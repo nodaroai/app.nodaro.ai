@@ -470,6 +470,7 @@ export function useWorkflowPersistence(projectId?: string) {
   const savedFadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const loadWorkflow = useWorkflowStore((s) => s.loadWorkflow)
+  const setIsWorkflowLoading = useWorkflowStore((s) => s.setIsWorkflowLoading)
   const setWorkflowId = useWorkflowStore((s) => s.setWorkflowId)
   const setSaveStatus = useWorkflowStore((s) => s.setSaveStatus)
   const setLoadedUpdatedAt = useWorkflowStore((s) => s.setLoadedUpdatedAt)
@@ -656,6 +657,7 @@ export function useWorkflowPersistence(projectId?: string) {
   const load = useCallback(
     async (id: string): Promise<SaveResult> => {
       setLoading(true)
+      setIsWorkflowLoading(true)
 
       // Immediately clear old workflow data so the canvas doesn't flash
       // the previous workflow while the new one is being fetched.
@@ -820,9 +822,10 @@ export function useWorkflowPersistence(projectId?: string) {
         }
       } finally {
         setLoading(false)
+        setIsWorkflowLoading(false)
       }
     },
-    [loadWorkflow, projectId, setLoadedUpdatedAt, setRemoteUpdatedAt],
+    [loadWorkflow, projectId, setIsWorkflowLoading, setLoadedUpdatedAt, setRemoteUpdatedAt],
   )
 
   // Refresh the ref pointer on every render — read by the save-on-

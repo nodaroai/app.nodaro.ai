@@ -632,7 +632,6 @@ export function ConfigPanel() {
   const edges = useWorkflowStore((s) => s.edges)
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-  const deleteNode = useWorkflowStore((s) => s.deleteNode)
   const deleteEdge = useWorkflowStore((s) => s.deleteEdge)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const runFromHere = useWorkflowStore((s) => s.runFromHere)
@@ -718,6 +717,7 @@ export function ConfigPanel() {
   // by calling `setConfigPanelFullscreen(true)`.
   const isExpanded = useWorkflowStore((s) => s.configPanelFullscreen)
   const setConfigPanelFullscreen = useWorkflowStore((s) => s.setConfigPanelFullscreen)
+  const closeFullscreenSettings = useWorkflowStore((s) => s.closeFullscreenSettings)
 
   // Mobile bottom sheet: peek (collapsed) / expanded states with bidirectional drag
   const [sheetState, setSheetState] = useState<"peek" | "expanded">("peek")
@@ -850,11 +850,6 @@ export function ConfigPanel() {
     }
   }, [edges, selectedNodeId, deleteEdge])
 
-  function handleDelete() {
-    if (!selectedNodeId) return
-    deleteNode(selectedNodeId)
-  }
-
   // useMemo must be called unconditionally (before any early return) to satisfy React's rules of hooks
   const configProps = useMemo(
     () => ({
@@ -930,11 +925,11 @@ export function ConfigPanel() {
           // Fullscreen: a prominent text "Close" button reads as the
           // primary exit affordance — the small X icon was easy to miss
           // against the wider modal chrome.
-          <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs" onClick={() => { setConfigPanelFullscreen(false); useWorkflowStore.setState({ selectedNodeId: null }) }}>
+          <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs" onClick={(e) => { e.stopPropagation(); closeFullscreenSettings() }}>
             Close
           </Button>
         ) : (
-          <Button variant="ghost" size="icon" className="text-gray-400 dark:text-[#64748B] hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2D2D2D]" onClick={() => { setConfigPanelFullscreen(false); useWorkflowStore.setState({ selectedNodeId: null }) }} aria-label="Close panel">
+          <Button variant="ghost" size="icon" className="text-gray-400 dark:text-[#64748B] hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2D2D2D]" onClick={() => useWorkflowStore.setState({ selectedNodeId: null })} aria-label="Close panel">
             <X className="h-4 w-4" />
           </Button>
         )}
@@ -948,10 +943,10 @@ export function ConfigPanel() {
       ? "fixed inset-0 z-50 flex items-center justify-center"
       : isMobile
         ? `fixed bottom-0 left-0 right-0 z-50 transition-transform duration-200 ease-in-out ${isVisible ? "translate-y-0" : "translate-y-full pointer-events-none"}`
-        : `absolute inset-0 z-10 bg-white dark:bg-[#1E1E1E] shadow-2xl flex flex-col sm:inset-auto sm:top-0 sm:right-0 sm:h-full sm:w-96 sm:border-l border-gray-200 dark:border-[#2D2D2D] transition-transform duration-200 ease-in-out ${isVisible ? "translate-x-0" : "translate-x-full pointer-events-none"}`
+        : `absolute inset-0 z-10 bg-white dark:bg-[#1E1E1E] shadow-2xl flex flex-col sm:inset-auto sm:top-0 sm:right-0 sm:h-full sm:w-96 sm:border-l border-gray-200 dark:border-[#2D2D2D] ${isVisible && !isExpanded ? "transition-transform duration-200 ease-in-out translate-x-0" : "hidden"}`
     }>
       {isExpanded && (
-        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setConfigPanelFullscreen(false)} />
+        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={(e) => { e.stopPropagation(); closeFullscreenSettings() }} />
       )}
       <div className={isExpanded
         ? "relative w-full max-w-[900px] max-h-[90vh] mx-4 bg-white dark:bg-[#1E1E1E] rounded-xl shadow-2xl border border-gray-200 dark:border-[#2D2D2D] flex flex-col overflow-hidden min-h-0"
@@ -973,7 +968,7 @@ export function ConfigPanel() {
           const t = e.target as HTMLElement | null
           if (!t) return
           const tile = t.closest('button[role="radio"], button[role="checkbox"]')
-          if (tile) setConfigPanelFullscreen(false)
+          if (tile) closeFullscreenSettings()
         } : undefined}
       >
         {/* Mobile drag handle + peek header */}
@@ -1033,7 +1028,7 @@ export function ConfigPanel() {
               Side-panel mode leaves the context null — double-click is a
               no-op there, which matches the surrounding-non-tile picker UX. */}
           {isExpanded ? (
-            <TileCommitContext.Provider value={{ commit: () => setConfigPanelFullscreen(false) }}>
+            <TileCommitContext.Provider value={{ commit: closeFullscreenSettings }}>
               <NodeTypeConfig
                 nodeType={nodeType}
                 nodeData={nodeData}
@@ -1110,17 +1105,9 @@ export function ConfigPanel() {
                   variant="outline"
                   size="sm"
                   className="w-full"
-                  onClick={() => setConfigPanelFullscreen(false)}
+                  onClick={(e) => { e.stopPropagation(); closeFullscreenSettings() }}
                 >
                   Close
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30"
-                  onClick={handleDelete}
-                >
-                  Delete Node
                 </Button>
               </div>
             ) : (
@@ -1205,9 +1192,6 @@ export function ConfigPanel() {
                   )
                 })()}
 
-                <Button variant="outline" size="sm" className="w-full text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30" onClick={handleDelete}>
-                  Delete Node
-                </Button>
               </>
             )}
           </div>

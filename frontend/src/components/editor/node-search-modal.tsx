@@ -346,7 +346,7 @@ export function NodeSearchModal({ open, onClose }: NodeSearchModalProps) {
         {/* Two-pane body: list on left, preview on right */}
         <div className="flex min-h-[420px] max-h-[65vh]">
           {/* Result list */}
-          <div ref={resultsRef} className="flex-1 min-w-0 overflow-y-auto py-1 border-r border-[#E2E8F0] dark:border-[#2D2D2D]">
+          <div ref={resultsRef} className="flex-1 min-w-0 overflow-y-auto py-1 border-r border-[#E2E8F0] dark:border-[#2D2D2D] node-menu-surface">
             {hits.length === 0 ? (
               <div className="px-4 py-10 text-center text-sm text-[#94A3B8]">
                 {query ? "No nodes match your search." : "This workflow has no nodes yet."}

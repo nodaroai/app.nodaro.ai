@@ -303,6 +303,23 @@ const edgeTypes = {
 }
 
 // Module-level function — no closure dependencies, stable reference
+/** Read a handle's own type color (`--pip-color`, set inline by
+ *  HandleWithPopover) straight off the rendered DOM. Used to tint the
+ *  add-node menu's "Connect to" title in the handle's color regardless of how
+ *  the menu was opened (drag-to-connect, "+Add", or a list cell). Returns a
+ *  6-digit hex or undefined (legacy plain handles carry no `--pip-color`, and
+ *  disabled pips resolve to a CSS var — both are rejected by the hex guard so
+ *  the menu falls back to its default accent). */
+function readHandlePipColor(nodeId: string, handleId: string): string | undefined {
+  if (typeof document === "undefined") return undefined
+  const el = document.querySelector(
+    `.react-flow__node[data-id="${CSS.escape(nodeId)}"] [data-handleid="${CSS.escape(handleId)}"]`,
+  )
+  if (!el) return undefined
+  const c = getComputedStyle(el).getPropertyValue("--pip-color").trim()
+  return /^#[0-9a-fA-F]{6}$/.test(c) ? c : undefined
+}
+
 function getMiniMapNodeColor(node: { type?: string }): string {
   const nodeType = node.type as string
   // Character nodes - bubblegum pink
@@ -398,6 +415,18 @@ interface WorkflowCanvasProps {
   readonly onToggleSidebar: () => void
 }
 
+/** Estimate how many tile-grid buttons fit in the first row by checking Y coords. */
+function estimatePickerGridCols(btns: HTMLButtonElement[]): number {
+  if (btns.length < 2) return 1
+  const firstY = btns[0].getBoundingClientRect().top
+  let cols = 1
+  for (let i = 1; i < btns.length; i++) {
+    if (Math.abs(btns[i].getBoundingClientRect().top - firstY) < 5) cols++
+    else break
+  }
+  return cols
+}
+
 export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanvasProps) {
   const nodes = useWorkflowStore((s) => s.nodes)
   // React Flow v12 requires a parent (group) node to precede its children in
@@ -412,6 +441,8 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const onEdgesChange = useWorkflowStore((s) => s.onEdgesChange)
   const onConnect = useWorkflowStore((s) => s.onConnect)
   const selectNode = useWorkflowStore((s) => s.selectNode)
+  const openFullscreenSettings = useWorkflowStore((s) => s.openFullscreenSettings)
+  const closeFullscreenSettings = useWorkflowStore((s) => s.closeFullscreenSettings)
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
   const duplicateNodes = useWorkflowStore((s) => s.duplicateNodes)
   const deleteNode = useWorkflowStore((s) => s.deleteNode)
@@ -524,10 +555,41 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const [focusMode, setFocusMode] = useState(false)
   const focusAnimatingRef = useRef(false)
 
+  // When the fullscreen config panel closes, restore keyboard focus to the
+  // React Flow pane so that arrow-key node nudging works immediately.
+  // When fullscreen closes, restore keyboard focus to the React Flow tree so
+  // arrow-key node nudging works. Arrow events only bubble through RF's
+  // onKeyDown container when their target is inside the RF DOM subtree. After
+  // the panel becomes `hidden`, focus falls to `body` which is outside that
+  // subtree. We focus the selected node element (data-id attribute, tabIndex
+  // set by React Flow) so the next arrow keydown originates inside RF.
+  const configPanelFullscreen = useWorkflowStore((s) => s.configPanelFullscreen)
+  const prevFullscreenRef = useRef(configPanelFullscreen)
+  useEffect(() => {
+    const wasOpen = prevFullscreenRef.current
+    prevFullscreenRef.current = configPanelFullscreen
+    if (wasOpen && !configPanelFullscreen) {
+      requestAnimationFrame(() => {
+        const state = useWorkflowStore.getState()
+        const sel = state.nodes.find((n) => n.selected)
+        const el = sel
+          ? document.querySelector<HTMLElement>(`.react-flow__node[data-id="${sel.id}"]`)
+          : document.querySelector<HTMLElement>(".react-flow__pane")
+        el?.focus({ preventScroll: true })
+      })
+    }
+  }, [configPanelFullscreen])
+
   // Center viewport on selected node and zoom to fit 60% of visible area
   useEffect(() => {
     if (!selectedNodeId) {
       setFocusMode(false)
+      return
+    }
+    // One-shot skip: set by openFullscreenSettings (icon click) so the node
+    // stays in place instead of zooming to fill the screen.
+    if (useWorkflowStore.getState().skipNextViewportAnimation) {
+      useWorkflowStore.setState({ skipNextViewportAnimation: false })
       return
     }
     const node = getNode(selectedNodeId)
@@ -660,6 +722,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   // auto-pan naturally fire for any appended items because they're
   // seeing those ids for the first time. See use-workflow-realtime-sync.ts.
   const realtimeWorkflowId = useWorkflowStore((s) => s.workflowId)
+  const isWorkflowLoading = useWorkflowStore((s) => s.isWorkflowLoading)
   const reconcileFromRemote = useWorkflowStore((s) => s.reconcileFromRemote)
   const setRemoteUpdatedAt = useWorkflowStore((s) => s.setRemoteUpdatedAt)
   useWorkflowRealtimeSync({
@@ -791,6 +854,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         direction: (fromHandle.type as "source" | "target") ?? "source",
         dropPosition: screenToFlowPosition({ x: clientX, y: clientY }),
         nodeType: fromNode.type,
+        color: readHandlePipColor(fromNode.id, fromHandle.id ?? "in"),
       })
       setAddNodePopupOpen(true)
     },
@@ -1106,6 +1170,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         direction,
         dropPosition: { x: flowX, y: flowY },
         nodeType,
+        color: readHandlePipColor(nodeId, handleId),
       })
       setAddNodePopupOpen(true)
       setCanvasContextMenu(null)
@@ -1388,6 +1453,121 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       const isEditable = (el: HTMLElement | null) =>
         !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable)
       if (isEditable(target) || isEditable(activeEl)) {
+        return
+      }
+
+      // Cmd/Ctrl+I — toggle fullscreen settings (must run BEFORE overlayOpen guard)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "i") {
+        const state = useWorkflowStore.getState()
+        if (state.configPanelFullscreen) {
+          e.preventDefault()
+          closeFullscreenSettings()
+          return
+        }
+        const nodeId = state.selectedNodeId ?? state.nodes.find((n) => n.selected)?.id
+        if (nodeId) {
+          e.preventDefault()
+          openFullscreenSettings(nodeId)
+        }
+        return
+      }
+
+      // Escape — close fullscreen first, then two-step deselect (must run BEFORE overlayOpen guard)
+      if (e.key === "Escape") {
+        setAddNodePopupOpen(false)
+        setCanvasContextMenu(null)
+        setNodeContextMenu(null)
+        setEdgeContextMenu(null)
+        const state = useWorkflowStore.getState()
+        if (state.configPanelFullscreen) {
+          // stopPropagation: prevent React Flow's own Escape handler from also
+          // deselecting the node (which would clear node.selected and remove the glow).
+          e.stopPropagation()
+          closeFullscreenSettings()
+        } else if (state.selectedNodeId) {
+          // Closing the sidebar keeps the node RF-focused (blue glow, no settings).
+          // stopPropagation prevents React Flow from also firing deselection.
+          e.stopPropagation()
+          useWorkflowStore.setState({ selectedNodeId: null })
+        } else {
+          // Node is RF-selected only: deselect fully. selectNode(null) already
+          // clears node.selected so no need for React Flow's handler either.
+          e.stopPropagation()
+          selectNode(null)
+        }
+        return
+      }
+
+      // Arrow keys + picker grid navigation while fullscreen settings are open.
+      // Must run BEFORE the overlayOpen guard so we can both block React Flow's
+      // node-nudge (via stopPropagation) and drive tile-grid focus/selection.
+      if (useWorkflowStore.getState().configPanelFullscreen) {
+        const isArrow = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)
+        const isSelect = e.key === "Enter"
+        const isMultiAdd = e.key === " " || e.key === "+"
+        const isInputLike = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
+
+        if (isArrow) {
+          // Left/right inside a text input should still move the cursor.
+          // Up/down from an input jumps focus into the tile grid.
+          if (isInputLike) {
+            if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+              e.preventDefault()
+              e.stopPropagation()
+              const grid = document.querySelector<HTMLElement>("[data-picker-grid]")
+              grid?.querySelector<HTMLButtonElement>("button[type='button']")?.focus()
+            }
+            // Always block node-nudge even when focus is in an input
+            e.stopPropagation()
+            return
+          }
+          e.preventDefault()
+          e.stopPropagation()
+          const grid = document.querySelector<HTMLElement>("[data-picker-grid]")
+          if (grid) {
+            const btns = Array.from(grid.querySelectorAll<HTMLButtonElement>("button[type='button']"))
+            const active = document.activeElement as HTMLButtonElement | null
+            const idx = active ? btns.indexOf(active) : -1
+            if (e.key === "ArrowRight") {
+              btns[(Math.max(idx, 0) + 1) % btns.length]?.focus()
+            } else if (e.key === "ArrowLeft") {
+              btns[(idx <= 0 ? btns.length : idx) - 1]?.focus()
+            } else {
+              const cols = estimatePickerGridCols(btns)
+              const delta = e.key === "ArrowDown" ? cols : -cols
+              btns[Math.max(0, Math.min(btns.length - 1, Math.max(idx, 0) + delta))]?.focus()
+            }
+          }
+          return
+        }
+
+        if (!isInputLike && (isSelect || isMultiAdd)) {
+          const grid = document.querySelector<HTMLElement>("[data-picker-grid]")
+          if (grid) {
+            const btns = Array.from(grid.querySelectorAll<HTMLButtonElement>("button[type='button']"))
+            const active = document.activeElement as HTMLButtonElement | null
+            const idx = active ? btns.indexOf(active) : -1
+            if (idx >= 0) {
+              const entryId = btns[idx]?.dataset.entryId
+              if (entryId) {
+                e.preventDefault()
+                e.stopPropagation()
+                // Enter = force single-select; Space/+ = add to multi-select
+                grid.dispatchEvent(new CustomEvent("picker-select", {
+                  detail: { action: isSelect ? "single" : "multi", id: entryId },
+                  bubbles: true,
+                }))
+                // Enter on an already-selected tile confirms and closes fullscreen
+                if (isSelect && btns[idx]?.getAttribute("aria-checked") === "true") {
+                  closeFullscreenSettings()
+                }
+              }
+            }
+          }
+          return
+        }
+
+        // All other keys while fullscreen: pass through (typing in inputs, etc.)
         return
       }
 
@@ -1744,21 +1924,6 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         return
       }
 
-      // Escape — two-step: close settings first, then deselect node
-      if (e.key === "Escape") {
-        setAddNodePopupOpen(false)
-        setCanvasContextMenu(null)
-        setNodeContextMenu(null)
-        setEdgeContextMenu(null)
-        if (useWorkflowStore.getState().selectedNodeId) {
-          // Step 1: close settings panel, keep node focused
-          useWorkflowStore.setState({ selectedNodeId: null })
-        } else {
-          // Step 2: deselect node entirely
-          selectNode(null)
-        }
-        return
-      }
     }
     // Capture phase so the handler runs BEFORE React Flow's per-node arrow
     // nudge listener — required for the settings-panel-open arrow-nav branch
@@ -1766,7 +1931,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     // selection jumps to the neighbor.
     document.addEventListener("keydown", handleKeyDown, true)
     return () => document.removeEventListener("keydown", handleKeyDown, true)
-  }, [selectedNodeId, duplicateNodes, deleteNode, handleAddStickyNote, handleTidyUp, handleSelectAll, handleOpenAddNodePopup, onToggleSidebar, undo, redo, handleToggleSnap, handleToggleAlignment, alignmentEnabled, computeGuides, getNode])
+  }, [selectedNodeId, duplicateNodes, deleteNode, handleAddStickyNote, handleTidyUp, handleSelectAll, handleOpenAddNodePopup, onToggleSidebar, undo, redo, handleToggleSnap, handleToggleAlignment, alignmentEnabled, computeGuides, getNode, openFullscreenSettings, closeFullscreenSettings])
 
   // Listen for pan-to events dispatched from teleporter config panel "Pan to" buttons
   useEffect(() => {
@@ -1819,6 +1984,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
             handleId: sourceHandle,
             direction: "source",
             dropPosition: screenToFlowPosition({ x: e.clientX, y: e.clientY }),
+            color: readHandlePipColor(sourceNodeId, sourceHandle),
           })
           setAddNodePopupOpen(true)
         } catch { /* ignore malformed data */ }
@@ -2145,10 +2311,11 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
             <ViewModeToggle />
           </div>
         )}
-        {/* First-run empty-canvas surface. Gated on a loaded workflow with zero
-            nodes (workflowId is null until the fetch resolves, so this never
-            flashes while an existing flow loads). Unmounts on the first node. */}
-        {realtimeWorkflowId != null && nodes.length === 0 && (
+        {/* First-run empty-canvas surface. Gated on a loaded (not loading) workflow
+            with zero nodes. isWorkflowLoading suppresses the flash that would
+            otherwise appear while the initial loadWorkflow(id, "", [], []) clear
+            sets workflowId before the real nodes arrive from the fetch. */}
+        {realtimeWorkflowId != null && nodes.length === 0 && !isWorkflowLoading && (
           <EmptyCanvasState
             onCreate={handleEmptyStateCreate}
             onOpenInputPanel={handleOpenInputPanel}

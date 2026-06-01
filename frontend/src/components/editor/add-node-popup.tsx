@@ -1814,7 +1814,7 @@ export function AddNodePopup({
     >
       {/* Header */}
       <div className="px-4 py-3 border-b border-[#E2E8F0] dark:border-[#2D2D2D]">
-        <h3 className="text-sm font-semibold text-[#1E293B] dark:text-white">
+        <h3 className="text-base font-semibold text-[#1E293B] dark:text-white">
           {selectedCategory ? (
             <button
               onClick={() => setSelectedCategory(selectedCategory === VIRTUAL_CATEGORY_IDS.commonPickers ? VIRTUAL_CATEGORY_IDS.common : null)}
@@ -1826,11 +1826,29 @@ export function AddNodePopup({
           ) : isFiltered && connectionContext ? (
             <div className="flex items-center gap-2">
               <span>Connect to</span>
-              <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-[#a78bfa]/20 text-[#a78bfa] border border-[#a78bfa]/30">
-                {connectionContext.direction === "source"
-                  ? `${connectionContext.handleId} →`
-                  : `→ ${connectionContext.handleId}`}
-              </span>
+              {(() => {
+                // Tint the chip in the handle's own type color when known
+                // (`connectionContext.color` is the pip's `--pip-color`);
+                // fall back to the default violet otherwise. `${hex}33` /
+                // `${hex}4D` append ~20% / ~30% alpha to the 6-digit hex.
+                const c = connectionContext.color
+                const style = c
+                  ? { color: c, backgroundColor: `${c}33`, borderColor: `${c}4D` }
+                  : undefined
+                return (
+                  <span
+                    className={cn(
+                      "px-2 py-0.5 rounded-full text-sm font-medium border",
+                      !c && "bg-[#a78bfa]/20 text-[#a78bfa] border-[#a78bfa]/30",
+                    )}
+                    style={style}
+                  >
+                    {connectionContext.direction === "source"
+                      ? `${connectionContext.handleId} →`
+                      : `→ ${connectionContext.handleId}`}
+                  </span>
+                )
+              })()}
             </div>
           ) : (
             "What do you want to create?"
@@ -1849,7 +1867,7 @@ export function AddNodePopup({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className={cn(
-              "w-full pl-9 pr-3 py-2 text-sm",
+              "w-full pl-9 pr-3 py-2 text-base",
               "bg-[#F8FAFC] dark:bg-[#121212]",
               "border border-[#E2E8F0] dark:border-[#2D2D2D]",
               "rounded-lg",
@@ -1891,13 +1909,13 @@ export function AddNodePopup({
                   {node.icon}
                 </span>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-[#1E293B] dark:text-white truncate">
+                  <div className="text-base font-medium text-[#1E293B] dark:text-white truncate">
                     {node.label}
                   </div>
-                  <div className="text-xs text-[#94A3B8]">{node.category}</div>
+                  <div className="text-sm text-[#94A3B8]">{node.category}</div>
                 </div>
                 {directMatchTypes.has(node.type) && (
-                  <span className="ml-auto text-[10px] text-[#4ade80] font-medium flex items-center gap-1 shrink-0">
+                  <span className="ml-auto text-[12px] text-[#4ade80] font-medium flex items-center gap-1 shrink-0">
                     <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80]" />
                     direct
                   </span>
@@ -1905,7 +1923,7 @@ export function AddNodePopup({
               </button>
             ))
           ) : (
-            <div className="px-4 py-8 text-center text-sm text-[#94A3B8]">
+            <div className="px-4 py-8 text-center text-base text-[#94A3B8]">
               No nodes found
             </div>
           )
@@ -1914,7 +1932,7 @@ export function AddNodePopup({
           <>
             {compatibilityNodes.direct.length > 0 && (
               <>
-                <div className="text-[10px] uppercase tracking-wider text-[#4ade80]/80 font-medium px-4 pt-2 pb-1 flex items-center gap-1.5">
+                <div className="text-[12px] uppercase tracking-wider text-[#4ade80]/80 font-medium px-4 pt-2 pb-1 flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80]" />
                   Direct Match
                 </div>
@@ -1936,10 +1954,10 @@ export function AddNodePopup({
                       {node.icon}
                     </span>
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-[#1E293B] dark:text-white truncate">{node.label}</div>
-                      <div className="text-xs text-[#94A3B8]">{node.category}</div>
+                      <div className="text-base font-medium text-[#1E293B] dark:text-white truncate">{node.label}</div>
+                      <div className="text-sm text-[#94A3B8]">{node.category}</div>
                     </div>
-                    <span className="text-[10px] text-[#4ade80] font-medium flex items-center gap-1 shrink-0">
+                    <span className="text-[12px] text-[#4ade80] font-medium flex items-center gap-1 shrink-0">
                       <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80]" />
                       direct
                     </span>
@@ -1949,7 +1967,7 @@ export function AddNodePopup({
             )}
             {compatibilityNodes.compatible.length > 0 && (
               <>
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-medium px-4 pt-2 pb-1">
+                <div className="text-[12px] uppercase tracking-wider text-muted-foreground/60 font-medium px-4 pt-2 pb-1">
                   Compatible
                 </div>
                 {compatibilityNodes.compatible.map((node, rawIndex) => {
@@ -1972,8 +1990,8 @@ export function AddNodePopup({
                         {node.icon}
                       </span>
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-[#1E293B] dark:text-white/70 truncate">{node.label}</div>
-                        <div className="text-xs text-[#94A3B8]">{node.category}</div>
+                        <div className="text-base font-medium text-[#1E293B] dark:text-white/70 truncate">{node.label}</div>
+                        <div className="text-sm text-[#94A3B8]">{node.category}</div>
                       </div>
                     </button>
                   );
@@ -1983,7 +2001,7 @@ export function AddNodePopup({
           </>
         ) : selectedCategory ? (
           categoryNodes.length === 0 ? (
-            <div className="px-4 py-8 text-center text-sm text-[#94A3B8]">
+            <div className="px-4 py-8 text-center text-base text-[#94A3B8]">
               No nodes here yet — they&apos;ll appear as you use them.
             </div>
           ) : selectedCategory === VIRTUAL_CATEGORY_IDS.common ? (
@@ -2002,7 +2020,7 @@ export function AddNodePopup({
                         {rows.length > 0 && (
                           <div className="border-t border-muted-foreground/10 mx-3 mt-1" />
                         )}
-                        <div className={cn("text-[10px] uppercase tracking-wider text-muted-foreground/60 font-medium px-4 pt-2 pb-1", indent && "pl-8")}>
+                        <div className={cn("text-[12px] uppercase tracking-wider text-muted-foreground/60 font-medium px-4 pt-2 pb-1", indent && "pl-8")}>
                           {header}
                         </div>
                       </>
@@ -2023,9 +2041,9 @@ export function AddNodePopup({
                       <span className={cn("text-[#64748B] dark:text-[#94A3B8]", CATEGORY_COLORS[node.category])}>
                         {node.icon}
                       </span>
-                      <span className="text-sm text-[#1E293B] dark:text-white">{node.label}</span>
+                      <span className="text-base text-[#1E293B] dark:text-white">{node.label}</span>
                       {directMatchTypes.has(node.type) && (
-                        <span className="ml-auto text-[10px] text-[#4ade80] font-medium flex items-center gap-1 shrink-0">
+                        <span className="ml-auto text-[12px] text-[#4ade80] font-medium flex items-center gap-1 shrink-0">
                           <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80]" />
                           direct
                         </span>
@@ -2061,7 +2079,7 @@ export function AddNodePopup({
                     )}
                   >
                     <span className="text-[#818CF8]"><Layers className="h-4 w-4" /></span>
-                    <span className="text-sm text-[#1E293B] dark:text-white">Common Pickers</span>
+                    <span className="text-base text-[#1E293B] dark:text-white">Common Pickers</span>
                     <ChevronRight className="ml-auto w-4 h-4 text-[#94A3B8]" />
                   </button>,
                 );
@@ -2092,7 +2110,7 @@ export function AddNodePopup({
                     {index > 0 && (
                       <div className="border-t border-muted-foreground/10 mx-3 mt-1" />
                     )}
-                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-medium px-4 pt-2 pb-1">
+                    <div className="text-[12px] uppercase tracking-wider text-muted-foreground/60 font-medium px-4 pt-2 pb-1">
                       {node.group}
                     </div>
                   </>
@@ -2118,11 +2136,11 @@ export function AddNodePopup({
                   >
                     {node.icon}
                   </span>
-                  <span className="text-sm text-[#1E293B] dark:text-white">
+                  <span className="text-base text-[#1E293B] dark:text-white">
                     {node.label}
                   </span>
                   {directMatchTypes.has(node.type) && (
-                    <span className="ml-auto text-[10px] text-[#4ade80] font-medium flex items-center gap-1 shrink-0">
+                    <span className="ml-auto text-[12px] text-[#4ade80] font-medium flex items-center gap-1 shrink-0">
                       <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80]" />
                       direct
                     </span>
@@ -2161,10 +2179,10 @@ export function AddNodePopup({
                 {cat.icon}
               </span>
               <div className="flex-1 min-w-0">
-                <div className="text-xs font-semibold uppercase tracking-wider text-[#1E293B] dark:text-white">
+                <div className="text-sm font-semibold uppercase tracking-wider text-[#1E293B] dark:text-white">
                   {cat.label}
                 </div>
-                <div className="text-xs text-[#94A3B8]">{cat.description}</div>
+                <div className="text-sm text-[#94A3B8]">{cat.description}</div>
               </div>
               <ChevronRight className="w-4 h-4 text-[#94A3B8]" />
             </button>
@@ -2174,7 +2192,7 @@ export function AddNodePopup({
 
       {/* Footer hint */}
       <div className="px-4 py-2 border-t border-[#E2E8F0] dark:border-[#2D2D2D] bg-[#F8FAFC] dark:bg-[#121212]">
-        <div className="flex items-center gap-4 text-[10px] text-[#94A3B8]">
+        <div className="flex items-center gap-4 text-[12px] text-[#94A3B8]">
           <span className="flex items-center gap-1">
             <kbd className="px-1 py-0.5 bg-white dark:bg-[#2D2D2D] rounded border border-[#E2E8F0] dark:border-[#3D3D3D]">
               ↑↓

@@ -158,7 +158,7 @@ export function VideoRetakeQuickToolbar({
   const containerClass =
     "flex items-center px-1.5 py-1 backdrop-blur-sm rounded-xl border " +
     "bg-white/85 border-black/10 text-neutral-900 " +
-    "dark:bg-black/60 dark:border-white/10 dark:text-white"
+    "node-menu-surface dark:border-white/10 dark:text-white"
 
   // ── Compact mode ───────────────────────────────────────────────────────
   if (isCompact) {
@@ -187,7 +187,7 @@ export function VideoRetakeQuickToolbar({
             side="bottom"
             align="start"
             sideOffset={8}
-            className="w-[240px] p-2 space-y-2"
+            className="w-[240px] p-2 space-y-2 node-menu-surface"
             onClick={(e) => e.stopPropagation()}
           >
             <ToolbarSetting label="Model" icon={<Sparkles className="w-3 h-3" />}>
@@ -195,7 +195,7 @@ export function VideoRetakeQuickToolbar({
                 <SelectTrigger className={ghostPopoverTriggerClass}>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="node-menu-surface">
                   {MODEL_OPTIONS.map((m) => (
                     <SelectItem key={m.value} value={m.value} className="text-xs">
                       {m.label}
@@ -209,7 +209,7 @@ export function VideoRetakeQuickToolbar({
                 <SelectTrigger className={ghostPopoverTriggerClass}>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="node-menu-surface">
                   {ASPECT_OPTIONS.map((opt) => (
                     <AspectRatioItem key={opt.value} value={opt.value} label={opt.label} />
                   ))}
@@ -221,7 +221,7 @@ export function VideoRetakeQuickToolbar({
                 <SelectTrigger className={ghostPopoverTriggerClass}>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="node-menu-surface">
                   {MODE_OPTIONS.map((opt) => (
                     <SelectItem key={opt.value} value={opt.value} className="text-xs">
                       {opt.label}
@@ -235,7 +235,7 @@ export function VideoRetakeQuickToolbar({
                 <SelectTrigger className={ghostPopoverTriggerClass}>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="node-menu-surface">
                   {[1, 2, 3, 4].map((n) => (
                     <SelectItem key={n} value={String(n)} className="text-xs">
                       × {n}
@@ -271,7 +271,7 @@ export function VideoRetakeQuickToolbar({
           <Sparkles className="opacity-70" />
           <SelectValue>{modelLabel}</SelectValue>
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent className="node-menu-surface">
           {MODEL_OPTIONS.map((m) => (
             <SelectItem key={m.value} value={m.value} className="text-xs">
               {m.label}
@@ -286,7 +286,7 @@ export function VideoRetakeQuickToolbar({
           <Ratio className="opacity-70" />
           <SelectValue>{aspectShort}</SelectValue>
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent className="node-menu-surface">
           {ASPECT_OPTIONS.map((opt) => (
             <AspectRatioItem key={opt.value} value={opt.value} label={opt.label} />
           ))}
@@ -299,7 +299,7 @@ export function VideoRetakeQuickToolbar({
           <RefreshCw className="opacity-70" />
           <SelectValue>{modeShort}</SelectValue>
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent className="node-menu-surface">
           {MODE_OPTIONS.map((opt) => (
             <SelectItem key={opt.value} value={opt.value} className="text-xs">
               {opt.label}
@@ -314,7 +314,7 @@ export function VideoRetakeQuickToolbar({
           <Copy className="opacity-70" />
           <SelectValue>× {repeatCount}</SelectValue>
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent className="node-menu-surface">
           {[1, 2, 3, 4].map((n) => (
             <SelectItem key={n} value={String(n)} className="text-xs">
               × {n}

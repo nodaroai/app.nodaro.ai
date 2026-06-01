@@ -84,7 +84,7 @@ const CustomHandleComponent = ({
       // Sized to match the 10px resize dot so it scales identically with
       // canvas viewport zoom. Inline SVG with viewBox matching container
       // px (no internal upscaling) so strokes are crisp at any zoom.
-      className="nodrag nopan absolute z-10 w-2.5 h-2.5 text-muted-foreground/70"
+      className="nodrag nopan absolute z-10 w-2.5 h-2.5 text-muted-foreground/70 hover:text-[#ff0073] transition-colors"
       style={{
         bottom: -5,
         left: position === "bottom-left" ? -5 : undefined,

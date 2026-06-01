@@ -165,7 +165,11 @@ function BaseNodeComponent({
   // O(N) `nodes.find` scan. `isPending` drives the active "node-running" border
   // the instant Run is clicked (the optimistic flip writes
   // data.executionStatus:"pending" before the backend execution even starts).
-  const { zoom, visualW, visualH, isSkipped, isPending } = useWorkflowStore(
+  // `measuredH` is React Flow's own ResizeObserver measurement (written via
+  // applyNodeChanges / onNodesChange). Subscribing to it lets the floor-clamp
+  // effect re-fire once RF completes the first measurement of a new node,
+  // instead of prematurely pinning the node before measurement arrives.
+  const { zoom, visualW, visualH, measuredH, isSkipped, isPending } = useWorkflowStore(
     useShallow((s) => {
       const node = s.nodes.find((n) => n.id === id)
       const data = node?.data as Record<string, unknown> | undefined
@@ -174,6 +178,7 @@ function BaseNodeComponent({
         zoom: typeof z === "number" ? z : 1.0,
         visualW: node?.width,
         visualH: node?.height,
+        measuredH: node?.measured?.height,
         isSkipped: !!data?.skipped,
         isPending: data?.executionStatus === "pending",
       }
@@ -248,6 +253,14 @@ function BaseNodeComponent({
 
     // No aspect ratio: only floor-clamp height for non-resized nodes.
     if (hasExplicitResize) return
+    // Guard: if neither an explicit height nor a RF-measured height exists yet,
+    // the node just mounted and React Flow's ResizeObserver hasn't fired. Skip
+    // now — `measuredH` in the dep array will re-trigger the effect once RF
+    // writes the first measurement. Without this guard the effect resolves
+    // `0 < effectiveMinHeight` and pins the node at 100px before its natural
+    // content height is known, causing picker nodes (h-full layout) to clip
+    // content until the user manually invokes "Fit Content".
+    if (node.height === undefined && node.measured?.height === undefined) return
     const currentHeight = (node.height ?? node.measured?.height ?? 0) as number
     if (currentHeight >= effectiveMinHeight) return
     useWorkflowStore.setState({
@@ -255,7 +268,7 @@ function BaseNodeComponent({
         n.id === id ? { ...n, height: effectiveMinHeight } : n
       ),
     })
-  }, [imageAspectRatio, id, visualH, effectiveMinHeight, minWidth])
+  }, [imageAspectRatio, id, visualH, measuredH, effectiveMinHeight, minWidth])
 
   // After any size change above, re-measure handle bounds. Needed for nodes
   // whose handles use `top: calc(100% - Npx)` (typed-pip stacks anchored to
@@ -299,6 +312,7 @@ function BaseNodeComponent({
   // Resize is now handled by <NodeResizeControl> from @xyflow/react and uses
   // its own internal drag state — we don't track it here.
   const updateNodeWithData = useWorkflowStore((s) => s.updateNodeWithData)
+  const openFullscreenSettings = useWorkflowStore((s) => s.openFullscreenSettings)
   const dragRef = useRef<{
     mode: "zoom"
     startX: number
@@ -308,6 +322,11 @@ function BaseNodeComponent({
     logicalH: number
     handlePosition: "bottom-left" | "bottom-right"
   } | null>(null)
+
+  function handleIconClick(e: MouseEvent) {
+    e.stopPropagation()
+    openFullscreenSettings(id)
+  }
 
   function handleMoreMenu(e: MouseEvent) {
     e.stopPropagation()
@@ -428,11 +447,11 @@ function BaseNodeComponent({
           }}
         >
           <button
-            className="text-muted-foreground hover:text-foreground transition-colors"
+            className="node-more-menu-btn text-muted-foreground transition-colors"
             onClick={handleMoreMenu}
             aria-label="More options"
           >
-            <MoreHorizontal className="h-4 w-4" />
+            <MoreHorizontal size={Math.round(zoom * 13)} />
           </button>
           {toolbarActions}
         </div>
@@ -478,45 +497,30 @@ function BaseNodeComponent({
             CATEGORY_HEADER[category],
           )}
         >
-          {category === "input" ? (
-            <span className="w-6 h-6 rounded-md bg-[#007AFF]/10 dark:bg-white/20 flex items-center justify-center text-[#007AFF] dark:text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
-              {icon}
-            </span>
-          ) : category === "parameter" ? (
-            <span className="w-6 h-6 rounded-md bg-[#6366F1]/10 dark:bg-white/20 flex items-center justify-center text-[#6366F1] dark:text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
-              {icon}
-            </span>
-          ) : category === "processing" ? (
-            <span className="w-6 h-6 rounded-md bg-[#475569]/10 dark:bg-white/20 flex items-center justify-center text-[#475569] dark:text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
-              {icon}
-            </span>
-          ) : category === "output" ? (
-            <span className="w-6 h-6 rounded-md bg-[#22C55E]/10 dark:bg-white/20 flex items-center justify-center text-[#22C55E] dark:text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
-              {icon}
-            </span>
-          ) : category === "character" ? (
-            <span className="w-6 h-6 rounded-md bg-[#ff0073] dark:bg-white/20 flex items-center justify-center text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
-              {icon}
-            </span>
-          ) : category === "location" ? (
-            <span className="w-6 h-6 rounded-md bg-[#ff0073] dark:bg-white/20 flex items-center justify-center text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
-              {icon}
-            </span>
-          ) : category === "object" ? (
-            <span className="w-6 h-6 rounded-md bg-[#ff0073] dark:bg-white/20 flex items-center justify-center text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
-              {icon}
-            </span>
-          ) : category === "component" ? (
-            <span className="w-6 h-6 rounded-md bg-[#A855F7]/10 dark:bg-white/20 flex items-center justify-center text-[#A855F7] dark:text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
-              {icon}
-            </span>
-          ) : (category === "ai" || category === "scene" || category === "script" || category === "i2v") ? (
-            <span className="w-6 h-6 rounded-md bg-[#ff0073] dark:bg-white/20 flex items-center justify-center text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
-              {icon}
-            </span>
-          ) : (
-            <span className={cn("w-6 h-6 rounded-md flex items-center justify-center [&>svg]:w-3.5 [&>svg]:h-3.5", CATEGORY_ICON_COLOR[category])}>{icon}</span>
-          )}
+          <button
+            type="button"
+            onClick={handleIconClick}
+            className={cn(
+              // `[&>svg]:size-4` keeps the header icon in lockstep with the
+              // floating-label icon (EditableNodeLabel) — same 16px glyph in a
+              // 24px box across every node, regardless of the per-node size.
+              "w-6 h-6 rounded-md flex items-center justify-center [&>svg]:size-4 cursor-pointer transition-colors",
+              // Light-bg categories: tint icon to brand pink on hover
+              // Dark/brand-pink-bg categories: dim on hover (white icon on pink bg
+              // would vanish if we applied hover:text-[#ff0073])
+              category === "input"      ? "bg-[#007AFF]/10 dark:bg-white/20 text-[#007AFF] dark:text-white hover:text-[#ff0073]" :
+              category === "parameter"  ? "bg-[#6366F1]/10 dark:bg-white/20 text-[#6366F1] dark:text-white hover:text-[#ff0073]" :
+              category === "processing" ? "bg-[#475569]/10 dark:bg-white/20 text-[#475569] dark:text-white hover:text-[#ff0073]" :
+              category === "output"     ? "bg-[#22C55E]/10 dark:bg-white/20 text-[#22C55E] dark:text-white hover:text-[#ff0073]" :
+              category === "component"  ? "bg-[#A855F7]/10 dark:bg-white/20 text-[#A855F7] dark:text-white hover:text-[#ff0073]" :
+              (category === "character" || category === "location" || category === "object" ||
+               category === "ai"        || category === "scene"    || category === "script" || category === "i2v")
+                                        ? "bg-[#ff0073] dark:bg-white/20 text-white hover:opacity-70" :
+              cn(CATEGORY_ICON_COLOR[category], "hover:text-[#ff0073]")
+            )}
+          >
+            {icon}
+          </button>
           <span className="flex-1 truncate">{label}</span>
           {listProgress && (
             <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30 animate-pulse">
@@ -648,7 +652,7 @@ function BaseNodeComponent({
               minWidth={minWidth}
               minHeight={effectiveMinHeight}
               keepAspectRatio={!!imageAspectRatio}
-              className="!w-2.5 !h-2.5 !bg-muted-foreground/40 !border-0 !rounded-full"
+              className="!w-2.5 !h-2.5 !border-0 !rounded-full" style={{ backgroundColor: "color-mix(in srgb, var(--muted-foreground) 40%, transparent)" }}
             />
             <CustomHandle
               visible
@@ -666,7 +670,7 @@ function BaseNodeComponent({
               minWidth={minWidth}
               minHeight={effectiveMinHeight}
               keepAspectRatio={!!imageAspectRatio}
-              className="!w-2.5 !h-2.5 !bg-muted-foreground/40 !border-0 !rounded-full"
+              className="!w-2.5 !h-2.5 !border-0 !rounded-full" style={{ backgroundColor: "color-mix(in srgb, var(--muted-foreground) 40%, transparent)" }}
             />
             <NodeResizeControl
               nodeId={id}
@@ -674,7 +678,7 @@ function BaseNodeComponent({
               minWidth={minWidth}
               minHeight={effectiveMinHeight}
               keepAspectRatio={!!imageAspectRatio}
-              className="!w-2.5 !h-2.5 !bg-muted-foreground/40 !border-0 !rounded-full"
+              className="!w-2.5 !h-2.5 !border-0 !rounded-full" style={{ backgroundColor: "color-mix(in srgb, var(--muted-foreground) 40%, transparent)" }}
             />
           </>
         )

@@ -402,6 +402,16 @@ interface WorkflowState {
    *  used to gate workflow keyboard shortcuts and the global Execute button. */
   readonly configPanelFullscreen: boolean
   readonly setConfigPanelFullscreen: (open: boolean) => void
+  /** One-shot flag: the next selectedNodeId change should NOT trigger the
+   *  canvas viewport animation (zoom-to-fit). Set by openFullscreenSettings;
+   *  consumed and cleared by the viewport effect in workflow-canvas. */
+  readonly skipNextViewportAnimation: boolean
+  /** Whether the sidebar was open when openFullscreenSettings was called.
+   *  closeFullscreenSettings uses this to restore the sidebar on close. */
+  readonly _sidebarWasOpenBeforeFullscreen: boolean
+  /** Close fullscreen settings and optionally restore the sidebar if it was
+   *  open before the fullscreen was triggered (via openFullscreenSettings). */
+  readonly closeFullscreenSettings: () => void
   readonly isDirty: boolean
   readonly loadGeneration: number
   readonly saveStatus: SaveStatus
@@ -466,6 +476,10 @@ interface WorkflowState {
    * actions separately so the edge lands before the picker mounts.
    */
   readonly addNodeAndOpenPicker: (type: SceneNodeType, position: { x: number; y: number }, initialData?: Record<string, unknown>) => string | undefined
+  /** Select a node and open its config panel in fullscreen WITHOUT triggering
+   *  the canvas zoom-to-fit animation. Used by the node icon click so the
+   *  viewport stays where it is. */
+  readonly openFullscreenSettings: (nodeId: string) => void
   readonly updateNode: (nodeId: string, updates: Partial<WorkflowNode>) => void
   readonly updateNodeData: (nodeId: string, data: Record<string, unknown>) => void
   /**
@@ -511,6 +525,8 @@ interface WorkflowState {
   readonly setFlowPromptTemplates: (templates: Record<string, string>) => void
   readonly savedViewport: { x: number; y: number; zoom: number } | null
   readonly setSavedViewport: (vp: { x: number; y: number; zoom: number } | null) => void
+  readonly isWorkflowLoading: boolean
+  readonly setIsWorkflowLoading: (loading: boolean) => void
   readonly loadWorkflow: (id: string, name: string, nodes: WorkflowNode[], edges: WorkflowEdge[], characterDefinitions?: CharacterDefinition[], flowPromptTemplates?: Record<string, string>, presentationSettings?: PresentationSettings, viewport?: { x: number; y: number; zoom: number } | null) => void
   readonly clearWorkflow: () => void
   readonly markClean: () => void
@@ -811,6 +827,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   selectedNodeId: null,
   configPanelFullscreen: false,
   setConfigPanelFullscreen: (open) => set({ configPanelFullscreen: open }),
+  skipNextViewportAnimation: false,
+  _sidebarWasOpenBeforeFullscreen: false,
   isDirty: false,
   loadGeneration: 0,
   saveStatus: "idle" as SaveStatus,
@@ -1272,6 +1290,39 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     const id = get().addNode(type, position, initialData)
     if (id) get().openPickerForNode(id, type)
     return id
+  },
+
+  openFullscreenSettings: (nodeId) => {
+    const prev = get()
+    // Record whether the sidebar was already open so closeFullscreenSettings
+    // can restore it when the user dismisses the fullscreen modal.
+    const sidebarWasOpen = prev.selectedNodeId !== null && !prev.configPanelFullscreen
+    set({
+      skipNextViewportAnimation: true,
+      _sidebarWasOpenBeforeFullscreen: sidebarWasOpen,
+    })
+    set((state) => ({
+      selectedNodeId: nodeId,
+      configPanelFullscreen: true,
+      nodes: state.nodes.map((n) => ({ ...n, selected: n.id === nodeId })),
+    }))
+  },
+
+  closeFullscreenSettings: () => {
+    const state = get()
+    // If the sidebar was open before we entered fullscreen, keep selectedNodeId
+    // so the sidebar re-appears; otherwise clear it entirely.
+    // Always clear skipNextViewportAnimation: openFullscreenSettings sets it to
+    // prevent the zoom-to-fit on open, but when the panel is opened from an
+    // already-selected node (selectedNodeId doesn't change) the viewport effect
+    // never fires and never consumes the flag. Without this clear, the NEXT
+    // arrow-key navigation after closing fullscreen skips its zoom animation.
+    set({
+      configPanelFullscreen: false,
+      selectedNodeId: state._sidebarWasOpenBeforeFullscreen ? state.selectedNodeId : null,
+      _sidebarWasOpenBeforeFullscreen: false,
+      skipNextViewportAnimation: false,
+    })
   },
 
   updateNode: (nodeId, updates) =>
@@ -2373,6 +2424,9 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       savedViewport: viewport ?? null,
     }))
   },
+
+  isWorkflowLoading: false,
+  setIsWorkflowLoading: (loading) => set({ isWorkflowLoading: loading }),
 
   clearWorkflow: () => {
     nextNodeId = 1

@@ -222,7 +222,7 @@ export function GenerateVideoQuickToolbar({
   const containerClass =
     "flex items-center px-1.5 py-1 backdrop-blur-sm rounded-xl border " +
     "bg-white/85 border-black/10 text-neutral-900 " +
-    "dark:bg-black/60 dark:border-white/10 dark:text-white"
+    "node-menu-surface dark:border-white/10 dark:text-white"
 
   // ── Compact mode (low zoom): one pill that opens a popover ─────────────
   if (isCompact) {
@@ -257,7 +257,7 @@ export function GenerateVideoQuickToolbar({
             side="bottom"
             align="start"
             sideOffset={8}
-            className="w-[240px] p-2 space-y-2"
+            className="w-[240px] p-2 space-y-2 node-menu-surface"
             onClick={(e) => e.stopPropagation()}
           >
             <ToolbarSetting label="Model" icon={<Sparkles className="w-3 h-3" />}>
@@ -268,6 +268,7 @@ export function GenerateVideoQuickToolbar({
                 options={VIDEO_GEN_MODELS}
                 getTooltip={getVideoModelCapabilitiesTooltip}
                 triggerClassName={ghostPopoverTriggerClass}
+                contentClassName="node-menu-surface"
                 ariaLabel="Model"
               />
             </ToolbarSetting>
@@ -277,7 +278,7 @@ export function GenerateVideoQuickToolbar({
                   <SelectTrigger className={ghostPopoverTriggerClass}>
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="node-menu-surface">
                     <SelectItem value="frames" className="text-xs">Frames (start/end images)</SelectItem>
                     <SelectItem value="references" className="text-xs">References (image refs)</SelectItem>
                   </SelectContent>
@@ -290,7 +291,7 @@ export function GenerateVideoQuickToolbar({
                   <SelectTrigger className={ghostPopoverTriggerClass}>
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="node-menu-surface">
                     {aspectOptions.map((opt) => (
                       <AspectRatioItem key={opt.value} value={opt.value} label={opt.label} />
                     ))}
@@ -308,7 +309,7 @@ export function GenerateVideoQuickToolbar({
                   <SelectTrigger className={ghostPopoverTriggerClass}>
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="node-menu-surface">
                     {durationOptions.map((opt) => (
                       <SelectItem key={opt.value} value={String(opt.value)} className="text-xs">
                         {opt.label}
@@ -324,7 +325,7 @@ export function GenerateVideoQuickToolbar({
                   <SelectTrigger className={ghostPopoverTriggerClass}>
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="node-menu-surface">
                     {resolutionOptions.map((opt) => (
                       <SelectItem key={opt.value} value={opt.value} className="text-xs">
                         {opt.label}
@@ -339,7 +340,7 @@ export function GenerateVideoQuickToolbar({
                 <SelectTrigger className={ghostPopoverTriggerClass}>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="node-menu-surface">
                   {[1, 2, 3, 4].map((n) => (
                     <SelectItem key={n} value={String(n)} className="text-xs">
                       × {n}
@@ -378,6 +379,7 @@ export function GenerateVideoQuickToolbar({
         triggerLabel={modelLabel}
         triggerIcon={<Sparkles className="opacity-70" />}
         triggerClassName={`${ghostTriggerClass} max-w-[180px]`}
+        contentClassName="node-menu-surface"
         ariaLabel="Model"
       />
 
@@ -388,7 +390,7 @@ export function GenerateVideoQuickToolbar({
             <Layers className="opacity-70" />
             <SelectValue>{seedance2ModeLabel}</SelectValue>
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="node-menu-surface">
             <SelectItem value="frames" className="text-xs">Frames (start/end images)</SelectItem>
             <SelectItem value="references" className="text-xs">References (image refs)</SelectItem>
           </SelectContent>
@@ -402,7 +404,7 @@ export function GenerateVideoQuickToolbar({
             <Ratio className="opacity-70" />
             <SelectValue>{aspectShort}</SelectValue>
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="node-menu-surface">
             {aspectOptions.map((opt) => (
               <AspectRatioItem key={opt.value} value={opt.value} label={opt.label} />
             ))}
@@ -421,7 +423,7 @@ export function GenerateVideoQuickToolbar({
             <Clock className="opacity-70" />
             <SelectValue>{durationShort}</SelectValue>
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="node-menu-surface">
             {durationOptions.map((opt) => (
               <SelectItem key={opt.value} value={String(opt.value)} className="text-xs">
                 {opt.label}
@@ -438,7 +440,7 @@ export function GenerateVideoQuickToolbar({
             <Maximize2 className="opacity-70" />
             <SelectValue>{resolutionShort}</SelectValue>
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="node-menu-surface">
             {resolutionOptions.map((opt) => (
               <SelectItem key={opt.value} value={opt.value} className="text-xs">
                 {opt.label}
@@ -454,7 +456,7 @@ export function GenerateVideoQuickToolbar({
           <Copy className="opacity-70" />
           <SelectValue>× {repeatCount}</SelectValue>
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent className="node-menu-surface">
           {[1, 2, 3, 4].map((n) => (
             <SelectItem key={n} value={String(n)} className="text-xs">
               × {n}

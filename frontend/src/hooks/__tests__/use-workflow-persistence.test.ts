@@ -62,6 +62,7 @@ vi.mock("@/hooks/use-workflow-store", () => {
           setSaveStatus: mockSetSaveStatus,
           setLoadedUpdatedAt: mockSetLoadedUpdatedAt,
           setRemoteUpdatedAt: mockSetRemoteUpdatedAt,
+          setIsWorkflowLoading: vi.fn(),
           applySaveSuccess: vi.fn(),
         }),
       {
@@ -73,6 +74,7 @@ vi.mock("@/hooks/use-workflow-store", () => {
           setSaveStatus: mockSetSaveStatus,
           setLoadedUpdatedAt: mockSetLoadedUpdatedAt,
           setRemoteUpdatedAt: mockSetRemoteUpdatedAt,
+          setIsWorkflowLoading: vi.fn(),
           applySaveSuccess: vi.fn(),
         }),
         setState: vi.fn(),

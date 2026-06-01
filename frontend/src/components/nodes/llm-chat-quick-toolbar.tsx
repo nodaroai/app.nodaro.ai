@@ -137,10 +137,10 @@ export function LlmChatQuickToolbar({
   const containerClass =
     "flex items-center px-1.5 py-1 backdrop-blur-sm rounded-xl border " +
     "bg-white/85 border-black/10 text-neutral-900 " +
-    "dark:bg-black/60 dark:border-white/10 dark:text-white"
+    "node-menu-surface dark:border-white/10 dark:text-white"
 
   const modelItems = (
-    <SelectContent>
+    <SelectContent className="node-menu-surface">
       {LLM_MODELS.map((m) => (
         <SelectItemWithMeta key={m.id} value={m.id} badge={TIER_LABELS[m.tier]} description={m.desc} className="text-xs">
           {m.displayName}
@@ -150,7 +150,7 @@ export function LlmChatQuickToolbar({
   )
 
   const templateItems = (
-    <SelectContent>
+    <SelectContent className="node-menu-surface">
       <SelectGroup>
         <SelectLabel>Built-in</SelectLabel>
         {GENERATE_TEXT_TEMPLATES.map((t) => (
@@ -173,7 +173,7 @@ export function LlmChatQuickToolbar({
   )
 
   const runsItems = (
-    <SelectContent>
+    <SelectContent className="node-menu-surface">
       {[1, 2, 3, 4].map((n) => (
         <SelectItem key={n} value={String(n)} className="text-xs">
           × {n}
@@ -200,7 +200,7 @@ export function LlmChatQuickToolbar({
               {repeatCount > 1 && <span className="font-medium opacity-80">× {repeatCount}</span>}
             </button>
           </PopoverTrigger>
-          <PopoverContent side="bottom" align="start" sideOffset={8} className="w-[240px] p-2 space-y-2" onClick={(e) => e.stopPropagation()}>
+          <PopoverContent side="bottom" align="start" sideOffset={8} className="w-[240px] p-2 space-y-2 node-menu-surface" onClick={(e) => e.stopPropagation()}>
             <ToolbarSetting label="Model" icon={<Sparkles className="w-3 h-3" />}>
               <Select value={currentModel} onValueChange={handleModelChange} onOpenChange={handleOpenChange}>
                 <SelectTrigger className={ghostPopoverTriggerClass}>
