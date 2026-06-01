@@ -1769,13 +1769,18 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         return
       }
 
-      // Escape — two-step: close settings first, then deselect node
+      // Escape — close fullscreen first (atomic), then two-step deselect
       if (e.key === "Escape") {
         setAddNodePopupOpen(false)
         setCanvasContextMenu(null)
         setNodeContextMenu(null)
         setEdgeContextMenu(null)
-        if (useWorkflowStore.getState().selectedNodeId) {
+        const state = useWorkflowStore.getState()
+        if (state.configPanelFullscreen) {
+          // Close fullscreen + deselect in one write — avoids the one-frame
+          // sidebar flash that two separate setState calls would cause.
+          useWorkflowStore.setState({ configPanelFullscreen: false, selectedNodeId: null })
+        } else if (state.selectedNodeId) {
           // Step 1: close settings panel, keep node focused
           useWorkflowStore.setState({ selectedNodeId: null })
         } else {
