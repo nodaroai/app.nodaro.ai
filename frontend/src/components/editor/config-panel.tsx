@@ -924,11 +924,11 @@ export function ConfigPanel() {
           // Fullscreen: a prominent text "Close" button reads as the
           // primary exit affordance — the small X icon was easy to miss
           // against the wider modal chrome.
-          <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs" onClick={() => { setConfigPanelFullscreen(false); useWorkflowStore.setState({ selectedNodeId: null }) }}>
+          <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs" onClick={() => useWorkflowStore.setState({ configPanelFullscreen: false, selectedNodeId: null })}>
             Close
           </Button>
         ) : (
-          <Button variant="ghost" size="icon" className="text-gray-400 dark:text-[#64748B] hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2D2D2D]" onClick={() => { setConfigPanelFullscreen(false); useWorkflowStore.setState({ selectedNodeId: null }) }} aria-label="Close panel">
+          <Button variant="ghost" size="icon" className="text-gray-400 dark:text-[#64748B] hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2D2D2D]" onClick={() => useWorkflowStore.setState({ configPanelFullscreen: false, selectedNodeId: null })} aria-label="Close panel">
             <X className="h-4 w-4" />
           </Button>
         )}
