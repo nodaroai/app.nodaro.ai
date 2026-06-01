@@ -36,7 +36,7 @@ Provide data to your workflow: text, images, video, audio, or external triggers.
 
 | Node | Description | When to Use |
 |------|-------------|-------------|
-| [Text Prompt](./input/text-prompt.md) | User-provided text input with variable support | Provide prompts, descriptions, or text data to downstream nodes |
+| [Text](./input/text-prompt.md) | User-provided text input with variable support | Provide prompts, descriptions, or text data to downstream nodes |
 | [List](./input/list.md) | List of items, or a multi-column typed table, for batch iteration | Batch process multiple prompts or subjects; grow into a typed table for multiple variables per iteration |
 | [Upload Image](./input/upload-image.md) | Upload or provide an image URL | Source images for image-to-video, editing, or composition |
 | [Upload Video](./input/upload-video.md) | Upload or provide a video URL | Source video for processing, effects, or transformation |

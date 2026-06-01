@@ -33,7 +33,7 @@ interface NodeOption {
 
 const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   // Input
-  { type: "text-prompt", label: "Text Prompt", icon: <Type className="h-4 w-4" />, category: "Input" },
+  { type: "text-prompt", label: "Text", icon: <Type className="h-4 w-4" />, category: "Input", keywords: ["prompt", "text prompt"] },
   { type: "upload-image", label: "Upload Image", icon: <Upload className="h-4 w-4" />, category: "Input" },
   { type: "upload-video", label: "Upload Video", icon: <Video className="h-4 w-4" />, category: "Input" },
   { type: "upload-audio", label: "Upload Audio", icon: <Music className="h-4 w-4" />, category: "Input" },

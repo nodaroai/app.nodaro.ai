@@ -29,6 +29,8 @@ export const HANDLE_COLORS = {
   audioRef: "#FACC15", // gold — audio references (kept distinct)
   // ── Look / params ────────────────────────────────────────────────────
   look: "#818CF8", // indigo — look, elements, cinematography pickers, json, branches
+  // ── Multimodal reference ─────────────────────────────────────────────
+  reference: "#E879F9", // fuchsia — mixed/any reference input (image + video + audio + text), e.g. Generate Text "References"
   // ── Identity / refs ──────────────────────────────────────────────────
   identity: "#F472B6", // pink — character, location, assets, voice id/persona
   // ── Single-purpose types ─────────────────────────────────────────────

@@ -12,6 +12,7 @@
  */
 
 import { config } from "../../lib/config.js"
+import { throwIfJobCancelled } from "../../lib/job-cancellation.js"
 import {
   KIE_API_BASE,
   sleep,
@@ -141,6 +142,7 @@ async function pollRunwayRecordDetail(
 ): Promise<string> {
   let attempts = 0
   while (attempts < MAX_POLL_ATTEMPTS_VIDEO) {
+    await throwIfJobCancelled()
     attempts++
     await sleep(pollDelay(attempts))
 

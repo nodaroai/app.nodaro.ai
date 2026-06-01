@@ -483,11 +483,12 @@ export function isValidGenerateScriptConnection(
   }
 }
 
-/** llm-chat: prompt (text + picker), references (any media producer +
- *  extract-frame + generate-mask — node-input-resolver.ts:1145-1158 routes
- *  by source-kind into referenceImageUrls / referenceVideoUrls /
- *  referenceAudioUrls), system-prompt (text only — no pickers, system
- *  messages are full-prompt context not value substitution). */
+/** llm-chat: prompt (text + picker), references (any media OR text producer +
+ *  extract-frame + generate-mask — node-input-resolver.ts:1200-1223 routes
+ *  image/video/audio by source-kind into referenceImageUrls /
+ *  referenceVideoUrls / referenceAudioUrls, and text producers fall through
+ *  into the prompt as added context), system-prompt (text only — no pickers,
+ *  system messages are full-prompt context not value substitution). */
 export function isValidLlmChatConnection(
   targetHandleId: string,
   sourceType: string,
@@ -497,10 +498,14 @@ export function isValidLlmChatConnection(
     case "prompt":
       return ACCEPTS_PROMPT(sourceType, isVisualPicker)
     case "references":
+      // Multimodal: accepts every media kind AND text — image, video, audio,
+      // text producers, plus the frame/mask extractors. Text references are
+      // merged into the prompt as added context by the resolver.
       return (
         IMAGE_PRODUCER_TYPES.has(sourceType) ||
         ACCEPTS_VIDEO_OR_DYN(sourceType) ||
         ACCEPTS_AUDIO_OR_DYN(sourceType) ||
+        ACCEPTS_TEXT_OR_DYN(sourceType) ||
         sourceType === "extract-frame" ||
         sourceType === "generate-mask"
       )
@@ -624,7 +629,7 @@ export const AUDIO_TEXT_HANDLE_LABELS: Record<string, Record<string, string>> = 
   "suno-upload-extend":     { audio: "Audio", prompt: "Prompt" },
   // Batch 3: AI > Script & Text
   "generate-script":    { prompt: "Prompt" },
-  "llm-chat":           { prompt: "Prompt", references: "References", "system-prompt": "System prompt" },
+  "llm-chat":           { prompt: "Prompt", references: "References", "system-prompt": "Instructions" },
   "transcribe":         { audio: "Audio" },
   // Batch 4: Processing > Audio + Text
   // (merge-video-audio, trim-audio, mix-audio, combine-audio, adjust-volume

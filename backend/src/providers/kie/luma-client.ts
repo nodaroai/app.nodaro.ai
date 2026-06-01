@@ -15,6 +15,7 @@
  */
 
 import { config } from "../../lib/config.js"
+import { throwIfJobCancelled } from "../../lib/job-cancellation.js"
 import {
   KIE_API_BASE,
   sleep,
@@ -125,6 +126,7 @@ export async function pollLumaTask(
   // successFlag: 0=generating, 1=success, 2=create failed, 3=generate failed, 4=callback failed
   let attempts = 0
   while (attempts < maxAttempts) {
+    await throwIfJobCancelled()
     attempts++
     await sleep(pollDelay(attempts))
 

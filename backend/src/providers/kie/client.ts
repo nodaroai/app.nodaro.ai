@@ -10,6 +10,7 @@
  */
 
 import { config } from "../../lib/config.js"
+import { throwIfJobCancelled } from "../../lib/job-cancellation.js"
 import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
 import type { ReconcileOpts } from "../provider.interface.js"
 
@@ -372,6 +373,8 @@ export async function pollKieTask(
   let attempts = 0
   while (attempts < maxAttempts) {
     attempts++
+    // Abort early if the user cancelled the job (worker-bound context).
+    await throwIfJobCancelled()
     await sleep(pollDelay(attempts))
 
     let detailResponse: Response
@@ -709,6 +712,8 @@ async function pollVeoRecordInfo(
   let attempts = 0
   while (attempts < MAX_POLL_ATTEMPTS_VIDEO) {
     attempts++
+    // Abort early if the user cancelled the job (worker-bound context).
+    await throwIfJobCancelled()
     await sleep(pollDelay(attempts))
 
     let detailResponse: Response

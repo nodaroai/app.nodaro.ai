@@ -11,6 +11,7 @@
  */
 
 import { config } from "../../lib/config.js"
+import { throwIfJobCancelled } from "../../lib/job-cancellation.js"
 import { KIE_API_BASE, createSanitizedError, sleep, pollDelay } from "./client.js"
 import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
 import type { ReconcileOpts } from "../provider.interface.js"
@@ -454,6 +455,7 @@ async function pollSunoEndpoint<T>(
 
   let attempts = 0
   while (attempts < SUNO_MAX_POLL_ATTEMPTS) {
+    await throwIfJobCancelled()
     await sleep(pollDelay(attempts))
     attempts++
 

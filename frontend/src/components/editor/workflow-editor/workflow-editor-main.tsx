@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, useMemo, Suspense } from "react";
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry";
+import { RUN_BUTTON_CLASS } from "@/lib/run-button-style";
 import { useNavigate } from "react-router-dom";
 import { isExpandedClone } from "@nodaro/shared";
 import { ReactFlowProvider } from "@xyflow/react";
@@ -1166,8 +1167,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                   size="lg"
                   disabled={hasCredits() && estimateLoading}
                   onClick={() => handleRun(ctx, projectId, useWorkflowStore.getState().workflowId, save, setIsRunning, onExecutionStarted, onExecutionEnded)}
-                  className="rounded-full px-6 text-white hover:opacity-90"
-                  style={{ backgroundColor: "#ff0073" }}
+                  className={`rounded-full px-6 ${RUN_BUTTON_CLASS}`}
                 >
                   {hasCredits() && estimateLoading ? (
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />

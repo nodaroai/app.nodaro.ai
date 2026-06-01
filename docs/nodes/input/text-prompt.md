@@ -1,6 +1,6 @@
-# Text Prompt
+# Text
 
-> User-provided text input with variable support.
+> User-provided text input with variable support. (Node type `text-prompt`; labeled **Text** in the editor — searching "prompt" still finds it.)
 
 ## Overview
 

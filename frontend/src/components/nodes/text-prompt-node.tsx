@@ -9,6 +9,7 @@ import { computeZoomFromDrag, computeVisualSize, applyMagnet } from "./zoom-math
 import { Type, FastForward, Maximize2, AArrowUp, AArrowDown, MoreHorizontal } from "lucide-react"
 import { useTheme } from "next-themes"
 import { cn } from "@/lib/utils"
+import { RUN_BUTTON_CLASS } from "@/lib/run-button-style"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useShallow } from "zustand/react/shallow"
 import { EditableNodeLabel } from "./editable-node-label"
@@ -55,8 +56,8 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
   // Inline-edit state for the modal's header title. Defaults to the node
   // label; commits to the store on blur/Enter, reverts on Escape.
   const [titleEditing, setTitleEditing] = useState(false)
-  const [titleDraft, setTitleDraft] = useState(nodeData.label ?? "Text Prompt")
-  useEffect(() => { setTitleDraft(nodeData.label ?? "Text Prompt") }, [nodeData.label])
+  const [titleDraft, setTitleDraft] = useState(nodeData.label ?? "Text")
+  useEffect(() => { setTitleDraft(nodeData.label ?? "Text") }, [nodeData.label])
   // Font-size control for the fullscreen prompt — bigger default than the
   // canvas node's 14px so the modal reads as a "writing surface", not a
   // zoomed copy of the chip on the canvas. Clamped to keep tag pills and
@@ -510,7 +511,7 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
           >
             <button
               type="button"
-              className="flex items-center gap-1.5 h-7 px-3 text-[11px] font-medium text-white rounded-lg whitespace-nowrap bg-[#ff0073] hover:bg-[#e60068] shadow-sm transition-colors"
+              className={`flex items-center gap-1 h-6 px-2.5 text-[11px] font-medium rounded-md whitespace-nowrap ${RUN_BUTTON_CLASS}`}
               onClick={(e) => {
                 e.stopPropagation()
                 runFromHere?.(id)
@@ -519,7 +520,7 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
               <FastForward className="w-3 h-3" />
               Run from here
               {hasCredits() && downstreamCredits > 0 && (
-                <span className="ml-0.5 opacity-80">({downstreamCredits} CR)</span>
+                <span className="ml-1 opacity-80">({downstreamCredits} CR)</span>
               )}
             </button>
           </div>
@@ -690,7 +691,7 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
           {/* Accessible title for Radix Dialog — visually replaced by the
               editable header below. */}
           <VisuallyHidden>
-            <DialogTitle>{nodeData.label ?? "Text Prompt"}</DialogTitle>
+            <DialogTitle>{nodeData.label ?? "Text"}</DialogTitle>
           </VisuallyHidden>
           {/* Header: icon + editable title, top-left. */}
           <div className="absolute top-2 left-3 flex items-center gap-1.5 text-[14px] font-medium text-foreground/70 dark:text-white/70">
@@ -704,12 +705,12 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
                   setTitleEditing(false)
                   const next = titleDraft.trim()
                   if (next && next !== nodeData.label) updateNodeData(id, { label: next })
-                  else setTitleDraft(nodeData.label ?? "Text Prompt")
+                  else setTitleDraft(nodeData.label ?? "Text")
                 }}
                 onKeyDown={(e) => {
                   e.stopPropagation()
                   if (e.key === "Enter") (e.target as HTMLInputElement).blur()
-                  if (e.key === "Escape") { setTitleDraft(nodeData.label ?? "Text Prompt"); setTitleEditing(false) }
+                  if (e.key === "Escape") { setTitleDraft(nodeData.label ?? "Text"); setTitleEditing(false) }
                 }}
                 className="bg-white border border-border rounded-md px-2 py-0.5 text-foreground outline-none min-w-[8rem] max-w-[20rem] text-[14px] focus:ring-1 focus:ring-[#ff0073]/40 focus:border-[#ff0073] dark:bg-zinc-900 dark:border-white/20 dark:text-white/90"
                 style={{ width: `${Math.max(8, titleDraft.length * 0.65 + 2)}ch` }}
@@ -720,7 +721,7 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
                 onClick={() => setTitleEditing(true)}
                 title="Click to rename"
               >
-                {nodeData.label ?? "Text Prompt"}
+                {nodeData.label ?? "Text"}
               </span>
             )}
           </div>

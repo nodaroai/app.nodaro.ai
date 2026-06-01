@@ -12,6 +12,8 @@ vi.mock("lucide-react", () => {
     Video: Icon,
     Music: Icon,
     X: Icon,
+    Save: Icon,
+    Trash2: Icon,
     ChevronDown: Icon,
     ChevronDownIcon: Icon,
     ChevronUpIcon: Icon,
@@ -106,7 +108,7 @@ function renderConfig(
   return { ...utils, onUpdate: props.onUpdate }
 }
 
-describe("LLMChatConfig (Generate Text — merged templates + fan-out)", () => {
+describe("LLMChatConfig (Generate Text — merged presets + fan-out)", () => {
   beforeEach(() => {
     createNodesFromWriterMock.mockClear()
     runAllWriterImageNodesMock.mockClear()
@@ -120,32 +122,32 @@ describe("LLMChatConfig (Generate Text — merged templates + fan-out)", () => {
     renderConfig()
     expect(screen.getByTestId("llm-model-select")).toBeInTheDocument()
     const labels = screen.getAllByTestId("mappable-field").map((n) => n.getAttribute("data-label"))
-    expect(labels).toContain("System Prompt")
+    expect(labels).toContain("Instructions (System Prompt)")
     expect(labels).toContain("User Prompt")
   })
 
-  // --- Template selector ---
-  it("renders the template selector with built-in templates", () => {
+  // --- Preset selector ---
+  it("renders the preset selector with built-in presets", () => {
     renderConfig()
-    const combo = screen.getByRole("combobox", { name: /template/i })
+    const combo = screen.getByRole("combobox", { name: /preset/i })
     const options = within(combo).getAllByRole("option").map((o) => o.textContent)
     expect(options).toContain("Photo Shoot Planner")
     expect(options).toContain("Product Catalog Writer")
     expect(options).toContain("Custom")
   })
 
-  it("renders a 'My Templates' group from the store's userTextTemplates", () => {
+  it("renders a 'My Presets' group from the store's userTextTemplates", () => {
     renderConfig(
       {},
       { userTextTemplates: [{ id: "u1", label: "My Brand Voice", systemPrompt: "Be punchy" }] },
     )
-    const combo = screen.getByRole("combobox", { name: /template/i })
+    const combo = screen.getByRole("combobox", { name: /preset/i })
     expect(within(combo).getByText("My Brand Voice")).toBeInTheDocument()
   })
 
-  it("applies systemPrompt + defaultInput + maxTokens when selecting a built-in template (empty input)", () => {
+  it("applies systemPrompt + defaultInput + maxTokens when selecting a built-in preset (empty input)", () => {
     const { onUpdate } = renderConfig({ userInput: "" })
-    const combo = screen.getByRole("combobox", { name: /template/i })
+    const combo = screen.getByRole("combobox", { name: /preset/i })
     fireEvent.change(combo, { target: { value: "photo-shoot" } })
     expect(onUpdate).toHaveBeenCalledTimes(1)
     const arg = onUpdate.mock.calls[0][0]
@@ -156,15 +158,15 @@ describe("LLMChatConfig (Generate Text — merged templates + fan-out)", () => {
     expect(arg.maxTokens).toBe(16384)
   })
 
-  it("does NOT overwrite a non-default userInput when switching templates", () => {
+  it("does NOT overwrite a non-default userInput when switching presets", () => {
     const { onUpdate } = renderConfig({ userInput: "my own custom brief", templateId: "custom" })
-    const combo = screen.getByRole("combobox", { name: /template/i })
+    const combo = screen.getByRole("combobox", { name: /preset/i })
     fireEvent.change(combo, { target: { value: "photo-shoot" } })
     const arg = onUpdate.mock.calls[0][0]
     expect(arg).not.toHaveProperty("userInput")
   })
 
-  it("applies a user template from the store on select", () => {
+  it("applies a user preset from the store on select", () => {
     const { onUpdate } = renderConfig(
       {},
       {
@@ -173,7 +175,7 @@ describe("LLMChatConfig (Generate Text — merged templates + fan-out)", () => {
         ],
       },
     )
-    const combo = screen.getByRole("combobox", { name: /template/i })
+    const combo = screen.getByRole("combobox", { name: /preset/i })
     fireEvent.change(combo, { target: { value: "u1" } })
     const arg = onUpdate.mock.calls[0][0]
     expect(arg.templateId).toBe("u1")
@@ -230,12 +232,12 @@ describe("LLMChatConfig (Generate Text — merged templates + fan-out)", () => {
     expect(runAllWriterImageNodesMock).toHaveBeenCalledWith("llm-node-1")
   })
 
-  // --- Save as template ---
-  it("Save as template writes to the store and persists via the settings mutation", () => {
+  // --- Save as preset ---
+  it("Save as preset writes to the store and persists via the settings mutation", () => {
     const promptSpy = vi.spyOn(window, "prompt").mockReturnValue("Reusable Preset")
     try {
       renderConfig({ systemPrompt: "Sys here", maxTokens: 4096, llmModel: "claude-x" })
-      fireEvent.click(screen.getByRole("button", { name: /save as template/i }))
+      fireEvent.click(screen.getByRole("button", { name: /save as preset/i }))
 
       expect(setUserTextTemplatesMock).toHaveBeenCalledTimes(1)
       const newList = setUserTextTemplatesMock.mock.calls[0][0]
@@ -253,6 +255,72 @@ describe("LLMChatConfig (Generate Text — merged templates + fan-out)", () => {
       expect(mutateArg.textTemplates).toEqual(newList)
     } finally {
       promptSpy.mockRestore()
+    }
+  })
+
+  // --- Update / Delete a saved user template ---
+  it("does NOT show Update / Delete for a built-in template", () => {
+    renderConfig({ templateId: "photo-shoot" })
+    expect(screen.queryByRole("button", { name: /^update$/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /delete preset/i })).not.toBeInTheDocument()
+  })
+
+  it("Update overrides the selected user template in place and persists", () => {
+    const { onUpdate } = renderConfig(
+      { templateId: "u1", systemPrompt: "Edited prompt", maxTokens: 8192, llmModel: "claude-y" },
+      { userTextTemplates: [{ id: "u1", label: "My Brand Voice", systemPrompt: "old" }] },
+    )
+    fireEvent.click(screen.getByRole("button", { name: /^update$/i }))
+    expect(setUserTextTemplatesMock).toHaveBeenCalledTimes(1)
+    const newList = setUserTextTemplatesMock.mock.calls[0][0]
+    expect(newList).toHaveLength(1)
+    expect(newList[0]).toMatchObject({
+      id: "u1",
+      label: "My Brand Voice",
+      systemPrompt: "Edited prompt",
+      defaultMaxTokens: 8192,
+      llmModel: "claude-y",
+    })
+    expect(saveTemplatesMutateMock).toHaveBeenCalledTimes(1)
+    // Override edits the template, not the node's selected templateId.
+    expect(onUpdate).not.toHaveBeenCalled()
+  })
+
+  it("Delete removes the selected user template, persists, and falls back to Custom", () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true)
+    try {
+      const { onUpdate } = renderConfig(
+        { templateId: "u1" },
+        {
+          userTextTemplates: [
+            { id: "u1", label: "Brand Voice", systemPrompt: "a" },
+            { id: "u2", label: "Other", systemPrompt: "b" },
+          ],
+        },
+      )
+      fireEvent.click(screen.getByRole("button", { name: /delete preset/i }))
+      expect(setUserTextTemplatesMock).toHaveBeenCalledTimes(1)
+      const newList = setUserTextTemplatesMock.mock.calls[0][0]
+      expect(newList.map((t: { id: string }) => t.id)).toEqual(["u2"])
+      expect(saveTemplatesMutateMock).toHaveBeenCalledTimes(1)
+      expect(onUpdate).toHaveBeenCalledWith({ templateId: "custom" })
+    } finally {
+      confirmSpy.mockRestore()
+    }
+  })
+
+  it("Delete is a no-op when the confirm is dismissed", () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false)
+    try {
+      renderConfig(
+        { templateId: "u1" },
+        { userTextTemplates: [{ id: "u1", label: "Brand Voice", systemPrompt: "a" }] },
+      )
+      fireEvent.click(screen.getByRole("button", { name: /delete preset/i }))
+      expect(setUserTextTemplatesMock).not.toHaveBeenCalled()
+      expect(saveTemplatesMutateMock).not.toHaveBeenCalled()
+    } finally {
+      confirmSpy.mockRestore()
     }
   })
 })

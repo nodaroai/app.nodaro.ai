@@ -1,11 +1,13 @@
 "use client"
 
-import { useMemo } from "react"
-import { FastForward, Play, Square } from "lucide-react"
+import { useMemo, type MouseEvent } from "react"
+import { FastForward, Play, Square, Loader2 } from "lucide-react"
 import { useShallow } from "zustand/react/shallow"
 import { hasCredits } from "@/lib/edition"
 import { cancelJob } from "@/lib/api"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { abortNodeRun } from "@/lib/node-run-abort"
+import { RUN_BUTTON_CLASS } from "@/lib/run-button-style"
 import { getListInputForNode } from "@/components/editor/workflow-editor/node-input-resolver"
 import { REPEATABLE_NODE_TYPES, getEffectiveRepeatCount } from "@nodaro/shared"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
@@ -28,7 +30,7 @@ export function RunNodeButton({ nodeId, credits, isRunning, onRun, runFromHere }
   // mutation that touches unrelated node data (or another node entirely) no
   // longer re-renders this button — it renders under 90+ node types, so this
   // is the render-amplification fix.
-  const { currentJobId, nodeType, nodeFingerprint, edgeFingerprint } = useWorkflowStore(
+  const { currentJobId, nodeStatus, nodeType, nodeFingerprint, edgeFingerprint } = useWorkflowStore(
     useShallow((s) => {
       let fp = ""
       for (const e of s.edges) {
@@ -40,6 +42,10 @@ export function RunNodeButton({ nodeId, credits, isRunning, onRun, runFromHere }
       const d = node?.data as Record<string, unknown> | undefined
       return {
         currentJobId: d?.currentJobId as string | undefined,
+        // Read the status directly so the Stop button shows from the
+        // optimistic "pending" flip (the instant Run is clicked) through
+        // "running" — not only once the caller's `isRunning` prop turns true.
+        nodeStatus: d?.executionStatus as string | undefined,
         nodeType: node?.type,
         // Credit math reads the whole `data` (getEffectiveRepeatCount +
         // getListInputForNode), so fingerprint it wholesale to guarantee no
@@ -69,38 +75,60 @@ export function RunNodeButton({ nodeId, credits, isRunning, onRun, runFromHere }
 
   const totalCredits = (credits ?? 0) * fanOutCount * repeatCount
 
-  if (isRunning && currentJobId) {
+  // The Run (play) button becomes a Stop button the moment the node runs —
+  // available immediately from the optimistic "pending" flip, even before a
+  // job id exists (the "initiating" window). Stopping cancels the job when
+  // there is one, and always clears the running state locally so the node
+  // never gets stuck mid-run.
+  const isActive = isRunning || nodeStatus === "pending" || nodeStatus === "running"
+  if (isActive) {
+    const handleStop = (e: MouseEvent) => {
+      e.stopPropagation()
+      // Actually abort the in-flight run: cancels a streaming SSE fetch (or any
+      // execution honoring ctx.signal) immediately. cancelJob below stops a
+      // backend job when there is one.
+      abortNodeRun(nodeId)
+      const markCancelled = () => {
+        // Cancelling must NOT destroy access to existing results. Fall back to
+        // the last result (→ "completed", point at result 0) when there is one,
+        // otherwise just return to "idle". Never a "Failed/Cancelled" state that
+        // replaces the node's content.
+        const node = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)
+        const results = (node?.data as Record<string, unknown> | undefined)?.generatedResults
+        const hasResults = Array.isArray(results) && results.length > 0
+        useWorkflowStore.getState().updateNodeData(nodeId, {
+          executionStatus: hasResults ? "completed" : "idle",
+          errorMessage: undefined,
+          currentJobId: undefined,
+          currentJobProgress: undefined,
+          ...(hasResults ? { activeResultIndex: 0 } : {}),
+        })
+      }
+      if (currentJobId) {
+        cancelJob(currentJobId).then(markCancelled).catch(markCancelled)
+      } else {
+        markCancelled()
+      }
+    }
+    // Same look as the Run button (brand-pink outline) — it just spins to show
+    // it's running; the icon swaps to a stop square on hover and clicking stops.
     return (
       <button
         type="button"
-        className="flex items-center gap-1 h-6 px-2.5 text-[11px] font-medium text-white rounded-md whitespace-nowrap bg-red-500 hover:bg-red-600 shadow-sm"
-        onClick={(e) => {
-          e.stopPropagation()
-          cancelJob(currentJobId).then(() => {
-            useWorkflowStore.getState().updateNodeData(nodeId, {
-              executionStatus: "failed",
-              errorMessage: "Cancelled",
-              currentJobId: undefined,
-              currentJobProgress: undefined,
-            })
-          }).catch(() => {
-            // If cancel API fails, still mark as failed locally
-            useWorkflowStore.getState().updateNodeData(nodeId, {
-              executionStatus: "failed",
-              errorMessage: "Cancelled",
-              currentJobId: undefined,
-              currentJobProgress: undefined,
-            })
-          })
-        }}
+        aria-label="Stop"
+        title="Stop"
+        className={`group/stop flex items-center gap-1 h-6 px-2.5 text-[11px] font-medium rounded-md whitespace-nowrap ${RUN_BUTTON_CLASS}`}
+        onClick={handleStop}
       >
-        <Square className="w-2.5 h-2.5 fill-current" />
+        <Loader2 className="w-3 h-3 animate-spin group-hover/stop:hidden" />
+        <Square className="w-2.5 h-2.5 fill-current hidden group-hover/stop:block" />
         Stop
+        {hasCredits() && credits !== undefined && credits > 0 && (
+          <span className="ml-1 opacity-80">({totalCredits} CR)</span>
+        )}
       </button>
     )
   }
-
-  if (isRunning) return null
 
   const Icon = runFromHere ? FastForward : Play
   const label = runFromHere ? "Run from here" : "Run"
@@ -108,7 +136,7 @@ export function RunNodeButton({ nodeId, credits, isRunning, onRun, runFromHere }
   return (
     <button
       type="button"
-      className="flex items-center gap-1 h-6 px-2.5 text-[11px] font-medium text-white rounded-md whitespace-nowrap bg-[#ff0073] hover:bg-[#e60068] shadow-sm"
+      className={`flex items-center gap-1 h-6 px-2.5 text-[11px] font-medium rounded-md whitespace-nowrap ${RUN_BUTTON_CLASS}`}
       onClick={(e) => { e.stopPropagation(); onRun(nodeId) }}
     >
       <Icon className="w-3 h-3" />

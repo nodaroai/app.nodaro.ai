@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { getJobStatusLean, getUserCredits, getWorkflowExecution, runWorkflow, streamWorkflowExecution, WorkflowAlreadyRunningError, withDedupRaceRetry } from "@/lib/api";
 import { generateIdempotencyKey } from "@/lib/idempotency-key";
+import { registerNodeRunAbort, clearNodeRunAbort } from "@/lib/node-run-abort";
 import { hasCredits } from "@/lib/edition";
 import { getCachedUserId } from "@/hooks/use-auth";
 import { setSkipUndoCapture } from "@/hooks/undo-flags";
@@ -338,8 +339,23 @@ export async function handleRunSingleNode(
   useWorkflowStore.getState().markNodesStatus([nodeId], "pending");
   setIsRunning(true);
 
+  // Per-node cancellation: register an AbortController so the node's Stop button
+  // can abort the in-flight execution (streaming SSE today; anything honoring
+  // ctx.signal). Registered BEFORE the pre-run save so a Stop during the save
+  // window also takes effect. Threaded into ctx; cleared when this run settles.
+  const abortController = new AbortController();
+  ctx.signal = abortController.signal;
+  registerNodeRunAbort(nodeId, abortController);
+
   if (wasDirty && projectId) {
     await save(projectId);
+  }
+
+  // Stop pressed during the save → don't start the run at all.
+  if (abortController.signal.aborted) {
+    clearNodeRunAbort(nodeId, abortController);
+    setIsRunning(false);
+    return;
   }
 
   const { nodes: currentNodes, edges: currentEdges } =
@@ -368,7 +384,9 @@ export async function handleRunSingleNode(
       // the optimistic "pending" flip — e.g. executeNode rejected on synchronous
       // input validation before writing any status — roll it back to "failed"
       // so it doesn't keep the animated running border forever. Leave any
-      // terminal status executeNode already set untouched.
+      // terminal status executeNode already set untouched. A user-initiated
+      // abort is NOT a failure: the Stop handler already set the terminal state.
+      if (abortController.signal.aborted) return;
       const cur = useWorkflowStore
         .getState()
         .nodes.find((n) => n.id === nodeId);
@@ -377,6 +395,7 @@ export async function handleRunSingleNode(
       }
     })
     .finally(() => {
+      clearNodeRunAbort(nodeId, abortController);
       if (pollIntervalsRef.current.size === 0) {
         setIsRunning(false);
       }

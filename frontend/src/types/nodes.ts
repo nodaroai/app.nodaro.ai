@@ -3523,7 +3523,7 @@ export type LLMChatData = {
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
   generatedText?: string
-  generatedResults?: Array<{ text: string; jobId?: string; timestamp?: string; systemPrompt?: string; userPrompt?: string; listValue?: string; runId?: string }>
+  generatedResults?: Array<{ text: string; jobId?: string; timestamp?: string; systemPrompt?: string; userPrompt?: string; listValue?: string; runId?: string; model?: string; templateId?: string }>
   activeResultIndex?: number
   lastSystemPrompt?: string
   lastUserPrompt?: string
@@ -4507,12 +4507,12 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
   // Input
   {
     type: "text-prompt",
-    label: "Text Prompt",
+    label: "Text",
     category: "input",
     creditCost: 0,
     inputs: ["in"],
     outputs: ["prompt"],
-    defaultData: { label: "Text Prompt", text: "", variables: {} },
+    defaultData: { label: "Text", text: "", variables: {} },
   },
   {
     type: "list",

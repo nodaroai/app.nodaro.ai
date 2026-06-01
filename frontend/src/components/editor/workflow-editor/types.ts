@@ -379,6 +379,13 @@ function fanOutCount(items: string[], selector: SelectorFields | undefined): num
 export interface ExecutionContext {
   userId: string | undefined;
   projectId: string | undefined;
+  /**
+   * Per-run cancellation signal. Set by `handleRunSingleNode` from a per-node
+   * `AbortController` (see `lib/node-run-abort.ts`) and threaded into the
+   * execution so the node's Stop button can abort an in-flight stream/request
+   * immediately. Undefined for runs that don't support per-node cancellation.
+   */
+  signal?: AbortSignal;
   trackInterval: (
     interval: ReturnType<typeof setInterval>,
   ) => ReturnType<typeof setInterval>;
