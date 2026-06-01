@@ -632,7 +632,6 @@ export function ConfigPanel() {
   const edges = useWorkflowStore((s) => s.edges)
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-  const deleteNode = useWorkflowStore((s) => s.deleteNode)
   const deleteEdge = useWorkflowStore((s) => s.deleteEdge)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const runFromHere = useWorkflowStore((s) => s.runFromHere)
@@ -849,11 +848,6 @@ export function ConfigPanel() {
       deleteEdge(edge.id)
     }
   }, [edges, selectedNodeId, deleteEdge])
-
-  function handleDelete() {
-    if (!selectedNodeId) return
-    deleteNode(selectedNodeId)
-  }
 
   // useMemo must be called unconditionally (before any early return) to satisfy React's rules of hooks
   const configProps = useMemo(
@@ -1114,14 +1108,6 @@ export function ConfigPanel() {
                 >
                   Close
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30"
-                  onClick={handleDelete}
-                >
-                  Delete Node
-                </Button>
               </div>
             ) : (
               <>
@@ -1205,9 +1191,6 @@ export function ConfigPanel() {
                   )
                 })()}
 
-                <Button variant="outline" size="sm" className="w-full text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30" onClick={handleDelete}>
-                  Delete Node
-                </Button>
               </>
             )}
           </div>
