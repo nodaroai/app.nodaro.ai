@@ -99,17 +99,16 @@ export function ModelSearchSelect({
           <ChevronsUpDown className="ml-1 size-3.5 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align={align} className={cn("w-[300px] p-0", contentClassName)}>
+      <PopoverContent align={align} className={cn("w-[350px] p-0", contentClassName)}>
         {/* Command ships its own `bg-popover`; make it transparent so it
             inherits the PopoverContent surface — that's #101010 when the caller
             passes `node-menu-surface` (node bottom-toolbar) and the default
             popover color elsewhere (config panel). Single fix for both. */}
         <Command shouldFilter={false} className="bg-transparent">
-          {/* Brighten the search hint a notch: the default `text-muted-
-              foreground` (#94A3B8) reads faint on the dark menu surface, so
-              tip it toward the input's foreground color for a touch more
-              presence. */}
-          <CommandInput value={query} onValueChange={setQuery} placeholder={placeholder} className="placeholder:text-foreground/70" />
+          {/* Keep the search hint quiet: it's a placeholder, so dim it to
+              `muted-foreground/50` so it reads clearly below the model names
+              and their descriptions rather than competing with them. */}
+          <CommandInput value={query} onValueChange={setQuery} placeholder={placeholder} className="placeholder:text-muted-foreground/50" />
           <CommandList>
             {filtered.length === 0 ? (
               <div className="py-6 text-center text-sm text-muted-foreground">No models match.</div>
@@ -166,7 +165,7 @@ function ModelCommandItem({
         )}
       </span>
       {option.desc && (
-        <span className="pl-[1.375rem] text-[11px] leading-tight text-muted-foreground/50">
+        <span className="pl-[1.375rem] text-[11px] leading-tight text-muted-foreground/60">
           {option.desc}
         </span>
       )}
