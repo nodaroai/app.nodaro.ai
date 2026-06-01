@@ -67,6 +67,11 @@ describe("checkExecutionControl — status mapping", () => {
     expect(await checkExecutionControl("exec-1")).toBe("stopping")
   })
 
+  it('returns "discarded" when DB status is "discarded"', async () => {
+    mockExecutionStatus("discarded")
+    expect(await checkExecutionControl("exec-1")).toBe("discarded")
+  })
+
   it('returns "running" when DB status is "running"', async () => {
     mockExecutionStatus("running")
     expect(await checkExecutionControl("exec-1")).toBe("running")
@@ -177,5 +182,105 @@ describe("orchestrator-worker.ts dispatch loop branches on both stop modes", () 
       stoppingEvent,
       `The stopping branch doesn't emit an execution:cancelled event within 500 chars.`,
     ).not.toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Test 3 — structural check that the orchestrator dispatch loop has a
+// DEDICATED "discarded" branch that is SEPARATE from the cancelled/stopping
+// branch. "discarded" = Discard Run: stop scheduling new levels, but DO NOT
+// cancel in-flight jobs and DO NOT rewrite the status to "cancelled" (the
+// frontend needs the "discarded" status to detach the canvas).
+//
+// Folding "discarded" into the shared cancelled||stopping branch would erase
+// the status the frontend depends on — these structural guards lock that in.
+// ---------------------------------------------------------------------------
+
+describe("orchestrator-worker.ts has a dedicated discarded branch", () => {
+  it('contains a "controlStatus === \\"discarded\\"" branch', () => {
+    expect(
+      /controlStatus\s*===\s*"discarded"/.test(ORCHESTRATOR_SRC),
+      `orchestrator-worker.ts no longer branches on \`controlStatus === "discarded"\` — Discard Run won't stop scheduling new levels. Re-add a dedicated branch after \`checkExecutionControl(executionId)\`.`,
+    ).toBe(true)
+  })
+
+  it('the discarded branch is NOT folded into the cancelled||stopping condition', () => {
+    // Guard against a regression that ORs "discarded" into the shared branch
+    // (which overwrites status to "cancelled" and cancels in-flight jobs).
+    expect(
+      /controlStatus\s*===\s*"cancelled"\s*\|\|\s*controlStatus\s*===\s*"stopping"\s*\|\|\s*controlStatus\s*===\s*"discarded"/.test(
+        ORCHESTRATOR_SRC,
+      ),
+      `"discarded" must NOT be ORed into the cancelled||stopping branch — that branch overwrites the execution status to "cancelled" and cancels in-flight jobs, erasing the "discarded" status the frontend needs. Use a separate \`if (controlStatus === "discarded")\` branch.`,
+    ).toBe(false)
+    // And the reverse fold ordering.
+    expect(
+      /controlStatus\s*===\s*"discarded"\s*\|\|\s*controlStatus\s*===\s*"(cancelled|stopping)"/.test(
+        ORCHESTRATOR_SRC,
+      ),
+      `"discarded" must NOT be ORed with cancelled/stopping. Use a separate branch.`,
+    ).toBe(false)
+  })
+
+  it('the discarded branch writes status: "discarded" (NOT "cancelled")', () => {
+    const discardedBlock = ORCHESTRATOR_SRC.match(
+      /controlStatus\s*===\s*"discarded"[\s\S]{0,400}?status:\s*"discarded"/,
+    )
+    expect(
+      discardedBlock,
+      `The discarded branch doesn't update the execution status to "discarded" within 400 chars — the frontend won't detach the canvas. It must write status: "discarded" (not "cancelled").`,
+    ).not.toBeNull()
+
+    // The discarded branch must NOT write status: "cancelled" before it writes
+    // status: "discarded" — otherwise it would clobber the status the frontend
+    // needs. We assert there's no `status: "cancelled"` between the discarded
+    // branch start and its `status: "discarded"` write.
+    const discardedToCancelled = ORCHESTRATOR_SRC.match(
+      /controlStatus\s*===\s*"discarded"[\s\S]{0,400}?status:\s*"cancelled"/,
+    )
+    expect(
+      discardedToCancelled,
+      `The discarded branch writes status: "cancelled" — it must write status: "discarded" instead, so the frontend can distinguish a discard from a cancel.`,
+    ).toBeNull()
+  })
+
+  it("the discarded branch emits the execution:discarded event (terminal SSE)", () => {
+    const discardedEvent = ORCHESTRATOR_SRC.match(
+      /controlStatus\s*===\s*"discarded"[\s\S]{0,500}?type:\s*"execution:discarded"/,
+    )
+    expect(
+      discardedEvent,
+      `The discarded branch doesn't emit an execution:discarded event within 500 chars — SSE subscribers won't get a terminal "done" on discard.`,
+    ).not.toBeNull()
+  })
+
+  it("the discarded branch does NOT set ctx.cancelled = true or cancel in-flight jobs", () => {
+    // In-flight jobs must finish naturally into My Library. The discarded
+    // branch must not set ctx.cancelled (which would make iteration tasks bail)
+    // nor call cancelJobAndThrow.
+    const discardedSetsCancelled = ORCHESTRATOR_SRC.match(
+      /controlStatus\s*===\s*"discarded"[\s\S]{0,400}?ctx\.cancelled\s*=\s*true/,
+    )
+    expect(
+      discardedSetsCancelled,
+      `The discarded branch sets ctx.cancelled = true — but Discard Run must let in-flight jobs finish into My Library. Remove that assignment from the discarded branch.`,
+    ).toBeNull()
+  })
+})
+
+describe("orchestrator-worker.ts stalled re-pick guard treats discarded as terminal", () => {
+  it("the stalled re-pick guard includes 'discarded' (a discarded run must not be re-executed/re-charged)", () => {
+    // A BullMQ stalled re-pick of a TERMINAL execution must short-circuit.
+    // 'discarded' sets completed_at and is terminal; omitting it would let a
+    // crashed-then-discarded run be re-executed, re-reserving credits for a run
+    // the user explicitly discarded. Find the guard array and assert membership.
+    const guard = ORCHESTRATOR_SRC.match(
+      /\[\s*"completed"\s*,\s*"failed"\s*,\s*"cancelled"[^\]]*\]\.includes\(\s*execRow\.status/,
+    )
+    expect(
+      guard,
+      "Could not find the stalled re-pick terminal-status guard (\"completed\",\"failed\",\"cancelled\",...].includes(execRow.status)).",
+    ).not.toBeNull()
+    expect(guard![0]).toContain('"discarded"')
   })
 })

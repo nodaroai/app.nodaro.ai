@@ -51,6 +51,7 @@ const STATUS_OPTIONS = [
   { value: "failed", label: "Failed" },
   { value: "pending", label: "Pending" },
   { value: "cancelled", label: "Cancelled" },
+  { value: "discarded", label: "Discarded" },
 ]
 
 export default function ExecutionsPage() {

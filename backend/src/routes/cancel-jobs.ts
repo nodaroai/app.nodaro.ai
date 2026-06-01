@@ -49,10 +49,12 @@ export async function cancelJobsRoutes(app: FastifyInstance) {
       }
 
       try {
-        // Get the job to verify ownership and current status
+        // Get the job to verify ownership and current status. `provider_task_id`
+        // is set once we've submitted to the external provider — past that point
+        // the job can't be killed (no provider cancel API), it runs to completion.
         const { data: job, error: fetchError } = await supabase
           .from("jobs")
-          .select("id, status, user_id, input_data, output_data")
+          .select("id, status, user_id, input_data, output_data, provider_task_id")
           .eq("id", jobId)
           .single()
 
@@ -69,7 +71,7 @@ export async function cancelJobsRoutes(app: FastifyInstance) {
           })
         }
 
-        // Check if job can be cancelled
+        // Already terminal — nothing to do.
         const cancellableStatuses = ["pending", "queued", "processing"]
         if (!cancellableStatuses.includes(job.status)) {
           return reply.status(400).send({
@@ -80,10 +82,19 @@ export async function cancelJobsRoutes(app: FastifyInstance) {
           })
         }
 
-        // Try to remove from BullMQ queue
+        // In flight: the external provider call already went out. We can't kill
+        // it — let it finish (the user keeps the result they paid for). Report
+        // `inFlight` so the UI shows a graceful "Stopping…" rather than pretending
+        // it was cancelled. No status change, no refund.
+        if (job.provider_task_id) {
+          return { success: true, cancelled: 0, inFlight: true }
+        }
+
+        // Pre-call: truly cancel. Remove from the queue (if still waiting), flip
+        // to cancelled (the worker's pre-call guard aborts before createTask if
+        // it had already been picked up), and refund the reserved credits.
         await tryRemoveFromQueue(jobId)
 
-        // Update job status to cancelled
         const { error: updateError } = await supabase
           .from("jobs")
           .update({ status: "cancelled" })
@@ -95,12 +106,10 @@ export async function cancelJobsRoutes(app: FastifyInstance) {
           })
         }
 
-        // Refund any reserved credits — without this, cancelling silently
-        // forfeits the user's balance for work that never produced output.
         await refundReservedCreditsForJobs([jobId])
         invalidateBalanceCache(userId)
 
-        return { success: true, cancelled: 1 }
+        return { success: true, cancelled: 1, inFlight: false }
       } catch (err) {
         console.error("[cancel-job] Error:", err)
         return reply.status(500).send({
@@ -121,12 +130,15 @@ export async function cancelJobsRoutes(app: FastifyInstance) {
     }
 
     try {
-      // Get all cancellable jobs for this user
+      // Get all cancellable jobs for this user that have NOT yet hit the
+      // external provider (provider_task_id IS NULL). In-flight jobs can't be
+      // killed — they run to completion — so we leave them alone.
       const { data: jobs, error: fetchError } = await supabase
         .from("jobs")
         .select("id")
         .eq("user_id", userId)
         .in("status", ["pending", "queued", "processing"])
+        .is("provider_task_id", null)
 
       if (fetchError) {
         return reply.status(500).send({

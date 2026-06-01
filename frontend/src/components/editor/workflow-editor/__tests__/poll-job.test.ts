@@ -1,11 +1,16 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 const mockGetJobStatusLean = vi.fn()
-const mockUpdateNodeData = vi.fn()
 const mockToastInfo = vi.fn()
 const mockToastError = vi.fn()
 const mockToastSuccess = vi.fn()
 const mockNodes: Array<{ id: string; data: Record<string, unknown> }> = []
+// Apply writes to mockNodes so node state (e.g. currentJobId, which the
+// abandon-guard reads) reflects what the real store would hold mid-poll.
+const mockUpdateNodeData = vi.fn((id: string, patch: Record<string, unknown>) => {
+  const node = mockNodes.find((n) => n.id === id)
+  if (node) node.data = { ...node.data, ...patch }
+})
 
 vi.mock("sonner", () => ({
   toast: {
@@ -307,6 +312,75 @@ describe("pollJobWithNodeUpdate", () => {
     expect(extraFn).toHaveBeenCalledWith({ audioUrl: "url", duration: 5.2 })
     expect(mockUpdateNodeData).toHaveBeenCalledWith("n1", expect.objectContaining({
       audioDuration: 5.2,
+    }))
+  })
+
+  // --- abandon-guard interaction at the live poll loop ---
+
+  it("abandons the completion write when currentJobId points at a different job", async () => {
+    // Negative-path / discard-detach proof: the node's currentJobId was
+    // replaced (re-run) or cleared (discard) while job j1 was in flight. The
+    // completion must NOT be written to the canvas and the promise resolves "".
+    // pollJobWithNodeUpdate's start write sets currentJobId: undefined, then the
+    // apiCall .then sets currentJobId = "j1". We overwrite it to a DIFFERENT job
+    // right before the first poll fires, simulating a concurrent re-run/discard.
+    const apiCall = vi.fn().mockResolvedValue({ jobId: "j1" })
+    mockGetJobStatusLean.mockResolvedValue({
+      status: "completed",
+      output_data: { videoUrl: "https://cdn.example.com/vid.mp4" },
+    })
+    mockNodes.push({ id: "n1", data: { generatedResults: [] } })
+
+    const ctx = makeCtx()
+    const promise = pollJobWithNodeUpdate("n1", apiCall, "generatedVideoUrl", "Video", ctx)
+    await vi.advanceTimersByTimeAsync(100) // apiCall resolves → currentJobId = "j1"
+    // Simulate a concurrent discard/re-run: node now points at a different job.
+    mockNodes[0].data.currentJobId = "job-OTHER"
+    mockUpdateNodeData.mockClear()
+    await vi.advanceTimersByTimeAsync(2000) // first poll → completed → abandoned
+
+    const result = await promise
+    expect(result).toBe("")
+    // No terminal write landed for the polled job.
+    const wroteCompleted = mockUpdateNodeData.mock.calls.some(
+      ([, patch]) => (patch as Record<string, unknown>).executionStatus === "completed",
+    )
+    const wroteResults = mockUpdateNodeData.mock.calls.some(
+      ([, patch]) => "generatedResults" in (patch as Record<string, unknown>),
+    )
+    expect(wroteCompleted).toBe(false)
+    expect(wroteResults).toBe(false)
+    expect(mockUpdateNodeData).not.toHaveBeenCalledWith("n1", expect.objectContaining({
+      generatedVideoUrl: "https://cdn.example.com/vid.mp4",
+    }))
+  })
+
+  it("does NOT abandon mid-list-fan-out even when currentJobId points at a different job", async () => {
+    // Parallel-fan-out regression (Task 6 HIGH): during a list fan-out, N
+    // iterations share one currentJobId slot. Iteration A's job (j1) completes
+    // while currentJobId already holds iteration B's job (job-OTHER). Pre-fix,
+    // the guard returned true → A's result was dropped (resolve("")), silently
+    // losing most batch results. With __listRunning set, the result MUST land.
+    const apiCall = vi.fn().mockResolvedValue({ jobId: "j1" })
+    mockGetJobStatusLean.mockResolvedValue({
+      status: "completed",
+      output_data: { videoUrl: "https://cdn.example.com/vidA.mp4" },
+    })
+    // __listRunning marks the fan-out window (set by executeNodeForList).
+    mockNodes.push({ id: "n1", data: { generatedResults: [], __listRunning: true } })
+
+    const ctx = makeCtx()
+    const promise = pollJobWithNodeUpdate("n1", apiCall, "generatedVideoUrl", "Video", ctx)
+    await vi.advanceTimersByTimeAsync(100) // apiCall resolves → currentJobId = "j1"
+    // A concurrent iteration overwrote the shared slot with its own job id.
+    mockNodes[0].data.currentJobId = "job-OTHER"
+    await vi.advanceTimersByTimeAsync(2000) // poll → completed → must be written
+
+    const result = await promise
+    expect(result).toBe("https://cdn.example.com/vidA.mp4")
+    expect(mockUpdateNodeData).toHaveBeenCalledWith("n1", expect.objectContaining({
+      executionStatus: "completed",
+      generatedVideoUrl: "https://cdn.example.com/vidA.mp4",
     }))
   })
 })

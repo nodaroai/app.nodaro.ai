@@ -4,7 +4,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 // Mock variables (declared before vi.mock calls)
 // ---------------------------------------------------------------------------
 
-const mockUpdateNodeData = vi.fn()
+// Apply writes to mockNodes so node state (e.g. currentJobId, read by the
+// abandon-guard mid-poll) reflects what the real store would hold.
+const mockUpdateNodeData = vi.fn((id: string, patch: Record<string, unknown>) => {
+  const node = mockNodes.find((n) => n.id === id)
+  if (node) node.data = { ...node.data, ...patch }
+})
 const mockToastError = vi.fn()
 const mockToastSuccess = vi.fn()
 const mockToastInfo = vi.fn()
@@ -1048,13 +1053,15 @@ describe("transcribe", () => {
     // Use fake timers to control the setInterval
     vi.useFakeTimers()
 
-    const promise = executeNode(
-      makeNode("transcribe", {
-        provider: "deepgram",
-        language: "en",
-      }),
-      makeCtx(),
-    )
+    // Register the node in the store so the abandon-guard (which reads
+    // store.nodes for currentJobId) sees the same node the poll loop updates.
+    const transcribeNode = makeNode("transcribe", {
+      provider: "deepgram",
+      language: "en",
+    })
+    mockNodes = [transcribeNode]
+
+    const promise = executeNode(transcribeNode, makeCtx())
 
     // Allow the transcribeApi promise to resolve
     await vi.advanceTimersByTimeAsync(0)

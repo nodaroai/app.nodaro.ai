@@ -3711,8 +3711,11 @@ export async function getWorkflowCostSummary(jobIds: readonly string[]): Promise
 export async function cancelJob(
   jobId: string,
   _userId?: string,
-): Promise<{ success: boolean; cancelled: number }> {
-  return nodaroClient.jobs.cancel(jobId)
+): Promise<{ success: boolean; cancelled: number; inFlight?: boolean }> {
+  // `inFlight: true` means the external provider call already went out and the
+  // job can't be killed — it runs to completion and lands in My Library, while
+  // the canvas detaches the result (see Discard run / shouldAbandonNode).
+  return nodaroClient.jobs.cancel(jobId) as Promise<{ success: boolean; cancelled: number; inFlight?: boolean }>
 }
 
 export async function cancelAllJobs(userId: string): Promise<{ success: boolean; cancelled: number }> {
@@ -4226,7 +4229,7 @@ export async function importWorkflow(
 export interface WorkflowExecution {
   id: string
   workflowId: string
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'timed_out' | 'stopping'
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'timed_out' | 'stopping' | 'discarded'
   triggerType: 'manual' | 'webhook' | 'schedule' | 'single-node' | 'app_run' | 'mcp'
   /** MCP client name (e.g. "Claude", "Cursor") when the execution was triggered via the MCP server. */
   mcpClient?: string | null
@@ -4379,6 +4382,12 @@ export async function stopWorkflowExecution(executionId: string): Promise<void> 
   await nodaroClient.executions.cancel(executionId, { mode: "after_current" })
 }
 
+/** Discard a run: in-flight jobs finish into My Library; the canvas detaches.
+ *  Unlike cancel, this does NOT kill jobs. */
+export async function discardWorkflowExecution(executionId: string): Promise<void> {
+  await nodaroClient.executions.cancel(executionId, { mode: "discard" })
+}
+
 /** Node execution state from the backend orchestrator. */
 interface ExecutionNodeState {
   status: "pending" | "running" | "completed" | "failed" | "skipped"
@@ -4407,6 +4416,7 @@ export interface StreamExecutionCallbacks {
   onCompleted: (data: Record<string, unknown>) => void
   onFailed: (data: Record<string, unknown>) => void
   onCancelled: (data: Record<string, unknown>) => void
+  onDiscarded?: (data: Record<string, unknown>) => void
 }
 
 /**
@@ -4444,6 +4454,14 @@ export async function streamWorkflowExecution(
       const d = event.data as Record<string, unknown>
       const nodeStates = (d.nodeStates ?? {}) as Record<string, ExecutionNodeState>
       const eventType = d.eventType as string | undefined
+      // A discarded run's final nodeStates must NEVER paint the canvas — the
+      // user stopped the run, so its results land in My Library off-canvas.
+      // Short-circuit before onNodeStatesChanged so the discarded states are
+      // never applied, and route to onDiscarded (not onCompleted).
+      if (eventType === "execution:discarded") {
+        callbacks.onDiscarded?.(d)
+        return
+      }
       // Always send the final nodeStates update first
       callbacks.onNodeStatesChanged(nodeStates, {
         completedNodes: d.completedNodes as number | undefined,

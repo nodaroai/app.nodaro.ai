@@ -647,6 +647,92 @@ describe("POST /v1/workflow-executions/:id/cancel", () => {
     expect(res.json().success).toBe(true)
   })
 
+  it("returns success with discard mode, writes status discarded, and does NOT cancel/refund jobs", async () => {
+    const mockFrom = vi.mocked(supabase.from)
+    const updateSpy = vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ data: null, error: null }),
+    })
+    let callNum = 0
+    mockFrom.mockImplementation((table: string) => {
+      callNum++
+      if (callNum === 1) {
+        // Select execution
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: { id: TEST_EXEC_ID, status: "running" },
+                  error: null,
+                }),
+              }),
+            }),
+          }),
+        } as never
+      }
+      if (callNum === 2) {
+        // Update execution status — capture for assertion
+        expect(table).toBe("workflow_executions")
+        return { update: updateSpy } as never
+      }
+      // No further DB calls expected for discard (no jobs query)
+      return {
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            in: vi.fn().mockResolvedValue({ data: [], error: null }),
+          }),
+        }),
+        update: vi.fn().mockReturnValue({
+          in: vi.fn().mockResolvedValue({ data: null, error: null }),
+          eq: vi.fn().mockResolvedValue({ data: null, error: null }),
+        }),
+      } as never
+    })
+
+    const res = await authedPost(`/v1/workflow-executions/${TEST_EXEC_ID}/cancel`, {
+      mode: "discard",
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().success).toBe(true)
+
+    // The execution UPDATE must set status:"discarded" (no completed_at).
+    expect(updateSpy).toHaveBeenCalledTimes(1)
+    const updatePayload = updateSpy.mock.calls[0]?.[0] as Record<string, unknown>
+    expect(updatePayload.status).toBe("discarded")
+    expect(updatePayload).not.toHaveProperty("completed_at")
+
+    // Let the (non-existent) fire-and-forget microtask drain to be safe.
+    await new Promise((r) => setImmediate(r))
+
+    // CRITICAL: discard must NOT cancel in-flight jobs or refund credits.
+    // Only two `from()` calls happen (select execution + update execution).
+    expect(mockFrom).toHaveBeenCalledTimes(2)
+    expect(mockRefundCredits).not.toHaveBeenCalled()
+    expect(mockInvalidateBalanceCache).not.toHaveBeenCalled()
+  })
+
+  it("returns 400 for an unknown cancel mode", async () => {
+    const mockFrom = vi.mocked(supabase.from)
+    mockFrom.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({
+              data: { id: TEST_EXEC_ID, status: "running" },
+              error: null,
+            }),
+          }),
+        }),
+      }),
+    } as never)
+
+    const res = await authedPost(`/v1/workflow-executions/${TEST_EXEC_ID}/cancel`, {
+      mode: "destroy",
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("bad_request")
+  })
+
   it("falls back to cancelling a standalone job", async () => {
     const mockFrom = vi.mocked(supabase.from)
     let callNum = 0

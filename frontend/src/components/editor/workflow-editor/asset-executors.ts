@@ -30,6 +30,7 @@ import {
   type ExecutionContext,
 } from "./types";
 import { pollJobToCompletion, guardedToast } from "./poll-job";
+import { shouldAbandonNode } from "./abandon-guard";
 
 // --- Character/Face/Object/Location generation ---
 
@@ -72,6 +73,15 @@ export function runCharacterGeneration(
             try {
               const job = await getJobStatusLean(jobId);
               pollFailures = 0;
+              if (job.status === "completed" || job.status === "failed") {
+                if (shouldAbandonNode(nodeId, jobId)) {
+                  // Run discarded/replaced — the job still lands in My Library,
+                  // but we must not write its result/error onto the canvas.
+                  ctx.untrackInterval(poll);
+                  resolve("");
+                  return;
+                }
+              }
               if (job.status === "completed") {
                 ctx.untrackInterval(poll);
                 const imageUrl = job.output_data?.imageUrl;
@@ -144,6 +154,11 @@ export function runCharacterGeneration(
               pollFailures++;
               if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
                 ctx.untrackInterval(poll);
+                if (shouldAbandonNode(nodeId, jobId)) {
+                  // Run discarded/replaced — don't write a failure to the canvas.
+                  resolve("");
+                  return;
+                }
                 const errMsg =
                   err instanceof Error
                     ? err.message
@@ -227,6 +242,15 @@ export function runFaceGeneration(
             try {
               const job = await getJobStatusLean(jobId);
               pollFailures = 0;
+              if (job.status === "completed" || job.status === "failed") {
+                if (shouldAbandonNode(nodeId, jobId)) {
+                  // Run discarded/replaced — the job still lands in My Library,
+                  // but we must not write its result/error onto the canvas.
+                  ctx.untrackInterval(poll);
+                  resolve("");
+                  return;
+                }
+              }
               if (job.status === "completed") {
                 ctx.untrackInterval(poll);
                 const imageUrl = job.output_data?.imageUrl;
@@ -290,6 +314,11 @@ export function runFaceGeneration(
               pollFailures++;
               if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
                 ctx.untrackInterval(poll);
+                if (shouldAbandonNode(nodeId, jobId)) {
+                  // Run discarded/replaced — don't write a failure to the canvas.
+                  resolve("");
+                  return;
+                }
                 const errMsg =
                   err instanceof Error
                     ? err.message
@@ -393,6 +422,15 @@ export function runObjectGeneration(
             try {
               const job = await getJobStatusLean(jobId);
               pollFailures = 0;
+              if (job.status === "completed" || job.status === "failed") {
+                if (shouldAbandonNode(nodeId, jobId)) {
+                  // Run discarded/replaced — the job still lands in My Library,
+                  // but we must not write its result/error onto the canvas.
+                  ctx.untrackInterval(poll);
+                  resolve("");
+                  return;
+                }
+              }
               if (job.status === "completed") {
                 ctx.untrackInterval(poll);
                 const imageUrl = job.output_data?.imageUrl;
@@ -460,6 +498,11 @@ export function runObjectGeneration(
               pollFailures++;
               if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
                 ctx.untrackInterval(poll);
+                if (shouldAbandonNode(nodeId, jobId)) {
+                  // Run discarded/replaced — don't write a failure to the canvas.
+                  resolve("");
+                  return;
+                }
                 const errMsg =
                   err instanceof Error
                     ? err.message
@@ -537,6 +580,15 @@ export function runLocationGeneration(
             try {
               const job = await getJobStatusLean(jobId);
               pollFailures = 0;
+              if (job.status === "completed" || job.status === "failed") {
+                if (shouldAbandonNode(nodeId, jobId)) {
+                  // Run discarded/replaced — the job still lands in My Library,
+                  // but we must not write its result/error onto the canvas.
+                  ctx.untrackInterval(poll);
+                  resolve("");
+                  return;
+                }
+              }
               if (job.status === "completed") {
                 ctx.untrackInterval(poll);
                 const imageUrl = job.output_data?.imageUrl;
@@ -604,6 +656,11 @@ export function runLocationGeneration(
               pollFailures++;
               if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
                 ctx.untrackInterval(poll);
+                if (shouldAbandonNode(nodeId, jobId)) {
+                  // Run discarded/replaced — don't write a failure to the canvas.
+                  resolve("");
+                  return;
+                }
                 updateNodeData(nodeId, {
                   executionStatus: "failed",
                   currentJobId: undefined,

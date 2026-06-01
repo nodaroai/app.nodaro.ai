@@ -686,6 +686,19 @@ export function useWorkflowPersistence(projectId?: string) {
         let nodes = data.nodes as unknown as WorkflowNode[]
         const edges = data.edges as unknown as WorkflowEdge[]
 
+        // `__listRunning` is an in-session list-fan-out marker (abandon-guard
+        // exemption). It must never survive a reload: there is no live
+        // executeNodeForList running for a freshly-loaded workflow, so a stale
+        // `true` (autosaved mid-batch before the finally cleared it) would
+        // permanently exempt the node from the abandon-guard. Clear it on load.
+        nodes = nodes.map((n) => {
+          const d = n.data as Record<string, unknown> | undefined
+          if (d?.__listRunning) {
+            return { ...n, data: { ...d, __listRunning: false } as typeof n.data }
+          }
+          return n
+        })
+
         // Sync node results from jobs table via backend API
         // This handles the case where user left while jobs were running
         const syncResult = await syncNodeResultsFromDB(nodes)

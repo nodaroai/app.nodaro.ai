@@ -709,7 +709,13 @@ export async function apiTokenRoutes(app: FastifyInstance) {
 
           if (!exec) break
 
-          if (exec.status === "completed" || exec.status === "failed" || exec.status === "cancelled") {
+          if (
+            exec.status === "completed" ||
+            exec.status === "failed" ||
+            exec.status === "cancelled" ||
+            exec.status === "timed_out" ||
+            exec.status === "discarded"
+          ) {
             return reply.send(formatExecutionResult(
               execution.id,
               exec as Record<string, unknown>,

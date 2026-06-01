@@ -260,6 +260,12 @@ export async function createKieTask(
   model: string,
   input: Record<string, unknown>,
 ): Promise<CreateKieTaskResult> {
+  // Cancellation is only honored BEFORE we call the external provider — once the
+  // task is submitted, KIE has no cancel API and it runs to completion. If the
+  // user cancelled during the pre-call window (queue pickup / input download),
+  // abort here so we never spend the upstream call.
+  await throwIfJobCancelled()
+
   const apiKey = config.KIE_API_KEY
 
   if (!apiKey) {
@@ -373,8 +379,6 @@ export async function pollKieTask(
   let attempts = 0
   while (attempts < maxAttempts) {
     attempts++
-    // Abort early if the user cancelled the job (worker-bound context).
-    await throwIfJobCancelled()
     await sleep(pollDelay(attempts))
 
     let detailResponse: Response
@@ -542,6 +546,9 @@ export async function runVeoTask(
   /** Provider generation duration in ms (KIE completeTime − createTime). */
   providerMs?: number
 }> {
+  // Pre-call cancellation guard (see createKieTask) — VEO has its own endpoint.
+  await throwIfJobCancelled()
+
   const apiKey = config.KIE_API_KEY
 
   if (!apiKey) {
@@ -712,8 +719,6 @@ async function pollVeoRecordInfo(
   let attempts = 0
   while (attempts < MAX_POLL_ATTEMPTS_VIDEO) {
     attempts++
-    // Abort early if the user cancelled the job (worker-bound context).
-    await throwIfJobCancelled()
     await sleep(pollDelay(attempts))
 
     let detailResponse: Response
@@ -816,6 +821,9 @@ export async function runVeoExtendTask(
   fallbackFlag?: boolean
   providerMs?: number
 }> {
+  // Pre-call cancellation guard (see createKieTask).
+  await throwIfJobCancelled()
+
   const apiKey = config.KIE_API_KEY
   if (!apiKey) {
     throw createSanitizedError("KIE_API_KEY is not configured", "Video extend")

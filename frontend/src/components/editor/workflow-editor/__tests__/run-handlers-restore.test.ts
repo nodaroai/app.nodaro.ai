@@ -143,10 +143,16 @@ function makeNode(
   type = "generate-image",
   extras: Record<string, unknown> = {},
 ) {
+  // A node whose job is being restored carries that job's id in currentJobId —
+  // this is the invariant the abandon-guard checks (the restored jobId must
+  // still match the node's currentJobId, else the run was discarded/replaced).
+  // The tests name nodes nN and their running jobs jN, so default accordingly;
+  // `extras.currentJobId` can override (e.g. to simulate a discarded run).
+  const currentJobId = id.replace(/^n/, "j")
   return {
     id,
     type,
-    data: { label: type, ...extras },
+    data: { label: type, currentJobId, ...extras },
   }
 }
 

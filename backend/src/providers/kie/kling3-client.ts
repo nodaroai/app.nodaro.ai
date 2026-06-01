@@ -8,7 +8,6 @@
  */
 
 import { config } from "../../lib/config.js"
-import { throwIfJobCancelled } from "../../lib/job-cancellation.js"
 import {
   KIE_API_BASE,
   MAX_POLL_ATTEMPTS_VIDEO,
@@ -273,7 +272,6 @@ export async function pollKling3Task(
   let attempts = 0
 
   while (attempts < maxAttempts) {
-    await throwIfJobCancelled()
     await sleep(pollDelay(attempts))
     attempts++
 

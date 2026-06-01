@@ -7,7 +7,6 @@
  */
 
 import { config } from "../../lib/config.js"
-import { throwIfJobCancelled } from "../../lib/job-cancellation.js"
 import {
   KIE_API_BASE,
   sleep,
@@ -123,7 +122,6 @@ export async function pollKontextTask(
 
   let attempts = 0
   while (attempts < maxAttempts) {
-    await throwIfJobCancelled()
     attempts++
     await sleep(pollDelay(attempts))
 

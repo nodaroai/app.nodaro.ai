@@ -481,11 +481,20 @@ const { data, nextCursor } = await client.executions.listForWorkflow(
 cancel(id: string, params?: CancelExecutionParams): Promise<{ success: true }>
 ```
 
-Cancels an execution. Default cancels immediately; `mode: "after_current"`
-sets the execution to `"stopping"` so in-flight nodes finish first.
+Cancels an execution. Three modes:
+
+- **default** (no `mode`) — cancels immediately, killing in-flight jobs and
+  refunding reserved credit holds (status `"cancelled"`).
+- **`mode: "after_current"`** — sets the execution to `"stopping"` so in-flight
+  nodes finish (and land on the canvas + My Library) before the run stops.
+- **`mode: "discard"`** — stops scheduling new nodes WITHOUT cancelling in-flight
+  jobs (external AI calls can't be killed mid-flight). Those jobs finish and are
+  saved to My Library, but their results are detached from the live canvas
+  (status `"discarded"`). No refund — the jobs completed.
 
 ```ts
 await client.executions.cancel(executionId, { mode: "after_current" })
+await client.executions.cancel(executionId, { mode: "discard" })
 ```
 
 ---
@@ -1520,11 +1529,11 @@ Every type used in a public method signature is re-exported from
 - `WorkflowExecution` — full execution record with per-node state map
 - `WorkflowExecutionSummary` — list-row shape
 - `NodeExecutionState` — per-node entry inside `nodeStates`
-- `ExecutionStatus` — `"pending" | "running" | "completed" | "failed" | "cancelled" | "stopping" | "timed_out"`
+- `ExecutionStatus` — `"pending" | "running" | "completed" | "failed" | "cancelled" | "stopping" | "timed_out" | "discarded"`
 - `ExecutionTriggerType` — `"manual" | "webhook" | "schedule" | "app_run" | "single-node"`
 - `ListExecutionsForWorkflowParams` — pagination + filters
 - `ListExecutionsPage<T>` — `{ data: T[], nextCursor? }`
-- `CancelExecutionParams` — `{ mode? }`
+- `CancelExecutionParams` — `{ mode?: "after_current" | "discard" }`
 
 ### Nodes
 

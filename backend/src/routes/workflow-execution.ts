@@ -411,7 +411,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     })
 
     // If already terminal, send done immediately and close
-    const terminalStatuses = new Set(["completed", "failed", "cancelled", "timed_out"])
+    const terminalStatuses = new Set(["completed", "failed", "cancelled", "timed_out", "discarded"])
     if (terminalStatuses.has(execution.status as string)) {
       sse.sendEvent({
         type: "done",
@@ -428,7 +428,8 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       const isTerminal =
         event.type === "execution:completed" ||
         event.type === "execution:failed" ||
-        event.type === "execution:cancelled"
+        event.type === "execution:cancelled" ||
+        event.type === "execution:discarded"
 
       sse.sendEvent({
         type: isTerminal ? "done" : "execution",
@@ -537,12 +538,30 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       })
     }
 
-    // mode: "after_current" sets status to "stopping" (finish current level, then stop)
-    // mode: undefined/default sets status to "cancelled" (stop ASAP)
-    const body = (req.body ?? {}) as Record<string, unknown>
-    const mode = body.mode === "after_current" ? "stopping" : "cancelled"
-    const updates: Record<string, unknown> = { status: mode }
-    if (mode === "cancelled") updates.completed_at = new Date().toISOString()
+    // mode: "after_current" → status "stopping" (finish current level, then stop)
+    // mode: "discard"        → status "discarded" (graceful: in-flight jobs finish
+    //                          into My Library, canvas detaches — NO cancel/refund)
+    // mode: undefined/default → status "cancelled" (stop ASAP, cancel + refund jobs)
+    // Unknown/typo'd modes are rejected with 400 — they must NEVER fall through to
+    // the destructive "cancelled" branch (which forfeits paid-for results).
+    const cancelBody = z.object({
+      userId: z.string().optional(),
+      mode: z.enum(["after_current", "discard"]).optional(),
+    })
+    const parsedBody = cancelBody.safeParse(req.body ?? {})
+    if (!parsedBody.success) {
+      return reply.status(400).send({
+        error: { code: "bad_request", message: "Invalid cancel mode" },
+      })
+    }
+    const mode = parsedBody.data.mode
+    const targetStatus =
+      mode === "after_current" ? "stopping" : mode === "discard" ? "discarded" : "cancelled"
+
+    const updates: Record<string, unknown> = { status: targetStatus }
+    // Only an immediate cancel finalizes here. "stopping"/"discarded" are handled
+    // by the orchestrator, which sets completed_at once jobs settle.
+    if (targetStatus === "cancelled") updates.completed_at = new Date().toISOString()
 
     await supabase
       .from("workflow_executions")
@@ -555,7 +574,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     // never-completed nodes (workflow-level analog of cancel-jobs.ts #1508).
     // Fire-and-forget — the DB status is already set, so the orchestrator will
     // pick up the cancellation regardless.
-    if (mode === "cancelled") {
+    if (targetStatus === "cancelled") {
       const userId = req.userId
       void (async () => {
         const { data: activeJobs } = await supabase

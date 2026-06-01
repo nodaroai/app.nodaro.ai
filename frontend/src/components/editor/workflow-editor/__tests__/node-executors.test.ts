@@ -10,7 +10,12 @@ const mockTextToSpeech = vi.fn()
 const mockGenerateScriptApi = vi.fn()
 const mockCombineVideos = vi.fn()
 const mockGetJobStatusLean = vi.fn()
-const mockUpdateNodeData = vi.fn()
+// Apply writes to mockNodes so node state (e.g. currentJobId, which the
+// abandon-guard reads mid-poll) reflects what the real store would hold.
+const mockUpdateNodeData = vi.fn((id: string, patch: Record<string, unknown>) => {
+  const node = mockNodes.find((n) => n.id === id)
+  if (node) node.data = { ...node.data, ...patch }
+})
 const mockToastInfo = vi.fn()
 const mockToastError = vi.fn()
 const mockToastSuccess = vi.fn()

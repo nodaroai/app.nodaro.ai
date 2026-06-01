@@ -82,6 +82,10 @@ export const EXECUTION_DATA_KEYS = new Set([
   "__listTotal",
   "__listCompleted",
   "__listResults",
+  // List fan-out window flag (abandon-guard exemption). Set/cleared by
+  // executeNodeForList — purely execution-related, never user-edited, so
+  // toggling it must not capture an undo snapshot or flip isDirty.
+  "__listRunning",
   // Selector node dual-channel outputs (picked + rest). Without these the
   // executeSelector store write diffs the config snapshot → useAutoExecute
   // re-runs 300ms later, and in random mode (Math.random) every re-run
