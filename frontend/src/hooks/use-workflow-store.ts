@@ -511,6 +511,8 @@ interface WorkflowState {
   readonly setFlowPromptTemplates: (templates: Record<string, string>) => void
   readonly savedViewport: { x: number; y: number; zoom: number } | null
   readonly setSavedViewport: (vp: { x: number; y: number; zoom: number } | null) => void
+  readonly isWorkflowLoading: boolean
+  readonly setIsWorkflowLoading: (loading: boolean) => void
   readonly loadWorkflow: (id: string, name: string, nodes: WorkflowNode[], edges: WorkflowEdge[], characterDefinitions?: CharacterDefinition[], flowPromptTemplates?: Record<string, string>, presentationSettings?: PresentationSettings, viewport?: { x: number; y: number; zoom: number } | null) => void
   readonly clearWorkflow: () => void
   readonly markClean: () => void
@@ -2373,6 +2375,9 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       savedViewport: viewport ?? null,
     }))
   },
+
+  isWorkflowLoading: false,
+  setIsWorkflowLoading: (loading) => set({ isWorkflowLoading: loading }),
 
   clearWorkflow: () => {
     nextNodeId = 1

@@ -660,6 +660,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   // auto-pan naturally fire for any appended items because they're
   // seeing those ids for the first time. See use-workflow-realtime-sync.ts.
   const realtimeWorkflowId = useWorkflowStore((s) => s.workflowId)
+  const isWorkflowLoading = useWorkflowStore((s) => s.isWorkflowLoading)
   const reconcileFromRemote = useWorkflowStore((s) => s.reconcileFromRemote)
   const setRemoteUpdatedAt = useWorkflowStore((s) => s.setRemoteUpdatedAt)
   useWorkflowRealtimeSync({
@@ -2145,10 +2146,11 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
             <ViewModeToggle />
           </div>
         )}
-        {/* First-run empty-canvas surface. Gated on a loaded workflow with zero
-            nodes (workflowId is null until the fetch resolves, so this never
-            flashes while an existing flow loads). Unmounts on the first node. */}
-        {realtimeWorkflowId != null && nodes.length === 0 && (
+        {/* First-run empty-canvas surface. Gated on a loaded (not loading) workflow
+            with zero nodes. isWorkflowLoading suppresses the flash that would
+            otherwise appear while the initial loadWorkflow(id, "", [], []) clear
+            sets workflowId before the real nodes arrive from the fetch. */}
+        {realtimeWorkflowId != null && nodes.length === 0 && !isWorkflowLoading && (
           <EmptyCanvasState
             onCreate={handleEmptyStateCreate}
             onOpenInputPanel={handleOpenInputPanel}
