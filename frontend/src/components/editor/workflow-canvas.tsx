@@ -1399,6 +1399,39 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         return
       }
 
+      // Cmd/Ctrl+I — toggle fullscreen settings (must run BEFORE overlayOpen guard)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "i") {
+        const state = useWorkflowStore.getState()
+        if (state.configPanelFullscreen) {
+          e.preventDefault()
+          useWorkflowStore.setState({ configPanelFullscreen: false, selectedNodeId: null })
+          return
+        }
+        const nodeId = state.selectedNodeId ?? state.nodes.find((n) => n.selected)?.id
+        if (nodeId) {
+          e.preventDefault()
+          openFullscreenSettings(nodeId)
+        }
+        return
+      }
+
+      // Escape — close fullscreen first, then two-step deselect (must run BEFORE overlayOpen guard)
+      if (e.key === "Escape") {
+        setAddNodePopupOpen(false)
+        setCanvasContextMenu(null)
+        setNodeContextMenu(null)
+        setEdgeContextMenu(null)
+        const state = useWorkflowStore.getState()
+        if (state.configPanelFullscreen) {
+          useWorkflowStore.setState({ configPanelFullscreen: false, selectedNodeId: null })
+        } else if (state.selectedNodeId) {
+          useWorkflowStore.setState({ selectedNodeId: null })
+        } else {
+          selectNode(null)
+        }
+        return
+      }
+
       // Skip workflow shortcuts when a fullscreen overlay is open: config panel
       // expanded, image edit, freecut, or any open MODAL dialog/lightbox. Lets
       // the active overlay handle keys (arrow nav inside the modal, text
@@ -1678,23 +1711,6 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         return
       }
 
-      // Cmd/Ctrl+I — toggle fullscreen settings for the selected node
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "i") {
-        const state = useWorkflowStore.getState()
-        if (state.configPanelFullscreen) {
-          // Already open — close it
-          e.preventDefault()
-          useWorkflowStore.setState({ configPanelFullscreen: false, selectedNodeId: null })
-          return
-        }
-        const nodeId = state.selectedNodeId ?? state.nodes.find((n) => n.selected)?.id
-        if (nodeId) {
-          e.preventDefault()
-          openFullscreenSettings(nodeId)
-        }
-        return
-      }
-
       // Enter — toggle settings panel
       if (e.key === "Enter") {
         e.preventDefault()
@@ -1769,26 +1785,6 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         return
       }
 
-      // Escape — close fullscreen first (atomic), then two-step deselect
-      if (e.key === "Escape") {
-        setAddNodePopupOpen(false)
-        setCanvasContextMenu(null)
-        setNodeContextMenu(null)
-        setEdgeContextMenu(null)
-        const state = useWorkflowStore.getState()
-        if (state.configPanelFullscreen) {
-          // Close fullscreen + deselect in one write — avoids the one-frame
-          // sidebar flash that two separate setState calls would cause.
-          useWorkflowStore.setState({ configPanelFullscreen: false, selectedNodeId: null })
-        } else if (state.selectedNodeId) {
-          // Step 1: close settings panel, keep node focused
-          useWorkflowStore.setState({ selectedNodeId: null })
-        } else {
-          // Step 2: deselect node entirely
-          selectNode(null)
-        }
-        return
-      }
     }
     // Capture phase so the handler runs BEFORE React Flow's per-node arrow
     // nudge listener — required for the settings-panel-open arrow-nav branch
