@@ -1531,6 +1531,10 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
                   detail: { action: isSelect ? "single" : "multi", id: entryId },
                   bubbles: true,
                 }))
+                // Enter on an already-selected tile confirms and closes fullscreen
+                if (isSelect && btns[idx]?.getAttribute("aria-checked") === "true") {
+                  closeFullscreenSettings()
+                }
               }
             }
           }
