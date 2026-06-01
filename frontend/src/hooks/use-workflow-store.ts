@@ -1312,10 +1312,16 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     const state = get()
     // If the sidebar was open before we entered fullscreen, keep selectedNodeId
     // so the sidebar re-appears; otherwise clear it entirely.
+    // Always clear skipNextViewportAnimation: openFullscreenSettings sets it to
+    // prevent the zoom-to-fit on open, but when the panel is opened from an
+    // already-selected node (selectedNodeId doesn't change) the viewport effect
+    // never fires and never consumes the flag. Without this clear, the NEXT
+    // arrow-key navigation after closing fullscreen skips its zoom animation.
     set({
       configPanelFullscreen: false,
       selectedNodeId: state._sidebarWasOpenBeforeFullscreen ? state.selectedNodeId : null,
       _sidebarWasOpenBeforeFullscreen: false,
+      skipNextViewportAnimation: false,
     })
   },
 
