@@ -53,7 +53,7 @@ export async function cancelJobsRoutes(app: FastifyInstance) {
         // is set once we've submitted to the external provider — past that point
         // the job can't be killed (no provider cancel API), it runs to completion.
         const { data: job, error: fetchError } = await supabase
-          .from("jobs")
+          .from("jobs") // tenant-scope-ignore: ownership verified post-fetch (job.user_id !== userId → 403 below)
           .select("id, status, user_id, input_data, output_data, provider_task_id")
           .eq("id", jobId)
           .single()
