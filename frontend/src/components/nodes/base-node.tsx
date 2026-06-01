@@ -165,7 +165,11 @@ function BaseNodeComponent({
   // O(N) `nodes.find` scan. `isPending` drives the active "node-running" border
   // the instant Run is clicked (the optimistic flip writes
   // data.executionStatus:"pending" before the backend execution even starts).
-  const { zoom, visualW, visualH, isSkipped, isPending } = useWorkflowStore(
+  // `measuredH` is React Flow's own ResizeObserver measurement (written via
+  // applyNodeChanges / onNodesChange). Subscribing to it lets the floor-clamp
+  // effect re-fire once RF completes the first measurement of a new node,
+  // instead of prematurely pinning the node before measurement arrives.
+  const { zoom, visualW, visualH, measuredH, isSkipped, isPending } = useWorkflowStore(
     useShallow((s) => {
       const node = s.nodes.find((n) => n.id === id)
       const data = node?.data as Record<string, unknown> | undefined
@@ -174,6 +178,7 @@ function BaseNodeComponent({
         zoom: typeof z === "number" ? z : 1.0,
         visualW: node?.width,
         visualH: node?.height,
+        measuredH: node?.measured?.height,
         isSkipped: !!data?.skipped,
         isPending: data?.executionStatus === "pending",
       }
@@ -248,6 +253,14 @@ function BaseNodeComponent({
 
     // No aspect ratio: only floor-clamp height for non-resized nodes.
     if (hasExplicitResize) return
+    // Guard: if neither an explicit height nor a RF-measured height exists yet,
+    // the node just mounted and React Flow's ResizeObserver hasn't fired. Skip
+    // now — `measuredH` in the dep array will re-trigger the effect once RF
+    // writes the first measurement. Without this guard the effect resolves
+    // `0 < effectiveMinHeight` and pins the node at 100px before its natural
+    // content height is known, causing picker nodes (h-full layout) to clip
+    // content until the user manually invokes "Fit Content".
+    if (node.height === undefined && node.measured?.height === undefined) return
     const currentHeight = (node.height ?? node.measured?.height ?? 0) as number
     if (currentHeight >= effectiveMinHeight) return
     useWorkflowStore.setState({
@@ -255,7 +268,7 @@ function BaseNodeComponent({
         n.id === id ? { ...n, height: effectiveMinHeight } : n
       ),
     })
-  }, [imageAspectRatio, id, visualH, effectiveMinHeight, minWidth])
+  }, [imageAspectRatio, id, visualH, measuredH, effectiveMinHeight, minWidth])
 
   // After any size change above, re-measure handle bounds. Needed for nodes
   // whose handles use `top: calc(100% - Npx)` (typed-pip stacks anchored to
