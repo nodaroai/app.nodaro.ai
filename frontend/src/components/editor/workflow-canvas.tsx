@@ -540,18 +540,25 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
 
   // When the fullscreen config panel closes, restore keyboard focus to the
   // React Flow pane so that arrow-key node nudging works immediately.
-  // Without this, the hidden panel loses DOM focus (browser moves it to body)
-  // and React Flow's onKeyDown container never receives arrow events.
+  // When fullscreen closes, restore keyboard focus to the React Flow tree so
+  // arrow-key node nudging works. Arrow events only bubble through RF's
+  // onKeyDown container when their target is inside the RF DOM subtree. After
+  // the panel becomes `hidden`, focus falls to `body` which is outside that
+  // subtree. We focus the selected node element (data-id attribute, tabIndex
+  // set by React Flow) so the next arrow keydown originates inside RF.
   const configPanelFullscreen = useWorkflowStore((s) => s.configPanelFullscreen)
   const prevFullscreenRef = useRef(configPanelFullscreen)
   useEffect(() => {
     const wasOpen = prevFullscreenRef.current
     prevFullscreenRef.current = configPanelFullscreen
     if (wasOpen && !configPanelFullscreen) {
-      // rAF defers until after the browser paints and focus settles on body.
-      // Without it, .focus() may fire before the hidden panel releases focus.
       requestAnimationFrame(() => {
-        document.querySelector<HTMLElement>(".react-flow__pane")?.focus()
+        const state = useWorkflowStore.getState()
+        const sel = state.nodes.find((n) => n.selected)
+        const el = sel
+          ? document.querySelector<HTMLElement>(`.react-flow__node[data-id="${sel.id}"]`)
+          : document.querySelector<HTMLElement>(".react-flow__pane")
+        el?.focus({ preventScroll: true })
       })
     }
   }, [configPanelFullscreen])
