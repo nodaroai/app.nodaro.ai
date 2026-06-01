@@ -1188,6 +1188,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   }, [setOpenAddNodePopupForHandleStore, openAddNodePopupForHandle])
 
   const handleOpenSearch = useCallback(() => setSearchModalOpen(true), [])
+  const handleOpenNodeSearch = useCallback(() => setNodeSearchModalOpen(true), [])
   const handleOpenAssetLibrary = useCallback(() => setAssetLibraryOpen(true), [])
   const handleOpenMediaLibrary = useCallback(() => setMediaLibraryOpen(true), [])
   const handleOpenComponentMarketplace = useCallback(() => setComponentMarketplaceOpen(true), [])
@@ -2089,6 +2090,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         onAddNode={handleOpenAddNodePopup}
         onComponents={handleOpenComponentMarketplace}
         onSearch={handleOpenSearch}
+        onFindInWorkflow={handleOpenNodeSearch}
         onAssetLibrary={handleOpenAssetLibrary}
         onMediaLibrary={handleOpenMediaLibrary}
         onAddStickyNote={handleAddStickyNote}
