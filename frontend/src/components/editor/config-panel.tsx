@@ -925,7 +925,7 @@ export function ConfigPanel() {
           // Fullscreen: a prominent text "Close" button reads as the
           // primary exit affordance — the small X icon was easy to miss
           // against the wider modal chrome.
-          <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs" onClick={closeFullscreenSettings}>
+          <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs" onClick={(e) => { e.stopPropagation(); closeFullscreenSettings() }}>
             Close
           </Button>
         ) : (
@@ -946,7 +946,7 @@ export function ConfigPanel() {
         : `absolute inset-0 z-10 bg-white dark:bg-[#1E1E1E] shadow-2xl flex flex-col sm:inset-auto sm:top-0 sm:right-0 sm:h-full sm:w-96 sm:border-l border-gray-200 dark:border-[#2D2D2D] ${isVisible && !isExpanded ? "transition-transform duration-200 ease-in-out translate-x-0" : "hidden"}`
     }>
       {isExpanded && (
-        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setConfigPanelFullscreen(false)} />
+        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={(e) => { e.stopPropagation(); closeFullscreenSettings() }} />
       )}
       <div className={isExpanded
         ? "relative w-full max-w-[900px] max-h-[90vh] mx-4 bg-white dark:bg-[#1E1E1E] rounded-xl shadow-2xl border border-gray-200 dark:border-[#2D2D2D] flex flex-col overflow-hidden min-h-0"
@@ -968,7 +968,7 @@ export function ConfigPanel() {
           const t = e.target as HTMLElement | null
           if (!t) return
           const tile = t.closest('button[role="radio"], button[role="checkbox"]')
-          if (tile) setConfigPanelFullscreen(false)
+          if (tile) closeFullscreenSettings()
         } : undefined}
       >
         {/* Mobile drag handle + peek header */}
@@ -1028,7 +1028,7 @@ export function ConfigPanel() {
               Side-panel mode leaves the context null — double-click is a
               no-op there, which matches the surrounding-non-tile picker UX. */}
           {isExpanded ? (
-            <TileCommitContext.Provider value={{ commit: () => setConfigPanelFullscreen(false) }}>
+            <TileCommitContext.Provider value={{ commit: closeFullscreenSettings }}>
               <NodeTypeConfig
                 nodeType={nodeType}
                 nodeData={nodeData}
@@ -1105,7 +1105,7 @@ export function ConfigPanel() {
                   variant="outline"
                   size="sm"
                   className="w-full"
-                  onClick={() => setConfigPanelFullscreen(false)}
+                  onClick={(e) => { e.stopPropagation(); closeFullscreenSettings() }}
                 >
                   Close
                 </Button>

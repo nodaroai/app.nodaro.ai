@@ -548,7 +548,11 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     const wasOpen = prevFullscreenRef.current
     prevFullscreenRef.current = configPanelFullscreen
     if (wasOpen && !configPanelFullscreen) {
-      document.querySelector<HTMLElement>(".react-flow__pane")?.focus()
+      // rAF defers until after the browser paints and focus settles on body.
+      // Without it, .focus() may fire before the hidden panel releases focus.
+      requestAnimationFrame(() => {
+        document.querySelector<HTMLElement>(".react-flow__pane")?.focus()
+      })
     }
   }, [configPanelFullscreen])
 
