@@ -406,6 +406,12 @@ interface WorkflowState {
    *  canvas viewport animation (zoom-to-fit). Set by openFullscreenSettings;
    *  consumed and cleared by the viewport effect in workflow-canvas. */
   readonly skipNextViewportAnimation: boolean
+  /** Whether the sidebar was open when openFullscreenSettings was called.
+   *  closeFullscreenSettings uses this to restore the sidebar on close. */
+  readonly _sidebarWasOpenBeforeFullscreen: boolean
+  /** Close fullscreen settings and optionally restore the sidebar if it was
+   *  open before the fullscreen was triggered (via openFullscreenSettings). */
+  readonly closeFullscreenSettings: () => void
   readonly isDirty: boolean
   readonly loadGeneration: number
   readonly saveStatus: SaveStatus
@@ -822,6 +828,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   configPanelFullscreen: false,
   setConfigPanelFullscreen: (open) => set({ configPanelFullscreen: open }),
   skipNextViewportAnimation: false,
+  _sidebarWasOpenBeforeFullscreen: false,
   isDirty: false,
   loadGeneration: 0,
   saveStatus: "idle" as SaveStatus,
@@ -1286,20 +1293,30 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   },
 
   openFullscreenSettings: (nodeId) => {
-    // One atomic update: selectedNodeId + configPanelFullscreen + node.selected
-    // in a single set() so ConfigPanel never renders with a selected node but a
-    // non-fullscreen flag. Two separate set() calls (even with React 18 batching)
-    // can fire an intermediate Zustand notification where the sidebar starts its
-    // slide-in transition for one frame before fullscreen kicks in.
-    // skipNextViewportAnimation is separate because the viewport effect reads it
-    // synchronously and we need it set before the selectedNodeId change triggers
-    // the effect's dep check.
-    set({ skipNextViewportAnimation: true })
+    const prev = get()
+    // Record whether the sidebar was already open so closeFullscreenSettings
+    // can restore it when the user dismisses the fullscreen modal.
+    const sidebarWasOpen = prev.selectedNodeId !== null && !prev.configPanelFullscreen
+    set({
+      skipNextViewportAnimation: true,
+      _sidebarWasOpenBeforeFullscreen: sidebarWasOpen,
+    })
     set((state) => ({
       selectedNodeId: nodeId,
       configPanelFullscreen: true,
       nodes: state.nodes.map((n) => ({ ...n, selected: n.id === nodeId })),
     }))
+  },
+
+  closeFullscreenSettings: () => {
+    const state = get()
+    // If the sidebar was open before we entered fullscreen, keep selectedNodeId
+    // so the sidebar re-appears; otherwise clear it entirely.
+    set({
+      configPanelFullscreen: false,
+      selectedNodeId: state._sidebarWasOpenBeforeFullscreen ? state.selectedNodeId : null,
+      _sidebarWasOpenBeforeFullscreen: false,
+    })
   },
 
   updateNode: (nodeId, updates) =>

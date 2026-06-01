@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, type ReactNode, useContext, useMemo, useState } from "react"
+import { createContext, type ReactNode, useContext, useEffect, useMemo, useRef, useState } from "react"
 import { Search } from "lucide-react"
 import type { I18nCatalogId } from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
@@ -62,14 +62,36 @@ export function DimensionTileGrid({
   readonly maxSelected?: number
 }) {
   const [query, setQuery] = useState("")
-  // Always call the hook to keep order stable; pass a sentinel catalog id when
-  // i18n is disabled. The resolver falls back to English when no sidecar exists.
   const i18n = useLocalizedCatalog(catalog ?? ("__noop__" as I18nCatalogId))
 
   const { selectedIds, isMulti, handlePick, activateMulti, demoteToSingle } =
     useMultiPick(value, onChange, maxSelected)
 
   const commitCtx = useContext(TileCommitContext)
+
+  // Stable refs so the native event listener doesn't need to re-register when
+  // onChange / handlePick identities change between renders.
+  const onChangeRef = useRef(onChange)
+  onChangeRef.current = onChange
+  const handlePickRef = useRef(handlePick)
+  handlePickRef.current = handlePick
+
+  const gridRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = gridRef.current
+    if (!el) return
+    const handler = (ev: Event) => {
+      const { action, id } = (ev as CustomEvent<{ action: "single" | "multi"; id: string }>).detail
+      if (action === "single") {
+        // Force single-select regardless of current multi mode
+        onChangeRef.current(id)
+      } else {
+        handlePickRef.current(id)
+      }
+    }
+    el.addEventListener("picker-select", handler)
+    return () => el.removeEventListener("picker-select", handler)
+  }, [])
 
   const filtered = useMemo<ReadonlyArray<DimensionEntry>>(() => {
     const q = query.trim().toLowerCase()
@@ -104,9 +126,12 @@ export function DimensionTileGrid({
         </div>
       ) : (
         <div
+          ref={gridRef}
           role={maxSelected > 1 ? "group" : "radiogroup"}
           aria-label={searchPlaceholder}
           className={gridClassName}
+          data-picker-grid="true"
+          data-multi={maxSelected > 1 ? "true" : "false"}
         >
           {filtered.map((entry) => {
             const selectedIndex = selectedIds.indexOf(entry.id)
@@ -122,6 +147,7 @@ export function DimensionTileGrid({
                   role={maxSelected > 1 ? "checkbox" : "radio"}
                   aria-checked={isSelected}
                   title={description}
+                  data-entry-id={entry.id}
                   onClick={() => handlePick(entry.id)}
                   onDoubleClick={(e) => {
                     // First click already fired handlePick via onClick; the

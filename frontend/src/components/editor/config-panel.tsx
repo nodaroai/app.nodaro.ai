@@ -717,6 +717,7 @@ export function ConfigPanel() {
   // by calling `setConfigPanelFullscreen(true)`.
   const isExpanded = useWorkflowStore((s) => s.configPanelFullscreen)
   const setConfigPanelFullscreen = useWorkflowStore((s) => s.setConfigPanelFullscreen)
+  const closeFullscreenSettings = useWorkflowStore((s) => s.closeFullscreenSettings)
 
   // Mobile bottom sheet: peek (collapsed) / expanded states with bidirectional drag
   const [sheetState, setSheetState] = useState<"peek" | "expanded">("peek")
@@ -924,11 +925,11 @@ export function ConfigPanel() {
           // Fullscreen: a prominent text "Close" button reads as the
           // primary exit affordance — the small X icon was easy to miss
           // against the wider modal chrome.
-          <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs" onClick={() => useWorkflowStore.setState({ configPanelFullscreen: false, selectedNodeId: null })}>
+          <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs" onClick={closeFullscreenSettings}>
             Close
           </Button>
         ) : (
-          <Button variant="ghost" size="icon" className="text-gray-400 dark:text-[#64748B] hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2D2D2D]" onClick={() => useWorkflowStore.setState({ configPanelFullscreen: false, selectedNodeId: null })} aria-label="Close panel">
+          <Button variant="ghost" size="icon" className="text-gray-400 dark:text-[#64748B] hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2D2D2D]" onClick={() => useWorkflowStore.setState({ selectedNodeId: null })} aria-label="Close panel">
             <X className="h-4 w-4" />
           </Button>
         )}
@@ -942,7 +943,7 @@ export function ConfigPanel() {
       ? "fixed inset-0 z-50 flex items-center justify-center"
       : isMobile
         ? `fixed bottom-0 left-0 right-0 z-50 transition-transform duration-200 ease-in-out ${isVisible ? "translate-y-0" : "translate-y-full pointer-events-none"}`
-        : `absolute inset-0 z-10 bg-white dark:bg-[#1E1E1E] shadow-2xl flex flex-col sm:inset-auto sm:top-0 sm:right-0 sm:h-full sm:w-96 sm:border-l border-gray-200 dark:border-[#2D2D2D] ${isVisible && !isExpanded ? "transition-transform duration-200 ease-in-out translate-x-0" : "translate-x-full pointer-events-none"}`
+        : `absolute inset-0 z-10 bg-white dark:bg-[#1E1E1E] shadow-2xl flex flex-col sm:inset-auto sm:top-0 sm:right-0 sm:h-full sm:w-96 sm:border-l border-gray-200 dark:border-[#2D2D2D] ${isVisible && !isExpanded ? "transition-transform duration-200 ease-in-out translate-x-0" : "hidden"}`
     }>
       {isExpanded && (
         <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setConfigPanelFullscreen(false)} />

@@ -398,6 +398,18 @@ interface WorkflowCanvasProps {
   readonly onToggleSidebar: () => void
 }
 
+/** Estimate how many tile-grid buttons fit in the first row by checking Y coords. */
+function estimatePickerGridCols(btns: HTMLButtonElement[]): number {
+  if (btns.length < 2) return 1
+  const firstY = btns[0].getBoundingClientRect().top
+  let cols = 1
+  for (let i = 1; i < btns.length; i++) {
+    if (Math.abs(btns[i].getBoundingClientRect().top - firstY) < 5) cols++
+    else break
+  }
+  return cols
+}
+
 export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanvasProps) {
   const nodes = useWorkflowStore((s) => s.nodes)
   // React Flow v12 requires a parent (group) node to precede its children in
@@ -413,6 +425,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const onConnect = useWorkflowStore((s) => s.onConnect)
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const openFullscreenSettings = useWorkflowStore((s) => s.openFullscreenSettings)
+  const closeFullscreenSettings = useWorkflowStore((s) => s.closeFullscreenSettings)
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
   const duplicateNodes = useWorkflowStore((s) => s.duplicateNodes)
   const deleteNode = useWorkflowStore((s) => s.deleteNode)
@@ -1404,7 +1417,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         const state = useWorkflowStore.getState()
         if (state.configPanelFullscreen) {
           e.preventDefault()
-          useWorkflowStore.setState({ configPanelFullscreen: false, selectedNodeId: null })
+          closeFullscreenSettings()
           return
         }
         const nodeId = state.selectedNodeId ?? state.nodes.find((n) => n.selected)?.id
@@ -1423,12 +1436,81 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         setEdgeContextMenu(null)
         const state = useWorkflowStore.getState()
         if (state.configPanelFullscreen) {
-          useWorkflowStore.setState({ configPanelFullscreen: false, selectedNodeId: null })
+          closeFullscreenSettings()
         } else if (state.selectedNodeId) {
           useWorkflowStore.setState({ selectedNodeId: null })
         } else {
           selectNode(null)
         }
+        return
+      }
+
+      // Arrow keys + picker grid navigation while fullscreen settings are open.
+      // Must run BEFORE the overlayOpen guard so we can both block React Flow's
+      // node-nudge (via stopPropagation) and drive tile-grid focus/selection.
+      if (useWorkflowStore.getState().configPanelFullscreen) {
+        const isArrow = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)
+        const isSelect = e.key === "Enter"
+        const isMultiAdd = e.key === " " || e.key === "+"
+        const isInputLike = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
+
+        if (isArrow) {
+          // Left/right inside a text input should still move the cursor.
+          // Up/down from an input jumps focus into the tile grid.
+          if (isInputLike) {
+            if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+              e.preventDefault()
+              e.stopPropagation()
+              const grid = document.querySelector<HTMLElement>("[data-picker-grid]")
+              grid?.querySelector<HTMLButtonElement>("button[type='button']")?.focus()
+            }
+            // Always block node-nudge even when focus is in an input
+            e.stopPropagation()
+            return
+          }
+          e.preventDefault()
+          e.stopPropagation()
+          const grid = document.querySelector<HTMLElement>("[data-picker-grid]")
+          if (grid) {
+            const btns = Array.from(grid.querySelectorAll<HTMLButtonElement>("button[type='button']"))
+            const active = document.activeElement as HTMLButtonElement | null
+            const idx = active ? btns.indexOf(active) : -1
+            if (e.key === "ArrowRight") {
+              btns[(Math.max(idx, 0) + 1) % btns.length]?.focus()
+            } else if (e.key === "ArrowLeft") {
+              btns[(idx <= 0 ? btns.length : idx) - 1]?.focus()
+            } else {
+              const cols = estimatePickerGridCols(btns)
+              const delta = e.key === "ArrowDown" ? cols : -cols
+              btns[Math.max(0, Math.min(btns.length - 1, Math.max(idx, 0) + delta))]?.focus()
+            }
+          }
+          return
+        }
+
+        if (!isInputLike && (isSelect || isMultiAdd)) {
+          const grid = document.querySelector<HTMLElement>("[data-picker-grid]")
+          if (grid) {
+            const btns = Array.from(grid.querySelectorAll<HTMLButtonElement>("button[type='button']"))
+            const active = document.activeElement as HTMLButtonElement | null
+            const idx = active ? btns.indexOf(active) : -1
+            if (idx >= 0) {
+              const entryId = btns[idx]?.dataset.entryId
+              if (entryId) {
+                e.preventDefault()
+                e.stopPropagation()
+                // Enter = force single-select; Space/+ = add to multi-select
+                grid.dispatchEvent(new CustomEvent("picker-select", {
+                  detail: { action: isSelect ? "single" : "multi", id: entryId },
+                  bubbles: true,
+                }))
+              }
+            }
+          }
+          return
+        }
+
+        // All other keys while fullscreen: pass through (typing in inputs, etc.)
         return
       }
 
@@ -1792,7 +1874,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     // selection jumps to the neighbor.
     document.addEventListener("keydown", handleKeyDown, true)
     return () => document.removeEventListener("keydown", handleKeyDown, true)
-  }, [selectedNodeId, duplicateNodes, deleteNode, handleAddStickyNote, handleTidyUp, handleSelectAll, handleOpenAddNodePopup, onToggleSidebar, undo, redo, handleToggleSnap, handleToggleAlignment, alignmentEnabled, computeGuides, getNode, openFullscreenSettings])
+  }, [selectedNodeId, duplicateNodes, deleteNode, handleAddStickyNote, handleTidyUp, handleSelectAll, handleOpenAddNodePopup, onToggleSidebar, undo, redo, handleToggleSnap, handleToggleAlignment, alignmentEnabled, computeGuides, getNode, openFullscreenSettings, closeFullscreenSettings])
 
   // Listen for pan-to events dispatched from teleporter config panel "Pan to" buttons
   useEffect(() => {
