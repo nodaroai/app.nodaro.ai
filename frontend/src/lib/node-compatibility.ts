@@ -34,6 +34,10 @@ export interface ConnectionContext {
    *  (e.g. `cinematography` hides motion-only pickers for still-image
    *  consumers). Optional for legacy call sites that don't have it. */
   readonly nodeType?: string
+  /** Hex color of the handle the menu was opened from (its `--pip-color`).
+   *  Used to tint the add-node menu's "Connect to" title in the handle's own
+   *  type color. Optional — falls back to the default accent when absent. */
+  readonly color?: string
 }
 
 /** Still-image consumer node types — their `cinematography` handle excludes

@@ -161,7 +161,7 @@ export function VideoSfxQuickToolbar({
   const containerClass =
     "flex items-center px-1.5 py-1 backdrop-blur-sm rounded-xl border " +
     "bg-white/85 border-black/10 text-neutral-900 " +
-    "dark:bg-black/60 dark:border-white/10 dark:text-white"
+    "node-menu-surface dark:border-white/10 dark:text-white"
 
   return (
     <div
@@ -191,7 +191,7 @@ export function VideoSfxQuickToolbar({
           <Copy className="opacity-70" />
           <SelectValue>× {versions}</SelectValue>
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent className="node-menu-surface">
           {[1, 2, 3, 4].map((n) => (
             <SelectItem key={n} value={String(n)} className="text-xs">
               × {n}

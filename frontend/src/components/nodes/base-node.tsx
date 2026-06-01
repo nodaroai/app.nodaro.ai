@@ -447,11 +447,11 @@ function BaseNodeComponent({
           }}
         >
           <button
-            className="text-muted-foreground hover:text-foreground transition-colors"
+            className="node-more-menu-btn text-muted-foreground transition-colors"
             onClick={handleMoreMenu}
             aria-label="More options"
           >
-            <MoreHorizontal className="h-4 w-4" />
+            <MoreHorizontal size={Math.round(zoom * 13)} />
           </button>
           {toolbarActions}
         </div>
@@ -501,7 +501,10 @@ function BaseNodeComponent({
             type="button"
             onClick={handleIconClick}
             className={cn(
-              "w-6 h-6 rounded-md flex items-center justify-center [&>svg]:w-3.5 [&>svg]:h-3.5 cursor-pointer transition-colors",
+              // `[&>svg]:size-4` keeps the header icon in lockstep with the
+              // floating-label icon (EditableNodeLabel) — same 16px glyph in a
+              // 24px box across every node, regardless of the per-node size.
+              "w-6 h-6 rounded-md flex items-center justify-center [&>svg]:size-4 cursor-pointer transition-colors",
               // Light-bg categories: tint icon to brand pink on hover
               // Dark/brand-pink-bg categories: dim on hover (white icon on pink bg
               // would vanish if we applied hover:text-[#ff0073])
@@ -649,7 +652,7 @@ function BaseNodeComponent({
               minWidth={minWidth}
               minHeight={effectiveMinHeight}
               keepAspectRatio={!!imageAspectRatio}
-              className="!w-2.5 !h-2.5 !bg-muted-foreground/40 !border-0 !rounded-full"
+              className="!w-2.5 !h-2.5 !border-0 !rounded-full" style={{ backgroundColor: "color-mix(in srgb, var(--muted-foreground) 40%, transparent)" }}
             />
             <CustomHandle
               visible
@@ -667,7 +670,7 @@ function BaseNodeComponent({
               minWidth={minWidth}
               minHeight={effectiveMinHeight}
               keepAspectRatio={!!imageAspectRatio}
-              className="!w-2.5 !h-2.5 !bg-muted-foreground/40 !border-0 !rounded-full"
+              className="!w-2.5 !h-2.5 !border-0 !rounded-full" style={{ backgroundColor: "color-mix(in srgb, var(--muted-foreground) 40%, transparent)" }}
             />
             <NodeResizeControl
               nodeId={id}
@@ -675,7 +678,7 @@ function BaseNodeComponent({
               minWidth={minWidth}
               minHeight={effectiveMinHeight}
               keepAspectRatio={!!imageAspectRatio}
-              className="!w-2.5 !h-2.5 !bg-muted-foreground/40 !border-0 !rounded-full"
+              className="!w-2.5 !h-2.5 !border-0 !rounded-full" style={{ backgroundColor: "color-mix(in srgb, var(--muted-foreground) 40%, transparent)" }}
             />
           </>
         )

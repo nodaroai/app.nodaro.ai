@@ -432,6 +432,17 @@ html, body {
   opacity: 1 !important;
 }
 
+/* On hover, the handle label takes the handle's OWN type color (the same
+ * `--pip-color` set inline by HandleWithPopover that drives the ring/icon),
+ * not the brand pink — so the label matches the pip it belongs to. Legacy
+ * plain handles carry no `--pip-color`, so they fall back to brand pink. */
+.handle-typed-pip:hover .handle-typed-pip-label {
+  color: var(--pip-color, #ff0073);
+}
+.react-flow__handle:not(.handle-typed-pip):hover ~ span {
+  color: var(--pip-color, #ff0073);
+}
+
 /* During a drag-to-connect, also reveal labels on the source pip and on
  * every TYPE-COMPATIBLE candidate pip (driven by `.valid-candidate`,
  * NOT a wrapper-class blanket reveal). `.connectingto` (cursor-over-handle
@@ -1159,10 +1170,34 @@ html, body {
 .text-prompt-card [data-orientation="horizontal"] > *:hover {
   background-color: color-mix(in srgb, var(--foreground) 60%, transparent) !important;
 }
+/* Node toolbar: 3-dots menu button turns branding pink on hover */
+.node-more-menu-btn:hover {
+  color: #ff0073;
+}
+
+/* Node-owned floating surfaces use the node-card color (#101010) in dark mode
+   so they read as part of the node rather than app chrome (which is #1E1E1E
+   via --popover). Applied to: the bottom quick-toolbar bar + the dropdowns it
+   opens, the handle connect/disconnect popover, and the node-search results
+   pane. Single source for the shade. This rule is UNLAYERED, so it beats
+   Tailwind's layered `bg-popover` utility without needing !important — but the
+   inner rows of these menus keep their own hover/active backgrounds (they are
+   child elements, not the surface itself). */
+.dark .node-menu-surface {
+  background-color: #101010;
+}
+
 /* NodeResizer: ensure resize handles stay interactive above card content */
 .react-flow__resize-control {
   z-index: 9999 !important;
   pointer-events: all !important;
+}
+/* Inline style sets the base color; !important here overrides inline style on hover */
+.react-flow__resize-control.handle {
+  transition: background-color 0.15s ease;
+}
+.react-flow__resize-control.handle:hover {
+  background-color: #ff0073 !important;
 }
 
 /* Slim styled scrollbar — thin track, rounded thumb, auto-hide */

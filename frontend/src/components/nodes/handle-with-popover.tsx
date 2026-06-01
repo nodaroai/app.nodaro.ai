@@ -381,7 +381,7 @@ export function HandleWithPopover({
         side={side === "left" ? "left" : "right"}
         align="start"
         sideOffset={12}
-        className="w-auto p-2"
+        className="w-auto p-2 node-menu-surface"
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         {/* Skeleton fallback gives Radix Floating UI a stable WIDTH anchor
@@ -415,6 +415,7 @@ export function HandleWithPopover({
             accepts={accepts}
             onAddNew={openPopup ? handleAddNew : undefined}
             onClose={onClose}
+            color={disabled ? undefined : color}
           />
         </Suspense>
       </PopoverContent>

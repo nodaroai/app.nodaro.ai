@@ -303,6 +303,23 @@ const edgeTypes = {
 }
 
 // Module-level function — no closure dependencies, stable reference
+/** Read a handle's own type color (`--pip-color`, set inline by
+ *  HandleWithPopover) straight off the rendered DOM. Used to tint the
+ *  add-node menu's "Connect to" title in the handle's color regardless of how
+ *  the menu was opened (drag-to-connect, "+Add", or a list cell). Returns a
+ *  6-digit hex or undefined (legacy plain handles carry no `--pip-color`, and
+ *  disabled pips resolve to a CSS var — both are rejected by the hex guard so
+ *  the menu falls back to its default accent). */
+function readHandlePipColor(nodeId: string, handleId: string): string | undefined {
+  if (typeof document === "undefined") return undefined
+  const el = document.querySelector(
+    `.react-flow__node[data-id="${CSS.escape(nodeId)}"] [data-handleid="${CSS.escape(handleId)}"]`,
+  )
+  if (!el) return undefined
+  const c = getComputedStyle(el).getPropertyValue("--pip-color").trim()
+  return /^#[0-9a-fA-F]{6}$/.test(c) ? c : undefined
+}
+
 function getMiniMapNodeColor(node: { type?: string }): string {
   const nodeType = node.type as string
   // Character nodes - bubblegum pink
@@ -837,6 +854,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         direction: (fromHandle.type as "source" | "target") ?? "source",
         dropPosition: screenToFlowPosition({ x: clientX, y: clientY }),
         nodeType: fromNode.type,
+        color: readHandlePipColor(fromNode.id, fromHandle.id ?? "in"),
       })
       setAddNodePopupOpen(true)
     },
@@ -1152,6 +1170,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         direction,
         dropPosition: { x: flowX, y: flowY },
         nodeType,
+        color: readHandlePipColor(nodeId, handleId),
       })
       setAddNodePopupOpen(true)
       setCanvasContextMenu(null)
@@ -1965,6 +1984,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
             handleId: sourceHandle,
             direction: "source",
             dropPosition: screenToFlowPosition({ x: e.clientX, y: e.clientY }),
+            color: readHandlePipColor(sourceNodeId, sourceHandle),
           })
           setAddNodePopupOpen(true)
         } catch { /* ignore malformed data */ }
