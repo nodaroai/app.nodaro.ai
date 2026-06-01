@@ -312,6 +312,8 @@ function BaseNodeComponent({
   // Resize is now handled by <NodeResizeControl> from @xyflow/react and uses
   // its own internal drag state — we don't track it here.
   const updateNodeWithData = useWorkflowStore((s) => s.updateNodeWithData)
+  const selectNode = useWorkflowStore((s) => s.selectNode)
+  const setConfigPanelFullscreen = useWorkflowStore((s) => s.setConfigPanelFullscreen)
   const dragRef = useRef<{
     mode: "zoom"
     startX: number
@@ -321,6 +323,12 @@ function BaseNodeComponent({
     logicalH: number
     handlePosition: "bottom-left" | "bottom-right"
   } | null>(null)
+
+  function handleIconClick(e: MouseEvent) {
+    e.stopPropagation()
+    selectNode(id)
+    setConfigPanelFullscreen(true)
+  }
 
   function handleMoreMenu(e: MouseEvent) {
     e.stopPropagation()
@@ -491,45 +499,27 @@ function BaseNodeComponent({
             CATEGORY_HEADER[category],
           )}
         >
-          {category === "input" ? (
-            <span className="w-6 h-6 rounded-md bg-[#007AFF]/10 dark:bg-white/20 flex items-center justify-center text-[#007AFF] dark:text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
-              {icon}
-            </span>
-          ) : category === "parameter" ? (
-            <span className="w-6 h-6 rounded-md bg-[#6366F1]/10 dark:bg-white/20 flex items-center justify-center text-[#6366F1] dark:text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
-              {icon}
-            </span>
-          ) : category === "processing" ? (
-            <span className="w-6 h-6 rounded-md bg-[#475569]/10 dark:bg-white/20 flex items-center justify-center text-[#475569] dark:text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
-              {icon}
-            </span>
-          ) : category === "output" ? (
-            <span className="w-6 h-6 rounded-md bg-[#22C55E]/10 dark:bg-white/20 flex items-center justify-center text-[#22C55E] dark:text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
-              {icon}
-            </span>
-          ) : category === "character" ? (
-            <span className="w-6 h-6 rounded-md bg-[#ff0073] dark:bg-white/20 flex items-center justify-center text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
-              {icon}
-            </span>
-          ) : category === "location" ? (
-            <span className="w-6 h-6 rounded-md bg-[#ff0073] dark:bg-white/20 flex items-center justify-center text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
-              {icon}
-            </span>
-          ) : category === "object" ? (
-            <span className="w-6 h-6 rounded-md bg-[#ff0073] dark:bg-white/20 flex items-center justify-center text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
-              {icon}
-            </span>
-          ) : category === "component" ? (
-            <span className="w-6 h-6 rounded-md bg-[#A855F7]/10 dark:bg-white/20 flex items-center justify-center text-[#A855F7] dark:text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
-              {icon}
-            </span>
-          ) : (category === "ai" || category === "scene" || category === "script" || category === "i2v") ? (
-            <span className="w-6 h-6 rounded-md bg-[#ff0073] dark:bg-white/20 flex items-center justify-center text-white [&>svg]:w-3.5 [&>svg]:h-3.5">
-              {icon}
-            </span>
-          ) : (
-            <span className={cn("w-6 h-6 rounded-md flex items-center justify-center [&>svg]:w-3.5 [&>svg]:h-3.5", CATEGORY_ICON_COLOR[category])}>{icon}</span>
-          )}
+          <button
+            type="button"
+            onClick={handleIconClick}
+            className={cn(
+              "w-6 h-6 rounded-md flex items-center justify-center [&>svg]:w-3.5 [&>svg]:h-3.5 cursor-pointer transition-colors",
+              // Light-bg categories: tint icon to brand pink on hover
+              // Dark/brand-pink-bg categories: dim on hover (white icon on pink bg
+              // would vanish if we applied hover:text-[#ff0073])
+              category === "input"      ? "bg-[#007AFF]/10 dark:bg-white/20 text-[#007AFF] dark:text-white hover:text-[#ff0073]" :
+              category === "parameter"  ? "bg-[#6366F1]/10 dark:bg-white/20 text-[#6366F1] dark:text-white hover:text-[#ff0073]" :
+              category === "processing" ? "bg-[#475569]/10 dark:bg-white/20 text-[#475569] dark:text-white hover:text-[#ff0073]" :
+              category === "output"     ? "bg-[#22C55E]/10 dark:bg-white/20 text-[#22C55E] dark:text-white hover:text-[#ff0073]" :
+              category === "component"  ? "bg-[#A855F7]/10 dark:bg-white/20 text-[#A855F7] dark:text-white hover:text-[#ff0073]" :
+              (category === "character" || category === "location" || category === "object" ||
+               category === "ai"        || category === "scene"    || category === "script" || category === "i2v")
+                                        ? "bg-[#ff0073] dark:bg-white/20 text-white hover:opacity-70" :
+              cn(CATEGORY_ICON_COLOR[category], "hover:text-[#ff0073]")
+            )}
+          >
+            {icon}
+          </button>
           <span className="flex-1 truncate">{label}</span>
           {listProgress && (
             <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30 animate-pulse">

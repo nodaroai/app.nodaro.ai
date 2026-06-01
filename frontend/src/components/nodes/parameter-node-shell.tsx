@@ -53,6 +53,8 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const updateNode = useWorkflowStore((s) => s.updateNode)
   const runFromHere = useWorkflowStore((s) => s.runFromHere)
+  const selectNode = useWorkflowStore((s) => s.selectNode)
+  const setConfigPanelFullscreen = useWorkflowStore((s) => s.setConfigPanelFullscreen)
 
   // Narrow subscription: this node object + whether any downstream edge exists
   // + a primitive fingerprint of incoming connections (for camera-motion /
@@ -209,6 +211,7 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
           label={label}
           icon={icon}
           onSave={(newLabel) => updateNodeData(id, { label: newLabel })}
+          onIconClick={() => { selectNode(id); setConfigPanelFullscreen(true) }}
         />
       </div>
       <BaseNode

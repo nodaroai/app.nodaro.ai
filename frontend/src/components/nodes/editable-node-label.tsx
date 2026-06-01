@@ -8,9 +8,10 @@ interface EditableNodeLabelProps {
   label: string
   icon: ReactNode
   onSave: (newLabel: string) => void
+  onIconClick?: () => void
 }
 
-export function EditableNodeLabel({ label, icon, onSave }: EditableNodeLabelProps) {
+export function EditableNodeLabel({ label, icon, onSave, onIconClick }: EditableNodeLabelProps) {
   const [editing, setEditing] = useState(false)
   const [value, setValue] = useState(label)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -35,7 +36,15 @@ export function EditableNodeLabel({ label, icon, onSave }: EditableNodeLabelProp
       className={`absolute -top-6 left-0 flex items-center gap-1.5 text-[14px] font-medium text-foreground/70 dark:text-white/70 ${editing ? "nopan nodrag nowheel" : "select-none"}`}
       style={{ transform: `scale(${compensateScale})`, transformOrigin: "0 100%" }}
     >
-      {icon}
+      <button
+        type="button"
+        className="nopan nodrag flex items-center transition-colors hover:text-[#ff0073] cursor-pointer"
+        onClick={(e) => { e.stopPropagation(); onIconClick?.() }}
+        onMouseDown={(e) => e.stopPropagation()}
+        title="Open settings"
+      >
+        {icon}
+      </button>
       {editing ? (
         <input
           ref={inputRef}
