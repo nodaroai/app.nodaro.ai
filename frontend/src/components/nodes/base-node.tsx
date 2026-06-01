@@ -312,8 +312,7 @@ function BaseNodeComponent({
   // Resize is now handled by <NodeResizeControl> from @xyflow/react and uses
   // its own internal drag state — we don't track it here.
   const updateNodeWithData = useWorkflowStore((s) => s.updateNodeWithData)
-  const selectNode = useWorkflowStore((s) => s.selectNode)
-  const setConfigPanelFullscreen = useWorkflowStore((s) => s.setConfigPanelFullscreen)
+  const openFullscreenSettings = useWorkflowStore((s) => s.openFullscreenSettings)
   const dragRef = useRef<{
     mode: "zoom"
     startX: number
@@ -326,8 +325,7 @@ function BaseNodeComponent({
 
   function handleIconClick(e: MouseEvent) {
     e.stopPropagation()
-    selectNode(id)
-    setConfigPanelFullscreen(true)
+    openFullscreenSettings(id)
   }
 
   function handleMoreMenu(e: MouseEvent) {

@@ -530,6 +530,12 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       setFocusMode(false)
       return
     }
+    // One-shot skip: set by openFullscreenSettings (icon click) so the node
+    // stays in place instead of zooming to fill the screen.
+    if (useWorkflowStore.getState().skipNextViewportAnimation) {
+      useWorkflowStore.setState({ skipNextViewportAnimation: false })
+      return
+    }
     const node = getNode(selectedNodeId)
     if (!node) return
 

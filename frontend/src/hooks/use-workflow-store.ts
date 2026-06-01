@@ -402,6 +402,10 @@ interface WorkflowState {
    *  used to gate workflow keyboard shortcuts and the global Execute button. */
   readonly configPanelFullscreen: boolean
   readonly setConfigPanelFullscreen: (open: boolean) => void
+  /** One-shot flag: the next selectedNodeId change should NOT trigger the
+   *  canvas viewport animation (zoom-to-fit). Set by openFullscreenSettings;
+   *  consumed and cleared by the viewport effect in workflow-canvas. */
+  readonly skipNextViewportAnimation: boolean
   readonly isDirty: boolean
   readonly loadGeneration: number
   readonly saveStatus: SaveStatus
@@ -466,6 +470,10 @@ interface WorkflowState {
    * actions separately so the edge lands before the picker mounts.
    */
   readonly addNodeAndOpenPicker: (type: SceneNodeType, position: { x: number; y: number }, initialData?: Record<string, unknown>) => string | undefined
+  /** Select a node and open its config panel in fullscreen WITHOUT triggering
+   *  the canvas zoom-to-fit animation. Used by the node icon click so the
+   *  viewport stays where it is. */
+  readonly openFullscreenSettings: (nodeId: string) => void
   readonly updateNode: (nodeId: string, updates: Partial<WorkflowNode>) => void
   readonly updateNodeData: (nodeId: string, data: Record<string, unknown>) => void
   /**
@@ -813,6 +821,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   selectedNodeId: null,
   configPanelFullscreen: false,
   setConfigPanelFullscreen: (open) => set({ configPanelFullscreen: open }),
+  skipNextViewportAnimation: false,
   isDirty: false,
   loadGeneration: 0,
   saveStatus: "idle" as SaveStatus,
@@ -1274,6 +1283,14 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     const id = get().addNode(type, position, initialData)
     if (id) get().openPickerForNode(id, type)
     return id
+  },
+
+  openFullscreenSettings: (nodeId) => {
+    // Set the one-shot flag BEFORE selectNode so the viewport effect reads it
+    // during the same render cycle and skips the zoom-to-fit animation.
+    set({ skipNextViewportAnimation: true })
+    get().selectNode(nodeId)
+    set({ configPanelFullscreen: true })
   },
 
   updateNode: (nodeId, updates) =>
