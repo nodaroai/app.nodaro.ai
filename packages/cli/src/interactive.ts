@@ -1,4 +1,5 @@
 import select from "@inquirer/select"
+import checkbox from "@inquirer/checkbox"
 import input from "@inquirer/input"
 import { stdin, stdout } from "node:process"
 
@@ -22,6 +23,8 @@ interface PickOpts<T> {
   choices: PickItem<T>[]
   /** Cap visible rows per page; @inquirer auto-scrolls past this. */
   pageSize?: number
+  /** Pre-selected value (highlighted on open). */
+  default?: T
 }
 
 /**
@@ -34,6 +37,7 @@ export async function pickFromList<T>(opts: PickOpts<T>): Promise<T> {
     choices: opts.choices,
     pageSize: opts.pageSize ?? 12,
     loop: false,
+    default: opts.default,
   })
 }
 
@@ -54,4 +58,28 @@ export async function ask(opts: AskOpts): Promise<string> {
     },
   })
   return value.trim()
+}
+
+interface PickManyItem<T> {
+  name: string
+  value: T
+  description?: string
+  checked?: boolean
+}
+
+/**
+ * Multi-select checkbox picker. Returns the array of chosen `value`s. Pass
+ * `checked: true` on items to pre-tick them (e.g. the server's `selected`).
+ */
+export async function pickManyFromList<T>(opts: {
+  message: string
+  choices: PickManyItem<T>[]
+  pageSize?: number
+}): Promise<T[]> {
+  return checkbox({
+    message: opts.message,
+    choices: opts.choices,
+    pageSize: opts.pageSize ?? 12,
+    loop: false,
+  })
 }

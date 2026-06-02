@@ -43,6 +43,7 @@ export { LocationsResource } from "./resources/locations.js"
 export { ObjectsResource } from "./resources/objects.js"
 export { PipelinesResource } from "./resources/pipelines.js"
 export { ReduceResource } from "./resources/reduce.js"
+export { PromptHelperResource } from "./resources/prompt-helper.js"
 
 // --- Resource type definitions ---
 export type {
@@ -200,3 +201,18 @@ export type {
   ReduceInput,
   ReduceResult,
 } from "./resources/reduce.js"
+
+export type {
+  AnalyzeInput,
+  AnalyzeResult,
+  GenerateInput,
+  EnhanceInput,
+  PromptResult,
+} from "./resources/prompt-helper.js"
+export type {
+  WizardQuestion,
+  WizardOption,
+  WizardSelection,
+  RecommendedModel,
+  WizardNodeContext,
+} from "@nodaro/shared"

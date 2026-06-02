@@ -454,6 +454,20 @@ The full set of strategies is: `pick-best-llm`, `concat`, `first-non-empty`,
 server returns a 400 (`code: "no_valid_inputs"`) which surfaces as a
 `NodaroError` subclass.
 
+### Improve a prompt with the Prompt Wizard
+
+`client.promptHelper` is AI assistance for writing prompts for generation
+nodes. The quickest path is `enhance()` — a one-shot "improve this prompt":
+
+```ts
+const { prompt } = await client.promptHelper.enhance({ nodeType: "generate-image", prompt: "snow leopard on a rock" })
+console.log(prompt)
+```
+
+For a guided flow, `analyze()` returns questions you answer, then `generate()`
+builds the final prompt from those selections. See
+[SDK Reference → client.promptHelper](./sdk-reference.md#clientprompthelper).
+
 ### Discover available nodes
 
 `nodes.list()` enumerates every node type the server supports, with category,

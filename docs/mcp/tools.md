@@ -12,7 +12,7 @@ authorizing the connector; missing scopes cause tools to be omitted entirely
 |-------|----------|
 | `workflows:read` | `list_projects`, `get_project`, `list_workflows`, `get_workflow`, `get_workflow_json`, `export_workflow` |
 | `workflows:write` | `create_workflow`, `delete_workflow`, `update_workflow_json`, `import_workflow` |
-| `workflows:execute` | `run_workflow`, `generate_character` (kind=`main`/`asset`), `generate_character_motion` |
+| `workflows:execute` | `run_workflow`, `generate_character` (kind=`main`/`asset`), `generate_character_motion`, `analyze_prompt`, `generate_prompt`, `enhance_prompt` |
 | `jobs:read` | `list_jobs`, `get_job` |
 | `assets:read` | `browse_gallery`, `list_favorites`, `get_asset`, `list_characters`, `get_character` |
 | `assets:write` | `favorite_asset`, `create_character`, `update_character`, `approve_portrait`, `recaption_character` |
@@ -333,6 +333,73 @@ registers an async task for progress tracking.
 **Response:** `{ executionId: "...", name: "..." }` — use `executionId` with
 the jobs/executions tools or the SDK to poll for completion. MCP clients that
 support the `tasks/*` API and widget rendering will show live progress inline.
+
+---
+
+## Prompt tools
+
+AI assistance for writing prompts for generation nodes. All three delegate to
+`POST /v1/prompt-helper/wizard` (the same endpoint as the SDK
+`client.promptHelper` and the CLI `nodaro prompt` commands) and reserve credits
+per call. Mirrored on the SDK at
+[`client.promptHelper`](../sdk-reference.md#clientprompthelper).
+
+### `analyze_prompt`
+
+Turns a rough idea into guided questions with options for a target node type
+(e.g. `generate-image`, `image-to-video`, `generate-music`). Pair with
+`generate_prompt`.
+
+**Scope:** `workflows:execute`
+
+**Input:**
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `nodeType` | string | Required. Target node type. |
+| `prompt` | string (max 5000) | Optional. The rough idea. Omit to build from scratch. |
+| `provider` | string | Optional. |
+| `style` | string | Optional. |
+| `aspectRatio` | string | Optional. |
+| `duration` | number | Optional. |
+| `llmModel` | enum | Optional. One of the supported LLM model ids. |
+
+**Response:** `{ jobId, questions }` — each question is
+`{ category, label, options[], selected, allowCustom, multi? }`.
+
+### `generate_prompt`
+
+Builds a single optimized prompt from `analyze_prompt` selections.
+
+**Scope:** `workflows:execute`
+
+**Input:**
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `nodeType` | string | Required. |
+| `selections` | array | Required. One `{ category, value, isCustom }` per answered question. |
+| `originalPrompt` | string (max 5000) | Optional. Woven into the result. |
+| `provider` / `style` / `aspectRatio` / `duration` / `llmModel` | — | Optional, as in `analyze_prompt`. |
+
+**Response:** `{ jobId, prompt, recommendedModel? }`.
+
+### `enhance_prompt`
+
+One-shot "improve this prompt" — rewrites a rough idea into one optimized
+prompt with no questions round-trip.
+
+**Scope:** `workflows:execute`
+
+**Input:**
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `nodeType` | string | Required. |
+| `prompt` | string (max 5000) | Optional. The rough idea to improve. Omit to build from scratch. |
+| `provider` / `style` / `aspectRatio` / `duration` / `llmModel` | — | Optional, as in `analyze_prompt`. |
+
+**Response:** `{ jobId, prompt, recommendedModel? }`.
 
 ---
 

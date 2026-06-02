@@ -13,6 +13,7 @@ import { LocationsResource } from "./resources/locations.js"
 import { ObjectsResource } from "./resources/objects.js"
 import { PipelinesResource } from "./resources/pipelines.js"
 import { ReduceResource } from "./resources/reduce.js"
+import { PromptHelperResource } from "./resources/prompt-helper.js"
 
 export interface ClientOptions {
   /** Backend base URL, e.g. "https://nodaro.example.com" or empty string for same-origin. */
@@ -61,6 +62,7 @@ export class NodaroClient {
   readonly objects: ObjectsResource
   readonly pipelines: PipelinesResource
   readonly reduce: ReduceResource
+  readonly promptHelper: PromptHelperResource
 
   constructor(opts: ClientOptions) {
     this.baseUrl = opts.baseUrl.replace(/\/$/, "")  // strip trailing slash
@@ -81,6 +83,7 @@ export class NodaroClient {
     this.objects = new ObjectsResource(this)
     this.pipelines = new PipelinesResource(this)
     this.reduce = new ReduceResource(this)
+    this.promptHelper = new PromptHelperResource(this)
   }
 
   async request<T>(method: string, path: string, options: RequestOptions = {}): Promise<T> {

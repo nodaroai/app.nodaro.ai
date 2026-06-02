@@ -148,6 +148,30 @@ When the user's input suggests ARTISTIC styles (anime, watercolor, pixel art, et
 }`
 }
 
+function buildProviderBlock(nodeType: string): string {
+  const providerCaps = PROVIDER_CAPABILITIES[nodeType]
+  if (!providerCaps || Object.keys(providerCaps).length <= 1) return ""
+  const entries = Object.entries(providerCaps)
+    .map(([p, desc]) => `- ${p}: ${desc}`)
+    .join("\n")
+  return `
+
+## Available Providers
+${entries}
+
+If a particular provider would excel at this content, include "recommendedModel" in your response.
+For suno-generate nodes, use field: "model" instead of field: "provider".`
+}
+
+function buildContextBlock(ctx: { provider?: string; style?: string; aspectRatio?: string; duration?: number }): string {
+  let block = ""
+  if (ctx.provider) block += `\n- Current provider: ${ctx.provider}`
+  if (ctx.style) block += `\n- Style preset: "${ctx.style}"`
+  if (ctx.aspectRatio) block += `\n- Aspect ratio: ${ctx.aspectRatio}`
+  if (ctx.duration) block += `\n- Duration: ${ctx.duration}s`
+  return block
+}
+
 export function buildWizardGenerateSystem(ctx: WizardGenerateContext): string {
   const contentCategory = NODE_CATEGORY_MAP[ctx.nodeType] ?? "image"
   const persona = PERSONA[contentCategory] ?? PERSONA.image
@@ -156,26 +180,8 @@ export function buildWizardGenerateSystem(ctx: WizardGenerateContext): string {
     .map((s) => `- ${s.category}: ${s.value}${s.isCustom ? " (custom)" : ""}`)
     .join("\n")
 
-  const providerCaps = PROVIDER_CAPABILITIES[ctx.nodeType]
-  let providerBlock = ""
-  if (providerCaps && Object.keys(providerCaps).length > 1) {
-    const entries = Object.entries(providerCaps)
-      .map(([p, desc]) => `- ${p}: ${desc}`)
-      .join("\n")
-    providerBlock = `
-
-## Available Providers
-${entries}
-
-If a particular provider would excel at this content, include "recommendedModel" in your response.
-For suno-generate nodes, use field: "model" instead of field: "provider".`
-  }
-
-  let contextBlock = ""
-  if (ctx.provider) contextBlock += `\n- Current provider: ${ctx.provider}`
-  if (ctx.style) contextBlock += `\n- Style preset: "${ctx.style}"`
-  if (ctx.aspectRatio) contextBlock += `\n- Aspect ratio: ${ctx.aspectRatio}`
-  if (ctx.duration) contextBlock += `\n- Duration: ${ctx.duration}s`
+  const providerBlock = buildProviderBlock(ctx.nodeType)
+  const contextBlock = buildContextBlock(ctx)
 
   return `${persona}
 
@@ -197,6 +203,63 @@ ${ctx.userPreference ? `## User Preference\nThe user has set a general preferenc
 
 {
   "prompt": "the generated prompt text",
+  "recommendedModel": {
+    "provider": "provider-key",
+    "field": "provider",
+    "label": "Display Name",
+    "reason": "One sentence why"
+  }
+}
+
+The "recommendedModel" field is optional — omit it if no strong recommendation.`
+}
+
+interface WizardEnhanceContext {
+  nodeType: string
+  provider?: string
+  style?: string
+  aspectRatio?: string
+  duration?: number
+  nodeContext?: { referenceImageCount?: number }
+  userPreference?: string
+}
+
+export function buildWizardEnhanceSystem(ctx: WizardEnhanceContext): string {
+  const contentCategory = NODE_CATEGORY_MAP[ctx.nodeType] ?? "image"
+  const persona = PERSONA[contentCategory] ?? PERSONA.image
+
+  const providerBlock = buildProviderBlock(ctx.nodeType)
+  const contextBlock = buildContextBlock(ctx)
+
+  const refCount = ctx.nodeContext?.referenceImageCount ?? 0
+  const referenceBlock = refCount > 0
+    ? `\n- ${refCount} reference image(s) connected — account for them in the prompt.`
+    : ""
+
+  const imageVocab = contentCategory === "image"
+    ? `## Style Vocabulary
+For PHOTOREALISM: precise camera/lens terms ("shot on 50mm f/1.8", "shallow depth of field"), real-world lighting ("golden hour", "soft window light"), tactile detail ("visible skin pores", "fabric grain"), and an explicit negative ("avoid CGI/plastic look").
+For ARTISTIC styles (anime, watercolor, pixel art): composition terms ("rule of thirds", "dynamic diagonal") and style textures ("brush strokes", "cell shading", "ink outlines").
+
+`
+    : ""
+
+  return `${persona}
+
+## Task
+Take the user's rough ${contentCategory} idea and rewrite it into ONE high-quality, optimized ${contentCategory} generation prompt. Make the expert creative choices yourself — subject, composition, lighting, mood, style, and what to avoid — based on best practices. Do NOT ask questions.
+
+## Node Context${contextBlock}${referenceBlock}
+${providerBlock}
+${imageVocab}${ctx.userPreference ? `## User Preference\nThe user has set a general preference. Follow it:\n"${ctx.userPreference}"\n\n` : ""}## Rules
+1. Output a single concise, natural-language prompt — under 500 characters.
+2. Preserve the user's intent; expand and refine, do not replace it.
+3. Weave style, mood, and lighting naturally — do not keyword-stuff.
+4. If the content calls for it, append negatives as "Avoid: ..." at the end.
+5. Output ONLY valid JSON — no markdown, no wrapping:
+
+{
+  "prompt": "the optimized prompt text",
   "recommendedModel": {
     "provider": "provider-key",
     "field": "provider",

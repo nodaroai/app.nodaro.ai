@@ -40,6 +40,13 @@ export interface RecommendedModel {
   reason: string
 }
 
+export interface WizardNodeContext {
+  connectedInputTypes?: string[]
+  referenceImageCount?: number
+  referenceImageUrls?: string[]
+  hasSourceVideo?: boolean
+}
+
 export interface ModelChange {
   field: string
   value: string

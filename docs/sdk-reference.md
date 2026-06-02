@@ -19,6 +19,8 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
   - [`client.objects`](#clientobjects)
   - [`client.pipelines`](#clientpipelines)
   - [`client.reduce`](#clientreduce)
+  - [`client.promptHelper`](#clientprompthelper)
+  - [`client.apps`](#clientapps)
   - [`client.developerApps`](#clientdeveloperapps)
   - [`client.oauth`](#clientoauth)
 - [Type re-exports](#type-re-exports)
@@ -48,10 +50,11 @@ const client = createClient({
 | `fetch` | `typeof fetch` | no | Custom fetch implementation. Default: `globalThis.fetch`. |
 | `timeoutMs` | `number` | no | Per-request timeout. Default: `60_000`. |
 
-The instance exposes nine resource objects: `workflows`, `projects`, `jobs`,
-`executions`, `nodes`, `characters`, `apps`, `developerApps`, `oauth`. It also
-exposes a low-level `request<T>(method, path, options)` method for endpoints
-not yet wrapped by a resource.
+The instance exposes 14 resource objects: `workflows`, `projects`, `jobs`,
+`executions`, `nodes`, `characters`, `locations`, `objects`, `pipelines`,
+`reduce`, `promptHelper`, `apps`, `developerApps`, `oauth`. It also exposes a
+low-level `request<T>(method, path, options)` method for endpoints not yet
+wrapped by a resource.
 
 ### `class NodaroClient`
 
@@ -213,8 +216,9 @@ Every resource is constructed automatically by `createClient` and reachable via
 `client.<resource>`. The classes are also exported for advanced typechecking
 but rarely need to be imported directly:
 `WorkflowsResource`, `ProjectsResource`, `JobsResource`, `ExecutionsResource`,
-`NodesResource`, `CharactersResource`, `AppsResource`, `DeveloperAppsResource`,
-`OAuthResource`.
+`NodesResource`, `CharactersResource`, `LocationsResource`, `ObjectsResource`,
+`PipelinesResource`, `ReduceResource`, `PromptHelperResource`, `AppsResource`,
+`DeveloperAppsResource`, `OAuthResource`.
 
 All "data" responses follow the envelope `{ data: T }` — the SDK returns the
 envelope as-is. Mutation responses (`delete`, `cancel`) return `{ success: true }`.
@@ -1355,6 +1359,130 @@ Throws a `NodaroError` (status 400, `code: "no_valid_inputs"`) when every
 input is empty / whitespace. Credits are reserved by the same
 `creditGuard` middleware used by all generation routes, so insufficient
 credits surface as `InsufficientCreditsError`.
+
+---
+
+### `client.promptHelper`
+
+AI prompt assistance for generation nodes. All three methods delegate to
+`POST /v1/prompt-helper/wizard` (see
+[API Integration §12](./api-integration.md#12-prompt-wizard)) and reserve
+credits per call.
+
+#### `analyze(input)`
+
+```ts
+analyze(input: AnalyzeInput): Promise<{ jobId: string; questions: WizardQuestion[] }>
+```
+
+Turns a rough idea into guided questions for a target node type. Pair the
+returned `questions` with `generate()`.
+
+```ts
+const { questions } = await client.promptHelper.analyze({
+  nodeType: "generate-image",
+  prompt: "a snow leopard",
+})
+```
+
+#### `generate(input)`
+
+```ts
+generate(input: GenerateInput): Promise<{ jobId: string; prompt: string; recommendedModel?: RecommendedModel }>
+```
+
+Builds a single optimized prompt from the selected answers. Each selection is
+`{ category, value, isCustom }`.
+
+```ts
+const { prompt } = await client.promptHelper.generate({
+  nodeType: "generate-image",
+  selections: [{ category: "subject", value: "snow leopard", isCustom: false }],
+})
+```
+
+#### `enhance(input)`
+
+```ts
+enhance(input: EnhanceInput): Promise<{ jobId: string; prompt: string; recommendedModel?: RecommendedModel }>
+```
+
+One-shot "improve this prompt" — skips the questions round-trip and returns the
+optimized prompt directly.
+
+```ts
+const { prompt } = await client.promptHelper.enhance({ nodeType: "generate-image", prompt: "a snow leopard" })
+```
+
+---
+
+### `client.apps`
+
+Browse and run published apps — a workflow wrapped in a curated input/output
+presentation. `list()` and `get()` are public; `run()` and the run-history
+methods authenticate as the caller.
+
+#### `list(params?)`
+
+```ts
+list(params?: ListAppsParams): Promise<ListAppsResult>
+```
+
+Cursor-paginated browse of published apps. Optional `search`, `category`, and
+`limit` (server caps at 50).
+
+```ts
+const { data, nextCursor } = await client.apps.list({ search: "headshot", limit: 20 })
+```
+
+#### `get(slug)`
+
+```ts
+get(slug: string): Promise<{ data: PublishedAppDetail }>
+```
+
+Fetches one app's metadata plus its `inputSchema` (the fields end users fill
+in) and `outputs` mapping.
+
+```ts
+const { data: app } = await client.apps.get("pro-headshot")
+```
+
+#### `run(slug, inputs?)`
+
+```ts
+run(slug: string, inputs?: Record<string, unknown>): Promise<AppRunResult>
+```
+
+Triggers an app run. `inputs` keys must match the app's input-schema field
+names. Returns `{ executionId, status, runId? }` — poll via
+`client.executions.get(executionId)`.
+
+```ts
+const { executionId } = await client.apps.run("pro-headshot", { photo: url })
+```
+
+#### `listRuns(slug, params?)` / `getRun(slug, runId)`
+
+```ts
+listRuns(slug: string, params?: ListAppRunsParams): Promise<{ data: AppRun[]; nextCursor?: string | null }>
+getRun(slug: string, runId: string): Promise<{ data: AppRun }>
+```
+
+List past runs for an app, or fetch one run by id.
+
+#### `deleteRun(slug, runId)`
+
+```ts
+deleteRun(slug: string, runId: string): Promise<{ success: true; archived: true }>
+```
+
+Archives (soft-deletes) a run. Restoration and permanent deletion are UI-only
+by design — SDK / MCP / API delete callers can't destroy data.
+
+```ts
+await client.apps.deleteRun("pro-headshot", runId)
+```
 
 ---
 
