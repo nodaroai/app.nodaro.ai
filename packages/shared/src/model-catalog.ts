@@ -334,7 +334,12 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["realistic", "fast", "unfiltered"],
     features: ["reference-image"],
     aspectRatios: FLUX_RATIOS,
-    pricing: [{ identifier: "flux-2-klein", credits: 2 }],
+    resolutions: ["0.5 MP", "1 MP", "2 MP", "4 MP"],
+    pricing: [
+      { identifier: "flux-2-klein",       credits: 1 },  // 1MP 0ref (default)
+      { identifier: "flux-2-klein:1MP:0ref", credits: 1 },  // min
+      { identifier: "flux-2-klein:4MP:8ref", credits: 11 }, // max
+    ],
   },
   "kontext-multi": {
     id: "kontext-multi",
@@ -358,7 +363,12 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["realistic", "high-quality", "unfiltered", "reference"],
     features: ["reference-image"],
     aspectRatios: FLUX_RATIOS,
-    pricing: [{ identifier: "flux-2-pro", credits: 3 }],
+    resolutions: ["0.5 MP", "1 MP", "2 MP", "4 MP"],
+    pricing: [
+      { identifier: "flux-2-pro",        credits: 3 },  // 2MP 0ref (default)
+      { identifier: "flux-2-pro:0.5MP:0ref", credits: 2 },  // min
+      { identifier: "flux-2-pro:4MP:8ref",   credits: 28 }, // max
+    ],
   },
   "flux-2-max": {
     id: "flux-2-max",
@@ -366,20 +376,15 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     modes: ["t2i", "i2i"] as const,
     family: "Black Forest Labs",
     label: "Flux 2 Max (Safety Tolerance)",
-    description: "BFL Flux 2 Max — even larger sibling of Pro via Replicate, safety_tolerance=5, up to 8 reference images. Variable pricing: $0.04 base + $0.03 per reference image.",
+    description: "BFL Flux 2 Max — even larger sibling of Pro via Replicate, safety_tolerance=5, up to 8 reference images. Variable pricing by MP and ref count.",
     useCases: ["realistic", "high-quality", "unfiltered", "multi-reference"],
     features: ["reference-image"],
     aspectRatios: FLUX_RATIOS,
+    resolutions: ["0.5 MP", "1 MP", "2 MP", "4 MP"],
     pricing: [
-      { identifier: "flux-2-max", credits: 2 },
-      { identifier: "flux-2-max:1ref", credits: 4 },
-      { identifier: "flux-2-max:2ref", credits: 5 },
-      { identifier: "flux-2-max:3ref", credits: 7 },
-      { identifier: "flux-2-max:4ref", credits: 8 },
-      { identifier: "flux-2-max:5ref", credits: 10 },
-      { identifier: "flux-2-max:6ref", credits: 11 },
-      { identifier: "flux-2-max:7ref", credits: 13 },
-      { identifier: "flux-2-max:8ref", credits: 14 },
+      { identifier: "flux-2-max",            credits: 7 },  // 2MP 0ref (default)
+      { identifier: "flux-2-max:0.5MP:0ref", credits: 2 },  // min
+      { identifier: "flux-2-max:4MP:8ref",   credits: 62 }, // max
     ],
   },
 

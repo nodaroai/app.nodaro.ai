@@ -403,6 +403,52 @@ describe("GenerateImageConfig — provider-snap useEffect", () => {
       expect("aspectRatio" in u).toBe(false)
     }
   })
+
+  it("flux-2-max with no resolution → snaps to '2 MP' (not 0.5 MP options[0])", () => {
+    // flux-2-max options are ["0.5 MP","1 MP","2 MP","4 MP"]. Without the
+    // flux-2-aware override, options[0] = "0.5 MP". We want "2 MP".
+    const onUpdate = vi.fn()
+    const data = baseGenerateImageData({ provider: "flux-2-max" }) // no resolution field
+    render(<GenerateImageConfig {...commonProps(onUpdate, data)} />)
+    const merged: Record<string, unknown> = onUpdate.mock.calls.reduce((acc: any, [u]: any) => ({ ...acc, ...u }), {})
+    expect(merged.resolution).toBe("2 MP")
+  })
+
+  it("flux-2-max with stale '2K' resolution → snaps to '2 MP'", () => {
+    // Switching from a provider that had "2K" (e.g. nano-banana-pro) to
+    // flux-2-max; "2K" is invalid for flux-2-max, must snap to "2 MP".
+    const onUpdate = vi.fn()
+    const data = baseGenerateImageData({ provider: "flux-2-max", resolution: "2K" })
+    render(<GenerateImageConfig {...commonProps(onUpdate, data)} />)
+    const merged: Record<string, unknown> = onUpdate.mock.calls.reduce((acc: any, [u]: any) => ({ ...acc, ...u }), {})
+    expect(merged.resolution).toBe("2 MP")
+  })
+
+  it("flux-2-pro with no resolution → snaps to '2 MP'", () => {
+    const onUpdate = vi.fn()
+    const data = baseGenerateImageData({ provider: "flux-2-pro" })
+    render(<GenerateImageConfig {...commonProps(onUpdate, data)} />)
+    const merged: Record<string, unknown> = onUpdate.mock.calls.reduce((acc: any, [u]: any) => ({ ...acc, ...u }), {})
+    expect(merged.resolution).toBe("2 MP")
+  })
+
+  it("flux-2-klein with no resolution → snaps to '1 MP'", () => {
+    const onUpdate = vi.fn()
+    const data = baseGenerateImageData({ provider: "flux-2-klein" })
+    render(<GenerateImageConfig {...commonProps(onUpdate, data)} />)
+    const merged: Record<string, unknown> = onUpdate.mock.calls.reduce((acc: any, [u]: any) => ({ ...acc, ...u }), {})
+    expect(merged.resolution).toBe("1 MP")
+  })
+
+  it("flux-2-max with valid '4 MP' → preserves it", () => {
+    // User explicitly picked "4 MP" — do not overwrite.
+    const onUpdate = vi.fn()
+    const data = baseGenerateImageData({ provider: "flux-2-max", resolution: "4 MP" })
+    render(<GenerateImageConfig {...commonProps(onUpdate, data)} />)
+    for (const [u] of onUpdate.mock.calls) {
+      expect("resolution" in u).toBe(false)
+    }
+  })
 })
 
 // =============================================================================
@@ -461,6 +507,34 @@ describe("ModifyImageConfig — provider-snap useEffect", () => {
     const merged: Record<string, unknown> = onUpdate.mock.calls.reduce((acc: any, [u]: any) => ({ ...acc, ...u }), {})
     expect(merged.maskUrl).toBeUndefined()
     expect("maskUrl" in merged).toBe(true)
+  })
+
+  it("flux-2-pro (modify-image) with stale '2K' → snaps to '2 MP'", () => {
+    // flux-2-pro is a valid modify-image provider. Stale "2K" must snap to
+    // "2 MP" (the provider default), not options[0] = "0.5 MP".
+    const onUpdate = vi.fn()
+    const data = baseModifyImageData({ provider: "flux-2-pro", resolution: "2K" })
+    render(<ModifyImageConfig {...commonProps(onUpdate, data)} />)
+    const merged: Record<string, unknown> = onUpdate.mock.calls.reduce((acc: any, [u]: any) => ({ ...acc, ...u }), {})
+    expect(merged.resolution).toBe("2 MP")
+  })
+
+  it("flux-2-max (modify-image) with no resolution → snaps to '2 MP'", () => {
+    const onUpdate = vi.fn()
+    const data = baseModifyImageData({ provider: "flux-2-max" })
+    render(<ModifyImageConfig {...commonProps(onUpdate, data)} />)
+    const merged: Record<string, unknown> = onUpdate.mock.calls.reduce((acc: any, [u]: any) => ({ ...acc, ...u }), {})
+    expect(merged.resolution).toBe("2 MP")
+  })
+
+  it("flux-2-max (modify-image) with valid '1 MP' → preserves it", () => {
+    // "1 MP" is valid for flux-2-max — do not overwrite with the default.
+    const onUpdate = vi.fn()
+    const data = baseModifyImageData({ provider: "flux-2-max", resolution: "1 MP" })
+    render(<ModifyImageConfig {...commonProps(onUpdate, data)} />)
+    for (const [u] of onUpdate.mock.calls) {
+      expect("resolution" in u).toBe(false)
+    }
   })
 })
 

@@ -4,6 +4,19 @@ import { getAppSettings } from "../../lib/app-settings.js"
 import { FREE_TIER_RESTRICTIONS, TIER_STORAGE_LIMITS } from "./stripe-config.js"
 import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier } from "@nodaro/shared"
 import { buildLlmCreditIdentifier } from "@nodaro/shared"
+import { flux2BaseCredits, FLUX2_RES_MP, type Flux2Model } from "@nodaro/shared"
+
+// ── Flux 2 per-MP×ref static costs (generated from flux2BaseCredits formula) ──
+// Identifier format: `<model>:<mp>MP:<n>ref` (e.g. `flux-2-max:2MP:1ref`)
+// These are 0%-base credits (markup is applied once at lookup via getAppSettings).
+const FLUX2_STATIC: Record<string, number> = {}
+for (const m of ["flux-2-klein", "flux-2-pro", "flux-2-max"] as Flux2Model[]) {
+  for (const mp of FLUX2_RES_MP) {
+    for (let r = 0; r <= 8; r++) {
+      FLUX2_STATIC[`${m}:${mp}MP:${r}ref`] = flux2BaseCredits(m, Number(mp), r)
+    }
+  }
+}
 
 // ============================================================
 // Types
@@ -127,21 +140,16 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
   // ── Replicate "Open" (uncensored) — run direct via Replicate, not KIE ──
-  "flux-2-klein": 2,             // ~$0.025, BFL Flux 2 9B Klein via Replicate
+  // Base rows (representative default-resolution 0-ref) — for admin display and
+  // single-node runs where no :MP:ref composite is available yet.
+  // Per-MP×ref composites are spread below via FLUX2_STATIC.
+  "flux-2-klein": 1,             // default 1MP 0ref — BFL Flux 2 9B Klein via Replicate
   ***REDACTED-OSS-SCRUB***
-  "flux-2-pro": 3,               // ~$0.06, BFL Flux 2 Pro via Replicate, safety_tolerance=5 (max for Pro)
-  // BFL Flux 2 Max via Replicate — $0.04 base + $0.03/ref. safety_tolerance=5.
-  // Composite identifiers `:Nref` (N=1..8) cover ref-aware pricing. The bare
-  // identifier (no suffix) is the 0-ref / pure-t2i case.
-  "flux-2-max": 2,               // $0.04 × 1.25 / $0.02 ≈ 2.5 → ceil = 3 cr
-  "flux-2-max:1ref": 4,          // $0.04 + 1×$0.03 = $0.07 → ceil(4.375) = 5 cr
-  "flux-2-max:2ref": 5,          // $0.10 → 7
-  "flux-2-max:3ref": 7,          // $0.13 → 9
-  "flux-2-max:4ref": 8,         // $0.16 → 10
-  "flux-2-max:5ref": 10,         // $0.19 → 12
-  "flux-2-max:6ref": 11,         // $0.22 → 14
-  "flux-2-max:7ref": 13,         // $0.25 → 16
-  "flux-2-max:8ref": 14,         // $0.28 → 18
+  "flux-2-pro": 3,               // default 2MP 0ref — BFL Flux 2 Pro via Replicate, safety_tolerance=5
+  "flux-2-max": 7,               // default 2MP 0ref — BFL Flux 2 Max via Replicate, safety_tolerance=5
+  // Full per-MP×ref grid for Flux 2 family (108 entries, see flux2BaseCredits formula).
+  // Identifier format: `<model>:<mp>MP:<n>ref` (mp ∈ {0.5,1,2,4}, n ∈ 0..8).
+  ...FLUX2_STATIC,
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
   // ── Image Editing ──

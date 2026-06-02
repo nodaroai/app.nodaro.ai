@@ -33,7 +33,7 @@ import type {
   ManualReferenceImage,
   ImageProvider,
 } from "@/types/nodes"
-import { IMAGE_GEN_MODELS, MODIFY_IMAGE_MODELS, UPSCALE_IMAGE_MODELS, IMAGE_STYLE_PRESETS, getAspectRatiosForModel, IMAGE_RESOLUTION_OPTIONS, IMAGE_QUALITY_OPTIONS, TOPAZ_IMAGE_RESOLUTIONS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, REF_IMAGE_MAX_LIMITS, DEFAULT_REF_IMAGE_MAX, I2I_STRENGTH_SUPPORT, I2I_MASK_SUPPORT, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT } from "./model-options"
+import { IMAGE_GEN_MODELS, MODIFY_IMAGE_MODELS, UPSCALE_IMAGE_MODELS, IMAGE_STYLE_PRESETS, getAspectRatiosForModel, IMAGE_RESOLUTION_OPTIONS, IMAGE_QUALITY_OPTIONS, TOPAZ_IMAGE_RESOLUTIONS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, REF_IMAGE_MAX_LIMITS, DEFAULT_REF_IMAGE_MAX, I2I_STRENGTH_SUPPORT, I2I_MASK_SUPPORT, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT, defaultResolutionFor } from "./model-options"
 import { ModelSelectOption } from "./model-select-option"
 import { ModelSearchSelect } from "./model-search-select"
 import { ModelDescriptionHint } from "./model-description-hint"
@@ -183,8 +183,15 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
     // Resolution: if provider exposes this lever, snap to a valid option;
     // if it does NOT, clear the stale value so the backend Zod enum
     // (1K|2K|4K) doesn't reject what the provider doesn't even use.
+    // Flux 2 uses ascending MP options ("0.5 MP"…"4 MP"), so we snap to
+    // the provider default (2 MP Pro/Max, 1 MP Klein) instead of options[0]
+    // (0.5 MP) when the current value is absent or invalid.
+    const flux2Default = defaultResolutionFor(currentProvider)
     if (resolutionOptions) {
-      if (data.resolution && !resolutionOptions.some((o) => o.value === data.resolution)) {
+      if (flux2Default) {
+        const valid = resolutionOptions.some((o) => o.value === data.resolution)
+        if (!valid && data.resolution !== flux2Default) updates.resolution = flux2Default
+      } else if (data.resolution && !resolutionOptions.some((o) => o.value === data.resolution)) {
         updates.resolution = resolutionOptions[0]?.value
       }
     } else if (data.resolution !== undefined) {
@@ -996,8 +1003,15 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
     // Resolution / quality fail-safe: snap invalid values to a valid option
     // when the provider exposes the lever, otherwise clear the stale value
     // so the backend route's Zod enum doesn't reject it.
+    // Flux 2 uses ascending MP options ("0.5 MP"…"4 MP"), so we snap to
+    // the provider default (2 MP Pro/Max, 1 MP Klein) instead of options[0]
+    // (0.5 MP) when the current value is absent or invalid.
+    const flux2Default = defaultResolutionFor(currentProvider)
     if (resolutionOptions) {
-      if (data.resolution && !resolutionOptions.some((o) => o.value === data.resolution)) {
+      if (flux2Default) {
+        const valid = resolutionOptions.some((o) => o.value === data.resolution)
+        if (!valid && data.resolution !== flux2Default) updates.resolution = flux2Default
+      } else if (data.resolution && !resolutionOptions.some((o) => o.value === data.resolution)) {
         updates.resolution = resolutionOptions[0]?.value
       }
     } else if (data.resolution !== undefined) {

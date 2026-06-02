@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
+import { flux2CostUsd } from "@nodaro/shared"
 
 const mocks = vi.hoisted(() => {
   const mockCreate = vi.fn()
@@ -79,7 +80,8 @@ describe("ReplicateImageProvider.generateImage", () => {
       input: expect.objectContaining({ prompt: "a cat", aspect_ratio: "1:1" }),
     }))
     expect(result.url).toBe("https://replicate.example.com/image.png")
-    expect(result.cost).toBe(0.005)
+    // flux-2-klein cost is formula-derived (not GPU-time): 1 MP default, 0 refs
+    expect(result.cost).toBe(flux2CostUsd("flux-2-klein", 1, 0))
   })
 
   it("translates prompt to English", async () => {
@@ -213,9 +215,12 @@ describe("ReplicateImageProvider.generateImage", () => {
     expect(callArgs.input.image_prompt_1).toBeUndefined()
   })
 
-  it("extracts cost from prediction metrics", async () => {
+  it("extracts cost from prediction metrics (non-flux-2 model, GPU-time path)", async () => {
+    // Use kontext-multi (not a flux-2 model) to exercise the GPU-time cost path.
+    // Flux 2 models override cost with the formula — this test guards the path
+    // where predict_time * rate IS the cost that flows through.
     mocks.mockExtractCost.mockReturnValueOnce(0.01)
-    const result = await provider.generateImage("test")
+    const result = await provider.generateImage("test", undefined, "kontext-multi")
     expect(result.cost).toBe(0.01)
   })
 
@@ -276,6 +281,44 @@ describe("ReplicateImageProvider.generateImage", () => {
     })
 
     expect(result.url).toBe("https://replicate.example.com/image.png")
+  })
+
+  // ─── Resolution field mapping + cost override tests (TASK 6) ──────────────
+
+  it("flux-2-max with resolution '2 MP' sends input.resolution='2 MP' and formula cost", async () => {
+    const refs = ["https://ref-1.png", "https://ref-2.png"]
+    const result = await provider.generateImage("scene", refs, "flux-2-max", { resolution: "2 MP" })
+    const callArgs = mocks.mockCreate.mock.calls[0][0]
+    expect(callArgs.input.resolution).toBe("2 MP")
+    // input_images still wired correctly
+    expect(callArgs.input.input_images).toEqual(refs)
+    // Cost is formula-derived, NOT the mocked GPU-time value (0.005)
+    expect(result.cost).toBe(flux2CostUsd("flux-2-max", 2, refs.length))
+    expect(result.cost).not.toBe(0.005)
+  })
+
+  it("flux-2-klein with resolution '2 MP' sends megapixels='2' (bare string) and no resolution field", async () => {
+    await provider.generateImage("style", ["https://ref.png"], "flux-2-klein", { resolution: "2 MP" })
+    const callArgs = mocks.mockCreate.mock.calls[0][0]
+    expect(callArgs.input.megapixels).toBe("2")
+    expect(callArgs.input.resolution).toBeUndefined()
+    // images array still wired
+    expect(callArgs.input.images).toEqual(["https://ref.png"])
+  })
+
+  it("flux-2-pro with resolution '0.5 MP' sends input.resolution='0.5 MP'", async () => {
+    await provider.generateImage("solo", undefined, "flux-2-pro", { resolution: "0.5 MP" })
+    const callArgs = mocks.mockCreate.mock.calls[0][0]
+    expect(callArgs.input.resolution).toBe("0.5 MP")
+  })
+
+  it("flux-2-max with NO resolution extraParam defaults to '1 MP' and formula cost at 1 MP", async () => {
+    const refs = ["https://ref-1.png"]
+    const result = await provider.generateImage("legacy", refs, "flux-2-max")
+    const callArgs = mocks.mockCreate.mock.calls[0][0]
+    // resolutionMp returns 1 when resolution is absent (legacy node behavior)
+    expect(callArgs.input.resolution).toBe("1 MP")
+    expect(result.cost).toBe(flux2CostUsd("flux-2-max", 1, refs.length))
   })
 })
 

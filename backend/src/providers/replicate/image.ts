@@ -14,6 +14,7 @@ import type {
 } from "../provider.interface.js"
 import { extractUrl, runReplicatePrediction } from "./client.js"
 import { translateToEnglish } from "../../lib/translate.js"
+import { flux2CostUsd, isFlux2Model } from "@nodaro/shared"
 
 const DEFAULT_ASPECT_RATIO = "1:1"
 
@@ -28,6 +29,15 @@ function readCommon(extraParams: Record<string, unknown> | undefined): CommonExt
       (extraParams?.aspect_ratio as string | undefined) ?? DEFAULT_ASPECT_RATIO,
     seed: extraParams?.seed as number | undefined,
   }
+}
+
+/** Parse the resolution extraParam ("2 MP") to megapixels. Absent → 1 MP
+ *  (legacy nodes predate the selector; see TASK 9). */
+function resolutionMp(extraParams: Record<string, unknown> | undefined): number {
+  const raw = extraParams?.resolution
+  if (typeof raw !== "string") return 1
+  const n = parseFloat(raw) // "2 MP" -> 2, "0.5 MP" -> 0.5, "2" -> 2
+  return Number.isFinite(n) && n > 0 ? n : 1
 }
 
 interface ReplicateModelSpec {
@@ -53,6 +63,7 @@ const IMAGE_MODELS: Record<string, ReplicateModelSpec> = {
       const input: Record<string, unknown> = {
         prompt,
         aspect_ratio: aspectRatio,
+        megapixels: String(resolutionMp(extraParams)),
       }
       if (seed != null) input.seed = seed
       // Schema field is `images` (array, max 5) — NOT a single `image` string.
@@ -115,6 +126,7 @@ const IMAGE_MODELS: Record<string, ReplicateModelSpec> = {
         aspect_ratio: aspectRatio,
         output_format: "png",
         safety_tolerance: 5,
+        resolution: `${resolutionMp(extraParams)} MP`,
       }
       // Schema field is a single `input_images` array (max 8) — NOT
       ***REDACTED-OSS-SCRUB***
@@ -138,6 +150,7 @@ const IMAGE_MODELS: Record<string, ReplicateModelSpec> = {
         aspect_ratio: aspectRatio,
         output_format: "png",
         safety_tolerance: 5,
+        resolution: `${resolutionMp(extraParams)} MP`,
       }
       // Schema field is a single `input_images` array — NOT image_prompt_1..N.
       if (refs.length) input.input_images = refs.slice(0, 8)
@@ -206,10 +219,22 @@ async function runImagePrediction(
         : output
   const resultUrl = extractUrl(raw)
 
-  console.log(
-    `[Replicate:image] result=${resultUrl} cost=${cost?.toFixed(6) ?? "N/A"}`,
-  )
-  return { url: resultUrl, cost }
+  // For Flux 2 models, replace GPU-time cost with the real per-MP formula cost
+  // and mark non-metered so commitJobCredits charges the reserved tier only.
+  // Replicate bills BFL Flux 2 at a fixed per-MP rate, not GPU time, so the
+  // predict-time figure is wrong for provider_cost / anomaly tracking.
+  let finalCost = cost
+  let metered: boolean | undefined = undefined
+  if (isFlux2Model(model)) {
+    finalCost = flux2CostUsd(model, resolutionMp(extraParams), referenceImageUrls?.length ?? 0)
+    metered = false
+  }
+
+  return {
+    url: resultUrl,
+    cost: finalCost,
+    ...(metered !== undefined ? { meteredCost: metered } : {}),
+  }
 }
 
 export class ReplicateImageProvider implements ImageGenerationProvider {

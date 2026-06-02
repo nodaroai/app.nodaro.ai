@@ -72,7 +72,7 @@ export const generateImageBody = z.object({
     "3:2", "2:3", "5:4", "4:5", "21:9",
     "8:1", "1:8", // Wan 2.7 / Wan 2.7 Pro ultra-wide (in the catalog + picker)
   ]).optional(),
-  resolution: z.enum(["1K", "2K", "4K"]).optional(),
+  resolution: z.enum(["1K", "2K", "4K", "0.5 MP", "1 MP", "2 MP", "4 MP"]).optional(),
   quality: z.enum(["medium", "high", "basic"]).optional(),
   negativePrompt: z.string().max(5000).optional(),
   seed: z.number().int().min(0).optional(),
