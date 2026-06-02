@@ -518,4 +518,38 @@ describe("POST /v1/generate-image", () => {
       },
     )
   })
+
+  describe("reference auto-swap to i2i (triggered by attached refs, no marker)", () => {
+    const VALID_UUID = "00000000-0000-4000-8000-000000000001"
+
+    it("routes a swap-map T2I provider to its i2i sibling when refs are attached + a PLAIN prompt", async () => {
+      setupSupabaseMock({})
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: {
+          prompt: "make it night", // plain — NO "Use these references…" marker
+          userId: VALID_UUID,
+          provider: "seedream-5-lite",
+          referenceImageUrls: ["https://r2.nodaro.ai/frame.png"],
+        },
+      })
+      expect(res.statusCode).toBe(200)
+      const reserveMock = vi.mocked(reserveCreditsForJob)
+      // The bare T2I endpoint ignores refs; the route auto-routes to the i2i sibling.
+      expect(reserveMock.mock.calls.at(-1)?.[3]).toContain("seedream-5-lite-i2i")
+    })
+
+    it("does NOT swap when no refs are attached", async () => {
+      setupSupabaseMock({})
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: { prompt: "a city", userId: VALID_UUID, provider: "seedream-5-lite" },
+      })
+      expect(res.statusCode).toBe(200)
+      const reserveMock = vi.mocked(reserveCreditsForJob)
+      expect(reserveMock.mock.calls.at(-1)?.[3]).not.toContain("i2i")
+    })
+  })
 })
