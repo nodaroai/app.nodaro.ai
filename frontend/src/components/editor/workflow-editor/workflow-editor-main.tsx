@@ -127,6 +127,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   const [singleDiscardDontAsk, setSingleDiscardDontAsk] = useState(false);
   const isMobile = useIsMobile();
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId);
+  const isReadOnly = useWorkflowStore((s) => s.isReadOnly);
   const selectedPipelineId = useWorkflowStore((s) => {
     if (!s.selectedNodeId) return undefined;
     const node = s.nodes.find((n) => n.id === s.selectedNodeId);
@@ -598,6 +599,11 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     function handleBeforeUnload() {
       if (!projectId) return;
       const state = useWorkflowStore.getState();
+      // Read-only (Studio) workflows must never be persisted from the editor.
+      // Auto-layout routes through the controlled onNodesChange and flips
+      // isDirty even for read-only workflows, so the isDirty check below is
+      // not enough on its own — bail before building/PATCHing the payload.
+      if (state.isReadOnly) return;
       if (!state.isDirty || state.nodes.length === 0) return;
 
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as
@@ -898,7 +904,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   useEffect(() => {
     useWorkflowStore.getState().setRunSingleNode(
-      (nodeId: string) => handleRunSingleNode(nodeId, ctx, projectId, save, setIsRunning, pollIntervalsRef)
+      isReadOnly ? null : (nodeId: string) => handleRunSingleNode(nodeId, ctx, projectId, save, setIsRunning, pollIntervalsRef)
         .finally(() => {
           // Invalidate execution history so the single-node run appears immediately
           if (workflowId) {
@@ -911,82 +917,65 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   useEffect(() => {
     useWorkflowStore.getState().setRunFromHere(
-      (nodeId: string) => handleRunFromHere(nodeId, ctx, projectId, save, setIsRunning, onExecutionStarted, onExecutionEnded),
+      isReadOnly ? null : (nodeId: string) => handleRunFromHere(nodeId, ctx, projectId, save, setIsRunning, onExecutionStarted, onExecutionEnded),
     );
     return () => useWorkflowStore.getState().setRunFromHere(null);
   });
 
   useEffect(() => {
     useWorkflowStore.getState().setRunSelected(
-      () => handleRunSelected(ctx, projectId, save, setIsRunning, onExecutionStarted, onExecutionEnded),
+      isReadOnly ? null : () => handleRunSelected(ctx, projectId, save, setIsRunning, onExecutionStarted, onExecutionEnded),
     );
     return () => useWorkflowStore.getState().setRunSelected(null);
   });
 
   useEffect(() => {
-    useWorkflowStore
-      .getState()
-      .setGenerateSceneImage((scriptNodeId: string, sceneIndex: number) =>
-        generateSceneImage(scriptNodeId, sceneIndex, ctx),
-      );
+    useWorkflowStore.getState().setGenerateSceneImage(
+      isReadOnly ? null : (scriptNodeId: string, sceneIndex: number) => generateSceneImage(scriptNodeId, sceneIndex, ctx),
+    );
     return () => useWorkflowStore.getState().setGenerateSceneImage(null);
   });
 
   useEffect(() => {
-    useWorkflowStore.getState().setExpandStoryboard(expandStoryboard);
+    useWorkflowStore.getState().setExpandStoryboard(isReadOnly ? null : expandStoryboard);
     return () => useWorkflowStore.getState().setExpandStoryboard(null);
   });
 
   useEffect(() => {
-    useWorkflowStore
-      .getState()
-      .setCreateSceneNodeFromScript(createSceneNode);
+    useWorkflowStore.getState().setCreateSceneNodeFromScript(isReadOnly ? null : createSceneNode);
     return () => useWorkflowStore.getState().setCreateSceneNodeFromScript(null);
   });
 
   useEffect(() => {
-    useWorkflowStore
-      .getState()
-      .setGenerateCharacterAssetFn(
-        (nodeId: string, assetType: "expressions" | "poses" | "lighting" | "angles") =>
-          handleGenerateCharacterAsset(nodeId, assetType, ctx),
-      );
+    useWorkflowStore.getState().setGenerateCharacterAssetFn(
+      isReadOnly ? null : (nodeId: string, assetType: "expressions" | "poses" | "lighting" | "angles") => handleGenerateCharacterAsset(nodeId, assetType, ctx),
+    );
     return () => useWorkflowStore.getState().setGenerateCharacterAssetFn(null);
   });
 
   useEffect(() => {
-    useWorkflowStore
-      .getState()
-      .setGenerateObjectAssetFn(
-        (nodeId: string, assetType: "angles" | "materials" | "variations") =>
-          handleGenerateObjectAsset(nodeId, assetType, ctx),
-      );
+    useWorkflowStore.getState().setGenerateObjectAssetFn(
+      isReadOnly ? null : (nodeId: string, assetType: "angles" | "materials" | "variations") => handleGenerateObjectAsset(nodeId, assetType, ctx),
+    );
     return () => useWorkflowStore.getState().setGenerateObjectAssetFn(null);
   });
 
   useEffect(() => {
-    useWorkflowStore
-      .getState()
-      .setGenerateLocationAssetFn(
-        (nodeId: string, assetType: "timeOfDay" | "weather" | "angles") =>
-          handleGenerateLocationAsset(nodeId, assetType, ctx),
-      );
+    useWorkflowStore.getState().setGenerateLocationAssetFn(
+      isReadOnly ? null : (nodeId: string, assetType: "timeOfDay" | "weather" | "angles") => handleGenerateLocationAsset(nodeId, assetType, ctx),
+    );
     return () => useWorkflowStore.getState().setGenerateLocationAssetFn(null);
   });
 
   useEffect(() => {
-    useWorkflowStore
-      .getState()
-      .setCreateNodesFromWriter(createNodesFromWriter);
+    useWorkflowStore.getState().setCreateNodesFromWriter(isReadOnly ? null : createNodesFromWriter);
     return () => useWorkflowStore.getState().setCreateNodesFromWriter(null);
   });
 
   useEffect(() => {
-    useWorkflowStore
-      .getState()
-      .setRunAllWriterImageNodes((writerNodeId: string) =>
-        runAllWriterImageNodes(writerNodeId, ctx, pollIntervalsRef),
-      );
+    useWorkflowStore.getState().setRunAllWriterImageNodes(
+      isReadOnly ? null : (writerNodeId: string) => runAllWriterImageNodes(writerNodeId, ctx, pollIntervalsRef),
+    );
     return () => useWorkflowStore.getState().setRunAllWriterImageNodes(null);
   });
 

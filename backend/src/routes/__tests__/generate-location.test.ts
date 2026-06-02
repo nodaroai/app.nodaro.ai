@@ -243,12 +243,13 @@ describe("POST /v1/generate-location — multi-candidate (Task 10)", () => {
     }
   })
 
-  it("returns 400 for invalid count value (3)", async () => {
+  it("returns 400 for invalid count value (5)", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/generate-location",
       headers: { "x-user-id": TEST_USER_ID },
-      payload: { name: "Forest Glade", count: 3 },
+      // 1/2/3/4 are valid; 5 is out of range.
+      payload: { name: "Forest Glade", count: 5 },
     })
 
     expect(res.statusCode).toBe(400)

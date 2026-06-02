@@ -204,8 +204,8 @@ export interface GenerateCharacterInput {
   attachToCharacterId?: string
   seedPrompt?: string
   referencePhotos?: ReferencePhoto[]
-  /** 1, 2, or 4 candidate portraits. */
-  count?: 1 | 2 | 4
+  /** 1, 2, 3, or 4 candidate portraits. */
+  count?: 1 | 2 | 3 | 4
   /**
    * Explicit aspect ratio. Highest precedence — overrides both the character
    * node toggle and the per-asset-type default (portraits default to `3:4`).
