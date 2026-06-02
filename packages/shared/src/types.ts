@@ -9,11 +9,21 @@ import type { LocationReferencePhotoKind } from "./entity-prompts.js"
 export interface GenericNode {
   id: string
   type: string
+  /**
+   * Canvas (React-Flow) position. The editor needs it to lay the node out —
+   * without it React-Flow stacks every node at (0,0). Optional so non-canvas
+   * callers (pure graph data) need not supply it.
+   */
+  position?: { x: number; y: number }
+  /** Fixed canvas width the editor applies (e.g. 220 for generate-image/-video). */
+  width?: number
   data: Record<string, unknown>
   hidden?: boolean
 }
 
 export interface GenericEdge {
+  /** Stable edge id — React-Flow requires one to render the connection. */
+  id?: string
   source: string
   target: string
   sourceHandle?: string | null

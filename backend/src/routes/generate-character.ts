@@ -54,7 +54,7 @@ const generateCharacterBody = z
       )
       .max(20)
       .optional(),
-    count: z.union([z.literal(1), z.literal(2), z.literal(4)]).optional().default(1),
+    count: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).optional().default(1),
     // Per-asset-type aspect-ratio defaults (smart-defaults feature). Portrait
     // generation defaults to 3:4 (vertical headshot). Callers can override
     // explicitly via `aspectRatio`, or via `characterNodeAspectRatio` (the
@@ -74,13 +74,14 @@ const generateCharacterBody = z
 /**
  * Extract `count` from a raw request body for the credit pre-check.
  * The Zod schema isn't parsed yet at preHandler time, so we defensively
- * coerce and clamp to the allowed {1, 2, 4} set. Invalid values fall back
+ * coerce and clamp to the allowed {1, 2, 3, 4} set. Invalid values fall back
  * to 1 so the pre-check never under-charges; the route's Zod validation
  * still 400s on bad input downstream.
  */
-function extractCount(body: unknown): 1 | 2 | 4 {
+function extractCount(body: unknown): 1 | 2 | 3 | 4 {
   const raw = (body as { count?: unknown })?.count
   if (raw === 2) return 2
+  if (raw === 3) return 3
   if (raw === 4) return 4
   return 1
 }
