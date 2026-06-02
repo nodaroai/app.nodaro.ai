@@ -28,10 +28,10 @@ Replicate covers a narrow set of models that fall outside the KIE.ai chain — u
 Replicate sits AFTER KIE in `routes/<capability>` provider chains. For image-generation / image-editing the chain is `[kie, replicate]` — KIE wins for every model id it declares; Replicate only sees requests for ids unique to its `supportedModels` array (no overlap allowed).
 
 Current Replicate-only model ids:
-- **`flux-2-klein`** — BFL Flux 2 9B Klein (`black-forest-labs/flux-2-klein-9b`), 2 cr
-- **`flux-2-pro`** — BFL Flux 2 Pro, flat 4 cr, up to 4 `image_prompt_1..4` refs
-- **`flux-2-max`** — BFL Flux 2 Max, variable pricing 3–18 cr via composite identifier (`flux-2-max:Nref`), up to 8 refs, `safety_tolerance: 5` pinned (max)
-- **`kontext-multi`** — multi-image Flux Kontext Pro (`flux-kontext-apps/multi-image-kontext-pro`), i2i / modify-image, up to 4 input images, 4 cr
+- **`flux-2-klein`** — BFL Flux 2 9B Klein (`black-forest-labs/flux-2-klein-9b`), 2 cr. Refs go in the `images` array (max 5), NOT a single `image` string.
+- **`flux-2-pro`** — BFL Flux 2 Pro, flat 4 cr, refs in the `input_images` array (schema max 8; frontend caps at 4)
+- **`flux-2-max`** — BFL Flux 2 Max, variable pricing 3–18 cr via composite identifier (`flux-2-max:Nref`), refs in the `input_images` array (max 8), `safety_tolerance: 5` pinned (max)
+- **`kontext-multi`** — multi-image Flux Kontext Pro (`flux-kontext-apps/multi-image-kontext-pro`), i2i / modify-image. The model exposes ONLY `input_image_1` + `input_image_2`, so the ref cap is **2** (not 4), 4 cr
 - **`flux-lora-character`** — synthetic id; version resolved per-request from `extraParams.lora_version` (the character's stored `lora_replicate_version`), 3 cr/image
 
 ## Character LoRA Training (Cloud only)

@@ -61,6 +61,10 @@ export interface Character {
     movementStyle: string
     behavioralNotes: string
   } | null
+  /** ~80–120-word LLM-authored visual caption (approve-portrait / recaption).
+   *  Optional on the read surface so existing literal consumers don't break;
+   *  the route always returns it (string | null). */
+  canonicalDescription?: string | null
   deletedAt: string | null
   createdAt: string
   updatedAt: string
