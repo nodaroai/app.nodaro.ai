@@ -1,5 +1,5 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { executeComponent as executeComponentApi, getJobStatusLean } from "@/lib/api"
+import { executeComponent as executeComponentApi, getJobStatusLean, cancelJob } from "@/lib/api"
 import { mergeExposedSettings, applyHandleInputOverride, isHandleInputWired } from "@nodaro/shared"
 import type { ComponentMetadata } from "@nodaro/shared"
 import type { WorkflowNode, ComponentNodeData, GeneratedResult } from "@/types/nodes"
@@ -91,6 +91,17 @@ export async function executeComponent(
       workflowId: workflowId || undefined,
     })
     createdJobId = jobId
+
+    if (ctx.signal?.aborted) {
+      // Run discarded/aborted while the create-job request was in flight. Don't
+      // re-attach currentJobId or start polling — that would defeat the discard
+      // and paint the result over the existing one. Cancel phase-aware (pre-call
+      // cancels+refunds; in-flight finishes → My Library), then bail. This is an
+      // async function → return "" (mirrors the shouldAbandonNode abandon-branch
+      // below; returning without throwing skips the catch-block failure write).
+      cancelJob(jobId).catch(() => {})
+      return ""
+    }
 
     // Store job ID so cancel + resume-after-refresh can find it
     updateNodeData(node.id, { currentJobId: jobId })

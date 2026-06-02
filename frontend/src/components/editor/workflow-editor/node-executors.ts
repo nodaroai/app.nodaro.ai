@@ -13,6 +13,7 @@ import {
   generateScriptApi,
   combineVideos,
   getJobStatusLean,
+  cancelJob,
 } from "@/lib/api";
 import type {
   GeneratedScript,
@@ -454,6 +455,17 @@ export function runScriptGeneration(
   return new Promise<string>((resolve, reject) => {
     generateScriptApi({ prompt, sceneCount, tone, targetDuration, provider, llmModel, userId: ctx.userId })
       .then(({ jobId }) => {
+        if (ctx.signal?.aborted) {
+          // Run discarded/aborted while the create-job request was in flight.
+          // Don't re-attach currentJobId or start polling — that would defeat
+          // the discard and paint the result over the existing one. Cancel
+          // phase-aware (pre-call cancels+refunds; in-flight finishes → My
+          // Library), then bail. `new Promise` → unwind by resolving "",
+          // mirroring the shouldAbandonNode abandon-branch below.
+          cancelJob(jobId).catch(() => {});
+          resolve("");
+          return;
+        }
         guardedToast.info("Script generation started", {
           description: `Job ID: ${jobId}`,
         });

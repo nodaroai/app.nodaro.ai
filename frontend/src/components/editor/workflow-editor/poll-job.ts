@@ -1,6 +1,6 @@
 import { toast } from "sonner";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
-import { getJobStatusLean, getExecutionEstimate } from "@/lib/api";
+import { getJobStatusLean, getExecutionEstimate, cancelJob } from "@/lib/api";
 import { calculateProgress } from "@nodaro/shared";
 import type { GeneratedResult } from "@/types/nodes";
 import { buildVariantResults } from "./variant-results";
@@ -179,6 +179,17 @@ export function pollJobWithNodeUpdate(
   return new Promise<string>((resolve, reject) => {
     apiCall()
       .then(async ({ jobId }) => {
+        if (ctx.signal?.aborted) {
+          // Run was discarded/aborted while the create-job request was in
+          // flight. Don't re-attach currentJobId or start polling — that would
+          // defeat the discard and paint the result over the existing one.
+          // Cancel phase-aware (pre-call cancels+refunds; in-flight finishes →
+          // My Library), then bail. This is a `new Promise`, so unwind by
+          // resolving "" — mirroring the shouldAbandonNode abandon-branch below.
+          cancelJob(jobId).catch(() => {});
+          resolve("");
+          return;
+        }
         guardedToast.info(`${label} started`, { description: `Job ID: ${jobId}` });
         updateNodeData(nodeId, { currentJobId: jobId });
 

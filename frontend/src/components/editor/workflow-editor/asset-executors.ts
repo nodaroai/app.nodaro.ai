@@ -15,6 +15,7 @@ import {
   generateLocationAsset,
   saveLocation,
   getJobStatusLean,
+  cancelJob,
 } from "@/lib/api";
 import type {
   GeneratedResult,
@@ -57,6 +58,17 @@ export function runCharacterGeneration(
       characterNodeAspectRatio: data.defaultAssetAspectRatio,
     })
       .then(({ jobId }) => {
+        if (ctx.signal?.aborted) {
+          // Run discarded/aborted while the create-job request was in flight.
+          // Don't re-attach currentJobId or start polling — that would defeat
+          // the discard and paint the result over the existing one. Cancel
+          // phase-aware (pre-call cancels+refunds; in-flight finishes → My
+          // Library), then bail. `new Promise` → resolve "" (mirrors the
+          // shouldAbandonNode abandon-branch below).
+          cancelJob(jobId).catch(() => {});
+          resolve("");
+          return;
+        }
         guardedToast.info("Character generation started", {
           description: `Job ID: ${jobId}`,
         });
@@ -226,6 +238,17 @@ export function runFaceGeneration(
       userId: ctx.userId,
     })
       .then(({ jobId }) => {
+        if (ctx.signal?.aborted) {
+          // Run discarded/aborted while the create-job request was in flight.
+          // Don't re-attach currentJobId or start polling — that would defeat
+          // the discard and paint the result over the existing one. Cancel
+          // phase-aware (pre-call cancels+refunds; in-flight finishes → My
+          // Library), then bail. `new Promise` → resolve "" (mirrors the
+          // shouldAbandonNode abandon-branch below).
+          cancelJob(jobId).catch(() => {});
+          resolve("");
+          return;
+        }
         guardedToast.info("Face headshot generation started", {
           description: `Job ID: ${jobId}`,
         });
@@ -406,6 +429,17 @@ export function runObjectGeneration(
           reject(new Error("Backend returned no job id"))
           return
         }
+        if (ctx.signal?.aborted) {
+          // Run discarded/aborted while the create-job request was in flight.
+          // Don't re-attach currentJobId or start polling — that would defeat
+          // the discard and paint the result over the existing one. Cancel
+          // phase-aware (pre-call cancels+refunds; in-flight finishes → My
+          // Library), then bail. `new Promise` → resolve "" (mirrors the
+          // shouldAbandonNode abandon-branch below).
+          cancelJob(jobId).catch(() => {});
+          resolve("");
+          return;
+        }
         guardedToast.info("Object generation started", {
           description: `Job ID: ${jobId}`,
         });
@@ -562,6 +596,17 @@ export function runLocationGeneration(
         const jobId = maybeJobId ?? jobIds?.[0];
         if (!jobId) {
           reject(new Error("Backend returned no job id"));
+          return;
+        }
+        if (ctx.signal?.aborted) {
+          // Run discarded/aborted while the create-job request was in flight.
+          // Don't re-attach currentJobId or start polling — that would defeat
+          // the discard and paint the result over the existing one. Cancel
+          // phase-aware (pre-call cancels+refunds; in-flight finishes → My
+          // Library), then bail. `new Promise` → resolve "" (mirrors the
+          // shouldAbandonNode abandon-branch below).
+          cancelJob(jobId).catch(() => {});
+          resolve("");
           return;
         }
         guardedToast.info("Location generation started", {

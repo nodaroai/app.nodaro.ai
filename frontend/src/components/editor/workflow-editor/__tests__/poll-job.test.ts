@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 const mockGetJobStatusLean = vi.fn()
+const mockCancelJob = vi.fn().mockResolvedValue({ success: true, cancelled: 1 })
 const mockToastInfo = vi.fn()
 const mockToastError = vi.fn()
 const mockToastSuccess = vi.fn()
@@ -32,6 +33,7 @@ vi.mock("@/hooks/use-workflow-store", () => ({
 vi.mock("@/lib/api", () => ({
   getJobStatusLean: (...args: unknown[]) => mockGetJobStatusLean(...args),
   getExecutionEstimate: vi.fn().mockResolvedValue(null),
+  cancelJob: (...args: unknown[]) => mockCancelJob(...args),
 }))
 
 vi.mock("../types", () => ({
@@ -382,5 +384,91 @@ describe("pollJobWithNodeUpdate", () => {
       executionStatus: "completed",
       generatedVideoUrl: "https://cdn.example.com/vidA.mp4",
     }))
+  })
+
+  // --- pre-currentJobId discard race (the production bug) ---
+
+  it("bails without re-attaching currentJobId when the run was aborted before create-job resolved", async () => {
+    // Discard-during-create-job race proof. The user presses Discard while the
+    // create-job request is still in flight: ctx.signal aborts, then apiCall
+    // resolves with the new job id. Pre-fix, the .then() unconditionally ran
+    // `updateNodeData(nodeId, { currentJobId: jobId })`, re-establishing the
+    // node→job link the discard had just cleared, then the poll completed and
+    // shouldAbandonNode matched → the discarded result painted over the
+    // existing one. The fix bails right after apiCall resolves if the signal is
+    // already aborted: no currentJobId re-attach, no poll, resolve("").
+    const controller = new AbortController()
+    // apiCall aborts (mirrors Discard pressed mid-flight), THEN resolves with
+    // the new job id — exactly the window where currentJobId is still undefined.
+    const apiCall = vi.fn().mockImplementation(() => {
+      controller.abort()
+      return Promise.resolve({ jobId: "new-job" })
+    })
+    mockGetJobStatusLean.mockResolvedValue({
+      status: "completed",
+      output_data: { videoUrl: "https://cdn.example.com/NEW.mp4" },
+    })
+    // Prior run already produced R1; activeResultIndex points at it.
+    mockNodes.push({
+      id: "n1",
+      data: {
+        generatedResults: [{ url: "R1", timestamp: "t0", jobId: "old-job" }],
+        activeResultIndex: 0,
+      },
+    })
+
+    const ctx = makeCtx({ signal: controller.signal })
+    const promise = pollJobWithNodeUpdate("n1", apiCall, "generatedVideoUrl", "Video", ctx)
+    await vi.advanceTimersByTimeAsync(100) // apiCall resolves (already aborted)
+    await vi.advanceTimersByTimeAsync(2000) // would-be first poll (must NOT run)
+
+    const result = await promise
+
+    // Discard is not a failure — the loop unwinds by resolving "".
+    expect(result).toBe("")
+    // The re-attach that defeats the discard must NOT have happened.
+    expect(mockUpdateNodeData).not.toHaveBeenCalledWith("n1", { currentJobId: "new-job" })
+    expect(mockUpdateNodeData).not.toHaveBeenCalledWith("n1", expect.objectContaining({
+      currentJobId: "new-job",
+    }))
+    // No poll began for the discarded job.
+    expect(mockGetJobStatusLean).not.toHaveBeenCalled()
+    // The existing result is preserved and the new one never painted.
+    expect(mockNodes[0].data.generatedResults).toEqual([
+      { url: "R1", timestamp: "t0", jobId: "old-job" },
+    ])
+    expect(mockUpdateNodeData).not.toHaveBeenCalledWith("n1", expect.objectContaining({
+      generatedVideoUrl: "https://cdn.example.com/NEW.mp4",
+    }))
+    // Phase-aware cancel fired for the in-flight job (pre-call cancels+refunds;
+    // in-flight finishes → My Library). Idempotent + only called here for this id.
+    expect(mockCancelJob).toHaveBeenCalledWith("new-job")
+  })
+
+  it("normal (non-aborted) path still sets currentJobId and writes the result", async () => {
+    // Guard the fix: an un-aborted run must behave exactly as before — the
+    // create-job .then() sets currentJobId, the poll runs, and the result is
+    // written. (signal present but never aborted.)
+    const controller = new AbortController()
+    const apiCall = vi.fn().mockResolvedValue({ jobId: "j1" })
+    mockGetJobStatusLean.mockResolvedValue({
+      status: "completed",
+      output_data: { videoUrl: "https://cdn.example.com/vid.mp4" },
+    })
+    mockNodes.push({ id: "n1", data: { generatedResults: [] } })
+
+    const ctx = makeCtx({ signal: controller.signal })
+    const promise = pollJobWithNodeUpdate("n1", apiCall, "generatedVideoUrl", "Video", ctx)
+    await vi.advanceTimersByTimeAsync(100)
+    await vi.advanceTimersByTimeAsync(2000)
+    const result = await promise
+
+    expect(result).toBe("https://cdn.example.com/vid.mp4")
+    expect(mockUpdateNodeData).toHaveBeenCalledWith("n1", { currentJobId: "j1" })
+    expect(mockUpdateNodeData).toHaveBeenCalledWith("n1", expect.objectContaining({
+      executionStatus: "completed",
+      generatedVideoUrl: "https://cdn.example.com/vid.mp4",
+    }))
+    expect(mockCancelJob).not.toHaveBeenCalled()
   })
 })
