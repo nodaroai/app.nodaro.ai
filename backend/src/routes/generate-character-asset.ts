@@ -163,6 +163,8 @@ function buildVariantPrompt(
       "right profile": "right profile view, head turned to the right, full side silhouette of the face visible",
       "3/4 right": "three-quarter view, head angled 45 degrees toward the right of the frame, face partially visible",
       back: "back of head view, facing away from camera",
+      above: "high-angle view, camera looking down at the head from above",
+      below: "low-angle view, camera looking up at the head from below",
     }
     const angle = angleMap[variant] ?? `${variant} view`
     const subject = namePart ? namePart.trim() : "the character"
@@ -177,6 +179,8 @@ function buildVariantPrompt(
       "right profile": "right profile view, body turned to the right",
       "3/4 right": "three-quarter view, body angled 45 degrees toward the right of the frame",
       back: "back view, body facing away from camera",
+      above: "high-angle view, camera looking down at the body from above",
+      below: "low-angle view, camera looking up at the body from below",
     }
     const angle = angleMap[variant] ?? `${variant} view`
     const subject = namePart ? namePart.trim() : "the character"
