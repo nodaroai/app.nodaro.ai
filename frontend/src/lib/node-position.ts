@@ -20,6 +20,9 @@ function hasFinitePosition(n: WorkflowNode): boolean {
 export function ensureNodePositions(
   nodes: WorkflowNode[],
 ): { nodes: WorkflowNode[]; filledCount: number } {
+  // Fast path: every node already positioned → return the original array with
+  // no allocation. Common case for normal app workflows and every realtime tick.
+  if (nodes.every(hasFinitePosition)) return { nodes, filledCount: 0 }
   let filledCount = 0
   const out = nodes.map((n, i) => {
     if (hasFinitePosition(n)) return n

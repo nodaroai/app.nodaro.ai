@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, useMemo, Suspense } from "rea
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry";
 import { RUN_BUTTON_CLASS } from "@/lib/run-button-style";
 import { useNavigate } from "react-router-dom";
-import { isExpandedClone } from "@nodaro/shared";
+import { isExpandedClone, filterCloneNodes } from "@nodaro/shared";
 import { ReactFlowProvider } from "@xyflow/react";
 import {
   Play,
@@ -15,6 +15,8 @@ import {
   ChevronDown,
   Trash2,
   RotateCcw,
+  ExternalLink,
+  Copy,
 } from "lucide-react";
 import { WorkflowCanvas } from "../workflow-canvas";
 import { NodeToolbar } from "../node-toolbar";
@@ -92,6 +94,8 @@ import { extractNodeOutput } from "./execution-graph";
 import { orderNodesParentFirst } from "./group-coords";
 import { getOutputType } from "@nodaro/shared";
 import { FreeCutImportPicker } from "../freecut-import-picker";
+import { studioWorkflowUrl } from "@/lib/studio";
+import { RemixProjectDialog } from "@/components/editor/remix-project-dialog";
 import type { ManualEditData, GeneratedResult } from "@/types/nodes";
 const FreeCutEditorModal = lazy(() => import("../freecut-editor-modal").then(m => ({ default: m.FreeCutEditorModal })));
 const FilerobotEditorModal = lazy(() => import("../filerobot-editor-modal").then(m => ({ default: m.FilerobotEditorModal })));
@@ -108,6 +112,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   const { user } = useAuth();
   const { save, load, saving, loading } = useWorkflowPersistence(projectId);
   const fetchProjects = useProjectsStore((s) => s.fetchProjects);
+  const createWorkflowWithContent = useProjectsStore((s) => s.createWorkflowWithContent);
   useUndoRedoSubscription();
   useAltKeyTracker();
   // Hydrate admin node defaults into React Query cache so addNode() can read them
@@ -115,6 +120,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   useNodeDefaults();
   const navigate = useNavigate();
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
+  const [remixOpen, setRemixOpen] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [activeExecutionId, setActiveExecutionId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"editor" | "present" | "executions" | "cost">(
@@ -1017,6 +1023,30 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     [navigate],
   );
 
+  // Clone a read-only (Studio) workflow into an editable copy in the chosen
+  // project. The `studio` marker is intentionally omitted from settings so the
+  // copy is editable. Temporary clone/sub-workflow nodes are filtered out and
+  // nodes are persisted parent-first (same invariant as the regular save path).
+  const handleRemix = useCallback(async (targetProjectId: string) => {
+    const st = useWorkflowStore.getState();
+    const cleaned = filterCloneNodes(st.nodes, st.edges, { filterSubWorkflow: true });
+    const nodes = orderNodesParentFirst(cleaned.nodes);
+    const settings = {
+      characterDefinitions: st.characterDefinitions,
+      flowPromptTemplates: st.flowPromptTemplates,
+      presentationSettings: st.presentationSettings,
+      viewport: st.savedViewport,
+      // NOTE: `studio` marker intentionally omitted → the copy is editable.
+    };
+    const wf = await createWorkflowWithContent(targetProjectId, {
+      name: `${st.workflowName} (Remix)`.slice(0, 200),
+      nodes: JSON.parse(JSON.stringify(nodes)),
+      edges: JSON.parse(JSON.stringify(cleaned.edges)),
+      settings: JSON.parse(JSON.stringify(settings)),
+    });
+    if (wf) navigate(`/projects/${targetProjectId}/workflows/${wf.id}`);
+  }, [createWorkflowWithContent, navigate]);
+
   function handleDialogSave(): void {
     setShowUnsavedDialog(false);
     handleSave().then(() => {
@@ -1232,6 +1262,26 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </>
+              ) : isReadOnly ? (
+                <>
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    className="rounded-full px-5"
+                    onClick={() => window.open(studioWorkflowUrl(useWorkflowStore.getState().workflowId ?? ""), "_blank", "noopener")}
+                  >
+                    <ExternalLink className="w-4 h-4 mr-2" />
+                    Open in Studio
+                  </Button>
+                  <Button
+                    size="lg"
+                    onClick={() => setRemixOpen(true)}
+                    className={`rounded-full px-6 ${RUN_BUTTON_CLASS}`}
+                  >
+                    <Copy className="w-4 h-4 mr-2" />
+                    Clone &amp; Remix
+                  </Button>
+                </>
               ) : (
                 <Button
                   size="lg"
@@ -1262,7 +1312,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               <PresentationViewLazy
                 mode="tab"
                 isOwner={true}
-                onRun={() => handleRun(ctx, projectId, useWorkflowStore.getState().workflowId, save, setIsRunning, onExecutionStarted, onExecutionEnded)}
+                onRun={isReadOnly ? undefined : () => handleRun(ctx, projectId, useWorkflowStore.getState().workflowId, save, setIsRunning, onExecutionStarted, onExecutionEnded)}
                 isRunning={isRunning}
               />
             </Suspense>
@@ -1288,6 +1338,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         onDiscard={handleDialogDiscard}
         onCancel={handleDialogCancel}
       />
+
+      <RemixProjectDialog open={remixOpen} onOpenChange={setRemixOpen} onConfirm={handleRemix} />
 
       <InsufficientCreditsModal
         open={showInsufficientCredits}

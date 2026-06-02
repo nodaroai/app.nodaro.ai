@@ -2,6 +2,7 @@ import { create } from "zustand"
 import { createClient } from "@/lib/supabase"
 import { queryClient } from "@/lib/query-client"
 import { queryKeys } from "@/lib/query-keys"
+import type { Json } from "@/types/database.types"
 
 export interface Project {
   readonly id: string
@@ -10,6 +11,7 @@ export interface Project {
   readonly isDefault: boolean
   readonly createdAt: string
   readonly updatedAt: string
+  readonly settings: Record<string, unknown>
 }
 
 export interface Folder {
@@ -53,6 +55,10 @@ interface ProjectsState {
   readonly moveWorkflow: (id: string, folderId: string | null) => Promise<void>
   readonly moveWorkflowToProject: (id: string, targetProjectId: string) => Promise<void>
   readonly duplicateWorkflow: (id: string) => Promise<WorkflowMeta | null>
+  readonly createWorkflowWithContent: (
+    projectId: string,
+    content: { name: string; nodes: unknown[]; edges: unknown[]; settings: Record<string, unknown> },
+  ) => Promise<WorkflowMeta | null>
 }
 
 function toProject(row: Record<string, unknown>): Project {
@@ -63,6 +69,7 @@ function toProject(row: Record<string, unknown>): Project {
     isDefault: row.is_default === true,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
+    settings: (row.settings as Record<string, unknown>) ?? {},
   }
 }
 
@@ -405,6 +412,33 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
 
       if (error || !data) return null
 
+      const wf = toWorkflowMeta(data)
+      set((s) => ({ workflowMetas: [wf, ...s.workflowMetas] }))
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
+      return wf
+    } catch {
+      return null
+    }
+  },
+
+  createWorkflowWithContent: async (projectId, content) => {
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return null
+      const { data, error } = await supabase
+        .from("workflows")
+        .insert({
+          project_id: projectId,
+          user_id: user.id,
+          name: content.name,
+          nodes: content.nodes as Json,
+          edges: content.edges as Json,
+          settings: content.settings as Json,
+        })
+        .select("id, project_id, folder_id, name, thumbnail_url, created_at, updated_at")
+        .single()
+      if (error || !data) return null
       const wf = toWorkflowMeta(data)
       set((s) => ({ workflowMetas: [wf, ...s.workflowMetas] }))
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })

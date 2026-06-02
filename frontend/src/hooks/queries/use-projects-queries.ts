@@ -10,6 +10,7 @@ export interface Project {
   readonly isDefault: boolean
   readonly createdAt: string
   readonly updatedAt: string
+  readonly settings: Record<string, unknown>
   readonly userId?: string
   readonly ownerEmail?: string
 }
@@ -38,6 +39,7 @@ function toProject(row: Record<string, unknown>): Project {
     isDefault: (row.is_default ?? row.isDefault) === true,
     createdAt: (row.created_at ?? row.createdAt) as string,
     updatedAt: (row.updated_at ?? row.updatedAt) as string,
+    settings: (row.settings as Record<string, unknown>) ?? {},
     userId: (row.user_id ?? row.userId) as string | undefined,
     ownerEmail: row.ownerEmail as string | undefined,
   }
