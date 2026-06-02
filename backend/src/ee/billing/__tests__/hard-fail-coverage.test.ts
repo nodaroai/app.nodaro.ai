@@ -33,6 +33,8 @@ import {
   buildCreditModelIdentifier,
   buildLlmCreditIdentifier,
   LLM_MODELS,
+  FLUX2_RES_MP,
+  type Flux2Model,
 } from "@nodaro/shared"
 
 // ---------------------------------------------------------------------------
@@ -55,7 +57,10 @@ const MOTION_RESOLUTIONS = ["480p", "580p", "720p", "1080p"]
 const MOTION_DURATIONS: Array<number | undefined> = [undefined, 5, 10, 15, 30]
 
 const IMAGE_QUALITIES: Array<string | undefined> = [undefined, "medium", "high"]
+// Non-flux-2 providers use "1K"/"2K"/"4K" resolution tokens.
+// Flux 2 family uses "0.5 MP"/"1 MP"/"2 MP"/"4 MP" — swept separately below with ref counts.
 const IMAGE_RESOLUTIONS: Array<string | undefined> = [undefined, "1K", "2K", "4K"]
+const FLUX2_IMAGE_RESOLUTIONS = ["0.5 MP", "1 MP", "2 MP", "4 MP"]
 const IMAGE_RENDERING_SPEEDS: Array<string | undefined> = [
   undefined,
   "BALANCED",
@@ -138,13 +143,15 @@ describe("hard-fail policy: every runtime-emitted credit identifier is in STATIC
       }
     }
 
-    // IMAGE (gen + i2i + edit)
+    // IMAGE (gen + i2i + edit) — non-flux-2 providers use 1K/2K/4K resolution tokens
+    const flux2Models = new Set<string>(["flux-2-klein", "flux-2-pro", "flux-2-max"])
     const imageProviders = new Set<string>([
       ...IMAGE_GEN_PROVIDERS,
       ...IMAGE_I2I_PROVIDERS,
       ...IMAGE_EDIT_PROVIDERS,
     ])
     for (const provider of imageProviders) {
+      if (flux2Models.has(provider)) continue  // handled separately below
       for (const quality of IMAGE_QUALITIES) {
         for (const resolution of IMAGE_RESOLUTIONS) {
           for (const renderingSpeed of IMAGE_RENDERING_SPEEDS) {
@@ -162,6 +169,17 @@ describe("hard-fail policy: every runtime-emitted credit identifier is in STATIC
               )
             }
           }
+        }
+      }
+    }
+
+    // FLUX 2 family — sweep full ref count matrix (0..8 × all MP tiers).
+    // These models use "N MP" resolution tokens and encode ref count into the identifier.
+    for (const m of ["flux-2-klein", "flux-2-pro", "flux-2-max"] as Flux2Model[]) {
+      for (const resolution of [undefined, ...FLUX2_IMAGE_RESOLUTIONS]) {
+        for (let r = 0; r <= 8; r++) {
+          const id = buildCreditModelIdentifier(m, undefined, resolution, undefined, undefined, r)
+          check(id, `flux2 ${m} res=${resolution} r=${r}`)
         }
       }
     }

@@ -177,23 +177,54 @@ describe("buildCreditModelIdentifier", () => {
     })
   })
 
-  // --- Flux 2 Max — variable pricing by reference image count ---
-  describe("flux-2-max referenceImageCount", () => {
-    it("zero refs returns bare provider", () => {
-      expect(buildCreditModelIdentifier("flux-2-max", undefined, undefined, undefined, undefined, 0)).toBe("flux-2-max")
+  // --- Flux 2 family — per-megapixel pricing ---
+  describe("flux-2 family (per-megapixel identifiers)", () => {
+    // All flux-2 models: <provider>:<mp>MP:<n>ref — the ref count is always
+    // encoded because every model charges per input MP, so Pro/Klein are
+    // ref-aware too (not just Max).
+    it("flux-2-pro with 2 MP resolution + 0 refs returns flux-2-pro:2MP:0ref", () => {
+      expect(buildCreditModelIdentifier("flux-2-pro", undefined, "2 MP")).toBe("flux-2-pro:2MP:0ref")
     })
 
-    it.each([1, 2, 3, 4, 5, 6, 7, 8])("%i refs returns composite identifier", (n) => {
-      expect(buildCreditModelIdentifier("flux-2-max", undefined, undefined, undefined, undefined, n)).toBe(`flux-2-max:${n}ref`)
+    it("flux-2-pro with 2 MP + 1 ref returns flux-2-pro:2MP:1ref", () => {
+      expect(buildCreditModelIdentifier("flux-2-pro", undefined, "2 MP", undefined, undefined, 1)).toBe("flux-2-pro:2MP:1ref")
     })
 
-    it("caps overflow at 8", () => {
-      expect(buildCreditModelIdentifier("flux-2-max", undefined, undefined, undefined, undefined, 12)).toBe("flux-2-max:8ref")
+    it("flux-2-klein with 1 MP resolution returns flux-2-klein:1MP:0ref", () => {
+      expect(buildCreditModelIdentifier("flux-2-klein", undefined, "1 MP")).toBe("flux-2-klein:1MP:0ref")
     })
 
-    it("does not affect non-flux-2-max providers", () => {
+    it("flux-2-pro with no resolution defaults to 1MP, ref-aware", () => {
+      expect(buildCreditModelIdentifier("flux-2-pro", undefined, undefined, undefined, undefined, 4)).toBe("flux-2-pro:1MP:4ref")
+    })
+
+    // flux-2-max: <provider>:<mp>MP:<n>ref (always includes ref count)
+    it("flux-2-max with 2 MP and 1 ref returns flux-2-max:2MP:1ref", () => {
+      expect(buildCreditModelIdentifier("flux-2-max", undefined, "2 MP", undefined, undefined, 1)).toBe("flux-2-max:2MP:1ref")
+    })
+
+    it("flux-2-max with 2 MP and 0 refs returns flux-2-max:2MP:0ref", () => {
+      expect(buildCreditModelIdentifier("flux-2-max", undefined, "2 MP", undefined, undefined, 0)).toBe("flux-2-max:2MP:0ref")
+    })
+
+    it("flux-2-max with no resolution defaults to 1MP", () => {
+      expect(buildCreditModelIdentifier("flux-2-max", undefined, undefined, undefined, undefined, 0)).toBe("flux-2-max:1MP:0ref")
+    })
+
+    it.each([1, 2, 3, 4, 5, 6, 7, 8])("flux-2-max 1MP %i refs returns composite identifier", (n) => {
+      expect(buildCreditModelIdentifier("flux-2-max", undefined, "1 MP", undefined, undefined, n)).toBe(`flux-2-max:1MP:${n}ref`)
+    })
+
+    it("flux-2-max caps ref count at 8", () => {
+      expect(buildCreditModelIdentifier("flux-2-max", undefined, "2 MP", undefined, undefined, 12)).toBe("flux-2-max:2MP:8ref")
+    })
+
+    it("flux-2-max strips MP unit correctly (no trailing space)", () => {
+      expect(buildCreditModelIdentifier("flux-2-max", undefined, "4 MP", undefined, undefined, 0)).toBe("flux-2-max:4MP:0ref")
+    })
+
+    it("does not affect non-flux-2 providers", () => {
       expect(buildCreditModelIdentifier("nano-banana", undefined, undefined, undefined, undefined, 4)).toBe("nano-banana")
-      expect(buildCreditModelIdentifier("flux-2-pro", undefined, undefined, undefined, undefined, 4)).toBe("flux-2-pro")
     })
   })
 })

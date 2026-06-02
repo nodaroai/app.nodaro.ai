@@ -475,7 +475,7 @@ describe("POST /v1/generate-image", () => {
   describe("flux-2-max reservation identifier parity", () => {
     const VALID_UUID = "00000000-0000-4000-8000-000000000001"
 
-    it("reserves at bare `flux-2-max` when no refs are attached", async () => {
+    it("reserves at `flux-2-max:1MP:0ref` when no refs are attached", async () => {
       setupSupabaseMock({})
 
       const res = await app.inject({
@@ -492,11 +492,11 @@ describe("POST /v1/generate-image", () => {
       const reserveMock = vi.mocked(reserveCreditsForJob)
       expect(reserveMock).toHaveBeenCalledTimes(1)
       // 4th arg is the modelIdentifier.
-      expect(reserveMock.mock.calls[0][3]).toBe("flux-2-max")
+      expect(reserveMock.mock.calls[0][3]).toBe("flux-2-max:1MP:0ref")
     })
 
     it.each([1, 2, 4, 8])(
-      "reserves at composite `flux-2-max:Nref` when %d refs are attached",
+      "reserves at composite `flux-2-max:1MP:Nref` when %d refs are attached",
       async (n) => {
         setupSupabaseMock({})
         const refs = Array.from({ length: n }, (_, i) => `https://r2.nodaro.ai/ref-${i}.png`)
@@ -514,7 +514,7 @@ describe("POST /v1/generate-image", () => {
 
         expect(res.statusCode).toBe(200)
         const reserveMock = vi.mocked(reserveCreditsForJob)
-        expect(reserveMock.mock.calls.at(-1)?.[3]).toBe(`flux-2-max:${n}ref`)
+        expect(reserveMock.mock.calls.at(-1)?.[3]).toBe(`flux-2-max:1MP:${n}ref`)
       },
     )
   })
@@ -550,6 +550,35 @@ describe("POST /v1/generate-image", () => {
       expect(res.statusCode).toBe(200)
       const reserveMock = vi.mocked(reserveCreditsForJob)
       expect(reserveMock.mock.calls.at(-1)?.[3]).not.toContain("i2i")
+    })
+  })
+
+  // ─── MP resolution Zod acceptance (TASK 7) ────────────────────────────────
+  describe("resolution: MP values accepted by Zod", () => {
+    it("accepts resolution '2 MP' for provider flux-2-max (returns 200)", async () => {
+      setupSupabaseMock({})
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: {
+          prompt: "a landscape",
+          userId: "00000000-0000-4000-8000-000000000001",
+          provider: "flux-2-max",
+          resolution: "2 MP",
+        },
+      })
+      // Zod should accept "2 MP"; the route should return 200 (not 400).
+      expect(res.statusCode).toBe(200)
+    })
+
+    it("accepts all MP resolution tiers in generateImageBody schema", () => {
+      for (const mp of ["0.5 MP", "1 MP", "2 MP", "4 MP"]) {
+        const result = generateImageBody.safeParse({
+          prompt: "test",
+          resolution: mp,
+        })
+        expect(result.success, `resolution "${mp}" should be valid`).toBe(true)
+      }
     })
   })
 })

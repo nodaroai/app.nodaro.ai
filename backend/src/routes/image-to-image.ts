@@ -23,7 +23,7 @@ const imageToImageBody = z.object({
   userPrompt: z.string().max(8000).optional(),
   provider: z.enum(IMAGE_I2I_PROVIDERS).optional(),
   referenceImageUrls: z.array(safeUrlSchema).max(13).optional(),
-  resolution: z.enum(["1K", "2K", "4K"]).optional(),
+  resolution: z.enum(["1K", "2K", "4K", "0.5 MP", "1 MP", "2 MP", "4 MP"]).optional(),
   quality: z.enum(["medium", "high", "basic"]).optional(),
   strength: z.number().min(0).max(1).optional(),
   // "auto" is gpt-image-2 specific (KIE constrains it to 1K) — kept here

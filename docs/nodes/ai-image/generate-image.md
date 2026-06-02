@@ -76,9 +76,9 @@ The migration runs on the frontend (`loadWorkflow`) plus three defensive backend
 | z-image | Z-Image | Fast, lightweight generation | 1:1, 16:9, 9:16, 4:3, 3:4 |
 | wan-2.7 | Wan 2.7 | Text-to-image, 1K/2K/4K resolution, up to 9 optional reference images | 1:1, 16:9, 9:16, 4:3, 3:4, 21:9, 8:1, 1:8 |
 | wan-2.7-pro | Wan 2.7 Pro | Higher quality text-to-image, 1K/2K/4K resolution | 1:1, 16:9, 9:16, 4:3, 3:4, 21:9, 8:1, 1:8 |
-| flux-2-klein | Flux 2 Klein (Open) | BFL Flux 2 9B Klein via Replicate — fast, no safety filter. 2 credits | Same as Flux |
-| flux-2-pro | Flux 2 Pro (Safety Tolerance) | BFL Flux 2 Pro flagship via Replicate — exposes `safety_tolerance` pinned to 5 (max for Pro). 4 credits | Same as Flux |
-| flux-2-max | Flux 2 Max (Safety Tolerance) | BFL Flux 2 Max — even larger sibling of Pro via Replicate, `safety_tolerance=5`, up to 8 reference images. **Variable pricing**: 3 credits (0 refs) → 18 credits (8 refs); each ref adds ~$0.03 of provider cost. | Same as Flux |
+| flux-2-klein | Flux 2 Klein (Open) | BFL Flux 2 9B Klein via Replicate — fast, no safety filter. Resolution 0.5 / 1 / 2 / 4 MP (default 1 MP). ~2 credits at 1 MP. | Same as Flux |
+| flux-2-pro | Flux 2 Pro (Safety Tolerance) | BFL Flux 2 Pro flagship via Replicate — `safety_tolerance` pinned to 5 (max for Pro). Resolution 0.5 / 1 / 2 / 4 MP (**default 2 MP**). Per-megapixel pricing ($0.015 + $0.015/MP in+out): ~4 credits at 2 MP. | Same as Flux |
+| flux-2-max | Flux 2 Max (Safety Tolerance) | BFL Flux 2 Max via Replicate — `safety_tolerance=5`, up to 8 reference images. Resolution 0.5 / 1 / 2 / 4 MP (**default 2 MP**). **Per-megapixel pricing** ($0.07/output-MP + $0.03/MP per reference): ~9 credits at 2 MP (0 refs), scaling with resolution and refs (e.g. ~18 credits at 4 MP, more per reference). | Same as Flux |
 
 ## Best Practices
 

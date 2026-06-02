@@ -6,6 +6,7 @@ import {
   durationsByMode,
   creditRangesAll,
   modelsWithFeature,
+  isFlux2Model,
   type LabeledOption,
 } from "@nodaro/shared"
 
@@ -32,7 +33,7 @@ export const IMAGE_GEN_MODELS: readonly { value: ImageGenProvider; label: string
   { value: "wan-2.7-pro", label: "Wan 2.7 Pro", desc: "Higher quality T2I, 1K/2K/4K" },
   { value: "flux-2-klein", label: "Flux 2 Klein (Open)", desc: "BFL Flux 2 9B via Replicate — fast, no safety filter" },
   { value: "flux-2-pro", label: "Flux 2 Pro (Safety Tolerance)", desc: "BFL Flux 2 Pro via Replicate — flagship quality, safety_tolerance=5 (max for Pro)" },
-  { value: "flux-2-max", label: "Flux 2 Max (Safety Tolerance)", desc: "BFL Flux 2 Max via Replicate — even larger sibling, up to 8 refs, safety_tolerance=5 (variable pricing: 3-18 cr)" },
+  { value: "flux-2-max", label: "Flux 2 Max (Safety Tolerance)", desc: "BFL Flux 2 Max via Replicate — even larger sibling, up to 8 refs, safety_tolerance=5 (variable pricing: 2-62 cr)" },
 ]
 
 export const IMAGE_GEN_MODEL_IDS = IMAGE_GEN_MODELS.map(m => m.value)
@@ -56,7 +57,7 @@ export const IMAGE_I2I_MODELS: readonly { value: ImageI2IProvider; label: string
   { value: "seedream-edit", label: "Seedream Edit", desc: "Photorealistic image editing" },
   { value: "kontext-multi", label: "Kontext Multi (Open)", desc: "Multi-image Flux Kontext via Replicate — up to 4 refs, no safety filter" },
   { value: "flux-2-pro", label: "Flux 2 Pro (Safety Tolerance)", desc: "BFL Flux 2 Pro via Replicate — flagship quality, safety_tolerance=5" },
-  { value: "flux-2-max", label: "Flux 2 Max (Safety Tolerance)", desc: "BFL Flux 2 Max via Replicate — up to 8 refs, safety_tolerance=5 (variable pricing: 5-18 cr)" },
+  { value: "flux-2-max", label: "Flux 2 Max (Safety Tolerance)", desc: "BFL Flux 2 Max via Replicate — up to 8 refs, safety_tolerance=5 (variable pricing: 2-62 cr)" },
 ]
 
 export const IMAGE_EDIT_MODELS = [
@@ -411,6 +412,17 @@ export function getVideoModelCapabilitiesTooltip(provider: string): string | und
 // Image qualities — derived from MODEL_CATALOG.
 export const IMAGE_QUALITY_OPTIONS: Record<string, readonly LabeledOption[]> =
   qualityOptionsByKind("image")
+
+/**
+ * Default resolution for the Flux 2 family when no (or a stale) resolution is
+ * set on the node. Flux 2 uses ascending MP options ("0.5 MP" … "4 MP"), so
+ * snapping to options[0] would wrongly land on 0.5 MP. Returns undefined for
+ * all non-flux-2 providers (let the caller use the existing options[0] logic).
+ */
+export function defaultResolutionFor(provider: string): string | undefined {
+  if (!isFlux2Model(provider)) return undefined
+  return provider === "flux-2-klein" ? "1 MP" : "2 MP"
+}
 
 // Kling 3.0 supports continuous durations from 3s to 15s.
 // Kept as a named export for the few callers that iterate this directly.

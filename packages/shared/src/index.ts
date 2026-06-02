@@ -355,6 +355,9 @@ export {
 } from "./lip-sync-pricing.js"
 export type { LipSyncDurationBucket } from "./lip-sync-pricing.js"
 
+export { flux2CostUsd, flux2BaseCredits, isFlux2Model, FLUX2_RES_MP } from "./flux2-pricing.js"
+export type { Flux2Model } from "./flux2-pricing.js"
+
 export { splitByLoopDelimiter, spliceDelimitedRows, NO_SPLIT_DELIMITER } from "./loop-delimiter.js"
 
 export { splitGeneratedItems, GENERATE_TEXT_DELIMITER } from "./generate-text-items.js"
