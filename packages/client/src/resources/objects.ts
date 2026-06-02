@@ -210,8 +210,8 @@ export interface GenerateObjectInput {
   style?: "realistic" | "anime" | "3d-pixar" | "illustration"
   sourceImageUrl?: string
   provider?: string
-  /** 1, 2, or 4 candidate main images. */
-  count?: 1 | 2 | 4
+  /** 1, 2, 3, or 4 candidate main images. */
+  count?: 1 | 2 | 3 | 4
   /** Auto-attach the result to this object row (single-candidate only). */
   attachToObjectId?: string
   /** Parameter-picker prompt-fragment pass-through. */

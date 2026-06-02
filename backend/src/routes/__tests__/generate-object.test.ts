@@ -195,12 +195,13 @@ describe("POST /v1/generate-object — multi-candidate + auto-attach (Phase C2a)
     expect(videoQueue.add).toHaveBeenCalledTimes(2)
   })
 
-  it("returns 400 for invalid count value (3)", async () => {
+  it("returns 400 for invalid count value (5)", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/generate-object",
       headers: { "x-user-id": TEST_USER_ID },
-      payload: { name: "Ornate Goblet", count: 3 },
+      // 1/2/3/4 are valid; 5 is out of range.
+      payload: { name: "Ornate Goblet", count: 5 },
     })
 
     expect(res.statusCode).toBe(400)
