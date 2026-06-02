@@ -203,6 +203,7 @@ export async function handleRun(
   onExecutionStarted?: (id: string) => void,
   onExecutionEnded?: () => void,
 ): Promise<void> {
+  if (useWorkflowStore.getState().isReadOnly) return;
   rejectAllManualEdits();
   const { nodes } = collapseExpandedClones();
   warnUnderMinRows(nodes);

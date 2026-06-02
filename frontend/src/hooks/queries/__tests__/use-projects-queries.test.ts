@@ -61,7 +61,7 @@ describe("useProjects", () => {
 
     expect(mockEq).toHaveBeenCalledWith("user_id", "user-1")
     expect(result).toEqual([
-      { id: "p1", name: "Project 1", description: "desc", isDefault: false, createdAt: "2026-01-01", updatedAt: "2026-01-02", userId: undefined, ownerEmail: undefined },
+      { id: "p1", name: "Project 1", description: "desc", isDefault: false, createdAt: "2026-01-01", updatedAt: "2026-01-02", userId: undefined, ownerEmail: undefined, settings: {} },
     ])
   })
 

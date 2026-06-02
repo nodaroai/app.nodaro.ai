@@ -28,9 +28,10 @@ interface ProjectCardProps {
   readonly isOwn?: boolean
   readonly showOwner?: boolean
   readonly viewMode?: "grid" | "list"
+  readonly readOnly?: boolean
 }
 
-export function ProjectCard({ project, onDelete, onRename, isOwn, showOwner, viewMode = "grid" }: ProjectCardProps) {
+export function ProjectCard({ project, onDelete, onRename, isOwn, showOwner, viewMode = "grid", readOnly }: ProjectCardProps) {
   const [renameOpen, setRenameOpen] = useState(false)
   const [newName, setNewName] = useState(project.name)
   const [renaming, setRenaming] = useState(false)
@@ -114,6 +115,11 @@ export function ProjectCard({ project, onDelete, onRename, isOwn, showOwner, vie
               </span>
             )}
             <h2 className="font-medium text-sm truncate">{project.name}</h2>
+            {readOnly && (
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-[#ff0073]/40 text-[#ff0073] flex-shrink-0">
+                Studio
+              </Badge>
+            )}
           </div>
           {showOwner && isOwn && (
             <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-[#ff0073]/40 text-[#ff0073] flex-shrink-0">
@@ -127,7 +133,7 @@ export function ProjectCard({ project, onDelete, onRename, isOwn, showOwner, vie
             {new Date(project.createdAt).toLocaleDateString()}
           </p>
           <div className="flex-shrink-0" onClick={(e) => e.preventDefault()}>
-            {menuDropdown}
+            {!readOnly && menuDropdown}
           </div>
         </Link>
       ) : (
@@ -141,7 +147,7 @@ export function ProjectCard({ project, onDelete, onRename, isOwn, showOwner, vie
 
             {/* Three-dot menu — top-right, visible on hover */}
             <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-              {menuDropdown}
+              {!readOnly && menuDropdown}
             </div>
           </div>
 
@@ -160,6 +166,11 @@ export function ProjectCard({ project, onDelete, onRename, isOwn, showOwner, vie
                 </span>
               )}
               <h2 className="font-medium text-sm truncate">{project.name}</h2>
+              {readOnly && (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-[#ff0073]/40 text-[#ff0073] flex-shrink-0">
+                  Studio
+                </Badge>
+              )}
               {showOwner && isOwn && (
                 <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-[#ff0073]/40 text-[#ff0073] flex-shrink-0">
                   Mine

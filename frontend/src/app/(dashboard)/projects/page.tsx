@@ -17,6 +17,7 @@ import {
 import { useProjectsStore } from "@/hooks/use-projects-store"
 import { useWorkflowSearch } from "@/hooks/use-workflow-search"
 import { useProjects, useAllProjects } from "@/hooks/queries/use-projects-queries"
+import { isStudioProject } from "@/lib/studio"
 import { ProjectCard } from "@/components/dashboard/project-card"
 import { StatsOverview } from "@/components/dashboard/stats-overview"
 import { WorkflowThumbnail } from "@/components/dashboard/workflow-thumbnail"
@@ -812,6 +813,7 @@ export default function ProjectsPage() {
                 showOwner={showAll}
                 isOwn={showAll && project.userId === currentUserId}
                 viewMode={viewMode}
+                readOnly={isStudioProject(project)}
               />
             ))}
           </div>

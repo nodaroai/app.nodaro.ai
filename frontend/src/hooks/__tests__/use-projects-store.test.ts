@@ -112,7 +112,7 @@ describe("useProjectsStore", () => {
     it("deletes a project and its folders and workflows", async () => {
       // Pre-populate the store
       useProjectsStore.setState({
-        projects: [{ id: "p1", name: "To Delete", description: "", isDefault: false, createdAt: NOW, updatedAt: NOW }],
+        projects: [{ id: "p1", name: "To Delete", description: "", isDefault: false, createdAt: NOW, updatedAt: NOW, settings: {} }],
         folders: [{ id: "f1", projectId: "p1", name: "Folder", createdAt: NOW }],
         workflowMetas: [{ id: "w1", projectId: "p1", folderId: null, name: "WF", thumbnailUrl: null, createdAt: NOW, updatedAt: NOW }],
       })
@@ -131,7 +131,7 @@ describe("useProjectsStore", () => {
 
     it("updates a project name and description", async () => {
       useProjectsStore.setState({
-        projects: [{ id: "p1", name: "Old Name", description: "Old Desc", isDefault: false, createdAt: NOW, updatedAt: NOW }],
+        projects: [{ id: "p1", name: "Old Name", description: "Old Desc", isDefault: false, createdAt: NOW, updatedAt: NOW, settings: {} }],
       })
 
       mockSupabase = createMockSupabase({

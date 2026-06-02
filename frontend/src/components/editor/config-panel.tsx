@@ -637,6 +637,7 @@ export function ConfigPanel() {
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const runFromHere = useWorkflowStore((s) => s.runFromHere)
   const variableDisplayMode = useWorkflowStore((s) => s.variableDisplayMode)
+  const isReadOnly = useWorkflowStore((s) => s.isReadOnly)
   const [userId, setUserId] = useState<string | undefined>(undefined)
 
   useEffect(() => {
@@ -1037,9 +1038,13 @@ export function ConfigPanel() {
               resolution, prompt, pickers, …) — these all live inside
               NodeTypeConfig. The node name, Results Gallery (replacing the
               selected output), run/stop buttons, and the fullscreen toggle are
-              rendered OUTSIDE this fieldset, so they stay interactive. */}
+              rendered OUTSIDE this fieldset, so they stay interactive.
+              Read-only (Studio/shared) workflows lock the same body: native
+              form controls go inert via the disabled fieldset (custom Radix
+              controls can still focus, but `updateNodeData` is already gated
+              for read-only so edits can't persist). */}
           <fieldset
-            disabled={isNodeRunning}
+            disabled={isNodeRunning || isReadOnly}
             className="border-0 p-0 m-0 min-w-0 disabled:opacity-70 disabled:pointer-events-none"
           >
             {isExpanded ? (
@@ -1128,7 +1133,7 @@ export function ConfigPanel() {
               </div>
             ) : (
               <>
-                {GENERATE_BUTTON_TYPES.has(nodeType) && (
+                {!isReadOnly && GENERATE_BUTTON_TYPES.has(nodeType) && (
                   <GenerateButton
                     onClick={() => runSingleNode?.(selectedNode.id)}
                     modelIdentifier={getModelIdentifier(selectedNode)}
@@ -1146,7 +1151,7 @@ export function ConfigPanel() {
                   />
                 )}
 
-                {RUN_BUTTON_TYPES.has(nodeType) && (
+                {!isReadOnly && RUN_BUTTON_TYPES.has(nodeType) && (
                   <button
                     type="button"
                     onClick={() => runSingleNode?.(selectedNode.id)}
@@ -1161,7 +1166,7 @@ export function ConfigPanel() {
                   </button>
                 )}
 
-                {RUN_FROM_HERE_TYPES.has(nodeType) && (
+                {!isReadOnly && RUN_FROM_HERE_TYPES.has(nodeType) && (
                   <button
                     type="button"
                     onClick={() => runFromHere?.(selectedNode.id)}
@@ -1177,7 +1182,7 @@ export function ConfigPanel() {
                   </button>
                 )}
 
-                {hasDownstream && !RUN_FROM_HERE_TYPES.has(nodeType) && (
+                {!isReadOnly && hasDownstream && !RUN_FROM_HERE_TYPES.has(nodeType) && (
                   <button
                     type="button"
                     onClick={() => runFromHere?.(selectedNode.id)}

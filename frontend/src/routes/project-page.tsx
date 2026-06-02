@@ -26,6 +26,7 @@ import { Badge } from "@/components/ui/badge"
 import { WorkflowsTab } from "@/components/dashboard/workflows-tab"
 import { AssetsTab } from "@/components/dashboard/assets-tab"
 import { JobsTab } from "@/components/dashboard/jobs-tab"
+import { isStudioProject } from "@/lib/studio"
 
 export default function ProjectPage() {
   const { id } = useParams<{ id: string }>()
@@ -39,7 +40,7 @@ export default function ProjectPage() {
   )
 
   const project = ownProject ?? fetchedProject ?? undefined
-  const readOnly = !ownProject && !!project
+  const readOnly = !ownProject || isStudioProject(project)
   const loading = projectsLoading || (isAdmin && !ownProject && fetchedLoading)
 
   const fetchProjectData = useProjectsStore((s) => s.fetchProjectData)

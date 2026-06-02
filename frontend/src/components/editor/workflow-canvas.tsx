@@ -1779,6 +1779,8 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         const payload = JSON.stringify({ __nodaro_clipboard: true, name: state.workflowName, nodes: selected, edges: connectedEdges })
         navigator.clipboard.writeText(payload).then(() => {
           if (e.key === "x") {
+            // Cut mutates the canvas — block in read-only (copy still works above).
+            if (useWorkflowStore.getState().isReadOnly) return
             useWorkflowStore.setState({
               nodes: state.nodes.filter((n) => !selectedIds.has(n.id)),
               edges: state.edges.filter((edge) => !selectedIds.has(edge.source) && !selectedIds.has(edge.target)),
@@ -1792,6 +1794,8 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
 
       // Ctrl+V - Paste nodes from clipboard
       if ((e.ctrlKey || e.metaKey) && e.key === "v") {
+        // Paste mutates the canvas — block entirely in read-only.
+        if (useWorkflowStore.getState().isReadOnly) return
         e.preventDefault()
         navigator.clipboard.readText().then((text) => {
           let parsed: { __nodaro_clipboard?: boolean; name?: string; nodes?: WorkflowNode[]; edges?: WorkflowEdge[] }
@@ -2065,6 +2069,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const dismissImportDialog = useCallback(() => setPendingImportData(null), [])
 
   const handleImportPaste = useCallback(() => {
+    if (useWorkflowStore.getState().isReadOnly) return
     if (!pendingImportData) return
     const { nodes: newNodes, edges: newEdges, mousePos } = pendingImportData
     const state = useWorkflowStore.getState()
