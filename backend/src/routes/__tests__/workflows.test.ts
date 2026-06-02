@@ -403,6 +403,53 @@ describe("GET /v1/workflows/:id", () => {
 })
 
 // ---------------------------------------------------------------------------
+// GET /v1/public/workflows/:id  (share-by-link, NO auth, opt-in only)
+// ---------------------------------------------------------------------------
+
+describe("GET /v1/public/workflows/:id", () => {
+  const mockPublicRead = (row: unknown) => {
+    const mockSingle = vi.fn().mockResolvedValue({ data: row, error: null })
+    const mockEq = vi.fn().mockReturnValue({ single: mockSingle })
+    const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
+    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
+  }
+
+  it("returns 400 for an invalid UUID (no auth needed)", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/public/workflows/not-a-uuid" })
+    expect(res.statusCode).toBe(400)
+  })
+
+  it("404s an UNshared workflow even though it exists (opt-in gating)", async () => {
+    mockPublicRead(DB_WORKFLOW_FULL) // settings: { autoSave: true } — not shared
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/public/workflows/${TEST_WORKFLOW_ID}`,
+    })
+    expect(res.statusCode).toBe(404)
+  })
+
+  it("returns 200 + a trimmed projection (no owner PII) for a SHARED workflow, no auth", async () => {
+    mockPublicRead({
+      ...DB_WORKFLOW_FULL,
+      settings: { studio: { shared: true, version: 3 } },
+    })
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/public/workflows/${TEST_WORKFLOW_ID}`,
+    })
+    expect(res.statusCode).toBe(200)
+    const data = res.json().data
+    expect(data.id).toBe(TEST_WORKFLOW_ID)
+    expect(data.name).toBe("My Workflow")
+    expect(data.nodes).toEqual([{ id: "n1", type: "generate-image" }])
+    expect(data.settings).toEqual({ studio: { shared: true, version: 3 } })
+    // Owner / internal fields MUST NOT leak through the public projection.
+    expect(data.userId).toBeUndefined()
+    expect(data.projectId).toBeUndefined()
+  })
+})
+
+// ---------------------------------------------------------------------------
 // PATCH /v1/workflows/:id
 // ---------------------------------------------------------------------------
 
