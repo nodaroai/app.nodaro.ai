@@ -12,6 +12,7 @@ import {
   PLACEHOLDER_CHARACTER_NAME,
   CHARACTER_ASPECT_OPTIONS,
   CHARACTER_ASSET_TYPES,
+  CHARACTER_ASSET_VARIANTS,
   CHARACTER_ATTACH_COLUMNS,
   resolveCharacterAspectRatio,
   type CharacterAssetTypeForAspect,
@@ -32,14 +33,10 @@ import {
 // MCP tool's input enum can't drift.
 const assetTypeEnum = z.enum(CHARACTER_ASSET_TYPES)
 
-const VARIANTS: Record<string, readonly string[]> = {
-  expressions: ["neutral", "smile", "angry", "surprised", "sad", "talking", "laughing", "disgusted", "fearful", "smirk", "crying"],
-  poses: ["standing", "walking", "sitting", "running", "crouching", "pointing", "fighting stance", "jumping", "turning"],
-  lighting: ["daylight", "night", "dramatic"],
-  angles: ["front", "3/4 left", "left profile", "right profile", "3/4 right", "back"],
-  headAngles: ["front", "3/4 left", "left profile", "right profile", "3/4 right"],
-  bodyAngles: ["front", "3/4 left", "left profile", "right profile", "3/4 right", "back"],
-}
+// Variant presets are the single source of truth in `@nodaro/shared`
+// (CHARACTER_ASSET_VARIANTS) — shared with the Studio client so the route's
+// validation and the creator UI can't drift. `custom` is free-form (no preset).
+const VARIANTS: Record<string, readonly string[]> = CHARACTER_ASSET_VARIANTS
 
 const generateCharacterAssetBody = z.object({
   assetType: assetTypeEnum,
@@ -166,6 +163,8 @@ function buildVariantPrompt(
       "right profile": "right profile view, head turned to the right, full side silhouette of the face visible",
       "3/4 right": "three-quarter view, head angled 45 degrees toward the right of the frame, face partially visible",
       back: "back of head view, facing away from camera",
+      above: "high-angle view, camera looking down at the head from above",
+      below: "low-angle view, camera looking up at the head from below",
     }
     const angle = angleMap[variant] ?? `${variant} view`
     const subject = namePart ? namePart.trim() : "the character"
@@ -180,6 +179,8 @@ function buildVariantPrompt(
       "right profile": "right profile view, body turned to the right",
       "3/4 right": "three-quarter view, body angled 45 degrees toward the right of the frame",
       back: "back view, body facing away from camera",
+      above: "high-angle view, camera looking down at the body from above",
+      below: "low-angle view, camera looking up at the body from below",
     }
     const angle = angleMap[variant] ?? `${variant} view`
     const subject = namePart ? namePart.trim() : "the character"

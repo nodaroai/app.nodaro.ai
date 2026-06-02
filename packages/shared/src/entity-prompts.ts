@@ -58,6 +58,44 @@ export const CHARACTER_ATTACH_COLUMNS = [
 export type CharacterAttachColumn = (typeof CHARACTER_ATTACH_COLUMNS)[number]
 
 /**
+ * Canonical variant presets per character asset type — the SINGLE source of
+ * truth shared by the `generate-character-asset` route (Zod validation rejects a
+ * non-`custom` variant outside this list) and any client building the asset-set
+ * UI (e.g. the Studio character creator), so the two can't drift. `custom` has no
+ * preset list (free-form variant).
+ */
+export const CHARACTER_ASSET_VARIANTS = {
+  expressions: [
+    "neutral",
+    "smile",
+    "angry",
+    "surprised",
+    "sad",
+    "talking",
+    "laughing",
+    "disgusted",
+    "fearful",
+    "smirk",
+    "crying",
+  ],
+  poses: [
+    "standing",
+    "walking",
+    "sitting",
+    "running",
+    "crouching",
+    "pointing",
+    "fighting stance",
+    "jumping",
+    "turning",
+  ],
+  lighting: ["daylight", "night", "dramatic"],
+  angles: ["front", "3/4 left", "left profile", "right profile", "3/4 right", "back", "above", "below"],
+  headAngles: ["front", "3/4 left", "left profile", "right profile", "3/4 right", "above", "below"],
+  bodyAngles: ["front", "3/4 left", "left profile", "right profile", "3/4 right", "back", "above", "below"],
+} as const satisfies Partial<Record<CharacterAssetType, readonly string[]>>
+
+/**
  * Location asset-type enum — the kinds of variant a user can generate off a
  * location's anchor establishing shot. Mirrors the literal accepted by
  * `POST /v1/generate-location-asset` (`backend/src/routes/generate-location-asset.ts`)
