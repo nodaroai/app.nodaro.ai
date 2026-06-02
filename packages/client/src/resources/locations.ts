@@ -165,8 +165,8 @@ export interface GenerateLocationInput {
   style?: "realistic" | "anime" | "3d-pixar" | "illustration"
   sourceImageUrl?: string
   provider?: string
-  /** 1, 2, or 4 candidate main images. */
-  count?: 1 | 2 | 4
+  /** 1, 2, 3, or 4 candidate main images. */
+  count?: 1 | 2 | 3 | 4
   /** Auto-attach the result to this location row (single-candidate only). */
   attachToLocationId?: string
 }
