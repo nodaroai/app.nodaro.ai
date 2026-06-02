@@ -647,8 +647,12 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
 
   // When a workflow loaded with positionless nodes (Studio exports), run a
   // single ELK layered layout so the grid-fallback positions become a clean
-  // graph. Uses React Flow's setNodes (UI-level, not a store edit) so it works
-  // even on read-only workflows without marking dirty.
+  // graph. <ReactFlow> is controlled, so this setNodes call DOES route through
+  // the Zustand onNodesChange and can mark the workflow dirty — even on a
+  // read-only workflow (only `remove` changes are filtered in read-only, by
+  // design, so the layout can apply). That is safe because every persistence
+  // path (the debounced save() and the beforeunload flush) bails on isReadOnly,
+  // so a read-only Studio workflow is never written back.
   useEffect(() => {
     if (!needsAutoLayout) return
     let cancelled = false

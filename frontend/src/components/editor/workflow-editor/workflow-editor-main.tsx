@@ -599,6 +599,11 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     function handleBeforeUnload() {
       if (!projectId) return;
       const state = useWorkflowStore.getState();
+      // Read-only (Studio) workflows must never be persisted from the editor.
+      // Auto-layout routes through the controlled onNodesChange and flips
+      // isDirty even for read-only workflows, so the isDirty check below is
+      // not enough on its own — bail before building/PATCHing the payload.
+      if (state.isReadOnly) return;
       if (!state.isDirty || state.nodes.length === 0) return;
 
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as

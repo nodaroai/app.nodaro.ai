@@ -514,8 +514,11 @@ export function useWorkflowPersistence(projectId?: string) {
       }
 
       // Studio workflows are read-only in the app; never persist. (The Studio
-      // app owns writes via the same backend route.) isReadOnly actions never
-      // set isDirty, so this is belt-and-suspenders.
+      // app owns writes via the same backend route.) This guard is load-bearing,
+      // NOT belt-and-suspenders: auto-layout on a positionless Studio import
+      // routes through the controlled onNodesChange and flips isDirty even on a
+      // read-only workflow, so the isDirty short-circuit above would otherwise
+      // let those relaid-out positions through.
       if (useWorkflowStore.getState().isReadOnly) return { success: true }
 
       setSaving(true)
@@ -818,7 +821,10 @@ export function useWorkflowPersistence(projectId?: string) {
         // optimistic-lock cursor — otherwise the next user-driven autosave
         // would send the pre-side-save version and 0-row-conflict against
         // the row we just bumped here ourselves.
-        if (nodesChanged && projectId) {
+        // Never write back to a read-only (Studio) workflow row. isReadOnly
+        // was set from `settings` just above; the Studio app owns writes via
+        // the same backend route, so even a benign node-heal must not persist.
+        if (nodesChanged && projectId && !useWorkflowStore.getState().isReadOnly) {
           const { data: sideSaved, error: saveError } = await supabase
             .from("workflows")
             .update({ nodes: JSON.parse(JSON.stringify(orderNodesParentFirst(nodes))) })
