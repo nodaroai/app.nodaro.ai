@@ -419,6 +419,7 @@ export async function workflowRoutes(app: FastifyInstance) {
     if (!params) return
 
     const { data, error } = await supabase
+      // tenant-scope-ignore: public share-by-link read, gated by the opt-in settings.studio.shared flag verified below (cross-tenant by design; a 404 hides unshared + missing alike)
       .from("workflows")
       .select(WORKFLOW_FULL_COLS)
       .eq("id", params.id)
