@@ -2,7 +2,7 @@ import { describe, it, expect, afterAll } from "vitest"
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { parseParamPairs, loadParamsFile, mergeParams, resolveParams, parseBoolFlag } from "../params.js"
+import { parseParamPairs, loadParamsFile, mergeParams, resolveParams, parseBoolFlag, parseSelectionPairs } from "../params.js"
 
 describe("parseParamPairs", () => {
   it("returns empty object when no pairs given", () => {
@@ -164,5 +164,31 @@ describe("parseBoolFlag", () => {
 
   it("includes the flagName in error messages so users know which flag failed", () => {
     expect(() => parseBoolFlag("yes", "my-flag")).toThrow(/--my-flag must be/)
+  })
+})
+
+describe("parseSelectionPairs", () => {
+  it("maps cat=val to a WizardSelection with isCustom false", () => {
+    expect(parseSelectionPairs(["subject=snow leopard"])).toEqual([
+      { category: "subject", value: "snow leopard", isCustom: false },
+    ])
+  })
+  it("preserves string values without coercion", () => {
+    expect(parseSelectionPairs(["count=4", "flag=true"])).toEqual([
+      { category: "count", value: "4", isCustom: false },
+      { category: "flag", value: "true", isCustom: false },
+    ])
+  })
+  it("keeps duplicate categories (no last-wins collapse)", () => {
+    expect(parseSelectionPairs(["lighting=golden hour", "lighting=rim light"])).toHaveLength(2)
+  })
+  it("splits on the first = so values may contain =", () => {
+    expect(parseSelectionPairs(["style=a=b"])).toEqual([{ category: "style", value: "a=b", isCustom: false }])
+  })
+  it("throws on a token without =", () => {
+    expect(() => parseSelectionPairs(["nope"])).toThrow(/expected category=value/)
+  })
+  it("throws on an empty category", () => {
+    expect(() => parseSelectionPairs(["=value"])).toThrow(/empty category/)
   })
 })

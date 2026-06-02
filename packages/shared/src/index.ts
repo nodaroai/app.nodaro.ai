@@ -585,6 +585,7 @@ export {
   type WizardOption,
   type WizardSelection,
   type RecommendedModel,
+  type WizardNodeContext,
   type ModelChange,
 } from "./prompt-wizard-categories.js"
 

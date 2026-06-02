@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs"
+import type { WizardSelection } from "@nodaro/shared"
 
 /**
  * Strict "true"/"false" → boolean coercion for CLI flags whose value commander
@@ -39,6 +40,26 @@ export function parseParamPairs(pairs: string[] | undefined): Record<string, unk
     const value = raw.slice(eq + 1)
     if (!key) throw new Error(`invalid param "${raw}": empty key`)
     out[key] = coerce(value)
+  }
+  return out
+}
+
+/**
+ * Parse `--selection category=value` (repeatable) into WizardSelection[].
+ * Unlike parseParamPairs: preserves string values (NO primitive coercion),
+ * allows duplicate categories (NO last-wins), splits on the first `=`. The
+ * scriptable path always sets isCustom:false (custom answers are wizard-only).
+ */
+export function parseSelectionPairs(pairs: string[] | undefined): WizardSelection[] {
+  if (!pairs || pairs.length === 0) return []
+  const out: WizardSelection[] = []
+  for (const raw of pairs) {
+    const eq = raw.indexOf("=")
+    if (eq < 0) throw new Error(`invalid --selection "${raw}": expected category=value`)
+    const category = raw.slice(0, eq).trim()
+    const value = raw.slice(eq + 1)
+    if (!category) throw new Error(`invalid --selection "${raw}": empty category`)
+    out.push({ category, value, isCustom: false })
   }
   return out
 }

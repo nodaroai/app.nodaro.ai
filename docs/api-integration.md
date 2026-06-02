@@ -496,7 +496,40 @@ Asset rows are NOT duplicated — pipeline entities reference the same asset_ids
 Chat turns (Guided Mode, Phase 1D.2) explicitly do NOT clone — the branched
 pipeline starts with empty chat history per chat-enabled stage.
 
-## 12. SDK alternative (TypeScript)
+## 12. Prompt Wizard
+
+AI assistance for writing prompts for generation nodes. One endpoint, three
+actions — discriminated by the `action` field. Credit-guarded (reserves
+credits per call).
+
+### `POST /v1/prompt-helper/wizard`
+
+| Action | Body | Response |
+|---|---|---|
+| `analyze` | `{ action, nodeType, prompt?, provider?, style?, aspectRatio?, duration?, llmModel?, nodeContext?, userPreference? }` | `{ jobId, questions }` |
+| `generate` | `{ action, nodeType, selections[], originalPrompt?, ... }` | `{ jobId, prompt, recommendedModel? }` |
+| `enhance` | `{ action, nodeType, prompt?, ... }` (no selections) | `{ jobId, prompt, recommendedModel? }` |
+
+- **`analyze`** — turns a rough idea into guided questions. Each question is
+  `{ category, label, options[], selected, allowCustom, multi? }`. Omit
+  `prompt` to build the questions from scratch.
+- **`generate`** — builds a single optimized prompt from the chosen answers.
+  Each selection is `{ category, value, isCustom }`. `originalPrompt` is woven
+  in when supplied.
+- **`enhance`** — one-shot "improve this prompt": skips the questions
+  round-trip and returns the optimized prompt directly.
+
+`recommendedModel` is present on `generate` / `enhance` when the wizard can
+suggest a provider/model for the target node type.
+
+**Errors:** 400 `validation_error` · 401 `unauthorized` · 503
+`provider_unavailable` · 502 `malformed_response` · 500 `llm_error`.
+
+The same endpoint is wrapped by the SDK (`client.promptHelper.{analyze,
+generate,enhance}`), the MCP tools (`analyze_prompt` / `generate_prompt` /
+`enhance_prompt`), and the CLI (`nodaro prompt wizard/analyze/generate/enhance`).
+
+## 13. SDK alternative (TypeScript)
 
 The same backend is fronted by a typed TypeScript client:
 

@@ -117,25 +117,29 @@ You can register up to **5 apps per user**.
 
 ## 4. Scope vocabulary
 
-There are 8 scopes total. The canonical list lives in
+There are 11 scopes total. The canonical list lives in
 [`backend/src/lib/scopes.ts`](https://github.com/nodaroai/app.nodaro.ai/blob/main/backend/src/lib/scopes.ts).
 
 | Scope | What it grants | Routes gated today |
 |-------|----------------|--------------------|
 | `workflows:read` | Read the user's workflows | `GET /v1/projects/:projectId/workflows` |
 | `workflows:write` | Create and modify workflows | (reserved — no routes gated yet) |
-| `workflows:execute` | Run workflows on the user's behalf | `POST /v1/workflows/:id/run` |
+| `workflows:execute` | Run workflows on the user's behalf | `POST /v1/workflows/:id/run`; the prompt-wizard MCP tools |
 | `jobs:read` | Read job status and results | `GET /v1/jobs/:id` |
 | `assets:read` | Read the user's uploaded assets | (reserved) |
 | `assets:write` | Upload assets to the user's account | (reserved) |
 | `credits:read` | See the user's credit balance | (reserved) |
 | `apps:read` | Read published apps | (reserved) |
+| `pipelines:read` | Read the user's Story-to-Video pipelines | `GET /v1/pipelines/*` |
+| `pipelines:execute` | Run / branch pipeline stages | `POST /v1/pipelines/:id/branch` and run routes |
+| `pipelines:approve` | Approve pipeline stage output | pipeline approval routes |
 
-> **Honest disclosure:** only three routes currently enforce scopes
-> (`workflows:read`, `workflows:execute`, `jobs:read`). The other five
-> are reserved names that future routes will gate. Request them only
-> if you actually intend to use them — minimal scope sets earn user
-> trust.
+> **Honest disclosure:** the gated scopes today are `workflows:read`,
+> `workflows:execute`, `jobs:read`, and the three `pipelines:*` scopes.
+> The other five (`workflows:write`, `assets:read`, `assets:write`,
+> `credits:read`, `apps:read`) are reserved names that future routes will
+> gate. Request scopes only if you actually intend to use them — minimal
+> scope sets earn user trust.
 
 The exact scope description shown to the user on the consent screen is
 defined in [`frontend/src/app/oauth/authorize/page.tsx`](https://github.com/nodaroai/app.nodaro.ai/blob/main/frontend/src/app/oauth/authorize/page.tsx).

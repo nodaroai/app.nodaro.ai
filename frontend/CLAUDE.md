@@ -69,7 +69,7 @@ Inline AI-powered prompt enhancement for node config panels (gated behind `hasCr
 - `PromptHelperButton` — small pink sparkles "AI" button, placed inline next to prompt fields
 - `PromptHelperDialog` — modal with: current prompt display, style dropdown (node-type-aware: `IMAGE_PROMPT_STYLES`, `VIDEO_PROMPT_STYLES`, `MUSIC_PROMPT_STYLES`, `AUDIO_PROMPT_STYLES`), LLM model selector (`LlmModelSelect` with `feature="prompt-helper"`), goal text field, editable enhanced result
 - `prompt-helper-styles.ts` — style presets per node type
-- Backend: `POST /v1/prompt-helper/enhance` with `creditGuard` + `resolveLlmCreditId()`
+- Backend: `POST /v1/prompt-helper/wizard` (the `enhance` action) with `creditGuard` + `resolveLlmCreditId()`
 
 ---
 
