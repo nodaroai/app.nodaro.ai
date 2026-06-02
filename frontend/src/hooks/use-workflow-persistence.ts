@@ -8,6 +8,7 @@ import { toast } from "sonner"
 import type { WorkflowNode, WorkflowEdge, CharacterDefinition, GeneratedResult, SceneNodeData } from "@/types/nodes"
 import { filterCloneNodes } from "@nodaro/shared"
 import { orderNodesParentFirst } from "@/components/editor/workflow-editor/group-coords"
+import { isStudioWorkflowSettings } from "@/lib/studio"
 
 interface StillRunningJob {
   readonly nodeId: string
@@ -512,6 +513,11 @@ export function useWorkflowPersistence(projectId?: string) {
         return { success: true }
       }
 
+      // Studio workflows are read-only in the app; never persist. (The Studio
+      // app owns writes via the same backend route.) isReadOnly actions never
+      // set isDirty, so this is belt-and-suspenders.
+      if (useWorkflowStore.getState().isReadOnly) return { success: true }
+
       setSaving(true)
       setSaveStatus("saving")
       try {
@@ -777,6 +783,10 @@ export function useWorkflowPersistence(projectId?: string) {
           savedViewport,
         )
         setLoadedUpdatedAt(data.updated_at as string)
+
+        // Studio-origin workflows are view-only in the node editor (the Studio
+        // app edits them). `settings` was computed above from data.settings.
+        useWorkflowStore.setState({ isReadOnly: isStudioWorkflowSettings(settings) })
 
         // Reconcile per-node `generatedResults` against the backend's
         // `jobs.output_data`. When a single-node run gets stuck → backend

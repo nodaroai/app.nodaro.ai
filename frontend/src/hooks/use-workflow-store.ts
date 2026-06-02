@@ -17,6 +17,7 @@ import type { PresentationItem, PipelineStatus } from "@nodaro/shared"
 import { migrateToItems, validateNoNestedGroups, cleanOrphanedItems, isCollectInEdge } from "@nodaro/shared"
 import type { VariableDisplayMode } from "@/components/editor/config-panels/types"
 import { buildPreviewItemKey, getPreviewItemKey } from "@/lib/preview-items"
+import { ensureNodePositions } from "@/lib/node-position"
 import { autoExecuteNode } from "@/components/editor/workflow-editor/auto-execute"
 import { orderNodesParentFirst, localToWorld } from "@/components/editor/workflow-editor/group-coords"
 import { MAIN_TEXT_HANDLE, TEXT_PRODUCING_SOURCE_TYPES } from "@/lib/main-text-handle"
@@ -531,6 +532,9 @@ interface WorkflowState {
   readonly setSavedViewport: (vp: { x: number; y: number; zoom: number } | null) => void
   readonly isWorkflowLoading: boolean
   readonly setIsWorkflowLoading: (loading: boolean) => void
+  readonly isReadOnly: boolean
+  readonly needsAutoLayout: boolean
+  readonly setNeedsAutoLayout: (v: boolean) => void
   readonly loadWorkflow: (id: string, name: string, nodes: WorkflowNode[], edges: WorkflowEdge[], characterDefinitions?: CharacterDefinition[], flowPromptTemplates?: Record<string, string>, presentationSettings?: PresentationSettings, viewport?: { x: number; y: number; zoom: number } | null) => void
   readonly clearWorkflow: () => void
   readonly markClean: () => void
@@ -834,6 +838,9 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   skipNextViewportAnimation: false,
   _sidebarWasOpenBeforeFullscreen: false,
   isDirty: false,
+  isReadOnly: false,
+  needsAutoLayout: false,
+  setNeedsAutoLayout: (v) => set({ needsAutoLayout: v }),
   loadGeneration: 0,
   saveStatus: "idle" as SaveStatus,
   saveError: null,
@@ -858,10 +865,14 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
   setProjectId: (id) => set({ projectId: id }),
 
-  setWorkflowName: (name) => set({ workflowName: name, isDirty: true }),
+  setWorkflowName: (name) => {
+    if (get().isReadOnly) return
+    set({ workflowName: name, isDirty: true })
+  },
 
-  onNodesChange: (changes) =>
+  onNodesChange: (rawChanges) =>
     set((state) => {
+      const changes = state.isReadOnly ? rawChanges.filter((c) => c.type !== "remove") : rawChanges
       let newNodes = applyNodeChanges(changes, state.nodes)
       // Only mark dirty for content changes (position, add, remove, replace)
       // NOT for selection or dimension measurements from React Flow
@@ -928,8 +939,9 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       }
     }),
 
-  onEdgesChange: (changes) =>
+  onEdgesChange: (rawChanges) =>
     set((state) => {
+      const changes = state.isReadOnly ? rawChanges.filter((c) => c.type !== "remove") : rawChanges
       const newEdges = applyEdgeChanges(changes, state.edges)
       // Only mark dirty for content changes, not selection
       const hasContentChange = changes.some((c) => c.type !== "select")
@@ -969,6 +981,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     }),
 
   onConnect: (connection) => {
+    if (get().isReadOnly) return
     set((state) => {
       let newEdges = addEdge(
         { ...connection, id: `edge_${Date.now()}` },
@@ -1197,6 +1210,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   },
 
   addNode: (type, position, initialData) => {
+    if (get().isReadOnly) return undefined
     const definition = NODE_DEFINITIONS.find((d) => d.type === type)
     if (!definition) return undefined
 
@@ -1329,12 +1343,14 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     })
   },
 
-  updateNode: (nodeId, updates) =>
+  updateNode: (nodeId, updates) => {
+    if (get().isReadOnly) return
     set((state) => ({
       nodes: state.nodes.map((node) =>
         node.id === nodeId ? { ...node, ...updates } : node,
       ),
-    })),
+    }))
+  },
 
   // Batched optimistic execution-status flip — see interface JSDoc. One
   // nodes.map(); only matched ids get a fresh data reference (object identity
@@ -1391,6 +1407,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   },
 
   updateNodeData: (nodeId, data) => {
+    if (get().isReadOnly) return
     // If every key in the update is execution-related, tell the undo system
     // to skip snapshot capture so job polling doesn't pollute undo history.
     const isExecOnly = Object.keys(data).every((k) => EXECUTION_DATA_KEYS.has(k))
@@ -1457,6 +1474,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   },
 
   updateNodeWithData: (nodeId, nodeUpdates, dataUpdates) => {
+    if (get().isReadOnly) return
     if (!get().nodes.some((n) => n.id === nodeId)) return
 
     const dataKeys = Object.keys(dataUpdates)
@@ -1487,7 +1505,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     }
   },
 
-  duplicateNode: (nodeId, position) =>
+  duplicateNode: (nodeId, position) => {
+    if (get().isReadOnly) return
     set((state) => {
       const source = state.nodes.find((n) => n.id === nodeId)
       if (!source) return state
@@ -1530,9 +1549,11 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         newNodeIds: new Set([...state.newNodeIds, newId]),
         isDirty: true,
       }
-    }),
+    })
+  },
 
-  duplicateNodes: (ids) =>
+  duplicateNodes: (ids) => {
+    if (get().isReadOnly) return
     set((state) => {
       const idSet = new Set(ids)
       const sources = state.nodes.filter((n) => idSet.has(n.id))
@@ -1604,9 +1625,11 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         selectedNodeId: null,
         isDirty: true,
       }
-    }),
+    })
+  },
 
-  deleteNode: (nodeId) =>
+  deleteNode: (nodeId) => {
+    if (get().isReadOnly) return
     set((state) => {
       const deletedNode = state.nodes.find((n) => n.id === nodeId)
       let remainingNodes = state.nodes.filter((n) => n.id !== nodeId)
@@ -1656,17 +1679,21 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         presentationSettings: updatedPs,
         isDirty: true,
       }
-    }),
+    })
+  },
 
-  updateEdgeData: (edgeId, data) =>
+  updateEdgeData: (edgeId, data) => {
+    if (get().isReadOnly) return
     set((state) => ({
       edges: state.edges.map((e) =>
         e.id === edgeId ? { ...e, data: { ...e.data, ...data } } : e
       ),
       isDirty: true,
-    })),
+    }))
+  },
 
-  deleteEdge: (edgeId) =>
+  deleteEdge: (edgeId) => {
+    if (get().isReadOnly) return
     set((state) => {
       const removedEdge = state.edges.find((e) => e.id === edgeId)
       const newEdges = state.edges.filter((e) => e.id !== edgeId)
@@ -1766,7 +1793,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       })
 
       return { nodes, edges: newEdges, isDirty: true }
-    }),
+    })
+  },
 
   selectNode: (nodeId) =>
     set((state) => {
@@ -1812,7 +1840,10 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
   setUserTextTemplates: (templates) => set({ userTextTemplates: templates }),
 
-  setFlowPromptTemplates: (templates) => set({ flowPromptTemplates: templates, isDirty: true }),
+  setFlowPromptTemplates: (templates) => {
+    if (get().isReadOnly) return
+    set({ flowPromptTemplates: templates, isDirty: true })
+  },
 
   loadWorkflow: (id, name, nodes, edges, characterDefinitions, flowPromptTemplates, presentationSettings, viewport) => {
     nextNodeId =
@@ -2410,6 +2441,11 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     // source of truth — and the next save — is correct.
     migratedNodes = orderNodesParentFirst(migratedNodes)
 
+    // Guarantee every node has a position — Studio exports omit it and React
+    // Flow crashes reading node.position.x. Flag for a one-shot auto-layout.
+    const positioned = ensureNodePositions(migratedNodes)
+    migratedNodes = positioned.nodes
+
     set((state) => ({
       workflowId: id,
       workflowName: name,
@@ -2417,6 +2453,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       edges: migratedEdges,
       selectedNodeId: null,
       isDirty: false,
+      isReadOnly: false,
+      needsAutoLayout: positioned.filledCount > 0,
       loadGeneration: state.loadGeneration + 1,
       saveStatus: "idle" as SaveStatus,
       saveError: null,
@@ -2475,7 +2513,10 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     // `loop` node arriving via realtime would otherwise be mishandled by the
     // now-`list`-only type-sets until a full reload. Idempotent; null/empty-safe.
     const migrated = migrateListLoopNodes(nodes, edges)
-    const orderedNodes = orderNodesParentFirst(migrated.nodes)
+    // Defense-in-depth: a realtime snapshot (e.g. a Studio write) can carry
+    // positionless nodes just like a fresh load. Guarantee finite positions
+    // so React Flow doesn't crash reading node.position.x on adoption.
+    const orderedNodes = ensureNodePositions(orderNodesParentFirst(migrated.nodes)).nodes
     const migratedEdges = migrated.edges
     set((state) => {
       // `WorkflowState`'s fields are `readonly` for consumers, but
@@ -2552,7 +2593,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   setOpenAddNodePopupForHandle: (fn) => set({ openAddNodePopupForHandle: fn }),
   hoveredEdgeId: null,
   setHoveredEdgeId: (id) => set({ hoveredEdgeId: id }),
-  reorderHandleEdges: (nodeId, handleId, direction, fromIndex, toIndex) =>
+  reorderHandleEdges: (nodeId, handleId, direction, fromIndex, toIndex) => {
+    if (get().isReadOnly) return
     set((state) => {
       // Collect indices of edges connected to this handle in original
       // store order. Reorder them according to from/to; leave all other
@@ -2595,8 +2637,10 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       }
 
       return { edges: newEdges, nodes: newNodes, isDirty: true }
-    }),
-  disconnectAllHandleEdges: (nodeId, handleId, direction) =>
+    })
+  },
+  disconnectAllHandleEdges: (nodeId, handleId, direction) => {
+    if (get().isReadOnly) return
     // Batched mirror of `deleteEdge`'s per-edge cleanup. Previously this
     // called `get().deleteEdge(e.id)` in a loop — N sequential `set()`s
     // re-running React Flow's subscriptions N times per click. We replicate
@@ -2756,29 +2800,36 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       })
 
       return { nodes: newNodes, edges: newEdges, isDirty: true }
-    }),
+    })
+  },
   generateSceneImage: null,
   setGenerateSceneImage: (fn) => set({ generateSceneImage: fn }),
 
-  addCharacterDefinition: (char) =>
+  addCharacterDefinition: (char) => {
+    if (get().isReadOnly) return
     set((state) => ({
       characterDefinitions: [...state.characterDefinitions, char],
       isDirty: true,
-    })),
+    }))
+  },
 
-  updateCharacterDefinition: (id, updates) =>
+  updateCharacterDefinition: (id, updates) => {
+    if (get().isReadOnly) return
     set((state) => ({
       characterDefinitions: state.characterDefinitions.map((c) =>
         c.id === id ? { ...c, ...updates } : c
       ),
       isDirty: true,
-    })),
+    }))
+  },
 
-  removeCharacterDefinition: (id) =>
+  removeCharacterDefinition: (id) => {
+    if (get().isReadOnly) return
     set((state) => ({
       characterDefinitions: state.characterDefinitions.filter((c) => c.id !== id),
       isDirty: true,
-    })),
+    }))
+  },
 
   toggleSkipNode: (nodeId) =>
     set((state) => ({
@@ -2817,6 +2868,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     }),
 
   restoreSnapshot: (snapshot) => {
+    if (get().isReadOnly) return
     // Ensure nextNodeId never goes backwards
     const maxId = snapshot.nodes.reduce((max, n) => {
       const num = parseInt(n.id.replace("node_", ""), 10)
@@ -2836,6 +2888,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   },
 
   batchAddNodesAndEdges: (newNodes, newEdges) => {
+    if (get().isReadOnly) return
     // Update nextNodeId to avoid collisions
     for (const n of newNodes) {
       const num = parseInt(n.id.replace("node_", ""), 10)
@@ -2905,7 +2958,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     })
   },
 
-  updatePresentationSettings: (settings) =>
+  updatePresentationSettings: (settings) => {
+    if (get().isReadOnly) return
     set((state) => {
       const current = state.presentationSettings
       const merged = { ...current, ...settings }
@@ -2924,9 +2978,11 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         merged.outputItems = validateNoNestedGroups(merged.outputItems)
       }
       return { presentationSettings: merged, isDirty: true }
-    }),
+    })
+  },
 
   syncTeleporterEdges: (channel) => {
+    if (get().isReadOnly) return
     set((state) => {
       const sendNode = state.nodes.find(
         (n) => n.type === "teleport-send" && (n.data as Record<string, unknown>).channel === channel
@@ -2957,6 +3013,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   },
 
   replaceEdgeWithTeleporter: (edgeId) => {
+    if (get().isReadOnly) return
     set((state) => {
       const edge = state.edges.find((e) => e.id === edgeId)
       if (!edge) return state
