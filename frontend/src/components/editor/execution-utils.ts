@@ -5,6 +5,9 @@ export const STATUS_COLORS: Record<string, string> = {
   pending: "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400",
   cancelled: "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400",
   stopping: "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400",
+  // Discard = stopped the flow, in-flight jobs finished into My Library but
+  // detached from the canvas. Distinct (muted grey) from cancelled's orange.
+  discarded: "bg-gray-200 text-gray-700 dark:bg-gray-500/20 dark:text-gray-300",
   timed_out: "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400",
 }
 

@@ -34,7 +34,7 @@ AI provider key (KIE_API_KEY, REPLICATE_API_TOKEN, or ANTHROPIC_API_KEY).
 docker compose -f docker-compose.community.yml up
 ```
 
-Wait for `nodaro-1` to log `server listening on http://0.0.0.0:9000` (backend), then visit http://localhost:3000.
+Wait for `nodaro-1` to log `Server listening at http://0.0.0.0:9000` (backend), then visit http://localhost:3000.
 
 Initial Docker build takes ~5-10 minutes (Node deps, Remotion bundling, frontend build). Subsequent boots are seconds.
 
@@ -44,7 +44,9 @@ http://localhost:3000
 
 Sign up with an email + password (Supabase Auth handles this — no Google OAuth
 required for community edition). The first user is automatically a regular
-user; admin promotion is a manual SQL step (see DEPLOYMENT.md).
+user; admin promotion is a manual SQL step (see
+[Deployment → First user + admin promotion](deployment.md#4-first-user--admin-promotion)).
+Note: the admin panel only exists in the Business and Cloud editions.
 
 ## Troubleshooting
 

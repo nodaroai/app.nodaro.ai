@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, useMemo, Suspense } from "react";
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry";
+import { RUN_BUTTON_CLASS } from "@/lib/run-button-style";
 import { useNavigate } from "react-router-dom";
 import { isExpandedClone } from "@nodaro/shared";
 import { ReactFlowProvider } from "@xyflow/react";
@@ -11,6 +12,9 @@ import {
   Layers,
   History,
   Monitor,
+  ChevronDown,
+  Trash2,
+  RotateCcw,
 } from "lucide-react";
 import { WorkflowCanvas } from "../workflow-canvas";
 import { NodeToolbar } from "../node-toolbar";
@@ -27,6 +31,24 @@ import { SubWorkflowBreadcrumb } from "../sub-workflow-breadcrumb";
 import { useSubWorkflowStack } from "@/hooks/use-sub-workflow-stack";
 import { jumpToBreadcrumb, jumpToBreadcrumbRoot } from "@/lib/sub-workflow-navigation";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { shouldConfirmDiscard, suppressDiscardConfirm } from "@/lib/run-confirm-pref";
 import { toast } from "sonner";
 import { useWorkflowPersistence } from "@/hooks/use-workflow-persistence";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
@@ -37,7 +59,7 @@ import { useProjectsStore } from "@/hooks/use-projects-store";
 import { useAuth } from "@/hooks/use-auth";
 import { useNodeDefaults } from "@/hooks/use-node-defaults";
 import { createClient } from "@/lib/supabase";
-import { StorageExceededError, uploadFile, setCurrentWorkflowId, cancelWorkflowExecution, cancelJob } from "@/lib/api";
+import { StorageExceededError, uploadFile, setCurrentWorkflowId, cancelJob, discardWorkflowExecution } from "@/lib/api";
 import { probeMediaMetadata } from "@/lib/probe-media-metadata";
 import { queryClient } from "@/lib/query-client";
 import { hasCredits } from "@/lib/edition";
@@ -60,6 +82,7 @@ import {
   handleRunSelected,
   restorePollingForRunningJobs,
   streamBackendExecution,
+  teardownActiveWorkflowStream,
 } from "./run-handlers";
 import { handleGenerateSceneImage as generateSceneImage, handleExpandStoryboard as expandStoryboard, handleCreateSceneNode as createSceneNode } from "./scene-story-handlers";
 import { handleGenerateCharacterAsset, handleGenerateObjectAsset, handleGenerateLocationAsset } from "./asset-executors";
@@ -98,6 +121,10 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     "editor",
   );
   const [sidebarVisible, setSidebarVisible] = useState(false);
+  // Confirm dialog for the fallback single-node discard control. Holds the
+  // action to run on confirm (or null when closed); mirrors run-node-button.tsx.
+  const [singleDiscardConfirm, setSingleDiscardConfirm] = useState<(() => void) | null>(null);
+  const [singleDiscardDontAsk, setSingleDiscardDontAsk] = useState(false);
   const isMobile = useIsMobile();
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId);
   const selectedPipelineId = useWorkflowStore((s) => {
@@ -790,45 +817,79 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     queryClient.invalidateQueries({ queryKey: ["workflow-executions"] });
   }, []);
 
-  function handleStop(): void {
-    for (const interval of pollIntervalsRef.current) {
-      clearInterval(interval);
-    }
+  // Pure UI cleanup for a whole-workflow discard. CRITICAL: this NEVER calls a
+  // workflow-level API cancel — the discard API call (discardWorkflowExecution,
+  // mode:"discard") already happened in the status bar (or in handleRunInstead).
+  // Calling cancelWorkflowExecution here would double-cancel and KILL the
+  // in-flight jobs — the exact opposite of discard. This only detaches the
+  // canvas: reverts in-flight/queued nodes to idle (clearing currentJobId so the
+  // per-node poll guard bails) and clears local polling/run state.
+  function handleExecutionDiscarded(): void {
+    // FIRST: fully stop the OLD whole-workflow stream — abort its SSE connection
+    // and set its `finished` flag — BEFORE we do any canvas cleanup or start a
+    // subsequent run. Without this, the old stream stays live; when the OLD
+    // execution reaches `discarded` server-side seconds later, its still-open SSE
+    // would fire onDiscarded and revert the NEW run's running/pending nodes to
+    // idle, wiping the freshly-started "Run instead" run. Tearing the stream down
+    // here also means its onDiscarded never fires for a bar-initiated discard, so
+    // only one "Run discarded…" toast shows (the bar's).
+    teardownActiveWorkflowStream();
+    for (const interval of pollIntervalsRef.current) clearInterval(interval);
     pollIntervalsRef.current.clear();
     setIsRunning(false);
-
-    // Cancel active backend jobs/executions
-    const executionId = activeExecutionId;
     setActiveExecutionId(null);
-
     const { nodes, updateNodeData } = useWorkflowStore.getState();
-    const jobIdsToCancel: string[] = [];
     for (const node of nodes) {
       const d = node.data as Record<string, unknown>;
       if (d.executionStatus === "running" || d.executionStatus === "pending") {
-        updateNodeData(node.id, { executionStatus: "idle" });
-        if (d.currentJobId) jobIdsToCancel.push(d.currentJobId as string);
+        updateNodeData(node.id, { executionStatus: "idle", currentJobId: undefined, currentJobProgress: undefined });
       }
     }
+    setTimeout(() => queryClient.invalidateQueries({ queryKey: ["workflow-executions"] }), 500);
+  }
 
-    // Cancel workflow execution (covers backend orchestrator runs)
-    if (executionId) {
-      cancelWorkflowExecution(executionId).catch(() => {});
-    }
-    // Cancel individual standalone jobs via the dedicated job-cancel route
-    // which also removes them from the BullMQ queue
-    for (const jobId of jobIdsToCancel) {
-      if (jobId !== executionId) {
-        cancelJob(jobId).catch(() => {});
+  // "Run instead" for the whole-workflow bar: discard the active run (in-flight
+  // jobs finish → Library, off canvas), detach the canvas, then start a fresh
+  // run. Order matters — discard old → UI cleanup → handleRun new.
+  function handleRunInstead(): void {
+    const id = activeExecutionId;
+    if (id) discardWorkflowExecution(id).catch(() => {});
+    handleExecutionDiscarded();
+    handleRun(ctx, projectId, useWorkflowStore.getState().workflowId, save, setIsRunning, onExecutionStarted, onExecutionEnded);
+  }
+
+  // Discard for the fallback single-node control (no whole-workflow execution).
+  // Uses the phase-aware per-job cancelJob: a job that hasn't been dispatched to
+  // the provider yet is cancelled+refunded; one already in flight finishes and
+  // lands in My Library (off the canvas). Clears currentJobId FIRST so the
+  // per-node poll guard abandons it before any re-run writes a new key.
+  function handleSingleNodeDiscard(): void {
+    const { nodes, updateNodeData } = useWorkflowStore.getState();
+    const jobIds: string[] = [];
+    for (const node of nodes) {
+      const d = node.data as Record<string, unknown>;
+      if (d.executionStatus === "running" || d.executionStatus === "pending") {
+        if (d.currentJobId) jobIds.push(d.currentJobId as string);
+        updateNodeData(node.id, { executionStatus: "idle", currentJobId: undefined, currentJobProgress: undefined });
       }
     }
+    for (const jobId of jobIds) cancelJob(jobId).catch(() => {});
+    for (const interval of pollIntervalsRef.current) clearInterval(interval);
+    pollIntervalsRef.current.clear();
+    setIsRunning(false);
+    setTimeout(() => queryClient.invalidateQueries({ queryKey: ["workflow-executions"] }), 500);
+  }
 
-    // Refresh execution history after cancellations settle
-    setTimeout(() => {
-      queryClient.invalidateQueries({ queryKey: ["workflow-executions"] });
-    }, 500);
-
-    toast.info("Execution stopped");
+  // Gate a single-node discard action behind the shared confirm dialog unless
+  // the user opted out (same preference key as run-node-button.tsx).
+  function withSingleDiscardConfirm(action: () => void): void {
+    if (shouldConfirmDiscard()) {
+      setSingleDiscardDontAsk(false);
+      // Wrap in an arrow so React's functional setState doesn't *call* it.
+      setSingleDiscardConfirm(() => action);
+    } else {
+      action();
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -1137,37 +1198,57 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               {isRunning && activeExecutionId ? (
                 <ExecutionStatusBar
                   executionId={activeExecutionId}
-                  onStopped={handleStop}
+                  onStopped={handleExecutionDiscarded}
+                  onRunInstead={handleRunInstead}
                 />
               ) : isRunning ? (
                 <>
                   <Button
                     size="lg"
-                    onClick={handleStop}
+                    disabled
                     className="rounded-full px-6 text-white"
                     style={{ backgroundColor: "#ff0073" }}
                   >
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     Executing workflow
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={handleStop}
-                    title="Stop current execution"
-                    aria-label="Stop current execution"
-                    className="rounded-lg bg-background"
-                  >
-                    <Square className="w-4 h-4" />
-                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className="rounded-lg bg-background h-9 px-2 gap-1"
+                        title="Stop current execution"
+                        aria-label="Stop current execution"
+                      >
+                        <Square className="w-3.5 h-3.5" />
+                        <ChevronDown className="w-3 h-3" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-64">
+                      <DropdownMenuItem
+                        onClick={() => withSingleDiscardConfirm(handleSingleNodeDiscard)}
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Discard (save to Library, off canvas)
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => withSingleDiscardConfirm(() => {
+                          handleSingleNodeDiscard();
+                          handleRun(ctx, projectId, useWorkflowStore.getState().workflowId, save, setIsRunning, onExecutionStarted, onExecutionEnded);
+                        })}
+                      >
+                        <RotateCcw className="w-4 h-4 mr-2" />
+                        Run instead
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </>
               ) : (
                 <Button
                   size="lg"
                   disabled={hasCredits() && estimateLoading}
                   onClick={() => handleRun(ctx, projectId, useWorkflowStore.getState().workflowId, save, setIsRunning, onExecutionStarted, onExecutionEnded)}
-                  className="rounded-full px-6 text-white hover:opacity-90"
-                  style={{ backgroundColor: "#ff0073" }}
+                  className={`rounded-full px-6 ${RUN_BUTTON_CLASS}`}
                 >
                   {hasCredits() && estimateLoading ? (
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -1234,6 +1315,42 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         quotaBytes={storageExceededData?.quotaBytes ?? 0}
         tier={storageExceededData?.tier ?? "free"}
       />
+
+      {/* Confirm dialog for the fallback single-node discard / run-instead. */}
+      <AlertDialog
+        open={singleDiscardConfirm !== null}
+        onOpenChange={(open) => { if (!open) setSingleDiscardConfirm(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard this run?</AlertDialogTitle>
+            <AlertDialogDescription>
+              In-progress jobs can&apos;t be cancelled — they&apos;ll finish and be saved to My
+              Library, but won&apos;t appear on the canvas.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
+            <Checkbox
+              checked={singleDiscardDontAsk}
+              onCheckedChange={(v) => setSingleDiscardDontAsk(v === true)}
+            />
+            Don&apos;t ask again
+          </label>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setSingleDiscardConfirm(null)}>Keep running</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (singleDiscardDontAsk) suppressDiscardConfirm();
+                const action = singleDiscardConfirm;
+                setSingleDiscardConfirm(null);
+                action?.();
+              }}
+            >
+              Discard
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {isFreeCutOpen && (
         <Suspense fallback={null}>

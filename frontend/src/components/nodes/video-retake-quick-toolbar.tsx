@@ -191,7 +191,7 @@ export function VideoRetakeQuickToolbar({
             onClick={(e) => e.stopPropagation()}
           >
             <ToolbarSetting label="Model" icon={<Sparkles className="w-3 h-3" />}>
-              <Select value={currentProvider} onValueChange={handleModelChange} onOpenChange={handleOpenChange}>
+              <Select disabled={isRunning} value={currentProvider} onValueChange={handleModelChange} onOpenChange={handleOpenChange}>
                 <SelectTrigger className={ghostPopoverTriggerClass}>
                   <SelectValue />
                 </SelectTrigger>
@@ -205,7 +205,7 @@ export function VideoRetakeQuickToolbar({
               </Select>
             </ToolbarSetting>
             <ToolbarSetting label="Aspect" icon={<Ratio className="w-3 h-3" />}>
-              <Select value={currentAspect} onValueChange={handleAspectChange} onOpenChange={handleOpenChange}>
+              <Select disabled={isRunning} value={currentAspect} onValueChange={handleAspectChange} onOpenChange={handleOpenChange}>
                 <SelectTrigger className={ghostPopoverTriggerClass}>
                   <SelectValue />
                 </SelectTrigger>
@@ -217,7 +217,7 @@ export function VideoRetakeQuickToolbar({
               </Select>
             </ToolbarSetting>
             <ToolbarSetting label="Mode" icon={<RefreshCw className="w-3 h-3" />}>
-              <Select value={currentMode} onValueChange={handleModeChange} onOpenChange={handleOpenChange}>
+              <Select disabled={isRunning} value={currentMode} onValueChange={handleModeChange} onOpenChange={handleOpenChange}>
                 <SelectTrigger className={ghostPopoverTriggerClass}>
                   <SelectValue />
                 </SelectTrigger>
@@ -231,7 +231,7 @@ export function VideoRetakeQuickToolbar({
               </Select>
             </ToolbarSetting>
             <ToolbarSetting label="Versions" icon={<Copy className="w-3 h-3" />}>
-              <Select value={String(repeatCount)} onValueChange={handleRepeatChange} onOpenChange={handleOpenChange}>
+              <Select disabled={isRunning} value={String(repeatCount)} onValueChange={handleRepeatChange} onOpenChange={handleOpenChange}>
                 <SelectTrigger className={ghostPopoverTriggerClass}>
                   <SelectValue />
                 </SelectTrigger>
@@ -246,7 +246,6 @@ export function VideoRetakeQuickToolbar({
             </ToolbarSetting>
           </PopoverContent>
         </Popover>
-        <PinkDot />
         <RunNodeButton
           nodeId={nodeId}
           credits={credits}
@@ -266,7 +265,7 @@ export function VideoRetakeQuickToolbar({
     >
       {/* Model selector — locked to LTX 2.3 Pro for now, dropdown rendered
           for forward-compat (additional retake providers slot in here). */}
-      <Select value={currentProvider} onValueChange={handleModelChange} onOpenChange={handleOpenChange}>
+      <Select disabled={isRunning} value={currentProvider} onValueChange={handleModelChange} onOpenChange={handleOpenChange}>
         <SelectTrigger className={`${ghostTriggerClass} max-w-[180px]`}>
           <Sparkles className="opacity-70" />
           <SelectValue>{modelLabel}</SelectValue>
@@ -281,7 +280,7 @@ export function VideoRetakeQuickToolbar({
       </Select>
 
       {/* Aspect ratio selector */}
-      <Select value={currentAspect} onValueChange={handleAspectChange} onOpenChange={handleOpenChange}>
+      <Select disabled={isRunning} value={currentAspect} onValueChange={handleAspectChange} onOpenChange={handleOpenChange}>
         <SelectTrigger className={ghostTriggerClass}>
           <Ratio className="opacity-70" />
           <SelectValue>{aspectShort}</SelectValue>
@@ -294,7 +293,7 @@ export function VideoRetakeQuickToolbar({
       </Select>
 
       {/* Mode selector — 3-way replace-audio / replace-video / replace-both */}
-      <Select value={currentMode} onValueChange={handleModeChange} onOpenChange={handleOpenChange}>
+      <Select disabled={isRunning} value={currentMode} onValueChange={handleModeChange} onOpenChange={handleOpenChange}>
         <SelectTrigger className={ghostTriggerClass}>
           <RefreshCw className="opacity-70" />
           <SelectValue>{modeShort}</SelectValue>
@@ -309,7 +308,7 @@ export function VideoRetakeQuickToolbar({
       </Select>
 
       {/* Versions */}
-      <Select value={String(repeatCount)} onValueChange={handleRepeatChange} onOpenChange={handleOpenChange}>
+      <Select disabled={isRunning} value={String(repeatCount)} onValueChange={handleRepeatChange} onOpenChange={handleOpenChange}>
         <SelectTrigger className={ghostTriggerClass} title="Versions per run">
           <Copy className="opacity-70" />
           <SelectValue>× {repeatCount}</SelectValue>
@@ -323,7 +322,6 @@ export function VideoRetakeQuickToolbar({
         </SelectContent>
       </Select>
 
-      <PinkDot />
 
       <RunNodeButton
         nodeId={nodeId}
@@ -350,15 +348,6 @@ function AspectRatioItem({ value, label }: { value: string; label: string }) {
   )
 }
 
-/** 4px brand-pink dot — divider between settings and the Run CTA. */
-function PinkDot() {
-  return (
-    <span
-      aria-hidden
-      className="w-1 h-1 rounded-full bg-[#ff0073] mx-1.5 shrink-0"
-    />
-  )
-}
 
 /** Row inside the compact-mode popover. */
 function ToolbarSetting({

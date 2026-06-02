@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { getJobStatusLean, getUserCredits, getWorkflowExecution, runWorkflow, streamWorkflowExecution, WorkflowAlreadyRunningError, withDedupRaceRetry } from "@/lib/api";
 import { generateIdempotencyKey } from "@/lib/idempotency-key";
+import { registerNodeRunAbort, clearNodeRunAbort } from "@/lib/node-run-abort";
 import { hasCredits } from "@/lib/edition";
 import { getCachedUserId } from "@/hooks/use-auth";
 import { setSkipUndoCapture } from "@/hooks/undo-flags";
@@ -21,11 +22,22 @@ import {
 import { COMPOSER_PLAN_MAP } from "@nodaro/shared";
 import { expandItemsWithRepeat } from "@nodaro/shared";
 import { collapseExpandedClones } from "./execution-graph";
+import { shouldAbandonNode } from "./abandon-guard";
 import { getListInputForNode } from "./node-input-resolver";
 import { executeNode, rejectAllManualEdits } from "./execute-node";
 import { executeNodeForList } from "./list-execution";
 import { cascadeAutoExecute } from "./auto-execute";
 import { buildVariantResults } from "./variant-results";
+
+// Phase 1 runs at most one whole-workflow stream at a time. We keep its teardown
+// here so a Discard / Run-instead can fully stop the OLD stream (abort its SSE +
+// set finished) BEFORE starting a new run — otherwise the old stream's late
+// `execution:discarded` event would revert the NEW run's nodes and tear down its UI.
+let activeWorkflowStreamCleanup: (() => void) | null = null;
+export function teardownActiveWorkflowStream(): void {
+  activeWorkflowStreamCleanup?.();
+  activeWorkflowStreamCleanup = null;
+}
 
 function warnUnderMinRows(nodes: WorkflowNode[]): void {
   const underMin = nodes.filter((n) => {
@@ -338,8 +350,23 @@ export async function handleRunSingleNode(
   useWorkflowStore.getState().markNodesStatus([nodeId], "pending");
   setIsRunning(true);
 
+  // Per-node cancellation: register an AbortController so the node's Stop button
+  // can abort the in-flight execution (streaming SSE today; anything honoring
+  // ctx.signal). Registered BEFORE the pre-run save so a Stop during the save
+  // window also takes effect. Threaded into ctx; cleared when this run settles.
+  const abortController = new AbortController();
+  ctx.signal = abortController.signal;
+  registerNodeRunAbort(nodeId, abortController);
+
   if (wasDirty && projectId) {
     await save(projectId);
+  }
+
+  // Stop pressed during the save → don't start the run at all.
+  if (abortController.signal.aborted) {
+    clearNodeRunAbort(nodeId, abortController);
+    setIsRunning(false);
+    return;
   }
 
   const { nodes: currentNodes, edges: currentEdges } =
@@ -368,7 +395,9 @@ export async function handleRunSingleNode(
       // the optimistic "pending" flip — e.g. executeNode rejected on synchronous
       // input validation before writing any status — roll it back to "failed"
       // so it doesn't keep the animated running border forever. Leave any
-      // terminal status executeNode already set untouched.
+      // terminal status executeNode already set untouched. A user-initiated
+      // abort is NOT a failure: the Stop handler already set the terminal state.
+      if (abortController.signal.aborted) return;
       const cur = useWorkflowStore
         .getState()
         .nodes.find((n) => n.id === nodeId);
@@ -377,6 +406,7 @@ export async function handleRunSingleNode(
       }
     })
     .finally(() => {
+      clearNodeRunAbort(nodeId, abortController);
       if (pollIntervalsRef.current.size === 0) {
         setIsRunning(false);
       }
@@ -603,12 +633,34 @@ export function restorePollingForRunningJobs(
           return;
         }
 
+        // Run was discarded or replaced while we were away (page reload): the
+        // node's currentJobId no longer points at the job we'd be restoring.
+        // Detach — the job still finishes into My Library, but we must not
+        // reattach it to the canvas.
+        if (shouldAbandonNode(nodeId, jobId)) {
+          ctx.untrackInterval(poll);
+          return;
+        }
+
         try {
           const job = await getJobStatusLean(jobId);
           pollFailures = 0;
 
           if (job.progress != null && job.progress > 0) {
             updateNodeData(nodeId, { currentJobProgress: job.progress });
+          }
+
+          // Re-check after the await: a discard/replace may have landed while
+          // the status request was in flight. Never write a terminal
+          // result/error for a job the node no longer points at.
+          if (
+            (job.status === "completed" ||
+              job.status === "failed" ||
+              job.status === "cancelled") &&
+            shouldAbandonNode(nodeId, jobId)
+          ) {
+            ctx.untrackInterval(poll);
+            return;
           }
 
           if (job.status === "completed") {
@@ -636,9 +688,19 @@ export function restorePollingForRunningJobs(
           pollFailures++;
           if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
             ctx.untrackInterval(poll);
+            if (shouldAbandonNode(nodeId, jobId)) {
+              // Run discarded/replaced — don't write result/failure to canvas.
+              return;
+            }
             // Final verification before marking as failed
             try {
               const finalJob = await getJobStatusLean(jobId);
+              // Re-check after the await: a discard/replace may have landed
+              // while this final status request was in flight. Never reattach a
+              // terminal result for a job the node no longer points at.
+              if (shouldAbandonNode(nodeId, jobId)) {
+                return;
+              }
               if (finalJob.status === "completed") {
                 applyRestoredJobCompletion(nodeId, nodeType, finalJob, jobId);
                 return;
@@ -736,6 +798,36 @@ export function streamBackendExecution(
   setIsRunning(true);
   const abortController = new AbortController();
   let finished = false;
+  let abandoned = false;
+
+  // Register this stream as THE active whole-workflow stream so a subsequent
+  // Discard / Run-instead can tear it down (abort SSE + set finished) before the
+  // new run starts. `cleanup` is hoisted, so referencing it here is safe.
+  activeWorkflowStreamCleanup = cleanup;
+
+  const applyStates = (s: Record<string, NodeExecutionState>) => {
+    if (abandoned) return;            // a discarded run must stop painting the canvas
+    syncNodeStatesToStore(s);
+  };
+  // Whole-workflow discard reverts only IN-FLIGHT / QUEUED nodes to idle (clears the
+  // node's currentJobId so the per-node poll guard bails); earlier-completed nodes
+  // from this run keep their results (design: no pre-run snapshot to restore).
+  const revertActiveNodesToIdle = () => {
+    const { nodes, updateNodeData } = useWorkflowStore.getState();
+    for (const node of nodes) {
+      const st = (node.data as Record<string, unknown>).executionStatus;
+      if (st === "running" || st === "pending") {
+        updateNodeData(node.id, { executionStatus: "idle", currentJobId: undefined, currentJobProgress: undefined });
+      }
+    }
+  };
+  const onDiscarded = () => {
+    if (finished) return;
+    abandoned = true;
+    revertActiveNodesToIdle();
+    cleanup();
+    toast.info("Run discarded — in-flight results will be saved to My Library");
+  };
 
   // Track the abort controller so it gets cleaned up on workflow switch
   const staleCheck = ctx.trackInterval(
@@ -752,7 +844,7 @@ export function streamBackendExecution(
     executionId,
     {
       onNodeStatesChanged: (nodeStates, _meta) => {
-        syncNodeStatesToStore(nodeStates);
+        applyStates(nodeStates);
       },
       onCompleted: async () => {
         if (finished) return;
@@ -764,7 +856,7 @@ export function streamBackendExecution(
         try {
           const exec = await getWorkflowExecution(executionId);
           const finalStates = (exec.nodeStates ?? {}) as Record<string, NodeExecutionState>;
-          syncNodeStatesToStore(finalStates);
+          applyStates(finalStates);
         } catch {
           // Non-critical — SSE already applied what it had.
         }
@@ -783,6 +875,7 @@ export function streamBackendExecution(
         cleanup();
         toast.info("Backend execution cancelled");
       },
+      onDiscarded,
     },
     abortController.signal,
   ).catch((err) => {
@@ -799,11 +892,13 @@ export function streamBackendExecution(
       const exec = await getWorkflowExecution(executionId);
       pollFailures = 0;
 
+      if (exec.status === "discarded") { onDiscarded(); return; }
+
       const nodeStates = (exec.nodeStates ?? {}) as Record<
         string,
         NodeExecutionState
       >;
-      syncNodeStatesToStore(nodeStates);
+      applyStates(nodeStates);
 
       if (
         exec.status === "completed" ||
@@ -832,8 +927,9 @@ export function streamBackendExecution(
         // Final verification before giving up
         try {
           const finalExec = await getWorkflowExecution(executionId);
+          if (finalExec.status === "discarded") { onDiscarded(); return; }
           const finalStates = (finalExec.nodeStates ?? {}) as Record<string, NodeExecutionState>;
-          syncNodeStatesToStore(finalStates);
+          applyStates(finalStates);
           if (finalExec.status === "completed") {
             cleanup();
             toast.success("Backend execution completed");
@@ -875,6 +971,10 @@ export function streamBackendExecution(
     clearTimeout(pollTimeout1);
     ctx.untrackInterval(staleCheck);
     ctx.untrackInterval(pollInterval);
+    // Only release the shared slot if THIS stream still owns it — a newer stream
+    // may have already replaced it (Run-instead starts the new stream after this
+    // one's teardown), and we must not clear the newer stream's registration.
+    if (activeWorkflowStreamCleanup === cleanup) activeWorkflowStreamCleanup = null;
     onExecutionEnded?.();
   }
 }

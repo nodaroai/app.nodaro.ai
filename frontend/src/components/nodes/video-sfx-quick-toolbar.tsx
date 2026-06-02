@@ -186,7 +186,7 @@ export function VideoSfxQuickToolbar({
           Linear credit multiplier — applied client-side here, mirrored by
           `creditGuard.computeCredits` on the route via `bucketBaseCreditsFor
           × versions`. */}
-      <Select value={String(versions)} onValueChange={handleVersionsChange} onOpenChange={handleOpenChange}>
+      <Select disabled={isRunning} value={String(versions)} onValueChange={handleVersionsChange} onOpenChange={handleOpenChange}>
         <SelectTrigger className={ghostTriggerClass} title="Versions per run">
           <Copy className="opacity-70" />
           <SelectValue>× {versions}</SelectValue>
@@ -200,7 +200,6 @@ export function VideoSfxQuickToolbar({
         </SelectContent>
       </Select>
 
-      <PinkDot />
 
       {/* Run button — credits already include the upstream-duration bucket
           and the versions multiplier. RunNodeButton's own fanOut/repeat
@@ -218,16 +217,3 @@ export function VideoSfxQuickToolbar({
   )
 }
 
-/** 4px brand-pink dot used as a quiet visual divider between settings and
- *  the Run CTA. Replaces the explicit vertical hairline — keeps the eye
- *  moving rightward while planting the accent color near the action.
- *  Mirrors the same helper in generate-image-quick-toolbar / generate-video-
- *  quick-toolbar (local copy keeps each toolbar self-contained). */
-function PinkDot() {
-  return (
-    <span
-      aria-hidden
-      className="w-1 h-1 rounded-full bg-[#ff0073] mx-1.5 shrink-0"
-    />
-  )
-}

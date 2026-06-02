@@ -10,6 +10,7 @@
  */
 
 import { config } from "../../lib/config.js"
+import { throwIfJobCancelled } from "../../lib/job-cancellation.js"
 import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
 import type { ReconcileOpts } from "../provider.interface.js"
 
@@ -259,6 +260,12 @@ export async function createKieTask(
   model: string,
   input: Record<string, unknown>,
 ): Promise<CreateKieTaskResult> {
+  // Cancellation is only honored BEFORE we call the external provider — once the
+  // task is submitted, KIE has no cancel API and it runs to completion. If the
+  // user cancelled during the pre-call window (queue pickup / input download),
+  // abort here so we never spend the upstream call.
+  await throwIfJobCancelled()
+
   const apiKey = config.KIE_API_KEY
 
   if (!apiKey) {
@@ -539,6 +546,9 @@ export async function runVeoTask(
   /** Provider generation duration in ms (KIE completeTime − createTime). */
   providerMs?: number
 }> {
+  // Pre-call cancellation guard (see createKieTask) — VEO has its own endpoint.
+  await throwIfJobCancelled()
+
   const apiKey = config.KIE_API_KEY
 
   if (!apiKey) {
@@ -811,6 +821,9 @@ export async function runVeoExtendTask(
   fallbackFlag?: boolean
   providerMs?: number
 }> {
+  // Pre-call cancellation guard (see createKieTask).
+  await throwIfJobCancelled()
+
   const apiKey = config.KIE_API_KEY
   if (!apiKey) {
     throw createSanitizedError("KIE_API_KEY is not configured", "Video extend")

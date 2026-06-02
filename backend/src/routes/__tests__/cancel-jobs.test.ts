@@ -129,7 +129,9 @@ function jobsHandler(opts: {
 }): TableHandler {
   return () => {
     const single = vi.fn().mockResolvedValue(opts.jobLookup ?? { data: null, error: { message: "not found" } })
-    const inForList = vi.fn().mockResolvedValue(opts.jobsList ?? { data: [], error: null })
+    // cancel-all chain: select().eq().in(status).is(provider_task_id, null)
+    const isForList = vi.fn().mockResolvedValue(opts.jobsList ?? { data: [], error: null })
+    const inForList = vi.fn().mockReturnValue({ is: isForList })
     const eqAfterSelect = vi.fn().mockReturnValue({ single, in: inForList })
     const select = vi.fn().mockReturnValue({ eq: eqAfterSelect })
 
@@ -240,12 +242,35 @@ describe("POST /v1/jobs/:jobId/cancel", () => {
     })
 
     expect(res.statusCode).toBe(200)
-    expect(res.json()).toEqual({ success: true, cancelled: 1 })
+    expect(res.json()).toEqual({ success: true, cancelled: 1, inFlight: false })
     expect(tryRemoveFromQueue).toHaveBeenCalledWith("job-1")
     // CRITICAL: the reserved credit hold MUST be refunded — without this the
     // user pays for cancelled work that never produced output.
     expect(mockRefundCredits).toHaveBeenCalledWith("usage-log-1")
     expect(mockInvalidateBalanceCache).toHaveBeenCalledWith(TEST_USER_ID)
+  })
+
+  it("does NOT cancel an in-flight job (provider_task_id set) — reports inFlight, no refund", async () => {
+    setupTableMocks({
+      jobs: jobsHandler({
+        jobLookup: {
+          data: { id: "job-1", status: "processing", user_id: TEST_USER_ID, input_data: {}, output_data: {}, provider_task_id: "kie-task-abc" },
+          error: null,
+        },
+      }),
+    })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/jobs/job-1/cancel",
+      payload: { userId: TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ success: true, cancelled: 0, inFlight: true })
+    // It's already running on the provider — don't touch the queue or refund.
+    expect(tryRemoveFromQueue).not.toHaveBeenCalled()
+    expect(mockRefundCredits).not.toHaveBeenCalled()
   })
 
   it("succeeds even if no usage_log exists (e.g. zero-cost job)", async () => {

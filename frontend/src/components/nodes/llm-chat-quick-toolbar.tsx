@@ -161,7 +161,7 @@ export function LlmChatQuickToolbar({
       </SelectGroup>
       {userTextTemplates.length > 0 && (
         <SelectGroup>
-          <SelectLabel>My Templates</SelectLabel>
+          <SelectLabel>My Presets</SelectLabel>
           {userTextTemplates.map((t) => (
             <SelectItem key={t.id} value={t.id} className="text-xs">
               {t.label || "Untitled"}
@@ -202,15 +202,15 @@ export function LlmChatQuickToolbar({
           </PopoverTrigger>
           <PopoverContent side="bottom" align="start" sideOffset={8} className="w-[240px] p-2 space-y-2 node-menu-surface" onClick={(e) => e.stopPropagation()}>
             <ToolbarSetting label="Model" icon={<Sparkles className="w-3 h-3" />}>
-              <Select value={currentModel} onValueChange={handleModelChange} onOpenChange={handleOpenChange}>
+              <Select disabled={isRunning} value={currentModel} onValueChange={handleModelChange} onOpenChange={handleOpenChange}>
                 <SelectTrigger className={ghostPopoverTriggerClass}>
                   <SelectValue />
                 </SelectTrigger>
                 {modelItems}
               </Select>
             </ToolbarSetting>
-            <ToolbarSetting label="Template" icon={<LayoutTemplate className="w-3 h-3" />}>
-              <Select value={currentTemplateId} onValueChange={handleTemplateChange} onOpenChange={handleOpenChange}>
+            <ToolbarSetting label="Preset" icon={<LayoutTemplate className="w-3 h-3" />}>
+              <Select disabled={isRunning} value={currentTemplateId} onValueChange={handleTemplateChange} onOpenChange={handleOpenChange}>
                 <SelectTrigger className={ghostPopoverTriggerClass}>
                   <SelectValue />
                 </SelectTrigger>
@@ -218,7 +218,7 @@ export function LlmChatQuickToolbar({
               </Select>
             </ToolbarSetting>
             <ToolbarSetting label="Runs" icon={<Repeat2 className="w-3 h-3" />}>
-              <Select value={String(repeatCount)} onValueChange={handleRepeatChange} onOpenChange={handleOpenChange}>
+              <Select disabled={isRunning} value={String(repeatCount)} onValueChange={handleRepeatChange} onOpenChange={handleOpenChange}>
                 <SelectTrigger className={ghostPopoverTriggerClass}>
                   <SelectValue />
                 </SelectTrigger>
@@ -227,7 +227,6 @@ export function LlmChatQuickToolbar({
             </ToolbarSetting>
           </PopoverContent>
         </Popover>
-        <PinkDot />
         <RunNodeButton nodeId={nodeId} credits={credits} isRunning={isRunning} onRun={(nid) => runSingleNode?.(nid)} />
       </div>
     )
@@ -237,7 +236,7 @@ export function LlmChatQuickToolbar({
   return (
     <div className={`${containerClass} gap-0.5`} style={toolbarTransform} onClick={(e) => e.stopPropagation()}>
       {/* AI Model */}
-      <Select value={currentModel} onValueChange={handleModelChange} onOpenChange={handleOpenChange}>
+      <Select disabled={isRunning} value={currentModel} onValueChange={handleModelChange} onOpenChange={handleOpenChange}>
         <SelectTrigger className={`${ghostTriggerClass} max-w-[150px]`} title="AI model">
           <Sparkles className="opacity-70" />
           <SelectValue>{modelLabel}</SelectValue>
@@ -245,9 +244,9 @@ export function LlmChatQuickToolbar({
         {modelItems}
       </Select>
 
-      {/* Template */}
-      <Select value={currentTemplateId} onValueChange={handleTemplateChange} onOpenChange={handleOpenChange}>
-        <SelectTrigger className={`${ghostTriggerClass} max-w-[140px]`} title="Template">
+      {/* Preset */}
+      <Select disabled={isRunning} value={currentTemplateId} onValueChange={handleTemplateChange} onOpenChange={handleOpenChange}>
+        <SelectTrigger className={`${ghostTriggerClass} max-w-[140px]`} title="Preset">
           <LayoutTemplate className="opacity-70" />
           <SelectValue>{templateLabel}</SelectValue>
         </SelectTrigger>
@@ -255,7 +254,7 @@ export function LlmChatQuickToolbar({
       </Select>
 
       {/* # of runs */}
-      <Select value={String(repeatCount)} onValueChange={handleRepeatChange} onOpenChange={handleOpenChange}>
+      <Select disabled={isRunning} value={String(repeatCount)} onValueChange={handleRepeatChange} onOpenChange={handleOpenChange}>
         <SelectTrigger className={ghostTriggerClass} title="Number of runs">
           <Repeat2 className="opacity-70" />
           <SelectValue>× {repeatCount}</SelectValue>
@@ -263,7 +262,6 @@ export function LlmChatQuickToolbar({
         {runsItems}
       </Select>
 
-      <PinkDot />
 
       {/* Run button — credit × repeat multiplier baked in by RunNodeButton. */}
       <RunNodeButton nodeId={nodeId} credits={credits} isRunning={isRunning} onRun={(nid) => runSingleNode?.(nid)} />
@@ -271,10 +269,6 @@ export function LlmChatQuickToolbar({
   )
 }
 
-/** 4px brand-pink divider dot between settings and the Run CTA. */
-function PinkDot() {
-  return <span aria-hidden className="w-1 h-1 rounded-full bg-[#ff0073] mx-1.5 shrink-0" />
-}
 
 /** Row inside the compact popover: small icon + label, full-width select under it. */
 function ToolbarSetting({

@@ -49,7 +49,7 @@ const NODE_TYPE_LABELS: Record<string, string> = {
   "motion-transfer": "Motion Transfer",
   "video-upscale": "Upscale Video",
   "render-video": "Render Video",
-  "text-prompt": "Text Prompt",
+  "text-prompt": "Text",
   "upload-image": "Upload Image",
   "upload-video": "Upload Video",
   "upload-audio": "Upload Audio",

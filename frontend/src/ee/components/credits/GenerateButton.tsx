@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { Loader2 } from "lucide-react"
 import { hasCredits } from "@/lib/edition"
+import { RUN_BUTTON_CLASS } from "@/lib/run-button-style"
 import { useModelCreditCost, useUserCredits } from "@/ee/hooks/queries/use-credits-queries"
 
 interface GenerateButtonProps {
@@ -58,7 +59,7 @@ export function GenerateButton({
     <Button
       onClick={onClick}
       disabled={disabled || isRunning || insufficient}
-      className="w-full"
+      className={`w-full ${RUN_BUTTON_CLASS}`}
     >
       {buttonContent}
     </Button>

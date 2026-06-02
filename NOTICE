@@ -1,0 +1,52 @@
+Nodaro
+Copyright (c) Nodaro
+
+This product bundles and depends on third-party software. The Nodaro source
+code is licensed as described in LICENSE.md (Sustainable Use License for core,
+Nodaro Enterprise License for `ee/`, Apache-2.0 for the published SDK packages).
+This NOTICE enumerates third-party components whose licenses impose obligations
+or warrant attention beyond the permissive MIT/ISC/BSD/Apache-2.0 majority.
+
+--------------------------------------------------------------------------------
+Remotion  (remotion, @remotion/*)
+--------------------------------------------------------------------------------
+Remotion is NOT MIT/permissive. It is distributed under the Remotion License
+("SEE LICENSE IN LICENSE.md" in each Remotion package). Individuals and small
+companies may use it for free; companies above Remotion's defined size threshold
+require a paid Remotion company license to use it in production.
+
+  >> If you self-host Nodaro at a company past that threshold, you must obtain a
+     Remotion license separately. See https://www.remotion.dev/license and
+     https://www.remotion.dev/docs/license-changes
+
+Remotion powers the video-composition / render nodes (backend render-worker and
+the packages/remotion compositions). It is an optional subsystem: the rest of
+Nodaro runs without it.
+
+--------------------------------------------------------------------------------
+sharp / @img/sharp-libvips-*  (LGPL-3.0-or-later)
+--------------------------------------------------------------------------------
+Image processing uses `sharp` (Apache-2.0), which dynamically links prebuilt
+libvips binaries published as `@img/sharp-libvips-<platform>` under
+LGPL-3.0-or-later. These are separate, dynamically-linked native libraries (not
+statically compiled into Nodaro), which is compatible with redistribution. The
+libvips source corresponding to those binaries is available from the sharp /
+libvips projects: https://github.com/lovell/sharp and https://www.libvips.org
+
+--------------------------------------------------------------------------------
+elkjs  (EPL-2.0)
+--------------------------------------------------------------------------------
+The frontend graph auto-layout uses `elkjs`, a JavaScript port of the Eclipse
+Layout Kernel, licensed under the Eclipse Public License 2.0. Source:
+https://github.com/kieler/elkjs
+
+--------------------------------------------------------------------------------
+Everything else
+--------------------------------------------------------------------------------
+The remaining dependencies are predominantly MIT, ISC, BSD-2/3-Clause, and
+Apache-2.0. For the authoritative, machine-generated inventory of every
+dependency and its license, run a license scanner against an installed tree,
+e.g.:
+
+  npx license-checker-rseidelsohn --summary
+  npx license-checker-rseidelsohn --csv --out THIRD_PARTY_LICENSES.csv

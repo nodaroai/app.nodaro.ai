@@ -132,9 +132,12 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   // Input
   {
     type: "text-prompt",
-    label: "Text Prompt",
+    label: "Text",
     icon: <Type className="h-4 w-4" />,
     category: "Input",
+    // Renamed from "Text Prompt" → "Text"; keep "prompt" searchable so users
+    // who look for "prompt" still find this node.
+    keywords: ["prompt", "text prompt"],
   },
   {
     type: "upload-image",

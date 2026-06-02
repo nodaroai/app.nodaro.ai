@@ -8,6 +8,7 @@ export type ExecutionStatus =
   | "cancelled"
   | "stopping"
   | "timed_out"
+  | "discarded"
 
 export type ExecutionTriggerType =
   | "manual"
@@ -91,7 +92,7 @@ export interface CancelExecutionParams {
    * "after_current" sets the execution to "stopping" (let in-flight nodes
    * finish, then stop). Default behavior cancels immediately.
    */
-  mode?: "after_current"
+  mode?: "after_current" | "discard"
 }
 
 export class ExecutionsResource {

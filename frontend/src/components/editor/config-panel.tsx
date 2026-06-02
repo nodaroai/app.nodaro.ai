@@ -12,6 +12,7 @@ import { Separator } from "@/components/ui/separator"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 const Kling3DirectorModal = lazy(() => import("@/components/editor/kling3-director-modal").then(m => ({ default: m.Kling3DirectorModal })))
 import { GenerateButton } from "@/ee/components/credits/GenerateButton"
+import { RUN_BUTTON_CLASS } from "@/lib/run-button-style"
 import { useProvidersCreditsSum } from "@/ee/hooks/use-providers-credits-sum"
 import { createClient } from "@/lib/supabase"
 import { pipelinesApi } from "@/lib/pipelines-api"
@@ -202,7 +203,7 @@ const LIBRARY_VIDEO_TYPES = new Set(["image-to-video", "video-to-video", "text-t
 const LIBRARY_AUDIO_TYPES = new Set(["text-to-speech", "generate-music", "text-to-audio", "audio-isolation", "text-to-dialogue", "voice-changer", "dubbing", "voice-remix", "voice-design", "suno-generate", "suno-cover", "suno-extend", "suno-separate", "suno-mashup", "suno-replace-section", "suno-add-instrumental", "suno-add-vocals", "suno-convert-wav", "suno-upload-extend"])
 
 const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
-  "text-prompt": "Text Prompt",
+  "text-prompt": "Text",
   "upload-image": "Upload Image",
   "upload-video": "Upload Video",
   "upload-audio": "Upload Audio",
@@ -892,6 +893,11 @@ export function ConfigPanel() {
   const selectedNode = displayNode
   const nodeType = selectedNode.type as string
   const nodeData = selectedNode.data as Record<string, unknown>
+  // Locks run-affecting config (model, resolution, prompt, pickers, …) while
+  // the node is executing or initiating. Name / results / run buttons / the
+  // fullscreen toggle stay interactive — see the fieldset around NodeTypeConfig.
+  const isNodeRunning =
+    nodeData.executionStatus === "running" || nodeData.executionStatus === "pending"
 
   // --- Shared content for both desktop and mobile ---
   const panelHeader = (
@@ -1027,8 +1033,28 @@ export function ConfigPanel() {
               Person, Styling, etc.) closes the modal on a double-click pick.
               Side-panel mode leaves the context null — double-click is a
               no-op there, which matches the surrounding-non-tile picker UX. */}
-          {isExpanded ? (
-            <TileCommitContext.Provider value={{ commit: closeFullscreenSettings }}>
+          {/* While the node runs, lock the run-affecting parameters (model,
+              resolution, prompt, pickers, …) — these all live inside
+              NodeTypeConfig. The node name, Results Gallery (replacing the
+              selected output), run/stop buttons, and the fullscreen toggle are
+              rendered OUTSIDE this fieldset, so they stay interactive. */}
+          <fieldset
+            disabled={isNodeRunning}
+            className="border-0 p-0 m-0 min-w-0 disabled:opacity-70 disabled:pointer-events-none"
+          >
+            {isExpanded ? (
+              <TileCommitContext.Provider value={{ commit: closeFullscreenSettings }}>
+                <NodeTypeConfig
+                  nodeType={nodeType}
+                  nodeData={nodeData}
+                  configProps={configProps}
+                  updateNodeData={updateNodeData}
+                  onExpandDirector={() => setExpandDirectorOpen(true)}
+                  update={update}
+                  selectedNodeId={selectedNodeId ?? undefined}
+                />
+              </TileCommitContext.Provider>
+            ) : (
               <NodeTypeConfig
                 nodeType={nodeType}
                 nodeData={nodeData}
@@ -1038,18 +1064,8 @@ export function ConfigPanel() {
                 update={update}
                 selectedNodeId={selectedNodeId ?? undefined}
               />
-            </TileCommitContext.Provider>
-          ) : (
-            <NodeTypeConfig
-              nodeType={nodeType}
-              nodeData={nodeData}
-              configProps={configProps}
-              updateNodeData={updateNodeData}
-              onExpandDirector={() => setExpandDirectorOpen(true)}
-              update={update}
-              selectedNodeId={selectedNodeId ?? undefined}
-            />
-          )}
+            )}
+          </fieldset>
 
           <Separator />
 
@@ -1135,7 +1151,7 @@ export function ConfigPanel() {
                     type="button"
                     onClick={() => runSingleNode?.(selectedNode.id)}
                     disabled={nodeData.executionStatus === "running"}
-                    className="w-full flex items-center justify-center gap-2 h-10 rounded-lg text-white font-medium bg-[#ff0073] hover:bg-[#e0005f] disabled:opacity-50 transition-colors"
+                    className={`w-full flex items-center justify-center gap-2 h-10 rounded-lg font-medium disabled:opacity-50 ${RUN_BUTTON_CLASS}`}
                   >
                     {nodeData.executionStatus === "running"
                       ? <Loader2 className="w-4 h-4 animate-spin" />
@@ -1150,7 +1166,7 @@ export function ConfigPanel() {
                     type="button"
                     onClick={() => runFromHere?.(selectedNode.id)}
                     disabled={nodeData.executionStatus === "running"}
-                    className="w-full flex items-center justify-center gap-2 h-10 rounded-lg text-white font-medium bg-[#ff0073] hover:bg-[#e0005f] disabled:opacity-50 transition-colors"
+                    className={`w-full flex items-center justify-center gap-2 h-10 rounded-lg font-medium disabled:opacity-50 ${RUN_BUTTON_CLASS}`}
                     title="Runs this node and all connected downstream nodes in sequence"
                   >
                     {nodeData.executionStatus === "running"

@@ -10,7 +10,7 @@ import { describe, it, expect, vi } from "vitest"
 
 // Exact copy of NODE_TYPE_DISPLAY_NAMES + getNodeTypeDisplayName from config-panel.tsx
 const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
-  "text-prompt": "Text Prompt",
+  "text-prompt": "Text",
   "upload-image": "Upload Image",
   "upload-video": "Upload Video",
   "upload-audio": "Upload Audio",
@@ -109,7 +109,7 @@ describe("getNodeTypeDisplayName", () => {
   })
 
   it("returns the hardcoded name for 'text-prompt'", () => {
-    expect(getNodeTypeDisplayName("text-prompt")).toBe("Text Prompt")
+    expect(getNodeTypeDisplayName("text-prompt")).toBe("Text")
   })
 
   it("returns the hardcoded name for 'audio-isolation' (Voice Extractor)", () => {

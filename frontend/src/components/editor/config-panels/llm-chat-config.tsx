@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { AlertCircle, BookmarkPlus, Loader2, Image as ImageIcon, Video as VideoIcon, Music as MusicIcon, X } from "lucide-react"
+import { AlertCircle, BookmarkPlus, Loader2, Image as ImageIcon, Video as VideoIcon, Music as MusicIcon, X, Save, Trash2 } from "lucide-react"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
@@ -111,6 +111,9 @@ export function LLMChatConfig({ data, onUpdate, sources, fieldMappings, onMapFie
   const templateId = data.templateId ?? "custom"
   const currentTemplate: GenerateTextTemplate | undefined =
     getGenerateTextTemplate(templateId) ?? userTextTemplates.find((t) => t.id === templateId)
+  // Whether the selected template is one of the user's saved (editable) ones —
+  // gates the Update / Delete affordances (built-ins can't be overridden).
+  const isUserTemplate = userTextTemplates.some((t) => t.id === templateId)
 
   // Reference-image gate: only warn when the chosen template explicitly needs one
   // (built-in fan-out templates set requiresImageRef) AND no image source is wired in.
@@ -140,11 +143,26 @@ export function LLMChatConfig({ data, onUpdate, sources, fieldMappings, onMapFie
     })
   }
 
+  // Single persistence path for the user's saved text templates: update the
+  // store optimistically, then PATCH settings. Re-sends the already-saved
+  // prompt templates so the PATCH doesn't clobber them (the backend updates
+  // prompt_templates whenever the field is present).
+  function persistTextTemplates(next: GenerateTextTemplate[]) {
+    setUserTextTemplates(next)
+    if (user?.id) {
+      saveTemplates.mutate({
+        userId: user.id,
+        promptTemplates: userPromptTemplates,
+        textTemplates: next,
+      })
+    }
+  }
+
   function handleSaveAsTemplate() {
-    const suggested = data.userInput?.trim().split("\n")[0]?.slice(0, 60) || "My Template"
-    const label = window.prompt("Name this template:", suggested)?.trim()
+    const suggested = data.userInput?.trim().split("\n")[0]?.slice(0, 60) || "My Preset"
+    const label = window.prompt("Name this preset:", suggested)?.trim()
     if (!label) return
-    const next: GenerateTextTemplate[] = [
+    persistTextTemplates([
       ...userTextTemplates,
       {
         id: crypto.randomUUID(),
@@ -153,17 +171,34 @@ export function LLMChatConfig({ data, onUpdate, sources, fieldMappings, onMapFie
         ...(data.maxTokens ? { defaultMaxTokens: data.maxTokens } : {}),
         ...(data.llmModel ? { llmModel: data.llmModel } : {}),
       },
-    ]
-    setUserTextTemplates(next)
-    if (user?.id) {
-      // Re-send the already-saved prompt templates so this PATCH doesn't clobber
-      // them (the backend updates prompt_templates whenever the field is present).
-      saveTemplates.mutate({
-        userId: user.id,
-        promptTemplates: userPromptTemplates,
-        textTemplates: next,
-      })
-    }
+    ])
+  }
+
+  // Override the currently-selected user template with the panel's current
+  // System Prompt + settings (in place — keeps the same id + label).
+  function handleUpdateTemplate() {
+    if (!isUserTemplate) return
+    persistTextTemplates(
+      userTextTemplates.map((t) =>
+        t.id === templateId
+          ? {
+              ...t,
+              systemPrompt: data.systemPrompt,
+              ...(data.maxTokens ? { defaultMaxTokens: data.maxTokens } : {}),
+              ...(data.llmModel ? { llmModel: data.llmModel } : {}),
+            }
+          : t,
+      ),
+    )
+  }
+
+  // Delete the currently-selected user template and fall back to Custom.
+  function handleDeleteTemplate() {
+    if (!isUserTemplate) return
+    const tpl = userTextTemplates.find((t) => t.id === templateId)
+    if (!window.confirm(`Delete the preset "${tpl?.label ?? "Untitled"}"? This can't be undone.`)) return
+    persistTextTemplates(userTextTemplates.filter((t) => t.id !== templateId))
+    onUpdate({ templateId: "custom" })
   }
 
   // Progress for the "Generate All" fan-out button (mirrors the former AI Agent).
@@ -184,24 +219,53 @@ export function LLMChatConfig({ data, onUpdate, sources, fieldMappings, onMapFie
 
   return (
     <>
-      {/* Template Selector — built-in presets + the user's saved templates */}
+      {/* Preset Selector — built-in presets + the user's saved presets */}
       <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm space-y-3">
-        <div className="flex items-center justify-between">
-          <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">Template</Label>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-7 text-xs"
-            onClick={handleSaveAsTemplate}
-            disabled={!data.systemPrompt?.trim()}
-          >
-            <BookmarkPlus className="w-3 h-3 mr-1" />
-            Save as template
-          </Button>
+        <div className="flex items-center justify-between gap-2">
+          <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">Preset</Label>
+          <div className="flex items-center gap-1">
+            {isUserTemplate && (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={handleUpdateTemplate}
+                  disabled={!data.systemPrompt?.trim()}
+                  title="Save your current edits back to this preset"
+                >
+                  <Save className="w-3 h-3 mr-1" />
+                  Update
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 w-7 p-0 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                  onClick={handleDeleteTemplate}
+                  title="Delete this preset"
+                  aria-label="Delete preset"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </Button>
+              </>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={handleSaveAsTemplate}
+              disabled={!data.systemPrompt?.trim()}
+            >
+              <BookmarkPlus className="w-3 h-3 mr-1" />
+              Save as preset
+            </Button>
+          </div>
         </div>
         <select
-          aria-label="Template"
+          aria-label="Preset"
           value={templateId}
           onChange={(e) => handleTemplateChange(e.target.value)}
           className="w-full rounded-md border border-gray-200 dark:border-[#2D2D2D] bg-[#F8FAFC] dark:bg-[#121212] px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff0073]/30 focus:border-[#ff0073]"
@@ -214,7 +278,7 @@ export function LLMChatConfig({ data, onUpdate, sources, fieldMappings, onMapFie
             ))}
           </optgroup>
           {userTextTemplates.length > 0 && (
-            <optgroup label="My Templates">
+            <optgroup label="My Presets">
               {userTextTemplates.map((tpl) => (
                 <option key={tpl.id} value={tpl.id}>
                   {tpl.label || "Untitled"}
@@ -249,8 +313,8 @@ export function LLMChatConfig({ data, onUpdate, sources, fieldMappings, onMapFie
         />
       </div>
 
-      {/* System Prompt */}
-      <MappableField field="systemPrompt" label="System Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="llm-chat" currentPrompt={data.systemPrompt || ""} onAccept={(prompt) => onUpdate({ systemPrompt: prompt })} />}>
+      {/* Instructions (System Prompt) */}
+      <MappableField field="systemPrompt" label="Instructions (System Prompt)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="llm-chat" currentPrompt={data.systemPrompt || ""} onAccept={(prompt) => onUpdate({ systemPrompt: prompt })} />}>
         <Textarea
           rows={4}
           value={data.systemPrompt}

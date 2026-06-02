@@ -261,7 +261,7 @@ export function GenerateVideoQuickToolbar({
             onClick={(e) => e.stopPropagation()}
           >
             <ToolbarSetting label="Model" icon={<Sparkles className="w-3 h-3" />}>
-              <ModelSearchSelect
+              <ModelSearchSelect disabled={isRunning}
                 value={currentProvider}
                 onChange={handleModelChange}
                 onOpenChange={handleOpenChange}
@@ -274,7 +274,7 @@ export function GenerateVideoQuickToolbar({
             </ToolbarSetting>
             {isSeedance2 && (
               <ToolbarSetting label="Mode" icon={<Layers className="w-3 h-3" />}>
-                <Select value={currentSeedance2Mode} onValueChange={handleSeedance2ModeChange} onOpenChange={handleOpenChange}>
+                <Select disabled={isRunning} value={currentSeedance2Mode} onValueChange={handleSeedance2ModeChange} onOpenChange={handleOpenChange}>
                   <SelectTrigger className={ghostPopoverTriggerClass}>
                     <SelectValue />
                   </SelectTrigger>
@@ -287,7 +287,7 @@ export function GenerateVideoQuickToolbar({
             )}
             {aspectOptions.length > 0 && (
               <ToolbarSetting label="Aspect" icon={<Ratio className="w-3 h-3" />}>
-                <Select value={currentAspect} onValueChange={handleAspectChange} onOpenChange={handleOpenChange}>
+                <Select disabled={isRunning} value={currentAspect} onValueChange={handleAspectChange} onOpenChange={handleOpenChange}>
                   <SelectTrigger className={ghostPopoverTriggerClass}>
                     <SelectValue />
                   </SelectTrigger>
@@ -321,7 +321,7 @@ export function GenerateVideoQuickToolbar({
             )}
             {resolutionOptions && resolutionOptions.length > 0 && (
               <ToolbarSetting label="Resolution" icon={<Maximize2 className="w-3 h-3" />}>
-                <Select value={currentResolution} onValueChange={handleResolutionChange} onOpenChange={handleOpenChange}>
+                <Select disabled={isRunning} value={currentResolution} onValueChange={handleResolutionChange} onOpenChange={handleOpenChange}>
                   <SelectTrigger className={ghostPopoverTriggerClass}>
                     <SelectValue />
                   </SelectTrigger>
@@ -336,7 +336,7 @@ export function GenerateVideoQuickToolbar({
               </ToolbarSetting>
             )}
             <ToolbarSetting label="Versions" icon={<Copy className="w-3 h-3" />}>
-              <Select value={String(repeatCount)} onValueChange={handleRepeatChange} onOpenChange={handleOpenChange}>
+              <Select disabled={isRunning} value={String(repeatCount)} onValueChange={handleRepeatChange} onOpenChange={handleOpenChange}>
                 <SelectTrigger className={ghostPopoverTriggerClass}>
                   <SelectValue />
                 </SelectTrigger>
@@ -351,7 +351,6 @@ export function GenerateVideoQuickToolbar({
             </ToolbarSetting>
           </PopoverContent>
         </Popover>
-        <PinkDot />
         <RunNodeButton
           nodeId={nodeId}
           credits={credits}
@@ -370,7 +369,7 @@ export function GenerateVideoQuickToolbar({
       onClick={(e) => e.stopPropagation()}
     >
       {/* Model selector */}
-      <ModelSearchSelect
+      <ModelSearchSelect disabled={isRunning}
         value={currentProvider}
         onChange={handleModelChange}
         onOpenChange={handleOpenChange}
@@ -385,7 +384,7 @@ export function GenerateVideoQuickToolbar({
 
       {/* Seedance 2 input mode (Frames vs References) — only when relevant */}
       {isSeedance2 && (
-        <Select value={currentSeedance2Mode} onValueChange={handleSeedance2ModeChange} onOpenChange={handleOpenChange}>
+        <Select disabled={isRunning} value={currentSeedance2Mode} onValueChange={handleSeedance2ModeChange} onOpenChange={handleOpenChange}>
           <SelectTrigger className={ghostTriggerClass} title="Input mode (Seedance 2)">
             <Layers className="opacity-70" />
             <SelectValue>{seedance2ModeLabel}</SelectValue>
@@ -399,7 +398,7 @@ export function GenerateVideoQuickToolbar({
 
       {/* Aspect ratio selector */}
       {aspectOptions.length > 0 && (
-        <Select value={currentAspect} onValueChange={handleAspectChange} onOpenChange={handleOpenChange}>
+        <Select disabled={isRunning} value={currentAspect} onValueChange={handleAspectChange} onOpenChange={handleOpenChange}>
           <SelectTrigger className={ghostTriggerClass}>
             <Ratio className="opacity-70" />
             <SelectValue>{aspectShort}</SelectValue>
@@ -435,7 +434,7 @@ export function GenerateVideoQuickToolbar({
 
       {/* Resolution selector (only when the provider exposes one) */}
       {resolutionOptions && resolutionOptions.length > 0 && (
-        <Select value={currentResolution} onValueChange={handleResolutionChange} onOpenChange={handleOpenChange}>
+        <Select disabled={isRunning} value={currentResolution} onValueChange={handleResolutionChange} onOpenChange={handleOpenChange}>
           <SelectTrigger className={ghostTriggerClass}>
             <Maximize2 className="opacity-70" />
             <SelectValue>{resolutionShort}</SelectValue>
@@ -451,7 +450,7 @@ export function GenerateVideoQuickToolbar({
       )}
 
       {/* Versions (×1–×4): how many results to generate per run. */}
-      <Select value={String(repeatCount)} onValueChange={handleRepeatChange} onOpenChange={handleOpenChange}>
+      <Select disabled={isRunning} value={String(repeatCount)} onValueChange={handleRepeatChange} onOpenChange={handleOpenChange}>
         <SelectTrigger className={ghostTriggerClass} title="Versions per run">
           <Copy className="opacity-70" />
           <SelectValue>× {repeatCount}</SelectValue>
@@ -465,7 +464,6 @@ export function GenerateVideoQuickToolbar({
         </SelectContent>
       </Select>
 
-      <PinkDot />
 
       {/* Run button — credits + run-multiplier already baked in. */}
       <RunNodeButton
@@ -506,17 +504,6 @@ function shortenLabel(label: string): string {
   return parenIdx > 0 ? label.slice(0, parenIdx) : label
 }
 
-/** 4px brand-pink dot used as a quiet visual divider between settings and
- *  the Run CTA. Replaces the explicit vertical hairline — keeps the eye
- *  moving rightward while planting the accent color near the action. */
-function PinkDot() {
-  return (
-    <span
-      aria-hidden
-      className="w-1 h-1 rounded-full bg-[#ff0073] mx-1.5 shrink-0"
-    />
-  )
-}
 
 /** Row inside the compact-mode popover: small icon + label on top, full-
  *  width select underneath. Mirrors the config-panel field rhythm. */

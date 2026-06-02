@@ -78,7 +78,7 @@ describe("useWorkflowStore", () => {
       expect(state.nodes).toHaveLength(1)
       expect(state.nodes[0].type).toBe("text-prompt")
       expect(state.nodes[0].position).toEqual({ x: 100, y: 200 })
-      expect(state.nodes[0].data.label).toBe("Text Prompt")
+      expect(state.nodes[0].data.label).toBe("Text")
       expect(state.isDirty).toBe(true)
     })
 

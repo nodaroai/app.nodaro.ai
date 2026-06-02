@@ -456,10 +456,12 @@ function BaseNodeComponent({
           {toolbarActions}
         </div>
       </NodeToolbar>
-      {/* Content above card (e.g. thumbnail gallery) */}
+      {/* Content above card (e.g. thumbnail gallery) — floats 4px higher than
+          the card's top edge gap (-translate-y-6 = 24px vs the prior 20px) so
+          the results strip clears the node with a touch more breathing room. */}
       {bottomToolbarContent && isHovered && (
         <div className="relative">
-          <div className="absolute left-0 right-0 bottom-0 -translate-y-5 z-50 flex justify-center">
+          <div className="absolute left-0 right-0 bottom-0 -translate-y-6 z-50 flex justify-center">
             {bottomToolbarContent}
           </div>
         </div>
@@ -580,7 +582,7 @@ function BaseNodeComponent({
     </div>
       {/* Content below card (e.g. run button) */}
       {topToolbarContent && (
-        <NodeToolbar align="center" isVisible={isHovered || !!keepTopToolbarVisible} position={Position.Bottom} offset={4}>
+        <NodeToolbar align="center" isVisible={isHovered || !!keepTopToolbarVisible || isRunning || isPending} position={Position.Bottom} offset={4}>
           <div
             // The bottom toolbar renders in a portal outside the node's DOM
             // subtree, so hovering it doesn't trigger the node's

@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-05-31T06:03:25.171Z
-generated_from: 7456f4bd
+generated_at: 2026-06-01T20:05:20.439Z
+generated_from: c8fd1e03
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -193,7 +193,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `teleport-receive` — Teleport Receive
 - `teleport-send` — Teleport Send
 - `temporal` — Temporal
-- `text-prompt` — Text Prompt
+- `text-prompt` — Text
 - `text-to-audio` — Text to Audio
 - `text-to-dialogue` — Text to Dialogue
 - `text-to-speech` — Text to Speech

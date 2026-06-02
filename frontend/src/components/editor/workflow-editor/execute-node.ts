@@ -69,7 +69,7 @@ import {
   executeReduce,
 } from "@/lib/api";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
-import { ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, MODEL_CATALOG, splitGeneratedItems } from "@nodaro/shared";
+import { ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, MODEL_CATALOG, splitGeneratedItems, LLM_FEATURE_DEFAULTS } from "@nodaro/shared";
 import { getGenerateTextTemplate } from "@/lib/generate-text-templates";
 import { buildScenePrompt } from "@/lib/prompt-builder";
 import type {
@@ -186,6 +186,7 @@ import { collectPreviewItems } from "./preview-items";
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
 import { resolveFieldMappings, NODE_MAPPABLE_FIELDS } from "./resolve-field-mappings";
 import { pollJobWithNodeUpdate, guardedToast } from "./poll-job";
+import { shouldAbandonNode } from "./abandon-guard";
 import {
   runImageGeneration,
   runEditImage,
@@ -2904,6 +2905,16 @@ export function executeNode(
                   updateProgressIfChanged(node.id, job.progress, updateNodeData);
                 }
 
+                if (job.status === "completed" || job.status === "failed") {
+                  if (shouldAbandonNode(node.id, jobId)) {
+                    // Run discarded/replaced — the job still lands in My
+                    // Library, but we must not write its result/error to canvas.
+                    ctx.untrackInterval(poll);
+                    resolve("");
+                    return;
+                  }
+                }
+
                 if (job.status === "completed") {
                   ctx.untrackInterval(poll);
                   const alignment = (job.output_data as Record<string, unknown>)?.alignment as Array<{ word: string; start: number; end: number }> | undefined;
@@ -2931,6 +2942,11 @@ export function executeNode(
                 pollFailures++;
                 if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
                   ctx.untrackInterval(poll);
+                  if (shouldAbandonNode(node.id, jobId)) {
+                    // Run discarded/replaced — don't write a failure to canvas.
+                    resolve("");
+                    return;
+                  }
                   updateNodeData(node.id, {
                     executionStatus: "failed",
                     currentJobId: undefined,
@@ -3135,6 +3151,16 @@ export function executeNode(
                   updateProgressIfChanged(node.id, job.progress, updateNodeData);
                 }
 
+                if (job.status === "completed" || job.status === "failed") {
+                  if (shouldAbandonNode(node.id, jobId)) {
+                    // Run discarded/replaced — the job still lands in My
+                    // Library, but we must not write its result/error to canvas.
+                    ctx.untrackInterval(poll);
+                    resolve("");
+                    return;
+                  }
+                }
+
                 if (job.status === "completed") {
                   ctx.untrackInterval(poll);
                   const lyrics = (job.output_data as Record<string, unknown>)
@@ -3176,6 +3202,11 @@ export function executeNode(
                 pollFailures++;
                 if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
                   ctx.untrackInterval(poll);
+                  if (shouldAbandonNode(node.id, jobId)) {
+                    // Run discarded/replaced — don't write a failure to canvas.
+                    resolve("");
+                    return;
+                  }
                   updateNodeData(node.id, {
                     executionStatus: "failed",
                     currentJobId: undefined,
@@ -3580,6 +3611,15 @@ export function executeNode(
                 if (job.status === "processing" && job.progress != null) {
                   updateProgressIfChanged(node.id, job.progress, updateNodeData);
                 }
+                if (job.status === "completed" || job.status === "failed") {
+                  if (shouldAbandonNode(node.id, jobId)) {
+                    // Run discarded/replaced — the job still lands in My
+                    // Library, but we must not write its result/error to canvas.
+                    ctx.untrackInterval(poll);
+                    resolve("");
+                    return;
+                  }
+                }
                 if (job.status === "completed") {
                   ctx.untrackInterval(poll);
                   const text = job.output_data?.text as string | undefined;
@@ -3650,6 +3690,11 @@ export function executeNode(
                 pollFailures++;
                 if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
                   ctx.untrackInterval(poll);
+                  if (shouldAbandonNode(node.id, jobId)) {
+                    // Run discarded/replaced — don't write a failure to canvas.
+                    resolve("");
+                    return;
+                  }
                   updateNodeData(node.id, {
                     executionStatus: "failed",
                     currentJobId: undefined,
@@ -3814,6 +3859,8 @@ export function executeNode(
       temperature: chatData.temperature ?? 0.7,
       maxTokens: chatData.maxTokens ?? 2048,
       llmModel: chatData.llmModel,
+      // Stop button → aborts this stream mid-flight (cancels the SSE fetch).
+      signal: ctx.signal,
       onToken: (token) => {
         const fresh = useWorkflowStore
           .getState()
@@ -3837,6 +3884,11 @@ export function executeNode(
           userPrompt: userInput,
           listValue: listValue || undefined,
           runId: runId ?? "manual",
+          // Record what actually produced this result so the node + execution
+          // log can show the model and template per result (the config may
+          // change between runs). Falls back to the llm-chat default model.
+          model: chatData.llmModel || LLM_FEATURE_DEFAULTS["llm-chat"],
+          templateId: chatData.templateId || "custom",
         };
         updateNodeData(node.id, {
           executionStatus: "completed",
@@ -3851,6 +3903,12 @@ export function executeNode(
         return result.generatedText ?? "";
       })
       .catch((err: Error) => {
+        // User pressed Stop → the stream's fetch was aborted. Not a failure:
+        // the Stop handler already restored the node (last result / idle), so
+        // don't overwrite it with a "Failed" state or a toast.
+        if (err?.name === "AbortError" || ctx.signal?.aborted) {
+          return "";
+        }
         updateNodeData(node.id, {
           executionStatus: "failed",
           errorMessage: err.message || "Generate Text failed",
@@ -4441,6 +4499,12 @@ export function executeNode(
           // failed take(s) will be refunded by the worker's standard flow.
           Promise.all(jobIds.map(pollOne))
             .then((results) => {
+              if (shouldAbandonNode(node.id, jobIds[0])) {
+                // Run discarded/replaced — the jobs still land in My Library,
+                // but we must not write their result onto the canvas.
+                resolve("");
+                return;
+              }
               const primary = results[0];
               const newResults: GeneratedResult[] = results.map((r) => ({
                 url: r.url,
@@ -4465,6 +4529,11 @@ export function executeNode(
               resolve(primary.url);
             })
             .catch((err) => {
+              if (shouldAbandonNode(node.id, jobIds[0])) {
+                // Run discarded/replaced — don't write a failure onto the canvas.
+                resolve("");
+                return;
+              }
               const errMsg = err instanceof Error ? err.message : "Unknown error";
               updateNodeData(node.id, {
                 executionStatus: "failed",
@@ -4556,6 +4625,15 @@ export function executeNode(
                 if (job.status === "processing" && job.progress != null) {
                   updateProgressIfChanged(node.id, job.progress, updateNodeData);
                 }
+                if (job.status === "completed" || job.status === "failed") {
+                  if (shouldAbandonNode(node.id, jobId)) {
+                    // Run discarded/replaced — the job still lands in My
+                    // Library, but we must not write its result/error to canvas.
+                    ctx.untrackInterval(poll);
+                    resolve("");
+                    return;
+                  }
+                }
                 if (job.status === "completed") {
                   ctx.untrackInterval(poll);
                   const od = (job.output_data ?? {}) as Record<string, unknown>;
@@ -4609,6 +4687,11 @@ export function executeNode(
                 pollFailures++;
                 if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
                   ctx.untrackInterval(poll);
+                  if (shouldAbandonNode(node.id, jobId)) {
+                    // Run discarded/replaced — don't write result/failure to canvas.
+                    resolve("");
+                    return;
+                  }
                   // Final verification: the job may have completed while polling was failing
                   try {
                     const finalJob = await getJobStatusLean(jobId);
@@ -4808,6 +4891,16 @@ export function executeNode(
           try {
             const job = await getJobStatusLean(jobId);
             if (job.progress != null) updateProgressIfChanged(node.id, job.progress, updateNodeData);
+            if (job.status === "completed" || job.status === "failed") {
+              if (shouldAbandonNode(node.id, jobId)) {
+                // Run discarded/replaced — the job still lands in My Library,
+                // but we must not write its result/error onto the canvas (nor
+                // spawn the per-chunk upload nodes).
+                clearInterval(poll);
+                resolve("");
+                return;
+              }
+            }
             if (job.status === "completed") {
               clearInterval(poll);
               const od = job.output_data as Record<string, unknown>;
@@ -4860,6 +4953,11 @@ export function executeNode(
             }
           } catch {
             clearInterval(poll);
+            if (shouldAbandonNode(node.id, jobId)) {
+              // Run discarded/replaced — don't write a failure to the canvas.
+              resolve("");
+              return;
+            }
             updateNodeData(node.id, { executionStatus: "failed", currentJobId: undefined });
             reject(new Error("Polling failed"));
           }

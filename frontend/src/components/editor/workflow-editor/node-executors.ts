@@ -28,6 +28,7 @@ import {
   type ExecutionContext,
 } from "./types";
 import { pollJobWithNodeUpdate, guardedToast } from "./poll-job";
+import { shouldAbandonNode } from "./abandon-guard";
 
 /** Extract kieTaskId from output data for downstream video chaining. */
 const extractKieTaskId = (od: Record<string, unknown>) => {
@@ -469,6 +470,15 @@ export function runScriptGeneration(
             try {
               const job = await getJobStatusLean(jobId);
               pollFailures = 0;
+              if (job.status === "completed" || job.status === "failed") {
+                if (shouldAbandonNode(nodeId, jobId)) {
+                  // Run discarded/replaced — the job still lands in My Library,
+                  // but we must not write its result/error onto the canvas.
+                  ctx.untrackInterval(poll);
+                  resolve("");
+                  return;
+                }
+              }
               if (job.status === "completed") {
                 ctx.untrackInterval(poll);
                 const script = job.output_data?.script as
@@ -519,6 +529,11 @@ export function runScriptGeneration(
               pollFailures++;
               if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
                 ctx.untrackInterval(poll);
+                if (shouldAbandonNode(nodeId, jobId)) {
+                  // Run discarded/replaced — don't write a failure to the canvas.
+                  resolve("");
+                  return;
+                }
                 updateNodeData(nodeId, {
                   executionStatus: "failed",
                   currentJobId: undefined,

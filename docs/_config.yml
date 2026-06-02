@@ -41,3 +41,7 @@ exclude:
   - Gemfile
   - Gemfile.lock
   - "*.gemspec"
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  - superpowers/

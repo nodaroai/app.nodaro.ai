@@ -55,7 +55,7 @@ const NODE_TYPE_LABELS: Record<string, string> = {
   "generate-script": "Generate Script",
   "image-to-text": "Image to Text",
   "transcribe": "Transcribe",
-  "text-prompt": "Text Prompt",
+  "text-prompt": "Text",
   "character": "Character",
   "location": "Location",
   "object": "Object",

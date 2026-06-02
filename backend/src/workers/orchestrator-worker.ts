@@ -476,7 +476,10 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
       .single()
 
     // A stalled re-pick of an already-finished execution must not re-run it.
-    if (execRow && ["completed", "failed", "cancelled"].includes(execRow.status as string)) {
+    // Includes every TERMINAL status (completed_at is set): re-running a
+    // discarded/timed-out run would re-execute nodes and re-charge credits for
+    // a run the user/system already closed.
+    if (execRow && ["completed", "failed", "cancelled", "timed_out", "discarded"].includes(execRow.status as string)) {
       console.log(
         `[orchestrator] Execution ${executionId} already ${execRow.status} — skipping re-run (stalled re-pick of a closed execution)`,
       )
@@ -724,6 +727,29 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
         })
         emitExecutionEvent({
           type: "execution:cancelled",
+          executionId,
+          nodeStates: { ...nodeStates },
+          completedNodes: completedCount,
+          failedNodes: failedCount,
+          totalCreditsUsed: totalCredits,
+        })
+        return
+      }
+
+      // "discarded" = Discard Run. Stop scheduling new levels, but DO NOT
+      // cancel in-flight jobs (they finish into My Library) and DO NOT rewrite
+      // the status to "cancelled" — the frontend needs the "discarded" status
+      // to detach the canvas. Deliberately a SEPARATE branch from
+      // cancelled||stopping: we don't set ctx.cancelled (so iteration tasks
+      // don't bail) and never call cancelJobAndThrow.
+      if (controlStatus === "discarded") {
+        await updateExecution(executionId, {
+          status: "discarded",
+          node_states: nodeStates,
+          completed_at: new Date().toISOString(),
+        })
+        emitExecutionEvent({
+          type: "execution:discarded",
           executionId,
           nodeStates: { ...nodeStates },
           completedNodes: completedCount,
@@ -1296,7 +1322,9 @@ function emitExecutionEvent(event: ExecutionEvent): void {
   }
 }
 
-export async function checkExecutionControl(executionId: string): Promise<"running" | "cancelled" | "stopping"> {
+export async function checkExecutionControl(
+  executionId: string,
+): Promise<"running" | "cancelled" | "stopping" | "discarded"> {
   const { data } = await supabase
     .from("workflow_executions")
     .select("status")
@@ -1305,5 +1333,6 @@ export async function checkExecutionControl(executionId: string): Promise<"runni
 
   if (data?.status === "cancelled") return "cancelled"
   if (data?.status === "stopping") return "stopping"
+  if (data?.status === "discarded") return "discarded"
   return "running"
 }

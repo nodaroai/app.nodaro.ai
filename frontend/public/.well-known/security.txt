@@ -1,0 +1,7 @@
+# Nodaro security contact (RFC 9116). See SECURITY.md for the full policy.
+Contact: mailto:security@nodaro.ai
+Contact: https://github.com/nodaroai/app.nodaro.ai/security/advisories/new
+Policy: https://github.com/nodaroai/app.nodaro.ai/blob/main/SECURITY.md
+Canonical: https://app.nodaro.ai/.well-known/security.txt
+Preferred-Languages: en
+Expires: 2027-05-31T00:00:00.000Z

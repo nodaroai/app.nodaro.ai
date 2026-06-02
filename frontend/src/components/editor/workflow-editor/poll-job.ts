@@ -4,6 +4,7 @@ import { getJobStatusLean, getExecutionEstimate } from "@/lib/api";
 import { calculateProgress } from "@nodaro/shared";
 import type { GeneratedResult } from "@/types/nodes";
 import { buildVariantResults } from "./variant-results";
+import { shouldAbandonNode } from "./abandon-guard";
 import {
   WorkflowStaleError,
   MAX_CONSECUTIVE_POLL_FAILURES,
@@ -228,6 +229,17 @@ export function pollJobWithNodeUpdate(
                 }
               }
 
+              if (job.status === "completed" || job.status === "failed") {
+                if (shouldAbandonNode(nodeId, jobId)) {
+                  // Run was discarded or replaced — the job still lands in My
+                  // Library, but we must not write its result/error onto the
+                  // canvas. Stop polling and resolve so the executor unwinds.
+                  ctx.untrackInterval(poll);
+                  resolve("");
+                  return;
+                }
+              }
+
               if (job.status === "completed") {
                 ctx.untrackInterval(poll);
                 if (!handleJobCompleted(job, nodeId, jobId, outputKey, label, extraOutputFields, updateNodeData, resolve)) {
@@ -257,9 +269,22 @@ export function pollJobWithNodeUpdate(
               pollFailures++;
               if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
                 ctx.untrackInterval(poll);
+                if (shouldAbandonNode(nodeId, jobId)) {
+                  // Run discarded/replaced — don't write a failure onto the
+                  // canvas; the job still lands in My Library.
+                  resolve("");
+                  return;
+                }
                 // Final verification: the job may have completed while polling was failing
                 try {
                   const job = await getJobStatusLean(jobId);
+                  // Re-check after the await: a discard/replace may have landed
+                  // while this final status request was in flight. Never write a
+                  // terminal result for a job the node no longer points at.
+                  if (shouldAbandonNode(nodeId, jobId)) {
+                    resolve("");
+                    return;
+                  }
                   if (job.status === "completed") {
                     if (handleJobCompleted(job, nodeId, jobId, outputKey, label, extraOutputFields, updateNodeData, resolve)) {
                       return;
