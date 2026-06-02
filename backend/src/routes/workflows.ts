@@ -408,6 +408,47 @@ export async function workflowRoutes(app: FastifyInstance) {
     return { data: toWorkflowFull(data) }
   })
 
+  // Public (share-by-link) read — NO auth (listed in auth.ts PUBLIC_ROUTES).
+  // OPT-IN ONLY: returns a workflow solely when its owner explicitly shared it
+  // (`settings.studio.shared === true`), and only a TRIMMED projection (no
+  // user_id / project_id / owner PII). Powers studio.nodaro.ai's read-only
+  // `/example/:id` viewer. An unshared or missing id 404s identically (no
+  // existence oracle). NOT user-scoped by design — sharing is by unguessable id.
+  app.get("/v1/public/workflows/:id", async (req, reply) => {
+    const params = parseWith(reply, workflowIdParams, req.params, "Invalid workflow ID")
+    if (!params) return
+
+    const { data, error } = await supabase
+      .from("workflows")
+      .select(WORKFLOW_FULL_COLS)
+      .eq("id", params.id)
+      .single()
+
+    if (error) {
+      if (error.code === PGRST_NOT_FOUND) return notFound(reply, "Workflow not found")
+      return internalError(reply, error.message)
+    }
+
+    const full = toWorkflowFull(data)
+    const settings = full.settings as { studio?: { shared?: unknown } } | null | undefined
+    if (settings?.studio?.shared !== true) {
+      // Not shared → indistinguishable from not-found (don't leak existence).
+      return notFound(reply, "Workflow not found")
+    }
+
+    // Trimmed public projection — only what the read-only viewer renders.
+    return {
+      data: {
+        id: full.id,
+        name: full.name,
+        thumbnailUrl: full.thumbnailUrl,
+        nodes: full.nodes,
+        edges: full.edges,
+        settings: full.settings,
+      },
+    }
+  })
+
   // Update workflow
   app.patch("/v1/workflows/:id", async (req, reply) => {
     const userId = authorize(req, reply, "workflows:write")
