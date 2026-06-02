@@ -118,7 +118,7 @@ const listCharactersQuery = z.object({
 })
 
 const SELECT_COLUMNS =
-  "id, user_id, node_id, project_id, name, description, gender, style, base_outfit, source_image_url, expressions, poses, lighting_variations, angles, body_angles, motions, voice, personality, lora_training_status, lora_replicate_version, lora_trigger_word, lora_trained_at, deleted_at, created_at, updated_at"
+  "id, user_id, node_id, project_id, name, description, gender, style, base_outfit, source_image_url, expressions, poses, lighting_variations, angles, body_angles, motions, voice, personality, canonical_description, lora_training_status, lora_replicate_version, lora_trigger_word, lora_trained_at, deleted_at, created_at, updated_at"
 
 type CharacterRow = {
   id: string
@@ -139,6 +139,7 @@ type CharacterRow = {
   motions: { name: string; url: string }[] | null
   voice: { voiceId: string; voiceName: string; traits: string } | null
   personality: { mood: string; speechStyle: string; movementStyle: string; behavioralNotes: string } | null
+  canonical_description: string | null
   lora_training_status: string | null
   lora_replicate_version: string | null
   lora_trigger_word: string | null
@@ -168,6 +169,7 @@ function toCamel(c: CharacterRow) {
     motions: c.motions,
     voice: c.voice,
     personality: c.personality,
+    canonicalDescription: c.canonical_description,
     loraTrainingStatus: c.lora_training_status,
     loraReplicateVersion: c.lora_replicate_version,
     loraTriggerWord: c.lora_trigger_word,
