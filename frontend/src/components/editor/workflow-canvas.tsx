@@ -430,6 +430,9 @@ function estimatePickerGridCols(btns: HTMLButtonElement[]): number {
 
 export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanvasProps) {
   const nodes = useWorkflowStore((s) => s.nodes)
+  const isReadOnly = useWorkflowStore((s) => s.isReadOnly)
+  const needsAutoLayout = useWorkflowStore((s) => s.needsAutoLayout)
+  const setNeedsAutoLayout = useWorkflowStore((s) => s.setNeedsAutoLayout)
   // React Flow v12 requires a parent (group) node to precede its children in
   // the array it receives, else the child renders at its local coords as if
   // absolute (teleports to ~origin) and warns. The store keeps insertion order
@@ -641,6 +644,38 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       requestAnimationFrame(() => fitView({ maxZoom: 1, minZoom: 0.5, padding: 0.2 }))
     }
   }, [nodes.length, savedViewport, setViewport, fitView])
+
+  // When a workflow loaded with positionless nodes (Studio exports), run a
+  // single ELK layered layout so the grid-fallback positions become a clean
+  // graph. Uses React Flow's setNodes (UI-level, not a store edit) so it works
+  // even on read-only workflows without marking dirty.
+  useEffect(() => {
+    if (!needsAutoLayout) return
+    let cancelled = false
+    void (async () => {
+      const rfNodes = getNodes()
+      const rfEdges = getEdges()
+      if (rfNodes.length === 0) { setNeedsAutoLayout(false); return }
+      try {
+        const elk = await getElk()
+        const layout = await elk.layout({
+          id: "root",
+          layoutOptions: { ...ELK_LAYOUT_OPTIONS },
+          children: rfNodes.map((n) => ({ id: n.id, width: n.measured?.width ?? 200, height: n.measured?.height ?? 120 })),
+          edges: rfEdges.map((e) => ({ id: e.id, sources: [e.source], targets: [e.target] })),
+        })
+        if (cancelled) return
+        const pos = new Map((layout.children ?? []).map((c) => [c.id, { x: c.x ?? 0, y: c.y ?? 0 }]))
+        setNodes((nds) => nds.map((n) => { const p = pos.get(n.id); return p ? { ...n, position: p } : n }))
+        requestAnimationFrame(() => fitView({ padding: 0.15, duration: 300 }))
+      } catch {
+        /* layout miss — grid fallback positions already prevent the crash */
+      } finally {
+        if (!cancelled) setNeedsAutoLayout(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [needsAutoLayout, getNodes, getEdges, setNodes, fitView, setNeedsAutoLayout])
 
   // Imperatively play/pause all canvas videos when toggle changes
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
@@ -2222,7 +2257,12 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
 
       <MobileCanvasContext.Provider value={mobileContextValue}>
       <CanvasZoomContext.Provider value={zoomContextValue}>
-      <div className="w-full h-full" onDragOver={handleDragOver} onDrop={handleDrop} onMouseMove={(e) => { lastMousePositionRef.current = { x: e.clientX, y: e.clientY } }}>
+      <div className="relative w-full h-full" onDragOver={handleDragOver} onDrop={handleDrop} onMouseMove={(e) => { lastMousePositionRef.current = { x: e.clientX, y: e.clientY } }}>
+        {isReadOnly && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 rounded-full border border-[#ff0073]/40 bg-background/90 px-4 py-1.5 text-xs text-muted-foreground shadow-sm backdrop-blur pointer-events-none">
+            Studio workflow — view only. Open in Studio to edit, or Clone &amp; Remix.
+          </div>
+        )}
         <ReactFlow
           nodes={orderedNodes}
           edges={visibleEdges}
@@ -2260,7 +2300,10 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           connectionDragThreshold={5}
           connectOnClick={isMobile}
           selectNodesOnDrag={!isMobile}
-          deleteKeyCode={["Delete", "Backspace"]}
+          nodesDraggable={!isReadOnly}
+          nodesConnectable={!isReadOnly}
+          edgesReconnectable={!isReadOnly}
+          deleteKeyCode={isReadOnly ? null : ["Delete", "Backspace"]}
           className={cn(
             "bg-background touch-manipulation",
             connectingFromType === "source" && "connecting-from-source",
