@@ -90,59 +90,60 @@ describe("ReplicateImageProvider.generateImage", () => {
     }))
   })
 
-  it("flux-2-klein forwards first ref image as `image`", async () => {
+  it("flux-2-klein forwards refs as an `images` array", async () => {
     await provider.generateImage("style", ["https://ref.png"], "flux-2-klein")
-    expect(mocks.mockCreate).toHaveBeenCalledWith(expect.objectContaining({
-      model: "black-forest-labs/flux-2-klein-9b",
-      input: expect.objectContaining({
-        prompt: "style",
-        image: "https://ref.png",
-      }),
+    const callArgs = mocks.mockCreate.mock.calls[0][0]
+    expect(callArgs.model).toBe("black-forest-labs/flux-2-klein-9b")
+    expect(callArgs.input).toEqual(expect.objectContaining({
+      prompt: "style",
+      images: ["https://ref.png"],
     }))
+    // flux-2-klein-9b's schema field is `images` (array, max 5) — the old
+    // single-string `image` field does not exist and is silently dropped.
+    expect(callArgs.input.image).toBeUndefined()
   })
 
-  it("kontext-multi maps up to 4 refs to input_image_1..4", async () => {
+  it("kontext-multi maps refs to input_image_1/2 only (model has no input_image_3+)", async () => {
     await provider.generateImage(
       "merge",
       ["https://a.png", "https://b.png", "https://c.png", "https://d.png"],
       "kontext-multi",
     )
-    expect(mocks.mockCreate).toHaveBeenCalledWith(expect.objectContaining({
-      model: "flux-kontext-apps/multi-image-kontext-pro",
-      input: expect.objectContaining({
-        prompt: "merge",
-        input_image_1: "https://a.png",
-        input_image_2: "https://b.png",
-        input_image_3: "https://c.png",
-        input_image_4: "https://d.png",
-        aspect_ratio: "1:1",
-        output_format: "png",
-      }),
+    const callArgs = mocks.mockCreate.mock.calls[0][0]
+    expect(callArgs.model).toBe("flux-kontext-apps/multi-image-kontext-pro")
+    expect(callArgs.input).toEqual(expect.objectContaining({
+      prompt: "merge",
+      input_image_1: "https://a.png",
+      input_image_2: "https://b.png",
+      aspect_ratio: "1:1",
+      output_format: "png",
     }))
+    // multi-image-kontext-pro only accepts input_image_1 + input_image_2;
+    // sending _3/_4 would be silently dropped by Replicate, so we must not.
+    expect(callArgs.input.input_image_3).toBeUndefined()
+    expect(callArgs.input.input_image_4).toBeUndefined()
   })
 
-  it("flux-2-pro maps refs to image_prompt_1..4 with safety_tolerance=5", async () => {
+  it("flux-2-pro maps refs to an input_images array with safety_tolerance=5", async () => {
     await provider.generateImage(
       "open-content scene",
       ["https://a.png", "https://b.png", "https://c.png", "https://d.png"],
       "flux-2-pro",
     )
-    expect(mocks.mockCreate).toHaveBeenCalledWith(expect.objectContaining({
-      model: "black-forest-labs/flux-2-pro",
-      input: expect.objectContaining({
-        prompt: "open-content scene",
-        image_prompt_1: "https://a.png",
-        image_prompt_2: "https://b.png",
-        image_prompt_3: "https://c.png",
-        image_prompt_4: "https://d.png",
-        aspect_ratio: "1:1",
-        output_format: "png",
-        safety_tolerance: 5,
-      }),
+    const callArgs = mocks.mockCreate.mock.calls[0][0]
+    expect(callArgs.model).toBe("black-forest-labs/flux-2-pro")
+    expect(callArgs.input).toEqual(expect.objectContaining({
+      prompt: "open-content scene",
+      input_images: ["https://a.png", "https://b.png", "https://c.png", "https://d.png"],
+      aspect_ratio: "1:1",
+      output_format: "png",
+      safety_tolerance: 5,
     }))
+    // Legacy per-index fields are not part of the real schema
+    expect(callArgs.input.image_prompt_1).toBeUndefined()
   })
 
-  it("flux-2-pro pure t2i (no refs) still sends safety_tolerance=5", async () => {
+  it("flux-2-pro pure t2i (no refs) still sends safety_tolerance=5 and no input_images", async () => {
     await provider.generateImage("solo prompt", undefined, "flux-2-pro")
     const callArgs = mocks.mockCreate.mock.calls[0][0]
     expect(callArgs.model).toBe("black-forest-labs/flux-2-pro")
@@ -152,43 +153,37 @@ describe("ReplicateImageProvider.generateImage", () => {
       output_format: "png",
       safety_tolerance: 5,
     }))
-    expect(callArgs.input.image_prompt_1).toBeUndefined()
-    expect(callArgs.input.image_prompt_2).toBeUndefined()
+    expect(callArgs.input.input_images).toBeUndefined()
   })
 
-  it("flux-2-max maps refs to image_prompt_1..8 with safety_tolerance=5", async () => {
+  it("flux-2-max maps refs to an input_images array with safety_tolerance=5", async () => {
     const refs = Array.from({ length: 8 }, (_, i) => `https://ref-${i + 1}.png`)
     await provider.generateImage("eight-ref scene", refs, "flux-2-max")
-    expect(mocks.mockCreate).toHaveBeenCalledWith(expect.objectContaining({
-      model: "black-forest-labs/flux-2-max",
-      input: expect.objectContaining({
-        prompt: "eight-ref scene",
-        image_prompt_1: "https://ref-1.png",
-        image_prompt_2: "https://ref-2.png",
-        image_prompt_3: "https://ref-3.png",
-        image_prompt_4: "https://ref-4.png",
-        image_prompt_5: "https://ref-5.png",
-        image_prompt_6: "https://ref-6.png",
-        image_prompt_7: "https://ref-7.png",
-        image_prompt_8: "https://ref-8.png",
-        aspect_ratio: "1:1",
-        output_format: "png",
-        safety_tolerance: 5,
-      }),
+    const callArgs = mocks.mockCreate.mock.calls[0][0]
+    expect(callArgs.model).toBe("black-forest-labs/flux-2-max")
+    expect(callArgs.input).toEqual(expect.objectContaining({
+      prompt: "eight-ref scene",
+      input_images: refs,
+      aspect_ratio: "1:1",
+      output_format: "png",
+      safety_tolerance: 5,
     }))
+    expect(callArgs.input.image_prompt_1).toBeUndefined()
   })
 
   it("flux-2-max caps refs at 8 when more are passed", async () => {
     const refs = Array.from({ length: 12 }, (_, i) => `https://r${i + 1}.png`)
     await provider.generateImage("overflow", refs, "flux-2-max")
     const callArgs = mocks.mockCreate.mock.calls[0][0]
-    expect(callArgs.input.image_prompt_8).toBe("https://r8.png")
+    const sent = callArgs.input.input_images as string[]
+    expect(sent).toHaveLength(8)
+    expect(sent[7]).toBe("https://r8.png")
     // Inputs 9..12 must NOT leak into the payload
-    expect(callArgs.input.image_prompt_9).toBeUndefined()
-    expect(callArgs.input.image_prompt_10).toBeUndefined()
+    expect(sent).not.toContain("https://r9.png")
+    expect(sent).not.toContain("https://r12.png")
   })
 
-  it("flux-2-max pure t2i (no refs) sends safety_tolerance=5 and no image_prompt_*", async () => {
+  it("flux-2-max pure t2i (no refs) sends safety_tolerance=5 and no input_images", async () => {
     await provider.generateImage("pure t2i", undefined, "flux-2-max")
     const callArgs = mocks.mockCreate.mock.calls[0][0]
     expect(callArgs.model).toBe("black-forest-labs/flux-2-max")
@@ -198,6 +193,23 @@ describe("ReplicateImageProvider.generateImage", () => {
       output_format: "png",
       safety_tolerance: 5,
     }))
+    expect(callArgs.input.input_images).toBeUndefined()
+  })
+
+  // Regression: a production job (flux-2-max + a single reference image +
+  // aspectRatio "1:1") completed but ignored the reference. buildInput wrote
+  // the ref to a non-existent `image_prompt_1` field; the real schema takes a
+  // single `input_images` array and Replicate silently drops unknown fields.
+  it("flux-2-max with a single ref + explicit aspect_ratio sends input_images and keeps the ratio", async () => {
+    await provider.generateImage(
+      "change color to green",
+      ["https://cdn.nodaro.ai/images/source.png"],
+      "flux-2-max",
+      { aspect_ratio: "1:1" },
+    )
+    const callArgs = mocks.mockCreate.mock.calls[0][0]
+    expect(callArgs.input.input_images).toEqual(["https://cdn.nodaro.ai/images/source.png"])
+    expect(callArgs.input.aspect_ratio).toBe("1:1")
     expect(callArgs.input.image_prompt_1).toBeUndefined()
   })
 
