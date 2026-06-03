@@ -44,6 +44,7 @@ export { ObjectsResource } from "./resources/objects.js"
 export { PipelinesResource } from "./resources/pipelines.js"
 export { ReduceResource } from "./resources/reduce.js"
 export { PromptHelperResource } from "./resources/prompt-helper.js"
+export { VoicesResource } from "./resources/voices.js"
 
 // --- Resource type definitions ---
 export type {
@@ -216,3 +217,10 @@ export type {
   RecommendedModel,
   WizardNodeContext,
 } from "@nodaro/shared"
+
+export type {
+  Voice,
+  SharedVoice,
+  VoiceLibraryParams,
+  VoiceLibraryResponse,
+} from "./resources/voices.js"
