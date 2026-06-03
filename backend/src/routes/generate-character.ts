@@ -191,6 +191,34 @@ export async function generateCharacterRoutes(app: FastifyInstance) {
       }
 
       // ──────────────────────────────────────────────────────────────────────
+      // Per-job creditOverride correction: the preHandler reserved the BATCH
+      // total (cost×count×markup) once; without resetting the override per job,
+      // the N-call reservation loop below would debit batchTotal×N (an N²
+      // over-charge). Mirror video-sfx: set the override to the per-JOB
+      // marked-up cost before each reserveCreditsForJob call.
+      //
+      // The per-job BASE is `getModelCreditBaseCost(modelIdentifier).creditCost`
+      // — identical to what computeCredits uses (it multiplies that same base
+      // by `count`), so per-job = computeCredits's base ÷ count. We then apply
+      // the SAME markup formula creditGuardImpl uses so the final per-job
+      // number matches what was checked.
+      //
+      // TODO(nodaro): extract a shared per-job-override helper — this block is
+      // duplicated 4 ways (video-sfx + generate-character/location/object).
+      // ──────────────────────────────────────────────────────────────────────
+      let perJobCreditOverride: number | undefined
+      if (hasCredits() && req.creditReservation) {
+        const { getModelCreditBaseCost } = await import("../ee/billing/credits.js")
+        const pricing = await getModelCreditBaseCost(modelIdentifier)
+        const { getAppSettings } = await import("../lib/app-settings.js")
+        const settings = await getAppSettings()
+        perJobCreditOverride =
+          settings.cost_markup_percent > 0 && pricing.creditCost > 0
+            ? Math.ceil(pricing.creditCost * (1 + settings.cost_markup_percent / 100))
+            : pricing.creditCost
+      }
+
+      // ──────────────────────────────────────────────────────────────────────
       // Phase 2A: Reserve credits for every job BEFORE enqueueing any.
       //
       // The preHandler already gated the full batch cost (computeCredits
@@ -203,10 +231,17 @@ export async function generateCharacterRoutes(app: FastifyInstance) {
       //     the row for job K itself on failure)
       // We DO NOT call videoQueue.add yet — that happens only in Phase 2B
       // after all reservations have succeeded.
+      //
+      // Per-job creditOverride correction (see comment above): reset
+      // `req.creditReservation.creditOverride` to the per-job number before
+      // each call so reserveCreditsForJobImpl debits per-job, not per-batch.
       // ──────────────────────────────────────────────────────────────────────
       type ReservationRecord = { jobId: string; usageLogId?: string }
       const reservations: ReservationRecord[] = []
       for (const jobId of insertedJobIds) {
+        if (req.creditReservation && perJobCreditOverride !== undefined) {
+          req.creditReservation.creditOverride = perJobCreditOverride
+        }
         const reservation = await reserveCreditsForJob(req, reply, jobId, modelIdentifier)
         if (reply.sent) {
           // Refund reservations that succeeded earlier in this batch.
