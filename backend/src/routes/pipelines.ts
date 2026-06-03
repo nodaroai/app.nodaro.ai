@@ -1575,7 +1575,7 @@ export async function pipelinesRoutes(app: FastifyInstance) {
   )
 
   // ── GET /v1/pipelines/:id/timeline ───────────────────────────────────────
-  // Phase 0 walking skeleton — assembles the data the studio view turns into a
+  // Phase 0 walking skeleton — assembles the data the pipeline view turns into a
   // Remotion SceneGraph: ordered scene composite clips + their durations, plus
   // the music + narration audio tracks. Reads the same scene metadata the
   // silent-cut reel uses (`scene_node_data.composite_video_url`) and the audio
@@ -1632,7 +1632,7 @@ export async function pipelinesRoutes(app: FastifyInstance) {
         sceneClips.push({ compositeUrl, durationSeconds })
       }
 
-      // Animate progress — per-SHOT, so the studio bar moves continuously
+      // Animate progress — per-SHOT, so the pipeline bar moves continuously
       // instead of jumping only when a whole scene composites. Each shot's video
       // is one `image-to-video` job; completed jobs + the in-flight job's
       // progress give a smooth percent over the total shot count.
@@ -1647,7 +1647,7 @@ export async function pipelinesRoutes(app: FastifyInstance) {
       // Partial progress across all in-flight shots, expressed in shots-worth
       // (each job's progress is 0-100). Dividing only by 100 — NOT by the
       // in-flight count — keeps each shot's contribution proportional, so the
-      // bar reflects reality when many shots animate in parallel (the studio's
+      // bar reflects reality when many shots animate in parallel (the pipeline's
       // default). Dividing by inFlight.length capped the whole parallel batch
       // at <1 shot and made the bar crawl.
       const inFlightFraction =

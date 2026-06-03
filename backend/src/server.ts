@@ -74,7 +74,7 @@ async function main() {
 
   // Start the Story→Video pipeline worker in-process too — opt-in via
   // PIPELINE_WORKER_INPROCESS=true. The workflow orchestrator above already
-  // runs in-process; enabling this lets `npm run dev` alone drive the studio
+  // runs in-process; enabling this lets `npm run dev` alone drive the pipeline
   // end-to-end in dev / self-host, with no separate `pipeline-worker` process
   // (the #1 "my film is stuck at queued" footgun). Leave it OFF in production,
   // where the worker runs as its own container process — running both would

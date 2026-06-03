@@ -7,7 +7,7 @@ import { pipelinesApi } from "@/lib/pipelines-api"
  * The director's chat stream (engine narration + the writer's messages), an
  * ACTIVE RENDER QUEUE, INTERACTIVE SUGGESTIONS cards, and a chat input wired
  * to the pipeline's Guided-mode chat (`postChat` on the script stage). The
- * narration `lines` are passed in from the studio's live SSE feed.
+ * narration `lines` are passed in from the pipeline's live SSE feed.
  */
 
 export interface DirectorLine {

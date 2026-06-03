@@ -29,17 +29,17 @@ import { usePipelineEvents } from "@/hooks/use-pipeline-events"
 import { buildSceneGraphFromPipeline } from "@remotion-pkg/lib/build-scene-graph-from-pipeline"
 import type { SceneGraph } from "@remotion-pkg/scene-graph"
 import { SceneGraphPlayerPreview } from "@/components/editor/scene-graph-player-preview"
-import { ComposerSpec } from "@/components/studio/composer-spec"
-import { ClipEditor } from "@/components/studio/clip-editor"
-import { CinemaTopBar, FlowGraphModal } from "@/components/studio/cinema-top-bar"
-import { AiDirectorPanel } from "@/components/studio/ai-director-panel"
-import { ReelPipeline } from "@/components/studio/reel-pipeline"
+import { ComposerSpec } from "@/components/pipeline/composer-spec"
+import { ClipEditor } from "@/components/pipeline/clip-editor"
+import { CinemaTopBar, FlowGraphModal } from "@/components/pipeline/cinema-top-bar"
+import { AiDirectorPanel } from "@/components/pipeline/ai-director-panel"
+import { ReelPipeline } from "@/components/pipeline/reel-pipeline"
 
 /**
- * Phase 0.x — the standalone "studio" tracer with per-stage CONTROL.
+ * Phase 0.x — the standalone "pipeline" tracer with per-stage CONTROL.
  *
  * The pipeline runs CHECKPOINTED (manual mode): it pauses at each gate so the
- * user decides before credits are spent. The studio renders a readable script,
+ * user decides before credits are spent. The pipeline renders a readable script,
  * a stage tracker, live artifacts, and a "Your turn" gate panel that drives the
  * engine's existing approval routes (approve stage / per-entity generate / skip
  * / approve / reject). Reuse-from-library + skip-script-critic are follow-ups.
@@ -310,7 +310,7 @@ function parseScreenplay(output: unknown): Screenplay | null {
 const PROMPT_PLACEHOLDER =
   'Describe your film — e.g. "A lighthouse keeper watches the sunrise"'
 
-function StudioPrompt({ onOpen }: { onOpen: (id: string) => void }) {
+function PipelinePrompt({ onOpen }: { onOpen: (id: string) => void }) {
   const [prompt, setPrompt] = useState("")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -395,7 +395,7 @@ function StudioPrompt({ onOpen }: { onOpen: (id: string) => void }) {
     <div className="flex h-full flex-col items-center gap-8 overflow-y-auto p-8">
       <div className="w-full max-w-xl">
         <h1 className="mb-2 text-lg font-medium text-foreground">
-          Nodaro Cinema — Studio
+          Nodaro Cinema — Pipeline
         </h1>
         <p className="mb-4 text-sm text-muted-foreground">
           Type a prompt; the director drafts a film and pauses at each step so
@@ -1432,7 +1432,7 @@ function Lightbox({
   )
 }
 
-function StudioSession({ pipelineId }: { pipelineId: string }) {
+function PipelineSession({ pipelineId }: { pipelineId: string }) {
   const { lastEvent, connected } = usePipelineEvents(pipelineId)
   const navigate = useNavigate()
   const [lines, setLines] = useState<NarrationLine[]>([])
@@ -1808,7 +1808,7 @@ function StudioSession({ pipelineId }: { pipelineId: string }) {
         credits={credits}
         running={!isTerminal}
         onStop={() => void stop()}
-        onNewFilm={() => navigate("/studio")}
+        onNewFilm={() => navigate("/Pipeline")}
       />
 
       <div className="flex flex-1 overflow-hidden">
@@ -2062,13 +2062,13 @@ npm run pipeline-worker:dev
   )
 }
 
-export default function StudioPage() {
+export default function PipelinePage() {
   const params = useParams<{ pipelineId?: string }>()
   const navigate = useNavigate()
   const pipelineId = params.pipelineId
 
   if (!pipelineId) {
-    return <StudioPrompt onOpen={(id) => navigate(`/studio/${id}`)} />
+    return <PipelinePrompt onOpen={(id) => navigate(`/Pipeline/${id}`)} />
   }
-  return <StudioSession pipelineId={pipelineId} />
+  return <PipelineSession pipelineId={pipelineId} />
 }

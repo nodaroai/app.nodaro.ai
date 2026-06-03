@@ -123,7 +123,7 @@ export function LibraryDrawer({
         {tab === "featured" && (
           <>
             <p className="rounded-md border border-[#2a2a2a] p-2 font-mono text-[10px] text-muted-foreground">
-              <span className="text-[#ff0073]">ⓘ</span> App-provided studio standards. Click{" "}
+              <span className="text-[#ff0073]">ⓘ</span> App-provided pipeline standards. Click{" "}
               <span className="text-foreground">"Use in Shot"</span> to inject them instantly.
             </p>
             {featured.map((f) => (

@@ -2,7 +2,7 @@
  * Phase 3 cinematic — top bar (mockup, every screen).
  *
  * NODARO CINEMA logo · project name · PRO CONTROL / AUTOPILOT AR toggle ·
- * FLOW GRAPH · Gen-Credits · SHARE SLATE. Presentational; the studio owns the
+ * FLOW GRAPH · Gen-Credits · SHARE SLATE. Presentational; the pipeline owns the
  * mode + credits + handlers.
  */
 export function CinemaTopBar({

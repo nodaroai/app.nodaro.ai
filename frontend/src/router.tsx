@@ -19,7 +19,7 @@ import ProjectPage from "@/routes/project-page"
 
 // Lazy-loaded routes — not needed for initial /projects page load
 const WorkflowEditorPage = lazy(() => import("@/routes/workflow-editor-page"))
-const StudioPage = lazy(() => import("@/routes/studio-page"))
+const PipelinePage = lazy(() => import("@/routes/pipeline-page"))
 const BillingPage = lazy(() => import("@/ee/app/(dashboard)/billing/page"))
 const SettingsPage = lazy(() => import("@/app/(dashboard)/settings/page"))
 const LibraryPage = lazy(() => import("@/app/(dashboard)/library/page"))
@@ -194,12 +194,12 @@ export const router = createBrowserRouter([
         element: <SuspenseWrapper><WorkflowEditorPage /></SuspenseWrapper>,
       },
       {
-        path: "/studio",
-        element: <SuspenseWrapper><StudioPage /></SuspenseWrapper>,
+        path: "/Pipeline",
+        element: <SuspenseWrapper><PipelinePage /></SuspenseWrapper>,
       },
       {
-        path: "/studio/:pipelineId",
-        element: <SuspenseWrapper><StudioPage /></SuspenseWrapper>,
+        path: "/Pipeline/:pipelineId",
+        element: <SuspenseWrapper><PipelinePage /></SuspenseWrapper>,
       },
       {
         path: "/billing",
