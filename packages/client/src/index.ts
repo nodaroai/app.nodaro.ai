@@ -221,6 +221,7 @@ export type {
 export type {
   Voice,
   SharedVoice,
+  VoiceClone,
   VoiceLibraryParams,
   VoiceLibraryResponse,
 } from "./resources/voices.js"

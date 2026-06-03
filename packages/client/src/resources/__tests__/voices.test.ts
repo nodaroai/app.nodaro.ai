@@ -45,4 +45,42 @@ describe("voices resource", () => {
     expect(url).not.toContain("gender=")
     expect(url).not.toContain("undefined")
   })
+
+  it("listClones() GETs /v1/voice-clones and unwraps voiceClones[]", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockOk({
+        voiceClones: [
+          { id: "vc1", name: "My Voice", elevenlabsVoiceId: "el1", sampleAudioUrl: "https://r2/a.mp3", createdAt: "2026-06-01T00:00:00Z" },
+        ],
+      }),
+    )
+    const c = make(fetchMock)
+    const out = await c.voices.listClones()
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/voice-clones")
+    expect((fetchMock.mock.calls[0][1] as { method: string }).method).toBe("GET")
+    expect(out).toEqual([
+      { id: "vc1", name: "My Voice", elevenlabsVoiceId: "el1", sampleAudioUrl: "https://r2/a.mp3", createdAt: "2026-06-01T00:00:00Z" },
+    ])
+  })
+
+  it("createClone() POSTs /v1/voice-clones/from-url with a JSON { name, audioUrl } body", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockOk({ id: "vc2", name: "Cloned", elevenlabsVoiceId: "el2", sampleAudioUrl: "https://r2/b.mp3", createdAt: "2026-06-02T00:00:00Z", jobId: "j1" }),
+    )
+    const c = make(fetchMock)
+    const out = await c.voices.createClone({ name: "Cloned", audioUrl: "https://r2/b.mp3" })
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/voice-clones/from-url")
+    const init = fetchMock.mock.calls[0][1] as { method: string; body: string }
+    expect(init.method).toBe("POST")
+    expect(JSON.parse(init.body)).toEqual({ name: "Cloned", audioUrl: "https://r2/b.mp3" })
+    expect(out.elevenlabsVoiceId).toBe("el2")
+  })
+
+  it("deleteClone() DELETEs /v1/voice-clones/:id", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk(undefined))
+    const c = make(fetchMock)
+    await c.voices.deleteClone("vc1")
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/voice-clones/vc1")
+    expect((fetchMock.mock.calls[0][1] as { method: string }).method).toBe("DELETE")
+  })
 })

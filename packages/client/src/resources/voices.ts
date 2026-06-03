@@ -1,16 +1,18 @@
-import type { Voice, VoiceLibraryParams, VoiceLibraryResponse } from "@nodaro/shared"
+import type { Voice, VoiceClone, VoiceLibraryParams, VoiceLibraryResponse } from "@nodaro/shared"
 import type { NodaroClient } from "../client.js"
 
 /**
  * Re-export the shared voice types so SDK consumers don't have to add
- * `@nodaro/shared` as a second dependency just to type a `Voice` row or a
- * `searchLibrary` call. Single source of truth lives in `@nodaro/shared`.
+ * `@nodaro/shared` as a second dependency just to type a `Voice` row, a
+ * `VoiceClone`, or a `searchLibrary` call. Single source of truth lives in
+ * `@nodaro/shared`.
  */
-export type { Voice, SharedVoice, VoiceLibraryParams, VoiceLibraryResponse } from "@nodaro/shared"
+export type { Voice, SharedVoice, VoiceClone, VoiceLibraryParams, VoiceLibraryResponse } from "@nodaro/shared"
 
 /**
  * Read access to ElevenLabs voices: the premade catalog plus the shared
- * community Voice Library. Both routes are public GETs (no body).
+ * community Voice Library (both public GETs, no body), and the signed-in
+ * user's own voice clones (list / create-from-url / delete).
  */
 export class VoicesResource {
   constructor(private client: NodaroClient) {}
@@ -36,5 +38,29 @@ export class VoicesResource {
       if (v !== undefined && v !== null && v !== "") query[k] = v as string | number | boolean
     }
     return this.client.request("GET", "/v1/voices/library", { query })
+  }
+
+  /**
+   * List the signed-in user's voice clones (`GET /v1/voice-clones`). The route
+   * wraps the rows in `{ voiceClones }`; we unwrap to the bare array.
+   */
+  async listClones(): Promise<VoiceClone[]> {
+    const res = await this.client.request<{ voiceClones: VoiceClone[] }>("GET", "/v1/voice-clones")
+    return res.voiceClones
+  }
+
+  /**
+   * Clone a voice from an already-uploaded audio URL
+   * (`POST /v1/voice-clones/from-url`). Costs credits. Returns the create
+   * subset of `VoiceClone` (`elevenlabsVoiceId` is the id to use at
+   * text-to-speech time).
+   */
+  createClone(input: { name: string; audioUrl: string }): Promise<VoiceClone> {
+    return this.client.request<VoiceClone>("POST", "/v1/voice-clones/from-url", { body: input })
+  }
+
+  /** Delete one of the user's voice clones (`DELETE /v1/voice-clones/:id`). */
+  async deleteClone(id: string): Promise<void> {
+    await this.client.request<void>("DELETE", `/v1/voice-clones/${encodeURIComponent(id)}`)
   }
 }
