@@ -45,3 +45,26 @@ export interface VoiceLibraryResponse {
   voices: SharedVoice[]
   hasMore: boolean
 }
+
+/**
+ * A user voice clone. `GET /v1/voice-clones` returns the full shape; the create
+ * response (`POST /v1/voice-clones/from-url`) returns only `id, name,
+ * elevenlabsVoiceId, sampleAudioUrl, createdAt` (+ a credit-tracking `jobId`),
+ * so the list-only fields are optional here. `elevenlabsVoiceId` is the id that
+ * resolves the clone at text-to-speech time (use it as the selected voiceId).
+ */
+export interface VoiceClone {
+  id: string
+  name: string
+  elevenlabsVoiceId: string
+  sampleAudioUrl: string
+  createdAt: string
+  /** Present on the list response; absent on the create response. */
+  description?: string | null
+  previewUrl?: string | null
+  gender?: string | null
+  accent?: string | null
+  updatedAt?: string
+  /** Only on the create response (credit-tracking); never on the list. */
+  jobId?: string
+}
