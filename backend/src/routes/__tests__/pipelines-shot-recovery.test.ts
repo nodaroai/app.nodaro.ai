@@ -533,3 +533,173 @@ describe("POST /v1/pipelines/:id/shots/:scene_id/:shot_id/retry-video-generation
     await app.close()
   })
 })
+
+// ---------------------------------------------------------------------------
+// Phase 3 — per-shot creative edit (Focus composer save)
+// ---------------------------------------------------------------------------
+
+describe("POST /v1/pipelines/:id/scenes/:scene_id/shots/:shot_id/edit", () => {
+  const editUrl = (sceneId: string, shotId: string) =>
+    `/v1/pipelines/${PIPELINE_ID}/scenes/${sceneId}/shots/${shotId}/edit`
+
+  it("404 not_found when the pipeline isn't owned by the caller", async () => {
+    seedSceneWithFailedShot()
+    const app = await makeApp(OTHER_USER_ID)
+    const res = await app.inject({
+      method: "POST",
+      url: editUrl(SCENE_ID, SHOT_ID),
+      payload: { motion_prompt: "x" },
+    })
+    expect(res.statusCode).toBe(404)
+    expect(res.json().error.code).toBe("not_found")
+    await app.close()
+  })
+
+  it("200 — edits whitelisted fields, preserves the rest (incl. orchestrator fields)", async () => {
+    seedSceneWithFailedShot()
+    const app = await makeApp()
+    const res = await app.inject({
+      method: "POST",
+      url: editUrl(SCENE_ID, SHOT_ID),
+      payload: { motion_prompt: "slow dolly in", duration_seconds: 7 },
+    })
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.ok).toBe(true)
+    expect(body.shot.motion_prompt).toBe("slow dolly in")
+    expect(body.shot.duration_seconds).toBe(7)
+    // Field-merge (not replace) — untouched fields survive:
+    expect(body.shot.action).toBe("Hero walks toward camera")
+    expect(body.shot.video_critic_failed).toBe(true)
+    // Persisted:
+    const stored = (_state.pipelineEntities.get(SCENE_ID)!.metadata as Record<string, unknown>)
+      .scene_node_data as { shots: Array<Record<string, unknown>> }
+    expect(stored.shots[0]!.motion_prompt).toBe("slow dolly in")
+    await app.close()
+  })
+
+  it("200 — merges camera nested without dropping sibling camera fields", async () => {
+    seedSceneWithFailedShot({ shotPatch: { camera: { shot_type: "wide", angle: "eye_level" } } })
+    const app = await makeApp()
+    const res = await app.inject({
+      method: "POST",
+      url: editUrl(SCENE_ID, SHOT_ID),
+      payload: { camera: { angle: "low" } },
+    })
+    expect(res.statusCode).toBe(200)
+    const cam = res.json().shot.camera
+    expect(cam.angle).toBe("low") // updated
+    expect(cam.shot_type).toBe("wide") // preserved
+    await app.close()
+  })
+
+  it("404 shot_not_found for an unknown shot_id", async () => {
+    seedSceneWithFailedShot()
+    const app = await makeApp()
+    const res = await app.inject({
+      method: "POST",
+      url: editUrl(SCENE_ID, "nonexistent_shot"),
+      payload: { motion_prompt: "x" },
+    })
+    expect(res.statusCode).toBe(404)
+    expect(res.json().error.code).toBe("shot_not_found")
+    await app.close()
+  })
+
+  it("400 empty_patch when no fields are provided", async () => {
+    seedSceneWithFailedShot()
+    const app = await makeApp()
+    const res = await app.inject({
+      method: "POST",
+      url: editUrl(SCENE_ID, SHOT_ID),
+      payload: {},
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("empty_patch")
+    await app.close()
+  })
+
+  it("400 validation_error on a non-whitelisted field (strict schema)", async () => {
+    seedSceneWithFailedShot()
+    const app = await makeApp()
+    const res = await app.inject({
+      method: "POST",
+      url: editUrl(SCENE_ID, SHOT_ID),
+      payload: { video_model: "veo3" },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+    await app.close()
+  })
+
+  it("409 scene_not_planned when the scene has no shots yet", async () => {
+    _state.pipelineEntities.set(SCENE_ID, {
+      id: SCENE_ID,
+      pipeline_id: PIPELINE_ID,
+      entity_type: "scene",
+      entity_key: "scene_01",
+      status: "pending",
+      metadata: {},
+    })
+    const app = await makeApp()
+    const res = await app.inject({
+      method: "POST",
+      url: editUrl(SCENE_ID, SHOT_ID),
+      payload: { motion_prompt: "x" },
+    })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe("scene_not_planned")
+    await app.close()
+  })
+
+  it("400 validation_error when duration exceeds the 8s shot cap", async () => {
+    seedSceneWithFailedShot()
+    const app = await makeApp()
+    const res = await app.inject({
+      method: "POST",
+      url: editUrl(SCENE_ID, SHOT_ID),
+      payload: { duration_seconds: 30 },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+    await app.close()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Phase 3 — keyframe re-roll (guards only; the gen path needs the media worker)
+// ---------------------------------------------------------------------------
+
+describe("POST /v1/pipelines/:id/scenes/:scene_id/shots/:shot_id/regenerate-keyframe", () => {
+  const rerollUrl = (sceneId: string, shotId: string) =>
+    `/v1/pipelines/${PIPELINE_ID}/scenes/${sceneId}/shots/${shotId}/regenerate-keyframe`
+
+  it("404 not_found when the pipeline isn't owned by the caller", async () => {
+    seedSceneWithFailedShot({ shotPatch: { visual_keyframe_prompt: "a lighthouse" } })
+    const app = await makeApp(OTHER_USER_ID)
+    const res = await app.inject({ method: "POST", url: rerollUrl(SCENE_ID, SHOT_ID) })
+    expect(res.statusCode).toBe(404)
+    expect(res.json().error.code).toBe("not_found")
+    await app.close()
+  })
+
+  it("404 shot_not_found for an unknown shot_id", async () => {
+    seedSceneWithFailedShot({ shotPatch: { visual_keyframe_prompt: "a lighthouse" } })
+    const app = await makeApp()
+    const res = await app.inject({ method: "POST", url: rerollUrl(SCENE_ID, "nope") })
+    expect(res.statusCode).toBe(404)
+    expect(res.json().error.code).toBe("shot_not_found")
+    await app.close()
+  })
+
+  it("409 shot_missing_keyframe_prompt when the shot has no keyframe prompt", async () => {
+    // Default seed shot has no visual_keyframe_prompt — the guard fires before
+    // any image generation is attempted.
+    seedSceneWithFailedShot()
+    const app = await makeApp()
+    const res = await app.inject({ method: "POST", url: rerollUrl(SCENE_ID, SHOT_ID) })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe("shot_missing_keyframe_prompt")
+    await app.close()
+  })
+})

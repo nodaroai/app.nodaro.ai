@@ -1,11 +1,67 @@
 import type { NodaroClient } from "../client.js"
 import type {
+  PipelineInput,
   PipelineStageName,
+  PipelineStatus,
+  PipelineMode,
+  SubGateName,
   ChatEnabledStage,
   ProposedChange,
 } from "@nodaro/shared"
 
-export type { PipelineStageName, ChatEnabledStage, ProposedChange }
+export type {
+  PipelineInput,
+  PipelineStageName,
+  PipelineStatus,
+  PipelineMode,
+  SubGateName,
+  ChatEnabledStage,
+  ProposedChange,
+}
+
+/**
+ * Owner-scoped pipeline record returned by `get` / `list` (the server strips
+ * `user_id`). Mirrors the public field set of `GET /v1/pipelines/:id`.
+ */
+export interface PipelineRecord {
+  id: string
+  status: PipelineStatus
+  current_stage: string | null
+  spent_credits: number
+  reserved_credits: number
+  upfront_credit_estimate: number
+  branched_from_pipeline_id: string | null
+  branched_from_stage: string | null
+  mode: PipelineMode | null
+  failure_reason: string | null
+  current_progress_message: string | null
+}
+
+/** One stage currently awaiting approval (from `pendingApprovals`). */
+export interface PendingApproval {
+  stage_name: PipelineStageName
+  /** Stage output snapshot; shape varies by stage. */
+  output: unknown
+}
+
+/**
+ * Assembled timeline (`GET /v1/pipelines/:id/timeline`) — ordered scene
+ * composites + their durations, plus optional music/narration and live
+ * per-shot animate progress. The data the studio turns into a render.
+ */
+export interface PipelineTimeline {
+  fps: number
+  width: number
+  height: number
+  scenes: Array<{ compositeUrl: string; durationSeconds: number }>
+  musicUrl?: string
+  narrationUrl?: string
+  animateProgress?: {
+    totalShots: number
+    shotsDone: number
+    percent: number
+  }
+}
 
 export interface BranchPipelineInput {
   /** The stage to re-run from. Upstream stages are cloned as approved. */
@@ -69,6 +125,135 @@ export type ApplyChatProposalResult =
 
 export class PipelinesResource {
   constructor(private client: NodaroClient) {}
+
+  /**
+   * Start a new pipeline (headless film generation) — the programmatic
+   * equivalent of the studio's "Create film". In Auto mode the engine
+   * self-advances to completion; poll {@link get} for status and
+   * {@link getTimeline} for the assembled output. In manual/guided mode, drive
+   * it with {@link pendingApprovals} + {@link approveStage} /
+   * {@link approveSubGate}.
+   *
+   * Requires `pipelines:execute` scope. Returns the new pipeline id.
+   */
+  create(input: PipelineInput): Promise<{ id: string }> {
+    return this.client.request("POST", "/v1/pipelines", { body: input })
+  }
+
+  /**
+   * Fetch current pipeline state: `status`, `current_stage`, credit counters,
+   * `mode`, and `failure_reason` (set when `status='failed'`). Poll this to
+   * track a headless Auto run to completion. Requires `pipelines:read`.
+   */
+  get(id: string): Promise<PipelineRecord> {
+    return this.client.request(
+      "GET",
+      `/v1/pipelines/${encodeURIComponent(id)}`,
+    )
+  }
+
+  /** List the caller's pipelines (most recent first). Requires `pipelines:read`. */
+  list(): Promise<PipelineRecord[]> {
+    return this.client.request("GET", "/v1/pipelines")
+  }
+
+  /**
+   * Cancel a running pipeline. Unspent reserved credits refund. Idempotent on
+   * an already-terminal pipeline. Requires `pipelines:execute`.
+   */
+  cancel(id: string): Promise<{ ok: true }> {
+    return this.client.request(
+      "POST",
+      `/v1/pipelines/${encodeURIComponent(id)}/cancel`,
+      { body: {} },
+    )
+  }
+
+  /**
+   * Stages currently `awaiting_approval`. Empty in a clean Auto run (the engine
+   * self-approves); populated in manual/guided mode at each gate. Requires
+   * `pipelines:read`.
+   */
+  pendingApprovals(id: string): Promise<PendingApproval[]> {
+    return this.client.request(
+      "GET",
+      `/v1/pipelines/${encodeURIComponent(id)}/pending-approvals`,
+    )
+  }
+
+  /**
+   * Approve a stage so the engine advances to the next one. An optional `edits`
+   * JSON-Patch is applied to the stage output before approval. Requires
+   * `pipelines:approve`.
+   */
+  approveStage(
+    id: string,
+    stage: PipelineStageName,
+    edits?: unknown,
+  ): Promise<{ ok: true }> {
+    return this.client.request(
+      "POST",
+      `/v1/pipelines/${encodeURIComponent(id)}/stages/${encodeURIComponent(stage)}/approve`,
+      { body: edits ? { edits } : {} },
+    )
+  }
+
+  /**
+   * Reject a stage with feedback; the engine re-runs it incorporating the note.
+   * Requires `pipelines:approve`.
+   */
+  rejectStage(
+    id: string,
+    stage: PipelineStageName,
+    feedback: string,
+  ): Promise<{ ok: true }> {
+    return this.client.request(
+      "POST",
+      `/v1/pipelines/${encodeURIComponent(id)}/stages/${encodeURIComponent(stage)}/reject`,
+      { body: { feedback } },
+    )
+  }
+
+  /**
+   * Approve a Stage-7 sub-gate (`dialogue_recheck` / `silent_cut`) so the
+   * orchestrator resumes from the next sub-step. Requires `pipelines:approve`.
+   */
+  approveSubGate(
+    id: string,
+    gate: SubGateName,
+  ): Promise<{ ok: true; gate: SubGateName; resumed_at: string }> {
+    return this.client.request(
+      "POST",
+      `/v1/pipelines/${encodeURIComponent(id)}/sub-gates/${encodeURIComponent(gate)}/approve`,
+      { body: {} },
+    )
+  }
+
+  /**
+   * Read a single stage's `status`, `output`, and `critic_feedback`. Useful for
+   * inspecting the script/plan before approving. Requires `pipelines:read`.
+   */
+  getStage(
+    id: string,
+    stage: PipelineStageName,
+  ): Promise<{ status: string; output: unknown; critic_feedback: unknown }> {
+    return this.client.request(
+      "GET",
+      `/v1/pipelines/${encodeURIComponent(id)}/stages/${encodeURIComponent(stage)}`,
+    )
+  }
+
+  /**
+   * Assembled timeline — ordered scene composites + durations + audio URLs +
+   * live animate progress. The output a headless caller renders or hands to a
+   * downstream editor. Requires `pipelines:read`.
+   */
+  getTimeline(id: string): Promise<PipelineTimeline> {
+    return this.client.request(
+      "GET",
+      `/v1/pipelines/${encodeURIComponent(id)}/timeline`,
+    )
+  }
 
   /**
    * Branch a completed pipeline into a new pipeline that re-runs from the

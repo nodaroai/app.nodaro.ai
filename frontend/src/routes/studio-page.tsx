@@ -1,12 +1,38 @@
-import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import type { PipelineEvent, PipelineStageName } from "@nodaro/shared"
+import type {
+  PipelineEvent,
+  PipelineMode,
+  PipelinePinnableImageModel,
+  PipelinePinnableVideoModel,
+  PipelineStageName,
+  SubGateName,
+} from "@nodaro/shared"
+import {
+  PIPELINE_PINNABLE_IMAGE_MODELS,
+  PIPELINE_PINNABLE_VIDEO_MODELS,
+  STYLE_PRESETS,
+  getStylePreset,
+  getFeaturedEntities,
+  estimateFilmCredits,
+} from "@nodaro/shared"
 import { pipelinesApi, type PipelineRecord } from "@/lib/pipelines-api"
-import { uploadImage, getCharacters, getLocations, getObjects } from "@/lib/api"
+import {
+  uploadImage,
+  getCharacters,
+  getLocations,
+  getObjects,
+  getCurrentUserId,
+  getUserCredits,
+} from "@/lib/api"
 import { usePipelineEvents } from "@/hooks/use-pipeline-events"
 import { buildSceneGraphFromPipeline } from "@remotion-pkg/lib/build-scene-graph-from-pipeline"
 import type { SceneGraph } from "@remotion-pkg/scene-graph"
 import { SceneGraphPlayerPreview } from "@/components/editor/scene-graph-player-preview"
+import { ComposerSpec } from "@/components/studio/composer-spec"
+import { CinemaTopBar, FlowGraphModal } from "@/components/studio/cinema-top-bar"
+import { AiDirectorPanel } from "@/components/studio/ai-director-panel"
+import { ReelPipeline } from "@/components/studio/reel-pipeline"
 
 /**
  * Phase 0.x — the standalone "studio" tracer with per-stage CONTROL.
@@ -19,6 +45,51 @@ import { SceneGraphPlayerPreview } from "@/components/editor/scene-graph-player-
  */
 
 type NarrationLine = { type: string; text: string }
+
+// Phase 3 — the autonomy dial (north-star §6: "Composer ⇄ AI Director").
+// One control that decides how much the engine does on its own vs how much the
+// user directs, by mapping to the pipeline's `mode` + gate config.
+type Autonomy = "director_ai" | "copilot" | "director_me"
+
+interface AutonomyOption {
+  label: string
+  hint: string
+  mode: PipelineMode
+  /** Auto-advance the production stages (shot_list / scene_images). */
+  autoAdvanceProduction: boolean
+  /** Skip the script critic + pause for review at the first draft. */
+  skipScriptCritic: boolean
+}
+
+const AUTONOMY_OPTIONS: Record<Autonomy, AutonomyOption> = {
+  director_ai: {
+    label: "AI Director",
+    hint: "Describe it — AI makes the whole film, no stops.",
+    mode: "auto",
+    autoAdvanceProduction: true,
+    skipScriptCritic: false,
+  },
+  copilot: {
+    label: "Co-pilot",
+    hint: "AI drafts; you approve the creative calls (cast, props, script).",
+    mode: "manual",
+    autoAdvanceProduction: true,
+    skipScriptCritic: true,
+  },
+  director_me: {
+    label: "Director",
+    hint: "You review and approve every stage.",
+    mode: "manual",
+    autoAdvanceProduction: false,
+    skipScriptCritic: true,
+  },
+}
+const AUTONOMY_ORDER: readonly Autonomy[] = ["director_ai", "copilot", "director_me"]
+
+// A stage-level gate awaiting the user, with its sub-gate (if any) so the right
+// route is used: animate sub-gates (dialogue_recheck / silent_cut) need
+// approveSubGate; plain stage gates (post_merge) use approveStage.
+type StageGate = { stageName: string; subGate: string | null }
 
 interface EntityCard {
   entityId: string
@@ -36,6 +107,37 @@ const ENTITY_GROUPS: ReadonlyArray<{ type: string; label: string }> = [
   { type: "object", label: "Props" },
 ]
 const ENTITY_TYPES = ["character", "object", "location"] as const
+
+interface FilmMediaItem {
+  url: string
+  label: string
+  kind: "image" | "video"
+}
+
+function mediaKind(url: string): "image" | "video" {
+  return /\.(mp4|webm|mov|m4v)(\?|$)/i.test(url) ? "video" : "image"
+}
+
+/**
+ * Flatten every generated asset of the film — each entity's main image + its
+ * variants, in stage order (Cast → Props → Locations) — into one ordered list
+ * the fullscreen viewer pages through. Scene composites (video) are appended by
+ * the caller once the timeline assembles.
+ */
+function buildEntityMedia(entities: Record<string, EntityCard>): FilmMediaItem[] {
+  const cards = Object.values(entities)
+  const out: FilmMediaItem[] = []
+  for (const { type } of ENTITY_GROUPS) {
+    for (const c of cards) {
+      if (c.entityType !== type || !c.mainAssetUrl) continue
+      out.push({ url: c.mainAssetUrl, label: c.entityKey, kind: mediaKind(c.mainAssetUrl) })
+      c.variants.forEach((u, i) =>
+        out.push({ url: u, label: `${c.entityKey} · variant ${i + 1}`, kind: mediaKind(u) }),
+      )
+    }
+  }
+  return out
+}
 
 const STAGE_ORDER = [
   "script",
@@ -58,7 +160,48 @@ const STAGE_LABELS: Record<string, string> = {
   post_merge: "Finish",
 }
 
+// Human "what's happening now" line per stage — shown in the status banner so
+// the user always knows the director is working, even when there's no gate to
+// act on (otherwise a generating stage looks frozen).
+const STAGE_ACTIVITY: Record<string, string> = {
+  script: "Drafting the script…",
+  characters: "Generating the cast…",
+  objects: "Generating the props…",
+  locations: "Generating the locations…",
+  shot_list: "Planning the shots…",
+  scene_images: "Creating the scenes…",
+  animate_audio_edit: "Animating and adding audio…",
+  post_merge: "Assembling your film…",
+}
+
+// Which entity type each entity-stage tab renders (that type's cards + gate).
+// Non-entity stages (script / shots / scenes / animate / finish) aren't here.
+const STAGE_ENTITY_TYPE: Record<string, "character" | "object" | "location"> = {
+  characters: "character",
+  objects: "object",
+  locations: "location",
+}
+// Stage tabs whose content is the assembled film player.
+const FILM_STAGES = new Set(["scene_images", "animate_audio_edit", "post_merge"])
+
 const TERMINAL_STATUSES = ["completed", "failed", "cancelled"]
+
+/**
+ * Map a thrown API error (shaped `"<status>: <json>"` by pipelines-api) to a
+ * human message for the gate's action banner. Without this, a failed gate
+ * action (e.g. reject hitting a 400/409) is swallowed by `act()` and the click
+ * looks dead — which is exactly how the "Redo does nothing" bug presented.
+ */
+function friendlyActionError(e: unknown): string {
+  const raw = e instanceof Error ? e.message : String(e)
+  const code = raw.match(/"code":"([^"]+)"/)?.[1]
+  const map: Record<string, string> = {
+    entity_not_awaiting_approval: "This item already moved on — the view refreshed.",
+    entity_already_advanced: "This item already moved on — the view refreshed.",
+    validation_error: "That request was rejected as invalid.",
+  }
+  return (code && map[code]) || "That action didn't go through — please try again."
+}
 
 function describeEvent(evt: PipelineEvent): string | null {
   const r = evt as unknown as Record<string, unknown>
@@ -171,6 +314,16 @@ function StudioPrompt({ onOpen }: { onOpen: (id: string) => void }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [recent, setRecent] = useState<PipelineRecord[]>([])
+  // Autonomy dial — how much the engine self-drives vs pauses for the user.
+  const [autonomy, setAutonomy] = useState<Autonomy>("copilot")
+  // Style Gallery — the foundational "look" ("" = Auto, let the Showrunner pick).
+  const [styleId, setStyleId] = useState("")
+  // Film length (seconds) — drives how many scenes/shots the Showrunner plans.
+  const [duration, setDuration] = useState(15)
+  // Upfront model picker — global overrides for the whole film ("" = let the
+  // engine choose). Per-step overrides land on each gate in a follow-up.
+  const [imageModel, setImageModel] = useState("")
+  const [videoModel, setVideoModel] = useState("")
 
   useEffect(() => {
     pipelinesApi
@@ -185,24 +338,45 @@ function StudioPrompt({ onOpen }: { onOpen: (id: string) => void }) {
     setBusy(true)
     setError(null)
     try {
+      const auto = AUTONOMY_OPTIONS[autonomy]
       const { id } = await pipelinesApi.create({
         pipeline_type: "story_to_video",
         root_node_id: crypto.randomUUID(),
         story_prompt: story,
-        target_duration_seconds: 15,
+        target_duration_seconds: duration,
         format: "reel",
         output_resolution: "720p",
         language: "en",
-        // Checkpointed: pause at each stage so the user controls before spending.
-        mode: "manual",
+        // Driven by the autonomy dial: AI Director = auto (no stops); Co-pilot /
+        // Director = manual (pause at creative / all gates respectively).
+        mode: auto.mode,
         video_critic_frame_count: "first_last",
+        // Style Gallery — folds into the Showrunner's global_style and
+        // propagates to every entity + shot. Omitted on "Auto".
+        style_directives: getStylePreset(styleId)?.directives,
         config: {
           music_enabled: true,
           narration_enabled: false,
           lipsync_enabled: false,
-          // Critic off by default — the script draft is shown immediately at the
-          // gate; the user can Edit / Regenerate / Run-critic there.
-          skip_script_critic: true,
+          // Co-pilot/Director skip the script critic and show the draft at the
+          // gate (Edit / Regenerate / Run-critic there); AI Director runs the
+          // full critic chain unattended.
+          skip_script_critic: auto.skipScriptCritic,
+          // Co-pilot's lever: approve the creative entities (script/cast/props/
+          // locations), then production (shots + keyframes) advances on its own.
+          // Director turns this off to review every stage.
+          auto_advance_production: auto.autoAdvanceProduction,
+          // Render shots in parallel (~minutes) instead of the continuity-forced
+          // sequential path (~an hour for a multi-shot reel).
+          force_parallel_animate: true,
+          // Upfront model overrides (global). Omitted when "Auto" so the engine
+          // picks. Per-stage overrides (stage_models) are layered on later.
+          image_model: imageModel
+            ? (imageModel as PipelinePinnableImageModel)
+            : undefined,
+          video_model: videoModel
+            ? (videoModel as PipelinePinnableVideoModel)
+            : undefined,
         },
       })
       onOpen(id)
@@ -210,10 +384,14 @@ function StudioPrompt({ onOpen }: { onOpen: (id: string) => void }) {
       setError(e instanceof Error ? e.message : "Failed to start the film")
       setBusy(false)
     }
-  }, [prompt, busy, onOpen])
+  }, [prompt, busy, onOpen, autonomy, styleId, duration, imageModel, videoModel])
+
+  // Approximate cost preview (display only — actual credits are charged per
+  // job at generation time). base + per-shot × shots, model-driven.
+  const cost = estimateFilmCredits(duration, videoModel || undefined)
 
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-8 overflow-y-auto p-8">
+    <div className="flex h-full flex-col items-center gap-8 overflow-y-auto p-8">
       <div className="w-full max-w-xl">
         <h1 className="mb-2 text-lg font-medium text-foreground">
           Nodaro Cinema — Studio
@@ -229,6 +407,139 @@ function StudioPrompt({ onOpen }: { onOpen: (id: string) => void }) {
           rows={3}
           className="w-full resize-none rounded-md border bg-card p-3 text-sm text-foreground outline-none focus:border-[#ff0073]"
         />
+        <div className="mt-3">
+          <span className="block text-xs text-muted-foreground">Who directs?</span>
+          <div className="mt-1 grid grid-cols-3 gap-2">
+            {AUTONOMY_ORDER.map((k) => {
+              const opt = AUTONOMY_OPTIONS[k]
+              const active = autonomy === k
+              return (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setAutonomy(k)}
+                  aria-pressed={active}
+                  className={`rounded-md border p-2 text-left transition-colors ${
+                    active
+                      ? "border-[#ff0073] bg-[#ff0073]/10"
+                      : "bg-card hover:border-[#ff0073]/50"
+                  }`}
+                >
+                  <span className="block text-sm font-medium text-foreground">
+                    {opt.label}
+                  </span>
+                  <span className="mt-0.5 block text-[10px] leading-tight text-muted-foreground">
+                    {opt.hint}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+        <div className="mt-3">
+          <span className="block text-xs text-muted-foreground">Style</span>
+          <div className="mt-1 grid grid-cols-3 gap-2 sm:grid-cols-4">
+            <button
+              type="button"
+              onClick={() => setStyleId("")}
+              aria-pressed={styleId === ""}
+              className={`rounded-md border p-1.5 text-left transition-colors ${
+                styleId === ""
+                  ? "border-[#ff0073] bg-[#ff0073]/10"
+                  : "bg-card hover:border-[#ff0073]/50"
+              }`}
+            >
+              <div className="flex h-8 items-center justify-center rounded bg-[var(--border-primary)] text-[9px] text-muted-foreground">
+                Auto
+              </div>
+              <span className="mt-1 block truncate text-[10px] font-medium text-foreground">
+                Auto
+              </span>
+            </button>
+            {STYLE_PRESETS.map((s) => {
+              const active = styleId === s.id
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => setStyleId(s.id)}
+                  aria-pressed={active}
+                  title={s.description}
+                  className={`rounded-md border p-1.5 text-left transition-colors ${
+                    active
+                      ? "border-[#ff0073] bg-[#ff0073]/10"
+                      : "bg-card hover:border-[#ff0073]/50"
+                  }`}
+                >
+                  <div className="h-8 rounded" style={{ background: s.swatch }} />
+                  <span className="mt-1 block truncate text-[10px] font-medium text-foreground">
+                    {s.label}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+        <div className="mt-3 grid grid-cols-3 gap-3">
+          <label className="block text-xs text-muted-foreground">
+            Length
+            <select
+              value={duration}
+              onChange={(e) => setDuration(Number(e.target.value))}
+              className="mt-1 w-full rounded-md border bg-card p-2 text-sm text-foreground outline-none focus:border-[#ff0073]"
+            >
+              <option value={15}>15s</option>
+              <option value={30}>30s</option>
+              <option value={45}>45s</option>
+              <option value={60}>1 min</option>
+              <option value={90}>1.5 min</option>
+              <option value={120}>2 min</option>
+              <option value={180}>3 min</option>
+              <option value={300}>5 min</option>
+              <option value={600}>10 min</option>
+            </select>
+          </label>
+          <label className="block text-xs text-muted-foreground">
+            Image model
+            <select
+              value={imageModel}
+              onChange={(e) => setImageModel(e.target.value)}
+              className="mt-1 w-full rounded-md border bg-card p-2 text-sm text-foreground outline-none focus:border-[#ff0073]"
+            >
+              <option value="">Auto (recommended)</option>
+              {PIPELINE_PINNABLE_IMAGE_MODELS.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block text-xs text-muted-foreground">
+            Video model
+            <select
+              value={videoModel}
+              onChange={(e) => setVideoModel(e.target.value)}
+              className="mt-1 w-full rounded-md border bg-card p-2 text-sm text-foreground outline-none focus:border-[#ff0073]"
+            >
+              <option value="">Auto (recommended)</option>
+              {PIPELINE_PINNABLE_VIDEO_MODELS.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="mt-3 flex items-baseline justify-between rounded-md border border-dashed bg-card/50 px-3 py-2">
+          <span className="text-xs text-muted-foreground">Estimated cost</span>
+          <span className="text-sm text-foreground">
+            ≈ {cost.totalCredits.toLocaleString()} credits{" "}
+            <span className="text-xs text-muted-foreground">
+              ({cost.shotCount} shots · ~{cost.creditsPerSecond}/s
+              {cost.modelKnown ? "" : " · Auto"})
+            </span>
+          </span>
+        </div>
         {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
         <button
           type="button"
@@ -271,36 +582,57 @@ function StudioPrompt({ onOpen }: { onOpen: (id: string) => void }) {
 function StageTracker({
   stageStatus,
   awaiting,
+  currentStage,
+  selected,
+  onSelect,
 }: {
   stageStatus: Record<string, string>
   awaiting: string[]
+  currentStage: string | null
+  selected: string
+  onSelect: (stage: string) => void
 }) {
-  // "You are here" = the first stage that's awaiting or running.
-  const currentIdx = STAGE_ORDER.findIndex(
-    (s) =>
-      awaiting.includes(s) ||
-      stageStatus[s] === "running" ||
-      stageStatus[s] === "awaiting_approval",
-  )
+  // "You are here" = the pipeline's authoritative current_stage (engine-set on
+  // the row) when known; otherwise fall back to the first stage that's
+  // awaiting/running per SSE. The row is the source of truth because SSE
+  // stage:status events can be dropped — when that happened the breadcrumb got
+  // stuck on the previous stage even though the run had moved on.
+  const fromRow = currentStage
+    ? STAGE_ORDER.indexOf(currentStage as (typeof STAGE_ORDER)[number])
+    : -1
+  const currentIdx =
+    fromRow >= 0
+      ? fromRow
+      : STAGE_ORDER.findIndex(
+          (s) =>
+            awaiting.includes(s) ||
+            stageStatus[s] === "running" ||
+            stageStatus[s] === "awaiting_approval",
+        )
   return (
     <div className="mb-6 flex flex-wrap items-center gap-1.5">
       {STAGE_ORDER.map((s, i) => {
+        const isSelected = s === selected
         const isCurrent = i === currentIdx
         const done =
           stageStatus[s] === "approved" || (currentIdx >= 0 && i < currentIdx)
-        const cls = isCurrent
+        const cls = isSelected
           ? "border-[#ff0073] bg-[#ff0073] text-white"
           : done
-            ? "border-green-500/50 bg-green-500/10 text-green-400"
-            : "border-[var(--border-primary)] text-muted-foreground"
+            ? "border-green-500/50 bg-green-500/10 text-green-400 hover:border-[#ff0073]/60"
+            : "border-[var(--border-primary)] text-muted-foreground hover:border-[#ff0073]/60"
         return (
-          <span
+          <button
             key={s}
-            className={`rounded-full border px-2.5 py-0.5 text-xs ${cls}`}
+            type="button"
+            onClick={() => onSelect(s)}
+            className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${cls}`}
           >
-            {isCurrent ? "▶ " : ""}
+            {/* Live dot marks the stage the engine is actually on, shown when
+                you've navigated to a different tab. */}
+            {isCurrent && !isSelected ? "● " : ""}
             {STAGE_LABELS[s]}
-          </span>
+          </button>
         )
       })}
     </div>
@@ -313,8 +645,8 @@ interface GateActions {
   upload: (entityId: string, assetUrl: string, file: File) => void
   reuse: (entityId: string, assetUrl: string) => void
   approveEntity: (entityId: string) => void
-  rejectEntity: (entityId: string) => void
-  approveStage: (stage: string) => void
+  rejectEntity: (entityId: string, feedback: string) => void
+  approveGate: (stageName: string, subGate: string | null) => void
 }
 
 type LibraryItem = { id: string; name: string; url: string }
@@ -354,9 +686,11 @@ function EntityDescGate({
   const [uploading, setUploading] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const [reuseOpen, setReuseOpen] = useState(false)
+  const [libTab, setLibTab] = useState<"featured" | "mine">("featured")
   const [library, setLibrary] = useState<LibraryItem[]>([])
   const [libLoading, setLibLoading] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  const featured = getFeaturedEntities(card.entityType)
 
   const toggleReuse = async () => {
     const next = !reuseOpen
@@ -426,7 +760,7 @@ function EntityDescGate({
             onClick={() => void toggleReuse()}
             className="rounded-md border px-3 py-1 text-xs text-foreground disabled:opacity-50"
           >
-            Reuse
+            Library
           </button>
           <button
             type="button"
@@ -448,7 +782,60 @@ function EntityDescGate({
       {err && <p className="mt-1 text-xs text-red-400">{err}</p>}
       {reuseOpen && (
         <div className="mt-2">
-          {libLoading ? (
+          <div className="mb-1.5 flex gap-1">
+            <button
+              type="button"
+              onClick={() => setLibTab("featured")}
+              className={`rounded-md px-2 py-0.5 text-[10px] ${
+                libTab === "featured"
+                  ? "bg-[#ff0073]/10 text-[#ff0073]"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Starter packs
+            </button>
+            <button
+              type="button"
+              onClick={() => setLibTab("mine")}
+              className={`rounded-md px-2 py-0.5 text-[10px] ${
+                libTab === "mine"
+                  ? "bg-[#ff0073]/10 text-[#ff0073]"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              My library
+            </button>
+          </div>
+
+          {libTab === "featured" ? (
+            featured.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                No starter packs for this type — Generate, Upload, or pick from My
+                library.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {featured.map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    disabled={busy}
+                    title={f.description}
+                    onClick={() => {
+                      setDesc(f.description)
+                      setReuseOpen(false)
+                    }}
+                    className="rounded-full border px-2 py-1 text-[10px] text-foreground hover:border-[#ff0073]/50 disabled:opacity-50"
+                  >
+                    {f.label}
+                  </button>
+                ))}
+                <p className="mt-1 w-full text-[10px] text-muted-foreground">
+                  Fills the description with a starter — then hit Generate.
+                </p>
+              </div>
+            )
+          ) : libLoading ? (
             <p className="text-xs text-muted-foreground">Loading your library…</p>
           ) : library.length === 0 ? (
             <p className="text-xs text-muted-foreground">
@@ -499,17 +886,29 @@ function GatePanel({
   acting,
   scriptReady,
   actions,
+  onOpenMedia,
+  viewStage,
 }: {
   cards: EntityCard[]
-  awaiting: string[]
+  awaiting: StageGate[]
   acting: boolean
   scriptReady: boolean
   actions: GateActions
+  onOpenMedia: (url: string) => void
+  viewStage: string
 }) {
-  const pendingDesc = cards.filter((c) => c.status === "pending_description")
-  const awaitingImage = cards.filter((c) => c.status === "awaiting_approval")
-  // Stage-level gates (script, shots, scenes, finish, variant batches).
-  const stageGates = awaiting
+  const [redoFor, setRedoFor] = useState<string | null>(null)
+  const [redoFeedback, setRedoFeedback] = useState("")
+  // Only surface the gate for the tab being viewed. Entity-stage tabs show that
+  // type's per-entity gates; non-entity stages show their own stage-level gate.
+  const entityType = STAGE_ENTITY_TYPE[viewStage]
+  const pendingDesc = entityType
+    ? cards.filter((c) => c.entityType === entityType && c.status === "pending_description")
+    : []
+  const awaitingImage = entityType
+    ? cards.filter((c) => c.entityType === entityType && c.status === "awaiting_approval")
+    : []
+  const stageGates = awaiting.filter((g) => g.stageName === viewStage)
   if (pendingDesc.length === 0 && awaitingImage.length === 0 && stageGates.length === 0) {
     return null
   }
@@ -543,41 +942,89 @@ function GatePanel({
 
       {awaitingImage.length > 0 && (
         <div className="mb-3">
-          <div className="mb-1 text-xs text-muted-foreground">Review generated:</div>
-          <div className="space-y-1">
+          <div className="mb-2 text-xs text-muted-foreground">
+            Review generated — click an image to view it full-screen:
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {awaitingImage.map((c) => (
               <div
                 key={c.entityId}
-                className="flex items-center justify-between gap-3 rounded-md border bg-card px-3 py-1.5 text-sm"
+                className="overflow-hidden rounded-md border bg-card"
               >
-                <span className="flex items-center gap-2">
-                  {c.mainAssetUrl && (
+                <button
+                  type="button"
+                  onClick={() => c.mainAssetUrl && onOpenMedia(c.mainAssetUrl)}
+                  className="block w-full cursor-zoom-in"
+                  title="View full-screen"
+                >
+                  {c.mainAssetUrl ? (
                     <img
                       src={c.mainAssetUrl}
-                      alt=""
-                      className="h-8 w-8 rounded object-cover"
+                      alt={c.entityKey}
+                      className="aspect-square w-full object-cover"
                     />
+                  ) : (
+                    <div className="flex aspect-square w-full items-center justify-center text-xs text-muted-foreground">
+                      generating…
+                    </div>
                   )}
-                  <span className="truncate text-foreground">{c.entityKey}</span>
-                </span>
-                <span className="flex shrink-0 gap-2">
-                  <button
-                    type="button"
-                    disabled={acting}
-                    onClick={() => actions.approveEntity(c.entityId)}
-                    className={`${btn} bg-[#ff0073] text-white`}
-                  >
-                    Approve
-                  </button>
-                  <button
-                    type="button"
-                    disabled={acting}
-                    onClick={() => actions.rejectEntity(c.entityId)}
-                    className={`${btn} border text-foreground`}
-                  >
-                    Redo
-                  </button>
-                </span>
+                </button>
+                <div className="p-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span
+                      className="truncate text-sm text-foreground"
+                      title={c.entityKey}
+                    >
+                      {c.entityKey}
+                    </span>
+                    <span className="flex shrink-0 gap-1.5">
+                      <button
+                        type="button"
+                        disabled={acting}
+                        onClick={() => actions.approveEntity(c.entityId)}
+                        className={`${btn} bg-[#ff0073] text-white`}
+                      >
+                        Approve
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRedoFor(redoFor === c.entityId ? null : c.entityId)
+                          setRedoFeedback("")
+                        }}
+                        className={`${btn} border text-foreground`}
+                      >
+                        Redo
+                      </button>
+                    </span>
+                  </div>
+                  {redoFor === c.entityId && (
+                    <div className="mt-2 flex gap-2">
+                      <input
+                        value={redoFeedback}
+                        onChange={(e) => setRedoFeedback(e.target.value)}
+                        placeholder="What to change (optional)…"
+                        className="flex-1 rounded-md border bg-background px-2 py-1 text-xs text-foreground"
+                      />
+                      <button
+                        type="button"
+                        disabled={acting}
+                        onClick={() => {
+                          actions.rejectEntity(
+                            c.entityId,
+                            redoFeedback.trim() ||
+                              "Regenerate this image — give a different take",
+                          )
+                          setRedoFor(null)
+                          setRedoFeedback("")
+                        }}
+                        className={`${btn} bg-[#ff0073] text-white`}
+                      >
+                        Regenerate
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -586,20 +1033,20 @@ function GatePanel({
 
       {stageGates.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
-          {stageGates.map((s) =>
-            s === "script" && !scriptReady ? (
-              <span key={s} className="text-xs text-muted-foreground">
+          {stageGates.map((g) =>
+            g.stageName === "script" && !scriptReady ? (
+              <span key={g.stageName} className="text-xs text-muted-foreground">
                 Loading script…
               </span>
             ) : (
               <button
-                key={s}
+                key={g.stageName}
                 type="button"
                 disabled={acting}
-                onClick={() => actions.approveStage(s)}
+                onClick={() => actions.approveGate(g.stageName, g.subGate)}
                 className={`${btn} bg-[#ff0073] text-white`}
               >
-                Approve {STAGE_LABELS[s] ?? s} & continue
+                Approve {STAGE_LABELS[g.stageName] ?? g.stageName} & continue
               </button>
             ),
           )}
@@ -609,18 +1056,31 @@ function GatePanel({
   )
 }
 
-function EntityImage({ card }: { card: EntityCard }) {
+function EntityImage({
+  card,
+  onOpenMedia,
+}: {
+  card: EntityCard
+  onOpenMedia: (url: string) => void
+}) {
   return (
-    <div className="w-32 shrink-0">
+    <div className="w-48 shrink-0">
       <div className="aspect-square w-full overflow-hidden rounded-md border bg-card">
         {card.mainAssetUrl ? (
-          <img
-            src={card.mainAssetUrl}
-            alt={card.entityKey}
-            className="h-full w-full object-cover"
-          />
+          <button
+            type="button"
+            onClick={() => onOpenMedia(card.mainAssetUrl as string)}
+            className="block h-full w-full cursor-zoom-in"
+            title="View full-screen"
+          >
+            <img
+              src={card.mainAssetUrl}
+              alt={card.entityKey}
+              className="h-full w-full object-cover"
+            />
+          </button>
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-[10px] text-muted-foreground">
+          <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
             {card.status === "failed"
               ? "failed"
               : card.status === "skipped"
@@ -637,12 +1097,15 @@ function EntityImage({ card }: { card: EntityCard }) {
       {card.variants.length > 0 && (
         <div className="mt-1 flex gap-1 overflow-x-auto">
           {card.variants.slice(0, 6).map((url, i) => (
-            <img
+            <button
               key={i}
-              src={url}
-              alt=""
-              className="h-8 w-8 shrink-0 rounded border object-cover"
-            />
+              type="button"
+              onClick={() => onOpenMedia(url)}
+              className="h-12 w-12 shrink-0 cursor-zoom-in overflow-hidden rounded border"
+              title="View full-screen"
+            >
+              <img src={url} alt="" className="h-full w-full object-cover" />
+            </button>
           ))}
         </div>
       )}
@@ -844,19 +1307,201 @@ function ScriptView({
   )
 }
 
+/**
+ * Fullscreen media viewer — opens on any film asset and pages forward/back
+ * across the whole film (cast, props, locations, scene clips) via arrows,
+ * keyboard (←/→/Esc), and a thumbnail strip. Click the backdrop to close.
+ */
+function Lightbox({
+  media,
+  index,
+  onClose,
+  onIndex,
+}: {
+  media: FilmMediaItem[]
+  index: number
+  onClose: () => void
+  onIndex: (i: number) => void
+}) {
+  const count = media.length
+  const go = useCallback(
+    (delta: number) => {
+      if (count === 0) return
+      onIndex((index + delta + count) % count)
+    },
+    [count, index, onIndex],
+  )
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose()
+      else if (e.key === "ArrowRight") go(1)
+      else if (e.key === "ArrowLeft") go(-1)
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [go, onClose])
+
+  const item = media[index]
+  if (!item) return null
+
+  return (
+    <div className="fixed inset-0 z-[9999] flex flex-col bg-black/90" onClick={onClose}>
+      <div className="flex items-center gap-4 px-4 py-3 text-sm text-white/80">
+        <span className="flex-1 truncate">{item.label}</span>
+        <span className="shrink-0 tabular-nums">
+          {index + 1} / {count}
+        </span>
+        <button
+          type="button"
+          onClick={onClose}
+          className="shrink-0 rounded-md border border-white/20 px-3 py-1 text-xs text-white hover:bg-white/10"
+        >
+          Close
+        </button>
+      </div>
+      <div
+        className="relative flex flex-1 items-center justify-center overflow-hidden p-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {count > 1 && (
+          <button
+            type="button"
+            onClick={() => go(-1)}
+            aria-label="Previous"
+            className="absolute left-4 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-3xl leading-none text-white hover:bg-white/20"
+          >
+            ‹
+          </button>
+        )}
+        {item.kind === "video" ? (
+          <video
+            key={item.url}
+            src={item.url}
+            controls
+            autoPlay
+            className="max-h-full max-w-full rounded-md"
+          />
+        ) : (
+          <img
+            src={item.url}
+            alt={item.label}
+            className="max-h-full max-w-full rounded-md object-contain"
+          />
+        )}
+        {count > 1 && (
+          <button
+            type="button"
+            onClick={() => go(1)}
+            aria-label="Next"
+            className="absolute right-4 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-3xl leading-none text-white hover:bg-white/20"
+          >
+            ›
+          </button>
+        )}
+      </div>
+      {count > 1 && (
+        <div
+          className="flex gap-2 overflow-x-auto px-4 py-3"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {media.map((m, i) => (
+            <button
+              key={`${m.url}-${i}`}
+              type="button"
+              onClick={() => onIndex(i)}
+              className={`h-14 w-14 shrink-0 overflow-hidden rounded border-2 ${
+                i === index
+                  ? "border-[#ff0073]"
+                  : "border-transparent opacity-60 hover:opacity-100"
+              }`}
+              title={m.label}
+            >
+              {m.kind === "video" ? (
+                <div className="flex h-full w-full items-center justify-center bg-white/10 text-white">
+                  ▶
+                </div>
+              ) : (
+                <img src={m.url} alt="" className="h-full w-full object-cover" />
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function StudioSession({ pipelineId }: { pipelineId: string }) {
   const { lastEvent, connected } = usePipelineEvents(pipelineId)
   const navigate = useNavigate()
   const [lines, setLines] = useState<NarrationLine[]>([])
   const [entities, setEntities] = useState<Record<string, EntityCard>>({})
   const [stageStatus, setStageStatus] = useState<Record<string, string>>({})
-  const [awaiting, setAwaiting] = useState<string[]>([])
+  const [awaiting, setAwaiting] = useState<StageGate[]>([])
   const [acting, setActing] = useState(false)
   const [screenplay, setScreenplay] = useState<Screenplay | null>(null)
   const [sceneGraph, setSceneGraph] = useState<SceneGraph | null>(null)
+  const [sceneMedia, setSceneMedia] = useState<FilmMediaItem[]>([])
+  const [completedScenes, setCompletedScenes] = useState(0)
+  // Seconds elapsed with no script yet — drives the "is the worker running?"
+  // hint when a film sits queued/working with nothing processing it.
+  const [elapsedSec, setElapsedSec] = useState(0)
+  // Cinematic shell: Pro Control vs Autopilot AR + the Flow Graph modal.
+  const [autopilot, setAutopilot] = useState(false)
+  const [flowOpen, setFlowOpen] = useState(false)
+  // Account Gen-Credits shown in the top bar — refreshed every 30s.
+  const [credits, setCredits] = useState<number | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      const uid = await getCurrentUserId()
+      if (!uid || cancelled) return
+      try {
+        const r = await getUserCredits(uid)
+        if (!cancelled) setCredits(r.data?.total ?? null)
+      } catch {
+        /* ignore — top bar falls back to "—" */
+      }
+    }
+    void load()
+    const t = window.setInterval(() => void load(), 30_000)
+    return () => {
+      cancelled = true
+      window.clearInterval(t)
+    }
+  }, [])
+  const [animateProgress, setAnimateProgress] = useState<{
+    totalShots: number
+    shotsDone: number
+    percent: number
+  } | null>(null)
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const [status, setStatus] = useState<string | null>(null)
+  const [currentStage, setCurrentStage] = useState<string | null>(null)
+  const [selectedStage, setSelectedStage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
   const feedRef = useRef<HTMLDivElement>(null)
+  // Last scene count we rebuilt the player at — avoids resetting playback on
+  // every 5s poll when the scene count hasn't changed.
+  const lastSceneCountRef = useRef(0)
+
+  // Pull the pipeline row's authoritative status + current_stage. SSE alone is
+  // unreliable for the breadcrumb (events can drop), so we also poll this and
+  // refresh it on every stage transition.
+  const loadPipeline = useCallback(async () => {
+    try {
+      const p = await pipelinesApi.get(pipelineId)
+      setStatus(p.status)
+      // Keep the last real stage — do NOT clobber it with a transient null
+      // during a stage handoff / re-drive (the row briefly has no
+      // current_stage). Otherwise the tab view bounces back to "Script" on
+      // every approval and snaps back a moment later.
+      if (p.current_stage) setCurrentStage(p.current_stage)
+    } catch {
+      /* ignore */
+    }
+  }, [pipelineId])
 
   const stop = useCallback(async () => {
     try {
@@ -870,8 +1515,25 @@ function StudioSession({ pipelineId }: { pipelineId: string }) {
   const loadTimeline = useCallback(async () => {
     try {
       const timeline = await pipelinesApi.getTimeline(pipelineId)
-      if (timeline.scenes.length > 0) {
+      // The timeline returns scenes as they finish (partial), so this doubles
+      // as the live animate progress count.
+      setCompletedScenes(timeline.scenes.length)
+      setAnimateProgress(timeline.animateProgress ?? null)
+      // Only rebuild the player when a NEW scene lands — rebuilding every poll
+      // would reset in-progress playback of the partial film.
+      if (
+        timeline.scenes.length > 0 &&
+        timeline.scenes.length !== lastSceneCountRef.current
+      ) {
+        lastSceneCountRef.current = timeline.scenes.length
         setSceneGraph(buildSceneGraphFromPipeline(timeline))
+        setSceneMedia(
+          timeline.scenes.map((s, i) => ({
+            url: s.compositeUrl,
+            label: `Scene ${i + 1}`,
+            kind: "video" as const,
+          })),
+        )
       }
     } catch {
       /* not assembled yet */
@@ -896,7 +1558,13 @@ function StudioSession({ pipelineId }: { pipelineId: string }) {
     void loadScript()
     try {
       const pa = await pipelinesApi.pendingApprovals(pipelineId)
-      setAwaiting(pa.map((p) => p.stage_name))
+      setAwaiting(
+        pa.map((p) => ({
+          stageName: p.stage_name,
+          subGate:
+            (p.output as { current_sub_gate?: string } | null)?.current_sub_gate ?? null,
+        })),
+      )
     } catch {
       /* ignore */
     }
@@ -931,8 +1599,9 @@ function StudioSession({ pipelineId }: { pipelineId: string }) {
     (fn: () => Promise<unknown>) => {
       if (acting) return
       setActing(true)
+      setActionError(null)
       void fn()
-        .catch(() => {})
+        .catch((e) => setActionError(friendlyActionError(e)))
         .finally(() => {
           setActing(false)
           void refreshGate()
@@ -954,9 +1623,17 @@ function StudioSession({ pipelineId }: { pipelineId: string }) {
       ),
     skip: (eid) => act(() => pipelinesApi.skipEntity(pipelineId, eid)),
     approveEntity: (eid) => act(() => pipelinesApi.approveEntity(pipelineId, eid)),
-    rejectEntity: (eid) => act(() => pipelinesApi.rejectEntity(pipelineId, eid, "")),
-    approveStage: (s) =>
-      act(() => pipelinesApi.approveStage(pipelineId, s as PipelineStageName)),
+    rejectEntity: (eid, feedback) =>
+      act(() => pipelinesApi.rejectEntity(pipelineId, eid, feedback)),
+    // Route to the right backend action: animate Stage-7 sub-gates
+    // (dialogue_recheck / silent_cut) need approveSubGate; a plain stage gate
+    // (the final cut at post_merge) uses approveStage.
+    approveGate: (stageName, subGate) =>
+      subGate && stageName === "animate_audio_edit"
+        ? act(() => pipelinesApi.approveSubGate(pipelineId, subGate as SubGateName))
+        : act(() =>
+            pipelinesApi.approveStage(pipelineId, stageName as PipelineStageName),
+          ),
     upload: (eid, assetUrl, file) =>
       act(() =>
         pipelinesApi.approveDescription(pipelineId, eid, {
@@ -981,11 +1658,8 @@ function StudioSession({ pipelineId }: { pipelineId: string }) {
     void loadScript()
     void loadTimeline()
     void refreshGate()
-    pipelinesApi
-      .get(pipelineId)
-      .then((p) => setStatus(p.status))
-      .catch(() => {})
-  }, [loadScript, loadTimeline, refreshGate, pipelineId])
+    void loadPipeline()
+  }, [loadScript, loadTimeline, refreshGate, loadPipeline])
 
   // Drive off the live SSE stream.
   useEffect(() => {
@@ -1001,6 +1675,7 @@ function StudioSession({ pipelineId }: { pipelineId: string }) {
       }
       if (e.stageName === "script") void loadScript()
       void refreshGate()
+      void loadPipeline()
     } else if (evt.type === "entity:status") {
       const e = evt as unknown as {
         entityId: string
@@ -1042,91 +1717,161 @@ function StudioSession({ pipelineId }: { pipelineId: string }) {
       if (s === "completed") void loadTimeline()
       else if (s === "failed" || s === "cancelled") setError(`Pipeline ${s}`)
       void refreshGate()
+      void loadPipeline()
     }
-  }, [lastEvent, loadScript, loadTimeline, refreshGate])
+  }, [lastEvent, loadScript, loadTimeline, refreshGate, loadPipeline])
 
   // Poll while a run is active so the gate, script, and timeline self-heal even
-  // if an SSE frame is dropped. Stops once the film is assembled or errored.
+  // if an SSE frame is dropped. Keep polling THROUGH animate (don't stop on the
+  // first assembled scene) so the partial film + per-scene progress keep
+  // updating; stop only once the pipeline is terminal or errored.
   useEffect(() => {
-    if (sceneGraph || error) return
+    if (error) return
+    if (status != null && TERMINAL_STATUSES.includes(status)) return
     const interval = setInterval(() => {
       void loadTimeline()
       void refreshGate()
+      void loadPipeline()
     }, 5000)
     return () => clearInterval(interval)
-  }, [sceneGraph, error, loadTimeline, refreshGate])
+  }, [status, error, loadTimeline, refreshGate, loadPipeline])
 
   useEffect(() => {
     feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight })
   }, [lines])
 
   const cards = Object.values(entities)
+  const filmMedia = useMemo(
+    () => [...buildEntityMedia(entities), ...sceneMedia],
+    [entities, sceneMedia],
+  )
+  const openMedia = useCallback(
+    (url: string) => {
+      const i = filmMedia.findIndex((m) => m.url === url)
+      setLightboxIndex(i >= 0 ? i : null)
+    },
+    [filmMedia],
+  )
   const isTerminal = status != null && TERMINAL_STATUSES.includes(status)
-  const hasArtifacts = screenplay || cards.length > 0 || sceneGraph
+  // Count up while the film hasn't produced a script yet; freeze once it has
+  // (or terminates). Lets us flag a film that's queued but not being driven.
+  useEffect(() => {
+    if (isTerminal || screenplay) return
+    const t = window.setInterval(() => setElapsedSec((s) => s + 1), 1000)
+    return () => window.clearInterval(t)
+  }, [isTerminal, screenplay])
+  // "Queued/working but nothing's processing it" — the pipeline worker is most
+  // likely down. A pre-start status (queued/pending) should be picked up within
+  // a second or two, so a short threshold there; give a running Stage 1 longer.
+  const notStarted = status === "queued" || status === "pending" || status == null
+  const stuck = !isTerminal && !screenplay && elapsedSec > (notStarted ? 15 : 75)
+  // Which stage tab is being viewed — the user's manual pick, else the active
+  // stage, else the first stage. `viewEntityType` is set for Cast/Props/Locations.
+  const viewStage = selectedStage ?? currentStage ?? "script"
+  const viewEntityType = STAGE_ENTITY_TYPE[viewStage]
+  // Total scenes (from the script) drives the animate progress bar; completed
+  // = scenes whose video composite is ready (from the timeline).
+  const totalScenes = screenplay?.scenes.length ?? 0
+  const sceneProgressPct =
+    totalScenes > 0 ? Math.round((completedScenes / totalScenes) * 100) : 0
+  // Is the user being asked to do something ON THE CURRENT STAGE right now? Scope
+  // it to currentStage (a stage gate for it, or its entities awaiting) so the
+  // banner doesn't say "your turn" while a production stage is just running.
+  const currentEntityType = currentStage ? STAGE_ENTITY_TYPE[currentStage] : undefined
+  const hasGate =
+    (currentStage != null && awaiting.some((a) => a.stageName === currentStage)) ||
+    (currentEntityType != null &&
+      cards.some(
+        (c) =>
+          c.entityType === currentEntityType &&
+          (c.status === "pending_description" || c.status === "awaiting_approval"),
+      ))
+  const activity = currentStage
+    ? STAGE_ACTIVITY[currentStage] ??
+      `Working on ${STAGE_LABELS[currentStage] ?? currentStage}…`
+    : "Working…"
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b px-4 py-2">
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-medium text-foreground">Nodaro Cinema</span>
-          {status && <span className="text-xs text-muted-foreground">{status}</span>}
-        </div>
-        <div className="flex items-center gap-2">
-          {status && !isTerminal && (
-            <button
-              type="button"
-              onClick={() => void stop()}
-              className="rounded-md border px-3 py-1 text-xs text-foreground hover:border-red-500 hover:text-red-400"
-            >
-              Stop
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => navigate("/studio")}
-            className="rounded-md bg-[#ff0073] px-3 py-1 text-xs font-medium text-white"
-          >
-            New film
-          </button>
-        </div>
-      </div>
+      <CinemaTopBar
+        projectName={pipelineId.slice(0, 8).toUpperCase()}
+        autopilot={autopilot}
+        onToggleAutopilot={setAutopilot}
+        onOpenFlow={() => setFlowOpen(true)}
+        credits={credits}
+        running={!isTerminal}
+        onStop={() => void stop()}
+        onNewFilm={() => navigate("/studio")}
+      />
 
       <div className="flex flex-1 overflow-hidden">
-        <div className="flex w-[300px] shrink-0 flex-col border-r">
-          <div className="flex items-center justify-between border-b px-4 py-2">
-            <span className="text-sm font-medium text-foreground">AI Director</span>
-            <span
-              className={
-                connected ? "text-xs text-green-400" : "text-xs text-muted-foreground"
-              }
-            >
-              {connected ? "live" : "connecting…"}
-            </span>
-          </div>
-          <div ref={feedRef} className="flex-1 space-y-1 overflow-y-auto p-3 text-xs">
-            {lines.length === 0 ? (
-              <p className="text-muted-foreground">Starting your film…</p>
-            ) : (
-              lines.map((l, i) => (
-                <p key={i} className="text-foreground">
-                  {l.text}
+        <div ref={feedRef} className="flex-1 overflow-y-auto bg-[#0a0a0a] p-6">
+          <StageTracker
+            stageStatus={stageStatus}
+            awaiting={awaiting.map((a) => a.stageName)}
+            currentStage={currentStage}
+            selected={viewStage}
+            onSelect={(s) =>
+              // Clicking the live stage re-enters "follow" mode (track the
+              // active stage); any other tab pins to that stage until you click
+              // again. No auto-yank, so approvals never bounce your view.
+              setSelectedStage(s === currentStage ? null : s)
+            }
+          />
+
+          {/* Global status: what the engine is doing right now, independent of
+              which tab is open. When a gate is open on a stage you're not
+              viewing, the banner is a button that jumps you there. */}
+          {!isTerminal &&
+            (hasGate ? (
+              viewStage === currentStage ? (
+                <div className="mb-4 flex items-center gap-3 rounded-md border bg-card px-3 py-2.5 text-sm">
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[#ff0073]" />
+                  <span className="text-foreground">Your turn — review and choose below.</span>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setSelectedStage(null)}
+                  className="mb-4 flex w-full items-center gap-3 rounded-md border border-[#ff0073]/40 bg-[#ff0073]/5 px-3 py-2.5 text-left text-sm hover:bg-[#ff0073]/10"
+                >
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[#ff0073]" />
+                  <span className="text-foreground">
+                    Your turn on{" "}
+                    {STAGE_LABELS[currentStage ?? ""] ?? "the current step"} — click to open.
+                  </span>
+                </button>
+              )
+            ) : stuck ? (
+              <div className="mb-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm">
+                <p className="font-medium text-amber-300">
+                  This film isn't being processed.
                 </p>
-              ))
-            )}
-          </div>
-        </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  It's {notStarted ? "queued, but nothing has picked it up" : "running, but stalled"}{" "}
+                  for {elapsedSec}s. The Story→Video engine is driven by a background
+                  worker — if it's not running, films sit here forever. Check that the
+                  backend has <code className="text-foreground">EDITION=cloud</code> and
+                  Redis up, then start the pipeline worker:
+                </p>
+                <pre className="mt-1.5 overflow-x-auto rounded bg-background p-1.5 text-[10px] text-foreground">
+npm run pipeline-worker:dev
+                </pre>
+              </div>
+            ) : (
+              <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border bg-card px-3 py-2.5 text-sm">
+                <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-[#ff0073] border-t-transparent" />
+                <span className="text-foreground">{activity}</span>
+                <span className="text-xs text-muted-foreground">
+                  You'll be asked to review as soon as it's ready — nothing to do right now.
+                </span>
+              </div>
+            ))}
 
-        <div className="flex-1 overflow-y-auto p-6">
-          <StageTracker stageStatus={stageStatus} awaiting={awaiting} />
-
-          {!isTerminal && (
-            <GatePanel
-              cards={cards}
-              awaiting={awaiting}
-              acting={acting}
-              scriptReady={!!screenplay}
-              actions={actions}
-            />
+          {actionError && (
+            <div className="mb-4 rounded-md border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-400">
+              {actionError}
+            </div>
           )}
 
           {error && (
@@ -1135,24 +1880,22 @@ function StudioSession({ pipelineId }: { pipelineId: string }) {
             </div>
           )}
 
-          {!hasArtifacts && !error && (
-            <p className="text-sm text-muted-foreground">
-              Working… the script, cast, and scenes will appear here as they're made.
-            </p>
+          {/* Gate for the viewed tab only. */}
+          {!isTerminal && (
+            <GatePanel
+              cards={cards}
+              awaiting={awaiting}
+              acting={acting}
+              scriptReady={!!screenplay}
+              actions={actions}
+              onOpenMedia={openMedia}
+              viewStage={viewStage}
+            />
           )}
 
-          {sceneGraph && (
-            <section className="mb-8">
-              <h2 className="mb-2 text-sm font-medium text-foreground">Film</h2>
-              <div className="max-w-3xl">
-                <SceneGraphPlayerPreview sceneGraph={sceneGraph} />
-              </div>
-            </section>
-          )}
-
-          {screenplay && (
-            <section className="mb-8">
-              <h2 className="mb-2 text-sm font-medium text-foreground">Script</h2>
+          {/* ── Tab content ─────────────────────────────────────────────── */}
+          {viewStage === "script" &&
+            (screenplay ? (
               <ScriptView
                 screenplay={screenplay}
                 acting={acting}
@@ -1161,42 +1904,117 @@ function StudioSession({ pipelineId }: { pipelineId: string }) {
                 }
                 onRedoScene={(index, fb) =>
                   act(() =>
-                    pipelinesApi.regenerateScene(
-                      pipelineId,
-                      index,
-                      fb || "Improve this scene",
-                    ),
+                    pipelinesApi.regenerateScene(pipelineId, index, fb || "Improve this scene"),
                   )
                 }
                 onRegenerate={(fb) =>
                   act(() =>
-                    pipelinesApi.rejectStage(
-                      pipelineId,
-                      "script",
-                      fb || "Regenerate the script",
-                    ),
+                    pipelinesApi.rejectStage(pipelineId, "script", fb || "Regenerate the script"),
                   )
                 }
               />
-            </section>
-          )}
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                The script will appear here once it's drafted.
+              </p>
+            ))}
 
-          {ENTITY_GROUPS.map(({ type, label }) => {
-            const group = cards.filter((c) => c.entityType === type)
-            if (group.length === 0) return null
-            return (
-              <section key={type} className="mb-8">
-                <h2 className="mb-2 text-sm font-medium text-foreground">{label}</h2>
+          {viewEntityType &&
+            (() => {
+              const group = cards.filter((c) => c.entityType === viewEntityType)
+              if (group.length === 0) {
+                return (
+                  <p className="text-sm text-muted-foreground">
+                    {STAGE_LABELS[viewStage]} will appear here as they're made.
+                  </p>
+                )
+              }
+              return (
                 <div className="flex flex-wrap gap-3">
                   {group.map((c) => (
-                    <EntityImage key={c.entityId} card={c} />
+                    <EntityImage key={c.entityId} card={c} onOpenMedia={openMedia} />
                   ))}
                 </div>
-              </section>
-            )
-          })}
+              )
+            })()}
+
+          {viewStage === "shot_list" && <ComposerSpec pipelineId={pipelineId} />}
+
+          {FILM_STAGES.has(viewStage) && (
+            <div className="max-w-3xl space-y-3">
+              {!isTerminal && animateProgress && animateProgress.totalShots > 0 ? (
+                <div>
+                  <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
+                    <span>Animating shots…</span>
+                    <span className="tabular-nums">
+                      {animateProgress.shotsDone} / {animateProgress.totalShots} shots (
+                      {animateProgress.percent}%)
+                    </span>
+                  </div>
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--border-primary)]">
+                    <div
+                      className="h-full bg-[#ff0073] transition-[width] duration-500"
+                      style={{ width: `${animateProgress.percent}%` }}
+                    />
+                  </div>
+                </div>
+              ) : totalScenes > 0 && !isTerminal ? (
+                <div>
+                  <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
+                    <span>Rendering scenes…</span>
+                    <span className="tabular-nums">
+                      {completedScenes} / {totalScenes} ready ({sceneProgressPct}%)
+                    </span>
+                  </div>
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--border-primary)]">
+                    <div
+                      className="h-full bg-[#ff0073] transition-[width] duration-500"
+                      style={{ width: `${sceneProgressPct}%` }}
+                    />
+                  </div>
+                </div>
+              ) : null}
+              {sceneGraph ? (
+                <SceneGraphPlayerPreview sceneGraph={sceneGraph} />
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  The first scene will play here the moment it's rendered — you don't
+                  have to wait for the whole film.
+                </p>
+              )}
+            </div>
+          )}
         </div>
+        <AiDirectorPanel
+          pipelineId={pipelineId}
+          lines={lines}
+          running={connected && !isTerminal}
+          expanded={autopilot}
+        />
       </div>
+
+      <ReelPipeline pipelineId={pipelineId} />
+
+      {flowOpen && (
+        <FlowGraphModal
+          projectName={pipelineId.slice(0, 8).toUpperCase()}
+          stems={(screenplay?.cast ?? []).map((c) => ({
+            name: c.name,
+            kind: "cast" as const,
+            desc: c.description,
+          }))}
+          onClose={() => setFlowOpen(false)}
+        />
+      )}
+
+      {lightboxIndex != null && filmMedia.length > 0 && (
+        <Lightbox
+          media={filmMedia}
+          index={Math.min(lightboxIndex, filmMedia.length - 1)}
+          onClose={() => setLightboxIndex(null)}
+          onIndex={setLightboxIndex}
+        />
+      )}
     </div>
   )
 }

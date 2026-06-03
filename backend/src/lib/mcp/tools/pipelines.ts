@@ -532,5 +532,71 @@ export function registerPipelineTools({ server, session }: RegisterPipelineTools
         return okJson({ turns: turns ?? [] })
       },
     )
+
+    // ── get_pipeline_status (pipelines:read) ─────────────────────────────────
+    // Phase 2 (§7.1) — lets an agent monitor a headless Auto run to completion:
+    // poll status / current_stage / failure_reason after start_pipeline.
+    server.registerTool(
+      "get_pipeline_status",
+      {
+        title: "Get Pipeline Status",
+        description:
+          "Get the current state of a pipeline: status (pending/running/awaiting_approval/completed/failed), current_stage, credit counters, mode, and failure_reason (set when status='failed'). Poll this after start_pipeline to track an Auto run to completion.",
+        inputSchema: {
+          pipeline_id: z.string().uuid().describe("The id of the pipeline"),
+        },
+        annotations: { readOnlyHint: true, destructiveHint: false },
+      },
+      async (args) => {
+        const { data, error } = await supabase
+          .from("pipelines")
+          .select(
+            "id,status,current_stage,spent_credits,reserved_credits,upfront_credit_estimate,mode,failure_reason,current_progress_message,user_id",
+          )
+          .eq("id", args.pipeline_id)
+          .maybeSingle()
+        if (error) return err(`Failed to load pipeline: ${error.message}`)
+        if (!data || data.user_id !== session.userId) {
+          return err(`Pipeline ${args.pipeline_id} not found.`)
+        }
+        const { user_id: _omit, ...pub } = data
+        return okJson(pub)
+      },
+    )
+
+    // ── pipeline_pending_approvals (pipelines:read) ──────────────────────────
+    // Stages currently awaiting approval — empty during a clean Auto run, one
+    // or more entries at each gate in manual/guided mode. An agent reads this
+    // to decide what to approve next (via the SDK's approveStage / the HTTP
+    // approve route).
+    server.registerTool(
+      "pipeline_pending_approvals",
+      {
+        title: "Pipeline Pending Approvals",
+        description:
+          "List the pipeline stages currently awaiting approval (status='awaiting_approval'), each with its output snapshot. An empty array means nothing is gated right now (a clean Auto run, or the pipeline is still generating).",
+        inputSchema: {
+          pipeline_id: z.string().uuid().describe("The id of the pipeline"),
+        },
+        annotations: { readOnlyHint: true, destructiveHint: false },
+      },
+      async (args) => {
+        const { data: pipeline } = await supabase
+          .from("pipelines")
+          .select("user_id")
+          .eq("id", args.pipeline_id)
+          .maybeSingle()
+        if (!pipeline || pipeline.user_id !== session.userId) {
+          return err(`Pipeline ${args.pipeline_id} not found.`)
+        }
+        const { data: stages, error } = await supabase
+          .from("pipeline_stages")
+          .select("stage_name,output")
+          .eq("pipeline_id", args.pipeline_id)
+          .eq("status", "awaiting_approval")
+        if (error) return err(`Failed to load approvals: ${error.message}`)
+        return okJson({ pending: stages ?? [] })
+      },
+    )
   }
 }

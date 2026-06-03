@@ -1077,3 +1077,31 @@ export const modelsForInputMode = (mode: SceneInputMode): string[] =>
   Object.entries(VIDEO_MODEL_CAPS)
     .filter(([, caps]) => caps.inputModes.includes(mode))
     .map(([model]) => model)
+
+/**
+ * preferredInputModeForModel — pick the best `shot_input_mode` for a pinned
+ * video model so the pipeline adapts its input wiring to the chosen model:
+ *
+ *   - models that accept `ref_images` (Seedance 2, Kling Omni) → `"ref_images"`,
+ *     so the character/location reference portraits feed the video model
+ *     directly (strongest identity lock).
+ *   - otherwise models that accept a start frame → `"first_frame"`, so the
+ *     per-scene keyframe is connected as the opening frame.
+ *
+ * Returns `undefined` for unknown/unregistered models (not in VIDEO_MODEL_CAPS)
+ * or models that expose neither mode, so the caller keeps its own default.
+ *
+ * `first_last_frame` is deliberately NOT auto-selected — the animate stage
+ * does not yet implement paired start+end keyframes (Method 2), so a
+ * first_last_frame-capable model still resolves to `first_frame` here.
+ */
+export function preferredInputModeForModel(
+  model: string | undefined,
+): SceneInputMode | undefined {
+  if (!model) return undefined
+  const caps = VIDEO_MODEL_CAPS[model]
+  if (!caps) return undefined
+  if (caps.inputModes.includes("ref_images")) return "ref_images"
+  if (caps.inputModes.includes("first_frame")) return "first_frame"
+  return undefined
+}

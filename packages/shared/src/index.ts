@@ -74,7 +74,24 @@ export {
   SceneInputModeSchema,
   VIDEO_MODEL_CAPS,
   modelsForInputMode,
+  preferredInputModeForModel,
 } from "./model-constants.js"
+
+export {
+  FILM_BASE_CREDITS,
+  KEYFRAME_CREDITS_PER_SHOT,
+  VIDEO_CRITIC_CREDITS_PER_SHOT,
+  VIDEO_CLIP_CREDITS,
+  DEFAULT_VIDEO_CLIP_COST,
+  estimateFilmCredits,
+} from "./film-pricing.js"
+export type { VideoClipCost, FilmCreditEstimate } from "./film-pricing.js"
+
+export { STYLE_PRESETS, getStylePreset } from "./style-presets.js"
+export type { StylePreset } from "./style-presets.js"
+
+export { FEATURED_ENTITIES, getFeaturedEntities } from "./featured-entities.js"
+export type { FeaturedEntity } from "./featured-entities.js"
 
 export type {
   ImageGenProvider,

@@ -23,6 +23,16 @@ export interface PipelineTimelineInput {
   readonly scenes: ReadonlyArray<PipelineTimelineScene>
   readonly musicUrl?: string
   readonly narrationUrl?: string
+  /**
+   * Live per-shot animate progress (Stage 7). Present while the film is being
+   * animated; lets the studio show a smooth shot-level bar instead of a
+   * scene-level one that only ticks when a whole scene composites.
+   */
+  readonly animateProgress?: {
+    readonly totalShots: number
+    readonly shotsDone: number
+    readonly percent: number
+  }
 }
 
 const DEFAULT_FPS = 30

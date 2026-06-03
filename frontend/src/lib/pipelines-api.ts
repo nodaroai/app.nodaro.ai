@@ -361,6 +361,43 @@ export const pipelinesApi = {
    */
   getTimeline: (id: string) =>
     getJson<PipelineTimelineInput>(`/v1/pipelines/${id}/timeline`),
+  /**
+   * Phase 3 (Focus composer) — save a per-shot creative edit. Field-merges the
+   * whitelisted fields into `scene_node_data.shots[]` (matched by shotId),
+   * preserving all other fields. Save-only — does not re-render; the new values
+   * take effect when the shot is next animated.
+   */
+  editShot: (
+    pipelineId: string,
+    sceneId: string,
+    shotId: string,
+    patch: {
+      motion_prompt?: string
+      visual_keyframe_prompt?: string
+      action?: string
+      dialogue_line?: string | null
+      duration_seconds?: number
+      camera?: { shot_type?: string; angle?: string; motion?: string }
+    },
+  ): Promise<{ ok: true; shot: Record<string, unknown> }> =>
+    postJson(
+      `/v1/pipelines/${pipelineId}/scenes/${sceneId}/shots/${shotId}/edit`,
+      patch,
+    ),
+  /**
+   * Phase 3 (Focus composer) — re-roll a shot's keyframe still: regenerates the
+   * image from the shot's current visual_keyframe_prompt + scene refs, persists
+   * the new keyframe_url. Synchronous (awaits the image job → needs the media
+   * worker running) and charges credits like any generation.
+   */
+  regenerateKeyframe: (
+    pipelineId: string,
+    sceneId: string,
+    shotId: string,
+  ): Promise<{ ok: true; keyframe_url: string }> =>
+    postJson(
+      `/v1/pipelines/${pipelineId}/scenes/${sceneId}/shots/${shotId}/regenerate-keyframe`,
+    ),
   eventsUrl: (id: string) => `${API_BASE}/v1/pipelines/${id}/events`,
   /**
    * Phase 1B.4 — fork a running pipeline. Backend response matches

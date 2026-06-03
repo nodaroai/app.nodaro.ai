@@ -196,6 +196,65 @@ describe("runSceneDirector", () => {
     ).rejects.toThrow(/not eligible/)
   })
 
+  it("coerces shot_input_mode to the stage-selected mode (ref_images) even if the LLM echoes first_frame", async () => {
+    ;(callLLM as ReturnType<typeof vi.fn>).mockResolvedValue({
+      // LLM picks a ref_images-eligible model but echoes a stale shot_input_mode.
+      output: {
+        ...(fakeSceneNodeData as Record<string, unknown>),
+        video_model: "seedance-2",
+        shot_input_mode: "first_frame",
+      },
+      llmCallId: "x",
+      costUsd: 0.08,
+      inputTokens: 1200,
+      outputTokens: 800,
+    })
+
+    const result = await runSceneDirector({
+      supabase: {} as never,
+      pipelineId: "p1",
+      stageId: "s5",
+      userId: "u1",
+      sceneId: "scene-entity-1",
+      plan: fakePlan,
+      sceneIndex: 1,
+      shotInputMode: "ref_images",
+      videoModelOverride: "seedance-2",
+    })
+
+    expect(result.shot_input_mode).toBe("ref_images")
+    expect(result.video_model).toBe("seedance-2")
+  })
+
+  it("honors a pinned video model film-wide even when it isn't in VIDEO_MODEL_CAPS (e.g. seedance v1)", async () => {
+    // The LLM picks a caps-eligible first_frame model; the user pinned 'seedance'
+    // (no caps entry). The pin must win so the whole film is consistent.
+    ;(callLLM as ReturnType<typeof vi.fn>).mockResolvedValue({
+      output: {
+        ...(fakeSceneNodeData as Record<string, unknown>),
+        video_model: "kling",
+      },
+      llmCallId: "x",
+      costUsd: 0.08,
+      inputTokens: 1200,
+      outputTokens: 800,
+    })
+
+    const result = await runSceneDirector({
+      supabase: {} as never,
+      pipelineId: "p1",
+      stageId: "s5",
+      userId: "u1",
+      sceneId: "scene-entity-1",
+      plan: fakePlan,
+      sceneIndex: 1,
+      shotInputMode: "first_frame",
+      videoModelOverride: "seedance",
+    })
+
+    expect(result.video_model).toBe("seedance")
+  })
+
   it("throws when scene_index not in plan", async () => {
     await expect(
       runSceneDirector({

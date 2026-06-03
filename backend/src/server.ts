@@ -72,6 +72,25 @@ async function main() {
   const orchestratorWorker = createOrchestratorWorker()
   console.log("[orchestrator] Worker started in-process")
 
+  // Start the Story→Video pipeline worker in-process too — opt-in via
+  // PIPELINE_WORKER_INPROCESS=true. The workflow orchestrator above already
+  // runs in-process; enabling this lets `npm run dev` alone drive the studio
+  // end-to-end in dev / self-host, with no separate `pipeline-worker` process
+  // (the #1 "my film is stuck at queued" footgun). Leave it OFF in production,
+  // where the worker runs as its own container process — running both would
+  // double-consume the queue (the documented "locked by another worker" stall).
+  // Dynamic import keeps the EE module out of the core bundle on other editions.
+  let pipelineWorker: { close: () => Promise<unknown> } | null = null
+  if (hasCredits() && process.env.PIPELINE_WORKER_INPROCESS === "true") {
+    try {
+      const { startPipelineWorker } = await import("./ee/workers/pipeline-worker.js")
+      pipelineWorker = startPipelineWorker()
+      console.log("[pipeline-worker] started in-process (PIPELINE_WORKER_INPROCESS=true)")
+    } catch (err) {
+      console.error("[pipeline-worker] in-process start failed:", err)
+    }
+  }
+
   // Boot the cross-process pipeline event bridge so events published by
   // the pipeline-worker (separate process) reach SSE subscribers here.
   // Without this, every pipelineEvents.publish() from the worker hits a
@@ -94,6 +113,7 @@ async function main() {
     stopWorkflowExecutionsReconcileCron()
     stopPipelinesReconcileCron()
     await orchestratorWorker.close()
+    if (pipelineWorker) await pipelineWorker.close()
     await app.close()
     process.exit(0)
   }

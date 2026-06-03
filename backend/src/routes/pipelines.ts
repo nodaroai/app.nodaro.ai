@@ -12,6 +12,7 @@ import {
   SubGateNameSchema,
   clearImageCriticMetadata,
   clearVideoCriticMetadata,
+  getIdentityLockClause,
   type ChatEnabledStage,
   type EntityType,
   type JsonPatch,
@@ -1610,6 +1611,7 @@ export async function pipelinesRoutes(app: FastifyInstance) {
       }
 
       const sceneClips: Array<{ compositeUrl: string; durationSeconds: number }> = []
+      let totalShots = 0
       for (const row of scenes ?? []) {
         const meta = (row.metadata as Record<string, unknown> | null) ?? {}
         const sceneNodeData = meta.scene_node_data as
@@ -1618,6 +1620,8 @@ export async function pipelinesRoutes(app: FastifyInstance) {
               shots?: Array<{ duration_seconds?: number }>
             }
           | undefined
+        // Count ALL shots (not just composited scenes) for the animate progress bar.
+        totalShots += (sceneNodeData?.shots ?? []).length
         const compositeUrl = sceneNodeData?.composite_video_url
         if (!compositeUrl) continue
         const durationSeconds = (sceneNodeData?.shots ?? []).reduce(
@@ -1627,6 +1631,39 @@ export async function pipelinesRoutes(app: FastifyInstance) {
         )
         sceneClips.push({ compositeUrl, durationSeconds })
       }
+
+      // Animate progress — per-SHOT, so the studio bar moves continuously
+      // instead of jumping only when a whole scene composites. Each shot's video
+      // is one `image-to-video` job; completed jobs + the in-flight job's
+      // progress give a smooth percent over the total shot count.
+      const { data: videoJobs } = await supabase
+        .from("jobs")
+        .select("status, progress")
+        .eq("pipeline_id", req.params.id)
+        .eq("job_type", "image-to-video")
+      const vj = (videoJobs ?? []) as Array<{ status: string; progress: number | null }>
+      const shotsDone = vj.filter((j) => j.status === "completed").length
+      const inFlight = vj.filter((j) => j.status === "processing" || j.status === "pending")
+      // Partial progress across all in-flight shots, expressed in shots-worth
+      // (each job's progress is 0-100). Dividing only by 100 — NOT by the
+      // in-flight count — keeps each shot's contribution proportional, so the
+      // bar reflects reality when many shots animate in parallel (the studio's
+      // default). Dividing by inFlight.length capped the whole parallel batch
+      // at <1 shot and made the bar crawl.
+      const inFlightFraction =
+        inFlight.reduce((s, j) => s + (typeof j.progress === "number" ? j.progress : 0), 0) / 100
+      const animateProgress =
+        totalShots > 0
+          ? {
+              totalShots,
+              shotsDone,
+              // Cap below 100 so it never reads "done" before the final composite.
+              percent: Math.min(
+                99,
+                Math.round(((shotsDone + inFlightFraction) / totalShots) * 100),
+              ),
+            }
+          : undefined
 
       // Audio URLs from the Stage 7 (animate_audio_edit) stage output.
       const { data: animateStage } = await supabase
@@ -1660,7 +1697,258 @@ export async function pipelinesRoutes(app: FastifyInstance) {
         scenes: sceneClips,
         ...(musicUrl ? { musicUrl } : {}),
         ...(narrationUrl ? { narrationUrl } : {}),
+        ...(animateProgress ? { animateProgress } : {}),
       }
+    },
+  )
+
+  // ── POST /v1/pipelines/:id/scenes/:scene_id/shots/:shot_id/edit ───────────
+  //
+  // Phase 3 — per-shot creative edit for the Focus composer. Field-merges a
+  // whitelisted set of plan fields into the target shot inside
+  // `scene_node_data.shots[]` (matched by `shot_id`), preserving every other
+  // field — including orchestrator-written ones (video_url, video_critic_*,
+  // last_frame) and the other shots. Save-only: it does NOT re-render; the new
+  // values take effect the next time the shot is animated.
+  const PerShotEditBodySchema = z
+    .object({
+      motion_prompt: z.string().max(2000).optional(),
+      visual_keyframe_prompt: z.string().max(2000).optional(),
+      action: z.string().max(2000).optional(),
+      dialogue_line: z.string().max(2000).nullable().optional(),
+      // Shots are short clips — align to ShotSpec's 0.3–8s contract so an edit
+      // can't write a duration the plan schema would reject.
+      duration_seconds: z.number().min(0.3).max(8).optional(),
+      camera: z
+        .object({
+          shot_type: z.string().max(64).optional(),
+          angle: z.string().max(64).optional(),
+          motion: z.string().max(64).optional(),
+        })
+        .optional(),
+    })
+    .strict()
+
+  app.post<{
+    Params: { id: string; scene_id: string; shot_id: string }
+    Body: unknown
+  }>(
+    "/v1/pipelines/:id/scenes/:scene_id/shots/:shot_id/edit",
+    async (req, reply) => {
+      if (!gateEdition(reply)) return
+      if (!gateScope(req, reply, "pipelines:approve")) return
+      const userId = gateAuth(req, reply)
+      if (!userId) return
+
+      const parsed = PerShotEditBodySchema.safeParse(req.body ?? {})
+      if (!parsed.success) {
+        return reply
+          .status(400)
+          .send({ error: { code: "validation_error", issues: parsed.error.issues } })
+      }
+      const patch = parsed.data
+      if (Object.keys(patch).length === 0) {
+        return reply.status(400).send({ error: { code: "empty_patch" } })
+      }
+
+      // Ownership on the parent pipeline.
+      const { data: owner } = await supabase
+        .from("pipelines")
+        .select("user_id")
+        .eq("id", req.params.id)
+        .maybeSingle()
+      if (!owner || owner.user_id !== userId) {
+        return reply.status(404).send({ error: { code: "not_found" } })
+      }
+
+      // Load the scene entity (must belong to this pipeline + be a scene).
+      const { data: scene } = await supabase
+        .from("pipeline_entities")
+        .select("id, metadata")
+        .eq("id", req.params.scene_id)
+        .eq("pipeline_id", req.params.id)
+        .eq("entity_type", "scene")
+        .maybeSingle()
+      if (!scene) {
+        return reply.status(404).send({ error: { code: "scene_not_found" } })
+      }
+
+      const metadata = (scene.metadata as Record<string, unknown> | null) ?? {}
+      const snd = metadata.scene_node_data as
+        | { shots?: Array<Record<string, unknown>> }
+        | undefined
+      const shots = snd?.shots
+      if (!snd || !Array.isArray(shots)) {
+        return reply.status(409).send({ error: { code: "scene_not_planned" } })
+      }
+
+      const idx = shots.findIndex(
+        (s) => (s as { shot_id?: string }).shot_id === req.params.shot_id,
+      )
+      if (idx === -1) {
+        return reply.status(404).send({ error: { code: "shot_not_found" } })
+      }
+
+      // Field-merge: spread the patch over the existing shot so untouched
+      // fields (incl. orchestrator-written video_url etc.) survive. Camera
+      // merges nested so a partial camera update doesn't drop sibling fields.
+      const current = shots[idx] as Record<string, unknown>
+      const { camera, ...rest } = patch
+      const mergedShot: Record<string, unknown> = {
+        ...current,
+        ...rest,
+        ...(camera
+          ? {
+              camera: {
+                ...((current.camera as Record<string, unknown> | undefined) ?? {}),
+                ...camera,
+              },
+            }
+          : {}),
+      }
+      const newShots = shots.map((s, i) => (i === idx ? mergedShot : s))
+      const newMetadata = {
+        ...metadata,
+        scene_node_data: { ...snd, shots: newShots },
+      }
+
+      const { error: updErr } = await supabase
+        .from("pipeline_entities")
+        .update({ metadata: newMetadata })
+        .eq("id", req.params.scene_id)
+        .eq("pipeline_id", req.params.id)
+      if (updErr) {
+        return reply
+          .status(500)
+          .send({ error: { code: "db_error", detail: updErr.message } })
+      }
+
+      return reply.send({ ok: true, shot: mergedShot })
+    },
+  )
+
+  // ── POST /v1/pipelines/:id/scenes/:scene_id/shots/:shot_id/regenerate-keyframe
+  //
+  // Phase 3 — Focus composer "re-roll": regenerate ONE shot's keyframe still
+  // from its current `visual_keyframe_prompt` + the scene's reference slots,
+  // then persist the new `keyframe_url` / `keyframe_asset_id` back onto the
+  // shot. Reuses the same `allocateReferenceSlots` + `pipelineGenerateImage`
+  // path Stage 6 uses, so identity refs + the chosen image model carry over.
+  // Synchronous: it awaits the image job (needs the media worker running) and
+  // charges credits like any generation.
+  app.post<{ Params: { id: string; scene_id: string; shot_id: string } }>(
+    "/v1/pipelines/:id/scenes/:scene_id/shots/:shot_id/regenerate-keyframe",
+    async (req, reply) => {
+      if (!gateEdition(reply)) return
+      if (!gateScope(req, reply, "pipelines:execute")) return
+      const userId = gateAuth(req, reply)
+      if (!userId) return
+
+      const { data: owner } = await supabase
+        .from("pipelines")
+        .select("user_id")
+        .eq("id", req.params.id)
+        .maybeSingle()
+      if (!owner || owner.user_id !== userId) {
+        return reply.status(404).send({ error: { code: "not_found" } })
+      }
+
+      const { data: scene } = await supabase
+        .from("pipeline_entities")
+        .select("id, metadata")
+        .eq("id", req.params.scene_id)
+        .eq("pipeline_id", req.params.id)
+        .eq("entity_type", "scene")
+        .maybeSingle()
+      if (!scene) {
+        return reply.status(404).send({ error: { code: "scene_not_found" } })
+      }
+
+      const metadata = (scene.metadata as Record<string, unknown> | null) ?? {}
+      const snd = metadata.scene_node_data as
+        | {
+            shots?: Array<Record<string, unknown>>
+            image_model?: string
+            cast_keys?: string[]
+          }
+        | undefined
+      const shots = snd?.shots
+      if (!snd || !Array.isArray(shots)) {
+        return reply.status(409).send({ error: { code: "scene_not_planned" } })
+      }
+      const idx = shots.findIndex(
+        (s) => (s as { shot_id?: string }).shot_id === req.params.shot_id,
+      )
+      if (idx === -1) {
+        return reply.status(404).send({ error: { code: "shot_not_found" } })
+      }
+      const shot = shots[idx] as Record<string, unknown>
+      const keyframePrompt = (shot.visual_keyframe_prompt as string | undefined)?.trim()
+      if (!keyframePrompt) {
+        return reply.status(409).send({ error: { code: "shot_missing_keyframe_prompt" } })
+      }
+
+      const { allocateReferenceSlots } = await import("../ee/pipelines/continuity.js")
+      const { pipelineGenerateImage } = await import(
+        "../ee/pipelines/services/pipeline-generate-image.js"
+      )
+
+      const refs = await allocateReferenceSlots({
+        supabase,
+        pipelineId: req.params.id,
+        scene: { id: req.params.scene_id },
+        // The allocator only reads shot_intent off the shot; the persisted shot
+        // carries it. Cast the stored JSON to the expected shape.
+        shot: shot as never,
+        sceneNodeData: snd as never,
+        priorLastFrame: null,
+        maxReferences: 4,
+      })
+      const referenceImageUrls = refs.map((r) => r.url)
+      const lockClause =
+        (snd.cast_keys?.length ?? 0) > 0 && referenceImageUrls.length > 0
+          ? getIdentityLockClause("strict")
+          : ""
+      const prompt = lockClause ? `${keyframePrompt}\n\n${lockClause}` : keyframePrompt
+
+      let result: { assetId: string | null; assetUrl: string }
+      try {
+        result = await pipelineGenerateImage({
+          supabase,
+          pipelineId: req.params.id,
+          pipelineEntityId: req.params.scene_id,
+          userId,
+          prompt,
+          modelIdentifier: snd.image_model ?? "nano-banana",
+          referenceImageUrls,
+        })
+      } catch (e) {
+        return reply.status(502).send({
+          error: {
+            code: "keyframe_regen_failed",
+            detail: e instanceof Error ? e.message : String(e),
+          },
+        })
+      }
+
+      const mergedShot = {
+        ...shot,
+        keyframe_url: result.assetUrl,
+        keyframe_asset_id: result.assetId,
+      }
+      const newShots = shots.map((s, i) => (i === idx ? mergedShot : s))
+      const { error: updErr } = await supabase
+        .from("pipeline_entities")
+        .update({ metadata: { ...metadata, scene_node_data: { ...snd, shots: newShots } } })
+        .eq("id", req.params.scene_id)
+        .eq("pipeline_id", req.params.id)
+      if (updErr) {
+        return reply
+          .status(500)
+          .send({ error: { code: "db_error", detail: updErr.message } })
+      }
+
+      return reply.send({ ok: true, keyframe_url: result.assetUrl })
     },
   )
 
