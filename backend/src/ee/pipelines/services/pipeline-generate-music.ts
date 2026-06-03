@@ -68,6 +68,52 @@ export async function pipelineGenerateMusic(
     referenceAudioUrl,
   } = args
 
+  // Suno path — enqueue the dedicated `suno-generate` worker (KIE Suno) rather
+  // than the legacy `generate-music` handler (which only knows musicgen/minimax/
+  // lyria/bark). Output shape matches: `output_data.audioUrl`. Credit identifier
+  // mirrors `sunoModelCreditType` in routes/suno.ts (V5_5 → suno-v5_5, V5 →
+  // suno-v5, else suno-generate). Instrumental score unless lyrics are supplied.
+  if (provider === "suno") {
+    const sunoModel = modelVersion ?? "V5_5"
+    const sunoCreditId =
+      sunoModel === "V5_5"
+        ? "suno-v5_5"
+        : sunoModel === "V5"
+          ? "suno-v5"
+          : "suno-generate"
+    return runPipelineWorkerJob({
+      supabase,
+      pipelineId,
+      pipelineEntityId,
+      userId,
+      inputData: {
+        prompt,
+        provider: "suno",
+        model: sunoModel,
+        instrumental: !lyrics,
+        lyrics,
+        duration: durationSec,
+        type: "suno-generate",
+      },
+      queueName: "videoQueue",
+      jobName: "suno-generate",
+      buildPayload: (jobId, usageLogId) => ({
+        jobId,
+        prompt,
+        model: sunoModel,
+        lyrics,
+        instrumental: !lyrics,
+        customMode: false,
+        usageLogId,
+      }),
+      modelIdentifier: sunoCreditId,
+      assetType: "audio",
+      pickOutputUrl: (output) => output.audioUrl as string | undefined,
+      missingOutputError:
+        "suno-generate job completed without audioUrl in output_data",
+    })
+  }
+
   return runPipelineWorkerJob({
     supabase,
     pipelineId,
