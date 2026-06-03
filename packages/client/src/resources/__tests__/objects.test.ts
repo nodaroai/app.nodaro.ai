@@ -261,7 +261,7 @@ describe("objects resource", () => {
   })
 
   it("generate POSTs /v1/generate-object with the single-candidate body", async () => {
-    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-1" }))
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-1", jobIds: ["job-1"] }))
     const c = createClient({
       baseUrl: "https://api.example.com",
       auth: new StaticTokenAuth("t"),
@@ -283,11 +283,39 @@ describe("objects resource", () => {
     expect(body.category).toBe("weapon")
   })
 
-  it("generate returns the multi-candidate {jobIds} shape on count=4", async () => {
+  it("generate returns jobIds always present, plus the deprecated jobId alias on count=1 (WI-7)", async () => {
+    // Harmonized contract: count=1 now returns BOTH `jobIds` (always present)
+    // and the deprecated `jobId` back-compat alias.
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job-1", jobIds: ["job-1"] }))
+    const c = createClient({
+      baseUrl: "https://api.example.com",
+      auth: new StaticTokenAuth("t"),
+      fetch: fetchMock,
+    })
+    const result = await c.objects.generate({ name: "Magic Sword", count: 1 })
+    expect(result.jobIds).toEqual(["job-1"])
+    expect(result.jobId).toBe("job-1")
+  })
+
+  it("generate synthesizes jobIds from a LEGACY server that returns only { jobId } (WI-7 defensive)", async () => {
+    // The SDK ships before the backend route deploys to prod; the consuming
+    // app hits prod. An old server returns only `{ jobId }` — the SDK must
+    // synthesize `jobIds` so consumers can rely on it unconditionally.
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "x" }))
+    const c = createClient({
+      baseUrl: "https://api.example.com",
+      auth: new StaticTokenAuth("t"),
+      fetch: fetchMock,
+    })
+    const result = await c.objects.generate({ name: "Magic Sword", count: 1 })
+    expect(result.jobIds).toEqual(["x"])
+    expect(result.jobId).toBe("x")
+  })
+
+  it("generate returns the multi-candidate {jobIds} shape on count=4 (no jobId alias)", async () => {
     // Multi-candidate batches return `{ jobIds: string[] }` and intentionally
     // skip the `attachToObjectId` auto-attach (the user must approve a
-    // winner via approveMainImage). The SDK passes through whatever shape the
-    // route returns — discriminate via `"jobIds" in result`.
+    // winner via approveMainImage). No deprecated `jobId` alias for count>1.
     const fetchMock = vi.fn().mockReturnValueOnce(
       mockOk({ jobIds: ["j1", "j2", "j3", "j4"] }),
     )
@@ -297,8 +325,8 @@ describe("objects resource", () => {
       fetch: fetchMock,
     })
     const result = await c.objects.generate({ name: "Magic Sword", count: 4 })
-    if (!("jobIds" in result)) throw new Error("expected jobIds shape")
     expect(result.jobIds.length).toBe(4)
+    expect(result.jobId).toBeUndefined()
   })
 
   it("generate threads seedPromptHint through to the body (Pass 7 F-77)", async () => {

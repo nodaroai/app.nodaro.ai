@@ -141,7 +141,7 @@ function setupSupabaseMock(opts: {
 // ---------------------------------------------------------------------------
 
 describe("POST /v1/generate-object — multi-candidate + auto-attach (Phase C2a)", () => {
-  it("count=1 (default) returns { jobId } single shape — backward compat", async () => {
+  it("count=1 (default) returns BOTH jobIds AND the deprecated jobId alias (WI-7 harmonized contract)", async () => {
     const { jobInsert } = setupSupabaseMock()
 
     const res = await app.inject({
@@ -153,8 +153,10 @@ describe("POST /v1/generate-object — multi-candidate + auto-attach (Phase C2a)
 
     expect(res.statusCode).toBe(200)
     const body = res.json()
+    // `jobIds` is ALWAYS present now (matches characters). `jobId` is kept as
+    // a deprecated back-compat alias for count=1 only.
+    expect(body.jobIds).toEqual(["job-1"])
     expect(body.jobId).toBe("job-1")
-    expect(body.jobIds).toBeUndefined()
     expect(jobInsert).toHaveBeenCalledTimes(1)
     expect(videoQueue.add).toHaveBeenCalledTimes(1)
   })

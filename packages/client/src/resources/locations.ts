@@ -172,11 +172,15 @@ export interface GenerateLocationInput {
 }
 
 /**
- * `generate()` response — `{ jobId }` on `count === 1` (legacy single-job
- * shape) or `{ jobIds }` on `count === 2 | 4`. SDK consumers can discriminate
- * via `"jobIds" in result`.
+ * `generate()` response — `jobIds` is ALWAYS present (the harmonized contract,
+ * matching characters). `jobId` is a deprecated back-compat alias populated only
+ * on `count === 1`; prefer `jobIds`. (Will be removed on the next major.)
  */
-export type GenerateLocationResult = { jobId: string } | { jobIds: string[] }
+export interface GenerateLocationResult {
+  jobIds: string[]
+  /** @deprecated count===1 back-compat alias — use `jobIds`. */
+  jobId?: string
+}
 
 /**
  * Input for `client.locations.generateAsset()` — fires the
@@ -346,8 +350,13 @@ export class LocationsResource {
    * the result directly to the row's `source_image_url`; otherwise you must
    * call `approveMainImage()` after picking a candidate.
    */
-  generate(data: GenerateLocationInput): Promise<GenerateLocationResult> {
-    return this.client.request("POST", "/v1/generate-location", { body: data })
+  async generate(data: GenerateLocationInput): Promise<GenerateLocationResult> {
+    const res = await this.client.request<{ jobId?: string; jobIds?: string[] }>(
+      "POST", "/v1/generate-location", { body: data },
+    )
+    // Tolerate the legacy `{ jobId }`-only shape (older server): synthesize jobIds.
+    const jobIds = res.jobIds ?? (res.jobId ? [res.jobId] : [])
+    return res.jobId ? { jobIds, jobId: res.jobId } : { jobIds }
   }
 
   /**
