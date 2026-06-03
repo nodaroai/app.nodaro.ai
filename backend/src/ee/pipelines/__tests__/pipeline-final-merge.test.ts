@@ -18,6 +18,10 @@ vi.mock("../../../providers/video/ffmpeg-utils.js", () => ({
   getVideoDuration: vi.fn().mockResolvedValue(5.0),
   runFfmpeg: vi.fn().mockResolvedValue(""),
   normalizeVideoForCombine: vi.fn().mockResolvedValue(undefined),
+  // d028845e added a dialogue probe to the final mix. Default false = no scene
+  // dialogue, so these (pre-dialogue) cases mix exactly as before. Tests that
+  // exercise the dialogue path override this per-case.
+  hasAudioStream: vi.fn().mockResolvedValue(false),
 }))
 vi.mock("../../../lib/storage.js", () => ({
   uploadFileToR2: vi.fn().mockResolvedValue("https://r2/final.mp4"),
@@ -392,13 +396,15 @@ describe("pipelineFinalMerge", () => {
     expect(downloads).toContain("https://r2/narration.mp3")
     expect(downloads.every((url) => !/music/.test(url))).toBe(true)
 
-    // The final ffmpeg call should reference 2 inputs (video + narration)
-    // and apply afade on [1:a] (the narration track).
+    // The final ffmpeg call should reference 2 inputs (video + narration) and
+    // route narration as the sole audio track. Post-d028845e only the MUSIC
+    // branch gets a tail fade; narration/dialogue mix at volume=1.0 (speech is
+    // not faded), so narration-only appears as [1:a]volume=1.0[narr].
     const ffmpegCalls = (runFfmpeg as ReturnType<typeof vi.fn>).mock.calls
     const narrationOnlyCall = ffmpegCalls.find((call) => {
       const args = call[0] as string[]
       const iCount = args.filter((a) => a === "-i").length
-      return iCount === 2 && args.some((a) => /\[1:a\]afade/.test(a))
+      return iCount === 2 && args.some((a) => /\[1:a\]volume=1\.0\[narr\]/.test(a))
     })
     expect(narrationOnlyCall).toBeDefined()
     // Importantly: NO amix filter (only narration → no mix).
@@ -436,11 +442,12 @@ describe("pipelineFinalMerge", () => {
         return args.some((a) => /amix=inputs=2/.test(a))
       }),
     ).toBe(false)
-    // Music overlay filter is still present.
+    // Music overlay filter is still present — post-d028845e the music branch is
+    // [1:a]volume=<vol>,afade=t=out (was a bare [1:a]afade before the rework).
     expect(
       ffmpegCalls.some((call) => {
         const args = call[0] as string[]
-        return args.some((a) => /\[1:a\]afade=t=out/.test(a))
+        return args.some((a) => /\[1:a\]volume=[\d.]+,afade=t=out/.test(a))
       }),
     ).toBe(true)
   })
