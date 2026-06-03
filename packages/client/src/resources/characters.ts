@@ -54,7 +54,11 @@ export interface Character {
   angles: Array<{ name: string; url: string }> | null
   bodyAngles: Array<{ name: string; url: string }> | null
   motions: Array<{ name: string; url: string }> | null
-  voice: { voiceId: string; voiceName: string; traits: string } | null
+  /** `voiceType` records the selected voice's KIND (premade voices are
+   *  addressed by name; library/custom voices by id at text-to-speech time).
+   *  Optional — a character may have no voice, or a legacy voice predating the
+   *  field. */
+  voice: { voiceId: string; voiceName: string; traits: string; voiceType?: "premade" | "library" | "custom" } | null
   personality: {
     mood: string
     speechStyle: string
@@ -139,7 +143,9 @@ export interface UpsertCharacterInput {
   angles?: Array<{ name: string; url: string }>
   bodyAngles?: Array<{ name: string; url: string }>
   motions?: Array<{ name: string; url: string }>
-  voice?: { voiceId: string; voiceName: string; traits: string } | null
+  /** See `Character.voice.voiceType` — persisted alongside the voice so TTS can
+   *  resolve a library/custom voice by id. Optional. */
+  voice?: { voiceId: string; voiceName: string; traits: string; voiceType?: "premade" | "library" | "custom" } | null
   personality?: {
     mood: string
     speechStyle: string
