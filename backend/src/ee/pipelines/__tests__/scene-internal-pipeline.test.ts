@@ -318,6 +318,93 @@ describe("runSceneInternalPipeline", () => {
     expect(result.per_shot_results?.[0]?.has_dialogue).toBe(true)
   })
 
+  it("audio-driven model (seedance-2): pre-TTS fed as reference audio, no revoice/lip-sync", async () => {
+    ;(pipelineAnimateShot as ReturnType<typeof vi.fn>).mockImplementation(
+      async (args: { shot: ShotSpec }) => defaultAnimateSuccess(args.shot.shot_id),
+    )
+    ;(pipelineGenerateSpeech as ReturnType<typeof vi.fn>).mockResolvedValue({
+      assetUrl: "https://r2/char-voice.mp3",
+      audioDurationSec: 2.5,
+    })
+
+    // supabase mock so loadCastVoiceMap resolves "hero" -> voice-xyz.
+    const supabase = {
+      from: () => {
+        const b: Record<string, unknown> = {}
+        b.select = () => b
+        b.eq = () => b
+        b.in = () =>
+          Promise.resolve({
+            data: [{ entity_key: "hero", metadata: { voice_match: { voice_id: "voice-xyz" } } }],
+            error: null,
+          })
+        return b
+      },
+    } as never
+
+    const sceneData = makeSceneNodeData(1, {
+      video_model: "seedance-2",
+      cast_keys: ["hero"],
+      shots: [makeShot("shot_01", { dialogue_line: "Hello there." })],
+    })
+    const result = await runSceneInternalPipeline(
+      { supabase, pipelineId: "p1", userId: "u1" },
+      makeSceneEntity({ scene_node_data: sceneData }),
+      { mode: "parallel", lipSyncEnabled: true, runImageCritic: false },
+    )
+
+    expect(result.ok).toBe(true)
+    // TTS synthesised in the character voice BEFORE animate (the pre-TTS step),
+    // and NOT again in the dialogue step (the audio_driven shot is skipped).
+    expect(pipelineGenerateSpeech).toHaveBeenCalledTimes(1)
+    expect(pipelineGenerateSpeech).toHaveBeenCalledWith(
+      expect.objectContaining({ voice: "voice-xyz", text: "Hello there." }),
+    )
+    // ...fed to the model as reference audio so it lip-syncs in-model.
+    expect(pipelineAnimateShot).toHaveBeenCalledWith(
+      expect.objectContaining({ referenceAudioUrls: ["https://r2/char-voice.mp3"] }),
+    )
+    // No separate revoice or lip-sync — the model already synced the voice.
+    expect(pipelineVoiceChange).not.toHaveBeenCalled()
+    expect(pipelineLipSync).not.toHaveBeenCalled()
+    expect(result.per_shot_results?.[0]?.has_dialogue).toBe(true)
+  })
+
+  it("audio-driven model with no cast voice: no pre-TTS, falls back to TTS + lip-sync", async () => {
+    ;(pipelineAnimateShot as ReturnType<typeof vi.fn>).mockImplementation(
+      async (args: { shot: ShotSpec }) => defaultAnimateSuccess(args.shot.shot_id),
+    )
+    ;(pipelineGenerateSpeech as ReturnType<typeof vi.fn>).mockResolvedValue({
+      assetUrl: "https://r2/tts.mp3",
+      audioDurationSec: 2.5,
+    })
+    ;(pipelineLipSync as ReturnType<typeof vi.fn>).mockResolvedValue({
+      assetId: "lipsync-asset",
+      assetUrl: "https://r2/lipsynced.mp4",
+    })
+
+    const sceneData = makeSceneNodeData(1, {
+      video_model: "seedance-2",
+      cast_keys: [],
+      shots: [makeShot("shot_01", { dialogue_line: "Hello there." })],
+    })
+    const result = await runSceneInternalPipeline(
+      makeCtx(),
+      makeSceneEntity({ scene_node_data: sceneData }),
+      { mode: "parallel", lipSyncEnabled: true, runImageCritic: false },
+    )
+
+    expect(result.ok).toBe(true)
+    // No resolved voice → no pre-TTS reference audio handed to the model.
+    expect(pipelineAnimateShot).not.toHaveBeenCalledWith(
+      expect.objectContaining({ referenceAudioUrls: expect.anything() }),
+    )
+    // Falls through to the TTS + lip-sync path in the dialogue step.
+    expect(pipelineGenerateSpeech).toHaveBeenCalledTimes(1)
+    expect(pipelineLipSync).toHaveBeenCalledTimes(1)
+    expect(pipelineVoiceChange).not.toHaveBeenCalled()
+  })
+
   it("continuity_break — Image Critic flags blocking continuity_break, scene short-circuits", async () => {
     ;(pipelineAnimateShot as ReturnType<typeof vi.fn>).mockImplementation(
       async (args: { shot: ShotSpec }) => defaultAnimateSuccess(args.shot.shot_id),

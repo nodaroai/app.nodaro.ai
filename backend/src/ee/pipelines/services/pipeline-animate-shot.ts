@@ -67,6 +67,13 @@ export interface PipelineAnimateShotArgs {
    *  shot → the payload is byte-identical to the silent-animate path. Only the
    *  standard i2v/t2v dispatch honors it (Method 3/8/10 ignore it). */
   spokenDialogue?: string
+  /** #63 audio-driven dialogue (Seedance 2.0) — character-voiced TTS fed as the
+   *  model's reference audio so it lip-syncs the dialogue in-model. The caller
+   *  pre-synthesises the voice and passes it here ONLY for `audio_driven` scene
+   *  models; the worker forwards it to the Seedance-2 `reference_audio_urls`
+   *  param. Absent for every other shot. Only the standard i2v/t2v dispatch
+   *  honors it. */
+  referenceAudioUrls?: ReadonlyArray<string>
 }
 
 export interface PipelineAnimateShotResult {
@@ -117,6 +124,7 @@ export async function pipelineAnimateShot(
     interpolationKeyframeUrls,
     pipelineMode = "manual",
     spokenDialogue,
+    referenceAudioUrls,
   } = args
 
   const mode = sceneNodeData.shot_input_mode
@@ -315,6 +323,11 @@ export async function pipelineAnimateShot(
   )
 
   const refsForPayload = referenceUrls.length > 0 ? [...referenceUrls] : undefined
+  // #63 audio-driven — character-voiced TTS forwarded to Seedance-2's
+  // reference_audio_urls so it lip-syncs the dialogue in-model. Conditional
+  // spread keeps every non-audio_driven payload byte-identical.
+  const refAudioForPayload =
+    referenceAudioUrls && referenceAudioUrls.length > 0 ? [...referenceAudioUrls] : undefined
 
   const result = await runPipelineWorkerJob({
     supabase,
@@ -334,6 +347,7 @@ export async function pipelineAnimateShot(
       // shots on the existing (silent / provider-default) path. VEO is not an
       // AUDIO_ADDON model, so this does not change the credit identifier.
       ...(spokenDialogue ? { generateAudio: true } : {}),
+      ...(refAudioForPayload ? { referenceAudioUrls: refAudioForPayload } : {}),
     },
     queueName: "videoQueue",
     jobName: dispatchKind,
@@ -348,6 +362,7 @@ export async function pipelineAnimateShot(
             duration,
             referenceImageUrls: refsForPayload,
             ...(spokenDialogue ? { generateAudio: true } : {}),
+            ...(refAudioForPayload ? { referenceAudioUrls: refAudioForPayload } : {}),
             usageLogId,
           }
         : {
@@ -357,6 +372,7 @@ export async function pipelineAnimateShot(
             duration,
             referenceImageUrls: refsForPayload,
             ...(spokenDialogue ? { generateAudio: true } : {}),
+            ...(refAudioForPayload ? { referenceAudioUrls: refAudioForPayload } : {}),
             usageLogId,
           },
     modelIdentifier,
