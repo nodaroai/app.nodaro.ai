@@ -95,6 +95,18 @@ const ALLOWED_PATHS = [
   // by design (every credit query goes through service-role helpers).
   /^src\/routes\/credits-balance\.ts$/,
 
+  // Current-user identity (GET /v1/me): reads the caller's OWN profile row
+  // scoped by `.eq("id", req.userId)` (401 if no userId). Service-role required
+  // because profiles RLS denies even self-reads by design (same rationale as
+  // credits-balance + user-settings).
+  /^src\/routes\/me\.ts$/,
+
+  // Extract Audio / Remove Audio: job-creation routes that derive
+  // `userId = req.userId` (401 if absent) and INSERT the job with
+  // `user_id: userId`. Service-role mirrors the other media-generation routes.
+  /^src\/routes\/extract-audio\.ts$/,
+  /^src\/routes\/remove-audio\.ts$/,
+
   // Embeds / og-tags: fetch public-facing metadata by id, not user-scoped.
   /^src\/routes\/embed\.ts$/,
   /^src\/routes\/og-tags\.ts$/,
