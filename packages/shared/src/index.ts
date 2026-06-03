@@ -171,6 +171,12 @@ export {
 } from "./prompt-builder-structured-fields.js"
 
 export {
+  assembleImageInput,
+  type AssembleImageInput,
+  type DirectionFields,
+} from "./assemble-image-input.js"
+
+export {
   INPUT_NODE_TYPES,
   getInputNodes,
   getOutputNodes,

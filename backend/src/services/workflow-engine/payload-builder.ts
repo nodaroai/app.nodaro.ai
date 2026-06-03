@@ -7,7 +7,7 @@ import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeExecutionState } from 
 
 // Shared logic from packages/shared — single source of truth
 import { collectAncestorRefs as sharedCollectAncestorRefs } from "@nodaro/shared"
-import { buildImagePrompt, buildScenePrompt, applyReferenceOrderToVideo } from "@nodaro/shared"
+import { buildImagePrompt, assembleImageInput, buildScenePrompt, applyReferenceOrderToVideo } from "@nodaro/shared"
 import { collectIdentityLockClause as sharedCollectIdentityLockClause } from "@nodaro/shared"
 import { resolveTemplate, applyTemplate } from "@nodaro/shared"
 import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt } from "@nodaro/shared"
@@ -1506,9 +1506,15 @@ export function buildPayload(
       const generateRefOrder = readStringArray(data.referenceOrder)
       const generateSuppressed = readStringArray(data.suppressedCanonicalCharacterIds)
       const generateSuppressedLoc = readStringArray(data.suppressedCanonicalLocationIds)
+      // Shared node-input assembly (WI-1a) — single source of truth with the
+      // frontend execute-node + Studio. `rawPrompt` is already graph-composed
+      // (cinematography hints + identity clause folded above), passed as
+      // `userPrompt` with NO `direction`/`structured` (composer is a no-op) →
+      // byte-identical to the previous inline `buildImagePrompt` calls. No
+      // `throwOnEmpty` — the orchestrator never rejected an empty prompt here.
       const result = useConnectedRefs
-        ? buildImagePrompt({
-            prompt: rawPrompt,
+        ? assembleImageInput({
+            userPrompt: rawPrompt,
             provider: effectiveProvider,
             style: styleBypass ? undefined : (typeof data.style === "string" ? data.style : undefined),
             negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
@@ -1531,15 +1537,15 @@ export function buildPayload(
             // LoRA path: skip mention machinery (trigger word + LoRA carry identity).
             skipCharacterMentions: lora !== null,
           })
-        : buildImagePrompt({
-            prompt: rawPrompt,
+        : assembleImageInput({
+            userPrompt: rawPrompt,
             provider: effectiveProvider,
             style: styleBypass ? undefined : (typeof data.style === "string" ? data.style : undefined),
             negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
             characterDefs: charDefs as CharacterDef[],
             userTemplates: settings?.userPromptTemplates,
             flowTemplates: settings?.flowPromptTemplates,
-            referenceImageUrls: directRefs,
+            extraReferenceImageUrls: directRefs,
             ancestorRefs,
             referenceOrder: generateRefOrder,
             suppressedCanonicalCharacterIds: generateSuppressed,
