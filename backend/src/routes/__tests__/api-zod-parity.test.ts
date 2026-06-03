@@ -80,8 +80,20 @@ describe("generate-image — frontend payload × backend Zod", () => {
     expect(result.success).toBe(true)
   })
 
-  it("rejects: empty prompt", () => {
-    expect(generateImageBody.safeParse({ prompt: "" }).success).toBe(false)
+  // WI-1b: `prompt` was relaxed from `.min(1)` to `.min(0)` — an empty prompt
+  // is now ACCEPTED at the Zod layer because structured inputs
+  // (`connectedReferences` / `direction` / `structured`) can fill it. The
+  // empty-prompt rejection MOVED post-assembly: the handler returns 400
+  // (`no_prompt`) when the FINAL assembled prompt is empty (see
+  // generate-image.test.ts "returns 400 when structured inputs assemble to an
+  // empty prompt"). `prompt` is still REQUIRED as a key — a missing prompt
+  // still fails Zod.
+  it("accepts: empty prompt (empty-check moved post-assembly in WI-1b)", () => {
+    expect(generateImageBody.safeParse({ prompt: "" }).success).toBe(true)
+  })
+
+  it("rejects: missing prompt key", () => {
+    expect(generateImageBody.safeParse({ provider: "nano-banana" }).success).toBe(false)
   })
 
   it("rejects: unknown provider", () => {

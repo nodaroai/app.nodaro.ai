@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import Fastify, { type FastifyInstance } from "fastify"
+import { describe, it, expect, vi, beforeEach, afterEach, expectTypeOf } from "vitest"
+import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify"
+import type { z } from "zod"
 
 // ---------------------------------------------------------------------------
 // Mocks — hoisted before any route import
@@ -64,11 +65,16 @@ vi.mock("@/lib/url-validator.js", async () => {
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
-import { generateImageRoutes, generateImageBody } from "../generate-image.js"
+import {
+  generateImageRoutes,
+  generateImageBody,
+  connectedReferenceSchema,
+  resolveImageCreditIdentifier,
+} from "../generate-image.js"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
-import { FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared"
+import { FLUX_LORA_CHARACTER_MODEL_ID, assembleImageInput, type ConnectedReference } from "@nodaro/shared"
 
 // ---------------------------------------------------------------------------
 // aspectRatio enum must cover every provider's catalog ratios. Wan 2.7 /
@@ -91,6 +97,77 @@ describe("generateImageBody aspectRatio enum", () => {
     for (const r of ["auto", "1:1", "16:9", "9:16", "4:3", "3:4", "21:9"]) {
       expect(aspectRatioEnum.has(r), `missing ${r}`).toBe(true)
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Drift guard for the hand-mirrored `connectedReferenceSchema` (WI-1b).
+//
+// The route's `connectedReferenceSchema` hand-mirrors the ~21-field shared
+// `ConnectedReference`. The ENUMS are derived from the catalog (can't drift),
+// but the FIELD SET is hand-typed — and Zod `.object()` is non-strict, so a NEW
+// optional field added to `ConnectedReference` would be SILENTLY STRIPPED here
+// (the structured-mode prompt builder would never see it) with no failing test.
+//
+// This is a COMPILE-TIME assertion: `tsc --noEmit` fails if the schema's
+// inferred key set diverges from `ConnectedReference`'s in EITHER direction
+// (missing field OR extra field). `readonly` modifiers differ between the two
+// (the shared type marks most fields `readonly`, Zod's inference does not), so
+// we compare KEY SETS rather than full structural types — that's the part the
+// hand-mirror can actually get wrong. See the TODO(nodaro) on the schema:
+// WI-7 replaces this mirror with a shared Zod schema and retires this guard.
+// ---------------------------------------------------------------------------
+describe("connectedReferenceSchema mirrors ConnectedReference (key-set drift guard)", () => {
+  type SchemaKeys = keyof z.infer<typeof connectedReferenceSchema>
+  type TypeKeys = keyof ConnectedReference
+  // `Exclude<A, B>` is `never` iff every member of A is in B. Asserting it both
+  // ways pins the key sets to be EQUAL — a missing field trips one direction,
+  // an extra field trips the other. If either resolves to a non-`never` key,
+  // `expectTypeOf<never>().toEqualTypeOf<...>()` fails at compile time.
+  type MissingFromSchema = Exclude<TypeKeys, SchemaKeys>
+  type ExtraInSchema = Exclude<SchemaKeys, TypeKeys>
+
+  it("has no field present in ConnectedReference but missing from the schema", () => {
+    expectTypeOf<MissingFromSchema>().toEqualTypeOf<never>()
+  })
+
+  it("has no field present in the schema but missing from ConnectedReference", () => {
+    expectTypeOf<ExtraInSchema>().toEqualTypeOf<never>()
+  })
+
+  // Runtime smoke: the two key sets are the same SIZE (catches a duplicate /
+  // typo'd key that the type-level Exclude would still see as a member of one
+  // side). The schema's runtime `.shape` is the source for its key count.
+  it("has the same number of keys in the schema as in ConnectedReference (runtime cross-check)", () => {
+    // A fully-populated ConnectedReference: TS forces EXACTLY the type's keys
+    // (excess-property + missing-property both error), so its key count is the
+    // authoritative `ConnectedReference` field count without runtime reflection.
+    const sample: Record<keyof ConnectedReference, true> = {
+      id: true,
+      defaultName: true,
+      source: true,
+      description: true,
+      url: true,
+      characterSlug: true,
+      variantSlug: true,
+      characterCanonicalDescription: true,
+      locationCanonicalDescription: true,
+      locationSlug: true,
+      locationVariantBucket: true,
+      locationVariantSlug: true,
+      locationVariantDisplayName: true,
+      locationReferencePhotoKind: true,
+      variantDescription: true,
+      variantDisplayName: true,
+      defaultUsageMode: true,
+      isExtraRef: true,
+      loraReplicateVersion: true,
+      loraTriggerWord: true,
+      loraTrainingStatus: true,
+    }
+    expect(Object.keys(connectedReferenceSchema.shape).sort()).toEqual(
+      Object.keys(sample).sort(),
+    )
   })
 })
 
@@ -261,6 +338,33 @@ describe("POST /v1/generate-image", () => {
     expect(res.statusCode).toBe(500)
     const body = res.json()
     expect(body.error.code).toBe("internal_error")
+  })
+
+  // -------------------------------------------------------------------------
+  // Robustness: a non-object JSON body (literal `null`, or a scalar) must NOT
+  // crash the preHandler. This route has no Fastify body schema, so `req.body`
+  // can legitimately be `null`/`"x"`/`42`. Before the `isStructuredImageMode`
+  // null-guard, `body.connectedReferences` threw a TypeError inside the
+  // (try/catch-less) preHandler → 500; the guard makes it fall through to the
+  // flat-ref path so the handler's `safeParse(null)` returns a clean 400.
+  // -------------------------------------------------------------------------
+  it.each([
+    ["null", null],
+    ["a scalar string", "x"],
+    ["a scalar number", 42],
+  ])("returns 400 (not 500) when the request body is %s", async (_label, payload) => {
+    setupSupabaseMock({})
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-image",
+      headers: { "content-type": "application/json" },
+      payload: JSON.stringify(payload),
+    })
+
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+    // The preHandler reached the flat path (no throw), and no work was enqueued.
+    expect(videoQueue.add).not.toHaveBeenCalled()
   })
 
   // -------------------------------------------------------------------------
@@ -579,6 +683,409 @@ describe("POST /v1/generate-image", () => {
         })
         expect(result.success, `resolution "${mp}" should be valid`).toBe(true)
       }
+    })
+  })
+
+  // ─── WI-1b: structured inputs + server-side assembly ──────────────────────
+  // The route now ALSO accepts the structured inputs a thin client (Studio /
+  // MCP) sends — `connectedReferences` / `direction` / `structured` — and
+  // assembles them server-side via the shared `assembleImageInput`. These
+  // tests pin: (1) the old pre-assembled shape is byte-identical (non-breaking),
+  // (2) structured inputs assemble to the same prompt/refs `assembleImageInput`
+  // produces, (3) the billed identifier prices on the ASSEMBLED ref count
+  // (parity with the flat path), (4) an assembly that yields an empty prompt → 400.
+  describe("WI-1b structured inputs", () => {
+    const VALID_UUID = "00000000-0000-4000-8000-000000000001"
+
+    function mkManualRefs(n: number) {
+      return Array.from({ length: n }, (_, i) => ({
+        id: `m${i}`,
+        defaultName: `ref${i}`,
+        source: "manual" as const,
+        url: `https://r2.nodaro.ai/cref-${i}.png`,
+      }))
+    }
+
+    // ── Non-breaking: OLD shape produces a byte-identical queued job ──────────
+    it("is byte-identical for the OLD pre-assembled shape (no structured fields)", async () => {
+      setupSupabaseMock({})
+      const oldShapePayload = {
+        prompt: "a beautiful sunset",
+        userId: VALID_UUID,
+        provider: "nano-banana",
+        negativePrompt: "blurry",
+        referenceImageUrls: ["https://r2.nodaro.ai/ref-a.png", "https://r2.nodaro.ai/ref-b.png"],
+      }
+
+      const res = await app.inject({ method: "POST", url: "/v1/generate-image", payload: oldShapePayload })
+      expect(res.statusCode).toBe(200)
+
+      // Queued payload must carry the prompt + refs + negativePrompt VERBATIM —
+      // no assembly ran (structured fields absent), so the route is unchanged.
+      const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as Record<string, unknown>
+      expect(queued.prompt).toBe("a beautiful sunset")
+      expect(queued.referenceImageUrls).toEqual([
+        "https://r2.nodaro.ai/ref-a.png",
+        "https://r2.nodaro.ai/ref-b.png",
+      ])
+      // Flat path: the raw negative prompt rides its own channel unchanged.
+      expect(queued.negativePrompt).toBe("blurry")
+      expect(queued.provider).toBe("nano-banana")
+
+      // Reservation identifier unchanged (nano-banana has no ref-count pricing).
+      expect(vi.mocked(reserveCreditsForJob).mock.calls.at(-1)?.[3]).toBe("nano-banana")
+    })
+
+    it("preserves `referenceImageUrls: undefined` on the queue when the old shape omits refs", async () => {
+      setupSupabaseMock({})
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: { prompt: "a city skyline", userId: VALID_UUID, provider: "nano-banana" },
+      })
+      expect(res.statusCode).toBe(200)
+      const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as Record<string, unknown>
+      // Byte-identical to before: no refs → the field stays `undefined` (not `[]`).
+      expect(queued.referenceImageUrls).toBeUndefined()
+    })
+
+    // ── Structured mode: assembles via the SAME shared assembleImageInput ─────
+    it("assembles `connectedReferences` + `direction` into the queued prompt/refs (matches assembleImageInput)", async () => {
+      setupSupabaseMock({})
+      const connectedReferences = mkManualRefs(2)
+      const direction = { framingId: "close-up", lightingId: "golden-hour" }
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: {
+          prompt: "a hero shot",
+          userId: VALID_UUID,
+          provider: "nano-banana",
+          connectedReferences,
+          direction,
+        },
+      })
+      expect(res.statusCode).toBe(200)
+
+      // Independently assemble the SAME inputs and compare the queued payload.
+      const expected = assembleImageInput({
+        userPrompt: "a hero shot",
+        provider: "nano-banana",
+        connectedReferences,
+        direction,
+        throwOnEmpty: true,
+      })
+      const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as Record<string, unknown>
+      expect(queued.prompt).toBe(expected.prompt)
+      expect(queued.referenceImageUrls).toEqual(expected.referenceImageUrls)
+      // The direction hints must have actually changed the prompt vs. the raw input.
+      expect(queued.prompt).not.toBe("a hero shot")
+    })
+
+    it("routes the non-native negative prompt into the assembled prompt (native rides its own channel)", async () => {
+      setupSupabaseMock({})
+      // nano-banana is NOT a native-negative model → negative folds into prompt.
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: {
+          prompt: "a portrait",
+          userId: VALID_UUID,
+          provider: "nano-banana",
+          structured: { mood: "somber" },
+          negativePrompt: "cartoonish",
+        },
+      })
+      expect(res.statusCode).toBe(200)
+      const expected = assembleImageInput({
+        userPrompt: "a portrait",
+        provider: "nano-banana",
+        structured: { mood: "somber" },
+        negativePrompt: "cartoonish",
+        throwOnEmpty: true,
+      })
+      const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as Record<string, unknown>
+      expect(queued.prompt).toBe(expected.prompt)
+      // Non-native model → assembled `nativeNegativePrompt` is undefined, so the
+      // queue's negativePrompt channel is undefined (it's folded into prompt).
+      expect(queued.negativePrompt).toBe(expected.nativeNegativePrompt)
+      expect(queued.prompt).toContain("Avoid: cartoonish")
+    })
+
+    // ── Pricing parity: flux-2-max bills the ASSEMBLED ref count ──────────────
+    it.each([0, 1, 2, 4, 8])(
+      "flux-2-max with %d connectedReferences bills the same as %d flat referenceImageUrls",
+      async (n) => {
+        // Flat path billed identifier.
+        setupSupabaseMock({})
+        await app.inject({
+          method: "POST",
+          url: "/v1/generate-image",
+          payload: {
+            prompt: "subject with refs",
+            userId: VALID_UUID,
+            provider: "flux-2-max",
+            referenceImageUrls: Array.from({ length: n }, (_, i) => `https://r2.nodaro.ai/ref-${i}.png`),
+          },
+        })
+        const flatIdentifier = vi.mocked(reserveCreditsForJob).mock.calls.at(-1)?.[3]
+
+        // Structured path billed identifier (N manual refs → N assembled refs).
+        vi.clearAllMocks()
+        setupSupabaseMock({})
+        await app.inject({
+          method: "POST",
+          url: "/v1/generate-image",
+          payload: {
+            prompt: "subject with refs",
+            userId: VALID_UUID,
+            provider: "flux-2-max",
+            connectedReferences: mkManualRefs(n),
+          },
+        })
+        const structuredIdentifier = vi.mocked(reserveCreditsForJob).mock.calls.at(-1)?.[3]
+
+        expect(structuredIdentifier).toBe(flatIdentifier)
+        expect(structuredIdentifier).toBe(`flux-2-max:1MP:${n}ref`)
+      },
+    )
+
+    it("flux-2-max prices a wired-character canonical fallback as 1 ref (not 0)", async () => {
+      // A wired-character with no @-mention contributes its canonical URL (1 ref)
+      // via buildImagePrompt's fallback — the billed count must reflect that.
+      setupSupabaseMock({})
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: {
+          prompt: "a portrait",
+          userId: VALID_UUID,
+          provider: "flux-2-max",
+          connectedReferences: [{
+            id: "c1",
+            defaultName: "Kira",
+            source: "wired-character",
+            characterSlug: "kira",
+            url: "https://r2.nodaro.ai/kira.png",
+          }],
+        },
+      })
+      expect(res.statusCode).toBe(200)
+      expect(vi.mocked(reserveCreditsForJob).mock.calls.at(-1)?.[3]).toBe("flux-2-max:1MP:1ref")
+    })
+
+    it("auto-swaps a T2I provider to its i2i sibling when connectedReferences assemble to >=1 ref", async () => {
+      setupSupabaseMock({})
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: {
+          prompt: "make it night",
+          userId: VALID_UUID,
+          provider: "seedream-5-lite",
+          connectedReferences: mkManualRefs(1),
+        },
+      })
+      expect(res.statusCode).toBe(200)
+      // Reserved + queued provider must be the i2i sibling (refs are consumed).
+      expect(vi.mocked(reserveCreditsForJob).mock.calls.at(-1)?.[3]).toContain("seedream-5-lite-i2i")
+      const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as Record<string, unknown>
+      expect(queued.provider).toBe("seedream-5-lite-i2i")
+    })
+
+    // ── Empty assembled prompt → 400 ──────────────────────────────────────────
+    it("returns 400 when structured inputs assemble to an empty prompt", async () => {
+      const { jobInsert } = setupSupabaseMock({})
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: {
+          // Empty user prompt + an empty `structured` object (no fields) and no
+          // refs → assembled prompt is empty → throwOnEmpty fires → 400.
+          prompt: "",
+          userId: VALID_UUID,
+          provider: "nano-banana",
+          structured: {},
+        },
+      })
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.code).toBe("no_prompt")
+      // No job created, nothing enqueued — the 400 short-circuits before insert.
+      expect(jobInsert).not.toHaveBeenCalled()
+      expect(videoQueue.add).not.toHaveBeenCalled()
+    })
+
+    it("does NOT reject when the user prompt is empty but a wired character fills it", async () => {
+      setupSupabaseMock({})
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: {
+          prompt: "",
+          userId: VALID_UUID,
+          provider: "nano-banana",
+          // A wired-character with no @-mention emits a canonical-fallback
+          // "Use these characters:" directive block → assembled prompt is
+          // non-empty even though the user typed nothing (mirrors the frontend
+          // execute-node guard: "type one, mention a character, or connect a
+          // cinematography source").
+          connectedReferences: [{
+            id: "c1",
+            defaultName: "Kira",
+            source: "wired-character",
+            characterSlug: "kira",
+            url: "https://r2.nodaro.ai/kira.png",
+          }],
+        },
+      })
+      expect(res.statusCode).toBe(200)
+      const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as Record<string, unknown>
+      expect(queued.prompt as string).toContain("Use these characters:")
+    })
+
+    it("returns 400 when the user prompt is empty and only a bare manual ref is attached (no directive text)", async () => {
+      // A `manual` ref with no `{image:N}` token auto-attaches its URL but emits
+      // NO directive text — so an empty user prompt assembles to an empty prompt
+      // → 400. (The URL alone is not a prompt; this matches assembleImageInput's
+      // throwOnEmpty contract and the frontend guard.)
+      const { jobInsert } = setupSupabaseMock({})
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: {
+          prompt: "",
+          userId: VALID_UUID,
+          provider: "nano-banana",
+          connectedReferences: mkManualRefs(1),
+        },
+      })
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.code).toBe("no_prompt")
+      expect(jobInsert).not.toHaveBeenCalled()
+    })
+  })
+
+  // ─── WI-1b: CHECK === DEBIT billing-parity invariant ──────────────────────
+  // The credit CHECK (preHandler `resolveImageCreditIdentifier`) and the credit
+  // DEBIT (handler `reserveCreditsForJob(..., modelIdentifier)`) are computed at
+  // SEPARATELY-WRITTEN sites. They're equal today (both derive the assembled
+  // ref count via the same `buildAssembleInput` + `assembleImageInput`), but a
+  // future tweak to one site could silently mis-bill — and every OTHER route
+  // test mocks `creditGuard` to a no-op, so the CHECK closure never runs there.
+  //
+  // This block runs the REAL preHandler pricing by calling the exported
+  // `resolveImageCreditIdentifier` resolver DIRECTLY (the exact function handed
+  // to `creditGuard` in the route — un-mockable here since `creditGuard` itself
+  // is mocked) and asserts, for the SAME structured body, that the CHECK
+  // identifier === the DEBIT identifier (captured from the `reserveCreditsForJob`
+  // 4th arg the handler computes). Cases mirror the DEBIT parity test:
+  // [0,1,2,4,8] refs, the wired-character canonical fallback (→ 1 ref), and the
+  // i2i auto-swap. This is the direct guard on the CHECK===DEBIT invariant.
+  describe("WI-1b CHECK === DEBIT identifier parity (real preHandler pricing)", () => {
+    const VALID_UUID = "00000000-0000-4000-8000-000000000001"
+
+    function mkManualRefs(n: number) {
+      return Array.from({ length: n }, (_, i) => ({
+        id: `m${i}`,
+        defaultName: `ref${i}`,
+        source: "manual" as const,
+        url: `https://r2.nodaro.ai/cref-${i}.png`,
+      }))
+    }
+
+    /** Run the route, return the DEBIT identifier (reserveCreditsForJob arg 4). */
+    async function debitIdentifierFor(payload: Record<string, unknown>): Promise<string | undefined> {
+      vi.clearAllMocks()
+      setupSupabaseMock({})
+      const res = await app.inject({ method: "POST", url: "/v1/generate-image", payload })
+      expect(res.statusCode).toBe(200)
+      return vi.mocked(reserveCreditsForJob).mock.calls.at(-1)?.[3]
+    }
+
+    /** Run the REAL preHandler CHECK resolver directly on the same body. */
+    function checkIdentifierFor(body: Record<string, unknown>): string {
+      // The resolver only reads `req.body`; a minimal stub suffices.
+      return resolveImageCreditIdentifier({ body } as FastifyRequest)
+    }
+
+    it.each([0, 1, 2, 4, 8])(
+      "CHECK === DEBIT for flux-2-max with %d connectedReferences",
+      async (n) => {
+        const body = {
+          prompt: "subject with refs",
+          userId: VALID_UUID,
+          provider: "flux-2-max",
+          connectedReferences: mkManualRefs(n),
+        }
+        const debit = await debitIdentifierFor(body)
+        const check = checkIdentifierFor(body)
+        expect(check).toBe(debit)
+        // Pin the concrete value so a regression in BOTH sites can't pass silently.
+        expect(check).toBe(`flux-2-max:1MP:${n}ref`)
+      },
+    )
+
+    it("CHECK === DEBIT for flat referenceImageUrls (non-structured path)", async () => {
+      const body = {
+        prompt: "subject with refs",
+        userId: VALID_UUID,
+        provider: "flux-2-max",
+        referenceImageUrls: ["https://r2.nodaro.ai/a.png", "https://r2.nodaro.ai/b.png", "https://r2.nodaro.ai/c.png"],
+      }
+      const debit = await debitIdentifierFor(body)
+      const check = checkIdentifierFor(body)
+      expect(check).toBe(debit)
+      expect(check).toBe("flux-2-max:1MP:3ref")
+    })
+
+    it("CHECK === DEBIT for a wired-character canonical fallback (→ 1 ref, not 0)", async () => {
+      const body = {
+        prompt: "a portrait",
+        userId: VALID_UUID,
+        provider: "flux-2-max",
+        connectedReferences: [{
+          id: "c1",
+          defaultName: "Kira",
+          source: "wired-character",
+          characterSlug: "kira",
+          url: "https://r2.nodaro.ai/kira.png",
+        }],
+      }
+      const debit = await debitIdentifierFor(body)
+      const check = checkIdentifierFor(body)
+      expect(check).toBe(debit)
+      expect(check).toBe("flux-2-max:1MP:1ref")
+    })
+
+    it("CHECK === DEBIT for the i2i auto-swap case (T2I provider + assembled refs)", async () => {
+      const body = {
+        prompt: "make it night",
+        userId: VALID_UUID,
+        provider: "seedream-5-lite",
+        connectedReferences: mkManualRefs(1),
+      }
+      const debit = await debitIdentifierFor(body)
+      const check = checkIdentifierFor(body)
+      // Both sites must swap T2I → i2i off the SAME assembled ref count.
+      expect(check).toBe(debit)
+      expect(check).toContain("seedream-5-lite-i2i")
+    })
+
+    // Robustness companion to the route-level null-body test: the REAL preHandler
+    // resolver must not throw on a non-object body (the `isStructuredImageMode`
+    // null-guard). A throw here = the production 500 regression.
+    it.each([
+      ["null", null],
+      ["a scalar string", "x"],
+      ["a scalar number", 42],
+    ])("CHECK resolver does not throw on %s body (falls back to default identifier)", (_label, body) => {
+      let identifier = ""
+      expect(() => {
+        identifier = resolveImageCreditIdentifier({ body } as unknown as FastifyRequest)
+      }).not.toThrow()
+      // Non-object body → flat path, 0 refs, default provider.
+      expect(identifier).toBe("nano-banana")
     })
   })
 })
