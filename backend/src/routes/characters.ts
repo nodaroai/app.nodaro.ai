@@ -68,7 +68,11 @@ export const upsertCharacterBody = z.object({
   angles: z.array(z.object({ name: z.string(), url: safeUrlSchema })).optional(),
   bodyAngles: z.array(z.object({ name: z.string(), url: safeUrlSchema })).optional(),
   motions: z.array(z.object({ name: z.string(), url: safeUrlSchema })).optional(),
-  voice: z.object({ voiceId: z.string(), voiceName: z.string(), traits: z.string() }).nullable().optional(),
+  // `voiceType` records the selected voice's KIND so text-to-speech can resolve
+  // a library/custom voice by id (premade voices are addressed by name). Always
+  // OPTIONAL: a character may have no voice, or a legacy voice with no recorded
+  // type. Without this field Zod would strip a client-sent `voiceType` on save.
+  voice: z.object({ voiceId: z.string(), voiceName: z.string(), traits: z.string(), voiceType: z.enum(["premade", "library", "custom"]).optional() }).nullable().optional(),
   personality: z.object({ mood: z.string(), speechStyle: z.string(), movementStyle: z.string(), behavioralNotes: z.string() }).nullable().optional(),
   // Identity-foundation fields (migration 114). Length caps mirror the DB
   // CHECK constraints so we reject at the boundary with a 400 rather than a
@@ -137,7 +141,7 @@ type CharacterRow = {
   angles: { name: string; url: string }[] | null
   body_angles: { name: string; url: string }[] | null
   motions: { name: string; url: string }[] | null
-  voice: { voiceId: string; voiceName: string; traits: string } | null
+  voice: { voiceId: string; voiceName: string; traits: string; voiceType?: "premade" | "library" | "custom" } | null
   personality: { mood: string; speechStyle: string; movementStyle: string; behavioralNotes: string } | null
   canonical_description: string | null
   lora_training_status: string | null

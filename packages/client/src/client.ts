@@ -14,6 +14,7 @@ import { ObjectsResource } from "./resources/objects.js"
 import { PipelinesResource } from "./resources/pipelines.js"
 import { ReduceResource } from "./resources/reduce.js"
 import { PromptHelperResource } from "./resources/prompt-helper.js"
+import { VoicesResource } from "./resources/voices.js"
 
 export interface ClientOptions {
   /** Backend base URL, e.g. "https://nodaro.example.com" or empty string for same-origin. */
@@ -63,6 +64,7 @@ export class NodaroClient {
   readonly pipelines: PipelinesResource
   readonly reduce: ReduceResource
   readonly promptHelper: PromptHelperResource
+  readonly voices: VoicesResource
 
   constructor(opts: ClientOptions) {
     this.baseUrl = opts.baseUrl.replace(/\/$/, "")  // strip trailing slash
@@ -84,6 +86,7 @@ export class NodaroClient {
     this.pipelines = new PipelinesResource(this)
     this.reduce = new ReduceResource(this)
     this.promptHelper = new PromptHelperResource(this)
+    this.voices = new VoicesResource(this)
   }
 
   async request<T>(method: string, path: string, options: RequestOptions = {}): Promise<T> {

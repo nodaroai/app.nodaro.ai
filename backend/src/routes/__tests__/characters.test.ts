@@ -47,7 +47,7 @@ vi.mock("@/lib/url-validator.js", async () => {
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
-import { characterRoutes } from "../characters.js"
+import { characterRoutes, upsertCharacterBody } from "../characters.js"
 import { supabase } from "../../lib/supabase.js"
 
 // ---------------------------------------------------------------------------
@@ -1197,6 +1197,50 @@ describe("POST /v1/characters", () => {
     expect(captured.row?.canonical_description).toBe(
       "A 25-year-old warrior with short dark hair, green eyes, scar on left cheek...",
     )
+  })
+
+  // voiceType records the selected voice's KIND (premade | library | custom)
+  // so text-to-speech can resolve a library/custom voice by id at speak time.
+  // It must survive Zod validation (the object strips unknown keys by default)
+  // and ride through into the persisted `voice` JSON blob unchanged.
+  it("persists voice.voiceType to insert row", async () => {
+    const { mockInsert, captured } = mockInsertCapture()
+    vi.mocked(supabase.from).mockReturnValue({ insert: mockInsert } as never)
+
+    const voice = { voiceId: "el_lib_123", voiceName: "Aria", traits: "warm", voiceType: "library" }
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: { name: "Hero", nodeId: "node-1", userId: TEST_USER_ID, voice },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(captured.row?.voice).toEqual(voice)
+  })
+
+  it("upsertCharacterBody preserves voice.voiceType through validation", () => {
+    const parsed = upsertCharacterBody.parse({
+      nodeId: "node-1",
+      voice: { voiceId: "el_lib_123", voiceName: "Aria", traits: "warm", voiceType: "library" },
+    })
+    expect(parsed.voice?.voiceType).toBe("library")
+  })
+
+  it("upsertCharacterBody rejects an invalid voice.voiceType", () => {
+    const result = upsertCharacterBody.safeParse({
+      nodeId: "node-1",
+      voice: { voiceId: "el_lib_123", voiceName: "Aria", traits: "warm", voiceType: "bogus" },
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it("upsertCharacterBody still accepts a voice WITHOUT voiceType (backward-compat)", () => {
+    const parsed = upsertCharacterBody.parse({
+      nodeId: "node-1",
+      voice: { voiceId: "Rachel", voiceName: "Rachel", traits: "calm" },
+    })
+    expect(parsed.voice).toEqual({ voiceId: "Rachel", voiceName: "Rachel", traits: "calm" })
+    expect(parsed.voice?.voiceType).toBeUndefined()
   })
 })
 
