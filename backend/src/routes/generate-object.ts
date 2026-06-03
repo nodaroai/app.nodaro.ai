@@ -286,11 +286,12 @@ export async function generateObjectRoutes(app: FastifyInstance) {
         })
       }
 
-      // Backward-compat response shape: count=1 returns the legacy `{ jobId }`,
-      // count=2/4 returns `{ jobIds }` — the studio UI uses jobIds.length to
-      // decide single-pane vs grid rendering.
+      // `jobIds` is ALWAYS present now (the harmonized contract — matches
+      // characters). `jobId` is kept ONLY for count===1 as a deprecated
+      // back-compat alias for callers that haven't migrated to jobIds yet; drop
+      // it on the next major. (Response shape only — billing is untouched.)
       return parsed.data.count === 1
-        ? { jobId: insertedJobIds[0] }
+        ? { jobId: insertedJobIds[0], jobIds: insertedJobIds }
         : { jobIds: insertedJobIds }
     },
   )
