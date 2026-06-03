@@ -81,6 +81,8 @@ export class VoicesResource {
     videoUrl?: string
     stability?: number
     similarityBoost?: number
+    /** Style exaggeration (0–1). Default 0; >0 amplifies delivery at the cost of latency/stability. */
+    style?: number
     removeBackgroundNoise?: boolean
   }): Promise<{ jobId: string }> {
     return this.client.request<{ jobId: string }>("POST", "/v1/voice-changer", { body: input })

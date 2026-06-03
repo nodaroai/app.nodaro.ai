@@ -173,6 +173,21 @@ describe("POST /v1/voice-changer", () => {
     const res = await app.inject({ method: "POST", url: "/v1/voice-changer", payload: { ...validBody, similarityBoost: 1 } })
     expect(res.statusCode).not.toBe(400)
   })
+
+  it("accepts style 0", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/voice-changer", payload: { ...validBody, style: 0 } })
+    expect(res.statusCode).not.toBe(400)
+  })
+
+  it("accepts style 1", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/voice-changer", payload: { ...validBody, style: 1 } })
+    expect(res.statusCode).not.toBe(400)
+  })
+
+  it("rejects style 1.5", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/voice-changer", payload: { ...validBody, style: 1.5 } })
+    expect(res.statusCode).toBe(400)
+  })
 })
 
 // ═══════════════════════════════════════════════════════════════════════════

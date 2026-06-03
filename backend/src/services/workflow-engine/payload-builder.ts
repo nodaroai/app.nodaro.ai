@@ -2920,6 +2920,7 @@ export function buildPayload(
         voiceId: data.voiceId || data.voice,
         stability: data.stability,
         similarityBoost: data.similarityBoost,
+        style: data.style,
         removeBackgroundNoise: data.removeBackgroundNoise,
         usageLogId,
       })

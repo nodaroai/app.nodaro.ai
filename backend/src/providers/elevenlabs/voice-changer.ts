@@ -5,6 +5,9 @@ export interface VoiceChangerOptions {
   removeBackgroundNoise?: boolean
   stability?: number
   similarityBoost?: number
+  /** Style exaggeration (0–1). Amplifies the source speaker's stylistic
+   *  delivery; >0 adds latency and can reduce stability, so 0 is the default. */
+  style?: number
 }
 
 export async function directVoiceChanger(
@@ -23,12 +26,15 @@ export async function directVoiceChanger(
     formData.append("remove_background_noise", "true")
   }
 
-  if (options?.stability != null || options?.similarityBoost != null) {
-    const voiceSettings = JSON.stringify({
+  if (options?.stability != null || options?.similarityBoost != null || options?.style != null) {
+    const voiceSettings: Record<string, number> = {
       stability: options?.stability ?? 0.5,
       similarity_boost: options?.similarityBoost ?? 0.75,
-    })
-    formData.append("voice_settings", voiceSettings)
+    }
+    // Only send style when explicitly set, so default requests stay byte-for-byte
+    // identical to before this lever existed.
+    if (options?.style != null) voiceSettings.style = options.style
+    formData.append("voice_settings", JSON.stringify(voiceSettings))
   }
 
   const response = await fetch(`${ELEVENLABS_BASE_URL}/v1/speech-to-speech/${voiceId}`, {

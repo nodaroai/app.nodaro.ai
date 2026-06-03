@@ -223,7 +223,7 @@ describe("voice-changer — directVoiceChanger", () => {
     expect(settings).toEqual({ stability: 0.3, similarity_boost: 0.75 })
   })
 
-  it("omits voice_settings entirely when neither stability nor similarityBoost set", async () => {
+  it("omits voice_settings entirely when no voice settings are set", async () => {
     await directVoiceChanger(Buffer.from("input"), "v1")
     const init = fetchMock.mock.calls[0][1] as { body: FormData }
     expect(init.body.get("voice_settings")).toBeNull()
@@ -235,6 +235,39 @@ describe("voice-changer — directVoiceChanger", () => {
     const init = fetchMock.mock.calls[0][1] as { body: FormData }
     const settings = JSON.parse(init.body.get("voice_settings") as string)
     expect(settings.stability).toBe(0)
+  })
+
+  it("packs style into voice_settings and defaults stability + similarity", async () => {
+    // style alone must trigger voice_settings (it's a valid STS lever on its own).
+    await directVoiceChanger(Buffer.from("input"), "v1", { style: 0.4 })
+    const init = fetchMock.mock.calls[0][1] as { body: FormData }
+    const settings = JSON.parse(init.body.get("voice_settings") as string)
+    expect(settings).toEqual({ stability: 0.5, similarity_boost: 0.75, style: 0.4 })
+  })
+
+  it("combines style with stability + similarityBoost", async () => {
+    await directVoiceChanger(Buffer.from("input"), "v1", {
+      stability: 0.3,
+      similarityBoost: 0.9,
+      style: 0.6,
+    })
+    const init = fetchMock.mock.calls[0][1] as { body: FormData }
+    const settings = JSON.parse(init.body.get("voice_settings") as string)
+    expect(settings).toEqual({ stability: 0.3, similarity_boost: 0.9, style: 0.6 })
+  })
+
+  it("omits the style key when style is not provided (back-compat)", async () => {
+    await directVoiceChanger(Buffer.from("input"), "v1", { stability: 0.3 })
+    const init = fetchMock.mock.calls[0][1] as { body: FormData }
+    const settings = JSON.parse(init.body.get("voice_settings") as string)
+    expect(settings).not.toHaveProperty("style")
+  })
+
+  it("includes style when style=0 (falsy but defined)", async () => {
+    await directVoiceChanger(Buffer.from("input"), "v1", { style: 0 })
+    const init = fetchMock.mock.calls[0][1] as { body: FormData }
+    const settings = JSON.parse(init.body.get("voice_settings") as string)
+    expect(settings.style).toBe(0)
   })
 
   it("throws on non-200 with error text in message", async () => {

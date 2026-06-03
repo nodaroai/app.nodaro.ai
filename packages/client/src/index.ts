@@ -16,6 +16,9 @@ export {
   RateLimitedError,
   InsufficientCreditsError,
   StorageExceededError,
+  JobFailedError,
+  JobTimeoutError,
+  JobAbortedError,
   throwFromResponse,
 } from "./errors.js"
 
@@ -45,6 +48,7 @@ export { PipelinesResource } from "./resources/pipelines.js"
 export { ReduceResource } from "./resources/reduce.js"
 export { PromptHelperResource } from "./resources/prompt-helper.js"
 export { VoicesResource } from "./resources/voices.js"
+export { CreditsResource } from "./resources/credits.js"
 
 // --- Resource type definitions ---
 export type {
@@ -109,7 +113,12 @@ export type {
   ListAppRunsParams,
   DeleteAppRunResult,
 } from "./resources/apps.js"
-export type { RunNodeResult } from "./resources/nodes.js"
+export type {
+  RunNodeResult,
+  NodeJobOutput,
+  RunAndWaitOptions,
+  RunManyResult,
+} from "./resources/nodes.js"
 
 export type {
   Character,
@@ -225,3 +234,8 @@ export type {
   VoiceLibraryParams,
   VoiceLibraryResponse,
 } from "./resources/voices.js"
+
+export type {
+  UserBalance,
+  ModelCostsResult,
+} from "./resources/credits.js"

@@ -19,6 +19,7 @@ export function voiceCommand(): Command {
     .option("--video <url>", "video URL to revoice (returns the video + the new audio track). Wins over --audio when both are given.")
     .option("--stability <n>", "voice stability 0..1", parseFloat)
     .option("--similarity <n>", "similarity boost 0..1", parseFloat)
+    .option("--style <n>", "style exaggeration 0..1 — amplifies the source's delivery (default 0; higher adds latency / less stable)", parseFloat)
     .option("--remove-background-noise", "clean, voice-only output; omit to keep the music/SFX bed under the new voice")
     .option("--watch", "poll until the job completes")
     .option("--poll-interval <ms>", "watch poll interval in ms", (v) => parseInt(v, 10), 2000)
@@ -37,6 +38,7 @@ Examples:
           video?: string
           stability?: number
           similarity?: number
+          style?: number
           removeBackgroundNoise?: boolean
           watch?: boolean
           pollInterval: number
@@ -54,6 +56,7 @@ Examples:
             videoUrl: opts.video,
             stability: opts.stability,
             similarityBoost: opts.similarity,
+            style: opts.style,
             removeBackgroundNoise: opts.removeBackgroundNoise,
           })
           const jobId = result.jobId

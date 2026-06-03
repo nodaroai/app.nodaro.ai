@@ -430,7 +430,7 @@ describe("voiceChangerApi", () => {
     const mock = mockFetchJson({ jobId: "jvc" })
     vi.stubGlobal("fetch", mock)
 
-    await voiceChangerApi("http://a.mp3", "voice-7", "user-3", 0.5, 0.8, true)
+    await voiceChangerApi("http://a.mp3", "voice-7", "user-3", 0.5, 0.8, 0.3, true)
 
     const [url, init] = lastCall(mock)
     expect(url).toBe("/v1/voice-changer")
@@ -441,6 +441,7 @@ describe("voiceChangerApi", () => {
       userId: "user-3",
       stability: 0.5,
       similarityBoost: 0.8,
+      style: 0.3,
       removeBackgroundNoise: true,
     })
   })
