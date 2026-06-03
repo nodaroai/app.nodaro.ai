@@ -1021,6 +1021,12 @@ export type {
 } from "./location-mention-slug.js"
 
 export {
+  toConnectedReference,
+  toConnectedReferences,
+} from "./to-connected-references.js"
+export type { EntityReferenceInput } from "./to-connected-references.js"
+
+export {
   USAGE_MODES,
   DEFAULT_USAGE_MODE,
   isUsageMode,
