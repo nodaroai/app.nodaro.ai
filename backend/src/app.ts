@@ -84,6 +84,7 @@ import { stripeWebhookRoutes } from "./ee/routes/stripe-webhook.js"
 import { billingRoutes } from "./ee/routes/billing.js"
 import { galleryRoutes } from "./routes/gallery.js"
 import { userSettingsRoutes } from "./routes/user-settings.js"
+import { meRoutes } from "./routes/me.js"
 import { adminGalleryReportsRoutes } from "./ee/routes/admin-gallery-reports.js"
 import { adminCreditAuditRoutes } from "./ee/routes/admin-credit-audit.js"
 import { adminCreditAnomalyRoutes } from "./ee/routes/admin-credit-anomalies.js"
@@ -312,6 +313,7 @@ export async function buildApp() {
   if (hasCredits()) await app.register(billingRoutes)
   await app.register(galleryRoutes)
   await app.register(userSettingsRoutes)
+  await app.register(meRoutes)
   if (hasAdmin()) await app.register(adminGalleryReportsRoutes)
   if (hasAdmin()) await app.register(adminCreditAuditRoutes)
   if (hasAdmin()) await app.register(adminCreditAnomalyRoutes)
