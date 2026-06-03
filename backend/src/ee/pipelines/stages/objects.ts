@@ -3,7 +3,13 @@ import type { PipelineConfig, ShowrunnerPlan } from "@nodaro/shared"
 import { resolvePipelineModel } from "@nodaro/shared"
 import { pipelineEvents } from "../events.js"
 import { pipelineGenerateImage } from "../services/pipeline-generate-image.js"
-import { bulkApproveStageEntities, ensureStageRow, failStage } from "../stage-utils.js"
+import {
+  bulkApproveStageEntities,
+  ensureStageRow,
+  failStage,
+  recoverFailedEntitiesToChoose,
+  rejectFeedbackSuffix,
+} from "../stage-utils.js"
 import { transitionEntityNodeAndEmit } from "../depends-on.js"
 import { emitDependentStaleEvents } from "../entity-approval.js"
 
@@ -50,7 +56,22 @@ export async function runObjectsStage(args: RunObjectsStageArgs): Promise<void> 
     return
   }
 
-  // Materialize.
+  // Mark the stage active so the studio breadcrumb highlights "Props" while the
+  // user is at the gate (mirrors characters.ts — without a running/awaiting
+  // stage:status the tracker can't tell which step we're on). Auto mode emits
+  // `approved` below; this just covers the manual/guided pause window.
+  pipelineEvents.publish({
+    type: "stage:status",
+    pipelineId,
+    stageName: "objects",
+    status: "running",
+  })
+
+  // Materialize. New objects start at `pending_description` so manual/guided
+  // pipelines pause for the user's Step A choice (edit the prompt / Generate /
+  // Upload / Reuse / Skip) BEFORE any credits are spent — mirrors Stage 2
+  // (characters). Auto mode bulk-flips them to `pending` just below so the
+  // existing parallel-gen flow runs unattended.
   for (const obj of plan.objects) {
     await supabase
       .from("pipeline_entities")
@@ -60,7 +81,7 @@ export async function runObjectsStage(args: RunObjectsStageArgs): Promise<void> 
           stage_id: stageId,
           entity_type: "object",
           entity_key: obj.key,
-          status: "pending",
+          status: "pending_description",
           metadata: {
             entity_type: "object",
             name: obj.name,
@@ -73,6 +94,18 @@ export async function runObjectsStage(args: RunObjectsStageArgs): Promise<void> 
       )
   }
 
+  // Auto mode short-circuits the Step A wizard: flip every freshly-inserted
+  // `pending_description` object to `pending` so the generation loop below
+  // picks them up exactly as before. Manual/guided pause at the gate.
+  if (args.mode === "auto") {
+    await supabase
+      .from("pipeline_entities")
+      .update({ status: "pending" })
+      .eq("pipeline_id", pipelineId)
+      .eq("entity_type", "object")
+      .eq("status", "pending_description")
+  }
+
   // Generate where needed.
   const { data: entities } = await supabase
     .from("pipeline_entities")
@@ -81,9 +114,22 @@ export async function runObjectsStage(args: RunObjectsStageArgs): Promise<void> 
     .eq("entity_type", "object")
     .order("created_at", { ascending: true })
 
+  // Failed objects go back to the choose-gate (holds the stage open + lets the
+  // user edit / regenerate / upload / reuse / skip). Auto: no-op.
+  const recovered = await recoverFailedEntitiesToChoose(
+    supabase,
+    pipelineId,
+    "object",
+    entities ?? [],
+    args.mode,
+  )
+
   let anyGenerating = false
-  for (const entity of entities ?? []) {
-    if (entity.status === "approved" || entity.status === "awaiting_approval") continue
+  for (const entity of recovered) {
+    // Only `pending` / `generating` get (re)generated. `pending_description`
+    // waits for the user's Step A choice (the stage pauses below); approved /
+    // awaiting_approval / skipped / failed are already resolved or user-owned.
+    if (entity.status !== "pending" && entity.status !== "generating") continue
     const obj = plan.objects.find((o) => o.key === entity.entity_key)
     if (!obj) continue
     await supabase
@@ -92,7 +138,7 @@ export async function runObjectsStage(args: RunObjectsStageArgs): Promise<void> 
       .eq("id", entity.id)
     anyGenerating = true
     try {
-      const prompt = `${obj.visual_description}, ${plan.global_style.visual_style}, ${plan.global_style.lighting}, product/object photograph, isolated on neutral background`
+      const prompt = `${obj.visual_description}, ${plan.global_style.visual_style}, ${plan.global_style.lighting}, product/object photograph, isolated on neutral background${rejectFeedbackSuffix(entity.metadata)}`
       const { assetId, assetUrl } = await pipelineGenerateImage({
         supabase,
         pipelineId,
@@ -150,9 +196,13 @@ export async function runObjectsStage(args: RunObjectsStageArgs): Promise<void> 
     return // pause for user approval
   }
 
-  // Check if any still awaiting.
-  const allApproved = (entities ?? []).every((e) => e.status === "approved")
-  if (!allApproved) {
+  // Every object resolved? Skipped objects (user opted out at the Step A gate)
+  // count as resolved — they don't block the stage from advancing. Anything
+  // still at `pending_description` / `awaiting_approval` keeps the stage paused.
+  const allResolved = recovered.every(
+    (e) => e.status === "approved" || e.status === "skipped",
+  )
+  if (!allResolved) {
     // Phase 1D.2a §4.1 (G2): on a re-entrant pass (no fresh generation, but
     // entities still sitting at `awaiting_approval`) auto-mode advances the
     // stage. Manual/guided modes pause until the user approves each card.

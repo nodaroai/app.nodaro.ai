@@ -26,7 +26,7 @@ export async function getAuthHeaders(): Promise<Record<string, string>> {
   return {}
 }
 
-async function getCurrentUserId(): Promise<string | undefined> {
+export async function getCurrentUserId(): Promise<string | undefined> {
   try {
     const supabase = createClient()
     const { data: { session } } = await supabase.auth.getSession()

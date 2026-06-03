@@ -212,6 +212,7 @@ export async function drivePipeline(args: DriveArgs): Promise<void> {
       userId: pipeline.user_id,
       userTier,
       mode: pipelineMode,
+      config: pipeline.config ?? undefined,
     })
     return
   }

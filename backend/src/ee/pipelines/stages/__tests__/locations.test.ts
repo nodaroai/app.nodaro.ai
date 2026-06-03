@@ -277,6 +277,52 @@ describe("runLocationsStage", () => {
     expect(pipelineGenerateImage).toHaveBeenCalledTimes(1)
   })
 
+  it("manual-mode: new locations pause at pending_description for the Step A gate (no spend)", async () => {
+    // New locations now start at pending_description (parity with characters /
+    // props): the stage pauses for the user's edit-prompt / Generate / Upload /
+    // Reuse / Skip choice instead of auto-generating.
+    const supabase = makeSupabase({
+      seedEntities: [
+        {
+          id: "e-carrier_deck", entity_key: "carrier_deck", pipeline_id: "p1-loc-gate",
+          entity_type: "location", status: "pending_description", metadata: {}, main_asset_id: null,
+        },
+      ],
+      pipelineId: "p1-loc-gate",
+    })
+    await runLocationsStage({
+      supabase, pipelineId: "p1-loc-gate", userId: "u1", userTier: "pro", mode: "manual",
+    })
+    expect(pipelineGenerateImage).not.toHaveBeenCalled()
+    expect(enqueuePipelineRun).not.toHaveBeenCalled()
+    const row = (supabase as never as {
+      _entities: Map<string, Record<string, unknown>>
+    })._entities.get("e-carrier_deck")
+    expect(row?.status).toBe("pending_description")
+  })
+
+  it("manual-mode: a skipped location counts as resolved and doesn't block stage advance", async () => {
+    const supabase = makeSupabase({
+      seedEntities: [
+        {
+          id: "e-carrier_deck", entity_key: "carrier_deck", pipeline_id: "p1-loc-skip",
+          entity_type: "location", status: "skipped",
+          metadata: { entity_type: "location", name: "Carrier Deck" }, main_asset_id: null,
+        },
+      ],
+      pipelineId: "p1-loc-skip",
+    })
+    await runLocationsStage({
+      supabase, pipelineId: "p1-loc-skip", userId: "u1", userTier: "pro", mode: "manual",
+    })
+    expect(pipelineGenerateImage).not.toHaveBeenCalled()
+    const stageUpdates = (supabase as never as {
+      _stageUpdates: Array<Record<string, unknown>>
+    })._stageUpdates
+    expect(stageUpdates.find((u) => u.status === "approved")).toBeDefined()
+    expect(enqueuePipelineRun).toHaveBeenCalled()
+  })
+
   it("generates 2 variants after main is approved", async () => {
     ;(pipelineGenerateImage as ReturnType<typeof vi.fn>).mockResolvedValue({
       jobId: "v1",
@@ -1103,5 +1149,38 @@ describe("runLocationsStage", () => {
     // assertion would fail with one stage update carrying status='approved'.
     const approvedPatch = refs._stageUpdates.find((p) => p.status === "approved")
     expect(approvedPatch).toBeUndefined()
+  })
+
+  it("manual-mode: a failed location (at load) is recovered to the choose-gate, NOT advanced past (regression)", async () => {
+    // The bug: a location that failed (e.g. credit error) let the stage fall
+    // through to 'approved' and advance to Shots on a re-drive. It must instead
+    // go back to pending_description so the stage holds open + the user recovers.
+    const supabase = makeSupabase({
+      seedEntities: [
+        {
+          id: "e-carrier_deck", entity_key: "carrier_deck", pipeline_id: "p1-loc-failrec",
+          entity_type: "location", status: "failed",
+          metadata: {
+            entity_type: "location", name: "Carrier Deck",
+            last_error: "Credit reservation failed: Insufficient credits",
+          },
+          main_asset_id: null,
+        },
+      ],
+      pipelineId: "p1-loc-failrec",
+    })
+    await runLocationsStage({
+      supabase, pipelineId: "p1-loc-failrec", userId: "u1", userTier: "pro", mode: "manual",
+    })
+    const row = (supabase as never as {
+      _entities: Map<string, Record<string, unknown>>
+    })._entities.get("e-carrier_deck")
+    expect(row?.status).toBe("pending_description") // recovered to the gate
+    expect(pipelineGenerateImage).not.toHaveBeenCalled()
+    const stageUpdates = (supabase as never as {
+      _stageUpdates: Array<Record<string, unknown>>
+    })._stageUpdates
+    expect(stageUpdates.find((u) => u.status === "approved")).toBeUndefined() // did NOT advance
+    expect(enqueuePipelineRun).not.toHaveBeenCalled()
   })
 })

@@ -100,19 +100,18 @@ export async function runSceneDirector(args: RunSceneDirectorArgs): Promise<Scen
   // caught any non-allowlist string at the route, but if a future codepath
   // bypasses Zod we mustn't propagate an arbitrary user string into the LLM
   // prompt — prompt-injection vector).
+  // A pinned video model is the user's explicit, tier-checked, Zod-validated
+  // choice — it MUST be used for every scene so the film is consistent (the
+  // user picked one model, not a per-scene grab-bag). When the pin is in the
+  // capability registry for this input mode, narrow the LLM's prompt to it.
+  // When it isn't (e.g. Seedance v1, which has no VIDEO_MODEL_CAPS entry yet),
+  // let the LLM pick from the eligible set for prompting purposes, but coerce
+  // the final `video_model` to the pin below. Either way the pin wins.
   const userVideoPick =
     args.videoModelOverride &&
     eligibleVideoModels.includes(args.videoModelOverride as (typeof eligibleVideoModels)[number])
       ? args.videoModelOverride
       : undefined
-  if (args.videoModelOverride && !userVideoPick) {
-    pipelineEvents.publish({
-      type: "pipeline:warning",
-      pipelineId: args.pipelineId,
-      code: "video_model_override_dropped",
-      message: `Pinned video_model='${args.videoModelOverride}' isn't compatible with shot_input_mode='${args.shotInputMode}'. Using the Director's per-shot pick instead.`,
-    })
-  }
   const videoModelsForPrompt = userVideoPick
     ? eligibleVideoModelsWithStyle.filter((m) => m.model === userVideoPick)
     : eligibleVideoModelsWithStyle
@@ -205,9 +204,19 @@ Return a SceneNodeData via the emit tool.`
   // historically non-Sonnet models have ignored prompt constraints. Symmetric
   // to the video gate above, but we coerce rather than throw because the
   // user's billing was already estimated assuming their pinned model.
-  if (userImagePick && result.output.image_model !== userImagePick) {
-    return { ...result.output, image_model: userImagePick }
+  //
+  // Also pin `shot_input_mode` to the mode this stage selected. The video_model
+  // gate above already guarantees the model is valid for `args.shotInputMode`,
+  // so coercing here makes the animate stage's input wiring (keyframe vs
+  // reference portraits) deterministic regardless of what the LLM echoed.
+  return {
+    ...result.output,
+    shot_input_mode: args.shotInputMode,
+    // Pinned video model wins for every scene (consistency). Per-scene/per-shot
+    // model changes are a deliberate post-hoc edit, not the default.
+    ...(args.videoModelOverride ? { video_model: args.videoModelOverride } : {}),
+    ...(userImagePick && result.output.image_model !== userImagePick
+      ? { image_model: userImagePick }
+      : {}),
   }
-
-  return result.output
 }

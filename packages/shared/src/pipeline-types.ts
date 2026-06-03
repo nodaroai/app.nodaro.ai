@@ -116,6 +116,22 @@ export const PipelineConfigSchema = z.object({
   freecut_export_format: z.enum(["json", "fcpxml"]).default("json"),
   shot_generation_mode: z.enum(["parallel", "sequential"]).default("parallel"),
   silent_cut_review: z.boolean().default(true),
+  // Phase 0 studio — when true, the script stage skips the critic + refine loop
+  // and pauses for the user immediately after the first draft ("critic off by
+  // default; you decide" — the user can Edit / Regenerate at the gate).
+  skip_script_critic: z.boolean().default(false),
+  // Studio — when true, the PRODUCTION stages (shot_list / scene_images) advance
+  // automatically instead of pausing for per-scene / keyframe review. The
+  // studio's control is the creative entities (script/cast/props/locations); the
+  // engine then produces the film. The final cut (post_merge) still pauses for
+  // review, and animate sub-gates (dialogue/silent-cut) still surface. Mirrors
+  // auto-mode's advance for those stages without skipping the creative gates.
+  auto_advance_production: z.boolean().default(false),
+  // Studio speed — when true, the shot-list stage does NOT auto-force sequential
+  // mode for shot continuity, so the animate stage renders all shots in parallel
+  // (~minutes vs ~an hour for a multi-shot reel). Trades continuity chaining for
+  // speed; per-shot keyframe identity still holds.
+  force_parallel_animate: z.boolean().default(false),
   // Global model overrides — apply to every stage of the matching kind unless
   // a more-specific entry in `stage_models` overrides it. Constrained to the
   // pinnable allowlists above; the route handler still re-validates against
@@ -156,7 +172,7 @@ export const PipelineInputSchema = z.object({
   workflow_id: z.string().uuid().optional(),
   root_node_id: z.string().min(1),
   story_prompt: z.string().min(1).max(4000),
-  target_duration_seconds: z.number().int().min(5).max(600),
+  target_duration_seconds: z.number().int().min(5).max(3600),
   format: z.enum(PIPELINE_FORMATS),
   output_resolution: z.enum(PIPELINE_OUTPUT_RESOLUTIONS).default("720p"),
   language: z.string().min(2).max(10).default("en"),
