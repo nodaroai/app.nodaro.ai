@@ -29,6 +29,8 @@ describe("DYNAMIC_PRODUCER_TYPES — shared set contents", () => {
       "list",
       "sub-workflow",
       "adjust-volume",
+      // Dual-mode: audio in → audio out; video in → video out (+ revoiced audio).
+      "voice-changer",
       "reduce",
     ]))
   })

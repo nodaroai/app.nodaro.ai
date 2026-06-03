@@ -2905,9 +2905,12 @@ export function buildPayload(
     }
 
     case "voice-changer":
+      // Dual-mode: a wired video input switches the worker to video mode
+      // (demux → STS → remux). Video wins over audio when both are present.
       return simpleResult("voice-changer", "elevenlabs-voice-changer", {
         jobId,
         audioUrl: resolvedInputs.audioUrl || data.audioUrl,
+        videoUrl: resolvedInputs.videoUrl || data.videoUrl,
         voiceId: data.voiceId || data.voice,
         stability: data.stability,
         similarityBoost: data.similarityBoost,

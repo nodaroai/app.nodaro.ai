@@ -5,6 +5,7 @@ import type {
   WorkflowEdge,
   GenerateImageData,
   AdjustVolumeData,
+  VoiceChangerData,
   GeneratedResult,
   LoopNodeData,
 } from "@/types/nodes";
@@ -1729,6 +1730,32 @@ export function resolveNodeInputs(
       } else {
         inputs.audioUrl = output;
       }
+    } else if (src.type === "voice-changer") {
+      // Dual-mode like adjust-volume: video mode → videoUrl; audio mode → the
+      // usual audio routing. `output` was already narrowed by extractNodeOutput
+      // via the source handle. Default prefers video when the node produced one.
+      const vcData = src.data as VoiceChangerData;
+      const producedVideo = Boolean(vcData.generatedVideoUrl);
+      if (resolvedSourceHandle === "video" || (resolvedSourceHandle !== "audio" && producedVideo)) {
+        inputs.videoUrl = output;
+      } else if (node.type === "suno-mashup") {
+        routeSunoMashupAudio(inputs, output);
+      } else if (MULTI_AUDIO_INPUT_TYPES.has(node.type!)) {
+        inputs.audioUrls = [...(inputs.audioUrls ?? []), output];
+        inputs.audioUrlsWithSourceIds = [
+          ...(inputs.audioUrlsWithSourceIds ?? []),
+          { nodeId: src.id, url: output },
+        ];
+      } else if (node.type === "merge-video-audio") {
+        inputs.audioSources = [
+          ...(inputs.audioSources ?? []),
+          { url: output, sourceNodeId: src.id },
+        ];
+      } else if (node.type === "manual-edit") {
+        appendManualEditAsset(inputs, src.id, output, "audio");
+      } else {
+        inputs.audioUrl = output;
+      }
     } else if (src.type === "suno-voice") {
       // Suno Voice persona: route voiceId → personaId on downstream music nodes.
       // No-op for non-music targets so the edge stays valid but doesn't poison
@@ -1795,7 +1822,6 @@ export function resolveNodeInputs(
       src.type === "trim-audio" ||
       src.type === "mix-audio" ||
       src.type === "combine-audio" ||
-      src.type === "voice-changer" ||
       src.type === "dubbing" ||
       src.type === "voice-remix" ||
       src.type === "voice-design"

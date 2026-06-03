@@ -119,7 +119,7 @@ export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleCo
   "video-sfx": { video: "video" },
   "video-to-video": { video: "video" },
   "video-upscale": { video: "video" },
-  "voice-changer": { audio: "audio" },
+  "voice-changer": { audio: "audio", video: "video" },
   "voice-design": { audio: "audio", voiceId: "identity" },
   "voice-remix": { audio: "audio" },
   "web-scrape": { json: "look" },

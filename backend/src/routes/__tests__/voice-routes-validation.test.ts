@@ -124,9 +124,19 @@ describe("POST /v1/voice-changer", () => {
     expect(res.statusCode).not.toBe(400)
   })
 
-  it("rejects missing audioUrl", async () => {
+  it("rejects when neither audioUrl nor videoUrl is provided", async () => {
     const res = await app.inject({ method: "POST", url: "/v1/voice-changer", payload: { voiceId: "voice-abc", userId: USER_ID } })
     expect(res.statusCode).toBe(400)
+  })
+
+  it("accepts videoUrl-only (video mode)", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/voice-changer", payload: { videoUrl: "https://example.com/clip.mp4", voiceId: "voice-abc", userId: USER_ID } })
+    expect(res.statusCode).not.toBe(400)
+  })
+
+  it("accepts both audioUrl and videoUrl (video wins server-side)", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/voice-changer", payload: { ...validBody, videoUrl: "https://example.com/clip.mp4" } })
+    expect(res.statusCode).not.toBe(400)
   })
 
   it("rejects missing voiceId", async () => {

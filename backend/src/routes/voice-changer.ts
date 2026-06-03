@@ -8,14 +8,23 @@ import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.j
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 
-const voiceChangerBody = z.object({
-  audioUrl: safeUrlSchema,
-  voiceId: z.string().min(1),
-  stability: z.number().min(0).max(1).optional(),
-  similarityBoost: z.number().min(0).max(1).optional(),
-  removeBackgroundNoise: z.boolean().optional(),
-  userId: z.string().uuid().optional(),
-})
+const voiceChangerBody = z
+  .object({
+    // Audio mode (audio in → audio out) OR video mode (video in → video out +
+    // revoiced audio). When both are supplied, video wins (the worker ignores
+    // audioUrl). Exactly one is required.
+    audioUrl: safeUrlSchema.optional(),
+    videoUrl: safeUrlSchema.optional(),
+    voiceId: z.string().min(1),
+    stability: z.number().min(0).max(1).optional(),
+    similarityBoost: z.number().min(0).max(1).optional(),
+    removeBackgroundNoise: z.boolean().optional(),
+    userId: z.string().uuid().optional(),
+  })
+  .refine((d) => Boolean(d.audioUrl) || Boolean(d.videoUrl), {
+    message: "Either audioUrl or videoUrl is required",
+    path: ["audioUrl"],
+  })
 
 export async function voiceChangerRoutes(app: FastifyInstance) {
   app.post("/v1/voice-changer", {
@@ -28,7 +37,7 @@ export async function voiceChangerRoutes(app: FastifyInstance) {
       })
     }
 
-    const { audioUrl, voiceId, stability, similarityBoost, removeBackgroundNoise } = parsed.data
+    const { audioUrl, videoUrl, voiceId, stability, similarityBoost, removeBackgroundNoise } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -62,6 +71,7 @@ export async function voiceChangerRoutes(app: FastifyInstance) {
     await videoQueue.add("voice-changer", {
       jobId: job.id,
       audioUrl,
+      videoUrl,
       voiceId,
       stability,
       similarityBoost,

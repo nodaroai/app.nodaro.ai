@@ -2,13 +2,14 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { AudioWaveform, Loader2, AlertCircle, Volume2, LayoutGrid } from "lucide-react"
+import { AudioWaveform, Loader2, AlertCircle, Volume2, LayoutGrid, Film, X } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { isValidVoiceChangerConnection } from "@/lib/audio-text-handles"
+import { useHandleConnections } from "@/hooks/use-handle-connections"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
@@ -18,6 +19,7 @@ import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import type { VoiceChangerData } from "@/types/nodes"
 
 const ACCEPTS_AUDIO = (t: string) => isValidVoiceChangerConnection("audio", t)
+const ACCEPTS_VIDEO = (t: string) => isValidVoiceChangerConnection("video", t)
 
 function VoiceChangerNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as VoiceChangerData
@@ -27,14 +29,24 @@ function VoiceChangerNodeComponent({ id, data, selected }: NodeProps) {
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
   const activeResult = results[activeIndex]
-  const activeUrl = activeResult?.url ?? nodeData.generatedAudioUrl
+
+  // Dual-mode: a wired video input switches the node to video mode (revoice the
+  // whole talking clip). Video wins when both are wired — the audio input is
+  // then ignored at runtime.
+  const videoInConnected = useHandleConnections(id, "video", "target").length > 0
+  const audioInConnected = useHandleConnections(id, "audio", "target").length > 0
+  const audioIgnored = videoInConnected && audioInConnected
+
+  // The video result drives the display + which output handle is live.
+  const isVideoResult = Boolean(nodeData.generatedVideoUrl)
+  const activeUrl = activeResult?.url ?? (isVideoResult ? nodeData.generatedVideoUrl : nodeData.generatedAudioUrl)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [showThumbnails, setShowThumbnails] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
   const credits = useModelCredits("elevenlabs-voice-changer", 4)
 
   function handleDeleteResult(indexToDelete: number) {
-    updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedAudioUrl"))
+    updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, isVideoResult ? "generatedVideoUrl" : "generatedAudioUrl"))
   }
 
   return (
@@ -72,21 +84,32 @@ function VoiceChangerNodeComponent({ id, data, selected }: NodeProps) {
                 }`}
                 onClick={(e) => {
                   e.stopPropagation()
-                  updateNodeData(id, { activeResultIndex: i, generatedAudioUrl: r.url })
+                  updateNodeData(id, { activeResultIndex: i, [isVideoResult ? "generatedVideoUrl" : "generatedAudioUrl"]: r.url })
                 }}
               >
-                <Volume2 className="w-4 h-4 text-white" />
+                {isVideoResult ? <Film className="w-4 h-4 text-white" /> : <Volume2 className="w-4 h-4 text-white" />}
               </button>
             ))}
           </div>
         ) : undefined
       }
       handles={[
+        { id: "video", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 52px)', left: '-29px' }, external: true },
         { id: "audio", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
         { id: "audio", type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
+        { id: "video", type: "source", position: Position.Right, customStyle: { top: '52px',              right: '-29px' }, external: true },
       ]}
     >
       <div className="flex flex-col gap-2 p-3" style={{ minHeight: 180 }}>
+        {/* Video wins, audio ignored — surfaced graphically so the precedence
+            rule is obvious on the canvas. */}
+        {audioIgnored && (
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-500/10 text-amber-600 text-[10px] leading-tight">
+            <Film className="w-3 h-3 shrink-0" />
+            <span>Video wins — audio input ignored</span>
+          </div>
+        )}
+
         {status === "running" && !activeUrl && (
           <div className="flex flex-col items-center justify-center gap-2 h-12 rounded-md bg-muted/30">
             <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
@@ -105,7 +128,15 @@ function VoiceChangerNodeComponent({ id, data, selected }: NodeProps) {
             </button>
           </div>
         )}
-        {activeUrl && (
+        {activeUrl && isVideoResult && (
+          <div className="relative group px-3">
+            <video src={activeUrl} crossOrigin="anonymous" controls className="w-full rounded-md max-h-32 object-contain bg-black" />
+            {results.length > 0 && (
+              <button type="button" aria-label="Remove" className="absolute top-1 right-4 w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}><X className="w-3 h-3" /></button>
+            )}
+          </div>
+        )}
+        {activeUrl && !isVideoResult && (
           <div className="px-3 py-2">
             <AudioResultOverlay
               url={activeUrl}
@@ -133,7 +164,7 @@ function VoiceChangerNodeComponent({ id, data, selected }: NodeProps) {
 
         {status !== "running" && !activeUrl && status !== "failed" && (
           <div className="flex items-center justify-center rounded-md border-2 border-dashed border-muted-foreground/20 text-muted-foreground/40" style={{ minHeight: 120, flex: 1 }}>
-            <AudioWaveform className="w-5 h-5" />
+            {videoInConnected ? <Film className="w-5 h-5" /> : <AudioWaveform className="w-5 h-5" />}
           </div>
         )}
 
@@ -143,8 +174,14 @@ function VoiceChangerNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
-    <HandleWithPopover nodeId={id} nodeType="voice-changer" handleId="audio" type="target" position={Position.Left}  label="Audio" color={HANDLE_COLORS.audio} icon={<AudioWaveform />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_AUDIO} />
+    {/* Inputs (left): video above audio. Audio input is dimmed when a video is
+        also wired (video wins, audio ignored). */}
+    <HandleWithPopover nodeId={id} nodeType="voice-changer" handleId="video" type="target" position={Position.Left}  label="Video" color={HANDLE_COLORS.video} icon={<Film />}           side="left"  top="calc(100% - 52px)" accepts={ACCEPTS_VIDEO} />
+    <HandleWithPopover nodeId={id} nodeType="voice-changer" handleId="audio" type="target" position={Position.Left}  label="Audio" color={HANDLE_COLORS.audio} icon={<AudioWaveform />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_AUDIO} disabled={videoInConnected} />
+    {/* Outputs (right): audio always live (revoiced track). Video output is
+        disabled until a video input is wired. */}
     <HandleWithPopover nodeId={id} nodeType="voice-changer" handleId="audio" type="source" position={Position.Right} label="Audio" color={HANDLE_COLORS.audio} icon={<AudioWaveform />} side="right" top="24px" />
+    <HandleWithPopover nodeId={id} nodeType="voice-changer" handleId="video" type="source" position={Position.Right} label="Video" color={HANDLE_COLORS.video} icon={<Film />}           side="right" top="52px" disabled={!videoInConnected} />
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}
       onClose={() => setDeleteConfirm(null)}
@@ -153,7 +190,7 @@ function VoiceChangerNodeComponent({ id, data, selected }: NodeProps) {
       }}
     />
     {activeUrl && (
-      <MediaPreviewModal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} type="audio" url={activeUrl} results={results} initialIndex={activeIndex} />
+      <MediaPreviewModal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} type={isVideoResult ? "video" : "audio"} url={activeUrl} results={results} initialIndex={activeIndex} />
     )}
     </div>
   )

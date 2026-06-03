@@ -1,7 +1,7 @@
 ---
 node_type: voice-changer
-generated_at: 2026-05-18T13:23:37.489Z
-generated_from: cb1e786d
+generated_at: 2026-06-03T08:01:22.366Z
+generated_from: 09dbdce0
 ---
 
 # Voice Changer
@@ -27,6 +27,7 @@ generated_from: cb1e786d
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
 - `generatedAudioUrl?: string`
+- `generatedVideoUrl?: string`
 - `generatedResults?: GeneratedResult[]`
 - `activeResultIndex?: number`
 - `currentJobId?: string`
@@ -60,6 +61,8 @@ generated_from: cb1e786d
 **Input parameters:**
 - `audio_url`
 - `audio_asset_id`
+- `video_url`
+- `video_asset_id`
 - `voice_id`
 - `stability`
 - `similarity_boost`

@@ -119,6 +119,24 @@ export function runFfprobe(args: readonly string[]): Promise<string> {
   })
 }
 
+/**
+ * Returns true if the media file has at least one audio stream. Used by the
+ * voice-changer video path to fail early (with a friendly message) when the
+ * source clip is silent — most i2v/t2v models output video with no audio
+ * track, and ElevenLabs speech-to-speech has nothing to transform. Probes a
+ * LOCAL file only (no network), so no SSRF guard is needed.
+ */
+export async function hasAudioStream(filePath: string): Promise<boolean> {
+  const output = await runFfprobe([
+    "-v", "error",
+    "-select_streams", "a:0",
+    "-show_entries", "stream=codec_type",
+    "-of", "default=noprint_wrappers=1:nokey=1",
+    filePath,
+  ])
+  return output.trim().length > 0
+}
+
 export async function getVideoDuration(filePath: string): Promise<number> {
   const output = await runFfprobe([
     "-v", "error",

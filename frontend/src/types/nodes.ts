@@ -2458,6 +2458,10 @@ export type VoiceChangerData = {
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
   generatedAudioUrl?: string
+  /** Set when the node ran in video mode (a video input was wired): the
+   *  revoiced video. Its presence selects the video display + the video
+   *  output handle. The revoiced audio sidecar still lands in generatedAudioUrl. */
+  generatedVideoUrl?: string
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number
   currentJobId?: string

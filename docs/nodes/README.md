@@ -207,7 +207,7 @@ Text-to-speech, voice processing, and audio generation using ElevenLabs and othe
 | [Text to Audio](./ai-audio/text-to-audio.md) | Generate ambient audio and sound effects | Create SFX, ambient sounds, or background audio from description |
 | [Voice Extractor](./ai-audio/audio-isolation.md) | Isolate voice from mixed audio | Remove background noise, extract clean vocal track |
 | [Text to Dialogue](./ai-audio/text-to-dialogue.md) | Multi-speaker dialogue generation | Create conversations with different voices per speaker |
-| [Voice Changer](./ai-audio/voice-changer.md) | Convert audio to different voice | Transform speech to another voice while preserving emotion |
+| [Voice Changer](./ai-audio/voice-changer.md) | Revoice audio or a talking video | Replace the voice in audio — or a whole video — preserving emotion and timing |
 | [Dubbing](./ai-audio/dubbing.md) | Translate audio preserving speaker identity | Translate spoken audio to another language |
 | [Voice Remix](./ai-audio/voice-remix.md) | Generate voice from natural language description | Create custom voice from text description |
 | [Voice Design](./ai-audio/voice-design.md) | Design custom voices with full controls | Create reusable voices with loudness, guidance, and quality controls |
