@@ -1,5 +1,5 @@
 export { createClient, NodaroClient } from "./client.js"
-export type { ClientOptions } from "./client.js"
+export type { ClientOptions, UserIdentity } from "./client.js"
 
 export {
   type Auth,
