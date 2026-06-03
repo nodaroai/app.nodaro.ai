@@ -873,6 +873,7 @@ export {
   qualityOptionsByKind,
   creditRangesAll,
   modelIdsByKindMode,
+  buildModelMenu,
 } from "./model-catalog.js"
 export type {
   ModelCatalogEntry,
@@ -883,6 +884,7 @@ export type {
   PriceVariant,
   ValidationField,
   LabeledOption,
+  ModelMenuOption,
 } from "./model-catalog.js"
 
 export {
