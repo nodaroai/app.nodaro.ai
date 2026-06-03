@@ -432,6 +432,23 @@ html, body {
   opacity: 1 !important;
 }
 
+/* Compact node (small on screen): declutter the typed-handle labels. Only
+ * CONNECTED pips keep their label at rest (and `--always` labels); UNCONNECTED
+ * labels are hidden — even when the node is selected — until the node is
+ * hovered, which reveals the full set. `.is-compact` / `.is-connected` are set
+ * per-label by HandleWithPopover; the compact threshold is shared with the
+ * Generate Image quick toolbar (see `lib/node-visual-compact.ts`).
+ *
+ * `!important` is required because the pip sets an inline `opacity` on the
+ * label (for the disabled-dim); inline styles otherwise win over these rules. */
+.handle-typed-pip-label.is-compact:not(.is-connected):not(.handle-typed-pip-label--always) {
+  opacity: 0 !important;
+}
+/* Hovering the node reveals every label, even on a compact node. */
+.react-flow__node:hover .handle-typed-pip-label.is-compact:not(.is-connected) {
+  opacity: 1 !important;
+}
+
 /* On hover, the handle label takes the handle's OWN type color (the same
  * `--pip-color` set inline by HandleWithPopover that drives the ring/icon),
  * not the brand pink — so the label matches the pip it belongs to. Legacy

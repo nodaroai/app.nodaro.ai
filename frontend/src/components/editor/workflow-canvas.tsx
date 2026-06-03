@@ -24,7 +24,6 @@ import { nodeTypes } from "@/components/nodes"
 import { NodeContextMenu } from "./node-context-menu"
 import { CanvasContextMenu } from "./canvas-context-menu"
 import { CanvasToolbar } from "./canvas-toolbar"
-import { ViewModeToggle } from "./canvas-toolbar/view-mode-toggle"
 import { CanvasControls } from "./canvas-controls"
 import { AddNodePopup } from "./add-node-popup"
 import { buildAdjacency, isValidWorkflowConnection } from "@/lib/connection-validation"
@@ -2357,14 +2356,6 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           >
             Follow build →
           </Button>
-        )}
-        {/* Phase 1C.2 — Canvas-wide Scene View Modes toggle. Floats top-
-            center on desktop; hidden on mobile where the canvas already
-            optimizes for one-scene-at-a-time. */}
-        {!isMobile && (
-          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30">
-            <ViewModeToggle />
-          </div>
         )}
         {/* Workflow-loading surface. Shown for the whole fetch window
             (`isWorkflowLoading` is set true at the start of load() and
