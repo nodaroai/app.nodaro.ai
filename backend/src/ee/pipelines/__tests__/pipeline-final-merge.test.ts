@@ -397,14 +397,14 @@ describe("pipelineFinalMerge", () => {
     expect(downloads.every((url) => !/music/.test(url))).toBe(true)
 
     // The final ffmpeg call should reference 2 inputs (video + narration) and
-    // route narration as the sole audio track. Post-d028845e only the MUSIC
-    // branch gets a tail fade; narration/dialogue mix at volume=1.0 (speech is
-    // not faded), so narration-only appears as [1:a]volume=1.0[narr].
+    // route narration as the sole audio track WITH a tail fade — narration VO
+    // fades out like the music bed so it doesn't cut off abruptly when it runs
+    // to the end of the film: [1:a]volume=1.0,afade=t=out...[narr].
     const ffmpegCalls = (runFfmpeg as ReturnType<typeof vi.fn>).mock.calls
     const narrationOnlyCall = ffmpegCalls.find((call) => {
       const args = call[0] as string[]
       const iCount = args.filter((a) => a === "-i").length
-      return iCount === 2 && args.some((a) => /\[1:a\]volume=1\.0\[narr\]/.test(a))
+      return iCount === 2 && args.some((a) => /\[1:a\]volume=1\.0,afade=t=out/.test(a))
     })
     expect(narrationOnlyCall).toBeDefined()
     // Importantly: NO amix filter (only narration → no mix).

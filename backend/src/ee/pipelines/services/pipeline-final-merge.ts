@@ -411,7 +411,11 @@ async function mergeScenesWithMusic(args: MergeArgs): Promise<number> {
         mixLabels.push("[dlg]")
       }
       if (hasNarration) {
-        filters.push(`[${narrIdx}:a]volume=1.0[narr]`)
+        // Narration VO gets the same tail fade as the music bed so it doesn't
+        // cut off abruptly when it runs to the end of the film.
+        filters.push(
+          `[${narrIdx}:a]volume=1.0,afade=t=out:st=${fadeStartStr}:d=${fadeOutDurationSec}[narr]`,
+        )
         mixLabels.push("[narr]")
       }
       if (hasMusic) {
