@@ -23,6 +23,35 @@ function subscribe(listener: () => void) {
   return () => { listeners.delete(listener) }
 }
 
+/**
+ * Load role + tier for `user` into the module cache (resets to defaults when
+ * there's no user). Single source of truth for the profile→cache mapping —
+ * shared by the initial load, refreshAuth, AND the onAuthStateChange handler.
+ *
+ * The handler call is the important one: an in-SPA sign-in (a SIGNED_IN event
+ * WITHOUT a full page reload — e.g. email/password sign-in or an account
+ * switch) previously updated `cachedUser` but never reloaded role/tier, so an
+ * admin signing in kept the default "user" role (and lost /admin access) and a
+ * paid user kept "free" tier (their list nodes ran at free-tier parallelism)
+ * until a hard refresh. Reloading on every session change keeps role/tier in
+ * lockstep with the live session.
+ */
+async function loadRoleAndTier(user: User | null): Promise<void> {
+  if (!user) {
+    cachedRole = "user"
+    cachedTier = "free"
+    return
+  }
+  const supabase = createClient()
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role, tier")
+    .eq("id", user.id)
+    .single()
+  cachedRole = (profile?.role as UserRole) ?? "user"
+  cachedTier = (profile?.tier as string) ?? "free"
+}
+
 function initAuth() {
   if (initialized) return
   initialized = true
@@ -32,21 +61,7 @@ function initAuth() {
   async function loadUser() {
     const { data: { user: currentUser } } = await supabase.auth.getUser()
     cachedUser = currentUser
-
-    if (currentUser) {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role, tier")
-        .eq("id", currentUser.id)
-        .single()
-      if (profile?.role) {
-        cachedRole = profile.role as UserRole
-      }
-      if (profile?.tier) {
-        cachedTier = profile.tier as string
-      }
-    }
-
+    await loadRoleAndTier(currentUser)
     cachedRoleLoaded = true
     cachedLoading = false
     notifyListeners()
@@ -55,13 +70,15 @@ function initAuth() {
   loadUser()
 
   supabase.auth.onAuthStateChange((_event, session) => {
-    cachedUser = session?.user ?? null
-    if (!session?.user) {
-      cachedRole = "user"
-      cachedTier = "free"
+    const sessionUser = session?.user ?? null
+    cachedUser = sessionUser
+    // Re-derive role/tier for the (possibly new) session — NOT just on sign-out.
+    // See loadRoleAndTier's docstring for why the sign-IN case matters.
+    void loadRoleAndTier(sessionUser).then(() => {
       cachedRoleLoaded = true
       cachedLoading = false
-    }
+      notifyListeners()
+    })
     notifyListeners()
   })
 }
@@ -91,21 +108,7 @@ export async function refreshAuth(): Promise<void> {
   const supabase = createClient()
   const { data: { user: currentUser } } = await supabase.auth.getUser()
   cachedUser = currentUser
-
-  if (currentUser) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role, tier")
-      .eq("id", currentUser.id)
-      .single()
-    if (profile?.role) {
-      cachedRole = profile.role as UserRole
-    }
-    if (profile?.tier) {
-      cachedTier = profile.tier as string
-    }
-  }
-
+  await loadRoleAndTier(currentUser)
   cachedRoleLoaded = true
   cachedLoading = false
   notifyListeners()

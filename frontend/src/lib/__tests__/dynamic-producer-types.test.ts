@@ -26,10 +26,11 @@ describe("DYNAMIC_PRODUCER_TYPES — shared set contents", () => {
     // change (forcing the next dev to update both this test AND the
     // sibling validators that depend on it).
     expect(new Set(DYNAMIC_PRODUCER_TYPES)).toEqual(new Set([
-      "loop",
       "list",
       "sub-workflow",
       "adjust-volume",
+      // Dual-mode: audio in → audio out; video in → video out (+ revoiced audio).
+      "voice-changer",
       "reduce",
     ]))
   })

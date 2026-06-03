@@ -69,7 +69,7 @@ Inline AI-powered prompt enhancement for node config panels (gated behind `hasCr
 - `PromptHelperButton` — small pink sparkles "AI" button, placed inline next to prompt fields
 - `PromptHelperDialog` — modal with: current prompt display, style dropdown (node-type-aware: `IMAGE_PROMPT_STYLES`, `VIDEO_PROMPT_STYLES`, `MUSIC_PROMPT_STYLES`, `AUDIO_PROMPT_STYLES`), LLM model selector (`LlmModelSelect` with `feature="prompt-helper"`), goal text field, editable enhanced result
 - `prompt-helper-styles.ts` — style presets per node type
-- Backend: `POST /v1/prompt-helper/enhance` with `creditGuard` + `resolveLlmCreditId()`
+- Backend: `POST /v1/prompt-helper/wizard` (the `enhance` action) with `creditGuard` + `resolveLlmCreditId()`
 
 ---
 
@@ -171,7 +171,15 @@ Calls `POST /v1/ai-writer/generate-stream` via SSE (bypasses proxy). Returns `{ 
 
 ---
 
-## List / Loop / Skip Node Patterns
+## List / Skip Node Patterns
+
+### List Node (`list`, formerly also `loop`/"Table")
+- The canonical batch-source node. Component: `frontend/src/components/nodes/loop-node.tsx` (file name kept for now); data type `LoopNodeData` in `frontend/src/types/nodes.ts`.
+- **Single-column by default**: starts as one text column ("Items") — one value per row, each emitted to downstream nodes in turn.
+- **Grows into a multi-column typed table**: connect a producer to the bottom-left **"+"** quick-add handle (`LOOP_COL_ADD_HANDLE`, cyan `Plus`) and a new typed column is added. Each column gets a per-column input handle (`loopColInputHandle` → `col_<id>_in`) and output handle (`loopColBaseHandle` → `col_<id>`). Column type (text / image-url / video-url / audio-url / json) drives the handle pip type and the auto-selected view mode (`resolveViewMode`).
+- Dynamic handles require `useUpdateNodeInternals` (React Flow v12 doesn't auto-detect new `<Handle>` components). The legacy single `"in"` handle is still recognized for backward-compat.
+- The config panel adapts: single-column **List** editor at one column, multi-column **Table** editor once there's more than one.
+- **`loop` is a deprecated alias of `list`** — auto-migrated to `list` on load in the editor (`frontend/src/lib/list-loop-migration.ts`, run from `use-workflow-store.ts:loadWorkflow`), presentation, and the app runner, plus a backend execution-time normalizer (`backend/src/services/workflow-engine/normalize-node-types.ts`) and a one-time DB sweep. Never frame `loop` as a separate creatable node type — it is not in the add-node UI; old workflows keep working via migration.
 
 ### List Execution
 - `extractNodeOutputAsList()` returns `string[]`. `getListInputForNode()` detects list input from upstream. `executeNodeForList()` runs node N times sequentially with progress (`__listTotal`/`__listCompleted`/`__listResults`).
@@ -201,11 +209,6 @@ Calls `POST /v1/ai-writer/generate-stream` via SSE (bypasses proxy). Returns `{ 
 | `executeNode()` | `execute-node.ts` | Main dispatch for all ~40+ node types |
 | `resolveNodeInputs()` | `node-input-resolver.ts` | Wire upstream outputs into node inputs |
 | `pollJobToCompletion()` | `poll-job.ts` | Generic job polling with status updates |
-
-### Loop Node
-- **Manual mode**: User defines columns + rows in table. Each column handle feeds column values as list.
-- **Connected mode**: Upstream wires to `"in"` handle. Splits output by `\n`, overrides manual table.
-- Dynamic handles require `useUpdateNodeInternals` (React Flow v12 doesn't auto-detect new `<Handle>` components)
 
 ### Skip Node
 - Right-click or multi-select to skip/unskip. Visual: opacity-40 + dashed border + orange SKIP badge.

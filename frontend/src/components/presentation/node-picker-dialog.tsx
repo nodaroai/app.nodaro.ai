@@ -21,7 +21,7 @@ import {
   getNodeLabel,
   getOutputType,
 } from "@/lib/presentation-utils"
-import type { WorkflowNode, LoopColumn } from "@/types/nodes"
+import type { WorkflowNode } from "@/types/nodes"
 import { NODE_DEF_MAP } from "@/types/nodes"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import type { ExposableField, ExposableOutput, PresentationItem } from "@nodaro/shared"
@@ -505,8 +505,8 @@ export function NodePickerDialog({ open, onOpenChange, section }: NodePickerDial
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set())
 
   const availableNodes = useMemo(() => getInputNodes(nodes, false), [nodes])
-  const arrayNodes = useMemo(() => availableNodes.filter(n => n.type === "list" || n.type === "loop"), [availableNodes])
-  const standardNodes = useMemo(() => availableNodes.filter(n => n.type !== "list" && n.type !== "loop"), [availableNodes])
+  const arrayNodes = useMemo(() => availableNodes.filter(n => n.type === "list"), [availableNodes])
+  const standardNodes = useMemo(() => availableNodes.filter(n => n.type !== "list"), [availableNodes])
 
   // IDs of nodes currently visible in presentation — used to seed inputItems/outputItems
   // when transitioning from legacy rendering to items-based rendering
@@ -627,11 +627,6 @@ export function NodePickerDialog({ open, onOpenChange, section }: NodePickerDial
                         items = data.items.split("\n").filter(Boolean).length
                       }
                       meta = `${items} item${items !== 1 ? "s" : ""} \u00b7 max ${maxItems}`
-                    } else if (node.type === "loop") {
-                      const columns = (data.columns as LoopColumn[]) ?? []
-                      const rows = (data.rows as string[][]) ?? []
-                      const types = columns.map(c => c.type ?? "text").join(", ")
-                      meta = `${columns.length} col${columns.length !== 1 ? "s" : ""} (${types}) \u00b7 max ${maxItems} rows`
                     }
                     return (
                       <div key={node.id}>

@@ -181,7 +181,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["realistic", "general", "fast"],
     features: ["reference-image"],
     aspectRatios: NANO_BANANA_RATIOS,
-    pricing: [{ identifier: "nano-banana", credits: 2, note: "1K" }],
+    pricing: [{ identifier: "nano-banana", credits: 1, note: "1K" }],
     mcpHidden: true,
   },
   "nano-banana-2": {
@@ -200,7 +200,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     pricing: [
       { identifier: "nano-banana-2", credits: 4, note: "1K default" },
       { identifier: "nano-banana-2:2K", credits: 5, note: "2K" },
-      { identifier: "nano-banana-2:4K", credits: 7, note: "4K" },
+      { identifier: "nano-banana-2:4K", credits: 5, note: "4K" },
     ],
   },
   "nano-banana-pro": {
@@ -215,8 +215,8 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     aspectRatios: NANO_BANANA_RATIOS,
     resolutions: ["1K", "2K", "4K"],
     pricing: [
-      { identifier: "nano-banana-pro", credits: 6, note: "1K / 2K" },
-      { identifier: "nano-banana-pro:4K", credits: 8, note: "4K" },
+      { identifier: "nano-banana-pro", credits: 5, note: "1K / 2K" },
+      { identifier: "nano-banana-pro:4K", credits: 6, note: "4K" },
     ],
     featured: true,
   },
@@ -247,7 +247,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     resolutions: ["1K", "2K"],
     pricing: [
       { identifier: "flux", credits: 2, note: "1K default" },
-      { identifier: "flux:2K", credits: 3, note: "2K" },
+      { identifier: "flux:2K", credits: 2, note: "2K" },
     ],
   },
   "flux-flex": {
@@ -262,8 +262,8 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     aspectRatios: FLUX_RATIOS,
     resolutions: ["1K", "2K"],
     pricing: [
-      { identifier: "flux-flex", credits: 5, note: "1K default" },
-      { identifier: "flux-flex:2K", credits: 8, note: "2K" },
+      { identifier: "flux-flex", credits: 4, note: "1K default" },
+      { identifier: "flux-flex:2K", credits: 6, note: "2K" },
     ],
   },
   "flux-i2i": {
@@ -278,8 +278,8 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     aspectRatios: FLUX_RATIOS,
     resolutions: ["1K", "2K"],
     pricing: [
-      { identifier: "flux-i2i", credits: 5, note: "1K default" },
-      { identifier: "flux-i2i:2K", credits: 8, note: "2K" },
+      { identifier: "flux-i2i", credits: 4, note: "1K default" },
+      { identifier: "flux-i2i:2K", credits: 6, note: "2K" },
     ],
   },
   "flux-pro-i2i": {
@@ -295,7 +295,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     resolutions: ["1K", "2K"],
     pricing: [
       { identifier: "flux-pro-i2i", credits: 2, note: "1K default" },
-      { identifier: "flux-pro-i2i:2K", credits: 3, note: "2K" },
+      { identifier: "flux-pro-i2i:2K", credits: 2, note: "2K" },
     ],
   },
   "flux-kontext": {
@@ -334,7 +334,12 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["realistic", "fast", "unfiltered"],
     features: ["reference-image"],
     aspectRatios: FLUX_RATIOS,
-    pricing: [{ identifier: "flux-2-klein", credits: 2 }],
+    resolutions: ["0.5 MP", "1 MP", "2 MP", "4 MP"],
+    pricing: [
+      { identifier: "flux-2-klein",       credits: 1 },  // 1MP 0ref (default)
+      { identifier: "flux-2-klein:1MP:0ref", credits: 1 },  // min
+      { identifier: "flux-2-klein:4MP:8ref", credits: 11 }, // max
+    ],
   },
   "kontext-multi": {
     id: "kontext-multi",
@@ -346,7 +351,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["edit", "multi-reference", "unfiltered"],
     features: ["reference-image"],
     aspectRatios: KONTEXT_RATIOS,
-    pricing: [{ identifier: "kontext-multi", credits: 4 }],
+    pricing: [{ identifier: "kontext-multi", credits: 3 }],
   },
   "flux-2-pro": {
     id: "flux-2-pro",
@@ -358,7 +363,12 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["realistic", "high-quality", "unfiltered", "reference"],
     features: ["reference-image"],
     aspectRatios: FLUX_RATIOS,
-    pricing: [{ identifier: "flux-2-pro", credits: 4 }],
+    resolutions: ["0.5 MP", "1 MP", "2 MP", "4 MP"],
+    pricing: [
+      { identifier: "flux-2-pro",        credits: 3 },  // 2MP 0ref (default)
+      { identifier: "flux-2-pro:0.5MP:0ref", credits: 2 },  // min
+      { identifier: "flux-2-pro:4MP:8ref",   credits: 28 }, // max
+    ],
   },
   "flux-2-max": {
     id: "flux-2-max",
@@ -366,20 +376,15 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     modes: ["t2i", "i2i"] as const,
     family: "Black Forest Labs",
     label: "Flux 2 Max (Safety Tolerance)",
-    description: "BFL Flux 2 Max — even larger sibling of Pro via Replicate, safety_tolerance=5, up to 8 reference images. Variable pricing: $0.04 base + $0.03 per reference image.",
+    description: "BFL Flux 2 Max — even larger sibling of Pro via Replicate, safety_tolerance=5, up to 8 reference images. Variable pricing by MP and ref count.",
     useCases: ["realistic", "high-quality", "unfiltered", "multi-reference"],
     features: ["reference-image"],
     aspectRatios: FLUX_RATIOS,
+    resolutions: ["0.5 MP", "1 MP", "2 MP", "4 MP"],
     pricing: [
-      { identifier: "flux-2-max", credits: 3 },
-      { identifier: "flux-2-max:1ref", credits: 5 },
-      { identifier: "flux-2-max:2ref", credits: 7 },
-      { identifier: "flux-2-max:3ref", credits: 9 },
-      { identifier: "flux-2-max:4ref", credits: 10 },
-      { identifier: "flux-2-max:5ref", credits: 12 },
-      { identifier: "flux-2-max:6ref", credits: 14 },
-      { identifier: "flux-2-max:7ref", credits: 16 },
-      { identifier: "flux-2-max:8ref", credits: 18 },
+      { identifier: "flux-2-max",            credits: 7 },  // 2MP 0ref (default)
+      { identifier: "flux-2-max:0.5MP:0ref", credits: 2 },  // min
+      { identifier: "flux-2-max:4MP:8ref",   credits: 62 }, // max
     ],
   },
 
@@ -397,7 +402,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     qualities: ["medium", "high"],
     pricing: [
       { identifier: "gpt-image", credits: 4, note: "medium default" },
-      { identifier: "gpt-image:high", credits: 7, note: "high quality" },
+      { identifier: "gpt-image:high", credits: 6, note: "high quality" },
     ],
     valueLabels: { "3:2": "3:2 (Landscape)", "2:3": "2:3 (Portrait)" },
     mcpHidden: true,
@@ -415,7 +420,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     qualities: ["medium", "high"],
     pricing: [
       { identifier: "gpt-image-i2i", credits: 4, note: "medium default" },
-      { identifier: "gpt-image-i2i:high", credits: 7, note: "high quality" },
+      { identifier: "gpt-image-i2i:high", credits: 6, note: "high quality" },
     ],
     valueLabels: { "3:2": "3:2 (Landscape)", "2:3": "2:3 (Portrait)" },
     mcpHidden: true,
@@ -432,9 +437,9 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     aspectRatios: GPT_IMAGE_2_RATIOS,
     resolutions: ["1K", "2K", "4K"],
     pricing: [
-      { identifier: "gpt-image-2", credits: 2, note: "1K default" },
-      { identifier: "gpt-image-2:2K", credits: 4, note: "2K" },
-      { identifier: "gpt-image-2:4K", credits: 7, note: "4K" },
+      { identifier: "gpt-image-2", credits: 1, note: "1K default" },
+      { identifier: "gpt-image-2:2K", credits: 3, note: "2K" },
+      { identifier: "gpt-image-2:4K", credits: 6, note: "4K" },
     ],
   },
   "gpt-image-2-i2i": {
@@ -449,9 +454,9 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     aspectRatios: GPT_IMAGE_2_RATIOS,
     resolutions: ["1K", "2K", "4K"],
     pricing: [
-      { identifier: "gpt-image-2-i2i", credits: 2, note: "1K default" },
-      { identifier: "gpt-image-2-i2i:2K", credits: 4, note: "2K" },
-      { identifier: "gpt-image-2-i2i:4K", credits: 7, note: "4K" },
+      { identifier: "gpt-image-2-i2i", credits: 1, note: "1K default" },
+      { identifier: "gpt-image-2-i2i:2K", credits: 3, note: "2K" },
+      { identifier: "gpt-image-2-i2i:4K", credits: 6, note: "4K" },
     ],
   },
 
@@ -489,9 +494,9 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     // No aspectRatios — Ideogram Edit takes output dimensions from the input
     // image + mask. Backend strips aspect_ratio for this provider.
     pricing: [
-      { identifier: "ideogram-edit", credits: 6, note: "BALANCED default" },
-      { identifier: "ideogram-edit:TURBO", credits: 4, note: "fastest" },
-      { identifier: "ideogram-edit:QUALITY", credits: 8, note: "best quality" },
+      { identifier: "ideogram-edit", credits: 5, note: "BALANCED default" },
+      { identifier: "ideogram-edit:TURBO", credits: 3, note: "fastest" },
+      { identifier: "ideogram-edit:QUALITY", credits: 6, note: "best quality" },
     ],
   },
   "ideogram-remix": {
@@ -505,9 +510,9 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     features: ["reference-image"],
     aspectRatios: IDEOGRAM_RATIOS,
     pricing: [
-      { identifier: "ideogram-remix", credits: 6, note: "BALANCED default" },
-      { identifier: "ideogram-remix:TURBO", credits: 4, note: "fastest" },
-      { identifier: "ideogram-remix:QUALITY", credits: 8, note: "best quality" },
+      { identifier: "ideogram-remix", credits: 5, note: "BALANCED default" },
+      { identifier: "ideogram-remix:TURBO", credits: 3, note: "fastest" },
+      { identifier: "ideogram-remix:QUALITY", credits: 6, note: "best quality" },
     ],
   },
   "ideogram-reframe": {
@@ -521,9 +526,9 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     features: ["reference-image"],
     aspectRatios: IDEOGRAM_RATIOS,
     pricing: [
-      { identifier: "ideogram-reframe", credits: 3, note: "BALANCED default" },
-      { identifier: "ideogram-reframe:TURBO", credits: 2, note: "fastest" },
-      { identifier: "ideogram-reframe:QUALITY", credits: 4, note: "best quality" },
+      { identifier: "ideogram-reframe", credits: 2, note: "BALANCED default" },
+      { identifier: "ideogram-reframe:TURBO", credits: 1, note: "fastest" },
+      { identifier: "ideogram-reframe:QUALITY", credits: 3, note: "best quality" },
     ],
   },
 
@@ -537,7 +542,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Google's Imagen 4 — strong photographic quality and prompt fidelity.",
     useCases: ["photographic", "realistic"],
     aspectRatios: IMAGEN4_RATIOS,
-    pricing: [{ identifier: "imagen4", credits: 3 }],
+    pricing: [{ identifier: "imagen4", credits: 2 }],
   },
   "imagen4-fast": {
     id: "imagen4-fast",
@@ -548,7 +553,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Cheaper / quicker Imagen 4 tier.",
     useCases: ["fast", "realistic", "general"],
     aspectRatios: IMAGEN4_RATIOS,
-    pricing: [{ identifier: "imagen4-fast", credits: 2 }],
+    pricing: [{ identifier: "imagen4-fast", credits: 1 }],
   },
   "imagen4-ultra": {
     id: "imagen4-ultra",
@@ -559,7 +564,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Premium Imagen 4 — highest fidelity, slower / more credits.",
     useCases: ["premium", "photographic"],
     aspectRatios: IMAGEN4_RATIOS,
-    pricing: [{ identifier: "imagen4-ultra", credits: 4 }],
+    pricing: [{ identifier: "imagen4-ultra", credits: 3 }],
   },
 
   // ── Bytedance Seedream ──
@@ -575,7 +580,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     aspectRatios: SEEDREAM_RATIOS,
     qualities: ["basic", "high"],
     pricing: [
-      { identifier: "seedream", credits: 3, note: "basic / 2K default" },
+      { identifier: "seedream", credits: 2, note: "basic / 2K default" },
       { identifier: "seedream:high", credits: 4, note: "high / 4K" },
     ],
     mcpHidden: true,
@@ -592,7 +597,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     aspectRatios: SEEDREAM_RATIOS,
     qualities: ["basic", "high"],
     pricing: [
-      { identifier: "seedream-edit", credits: 3, note: "basic default" },
+      { identifier: "seedream-edit", credits: 2, note: "basic default" },
       { identifier: "seedream-edit:high", credits: 4, note: "high quality" },
     ],
     mcpHidden: true,
@@ -653,7 +658,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["edit", "fast", "cheap"],
     features: ["reference-image"],
     aspectRatios: IDEOGRAM_RATIOS,
-    pricing: [{ identifier: "qwen-i2i", credits: 2 }],
+    pricing: [{ identifier: "qwen-i2i", credits: 1 }],
   },
   "qwen-edit": {
     id: "qwen-edit",
@@ -697,7 +702,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["stylized", "expressive", "general"],
     features: ["reference-image"],
     aspectRatios: GROK_RATIOS,
-    pricing: [{ identifier: "grok", credits: 2 }],
+    pricing: [{ identifier: "grok", credits: 1 }],
   },
   "grok-i2i": {
     id: "grok-i2i",
@@ -708,7 +713,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Image-to-image with Grok.",
     useCases: ["edit", "stylized"],
     features: ["reference-image"],
-    pricing: [{ identifier: "grok-i2i", credits: 2 }],
+    pricing: [{ identifier: "grok-i2i", credits: 1 }],
   },
   "grok-upscale": {
     id: "grok-upscale",
@@ -718,7 +723,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     label: "Grok Upscale",
     description: "Upscale a previously-generated Grok image. Requires the prior task id.",
     useCases: ["upscale"],
-    pricing: [{ identifier: "grok-upscale", credits: 4 }],
+    pricing: [{ identifier: "grok-upscale", credits: 3 }],
   },
 
   // ── Utilities ──
@@ -755,9 +760,9 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     features: ["reference-image"],
     resolutions: ["2K", "4K", "8K"],
     pricing: [
-      { identifier: "topaz-image-upscale", credits: 4, note: "2K default" },
-      { identifier: "topaz-image-upscale:4K", credits: 7, note: "4K" },
-      { identifier: "topaz-image-upscale:8K", credits: 13, note: "8K" },
+      { identifier: "topaz-image-upscale", credits: 3, note: "2K default" },
+      { identifier: "topaz-image-upscale:4K", credits: 5, note: "4K" },
+      { identifier: "topaz-image-upscale:8K", credits: 10, note: "8K" },
     ],
   },
 }
@@ -777,7 +782,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["realistic", "motion", "narrative"],
     features: ["end-frame"],
     durations: [5],
-    pricing: [{ identifier: "minimax", credits: 18, note: "5s, 1080p" }],
+    pricing: [{ identifier: "minimax", credits: 15, note: "5s, 1080p" }],
   },
   "hailuo-2.3-pro": {
     id: "hailuo-2.3-pro",
@@ -808,7 +813,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["realistic", "cheap"],
     durations: [6, 10],
     pricing: [
-      { identifier: "hailuo-2.3", credits: 10, note: "6s default" },
+      { identifier: "hailuo-2.3", credits: 8, note: "6s default" },
       { identifier: "hailuo-2.3:6s", credits: 8, note: "6s" },
       { identifier: "hailuo-2.3:10s", credits: 13, note: "10s" },
     ],
@@ -825,7 +830,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     durations: [6, 10],
     resolutions: ["512P", "768P"],
     pricing: [
-      { identifier: "hailuo-standard", credits: 10, note: "6s default" },
+      { identifier: "hailuo-standard", credits: 8, note: "6s default" },
       { identifier: "hailuo-standard:6s", credits: 8, note: "6s" },
       { identifier: "hailuo-standard:10s", credits: 13, note: "10s" },
     ],
@@ -847,7 +852,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     // /api/v1/veo/get-4k-video endpoint and is exposed via a dedicated
     // upgrade node, not this picker.
     resolutions: ["720p", "1080p"],
-    pricing: [{ identifier: "veo3", credits: 79, note: "4/6/8s with audio (flat per-generation)" }],
+    pricing: [{ identifier: "veo3", credits: 63, note: "4/6/8s with audio (flat per-generation)" }],
     featured: true,
   },
   "veo3.1": {
@@ -863,8 +868,8 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     aspectRatios: VIDEO_RATIOS_HV,
     resolutions: ["720p", "1080p"],
     pricing: [
-      { identifier: "veo3.1", credits: 19, note: "4/6/8s with audio @ 720p (flat)" },
-      { identifier: "veo3.1:1080p", credits: 21, note: "4/6/8s with audio @ 1080p (flat)" },
+      { identifier: "veo3.1", credits: 15, note: "4/6/8s with audio @ 720p (flat)" },
+      { identifier: "veo3.1:1080p", credits: 17, note: "4/6/8s with audio @ 1080p (flat)" },
     ],
     featured: true,
   },
@@ -881,8 +886,8 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     aspectRatios: VIDEO_RATIOS_HV,
     resolutions: ["720p", "1080p"],
     pricing: [
-      { identifier: "veo3_lite", credits: 10, note: "4/6/8s with audio @ 720p (flat)" },
-      { identifier: "veo3_lite:1080p", credits: 11, note: "4/6/8s with audio @ 1080p (flat)" },
+      { identifier: "veo3_lite", credits: 8, note: "4/6/8s with audio @ 720p (flat)" },
+      { identifier: "veo3_lite:1080p", credits: 9, note: "4/6/8s with audio @ 1080p (flat)" },
     ],
     featured: false,
   },
@@ -899,17 +904,17 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     resolutions: ["720p", "1080p", "4k"],
     durations: [4, 6, 8, 10],
     pricing: [
-      { identifier: "gemini-omni-video", credits: 29, note: "default — 720p/1080p 4s" },
-      { identifier: "gemini-omni-video:4", credits: 29, note: "720p/1080p 4s" },
-      { identifier: "gemini-omni-video:6", credits: 38, note: "720p/1080p 6s" },
-      { identifier: "gemini-omni-video:8", credits: 47, note: "720p/1080p 8s" },
-      { identifier: "gemini-omni-video:10", credits: 57, note: "720p/1080p 10s" },
-      { identifier: "gemini-omni-video:4k:4", credits: 66, note: "4K 4s" },
-      { identifier: "gemini-omni-video:4k:6", credits: 75, note: "4K 6s" },
-      { identifier: "gemini-omni-video:4k:8", credits: 85, note: "4K 8s" },
-      { identifier: "gemini-omni-video:4k:10", credits: 94, note: "4K 10s" },
-      { identifier: "gemini-omni-video:vref", credits: 75, note: "video-edit 720p/1080p" },
-      { identifier: "gemini-omni-video:4k:vref", credits: 113, note: "video-edit 4K" },
+      { identifier: "gemini-omni-video", credits: 23, note: "default — 720p/1080p 4s" },
+      { identifier: "gemini-omni-video:4", credits: 23, note: "720p/1080p 4s" },
+      { identifier: "gemini-omni-video:6", credits: 30, note: "720p/1080p 6s" },
+      { identifier: "gemini-omni-video:8", credits: 38, note: "720p/1080p 8s" },
+      { identifier: "gemini-omni-video:10", credits: 45, note: "720p/1080p 10s" },
+      { identifier: "gemini-omni-video:4k:4", credits: 53, note: "4K 4s" },
+      { identifier: "gemini-omni-video:4k:6", credits: 60, note: "4K 6s" },
+      { identifier: "gemini-omni-video:4k:8", credits: 68, note: "4K 8s" },
+      { identifier: "gemini-omni-video:4k:10", credits: 75, note: "4K 10s" },
+      { identifier: "gemini-omni-video:vref", credits: 60, note: "video-edit 720p/1080p" },
+      { identifier: "gemini-omni-video:4k:vref", credits: 90, note: "video-edit 4K" },
     ],
   },
 
@@ -930,7 +935,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "kling:5s", credits: 14, note: "5s no audio" },
       { identifier: "kling:10s", credits: 28, note: "10s no audio" },
       { identifier: "kling:5s:audio", credits: 28, note: "5s with audio" },
-      { identifier: "kling:10s:audio", credits: 56, note: "10s with audio" },
+      { identifier: "kling:10s:audio", credits: 55, note: "10s with audio" },
     ],
   },
   "kling-turbo": {
@@ -944,7 +949,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     features: ["end-frame"],
     durations: [5, 10],
     pricing: [
-      { identifier: "kling-turbo", credits: 14, note: "5s default" },
+      { identifier: "kling-turbo", credits: 11, note: "5s default" },
       { identifier: "kling-turbo:5s", credits: 11 },
       { identifier: "kling-turbo:10s", credits: 21 },
     ],
@@ -961,13 +966,13 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     durations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     resolutions: ["720P", "1080P"],
     pricing: [
-      { identifier: "kling-3.0", credits: 63, note: "5s 1080p with audio" },
-      { identifier: "kling-3.0:5s", credits: 43, note: "5s 1080p no audio" },
-      { identifier: "kling-3.0:10s", credits: 86, note: "10s 1080p no audio" },
-      { identifier: "kling-3.0:15s", credits: 128, note: "15s 1080p no audio" },
-      { identifier: "kling-3.0:5s:audio", credits: 63, note: "5s 1080p with audio" },
-      { identifier: "kling-3.0:10s:audio", credits: 126, note: "10s 1080p with audio" },
-      { identifier: "kling-3.0:15s:audio", credits: 189, note: "15s 1080p with audio" },
+      { identifier: "kling-3.0", credits: 50, note: "5s 1080p with audio" },
+      { identifier: "kling-3.0:5s", credits: 34, note: "5s 1080p no audio" },
+      { identifier: "kling-3.0:10s", credits: 68, note: "10s 1080p no audio" },
+      { identifier: "kling-3.0:15s", credits: 102, note: "15s 1080p no audio" },
+      { identifier: "kling-3.0:5s:audio", credits: 50, note: "5s 1080p with audio" },
+      { identifier: "kling-3.0:10s:audio", credits: 100, note: "10s 1080p with audio" },
+      { identifier: "kling-3.0:15s:audio", credits: 150, note: "15s 1080p with audio" },
     ],
     featured: true,
   },
@@ -981,7 +986,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["cinematic", "premium"],
     durations: [5, 10],
     pricing: [
-      { identifier: "kling-master", credits: 50, note: "5s default" },
+      { identifier: "kling-master", credits: 40, note: "5s default" },
       { identifier: "kling-master:5s", credits: 40 },
       { identifier: "kling-master:10s", credits: 80 },
     ],
@@ -999,10 +1004,10 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     resolutions: ["720p", "1080p"],
     aspectRatios: VIDEO_RATIOS_HVS,
     pricing: [
-      { identifier: "kling-3-omni", credits: 32, note: "5s 720p default" },
-      { identifier: "kling-3-omni:5s", credits: 32 },
-      { identifier: "kling-3-omni:10s", credits: 63 },
-      { identifier: "kling-3-omni:15s", credits: 94 },
+      { identifier: "kling-3-omni", credits: 25, note: "5s 720p default" },
+      { identifier: "kling-3-omni:5s", credits: 25 },
+      { identifier: "kling-3-omni:10s", credits: 50 },
+      { identifier: "kling-3-omni:15s", credits: 75 },
     ],
   },
 
@@ -1019,7 +1024,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     durations: [6, 10],
     resolutions: ["480p", "720p"],
     pricing: [
-      { identifier: "grok-i2v", credits: 7, note: "6s default" },
+      { identifier: "grok-i2v", credits: 5, note: "6s default" },
       { identifier: "grok-i2v:6s", credits: 5 },
       { identifier: "grok-i2v:10s", credits: 8 },
       { identifier: "grok-i2v:15s", credits: 10 },
@@ -1103,7 +1108,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     durations: [5, 10, 15],
     resolutions: ["720p", "1080p"],
     pricing: [
-      { identifier: "wan-i2v", credits: 22, note: "5s 720p default" },
+      { identifier: "wan-i2v", credits: 18, note: "5s 720p default" },
       { identifier: "wan-i2v:5s", credits: 18 },
       { identifier: "wan-i2v:10s", credits: 35 },
       { identifier: "wan-i2v:15s", credits: 53 },
@@ -1123,8 +1128,8 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     // Different KIE endpoints (i2v vs t2v) → different costs under
     // composite ids. Route picks endpoint based on whether image was supplied.
     pricing: [
-      { identifier: "wan-turbo", credits: 13, note: "i2v 5s 480p" },
-      { identifier: "wan-turbo-t2v", credits: 25, note: "t2v 5s 720p" },
+      { identifier: "wan-turbo", credits: 10, note: "i2v 5s 480p" },
+      { identifier: "wan-turbo-t2v", credits: 20, note: "t2v 5s 720p" },
     ],
   },
   "wan": {
@@ -1140,8 +1145,8 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     durations: [5],
     resolutions: ["720p", "1080p"],
     pricing: [
-      { identifier: "wan", credits: 22, note: "v2v 5s 720p" },
-      { identifier: "wan-t2v", credits: 33, note: "t2v 5s 1080p" },
+      { identifier: "wan", credits: 18, note: "v2v 5s 720p" },
+      { identifier: "wan-t2v", credits: 27, note: "t2v 5s 1080p" },
     ],
   },
   "wan-flash": {
@@ -1178,9 +1183,9 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     aspectRatios: WAN_27_IMAGE_RATIOS,
     resolutions: ["1K", "2K", "4K"],
     pricing: [
-      { identifier: "wan-2.7",    credits: 3,  note: "1K base" },
-      { identifier: "wan-2.7:2K", credits: 5,  note: "2K" },
-      { identifier: "wan-2.7:4K", credits: 10, note: "4K" },
+      { identifier: "wan-2.7",    credits: 2,  note: "1K base" },
+      { identifier: "wan-2.7:2K", credits: 4,  note: "2K" },
+      { identifier: "wan-2.7:4K", credits: 8, note: "4K" },
     ],
   },
   "wan-2.7-pro": {
@@ -1194,9 +1199,9 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     aspectRatios: WAN_27_IMAGE_RATIOS,
     resolutions: ["1K", "2K", "4K"],
     pricing: [
-      { identifier: "wan-2.7-pro",    credits: 4,  note: "1K base" },
-      { identifier: "wan-2.7-pro:2K", credits: 8,  note: "2K" },
-      { identifier: "wan-2.7-pro:4K", credits: 15, note: "4K" },
+      { identifier: "wan-2.7-pro",    credits: 3,  note: "1K base" },
+      { identifier: "wan-2.7-pro:2K", credits: 6,  note: "2K" },
+      { identifier: "wan-2.7-pro:4K", credits: 12, note: "4K" },
     ],
   },
   "wan-2.7-i2v": {
@@ -1211,7 +1216,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     resolutions: ["720p", "1080p"],
     features: ["end-frame"],
     pricing: [
-      { identifier: "wan-2.7-i2v", credits: 24, note: "5s 720p default" },
+      { identifier: "wan-2.7-i2v", credits: 19, note: "5s 720p default" },
     ],
   },
   "wan-2.7-t2v": {
@@ -1226,7 +1231,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     durations: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     resolutions: ["720p", "1080p"],
     pricing: [
-      { identifier: "wan-2.7-t2v", credits: 24, note: "5s 720p default" },
+      { identifier: "wan-2.7-t2v", credits: 19, note: "5s 720p default" },
     ],
   },
   // ── HappyHorse ──
@@ -1242,7 +1247,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     durations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     resolutions: ["720p", "1080p"],
     pricing: [
-      { identifier: "happyhorse", credits: 16, note: "5s 720p default" },
+      { identifier: "happyhorse", credits: 13, note: "5s 720p default" },
     ],
   },
   "happyhorse-i2v": {
@@ -1256,7 +1261,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     durations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     resolutions: ["720p", "1080p"],
     pricing: [
-      { identifier: "happyhorse-i2v", credits: 16, note: "5s 720p default" },
+      { identifier: "happyhorse-i2v", credits: 13, note: "5s 720p default" },
     ],
   },
   "happyhorse-ref2v": {
@@ -1272,7 +1277,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     resolutions: ["720p", "1080p"],
     features: ["reference-image"],
     pricing: [
-      { identifier: "happyhorse-ref2v", credits: 19, note: "5s 720p default" },
+      { identifier: "happyhorse-ref2v", credits: 15, note: "5s 720p default" },
     ],
   },
   "happyhorse-edit": {
@@ -1285,7 +1290,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["v2v", "restyle"],
     resolutions: ["720p", "1080p"],
     pricing: [
-      { identifier: "happyhorse-edit", credits: 25, note: "720p default" },
+      { identifier: "happyhorse-edit", credits: 20, note: "720p default" },
     ],
   },
   // ── Bytedance video lite/pro ──
@@ -1346,7 +1351,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["motion", "narrative"],
     durations: [5, 10],
     resolutions: ["720p", "1080p"],
-    pricing: [{ identifier: "runway-kie", credits: 4, note: "5s 720p" }],
+    pricing: [{ identifier: "runway-kie", credits: 3, note: "5s 720p" }],
   },
   "runway-aleph": {
     id: "runway-aleph",
@@ -1426,12 +1431,12 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     durations: [5, 10, 15, 30],
     resolutions: ["720p", "1080p"],
     pricing: [
-      { identifier: "motion-transfer", credits: 19, note: "10s 720p default" },
-      { identifier: "motion-transfer:5s", credits: 10 },
-      { identifier: "motion-transfer:10s", credits: 19 },
-      { identifier: "motion-transfer:15s", credits: 29 },
-      { identifier: "motion-transfer:30s", credits: 57 },
-      { identifier: "motion-transfer:1080p:10s", credits: 29 },
+      { identifier: "motion-transfer", credits: 15, note: "10s 720p default" },
+      { identifier: "motion-transfer:5s", credits: 8 },
+      { identifier: "motion-transfer:10s", credits: 15 },
+      { identifier: "motion-transfer:15s", credits: 23 },
+      { identifier: "motion-transfer:30s", credits: 45 },
+      { identifier: "motion-transfer:1080p:10s", credits: 23 },
     ],
   },
   "kling-3.0-motion": {
@@ -1445,10 +1450,10 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     durations: [5, 10, 15, 30],
     resolutions: ["720p", "1080p"],
     pricing: [
-      { identifier: "kling-3.0-motion", credits: 38, note: "10s 720p default" },
-      { identifier: "kling-3.0-motion:5s", credits: 19 },
-      { identifier: "kling-3.0-motion:10s", credits: 38 },
-      { identifier: "kling-3.0-motion:1080p:10s", credits: 63 },
+      { identifier: "kling-3.0-motion", credits: 30, note: "10s 720p default" },
+      { identifier: "kling-3.0-motion:5s", credits: 15 },
+      { identifier: "kling-3.0-motion:10s", credits: 30 },
+      { identifier: "kling-3.0-motion:1080p:10s", credits: 50 },
     ],
   },
 
@@ -1514,7 +1519,7 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Latest ElevenLabs TTS — supports [audio tags] for emotion / pacing. Direct API.",
     useCases: ["tts", "voice-over", "narration", "expressive"],
     features: ["audio-tags", "voice-cloning"],
-    pricing: [{ identifier: "elevenlabs-v3", credits: 4 }],
+    pricing: [{ identifier: "elevenlabs-v3", credits: 3 }],
     featured: true,
   },
   "elevenlabs-turbo": {
@@ -1535,7 +1540,7 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
     label: "ElevenLabs Multilingual v2",
     description: "Multi-language ElevenLabs TTS via KIE.",
     useCases: ["tts", "multilingual"],
-    pricing: [{ identifier: "elevenlabs-multilingual", credits: 4, note: "per 1K chars" }],
+    pricing: [{ identifier: "elevenlabs-multilingual", credits: 3, note: "per 1K chars" }],
   },
   "elevenlabs-dialogue": {
     id: "elevenlabs-dialogue",
@@ -1545,7 +1550,7 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
     label: "ElevenLabs Dialogue v3",
     description: "Multi-speaker dialogue TTS — give it a script, it voices each role.",
     useCases: ["tts", "dialogue", "multi-speaker"],
-    pricing: [{ identifier: "elevenlabs-dialogue", credits: 5, note: "per 1K chars" }],
+    pricing: [{ identifier: "elevenlabs-dialogue", credits: 4, note: "per 1K chars" }],
   },
 
   // ── ElevenLabs voice utilities ──
@@ -1641,7 +1646,7 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
     label: "Suno v4",
     description: "Suno v4 music generation — full songs with vocals, multiple genres.",
     useCases: ["music", "song", "vocals"],
-    pricing: [{ identifier: "suno", credits: 4, note: "per generation" }],
+    pricing: [{ identifier: "suno", credits: 3, note: "per generation" }],
   },
   "suno-v5": {
     id: "suno-v5",
@@ -1651,7 +1656,7 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
     label: "Suno v5",
     description: "Newer Suno v5 — better vocal quality, more genres. Same price as v4.",
     useCases: ["music", "song", "vocals", "premium"],
-    pricing: [{ identifier: "suno-v5", credits: 4, note: "per generation" }],
+    pricing: [{ identifier: "suno-v5", credits: 3, note: "per generation" }],
   },
   "suno-v5_5": {
     id: "suno-v5_5",
@@ -1661,7 +1666,7 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
     label: "Suno v5.5",
     description: "Suno v5.5 — latest model with improved audio quality and expressiveness.",
     useCases: ["music", "song", "vocals", "premium"],
-    pricing: [{ identifier: "suno-v5_5", credits: 4, note: "per generation" }],
+    pricing: [{ identifier: "suno-v5_5", credits: 3, note: "per generation" }],
     featured: true,
   },
 }

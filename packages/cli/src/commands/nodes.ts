@@ -9,7 +9,7 @@ interface GlobalOpts extends OutputOpts {
   profile?: string
 }
 
-async function pickNodeInteractively(client: ReturnType<typeof buildClient>): Promise<string> {
+export async function pickNodeInteractively(client: ReturnType<typeof buildClient>): Promise<string> {
   if (!isInteractive()) {
     warn("missing <type> and stdin is not a TTY — provide a node type or pipe input")
     process.exit(2)

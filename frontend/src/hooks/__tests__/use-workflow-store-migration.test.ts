@@ -642,3 +642,52 @@ describe("loadWorkflow — legacy null-sourceHandle picker migration", () => {
     expect(e?.sourceHandle).not.toBe("out")
   })
 })
+
+// ---------------------------------------------------------------------------
+// Legacy bare-"in" edge rewrite for pre-unification `loop` ("Table") nodes.
+//
+// loadWorkflow runs an early PRE-migration block that rewrites a node's bare
+// global "in" edge onto its first column's `col_*_in` handle (and stamps
+// connectedSourceId on column 0). That block runs BEFORE migrateListLoopNodes
+// renames `loop` → `list`, so at that point a legacy node is still typed
+// "loop" and the block MUST recognize the "loop" type. Regression guard for
+// commit 37974448 having narrowed the type filter to `list`-only, which left
+// loaded/imported pre-unification `loop` nodes with a dangling "in" edge and
+// unset column metadata.
+// ---------------------------------------------------------------------------
+
+describe("loadWorkflow — legacy loop bare-\"in\" edge rewrite (runs before loop→list rename)", () => {
+  it("rewires a loop node's bare \"in\" edge to the first column's col_*_in handle and sets connectedSourceId on column 0, while renaming loop → list", () => {
+    const nodes = [
+      // Upstream source so the edge survives loadWorkflow's "drop edges
+      // referencing nonexistent nodes" filter and reaches the migration.
+      { id: "src", type: "text-prompt", position: { x: 0, y: 0 }, data: { label: "src", text: "a\nb", fieldMappings: {} } },
+      {
+        id: "loop1", type: "loop", position: { x: 200, y: 0 },
+        data: {
+          label: "Table",
+          columns: [{ id: "a", name: "Items", handleId: "col_a", type: "text" }],
+          rows: [[""]],
+          fieldMappings: {},
+        },
+      },
+    ] as any
+    const edges = [
+      { id: "e1", source: "src", sourceHandle: "prompt", target: "loop1", targetHandle: "in" },
+    ] as any
+    useWorkflowStore.getState().loadWorkflow("w1", "test", nodes, edges)
+
+    const loaded = useWorkflowStore.getState().nodes.find((n) => n.id === "loop1")
+    // (a) loop → list rename applied
+    expect(loaded?.type).toBe("list")
+
+    // (b) bare "in" edge rewired to the first column's input handle
+    const e1 = useWorkflowStore.getState().edges.find((e) => e.id === "e1")
+    expect(e1?.targetHandle).toBe("col_a_in")
+
+    // ...and column 0 now carries the connected source metadata
+    const cols = (loaded?.data as { columns?: ReadonlyArray<Record<string, unknown>> }).columns ?? []
+    expect(cols[0]?.connectedSourceId).toBe("src")
+    expect(cols[0]?.connectedSourceHandle).toBe("prompt")
+  })
+})

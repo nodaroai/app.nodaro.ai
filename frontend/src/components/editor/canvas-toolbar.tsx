@@ -1,6 +1,6 @@
 "use client"
 
-import { Plus, Search, Package, Film, StickyNote, Wand2, PanelLeft, Undo2, Redo2, ChevronLeft, Puzzle } from "lucide-react"
+import { Plus, Search, ScanSearch, Package, Film, StickyNote, Wand2, PanelLeft, Undo2, Redo2, ChevronLeft, Puzzle } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import { cn } from "@/lib/utils"
 import { useIsMobile } from "@/hooks/use-is-mobile"
@@ -16,6 +16,8 @@ interface CanvasToolbarProps {
   readonly onAddNode: (position?: { x: number; y: number }, placeAtCenter?: boolean) => void
   readonly onComponents: () => void
   readonly onSearch: () => void
+  /** Open the "find inside this workflow" node-search modal (Ctrl+F). */
+  readonly onFindInWorkflow: () => void
   readonly onAssetLibrary: () => void
   readonly onMediaLibrary: () => void
   readonly onAddStickyNote: () => void
@@ -120,6 +122,7 @@ export function CanvasToolbar({
   onAddNode,
   onComponents,
   onSearch,
+  onFindInWorkflow,
   onAssetLibrary,
   onMediaLibrary,
   onAddStickyNote,
@@ -240,9 +243,16 @@ export function CanvasToolbar({
 
         <ToolbarButton
           icon={<Search className="w-5 h-5" />}
-          label="Search"
+          label="Search workflows"
           shortcut="Ctrl+K"
           onClick={onSearch}
+        />
+
+        <ToolbarButton
+          icon={<ScanSearch className="w-5 h-5" />}
+          label="Find in workflow"
+          shortcut="Ctrl+F"
+          onClick={onFindInWorkflow}
         />
 
         <ToolbarButton

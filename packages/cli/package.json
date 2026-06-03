@@ -30,6 +30,7 @@
     "compile:all": "npm run compile:darwin-arm64 && npm run compile:darwin-x64 && npm run compile:linux-arm64 && npm run compile:linux-x64 && npm run compile:windows-x64"
   },
   "dependencies": {
+    "@inquirer/checkbox": "^5.1.4",
     "@inquirer/confirm": "^6.0.12",
     "@inquirer/input": "^5.0.12",
     "@inquirer/select": "^5.1.4",

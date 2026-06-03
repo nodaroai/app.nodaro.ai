@@ -1,9 +1,10 @@
 import { toast } from "sonner";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
-import { getJobStatus, getExecutionEstimate } from "@/lib/api";
+import { getJobStatusLean, getExecutionEstimate, cancelJob } from "@/lib/api";
 import { calculateProgress } from "@nodaro/shared";
 import type { GeneratedResult } from "@/types/nodes";
 import { buildVariantResults } from "./variant-results";
+import { shouldAbandonNode } from "./abandon-guard";
 import {
   WorkflowStaleError,
   MAX_CONSECUTIVE_POLL_FAILURES,
@@ -57,7 +58,7 @@ export function pollJobToCompletion(
           return;
         }
         try {
-          const job = await getJobStatus(jobId);
+          const job = await getJobStatusLean(jobId);
           pollFailures = 0;
           if (job.status === "completed") {
             ctx.untrackInterval(poll);
@@ -72,7 +73,7 @@ export function pollJobToCompletion(
             ctx.untrackInterval(poll);
             // Final verification: the job may have completed while polling was failing
             try {
-              const job = await getJobStatus(jobId);
+              const job = await getJobStatusLean(jobId);
               if (job.status === "completed") {
                 resolve(job.output_data?.imageUrl ?? "");
                 return;
@@ -96,7 +97,7 @@ export function pollJobToCompletion(
  * Returns true if the completion was handled, false if no URL was found.
  */
 function handleJobCompleted(
-  job: Awaited<ReturnType<typeof getJobStatus>>,
+  job: Awaited<ReturnType<typeof getJobStatusLean>>,
   nodeId: string,
   jobId: string,
   outputKey: OutputKey,
@@ -178,6 +179,17 @@ export function pollJobWithNodeUpdate(
   return new Promise<string>((resolve, reject) => {
     apiCall()
       .then(async ({ jobId }) => {
+        if (ctx.signal?.aborted) {
+          // Run was discarded/aborted while the create-job request was in
+          // flight. Don't re-attach currentJobId or start polling — that would
+          // defeat the discard and paint the result over the existing one.
+          // Cancel phase-aware (pre-call cancels+refunds; in-flight finishes →
+          // My Library), then bail. This is a `new Promise`, so unwind by
+          // resolving "" — mirroring the shouldAbandonNode abandon-branch below.
+          cancelJob(jobId).catch(() => {});
+          resolve("");
+          return;
+        }
         guardedToast.info(`${label} started`, { description: `Job ID: ${jobId}` });
         updateNodeData(nodeId, { currentJobId: jobId });
 
@@ -213,7 +225,7 @@ export function pollJobWithNodeUpdate(
               return;
             }
             try {
-              const job = await getJobStatus(jobId);
+              const job = await getJobStatusLean(jobId);
               pollFailures = 0;
 
               if (job.status === "processing") {
@@ -225,6 +237,17 @@ export function pollJobWithNodeUpdate(
                   updateProgressIfChanged(nodeId, next, updateNodeData);
                 } else if (job.progress != null) {
                   updateProgressIfChanged(nodeId, job.progress, updateNodeData);
+                }
+              }
+
+              if (job.status === "completed" || job.status === "failed") {
+                if (shouldAbandonNode(nodeId, jobId)) {
+                  // Run was discarded or replaced — the job still lands in My
+                  // Library, but we must not write its result/error onto the
+                  // canvas. Stop polling and resolve so the executor unwinds.
+                  ctx.untrackInterval(poll);
+                  resolve("");
+                  return;
                 }
               }
 
@@ -257,9 +280,22 @@ export function pollJobWithNodeUpdate(
               pollFailures++;
               if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
                 ctx.untrackInterval(poll);
+                if (shouldAbandonNode(nodeId, jobId)) {
+                  // Run discarded/replaced — don't write a failure onto the
+                  // canvas; the job still lands in My Library.
+                  resolve("");
+                  return;
+                }
                 // Final verification: the job may have completed while polling was failing
                 try {
-                  const job = await getJobStatus(jobId);
+                  const job = await getJobStatusLean(jobId);
+                  // Re-check after the await: a discard/replace may have landed
+                  // while this final status request was in flight. Never write a
+                  // terminal result for a job the node no longer points at.
+                  if (shouldAbandonNode(nodeId, jobId)) {
+                    resolve("");
+                    return;
+                  }
                   if (job.status === "completed") {
                     if (handleJobCompleted(job, nodeId, jobId, outputKey, label, extraOutputFields, updateNodeData, resolve)) {
                       return;

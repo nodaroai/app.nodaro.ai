@@ -17,6 +17,7 @@ import type { PresentationItem, PipelineStatus } from "@nodaro/shared"
 import { migrateToItems, validateNoNestedGroups, cleanOrphanedItems, isCollectInEdge } from "@nodaro/shared"
 import type { VariableDisplayMode } from "@/components/editor/config-panels/types"
 import { buildPreviewItemKey, getPreviewItemKey } from "@/lib/preview-items"
+import { ensureNodePositions } from "@/lib/node-position"
 import { autoExecuteNode } from "@/components/editor/workflow-editor/auto-execute"
 import { orderNodesParentFirst, localToWorld } from "@/components/editor/workflow-editor/group-coords"
 import { MAIN_TEXT_HANDLE, TEXT_PRODUCING_SOURCE_TYPES } from "@/lib/main-text-handle"
@@ -28,6 +29,7 @@ import { getStickyParameterDisplayMode } from "@/lib/parameter-node-prefs"
 import type { GenerateTextTemplate } from "@/lib/generate-text-templates"
 import { migrateGenerateImageHandles } from "@/lib/generate-image-handle-migration"
 import { migrateGenerateVideoNodes } from "@/lib/generate-video-handle-migration"
+import { migrateListLoopNodes } from "@/lib/list-loop-migration"
 import { migratePickerSourceHandle, isTileGridPickerType } from "@/lib/picker-handles"
 
 /**
@@ -81,6 +83,10 @@ export const EXECUTION_DATA_KEYS = new Set([
   "__listTotal",
   "__listCompleted",
   "__listResults",
+  // List fan-out window flag (abandon-guard exemption). Set/cleared by
+  // executeNodeForList — purely execution-related, never user-edited, so
+  // toggling it must not capture an undo snapshot or flip isDirty.
+  "__listRunning",
   // Selector node dual-channel outputs (picked + rest). Without these the
   // executeSelector store write diffs the config snapshot → useAutoExecute
   // re-runs 300ms later, and in random mode (Math.random) every re-run
@@ -128,8 +134,8 @@ function detectLoopColumnType(
   allNodes?: WorkflowNode[],
   allEdges?: WorkflowEdge[],
 ): LoopColumn["type"] {
-  // Upstream loop/list node — inherit the source column's type directly
-  if ((sourceNode.type === "loop" || sourceNode.type === "list") && sourceHandle) {
+  // Upstream list node — inherit the source column's type directly
+  if (sourceNode.type === "list" && sourceHandle) {
     const srcColumns = ((sourceNode.data as Record<string, unknown>).columns ?? []) as Array<{ handleId: string; type?: string }>
     const srcCol = srcColumns.find((c) => c.handleId === sourceHandle)
     if (srcCol?.type) return srcCol.type as LoopColumn["type"]
@@ -189,7 +195,7 @@ function getNodeOutputForPreview(
   const d = node.data as Record<string, unknown>
   const t = node.type ?? ""
 
-  if (t === "list" || t === "loop") {
+  if (t === "list") {
     const columns = d.columns as Array<{ handleId: string; type?: string }> | undefined
     const rows = d.rows as string[][] | undefined
     if (columns && sourceHandle) {
@@ -204,14 +210,17 @@ function getNodeOutputForPreview(
         return { type: "text", value }
       }
     }
-    if (t === "list") {
-      const first = ((d.items as string | undefined) ?? "")
-        .split("\n")
-        .map((line) => line.trim())
-        .find(Boolean)
-      return first ? { type: "text", value: first } : null
-    }
-    const first = rows?.[0]?.[0]?.trim()
+    // Superset of the backend extractNodeOutput ordering: when the typed-column
+    // lookup above misses (no columns, or a stale/legacy sourceHandle like "in"
+    // that matches no column), fall back to the first row's first cell BEFORE
+    // the legacy `items` string. Without this a columns+rows list previewed via
+    // a non-matching handle returned null instead of rows[0][0].
+    const rowValue = rows?.[0]?.[0]?.trim()
+    if (rowValue) return { type: "text", value: rowValue }
+    const first = ((d.items as string | undefined) ?? "")
+      .split("\n")
+      .map((line) => line.trim())
+      .find(Boolean)
     return first ? { type: "text", value: first } : null
   }
 
@@ -398,6 +407,16 @@ interface WorkflowState {
    *  used to gate workflow keyboard shortcuts and the global Execute button. */
   readonly configPanelFullscreen: boolean
   readonly setConfigPanelFullscreen: (open: boolean) => void
+  /** One-shot flag: the next selectedNodeId change should NOT trigger the
+   *  canvas viewport animation (zoom-to-fit). Set by openFullscreenSettings;
+   *  consumed and cleared by the viewport effect in workflow-canvas. */
+  readonly skipNextViewportAnimation: boolean
+  /** Whether the sidebar was open when openFullscreenSettings was called.
+   *  closeFullscreenSettings uses this to restore the sidebar on close. */
+  readonly _sidebarWasOpenBeforeFullscreen: boolean
+  /** Close fullscreen settings and optionally restore the sidebar if it was
+   *  open before the fullscreen was triggered (via openFullscreenSettings). */
+  readonly closeFullscreenSettings: () => void
   readonly isDirty: boolean
   readonly loadGeneration: number
   readonly saveStatus: SaveStatus
@@ -462,8 +481,27 @@ interface WorkflowState {
    * actions separately so the edge lands before the picker mounts.
    */
   readonly addNodeAndOpenPicker: (type: SceneNodeType, position: { x: number; y: number }, initialData?: Record<string, unknown>) => string | undefined
+  /** Select a node and open its config panel in fullscreen WITHOUT triggering
+   *  the canvas zoom-to-fit animation. Used by the node icon click so the
+   *  viewport stays where it is. */
+  readonly openFullscreenSettings: (nodeId: string) => void
   readonly updateNode: (nodeId: string, updates: Partial<WorkflowNode>) => void
   readonly updateNodeData: (nodeId: string, data: Record<string, unknown>) => void
+  /**
+   * Batched optimistic execution-status flip for many nodes in ONE store
+   * update. Sets `data.executionStatus` on every matched id (to `undefined`,
+   * which reads back as idle, when `status` is undefined) in a single
+   * `nodes.map()` — used by the Run
+   * handlers so the "pending" border appears the instant Run is clicked
+   * without K separate `updateNodeData` calls. `executionStatus` is an
+   * EXECUTION_DATA_KEY so this is wrapped in `setSkipUndoCapture` and never
+   * registers an undo snapshot (same exemption rationale as
+   * `syncNodeStatesToStore`). Unmatched nodes keep object identity.
+   */
+  readonly markNodesStatus: (
+    ids: ReadonlyArray<string>,
+    status: "pending" | "running" | "failed" | "completed" | undefined,
+  ) => void
   /**
    * Phase 1B.4 — patch `data` on every node whose
    * `data.pipeline_entity_id === entityId`. Used by the pipeline SSE handler
@@ -492,6 +530,11 @@ interface WorkflowState {
   readonly setFlowPromptTemplates: (templates: Record<string, string>) => void
   readonly savedViewport: { x: number; y: number; zoom: number } | null
   readonly setSavedViewport: (vp: { x: number; y: number; zoom: number } | null) => void
+  readonly isWorkflowLoading: boolean
+  readonly setIsWorkflowLoading: (loading: boolean) => void
+  readonly isReadOnly: boolean
+  readonly needsAutoLayout: boolean
+  readonly setNeedsAutoLayout: (v: boolean) => void
   readonly loadWorkflow: (id: string, name: string, nodes: WorkflowNode[], edges: WorkflowEdge[], characterDefinitions?: CharacterDefinition[], flowPromptTemplates?: Record<string, string>, presentationSettings?: PresentationSettings, viewport?: { x: number; y: number; zoom: number } | null) => void
   readonly clearWorkflow: () => void
   readonly markClean: () => void
@@ -756,9 +799,9 @@ export function buildDuplicatedNodeData(
     }
   }
 
-  // Generate fresh UUIDs for loop column IDs and handleIds; re-point or clear
+  // Generate fresh UUIDs for list column IDs and handleIds; re-point or clear
   // the column's connected-source reference (see idMap note above).
-  if (source.type === "loop" || source.type === "list") {
+  if (source.type === "list") {
     const cols = d.columns as LoopColumn[] | undefined
     if (cols) {
       d.columns = cols.map((c) => {
@@ -792,7 +835,12 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   selectedNodeId: null,
   configPanelFullscreen: false,
   setConfigPanelFullscreen: (open) => set({ configPanelFullscreen: open }),
+  skipNextViewportAnimation: false,
+  _sidebarWasOpenBeforeFullscreen: false,
   isDirty: false,
+  isReadOnly: false,
+  needsAutoLayout: false,
+  setNeedsAutoLayout: (v) => set({ needsAutoLayout: v }),
   loadGeneration: 0,
   saveStatus: "idle" as SaveStatus,
   saveError: null,
@@ -817,10 +865,14 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
   setProjectId: (id) => set({ projectId: id }),
 
-  setWorkflowName: (name) => set({ workflowName: name, isDirty: true }),
+  setWorkflowName: (name) => {
+    if (get().isReadOnly) return
+    set({ workflowName: name, isDirty: true })
+  },
 
-  onNodesChange: (changes) =>
+  onNodesChange: (rawChanges) =>
     set((state) => {
+      const changes = state.isReadOnly ? rawChanges.filter((c) => c.type !== "remove") : rawChanges
       let newNodes = applyNodeChanges(changes, state.nodes)
       // Only mark dirty for content changes (position, add, remove, replace)
       // NOT for selection or dimension measurements from React Flow
@@ -887,8 +939,9 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       }
     }),
 
-  onEdgesChange: (changes) =>
+  onEdgesChange: (rawChanges) =>
     set((state) => {
+      const changes = state.isReadOnly ? rawChanges.filter((c) => c.type !== "remove") : rawChanges
       const newEdges = applyEdgeChanges(changes, state.edges)
       // Only mark dirty for content changes, not selection
       const hasContentChange = changes.some((c) => c.type !== "select")
@@ -928,16 +981,17 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     }),
 
   onConnect: (connection) => {
+    if (get().isReadOnly) return
     set((state) => {
       let newEdges = addEdge(
         { ...connection, id: `edge_${Date.now()}` },
         state.edges,
       )
 
-      // --- Loop node: quick-add handle or per-column-target handle ---
+      // --- List node: quick-add handle or per-column-target handle ---
       let newNodes = state.nodes
       const targetNode = state.nodes.find((n) => n.id === connection.target)
-      if (targetNode?.type === "loop" || targetNode?.type === "list") {
+      if (targetNode?.type === "list") {
         const loopData = targetNode.data as LoopNodeData
         const sourceNode = state.nodes.find((n) => n.id === connection.source)
 
@@ -1156,6 +1210,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   },
 
   addNode: (type, position, initialData) => {
+    if (get().isReadOnly) return undefined
     const definition = NODE_DEFINITIONS.find((d) => d.type === type)
     if (!definition) return undefined
 
@@ -1255,12 +1310,74 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     return id
   },
 
-  updateNode: (nodeId, updates) =>
+  openFullscreenSettings: (nodeId) => {
+    const prev = get()
+    // Record whether the sidebar was already open so closeFullscreenSettings
+    // can restore it when the user dismisses the fullscreen modal.
+    const sidebarWasOpen = prev.selectedNodeId !== null && !prev.configPanelFullscreen
+    set({
+      skipNextViewportAnimation: true,
+      _sidebarWasOpenBeforeFullscreen: sidebarWasOpen,
+    })
+    set((state) => ({
+      selectedNodeId: nodeId,
+      configPanelFullscreen: true,
+      nodes: state.nodes.map((n) => ({ ...n, selected: n.id === nodeId })),
+    }))
+  },
+
+  closeFullscreenSettings: () => {
+    const state = get()
+    // If the sidebar was open before we entered fullscreen, keep selectedNodeId
+    // so the sidebar re-appears; otherwise clear it entirely.
+    // Always clear skipNextViewportAnimation: openFullscreenSettings sets it to
+    // prevent the zoom-to-fit on open, but when the panel is opened from an
+    // already-selected node (selectedNodeId doesn't change) the viewport effect
+    // never fires and never consumes the flag. Without this clear, the NEXT
+    // arrow-key navigation after closing fullscreen skips its zoom animation.
+    set({
+      configPanelFullscreen: false,
+      selectedNodeId: state._sidebarWasOpenBeforeFullscreen ? state.selectedNodeId : null,
+      _sidebarWasOpenBeforeFullscreen: false,
+      skipNextViewportAnimation: false,
+    })
+  },
+
+  updateNode: (nodeId, updates) => {
+    if (get().isReadOnly) return
     set((state) => ({
       nodes: state.nodes.map((node) =>
         node.id === nodeId ? { ...node, ...updates } : node,
       ),
-    })),
+    }))
+  },
+
+  // Batched optimistic execution-status flip — see interface JSDoc. One
+  // nodes.map(); only matched ids get a fresh data reference (object identity
+  // preserved for the rest). executionStatus is execution-only, so undo
+  // capture is suppressed (mirrors syncNodeStatesToStore).
+  markNodesStatus: (ids, status) => {
+    if (ids.length === 0) return
+    const idSet = new Set(ids)
+    // Build the patch as Record<string, unknown> so the literal status
+    // (which includes the runtime-only "pending" value, not present in the
+    // narrower SceneNodeData type) erases to unknown — same erasure
+    // updateNodeData/syncNodeStatesToStore rely on for "pending".
+    const patch: Record<string, unknown> = { executionStatus: status }
+    setSkipUndoCapture(true)
+    try {
+      set((state) => ({
+        nodes: state.nodes.map((node) =>
+          idSet.has(node.id)
+            ? { ...node, data: { ...node.data, ...patch } as SceneNodeData }
+            : node,
+        ),
+        isDirty: true,
+      }))
+    } finally {
+      setSkipUndoCapture(false)
+    }
+  },
 
   // Phase 1B.4 — see interface JSDoc. Skips undo capture (lifecycle is
   // backend-driven, not a user action) and skips label-rename / ref-sync.
@@ -1290,6 +1407,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   },
 
   updateNodeData: (nodeId, data) => {
+    if (get().isReadOnly) return
     // If every key in the update is execution-related, tell the undo system
     // to skip snapshot capture so job polling doesn't pollute undo history.
     const isExecOnly = Object.keys(data).every((k) => EXECUTION_DATA_KEYS.has(k))
@@ -1356,6 +1474,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   },
 
   updateNodeWithData: (nodeId, nodeUpdates, dataUpdates) => {
+    if (get().isReadOnly) return
     if (!get().nodes.some((n) => n.id === nodeId)) return
 
     const dataKeys = Object.keys(dataUpdates)
@@ -1386,7 +1505,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     }
   },
 
-  duplicateNode: (nodeId, position) =>
+  duplicateNode: (nodeId, position) => {
+    if (get().isReadOnly) return
     set((state) => {
       const source = state.nodes.find((n) => n.id === nodeId)
       if (!source) return state
@@ -1429,9 +1549,11 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         newNodeIds: new Set([...state.newNodeIds, newId]),
         isDirty: true,
       }
-    }),
+    })
+  },
 
-  duplicateNodes: (ids) =>
+  duplicateNodes: (ids) => {
+    if (get().isReadOnly) return
     set((state) => {
       const idSet = new Set(ids)
       const sources = state.nodes.filter((n) => idSet.has(n.id))
@@ -1503,9 +1625,11 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         selectedNodeId: null,
         isDirty: true,
       }
-    }),
+    })
+  },
 
-  deleteNode: (nodeId) =>
+  deleteNode: (nodeId) => {
+    if (get().isReadOnly) return
     set((state) => {
       const deletedNode = state.nodes.find((n) => n.id === nodeId)
       let remainingNodes = state.nodes.filter((n) => n.id !== nodeId)
@@ -1524,9 +1648,9 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         )
       }
 
-      // Clear connectedSourceId on loop columns that referenced the deleted node
+      // Clear connectedSourceId on list columns that referenced the deleted node
       remainingNodes = remainingNodes.map((n) => {
-        if (n.type !== "loop" && n.type !== "list") return n
+        if (n.type !== "list") return n
         const loopData = n.data as LoopNodeData
         const hasConnected = (loopData.columns ?? []).some((c) => c.connectedSourceId === nodeId)
         if (!hasConnected) return n
@@ -1555,17 +1679,21 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         presentationSettings: updatedPs,
         isDirty: true,
       }
-    }),
+    })
+  },
 
-  updateEdgeData: (edgeId, data) =>
+  updateEdgeData: (edgeId, data) => {
+    if (get().isReadOnly) return
     set((state) => ({
       edges: state.edges.map((e) =>
         e.id === edgeId ? { ...e, data: { ...e.data, ...data } } : e
       ),
       isDirty: true,
-    })),
+    }))
+  },
 
-  deleteEdge: (edgeId) =>
+  deleteEdge: (edgeId) => {
+    if (get().isReadOnly) return
     set((state) => {
       const removedEdge = state.edges.find((e) => e.id === edgeId)
       const newEdges = state.edges.filter((e) => e.id !== edgeId)
@@ -1620,8 +1748,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
         let mutated: typeof node.data | null = null
 
-        // (1) Loop column cleanup — unconditional when this is an `_in` edge.
-        if ((node.type === "loop" || node.type === "list") && isLoopColumnEdge && removedEdge.targetHandle) {
+        // (1) List column cleanup — unconditional when this is an `_in` edge.
+        if (node.type === "list" && isLoopColumnEdge && removedEdge.targetHandle) {
           const loopData = node.data as LoopNodeData
           const baseHandleId = loopColBaseHandle(removedEdge.targetHandle)
           const updatedColumns = (loopData.columns ?? []).map((col) =>
@@ -1665,7 +1793,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       })
 
       return { nodes, edges: newEdges, isDirty: true }
-    }),
+    })
+  },
 
   selectNode: (nodeId) =>
     set((state) => {
@@ -1711,7 +1840,10 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
   setUserTextTemplates: (templates) => set({ userTextTemplates: templates }),
 
-  setFlowPromptTemplates: (templates) => set({ flowPromptTemplates: templates, isDirty: true }),
+  setFlowPromptTemplates: (templates) => {
+    if (get().isReadOnly) return
+    set({ flowPromptTemplates: templates, isDirty: true })
+  },
 
   loadWorkflow: (id, name, nodes, edges, characterDefinitions, flowPromptTemplates, presentationSettings, viewport) => {
     nextNodeId =
@@ -1730,7 +1862,9 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     const cleanedNodeIds = new Set(cleanedNodes.map((n) => n.id))
     const cleanedEdges = cleaned.edges.filter((e) => cleanedNodeIds.has(e.source) && cleanedNodeIds.has(e.target))
 
-    // Migrate legacy "in" target handles on loop nodes to per-column handles
+    // Migrate legacy "in" target handles on list nodes (incl. loop-origin
+    // migrated nodes) to per-column handles
+    // pre-migration block: runs BEFORE migrateListLoopNodes, so must still recognize the legacy "loop" type
     const loopNodeMap = new Map(
       cleanedNodes.filter((n) => n.type === "loop" || n.type === "list").map((n) => [n.id, n])
     )
@@ -1925,6 +2059,14 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     // updates compose on top of the image-handle migration result.
     {
       const result = migrateGenerateVideoNodes(migratedNodes, migratedEdges)
+      migratedNodes = result.nodes
+      migratedEdges = result.edges
+    }
+
+    // Unify legacy `loop` ("Table") nodes into the canonical `list` type and
+    // normalize legacy `items` strings. Idempotent; edges unchanged.
+    {
+      const result = migrateListLoopNodes(migratedNodes, migratedEdges)
       migratedNodes = result.nodes
       migratedEdges = result.edges
     }
@@ -2299,6 +2441,11 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     // source of truth — and the next save — is correct.
     migratedNodes = orderNodesParentFirst(migratedNodes)
 
+    // Guarantee every node has a position — Studio exports omit it and React
+    // Flow crashes reading node.position.x. Flag for a one-shot auto-layout.
+    const positioned = ensureNodePositions(migratedNodes)
+    migratedNodes = positioned.nodes
+
     set((state) => ({
       workflowId: id,
       workflowName: name,
@@ -2306,6 +2453,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       edges: migratedEdges,
       selectedNodeId: null,
       isDirty: false,
+      isReadOnly: false,
+      needsAutoLayout: positioned.filledCount > 0,
       loadGeneration: state.loadGeneration + 1,
       saveStatus: "idle" as SaveStatus,
       saveError: null,
@@ -2317,6 +2466,9 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       savedViewport: viewport ?? null,
     }))
   },
+
+  isWorkflowLoading: false,
+  setIsWorkflowLoading: (loading) => set({ isWorkflowLoading: loading }),
 
   clearWorkflow: () => {
     nextNodeId = 1
@@ -2356,14 +2508,23 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     }),
 
   reconcileFromRemote: ({ nodes, edges, updatedAt, settings }) => {
-    const orderedNodes = orderNodesParentFirst(nodes)
+    // Unify legacy `loop` ("Table") nodes into the canonical `list` type and
+    // normalize legacy `items` strings, exactly as `loadWorkflow` does — a raw
+    // `loop` node arriving via realtime would otherwise be mishandled by the
+    // now-`list`-only type-sets until a full reload. Idempotent; null/empty-safe.
+    const migrated = migrateListLoopNodes(nodes, edges)
+    // Defense-in-depth: a realtime snapshot (e.g. a Studio write) can carry
+    // positionless nodes just like a fresh load. Guarantee finite positions
+    // so React Flow doesn't crash reading node.position.x on adoption.
+    const orderedNodes = ensureNodePositions(orderNodesParentFirst(migrated.nodes)).nodes
+    const migratedEdges = migrated.edges
     set((state) => {
       // `WorkflowState`'s fields are `readonly` for consumers, but
       // Zustand's `set` accepts a partial-state object — collect the
       // patch in a plain record and cast on return.
       const next: Record<string, unknown> = {
         nodes: orderedNodes,
-        edges,
+        edges: migratedEdges,
         isDirty: false,
         loadedUpdatedAt: updatedAt,
         remoteUpdatedAt: null,
@@ -2432,7 +2593,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   setOpenAddNodePopupForHandle: (fn) => set({ openAddNodePopupForHandle: fn }),
   hoveredEdgeId: null,
   setHoveredEdgeId: (id) => set({ hoveredEdgeId: id }),
-  reorderHandleEdges: (nodeId, handleId, direction, fromIndex, toIndex) =>
+  reorderHandleEdges: (nodeId, handleId, direction, fromIndex, toIndex) => {
+    if (get().isReadOnly) return
     set((state) => {
       // Collect indices of edges connected to this handle in original
       // store order. Reorder them according to from/to; leave all other
@@ -2475,8 +2637,10 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       }
 
       return { edges: newEdges, nodes: newNodes, isDirty: true }
-    }),
-  disconnectAllHandleEdges: (nodeId, handleId, direction) =>
+    })
+  },
+  disconnectAllHandleEdges: (nodeId, handleId, direction) => {
+    if (get().isReadOnly) return
     // Batched mirror of `deleteEdge`'s per-edge cleanup. Previously this
     // called `get().deleteEdge(e.id)` in a loop — N sequential `set()`s
     // re-running React Flow's subscriptions N times per click. We replicate
@@ -2534,13 +2698,13 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         return b
       }
       for (const removed of removedEdges) {
-        // Loop column cleanup is handle-specific — schedule even if the
+        // List column cleanup is handle-specific — schedule even if the
         // node pair survives via another (non-column) wire. Gated on the
-        // target being an actual loop/list node so the `_in` suffix
+        // target being an actual list node so the `_in` suffix
         // can't false-positive on other node types.
         if (removed.targetHandle?.endsWith("_in")) {
           const targetType = nodeTypeById.get(removed.target)
-          if (targetType === "loop" || targetType === "list") {
+          if (targetType === "list") {
             bucketFor(removed.target).loopHandles.add(loopColBaseHandle(removed.targetHandle))
           }
         }
@@ -2584,10 +2748,10 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         // when no cleanup applies.
         let mutated: typeof node.data | null = null
 
-        // Loop / list column refs — clear `connectedSourceId` /
+        // List column refs — clear `connectedSourceId` /
         // `connectedSourceHandle` for any column whose handle was in this
         // batch's removed _in edges.
-        if ((node.type === "loop" || node.type === "list") && cleanup.loopHandles.size > 0) {
+        if (node.type === "list" && cleanup.loopHandles.size > 0) {
           const loopData = node.data as LoopNodeData
           const updatedColumns = (loopData.columns ?? []).map((col) =>
             cleanup.loopHandles.has(col.handleId)
@@ -2636,29 +2800,36 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       })
 
       return { nodes: newNodes, edges: newEdges, isDirty: true }
-    }),
+    })
+  },
   generateSceneImage: null,
   setGenerateSceneImage: (fn) => set({ generateSceneImage: fn }),
 
-  addCharacterDefinition: (char) =>
+  addCharacterDefinition: (char) => {
+    if (get().isReadOnly) return
     set((state) => ({
       characterDefinitions: [...state.characterDefinitions, char],
       isDirty: true,
-    })),
+    }))
+  },
 
-  updateCharacterDefinition: (id, updates) =>
+  updateCharacterDefinition: (id, updates) => {
+    if (get().isReadOnly) return
     set((state) => ({
       characterDefinitions: state.characterDefinitions.map((c) =>
         c.id === id ? { ...c, ...updates } : c
       ),
       isDirty: true,
-    })),
+    }))
+  },
 
-  removeCharacterDefinition: (id) =>
+  removeCharacterDefinition: (id) => {
+    if (get().isReadOnly) return
     set((state) => ({
       characterDefinitions: state.characterDefinitions.filter((c) => c.id !== id),
       isDirty: true,
-    })),
+    }))
+  },
 
   toggleSkipNode: (nodeId) =>
     set((state) => ({
@@ -2697,6 +2868,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     }),
 
   restoreSnapshot: (snapshot) => {
+    if (get().isReadOnly) return
     // Ensure nextNodeId never goes backwards
     const maxId = snapshot.nodes.reduce((max, n) => {
       const num = parseInt(n.id.replace("node_", ""), 10)
@@ -2716,6 +2888,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   },
 
   batchAddNodesAndEdges: (newNodes, newEdges) => {
+    if (get().isReadOnly) return
     // Update nextNodeId to avoid collisions
     for (const n of newNodes) {
       const num = parseInt(n.id.replace("node_", ""), 10)
@@ -2785,7 +2958,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     })
   },
 
-  updatePresentationSettings: (settings) =>
+  updatePresentationSettings: (settings) => {
+    if (get().isReadOnly) return
     set((state) => {
       const current = state.presentationSettings
       const merged = { ...current, ...settings }
@@ -2804,9 +2978,11 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         merged.outputItems = validateNoNestedGroups(merged.outputItems)
       }
       return { presentationSettings: merged, isDirty: true }
-    }),
+    })
+  },
 
   syncTeleporterEdges: (channel) => {
+    if (get().isReadOnly) return
     set((state) => {
       const sendNode = state.nodes.find(
         (n) => n.type === "teleport-send" && (n.data as Record<string, unknown>).channel === channel
@@ -2837,6 +3013,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   },
 
   replaceEdgeWithTeleporter: (edgeId) => {
+    if (get().isReadOnly) return
     set((state) => {
       const edge = state.edges.find((e) => e.id === edgeId)
       if (!edge) return state

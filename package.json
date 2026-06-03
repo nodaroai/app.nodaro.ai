@@ -1,6 +1,7 @@
 {
   "name": "nodaro-ai",
   "private": true,
+  "license": "SEE LICENSE IN LICENSE",
   "workspaces": [
     "packages/*",
     "backend",

@@ -7,7 +7,7 @@ import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { isValidSunoConvertWavConnection } from "@/lib/audio-text-handles"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { computeDeleteResultUpdates } from "@/lib/utils"
@@ -104,8 +104,8 @@ function SunoConvertWavNodeComponent({ id, data, selected }: NodeProps) {
         <span className="text-xs text-muted-foreground">Convert WAV</span>
       </div>
     </BaseNode>
-    <HandleWithPopover nodeId={id} nodeType="suno-convert-wav" handleId="audio" type="target" position={Position.Left}  label="Audio" color="#F59E0B" icon={<AudioLines />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_AUDIO} />
-    <HandleWithPopover nodeId={id} nodeType="suno-convert-wav" handleId="audio" type="source" position={Position.Right} label="Audio" color="#F59E0B" icon={<AudioLines />} side="right" top="24px" />
+    <HandleWithPopover nodeId={id} nodeType="suno-convert-wav" handleId="audio" type="target" position={Position.Left}  label="Audio" color={HANDLE_COLORS.audio} icon={<AudioLines />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_AUDIO} />
+    <HandleWithPopover nodeId={id} nodeType="suno-convert-wav" handleId="audio" type="source" position={Position.Right} label="Audio" color={HANDLE_COLORS.audio} icon={<AudioLines />} side="right" top="24px" />
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}
       onClose={() => setDeleteConfirm(null)}

@@ -27,7 +27,7 @@ import { join } from "node:path"
 import { describe, it, expect } from "vitest"
 import { NODE_REGISTRY } from "../node-registry.js"
 import { PARAMETER_NODE_TYPES } from "@nodaro/shared"
-import { isSourceNode, isSkipNode } from "@/services/workflow-engine/execution-graph.js"
+import { isSourceNode, isSkipNode, migrateLegacyNodeType } from "@/services/workflow-engine/execution-graph.js"
 
 // REPO_ROOT: backend/src/lib/__tests__/ → up 4 → repo root
 const REPO_ROOT = join(__dirname, "..", "..", "..", "..")
@@ -63,6 +63,41 @@ function extractFrontendExecutableTypes(): Set<string> {
 }
 
 const FRONTEND_EXECUTABLE_TYPES = extractFrontendExecutableTypes()
+
+const FRONTEND_NODE_TYPES_PATH = join(
+  REPO_ROOT,
+  "frontend/src/components/nodes/index.ts",
+)
+
+/**
+ * Extract every renderable node-type key from the React Flow `nodeTypes` map —
+ * the authoritative universe of types that can appear as `node.type` in a saved
+ * workflow and therefore reach the backend orchestrator. Read as text for the
+ * same reason as EXECUTABLE_TYPES: it lives in a package the backend can't
+ * import at compile time. Expected shape:
+ *
+ *   export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
+ *     "text-prompt": TextPromptNode,
+ *     list: LoopNode,
+ *     ...
+ *   }
+ */
+function extractFrontendNodeTypes(): Set<string> {
+  const source = readFileSync(FRONTEND_NODE_TYPES_PATH, "utf8")
+  const match = source.match(/export const nodeTypes[^=]*=\s*\{([\s\S]*?)\n\}/)
+  if (!match) {
+    throw new Error(
+      `Couldn't extract nodeTypes from ${FRONTEND_NODE_TYPES_PATH}. Has the declaration syntax changed? Update extractFrontendNodeTypes() in this test file to match.`,
+    )
+  }
+  const body = match[1] ?? ""
+  const keys = [...body.matchAll(/^\s*(?:"([^"]+)"|([A-Za-z_$][\w-]*))\s*:/gm)]
+    .map((m) => m[1] ?? m[2])
+    .filter((k): k is string => !!k)
+  return new Set(keys)
+}
+
+const FRONTEND_NODE_TYPES = extractFrontendNodeTypes()
 
 // ---------------------------------------------------------------------------
 // Sanity check on the regex extraction itself — if this breaks, every other
@@ -110,6 +145,72 @@ describe("NODE_REGISTRY entries are classified", () => {
   • Source (orchestrator reads raw output from node.data, no execution): add to SOURCE_NODE_TYPES in backend/src/services/workflow-engine/execution-graph.ts
   • Skip (orchestrator intentionally skips): add to SKIP_NODE_TYPES in same file
 `,
+      ).toBeGreaterThan(0)
+    },
+  )
+})
+
+// ---------------------------------------------------------------------------
+// Test 1b — EVERY renderable node type is classified (not just NODE_REGISTRY).
+//
+// NODE_REGISTRY is a curated ~20-entry discovery subset, so Test 1 above cannot
+// catch a renderable-but-unclassified type. This iterates the full React Flow
+// `nodeTypes` map — the real universe of types that can be saved in a workflow
+// and reach the orchestrator. A type in NONE of the four sets makes the
+// orchestrator create a stale "pending" jobs row and `buildPayload` throw
+// "Unknown node type", failing the ENTIRE workflow on any full server-side run
+// (webhook / schedule / MCP / published-app) or the default Run button. This is
+// the sticky-note / provider / rss-feed outage class — invisible to the
+// frontend (which gates on EXECUTABLE_TYPES) and to Test 1 (NODE_REGISTRY only).
+//
+// Exception: a @deprecated render-only alias (e.g. "loop", kept in the nodeTypes
+// map so a stray un-migrated node still renders) may stay unclassified IFF the
+// shared load-time migration (normalize-node-types.ts) rewrites it to a
+// classified canonical type before execution — verified inline below, so the
+// exemption can't silently rot.
+// ---------------------------------------------------------------------------
+
+describe("every renderable node type is classified", () => {
+  it("found a non-trivial number of node types (>= 100)", () => {
+    expect(FRONTEND_NODE_TYPES.size).toBeGreaterThanOrEqual(100)
+  })
+
+  it.each([...FRONTEND_NODE_TYPES].map((t) => [t] as const))(
+    'node type "%s" is in EXECUTABLE_TYPES, PARAMETER_NODE_TYPES, SOURCE_NODE_TYPES, or SKIP_NODE_TYPES',
+    (type) => {
+      const classifications: string[] = []
+      if (FRONTEND_EXECUTABLE_TYPES.has(type)) classifications.push("EXECUTABLE_TYPES")
+      if (PARAMETER_NODE_TYPES.has(type)) classifications.push("PARAMETER_NODE_TYPES")
+      if (isSourceNode(type)) classifications.push("SOURCE_NODE_TYPES")
+      if (isSkipNode(type)) classifications.push("SKIP_NODE_TYPES")
+
+      // Escape hatch for @deprecated render-only aliases (e.g. "loop"): these
+      // never reach the orchestrator as-is — the shared load-time migration
+      // rewrites them to a canonical type BEFORE buildPayload. Allow an
+      // unclassified type IFF it provably migrates to a *different*, classified
+      // type. Self-verifying: drop the loop→list migration (or unclassify
+      // "list") and this re-trips, so it can't mask a real outage.
+      if (classifications.length === 0) {
+        const migratedType = migrateLegacyNodeType({ type, data: {} }).type
+        if (
+          migratedType !== type &&
+          (FRONTEND_EXECUTABLE_TYPES.has(migratedType) ||
+            PARAMETER_NODE_TYPES.has(migratedType) ||
+            isSourceNode(migratedType) ||
+            isSkipNode(migratedType))
+        ) {
+          classifications.push(`load-migrated alias → "${migratedType}"`)
+        }
+      }
+
+      expect(
+        classifications.length,
+        `Renderable node type "${type}" (in frontend nodeTypes map) is in NONE of the four classification sets and does not migrate to a classified type. At runtime the orchestrator creates a stale "pending" jobs row and buildPayload throws "Unknown node type", failing the whole workflow on any full server-side run or the default Run button. Classify it:
+  • Executable: add to EXECUTABLE_TYPES (frontend types.ts) + a buildPayload case
+  • Parameter: add to PARAMETER_NODE_TYPES + getParameterValue/getParameterPromptHint
+  • Source (output read from node.data): add to SOURCE_NODE_TYPES in execution-graph.ts
+  • Skip (visual / non-executable, e.g. sticky-note, provider): add to SKIP_NODE_TYPES in execution-graph.ts
+  • Legacy alias: ensure normalize-node-types.ts migrates it to a classified type before execution`,
       ).toBeGreaterThan(0)
     },
   )

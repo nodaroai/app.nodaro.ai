@@ -6,8 +6,10 @@ import { join } from "node:path"
 import { randomUUID } from "node:crypto"
 import { Readable } from "node:stream"
 import { pipeline } from "node:stream/promises"
+import { lookup as dnsLookup } from "node:dns/promises"
+import { isIP } from "node:net"
 import { config } from "../../lib/config.js"
-import { safeFetch } from "../../lib/safe-fetch.js"
+import { safeFetch, isPrivateOrReservedIP } from "../../lib/safe-fetch.js"
 
 export async function downloadFile(url: string, dest: string): Promise<void> {
   // safeFetch: callers include media-process which streams user-supplied
@@ -117,6 +119,24 @@ export function runFfprobe(args: readonly string[]): Promise<string> {
   })
 }
 
+/**
+ * Returns true if the media file has at least one audio stream. Used by the
+ * voice-changer video path to fail early (with a friendly message) when the
+ * source clip is silent — most i2v/t2v models output video with no audio
+ * track, and ElevenLabs speech-to-speech has nothing to transform. Probes a
+ * LOCAL file only (no network), so no SSRF guard is needed.
+ */
+export async function hasAudioStream(filePath: string): Promise<boolean> {
+  const output = await runFfprobe([
+    "-v", "error",
+    "-select_streams", "a:0",
+    "-show_entries", "stream=codec_type",
+    "-of", "default=noprint_wrappers=1:nokey=1",
+    filePath,
+  ])
+  return output.trim().length > 0
+}
+
 export async function getVideoDuration(filePath: string): Promise<number> {
   const output = await runFfprobe([
     "-v", "error",
@@ -132,16 +152,70 @@ export async function getVideoDuration(filePath: string): Promise<number> {
 }
 
 /**
+ * SSRF guard for probeVideoSource when handed a remote URL. ffprobe performs
+ * its OWN DNS resolution + network I/O, so it bypasses safeFetch — a
+ * user-supplied URL that resolves to an internal IP would let ffprobe connect
+ * to internal services (a blind SSRF / port-scan / cloud-metadata oracle).
+ * Validate before invoking ffprobe: reject non-http(s), reject literal
+ * private/reserved IPs, and reject hostnames that resolve to any
+ * private/reserved IP. Local filesystem paths (no "://") bypass this — they
+ * never touch the network. The `-protocol_whitelist` on the ffprobe call
+ * additionally blocks protocol pivots (e.g. an HLS/concat manifest that
+ * references file://). Residual: a DNS-rebind between this resolve and
+ * ffprobe's own resolve — narrow, and the probe is a blind duration oracle.
+ */
+async function assertSafeProbeSource(src: string): Promise<void> {
+  if (!src.includes("://")) return // local filesystem path — no network I/O
+  let parsed: URL
+  try {
+    parsed = new URL(src)
+  } catch {
+    throw new Error(`probeVideoSource: blocked — invalid URL "${src}"`)
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error(`probeVideoSource: blocked non-http(s) protocol ${parsed.protocol}`)
+  }
+  const host = parsed.hostname.replace(/^\[|\]$/g, "")
+  if (isIP(host)) {
+    if (isPrivateOrReservedIP(host)) {
+      throw new Error(`probeVideoSource: blocked private/reserved IP ${host}`)
+    }
+    return
+  }
+  let addrs: Array<{ address: string }>
+  try {
+    addrs = await dnsLookup(host, { all: true })
+  } catch {
+    throw new Error(`probeVideoSource: blocked — DNS resolution failed for ${host}`)
+  }
+  if (addrs.length === 0) {
+    throw new Error(`probeVideoSource: blocked — no DNS resolution for ${host}`)
+  }
+  for (const a of addrs) {
+    if (isPrivateOrReservedIP(a.address)) {
+      throw new Error(
+        `probeVideoSource: blocked — ${host} resolves to private/reserved IP ${a.address}`,
+      )
+    }
+  }
+}
+
+/**
  * Probe a video URL for dimensions + duration in a single ffprobe call.
- * Accepts a local path OR a remote http(s) URL — ffprobe reads both.
+ * Accepts a local path OR a remote http(s) URL — ffprobe reads both. Remote
+ * URLs go through assertSafeProbeSource first (SSRF guard); see that helper.
  */
 export async function probeVideoSource(srcUrlOrPath: string): Promise<{
   width: number
   height: number
   durationSeconds: number
 }> {
+  await assertSafeProbeSource(srcUrlOrPath)
   const output = await runFfprobe([
     "-v", "error",
+    // Confine ffprobe to file + http(s) transport so a malicious manifest
+    // can't pivot to other protocols. Keep `file` so local-path probes work.
+    "-protocol_whitelist", "file,http,https,tcp,tls",
     "-select_streams", "v:0",
     "-show_entries", "stream=width,height:format=duration",
     "-of", "csv=p=0",

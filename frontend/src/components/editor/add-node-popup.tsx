@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo, useCallback, Suspense, lazy } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback, Suspense, lazy, type ReactNode } from "react";
 import {
   Type,
   List,
@@ -132,9 +132,12 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   // Input
   {
     type: "text-prompt",
-    label: "Text Prompt",
+    label: "Text",
     icon: <Type className="h-4 w-4" />,
     category: "Input",
+    // Renamed from "Text Prompt" → "Text"; keep "prompt" searchable so users
+    // who look for "prompt" still find this node.
+    keywords: ["prompt", "text prompt"],
   },
   {
     type: "upload-image",
@@ -197,12 +200,6 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     type: "list",
     label: "List",
     icon: <List className="h-4 w-4" />,
-    category: "Data",
-  },
-  {
-    type: "loop",
-    label: "Table",
-    icon: <Repeat className="h-4 w-4" />,
     category: "Data",
   },
   {
@@ -823,7 +820,7 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   },
   {
     type: "suno-generate",
-    label: "Suno Generate",
+    label: "Suno Create Music",
     icon: <Music className="h-4 w-4" />,
     category: "AI",
     group: "Suno Music",
@@ -1302,6 +1299,7 @@ export const VIRTUAL_CATEGORY_IDS = {
   recent: "Recent",
   mostUsed: "Most Used",
   common: "Common",
+  commonPickers: "Common Pickers",
 } as const;
 
 const isNodeOption = (n: NodeOption | undefined): n is NodeOption => Boolean(n);
@@ -1318,28 +1316,48 @@ function mapHistoryToOptions(
     .filter(isNodeOption);
 }
 
-const COMMON_NODE_TYPES: ReadonlyArray<SceneNodeType> = [
-  // Headerless lead block — first COMMON_LEAD_COUNT entries render without
-  // a group sub-header in the COMMON tab. Reorder with care.
+// Curated COMMON tab. The lead block renders without a sub-header; the rest
+// are grouped into titled sections. `COMMON_PICKER_SECTIONS` live inside a
+// collapsible "Common Pickers" submenu (see the COMMON render branch).
+interface CommonSection {
+  readonly title: string;
+  readonly types: ReadonlyArray<SceneNodeType>;
+}
+const COMMON_LEAD: ReadonlyArray<SceneNodeType> = [
   "text-prompt",
   "llm-chat",
+  "combine-text",
   "upload-image",
   "upload-video",
-  // Group sub-headers resume below.
-  "generate-image",
-  "modify-image",
-  "upscale-image",
-  "generate-video",
-  "extend-video",
-  "combine-videos",
-  "text-to-speech",
-  "generate-music",
-  "lip-sync",
-  "face-swap",
-  "add-captions",
-  "save-to-storage",
+  "list",
 ];
-const COMMON_LEAD_COUNT = 4;
+const COMMON_SECTIONS: ReadonlyArray<CommonSection> = [
+  { title: "Image", types: ["generate-image", "upscale-image", "image-to-text", "image-critic"] },
+  { title: "Video", types: ["generate-video", "extend-video", "motion-transfer", "lip-sync", "combine-videos", "merge-video-audio"] },
+  { title: "Voice & Music", types: ["text-to-speech", "voice-changer", "suno-generate"] },
+];
+const COMMON_PICKER_SECTIONS: ReadonlyArray<CommonSection> = [
+  { title: "Camera", types: ["camera-motion", "transition", "framing"] },
+  { title: "Look", types: ["atmosphere", "action-fx", "style", "setting"] },
+  { title: "Subject", types: ["person", "pose", "styling", "held-prop", "animal"] },
+  { title: "Object", types: ["vehicle", "weapon", "furniture", "material"] },
+  { title: "Sound", types: ["music-genre", "music-mood", "instrumentation"] },
+];
+const COMMON_ASSETS_SECTION: CommonSection = {
+  title: "Assets",
+  types: ["character", "object", "location"],
+};
+/** Nav-list sentinel for the "Common Pickers" row. It has `id` but no `type`,
+ *  so the popup's keyboard nav treats it like a category — Enter/click opens
+ *  the Common Pickers sub-view, and arrows highlight it like any other row. */
+interface CommonPickersNavItem {
+  readonly id: typeof VIRTUAL_CATEGORY_IDS.commonPickers;
+  readonly isCommonPickersNav: true;
+}
+const COMMON_PICKERS_NAV_ITEM: CommonPickersNavItem = {
+  id: VIRTUAL_CATEGORY_IDS.commonPickers,
+  isCommonPickersNav: true,
+};
 
 export const CATEGORIES = [
   {
@@ -1459,6 +1477,9 @@ interface AddNodePopupProps {
   readonly connectionContext?: ConnectionContext | null;
   readonly storeAddNode?: (type: SceneNodeType, position: { x: number; y: number }, initialData?: Record<string, unknown>) => string | undefined;
   readonly storeOnConnect?: (connection: Connection) => void;
+  /** Pre-select a category drill-down on open (e.g. "Input") instead of the
+   *  top-level category list. Used by the editor empty-state's upload bar. */
+  readonly initialCategory?: string | null;
 }
 
 export function AddNodePopup({
@@ -1469,6 +1490,7 @@ export function AddNodePopup({
   connectionContext,
   storeAddNode,
   storeOnConnect,
+  initialCategory,
 }: AddNodePopupProps) {
   const { isAdmin, user } = useAuth();
   const { data: userSettings } = useUserSettings(user?.id);
@@ -1612,10 +1634,30 @@ export function AddNodePopup({
     );
   }, [searchQuery, effectivePool]);
 
-  const categoryNodes = useMemo<NodeOption[]>(() => {
+  const categoryNodes = useMemo<Array<NodeOption | CommonPickersNavItem>>(() => {
     if (!selectedCategory) return [];
     if (selectedCategory === VIRTUAL_CATEGORY_IDS.common) {
-      return COMMON_NODE_TYPES.map((t) => optionByType.get(t)).filter(isNodeOption);
+      // Flat nav order matches the COMMON render below: lead, the Common
+      // Pickers nav row (under List), titled sections, then Assets.
+      const toOpts = (types: ReadonlyArray<SceneNodeType>) =>
+        types.map((t) => optionByType.get(t)).filter(isNodeOption);
+      return [
+        ...toOpts(COMMON_LEAD),
+        COMMON_PICKERS_NAV_ITEM,
+        ...toOpts(COMMON_SECTIONS.flatMap((s) => s.types)),
+        ...toOpts(COMMON_ASSETS_SECTION.types),
+      ];
+    }
+    if (selectedCategory === VIRTUAL_CATEGORY_IDS.commonPickers) {
+      // Common Pickers sub-view: picker nodes grouped by section. Each node's
+      // `group` is overridden to its section title so the generic render below
+      // shows Camera / Look / Subject / Object headers.
+      return COMMON_PICKER_SECTIONS.flatMap((sec) =>
+        sec.types
+          .map((t) => optionByType.get(t))
+          .filter(isNodeOption)
+          .map((o) => ({ ...o, group: sec.title })),
+      );
     }
     if (selectedCategory === VIRTUAL_CATEGORY_IDS.recent) {
       return mapHistoryToOptions(history, (a, b) => b.lastUsedAt - a.lastUsedAt, optionByType);
@@ -1654,11 +1696,11 @@ export function AddNodePopup({
   useEffect(() => {
     if (open) {
       setSearchQuery("");
-      setSelectedCategory(null);
+      setSelectedCategory(initialCategory ?? null);
       setHighlightedIndex(0);
       setTimeout(() => searchInputRef.current?.focus(), 50);
     }
-  }, [open]);
+  }, [open, initialCategory]);
 
   // Handle click outside
   useEffect(() => {
@@ -1681,7 +1723,7 @@ export function AddNodePopup({
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") {
         if (selectedCategory && !searchQuery) {
-          setSelectedCategory(null);
+          setSelectedCategory(selectedCategory === VIRTUAL_CATEGORY_IDS.commonPickers ? VIRTUAL_CATEGORY_IDS.common : null);
           setHighlightedIndex(0);
         } else {
           onClose();
@@ -1710,7 +1752,7 @@ export function AddNodePopup({
           }
         }
       } else if (e.key === "Backspace" && !searchQuery && selectedCategory) {
-        setSelectedCategory(null);
+        setSelectedCategory(selectedCategory === VIRTUAL_CATEGORY_IDS.commonPickers ? VIRTUAL_CATEGORY_IDS.common : null);
         setHighlightedIndex(0);
       }
     }
@@ -1775,10 +1817,10 @@ export function AddNodePopup({
     >
       {/* Header */}
       <div className="px-4 py-3 border-b border-[#E2E8F0] dark:border-[#2D2D2D]">
-        <h3 className="text-sm font-semibold text-[#1E293B] dark:text-white">
+        <h3 className="text-base font-semibold text-[#1E293B] dark:text-white">
           {selectedCategory ? (
             <button
-              onClick={() => setSelectedCategory(null)}
+              onClick={() => setSelectedCategory(selectedCategory === VIRTUAL_CATEGORY_IDS.commonPickers ? VIRTUAL_CATEGORY_IDS.common : null)}
               className="flex items-center gap-2 hover:text-[#ff0073] transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -1787,11 +1829,29 @@ export function AddNodePopup({
           ) : isFiltered && connectionContext ? (
             <div className="flex items-center gap-2">
               <span>Connect to</span>
-              <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-[#a78bfa]/20 text-[#a78bfa] border border-[#a78bfa]/30">
-                {connectionContext.direction === "source"
-                  ? `${connectionContext.handleId} →`
-                  : `→ ${connectionContext.handleId}`}
-              </span>
+              {(() => {
+                // Tint the chip in the handle's own type color when known
+                // (`connectionContext.color` is the pip's `--pip-color`);
+                // fall back to the default violet otherwise. `${hex}33` /
+                // `${hex}4D` append ~20% / ~30% alpha to the 6-digit hex.
+                const c = connectionContext.color
+                const style = c
+                  ? { color: c, backgroundColor: `${c}33`, borderColor: `${c}4D` }
+                  : undefined
+                return (
+                  <span
+                    className={cn(
+                      "px-2 py-0.5 rounded-full text-sm font-medium border",
+                      !c && "bg-[#a78bfa]/20 text-[#a78bfa] border-[#a78bfa]/30",
+                    )}
+                    style={style}
+                  >
+                    {connectionContext.direction === "source"
+                      ? `${connectionContext.handleId} →`
+                      : `→ ${connectionContext.handleId}`}
+                  </span>
+                )
+              })()}
             </div>
           ) : (
             "What do you want to create?"
@@ -1810,7 +1870,7 @@ export function AddNodePopup({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className={cn(
-              "w-full pl-9 pr-3 py-2 text-sm",
+              "w-full pl-9 pr-3 py-2 text-base",
               "bg-[#F8FAFC] dark:bg-[#121212]",
               "border border-[#E2E8F0] dark:border-[#2D2D2D]",
               "rounded-lg",
@@ -1852,13 +1912,13 @@ export function AddNodePopup({
                   {node.icon}
                 </span>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-[#1E293B] dark:text-white truncate">
+                  <div className="text-base font-medium text-[#1E293B] dark:text-white truncate">
                     {node.label}
                   </div>
-                  <div className="text-xs text-[#94A3B8]">{node.category}</div>
+                  <div className="text-sm text-[#94A3B8]">{node.category}</div>
                 </div>
                 {directMatchTypes.has(node.type) && (
-                  <span className="ml-auto text-[10px] text-[#4ade80] font-medium flex items-center gap-1 shrink-0">
+                  <span className="ml-auto text-[12px] text-[#4ade80] font-medium flex items-center gap-1 shrink-0">
                     <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80]" />
                     direct
                   </span>
@@ -1866,7 +1926,7 @@ export function AddNodePopup({
               </button>
             ))
           ) : (
-            <div className="px-4 py-8 text-center text-sm text-[#94A3B8]">
+            <div className="px-4 py-8 text-center text-base text-[#94A3B8]">
               No nodes found
             </div>
           )
@@ -1875,7 +1935,7 @@ export function AddNodePopup({
           <>
             {compatibilityNodes.direct.length > 0 && (
               <>
-                <div className="text-[10px] uppercase tracking-wider text-[#4ade80]/80 font-medium px-4 pt-2 pb-1 flex items-center gap-1.5">
+                <div className="text-[12px] uppercase tracking-wider text-[#4ade80]/80 font-medium px-4 pt-2 pb-1 flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80]" />
                   Direct Match
                 </div>
@@ -1897,10 +1957,10 @@ export function AddNodePopup({
                       {node.icon}
                     </span>
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-[#1E293B] dark:text-white truncate">{node.label}</div>
-                      <div className="text-xs text-[#94A3B8]">{node.category}</div>
+                      <div className="text-base font-medium text-[#1E293B] dark:text-white truncate">{node.label}</div>
+                      <div className="text-sm text-[#94A3B8]">{node.category}</div>
                     </div>
-                    <span className="text-[10px] text-[#4ade80] font-medium flex items-center gap-1 shrink-0">
+                    <span className="text-[12px] text-[#4ade80] font-medium flex items-center gap-1 shrink-0">
                       <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80]" />
                       direct
                     </span>
@@ -1910,7 +1970,7 @@ export function AddNodePopup({
             )}
             {compatibilityNodes.compatible.length > 0 && (
               <>
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-medium px-4 pt-2 pb-1">
+                <div className="text-[12px] uppercase tracking-wider text-muted-foreground/60 font-medium px-4 pt-2 pb-1">
                   Compatible
                 </div>
                 {compatibilityNodes.compatible.map((node, rawIndex) => {
@@ -1933,8 +1993,8 @@ export function AddNodePopup({
                         {node.icon}
                       </span>
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-[#1E293B] dark:text-white/70 truncate">{node.label}</div>
-                        <div className="text-xs text-[#94A3B8]">{node.category}</div>
+                        <div className="text-base font-medium text-[#1E293B] dark:text-white/70 truncate">{node.label}</div>
+                        <div className="text-sm text-[#94A3B8]">{node.category}</div>
                       </div>
                     </button>
                   );
@@ -1944,19 +2004,108 @@ export function AddNodePopup({
           </>
         ) : selectedCategory ? (
           categoryNodes.length === 0 ? (
-            <div className="px-4 py-8 text-center text-sm text-[#94A3B8]">
+            <div className="px-4 py-8 text-center text-base text-[#94A3B8]">
               No nodes here yet — they&apos;ll appear as you use them.
             </div>
+          ) : selectedCategory === VIRTUAL_CATEGORY_IDS.common ? (
+            // Curated COMMON tab: titled sections + a collapsible Common
+            // Pickers submenu. `nav` mirrors the categoryNodes flat order so
+            // keyboard highlight/Enter line up with what's rendered.
+            (() => {
+              const rows: ReactNode[] = [];
+              let nav = 0;
+              const pushNode = (node: NodeOption, header: string | null, indent: boolean) => {
+                const i = nav++;
+                rows.push(
+                  <div key={node.type}>
+                    {header && (
+                      <>
+                        {rows.length > 0 && (
+                          <div className="border-t border-muted-foreground/10 mx-3 mt-1" />
+                        )}
+                        <div className={cn("text-[12px] uppercase tracking-wider text-muted-foreground/60 font-medium px-4 pt-2 pb-1", indent && "pl-8")}>
+                          {header}
+                        </div>
+                      </>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleNodeSelect(node.type)}
+                      className={cn(
+                        "w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors",
+                        indent && "pl-8",
+                        i === highlightedIndex
+                          ? "bg-[#F1F5F9] dark:bg-[#2D2D2D]"
+                          : "hover:bg-[#F8FAFC] dark:hover:bg-[#252525]",
+                      )}
+                      onMouseEnter={() => setHighlightedIndex(i)}
+                      data-active={i === highlightedIndex ? "true" : undefined}
+                    >
+                      <span className={cn("text-[#64748B] dark:text-[#94A3B8]", CATEGORY_COLORS[node.category])}>
+                        {node.icon}
+                      </span>
+                      <span className="text-base text-[#1E293B] dark:text-white">{node.label}</span>
+                      {directMatchTypes.has(node.type) && (
+                        <span className="ml-auto text-[12px] text-[#4ade80] font-medium flex items-center gap-1 shrink-0">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80]" />
+                          direct
+                        </span>
+                      )}
+                    </button>
+                  </div>,
+                );
+              };
+              COMMON_LEAD.forEach((t) => {
+                const o = optionByType.get(t);
+                if (o) pushNode(o, null, false);
+              });
+              // Common Pickers sits in the lead block, right under List — a
+              // real nav row: it consumes a nav index so arrows highlight it
+              // and Enter (handled via its categoryNodes sentinel) opens it.
+              {
+                const i = nav++;
+                rows.push(
+                  <button
+                    key="__common_pickers_nav"
+                    type="button"
+                    onClick={() => {
+                      setSelectedCategory(VIRTUAL_CATEGORY_IDS.commonPickers);
+                      setHighlightedIndex(0);
+                    }}
+                    onMouseEnter={() => setHighlightedIndex(i)}
+                    data-active={i === highlightedIndex ? "true" : undefined}
+                    className={cn(
+                      "w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors",
+                      i === highlightedIndex
+                        ? "bg-[#F1F5F9] dark:bg-[#2D2D2D]"
+                        : "hover:bg-[#F8FAFC] dark:hover:bg-[#252525]",
+                    )}
+                  >
+                    <span className="text-[#818CF8]"><Layers className="h-4 w-4" /></span>
+                    <span className="text-base text-[#1E293B] dark:text-white">Common Pickers</span>
+                    <ChevronRight className="ml-auto w-4 h-4 text-[#94A3B8]" />
+                  </button>,
+                );
+              }
+              COMMON_SECTIONS.forEach((sec) =>
+                sec.types.forEach((t, j) => {
+                  const o = optionByType.get(t);
+                  if (o) pushNode(o, j === 0 ? sec.title : null, false);
+                }),
+              );
+              COMMON_ASSETS_SECTION.types.forEach((t, j) => {
+                const o = optionByType.get(t);
+                if (o) pushNode(o, j === 0 ? COMMON_ASSETS_SECTION.title : null, false);
+              });
+              return rows;
+            })()
           ) : (
           // Category nodes — with optional group sub-headers
-          categoryNodes.map((node, index) => {
+          (categoryNodes as NodeOption[]).map((node, index, arr) => {
             const prevGroup =
-              index > 0 ? categoryNodes[index - 1].group : undefined;
-            const inCommonLead =
-              selectedCategory === VIRTUAL_CATEGORY_IDS.common &&
-              index < COMMON_LEAD_COUNT;
+              index > 0 ? arr[index - 1].group : undefined;
             const showGroupHeader =
-              !inCommonLead && node.group && node.group !== prevGroup;
+              node.group && node.group !== prevGroup;
             return (
               <div key={node.type}>
                 {showGroupHeader && (
@@ -1964,7 +2113,7 @@ export function AddNodePopup({
                     {index > 0 && (
                       <div className="border-t border-muted-foreground/10 mx-3 mt-1" />
                     )}
-                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-medium px-4 pt-2 pb-1">
+                    <div className="text-[12px] uppercase tracking-wider text-muted-foreground/60 font-medium px-4 pt-2 pb-1">
                       {node.group}
                     </div>
                   </>
@@ -1990,11 +2139,11 @@ export function AddNodePopup({
                   >
                     {node.icon}
                   </span>
-                  <span className="text-sm text-[#1E293B] dark:text-white">
+                  <span className="text-base text-[#1E293B] dark:text-white">
                     {node.label}
                   </span>
                   {directMatchTypes.has(node.type) && (
-                    <span className="ml-auto text-[10px] text-[#4ade80] font-medium flex items-center gap-1 shrink-0">
+                    <span className="ml-auto text-[12px] text-[#4ade80] font-medium flex items-center gap-1 shrink-0">
                       <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80]" />
                       direct
                     </span>
@@ -2033,10 +2182,10 @@ export function AddNodePopup({
                 {cat.icon}
               </span>
               <div className="flex-1 min-w-0">
-                <div className="text-xs font-semibold uppercase tracking-wider text-[#1E293B] dark:text-white">
+                <div className="text-sm font-semibold uppercase tracking-wider text-[#1E293B] dark:text-white">
                   {cat.label}
                 </div>
-                <div className="text-xs text-[#94A3B8]">{cat.description}</div>
+                <div className="text-sm text-[#94A3B8]">{cat.description}</div>
               </div>
               <ChevronRight className="w-4 h-4 text-[#94A3B8]" />
             </button>
@@ -2046,7 +2195,7 @@ export function AddNodePopup({
 
       {/* Footer hint */}
       <div className="px-4 py-2 border-t border-[#E2E8F0] dark:border-[#2D2D2D] bg-[#F8FAFC] dark:bg-[#121212]">
-        <div className="flex items-center gap-4 text-[10px] text-[#94A3B8]">
+        <div className="flex items-center gap-4 text-[12px] text-[#94A3B8]">
           <span className="flex items-center gap-1">
             <kbd className="px-1 py-0.5 bg-white dark:bg-[#2D2D2D] rounded border border-[#E2E8F0] dark:border-[#3D3D3D]">
               ↑↓

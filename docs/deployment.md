@@ -244,6 +244,13 @@ docker compose -f docker-compose.community.yml build --no-cache nodaro
 docker compose -f docker-compose.community.yml up
 ```
 
+Other build-time frontend env vars (all `VITE_*`, all inlined by Vite at
+build time):
+
+| Var | Description |
+|---|---|
+| `VITE_STUDIO_URL` | Base URL of the external Studio app (studio.nodaro.ai) for "Open in Studio" deep links. Default `https://studio.nodaro.ai`. |
+
 ## 6. Updating
 
 Pull, rebuild, restart:

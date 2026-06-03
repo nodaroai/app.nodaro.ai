@@ -42,15 +42,21 @@ vi.mock("../run-node-button", () => ({
   RunNodeButton: () => <div data-testid="run-node-button" />,
 }))
 
-vi.mock("@/hooks/use-workflow-store", () => ({
-  useWorkflowStore: (selector: any) => selector({
+vi.mock("@/hooks/use-workflow-store", () => {
+  const state = {
     updateNodeData: () => {},
     runSingleNode: () => {},
     videoAutoplay: false,
     nodes: [],
     edges: [],
-  }),
-}))
+  }
+  return {
+    useWorkflowStore: Object.assign(
+      (selector: any) => selector(state),
+      { getState: () => state },
+    ),
+  }
+})
 
 vi.mock("@/ee/hooks/use-model-credits", () => ({ useModelCredits: () => 0 }))
 vi.mock("@/hooks/use-full-resolution", () => ({ useFullResolution: () => false }))

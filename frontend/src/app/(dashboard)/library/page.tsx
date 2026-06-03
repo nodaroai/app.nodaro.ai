@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState, memo } from "react"
 import { Link } from "react-router-dom"
 import {
   HardDrive,
@@ -25,6 +25,7 @@ import { useStorageProfile } from "@/ee/hooks/queries/use-billing-queries"
 import { CachedImage } from "@/components/ui/cached-image"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { useBackToClose } from "@/hooks/use-back-to-close"
+import { useVirtualGrid, rowItems, GRID_BREAKPOINTS } from "@/hooks/use-virtual-grid"
 import type { LibraryAsset } from "@/lib/api"
 
 function formatBytes(bytes: number): string {
@@ -41,6 +42,140 @@ function formatDate(iso: string): string {
 
 const TYPE_FILTERS = ["all", "image", "video", "audio"] as const
 type TypeFilter = (typeof TYPE_FILTERS)[number]
+
+function TypeIcon({ type }: { type: string }) {
+  if (type === "image") return <ImageIcon className="h-4 w-4 text-blue-400" />
+  if (type === "video") return <Film className="h-4 w-4 text-purple-400" />
+  return <Music className="h-4 w-4 text-green-400" />
+}
+
+interface LibraryAssetCardProps {
+  readonly asset: LibraryAsset
+  readonly index: number
+  readonly isSelected: boolean
+  readonly onOpenPreview: (index: number) => void
+  readonly onToggleSelect: (id: string) => void
+  readonly onDelete: (id: string) => void
+}
+
+// Memoized so toggling one card's selection re-renders only that card, not the
+// entire (non-virtualized, growing) "My Files" grid.
+const LibraryAssetCard = memo(function LibraryAssetCard({
+  asset,
+  index,
+  isSelected,
+  onOpenPreview,
+  onToggleSelect,
+  onDelete,
+}: LibraryAssetCardProps) {
+  return (
+    <div
+      className={`group relative rounded-lg border transition-colors overflow-hidden ${
+        isSelected
+          ? "border-[#ff0073] bg-[#ff0073]/5"
+          : "border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700"
+      }`}
+    >
+      {/* Thumbnail / Preview */}
+      <div
+        className="h-32 bg-muted/30 flex items-center justify-center cursor-pointer relative"
+        onClick={() => asset.url && onOpenPreview(index)}
+      >
+        {asset.type === "image" && asset.url ? (
+          <CachedImage
+            src={asset.thumbnailUrl ?? asset.url}
+            alt={asset.filename}
+            className="w-full h-full object-cover"
+            thumbnail
+            thumbnailWidth={320}
+          />
+        ) : asset.type === "video" ? (
+          asset.thumbnailUrl ? (
+            <div className="relative w-full h-full">
+              <CachedImage
+                src={asset.thumbnailUrl}
+                alt={asset.filename}
+                className="w-full h-full object-cover"
+                thumbnail
+                thumbnailWidth={320}
+              />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="rounded-full bg-black/50 p-2">
+                  <Play className="h-5 w-5 text-white" fill="white" />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="relative flex items-center justify-center">
+              <Film className="h-10 w-10 text-muted-foreground/30" />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Play className="h-4 w-4 text-muted-foreground/50" />
+              </div>
+            </div>
+          )
+        ) : (
+          <div className="relative flex items-center justify-center">
+            <Music className="h-10 w-10 text-muted-foreground/30" />
+            <div className="absolute inset-0 flex items-center justify-center mt-6">
+              <Play className="h-4 w-4 text-muted-foreground/50" />
+            </div>
+          </div>
+        )}
+
+        {/* Checkbox overlay */}
+        <button
+          type="button"
+          className={`absolute top-2 left-2 transition-opacity ${isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+          onClick={(e) => {
+            e.stopPropagation()
+            onToggleSelect(asset.id)
+          }}
+        >
+          {isSelected ? (
+            <CheckSquare className="h-5 w-5 text-[#ff0073]" />
+          ) : (
+            <Square className="h-5 w-5 text-muted-foreground/60" />
+          )}
+        </button>
+      </div>
+
+      {/* Info */}
+      <div className="p-3 space-y-1.5">
+        <p className="text-xs font-medium truncate" title={asset.filename}>
+          {asset.filename || "Untitled"}
+        </p>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 capitalize flex items-center gap-1">
+              <TypeIcon type={asset.type} />
+              {asset.type}
+            </Badge>
+            {asset.sizeBytes > 0 && (
+              <span className="text-[10px] text-muted-foreground">{formatBytes(asset.sizeBytes)}</span>
+            )}
+          </div>
+          <span className="text-[10px] text-muted-foreground">{formatDate(asset.createdAt)}</span>
+        </div>
+
+        {/* Delete button */}
+        <div className="flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+            onClick={(e) => {
+              e.stopPropagation()
+              onDelete(asset.id)
+            }}
+          >
+            <Trash2 className="h-3 w-3 mr-1" />
+            Delete
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+})
 
 export default function LibraryPage() {
   const { user } = useAuth()
@@ -70,7 +205,12 @@ export default function LibraryPage() {
     limit: 40,
   })
 
-  const assets: LibraryAsset[] = data?.pages.flatMap((p) => p.data) ?? []
+  // Memoized so selection toggles don't re-derive the whole list and force the
+  // (non-virtualized, growing) grid to reconcile every card.
+  const assets: LibraryAsset[] = useMemo(
+    () => data?.pages.flatMap((p) => p.data) ?? [],
+    [data],
+  )
   const totalCount = data?.pages[0]?.totalCount ?? assets.length
   const previewAsset = previewIndex !== null ? assets[previewIndex] ?? null : null
 
@@ -137,30 +277,48 @@ export default function LibraryPage() {
     toast.success(`Deleted ${deletedCount} file${deletedCount !== 1 ? "s" : ""}`)
   }, [user?.id, selected, deleteMutation])
 
-  const toggleSelect = (id: string) => {
+  const toggleSelect = useCallback((id: string) => {
     setSelected((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
       return next
     })
-  }
+  }, [])
 
-  const toggleSelectAll = () => {
-    if (selected.size === assets.length) {
-      setSelected(new Set())
-    } else {
-      setSelected(new Set(assets.map((a) => a.id)))
-    }
-  }
+  const toggleSelectAll = useCallback(() => {
+    setSelected((prev) => (prev.size === assets.length ? new Set() : new Set(assets.map((a) => a.id))))
+  }, [assets])
+
+  // Stable preview-open callback for memoized cards
+  const handleOpenPreview = useCallback((index: number) => {
+    setPreviewIndex(index)
+  }, [])
+
+  // Row-virtualize the (window-scrolled) "My Files" grid. The hook auto-fetches
+  // the next page when the last rendered row nears the end, so the "Load More"
+  // button below is kept only as a manual fallback. The flat `assets` array
+  // stays complete — preview indexing into assets[i] is unaffected.
+  const {
+    gridRef,
+    virtualRows,
+    totalSize,
+    columns,
+    scrollMargin,
+    gridTemplateColumns,
+  } = useVirtualGrid({
+    itemCount: assets.length,
+    breakpoints: GRID_BREAKPOINTS.library,
+    // Fixed-height cards: h-32 thumbnail + info/actions section.
+    estimateRowHeight: 224,
+    gap: 12, // gap-3
+    overscan: 3,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage: loadingMore,
+  })
 
   const usagePercent = storageLimit > 0 ? Math.min(100, Math.round((storageUsed / storageLimit) * 100)) : 0
-
-  const TypeIcon = ({ type }: { type: string }) => {
-    if (type === "image") return <ImageIcon className="h-4 w-4 text-blue-400" />
-    if (type === "video") return <Film className="h-4 w-4 text-purple-400" />
-    return <Music className="h-4 w-4 text-green-400" />
-  }
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 p-6">
@@ -276,118 +434,32 @@ export default function LibraryPage() {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {assets.map((asset, assetIndex) => {
-            const isSelected = selected.has(asset.id)
-            return (
-              <div
-                key={asset.id}
-                className={`group relative rounded-lg border transition-colors overflow-hidden ${
-                  isSelected
-                    ? "border-[#ff0073] bg-[#ff0073]/5"
-                    : "border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700"
-                }`}
-              >
-                {/* Thumbnail / Preview */}
-                <div
-                  className="h-32 bg-muted/30 flex items-center justify-center cursor-pointer relative"
-                  onClick={() => asset.url && setPreviewIndex(assetIndex)}
-                >
-                  {asset.type === "image" && asset.url ? (
-                    <CachedImage
-                      src={asset.thumbnailUrl ?? asset.url}
-                      alt={asset.filename}
-                      className="w-full h-full object-cover"
-                      thumbnail
-                      thumbnailWidth={320}
-                    />
-                  ) : asset.type === "video" ? (
-                    asset.thumbnailUrl ? (
-                      <div className="relative w-full h-full">
-                        <CachedImage
-                          src={asset.thumbnailUrl}
-                          alt={asset.filename}
-                          className="w-full h-full object-cover"
-                          thumbnail
-                          thumbnailWidth={320}
-                        />
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="rounded-full bg-black/50 p-2">
-                            <Play className="h-5 w-5 text-white" fill="white" />
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="relative flex items-center justify-center">
-                        <Film className="h-10 w-10 text-muted-foreground/30" />
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <Play className="h-4 w-4 text-muted-foreground/50" />
-                        </div>
-                      </div>
-                    )
-                  ) : (
-                    <div className="relative flex items-center justify-center">
-                      <Music className="h-10 w-10 text-muted-foreground/30" />
-                      <div className="absolute inset-0 flex items-center justify-center mt-6">
-                        <Play className="h-4 w-4 text-muted-foreground/50" />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Checkbox overlay */}
-                  <button
-                    type="button"
-                    className={`absolute top-2 left-2 transition-opacity ${isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      toggleSelect(asset.id)
-                    }}
-                  >
-                    {isSelected ? (
-                      <CheckSquare className="h-5 w-5 text-[#ff0073]" />
-                    ) : (
-                      <Square className="h-5 w-5 text-muted-foreground/60" />
-                    )}
-                  </button>
-                </div>
-
-                {/* Info */}
-                <div className="p-3 space-y-1.5">
-                  <p className="text-xs font-medium truncate" title={asset.filename}>
-                    {asset.filename || "Untitled"}
-                  </p>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 capitalize flex items-center gap-1">
-                        <TypeIcon type={asset.type} />
-                        {asset.type}
-                      </Badge>
-                      {asset.sizeBytes > 0 && (
-                        <span className="text-[10px] text-muted-foreground">{formatBytes(asset.sizeBytes)}</span>
-                      )}
-                    </div>
-                    <span className="text-[10px] text-muted-foreground">{formatDate(asset.createdAt)}</span>
-                  </div>
-
-                  {/* Delete button */}
-                  <div className="flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 px-2 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleDelete(asset.id)
-                      }}
-                    >
-                      <Trash2 className="h-3 w-3 mr-1" />
-                      Delete
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )
-          })}
+        // Windowed grid: only rows in (viewport + overscan) are mounted.
+        <div ref={gridRef} style={{ height: totalSize, position: "relative" }}>
+          {virtualRows.map((virtualRow) => (
+            <div
+              key={virtualRow.key}
+              className="absolute top-0 left-0 w-full"
+              style={{
+                transform: `translateY(${virtualRow.start - scrollMargin}px)`,
+                display: "grid",
+                gridTemplateColumns,
+                gap: 12,
+              }}
+            >
+              {rowItems(assets, virtualRow.index, columns).map(({ item: asset, index: assetIndex }) => (
+                <LibraryAssetCard
+                  key={asset.id}
+                  asset={asset}
+                  index={assetIndex}
+                  isSelected={selected.has(asset.id)}
+                  onOpenPreview={handleOpenPreview}
+                  onToggleSelect={toggleSelect}
+                  onDelete={handleDelete}
+                />
+              ))}
+            </div>
+          ))}
         </div>
       )}
 

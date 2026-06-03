@@ -36,8 +36,8 @@ const AUTO_EXECUTE_TYPES = new Set(
   NODE_DEFINITIONS.filter((d) => d.autoExecute).map((d) => d.type),
 )
 
-/** Display-only nodes that read upstream data reactively (list, loop, preview). */
-const REACTIVE_DISPLAY_TYPES = new Set(["list", "loop", "preview"])
+/** Display-only nodes that read upstream data reactively (list, preview). */
+const REACTIVE_DISPLAY_TYPES = new Set(["list", "preview"])
 
 /**
  * Execute a single auto-execute node if it has upstream data.

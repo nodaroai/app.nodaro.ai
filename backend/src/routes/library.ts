@@ -58,29 +58,31 @@ export async function libraryRoutes(app: FastifyInstance) {
 
     const { type, search, limit, cursor, owned } = parsed.data
 
-    // Count query (only on first page — when no cursor)
-    let totalCount: number | null = null
+    // Count query (only on first page — when no cursor). Built here but NOT
+    // awaited yet so it can run concurrently with the page fetch below
+    // (Promise.all) instead of serializing two round-trips. Exact count drives
+    // preview-nav bounds, so it must stay `count: "exact"`.
+    let countPromise: PromiseLike<{ count: number | null }> | null = null
     if (!cursor) {
-      let countQuery = supabase
+      let cq = supabase
         .from("assets")
         .select("id", { count: "exact", head: true })
 
       if (owned) {
-        countQuery = countQuery.eq("user_id", userId)
+        cq = cq.eq("user_id", userId)
       } else {
-        countQuery = countQuery.or(`and(user_id.eq.${userId},in_library.eq.true),is_library_item.eq.true`)
+        cq = cq.or(`and(user_id.eq.${userId},in_library.eq.true),is_library_item.eq.true`)
       }
 
       if (type !== "all") {
-        countQuery = countQuery.eq("type", type)
+        cq = cq.eq("type", type)
       }
 
       if (search) {
-        countQuery = countQuery.ilike("filename", `%${search}%`)
+        cq = cq.ilike("filename", `%${search}%`)
       }
 
-      const { count } = await countQuery
-      totalCount = count
+      countPromise = cq
     }
 
     let query = supabase
@@ -120,7 +122,14 @@ export async function libraryRoutes(app: FastifyInstance) {
       }
     }
 
-    const { data, error } = await query
+    // Run the page fetch and the (optional) exact-count query concurrently so
+    // the count round-trip doesn't add latency on top of the page fetch.
+    const [{ data, error }, countResult] = await Promise.all([
+      query,
+      countPromise ?? Promise.resolve(null),
+    ])
+
+    const totalCount: number | null = countResult?.count ?? null
 
     if (error) {
       return reply.status(500).send({

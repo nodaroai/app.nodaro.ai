@@ -379,16 +379,6 @@ export function isValidWorkflowConnection(
       isVisualPickerType,
     )
   }
-  if (targetType === "loop" && connection.targetHandle) {
-    // Coarse gate applies to BOTH col_add and per-column handles. Identity
-    // refs (character/face/object/location) and other non-producer source
-    // types are rejected outright — they have no sensible mapping in
-    // detectLoopColumnType's type-inference. Pickers, media producers,
-    // and data producers pass; the col_add handler then auto-detects the
-    // column type from the source, and per-column refinement happens in
-    // the loop component's per-pip `accepts` predicate.
-    return isValidLoopCoarse(typeOf(connection.source) ?? "", isVisualPickerType)
-  }
 
   // Audio & Speech, Suno Music, Script & Text, and Processing (Audio + Text)
   // — 31 nodes covered by audio-text-handles.ts predicates. The dispatch

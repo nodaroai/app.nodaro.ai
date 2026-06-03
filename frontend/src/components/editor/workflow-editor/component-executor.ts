@@ -1,10 +1,11 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { executeComponent as executeComponentApi, getJobStatus } from "@/lib/api"
+import { executeComponent as executeComponentApi, getJobStatusLean, cancelJob } from "@/lib/api"
 import { mergeExposedSettings, applyHandleInputOverride, isHandleInputWired } from "@nodaro/shared"
 import type { ComponentMetadata } from "@nodaro/shared"
 import type { WorkflowNode, ComponentNodeData, GeneratedResult } from "@/types/nodes"
 import type { ExecutionContext } from "./types"
 import type { FrontendResolvedInputs } from "./node-input-resolver"
+import { shouldAbandonNode } from "./abandon-guard"
 
 const POLL_INTERVAL_MS = 2_500
 const TIMEOUT_MS = 30 * 60 * 1000
@@ -75,6 +76,10 @@ export async function executeComponent(
     currentJobProgress: 0,
   })
 
+  // Hoisted so the catch block can honor the abandon guard (the job id isn't
+  // known until the create call resolves; undefined before then).
+  let createdJobId: string | undefined
+
   try {
     // Get current workflow ID for job tagging
     const workflowId = useWorkflowStore.getState().workflowId
@@ -85,6 +90,18 @@ export async function executeComponent(
       pinnedVersion: data.pinnedVersion || undefined,
       workflowId: workflowId || undefined,
     })
+    createdJobId = jobId
+
+    if (ctx.signal?.aborted) {
+      // Run discarded/aborted while the create-job request was in flight. Don't
+      // re-attach currentJobId or start polling — that would defeat the discard
+      // and paint the result over the existing one. Cancel phase-aware (pre-call
+      // cancels+refunds; in-flight finishes → My Library), then bail. This is an
+      // async function → return "" (mirrors the shouldAbandonNode abandon-branch
+      // below; returning without throwing skips the catch-block failure write).
+      cancelJob(jobId).catch(() => {})
+      return ""
+    }
 
     // Store job ID so cancel + resume-after-refresh can find it
     updateNodeData(node.id, { currentJobId: jobId })
@@ -96,7 +113,18 @@ export async function executeComponent(
     while (Date.now() - startTime < TIMEOUT_MS) {
       if (ctx.isWorkflowStale()) throw new Error("Workflow changed during execution")
 
-      const job = await getJobStatus(jobId)
+      const job = await getJobStatusLean(jobId)
+
+      if (
+        (job.status === "completed" || job.status === "failed") &&
+        shouldAbandonNode(node.id, jobId)
+      ) {
+        // Run discarded/replaced — the job still lands in My Library, but we
+        // must not write its result/error onto the canvas. Bail without
+        // touching node data (returning early skips the catch-block failure
+        // write too, since we don't throw).
+        return ""
+      }
 
       if (job.status === "completed") {
         const outputData = (job.output_data ?? {}) as Record<string, string>
@@ -143,6 +171,11 @@ export async function executeComponent(
 
     throw new Error("Component execution timed out")
   } catch (err) {
+    if (createdJobId !== undefined && shouldAbandonNode(node.id, createdJobId)) {
+      // Run discarded/replaced — don't write a failure onto the canvas. The
+      // wrapper job still completes into My Library.
+      return ""
+    }
     updateNodeData(node.id, {
       executionStatus: "failed",
       errorMessage: err instanceof Error ? err.message : "Unknown error",

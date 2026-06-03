@@ -201,6 +201,115 @@ describe("extractAppInputSchema", () => {
     expect(schema.fields).toHaveLength(2)
     expect(schema.fields.some((f) => f.label === "Park")).toBe(true)
   })
+
+  // ── code-review #2 ───────────────────────────────────────────────────────
+  // (1) Raw, un-migrated `loop` snapshot nodes (apps published before the
+  // loop→list rename, on editions where the DB sweep hasn't run) must be
+  // normalized to `list` BEFORE deriving inputs — otherwise NODE_TYPE_INFO has
+  // no `loop` entry and the input is silently dropped.
+  it("normalizes a raw `loop` node to a list input (curated)", () => {
+    const schema = extractAppInputSchema({
+      snapshotSettings: {
+        presentationSettings: { inputItems: [{ type: "node", nodeId: "lp1" }] },
+      },
+      snapshotNodes: [
+        {
+          id: "lp1",
+          type: "loop",
+          data: {
+            label: "Prompts",
+            columns: [{ id: "c1", handleId: "col_c1", type: "text" }],
+            rows: [["a"]],
+          },
+        },
+      ],
+    })
+    expect(schema.fields).toHaveLength(1)
+    expect(schema.fields[0]!.type).toBe("list")
+    // Single-column → writes to `items` (FIX #1 coerces the array to rows).
+    expect(schema.keyMap[schema.fields[0]!.key]).toEqual({
+      nodeId: "lp1",
+      fieldKey: "items",
+    })
+  })
+
+  it("auto-derives a raw `loop` node as an input (no presentationSettings)", () => {
+    const schema = extractAppInputSchema({
+      snapshotSettings: null,
+      snapshotNodes: [
+        {
+          id: "lp1",
+          type: "loop",
+          data: {
+            label: "Prompts",
+            columns: [{ id: "c1", handleId: "col_c1", type: "text" }],
+            rows: [["a"]],
+          },
+        },
+      ],
+    })
+    // Without loop→list normalization the auto-derive filter
+    // (NODE_TYPE_INFO[n.type]) drops the raw `loop` node entirely.
+    expect(schema.fields).toHaveLength(1)
+    expect(schema.fields[0]!.label).toBe("Prompts")
+  })
+
+  // (2) A single-column list writes to `items` (the shape ListInputCard sends);
+  // a MULTI-column list must write to `rows` (string[][] — the shape
+  // LoopInputCard sends + the backend list extractor reads). Mapping a
+  // multi-column list to `items` silently corrupts the grid (the orchestrator
+  // would coerce the array into single-cell rows, destroying columns 2+).
+  it("single-column list maps to fieldKey=items", () => {
+    const schema = extractAppInputSchema({
+      snapshotSettings: {
+        presentationSettings: { inputItems: [{ type: "node", nodeId: "l1" }] },
+      },
+      snapshotNodes: [
+        {
+          id: "l1",
+          type: "list",
+          data: {
+            label: "Items",
+            columns: [{ id: "c1", handleId: "col_c1", type: "text" }],
+            rows: [["a"]],
+          },
+        },
+      ],
+    })
+    expect(schema.keyMap[schema.fields[0]!.key]).toEqual({
+      nodeId: "l1",
+      fieldKey: "items",
+    })
+  })
+
+  it("multi-column list maps to fieldKey=rows (NOT items — avoids grid corruption)", () => {
+    const schema = extractAppInputSchema({
+      snapshotSettings: {
+        presentationSettings: { inputItems: [{ type: "node", nodeId: "t1" }] },
+      },
+      snapshotNodes: [
+        {
+          id: "t1",
+          type: "list",
+          data: {
+            label: "Table",
+            columns: [
+              { id: "c1", handleId: "col_c1", type: "text" },
+              { id: "c2", handleId: "col_c2", type: "text" },
+            ],
+            rows: [["a", "b"]],
+          },
+        },
+      ],
+    })
+    expect(schema.keyMap[schema.fields[0]!.key]).toEqual({
+      nodeId: "t1",
+      fieldKey: "rows",
+    })
+    expect(schema.fields[0]!.type).toBe("list")
+    // The 2D shape requirement is documented for the caller.
+    expect(schema.fields[0]!.description).toMatch(/rows/i)
+  })
 })
 
 describe("extractComponentInputSchema", () => {

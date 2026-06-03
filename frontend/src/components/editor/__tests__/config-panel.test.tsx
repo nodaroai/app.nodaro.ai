@@ -10,7 +10,7 @@ import { describe, it, expect, vi } from "vitest"
 
 // Exact copy of NODE_TYPE_DISPLAY_NAMES + getNodeTypeDisplayName from config-panel.tsx
 const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
-  "text-prompt": "Text Prompt",
+  "text-prompt": "Text",
   "upload-image": "Upload Image",
   "upload-video": "Upload Video",
   "upload-audio": "Upload Audio",
@@ -60,7 +60,6 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "manual-edit": "Manual Edit",
   "combine-text": "Combine Text",
   "split-text": "Split Text",
-  "loop": "Table",
   "save-to-storage": "Save to Storage",
   "webhook-output": "Webhook Output",
   "character": "Character",
@@ -94,7 +93,11 @@ const RUN_BUTTON_TYPES = new Set([
   "sub-workflow",
 ])
 
-const RUN_FROM_HERE_TYPES = new Set(["combine-text", "split-text", "extract-field", "preview", "loop", "list"])
+const RUN_FROM_HERE_TYPES = new Set([
+  "combine-text", "split-text", "extract-field", "json-process", "filter-list",
+  "deduplicate", "merge-lists", "sort-list", "selector", "router",
+  "preview", "list",
+])
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -106,7 +109,7 @@ describe("getNodeTypeDisplayName", () => {
   })
 
   it("returns the hardcoded name for 'text-prompt'", () => {
-    expect(getNodeTypeDisplayName("text-prompt")).toBe("Text Prompt")
+    expect(getNodeTypeDisplayName("text-prompt")).toBe("Text")
   })
 
   it("returns the hardcoded name for 'audio-isolation' (Voice Extractor)", () => {

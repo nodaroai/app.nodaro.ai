@@ -17,6 +17,7 @@ Sign in with your Nodaro account, consent, and the tools appear inline.
 
 - 13 generation verbs (`generate_image`, `generate_video`, `animate_image`, ...)
 - Workflow tools (`list_workflows`, `get_workflow`, `create_workflow`, `delete_workflow`, `get_workflow_json`, `update_workflow_json`, `export_workflow`, `import_workflow`, `run_workflow`) — all scoped to an auto-created "mcp" project except `export_workflow`, which can export any of your workflows
+- Prompt tools (`analyze_prompt`, `generate_prompt`, `enhance_prompt`) — AI assistance for writing prompts for generation nodes
 - Other utility tools (`list_jobs`, `get_job`, `list_projects`, `get_project`, `list_models`, ...)
 - 4 gallery tools (`browse_gallery`, `list_favorites`, `favorite_asset`, `get_asset`)
 - Your published apps and saved components surface as their own named tools (capped at 30/session)

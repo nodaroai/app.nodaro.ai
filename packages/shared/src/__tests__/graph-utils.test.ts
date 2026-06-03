@@ -395,7 +395,7 @@ describe("IMAGE_REF_TYPES", () => {
 
 describe("PASSTHROUGH_TYPES", () => {
   it("contains the expected passthrough node types", () => {
-    const expected = ["ai-writer", "llm-chat", "split-text", "combine-text", "text-prompt", "loop", "list"]
+    const expected = ["ai-writer", "llm-chat", "split-text", "combine-text", "text-prompt", "list"]
     for (const t of expected) {
       expect(PASSTHROUGH_TYPES.has(t)).toBe(true)
     }
@@ -543,12 +543,12 @@ describe("collectAncestorRefs", () => {
   })
 
   it("traverses through multiple chained passthrough nodes", () => {
-    // A(upload-image) -> B(ai-writer) -> C(split-text) -> D(loop) -> E(generate-image)
+    // A(upload-image) -> B(ai-writer) -> C(split-text) -> D(list) -> E(generate-image)
     const nodes: GenericNode[] = [
       mkGenericNode("a", "upload-image", { imageUrl: "https://example.com/deep.png" }),
       mkGenericNode("b", "ai-writer"),
       mkGenericNode("c", "split-text"),
-      mkGenericNode("d", "loop"),
+      mkGenericNode("d", "list"),
       mkGenericNode("e", "generate-image"),
     ]
     const edges: GenericEdge[] = [

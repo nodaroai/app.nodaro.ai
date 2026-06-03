@@ -4,7 +4,7 @@ import { Box, ImageIcon, Loader2, AlertCircle } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { NodeJobProgress } from "./node-job-progress"
@@ -12,8 +12,7 @@ import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
 import type { ThreeDTitleData } from "@/types/nodes"
 
 function ThreeDTitleNodeComponent({ id, data, selected }: NodeProps) {
-  const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as ThreeDTitleData | undefined
-  const nodeData = currentNodeData ?? (data as ThreeDTitleData)
+  const nodeData = data as ThreeDTitleData
   const credits = useModelCredits(buildLlmCreditIdentifier("3d-title", nodeData.llmModel || LLM_FEATURE_DEFAULTS["3d-title"]), 15)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
@@ -97,8 +96,8 @@ function ThreeDTitleNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
-    <HandleWithPopover nodeId={id} nodeType="3d-title" handleId="background"  type="target" position={Position.Left}  label="Background"  color="#22D3EE" icon={<ImageIcon />} side="left"  top="calc(100% - 24px)" />
-    <HandleWithPopover nodeId={id} nodeType="3d-title" handleId="composition" type="source" position={Position.Right} label="Composition" color="#ff0073" icon={<Box />}       side="right" top="24px" />
+    <HandleWithPopover nodeId={id} nodeType="3d-title" handleId="background"  type="target" position={Position.Left}  label="Background"  color={HANDLE_COLORS.image} icon={<ImageIcon />} side="left"  top="calc(100% - 24px)" />
+    <HandleWithPopover nodeId={id} nodeType="3d-title" handleId="composition" type="source" position={Position.Right} label="Composition" color={HANDLE_COLORS.control} icon={<Box />}       side="right" top="24px" />
     </div>
   )
 }

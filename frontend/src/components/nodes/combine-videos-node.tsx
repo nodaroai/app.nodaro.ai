@@ -19,8 +19,7 @@ import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { CombineVideosData } from "@/types/nodes"
 
 function CombineVideosNodeComponent({ id, data, selected }: NodeProps) {
-  const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as CombineVideosData | undefined
-  const nodeData = currentNodeData ?? (data as CombineVideosData)
+  const nodeData = data as CombineVideosData
   const credits = useEstimatedCredits({ id, type: "combine-videos", data: nodeData } as any)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)

@@ -9,6 +9,7 @@ import { computeZoomFromDrag, computeVisualSize, applyMagnet } from "./zoom-math
 import { Type, FastForward, Maximize2, AArrowUp, AArrowDown, MoreHorizontal } from "lucide-react"
 import { useTheme } from "next-themes"
 import { cn } from "@/lib/utils"
+import { RUN_BUTTON_CLASS } from "@/lib/run-button-style"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useShallow } from "zustand/react/shallow"
 import { EditableNodeLabel } from "./editable-node-label"
@@ -55,8 +56,8 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
   // Inline-edit state for the modal's header title. Defaults to the node
   // label; commits to the store on blur/Enter, reverts on Escape.
   const [titleEditing, setTitleEditing] = useState(false)
-  const [titleDraft, setTitleDraft] = useState(nodeData.label ?? "Text Prompt")
-  useEffect(() => { setTitleDraft(nodeData.label ?? "Text Prompt") }, [nodeData.label])
+  const [titleDraft, setTitleDraft] = useState(nodeData.label ?? "Text")
+  useEffect(() => { setTitleDraft(nodeData.label ?? "Text") }, [nodeData.label])
   // Font-size control for the fullscreen prompt — bigger default than the
   // canvas node's 14px so the modal reads as a "writing surface", not a
   // zoomed copy of the chip on the canvas. Clamped to keep tag pills and
@@ -66,15 +67,63 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
   const { resolvedTheme } = useTheme()
   const isDark = resolvedTheme === "dark"
 
-  // Only subscribe to full nodes/edges for nodeRefs + downstream credits,
-  // but memoize the nodeRefs result by serializing to avoid unnecessary TagTextarea re-renders
-  const nodes = useWorkflowStore((s) => s.nodes)
-  const edges = useWorkflowStore((s) => s.edges)
-  const nodeRefsRaw = useMemo(() => getUpstreamNodes(id, nodes, edges), [id, nodes, edges])
-  const nodeRefsKey = useMemo(() => nodeRefsRaw.map(r => r.id).join(","), [nodeRefsRaw])
-  // Stable reference: only changes when the actual upstream node IDs change
+  // Both the nodeRefs autocomplete and the downstream-credits walk traverse
+  // the whole graph. Previously this component held whole-array `s.nodes` /
+  // `s.edges` subscriptions, so every node drag (~60fps, new array refs) and
+  // every keystroke anywhere re-rendered this node AND its TagTextarea tree.
+  // Instead, derive PRIMITIVE keys in a useShallow selector: the component
+  // only re-renders when the upstream node set (id\x01label\x01type) or the
+  // downstream credit topology actually changes. The heavy walks are memoized
+  // on those keys and read live arrays from getState() at compute time.
+  const { upstreamKey, downstreamKey } = useWorkflowStore(
+    useShallow((s) => {
+      // Upstream key — id + label + type so a rename invalidates (not id alone,
+      // which would leave stale {Node Label} tokens in the textarea).
+      const ups = getUpstreamNodes(id, s.nodes, s.edges)
+      let uKey = ""
+      for (const r of ups) uKey += `${r.id}\x01${r.label}\x01${r.type}\x02`
+
+      // Downstream key — forward BFS topology + each executable downstream
+      // node's type and the data fields estimateNodeCredits reads. Index nodes
+      // by id + edges by source once so the walk is O(V+E), not O(V·(V+E))
+      // from `nodes.find()` + a full `edges` scan per visited node.
+      let dKey = ""
+      const outEdges0 = s.edges.filter((e) => e.source === id)
+      if (outEdges0.length > 0) {
+        const nodesById = new Map<string, (typeof s.nodes)[number]>()
+        for (const n of s.nodes) nodesById.set(n.id, n)
+        const edgesBySource = new Map<string, (typeof s.edges)[number][]>()
+        for (const edge of s.edges) {
+          const bucket = edgesBySource.get(edge.source)
+          if (bucket) bucket.push(edge)
+          else edgesBySource.set(edge.source, [edge])
+        }
+        const visited = new Set<string>([id])
+        const queue = outEdges0.map((e) => e.target)
+        while (queue.length > 0) {
+          const current = queue.shift()!
+          if (visited.has(current)) continue
+          visited.add(current)
+          const dn = nodesById.get(current)
+          if (dn) {
+            const dd = (dn.data ?? {}) as Record<string, unknown>
+            dKey += `${current}\x01${dn.type ?? ""}\x01${String(dd.estimatedCredits ?? "")}\x01${String(dd.provider ?? "")}\x01${String(dd.resolution ?? "")}\x01${String(dd.videoDuration ?? "")}\x01${String(dd.actor ?? "")}\x01${String(dd.mode ?? "")}\x02`
+          }
+          for (const edge of edgesBySource.get(current) ?? []) {
+            if (!visited.has(edge.target)) queue.push(edge.target)
+          }
+        }
+      }
+      return { upstreamKey: uKey, downstreamKey: dKey }
+    }),
+  )
+
+  // Recompute the actual upstream refs only when the upstream key changes.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const nodeRefs = useMemo(() => nodeRefsRaw, [nodeRefsKey])
+  const nodeRefs = useMemo(() => {
+    const { nodes, edges } = useWorkflowStore.getState()
+    return getUpstreamNodes(id, nodes, edges)
+  }, [id, upstreamKey])
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // `null`/undefined = "no color" — re-pressing the active swatch clears
@@ -224,10 +273,26 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
     }
   }, [id])
 
-  // BFS forward to find downstream executable nodes and sum their credit cost
+  // BFS forward to find downstream executable nodes and sum their credit cost.
+  // Memoized on `downstreamKey` (a primitive fingerprint of the downstream
+  // topology + credit-relevant data) so it only recomputes when that actually
+  // changes; reads live arrays from getState() at compute time.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const { hasDownstream, downstreamCredits } = useMemo(() => {
+    const { nodes, edges } = useWorkflowStore.getState()
     const outEdges = edges.filter((e) => e.source === id)
     if (outEdges.length === 0) return { hasDownstream: false, downstreamCredits: 0 }
+
+    // Index nodes by id + edges by source once so the forward walk is O(V+E),
+    // not O(V·(V+E)) from `nodes.find()` + a full `edges` scan per visited node.
+    const nodesById = new Map<string, (typeof nodes)[number]>()
+    for (const n of nodes) nodesById.set(n.id, n)
+    const edgesBySource = new Map<string, (typeof edges)[number][]>()
+    for (const edge of edges) {
+      const bucket = edgesBySource.get(edge.source)
+      if (bucket) bucket.push(edge)
+      else edgesBySource.set(edge.source, [edge])
+    }
 
     const visited = new Set<string>([id])
     const queue = outEdges.map((e) => e.target)
@@ -238,22 +303,22 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
       if (visited.has(current)) continue
       visited.add(current)
 
-      const node = nodes.find((n) => n.id === current)
+      const node = nodesById.get(current)
       if (!node) continue
 
       if (EXECUTABLE_TYPES.has(node.type ?? "")) {
         totalCredits += estimateNodeCredits(node as { type?: string; data?: Record<string, unknown> })
       }
 
-      for (const edge of edges) {
-        if (edge.source === current && !visited.has(edge.target)) {
+      for (const edge of edgesBySource.get(current) ?? []) {
+        if (!visited.has(edge.target)) {
           queue.push(edge.target)
         }
       }
     }
 
     return { hasDownstream: true, downstreamCredits: totalCredits }
-  }, [id, nodes, edges])
+  }, [id, downstreamKey])
 
   const outputTarget: "text" | "voice" | "lyrics" =
     nodeData.outputTarget === "voice" || nodeData.outputTarget === "lyrics" ? nodeData.outputTarget : "text"
@@ -446,7 +511,7 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
           >
             <button
               type="button"
-              className="flex items-center gap-1.5 h-7 px-3 text-[11px] font-medium text-white rounded-lg whitespace-nowrap bg-[#ff0073] hover:bg-[#e60068] shadow-sm transition-colors"
+              className={`flex items-center gap-1 h-6 px-2.5 text-[11px] font-medium rounded-md whitespace-nowrap ${RUN_BUTTON_CLASS}`}
               onClick={(e) => {
                 e.stopPropagation()
                 runFromHere?.(id)
@@ -455,7 +520,7 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
               <FastForward className="w-3 h-3" />
               Run from here
               {hasCredits() && downstreamCredits > 0 && (
-                <span className="ml-0.5 opacity-80">({downstreamCredits} CR)</span>
+                <span className="ml-1 opacity-80">({downstreamCredits} CR)</span>
               )}
             </button>
           </div>
@@ -626,7 +691,7 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
           {/* Accessible title for Radix Dialog — visually replaced by the
               editable header below. */}
           <VisuallyHidden>
-            <DialogTitle>{nodeData.label ?? "Text Prompt"}</DialogTitle>
+            <DialogTitle>{nodeData.label ?? "Text"}</DialogTitle>
           </VisuallyHidden>
           {/* Header: icon + editable title, top-left. */}
           <div className="absolute top-2 left-3 flex items-center gap-1.5 text-[14px] font-medium text-foreground/70 dark:text-white/70">
@@ -640,12 +705,12 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
                   setTitleEditing(false)
                   const next = titleDraft.trim()
                   if (next && next !== nodeData.label) updateNodeData(id, { label: next })
-                  else setTitleDraft(nodeData.label ?? "Text Prompt")
+                  else setTitleDraft(nodeData.label ?? "Text")
                 }}
                 onKeyDown={(e) => {
                   e.stopPropagation()
                   if (e.key === "Enter") (e.target as HTMLInputElement).blur()
-                  if (e.key === "Escape") { setTitleDraft(nodeData.label ?? "Text Prompt"); setTitleEditing(false) }
+                  if (e.key === "Escape") { setTitleDraft(nodeData.label ?? "Text"); setTitleEditing(false) }
                 }}
                 className="bg-white border border-border rounded-md px-2 py-0.5 text-foreground outline-none min-w-[8rem] max-w-[20rem] text-[14px] focus:ring-1 focus:ring-[#ff0073]/40 focus:border-[#ff0073] dark:bg-zinc-900 dark:border-white/20 dark:text-white/90"
                 style={{ width: `${Math.max(8, titleDraft.length * 0.65 + 2)}ch` }}
@@ -656,7 +721,7 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
                 onClick={() => setTitleEditing(true)}
                 title="Click to rename"
               >
-                {nodeData.label ?? "Text Prompt"}
+                {nodeData.label ?? "Text"}
               </span>
             )}
           </div>

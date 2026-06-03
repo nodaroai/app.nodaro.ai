@@ -1,3 +1,4 @@
+import { memo } from "react"
 import { ImageGridOutput } from "./image-grid-output"
 import { VideoCarouselOutput } from "./video-carousel-output"
 import { AudioListOutput } from "./audio-list-output"
@@ -9,7 +10,7 @@ export interface GalleryOutputCardProps extends GalleryOutputProps {
   columns?: number
 }
 
-export function GalleryOutputCard({
+function GalleryOutputCardImpl({
   outputType,
   results,
   status,
@@ -61,3 +62,5 @@ export function GalleryOutputCard({
       )
   }
 }
+
+export const GalleryOutputCard = memo(GalleryOutputCardImpl)

@@ -8,7 +8,7 @@ import { llmComplete } from "../lib/llm-client.js"
 import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { buildWizardAnalyzeSystem, buildWizardGenerateSystem } from "../prompts/prompt-wizard-system.js"
+import { buildWizardAnalyzeSystem, buildWizardGenerateSystem, buildWizardEnhanceSystem } from "../prompts/prompt-wizard-system.js"
 import { extractJsonFromAIResponse } from "../lib/json-utils.js"
 import { formatZodError } from "../lib/zod-error.js"
 
@@ -54,7 +54,20 @@ const wizardGenerateBody = z.object({
   userPreference: z.string().max(500).optional(),
 })
 
-const wizardBody = z.discriminatedUnion("action", [wizardAnalyzeBody, wizardGenerateBody])
+const wizardEnhanceBody = z.object({
+  action: z.literal("enhance"),
+  nodeType: z.string(),
+  prompt: z.string().max(5000).optional(),
+  provider: z.string().optional(),
+  style: z.string().optional(),
+  aspectRatio: z.string().optional(),
+  duration: z.number().optional(),
+  llmModel: z.enum(LLM_MODEL_IDS as [string, ...string[]]).optional(),
+  nodeContext: nodeContextSchema,
+  userPreference: z.string().max(500).optional(),
+})
+
+const wizardBody = z.discriminatedUnion("action", [wizardAnalyzeBody, wizardGenerateBody, wizardEnhanceBody])
 
 // Response validation schemas
 const wizardOptionSchema = z.object({
@@ -157,7 +170,7 @@ export async function promptHelperRoutes(app: FastifyInstance) {
           userMessage = body.prompt
             ? `Analyze this prompt idea and generate questions:\n\n${body.prompt}`
             : `Generate questions to help build a ${body.nodeType} prompt from scratch. The user has not provided any initial idea.`
-        } else {
+        } else if (body.action === "generate") {
           systemPrompt = buildWizardGenerateSystem({
             nodeType: body.nodeType,
             provider: body.provider,
@@ -173,10 +186,24 @@ export async function promptHelperRoutes(app: FastifyInstance) {
           if (body.originalPrompt) {
             userMessage += `\n\nOriginal idea: ${body.originalPrompt}`
           }
+        } else {
+          // enhance — one-shot, no selections
+          systemPrompt = buildWizardEnhanceSystem({
+            nodeType: body.nodeType,
+            provider: body.provider,
+            style: body.style,
+            aspectRatio: body.aspectRatio,
+            duration: body.duration,
+            nodeContext: body.nodeContext,
+            userPreference: body.userPreference,
+          })
+          userMessage = body.prompt
+            ? `Rewrite this rough idea into one optimized prompt:\n\n${body.prompt}`
+            : `Create an optimized ${body.nodeType} prompt from scratch. The user has not provided any initial idea.`
         }
 
         // Build message content — include reference images for multimodal analysis
-        const refUrls = body.action === "analyze" ? (body.nodeContext?.referenceImageUrls ?? []) : []
+        const refUrls = body.action !== "generate" ? (body.nodeContext?.referenceImageUrls ?? []) : []
         let messageContent: string | Array<{ type: "text"; text: string } | { type: "image"; url: string }>
 
         if (refUrls.length > 0) {
@@ -213,9 +240,10 @@ export async function promptHelperRoutes(app: FastifyInstance) {
           }
           result = { jobId: job.id, questions: validated.data.questions }
         } else {
+          // generate + enhance both return { prompt, recommendedModel? } — validated by the same schema, so this stays 2-way
           const validated = generateResponseSchema.safeParse(parsedResponse)
           if (!validated.success) {
-            throw new Error(`Malformed generate response: ${validated.error.issues[0]?.message}`)
+            throw new Error(`Malformed ${body.action} response: ${validated.error.issues[0]?.message}`)
           }
           result = {
             jobId: job.id,

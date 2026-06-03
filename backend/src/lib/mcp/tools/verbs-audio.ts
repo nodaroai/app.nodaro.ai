@@ -9,6 +9,7 @@ import {
   errorResult,
   parseFailure,
   jobResultWithWidget,
+  dispatchJob,
 } from "./_verb-helpers.js"
 import { SUNO_MODELS, SUNO_ADD_TRACK_MODELS } from "@nodaro/shared"
 
@@ -131,21 +132,10 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
             mcp_client: session.clientName,
             userId: session.userId,
           }
-      const res = await fastify.inject({
-        method: "POST",
+      return dispatchJob(fastify, session, {
         url,
-        headers: {
-          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-        },
         payload,
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
-      return jobResultWithWidget({
-        jobId,
         label: "music generation",
-        session,
         widgetKind: "audio",
         widgetData: {
           prompt: args.prompt,
@@ -243,21 +233,10 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         mcp_client: session.clientName,
         userId: session.userId,
       }
-      const res = await fastify.inject({
-        method: "POST",
+      return dispatchJob(fastify, session, {
         url: "/v1/text-to-speech",
-        headers: {
-          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-        },
         payload,
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
-      return jobResultWithWidget({
-        jobId,
         label: "text-to-speech",
-        session,
         widgetKind: "audio",
         widgetData: {
           prompt: args.text,
@@ -305,21 +284,10 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         mcp_client: session.clientName,
         userId: session.userId,
       }
-      const res = await fastify.inject({
-        method: "POST",
+      return dispatchJob(fastify, session, {
         url: "/v1/extract-youtube-audio",
-        headers: {
-          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-        },
         payload,
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
-      return jobResultWithWidget({
-        jobId,
         label: "YouTube audio",
-        session,
         widgetKind: "audio",
         widgetData: {
           prompt: args.youtube_url,
@@ -337,16 +305,22 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
     {
       title: "Voice Changer",
       description:
-        "Replace the voice on an existing audio track while preserving the " +
-        "delivery / cadence (ElevenLabs Voice Changer). Provide ONE audio " +
-        "source — audio_url OR audio_asset_id (a Nodaro audio job id) — " +
-        "plus a target voice_id.\n\n" +
+        "Replace the voice on an existing audio track — or in a whole talking " +
+        "video — while preserving the delivery / cadence (ElevenLabs Voice " +
+        "Changer). Provide ONE source: audio_url / audio_asset_id to revoice " +
+        "audio→audio, OR video_url / video_asset_id to revoice an entire clip " +
+        "(the revoiced video is saved to your library; the new audio track is " +
+        "previewed here). Video wins if both are supplied. Plus a target voice_id.\n\n" +
+        "remove_background_noise off keeps the music/SFX bed under the new " +
+        "voice; on yields a clean voice-only result.\n\n" +
         "Use the same voice naming as `generate_speech`: pass a premade " +
         "voice NAME (Rachel, Aria, Roger, ...) or an ElevenLabs UUID for " +
         "a custom clone. Don't invent UUIDs — passing an unknown one fails.",
       inputSchema: {
         audio_url: z.string().url().optional(),
         audio_asset_id: z.string().optional(),
+        video_url: z.string().url().optional().describe("Revoice a talking video — demux audio, run speech-to-speech, remux. Returns video + new audio."),
+        video_asset_id: z.string().optional().describe("A Nodaro video job id to revoice (alternative to video_url)."),
         voice_id: z.string().min(1).describe("Target voice — premade name (Rachel, Aria, Roger, ...) or ElevenLabs UUID for a custom clone."),
         stability: z.number().min(0).max(1).optional(),
         similarity_boost: z.number().min(0).max(1).optional(),
@@ -372,6 +346,16 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       },
     },
     async (args) => {
+      // Video wins when both a video and an audio source are supplied.
+      const videoUrl =
+        args.video_url ??
+        (args.video_asset_id
+          ? await resolveAssetId({
+              assetId: args.video_asset_id,
+              userId: session.userId,
+              expectedKind: "video",
+            })
+          : null)
       const audioUrl =
         args.audio_url ??
         (args.audio_asset_id
@@ -381,16 +365,17 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
               expectedKind: "audio",
             })
           : null)
-      if (!audioUrl) {
+      if (!videoUrl && !audioUrl) {
         return {
           content: [
-            { type: "text", text: "Pass audio_url or audio_asset_id." },
+            { type: "text", text: "Pass audio_url/audio_asset_id to revoice audio, or video_url/video_asset_id to revoice a talking video." },
           ],
           isError: true,
         }
       }
+      const isVideo = Boolean(videoUrl)
       const payload = {
-        audioUrl,
+        ...(isVideo ? { videoUrl } : { audioUrl }),
         voiceId: args.voice_id,
         stability: args.stability,
         similarityBoost: args.similarity_boost,
@@ -398,21 +383,13 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         mcp_client: session.clientName,
         userId: session.userId,
       }
-      const res = await fastify.inject({
-        method: "POST",
+      // The widget previews audio (the static job-audio template); in video mode
+      // the job also emits an audio sidecar so the preview still plays, and the
+      // full revoiced video is saved to the library.
+      return dispatchJob(fastify, session, {
         url: "/v1/voice-changer",
-        headers: {
-          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-        },
         payload,
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
-      return jobResultWithWidget({
-        jobId,
-        label: "voice changer",
-        session,
+        label: isVideo ? "voice changer (video)" : "voice changer",
         widgetKind: "audio",
         widgetData: { prompt: `voice → ${args.voice_id}`, model: "elevenlabs-voice-changer" },
       })
@@ -498,21 +475,10 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         mcp_client: session.clientName,
         userId: session.userId,
       }
-      const res = await fastify.inject({
-        method: "POST",
+      return dispatchJob(fastify, session, {
         url: "/v1/dubbing",
-        headers: {
-          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-        },
         payload,
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
-      return jobResultWithWidget({
-        jobId,
         label: "dubbing",
-        session,
         widgetKind: "audio",
         widgetData: { prompt: `dub → ${args.target_language}`, model: "elevenlabs-dubbing" },
       })
@@ -581,21 +547,10 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         mcp_client: session.clientName,
         userId: session.userId,
       }
-      const res = await fastify.inject({
-        method: "POST",
+      return dispatchJob(fastify, session, {
         url: "/v1/voice-design",
-        headers: {
-          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-        },
         payload,
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
-      return jobResultWithWidget({
-        jobId,
         label: "voice design",
-        session,
         widgetKind: "audio",
         widgetData: { prompt: args.voice_description, model: "elevenlabs-voice-design" },
       })
@@ -768,21 +723,10 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         mcp_client: session.clientName,
         userId: session.userId,
       }
-      const res = await fastify.inject({
-        method: "POST",
+      return dispatchJob(fastify, session, {
         url: "/v1/suno/separate",
-        headers: {
-          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-        },
         payload,
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
-      return jobResultWithWidget({
-        jobId,
         label: "stem separation",
-        session,
         widgetKind: "audio",
         widgetData: { prompt: args.type ?? "separate_vocal", model: "suno-separate" },
       })
@@ -851,21 +795,10 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         mcp_client: session.clientName,
         userId: session.userId,
       }
-      const res = await fastify.inject({
-        method: "POST",
+      return dispatchJob(fastify, session, {
         url: "/v1/suno/music-video",
-        headers: {
-          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-        },
         payload,
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
-      return jobResultWithWidget({
-        jobId,
         label: "Suno music video",
-        session,
         widgetKind: "video",
         widgetData: { prompt: "(music video)", model: "suno-music-video" },
       })
@@ -946,21 +879,10 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         mcp_client: session.clientName,
         userId: session.userId,
       }
-      const res = await fastify.inject({
-        method: "POST",
+      return dispatchJob(fastify, session, {
         url: "/v1/suno/extend",
-        headers: {
-          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-        },
         payload,
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
-      return jobResultWithWidget({
-        jobId,
         label: "Suno extend",
-        session,
         widgetKind: "audio",
         widgetData: { prompt: args.prompt ?? "(extend)", model: args.model === "V4" ? "suno" : "suno-v5" },
       })
@@ -1042,21 +964,10 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         mcp_client: session.clientName,
         userId: session.userId,
       }
-      const res = await fastify.inject({
-        method: "POST",
+      return dispatchJob(fastify, session, {
         url: "/v1/suno/cover",
-        headers: {
-          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-        },
         payload,
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
-      return jobResultWithWidget({
-        jobId,
         label: "Suno cover",
-        session,
         widgetKind: "audio",
         widgetData: { prompt: args.prompt, model: args.model === "V4" ? "suno" : "suno-v5" },
       })
@@ -1223,16 +1134,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         mcp_client: session.clientName,
         userId: session.userId,
       }
-      const res = await fastify.inject({
-        method: "POST",
-        url: "/v1/text-to-audio",
-        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
-        payload,
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
-      return jobResultWithWidget({ jobId, label: "sound effect", session, widgetKind: "audio", widgetData: { prompt: args.prompt, model: "elevenlabs-sfx" } })
+      return dispatchJob(fastify, session, { url: "/v1/text-to-audio", payload, label: "sound effect", widgetKind: "audio", widgetData: { prompt: args.prompt, model: "elevenlabs-sfx" } })
     },
   )
 
@@ -1263,16 +1165,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
           ? await resolveAssetId({ assetId: args.audio_asset_id, userId: session.userId, expectedKind: "audio" })
           : null)
       if (!audioUrl) return { content: [{ type: "text" as const, text: "Pass audio_url or audio_asset_id." }], isError: true }
-      const res = await fastify.inject({
-        method: "POST",
-        url: "/v1/audio-isolation",
-        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
-        payload: { audioUrl, mcp_client: session.clientName, userId: session.userId },
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
-      return jobResultWithWidget({ jobId, label: "audio isolation", session, widgetKind: "audio", widgetData: { prompt: "(isolate audio)", model: "audio-isolation" } })
+      return dispatchJob(fastify, session, { url: "/v1/audio-isolation", payload: { audioUrl, mcp_client: session.clientName, userId: session.userId }, label: "audio isolation", widgetKind: "audio", widgetData: { prompt: "(isolate audio)", model: "audio-isolation" } })
     },
   )
 
@@ -1311,16 +1204,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         mcp_client: session.clientName,
         userId: session.userId,
       }
-      const res = await fastify.inject({
-        method: "POST",
-        url: "/v1/transcribe",
-        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
-        payload,
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
-      return jobResultWithWidget({ jobId, label: "transcribe", session, widgetKind: "generic", widgetData: { prompt: "(transcribe)", model: "elevenlabs-stt" } })
+      return dispatchJob(fastify, session, { url: "/v1/transcribe", payload, label: "transcribe", widgetKind: "generic", widgetData: { prompt: "(transcribe)", model: "elevenlabs-stt" } })
     },
   )
 
@@ -1345,16 +1229,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       },
     },
     async (args) => {
-      const res = await fastify.inject({
-        method: "POST",
-        url: "/v1/voice-remix",
-        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
-        payload: { text: args.text, voiceDescription: args.voice_description, mcp_client: session.clientName, userId: session.userId },
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
-      return jobResultWithWidget({ jobId, label: "voice remix", session, widgetKind: "audio", widgetData: { prompt: args.text.slice(0, 80), model: "voice-remix" } })
+      return dispatchJob(fastify, session, { url: "/v1/voice-remix", payload: { text: args.text, voiceDescription: args.voice_description, mcp_client: session.clientName, userId: session.userId }, label: "voice remix", widgetKind: "audio", widgetData: { prompt: args.text.slice(0, 80), model: "voice-remix" } })
     },
   )
 
@@ -1409,16 +1284,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         mcp_client: session.clientName,
         userId: session.userId,
       }
-      const res = await fastify.inject({
-        method: "POST",
-        url: "/v1/suno/generate",
-        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
-        payload,
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
-      return jobResultWithWidget({ jobId, label: "Suno generate", session, widgetKind: "audio", widgetData: { prompt: args.prompt.slice(0, 80), model: args.model ?? "V5_5" } })
+      return dispatchJob(fastify, session, { url: "/v1/suno/generate", payload, label: "Suno generate", widgetKind: "audio", widgetData: { prompt: args.prompt.slice(0, 80), model: args.model ?? "V5_5" } })
     },
   )
 
@@ -1438,16 +1304,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     async (args) => {
-      const res = await fastify.inject({
-        method: "POST",
-        url: "/v1/suno/lyrics",
-        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
-        payload: { prompt: args.prompt, mcp_client: session.clientName, userId: session.userId },
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
-      return jobResultWithWidget({ jobId, label: "Suno lyrics", session, widgetKind: "generic", widgetData: { prompt: args.prompt, model: "suno-lyrics" } })
+      return dispatchJob(fastify, session, { url: "/v1/suno/lyrics", payload: { prompt: args.prompt, mcp_client: session.clientName, userId: session.userId }, label: "Suno lyrics", widgetKind: "generic", widgetData: { prompt: args.prompt, model: "suno-lyrics" } })
     },
   )
 
@@ -1495,16 +1352,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         mcp_client: session.clientName,
         userId: session.userId,
       }
-      const res = await fastify.inject({
-        method: "POST",
-        url: "/v1/suno/mashup",
-        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
-        payload,
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
-      return jobResultWithWidget({ jobId, label: "Suno mashup", session, widgetKind: "audio", widgetData: { prompt: "(mashup)", model: "suno-mashup" } })
+      return dispatchJob(fastify, session, { url: "/v1/suno/mashup", payload, label: "Suno mashup", widgetKind: "audio", widgetData: { prompt: "(mashup)", model: "suno-mashup" } })
     },
   )
 
@@ -1545,16 +1393,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         mcp_client: session.clientName,
         userId: session.userId,
       }
-      const res = await fastify.inject({
-        method: "POST",
-        url: "/v1/suno/replace-section",
-        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
-        payload,
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
-      return jobResultWithWidget({ jobId, label: "Suno replace section", session, widgetKind: "audio", widgetData: { prompt: args.prompt.slice(0, 60), model: "suno-replace-section" } })
+      return dispatchJob(fastify, session, { url: "/v1/suno/replace-section", payload, label: "Suno replace section", widgetKind: "audio", widgetData: { prompt: args.prompt.slice(0, 60), model: "suno-replace-section" } })
     },
   )
 
@@ -1574,16 +1413,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     async (args) => {
-      const res = await fastify.inject({
-        method: "POST",
-        url: "/v1/suno/style-boost",
-        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
-        payload: { content: args.content, mcp_client: session.clientName, userId: session.userId },
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
-      return jobResultWithWidget({ jobId, label: "Suno style boost", session, widgetKind: "generic", widgetData: { prompt: args.content.slice(0, 60), model: "suno-style-boost" } })
+      return dispatchJob(fastify, session, { url: "/v1/suno/style-boost", payload: { content: args.content, mcp_client: session.clientName, userId: session.userId }, label: "Suno style boost", widgetKind: "generic", widgetData: { prompt: args.content.slice(0, 60), model: "suno-style-boost" } })
     },
   )
 
@@ -1609,16 +1439,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
     async (args) => {
       const ids = await resolveSunoIds(args.audio_asset_id, session.userId)
       if (!ids) return { content: [{ type: "text" as const, text: `No Suno ids found for asset ${args.audio_asset_id}.` }], isError: true }
-      const res = await fastify.inject({
-        method: "POST",
-        url: "/v1/suno/add-instrumental",
-        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
-        payload: { taskId: ids.sunoTaskId, audioId: ids.sunoTrackId, model: args.model ?? "V5_5", mcp_client: session.clientName, userId: session.userId },
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
-      return jobResultWithWidget({ jobId, label: "Suno add instrumental", session, widgetKind: "audio", widgetData: { prompt: "(add instrumental)", model: args.model ?? "V5_5" } })
+      return dispatchJob(fastify, session, { url: "/v1/suno/add-instrumental", payload: { taskId: ids.sunoTaskId, audioId: ids.sunoTrackId, model: args.model ?? "V5_5", mcp_client: session.clientName, userId: session.userId }, label: "Suno add instrumental", widgetKind: "audio", widgetData: { prompt: "(add instrumental)", model: args.model ?? "V5_5" } })
     },
   )
 
@@ -1644,16 +1465,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
     async (args) => {
       const ids = await resolveSunoIds(args.audio_asset_id, session.userId)
       if (!ids) return { content: [{ type: "text" as const, text: `No Suno ids found for asset ${args.audio_asset_id}.` }], isError: true }
-      const res = await fastify.inject({
-        method: "POST",
-        url: "/v1/suno/add-vocals",
-        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
-        payload: { taskId: ids.sunoTaskId, audioId: ids.sunoTrackId, model: args.model ?? "V5_5", mcp_client: session.clientName, userId: session.userId },
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
-      return jobResultWithWidget({ jobId, label: "Suno add vocals", session, widgetKind: "audio", widgetData: { prompt: "(add vocals)", model: args.model ?? "V5_5" } })
+      return dispatchJob(fastify, session, { url: "/v1/suno/add-vocals", payload: { taskId: ids.sunoTaskId, audioId: ids.sunoTrackId, model: args.model ?? "V5_5", mcp_client: session.clientName, userId: session.userId }, label: "Suno add vocals", widgetKind: "audio", widgetData: { prompt: "(add vocals)", model: args.model ?? "V5_5" } })
     },
   )
 
@@ -1678,16 +1490,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
     async (args) => {
       const ids = await resolveSunoIds(args.audio_asset_id, session.userId)
       if (!ids) return { content: [{ type: "text" as const, text: `No Suno ids found for asset ${args.audio_asset_id}.` }], isError: true }
-      const res = await fastify.inject({
-        method: "POST",
-        url: "/v1/suno/convert-wav",
-        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
-        payload: { taskId: ids.sunoTaskId, audioId: ids.sunoTrackId, mcp_client: session.clientName, userId: session.userId },
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
-      return jobResultWithWidget({ jobId, label: "Suno convert WAV", session, widgetKind: "audio", widgetData: { prompt: "(convert to WAV)", model: "suno-convert-wav" } })
+      return dispatchJob(fastify, session, { url: "/v1/suno/convert-wav", payload: { taskId: ids.sunoTaskId, audioId: ids.sunoTrackId, mcp_client: session.clientName, userId: session.userId }, label: "Suno convert WAV", widgetKind: "audio", widgetData: { prompt: "(convert to WAV)", model: "suno-convert-wav" } })
     },
   )
 
@@ -1730,16 +1533,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         mcp_client: session.clientName,
         userId: session.userId,
       }
-      const res = await fastify.inject({
-        method: "POST",
-        url: "/v1/suno/upload-extend",
-        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
-        payload,
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
-      return jobResultWithWidget({ jobId, label: "Suno upload extend", session, widgetKind: "audio", widgetData: { prompt: "(upload extend)", model: args.model ?? "V5_5" } })
+      return dispatchJob(fastify, session, { url: "/v1/suno/upload-extend", payload, label: "Suno upload extend", widgetKind: "audio", widgetData: { prompt: "(upload extend)", model: args.model ?? "V5_5" } })
     },
   )
 }

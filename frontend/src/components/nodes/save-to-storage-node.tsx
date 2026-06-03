@@ -6,7 +6,7 @@ import { HardDrive } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { SaveToStorageData } from "@/types/nodes"
 
@@ -45,8 +45,8 @@ function SaveToStorageNodeComponent({ id, data, selected }: NodeProps) {
           {nodeData.format} ({nodeData.quality})
         </p>
       </BaseNode>
-      <HandleWithPopover nodeId={id} nodeType="save-to-storage" handleId="in"  type="target" position={Position.Left}  label="Input"  color="#22c55e" icon={<HardDrive />} side="left"  top="calc(100% - 24px)" />
-      <HandleWithPopover nodeId={id} nodeType="save-to-storage" handleId="out" type="source" position={Position.Right} label="Output" color="#22c55e" icon={<HardDrive />} side="right" top="24px" />
+      <HandleWithPopover nodeId={id} nodeType="save-to-storage" handleId="in"  type="target" position={Position.Left}  label="Input"  color={HANDLE_COLORS.approve} icon={<HardDrive />} side="left"  top="calc(100% - 24px)" />
+      <HandleWithPopover nodeId={id} nodeType="save-to-storage" handleId="out" type="source" position={Position.Right} label="Output" color={HANDLE_COLORS.approve} icon={<HardDrive />} side="right" top="24px" />
     </div>
   )
 }

@@ -46,7 +46,7 @@ vi.mock("@/lib/api", () => ({
   uploadAudio: vi.fn(),
   fetchYouTubeOEmbed: vi.fn(),
   extractYouTubeAudioApi: vi.fn(),
-  getJobStatus: vi.fn(),
+  getJobStatusLean: vi.fn(),
   startVideoDownload: vi.fn(),
   subscribeToDownloadProgress: vi.fn(),
 }))
@@ -217,7 +217,6 @@ describe("LoopConfig — Split button", () => {
         data={data as any}
         onUpdate={onUpdate}
         nodeId="n1"
-        singleColumn
       />,
     )
 
@@ -228,5 +227,89 @@ describe("LoopConfig — Split button", () => {
     expect(onUpdate).toHaveBeenCalledWith({
       rows: [["apple"], ["banana"], ["cherry"]],
     })
+  })
+})
+
+describe("LoopConfig — List vs Table UI derived from column count", () => {
+  const col = (id: string, name: string) => ({
+    id,
+    name,
+    handleId: `col_${id}`,
+    type: "text" as const,
+  })
+
+  it("renders the single-column List UI when there is one column", () => {
+    // rows:[] keeps the table free of per-row remove (X) buttons so the only X
+    // icons that could appear are the per-column remove buttons under test.
+    render(
+      <LoopConfig
+        data={{ columns: [col("c1", "Items")], rows: [], fieldMappings: {} } as any}
+        onUpdate={() => {}}
+        nodeId="n1"
+      />,
+    )
+
+    // Label reads "List", and the "Add Column" affordance + per-column remove (X) are hidden.
+    expect(screen.getByText("List")).toBeInTheDocument()
+    expect(screen.queryByText("Table")).not.toBeInTheDocument()
+    expect(screen.queryByText("Add Column")).not.toBeInTheDocument()
+    expect(screen.queryByTestId("x-icon")).not.toBeInTheDocument()
+  })
+
+  it("offers the Add Column affordance when there are zero columns (broken/bootstrap state)", () => {
+    // 0 columns is a degenerate state (e.g. an empty Table migrated to a list
+    // with columns:[]). The canvas "+" quick-add handle is the only other path,
+    // so the config panel MUST offer an Add Column affordance here to recover.
+    render(
+      <LoopConfig
+        data={{ columns: [], rows: [], fieldMappings: {} } as any}
+        onUpdate={() => {}}
+        nodeId="n1"
+      />,
+    )
+
+    expect(screen.getByText("List")).toBeInTheDocument()
+    expect(screen.getByText("Add Column")).toBeInTheDocument()
+  })
+
+  it("calls onUpdate with a new column when Add Column is clicked at zero columns", () => {
+    const onUpdate = vi.fn()
+    render(
+      <LoopConfig
+        data={{ columns: [], rows: [], fieldMappings: {} } as any}
+        onUpdate={onUpdate}
+        nodeId="n1"
+      />,
+    )
+
+    fireEvent.click(screen.getByText("Add Column"))
+
+    expect(onUpdate).toHaveBeenCalledTimes(1)
+    const patch = onUpdate.mock.calls[0][0]
+    expect(patch.columns).toHaveLength(1)
+    expect(patch.columns[0]).toMatchObject({ name: "Column 1", type: "text" })
+    expect(patch.rows).toEqual([])
+  })
+
+  it("renders the multi-column Table UI when there are two or more columns", () => {
+    // rows:[] isolates the per-column remove (X) buttons (no per-row X confound).
+    render(
+      <LoopConfig
+        data={{
+          columns: [col("c1", "Name"), col("c2", "Age")],
+          rows: [],
+          fieldMappings: {},
+        } as any}
+        onUpdate={() => {}}
+        nodeId="n1"
+      />,
+    )
+
+    // Label reads "Table", and the "Add Column" affordance + per-column remove (X) are visible.
+    expect(screen.getByText("Table")).toBeInTheDocument()
+    expect(screen.queryByText("List")).not.toBeInTheDocument()
+    expect(screen.getByText("Add Column")).toBeInTheDocument()
+    // One remove (X) button per column.
+    expect(screen.getAllByTestId("x-icon")).toHaveLength(2)
   })
 })

@@ -110,7 +110,7 @@ describe("migrateGenerateVideoNodes", () => {
   it("does not touch unrelated nodes", () => {
     const nodes = [
       mkNode("n1", "generate-image", { prompt: "x" }),
-      mkNode("n2", "loop"),
+      mkNode("n2", "list"),
     ]
     const result = migrateGenerateVideoNodes(nodes, [])
     expect(result.nodes).toEqual(nodes)

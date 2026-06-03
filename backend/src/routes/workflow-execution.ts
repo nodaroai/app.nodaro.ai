@@ -411,7 +411,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     })
 
     // If already terminal, send done immediately and close
-    const terminalStatuses = new Set(["completed", "failed", "cancelled", "timed_out"])
+    const terminalStatuses = new Set(["completed", "failed", "cancelled", "timed_out", "discarded"])
     if (terminalStatuses.has(execution.status as string)) {
       sse.sendEvent({
         type: "done",
@@ -428,7 +428,8 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       const isTerminal =
         event.type === "execution:completed" ||
         event.type === "execution:failed" ||
-        event.type === "execution:cancelled"
+        event.type === "execution:cancelled" ||
+        event.type === "execution:discarded"
 
       sse.sendEvent({
         type: isTerminal ? "done" : "execution",
@@ -537,12 +538,30 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       })
     }
 
-    // mode: "after_current" sets status to "stopping" (finish current level, then stop)
-    // mode: undefined/default sets status to "cancelled" (stop ASAP)
-    const body = (req.body ?? {}) as Record<string, unknown>
-    const mode = body.mode === "after_current" ? "stopping" : "cancelled"
-    const updates: Record<string, unknown> = { status: mode }
-    if (mode === "cancelled") updates.completed_at = new Date().toISOString()
+    // mode: "after_current" → status "stopping" (finish current level, then stop)
+    // mode: "discard"        → status "discarded" (graceful: in-flight jobs finish
+    //                          into My Library, canvas detaches — NO cancel/refund)
+    // mode: undefined/default → status "cancelled" (stop ASAP, cancel + refund jobs)
+    // Unknown/typo'd modes are rejected with 400 — they must NEVER fall through to
+    // the destructive "cancelled" branch (which forfeits paid-for results).
+    const cancelBody = z.object({
+      userId: z.string().optional(),
+      mode: z.enum(["after_current", "discard"]).optional(),
+    })
+    const parsedBody = cancelBody.safeParse(req.body ?? {})
+    if (!parsedBody.success) {
+      return reply.status(400).send({
+        error: { code: "bad_request", message: "Invalid cancel mode" },
+      })
+    }
+    const mode = parsedBody.data.mode
+    const targetStatus =
+      mode === "after_current" ? "stopping" : mode === "discard" ? "discarded" : "cancelled"
+
+    const updates: Record<string, unknown> = { status: targetStatus }
+    // Only an immediate cancel finalizes here. "stopping"/"discarded" are handled
+    // by the orchestrator, which sets completed_at once jobs settle.
+    if (targetStatus === "cancelled") updates.completed_at = new Date().toISOString()
 
     await supabase
       .from("workflow_executions")
@@ -555,7 +574,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     // never-completed nodes (workflow-level analog of cancel-jobs.ts #1508).
     // Fire-and-forget — the DB status is already set, so the orchestrator will
     // pick up the cancellation regardless.
-    if (mode === "cancelled") {
+    if (targetStatus === "cancelled") {
       const userId = req.userId
       void (async () => {
         const { data: activeJobs } = await supabase
@@ -887,6 +906,30 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
 // Response formatters
 // ---------------------------------------------------------------------------
 
+/**
+ * Strip the per-node-state `inputs` blob (resolved upstream inputs, kept only
+ * for debugging) from a `node_states` map. The 2s/3s execution-status poll
+ * (app-runner + editor live state) reads `node_states[].output` to render
+ * live results but never reads `inputs`, so dropping it trims a large
+ * payload from the hottest poll path without changing observable behavior.
+ * `output` and every other field are preserved verbatim. Non-mutating —
+ * returns a fresh map (and fresh per-node objects for any node that carried
+ * an `inputs` field).
+ */
+function stripNodeStateInputs(nodeStates: unknown): unknown {
+  if (!nodeStates || typeof nodeStates !== "object") return nodeStates
+  const out: Record<string, unknown> = {}
+  for (const [nodeId, state] of Object.entries(nodeStates as Record<string, unknown>)) {
+    if (state && typeof state === "object" && "inputs" in (state as Record<string, unknown>)) {
+      const { inputs: _inputs, ...rest } = state as Record<string, unknown>
+      out[nodeId] = rest
+    } else {
+      out[nodeId] = state
+    }
+  }
+  return out
+}
+
 function toExecutionResponse(row: Record<string, unknown>) {
   return {
     id: row.id,
@@ -895,8 +938,11 @@ function toExecutionResponse(row: Record<string, unknown>) {
     status: row.status,
     triggerType: row.trigger_type,
     mcpClient: (row.mcp_client as string | null | undefined) ?? null,
-    triggerData: row.trigger_data,
-    nodeStates: row.node_states,
+    // `triggerData` (top-level) is debug-only and not read by any poll
+    // consumer (verified across frontend/backend), so it's omitted here to
+    // trim the hot-path detail/poll response. The per-node `inputs` blobs are
+    // also stripped — pollers read `node_states[].output`, never `inputs`.
+    nodeStates: stripNodeStateInputs(row.node_states),
     totalNodes: row.total_nodes,
     completedNodes: row.completed_nodes,
     failedNodes: row.failed_nodes,
@@ -909,13 +955,18 @@ function toExecutionResponse(row: Record<string, unknown>) {
   }
 }
 
-function toExecutionSummary(row: Record<string, unknown>) {
+export function toExecutionSummary(row: Record<string, unknown>) {
   return {
     id: row.id,
     status: row.status,
     triggerType: row.trigger_type,
     mcpClient: (row.mcp_client as string | null | undefined) ?? null,
-    nodeStates: row.node_states,
+    // Strip the per-node `inputs` blob (resolved upstream inputs — large,
+    // debug-only) exactly as toExecutionResponse does. The list row + node-info
+    // modal render status/type/timing/error/output, never `inputs`, so this
+    // trims the paginated (and polled) list payload without changing the UI.
+    // Full node_states (incl. inputs) remain on GET /v1/workflow-executions/:id.
+    nodeStates: stripNodeStateInputs(row.node_states),
     totalNodes: row.total_nodes,
     completedNodes: row.completed_nodes,
     failedNodes: row.failed_nodes,

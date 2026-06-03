@@ -1,6 +1,6 @@
-# Text Prompt
+# Text
 
-> User-provided text input with variable support.
+> User-provided text input with variable support. (Node type `text-prompt`; labeled **Text** in the editor — searching "prompt" still finds it.)
 
 ## Overview
 
@@ -34,5 +34,5 @@ The Text Prompt node is the most common starting point for workflows. It provide
 ## Tips
 
 - Text Prompt outputs can fan out to multiple downstream nodes simultaneously
-- For batch workflows, use a List or Loop node instead, which feeds items one at a time
+- For batch workflows, use a List node instead, which feeds items one at a time
 - Node references allow you to dynamically include output from other nodes in your text

@@ -12,7 +12,8 @@ import {
   textToSpeech,
   generateScriptApi,
   combineVideos,
-  getJobStatus,
+  getJobStatusLean,
+  cancelJob,
 } from "@/lib/api";
 import type {
   GeneratedScript,
@@ -28,6 +29,7 @@ import {
   type ExecutionContext,
 } from "./types";
 import { pollJobWithNodeUpdate, guardedToast } from "./poll-job";
+import { shouldAbandonNode } from "./abandon-guard";
 
 /** Extract kieTaskId from output data for downstream video chaining. */
 const extractKieTaskId = (od: Record<string, unknown>) => {
@@ -453,6 +455,17 @@ export function runScriptGeneration(
   return new Promise<string>((resolve, reject) => {
     generateScriptApi({ prompt, sceneCount, tone, targetDuration, provider, llmModel, userId: ctx.userId })
       .then(({ jobId }) => {
+        if (ctx.signal?.aborted) {
+          // Run discarded/aborted while the create-job request was in flight.
+          // Don't re-attach currentJobId or start polling — that would defeat
+          // the discard and paint the result over the existing one. Cancel
+          // phase-aware (pre-call cancels+refunds; in-flight finishes → My
+          // Library), then bail. `new Promise` → unwind by resolving "",
+          // mirroring the shouldAbandonNode abandon-branch below.
+          cancelJob(jobId).catch(() => {});
+          resolve("");
+          return;
+        }
         guardedToast.info("Script generation started", {
           description: `Job ID: ${jobId}`,
         });
@@ -467,8 +480,17 @@ export function runScriptGeneration(
               return;
             }
             try {
-              const job = await getJobStatus(jobId);
+              const job = await getJobStatusLean(jobId);
               pollFailures = 0;
+              if (job.status === "completed" || job.status === "failed") {
+                if (shouldAbandonNode(nodeId, jobId)) {
+                  // Run discarded/replaced — the job still lands in My Library,
+                  // but we must not write its result/error onto the canvas.
+                  ctx.untrackInterval(poll);
+                  resolve("");
+                  return;
+                }
+              }
               if (job.status === "completed") {
                 ctx.untrackInterval(poll);
                 const script = job.output_data?.script as
@@ -519,6 +541,11 @@ export function runScriptGeneration(
               pollFailures++;
               if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
                 ctx.untrackInterval(poll);
+                if (shouldAbandonNode(nodeId, jobId)) {
+                  // Run discarded/replaced — don't write a failure to the canvas.
+                  resolve("");
+                  return;
+                }
                 updateNodeData(nodeId, {
                   executionStatus: "failed",
                   currentJobId: undefined,

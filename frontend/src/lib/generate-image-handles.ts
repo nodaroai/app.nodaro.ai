@@ -93,7 +93,7 @@ export const TEXT_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   // input-resolver.ts:1252 (TEXT_SOURCE_NODE_TYPES dispatch into
   // inputs.prompt). Without these, qa-check/image-critic outputs and
   // list/loop/extract-field text values can't feed any typed prompt.
-  "extract-field", "qa-check", "image-critic", "forced-alignment", "list", "loop",
+  "extract-field", "qa-check", "image-critic", "forced-alignment", "list",
 ])
 
 /** Source node types whose output image feeds References (mirrors backend

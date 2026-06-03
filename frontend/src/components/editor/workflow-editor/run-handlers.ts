@@ -1,10 +1,11 @@
 import type { MutableRefObject } from "react";
 import { toast } from "sonner";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
-import { getJobStatus, getUserCredits, getWorkflowExecution, runWorkflow, streamWorkflowExecution, WorkflowAlreadyRunningError, withDedupRaceRetry } from "@/lib/api";
+import { getJobStatusLean, getUserCredits, getWorkflowExecution, runWorkflow, streamWorkflowExecution, WorkflowAlreadyRunningError, withDedupRaceRetry } from "@/lib/api";
 import { generateIdempotencyKey } from "@/lib/idempotency-key";
-import { createClient } from "@/lib/supabase";
+import { registerNodeRunAbort, clearNodeRunAbort } from "@/lib/node-run-abort";
 import { hasCredits } from "@/lib/edition";
+import { getCachedUserId } from "@/hooks/use-auth";
 import { setSkipUndoCapture } from "@/hooks/undo-flags";
 import { queryClient } from "@/lib/query-client";
 import { queryKeys } from "@/lib/query-keys";
@@ -21,15 +22,26 @@ import {
 import { COMPOSER_PLAN_MAP } from "@nodaro/shared";
 import { expandItemsWithRepeat } from "@nodaro/shared";
 import { collapseExpandedClones } from "./execution-graph";
+import { shouldAbandonNode } from "./abandon-guard";
 import { getListInputForNode } from "./node-input-resolver";
 import { executeNode, rejectAllManualEdits } from "./execute-node";
 import { executeNodeForList } from "./list-execution";
 import { cascadeAutoExecute } from "./auto-execute";
 import { buildVariantResults } from "./variant-results";
 
+// Phase 1 runs at most one whole-workflow stream at a time. We keep its teardown
+// here so a Discard / Run-instead can fully stop the OLD stream (abort its SSE +
+// set finished) BEFORE starting a new run — otherwise the old stream's late
+// `execution:discarded` event would revert the NEW run's nodes and tear down its UI.
+let activeWorkflowStreamCleanup: (() => void) | null = null;
+export function teardownActiveWorkflowStream(): void {
+  activeWorkflowStreamCleanup?.();
+  activeWorkflowStreamCleanup = null;
+}
+
 function warnUnderMinRows(nodes: WorkflowNode[]): void {
   const underMin = nodes.filter((n) => {
-    if (n.type !== "loop" && n.type !== "list") return false
+    if (n.type !== "list") return false
     const data = n.data as Record<string, unknown>
     const minRows = (data.minRows as number) ?? 0
     if (minRows === 0) return false
@@ -154,7 +166,7 @@ export function resetNodeAccumulation(
 export function clearConnectedListRows(nodes: WorkflowNode[]): void {
   const { updateNodeData } = useWorkflowStore.getState()
   for (const node of nodes) {
-    if (node.type !== "list" && node.type !== "loop") continue
+    if (node.type !== "list") continue
     const data = node.data as Record<string, unknown>
     const columns = (data.columns as ListLoopColumn[] | undefined) ?? []
     if (columns.length === 0) continue
@@ -191,6 +203,7 @@ export async function handleRun(
   onExecutionStarted?: (id: string) => void,
   onExecutionEnded?: () => void,
 ): Promise<void> {
+  if (useWorkflowStore.getState().isReadOnly) return;
   rejectAllManualEdits();
   const { nodes } = collapseExpandedClones();
   warnUnderMinRows(nodes);
@@ -209,27 +222,31 @@ export async function handleRun(
     return;
   }
 
-  // Reset accumulated output so downstream list/preview nodes reflect only
-  // this run — mirrors the per-run clear the backend orchestrator applies
-  // via list-execution.ts:42.
-  resetNodeAccumulation(executableNodes);
+  // Capture dirtiness BEFORE any per-run state writes (the accumulation reset
+  // and the optimistic pending flip both set isDirty). A clean editor can then
+  // skip the pre-Run save round-trip entirely (see FIX 4 in
+  // use-workflow-persistence).
+  const wasDirty = useWorkflowStore.getState().isDirty;
 
-  if (projectId) {
-    await save(projectId);
-  }
+  // Optimistic UI FIRST: flip every executable node to "pending" and show the
+  // running state before the credit precheck. This is what makes Run feel
+  // instant — the active border appears the instant the user clicks. It is
+  // fully reversible (rolled back below if the precheck fails), unlike the
+  // accumulation reset + save, which are deferred until AFTER the gate passes.
+  const { markNodesStatus } = useWorkflowStore.getState();
+  const executableIds = executableNodes.map((n) => n.id);
+  markNodesStatus(executableIds, "pending");
+  setIsRunning(true);
 
   // Credit check (cloud edition only)
   if (hasCredits()) {
     try {
-      const supabase = createClient();
-      const {
-        data: { user: authUser },
-      } = await supabase.auth.getUser();
-      if (authUser) {
+      const userId = getCachedUserId();
+      if (userId) {
         const balance = await queryClient.fetchQuery({
-          queryKey: queryKeys.credits.balance(authUser.id),
+          queryKey: queryKeys.credits.balance(userId),
           queryFn: async () => {
-            const result = await getUserCredits(authUser.id);
+            const result = await getUserCredits(userId);
             return (
               result.data ??
               (result as unknown as { total: number; tier: string })
@@ -246,6 +263,9 @@ export async function handleRun(
           return sum + cost * multiplier;
         }, 0);
         if (balance.total < estimatedCost) {
+          // Roll back the optimistic flip before surfacing the modal.
+          markNodesStatus(executableIds, undefined);
+          setIsRunning(false);
           ctx.setInsufficientCreditsData({
             required: estimatedCost,
             available: balance.total,
@@ -256,17 +276,20 @@ export async function handleRun(
         }
       }
     } catch {
-      // Credit check failed -- proceed anyway
+      // Credit check failed -- proceed anyway (optimistic state stays)
     }
   }
 
-  // Mark all executable nodes as pending immediately for UI feedback
-  const { updateNodeData } = useWorkflowStore.getState();
-  for (const node of executableNodes) {
-    updateNodeData(node.id, { executionStatus: "pending" });
+  // Credit gate passed — only NOW clear accumulated output and persist. Doing
+  // this before the gate wiped generatedResults (persisted node data) and saved
+  // the cleared state even when the run was about to abort for insufficient
+  // credits, destroying the prior run's on-canvas results. Mirrors the per-run
+  // clear the backend orchestrator applies via list-execution.ts:42.
+  resetNodeAccumulation(executableNodes);
+  if (wasDirty && projectId) {
+    await save(projectId);
   }
 
-  setIsRunning(true);
   toast.info("Executing workflow...", {
     description: `${executableNodes.length} node(s) to run`,
   });
@@ -288,9 +311,7 @@ export async function handleRun(
       return;
     }
     setIsRunning(false);
-    for (const node of executableNodes) {
-      updateNodeData(node.id, { executionStatus: undefined });
-    }
+    markNodesStatus(executableIds, undefined);
     toast.error("Failed to start workflow", {
       description: err instanceof Error ? err.message : "Unknown error",
     });
@@ -318,14 +339,37 @@ export async function handleRunSingleNode(
     return;
   }
 
+  // Capture dirtiness BEFORE the per-run resets / optimistic flip so a clean
+  // editor skips the pre-Run save round-trip (see FIX 4).
+  const wasDirty = useWorkflowStore.getState().isDirty;
+
   clearConnectedListRows(nodes);
   resetNodeAccumulation([node], { preserveHistory: true });
 
-  if (projectId) {
+  // Optimistic UI FIRST — flip this node to "pending" + show running before the
+  // save round-trip so the active border appears the instant Run is clicked.
+  useWorkflowStore.getState().markNodesStatus([nodeId], "pending");
+  setIsRunning(true);
+
+  // Per-node cancellation: register an AbortController so the node's Stop button
+  // can abort the in-flight execution (streaming SSE today; anything honoring
+  // ctx.signal). Registered BEFORE the pre-run save so a Stop during the save
+  // window also takes effect. Threaded into ctx; cleared when this run settles.
+  const abortController = new AbortController();
+  ctx.signal = abortController.signal;
+  registerNodeRunAbort(nodeId, abortController);
+
+  if (wasDirty && projectId) {
     await save(projectId);
   }
 
-  setIsRunning(true);
+  // Stop pressed during the save → don't start the run at all.
+  if (abortController.signal.aborted) {
+    clearNodeRunAbort(nodeId, abortController);
+    setIsRunning(false);
+    return;
+  }
+
   const { nodes: currentNodes, edges: currentEdges } =
     useWorkflowStore.getState();
   const listItems = getListInputForNode(node, currentNodes, currentEdges);
@@ -348,9 +392,22 @@ export async function handleRunSingleNode(
       cascadeAutoExecute(nodeId);
     })
     .catch(() => {
-      // Error already handled via toast in executeNode
+      // Error already surfaced via toast in executeNode. If the node never left
+      // the optimistic "pending" flip — e.g. executeNode rejected on synchronous
+      // input validation before writing any status — roll it back to "failed"
+      // so it doesn't keep the animated running border forever. Leave any
+      // terminal status executeNode already set untouched. A user-initiated
+      // abort is NOT a failure: the Stop handler already set the terminal state.
+      if (abortController.signal.aborted) return;
+      const cur = useWorkflowStore
+        .getState()
+        .nodes.find((n) => n.id === nodeId);
+      if ((cur?.data as { executionStatus?: string } | undefined)?.executionStatus === "pending") {
+        useWorkflowStore.getState().markNodesStatus([nodeId], "failed");
+      }
     })
     .finally(() => {
+      clearNodeRunAbort(nodeId, abortController);
       if (pollIntervalsRef.current.size === 0) {
         setIsRunning(false);
       }
@@ -389,10 +446,6 @@ export async function handleRunFromHere(
     return;
   }
 
-  if (projectId) {
-    await save(projectId);
-  }
-
   // BFS forward to collect all downstream node IDs
   const downstream = new Set<string>([nodeId]);
   const queue = [nodeId];
@@ -416,6 +469,10 @@ export async function handleRunFromHere(
     return;
   }
 
+  // Capture dirtiness BEFORE the per-run resets / optimistic flip so a clean
+  // editor skips the pre-Run save round-trip (see FIX 4).
+  const wasDirty = useWorkflowStore.getState().isDirty;
+
   // Only clear the scope that's actually re-running — upstream/out-of-subset
   // nodes keep their saved output so the backend orchestrator can still
   // resolve inputs from them via extractSavedNodeOutput.
@@ -423,13 +480,17 @@ export async function handleRunFromHere(
   // existing list instead of replacing it (matches single-node Run behavior).
   resetNodeAccumulation(executableNodes, { preserveHistory: true });
 
-  // Mark nodes as pending for immediate UI feedback
-  const { updateNodeData } = useWorkflowStore.getState();
-  for (const node of executableNodes) {
-    updateNodeData(node.id, { executionStatus: "pending" });
+  // Optimistic UI FIRST — batched pending flip + running state before the save
+  // round-trip so the active border appears the instant Run is clicked.
+  const { markNodesStatus } = useWorkflowStore.getState();
+  const executableIds = executableNodes.map((n) => n.id);
+  markNodesStatus(executableIds, "pending");
+  setIsRunning(true);
+
+  if (wasDirty && projectId) {
+    await save(projectId);
   }
 
-  setIsRunning(true);
   toast.info("Running from here...", {
     description: `${executableNodes.length} node(s) to run`,
   });
@@ -447,9 +508,7 @@ export async function handleRunFromHere(
       return;
     }
     setIsRunning(false);
-    for (const node of executableNodes) {
-      updateNodeData(node.id, { executionStatus: undefined });
-    }
+    markNodesStatus(executableIds, undefined);
     toast.error("Failed to start execution", {
       description: err instanceof Error ? err.message : "Unknown error",
     });
@@ -489,10 +548,6 @@ export async function handleRunSelected(
     return;
   }
 
-  if (projectId) {
-    await save(projectId);
-  }
-
   const executableNodes = selectedNodes.filter(isExecutableNode);
   if (executableNodes.length === 0) {
     toast.error("No executable nodes in selection.");
@@ -502,15 +557,23 @@ export async function handleRunSelected(
 
   const selectedIds = selectedNodes.map((n) => n.id);
 
+  // Capture dirtiness BEFORE the per-run resets / optimistic flip so a clean
+  // editor skips the pre-Run save round-trip (see FIX 4).
+  const wasDirty = useWorkflowStore.getState().isDirty;
+
   resetNodeAccumulation(executableNodes);
 
-  // Mark nodes as pending for immediate UI feedback
-  const { updateNodeData } = useWorkflowStore.getState();
-  for (const node of executableNodes) {
-    updateNodeData(node.id, { executionStatus: "pending" });
+  // Optimistic UI FIRST — batched pending flip + running state before the save
+  // round-trip so the active border appears the instant Run is clicked.
+  const { markNodesStatus } = useWorkflowStore.getState();
+  const executableIds = executableNodes.map((n) => n.id);
+  markNodesStatus(executableIds, "pending");
+  setIsRunning(true);
+
+  if (wasDirty && projectId) {
+    await save(projectId);
   }
 
-  setIsRunning(true);
   toast.info("Running selected nodes...", {
     description: `${executableNodes.length} node(s) to run`,
   });
@@ -528,9 +591,7 @@ export async function handleRunSelected(
       return;
     }
     setIsRunning(false);
-    for (const node of executableNodes) {
-      updateNodeData(node.id, { executionStatus: undefined });
-    }
+    markNodesStatus(executableIds, undefined);
     toast.error("Failed to start execution", {
       description: err instanceof Error ? err.message : "Unknown error",
     });
@@ -573,12 +634,34 @@ export function restorePollingForRunningJobs(
           return;
         }
 
+        // Run was discarded or replaced while we were away (page reload): the
+        // node's currentJobId no longer points at the job we'd be restoring.
+        // Detach — the job still finishes into My Library, but we must not
+        // reattach it to the canvas.
+        if (shouldAbandonNode(nodeId, jobId)) {
+          ctx.untrackInterval(poll);
+          return;
+        }
+
         try {
-          const job = await getJobStatus(jobId);
+          const job = await getJobStatusLean(jobId);
           pollFailures = 0;
 
           if (job.progress != null && job.progress > 0) {
             updateNodeData(nodeId, { currentJobProgress: job.progress });
+          }
+
+          // Re-check after the await: a discard/replace may have landed while
+          // the status request was in flight. Never write a terminal
+          // result/error for a job the node no longer points at.
+          if (
+            (job.status === "completed" ||
+              job.status === "failed" ||
+              job.status === "cancelled") &&
+            shouldAbandonNode(nodeId, jobId)
+          ) {
+            ctx.untrackInterval(poll);
+            return;
           }
 
           if (job.status === "completed") {
@@ -606,9 +689,19 @@ export function restorePollingForRunningJobs(
           pollFailures++;
           if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
             ctx.untrackInterval(poll);
+            if (shouldAbandonNode(nodeId, jobId)) {
+              // Run discarded/replaced — don't write result/failure to canvas.
+              return;
+            }
             // Final verification before marking as failed
             try {
-              const finalJob = await getJobStatus(jobId);
+              const finalJob = await getJobStatusLean(jobId);
+              // Re-check after the await: a discard/replace may have landed
+              // while this final status request was in flight. Never reattach a
+              // terminal result for a job the node no longer points at.
+              if (shouldAbandonNode(nodeId, jobId)) {
+                return;
+              }
               if (finalJob.status === "completed") {
                 applyRestoredJobCompletion(nodeId, nodeType, finalJob, jobId);
                 return;
@@ -706,6 +799,36 @@ export function streamBackendExecution(
   setIsRunning(true);
   const abortController = new AbortController();
   let finished = false;
+  let abandoned = false;
+
+  // Register this stream as THE active whole-workflow stream so a subsequent
+  // Discard / Run-instead can tear it down (abort SSE + set finished) before the
+  // new run starts. `cleanup` is hoisted, so referencing it here is safe.
+  activeWorkflowStreamCleanup = cleanup;
+
+  const applyStates = (s: Record<string, NodeExecutionState>) => {
+    if (abandoned) return;            // a discarded run must stop painting the canvas
+    syncNodeStatesToStore(s);
+  };
+  // Whole-workflow discard reverts only IN-FLIGHT / QUEUED nodes to idle (clears the
+  // node's currentJobId so the per-node poll guard bails); earlier-completed nodes
+  // from this run keep their results (design: no pre-run snapshot to restore).
+  const revertActiveNodesToIdle = () => {
+    const { nodes, updateNodeData } = useWorkflowStore.getState();
+    for (const node of nodes) {
+      const st = (node.data as Record<string, unknown>).executionStatus;
+      if (st === "running" || st === "pending") {
+        updateNodeData(node.id, { executionStatus: "idle", currentJobId: undefined, currentJobProgress: undefined });
+      }
+    }
+  };
+  const onDiscarded = () => {
+    if (finished) return;
+    abandoned = true;
+    revertActiveNodesToIdle();
+    cleanup();
+    toast.info("Run discarded — in-flight results will be saved to My Library");
+  };
 
   // Track the abort controller so it gets cleaned up on workflow switch
   const staleCheck = ctx.trackInterval(
@@ -722,7 +845,7 @@ export function streamBackendExecution(
     executionId,
     {
       onNodeStatesChanged: (nodeStates, _meta) => {
-        syncNodeStatesToStore(nodeStates);
+        applyStates(nodeStates);
       },
       onCompleted: async () => {
         if (finished) return;
@@ -734,7 +857,7 @@ export function streamBackendExecution(
         try {
           const exec = await getWorkflowExecution(executionId);
           const finalStates = (exec.nodeStates ?? {}) as Record<string, NodeExecutionState>;
-          syncNodeStatesToStore(finalStates);
+          applyStates(finalStates);
         } catch {
           // Non-critical — SSE already applied what it had.
         }
@@ -753,6 +876,7 @@ export function streamBackendExecution(
         cleanup();
         toast.info("Backend execution cancelled");
       },
+      onDiscarded,
     },
     abortController.signal,
   ).catch((err) => {
@@ -769,11 +893,13 @@ export function streamBackendExecution(
       const exec = await getWorkflowExecution(executionId);
       pollFailures = 0;
 
+      if (exec.status === "discarded") { onDiscarded(); return; }
+
       const nodeStates = (exec.nodeStates ?? {}) as Record<
         string,
         NodeExecutionState
       >;
-      syncNodeStatesToStore(nodeStates);
+      applyStates(nodeStates);
 
       if (
         exec.status === "completed" ||
@@ -802,8 +928,9 @@ export function streamBackendExecution(
         // Final verification before giving up
         try {
           const finalExec = await getWorkflowExecution(executionId);
+          if (finalExec.status === "discarded") { onDiscarded(); return; }
           const finalStates = (finalExec.nodeStates ?? {}) as Record<string, NodeExecutionState>;
-          syncNodeStatesToStore(finalStates);
+          applyStates(finalStates);
           if (finalExec.status === "completed") {
             cleanup();
             toast.success("Backend execution completed");
@@ -845,6 +972,10 @@ export function streamBackendExecution(
     clearTimeout(pollTimeout1);
     ctx.untrackInterval(staleCheck);
     ctx.untrackInterval(pollInterval);
+    // Only release the shared slot if THIS stream still owns it — a newer stream
+    // may have already replaced it (Run-instead starts the new stream after this
+    // one's teardown), and we must not clear the newer stream's registration.
+    if (activeWorkflowStreamCleanup === cleanup) activeWorkflowStreamCleanup = null;
     onExecutionEnded?.();
   }
 }

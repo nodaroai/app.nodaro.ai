@@ -23,7 +23,7 @@ import {
   runLtxRetake,
 } from "../../providers/replicate/ltx-video.js"
 import { config } from "../../lib/config.js"
-import { REPLICATE_LIP_SYNC_PROVIDERS, SEEDANCE_LIP_SYNC_PROVIDERS, estimateLoopTrimAddonCredits } from "@nodaro/shared"
+import { REPLICATE_LIP_SYNC_PROVIDERS, SEEDANCE_LIP_SYNC_PROVIDERS, estimateLoopTrimAddonCredits, isVeoProvider } from "@nodaro/shared"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
 import {
   cleanupWorkDir,
@@ -313,7 +313,7 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
   if (
     sound === false &&
     !audioUrl &&
-    (provider === "veo3" || provider === "veo3.1" || provider === "veo3_lite")
+    isVeoProvider(provider)
   ) {
     console.log(
       `[worker] VEO sound=false — stripping audio from output for job ${ctx.jobId}`,
@@ -497,7 +497,7 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
   // VEO3 / VEO3.1: KIE has no native audio toggle, so honour `sound: false`
   // by stripping the audio track post-generation (cheap stream copy).
   let providerOutputUrl = result.url
-  if (sound === false && (provider === "veo3" || provider === "veo3.1" || provider === "veo3_lite")) {
+  if (sound === false && isVeoProvider(provider)) {
     console.log(
       `[worker] VEO sound=false — stripping audio from t2v output for job ${ctx.jobId}`,
     )

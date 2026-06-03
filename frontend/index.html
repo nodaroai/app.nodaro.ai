@@ -10,18 +10,57 @@
     <link rel="icon" href="/favicon.ico?v=9" />
     <link rel="apple-touch-icon" sizes="192x192" href="/logo-192.png" />
     <link rel="preload" href="/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
-    <link rel="preconnect" href="https://kvitmiiswsbtxvjgvbkw.supabase.co" crossorigin />
+    <link rel="preconnect" href="%VITE_SUPABASE_URL%" crossorigin />
     <title>Nodaro.ai</title>
+    <!-- Analytics (Microsoft Clarity + Google gtag) — opt-in via build-time env
+         (VITE_CLARITY_ID / VITE_GA_ID); empty/unset (the self-hosted
+         Community/Business default) is a no-op and nothing leaves the
+         deployment. Loaded on the first-party dashboard ONLY: skipped inside
+         iframes and on public app/present/embed/share/profile surfaces so that
+         customer-embedded widgets don't load Clarity session recording + GA.
+         Keep the public-surface prefix list in sync with the routes in
+         src/router.tsx. -->
     <script>
-      (function(c,l,a,r,i,t,y){c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);})(window,document,"clarity","script","vfqplx14da");
-    </script>
-    <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-Y1JWM4CT9Z"></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      gtag('config', 'G-Y1JWM4CT9Z');
+      (function () {
+        // Bail out when rendered inside an iframe (embeds): a cross-origin
+        // access on window.top throws, which also means we're framed.
+        try {
+          if (window.self !== window.top) return;
+        } catch (e) {
+          return;
+        }
+        // Bail out on public/embed/app-runner/present/share/profile surfaces.
+        if (
+          /^\/(app|present|embed|g|static-share|u)(\/|$)/.test(
+            window.location.pathname,
+          )
+        ) {
+          return;
+        }
+
+        var clarityId = "%VITE_CLARITY_ID%";
+        var gaId = "%VITE_GA_ID%";
+        // Treat empty or unsubstituted ("%VITE_…%") values as disabled.
+        var unset = function (v) { return !v || v.charAt(0) === "%"; };
+
+        // Microsoft Clarity
+        if (!unset(clarityId)) {
+          (function(c,l,a,r,i,t,y){c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);})(window,document,"clarity","script",clarityId);
+        }
+
+        // Google tag (gtag.js)
+        if (!unset(gaId)) {
+          var ga = document.createElement("script");
+          ga.async = true;
+          ga.src = "https://www.googletagmanager.com/gtag/js?id=" + gaId;
+          document.head.appendChild(ga);
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          window.gtag = gtag;
+          gtag('js', new Date());
+          gtag('config', gaId);
+        }
+      })();
     </script>
   </head>
   <body class="antialiased" style="overscroll-behavior-y:contain">

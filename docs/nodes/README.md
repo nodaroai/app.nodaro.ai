@@ -36,9 +36,8 @@ Provide data to your workflow: text, images, video, audio, or external triggers.
 
 | Node | Description | When to Use |
 |------|-------------|-------------|
-| [Text Prompt](./input/text-prompt.md) | User-provided text input with variable support | Provide prompts, descriptions, or text data to downstream nodes |
-| [List](./input/list.md) | Create a list of items for iteration | Batch process multiple prompts or subjects |
-| [Loop](./input/loop.md) | Table-based loop with columns and rows | Structured batch workflows with multiple variables per iteration |
+| [Text](./input/text-prompt.md) | User-provided text input with variable support | Provide prompts, descriptions, or text data to downstream nodes |
+| [List](./input/list.md) | List of items, or a multi-column typed table, for batch iteration | Batch process multiple prompts or subjects; grow into a typed table for multiple variables per iteration |
 | [Upload Image](./input/upload-image.md) | Upload or provide an image URL | Source images for image-to-video, editing, or composition |
 | [Upload Video](./input/upload-video.md) | Upload or provide a video URL | Source video for processing, effects, or transformation |
 | [Upload Audio](./input/upload-audio.md) | Upload or provide an audio URL | Source audio for TTS, lip sync, dubbing, or mixing |
@@ -47,6 +46,7 @@ Provide data to your workflow: text, images, video, audio, or external triggers.
 | [Reference Audio](./input/reference-audio.md) | Extract audio from YouTube or uploaded video | Extract audio tracks for dubbing, remixing, or analysis |
 | [Webhook Trigger](./input/webhook-trigger.md) | Trigger workflow via HTTP webhook endpoint | Integrate with external systems, APIs, n8n, or Zapier |
 | [Schedule Trigger](./input/schedule-trigger.md) | Trigger workflow on a cron schedule | Daily content generation, recurring social posting |
+| [Telegram Trigger](./input/telegram-trigger.md) | Trigger workflow when a Telegram bot receives a message | Run pipelines from chat messages, photos, or videos sent to your bot |
 
 ---
 
@@ -116,6 +116,7 @@ Pose, material, animals, vehicles, weapons, props.
 | [Vehicle](./parameters/vehicle.md) | Pick a vehicle from 107 entries with descriptions | Feature vehicles in a scene |
 | [Weapon](./parameters/weapon.md) | Pick a weapon from 85 entries with descriptions | Action / fantasy / sci-fi / period work |
 | [Held Prop](./parameters/held-prop.md) | Pick a held prop from 59 entries (smartphone, umbrella, bouquet, ...) | Add narrative texture to a portrait or scene |
+| [Furniture](./parameters/furniture.md) | Pick a furniture piece from 78 entries across 9 categories | Furnish an interior scene with a specific, well-described piece |
 
 ### Picker nodes — Multi-dim composed pickers
 
@@ -152,6 +153,7 @@ Generate, transform, or extract text using AI models.
 |------|-------------|-------------|
 | [Generate Script](./ai-text/generate-script.md) | AI multi-scene script with cinematography | Create structured video scripts with scene descriptions and camera directions |
 | [Generate Text](./ai-text/llm-chat.md) | LLM text generation from a prompt (selectable model, optional image/video/audio refs). Two outputs: full `text` and a `===NEXT===`-split `items` fan-out list. Built-in + user templates; "Create N Image Nodes" fan-out | Rewrite/transform text, caption media, brainstorm, or fan out N image prompts |
+| [QA Check](./ai-text/qa-check.md) | LLM quality gate — scores text 0.0-1.0, returns pass/fail + reason | Validate generated scripts or captions before they continue downstream |
 | [Transcribe](./ai-text/transcribe.md) | Speech-to-text with diarization | Convert audio to text with speaker identification and timestamps |
 
 ---
@@ -164,6 +166,9 @@ Generate, edit, and transform images using 20+ AI providers.
 |------|-------------|-------------|
 | [Generate Image](./ai-image/generate-image.md) | AI image generation from text (21 providers) | Create images from prompts with style, aspect ratio, and quality controls |
 | [Edit Image](./ai-image/edit-image.md) | Upscale, remove background, or AI-edit images | Enhance, upscale, or modify existing images |
+| [Modify Image](./ai-image/modify-image.md) | Transform an image with a text prompt (20+ providers) | Prompt-driven editing: style transfer, inpainting, instruction edits |
+| [Upscale Image](./ai-image/upscale-image.md) | Increase image resolution (Recraft, Topaz) | Enhance generated or uploaded images to 2K/4K/8K |
+| [Remove Background](./ai-image/remove-background.md) | Strip the background to a transparent PNG (Recraft) | Cut out subjects for compositing or product shots |
 | [Image to Image](./ai-image/image-to-image.md) | Transform image with AI prompt (15 providers) | Style transfer, inpainting, reframing, or prompt-guided transformation |
 | [Generate Mask](./ai-image/generate-mask.md) | Text-prompted segmentation mask (Grounded SAM) | Create a mask for inpainting from a description; passes image through for chaining |
 | [Image Critic](./ai-image/image-critic.md) | Score an image on realism / character consistency / prompt adherence / anatomy / aesthetic / style-match via VLM | QC pipeline gates, automated regeneration loops with modify-image, batch quality scoring |
@@ -202,7 +207,7 @@ Text-to-speech, voice processing, and audio generation using ElevenLabs and othe
 | [Text to Audio](./ai-audio/text-to-audio.md) | Generate ambient audio and sound effects | Create SFX, ambient sounds, or background audio from description |
 | [Voice Extractor](./ai-audio/audio-isolation.md) | Isolate voice from mixed audio | Remove background noise, extract clean vocal track |
 | [Text to Dialogue](./ai-audio/text-to-dialogue.md) | Multi-speaker dialogue generation | Create conversations with different voices per speaker |
-| [Voice Changer](./ai-audio/voice-changer.md) | Convert audio to different voice | Transform speech to another voice while preserving emotion |
+| [Voice Changer](./ai-audio/voice-changer.md) | Revoice audio or a talking video | Replace the voice in audio — or a whole video — preserving emotion and timing |
 | [Dubbing](./ai-audio/dubbing.md) | Translate audio preserving speaker identity | Translate spoken audio to another language |
 | [Voice Remix](./ai-audio/voice-remix.md) | Generate voice from natural language description | Create custom voice from text description |
 | [Voice Design](./ai-audio/voice-design.md) | Design custom voices with full controls | Create reusable voices with loudness, guidance, and quality controls |
@@ -264,6 +269,7 @@ FFmpeg-based audio manipulation.
 | [Merge Video & Audio](./processing-audio/merge-video-audio.md) | Combine video with audio tracks | Add voiceover, music, or sound effects to video |
 | [Trim Audio](./processing-audio/trim-audio.md) | Extract section of audio file | Cut specific time range from audio |
 | [Mix Audio](./processing-audio/mix-audio.md) | Blend multiple audio tracks with levels | Layer voice, music, and SFX with volume control |
+| [Combine Audio](./processing-audio/combine-audio.md) | Concatenate audio tracks end-to-end, with per-segment trim | Join clips sequentially (vs. Mix Audio's layering) |
 | [Adjust Volume](./processing-audio/adjust-volume.md) | Change volume and add fade transitions | Normalize, boost, or fade audio tracks |
 
 ---
@@ -323,6 +329,7 @@ Deliver results to storage, webhooks, or social media platforms.
 | [LinkedIn Post](./output/linkedin-post.md) | Post to LinkedIn | Share text, images, or video on LinkedIn |
 | [X Post](./output/x-post.md) | Post to X/Twitter | Share content on X (280 char limit) |
 | [Facebook Post](./output/facebook-post.md) | Post to Facebook | Share text, images, video, or stories |
+| [Telegram Post](./output/telegram-post.md) | Send a message, photo, or video to Telegram | Publish to a Telegram chat, channel, or group via a bot |
 
 ---
 
@@ -355,10 +362,15 @@ Helpers for debugging and workflow organization.
 | Node | Description | When to Use |
 |------|-------------|-------------|
 | [Preview](./utility/preview.md) | Display text, image, video, or audio in editor | Debug and inspect intermediate results |
-| [Reduce](./utility/reduce.md) | Fan-in N upstream values into 1 via a strategy (pick-best-llm / concat / first-non-empty / count / vote / merge-json) | Close a List/Loop fan-out — pick the best variant, count survivors, or merge JSON |
+| [Reduce](./utility/reduce.md) | Fan-in N upstream values into 1 via a strategy (pick-best-llm / concat / first-non-empty / count / vote / merge-json) | Close a List fan-out — pick the best variant, count survivors, or merge JSON |
 | [Selector](./utility/selector.md) | Pick item(s) from a list — 7 modes (item / range / list / random / modulo / predicate / named-key); two outputs: `picked` + `rest` | Share a single selection across multiple consumers, route rejected items, or reach operators the edge selector doesn't support |
 | [Sticky Note](./utility/sticky-note.md) | Annotated notes on workflow canvas | Document workflow logic and leave notes for collaborators |
 | [Group](./utility/group.md) | Spatial container that aggregates children's outputs by type | Organize related nodes; fan out per-type arrays into list-aware consumers |
 | [Collect](./utility/collect.md) | Aggregate multiple inputs into per-type arrays | Merge outputs from many nodes into ordered per-type lists |
+| [Filter List](./utility/filter-list.md) | Keep list items matching one or more conditions (AND/OR) | Narrow a scraped or generated list before fan-out |
+| [Sort List](./utility/sort-list.md) | Sort a list by value or field (text/number/date, asc/desc) | Order items by score, date, or name |
+| [Deduplicate](./utility/deduplicate.md) | Remove duplicate list items by value or field | Drop repeats from scraped or merged lists |
+| [Merge Lists](./utility/merge-lists.md) | Combine lists by concatenation or element-wise zip | Join parallel lists; inject a shared value into every item |
+| [JSON Process](./utility/json-process.md) | Filter, project, and extract paths from JSON data | Reshape scraped/API JSON; drill into nested payloads |
 
 ---

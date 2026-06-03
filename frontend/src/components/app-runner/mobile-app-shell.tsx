@@ -374,6 +374,30 @@ export function MobileAppShell({
     [presNodeStates],
   )
 
+  // Per-node single-key `inputValues` slice + merged `display`, both with stable
+  // identity so the memoized InputCard bails out: a keystroke only changes the
+  // touched node's slice identity, leaving every other card's props equal.
+  const inputSliceCache = useRef(new Map<string, { slice: unknown; map: Record<string, Record<string, unknown>> }>())
+  const getInputSliceMap = useCallback((nodeId: string): Record<string, Record<string, unknown>> => {
+    const slice = presInputValues[nodeId]
+    const cached = inputSliceCache.current.get(nodeId)
+    if (cached && cached.slice === slice) return cached.map
+    const map = slice !== undefined ? { [nodeId]: slice } : {}
+    inputSliceCache.current.set(nodeId, { slice, map })
+    return map
+  }, [presInputValues])
+
+  const displayCache = useRef(new Map<string, { node: unknown; card: unknown; merged: PresentationDisplay }>())
+  const getMergedDisplay = useCallback((node: WorkflowNode): PresentationDisplay => {
+    const nodeDisplay = (node.data as Record<string, unknown>).presentationDisplay as PresentationDisplay | undefined
+    const cardDisplay = settings.cardMeta?.[node.id]?.display
+    const cached = displayCache.current.get(node.id)
+    if (cached && cached.node === nodeDisplay && cached.card === cardDisplay) return cached.merged
+    const merged = { ...nodeDisplay, ...cardDisplay }
+    displayCache.current.set(node.id, { node: nodeDisplay, card: cardDisplay, merged })
+    return merged
+  }, [settings.cardMeta])
+
   // ---- Item-based input renderer (mirrors PresentationView renderInputItem) ----
   const renderInputItem = useCallback(
     (item: PresentationItem): React.ReactNode => {
@@ -381,21 +405,18 @@ export function MobileAppShell({
         case "node": {
           const node = nodeMap.get(item.nodeId)
           if (!node) return null
-          const nodeDisplay = (node.data as Record<string, unknown>).presentationDisplay as PresentationDisplay | undefined
-          const cardDisplay = settings.cardMeta?.[node.id]?.display
-          const display = { ...nodeDisplay, ...cardDisplay }
           return (
             <InputCard
               node={node}
               nodes={presNodes}
               edges={presEdges}
               isFullscreen
-              inputValues={presInputValues}
+              inputValues={getInputSliceMap(node.id)}
               onUpdateInput={presUpdateInput}
               readOnly={inputsReadOnly || isRunning}
               onOpenMedia={handleOpenMedia}
               onOpenConfig={setConfigNode}
-              display={display}
+              display={getMergedDisplay(node)}
             />
           )
         }
@@ -442,7 +463,7 @@ export function MobileAppShell({
           return null
       }
     },
-    [nodeMap, presNodes, presEdges, presInputValues, presUpdateInput, inputsReadOnly, isRunning, handleOpenMedia, setConfigNode, findFieldDef, settings.cardMeta],
+    [nodeMap, presNodes, presEdges, presInputValues, presUpdateInput, inputsReadOnly, isRunning, handleOpenMedia, setConfigNode, findFieldDef, settings.cardMeta, getInputSliceMap, getMergedDisplay],
   )
 
   // ---- Media lightbox ----
@@ -909,26 +930,21 @@ export function MobileAppShell({
                 return <div key={key}>{renderInputItem(item)}</div>
               })
             ) : (
-              orderedInputNodes.map((node) => {
-                const nodeDisplay = (node.data as Record<string, unknown>).presentationDisplay as PresentationDisplay | undefined
-                const cardDisplay = settings.cardMeta?.[node.id]?.display
-                const display = { ...nodeDisplay, ...cardDisplay }
-                return (
-                  <InputCard
-                    key={node.id}
-                    node={node}
-                    isFullscreen
-                    inputValues={presInputValues}
-                    onUpdateInput={presUpdateInput}
-                    readOnly={inputsReadOnly || isRunning}
-                    onOpenMedia={handleOpenMedia}
-                    onOpenConfig={setConfigNode}
-                    display={display}
-                    nodes={presNodes}
-                    edges={presEdges}
-                  />
-                )
-              })
+              orderedInputNodes.map((node) => (
+                <InputCard
+                  key={node.id}
+                  node={node}
+                  isFullscreen
+                  inputValues={getInputSliceMap(node.id)}
+                  onUpdateInput={presUpdateInput}
+                  readOnly={inputsReadOnly || isRunning}
+                  onOpenMedia={handleOpenMedia}
+                  onOpenConfig={setConfigNode}
+                  display={getMergedDisplay(node)}
+                  nodes={presNodes}
+                  edges={presEdges}
+                />
+              ))
             )}
           </div>
         ) : activeTab === "outputs" ? (

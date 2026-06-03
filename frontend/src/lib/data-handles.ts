@@ -17,6 +17,7 @@ import {
   TEXT_PRODUCER_TYPES as IMAGE_TEXT_PRODUCERS,
   IMAGE_PRODUCER_TYPES,
 } from "./generate-image-handles"
+import { HANDLE_COLORS } from "./handle-colors"
 
 /** Producers of text/string output. Reuses generate-image-handles
  *  TEXT_PRODUCER_TYPES plus extract-field (its `text` mode emits a scalar)
@@ -30,7 +31,7 @@ export const DATA_TEXT_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>([
 /** Producers of list/array data — data nodes themselves plus AI nodes that
  *  output structured items via `__listResults`. */
 export const LIST_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>([
-  "list", "loop",
+  "list",
   "web-scrape", "extract-field", "filter-list",
   "deduplicate", "merge-lists", "sort-list",
   "selector",
@@ -41,7 +42,7 @@ export const LIST_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>([
  *  extract-field has a `json` outputType, etc. */
 export const JSON_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>([
   "web-scrape", "extract-field",
-  "list", "loop", "filter-list",
+  "list", "filter-list",
   "deduplicate", "merge-lists", "sort-list",
   "selector",
   "ai-writer", "generate-script",
@@ -233,22 +234,21 @@ export function isValidLoopCoarse(
     || isDataProducer(sourceType, isPicker)
 }
 
-/** Brand colors for data-node handle pips. Teal matches the Data category
- *  color in the add-node popup (`text-[#14B8A6]`) so the pip identity reads
- *  consistently with the rest of the category. */
+/** Data-node handle pip colors — all derive from the canonical HANDLE_COLORS
+ *  map by type, so list/data nodes match the rest of the canvas. */
 export const DATA_HANDLE_COLORS = {
   /** Generic list / data flow (list-node, list-processor in/out). */
-  list: "#14B8A6",
+  list: HANDLE_COLORS.list,
   /** JSON output (web-scrape, extract-field json mode). */
-  json: "#818CF8",
-  /** Text output (extract-field text mode, web-scrape input). */
-  text: "#22D3EE",
-  /** Variables input (filter-list). */
-  variables: "#F59E0B",
-  /** Image-url column output (loop). */
-  imageUrl: "#F472B6",
+  json: HANDLE_COLORS.look,
+  /** Text/string output (extract-field text mode, web-scrape input, list text columns). */
+  text: HANDLE_COLORS.text,
+  /** Variables input (filter-list) — orange, distinct from the amber audio family. */
+  variables: HANDLE_COLORS.variables,
+  /** Image-url column output (loop) — image cyan (was pink, which collided with Assets). */
+  imageUrl: HANDLE_COLORS.image,
   /** Video-url column output (loop). */
-  videoUrl: "#A78BFA",
+  videoUrl: HANDLE_COLORS.video,
   /** Audio-url column output (loop). */
-  audioUrl: "#F59E0B",
+  audioUrl: HANDLE_COLORS.audio,
 } as const

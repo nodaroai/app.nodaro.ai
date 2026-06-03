@@ -168,7 +168,7 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
   const type = node.type;
 
   if (type === "list") {
-    // New format: columns + rows (same as loop)
+    // New format: columns + rows
     const loopData = data as LoopNodeData;
     if (loopData.columns) {
       if (sourceHandle) {
@@ -179,22 +179,19 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
       }
       return loopData.rows?.[0]?.[0]?.trim() || "";
     }
+    // Rows-only shape (rows present, columns absent) — the loop→list rename
+    // does NOT backfill columns, so a renamed rows-only loop lands here. With
+    // no columns there are no handle ids to match a sourceHandle against, so
+    // (as the retired `loop` branch's no-column-match fallthrough did) return
+    // the first row's first cell, BEFORE the legacy `items` fallback. This makes
+    // `list` a true superset of `loop`.
+    if (loopData.rows) {
+      return loopData.rows?.[0]?.[0]?.trim() || "";
+    }
     // Legacy format: items string
     const items = (data.items as string | undefined) || "";
     const lines = items.split("\n").filter((l: string) => l.trim().length > 0);
     return lines[0]?.trim();
-  }
-  if (type === "loop") {
-    const loopData = data as LoopNodeData;
-    if (sourceHandle) {
-      const colIndex = (loopData.columns ?? []).findIndex(
-        (c: { handleId: string }) => c.handleId === sourceHandle,
-      );
-      if (colIndex >= 0) {
-        return loopData.rows?.[0]?.[colIndex]?.trim() || "";
-      }
-    }
-    return loopData.rows?.[0]?.[0]?.trim() || "";
   }
   if (type === "text-prompt") {
     return (data.text as string | undefined)?.trim();
@@ -401,7 +398,6 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     type === "suno-cover" ||
     type === "suno-extend" ||
     type === "text-to-dialogue" ||
-    type === "voice-changer" ||
     type === "dubbing" ||
     type === "voice-remix" ||
     type === "audio-isolation" ||
@@ -508,6 +504,19 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
         ? (data.generatedVideoUrl as string | undefined)
         : (data.generatedAudioUrl as string | undefined);
     return results[activeIndex]?.url ?? fallbackUrl;
+  }
+  if (type === "voice-changer") {
+    // Dual-mode: audio in → audio out; video in → video out (+ revoiced audio).
+    // Route by the tapped output handle; default prefers the active result, then
+    // video (video mode), then audio. Mirrors backend getPrimaryOutput.
+    const results =
+      (data.generatedResults as GeneratedResult[] | undefined) ?? [];
+    const activeIndex = (data.activeResultIndex as number | undefined) ?? 0;
+    const videoUrl = data.generatedVideoUrl as string | undefined;
+    const audioUrl = data.generatedAudioUrl as string | undefined;
+    if (sourceHandle === "audio") return audioUrl;
+    if (sourceHandle === "video") return videoUrl;
+    return results[activeIndex]?.url ?? videoUrl ?? audioUrl;
   }
   if (type === "reference-audio") {
     return (data.extractedAudioUrl as string | undefined)?.trim();

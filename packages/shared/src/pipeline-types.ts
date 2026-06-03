@@ -82,7 +82,7 @@ export type PipelinePinnableVideoModel = (typeof PIPELINE_PINNABLE_VIDEO_MODELS)
 export const PIPELINE_PINNABLE_SCRIPT_LLMS = [
   "claude-haiku-4-5",
   "claude-sonnet-4-6",
-  "claude-opus-4-6",
+  "claude-opus-4-7",
 ] as const
 export type PipelinePinnableScriptLlm = (typeof PIPELINE_PINNABLE_SCRIPT_LLMS)[number]
 

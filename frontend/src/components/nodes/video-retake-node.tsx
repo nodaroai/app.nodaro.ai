@@ -2,6 +2,7 @@
 
 import { memo, useState, useMemo, useEffect, useRef, useCallback } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
+import { useShallow } from "zustand/react/shallow"
 import {
   Scissors,
   Video,
@@ -19,7 +20,7 @@ import {
   Frame,
 } from "lucide-react"
 import { BaseNode } from "./base-node"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { EditableNodeLabel } from "./editable-node-label"
 import { VideoRetakeQuickToolbar } from "./video-retake-quick-toolbar"
 import { NodeJobProgress } from "./node-job-progress"
@@ -64,8 +65,22 @@ function VideoRetakeNodeComponent({ id, data, selected }: NodeProps) {
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const isSettingsOpen = useWorkflowStore((s) => s.selectedNodeId === id)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
-  const edges = useWorkflowStore((s) => s.edges)
-  const nodes = useWorkflowStore((s) => s.nodes)
+
+  // Narrow subscription: a primitive fingerprint of the `video`-handle source
+  // (id + full data) instead of whole-array `s.nodes` / `s.edges`. The only
+  // consumers are `upstreamVideoNode` / `upstreamVideoUrl`, which read the
+  // connected source's data (changes during polling), so serialize that one
+  // source's data wholesale to guarantee no missed field, and re-render only
+  // when the video connection or its source data changes.
+  const videoSourceFingerprint = useWorkflowStore(
+    useShallow((s) => {
+      const videoEdge = s.edges.find((e) => e.target === id && e.targetHandle === "video")
+      if (!videoEdge) return ""
+      const src = s.nodes.find((n) => n.id === videoEdge.source)
+      if (!src) return `${videoEdge.id}\x01${videoEdge.source}`
+      return `${videoEdge.id}\x01${src.id}\x01${src.type ?? ""}\x01${JSON.stringify(src.data ?? {})}`
+    }),
+  )
 
   const [toolbarDropdownOpen, setToolbarDropdownOpen] = useState(false)
   const [showThumbnails, setShowThumbnails] = useState(false)
@@ -88,11 +103,13 @@ function VideoRetakeNodeComponent({ id, data, selected }: NodeProps) {
   // a retake window. lip-sync-node also auto-selects the first upstream
   // video node into `selectedVideoNodeId` — we do the same so downstream
   // execution-graph hydration matches the visible preview.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const upstreamVideoNode = useMemo(() => {
+    const { nodes, edges } = useWorkflowStore.getState()
     const videoEdge = edges.find((e) => e.target === id && e.targetHandle === "video")
     if (!videoEdge) return undefined
     return nodes.find((n) => n.id === videoEdge.source)
-  }, [edges, nodes, id])
+  }, [id, videoSourceFingerprint])
 
   // Sync selectedVideoNodeId to whatever is currently connected to the
   // `video` handle (mirrors lip-sync-node's auto-selection effect).
@@ -498,10 +515,11 @@ function VideoRetakeNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </BaseNode>
 
-      {/* Typed input + output pips. Canonical color/icon convention:
-            video   → violet (#8B5CF6, video producer)
-            prompt  → brand pink (#ff0073, text producers + pickers)
-            look    → indigo (#818CF8, Look picker family) */}
+      {/* Typed input + output pips. Colors come from the canonical
+          HANDLE_COLORS map (single source of truth):
+            video   → HANDLE_COLORS.video  (violet, video producer)
+            prompt  → HANDLE_COLORS.text   (blue, text producers + pickers)
+            look    → HANDLE_COLORS.look   (indigo, Look picker family) */}
       <HandleWithPopover
         nodeId={id}
         nodeType="video-retake"
@@ -509,7 +527,7 @@ function VideoRetakeNodeComponent({ id, data, selected }: NodeProps) {
         type="target"
         position={Position.Left}
         label="Video"
-        color="#8B5CF6"
+        color={HANDLE_COLORS.video}
         icon={<Video />}
         side="left"
         top={HANDLE_TOP.video}
@@ -523,7 +541,7 @@ function VideoRetakeNodeComponent({ id, data, selected }: NodeProps) {
         type="target"
         position={Position.Left}
         label="Prompt"
-        color="#ff0073"
+        color={HANDLE_COLORS.text}
         icon={<Type />}
         side="left"
         top={HANDLE_TOP.prompt}
@@ -537,7 +555,7 @@ function VideoRetakeNodeComponent({ id, data, selected }: NodeProps) {
         type="target"
         position={Position.Left}
         label="Look"
-        color="#818CF8"
+        color={HANDLE_COLORS.look}
         icon={<Aperture />}
         side="left"
         top={HANDLE_TOP.look}
@@ -553,7 +571,7 @@ function VideoRetakeNodeComponent({ id, data, selected }: NodeProps) {
         type="source"
         position={Position.Right}
         label="Video"
-        color="#8B5CF6"
+        color={HANDLE_COLORS.video}
         icon={<Video />}
         side="right"
         top="24px"

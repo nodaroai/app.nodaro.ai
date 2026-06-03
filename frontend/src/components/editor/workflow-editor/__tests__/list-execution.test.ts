@@ -79,6 +79,39 @@ describe("executeNodeForList", () => {
     }))
   })
 
+  it("flags __listRunning during the fan-out and clears it afterwards", async () => {
+    // __listRunning exempts the shared node from the abandon-guard while N
+    // concurrent iterations write the same currentJobId slot (Task 6 fix).
+    mockExecuteNode.mockResolvedValue(undefined)
+    mockExtractNodeOutput.mockReturnValue("result.png")
+
+    await executeNodeForList(mockNodes[0] as unknown as WorkflowNode, ["a", "b"], makeCtx())
+
+    // Set true on the initial running-state write…
+    expect(mockUpdateNodeData).toHaveBeenCalledWith("n1", expect.objectContaining({
+      __listRunning: true,
+    }))
+    // …and cleared in the finally (last write must leave it false).
+    const clearCall = mockUpdateNodeData.mock.calls.find(
+      ([, patch]) => (patch as Record<string, unknown>).__listRunning === false,
+    )
+    expect(clearCall).toBeDefined()
+    // The clear must be the final fan-out write so no later write re-flags it.
+    const lastCall = mockUpdateNodeData.mock.calls[mockUpdateNodeData.mock.calls.length - 1]
+    expect((lastCall[1] as Record<string, unknown>).__listRunning).toBe(false)
+  })
+
+  it("clears __listRunning even when the whole batch fails", async () => {
+    // The finally must run on throw too, or a failed batch leaves the node
+    // permanently exempt from the abandon-guard.
+    mockExecuteNode.mockRejectedValue(new Error("fail"))
+
+    await executeNodeForList(mockNodes[0] as unknown as WorkflowNode, ["a"], makeCtx())
+
+    const lastCall = mockUpdateNodeData.mock.calls[mockUpdateNodeData.mock.calls.length - 1]
+    expect((lastCall[1] as Record<string, unknown>).__listRunning).toBe(false)
+  })
+
   it("executes node for each item in the list", async () => {
     mockExecuteNode.mockResolvedValue(undefined)
     mockExtractNodeOutput.mockReturnValue("result.png")
@@ -335,11 +368,11 @@ describe("expandLoopResults", () => {
     expect(clone0.data.__expandedFrom).toBe("n1")
   })
 
-  it("does not clone list source types (loop, list, split-text)", () => {
+  it("does not clone list source types (list, split-text)", () => {
     mockNodes = [
       makeNode({
-        id: "loop1",
-        type: "loop",
+        id: "list1",
+        type: "list",
         data: {
           label: "Table",
           __listResults: ["a", "b"],
@@ -349,8 +382,8 @@ describe("expandLoopResults", () => {
     ]
     expandLoopResults()
 
-    // loop type is a multi-result node but LIST_SOURCE_TYPES are excluded from cloning.
-    // setState is still called but the loop node should NOT be hidden and no _iter_ clones created.
+    // list type is a multi-result node but LIST_SOURCE_TYPES are excluded from cloning.
+    // setState is still called but the list node should NOT be hidden and no _iter_ clones created.
     if (mockSetState.mock.calls.length > 0) {
       const state = mockSetState.mock.calls[0][0]
       const cloneNodes = state.nodes.filter((n: any) => n.id.includes("_iter_"))

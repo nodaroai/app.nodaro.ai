@@ -10,6 +10,13 @@ import {
 } from "@nodaro/shared"
 import type { SimpleNode, SimpleEdge, NodeExecutionState } from "./types.js"
 
+// The per-node legacy-type migration lives in normalize-node-types.ts (single
+// source of truth, shared by the orchestrator, sub-workflow handler, app-input
+// extraction, and api-token routes — now also incl. loop → list). Re-exported
+// here so callers importing it alongside the other engine helpers from this
+// module keep a stable import path.
+export { migrateLegacyNodeType } from "./normalize-node-types.js"
+
 /**
  * Topological sort via Kahn's algorithm.
  * Returns array of levels where nodes in the same level can execute in parallel.
@@ -188,7 +195,6 @@ const SOURCE_NODE_TYPES = new Set([
   "youtube-video",
   "reference-audio",
   "list",
-  "loop",
   "webhook-trigger",
   "schedule-trigger",
   "telegram-trigger",
@@ -197,6 +203,13 @@ const SOURCE_NODE_TYPES = new Set([
   // workflow runtime without any execution. Without this, the orchestrator
   // tries to enqueue a job and payload-builder throws "Unknown node type".
   "suno-voice",
+  // preview — a display/passthrough node. It produces its output from saved
+  // `data.previewItems` (see output-extractor.ts `case "preview"`) and routes
+  // it downstream (input-resolver.ts `srcType === "preview"`); it never makes
+  // an API call. Without this it falls through to executeWorkerNode →
+  // buildPayload throws "Unknown node type" and the whole workflow fails on any
+  // full server-side run. (Surfaced by node-registry-sync.test.ts hardening.)
+  "preview",
 ])
 
 export function isSourceNode(nodeType: string): boolean {
@@ -213,6 +226,18 @@ const SKIP_NODE_TYPES = new Set([
   "sub-workflow-output",
   "group",
   "collect",
+  // Visual / config-only nodes that are NOT executable, NOT parameter pickers,
+  // and produce no DAG output. Without an explicit classification they fall
+  // through the orchestrator's executable filter → buildPayload throws
+  // "Unknown node type" → the ENTIRE workflow fails on any full server-side run
+  // (webhook / schedule / MCP / published-app) or the default Run button. The
+  // frontend masks this because it gates on EXECUTABLE_TYPES. The platform's
+  // own film template ships a sticky-note (lib/film-template.ts), so film
+  // workflows hit this. Guarded by node-registry-sync.test.ts (full nodeTypes
+  // map, not just NODE_REGISTRY).
+  "sticky-note", // free-form canvas annotation
+  "provider", // emits a provider value consumed at field-mapping time, not via DAG execution
+  "rss-feed", // legacy/commented-out source; no executable handler — skip rather than crash
 ])
 
 export function isSkipNode(nodeType: string): boolean {
@@ -309,5 +334,4 @@ export const TEXT_SOURCE_TYPES = new Set([
   "preview",
   "generate-script",
   "list",
-  "loop",
 ])

@@ -47,6 +47,9 @@ interface HandlePopoverProps {
   readonly accepts?: (sourceNodeType: string) => boolean
   readonly onAddNew?: () => void
   readonly onClose?: () => void
+  /** Hex color of this handle (its `--pip-color`). Tints the popover title so
+   *  the menu header matches the pip it belongs to. */
+  readonly color?: string
 }
 
 interface EnrichedConnection extends HandleConnection {
@@ -106,6 +109,7 @@ export function HandlePopover({
   accepts,
   onAddNew,
   onClose,
+  color,
 }: HandlePopoverProps) {
   const connections = useHandleConnections(nodeId, handleId, direction)
   const nodes = useWorkflowStore((s) => s.nodes)
@@ -504,8 +508,8 @@ export function HandlePopover({
     >
         <div className="px-1 pb-2 flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <div className="text-xs font-semibold text-foreground truncate">{label}</div>
-            <div className="text-[10px] text-muted-foreground">{countLabel}</div>
+            <div className="text-sm font-semibold text-foreground truncate" style={color ? { color } : undefined}>{label}</div>
+            <div className="text-[12px] text-muted-foreground">{countLabel}</div>
           </div>
           <div className="flex items-center gap-0.5">
             {onAddNew && (
@@ -513,7 +517,7 @@ export function HandlePopover({
                 type="button"
                 aria-label="Add new node"
                 title="Add new node"
-                className="px-2 py-1 rounded hover:bg-accent text-xs font-medium flex items-center gap-1"
+                className="px-2 py-1 rounded hover:bg-accent text-sm font-medium flex items-center gap-1"
                 onClick={() => {
                   onAddNew()
                   onClose?.()
@@ -591,7 +595,7 @@ export function HandlePopover({
         {showCandidates && (
           <>
             {enriched.length > 0 && <div className="border-t border-border my-2" />}
-            <div className="px-1.5 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground/70">
+            <div className="px-1.5 pb-1 text-[12px] uppercase tracking-wide text-muted-foreground/70">
               Optional ({candidates.length})
             </div>
             <ul className="flex flex-col gap-0.5">
@@ -610,7 +614,7 @@ export function HandlePopover({
               ))}
             </ul>
             {hasDynamicOutputCandidates && (
-              <div className="px-1.5 pt-1.5 text-[10px] text-muted-foreground/70 italic">
+              <div className="px-1.5 pt-1.5 text-[12px] text-muted-foreground/70 italic">
                 Drag from list/loop nodes for column outputs.
               </div>
             )}
@@ -644,7 +648,7 @@ function ConnectionRow({ connection, onJump, onDisconnect, onHoverEdge, dragHand
   return (
     <li
       className={cn(
-        "group flex items-center gap-2 px-1.5 py-1 text-xs rounded hover:bg-accent",
+        "group flex items-center gap-2 px-1.5 py-1 text-sm rounded hover:bg-accent",
         isOverflow && "opacity-50",
       )}
       title={isOverflow ? "Past model's max — won't be used by the current model. Reorder above or switch model to include." : undefined}
@@ -663,7 +667,7 @@ function ConnectionRow({ connection, onJump, onDisconnect, onHoverEdge, dragHand
         <div className="truncate text-foreground" title={connection.otherNodeLabel}>
           {connection.otherNodeLabel}
         </div>
-        <div className="text-[10px] text-muted-foreground truncate">{connection.otherNodeType}</div>
+        <div className="text-[12px] text-muted-foreground truncate">{connection.otherNodeType}</div>
       </div>
       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
         <button
@@ -752,7 +756,7 @@ function SortableConnectionRow(
             tabIndex={isTabStop ? 0 : -1}
             onFocus={() => onGripFocus(edgeId)}
             aria-label={`Drag to reorder (position ${position})`}
-            className="flex items-center gap-0.5 text-[10px] leading-none text-muted-foreground/60 group-hover:text-muted-foreground shrink-0 cursor-grab active:cursor-grabbing select-none px-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 rounded"
+            className="flex items-center gap-0.5 text-[12px] leading-none text-muted-foreground/60 group-hover:text-muted-foreground shrink-0 cursor-grab active:cursor-grabbing select-none px-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 rounded"
           >
             <span className="font-medium tabular-nums">{position}</span>
             <span aria-hidden className="opacity-60">⋮⋮</span>
@@ -772,7 +776,7 @@ interface CandidateRowProps {
 
 function CandidateRow({ candidate, direction, onJump, onConnect }: CandidateRowProps) {
   return (
-    <li className="group flex items-center gap-2 px-1.5 py-1 text-xs rounded hover:bg-accent/60 opacity-60 hover:opacity-100 transition-opacity">
+    <li className="group flex items-center gap-2 px-1.5 py-1 text-sm rounded hover:bg-accent/60 opacity-60 hover:opacity-100 transition-opacity">
       <ThumbnailButton
         thumbnailUrl={candidate.thumbnailUrl}
         videoUrl={candidate.videoUrl}
@@ -791,12 +795,12 @@ function CandidateRow({ candidate, direction, onJump, onConnect }: CandidateRowP
             // wire to. Prefer the registry's friendly label (e.g. "Start
             // state", "Look"); fall back to the raw handle id when the
             // entry has no label.
-            <span className="shrink-0 text-[10px] text-muted-foreground">
+            <span className="shrink-0 text-[12px] text-muted-foreground">
               → {candidate.targetHandleLabel ?? candidate.targetHandle}
             </span>
           )}
         </div>
-        <div className="text-[10px] text-muted-foreground truncate">{candidate.nodeType}</div>
+        <div className="text-[12px] text-muted-foreground truncate">{candidate.nodeType}</div>
       </div>
       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
         <button
@@ -834,7 +838,7 @@ function OverflowDivider({ providerLabel }: { providerLabel: string }) {
   return (
     <li
       aria-hidden
-      className="pointer-events-none px-1.5 py-1 text-[9.5px] uppercase tracking-wide text-muted-foreground/60 border-t border-dashed border-border/70 mt-1"
+      className="pointer-events-none px-1.5 py-1 text-[11px] uppercase tracking-wide text-muted-foreground/60 border-t border-dashed border-border/70 mt-1"
     >
       Beyond {providerLabel}'s max — won't be used
     </li>
@@ -863,6 +867,9 @@ function ThumbnailButton({
   // popover scroll container when the row is near the bottom of the list).
   const [previewAnchor, setPreviewAnchor] = useState<DOMRect | null>(null)
   const btnRef = useRef<HTMLButtonElement>(null)
+  // Coalesce scroll/resize re-anchoring into one rAF per frame so a fast
+  // scroll doesn't fire getBoundingClientRect + setState on every event.
+  const rafIdRef = useRef<number | null>(null)
 
   // The popover wrapper has its own overflow-y-auto. If the user scrolls
   // within the popover (or the window resizes) while a preview is showing,
@@ -874,14 +881,23 @@ function ThumbnailButton({
   useEffect(() => {
     if (!previewAnchor) return
     const update = () => {
-      const rect = btnRef.current?.getBoundingClientRect()
-      if (rect) setPreviewAnchor(rect)
+      // Skip if a frame is already queued — the latest rect wins at flush.
+      if (rafIdRef.current !== null) return
+      rafIdRef.current = requestAnimationFrame(() => {
+        rafIdRef.current = null
+        const rect = btnRef.current?.getBoundingClientRect()
+        if (rect) setPreviewAnchor(rect)
+      })
     }
     document.addEventListener("scroll", update, true)
     window.addEventListener("resize", update)
     return () => {
       document.removeEventListener("scroll", update, true)
       window.removeEventListener("resize", update)
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current)
+        rafIdRef.current = null
+      }
     }
     // Run once on open / once on close — we don't want to reinstall the
     // listener on every rect mutation, which is why we depend on the

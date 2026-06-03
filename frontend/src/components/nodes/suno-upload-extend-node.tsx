@@ -7,7 +7,7 @@ import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { isValidSunoUploadExtendConnection } from "@/lib/audio-text-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -108,9 +108,9 @@ function SunoUploadExtendNodeComponent({ id, data, selected }: NodeProps) {
         <span className="text-xs text-muted-foreground">Upload Extend</span>
       </div>
     </BaseNode>
-    <HandleWithPopover nodeId={id} nodeType="suno-upload-extend" handleId="audio"  type="target" position={Position.Left}  label="Audio"  color="#F59E0B" icon={<FastForward />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_AUDIO} />
-    <HandleWithPopover nodeId={id} nodeType="suno-upload-extend" handleId="prompt" type="target" position={Position.Left}  label="Prompt" color="#ff0073" icon={<Type />}        side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_PROMPT} />
-    <HandleWithPopover nodeId={id} nodeType="suno-upload-extend" handleId="audio"  type="source" position={Position.Right} label="Audio"  color="#F59E0B" icon={<FastForward />} side="right" top="24px" />
+    <HandleWithPopover nodeId={id} nodeType="suno-upload-extend" handleId="audio"  type="target" position={Position.Left}  label="Audio"  color={HANDLE_COLORS.audio} icon={<FastForward />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_AUDIO} />
+    <HandleWithPopover nodeId={id} nodeType="suno-upload-extend" handleId="prompt" type="target" position={Position.Left}  label="Prompt" color={TEXT_HANDLE_COLOR} icon={<Type />}        side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_PROMPT} />
+    <HandleWithPopover nodeId={id} nodeType="suno-upload-extend" handleId="audio"  type="source" position={Position.Right} label="Audio"  color={HANDLE_COLORS.audio} icon={<FastForward />} side="right" top="24px" />
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}
       onClose={() => setDeleteConfirm(null)}

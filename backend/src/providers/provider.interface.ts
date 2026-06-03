@@ -7,6 +7,13 @@ export interface ProviderResult {
    *  provider returns a single result. */
   extraUrls?: readonly string[]
   cost: number | null // null if cost unknown
+  /** True only for GENUINELY metered providers (Replicate GPU-time: face-swap,
+   *  legacy lip-sync, whisper transcribe). When true, commit recomputes the
+   *  charge from `cost` and trues-up. When false/undefined (the default for all
+   *  fixed/composite-priced providers), commit charges the RESERVED tier —
+   *  markup is applied once at reserve over the 0%-base price. See the pricing-
+   *  convention design (decision A). */
+  meteredCost?: boolean
   kieTaskId?: string  // KIE task ID for extend/upscale operations (VEO, Runway)
   /** Provider-reported seed VEO actually used. Captured even when no seed
    *  was supplied — KIE returns it. Used by perfect-loop component to pin

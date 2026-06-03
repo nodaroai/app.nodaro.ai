@@ -9,8 +9,13 @@ const mockTextToVideo = vi.fn()
 const mockTextToSpeech = vi.fn()
 const mockGenerateScriptApi = vi.fn()
 const mockCombineVideos = vi.fn()
-const mockGetJobStatus = vi.fn()
-const mockUpdateNodeData = vi.fn()
+const mockGetJobStatusLean = vi.fn()
+// Apply writes to mockNodes so node state (e.g. currentJobId, which the
+// abandon-guard reads mid-poll) reflects what the real store would hold.
+const mockUpdateNodeData = vi.fn((id: string, patch: Record<string, unknown>) => {
+  const node = mockNodes.find((n) => n.id === id)
+  if (node) node.data = { ...node.data, ...patch }
+})
 const mockToastInfo = vi.fn()
 const mockToastError = vi.fn()
 const mockToastSuccess = vi.fn()
@@ -43,7 +48,7 @@ vi.mock("@/lib/api", () => ({
   textToSpeech: (...args: unknown[]) => mockTextToSpeech(...args),
   generateScriptApi: (...args: unknown[]) => mockGenerateScriptApi(...args),
   combineVideos: (...args: unknown[]) => mockCombineVideos(...args),
-  getJobStatus: (...args: unknown[]) => mockGetJobStatus(...args),
+  getJobStatusLean: (...args: unknown[]) => mockGetJobStatusLean(...args),
 }))
 
 vi.mock("../types", () => ({
@@ -110,7 +115,7 @@ describe("runImageGeneration", () => {
   it("completes on successful job", async () => {
     vi.useFakeTimers()
     mockGenerateImage.mockResolvedValue({ jobId: "j1" })
-    mockGetJobStatus.mockResolvedValue({
+    mockGetJobStatusLean.mockResolvedValue({
       status: "completed",
       output_data: { imageUrl: "http://img.png" },
     })
@@ -160,7 +165,7 @@ describe("runEditImage", () => {
   it("completes on successful job", async () => {
     vi.useFakeTimers()
     mockEditImage.mockResolvedValue({ jobId: "j2" })
-    mockGetJobStatus.mockResolvedValue({
+    mockGetJobStatusLean.mockResolvedValue({
       status: "completed",
       output_data: { imageUrl: "http://edited.png" },
     })
@@ -210,7 +215,7 @@ describe("runImageToImage", () => {
   it("completes on successful job", async () => {
     vi.useFakeTimers()
     mockImageToImage.mockResolvedValue({ jobId: "j3" })
-    mockGetJobStatus.mockResolvedValue({
+    mockGetJobStatusLean.mockResolvedValue({
       status: "completed",
       output_data: { imageUrl: "http://transformed.png" },
     })
@@ -260,7 +265,7 @@ describe("runVideoGeneration", () => {
   it("completes on successful job", async () => {
     vi.useFakeTimers()
     mockGenerateVideo.mockResolvedValue({ jobId: "j4" })
-    mockGetJobStatus.mockResolvedValue({
+    mockGetJobStatusLean.mockResolvedValue({
       status: "completed",
       output_data: { videoUrl: "http://vid.mp4" },
     })
@@ -310,7 +315,7 @@ describe("runVideoToVideoGeneration", () => {
   it("completes on successful job", async () => {
     vi.useFakeTimers()
     mockVideoToVideo.mockResolvedValue({ jobId: "j5" })
-    mockGetJobStatus.mockResolvedValue({
+    mockGetJobStatusLean.mockResolvedValue({
       status: "completed",
       output_data: { videoUrl: "http://v2v.mp4" },
     })
@@ -360,7 +365,7 @@ describe("runTextToVideoGeneration", () => {
   it("completes on successful job", async () => {
     vi.useFakeTimers()
     mockTextToVideo.mockResolvedValue({ jobId: "j6" })
-    mockGetJobStatus.mockResolvedValue({
+    mockGetJobStatusLean.mockResolvedValue({
       status: "completed",
       output_data: { videoUrl: "http://t2v.mp4" },
     })
@@ -410,7 +415,7 @@ describe("runTextToSpeechGeneration", () => {
   it("completes on successful job", async () => {
     vi.useFakeTimers()
     mockTextToSpeech.mockResolvedValue({ jobId: "j7" })
-    mockGetJobStatus.mockResolvedValue({
+    mockGetJobStatusLean.mockResolvedValue({
       status: "completed",
       output_data: { audioUrl: "http://audio.mp3" },
     })
@@ -461,7 +466,7 @@ describe("runScriptGeneration", () => {
     vi.useFakeTimers()
     const script = { title: "Test", totalDuration: 30, scenes: [] }
     mockGenerateScriptApi.mockResolvedValue({ jobId: "j8" })
-    mockGetJobStatus.mockResolvedValue({
+    mockGetJobStatusLean.mockResolvedValue({
       status: "completed",
       output_data: { script },
     })
@@ -511,7 +516,7 @@ describe("runCombineVideos", () => {
   it("completes on successful job", async () => {
     vi.useFakeTimers()
     mockCombineVideos.mockResolvedValue({ jobId: "j9" })
-    mockGetJobStatus.mockResolvedValue({
+    mockGetJobStatusLean.mockResolvedValue({
       status: "completed",
       output_data: { videoUrl: "http://combined.mp4" },
     })

@@ -19,6 +19,7 @@ import {
 } from "@/lib/api"
 import { buildProgressSegments, calculateCombinedProgress, type ProgressSegment, CATEGORY_DURATION_DEFAULTS } from "@nodaro/shared"
 import { getOutputNodes } from "@nodaro/shared"
+import { migrateListLoopNodes } from "@/lib/list-loop-migration"
 
 export type AppRunnerStatus = "idle" | "loading" | "running" | "completed" | "failed"
 
@@ -104,7 +105,14 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
       const app = await getPublishedApp(slug)
       // Guard: discard response if slug changed during fetch (navigation race)
       if (get().slug !== slug) { set({ loading: false }); return }
-      set({ app, loading: false })
+      // Migrate legacy `loop` ("Table") nodes to canonical `list` at this single
+      // ingest boundary, so EVERY downstream consumer of app.snapshotNodes
+      // (presentation-store seeding in app-runner-page/embed-page, useRunSlots'
+      // input/output derivation, computeProgressSegments, MobileAppShell, remix)
+      // sees `list`. Published-app snapshots are served raw (no editor/
+      // orchestrator normalization). Edges are untouched (shared handle ids).
+      const migratedApp = migrateAppSnapshot(app)
+      set({ app: migratedApp, loading: false })
     } catch (err) {
       if (get().slug !== slug) { set({ loading: false }); return }
       set({
@@ -277,6 +285,27 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
     })
   },
 }))
+
+/**
+ * Migrate a published app's snapshot node array (loop→list, items→columns/rows)
+ * once, at the loadApp ingest boundary. Only snapshotNodes/snapshotEdges are
+ * replaced; every other PublishedApp field is passed through verbatim. Runs once
+ * per load (loadApp is guarded against concurrent/duplicate loads), so the fresh
+ * `app` object identity is harmless. Edges are returned unchanged by the
+ * migration (list/loop share handle ids).
+ *
+ * Null-safe: if snapshotNodes is absent (real apps always have it — NOT NULL in
+ * DB — but be defensive), the app is returned untouched rather than gaining
+ * spurious empty arrays.
+ */
+function migrateAppSnapshot(app: PublishedApp): PublishedApp {
+  if (!Array.isArray(app.snapshotNodes)) return app
+  const { nodes, edges } = migrateListLoopNodes(
+    app.snapshotNodes as WorkflowNode[],
+    (Array.isArray(app.snapshotEdges) ? app.snapshotEdges : []) as WorkflowEdge[],
+  )
+  return { ...app, snapshotNodes: nodes, snapshotEdges: edges }
+}
 
 /**
  * Creates a bridged run function that syncs input values from the presentation store

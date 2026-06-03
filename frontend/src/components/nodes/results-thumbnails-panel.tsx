@@ -1,11 +1,11 @@
 "use client"
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
-import { ChevronLeft, ChevronRight, X } from "lucide-react"
+import { ChevronLeft, ChevronRight, FileText, X } from "lucide-react"
 import { CachedImage } from "@/components/ui/cached-image"
 import { isVideoUrl } from "@/lib/media-type"
 
-interface ResultsThumbnailsPanelProps<T extends { url: string; jobId?: string }> {
+interface ResultsThumbnailsPanelProps<T extends { url?: string; text?: string; jobId?: string }> {
   readonly results: ReadonlyArray<T>
   readonly activeIndex: number
   readonly onSelect: (index: number) => void
@@ -19,11 +19,10 @@ interface ResultsThumbnailsPanelProps<T extends { url: string; jobId?: string }>
    *  fit fewer items per page. */
   readonly thumbSize?: number
   /** Media type — `"image"` (default) renders thumbnails via CachedImage
-   *  (`<img>`). `"video"` renders a muted/playsInline `<video>` for any
-   *  thumb whose url ISN'T an obvious image src — handles the case where
-   *  the ffmpeg backend's `generateAndUploadThumbnail` returned null and
-   *  the caller fell back to the raw video url. */
-  readonly mediaType?: "image" | "video"
+   *  (`<img>`). `"video"` renders a muted/playsInline `<video>`. `"text"`
+   *  renders a numbered FileText tile (for text-producing nodes like
+   *  Generate Text) — no media element, snippet shown via `title`. */
+  readonly mediaType?: "image" | "video" | "text"
   /** Per-thumbnail delete affordance (hover-revealed red X on each tile).
    *  Omit to disable. Matches the legacy inline strip behavior — without
    *  it, removing non-active results becomes a two-click detour through
@@ -75,7 +74,7 @@ function isInternalUrl(url: string): boolean {
   }
 }
 
-export function ResultsThumbnailsPanel<T extends { url: string; jobId?: string }>({
+export function ResultsThumbnailsPanel<T extends { url?: string; text?: string; jobId?: string }>({
   results,
   activeIndex,
   onSelect,
@@ -204,7 +203,8 @@ export function ResultsThumbnailsPanel<T extends { url: string; jobId?: string }
         {visible.map((r, i) => {
           const absoluteIndex = pageStart + i
           const isActive = absoluteIndex === activeIndex
-          const useVideoTile = mediaType === "video" && isVideoUrl(r.url)
+          const isTextTile = mediaType === "text"
+          const useVideoTile = mediaType === "video" && isVideoUrl(r.url ?? "")
           const tileClass = `w-full h-full object-cover rounded-lg cursor-pointer transition-all ${
             isActive ? "ring-2 ring-[#ff0073]" : "opacity-60 hover:opacity-100"
           }`
@@ -218,7 +218,17 @@ export function ResultsThumbnailsPanel<T extends { url: string; jobId?: string }
               className="relative shrink-0 group/thumb"
               style={{ width: thumbSize, height: thumbSize }}
             >
-              {useVideoTile ? (
+              {isTextTile ? (
+                <button
+                  type="button"
+                  aria-label={`Switch to result ${absoluteIndex + 1}`}
+                  title={(r.text ?? "").slice(0, 120)}
+                  className={`${tileClass} flex items-center justify-center ${isActive ? "bg-[#ff0073]/15" : "bg-muted"}`}
+                  onClick={handleClick}
+                >
+                  <FileText className="w-1/2 h-1/2 text-muted-foreground" />
+                </button>
+              ) : useVideoTile ? (
                 // iOS Safari intercepts taps on <video> without controls
                 // to play/pause; React's synthetic onClick fires
                 // unreliably as a result. Transparent overlay div above
@@ -230,8 +240,8 @@ export function ResultsThumbnailsPanel<T extends { url: string; jobId?: string }
                 // credentialed requests — mirrors CachedImage's logic.
                 <>
                   <video
-                    src={r.url}
-                    crossOrigin={isInternalUrl(r.url) ? "anonymous" : undefined}
+                    src={r.url ?? ""}
+                    crossOrigin={isInternalUrl(r.url ?? "") ? "anonymous" : undefined}
                     className={tileClass}
                     style={{ pointerEvents: "none" }}
                     muted
@@ -247,7 +257,7 @@ export function ResultsThumbnailsPanel<T extends { url: string; jobId?: string }
                 </>
               ) : (
                 <CachedImage
-                  src={r.url}
+                  src={r.url ?? ""}
                   alt={`Result ${absoluteIndex + 1}`}
                   className={tileClass}
                   thumbnail

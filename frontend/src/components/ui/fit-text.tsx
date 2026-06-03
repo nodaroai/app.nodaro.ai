@@ -33,30 +33,53 @@ export function FitText({
     const el = ref.current
     if (!el) return
 
+    let rafId: number | null = null
+
     const fit = () => {
       // Reset to inherited size before measuring so we always start fresh.
       el.style.fontSize = ""
       const baseSize = parseFloat(getComputedStyle(el).fontSize)
       if (!Number.isFinite(baseSize) || baseSize <= 0) return
       el.style.fontSize = `${baseSize}px`
-      // Shrink in 0.5px steps until it fits or we hit the min.
-      let size = baseSize
-      while (size > minFontSize && el.scrollWidth > el.clientWidth + 0.5) {
-        size = Math.max(minFontSize, size - 0.5)
-        el.style.fontSize = `${size}px`
-        if (size === minFontSize) break
+      if (el.scrollWidth <= el.clientWidth + 0.5) return
+      // Binary search: converges in O(log n) instead of O(n) linear steps.
+      let lo = minFontSize
+      let hi = baseSize
+      while (hi - lo > 0.5) {
+        const mid = (lo + hi) / 2
+        el.style.fontSize = `${mid}px`
+        if (el.scrollWidth <= el.clientWidth + 0.5) {
+          lo = mid
+        } else {
+          hi = mid
+        }
       }
+      el.style.fontSize = `${lo}px`
     }
 
-    fit()
+    const scheduleFit = () => {
+      if (rafId !== null) return
+      rafId = requestAnimationFrame(() => {
+        rafId = null
+        fit()
+      })
+    }
+
+    scheduleFit()
 
     // Re-fit on container resize. Observe the closest sized ancestor (parent
     // tile / chip), since that's what bounds the label's clientWidth.
     const parent = el.parentElement
     if (!parent || typeof ResizeObserver === "undefined") return
-    const ro = new ResizeObserver(() => fit())
+    const ro = new ResizeObserver(scheduleFit)
     ro.observe(parent)
-    return () => ro.disconnect()
+    return () => {
+      ro.disconnect()
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId)
+        rafId = null
+      }
+    }
   }, [textKey, minFontSize])
 
   return (

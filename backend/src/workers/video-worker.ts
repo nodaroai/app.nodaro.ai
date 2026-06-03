@@ -4,6 +4,7 @@ import { config, hasCredits } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
 import { initProviders } from "../providers/index.js"
 import { KieError } from "../providers/kie/client.js"
+import { runWithJobCancellation, JobCancelledError } from "../lib/job-cancellation.js"
 import { isPromptBlocked } from "../config/content-filter.js"
 import { refundJobCredits, createAssetFromJob, isFinalJobAttempt, type HandlerFn, type JobContext } from "./shared.js"
 import { imageAIHandlers } from "./handlers/image-ai.js"
@@ -158,7 +159,9 @@ export function createVideoWorker() {
           throw new Error(`Unknown job type: ${job.name}`)
         }
 
-        await handler(job, ctx)
+        // Bind a cancellation context so provider poll loops abort the moment
+        // the user cancels — instead of polling the upstream job to completion.
+        await runWithJobCancellation(jobId, () => handler(job, ctx))
 
         // Record execution duration for progress bar estimation
         // (started_at was set on the job record at the start of processing above)
@@ -180,6 +183,15 @@ export function createVideoWorker() {
         // Create asset records so generated media appears in /library
         await createAssetFromJob(jobId, jobUserId)
       } catch (err) {
+        // User cancelled mid-flight (queue-pickup race or poll abort). The row
+        // is already at status='cancelled' (+ refunded) by the cancel route, so
+        // discard quietly — do NOT mark "failed" or re-refund, and don't rethrow
+        // (a throw would make BullMQ retry the cancelled job).
+        if (err instanceof JobCancelledError) {
+          console.log(`[worker] Job ${jobId} cancelled by user — discarding result, leaving status='cancelled'`)
+          return
+        }
+
         const message = err instanceof Error ? err.message : "Unknown error"
 
         // For KieError, log the internal details for debugging

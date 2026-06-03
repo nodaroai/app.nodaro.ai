@@ -19,6 +19,8 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
   - [`client.objects`](#clientobjects)
   - [`client.pipelines`](#clientpipelines)
   - [`client.reduce`](#clientreduce)
+  - [`client.promptHelper`](#clientprompthelper)
+  - [`client.apps`](#clientapps)
   - [`client.developerApps`](#clientdeveloperapps)
   - [`client.oauth`](#clientoauth)
 - [Type re-exports](#type-re-exports)
@@ -48,10 +50,11 @@ const client = createClient({
 | `fetch` | `typeof fetch` | no | Custom fetch implementation. Default: `globalThis.fetch`. |
 | `timeoutMs` | `number` | no | Per-request timeout. Default: `60_000`. |
 
-The instance exposes nine resource objects: `workflows`, `projects`, `jobs`,
-`executions`, `nodes`, `characters`, `apps`, `developerApps`, `oauth`. It also
-exposes a low-level `request<T>(method, path, options)` method for endpoints
-not yet wrapped by a resource.
+The instance exposes 14 resource objects: `workflows`, `projects`, `jobs`,
+`executions`, `nodes`, `characters`, `locations`, `objects`, `pipelines`,
+`reduce`, `promptHelper`, `apps`, `developerApps`, `oauth`. It also exposes a
+low-level `request<T>(method, path, options)` method for endpoints not yet
+wrapped by a resource.
 
 ### `class NodaroClient`
 
@@ -213,8 +216,9 @@ Every resource is constructed automatically by `createClient` and reachable via
 `client.<resource>`. The classes are also exported for advanced typechecking
 but rarely need to be imported directly:
 `WorkflowsResource`, `ProjectsResource`, `JobsResource`, `ExecutionsResource`,
-`NodesResource`, `CharactersResource`, `AppsResource`, `DeveloperAppsResource`,
-`OAuthResource`.
+`NodesResource`, `CharactersResource`, `LocationsResource`, `ObjectsResource`,
+`PipelinesResource`, `ReduceResource`, `PromptHelperResource`, `AppsResource`,
+`DeveloperAppsResource`, `OAuthResource`, `VoicesResource`.
 
 All "data" responses follow the envelope `{ data: T }` — the SDK returns the
 envelope as-is. Mutation responses (`delete`, `cancel`) return `{ success: true }`.
@@ -481,11 +485,20 @@ const { data, nextCursor } = await client.executions.listForWorkflow(
 cancel(id: string, params?: CancelExecutionParams): Promise<{ success: true }>
 ```
 
-Cancels an execution. Default cancels immediately; `mode: "after_current"`
-sets the execution to `"stopping"` so in-flight nodes finish first.
+Cancels an execution. Three modes:
+
+- **default** (no `mode`) — cancels immediately, killing in-flight jobs and
+  refunding reserved credit holds (status `"cancelled"`).
+- **`mode: "after_current"`** — sets the execution to `"stopping"` so in-flight
+  nodes finish (and land on the canvas + My Library) before the run stops.
+- **`mode: "discard"`** — stops scheduling new nodes WITHOUT cancelling in-flight
+  jobs (external AI calls can't be killed mid-flight). Those jobs finish and are
+  saved to My Library, but their results are detached from the live canvas
+  (status `"discarded"`). No refund — the jobs completed.
 
 ```ts
 await client.executions.cancel(executionId, { mode: "after_current" })
+await client.executions.cancel(executionId, { mode: "discard" })
 ```
 
 ---
@@ -1349,6 +1362,130 @@ credits surface as `InsufficientCreditsError`.
 
 ---
 
+### `client.promptHelper`
+
+AI prompt assistance for generation nodes. All three methods delegate to
+`POST /v1/prompt-helper/wizard` (see
+[API Integration §12](./api-integration.md#12-prompt-wizard)) and reserve
+credits per call.
+
+#### `analyze(input)`
+
+```ts
+analyze(input: AnalyzeInput): Promise<{ jobId: string; questions: WizardQuestion[] }>
+```
+
+Turns a rough idea into guided questions for a target node type. Pair the
+returned `questions` with `generate()`.
+
+```ts
+const { questions } = await client.promptHelper.analyze({
+  nodeType: "generate-image",
+  prompt: "a snow leopard",
+})
+```
+
+#### `generate(input)`
+
+```ts
+generate(input: GenerateInput): Promise<{ jobId: string; prompt: string; recommendedModel?: RecommendedModel }>
+```
+
+Builds a single optimized prompt from the selected answers. Each selection is
+`{ category, value, isCustom }`.
+
+```ts
+const { prompt } = await client.promptHelper.generate({
+  nodeType: "generate-image",
+  selections: [{ category: "subject", value: "snow leopard", isCustom: false }],
+})
+```
+
+#### `enhance(input)`
+
+```ts
+enhance(input: EnhanceInput): Promise<{ jobId: string; prompt: string; recommendedModel?: RecommendedModel }>
+```
+
+One-shot "improve this prompt" — skips the questions round-trip and returns the
+optimized prompt directly.
+
+```ts
+const { prompt } = await client.promptHelper.enhance({ nodeType: "generate-image", prompt: "a snow leopard" })
+```
+
+---
+
+### `client.apps`
+
+Browse and run published apps — a workflow wrapped in a curated input/output
+presentation. `list()` and `get()` are public; `run()` and the run-history
+methods authenticate as the caller.
+
+#### `list(params?)`
+
+```ts
+list(params?: ListAppsParams): Promise<ListAppsResult>
+```
+
+Cursor-paginated browse of published apps. Optional `search`, `category`, and
+`limit` (server caps at 50).
+
+```ts
+const { data, nextCursor } = await client.apps.list({ search: "headshot", limit: 20 })
+```
+
+#### `get(slug)`
+
+```ts
+get(slug: string): Promise<{ data: PublishedAppDetail }>
+```
+
+Fetches one app's metadata plus its `inputSchema` (the fields end users fill
+in) and `outputs` mapping.
+
+```ts
+const { data: app } = await client.apps.get("pro-headshot")
+```
+
+#### `run(slug, inputs?)`
+
+```ts
+run(slug: string, inputs?: Record<string, unknown>): Promise<AppRunResult>
+```
+
+Triggers an app run. `inputs` keys must match the app's input-schema field
+names. Returns `{ executionId, status, runId? }` — poll via
+`client.executions.get(executionId)`.
+
+```ts
+const { executionId } = await client.apps.run("pro-headshot", { photo: url })
+```
+
+#### `listRuns(slug, params?)` / `getRun(slug, runId)`
+
+```ts
+listRuns(slug: string, params?: ListAppRunsParams): Promise<{ data: AppRun[]; nextCursor?: string | null }>
+getRun(slug: string, runId: string): Promise<{ data: AppRun }>
+```
+
+List past runs for an app, or fetch one run by id.
+
+#### `deleteRun(slug, runId)`
+
+```ts
+deleteRun(slug: string, runId: string): Promise<{ success: true; archived: true }>
+```
+
+Archives (soft-deletes) a run. Restoration and permanent deletion are UI-only
+by design — SDK / MCP / API delete callers can't destroy data.
+
+```ts
+await client.apps.deleteRun("pro-headshot", runId)
+```
+
+---
+
 ### `client.developerApps`
 
 Manage your own OAuth developer apps. Only the owner can read or modify their
@@ -1488,6 +1625,50 @@ const info = await client.oauth.getAppInfo("ndr_client_abc123")
 // { name, description, logoUrl, homepageUrl, scopesRequested }
 ```
 
+### `client.voices`
+
+ElevenLabs voices: the premade catalog, the community Voice Library, the
+signed-in user's voice clones, and the **voice changer**.
+
+#### `change(input)`
+
+```ts
+change(input: {
+  voiceId: string
+  audioUrl?: string
+  videoUrl?: string
+  stability?: number
+  similarityBoost?: number
+  removeBackgroundNoise?: boolean
+}): Promise<{ jobId: string }>
+```
+
+Replace the voice in a recording — or in a whole talking video — with a
+different voice (`POST /v1/voice-changer`). Pass **`audioUrl`** to revoice
+audio→audio, or **`videoUrl`** to revoice an entire clip: the server demuxes the
+audio, runs speech-to-speech, and remuxes the new voice onto the original video.
+Exactly one of `audioUrl` / `videoUrl` is required; **when both are sent, video
+wins**. `removeBackgroundNoise` off keeps the music/SFX bed under the new voice;
+on yields a clean voice-only result. Runs async — poll `client.jobs.get(jobId)`.
+
+```ts
+// Audio → audio
+const { jobId } = await client.voices.change({
+  audioUrl: "https://cdn.example.com/speech.mp3",
+  voiceId: "Rachel",
+})
+
+// Video → revoiced video (output_data has videoUrl + audioUrl)
+const job = await client.voices.change({
+  videoUrl: "https://cdn.example.com/talking.mp4",
+  voiceId: "Aria",
+})
+```
+
+The other methods — `list()`, `searchLibrary(params)`, `listClones()`,
+`createClone(input)`, `deleteClone(id)` — cover the premade catalog, the
+community library, and managing custom clones.
+
 ---
 
 ## Type re-exports
@@ -1520,11 +1701,11 @@ Every type used in a public method signature is re-exported from
 - `WorkflowExecution` — full execution record with per-node state map
 - `WorkflowExecutionSummary` — list-row shape
 - `NodeExecutionState` — per-node entry inside `nodeStates`
-- `ExecutionStatus` — `"pending" | "running" | "completed" | "failed" | "cancelled" | "stopping" | "timed_out"`
+- `ExecutionStatus` — `"pending" | "running" | "completed" | "failed" | "cancelled" | "stopping" | "timed_out" | "discarded"`
 - `ExecutionTriggerType` — `"manual" | "webhook" | "schedule" | "app_run" | "single-node"`
 - `ListExecutionsForWorkflowParams` — pagination + filters
 - `ListExecutionsPage<T>` — `{ data: T[], nextCursor? }`
-- `CancelExecutionParams` — `{ mode? }`
+- `CancelExecutionParams` — `{ mode?: "after_current" | "discard" }`
 
 ### Nodes
 

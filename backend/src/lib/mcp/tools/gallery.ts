@@ -589,6 +589,11 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
             .from("jobs")
             .select("id, job_type, input_data, output_data, completed_at, provider")
             .in("id", jobIds)
+            // Tenant scope: only hydrate jobs the caller may see (own, or
+            // public+completed) — same predicate as get_asset/display_asset.
+            // Without this, favoriting another user's job UUID would leak its
+            // output_data URLs + input_data prompt.
+            .or(`user_id.eq.${session.userId},and(is_public.eq.true,status.eq.completed)`)
           items = ((jobsData ?? []) as GalleryRow[])
             .map(rowToGalleryItem)
             .filter((item): item is GalleryItem => item !== null)
@@ -1031,6 +1036,22 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
       },
       async (args) => {
         if (args.favorited) {
+          // Ownership gate: only allow favoriting a job the caller may see
+          // (own, or public+completed). Prevents storing favorites for another
+          // tenant's private job (defense-in-depth alongside the scoped
+          // hydration in list_favorites).
+          const { data: visible } = await supabase
+            .from("jobs")
+            .select("id")
+            .eq("id", args.job_id)
+            .or(`user_id.eq.${session.userId},and(is_public.eq.true,status.eq.completed)`)
+            .maybeSingle()
+          if (!visible) {
+            return {
+              content: [{ type: "text", text: "Error: asset not found" }],
+              isError: true,
+            }
+          }
           // Insert; ignore unique-violation duplicates so the call is idempotent.
           const { error } = await supabase
             .from("gallery_favorites")

@@ -1,20 +1,23 @@
 "use client"
 
-import { memo, useState } from "react"
+import { memo, useMemo, useState, Suspense } from "react"
 import { createPortal } from "react-dom"
 import { Position, type NodeProps } from "@xyflow/react"
-import { MessageSquare, Type, Loader2, AlertCircle, X, FileText, Copy, Download, BookOpen, ImageIcon, List } from "lucide-react"
+import { MessageSquare, Type, Loader2, AlertCircle, X, FileText, Copy, Download, BookOpen, ImageIcon, List, LayoutGrid, LayoutTemplate, Sparkles, Braces, Eye } from "lucide-react"
 import { computeDeleteResultUpdates, copyToClipboard, downloadTextFile } from "@/lib/utils"
+import { lazyWithRetry } from "@/lib/lazy-with-retry"
 import { BaseNode } from "./base-node"
-import { RunNodeButton } from "./run-node-button"
+import { LlmChatQuickToolbar } from "./llm-chat-quick-toolbar"
+import { ResultsThumbnailsPanel } from "./results-thumbnails-panel"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { isValidLlmChatConnection } from "@/lib/audio-text-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
-import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
-import { getGenerateTextTemplate } from "@/lib/generate-text-templates"
+import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS, LLM_MODELS } from "@nodaro/shared"
+import { getGenerateTextTemplate, GENERATE_TEXT_TEMPLATES } from "@/lib/generate-text-templates"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import type { LLMChatData } from "@/types/nodes"
 
@@ -23,34 +26,80 @@ const ACCEPTS_PROMPT        = (t: string) => isValidLlmChatConnection("prompt", 
 const ACCEPTS_REFERENCES    = (t: string) => isValidLlmChatConnection("references",    t, isVisualPicker)
 const ACCEPTS_SYSTEM_PROMPT = (t: string) => isValidLlmChatConnection("system-prompt", t, isVisualPicker)
 
+/** Resolve an LLM model id to its display name (falls back to the raw id). */
+function llmModelLabel(id: string | undefined): string | undefined {
+  if (!id) return undefined
+  return LLM_MODELS.find((m) => m.id === id)?.displayName ?? id
+}
+
+/** If the output is a JSON object/array (optionally wrapped in a ```json
+ *  fence), return the parsed value so the rendered view can show a colored
+ *  object tree; otherwise `undefined` (→ render as Markdown). Lightweight —
+ *  no heavy imports, safe to run on every render. */
+function tryParseLlmJson(text: string | undefined): unknown {
+  if (!text) return undefined
+  let t = text.trim()
+  const fence = t.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/i)
+  if (fence) t = fence[1].trim()
+  if (!(t.startsWith("{") || t.startsWith("["))) return undefined
+  try {
+    const v = JSON.parse(t)
+    return typeof v === "object" && v !== null ? v : undefined
+  } catch {
+    return undefined
+  }
+}
+
+// Lazy — keeps `react-markdown` out of the editor's main bundle; only loads
+// when the user toggles the rendered (Markdown / JSON) view.
+const LlmOutputView = lazyWithRetry(() =>
+  import("./llm-output-view").then((m) => ({ default: m.LlmOutputView })),
+)
+
+// Result-card action-strip button styles — ghost icon buttons that sit on the
+// muted result surface (replaces the former black-overlay buttons).
+const STRIP_BTN =
+  "shrink-0 w-6 h-6 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+const STRIP_DELETE_BTN =
+  "shrink-0 w-6 h-6 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-white hover:bg-red-500 transition-colors"
+const SHOW_OUTPUTS_BTN =
+  "shrink-0 h-6 px-1.5 inline-flex items-center gap-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+const SHOW_OUTPUTS_BTN_ACTIVE =
+  "shrink-0 h-6 px-1.5 inline-flex items-center gap-1 rounded-md bg-[#ff0073] text-white hover:bg-[#ff0073]/90 transition-colors"
+
 function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as LLMChatData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-  const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
   const activeResult = results[activeIndex]
   const activeText = activeResult?.text ?? nodeData.generatedText
+  const isSettingsOpen = useWorkflowStore((s) => s.selectedNodeId === id)
+  const userTextTemplates = useWorkflowStore((s) => s.userTextTemplates) ?? []
+  const [toolbarDropdownOpen, setToolbarDropdownOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [showLog, setShowLog] = useState(false)
   const [expandedLogIndex, setExpandedLogIndex] = useState<number | null>(null)
-  const [showRuns, setShowRuns] = useState(false)
-  const [activeRunId, setActiveRunId] = useState<string | null>(null)
+  // "Show outputs" toggle for the multi-result thumbnail strip — mirrors
+  // Generate Image (off by default; revealed via the toolbar button).
+  const [showThumbnails, setShowThumbnails] = useState(false)
+  // Output rendering: "raw" (plain text, preserves formatting) vs "rendered"
+  // (colored JSON object view when the output is JSON, else Markdown).
+  const [outputView, setOutputView] = useState<"raw" | "rendered">("raw")
+  const jsonValue = useMemo(() => tryParseLlmJson(activeText), [activeText])
+  const isJsonOutput = jsonValue !== undefined
   const credits = useModelCredits(buildLlmCreditIdentifier("llm-chat", nodeData.llmModel || LLM_FEATURE_DEFAULTS["llm-chat"]), 3)
   const template = getGenerateTextTemplate(nodeData.templateId ?? "")
 
-  // Group results by runId
-  const runGroups: Map<string, typeof results> = new Map()
-  for (const r of results) {
-    const rid = ((r as Record<string, unknown>).runId as string) ?? 'manual'
-    if (!runGroups.has(rid)) runGroups.set(rid, [])
-    runGroups.get(rid)!.push(r)
-  }
-  const runEntries = Array.from(runGroups.entries()) // oldest first
-  const latestRunId = runEntries[runEntries.length - 1]?.[0] ?? null
-  const effectiveRunId = activeRunId ?? latestRunId
-  const activeRunResults = effectiveRunId ? (runGroups.get(effectiveRunId) ?? results) : results
+  // Per-result model + template — what actually produced the active result
+  // (recorded at generation time; older results may lack these fields).
+  const activeModelLabel = llmModelLabel(activeResult?.model)
+  const activeTemplateId = activeResult?.templateId
+  const activeTemplateLabel =
+    activeTemplateId && activeTemplateId !== "custom"
+      ? [...GENERATE_TEXT_TEMPLATES, ...userTextTemplates].find((t) => t.id === activeTemplateId)?.label ?? activeTemplateId
+      : undefined
 
   function handleDeleteResult(indexToDelete: number) {
     updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedText", "text"))
@@ -72,10 +121,30 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
         selected={selected}
         isRunning={status === "running"}
         minWidth={260}
-        minHeight={180}
+        minHeight={200}
         hideHeader
+        enableZoomHandle
+        keepTopToolbarVisible={toolbarDropdownOpen}
         topToolbarContent={
-          <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+          <LlmChatQuickToolbar
+            nodeId={id}
+            data={nodeData}
+            credits={credits}
+            isRunning={status === "running"}
+            onAnyOpenChange={setToolbarDropdownOpen}
+          />
+        }
+        bottomToolbarContent={
+          showThumbnails && results.length > 1 ? (
+            <ResultsThumbnailsPanel
+              results={results}
+              activeIndex={activeIndex}
+              mediaType="text"
+              nodeSelected={!!selected || isSettingsOpen}
+              onSelect={(i) => updateNodeData(id, { activeResultIndex: i, generatedText: results[i].text })}
+              onDelete={(i) => setDeleteConfirm(i)}
+            />
+          ) : undefined
         }
         handles={[
           { id: "prompt",        type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
@@ -85,10 +154,12 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
           { id: "items",         type: "source", position: Position.Right, customStyle: { top: '56px',              right: '-29px' }, external: true },
         ]}
       >
-        <div className="flex flex-col gap-1 h-full">
-            <>
-          {/* Template badge */}
-          {template && template.id !== "custom" && (
+        <div className="flex flex-col gap-1 h-full min-h-0">
+          {/* Configured template badge — shown only before any result exists.
+              Once a result is displayed, the per-result model/template strip
+              inside the result card takes over (the result records what
+              actually produced it, which may differ from the current config). */}
+          {!activeText && template && template.id !== "custom" && (
             <div className="flex items-center gap-1">
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-500 font-medium">
                 {template.label}
@@ -103,57 +174,151 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
           )}
 
           {activeText && (
-            <div className="relative group flex-1 flex flex-col">
-              <div className="w-full rounded-md bg-muted/20 p-3 flex-1 flex flex-col">
-                <div className="overflow-y-auto flex-1 pr-1" style={{ maxHeight: '200px' }}>
-                  <p className="text-sm text-foreground/85 whitespace-pre-wrap leading-relaxed">
-                    {activeText}
-                  </p>
+            <div className="relative group flex-1 flex flex-col min-h-0">
+              <div className="w-full rounded-md bg-muted/20 flex-1 flex flex-col min-h-0 overflow-hidden">
+                {/* Action strip: copy / download / log on the LEFT; the
+                    "show outputs" toggle and the delete (X) on the RIGHT. */}
+                <div className="flex items-center gap-0.5 px-1 pt-1 pb-0.5 shrink-0">
+                  <button
+                    type="button"
+                    aria-label={
+                      outputView === "rendered"
+                        ? "Show raw text"
+                        : isJsonOutput
+                          ? "View as JSON"
+                          : "View as Markdown"
+                    }
+                    title={
+                      outputView === "rendered"
+                        ? "Show raw text"
+                        : isJsonOutput
+                          ? "View as JSON"
+                          : "View as Markdown"
+                    }
+                    aria-pressed={outputView === "rendered"}
+                    className={outputView === "rendered" ? SHOW_OUTPUTS_BTN_ACTIVE : STRIP_BTN}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setOutputView((v) => (v === "rendered" ? "raw" : "rendered"))
+                    }}
+                  >
+                    {isJsonOutput ? <Braces className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Copy text"
+                    title="Copy text"
+                    className={STRIP_BTN}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      copyToClipboard(activeText ?? "", "Text copied")
+                    }}
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Download"
+                    title="Download"
+                    className={STRIP_BTN}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      downloadTextFile(activeText ?? "", `${nodeData.label || "llm-chat"}.txt`)
+                    }}
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                  </button>
+                  {results.length > 0 && (
+                    <button
+                      type="button"
+                      aria-label="Open log"
+                      title="Execution log"
+                      className={STRIP_BTN}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setShowLog(true)
+                      }}
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  <div className="flex-1 min-w-0" />
+                  {results.length > 1 && (
+                    <button
+                      type="button"
+                      aria-label={showThumbnails ? "Hide outputs" : "Show outputs"}
+                      title={showThumbnails ? "Hide outputs" : "Show outputs"}
+                      aria-pressed={showThumbnails}
+                      className={showThumbnails ? SHOW_OUTPUTS_BTN_ACTIVE : SHOW_OUTPUTS_BTN}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setShowThumbnails((v) => !v)
+                      }}
+                    >
+                      <LayoutGrid className="w-3.5 h-3.5" />
+                      <span className="text-[10px] font-semibold tabular-nums">{results.length}</span>
+                    </button>
+                  )}
+                  {results.length > 0 && (
+                    <button
+                      type="button"
+                      aria-label="Remove"
+                      title="Delete this result"
+                      className={STRIP_DELETE_BTN}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setDeleteConfirm(activeIndex)
+                      }}
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
+
+                {/* Per-result model + template — records what produced this
+                    specific result (model id resolved to display name). */}
+                {(activeModelLabel || activeTemplateLabel) && (
+                  <div className="flex items-center gap-1 flex-wrap px-2 pb-1 shrink-0">
+                    {activeModelLabel && (
+                      <span className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded bg-black/5 dark:bg-white/10 text-muted-foreground font-medium">
+                        <Sparkles className="w-2.5 h-2.5" />
+                        {activeModelLabel}
+                      </span>
+                    )}
+                    {activeTemplateLabel && (
+                      <span className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-500 font-medium">
+                        <LayoutTemplate className="w-2.5 h-2.5" />
+                        {activeTemplateLabel}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* Scrollable output — Radix ScrollArea, matching the Text
+                    Prompt node's scrollbar look + behavior (height-driven, not
+                    a fixed maxHeight, so the box tracks the node size). The
+                    rendered view (Markdown / colored JSON) is lazy-loaded. */}
+                <ScrollArea className="flex-1 min-h-0 w-full">
+                  {outputView === "rendered" ? (
+                    <Suspense
+                      fallback={
+                        <p className="text-xs text-muted-foreground px-3 pb-3 pt-0.5">Rendering…</p>
+                      }
+                    >
+                      <LlmOutputView text={activeText} json={jsonValue} />
+                    </Suspense>
+                  ) : (
+                    <p className="text-sm text-foreground/85 whitespace-pre-wrap leading-relaxed px-3 pb-3 pt-0.5">
+                      {activeText}
+                    </p>
+                  )}
+                </ScrollArea>
               </div>
               {status === "running" && (
-                <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded">
+                <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
                   <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
                 </div>
               )}
-              <div className="absolute -top-1 -right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button
-                  type="button"
-                  aria-label="Copy text"
-                  className="w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    copyToClipboard(activeText ?? "", "Text copied")
-                  }}
-                >
-                  <Copy className="w-3 h-3" />
-                </button>
-                <button
-                  type="button"
-                  aria-label="Download"
-                  className="w-5 h-5 flex items-center justify-center bg-black/50 hover:bg-black/70 text-white rounded"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    downloadTextFile(activeText ?? "", `${nodeData.label || "llm-chat"}.txt`)
-                  }}
-                >
-                  <Download className="w-3 h-3" />
-                </button>
-                {results.length > 0 && (
-                  <button
-                    type="button"
-                    aria-label="Remove"
-                    className="w-5 h-5 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setDeleteConfirm(activeIndex)
-                    }}
-                    title="Delete this result"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                )}
-              </div>
             </div>
           )}
 
@@ -176,114 +341,13 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
               <span className="text-xs">No output yet</span>
             </div>
           )}
-
-          {results.length > 0 && (
-            <div className="flex flex-col gap-1">
-              {/* Run selector */}
-              {showRuns && runEntries.length > 1 && (
-                <div className="flex gap-1 overflow-x-auto pb-0.5">
-                  {runEntries.map(([rid, runResults], idx) => (
-                    <button
-                      key={rid}
-                      type="button"
-                      onPointerDown={(e) => e.stopPropagation()}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setActiveRunId(rid)
-                        const firstResult = runResults[0]
-                        const globalIdx = results.indexOf(firstResult)
-                        if (globalIdx >= 0) updateNodeData(id, { activeResultIndex: globalIdx, generatedText: firstResult.text })
-                      }}
-                      className={`shrink-0 text-[9px] px-2 py-1 rounded-md transition-colors ${
-                        rid === effectiveRunId
-                          ? "bg-primary/25 text-primary ring-1 ring-primary/50"
-                          : "bg-muted/50 text-muted-foreground hover:bg-muted"
-                      }`}
-                    >
-                      Run {idx + 1} · {runResults.length}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {/* Iteration thumbnails for active run */}
-              <div className="flex gap-1 overflow-x-auto">
-                {activeRunResults.slice(0, 5).map((r) => {
-                  const globalIdx = results.indexOf(r)
-                  return (
-                    <div key={`result-${globalIdx}`} className="relative group/thumb shrink-0">
-                      <button
-                        type="button"
-                        aria-label={`Result ${globalIdx + 1}`}
-                        className={`w-8 h-8 flex items-center justify-center rounded cursor-pointer transition-opacity ${
-                          globalIdx === activeIndex
-                            ? "opacity-100 ring-2 ring-primary bg-primary/20"
-                            : "opacity-50 hover:opacity-80 bg-muted"
-                        }`}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          updateNodeData(id, { activeResultIndex: globalIdx, generatedText: r.text })
-                        }}
-                      >
-                        <FileText className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        aria-label="Remove"
-                        className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setDeleteConfirm(globalIdx)
-                        }}
-                      >
-                        <X className="w-2.5 h-2.5" />
-                      </button>
-                    </div>
-                  )
-                })}
-                {activeRunResults.length > 5 && (
-                  <span className="text-[9px] text-muted-foreground/40 self-center pl-1">+{activeRunResults.length - 5}</span>
-                )}
-              </div>
-            </div>
-          )}
-
-          {(activeText || results.length > 0) && (
-            <div className="flex items-center justify-between gap-1 px-1 pt-1">
-              <span className="text-[10px] text-muted-foreground/50">{nodeData.llmModel || "default"}</span>
-              <div className="flex items-center gap-1">
-                {runEntries.length > 1 && (
-                  <button
-                    type="button"
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onClick={(e) => { e.stopPropagation(); setShowRuns(v => !v) }}
-                    className={`text-[9px] px-1.5 py-0.5 rounded transition-colors ${showRuns ? "bg-muted text-foreground" : "text-muted-foreground/50 hover:text-muted-foreground"}`}
-                    title="Toggle run selector"
-                  >
-                    {runEntries.length} runs
-                  </button>
-                )}
-                {results.length > 0 && (
-                  <button
-                    type="button"
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onClick={(e) => { e.stopPropagation(); setShowLog(true) }}
-                    className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md bg-primary/15 hover:bg-primary/25 text-primary transition-colors"
-                  >
-                    <FileText className="w-3 h-3" />
-                    <span>Log · {results.length}</span>
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-            </>
         </div>
       </BaseNode>
-      <HandleWithPopover nodeId={id} nodeType="llm-chat" handleId="prompt"        type="target" position={Position.Left}  label="Prompt"        color="#ff0073" icon={<Type />}      side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_PROMPT} />
-      <HandleWithPopover nodeId={id} nodeType="llm-chat" handleId="references"    type="target" position={Position.Left}  label="References"    color="#22D3EE" icon={<ImageIcon />} side="left"  top="calc(100% - 56px)" orderMatters accepts={ACCEPTS_REFERENCES} />
-      <HandleWithPopover nodeId={id} nodeType="llm-chat" handleId="system-prompt" type="target" position={Position.Left}  label="System prompt" color="#22D3EE" icon={<BookOpen />}  side="left"  top="calc(100% - 88px)" accepts={ACCEPTS_SYSTEM_PROMPT} />
-      <HandleWithPopover nodeId={id} nodeType="llm-chat" handleId="text"          type="source" position={Position.Right} label="Text"          color="#22D3EE" icon={<Type />}      side="right" top="24px" />
-      <HandleWithPopover nodeId={id} nodeType="llm-chat" handleId="items"         type="source" position={Position.Right} label="Items"         color="#A78BFA" icon={<List />}      side="right" top="56px" />
+      <HandleWithPopover nodeId={id} nodeType="llm-chat" handleId="prompt"        type="target" position={Position.Left}  label="Prompt"        color={TEXT_HANDLE_COLOR} icon={<Type />}      side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_PROMPT} />
+      <HandleWithPopover nodeId={id} nodeType="llm-chat" handleId="references"    type="target" position={Position.Left}  label="References"    color={HANDLE_COLORS.reference} icon={<ImageIcon />} side="left"  top="calc(100% - 56px)" orderMatters accepts={ACCEPTS_REFERENCES} />
+      <HandleWithPopover nodeId={id} nodeType="llm-chat" handleId="system-prompt" type="target" position={Position.Left}  label="Instructions" color={TEXT_HANDLE_COLOR} icon={<BookOpen />}  side="left"  top="calc(100% - 88px)" accepts={ACCEPTS_SYSTEM_PROMPT} />
+      <HandleWithPopover nodeId={id} nodeType="llm-chat" handleId="text"          type="source" position={Position.Right} label="Text"          color={TEXT_HANDLE_COLOR} icon={<Type />}      side="right" top="24px" />
+      <HandleWithPopover nodeId={id} nodeType="llm-chat" handleId="items"         type="source" position={Position.Right} label="Items"         color={HANDLE_COLORS.list} icon={<List />}      side="right" top="56px" />
       {showLog && createPortal(
         <div
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm"
@@ -325,7 +389,16 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
                   groups.get(rid)!.push(r)
                 }
                 const groupEntries = Array.from(groups.entries())
-                return groupEntries.map(([rid, groupResults], groupIdx) => (
+                return groupEntries.map(([rid, groupResults], groupIdx) => {
+                  // Model + template are recorded per result; within a run they
+                  // are consistent, so read them off the first iteration.
+                  const runModelLabel = llmModelLabel(groupResults[0]?.model)
+                  const runTemplateId = groupResults[0]?.templateId
+                  const runTemplateLabel =
+                    runTemplateId && runTemplateId !== "custom"
+                      ? [...GENERATE_TEXT_TEMPLATES, ...userTextTemplates].find((t) => t.id === runTemplateId)?.label ?? runTemplateId
+                      : undefined
+                  return (
                   <div key={rid} className="rounded-xl border border-white/8 overflow-hidden">
                     {/* Run header */}
                     <div className="flex items-center gap-2 px-4 py-2.5 bg-white/5">
@@ -334,6 +407,18 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
                       </span>
                       <span className="text-[10px] text-muted-foreground/50">·</span>
                       <span className="text-[10px] text-muted-foreground/50">{groupResults.length} iteration{groupResults.length !== 1 ? 's' : ''}</span>
+                      {runModelLabel && (
+                        <span className="ml-auto inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-muted-foreground font-medium">
+                          <Sparkles className="w-2.5 h-2.5" />
+                          {runModelLabel}
+                        </span>
+                      )}
+                      {runTemplateLabel && (
+                        <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-400 font-medium">
+                          <LayoutTemplate className="w-2.5 h-2.5" />
+                          {runTemplateLabel}
+                        </span>
+                      )}
                     </div>
                     {/* Iterations */}
                     <div className="divide-y divide-white/5">
@@ -365,7 +450,7 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
                               <div className="px-4 pb-4 grid grid-cols-3 gap-4">
                                 <div className="rounded-lg p-3 overflow-y-auto" style={{ background: '#818cf810', maxHeight: '300px' }}>
                                   <div className="flex items-center justify-between mb-2">
-                                    <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: '#818cf8' }}>System Prompt</p>
+                                    <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: '#818cf8' }}>Instructions</p>
                                     {sys && <button type="button" onClick={() => copyToClipboard(sys, "Copied")} className="text-[9px] text-muted-foreground/50 hover:text-muted-foreground transition-colors flex items-center gap-0.5"><Copy className="w-2.5 h-2.5" />Copy</button>}
                                   </div>
                                   <p className="text-[11px] whitespace-pre-wrap leading-relaxed" style={{ color: '#a5b4fc' }}>{sys || '—'}</p>
@@ -391,7 +476,8 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
                       })}
                     </div>
                   </div>
-                ))
+                  )
+                })
               })()}
             </div>
           </div>

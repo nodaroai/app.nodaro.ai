@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
-import { Braces, Copy, Download, Expand, Film, GripVertical, Image, Info, Link, List, Loader2, Music, Plus, Repeat, Table2, Type, Upload, X } from "lucide-react"
+import { Braces, Copy, Download, Expand, Film, GripVertical, Image, Info, Link, List, Loader2, Music, Plus, Table2, Type, Upload, X } from "lucide-react"
 import {
   DndContext,
   closestCenter,
@@ -18,10 +18,11 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
+import { upstreamSubgraphFingerprint } from "@/lib/node-fingerprint"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { LOOP_COLUMN_TYPE_META, LOOP_COL_ADD_HANDLE, TEXT_CELL_CONTROLS_MIN_LINES, TEXT_CELL_DEFAULT_MAX_LINES, TEXT_FONT_SIZE_CLASS, TEXT_FONT_SIZE_DEFAULT, loopColBaseHandle, loopColInputHandle, resolveViewMode, type LoopNodeData, type LoopColumn, type WorkflowNode } from "@/types/nodes"
@@ -140,16 +141,17 @@ function buildHandles(columns: ReadonlyArray<LoopColumn>) {
     external?: boolean
   }
 
-  // Quick-add target handle — always present at top. Stays as a HandleIcon
-  // decoration (no popover): its only role is "drop here to auto-create a
-  // new column", which is owned by the store's connection handler. A click
-  // popover would be meaningless when there's no existing wire to manage.
+  // Quick-add target handle — always present at the bottom-left. Stays as a
+  // HandleIcon decoration (no popover): its only role is "drop here to
+  // auto-create a new column", which is owned by the store's connection
+  // handler. A click popover would be meaningless when there's no existing
+  // wire to manage. Sits below the per-column input pips (capped at 80%).
   const quickAdd: HandleDef = {
     id: LOOP_COL_ADD_HANDLE,
     type: "target" as const,
     position: Position.Left,
-    top: "15%",
-    customStyle: { top: '15%', left: '-29px' },
+    top: "calc(100% - 20px)",
+    customStyle: { top: "calc(100% - 20px)", left: "-29px" },
     hideHandle: true,
   }
 
@@ -233,29 +235,36 @@ function SortableNodeRow({
 
 function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
   const nodeData = data as LoopNodeData
-  const isList = type === "list"
   const runFromHere = useWorkflowStore((s) => s.runFromHere)
-  const edges = useWorkflowStore((s) => s.edges)
-  const nodes = useWorkflowStore((s) => s.nodes)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
+
+  // `connectedRows` resolves values through this node's column `in` edges,
+  // which can recurse up a loop/list chain (resolveLoopColumnValues), and
+  // `hasUpstreamInput` checks incoming target-handle edges. Subscribing to
+  // whole `s.nodes` / `s.edges` re-rendered this (heavy) node on every
+  // unrelated mutation. Instead derive a PRIMITIVE fingerprint over the
+  // transitive upstream subgraph (ancestor nodes' data + edges among them) so
+  // any change feeding the resolution invalidates the memos without missing a
+  // deep-chain field; the heavy resolution reads live arrays from getState().
+  const upstreamFingerprint = useWorkflowStore((s) => {
+    let seedPrefix = ""
+    const seedSources: string[] = []
+    // Seed: every edge landing on this node (any handle, incl. legacy "in").
+    for (const e of s.edges) {
+      if (e.target !== id) continue
+      seedPrefix += `in:${e.id}\x01${e.source}\x01${e.sourceHandle ?? ""}\x01${e.targetHandle ?? ""}\x01${JSON.stringify(e.data ?? {})}\x04`
+      seedSources.push(e.source)
+    }
+    if (seedSources.length === 0) return ""
+    return upstreamSubgraphFingerprint(s.nodes, s.edges, id, seedSources, seedPrefix)
+  })
   const updateNodeInternals = useUpdateNodeInternals()
   const status = (nodeData as Record<string, unknown>).executionStatus as string | undefined ?? "idle"
 
-  // Migrate legacy list data (items string → columns + rows)
-  useEffect(() => {
-    if (!isList) return
-    const d = data as Record<string, unknown>
-    if (typeof d.items === "string" && !d.columns) {
-      const items = (d.items as string).split("\n").filter((l: string) => l.trim() !== "").map((l: string) => l.trim())
-      const colId = crypto.randomUUID()
-      const col: LoopColumn = { id: colId, name: "Items", handleId: `col_${colId}`, type: "text" }
-      updateNodeData(id, { columns: [col], rows: items.map((item) => [item]), items: undefined })
-    } else if (!d.columns) {
-      const colId = crypto.randomUUID()
-      const col: LoopColumn = { id: colId, name: "Items", handleId: `col_${colId}`, type: "text" }
-      updateNodeData(id, { columns: [col], rows: [[""]] })
-    }
-  }, [isList, id]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Legacy list/loop data normalization (items string → columns + rows, and
+  // default-column seeding) now happens once at workflow load in
+  // `migrateListLoopNodes` (list-loop-migration.ts); freshly-created `list`
+  // nodes get their default column from `NODE_DEFINITIONS.list.defaultData`.
   const showData = !!(nodeData as Record<string, unknown>).showData
   const setShowData = useCallback((v: boolean) => updateNodeData(id, { showData: v }), [id, updateNodeData])
 
@@ -283,14 +292,17 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
     [handles],
   )
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const hasUpstreamInput = useMemo(
-    () => edges.some((e) => e.target === id && e.targetHandle && targetHandleIds.has(e.targetHandle)),
-    [edges, id, targetHandleIds],
+    () => useWorkflowStore.getState().edges.some((e) => e.target === id && e.targetHandle && targetHandleIds.has(e.targetHandle)),
+    [id, targetHandleIds, upstreamFingerprint],
   )
 
   /** Resolve rows from connected upstream nodes — respects edge outputMode and selector. */
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const connectedRows = useMemo<string[][] | null>(() => {
     if (columns.length === 0) return null
+    const { nodes, edges } = useWorkflowStore.getState()
 
     const colValues: (string[] | null)[] = columns.map((col) => {
       const colInEdges = edges.filter(
@@ -333,7 +345,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
       )
     }
     return result
-  }, [id, columns, edges, nodes])
+  }, [id, columns, upstreamFingerprint])
 
   useEffect(() => {
     updateNodeInternals(id)
@@ -861,13 +873,13 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
       />
       <EditableNodeLabel
         label={nodeData.label}
-        icon={isList ? <List className="w-3.5 h-3.5" /> : <Repeat className="w-3.5 h-3.5" />}
+        icon={<List className="w-3.5 h-3.5" />}
         onSave={(newLabel) => updateNodeData(id, { label: newLabel })}
       />
       <BaseNode
         id={id}
         label={nodeData.label}
-        icon={isList ? <List className="h-4 w-4" /> : <Repeat className="h-4 w-4" />}
+        icon={<List className="h-4 w-4" />}
         category="input"
         credits={0}
         selected={selected}
@@ -1113,10 +1125,10 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
           )}
         </div>
       </BaseNode>
-      {/* Quick-add target icon (top-left) — stays decorative; drop-only
-          handle that auto-creates a new column on connection (see
-          use-workflow-store.ts col_add branch). No popover. */}
-      <HandleIcon icon={<Plus />} color="cyan" side="left" top="15%" />
+      {/* Quick-add target — drop-only handle that auto-creates a typed column
+          (see use-workflow-store.ts col_add branch). Bottom-left, matched pip
+          size, no popover (it manages no existing wire). */}
+      <HandleIcon icon={<Plus />} color="cyan" side="left" top="calc(100% - 20px)" />
       {/* Per-column target pips (left side) — typed handle with popover. */}
       {targetHandles.map((h) => {
         const handleBase = loopColBaseHandle(h.id)
@@ -1129,7 +1141,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
           <HandleWithPopover
             key={h.id}
             nodeId={id}
-            nodeType={type ?? "loop"}
+            nodeType={type ?? "list"}
             handleId={h.id}
             type="target"
             position={Position.Left}
@@ -1152,7 +1164,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
           <HandleWithPopover
             key={h.id}
             nodeId={id}
-            nodeType={type ?? "loop"}
+            nodeType={type ?? "list"}
             handleId={h.id}
             type="source"
             position={Position.Right}

@@ -131,7 +131,7 @@ describe("getEffectivelySkippedIds", () => {
 
 describe("isSourceNode", () => {
   it("returns true for all source node types", () => {
-    for (const t of ["text-prompt", "upload-image", "upload-video", "upload-audio", "youtube-video", "reference-audio", "list", "loop", "webhook-trigger", "schedule-trigger", "sub-workflow-input"]) {
+    for (const t of ["text-prompt", "upload-image", "upload-video", "upload-audio", "youtube-video", "reference-audio", "list", "webhook-trigger", "schedule-trigger", "sub-workflow-input"]) {
       expect(isSourceNode(t)).toBe(true)
     }
   })

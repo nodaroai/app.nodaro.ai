@@ -425,3 +425,33 @@ describe("KieVideoProvider — gemini-omni-video imageToVideo", () => {
     expect(capturedInput.resolution).toBe("4k")
   })
 })
+
+// Gemini Omni Video — per-tier wholesale cost (the under-charge fix: the provider must
+// report the ACTUAL tier cost so the credit-commit charges that tier, not the flat cheapest).
+describe("KieVideoProvider — gemini-omni-video per-tier cost", () => {
+  it("T2V 720p/1080p reports per-duration cost (not the flat cheapest)", async () => {
+    const r8 = await provider.textToVideo("p", "gemini-omni-video", 8, "16:9", { resolution: "720p" })
+    expect(r8.cost).toBe(0.75) // 8s 720p
+    const r10 = await provider.textToVideo("p", "gemini-omni-video", 10, "16:9", { resolution: "1080p" })
+    expect(r10.cost).toBe(0.9) // 10s 1080p band
+  })
+
+  it("4K reports the higher per-duration cost", async () => {
+    const r = await provider.imageToVideo("https://x/s.png", "p", "gemini-omni-video", 4, undefined, { resolution: "4k" })
+    expect(r.cost).toBe(1.05) // 4s 4K
+    const r10 = await provider.imageToVideo("https://x/s.png", "p", "gemini-omni-video", 10, undefined, { resolution: "4k" })
+    expect(r10.cost).toBe(1.5) // 10s 4K
+  })
+
+  it("V2V reports the flat per-generation cost by resolution band", async () => {
+    const sd = await provider.imageToVideo("https://x/s.png", "p", "gemini-omni-video", 8, undefined, { resolution: "1080p", referenceVideoUrls: ["https://x/v.mp4"] })
+    expect(sd.cost).toBe(1.2) // V2V 720p/1080p flat
+    const uhd = await provider.imageToVideo("https://x/s.png", "p", "gemini-omni-video", 8, undefined, { resolution: "4k", referenceVideoUrls: ["https://x/v.mp4"] })
+    expect(uhd.cost).toBe(1.8) // V2V 4K flat
+  })
+
+  it("off-tier duration snaps before cost lookup (5 → 4s band)", async () => {
+    const r = await provider.imageToVideo("https://x/s.png", "p", "gemini-omni-video", 5, undefined, { resolution: "720p" })
+    expect(r.cost).toBe(0.45) // snapped to 4s
+  })
+})

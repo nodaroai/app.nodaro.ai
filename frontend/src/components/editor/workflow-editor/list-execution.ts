@@ -45,6 +45,10 @@ export async function executeNodeForList(
     __listResults: [],
     __listInputs: [...items],
     __currentRunId: runId,
+    // Signals the abandon-guard that N iterations share this node's single
+    // `currentJobId` slot, so the single-job match is meaningless — never
+    // abandon mid-fan-out. Cleared in the finally below (even on throw).
+    __listRunning: true,
   });
 
   let completedCount = 0;
@@ -139,6 +143,10 @@ export async function executeNodeForList(
       __listInputs: [...items],
       generatedResults: [...batchResults, ...preBatchHistory],
       activeResultIndex: 0,
+      // Fan-out window closes atomically with the terminal status write, so the
+      // abandon-guard resumes normal single-job matching the moment the batch
+      // settles. (The finally below is a defensive backstop for the throw path.)
+      __listRunning: false,
       errorMessage:
         failedCount > 0
           ? `${completedCount}/${items.length} succeeded, ${failedCount} failed`
@@ -146,6 +154,18 @@ export async function executeNodeForList(
     });
   } finally {
     setSuppressToasts(false);
+    // Backstop: if the try threw before the terminal write above (e.g. an
+    // unexpected error mid-assembly), the fan-out flag could still be `true`.
+    // Clear it only in that case so a normal success/fail run doesn't emit a
+    // redundant trailing write (which would also displace the terminal-status
+    // write as the "last" call other code/tests rely on).
+    const stillRunning = (
+      useWorkflowStore.getState().nodes.find((n) => n.id === node.id)
+        ?.data as Record<string, unknown> | undefined
+    )?.__listRunning;
+    if (stillRunning) {
+      useWorkflowStore.getState().updateNodeData(node.id, { __listRunning: false });
+    }
   }
 }
 
@@ -231,7 +251,7 @@ export function expandLoopResults(): void {
   if (chains.length === 0) return;
 
   // List source types should NOT be cloned or removed
-  const LIST_SOURCE_TYPES = new Set(["loop", "split-text", "list"]);
+  const LIST_SOURCE_TYPES = new Set(["split-text", "list"]);
   const cloneableNodeIds = new Set(
     chains
       .flat()

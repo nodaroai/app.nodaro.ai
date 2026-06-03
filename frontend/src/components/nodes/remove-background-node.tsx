@@ -3,7 +3,7 @@
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Eraser, Loader2, AlertCircle, X, Settings, LayoutGrid, Expand, Download, ImageIcon, Link, Pencil } from "lucide-react"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { isValidRemoveBackgroundConnection } from "@/lib/image-producer-handles"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import { NodeJobProgress } from "./node-job-progress"
@@ -190,8 +190,8 @@ function RemoveBackgroundNodeComponent({ id, data, selected }: NodeProps) {
         )}
       </div>
     </BaseNode>
-    <HandleWithPopover nodeId={id} nodeType="remove-background" handleId="image" type="target" position={Position.Left}  label="Image" color="#22D3EE" icon={<ImageIcon />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_IMAGE} />
-    <HandleWithPopover nodeId={id} nodeType="remove-background" handleId="image" type="source" position={Position.Right} label="Image" color="#22D3EE" icon={<ImageIcon />} side="right" top="24px" />
+    <HandleWithPopover nodeId={id} nodeType="remove-background" handleId="image" type="target" position={Position.Left}  label="Image" color={HANDLE_COLORS.image} icon={<ImageIcon />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_IMAGE} />
+    <HandleWithPopover nodeId={id} nodeType="remove-background" handleId="image" type="source" position={Position.Right} label="Image" color={HANDLE_COLORS.image} icon={<ImageIcon />} side="right" top="24px" />
     {activeUrl && (
       <MediaPreviewModal
         isOpen={previewOpen}

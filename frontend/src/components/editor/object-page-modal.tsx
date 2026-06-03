@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { generateObjectAsset, getJobStatus, deleteObject, generateImage, saveObject } from "@/lib/api"
+import { generateObjectAsset, getJobStatusLean, deleteObject, generateImage, saveObject } from "@/lib/api"
 import { useAuth } from "@/hooks/use-auth"
 import { createClient } from "@/lib/supabase"
 import { cn } from "@/lib/utils"
@@ -303,7 +303,7 @@ no shadows, professional product photography`
           const imageUrl = await new Promise<string>((resolve, reject) => {
             const interval = setInterval(async () => {
               try {
-                const job = await getJobStatus(jobId)
+                const job = await getJobStatusLean(jobId)
                 if (job.status === "completed") {
                   clearInterval(interval)
                   resolve(job.output_data?.imageUrl ?? "")
@@ -447,7 +447,7 @@ no shadows, professional product photography`
             const resultUrl = await new Promise<string>((resolve, reject) => {
               const interval = setInterval(async () => {
                 try {
-                  const job = await getJobStatus(jobId)
+                  const job = await getJobStatusLean(jobId)
                   if (job.status === "completed") {
                     clearInterval(interval)
                     resolve(job.output_data?.imageUrl ?? "")
@@ -557,7 +557,7 @@ no shadows, professional product photography`
       const imageUrl = await new Promise<string>((resolve, reject) => {
         const interval = setInterval(async () => {
           try {
-            const job = await getJobStatus(jobId)
+            const job = await getJobStatusLean(jobId)
             if (job.status === "completed") {
               clearInterval(interval)
               resolve(job.output_data?.imageUrl ?? "")

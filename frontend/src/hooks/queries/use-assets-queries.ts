@@ -3,6 +3,7 @@ import {
   useInfiniteQuery,
   useMutation,
   useQueryClient,
+  type InfiniteData,
 } from "@tanstack/react-query"
 import {
   getCharacters,
@@ -12,8 +13,12 @@ import {
   getLibraryAssets,
   deleteLibraryAsset,
   removeLibraryAsset,
+  type LibraryAsset,
 } from "@/lib/api"
 import { queryKeys } from "@/lib/query-keys"
+import { removeInfiniteItems } from "@/lib/optimistic-cache"
+
+type LibraryPage = { data: LibraryAsset[]; nextCursor: string | null; totalCount?: number }
 
 // --- Characters ---
 export function useCharacters(projectId?: string, userId?: string) {
@@ -134,7 +139,28 @@ export function useDeleteLibraryAssetMutation() {
   return useMutation({
     mutationFn: ({ assetId, userId }: { assetId: string; userId: string }) =>
       deleteLibraryAsset(assetId, userId),
-    onSuccess: (_data, { userId }) => {
+    // Optimistically drop the asset from every cached library-list variant.
+    // Items live under `.data` on each infinite-query page.
+    onMutate: async ({ assetId }) => {
+      await qc.cancelQueries({ queryKey: queryKeys.library.all })
+      const previous = qc.getQueriesData<InfiniteData<LibraryPage>>({
+        queryKey: queryKeys.library.all,
+      })
+      qc.setQueriesData<InfiniteData<LibraryPage>>(
+        { queryKey: queryKeys.library.all },
+        (data) =>
+          removeInfiniteItems<"data", LibraryAsset, LibraryPage>(
+            data,
+            "data",
+            (item) => item.id === assetId,
+          ),
+      )
+      return { previous }
+    },
+    onError: (_err, _vars, context) => {
+      context?.previous?.forEach(([key, data]) => qc.setQueryData(key, data))
+    },
+    onSettled: (_data, _err, { userId }) => {
       qc.invalidateQueries({ queryKey: queryKeys.library.all })
       qc.invalidateQueries({ queryKey: queryKeys.billing.storage(userId) })
     },
@@ -146,7 +172,27 @@ export function useRemoveLibraryAssetMutation() {
   return useMutation({
     mutationFn: ({ assetId, userId }: { assetId: string; userId: string }) =>
       removeLibraryAsset(assetId, userId),
-    onSuccess: () => {
+    // Optimistically drop the asset from every cached library-list variant.
+    onMutate: async ({ assetId }) => {
+      await qc.cancelQueries({ queryKey: queryKeys.library.all })
+      const previous = qc.getQueriesData<InfiniteData<LibraryPage>>({
+        queryKey: queryKeys.library.all,
+      })
+      qc.setQueriesData<InfiniteData<LibraryPage>>(
+        { queryKey: queryKeys.library.all },
+        (data) =>
+          removeInfiniteItems<"data", LibraryAsset, LibraryPage>(
+            data,
+            "data",
+            (item) => item.id === assetId,
+          ),
+      )
+      return { previous }
+    },
+    onError: (_err, _vars, context) => {
+      context?.previous?.forEach(([key, data]) => qc.setQueryData(key, data))
+    },
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: queryKeys.library.all })
     },
   })

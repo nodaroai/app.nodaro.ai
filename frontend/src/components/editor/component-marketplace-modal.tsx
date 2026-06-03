@@ -626,6 +626,8 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
               )
             })()
           ) : (
+            // Intentionally NOT row-virtualized (Batch E): variable-height
+            // cards + only 20/page make windowing low-payoff here.
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {currentItems.map((card) => (
                 <AppMarketplaceCard

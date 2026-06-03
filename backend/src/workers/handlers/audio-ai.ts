@@ -1,5 +1,7 @@
+import { dirname } from "node:path"
+import { promises as fs } from "node:fs"
 import { supabase } from "../../lib/supabase.js"
-import { uploadToR2, uploadBufferToR2 } from "../../lib/storage.js"
+import { uploadToR2, uploadBufferToR2, uploadFileToR2 } from "../../lib/storage.js"
 import { textToSpeech as routedTextToSpeech } from "../../providers/index.js"
 import { directElevenLabsTTS, stripAudioTags } from "../../providers/elevenlabs/direct-tts.js"
 import { generateMusic, type MusicProvider } from "../../providers/audio/generate-music.js"
@@ -7,7 +9,10 @@ import { textToAudio, type AudioProvider } from "../../providers/audio/text-to-a
 import { KieAudioProvider, isKieAcceptedVoice } from "../../providers/kie/audio.js"
 import { transcribe, type TranscribeProvider } from "../../providers/audio/transcribe.js"
 import { extractYouTubeAudio } from "../../providers/audio/youtube-extractor.js"
-import { voiceChangerFromUrl } from "../../providers/elevenlabs/voice-changer.js"
+import { voiceChangerFromUrl, directVoiceChanger } from "../../providers/elevenlabs/voice-changer.js"
+import { extractAudioTrack } from "../../providers/video/extract-audio-track.js"
+import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
+import { cleanupWorkDir } from "../../providers/video/ffmpeg-utils.js"
 import { startDubbing, waitForDubbing, downloadDubbedAudio } from "../../providers/elevenlabs/dubbing.js"
 import { remixVoice } from "../../providers/elevenlabs/voice-remix.js"
 import { designVoice } from "../../providers/elevenlabs/voice-design.js"
@@ -19,6 +24,8 @@ import {
   buildProviderMeta,
   setJobProgress,
   withProgressRamp,
+  generateAndUploadThumbnail,
+  createAssetFromJob,
   type HandlerFn,
 } from "../shared.js"
 import { finalizeJobWithMedia } from "../../lib/job-finalize.js"
@@ -270,16 +277,71 @@ const handleTextToDialogue: HandlerFn = async function handleTextToDialogue(job,
 }
 
 const handleVoiceChanger: HandlerFn = async function handleVoiceChanger(job, ctx) {
-  const { audioUrl, voiceId, stability, similarityBoost, removeBackgroundNoise } = job.data as {
-    jobId: string; audioUrl: string; voiceId: string
+  const { audioUrl, videoUrl, voiceId, stability, similarityBoost, removeBackgroundNoise } = job.data as {
+    jobId: string; audioUrl?: string; videoUrl?: string; voiceId: string
     stability?: number; similarityBoost?: number; removeBackgroundNoise?: boolean
   }
+  const opts = { stability, similarityBoost, removeBackgroundNoise }
+
+  // --- Video mode: demux audio → speech-to-speech → remux onto the original
+  // video. Video takes precedence when both inputs are wired (matches the route
+  // + frontend). Output exposes BOTH a video and the revoiced audio track. ---
+  if (videoUrl) {
+    console.log(`[worker] voice-changer ${ctx.jobId} (video mode)`)
+
+    // 1. Download once + extract audio (throws NoAudioTrackError → friendly
+    //    failure when the source clip is silent).
+    const { audioPath, workDir } = await extractAudioTrack(videoUrl)
+    let newAudioR2Url: string
+    try {
+      const sourceAudio = await fs.readFile(audioPath)
+      await setJobProgress(job, ctx.jobId, 20)
+      const revoiced = await withProgressRamp(
+        job,
+        ctx.jobId,
+        { start: 20, cap: 60 },
+        () => directVoiceChanger(sourceAudio, voiceId, opts),
+      )
+      // Upload the revoiced audio — needed as a URL for the remux step AND
+      // surfaced on the node's audio output handle.
+      newAudioR2Url = await uploadBufferToR2(revoiced, `audio/${ctx.jobId}.mp3`, "audio/mpeg", ctx.jobUserId)
+    } finally {
+      await cleanupWorkDir(workDir)
+    }
+    await setJobProgress(job, ctx.jobId, 70)
+
+    // 2. Remux the new audio onto the original video. Reuses merge-video-audio
+    //    (VP8/VP9 re-encode + length handling). keepOriginalAudio:false replaces
+    //    the source dialogue entirely.
+    const mergedPath = await mergeVideoAudio({
+      videoUrl,
+      audioTracks: [{ url: newAudioR2Url, startTime: 0, volume: 100, sourceType: "audio" }],
+      keepOriginalAudio: false,
+    })
+    const videoR2Url = await uploadFileToR2(mergedPath, ctx.jobId, "video", ctx.jobUserId)
+    await cleanupWorkDir(dirname(mergedPath))
+    const thumbUrl = await generateAndUploadThumbnail(videoR2Url, ctx.jobId, ctx.jobUserId)
+    await setJobProgress(job, ctx.jobId, 100)
+
+    if (!await shouldSaveJobResult(ctx.jobId)) return
+    const ok = await markJobCompleted(ctx.jobId, {
+      output_data: { videoUrl: videoR2Url, audioUrl: newAudioR2Url, thumbnailUrl: thumbUrl },
+    })
+    if (!ok) return
+    await commitJobCredits(ctx.usageLogId, ctx.jobId)
+    await createAssetFromJob(ctx.jobId, ctx.jobUserId)
+    console.log(`[worker] Job ${ctx.jobId} completed (video): ${videoR2Url}`)
+    return
+  }
+
+  // --- Audio mode (unchanged): speech-to-speech → audio. ---
+  if (!audioUrl) throw new Error("voice-changer requires audioUrl or videoUrl")
   console.log(`[worker] voice-changer ${ctx.jobId}`)
   const audioBuffer = await withProgressRamp(
     job,
     ctx.jobId,
     { start: 5, cap: 45 },
-    () => voiceChangerFromUrl(audioUrl, voiceId, { stability, similarityBoost, removeBackgroundNoise }),
+    () => voiceChangerFromUrl(audioUrl, voiceId, opts),
   )
   await setJobProgress(job, ctx.jobId, 50)
   const r2Url = await uploadBufferToR2(audioBuffer, `audio/${ctx.jobId}.mp3`, "audio/mpeg", ctx.jobUserId)

@@ -43,6 +43,8 @@ export { LocationsResource } from "./resources/locations.js"
 export { ObjectsResource } from "./resources/objects.js"
 export { PipelinesResource } from "./resources/pipelines.js"
 export { ReduceResource } from "./resources/reduce.js"
+export { PromptHelperResource } from "./resources/prompt-helper.js"
+export { VoicesResource } from "./resources/voices.js"
 
 // --- Resource type definitions ---
 export type {
@@ -60,7 +62,7 @@ export type {
   UpdateProjectInput,
 } from "./resources/projects.js"
 
-export type { Job, JobStatus, CancelJobResult } from "./resources/jobs.js"
+export type { Job, JobStatus, JobStatusResult, CancelJobResult } from "./resources/jobs.js"
 
 export type {
   WorkflowExecution,
@@ -200,3 +202,26 @@ export type {
   ReduceInput,
   ReduceResult,
 } from "./resources/reduce.js"
+
+export type {
+  AnalyzeInput,
+  AnalyzeResult,
+  GenerateInput,
+  EnhanceInput,
+  PromptResult,
+} from "./resources/prompt-helper.js"
+export type {
+  WizardQuestion,
+  WizardOption,
+  WizardSelection,
+  RecommendedModel,
+  WizardNodeContext,
+} from "@nodaro/shared"
+
+export type {
+  Voice,
+  SharedVoice,
+  VoiceClone,
+  VoiceLibraryParams,
+  VoiceLibraryResponse,
+} from "./resources/voices.js"

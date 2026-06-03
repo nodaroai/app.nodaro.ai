@@ -7,10 +7,8 @@ import { resolveAssetId } from "../asset-resolver.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { config } from "../../config.js"
 import {
-  parseJobId,
   errorResult,
-  parseFailure,
-  jobResultWithWidget,
+  dispatchJob,
 } from "./_verb-helpers.js"
 import { modelIdsByKindMode } from "@nodaro/shared"
 import { getUserMcpPreferences } from "../user-preferences.js"
@@ -230,22 +228,10 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           userId: session.userId,
         }
 
-        const res = await fastify.inject({
-          method: "POST",
+        return dispatchJob(fastify, session, {
           url: "/v1/generate-image",
-          headers: {
-            "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-          },
           payload,
-        })
-
-        if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-        const jobId = parseJobId(res.body)
-        if (!jobId) return parseFailure(res.body)
-        return jobResultWithWidget({
-          jobId,
           label: "image generation",
-          session,
           widgetKind: "image",
           widgetData: {
             prompt: compositePrompt,
@@ -422,22 +408,10 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           userId: session.userId,
         }
 
-        const res = await fastify.inject({
-          method: "POST",
+        return dispatchJob(fastify, session, {
           url: "/v1/image-to-image",
-          headers: {
-            "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-          },
           payload,
-        })
-
-        if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-        const jobId = parseJobId(res.body)
-        if (!jobId) return parseFailure(res.body)
-        return jobResultWithWidget({
-          jobId,
           label: "image-to-image",
-          session,
           widgetKind: "image",
           widgetData: {
             prompt: compositePrompt,
@@ -589,16 +563,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         mcp_client: session.clientName,
         userId: session.userId,
       }
-      const res = await fastify.inject({
-        method: "POST",
-        url: "/v1/image-to-image",
-        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
-        payload,
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
-      return jobResultWithWidget({ jobId, label: "image to image", session, widgetKind: "image", widgetData: { prompt: args.prompt, model: args.model ?? "nano-banana" } })
+      return dispatchJob(fastify, session, { url: "/v1/image-to-image", payload, label: "image to image", widgetKind: "image", widgetData: { prompt: args.prompt, model: args.model ?? "nano-banana" } })
     },
   )
 
@@ -673,16 +638,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         mcp_client: session.clientName,
         userId: session.userId,
       }
-      const res = await fastify.inject({
-        method: "POST",
-        url: "/v1/edit-image",
-        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
-        payload,
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
-      return jobResultWithWidget({ jobId, label: "edit image", session, widgetKind: "image", widgetData: { prompt: args.prompt ?? `(${provider})`, model: provider } })
+      return dispatchJob(fastify, session, { url: "/v1/edit-image", payload, label: "edit image", widgetKind: "image", widgetData: { prompt: args.prompt ?? `(${provider})`, model: provider } })
     },
   )
 
@@ -722,16 +678,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         mcp_client: session.clientName,
         userId: session.userId,
       }
-      const res = await fastify.inject({
-        method: "POST",
-        url: "/v1/generate-mask",
-        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
-        payload,
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
-      return jobResultWithWidget({ jobId, label: "generate mask", session, widgetKind: "image", widgetData: { prompt: args.prompt, model: "generate-mask" } })
+      return dispatchJob(fastify, session, { url: "/v1/generate-mask", payload, label: "generate mask", widgetKind: "image", widgetData: { prompt: args.prompt, model: "generate-mask" } })
     },
   )
 
@@ -767,16 +714,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         mcp_client: session.clientName,
         userId: session.userId,
       }
-      const res = await fastify.inject({
-        method: "POST",
-        url: "/v1/image-to-text/describe",
-        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
-        payload,
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
-      return jobResultWithWidget({ jobId, label: "image to text", session, widgetKind: "generic", widgetData: { prompt: args.custom_prompt ?? `(${args.detail_level ?? "detailed"} description)`, model: "image-to-text" } })
+      return dispatchJob(fastify, session, { url: "/v1/image-to-text/describe", payload, label: "image to text", widgetKind: "generic", widgetData: { prompt: args.custom_prompt ?? `(${args.detail_level ?? "detailed"} description)`, model: "image-to-text" } })
     },
   )
 
@@ -810,16 +748,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         mcp_client: session.clientName,
         userId: session.userId,
       }
-      const res = await fastify.inject({
-        method: "POST",
-        url: "/v1/generate-script",
-        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
-        payload,
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
-      return jobResultWithWidget({ jobId, label: "generate script", session, widgetKind: "generic", widgetData: { prompt: args.prompt.slice(0, 80), model: args.model ?? "gemini" } })
+      return dispatchJob(fastify, session, { url: "/v1/generate-script", payload, label: "generate script", widgetKind: "generic", widgetData: { prompt: args.prompt.slice(0, 80), model: args.model ?? "gemini" } })
     },
   )
 }

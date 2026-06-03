@@ -13,14 +13,14 @@ Nodaro is a Fastify backend + Vite/React frontend, source-available under the [S
 ## SDK & CLI
 
 - [SDK Quickstart](https://nodaroai.github.io/app.nodaro.ai/sdk-quickstart.md): install `@nodaro/client`, three auth modes, error handling, common recipes
-- [SDK Reference](https://nodaroai.github.io/app.nodaro.ai/sdk-reference.md): every public export — `createClient`, auth providers, error classes, 10 resource classes (workflows, projects, jobs, executions, nodes, apps, characters, developerApps, oauth, me)
+- [SDK Reference](https://nodaroai.github.io/app.nodaro.ai/sdk-reference.md): every public export — `createClient`, auth providers, error classes, 14 resource classes (workflows, projects, jobs, executions, nodes, characters, locations, objects, pipelines, reduce, promptHelper, apps, developerApps, oauth)
 - [CLI](https://nodaroai.github.io/app.nodaro.ai/cli.md): terminal client `@nodaro/cli` — multi-profile auth, `--watch` polling, JSON output, single-binary distribution via `bun build --compile` for darwin/linux/windows
 
 ## API & integrations
 
-- [API Integration](https://nodaroai.github.io/app.nodaro.ai/api-integration.md): server-to-server via API tokens (`ndr_<64hex>`), 4 public endpoints, sync vs async, webhooks, rate limits
+- [API Integration](https://nodaroai.github.io/app.nodaro.ai/api-integration.md): server-to-server via API tokens (`ndr_<64hex>`), 5 public endpoints, sync vs async, webhooks, rate limits
 - [Character Platform](https://nodaroai.github.io/app.nodaro.ai/character-platform.md): full programmatic Character Studio — create / update / soft-delete / restore characters, portrait + asset + motion generation, LLM-captioned portrait approval. Covered across REST + SDK + CLI + MCP.
-- [OAuth Flow](https://nodaroai.github.io/app.nodaro.ai/oauth-flow.md): RFC 6749 authorization-code flow for third-party apps acting on behalf of users — app registration, scope vocabulary (8 scopes), code exchange, token revocation (RFC 7009)
+- [OAuth Flow](https://nodaroai.github.io/app.nodaro.ai/oauth-flow.md): RFC 6749 authorization-code flow for third-party apps acting on behalf of users — app registration, scope vocabulary (11 scopes), code exchange, token revocation (RFC 7009)
 - [Node Reference](https://nodaroai.github.io/app.nodaro.ai/nodes/README.md): every supported node type with parameters, providers, and examples
 
 ## Contributing

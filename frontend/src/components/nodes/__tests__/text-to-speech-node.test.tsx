@@ -86,7 +86,8 @@ vi.mock("../audio-result-overlay", () => ({
   AudioResultOverlay: ({ url }: any) => <div data-testid="audio-overlay"><audio src={url} controls /></div>,
 }))
 
-vi.mock("../handle-with-popover", () => ({
+vi.mock("../handle-with-popover", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   HandleWithPopover: ({ nodeType, handleId, type, color, label }: any) => (
     <div
       data-testid={`handle-popover-${type}-${handleId}`}
@@ -193,7 +194,7 @@ describe("TextToSpeechNode", () => {
     renderNode()
     const prompt = screen.getByTestId("handle-popover-target-prompt")
     expect(prompt).toHaveAttribute("data-node-type", "text-to-speech")
-    expect(prompt).toHaveAttribute("data-color", "#ff0073")
+    expect(prompt).toHaveAttribute("data-color", "#3B82F6")
     const audio = screen.getByTestId("handle-popover-source-audio")
     expect(audio).toHaveAttribute("data-node-type", "text-to-speech")
     expect(audio).toHaveAttribute("data-color", "#F59E0B")

@@ -64,11 +64,35 @@ vi.mock("@/lib/url-validator.js", async () => {
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
-import { generateImageRoutes } from "../generate-image.js"
+import { generateImageRoutes, generateImageBody } from "../generate-image.js"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
 import { FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared"
+
+// ---------------------------------------------------------------------------
+// aspectRatio enum must cover every provider's catalog ratios. Wan 2.7 /
+// Wan 2.7 Pro expose ultra-wide 8:1 and 1:8 in the picker (the per-provider
+// fail-safe useEffect deliberately keeps them because they're valid catalog
+// values); the route Zod enum omitted them, so selecting either 400'd at
+// generate time. Guard the specific gap + the common ratios.
+// ---------------------------------------------------------------------------
+describe("generateImageBody aspectRatio enum", () => {
+  const aspectRatioEnum = new Set(
+    (generateImageBody.shape.aspectRatio.unwrap() as { options: readonly string[] }).options,
+  )
+
+  it("includes Wan 2.7 ultra-wide ratios 8:1 and 1:8", () => {
+    expect(aspectRatioEnum.has("8:1")).toBe(true)
+    expect(aspectRatioEnum.has("1:8")).toBe(true)
+  })
+
+  it("still accepts the common aspect ratios", () => {
+    for (const r of ["auto", "1:1", "16:9", "9:16", "4:3", "3:4", "21:9"]) {
+      expect(aspectRatioEnum.has(r), `missing ${r}`).toBe(true)
+    }
+  })
+})
 
 // ---------------------------------------------------------------------------
 // Test app setup
@@ -451,7 +475,7 @@ describe("POST /v1/generate-image", () => {
   describe("flux-2-max reservation identifier parity", () => {
     const VALID_UUID = "00000000-0000-4000-8000-000000000001"
 
-    it("reserves at bare `flux-2-max` when no refs are attached", async () => {
+    it("reserves at `flux-2-max:1MP:0ref` when no refs are attached", async () => {
       setupSupabaseMock({})
 
       const res = await app.inject({
@@ -468,11 +492,11 @@ describe("POST /v1/generate-image", () => {
       const reserveMock = vi.mocked(reserveCreditsForJob)
       expect(reserveMock).toHaveBeenCalledTimes(1)
       // 4th arg is the modelIdentifier.
-      expect(reserveMock.mock.calls[0][3]).toBe("flux-2-max")
+      expect(reserveMock.mock.calls[0][3]).toBe("flux-2-max:1MP:0ref")
     })
 
     it.each([1, 2, 4, 8])(
-      "reserves at composite `flux-2-max:Nref` when %d refs are attached",
+      "reserves at composite `flux-2-max:1MP:Nref` when %d refs are attached",
       async (n) => {
         setupSupabaseMock({})
         const refs = Array.from({ length: n }, (_, i) => `https://r2.nodaro.ai/ref-${i}.png`)
@@ -490,8 +514,71 @@ describe("POST /v1/generate-image", () => {
 
         expect(res.statusCode).toBe(200)
         const reserveMock = vi.mocked(reserveCreditsForJob)
-        expect(reserveMock.mock.calls.at(-1)?.[3]).toBe(`flux-2-max:${n}ref`)
+        expect(reserveMock.mock.calls.at(-1)?.[3]).toBe(`flux-2-max:1MP:${n}ref`)
       },
     )
+  })
+
+  describe("reference auto-swap to i2i (triggered by attached refs, no marker)", () => {
+    const VALID_UUID = "00000000-0000-4000-8000-000000000001"
+
+    it("routes a swap-map T2I provider to its i2i sibling when refs are attached + a PLAIN prompt", async () => {
+      setupSupabaseMock({})
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: {
+          prompt: "make it night", // plain — NO "Use these references…" marker
+          userId: VALID_UUID,
+          provider: "seedream-5-lite",
+          referenceImageUrls: ["https://r2.nodaro.ai/frame.png"],
+        },
+      })
+      expect(res.statusCode).toBe(200)
+      const reserveMock = vi.mocked(reserveCreditsForJob)
+      // The bare T2I endpoint ignores refs; the route auto-routes to the i2i sibling.
+      expect(reserveMock.mock.calls.at(-1)?.[3]).toContain("seedream-5-lite-i2i")
+    })
+
+    it("does NOT swap when no refs are attached", async () => {
+      setupSupabaseMock({})
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: { prompt: "a city", userId: VALID_UUID, provider: "seedream-5-lite" },
+      })
+      expect(res.statusCode).toBe(200)
+      const reserveMock = vi.mocked(reserveCreditsForJob)
+      expect(reserveMock.mock.calls.at(-1)?.[3]).not.toContain("i2i")
+    })
+  })
+
+  // ─── MP resolution Zod acceptance (TASK 7) ────────────────────────────────
+  describe("resolution: MP values accepted by Zod", () => {
+    it("accepts resolution '2 MP' for provider flux-2-max (returns 200)", async () => {
+      setupSupabaseMock({})
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: {
+          prompt: "a landscape",
+          userId: "00000000-0000-4000-8000-000000000001",
+          provider: "flux-2-max",
+          resolution: "2 MP",
+        },
+      })
+      // Zod should accept "2 MP"; the route should return 200 (not 400).
+      expect(res.statusCode).toBe(200)
+    })
+
+    it("accepts all MP resolution tiers in generateImageBody schema", () => {
+      for (const mp of ["0.5 MP", "1 MP", "2 MP", "4 MP"]) {
+        const result = generateImageBody.safeParse({
+          prompt: "test",
+          resolution: mp,
+        })
+        expect(result.success, `resolution "${mp}" should be valid`).toBe(true)
+      }
+    })
   })
 })

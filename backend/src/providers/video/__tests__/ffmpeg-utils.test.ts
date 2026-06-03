@@ -45,11 +45,12 @@ const mocks = vi.hoisted(() => {
   const fsMkdir = vi.fn().mockResolvedValue(undefined)
   const fsRm = vi.fn().mockResolvedValue(undefined)
   const safeFetch = vi.fn()
+  const dnsLookup = vi.fn()
   const createWriteStream = vi.fn(() => ({}))
   const pipeline = vi.fn().mockResolvedValue(undefined)
   const readableFromWeb = vi.fn(() => ({}))
   return {
-    execFile, fsMkdir, fsRm, safeFetch,
+    execFile, fsMkdir, fsRm, safeFetch, dnsLookup,
     createWriteStream, pipeline, readableFromWeb,
   }
 })
@@ -74,8 +75,15 @@ vi.mock("node:stream", () => ({
   Readable: { fromWeb: mocks.readableFromWeb },
 }))
 
-vi.mock("../../../lib/safe-fetch.js", () => ({
+vi.mock("../../../lib/safe-fetch.js", async (importOriginal) => ({
+  // Keep the REAL isPrivateOrReservedIP (a pure classifier used by the
+  // probeVideoSource SSRF guard); only safeFetch is stubbed.
+  ...(await importOriginal<typeof import("../../../lib/safe-fetch.js")>()),
   safeFetch: mocks.safeFetch,
+}))
+
+vi.mock("node:dns/promises", () => ({
+  lookup: mocks.dnsLookup,
 }))
 
 vi.mock("@/lib/config.js", () => ({
@@ -122,6 +130,8 @@ beforeEach(() => {
   mocks.fsMkdir.mockResolvedValue(undefined)
   mocks.fsRm.mockResolvedValue(undefined)
   mocks.pipeline.mockResolvedValue(undefined)
+  // Default: any hostname resolves to a public IP so URL-based probes proceed.
+  mocks.dnsLookup.mockResolvedValue([{ address: "1.2.3.4", family: 4 }])
 })
 
 /** Helper: control execFile output once. */
@@ -423,6 +433,46 @@ describe("probeVideoSource", () => {
     await probeVideoSource("https://r2/video.mp4")
 
     expect(execArgs()).toContain("https://r2/video.mp4")
+  })
+
+  // --- SSRF guard (ffprobe does its own DNS+network I/O, bypassing safeFetch) ---
+
+  it("rejects a literal private/metadata IP URL BEFORE invoking ffprobe", async () => {
+    await expect(
+      probeVideoSource("http://169.254.169.254/latest/meta-data/"),
+    ).rejects.toThrow(/private|reserved|blocked/i)
+    expect(mocks.execFile).not.toHaveBeenCalled()
+  })
+
+  it("rejects loopback and RFC-1918 literal IP URLs", async () => {
+    await expect(probeVideoSource("http://127.0.0.1/v.mp4")).rejects.toThrow(/private|reserved|blocked/i)
+    await expect(probeVideoSource("http://10.0.0.5/v.mp4")).rejects.toThrow(/private|reserved|blocked/i)
+    expect(mocks.execFile).not.toHaveBeenCalled()
+  })
+
+  it("rejects non-http(s) protocols (e.g. file://) BEFORE invoking ffprobe", async () => {
+    await expect(probeVideoSource("file:///etc/passwd")).rejects.toThrow(/protocol/i)
+    expect(mocks.execFile).not.toHaveBeenCalled()
+  })
+
+  it("rejects a hostname that RESOLVES to a private IP (DNS-rebinding class)", async () => {
+    mocks.dnsLookup.mockResolvedValueOnce([{ address: "10.0.0.5", family: 4 }])
+    await expect(probeVideoSource("http://evil.example/v.mp4")).rejects.toThrow(/resolve|private|reserved/i)
+    expect(mocks.execFile).not.toHaveBeenCalled()
+  })
+
+  it("passes -protocol_whitelist to ffprobe (blocks protocol pivots)", async () => {
+    execFileOnce("1920,1080\n10.0\n")
+    await probeVideoSource("/tmp/v.mp4")
+    const args = execArgs()
+    expect(args).toContain("-protocol_whitelist")
+  })
+
+  it("allows a local filesystem path with no DNS lookup", async () => {
+    execFileOnce("1920,1080\n7.0\n")
+    const result = await probeVideoSource("/tmp/local.mp4")
+    expect(result).toEqual({ width: 1920, height: 1080, durationSeconds: 7.0 })
+    expect(mocks.dnsLookup).not.toHaveBeenCalled()
   })
 })
 

@@ -903,9 +903,10 @@ describe("POST /v1/image-to-image", () => {
   // In image-to-image the primary `imageUrl` counts as one of the up-to-8 refs
   // because the worker concatenates [imageUrl, ...referenceImageUrls] before
   // dispatching to Replicate — so the bare i2i call against flux-2-max with
-  // zero extra refs must still reserve at `flux-2-max:1ref`.
+  // zero extra refs must still reserve at `flux-2-max:1MP:1ref` (no resolution
+  // in the payload → 1 MP default; primary image counts as the single ref).
   describe("flux-2-max reservation identifier parity", () => {
-    it("reserves at `flux-2-max:1ref` when only the primary imageUrl is supplied", async () => {
+    it("reserves at `flux-2-max:1MP:1ref` when only the primary imageUrl is supplied", async () => {
       mockJobInsert()
 
       const res = await app.inject({
@@ -922,14 +923,14 @@ describe("POST /v1/image-to-image", () => {
       expect(res.statusCode).toBe(200)
       const reserveMock = vi.mocked(reserveCreditsForJob)
       expect(reserveMock).toHaveBeenCalledTimes(1)
-      expect(reserveMock.mock.calls[0][3]).toBe("flux-2-max:1ref")
+      expect(reserveMock.mock.calls[0][3]).toBe("flux-2-max:1MP:1ref")
     })
 
     it.each([
-      [0, "flux-2-max:1ref"],
-      [1, "flux-2-max:2ref"],
-      [3, "flux-2-max:4ref"],
-      [7, "flux-2-max:8ref"],
+      [0, "flux-2-max:1MP:1ref"],
+      [1, "flux-2-max:1MP:2ref"],
+      [3, "flux-2-max:1MP:4ref"],
+      [7, "flux-2-max:1MP:8ref"],
     ])(
       "reserves at composite identifier matching primary+%d extras → %s",
       async (extras, expected) => {
@@ -953,5 +954,40 @@ describe("POST /v1/image-to-image", () => {
         expect(reserveMock.mock.calls.at(-1)?.[3]).toBe(expected)
       },
     )
+  })
+
+  // ─── MP resolution Zod acceptance (TASK 7) ────────────────────────────────
+  describe("resolution: MP values accepted by Zod", () => {
+    it("accepts resolution '2 MP' for provider flux-2-max (returns 200, not 400)", async () => {
+      mockJobInsert("job-mp-1")
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/image-to-image",
+        payload: {
+          imageUrl: "https://example.com/primary.png",
+          prompt: "make it dramatic",
+          userId: VALID_UUID,
+          provider: "flux-2-max",
+          resolution: "2 MP",
+        },
+      })
+      // Zod should accept "2 MP"; the route returns 200.
+      expect(res.statusCode).toBe(200)
+    })
+
+    it("accepts '0.5 MP' resolution", async () => {
+      mockJobInsert("job-mp-2")
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/image-to-image",
+        payload: {
+          imageUrl: "https://example.com/primary.png",
+          prompt: "test",
+          userId: VALID_UUID,
+          resolution: "0.5 MP",
+        },
+      })
+      expect(res.statusCode).toBe(200)
+    })
   })
 })

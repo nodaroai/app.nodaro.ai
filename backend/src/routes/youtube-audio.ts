@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { safeUrlSchema } from "../lib/url-validator.js"
+import { safeUrlSchema, isAllowedSocialVideoUrl } from "../lib/url-validator.js"
 import { randomUUID } from "node:crypto"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -9,25 +9,9 @@ import youtubedl from "youtube-dl-exec"
 import { uploadFileWithKeyToR2, uploadBufferToR2 } from "../lib/storage.js"
 import { formatZodError } from "../lib/zod-error.js"
 
-// Supported video platforms (yt-dlp supports 1000+ sites natively)
-const SUPPORTED_HOSTNAMES = [
-  "youtube.com", "youtu.be",
-  "tiktok.com",
-  "instagram.com",
-  "twitter.com", "x.com",
-  "facebook.com", "fb.watch", "fb.com",
-]
-
 const videoAudioBody = z.object({
   url: safeUrlSchema.refine(
-    (url) => {
-      try {
-        const parsed = new URL(url)
-        return SUPPORTED_HOSTNAMES.some((h) => parsed.hostname.includes(h))
-      } catch {
-        return false
-      }
-    },
+    (url) => isAllowedSocialVideoUrl(url),
     { message: "Must be a valid video URL (YouTube, Facebook, TikTok, Instagram, or X)" },
   ),
 })

@@ -1,7 +1,7 @@
 ---
 node_type: text-prompt
-generated_at: 2026-05-18T13:23:36.988Z
-generated_from: cb1e786d
+generated_at: 2026-06-01T20:05:20.450Z
+generated_from: c8fd1e03
 ---
 
 # text-prompt
@@ -31,7 +31,7 @@ generated_from: cb1e786d
 **Default data:**
 ```json
 {
-  "label": "Text Prompt",
+  "label": "Text",
   "text": "",
   "variables": {}
 }
@@ -59,7 +59,7 @@ Display the approved script, a story brief, narration, or any human-readable tex
     "y": 0
   },
   "data": {
-    "label": "Text Prompt",
+    "label": "Text",
     "text": "",
     "variables": {}
   }

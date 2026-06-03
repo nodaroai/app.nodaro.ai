@@ -6,7 +6,7 @@ import { ShieldCheck, Type, Check, X } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
@@ -49,9 +49,9 @@ function QACheckNodeComponent({ id, data, selected }: NodeProps) {
           {nodeData.checkType} ({nodeData.provider})
         </p>
       </BaseNode>
-      <HandleWithPopover nodeId={id} nodeType="qa-check" handleId="in"       type="target" position={Position.Left}  label="Input"    color="#ff0073" icon={<Type />}  side="left"  top="calc(100% - 24px)" />
-      <HandleWithPopover nodeId={id} nodeType="qa-check" handleId="approved" type="source" position={Position.Right} label="Approved" color="#22c55e" icon={<Check />} side="right" top="24px" />
-      <HandleWithPopover nodeId={id} nodeType="qa-check" handleId="rejected" type="source" position={Position.Right} label="Rejected" color="#ef4444" icon={<X />}     side="right" top="56px" />
+      <HandleWithPopover nodeId={id} nodeType="qa-check" handleId="in"       type="target" position={Position.Left}  label="Input"    color={HANDLE_COLORS.control} icon={<Type />}  side="left"  top="calc(100% - 24px)" />
+      <HandleWithPopover nodeId={id} nodeType="qa-check" handleId="approved" type="source" position={Position.Right} label="Approved" color={HANDLE_COLORS.approve} icon={<Check />} side="right" top="24px" />
+      <HandleWithPopover nodeId={id} nodeType="qa-check" handleId="rejected" type="source" position={Position.Right} label="Rejected" color={HANDLE_COLORS.negative} icon={<X />}     side="right" top="56px" />
     </div>
   )
 }

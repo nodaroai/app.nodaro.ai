@@ -1,3 +1,4 @@
+import { memo } from "react"
 import { Copy, FileText } from "lucide-react"
 import { toast } from "sonner"
 import { StatusBadge, GlassCard, GlassButton, UnhideBanner, resolveTextCardActions, type OutputStatus, type OutputCardActions } from "./shared"
@@ -13,7 +14,7 @@ interface TextOutputCardProps {
   actions?: OutputCardActions
 }
 
-export function TextOutputCard({ label, status, text, nodeId, actions }: TextOutputCardProps) {
+function TextOutputCardImpl({ label, status, text, nodeId, actions }: TextOutputCardProps) {
   const bound = resolveTextCardActions(actions, nodeId)
   return (
     <GlassCard>
@@ -83,3 +84,5 @@ export function TextOutputCard({ label, status, text, nodeId, actions }: TextOut
     </GlassCard>
   )
 }
+
+export const TextOutputCard = memo(TextOutputCardImpl)

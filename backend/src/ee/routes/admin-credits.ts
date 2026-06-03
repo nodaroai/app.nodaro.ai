@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../../lib/supabase.js"
+import { config } from "../../lib/config.js"
 import { CreditsService, invalidateModelPricingCache } from "../billing/credits.js"
 import { invalidateBalanceCache } from "../routes/credits.js"
 import { requireAdmin } from "../middleware/require-admin.js"
@@ -236,8 +237,9 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: "Cannot change your own role" })
     }
 
-    // Protect the original super_admin (owner)
-    const OWNER_EMAIL = "[email removed]"
+    // Protect the original super_admin (owner). Configured via
+    // PLATFORM_OWNER_EMAIL; empty (self-host default) means no protected owner.
+    const OWNER_EMAIL = config.PLATFORM_OWNER_EMAIL
     const { data: targetProfile, error: targetError } = await supabase
       .from("profiles")
       .select("email, role")
@@ -247,7 +249,7 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
     if (targetError || !targetProfile) {
       return reply.code(404).send({ error: "User not found" })
     }
-    if (targetProfile.email === OWNER_EMAIL) {
+    if (OWNER_EMAIL && targetProfile.email === OWNER_EMAIL) {
       return reply.code(403).send({ error: "Cannot change the role of the platform owner" })
     }
 

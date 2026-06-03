@@ -11,14 +11,13 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 const Kling3DirectorModal = lazy(() => import("@/components/editor/kling3-director-modal").then(m => ({ default: m.Kling3DirectorModal })))
-const Kling3StudioConfig = lazy(() => import("./config-panels/kling3-studio-config").then(m => ({ default: m.Kling3StudioConfig })))
 import { GenerateButton } from "@/ee/components/credits/GenerateButton"
+import { RUN_BUTTON_CLASS } from "@/lib/run-button-style"
 import { useProvidersCreditsSum } from "@/ee/hooks/use-providers-credits-sum"
 import { createClient } from "@/lib/supabase"
 import { pipelinesApi } from "@/lib/pipelines-api"
 import {
   NODE_DEFINITIONS,
-  type ImageToVideoData,
   type TextToVideoData,
   type GenerateVideoNodeData,
   type FieldMappings,
@@ -204,7 +203,7 @@ const LIBRARY_VIDEO_TYPES = new Set(["image-to-video", "video-to-video", "text-t
 const LIBRARY_AUDIO_TYPES = new Set(["text-to-speech", "generate-music", "text-to-audio", "audio-isolation", "text-to-dialogue", "voice-changer", "dubbing", "voice-remix", "voice-design", "suno-generate", "suno-cover", "suno-extend", "suno-separate", "suno-mashup", "suno-replace-section", "suno-add-instrumental", "suno-add-vocals", "suno-convert-wav", "suno-upload-extend"])
 
 const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
-  "text-prompt": "Text Prompt",
+  "text-prompt": "Text",
   "upload-image": "Upload Image",
   "upload-video": "Upload Video",
   "upload-audio": "Upload Audio",
@@ -328,7 +327,6 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "sort-list": "Sort List",
   "selector": "Selector",
   "preview": "Preview",
-  "loop": "Table",
   "save-to-storage": "Save to Storage",
   "webhook-output": "Webhook Output",
   "character": "Character",
@@ -389,7 +387,7 @@ export const RUN_BUTTON_TYPES = new Set([
 /** Nodes that show "Run from here" as primary action instead of "Run". */
 const RUN_FROM_HERE_TYPES: Set<string> = new Set([
   ...NODE_DEFINITIONS.filter((d) => d.autoExecute).map((d) => d.type),
-  "preview", "loop", "list",
+  "preview", "list",
 ])
 
 const KLING3_DIRECTOR_TYPES = new Set(["image-to-video", "text-to-video", "generate-video"])
@@ -433,8 +431,8 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
 
   switch (nodeType) {
     case "text-prompt": return <TextPromptConfig {...configProps} />
-    case "list": return <LoopConfig {...configProps} nodeId={selectedNodeId} singleColumn />
-    case "loop": return <LoopConfig {...configProps} nodeId={selectedNodeId} />
+    case "list":
+      return <LoopConfig {...configProps} nodeId={selectedNodeId} />
     case "upload-image": return <UploadImageConfig {...configProps} />
     case "upload-video": return <UploadVideoConfig {...configProps} />
     case "upload-audio": return <UploadAudioConfig {...configProps} />
@@ -494,9 +492,10 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "upscale-image": return <UpscaleImageConfig {...configProps} />
     case "remove-background": return <RemoveBackgroundConfig {...configProps} />
     case "generate-mask": return <GenerateMaskConfig {...configProps} />
-    case "image-to-video": return (nodeData as ImageToVideoData).provider === "kling-3.0"
-      ? <Suspense fallback={null}><Kling3StudioConfig {...configProps} /></Suspense>
-      : <ImageToVideoConfig {...configProps} onUpdateNode={updateNodeData} nodeId={selectedNodeId} />
+    // ImageToVideoConfig dispatches the kling-3.0 provider to the
+    // (lazy-loaded) Kling3StudioConfig internally — no separate branch needed
+    // here, which keeps the studio panel in a single on-demand chunk.
+    case "image-to-video": return <ImageToVideoConfig {...configProps} onUpdateNode={updateNodeData} nodeId={selectedNodeId} />
     case "video-to-video": return <VideoToVideoConfig {...configProps} nodeId={selectedNodeId} />
     case "text-to-video": return (
       <>
@@ -634,11 +633,11 @@ export function ConfigPanel() {
   const edges = useWorkflowStore((s) => s.edges)
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-  const deleteNode = useWorkflowStore((s) => s.deleteNode)
   const deleteEdge = useWorkflowStore((s) => s.deleteEdge)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const runFromHere = useWorkflowStore((s) => s.runFromHere)
   const variableDisplayMode = useWorkflowStore((s) => s.variableDisplayMode)
+  const isReadOnly = useWorkflowStore((s) => s.isReadOnly)
   const [userId, setUserId] = useState<string | undefined>(undefined)
 
   useEffect(() => {
@@ -650,20 +649,55 @@ export function ConfigPanel() {
 
   const foundNode = nodes.find((n) => n.id === selectedNodeId)
 
+  // Topology signature that EXCLUDES the selected node's own data. Editing the
+  // selected node creates a fresh `nodes` array (and a new data object for that
+  // node) on every keystroke; keying the heavy whole-graph BFS memos directly
+  // on [nodes, edges] would re-run them all on each keystroke even though only
+  // the selected node changed. We bump `topoVersion` only when `edges` change
+  // or when ANY non-selected node's identity/type/data reference changes — so
+  // the BFS memos still recompute when an UPSTREAM node's data changes
+  // (liveRefMap reads upstream output via extractNodeOutput) but stay put while
+  // the user types into the selected node. Zustand does immutable updates, so a
+  // changed node always carries a new `data` reference (reference compare is
+  // sufficient and cheap).
+  const topoVersionRef = useRef(0)
+  const prevTopoRef = useRef<{ edges: typeof edges; sig: ReadonlyArray<unknown> } | null>(null)
+  const topoVersion = useMemo(() => {
+    const sig: unknown[] = []
+    for (const n of nodes) {
+      if (n.id === selectedNodeId) continue
+      sig.push(n.id, n.type, n.data)
+    }
+    const prev = prevTopoRef.current
+    const changed =
+      !prev ||
+      prev.edges !== edges ||
+      prev.sig.length !== sig.length ||
+      sig.some((v, i) => v !== prev.sig[i])
+    if (changed) {
+      topoVersionRef.current += 1
+      prevTopoRef.current = { edges, sig }
+    }
+    return topoVersionRef.current
+  }, [nodes, edges, selectedNodeId])
+
   const liveSources = useMemo(() => {
     if (!selectedNodeId) return [] as SourceNodeInfo[]
     return getConnectedSources(selectedNodeId, edges, nodes)
-  }, [edges, nodes, selectedNodeId])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topoVersion, selectedNodeId])
 
   const liveNodeRefs = useMemo(() => {
     if (!selectedNodeId) return []
     return getUpstreamNodes(selectedNodeId, nodes, edges)
-  }, [selectedNodeId, nodes, edges])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topoVersion, selectedNodeId])
 
   const liveRefMap = useMemo(() => {
     if (!selectedNodeId) return new Map<string, string>()
     return buildNodeRefMap(selectedNodeId, nodes, edges)
-  }, [selectedNodeId, nodes, edges])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topoVersion, selectedNodeId])
 
   const liveHasDownstream = useMemo(() => {
     if (!selectedNodeId) return false
@@ -685,6 +719,7 @@ export function ConfigPanel() {
   // by calling `setConfigPanelFullscreen(true)`.
   const isExpanded = useWorkflowStore((s) => s.configPanelFullscreen)
   const setConfigPanelFullscreen = useWorkflowStore((s) => s.setConfigPanelFullscreen)
+  const closeFullscreenSettings = useWorkflowStore((s) => s.closeFullscreenSettings)
 
   // Mobile bottom sheet: peek (collapsed) / expanded states with bidirectional drag
   const [sheetState, setSheetState] = useState<"peek" | "expanded">("peek")
@@ -817,11 +852,6 @@ export function ConfigPanel() {
     }
   }, [edges, selectedNodeId, deleteEdge])
 
-  function handleDelete() {
-    if (!selectedNodeId) return
-    deleteNode(selectedNodeId)
-  }
-
   // useMemo must be called unconditionally (before any early return) to satisfy React's rules of hooks
   const configProps = useMemo(
     () => ({
@@ -864,6 +894,11 @@ export function ConfigPanel() {
   const selectedNode = displayNode
   const nodeType = selectedNode.type as string
   const nodeData = selectedNode.data as Record<string, unknown>
+  // Locks run-affecting config (model, resolution, prompt, pickers, …) while
+  // the node is executing or initiating. Name / results / run buttons / the
+  // fullscreen toggle stay interactive — see the fieldset around NodeTypeConfig.
+  const isNodeRunning =
+    nodeData.executionStatus === "running" || nodeData.executionStatus === "pending"
 
   // --- Shared content for both desktop and mobile ---
   const panelHeader = (
@@ -897,11 +932,11 @@ export function ConfigPanel() {
           // Fullscreen: a prominent text "Close" button reads as the
           // primary exit affordance — the small X icon was easy to miss
           // against the wider modal chrome.
-          <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs" onClick={() => { setConfigPanelFullscreen(false); useWorkflowStore.setState({ selectedNodeId: null }) }}>
+          <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs" onClick={(e) => { e.stopPropagation(); closeFullscreenSettings() }}>
             Close
           </Button>
         ) : (
-          <Button variant="ghost" size="icon" className="text-gray-400 dark:text-[#64748B] hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2D2D2D]" onClick={() => { setConfigPanelFullscreen(false); useWorkflowStore.setState({ selectedNodeId: null }) }} aria-label="Close panel">
+          <Button variant="ghost" size="icon" className="text-gray-400 dark:text-[#64748B] hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2D2D2D]" onClick={() => useWorkflowStore.setState({ selectedNodeId: null })} aria-label="Close panel">
             <X className="h-4 w-4" />
           </Button>
         )}
@@ -915,10 +950,10 @@ export function ConfigPanel() {
       ? "fixed inset-0 z-50 flex items-center justify-center"
       : isMobile
         ? `fixed bottom-0 left-0 right-0 z-50 transition-transform duration-200 ease-in-out ${isVisible ? "translate-y-0" : "translate-y-full pointer-events-none"}`
-        : `absolute inset-0 z-10 bg-white dark:bg-[#1E1E1E] shadow-2xl flex flex-col sm:inset-auto sm:top-0 sm:right-0 sm:h-full sm:w-96 sm:border-l border-gray-200 dark:border-[#2D2D2D] transition-transform duration-200 ease-in-out ${isVisible ? "translate-x-0" : "translate-x-full pointer-events-none"}`
+        : `absolute inset-0 z-10 bg-white dark:bg-[#1E1E1E] shadow-2xl flex flex-col sm:inset-auto sm:top-0 sm:right-0 sm:h-full sm:w-96 sm:border-l border-gray-200 dark:border-[#2D2D2D] ${isVisible && !isExpanded ? "transition-transform duration-200 ease-in-out translate-x-0" : "hidden"}`
     }>
       {isExpanded && (
-        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setConfigPanelFullscreen(false)} />
+        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={(e) => { e.stopPropagation(); closeFullscreenSettings() }} />
       )}
       <div className={isExpanded
         ? "relative w-full max-w-[900px] max-h-[90vh] mx-4 bg-white dark:bg-[#1E1E1E] rounded-xl shadow-2xl border border-gray-200 dark:border-[#2D2D2D] flex flex-col overflow-hidden min-h-0"
@@ -940,7 +975,7 @@ export function ConfigPanel() {
           const t = e.target as HTMLElement | null
           if (!t) return
           const tile = t.closest('button[role="radio"], button[role="checkbox"]')
-          if (tile) setConfigPanelFullscreen(false)
+          if (tile) closeFullscreenSettings()
         } : undefined}
       >
         {/* Mobile drag handle + peek header */}
@@ -999,8 +1034,32 @@ export function ConfigPanel() {
               Person, Styling, etc.) closes the modal on a double-click pick.
               Side-panel mode leaves the context null — double-click is a
               no-op there, which matches the surrounding-non-tile picker UX. */}
-          {isExpanded ? (
-            <TileCommitContext.Provider value={{ commit: () => setConfigPanelFullscreen(false) }}>
+          {/* While the node runs, lock the run-affecting parameters (model,
+              resolution, prompt, pickers, …) — these all live inside
+              NodeTypeConfig. The node name, Results Gallery (replacing the
+              selected output), run/stop buttons, and the fullscreen toggle are
+              rendered OUTSIDE this fieldset, so they stay interactive.
+              Read-only (Studio/shared) workflows lock the same body: native
+              form controls go inert via the disabled fieldset (custom Radix
+              controls can still focus, but `updateNodeData` is already gated
+              for read-only so edits can't persist). */}
+          <fieldset
+            disabled={isNodeRunning || isReadOnly}
+            className="border-0 p-0 m-0 min-w-0 disabled:opacity-70 disabled:pointer-events-none"
+          >
+            {isExpanded ? (
+              <TileCommitContext.Provider value={{ commit: closeFullscreenSettings }}>
+                <NodeTypeConfig
+                  nodeType={nodeType}
+                  nodeData={nodeData}
+                  configProps={configProps}
+                  updateNodeData={updateNodeData}
+                  onExpandDirector={() => setExpandDirectorOpen(true)}
+                  update={update}
+                  selectedNodeId={selectedNodeId ?? undefined}
+                />
+              </TileCommitContext.Provider>
+            ) : (
               <NodeTypeConfig
                 nodeType={nodeType}
                 nodeData={nodeData}
@@ -1010,18 +1069,8 @@ export function ConfigPanel() {
                 update={update}
                 selectedNodeId={selectedNodeId ?? undefined}
               />
-            </TileCommitContext.Provider>
-          ) : (
-            <NodeTypeConfig
-              nodeType={nodeType}
-              nodeData={nodeData}
-              configProps={configProps}
-              updateNodeData={updateNodeData}
-              onExpandDirector={() => setExpandDirectorOpen(true)}
-              update={update}
-              selectedNodeId={selectedNodeId ?? undefined}
-            />
-          )}
+            )}
+          </fieldset>
 
           <Separator />
 
@@ -1077,22 +1126,14 @@ export function ConfigPanel() {
                   variant="outline"
                   size="sm"
                   className="w-full"
-                  onClick={() => setConfigPanelFullscreen(false)}
+                  onClick={(e) => { e.stopPropagation(); closeFullscreenSettings() }}
                 >
                   Close
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30"
-                  onClick={handleDelete}
-                >
-                  Delete Node
                 </Button>
               </div>
             ) : (
               <>
-                {GENERATE_BUTTON_TYPES.has(nodeType) && (
+                {!isReadOnly && GENERATE_BUTTON_TYPES.has(nodeType) && (
                   <GenerateButton
                     onClick={() => runSingleNode?.(selectedNode.id)}
                     modelIdentifier={getModelIdentifier(selectedNode)}
@@ -1110,12 +1151,12 @@ export function ConfigPanel() {
                   />
                 )}
 
-                {RUN_BUTTON_TYPES.has(nodeType) && (
+                {!isReadOnly && RUN_BUTTON_TYPES.has(nodeType) && (
                   <button
                     type="button"
                     onClick={() => runSingleNode?.(selectedNode.id)}
                     disabled={nodeData.executionStatus === "running"}
-                    className="w-full flex items-center justify-center gap-2 h-10 rounded-lg text-white font-medium bg-[#ff0073] hover:bg-[#e0005f] disabled:opacity-50 transition-colors"
+                    className={`w-full flex items-center justify-center gap-2 h-10 rounded-lg font-medium disabled:opacity-50 ${RUN_BUTTON_CLASS}`}
                   >
                     {nodeData.executionStatus === "running"
                       ? <Loader2 className="w-4 h-4 animate-spin" />
@@ -1125,12 +1166,12 @@ export function ConfigPanel() {
                   </button>
                 )}
 
-                {RUN_FROM_HERE_TYPES.has(nodeType) && (
+                {!isReadOnly && RUN_FROM_HERE_TYPES.has(nodeType) && (
                   <button
                     type="button"
                     onClick={() => runFromHere?.(selectedNode.id)}
                     disabled={nodeData.executionStatus === "running"}
-                    className="w-full flex items-center justify-center gap-2 h-10 rounded-lg text-white font-medium bg-[#ff0073] hover:bg-[#e0005f] disabled:opacity-50 transition-colors"
+                    className={`w-full flex items-center justify-center gap-2 h-10 rounded-lg font-medium disabled:opacity-50 ${RUN_BUTTON_CLASS}`}
                     title="Runs this node and all connected downstream nodes in sequence"
                   >
                     {nodeData.executionStatus === "running"
@@ -1141,7 +1182,7 @@ export function ConfigPanel() {
                   </button>
                 )}
 
-                {hasDownstream && !RUN_FROM_HERE_TYPES.has(nodeType) && (
+                {!isReadOnly && hasDownstream && !RUN_FROM_HERE_TYPES.has(nodeType) && (
                   <button
                     type="button"
                     onClick={() => runFromHere?.(selectedNode.id)}
@@ -1172,9 +1213,6 @@ export function ConfigPanel() {
                   )
                 })()}
 
-                <Button variant="outline" size="sm" className="w-full text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30" onClick={handleDelete}>
-                  Delete Node
-                </Button>
               </>
             )}
           </div>
@@ -1185,7 +1223,7 @@ export function ConfigPanel() {
                 display={nodeData.presentationDisplay as PresentationDisplay ?? {}}
                 onChange={(d) => updateNodeData(selectedNodeId!, { presentationDisplay: d })}
                 showElementSize={nodeType !== "text-prompt"}
-                viewModes={nodeType === "loop" ? [{ value: "cards", label: "Cards" }, { value: "table", label: "Table" }] : undefined}
+                viewModes={nodeType === "list" ? [{ value: "cards", label: "Cards" }, { value: "table", label: "Table" }] : undefined}
               />
             </div>
           )}

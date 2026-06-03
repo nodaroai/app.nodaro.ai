@@ -16,14 +16,15 @@ import {
   VIDEO_DURATION_TIERS,
   MOTION_DURATION_TIERS,
 } from "./model-constants.js"
+import { isFlux2Model } from "./flux2-pricing.js"
 
 /**
  * Compute composite model identifier for variable credit pricing.
  * Examples: "gpt-image:high", "flux:2K", "nano-banana-pro:4K", "ideogram:TURBO",
- *           "flux-2-max:3ref" (Flux 2 Max — billed per reference image).
+ *           "flux-2-pro:2MP", "flux-2-max:2MP:1ref" (Flux 2 — billed per megapixel).
  *
- * For image models, uses quality/resolution/renderingSpeed and (Flux 2 Max only)
- * the number of reference images attached at request time.
+ * For image models, uses quality/resolution/renderingSpeed and (Flux 2) the output
+ * megapixel count plus (Flux 2 Max) the number of reference images attached at request time.
  * For video models, uses duration/sound params when the model has variable pricing.
  */
 export function buildCreditModelIdentifier(
@@ -34,6 +35,16 @@ export function buildCreditModelIdentifier(
   targetResolution?: string,
   referenceImageCount?: number,
 ): string {
+  // Flux 2 family: billed per output megapixel AND per reference image (each
+  // ref counts as input megapixels). Resolution arrives as "N MP" strings (the
+  // UI value space); strip the unit. ALL three models encode the ref count
+  // (capped at 8): Pro/Klein i2i always carry the source image as a ref and
+  // their cost formula charges per input MP, so the reserved identifier must
+  // reflect refs (there is no metered true-up to correct an under-reserved tier).
+  if (isFlux2Model(provider)) {
+    const mp = (resolution ?? "1 MP").replace(/\s*MP$/i, "").trim()
+    return `${provider}:${mp}MP:${Math.min(referenceImageCount ?? 0, 8)}ref`
+  }
   if (HIGH_QUALITY_PROVIDERS.has(provider) && quality === "high") {
     return `${provider}:high`
   }
@@ -53,13 +64,6 @@ export function buildCreditModelIdentifier(
   if (IDEOGRAM_PROVIDERS.has(provider)) {
     if (renderingSpeed === "TURBO") return `${provider}:TURBO`
     if (renderingSpeed === "QUALITY") return `${provider}:QUALITY`
-  }
-  // Flux 2 Max: BFL bills $0.04 base + $0.03 per reference image up to 8.
-  // We encode the ref count in the identifier so the standard model_pricing
-  // lookup returns the right credit total — see migration 129 for the rows.
-  if (provider === "flux-2-max" && referenceImageCount && referenceImageCount > 0) {
-    const n = Math.min(referenceImageCount, 8)
-    return `${provider}:${n}ref`
   }
   return provider
 }

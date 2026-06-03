@@ -5,7 +5,7 @@ import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -16,8 +16,7 @@ import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { RenderVideoData } from "@/types/nodes"
 
 function RenderVideoNodeComponent({ id, data, selected }: NodeProps) {
-  const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as RenderVideoData | undefined
-  const nodeData = currentNodeData ?? (data as RenderVideoData)
+  const nodeData = data as RenderVideoData
   const credits = useModelCredits("render-video", 15)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
@@ -191,8 +190,8 @@ function RenderVideoNodeComponent({ id, data, selected }: NodeProps) {
         />
       )}
 
-      <HandleWithPopover nodeId={id} nodeType="render-video" handleId="composition" type="target" position={Position.Left}  label="Composition" color="#ff0073" icon={<Film />} side="left"  top="calc(100% - 24px)" />
-      <HandleWithPopover nodeId={id} nodeType="render-video" handleId="video"       type="source" position={Position.Right} label="Video"       color="#A78BFA" icon={<Film />} side="right" top="24px" />
+      <HandleWithPopover nodeId={id} nodeType="render-video" handleId="composition" type="target" position={Position.Left}  label="Composition" color={HANDLE_COLORS.control} icon={<Film />} side="left"  top="calc(100% - 24px)" />
+      <HandleWithPopover nodeId={id} nodeType="render-video" handleId="video"       type="source" position={Position.Right} label="Video"       color={HANDLE_COLORS.video} icon={<Film />} side="right" top="24px" />
       {activeUrl && (
         <MediaPreviewModal
           isOpen={previewOpen}

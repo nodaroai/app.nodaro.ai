@@ -22,8 +22,9 @@ import {
   isSkipNode,
 } from "../services/workflow-engine/execution-graph.js"
 import { resolveNodeInputs, getListInputForNode } from "../services/workflow-engine/input-resolver.js"
+import { normalizeLegacyNodeTypes } from "../services/workflow-engine/normalize-node-types.js"
 import { migrateGenerateImageHandles } from "../lib/generate-image-handle-migration.js"
-import { extractSourceNodeOutput, extractSavedNodeOutput } from "../services/workflow-engine/output-extractor.js"
+import { extractSourceNodeOutput, extractSavedNodeOutput, coerceListItemsOverrideToRows } from "../services/workflow-engine/output-extractor.js"
 import { executeNode, type ExecuteNodeResult } from "../services/workflow-engine/node-executor.js"
 import type {
   WorkflowExecutionJob,
@@ -376,25 +377,11 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
       ctx.workflowOwnerId = (workflow.user_id as string | null) ?? undefined
     }
 
-    // Migrate legacy image node types (edit-image → modify/upscale/remove-background, image-to-image → modify)
+    // Normalize legacy node types (edit-image → modify/upscale/remove-background,
+    // image-to-image → modify, old collect → reduce, loop → list) BEFORE the
+    // engine reads node.type. See normalize-node-types.ts.
     const rawNodes = (workflowData.nodes as (SimpleNode & { hidden?: boolean })[]) ?? []
-    const allNodes = rawNodes.map(node => {
-      if (node.type === "edit-image") {
-        const provider = (node.data as Record<string, unknown> | undefined)?.provider as string | undefined
-        if (provider === "nano-banana-edit") return { ...node, type: "modify-image" }
-        if (provider === "recraft-remove-bg") return { ...node, type: "remove-background" }
-        return { ...node, type: "upscale-image" }
-      }
-      if (node.type === "image-to-image") return { ...node, type: "modify-image" }
-      // Backward-compat shim: dev's old "collect" (fan-in reducer) was renamed
-      // to "reduce" on 2026-05-23 to free the "collect" name for the NEW
-      // type-aggregator landing in #2692. Remove after all saved workflows are
-      // migrated (see migration 151).
-      // Discriminate via the NEW shape: NEW Collect always has `order: string[]`.
-      // Anything else with type === "collect" is the OLD pre-rename fan-in reducer.
-      if (node.type === "collect" && !Array.isArray((node.data as { order?: unknown })?.order)) return { ...node, type: "reduce" }
-      return node
-    })
+    const allNodes = normalizeLegacyNodeTypes(rawNodes)
 
     // Filter out hidden nodes (from loop expansion) and expanded clones that were persisted
     const allEdges: SimpleEdge[] = ((workflowData.edges as SimpleEdge[]) ?? []).map(e => ({
@@ -451,6 +438,13 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
           if (node.type === "location") {
             applyLocationVariantOverride(cleaned)
           }
+          // A columns-present `list` (incl. migrated former-`loop`) used as a
+          // published-app input gets the user's value as an `items: string[]`
+          // override (ListInputCard always writes `items`). Both list extractors
+          // read `rows` first when `columns` exist, so without this the override
+          // is ignored and the run uses the STALE snapshot rows. Rewrite rows
+          // from the items override so the user's input is authoritative.
+          coerceListItemsOverrideToRows(cleaned)
           node.data = cleaned
         }
       }
@@ -461,8 +455,64 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
       return
     }
 
-    // 2. Initialize node states
+    // 2. Initialize node states — RESUME-AWARE.
+    //
+    // A BullMQ stalled re-pick (the documented recovery path: worker died
+    // mid-run on a Railway redeploy / OOM / SIGKILL, lock expired) re-invokes
+    // this function for the SAME execution. Rebuilding `nodeStates = {}` here
+    // would re-derive every node as executable and re-run + RE-RESERVE credits
+    // for nodes that already completed-and-committed on the prior attempt
+    // (double-charge + duplicate provider spend + duplicate outputs).
+    //
+    // Load the persisted state and carry forward terminal progress so completed
+    // work is neither re-executed nor re-charged. Reconcile against the jobs
+    // table first to catch nodes whose job finished after the crash but before
+    // node_states could be written. This is a pure no-op on a fresh run (no
+    // prior progress → nodeStates stays empty → identical to the old behavior).
+    const { data: execRow } = await supabase
+      .from("workflow_executions")
+      .select("status, node_states")
+      .eq("id", executionId)
+      .single()
+
+    // A stalled re-pick of an already-finished execution must not re-run it.
+    // Includes every TERMINAL status (completed_at is set): re-running a
+    // discarded/timed-out run would re-execute nodes and re-charge credits for
+    // a run the user/system already closed.
+    if (execRow && ["completed", "failed", "cancelled", "timed_out", "discarded"].includes(execRow.status as string)) {
+      console.log(
+        `[orchestrator] Execution ${executionId} already ${execRow.status} — skipping re-run (stalled re-pick of a closed execution)`,
+      )
+      return
+    }
+
     const nodeStates: Record<string, NodeExecutionState> = {}
+    let resumedNodeCount = 0
+    {
+      const persisted = (execRow?.node_states ?? {}) as Record<string, NodeExecutionState>
+      const hasPriorProgress = Object.values(persisted).some(
+        (s) => s?.status === "completed" || s?.status === "skipped",
+      )
+      if (hasPriorProgress) {
+        // Reconcile "running"/"pending" entries against the jobs table (flips
+        // jobs that completed post-crash to completed), then carry forward only
+        // TERMINAL-DONE states. Nodes still genuinely in-flight (job pending at
+        // re-pick time) are intentionally NOT carried — they re-execute. A
+        // failed node is also not carried, so it re-attempts on resume.
+        const { next } = await reconcileNodeStatesFromJobs(persisted, executionId)
+        for (const [id, st] of Object.entries(next)) {
+          if (st?.status === "completed" || st?.status === "skipped") {
+            nodeStates[id] = st
+            resumedNodeCount++
+          }
+        }
+        if (resumedNodeCount > 0) {
+          console.log(
+            `[orchestrator] Resuming execution ${executionId}: ${resumedNodeCount} node(s) already done — skipped (no re-charge)`,
+          )
+        }
+      }
+    }
     // Jobs → owning node. Fan-out creates one job per iteration, so the
     // scalar nodeStates[node].jobId field would only remember the last one
     // and onJobProgress couldn't find earlier iterations.
@@ -648,8 +698,10 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
       failedNodes: 0,
     })
 
-    // 7. Execute level by level
-    let completedCount = 0
+    // 7. Execute level by level. On a resume, the carried-forward done nodes
+    // already count toward progress (they're in totalExecutions) — seed the
+    // counter so the progress bar isn't under-reported after a re-pick.
+    let completedCount = resumedNodeCount
     let failedCount = 0
     let totalCredits = 0
     const startTime = Date.now()
@@ -663,7 +715,10 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
 
       // Check cancellation / stopping
       const controlStatus = await checkExecutionControl(executionId)
-      if (controlStatus === "cancelled") {
+      // "stopping" = "Stop after current" — don't start this level; same effect
+      // as an explicit cancel (mark cancelled + emit the same event), so the two
+      // control states are handled together.
+      if (controlStatus === "cancelled" || controlStatus === "stopping") {
         ctx.cancelled = true
         await updateExecution(executionId, {
           status: "cancelled",
@@ -680,16 +735,21 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
         })
         return
       }
-      if (controlStatus === "stopping") {
-        // "Stop after current" — don't start this level, mark as cancelled
-        ctx.cancelled = true
+
+      // "discarded" = Discard Run. Stop scheduling new levels, but DO NOT
+      // cancel in-flight jobs (they finish into My Library) and DO NOT rewrite
+      // the status to "cancelled" — the frontend needs the "discarded" status
+      // to detach the canvas. Deliberately a SEPARATE branch from
+      // cancelled||stopping: we don't set ctx.cancelled (so iteration tasks
+      // don't bail) and never call cancelJobAndThrow.
+      if (controlStatus === "discarded") {
         await updateExecution(executionId, {
-          status: "cancelled",
+          status: "discarded",
           node_states: nodeStates,
           completed_at: new Date().toISOString(),
         })
         emitExecutionEvent({
-          type: "execution:cancelled",
+          type: "execution:discarded",
           executionId,
           nodeStates: { ...nodeStates },
           completedNodes: completedCount,
@@ -1262,7 +1322,9 @@ function emitExecutionEvent(event: ExecutionEvent): void {
   }
 }
 
-export async function checkExecutionControl(executionId: string): Promise<"running" | "cancelled" | "stopping"> {
+export async function checkExecutionControl(
+  executionId: string,
+): Promise<"running" | "cancelled" | "stopping" | "discarded"> {
   const { data } = await supabase
     .from("workflow_executions")
     .select("status")
@@ -1271,5 +1333,6 @@ export async function checkExecutionControl(executionId: string): Promise<"runni
 
   if (data?.status === "cancelled") return "cancelled"
   if (data?.status === "stopping") return "stopping"
+  if (data?.status === "discarded") return "discarded"
   return "running"
 }

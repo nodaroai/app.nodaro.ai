@@ -2,11 +2,11 @@
 
 import { memo, useMemo, useState, useRef, useCallback, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
+import { incomingSourcesFingerprint } from "@/lib/node-fingerprint"
 import { Scissors, Loader2, AlertCircle, X, Film } from "lucide-react"
 import { BaseNode } from "./base-node"
-import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -41,7 +41,6 @@ function ManualEditNodeComponent({ id, data, selected }: NodeProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const playState = nodeData.videoPlayState ?? "loop"
   const shouldPlay = videoAutoplay && playState === "loop"
-  const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
@@ -51,8 +50,14 @@ function ManualEditNodeComponent({ id, data, selected }: NodeProps) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [videoError, setVideoError] = useState(false)
-  const edges = useWorkflowStore((s) => s.edges)
-  const allNodes = useWorkflowStore((s) => s.nodes)
+  // Narrow subscription: a primitive fingerprint of the incoming connections
+  // (source id + type + label) instead of whole-array `s.nodes` / `s.edges`.
+  // `connectedAssets` is the only consumer of those arrays, so re-render this
+  // node only when an incoming connection (or an upstream label) changes —
+  // not on every unrelated keystroke/drag that mints a new nodes array.
+  const connectedFingerprint = useWorkflowStore((s) =>
+    incomingSourcesFingerprint(s.nodes, s.edges, id, "label"),
+  )
 
   useEffect(() => {
     const v = videoRef.current
@@ -72,7 +77,9 @@ function ManualEditNodeComponent({ id, data, selected }: NodeProps) {
     updateNodeData(id, { videoPlayState: state.playState, pausedAtTime: state.currentTime })
   }, [id, updateNodeData])
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const connectedAssets = useMemo(() => {
+    const { nodes: allNodes, edges } = useWorkflowStore.getState()
     const inEdges = edges.filter((e) => e.target === id)
     const assets: Array<{ nodeId: string; label: string; type: "video" | "image" | "audio" }> = []
     for (const edge of inEdges) {
@@ -85,7 +92,7 @@ function ManualEditNodeComponent({ id, data, selected }: NodeProps) {
       else if (AUDIO_TYPES.has(src.type)) assets.push({ nodeId: src.id, label, type: "audio" })
     }
     return assets
-  }, [edges, allNodes, id])
+  }, [id, connectedFingerprint])
 
   function handleDeleteResult(indexToDelete: number) {
     updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedVideoUrl"))
@@ -102,7 +109,6 @@ function ManualEditNodeComponent({ id, data, selected }: NodeProps) {
     <BaseNode id={id} label={nodeData.label} icon={<Scissors className="h-4 w-4" />} category="processing" credits={credits} selected={selected} isRunning={status === "running"}
       hideHeader
       minWidth={220}
-      topToolbarContent={(<RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />)}
       handles={[
         { id: "in",    type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
         { id: "video", type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
@@ -212,8 +218,8 @@ function ManualEditNodeComponent({ id, data, selected }: NodeProps) {
         </p>
       </div>
     </BaseNode>
-    <HandleWithPopover nodeId={id} nodeType="manual-edit" handleId="in"    type="target" position={Position.Left}  label="Assets" color="#475569" icon={<Scissors />} side="left"  top="calc(100% - 24px)" />
-    <HandleWithPopover nodeId={id} nodeType="manual-edit" handleId="video" type="source" position={Position.Right} label="Video"  color="#A78BFA" icon={<Film />}     side="right" top="24px" />
+    <HandleWithPopover nodeId={id} nodeType="manual-edit" handleId="in"    type="target" position={Position.Left}  label="Assets" color={HANDLE_COLORS.identity} icon={<Scissors />} side="left"  top="calc(100% - 24px)" />
+    <HandleWithPopover nodeId={id} nodeType="manual-edit" handleId="video" type="source" position={Position.Right} label="Video"  color={HANDLE_COLORS.video} icon={<Film />}     side="right" top="24px" />
     {activeUrl && <MediaPreviewModal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} type="video" url={activeUrl} results={results} initialIndex={activeIndex} onVideoStateChange={handleVideoStateChange} initialVideoPlayState={nodeData.videoPlayState} initialPausedAtTime={nodeData.pausedAtTime} />}
     <DeleteConfirmationDialog isOpen={deleteConfirm !== null} onClose={() => setDeleteConfirm(null)} onConfirm={() => { if (deleteConfirm !== null) handleDeleteResult(deleteConfirm) }} />
     </div>

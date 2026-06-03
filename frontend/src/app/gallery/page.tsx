@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from "react"
+import { useState, useEffect, useCallback, useRef, useMemo, memo } from "react"
 import { Link, useLocation } from "react-router-dom"
 import { ArrowLeft, ChevronLeft, ChevronRight, Download, Maximize2, Minimize2, X, Image as ImageIcon, Video, Music, Loader2, Play, Pause, Copy, Check, Flag, Trash2, Heart } from "lucide-react"
 import { NodaroLogo } from "@/components/nodaro-logo"
@@ -17,6 +17,7 @@ import {
 import { useGalleryInfinite, useGalleryFavorites, useToggleFavoriteMutation, useReportGalleryItemMutation, useDeleteGalleryItemMutation } from "@/hooks/queries/use-gallery-queries"
 import { useBackToClose } from "@/hooks/use-back-to-close"
 import { useImageAspect } from "@/hooks/use-image-aspect"
+import { useVirtualGrid, rowItems, GRID_BREAKPOINTS } from "@/hooks/use-virtual-grid"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import type { GalleryItem } from "@/hooks/queries/use-gallery-queries"
@@ -273,6 +274,106 @@ function CopyPromptButton({ prompt }: { readonly prompt: string }) {
   )
 }
 
+interface GalleryGridCardProps {
+  readonly item: GalleryItem
+  readonly index: number
+  readonly isFavorited: boolean
+  readonly showFavorite: boolean
+  readonly isAdmin: boolean
+  readonly onSelect: (index: number) => void
+  readonly onToggleFavorite: (item: GalleryItem, e?: React.MouseEvent) => void
+  readonly onReport: (item: GalleryItem, e?: React.MouseEvent) => void
+  readonly onDelete: (item: GalleryItem, e?: React.MouseEvent) => void
+}
+
+// Memoized so selection/favorite changes only re-render the affected card,
+// not every card in the (non-virtualized, growing) infinite-scroll grid.
+const GalleryGridCard = memo(function GalleryGridCard({
+  item,
+  index,
+  isFavorited,
+  showFavorite,
+  isAdmin,
+  onSelect,
+  onToggleFavorite,
+  onReport,
+  onDelete,
+}: GalleryGridCardProps) {
+  const overlay = (
+    <>
+      {/* Overlay */}
+      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3 pt-8 opacity-0 group-hover:opacity-100 transition-opacity z-[3]">
+        <div className="flex items-center justify-between">
+          <TypeBadge type={item.type} />
+          <span className="text-white/60 text-xs">
+            {formatDate(item.createdAt)}
+          </span>
+        </div>
+      </div>
+
+      {/* Action buttons (top-right corner on hover) */}
+      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-[3]">
+        {showFavorite && (
+          <button
+            onClick={(e) => onToggleFavorite(item, e)}
+            className="rounded-full bg-black/50 p-1.5 hover:bg-black/70 transition-colors"
+            title={isFavorited ? "Remove from favorites" : "Add to favorites"}
+          >
+            <Heart className={cn("h-3.5 w-3.5", isFavorited ? "text-[#ff0073] fill-[#ff0073]" : "text-white")} />
+          </button>
+        )}
+        <button
+          onClick={(e) => onReport(item, e)}
+          className="rounded-full bg-black/50 p-1.5 hover:bg-black/70 transition-colors"
+          title="Report"
+        >
+          <Flag className="h-3.5 w-3.5 text-white" />
+        </button>
+        {isAdmin && (
+          <button
+            onClick={(e) => onDelete(item, e)}
+            className="rounded-full bg-red-500/70 p-1.5 hover:bg-red-500/90 transition-colors"
+            title="Remove from gallery"
+          >
+            <Trash2 className="h-3.5 w-3.5 text-white" />
+          </button>
+        )}
+      </div>
+    </>
+  )
+
+  return (
+    <div
+      role="button"
+      aria-label={`View ${item.type} item`}
+      tabIndex={0}
+      className="group relative aspect-square rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden bg-card hover:ring-2 hover:ring-[#ff0073]/30 transition-all cursor-pointer"
+      onClick={() => onSelect(index)}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onSelect(index) }}
+    >
+      {item.type === "image" ? (
+        <>
+          <CachedImage
+            src={item.outputUrl}
+            alt=""
+            className="w-full h-full object-cover"
+            {...(index < 10 ? (index === 0 ? { fetchPriority: "high" } : {}) : { loading: "lazy" })}
+            thumbnail
+          />
+          {overlay}
+        </>
+      ) : item.type === "video" ? (
+        <VideoCard item={item} priority={index < 10}>{overlay}</VideoCard>
+      ) : (
+        <>
+          <AudioCard url={item.outputUrl} />
+          {overlay}
+        </>
+      )}
+    </div>
+  )
+})
+
 export default function GalleryPage() {
   const { user, isAdmin } = useAuth()
   const location = useLocation()
@@ -283,7 +384,6 @@ export default function GalleryPage() {
   })
   const [favoritesOnly, setFavoritesOnly] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
-  const sentinelRef = useRef<HTMLDivElement>(null)
 
   const toggleMyItems = useCallback((checked: boolean) => {
     setMyItemsOnly(checked)
@@ -302,12 +402,16 @@ export default function GalleryPage() {
   )
   const { data: favoriteIds } = useGalleryFavorites(user?.id)
   const favoritesSet = useMemo(() => new Set(favoriteIds ?? []), [favoriteIds])
-  const favoriteMutation = useToggleFavoriteMutation()
+  const favoriteMutation = useToggleFavoriteMutation(user?.id)
   const reportMutation = useReportGalleryItemMutation()
   const deleteMutation = useDeleteGalleryItemMutation()
 
-  // Derive flat items list from infinite query pages
-  const items: readonly GalleryItem[] = data?.pages.flatMap((p) => p.data) ?? []
+  // Derive flat items list from infinite query pages (memoized so the grid
+  // doesn't reconcile every card on unrelated re-renders)
+  const items: readonly GalleryItem[] = useMemo(
+    () => data?.pages.flatMap((p) => p.data) ?? [],
+    [data],
+  )
   const totalCount = data?.pages[0]?.totalCount ?? items.length
 
   const selectedItem = selectedIndex !== null ? items[selectedIndex] ?? null : null
@@ -331,21 +435,29 @@ export default function GalleryPage() {
   // Admin delete confirm state
   const [deleteItem, setDeleteItem] = useState<GalleryItem | null>(null)
 
-  // Infinite scroll via IntersectionObserver
-  useEffect(() => {
-    const sentinel = sentinelRef.current
-    if (!sentinel) return
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting && hasMore && !loading && !loadingMore) {
-          fetchNextPage()
-        }
-      },
-      { rootMargin: "800px" },
-    )
-    observer.observe(sentinel)
-    return () => observer.disconnect()
-  }, [hasMore, loading, loadingMore, fetchNextPage])
+  // Row-virtualize the (window-scrolled, unbounded) grid. Replaces the old
+  // IntersectionObserver sentinel — the hook auto-fetches the next page when the
+  // last rendered row nears the end. The flat `items` array stays complete (no
+  // maxPages), so lightbox indexing into items[i] is unaffected.
+  const {
+    gridRef,
+    virtualRows,
+    totalSize,
+    columns,
+    scrollMargin,
+    gridTemplateColumns,
+  } = useVirtualGrid({
+    itemCount: items.length,
+    breakpoints: GRID_BREAKPOINTS.gallery,
+    // aspect-square tiles, no info section below the tile → row height ≈ width.
+    squareTiles: true,
+    estimateRowHeight: 240,
+    gap: 16, // gap-4
+    overscan: 3,
+    fetchNextPage,
+    hasNextPage: hasMore,
+    isFetchingNextPage: loadingMore,
+  })
 
   async function handleReport() {
     if (!reportItem) return
@@ -461,7 +573,7 @@ export default function GalleryPage() {
     }
   }
 
-  async function handleToggleFavorite(item: GalleryItem, e?: React.MouseEvent) {
+  const handleToggleFavorite = useCallback(async (item: GalleryItem, e?: React.MouseEvent) => {
     e?.stopPropagation()
     if (!user) {
       toast.error("Sign in to save favorites")
@@ -473,19 +585,24 @@ export default function GalleryPage() {
     } catch {
       toast.error("Failed to update favorite")
     }
-  }
+  }, [user, favoriteMutation])
 
-  function openReportDialog(item: GalleryItem, e?: React.MouseEvent) {
+  const openReportDialog = useCallback((item: GalleryItem, e?: React.MouseEvent) => {
     e?.stopPropagation()
     setReportItem(item)
     setReportReason("inappropriate")
     setReportDetails("")
-  }
+  }, [])
 
-  function openDeleteDialog(item: GalleryItem, e?: React.MouseEvent) {
+  const openDeleteDialog = useCallback((item: GalleryItem, e?: React.MouseEvent) => {
     e?.stopPropagation()
     setDeleteItem(item)
-  }
+  }, [])
+
+  // Stable selection callback for memoized grid cards
+  const handleSelectIndex = useCallback((index: number) => {
+    setSelectedIndex(index)
+  }, [])
 
   return (
     <div className="min-h-screen bg-background">
@@ -569,99 +686,45 @@ export default function GalleryPage() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {items.map((item, index) => {
-                const overlay = (
-                  <>
-                    {/* Overlay */}
-                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3 pt-8 opacity-0 group-hover:opacity-100 transition-opacity z-[3]">
-                      <div className="flex items-center justify-between">
-                        <TypeBadge type={item.type} />
-                        <span className="text-white/60 text-xs">
-                          {formatDate(item.createdAt)}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Action buttons (top-right corner on hover) */}
-                    <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-[3]">
-                      {user && (
-                        <button
-                          onClick={(e) => handleToggleFavorite(item, e)}
-                          className="rounded-full bg-black/50 p-1.5 hover:bg-black/70 transition-colors"
-                          title={favoritesSet.has(item.id) ? "Remove from favorites" : "Add to favorites"}
-                        >
-                          <Heart className={cn("h-3.5 w-3.5", favoritesSet.has(item.id) ? "text-[#ff0073] fill-[#ff0073]" : "text-white")} />
-                        </button>
-                      )}
-                      <button
-                        onClick={(e) => openReportDialog(item, e)}
-                        className="rounded-full bg-black/50 p-1.5 hover:bg-black/70 transition-colors"
-                        title="Report"
-                      >
-                        <Flag className="h-3.5 w-3.5 text-white" />
-                      </button>
-                      {isAdmin && (
-                        <button
-                          onClick={(e) => openDeleteDialog(item, e)}
-                          className="rounded-full bg-red-500/70 p-1.5 hover:bg-red-500/90 transition-colors"
-                          title="Remove from gallery"
-                        >
-                          <Trash2 className="h-3.5 w-3.5 text-white" />
-                        </button>
-                      )}
-                    </div>
-                  </>
-                )
-
-                return (
-                  <div
-                    key={`${item.id}-${index}`}
-                    role="button"
-                    aria-label={`View ${item.type} item`}
-                    tabIndex={0}
-                    className="group relative aspect-square rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden bg-card hover:ring-2 hover:ring-[#ff0073]/30 transition-all cursor-pointer"
-                    onClick={() => setSelectedIndex(index)}
-                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setSelectedIndex(index) }}
-                  >
-                    {item.type === "image" ? (
-                      <>
-                        <CachedImage
-                          src={item.outputUrl}
-                          alt=""
-                          className="w-full h-full object-cover"
-                          {...(index < 10 ? (index === 0 ? { fetchPriority: "high" } : {}) : { loading: "lazy" })}
-                          thumbnail
-                        />
-                        {overlay}
-                      </>
-                    ) : item.type === "video" ? (
-                      <VideoCard item={item} priority={index < 10}>{overlay}</VideoCard>
-                    ) : (
-                      <>
-                        <AudioCard url={item.outputUrl} />
-                        {overlay}
-                      </>
-                    )}
-                  </div>
-                )
-              })}
+            {/* Windowed grid: only rows in (viewport + overscan) are mounted.
+                Container height = totalSize so the scrollbar reflects the full
+                list; each row is absolutely positioned at its virtual offset. */}
+            <div ref={gridRef} style={{ height: totalSize, position: "relative" }}>
+              {virtualRows.map((virtualRow) => (
+                <div
+                  key={virtualRow.key}
+                  className="absolute top-0 left-0 w-full"
+                  style={{
+                    transform: `translateY(${virtualRow.start - scrollMargin}px)`,
+                    display: "grid",
+                    gridTemplateColumns,
+                    gap: 16,
+                  }}
+                >
+                  {rowItems(items, virtualRow.index, columns).map(({ item, index }) => (
+                    <GalleryGridCard
+                      key={`${item.id}-${index}`}
+                      item={item}
+                      index={index}
+                      isFavorited={favoritesSet.has(item.id)}
+                      showFavorite={!!user}
+                      isAdmin={isAdmin}
+                      onSelect={handleSelectIndex}
+                      onToggleFavorite={handleToggleFavorite}
+                      onReport={openReportDialog}
+                      onDelete={openDeleteDialog}
+                    />
+                  ))}
+                </div>
+              ))}
             </div>
 
-            {/* Skeleton placeholders while loading next page */}
+            {/* Loading indicator while fetching the next page */}
             {loadingMore && (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 mt-4">
-                {Array.from({ length: 20 }).map((_, i) => (
-                  <div
-                    key={`skeleton-${i}`}
-                    className="aspect-square rounded-lg bg-zinc-200 dark:bg-zinc-800 animate-pulse"
-                  />
-                ))}
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
             )}
-
-            {/* Infinite scroll sentinel */}
-            <div ref={sentinelRef} className="h-1" />
 
             {!hasMore && items.length > 0 && (
               <p className="text-center text-sm text-muted-foreground py-8">

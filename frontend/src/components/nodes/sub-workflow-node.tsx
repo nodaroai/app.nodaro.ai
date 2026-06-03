@@ -6,11 +6,8 @@ import { Workflow, Expand } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
-
-const PORT_COLOR: Record<string, string> = {
-  text: "#22D3EE", image: "#22D3EE", video: "#A78BFA", audio: "#FCD34D", any: "#475569",
-}
+import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
+import { PORT_COLOR } from "@/lib/sub-workflow-handles"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useNavigateWithGuard } from "@/hooks/use-navigate-with-guard"
 import { openSubWorkflow } from "@/lib/sub-workflow-navigation"
@@ -140,10 +137,10 @@ function SubWorkflowNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </BaseNode>
       {handles.filter(h => h.type === "target").map(h => (
-        <HandleWithPopover key={h.id} nodeId={id} nodeType="sub-workflow" handleId={h.id} type="target" position={Position.Left}  label={h.label ?? h.id} color={PORT_COLOR[h.mediaType ?? "any"] ?? "#475569"} icon={<Workflow />} side="left"  top={h.top ?? "calc(100% - 24px)"} />
+        <HandleWithPopover key={h.id} nodeId={id} nodeType="sub-workflow" handleId={h.id} type="target" position={Position.Left}  label={h.label ?? h.id} color={PORT_COLOR[h.mediaType ?? "any"] ?? HANDLE_COLORS.control} icon={<Workflow />} side="left"  top={h.top ?? "calc(100% - 24px)"} />
       ))}
       {handles.filter(h => h.type === "source").map(h => (
-        <HandleWithPopover key={h.id} nodeId={id} nodeType="sub-workflow" handleId={h.id} type="source" position={Position.Right} label={h.label ?? h.id} color={PORT_COLOR[h.mediaType ?? "any"] ?? "#475569"} icon={<Workflow />} side="right" top={h.top ?? "24px"} />
+        <HandleWithPopover key={h.id} nodeId={id} nodeType="sub-workflow" handleId={h.id} type="source" position={Position.Right} label={h.label ?? h.id} color={PORT_COLOR[h.mediaType ?? "any"] ?? HANDLE_COLORS.control} icon={<Workflow />} side="right" top={h.top ?? "24px"} />
       ))}
       {nodeData.referencedWorkflowId && status !== "running" && (
         <button

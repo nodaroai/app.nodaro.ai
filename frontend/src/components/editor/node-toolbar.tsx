@@ -7,7 +7,7 @@ import {
   Upload, Video, Rss, Palette, PaintBucket, Server, Brush, Mountain,
   Hash, Clock, RatioIcon, Mic, ShieldCheck, StickyNote,
   Volume2, Captions, Maximize, AudioLines, Music,
-  SlidersHorizontal, Scissors, Frame, Aperture, Lightbulb, SwatchBook, CloudFog, Globe, HardDrive, Webhook, Clapperboard, UserPlus, SmilePlus, Package, MapPin, Wand2, Layers, Disc3, FastForward, FileText, Users, Waypoints, Sparkles, Repeat, Gauge, SunDim, Box, Shapes, AudioWaveform, ArrowUpFromLine, RefreshCw, Eye, Languages, AlignLeft, Workflow, LogIn, LogOut, Share2, Instagram, Youtube, Linkedin, Twitter, Facebook, UserRound, Send, Download, GitBranch, Puzzle, MessageSquare, ZoomIn, Eraser, ListMusic, Braces, Filter, Funnel, ListFilter, ListTree, CopyMinus, GitMerge, ArrowUpDown, Smile, PersonStanding, PawPrint, Car, Swords, Armchair, Camera, LayoutDashboard, HandMetal, Hourglass, Cpu, Zap, Activity, Piano, User, MessageCircle, ScanFace, VenetianMask,
+  SlidersHorizontal, Scissors, Frame, Aperture, Lightbulb, SwatchBook, CloudFog, Globe, HardDrive, Webhook, Clapperboard, UserPlus, SmilePlus, Package, MapPin, Wand2, Layers, Disc3, FastForward, FileText, Users, Waypoints, Sparkles, Repeat, Gauge, SunDim, Box, Shapes, AudioWaveform, ArrowUpFromLine, RefreshCw, Eye, Languages, AlignLeft, Workflow, LogIn, LogOut, Share2, Instagram, Youtube, Linkedin, Twitter, Facebook, UserRound, Send, Download, GitBranch, Puzzle, MessageSquare, ZoomIn, Eraser, ListMusic, Braces, Filter, Funnel, ListFilter, ListTree, CopyMinus, GitMerge, ArrowUpDown, Smile, PersonStanding, PawPrint, Car, Swords, Armchair, Camera, LayoutDashboard, HandMetal, Hourglass, Cpu, Zap, Activity, Piano, User, MessageCircle, ScanFace, VenetianMask, Gem,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -33,7 +33,7 @@ interface NodeOption {
 
 const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   // Input
-  { type: "text-prompt", label: "Text Prompt", icon: <Type className="h-4 w-4" />, category: "Input" },
+  { type: "text-prompt", label: "Text", icon: <Type className="h-4 w-4" />, category: "Input", keywords: ["prompt", "text prompt"] },
   { type: "upload-image", label: "Upload Image", icon: <Upload className="h-4 w-4" />, category: "Input" },
   { type: "upload-video", label: "Upload Video", icon: <Video className="h-4 w-4" />, category: "Input" },
   { type: "upload-audio", label: "Upload Audio", icon: <Music className="h-4 w-4" />, category: "Input" },
@@ -47,7 +47,6 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "telegram-trigger", label: "Telegram Trigger", icon: <Send className="h-4 w-4" />, category: "Triggers" },
   // Data
   { type: "list", label: "List", icon: <List className="h-4 w-4" />, category: "Data" },
-  { type: "loop", label: "Table", icon: <Repeat className="h-4 w-4" />, category: "Data" },
   { type: "web-scrape", label: "Web Scrape", icon: <Globe className="h-4 w-4" />, category: "Data" },
   // Hidden — uncomment to restore in the Add Node UI:
   // { type: "json-process", label: "JSON Process", icon: <Filter className="h-4 w-4" />, category: "Data" },
@@ -84,6 +83,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "aesthetic", label: "Aesthetic / Microtrend", icon: <Sparkles className="h-4 w-4" />, category: "Pickers", group: "Look", keywords: ["aesthetic", "microtrend", "core", "y2k", "cottagecore", "dark academia", "techwear", "gorpcore", "old money", "preppy", "streetwear", "coquette", "indie sleaze", "balletcore", "goblincore", "minimalism", "maximalism", "vibe"] },
   { type: "era", label: "Era / Period", icon: <Hourglass className="h-4 w-4" />, category: "Pickers", group: "Look", keywords: ["era", "period", "decade", "1920s", "1950s", "1970s", "1980s", "1990s", "2000s", "victorian", "medieval", "renaissance", "wild west", "feudal japan", "cyberpunk", "post-apocalyptic", "retrofuturism", "dieselpunk", "atompunk", "vintage", "future"] },
   { type: "pose", label: "Pose", icon: <PersonStanding className="h-4 w-4" />, category: "Pickers", group: "Subject", keywords: ["pose", "posture", "action", "stance", "standing", "sitting", "running", "walking", "dancing", "jumping", "fighting", "body", "position"] },
+  { type: "styling", label: "Styling", icon: <Gem className="h-4 w-4" />, category: "Pickers", group: "Subject", keywords: ["beauty", "makeup", "glamour", "smoky eye", "lipstick", "eyewear", "sunglasses", "aviators", "headwear", "hat", "beanie", "fedora", "jewelry", "necklace", "earrings", "nails", "manicure", "face paint", "fabric", "silk", "leather", "denim", "velvet", "satin", "lace"] },
   { type: "material", label: "Material", icon: <Layers className="h-4 w-4" />, category: "Pickers", group: "Object", keywords: ["material", "fabric", "metal", "stone", "wood", "glass", "silk", "leather", "chrome", "marble", "gold", "silver", "bronze", "velvet", "porcelain", "crystal", "holographic", "iridescent", "neon", "made of"] },
   { type: "animal", label: "Animal", icon: <PawPrint className="h-4 w-4" />, category: "Pickers", group: "Object", keywords: ["animal", "cat", "dog", "bird", "fish", "horse", "lion", "tiger", "bear", "wolf", "fox", "elephant", "pet", "wildlife", "dinosaur", "dragon"] },
   { type: "vehicle", label: "Vehicle", icon: <Car className="h-4 w-4" />, category: "Pickers", group: "Object", keywords: ["vehicle", "car", "truck", "motorcycle", "bike", "boat", "plane", "helicopter", "tank", "spaceship", "muscle", "classic", "sports", "transport"] },
@@ -138,7 +138,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "forced-alignment", label: "Forced Alignment", icon: <AlignLeft className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
   // AI — Suno Music
   { type: "suno-voice", label: "Suno Voice", icon: <Mic className="h-4 w-4" />, category: "AI", group: "Suno Music" },
-  { type: "suno-generate", label: "Suno Generate", icon: <Music className="h-4 w-4" />, category: "AI", group: "Suno Music" },
+  { type: "suno-generate", label: "Suno Create Music", icon: <Music className="h-4 w-4" />, category: "AI", group: "Suno Music" },
   { type: "suno-cover", label: "Suno Cover", icon: <Disc3 className="h-4 w-4" />, category: "AI", group: "Suno Music" },
   { type: "suno-extend", label: "Suno Extend", icon: <FastForward className="h-4 w-4" />, category: "AI", group: "Suno Music" },
   { type: "suno-lyrics", label: "Suno Lyrics", icon: <FileText className="h-4 w-4" />, category: "AI", group: "Suno Music" },
@@ -238,9 +238,9 @@ const CATEGORY_ICON_HOVER: Record<string, string> = {
 
 function NodeList({ onAdd }: { readonly onAdd: (type: SceneNodeType) => void }) {
   const { isAdmin } = useAuth()
-  // The "Parameter" category is currently hidden from the toolbar. Re-enable
-  // by dropping the `n.category !== "Parameter"` clause below.
-  const visibleNodes = NODE_OPTIONS.filter((n) => (!n.adminOnly || isAdmin) && n.category !== "Parameter")
+  // Show every node type in the sidebar (Parameter pickers included). Only
+  // admin-only nodes stay gated, matching the add-node popup's pool.
+  const visibleNodes = NODE_OPTIONS.filter((n) => !n.adminOnly || isAdmin)
   const categories = Array.from(new Set(visibleNodes.map((n) => n.category)))
     .sort((a, b) => categoryRank(a) - categoryRank(b))
   return (

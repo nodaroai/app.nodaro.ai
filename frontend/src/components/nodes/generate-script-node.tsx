@@ -8,7 +8,7 @@ import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { isValidGenerateScriptConnection } from "@/lib/audio-text-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import type { ExpandOptions } from "@/components/editor/expand-storyboard-dialog"
@@ -257,14 +257,14 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
-    <HandleWithPopover nodeId={id} nodeType="generate-script" handleId="prompt"     type="target" position={Position.Left}  label="Prompt"     color="#ff0073" icon={<Type />}          side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_PROMPT} />
-    <HandleWithPopover nodeId={id} nodeType="generate-script" handleId="scenes"     type="source" position={Position.Right} label="Scenes"     color="#A78BFA" icon={<Braces />}        side="right" top="24px" />
-    <HandleWithPopover nodeId={id} nodeType="generate-script" handleId="images"     type="source" position={Position.Right} label="Images"     color="#22D3EE" icon={<ImageIcon />}     side="right" top="56px" />
-    <HandleWithPopover nodeId={id} nodeType="generate-script" handleId="dialogue"   type="source" position={Position.Right} label="Dialogue"   color="#22D3EE" icon={<MessageSquare />} side="right" top="88px" />
-    <HandleWithPopover nodeId={id} nodeType="generate-script" handleId="music"      type="source" position={Position.Right} label="Music"      color="#F59E0B" icon={<Music />}         side="right" top="120px" />
-    <HandleWithPopover nodeId={id} nodeType="generate-script" handleId="sfx"        type="source" position={Position.Right} label="SFX"        color="#F59E0B" icon={<Volume2 />}       side="right" top="152px" />
-    <HandleWithPopover nodeId={id} nodeType="generate-script" handleId="characters" type="source" position={Position.Right} label="Characters" color="#F472B6" icon={<User />}          side="right" top="184px" />
-    <HandleWithPopover nodeId={id} nodeType="generate-script" handleId="locations"  type="source" position={Position.Right} label="Locations"  color="#F472B6" icon={<MapPin />}        side="right" top="216px" />
+    <HandleWithPopover nodeId={id} nodeType="generate-script" handleId="prompt"     type="target" position={Position.Left}  label="Prompt"     color={TEXT_HANDLE_COLOR} icon={<Type />}          side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_PROMPT} />
+    <HandleWithPopover nodeId={id} nodeType="generate-script" handleId="scenes"     type="source" position={Position.Right} label="Scenes"     color={HANDLE_COLORS.video} icon={<Braces />}        side="right" top="24px" />
+    <HandleWithPopover nodeId={id} nodeType="generate-script" handleId="images"     type="source" position={Position.Right} label="Images"     color={HANDLE_COLORS.image} icon={<ImageIcon />}     side="right" top="56px" />
+    <HandleWithPopover nodeId={id} nodeType="generate-script" handleId="dialogue"   type="source" position={Position.Right} label="Dialogue"   color={TEXT_HANDLE_COLOR} icon={<MessageSquare />} side="right" top="88px" />
+    <HandleWithPopover nodeId={id} nodeType="generate-script" handleId="music"      type="source" position={Position.Right} label="Music"      color={HANDLE_COLORS.audio} icon={<Music />}         side="right" top="120px" />
+    <HandleWithPopover nodeId={id} nodeType="generate-script" handleId="sfx"        type="source" position={Position.Right} label="SFX"        color={HANDLE_COLORS.audio} icon={<Volume2 />}       side="right" top="152px" />
+    <HandleWithPopover nodeId={id} nodeType="generate-script" handleId="characters" type="source" position={Position.Right} label="Characters" color={HANDLE_COLORS.identity} icon={<User />}          side="right" top="184px" />
+    <HandleWithPopover nodeId={id} nodeType="generate-script" handleId="locations"  type="source" position={Position.Right} label="Locations"  color={HANDLE_COLORS.identity} icon={<MapPin />}        side="right" top="216px" />
     {activeScript && showFullscreen && (
       <Suspense fallback={null}>
       <ScriptPreviewModal

@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-05-28T14:07:28.053Z
-generated_from: 54359c42
+generated_at: 2026-06-01T20:05:20.439Z
+generated_from: c8fd1e03
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -37,7 +37,7 @@ Every edge connects a SOURCE node's output handle to a TARGET node's input handl
 
 - **`sourceHandle`** — must match one of the source node's published output handles. Per-node skill content lists the canonical handles. Common shorthand: `generate-image` → `"image"`, `image-to-video` → `"video"`, `generate-music` → `"audio"`.
 - **`targetHandle`** — must match one of the target node's input handles. Most generation nodes accept `"in"` as the default input. Specialized handles: `image-to-video` exposes `"startFrame"`, `"endFrame"`, `"audio"`.
-- **Loop (Table) node columns** — each column on a `loop` node exposes its own source handle named `col_<column_id>`. Wire `sourceHandle: "col_<id>"` to fan out a column's values into a downstream node. Omitting `sourceHandle` connects to the default output, which usually isn't what you want.
+- **List node columns** — a `list` node starts as a single text column and grows into a multi-column typed table as you connect more inputs. Each column exposes its own source handle named `col_<column_id>`. Wire `sourceHandle: "col_<id>"` to fan out a column's values into a downstream node. Omitting `sourceHandle` connects to the default output, which usually isn't what you want.
 
 ## update_workflow_json contract
 
@@ -123,7 +123,6 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `list` — List
 - `llm-chat` — Generate Text
 - `location` — Location
-- `loop` — Table
 - `loop-subject` — Loop Subject
 - `loop-video` — Loop Video
 - `lottie-overlay` — Lottie Overlay
@@ -194,7 +193,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `teleport-receive` — Teleport Receive
 - `teleport-send` — Teleport Send
 - `temporal` — Temporal
-- `text-prompt` — Text Prompt
+- `text-prompt` — Text
 - `text-to-audio` — Text to Audio
 - `text-to-dialogue` — Text to Dialogue
 - `text-to-speech` — Text to Speech
@@ -233,7 +232,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 ## Common gotchas
 
 - Node types are kebab-case in JSON (`generate-image`), not camelCase or PascalCase. The frontend silently drops unknown types.
-- The `loop` type's UI label is "Table" — don't confuse it with `list` (single-column).
-- An edge with no `sourceHandle` connects to the default node output. For column-aware fan-out from a `loop` node, you MUST set `sourceHandle: "col_<id>"`.
+- The `list` node is a single text column by default and grows into a multi-column typed table as you connect more inputs. (The retired `loop`/"Table" type is now an alias of `list`, auto-migrated on workflow load.)
+- An edge with no `sourceHandle` connects to the default node output. For column-aware fan-out from a `list` node, you MUST set `sourceHandle: "col_<id>"`.
 - `update_workflow_json` overwrites — always merge new nodes into the existing graph, never replace it.
 - The catalog above auto-generates. If a node type you expect to find isn't here, run `npm run gen:skills` from `backend/`.

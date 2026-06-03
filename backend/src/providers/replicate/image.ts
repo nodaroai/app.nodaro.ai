@@ -12,9 +12,9 @@ import type {
   ProviderResult,
   ReconcileOpts,
 } from "../provider.interface.js"
-import { replicate, extractUrl, extractCost } from "./client.js"
-import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
+import { extractUrl, runReplicatePrediction } from "./client.js"
 import { translateToEnglish } from "../../lib/translate.js"
+import { flux2CostUsd, isFlux2Model } from "@nodaro/shared"
 
 const DEFAULT_ASPECT_RATIO = "1:1"
 
@@ -29,6 +29,15 @@ function readCommon(extraParams: Record<string, unknown> | undefined): CommonExt
       (extraParams?.aspect_ratio as string | undefined) ?? DEFAULT_ASPECT_RATIO,
     seed: extraParams?.seed as number | undefined,
   }
+}
+
+/** Parse the resolution extraParam ("2 MP") to megapixels. Absent → 1 MP
+ *  (legacy nodes predate the selector; see TASK 9). */
+function resolutionMp(extraParams: Record<string, unknown> | undefined): number {
+  const raw = extraParams?.resolution
+  if (typeof raw !== "string") return 1
+  const n = parseFloat(raw) // "2 MP" -> 2, "0.5 MP" -> 0.5, "2" -> 2
+  return Number.isFinite(n) && n > 0 ? n : 1
 }
 
 interface ReplicateModelSpec {
@@ -54,9 +63,13 @@ const IMAGE_MODELS: Record<string, ReplicateModelSpec> = {
       const input: Record<string, unknown> = {
         prompt,
         aspect_ratio: aspectRatio,
+        megapixels: String(resolutionMp(extraParams)),
       }
       if (seed != null) input.seed = seed
-      if (referenceImageUrls?.length) input.image = referenceImageUrls[0]
+      // Schema field is `images` (array, max 5) — NOT a single `image` string.
+      // Replicate silently drops unknown input fields, so the wrong name means
+      // the reference is ignored and the model runs as pure text-to-image.
+      if (referenceImageUrls?.length) input.images = referenceImageUrls.slice(0, 5)
       return input
     },
   },
@@ -80,7 +93,9 @@ const IMAGE_MODELS: Record<string, ReplicateModelSpec> = {
       return input
     },
   },
-  // Multi-image Flux Kontext Pro — up to 4 input images, no KIE safety filter.
+  // Multi-image Flux Kontext Pro — no KIE safety filter. The
+  // `multi-image-kontext-pro` schema exposes ONLY input_image_1 + input_image_2
+  // (it is a two-image combiner), so the ref cap is 2 (see REF_IMAGE_MAX_LIMITS).
   "kontext-multi": {
     model: "flux-kontext-apps/multi-image-kontext-pro",
     buildInput: (prompt, referenceImageUrls, extraParams) => {
@@ -93,8 +108,6 @@ const IMAGE_MODELS: Record<string, ReplicateModelSpec> = {
       }
       if (refs[0]) input.input_image_1 = refs[0]
       if (refs[1]) input.input_image_2 = refs[1]
-      if (refs[2]) input.input_image_3 = refs[2]
-      if (refs[3]) input.input_image_4 = refs[3]
       if (seed != null) input.seed = seed
       return input
     },
@@ -102,7 +115,7 @@ const IMAGE_MODELS: Record<string, ReplicateModelSpec> = {
   // BFL Flux 2 Max — even larger sibling of Pro. Same safety_tolerance
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
-  // `buildCreditModelIdentifier`). Supports up to 8 image_prompt refs.
+  // `buildCreditModelIdentifier`). Supports up to 8 reference images.
   "flux-2-max": {
     model: "black-forest-labs/flux-2-max",
     buildInput: (prompt, referenceImageUrls, extraParams) => {
@@ -113,21 +126,20 @@ const IMAGE_MODELS: Record<string, ReplicateModelSpec> = {
         aspect_ratio: aspectRatio,
         output_format: "png",
         safety_tolerance: 5,
+        resolution: `${resolutionMp(extraParams)} MP`,
       }
-      // Map up to 8 references; flux-2-max charges $0.03 per ref so the
-      // cap is honored at the frontend (REF_IMAGE_MAX_LIMITS) and route
-      // pricing tier as well.
-      for (let i = 0; i < Math.min(refs.length, 8); i++) {
-        input[`image_prompt_${i + 1}`] = refs[i]
-      }
+      // Schema field is a single `input_images` array (max 8) — NOT
+      ***REDACTED-OSS-SCRUB***
+      // also gated at the frontend (REF_IMAGE_MAX_LIMITS) and route pricing.
+      if (refs.length) input.input_images = refs.slice(0, 8)
       if (seed != null) input.seed = seed
       return input
     },
   },
   // BFL Flux 2 Pro — flagship Flux 2 with `safety_tolerance` (0-5) lever.
   // We pin it to 5 (the max — Replicate caps Pro at 5, NOT 6). KIE's safety
-  // filter never sees the request. Supports up to 4 image_prompt refs for
-  // i2i consistency.
+  // filter never sees the request. Shares Max's schema: a single
+  // `input_images` array (the model accepts up to 8; frontend caps at 4).
   "flux-2-pro": {
     model: "black-forest-labs/flux-2-pro",
     buildInput: (prompt, referenceImageUrls, extraParams) => {
@@ -138,11 +150,10 @@ const IMAGE_MODELS: Record<string, ReplicateModelSpec> = {
         aspect_ratio: aspectRatio,
         output_format: "png",
         safety_tolerance: 5,
+        resolution: `${resolutionMp(extraParams)} MP`,
       }
-      if (refs[0]) input.image_prompt_1 = refs[0]
-      if (refs[1]) input.image_prompt_2 = refs[1]
-      if (refs[2]) input.image_prompt_3 = refs[2]
-      if (refs[3]) input.image_prompt_4 = refs[3]
+      // Schema field is a single `input_images` array — NOT image_prompt_1..N.
+      if (refs.length) input.input_images = refs.slice(0, 8)
       if (seed != null) input.seed = seed
       return input
     },
@@ -175,7 +186,9 @@ async function runImagePrediction(
   const input = spec.buildInput(englishPrompt, referenceImageUrls, extraParams)
 
   // Resolve dynamic model (flux-lora-character) per-request from extraParams.
-  let prediction
+  // Versioned references contain ":" (owner/name:hash) and use the `version`
+  // field on predictions.create; static specs use the `model` field.
+  let dispatchTarget: { version: string } | { model: string }
   if (spec.model === null) {
     const loraVersion = extraParams?.lora_version as string | undefined
     if (!loraVersion) {
@@ -183,25 +196,20 @@ async function runImagePrediction(
         `[Replicate:image] model=${model} requires extraParams.lora_version`,
       )
     }
-    // Versioned references contain ":" (owner/name:hash). Use the `version`
-    // field on predictions.create rather than `model`.
     const versionHash = loraVersion.includes(":")
       ? loraVersion.split(":").pop()!
       : loraVersion
-    prediction = await replicate.predictions.create({ version: versionHash, input })
+    dispatchTarget = { version: versionHash }
   } else {
-    prediction = await replicate.predictions.create({
-      model: spec.model,
-      input,
-    })
+    dispatchTarget = { model: spec.model }
   }
-  await fireOnTaskCreated(reconcileOpts, prediction.id, "[replicate:image]")
-  const completed = await replicate.wait(prediction)
-  const output = completed.output
 
-  const cost = extractCost(
-    completed.metrics as Record<string, unknown> | undefined,
-  )
+  const { output, cost } = await runReplicatePrediction({
+    ...dispatchTarget,
+    input,
+    label: "[replicate:image]",
+    reconcileOpts,
+  })
 
   const raw =
     typeof output === "string"
@@ -211,10 +219,22 @@ async function runImagePrediction(
         : output
   const resultUrl = extractUrl(raw)
 
-  console.log(
-    `[Replicate:image] result=${resultUrl} cost=${cost?.toFixed(6) ?? "N/A"}`,
-  )
-  return { url: resultUrl, cost }
+  // For Flux 2 models, replace GPU-time cost with the real per-MP formula cost
+  // and mark non-metered so commitJobCredits charges the reserved tier only.
+  // Replicate bills BFL Flux 2 at a fixed per-MP rate, not GPU time, so the
+  // predict-time figure is wrong for provider_cost / anomaly tracking.
+  let finalCost = cost
+  let metered: boolean | undefined = undefined
+  if (isFlux2Model(model)) {
+    finalCost = flux2CostUsd(model, resolutionMp(extraParams), referenceImageUrls?.length ?? 0)
+    metered = false
+  }
+
+  return {
+    url: resultUrl,
+    cost: finalCost,
+    ...(metered !== undefined ? { meteredCost: metered } : {}),
+  }
 }
 
 export class ReplicateImageProvider implements ImageGenerationProvider {

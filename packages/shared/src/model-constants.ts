@@ -195,9 +195,10 @@ export const REF_IMAGE_MAX_LIMITS: Record<string, number> = {
   "recraft-upscale": 1,
   "topaz-image-upscale": 1,
   // Replicate Open models — Klein takes an optional single ref; Kontext Multi
-  // accepts up to 4 numbered input images; Flux 2 Pro up to 4; Max up to 8.
+  // (multi-image-kontext-pro) is a two-image combiner (input_image_1/2 only);
+  // Flux 2 Pro up to 4; Max up to 8.
   "flux-2-klein": 1,
-  "kontext-multi": 4,
+  "kontext-multi": 2,
   "flux-2-pro": 4,
   "flux-2-max": 8,
 }

@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest"
-import { safeUrlSchema } from "../url-validator.js"
+import {
+  safeUrlSchema,
+  hostnameMatchesAllowlist,
+  isAllowedSocialVideoUrl,
+  SOCIAL_VIDEO_HOSTS,
+  YOUTUBE_HOSTS,
+} from "../url-validator.js"
 
 describe("safeUrlSchema", () => {
   it("accepts valid HTTPS URLs", () => {
@@ -95,5 +101,43 @@ describe("safeUrlSchema", () => {
     // detect this — the runtime gate in `safeFetch` does.
     expect(safeUrlSchema.safeParse("https://attacker.example/").success).toBe(true)
     expect(safeUrlSchema.safeParse("https://subdomain.corp.internal/").success).toBe(true)
+  })
+})
+
+describe("hostnameMatchesAllowlist / isAllowedSocialVideoUrl (SSRF allowlist)", () => {
+  it("accepts the exact allowlisted domains and true subdomains", () => {
+    expect(isAllowedSocialVideoUrl("https://youtube.com/watch?v=abc")).toBe(true)
+    expect(isAllowedSocialVideoUrl("https://www.youtube.com/watch?v=abc")).toBe(true)
+    expect(isAllowedSocialVideoUrl("https://m.youtube.com/watch?v=abc")).toBe(true)
+    expect(isAllowedSocialVideoUrl("https://youtu.be/abc")).toBe(true)
+    expect(isAllowedSocialVideoUrl("https://www.tiktok.com/@x/video/1")).toBe(true)
+    expect(isAllowedSocialVideoUrl("https://x.com/i/status/1")).toBe(true)
+    expect(isAllowedSocialVideoUrl("https://fb.watch/abc")).toBe(true)
+  })
+
+  it("REJECTS the substring-bypass hosts the old .includes() check let through", () => {
+    // attacker-controlled domains that contain an allowlisted token as a substring
+    expect(isAllowedSocialVideoUrl("https://youtube.com.attacker.example/x")).toBe(false)
+    expect(isAllowedSocialVideoUrl("https://youtu.be.evil.com/x")).toBe(false)
+    expect(isAllowedSocialVideoUrl("https://notyoutube.com/x")).toBe(false)
+    expect(isAllowedSocialVideoUrl("https://x.com.evil.com/x")).toBe(false)
+    expect(isAllowedSocialVideoUrl("https://evil-x.com/x")).toBe(false)
+    // the classic SSRF target a substring host could resolve to
+    expect(isAllowedSocialVideoUrl("https://youtube.com.169.254.169.254.nip.io/x")).toBe(false)
+  })
+
+  it("rejects non-allowlisted hosts and malformed URLs", () => {
+    expect(isAllowedSocialVideoUrl("https://vimeo.com/123")).toBe(false)
+    expect(isAllowedSocialVideoUrl("not a url")).toBe(false)
+  })
+
+  it("YOUTUBE_HOSTS subset rejects other social hosts", () => {
+    expect(isAllowedSocialVideoUrl("https://youtube.com/x", YOUTUBE_HOSTS)).toBe(true)
+    expect(isAllowedSocialVideoUrl("https://tiktok.com/x", YOUTUBE_HOSTS)).toBe(false)
+  })
+
+  it("handles FQDN trailing dot and case", () => {
+    expect(hostnameMatchesAllowlist("YouTube.com.", SOCIAL_VIDEO_HOSTS)).toBe(true)
+    expect(hostnameMatchesAllowlist("youtube.com.attacker.example.", SOCIAL_VIDEO_HOSTS)).toBe(false)
   })
 })

@@ -10,16 +10,18 @@ const proxyQuery = z.object({
   download: z.string().optional(),
 })
 
-// Mirrors the allow-list in routes/download.ts. Only Nodaro-hosted media may
+// Mirrors the allow-list in routes/download.ts. Only configured asset media may
 // be served with Content-Disposition: attachment, so the route can't be used
-// as a phishing/malware download proxy under app.nodaro.ai.
-const ALLOWED_DOMAIN = "pub-c813076fe3024da78029786e7b9fd59d.r2.dev"
+// as a phishing/malware download proxy. Extra bucket host via
+// R2_PUBLIC_FALLBACK_DOMAIN (empty by default); the primary gate is the origin
+// derived from R2_PUBLIC_URL below.
+const ALLOWED_DOMAIN = config.R2_PUBLIC_FALLBACK_DOMAIN
 
 // Parsed origin of R2_PUBLIC_URL, cached once. Origin (protocol+host+port)
 // comparison replaces the previous `rawUrl.startsWith(config.R2_PUBLIC_URL)`
-// check — which, with the env example value `https://assets.nodaro.ai` (no
+// check — which, with the env example value `https://assets.example.com` (no
 // trailing slash), allowed look-alike hostnames like
-// `assets.nodaro.ai.evil.com` to pass the allowlist.
+// `assets.example.com.evil.com` to pass the allowlist.
 const R2_PUBLIC_ORIGIN: string | null = (() => {
   if (!config.R2_PUBLIC_URL) return null
   try {
@@ -32,7 +34,7 @@ const R2_PUBLIC_ORIGIN: string | null = (() => {
 function isAllowedDownloadHost(rawUrl: string): boolean {
   try {
     const parsed = new URL(rawUrl)
-    if (parsed.hostname === ALLOWED_DOMAIN) return true
+    if (ALLOWED_DOMAIN !== "" && parsed.hostname === ALLOWED_DOMAIN) return true
     if (R2_PUBLIC_ORIGIN !== null && parsed.origin === R2_PUBLIC_ORIGIN) return true
     return false
   } catch {

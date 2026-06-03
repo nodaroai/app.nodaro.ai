@@ -1,6 +1,6 @@
 ---
 name: building-nodaro-oauth-app
-description: Use when implementing OAuth 2.0 against a Nodaro instance — registering a developer app, building the redirect-to-authorize flow, exchanging codes for access tokens server-side, storing/refreshing tokens, handling scope errors. Covers the eight scopes, the consent screen, RFC 7009 revocation, common errors (invalid_client, invalid_grant, insufficient_scope), and when OAuth is the right choice over API tokens.
+description: Use when implementing OAuth 2.0 against a Nodaro instance — registering a developer app, building the redirect-to-authorize flow, exchanging codes for access tokens server-side, storing/refreshing tokens, handling scope errors. Covers the eleven scopes, the consent screen, RFC 7009 revocation, common errors (invalid_client, invalid_grant, insufficient_scope), and when OAuth is the right choice over API tokens.
 ---
 
 # Building an OAuth app against Nodaro
@@ -47,18 +47,21 @@ You can rotate the secret at any time via the "Rotate secret" button — invalid
 
 ## Step 2: Scope vocabulary
 
-Eight scopes, all of which exist in your app's `scopes_requested`:
+Eleven scopes, all of which exist in your app's `scopes_requested`:
 
 | Scope | What it grants | Routes gated |
 |---|---|---|
 | `workflows:read` | Read user's workflows | `GET /v1/projects/:projectId/workflows` |
 | `workflows:write` | Create / modify workflows | (reserved — no gated routes yet) |
-| `workflows:execute` | Run workflows | `POST /v1/workflows/:id/run` |
+| `workflows:execute` | Run workflows | `POST /v1/workflows/:id/run`; prompt-wizard MCP tools |
 | `jobs:read` | Read job status / results | `GET /v1/jobs/:id` |
 | `assets:read` | Read user's uploaded assets | (reserved) |
 | `assets:write` | Upload assets | (reserved) |
 | `credits:read` | See user's credit balance | (reserved) |
 | `apps:read` | Read public apps | (reserved) |
+| `pipelines:read` | Read Story-to-Video pipelines | `GET /v1/pipelines/*` |
+| `pipelines:execute` | Run / branch pipeline stages | `POST /v1/pipelines/:id/branch` and run routes |
+| `pipelines:approve` | Approve pipeline stage output | pipeline approval routes |
 
 **Request only what you need.** Users see the requested scopes on the consent screen; over-asking causes drop-off.
 

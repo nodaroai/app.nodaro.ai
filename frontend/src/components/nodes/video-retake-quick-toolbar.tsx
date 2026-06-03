@@ -158,7 +158,7 @@ export function VideoRetakeQuickToolbar({
   const containerClass =
     "flex items-center px-1.5 py-1 backdrop-blur-sm rounded-xl border " +
     "bg-white/85 border-black/10 text-neutral-900 " +
-    "dark:bg-black/60 dark:border-white/10 dark:text-white"
+    "node-menu-surface dark:border-white/10 dark:text-white"
 
   // ── Compact mode ───────────────────────────────────────────────────────
   if (isCompact) {
@@ -187,15 +187,15 @@ export function VideoRetakeQuickToolbar({
             side="bottom"
             align="start"
             sideOffset={8}
-            className="w-[240px] p-2 space-y-2"
+            className="w-[240px] p-2 space-y-2 node-menu-surface"
             onClick={(e) => e.stopPropagation()}
           >
             <ToolbarSetting label="Model" icon={<Sparkles className="w-3 h-3" />}>
-              <Select value={currentProvider} onValueChange={handleModelChange} onOpenChange={handleOpenChange}>
+              <Select disabled={isRunning} value={currentProvider} onValueChange={handleModelChange} onOpenChange={handleOpenChange}>
                 <SelectTrigger className={ghostPopoverTriggerClass}>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="node-menu-surface">
                   {MODEL_OPTIONS.map((m) => (
                     <SelectItem key={m.value} value={m.value} className="text-xs">
                       {m.label}
@@ -205,11 +205,11 @@ export function VideoRetakeQuickToolbar({
               </Select>
             </ToolbarSetting>
             <ToolbarSetting label="Aspect" icon={<Ratio className="w-3 h-3" />}>
-              <Select value={currentAspect} onValueChange={handleAspectChange} onOpenChange={handleOpenChange}>
+              <Select disabled={isRunning} value={currentAspect} onValueChange={handleAspectChange} onOpenChange={handleOpenChange}>
                 <SelectTrigger className={ghostPopoverTriggerClass}>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="node-menu-surface">
                   {ASPECT_OPTIONS.map((opt) => (
                     <AspectRatioItem key={opt.value} value={opt.value} label={opt.label} />
                   ))}
@@ -217,11 +217,11 @@ export function VideoRetakeQuickToolbar({
               </Select>
             </ToolbarSetting>
             <ToolbarSetting label="Mode" icon={<RefreshCw className="w-3 h-3" />}>
-              <Select value={currentMode} onValueChange={handleModeChange} onOpenChange={handleOpenChange}>
+              <Select disabled={isRunning} value={currentMode} onValueChange={handleModeChange} onOpenChange={handleOpenChange}>
                 <SelectTrigger className={ghostPopoverTriggerClass}>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="node-menu-surface">
                   {MODE_OPTIONS.map((opt) => (
                     <SelectItem key={opt.value} value={opt.value} className="text-xs">
                       {opt.label}
@@ -231,11 +231,11 @@ export function VideoRetakeQuickToolbar({
               </Select>
             </ToolbarSetting>
             <ToolbarSetting label="Versions" icon={<Copy className="w-3 h-3" />}>
-              <Select value={String(repeatCount)} onValueChange={handleRepeatChange} onOpenChange={handleOpenChange}>
+              <Select disabled={isRunning} value={String(repeatCount)} onValueChange={handleRepeatChange} onOpenChange={handleOpenChange}>
                 <SelectTrigger className={ghostPopoverTriggerClass}>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="node-menu-surface">
                   {[1, 2, 3, 4].map((n) => (
                     <SelectItem key={n} value={String(n)} className="text-xs">
                       × {n}
@@ -246,7 +246,6 @@ export function VideoRetakeQuickToolbar({
             </ToolbarSetting>
           </PopoverContent>
         </Popover>
-        <PinkDot />
         <RunNodeButton
           nodeId={nodeId}
           credits={credits}
@@ -266,12 +265,12 @@ export function VideoRetakeQuickToolbar({
     >
       {/* Model selector — locked to LTX 2.3 Pro for now, dropdown rendered
           for forward-compat (additional retake providers slot in here). */}
-      <Select value={currentProvider} onValueChange={handleModelChange} onOpenChange={handleOpenChange}>
+      <Select disabled={isRunning} value={currentProvider} onValueChange={handleModelChange} onOpenChange={handleOpenChange}>
         <SelectTrigger className={`${ghostTriggerClass} max-w-[180px]`}>
           <Sparkles className="opacity-70" />
           <SelectValue>{modelLabel}</SelectValue>
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent className="node-menu-surface">
           {MODEL_OPTIONS.map((m) => (
             <SelectItem key={m.value} value={m.value} className="text-xs">
               {m.label}
@@ -281,12 +280,12 @@ export function VideoRetakeQuickToolbar({
       </Select>
 
       {/* Aspect ratio selector */}
-      <Select value={currentAspect} onValueChange={handleAspectChange} onOpenChange={handleOpenChange}>
+      <Select disabled={isRunning} value={currentAspect} onValueChange={handleAspectChange} onOpenChange={handleOpenChange}>
         <SelectTrigger className={ghostTriggerClass}>
           <Ratio className="opacity-70" />
           <SelectValue>{aspectShort}</SelectValue>
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent className="node-menu-surface">
           {ASPECT_OPTIONS.map((opt) => (
             <AspectRatioItem key={opt.value} value={opt.value} label={opt.label} />
           ))}
@@ -294,12 +293,12 @@ export function VideoRetakeQuickToolbar({
       </Select>
 
       {/* Mode selector — 3-way replace-audio / replace-video / replace-both */}
-      <Select value={currentMode} onValueChange={handleModeChange} onOpenChange={handleOpenChange}>
+      <Select disabled={isRunning} value={currentMode} onValueChange={handleModeChange} onOpenChange={handleOpenChange}>
         <SelectTrigger className={ghostTriggerClass}>
           <RefreshCw className="opacity-70" />
           <SelectValue>{modeShort}</SelectValue>
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent className="node-menu-surface">
           {MODE_OPTIONS.map((opt) => (
             <SelectItem key={opt.value} value={opt.value} className="text-xs">
               {opt.label}
@@ -309,12 +308,12 @@ export function VideoRetakeQuickToolbar({
       </Select>
 
       {/* Versions */}
-      <Select value={String(repeatCount)} onValueChange={handleRepeatChange} onOpenChange={handleOpenChange}>
+      <Select disabled={isRunning} value={String(repeatCount)} onValueChange={handleRepeatChange} onOpenChange={handleOpenChange}>
         <SelectTrigger className={ghostTriggerClass} title="Versions per run">
           <Copy className="opacity-70" />
           <SelectValue>× {repeatCount}</SelectValue>
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent className="node-menu-surface">
           {[1, 2, 3, 4].map((n) => (
             <SelectItem key={n} value={String(n)} className="text-xs">
               × {n}
@@ -323,7 +322,6 @@ export function VideoRetakeQuickToolbar({
         </SelectContent>
       </Select>
 
-      <PinkDot />
 
       <RunNodeButton
         nodeId={nodeId}
@@ -350,15 +348,6 @@ function AspectRatioItem({ value, label }: { value: string; label: string }) {
   )
 }
 
-/** 4px brand-pink dot — divider between settings and the Run CTA. */
-function PinkDot() {
-  return (
-    <span
-      aria-hidden
-      className="w-1 h-1 rounded-full bg-[#ff0073] mx-1.5 shrink-0"
-    />
-  )
-}
 
 /** Row inside the compact-mode popover. */
 function ToolbarSetting({

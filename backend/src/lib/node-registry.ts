@@ -75,6 +75,31 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
     outputType: "audio",
     inputSchema: { fields: [{ key: "url", type: "audio-url", required: true }] },
   },
+  {
+    type: "youtube-video",
+    label: "Video URL",
+    category: "input",
+    // outputType: video — input-resolver isVideoSourceType() treats youtube-video as a video source.
+    description: "Download video or audio from YouTube, TikTok, Instagram, Facebook, or X.",
+    outputType: "video",
+    inputSchema: { fields: [{ key: "url", type: "text", required: true }] },
+  },
+  {
+    type: "reference-audio",
+    label: "Reference Audio",
+    category: "input",
+    // outputType: audio — source node (SOURCE_NODE_TYPES) that emits an audio URL.
+    description: "Extract audio from YouTube videos or provide audio via upload/URL.",
+    outputType: "audio",
+  },
+  {
+    type: "rss-feed",
+    label: "RSS Feed",
+    category: "input",
+    // outputType: data — source node that emits the selected RSS/Atom item (title/description/link).
+    description: "Pull content from RSS/Atom feeds for automated content pipelines.",
+    outputType: "data",
+  },
 
   {
     type: "generate-image",
@@ -208,6 +233,44 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
     outputType: "none",
     creditCost: 20,
   },
+  // ---- Additional ai-audio nodes (outputType: AUDIO_OUTPUT_NODE_TYPES in input-resolver.ts; creditCost auto-filled from STATIC_CREDIT_COSTS) ----
+  { type: "text-to-audio", label: "Text to Audio", category: "ai-audio", description: "Generate sound effects and ambient audio from a text description using ElevenLabs SFX.", outputType: "audio" },
+  { type: "text-to-dialogue", label: "Text to Dialogue", category: "ai-audio", description: "Generate multi-speaker dialogue audio where each line is spoken by a different voice.", outputType: "audio" },
+  { type: "audio-isolation", label: "Audio Isolation", category: "ai-audio", description: "Isolate and clean up vocal audio by removing background noise and non-speech elements.", outputType: "audio" },
+  {
+    type: "voice-changer",
+    label: "Voice Changer",
+    category: "ai-audio",
+    description: "Replace the voice in an audio recording — or in an entire talking video — with a different voice, preserving the original emotion, cadence, and timing. Audio in → audio out; video in → revoiced video out (plus the new audio track). Video wins when both inputs are wired.",
+    outputType: "audio",
+    creditCost: 4,
+    capabilities: ["audio-to-audio", "video-revoice", "dual-output-handles"],
+    inputSchema: {
+      fields: [
+        { key: "audioUrl", type: "audio-url" },
+        { key: "videoUrl", type: "video-url" },
+        { key: "voiceId", type: "string", required: true },
+        { key: "removeBackgroundNoise", type: "boolean" },
+      ],
+    },
+  },
+  { type: "dubbing", label: "Dubbing", category: "ai-audio", description: "Translate spoken audio into another language while preserving the original speaker's voice and identity.", outputType: "audio" },
+  { type: "voice-remix", label: "Voice Remix", category: "ai-audio", description: "Generate a voice from a natural language description and hear it speak preview text.", outputType: "audio" },
+  { type: "voice-design", label: "Voice Design", category: "ai-audio", description: "Create a custom voice with full parameter controls and receive both an audio preview and a reusable voice ID.", outputType: "audio" },
+  // Suno audio-track nodes (output audio) — suno-music-video is ai-video (above), suno-lyrics / suno-style-boost are ai-text (below).
+  { type: "suno-generate", label: "Suno Generate", category: "ai-audio", description: "Full song generation using Suno AI with extensive creative controls.", outputType: "audio" },
+  { type: "suno-cover", label: "Suno Cover", category: "ai-audio", description: "Create a cover version of an existing audio track using Suno AI.", outputType: "audio" },
+  { type: "suno-extend", label: "Suno Extend", category: "ai-audio", description: "Extend an existing Suno-generated track by continuing from a specified timestamp.", outputType: "audio" },
+  { type: "suno-separate", label: "Suno Separate Stems", category: "ai-audio", description: "Separate vocals from instrumentals, or split a track into individual stems.", outputType: "audio" },
+  { type: "suno-mashup", label: "Suno Mashup", category: "ai-audio", description: "Blend two audio tracks into a single mashup using Suno AI.", outputType: "audio" },
+  { type: "suno-replace-section", label: "Suno Replace Section", category: "ai-audio", description: "Replace a specific time range within a Suno-generated track with new content.", outputType: "audio" },
+  { type: "suno-add-instrumental", label: "Suno Add Instrumental", category: "ai-audio", description: "Add an AI-generated instrumental backing track to an existing vocal track.", outputType: "audio" },
+  { type: "suno-add-vocals", label: "Suno Add Vocals", category: "ai-audio", description: "Add AI-generated vocals to an existing instrumental track.", outputType: "audio" },
+  { type: "suno-convert-wav", label: "Suno Convert WAV", category: "ai-audio", description: "Convert a Suno-generated MP3 audio track to lossless WAV format.", outputType: "audio" },
+  { type: "suno-upload-extend", label: "Suno Upload & Extend", category: "ai-audio", description: "Extend any audio file (not limited to Suno-generated tracks) using Suno AI.", outputType: "audio" },
+  // Suno text nodes (output text) — input-resolver TEXT_SOURCE_NODE_TYPES.
+  { type: "suno-lyrics", label: "Suno Lyrics", category: "ai-text", description: "Generate song lyrics from a text prompt using Suno AI.", outputType: "text" },
+  { type: "suno-style-boost", label: "Suno Style Boost", category: "ai-text", description: "Enhance and refine the style of lyrics or text content using Suno AI.", outputType: "text" },
   {
     type: "llm-chat",
     label: "Generate Text",
@@ -215,6 +278,51 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
     description: "LLM text generation from a prompt (+ optional image/video/audio refs). Stream-capable. Two outputs: full text and a fan-out item list split on ===NEXT===.",
     outputType: "text",
     creditCost: "3-15",
+  },
+  {
+    type: "generate-script",
+    label: "Generate Script",
+    category: "ai-text",
+    // outputType: structured GeneratedScript (docs) — execution-graph TEXT_SOURCE_TYPES.
+    description: "AI-powered multi-scene script generation with cinematography details, character actions, and structured scene breakdowns.",
+    outputType: "text",
+    // Variable per LLM tier: economy 1, standard 2, premium 3 (generate-script:* in STATIC_CREDIT_COSTS).
+    creditCost: "1-3",
+  },
+  {
+    type: "image-to-text",
+    label: "Describe Image",
+    category: "ai-text",
+    // outputType: text (docs: "output is text, not an image") — input-resolver TEXT_SOURCE_NODE_TYPES.
+    description: "Extract a text description from an image using Claude Sonnet vision, with configurable detail levels.",
+    outputType: "text",
+    // Flat 1cr across LLM tiers (image-to-text / :economy / :premium all = 1) — auto-filled from STATIC_CREDIT_COSTS.
+  },
+  {
+    type: "transcribe",
+    label: "Transcribe",
+    category: "ai-text",
+    // outputType: text — input-resolver TEXT_SOURCE_NODE_TYPES.
+    description: "Convert spoken audio to text with optional speaker diarization and audio event tagging.",
+    outputType: "text",
+  },
+  {
+    type: "qa-check",
+    label: "QA Check",
+    category: "ai-text",
+    description: "LLM quality gate — scores upstream text 0.0-1.0 against a check type (content / quality / consistency / safety) and returns score + approved + reason. Flat 1cr across LLM tiers (qa-check / :economy / :premium all = 1).",
+    outputType: "text",
+  },
+  {
+    type: "forced-alignment",
+    label: "Forced Alignment",
+    category: "ai-audio",
+    // outputType: data — node is in input-resolver TEXT_SOURCE_NODE_TYPES, but its output is
+    // JSON word-level timestamps (docs: "data-producing node — it outputs timing information,
+    // not audio"). Overridden to "data" per the image-critic precedent (also in
+    // TEXT_SOURCE_NODE_TYPES, registry classifies as data).
+    description: "Generate word-level timestamps by aligning a transcript to its corresponding audio.",
+    outputType: "data",
   },
 
   {
@@ -258,6 +366,80 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
       ],
     },
   },
+  // ---- Additional ai-video nodes (outputType: VIDEO_OUTPUT_NODE_TYPES in input-resolver.ts) ----
+  {
+    type: "video-to-video",
+    label: "Video to Video",
+    category: "ai-video",
+    description: "Transform existing video using AI with a text prompt.",
+    outputType: "video",
+    inputSchema: {
+      fields: [
+        { key: "videoUrl", type: "video-url", required: true },
+        { key: "prompt", type: "text" },
+      ],
+    },
+  },
+  {
+    type: "lip-sync",
+    label: "Lip Sync",
+    category: "ai-video",
+    description: "Sync audio to a character's face to create a talking head video.",
+    outputType: "video",
+    inputSchema: {
+      fields: [
+        { key: "imageUrl", type: "image-url" },
+        { key: "videoUrl", type: "video-url" },
+        { key: "audioUrl", type: "audio-url", required: true },
+      ],
+    },
+  },
+  {
+    type: "speech-to-video",
+    label: "Speech to Video",
+    category: "ai-video",
+    description: "Generate video driven by speech audio input using Wan 2.2.",
+    outputType: "video",
+    // Resolution-tiered: 480p 3, 580p 5, 720p 6 (speech-to-video:* in STATIC_CREDIT_COSTS).
+    creditCost: "3-6",
+    inputSchema: {
+      fields: [
+        { key: "imageUrl", type: "image-url" },
+        { key: "audioUrl", type: "audio-url", required: true },
+        { key: "prompt", type: "text" },
+      ],
+    },
+  },
+  {
+    type: "motion-transfer",
+    label: "Motion Transfer",
+    category: "ai-video",
+    description: "Apply motion from a reference video to a static character image.",
+    outputType: "video",
+    // Duration × resolution tiered (motion-transfer:5s 8 → motion-transfer:1080p:30s 68).
+    creditCost: "8-68",
+  },
+  {
+    type: "video-upscale",
+    label: "Upscale Video",
+    category: "ai-video",
+    description: "Upscale video resolution using Topaz or VEO AI.",
+    outputType: "video",
+  },
+  {
+    type: "extend-video",
+    label: "Extend Video",
+    category: "ai-video",
+    description: "Continue a generated video with a new prompt direction.",
+    outputType: "video",
+  },
+  {
+    type: "suno-music-video",
+    label: "Suno Music Video",
+    category: "ai-video",
+    description: "Generate a music video for a Suno-generated track.",
+    outputType: "video",
+  },
 
   {
     type: "generate-mask",
@@ -275,6 +457,10 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
       ],
     },
   },
+  // ---- Additional ai-image nodes (creditCost auto-filled from STATIC_CREDIT_COSTS; per-provider variable pricing) ----
+  { type: "modify-image", label: "Modify Image", category: "ai-image", description: "Transform an existing image with a text prompt across 20+ image-to-image / editing providers (Flux, GPT Image, Ideogram, Nano Banana, Qwen, Seedream, + Nano Banana Edit). Migrated successor of edit-image.", outputType: "image", creditCost: "1-18" },
+  { type: "upscale-image", label: "Upscale Image", category: "ai-image", description: "Increase image resolution with Recraft Upscale or Topaz Upscale (2K/4K/8K). No prompt — pure enhancement utility.", outputType: "image", creditCost: "1-10" },
+  { type: "remove-background", label: "Remove Background", category: "ai-image", description: "Remove the background from an image and output a transparent PNG (Recraft).", outputType: "image" },
 
   {
     type: "image-critic",
@@ -302,22 +488,49 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
   { type: "extract-frame", label: "Extract Frame", category: "processing", description: "Extract a single frame as an image.", outputType: "image" },
   { type: "add-captions", label: "Add Captions", category: "processing", description: "Burn captions into a video. Static (subtitle) is FFmpeg/free; kinetic styles (word-highlight, karaoke, tiktok-words, word-pop, bouncy) render via Remotion at 5 credits.", outputType: "video", creditCost: "0-5" },
   { type: "speed-ramp", label: "Adjust Speed", category: "processing", description: "Change playback speed (0.05x to 100x), reverse, choose audio treatment (pitch-preserve / pitch-shift / drop), opt into motion-compensated frame interpolation (smooth slow-mo), or define a piecewise speed ramp via segments. FFmpeg only.", outputType: "video", creditCost: "2-5" },
+  // ---- Additional processing nodes (video → VIDEO_OUTPUT_NODE_TYPES, audio → AUDIO_OUTPUT_NODE_TYPES in input-resolver.ts; creditCost auto-filled from STATIC_CREDIT_COSTS) ----
+  { type: "loop-video", label: "Loop Video", category: "processing", description: "Repeat video to reach a target duration or count, with optional smart-loop-cut for seamless seams.", outputType: "video" },
+  { type: "fade-video", label: "Fade Video", category: "processing", description: "Add fade transitions to the beginning and end of video.", outputType: "video" },
+  { type: "transcode-video", label: "Transcode Video", category: "processing", description: "Convert video codec, quality, and resolution.", outputType: "video" },
+  { type: "social-media-format", label: "Social Media Format", category: "processing", description: "Auto-format video for specific platform specifications.", outputType: "video" },
+  { type: "manual-edit", label: "Manual Edit", category: "processing", description: "Open video in a browser-based web editor for manual adjustments.", outputType: "video" },
+  { type: "trim-audio", label: "Trim Audio", category: "processing", description: "Extract a section of audio or extract audio from video.", outputType: "audio" },
+  { type: "mix-audio", label: "Mix Audio", category: "processing", description: "Blend multiple audio tracks with individual volume control.", outputType: "audio" },
+  { type: "combine-audio", label: "Combine Audio", category: "processing", description: "Concatenate audio tracks end-to-end in order, with optional per-segment trim. (Mix Audio layers tracks; this joins them sequentially.)", outputType: "audio" },
 
   { type: "render-video", label: "Render Video", category: "composition", description: "Render a Remotion composition to MP4.", outputType: "video", creditCost: 15 },
   { type: "after-effects", label: "After Effects", category: "composition", description: "AI-generated post-processing layer.", outputType: "video", creditCost: 2 },
   { type: "motion-graphics", label: "Motion Graphics", category: "composition", description: "AI-generated 2D motion graphics.", outputType: "video", creditCost: 2 },
   { type: "3d-title", label: "3D Title", category: "composition", description: "AI-generated 3D animated text.", outputType: "video", creditCost: 15 },
+  // composition siblings of after-effects / motion-graphics / 3d-title (rendered video output).
+  { type: "video-composer", label: "Video Composer", category: "composition", description: "AI-powered scene-graph video composition from natural language prompts.", outputType: "video", creditCost: "1-4" },
+  { type: "lottie-overlay", label: "Lottie Overlay", category: "composition", description: "AI-placed timed Lottie animations overlaid on video.", outputType: "video", creditCost: "1-2" },
 
   { type: "webhook-trigger", label: "Webhook Trigger", category: "trigger", description: "Trigger the workflow via HTTP POST.", outputType: "data" },
   { type: "schedule-trigger", label: "Schedule Trigger", category: "trigger", description: "Trigger the workflow on a cron/interval.", outputType: "data" },
+  { type: "telegram-trigger", label: "Telegram Trigger", category: "trigger", description: "Trigger the workflow when a connected Telegram bot receives a message. Emits text + chatId + messageId + messageType (+ imageUrl/videoUrl/audioUrl for media). Free — downstream nodes incur their own costs.", outputType: "data" },
 
   { type: "save-to-storage", label: "Save to Storage", category: "output", description: "Persist a node output to user storage.", outputType: "none" },
   { type: "webhook-output", label: "Webhook Output", category: "output", description: "POST a node output to a URL.", outputType: "none" },
+  // ---- Social-post nodes (SOCIAL_POST_NODE_TYPES in @nodaro/shared; outputType: none — terminal publish, matches sibling output nodes; creditCost auto-filled from STATIC_CREDIT_COSTS) ----
+  { type: "instagram-post", label: "Instagram Post", category: "output", description: "Publish images, reels, stories, and carousels directly to Instagram.", outputType: "none" },
+  { type: "tiktok-post", label: "TikTok Post", category: "output", description: "Publish video content directly to TikTok.", outputType: "none" },
+  { type: "youtube-upload", label: "YouTube Upload", category: "output", description: "Upload videos and Shorts to YouTube with full metadata control.", outputType: "none" },
+  { type: "linkedin-post", label: "LinkedIn Post", category: "output", description: "Post text, images, and video to LinkedIn.", outputType: "none" },
+  { type: "x-post", label: "X Post", category: "output", description: "Post text, images, and video to X (Twitter).", outputType: "none" },
+  { type: "facebook-post", label: "Facebook Post", category: "output", description: "Post text, images, video, and stories to Facebook.", outputType: "none" },
+  { type: "telegram-post", label: "Telegram Post", category: "output", description: "Send a message, photo, or video to a Telegram chat, channel, or group via a connected bot (send type auto-detected from connected media).", outputType: "none" },
 
   { type: "list", label: "List", category: "control", description: "Static list of items for fan-out.", outputType: "data" },
-  { type: "loop", label: "Loop", category: "control", description: "Multi-column loop / table.", outputType: "data" },
   { type: "group", label: "Group", category: "utility", description: "Visual container that groups child nodes via React Flow parentId — emits members as a structured list to downstream consumers (Loop, Merge Lists, sub-workflow).", outputType: "data" },
   { type: "collect", label: "Collect", category: "utility", description: "Explicit list-builder — multiple inputs converge on a single 'in' handle in connection order and emit as a structured list downstream.", outputType: "data" },
+  // ---- List / JSON utility nodes (inline-executor; outputType data; free — STATIC_CREDIT_COSTS = 0) ----
+  { type: "filter-list", label: "Filter List", category: "utility", description: "Keep only the upstream list items matching one or more field conditions (AND/OR), with 12 operators (equals, contains, regex, in-list, ...).", outputType: "data", creditCost: 0 },
+  { type: "sort-list", label: "Sort List", category: "utility", description: "Sort an upstream list by value or by a dot-path field, with Auto/Text/Number/Date comparison and asc/desc direction (missing values sort last).", outputType: "data", creditCost: 0 },
+  { type: "deduplicate", label: "Deduplicate", category: "utility", description: "Remove duplicate items from an upstream list, keeping the first occurrence. Compares whole items or a dot-path field.", outputType: "data", creditCost: 0 },
+  { type: "merge-lists", label: "Merge Lists", category: "utility", description: "Combine multiple upstream lists into one — concatenate (append in edge order) or zip (element-wise merge with modulo-wrap), with optional dedupe.", outputType: "data", creditCost: 0 },
+  { type: "json-process", label: "JSON Process", category: "utility", description: "Transform upstream JSON — input-path drill, filter conditions, and field projection via a visual builder, or a raw transformation expression in Advanced mode.", outputType: "data", creditCost: 0 },
+  { type: "sticky-note", label: "Sticky Note", category: "utility", description: "Place annotated notes on the workflow canvas for documentation and organization.", outputType: "none" },
   { type: "selector", label: "Selector", category: "utility", description: "Pick item(s) from a list — supports item/range/list/random/modulo/predicate/named-key modes. Two outputs: picked + rest.", outputType: "text", creditCost: 0 },
   { type: "combine-text", label: "Combine Text", category: "control", description: "Concatenate text inputs.", outputType: "text" },
   { type: "split-text", label: "Split Text", category: "control", description: "Split text by delimiter.", outputType: "text" },
@@ -381,6 +594,14 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
   { type: "voice-character", label: "Voice Character", category: "parameter", description: "Pick age + gender + language (up to 3 for multilingual) + accent + timbre for ElevenLabs Voice Design.", outputType: "text" },
   { type: "voice-delivery",  label: "Voice Delivery",  category: "parameter", description: "Pick pace + emotion + archetype for ElevenLabs Voice Design.", outputType: "text" },
 
+  // ---- Text / value parameter pickers (PARAMETER_NODE_TYPES in @nodaro/shared → outputType text) ----
+  { type: "tone",         label: "Tone",         category: "parameter", description: "Define a tone or style modifier text (e.g., \"cinematic\", \"cheerful\") to influence connected AI nodes.", outputType: "text" },
+  { type: "style-guide",  label: "Style Guide",  category: "parameter", description: "Define visual style reference text for consistent aesthetics across AI generation nodes in a workflow.", outputType: "text" },
+  { type: "motion",       label: "Motion",       category: "parameter", description: "Define the motion intensity level for connected video generation nodes.", outputType: "text" },
+  { type: "scene-count",  label: "Scene Count",  category: "parameter", description: "Specify the number of scenes for script generation nodes.", outputType: "text" },
+  { type: "duration",     label: "Duration",     category: "parameter", description: "Set a target duration in seconds for connected video or audio generation nodes.", outputType: "text" },
+  { type: "aspect-ratio", label: "Aspect Ratio", category: "parameter", description: "Set the target aspect ratio for connected image and video generation nodes.", outputType: "text" },
+
   // ---- Look family (15) — visual style, look, mood, atmosphere ----
   { type: "setting",              label: "Setting",              category: "parameter", description: "Pick a setting from 63 entries across 4 categories (indoor, urban, nature, fantastical). Emits a setting-description prompt fragment via the cinematography handle.", outputType: "text" },
   { type: "atmosphere",           label: "Atmosphere",           category: "parameter", description: "Pick an atmospheric condition from 40 entries (clear, fog, dust, rain, snow, smoke, ...). Emits an atmosphere prompt fragment via the cinematography handle.", outputType: "text" },
@@ -412,6 +633,7 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
   { type: "vehicle",              label: "Vehicle",              category: "parameter", description: "Pick a vehicle from 107 entries across subcategories (car, truck, motorcycle, boat, aircraft, spaceship, etc.). Emits 'featuring a X' prompt fragment with description via the cinematography handle.", outputType: "text" },
   { type: "weapon",               label: "Weapon",               category: "parameter", description: "Pick a weapon from 85 entries across subcategories (blade, ranged, firearm, fantasy, sci-fi, etc.). Emits 'with a X' prompt fragment with description via the cinematography handle.", outputType: "text" },
   { type: "held-prop",            label: "Held Prop",            category: "parameter", description: "Pick a held prop from 59 entries (smartphone, umbrella, bouquet, briefcase, ...). Emits a held-prop prompt fragment via the cinematography handle.", outputType: "text" },
+  { type: "furniture",            label: "Furniture",            category: "parameter", description: "Pick a furniture piece from 78 entries across 9 categories (seating, tables, beds, storage, lighting, kitchen-dining, outdoor, decorative, bath). Emits an 'including a X' prompt fragment with description via the cinematography handle.", outputType: "text" },
 
   // ---- Multi-dim family (6) — composed pickers with multiple fields ----
   { type: "framing",              label: "Framing",              category: "parameter", description: "Multi-dim picker for shot-size + angle + coverage + composition + vantage (72 catalog options across 5 fields). Emits a framing-descriptor prompt fragment via the cinematography handle.", outputType: "text" },

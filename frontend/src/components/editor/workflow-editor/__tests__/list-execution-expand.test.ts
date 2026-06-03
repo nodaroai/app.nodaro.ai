@@ -378,8 +378,8 @@ describe("expandLoopResults — fan-out edges from list source", () => {
   it("creates fan-out edges from non-cloneable source to each clone", () => {
     mockNodes = [
       makeNode({
-        id: "loop1",
-        type: "loop",
+        id: "list1",
+        type: "list",
         data: {
           label: "Table",
           __listResults: ["a", "b", "c"],
@@ -396,15 +396,15 @@ describe("expandLoopResults — fan-out edges from list source", () => {
         },
       }),
     ]
-    mockEdges = [{ id: "e1", source: "loop1", target: "n2" }]
+    mockEdges = [{ id: "e1", source: "list1", target: "n2" }]
 
     expandLoopResults()
 
     const state = mockSetState.mock.calls[0][0]
     const cloneEdges = state.edges.filter((e: any) => e.id.includes("_iter_"))
-    // loop1 is not cloneable, n2 is -> fan-out pattern
+    // list1 is not cloneable, n2 is -> fan-out pattern
     expect(cloneEdges).toHaveLength(3)
-    expect(cloneEdges[0].source).toBe("loop1") // source stays as original
+    expect(cloneEdges[0].source).toBe("list1") // source stays as original
     expect(cloneEdges[0].target).toBe("n2_iter_0")
     expect(cloneEdges[1].target).toBe("n2_iter_1")
     expect(cloneEdges[2].target).toBe("n2_iter_2")

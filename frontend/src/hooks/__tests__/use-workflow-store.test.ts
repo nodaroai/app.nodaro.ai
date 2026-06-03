@@ -78,7 +78,7 @@ describe("useWorkflowStore", () => {
       expect(state.nodes).toHaveLength(1)
       expect(state.nodes[0].type).toBe("text-prompt")
       expect(state.nodes[0].position).toEqual({ x: 100, y: 200 })
-      expect(state.nodes[0].data.label).toBe("Text Prompt")
+      expect(state.nodes[0].data.label).toBe("Text")
       expect(state.isDirty).toBe(true)
     })
 
@@ -454,6 +454,30 @@ describe("useWorkflowStore", () => {
       const next = useWorkflowStore.getState()
       expect(next.flowPromptTemplates).toEqual({ "node-1": "before" })
     })
+
+    it("migrates a raw `loop` node arriving via realtime into the canonical `list` type", () => {
+      // FIX #7: realtime reconcile injected nodes/edges WITHOUT running
+      // migrateListLoopNodes (unlike loadWorkflow), so a `loop` node from another
+      // device stayed `loop` and was mishandled by the now-`list`-only type-sets.
+      const store = useWorkflowStore.getState()
+      store.loadWorkflow("wf-1", "Test", [], [])
+
+      store.reconcileFromRemote({
+        nodes: [
+          {
+            id: "loop_1",
+            type: "loop",
+            position: { x: 0, y: 0 },
+            data: { label: "Table", columns: [{ id: "a", handleId: "col_a", type: "text" }], rows: [["a"]] },
+          },
+        ] as never,
+        edges: [],
+        updatedAt: "T2",
+      })
+
+      const reconciled = useWorkflowStore.getState().nodes.find((n) => n.id === "loop_1")!
+      expect(reconciled.type).toBe("list")
+    })
   })
 })
 
@@ -545,13 +569,13 @@ describe("duplicateNodes", () => {
     expect(useWorkflowStore.getState().isDirty).toBe(false)
   })
 
-  it("re-points a loop column's connectedSourceId to the clone when its source is also duplicated", () => {
+  it("re-points a list column's connectedSourceId to the clone when its source is also duplicated", () => {
     useWorkflowStore.setState({
       nodes: [
         { id: "src", type: "text-prompt", position: { x: 0, y: 0 }, data: {}, selected: true },
         {
           id: "lp",
-          type: "loop",
+          type: "list",
           position: { x: 100, y: 0 },
           data: { columns: [{ id: "c1", handleId: "col_c1", connectedSourceId: "src", connectedSourceHandle: "out" }] },
           selected: true,
@@ -565,8 +589,8 @@ describe("duplicateNodes", () => {
     useWorkflowStore.getState().duplicateNodes(["src", "lp"])
     const { nodes } = useWorkflowStore.getState()
     const srcClone = nodes.find((n) => !["src", "lp"].includes(n.id) && n.type === "text-prompt")
-    const loopClone = nodes.find((n) => !["src", "lp"].includes(n.id) && n.type === "loop")
-    const col = (loopClone!.data as { columns: Array<{ connectedSourceId?: string; connectedSourceHandle?: string }> }).columns[0]
+    const listClone = nodes.find((n) => !["src", "lp"].includes(n.id) && n.type === "list")
+    const col = (listClone!.data as { columns: Array<{ connectedSourceId?: string; connectedSourceHandle?: string }> }).columns[0]
     expect(col.connectedSourceId).toBe(srcClone!.id)
     expect(col.connectedSourceHandle).toBe("out")
   })
@@ -602,13 +626,13 @@ describe("duplicateNodes", () => {
     expect(clonedEdge!.targetHandle).toBe("look")
   })
 
-  it("clears a loop column's connectedSourceId when only the loop (not its source) is duplicated", () => {
+  it("clears a list column's connectedSourceId when only the list (not its source) is duplicated", () => {
     useWorkflowStore.setState({
       nodes: [
         { id: "src", type: "text-prompt", position: { x: 0, y: 0 }, data: {}, selected: false },
         {
           id: "lp",
-          type: "loop",
+          type: "list",
           position: { x: 100, y: 0 },
           data: { columns: [{ id: "c1", handleId: "col_c1", connectedSourceId: "src", connectedSourceHandle: "out" }] },
           selected: true,
@@ -620,8 +644,8 @@ describe("duplicateNodes", () => {
     } as unknown as Partial<ReturnType<typeof useWorkflowStore.getState>>)
 
     useWorkflowStore.getState().duplicateNodes(["lp"])
-    const loopClone = useWorkflowStore.getState().nodes.find((n) => !["src", "lp"].includes(n.id) && n.type === "loop")
-    const col = (loopClone!.data as { columns: Array<{ connectedSourceId?: string }> }).columns[0]
+    const listClone = useWorkflowStore.getState().nodes.find((n) => !["src", "lp"].includes(n.id) && n.type === "list")
+    const col = (listClone!.data as { columns: Array<{ connectedSourceId?: string }> }).columns[0]
     expect(col.connectedSourceId).toBeUndefined()
   })
 })

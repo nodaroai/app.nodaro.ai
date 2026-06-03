@@ -68,7 +68,9 @@
 	# Bust stale CDN cache for favicon.ico by rewriting to a versioned file
 	rewrite /favicon.ico /favicon-v8.ico
 	handle {
-		encode gzip
+		# zstd + gzip: Caddy negotiates the best supported encoding per request.
+		# zstd shaves ~15-25% more off JS/CSS than gzip alone.
+		encode zstd gzip
 		root * /app/frontend/dist
 		try_files {path} /index.html
 		file_server
@@ -77,4 +79,16 @@
 	header @static Cache-Control "public, max-age=31536000, immutable"
 	@favicon path *.ico
 	header @favicon Cache-Control "public, max-age=86400"
+
+	# The SPA shell (index.html) must always be revalidated. try_files serves
+	# index.html for the bare path "/", any *.html, and every extensionless SPA
+	# route (/editor, /gallery, /app/abc, …). A stale shell could point at
+	# deleted hashed chunks; the vite:preloadError reload machinery relies on
+	# the HTML never being cached by an intermediary.
+	#
+	# `^[^.]*$` matches paths with no dot (the SPA routes) and `/.*\.html$`
+	# matches .html files — both disjoint from the hashed *.js/*.css/*.png/etc.
+	# assets above, which keep their 1yr immutable header.
+	@html path_regexp html ^([^.]*|/.*\.html)$
+	header @html Cache-Control "no-cache"
 }

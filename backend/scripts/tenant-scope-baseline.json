@@ -41,12 +41,6 @@
     {
       "file": "src/routes/cancel-jobs.ts",
       "table": "jobs",
-      "hash": "3447a524b0d3",
-      "line": 54
-    },
-    {
-      "file": "src/routes/cancel-jobs.ts",
-      "table": "jobs",
       "hash": "a2ddf32c242f",
       "line": 88
     },

@@ -1,5 +1,6 @@
 import type { WorkflowNode } from "@/types/nodes"
 import { getNodeResult, getOutputType } from "@/lib/presentation-utils"
+import { isMultiColumnList } from "@/lib/list-loop-migration"
 
 export const ORIGINAL_SLOT_ID = "original"
 
@@ -35,13 +36,17 @@ export function makeEmptyInputs(inputNodes: WorkflowNode[]): Record<string, Reco
       empty[node.id] = { text: d.presentationReadOnly ? (d.text as string) ?? "" : "" }
     } else if (t === "upload-image" || t === "upload-video" || t === "upload-audio") empty[node.id] = { url: "" }
     else if (t === "list") {
-      empty[node.id] = { items: [""] }
-    } else if (t === "loop") {
-      const columns = (d.columns as Array<Record<string, unknown>>) ?? []
-      const minRows = (d.minRows as number) ?? 0
-      const defaultRows = Math.max((d.defaultRows as number) ?? 1, minRows)
-      const emptyRow = columns.map(() => "")
-      empty[node.id] = { rows: Array.from({ length: defaultRows }, () => [...emptyRow]) }
+      // Empty shape by column count (see isMultiColumnList): multi-column → `rows`
+      // grid (LoopInputCard), single-column → `items` (ListInputCard).
+      if (isMultiColumnList(d)) {
+        const columns = (d.columns as Array<Record<string, unknown>>) ?? []
+        const minRows = (d.minRows as number) ?? 0
+        const defaultRows = Math.max((d.defaultRows as number) ?? 1, minRows)
+        const emptyRow = columns.map(() => "")
+        empty[node.id] = { rows: Array.from({ length: defaultRows }, () => [...emptyRow]) }
+      } else {
+        empty[node.id] = { items: [""] }
+      }
     }
   }
   return empty
@@ -73,28 +78,30 @@ export function makeSnapshotInputs(inputNodes: WorkflowNode[]): Record<string, R
     } else if (t === "upload-image" || t === "upload-video" || t === "upload-audio") {
       inputs[node.id] = { url: (node.data.url as string) ?? "" }
     } else if (t === "list") {
+      // Snapshot shape by column count (see isMultiColumnList).
       const d = node.data as Record<string, unknown>
-      let items: string[] = []
-      // Modern format (columns+rows) wins — otherwise published apps with
-      // modern lists loaded with default empty values instead of their
-      // snapshot data.
-      if (d.columns) {
-        const rows = (d.rows as string[][] | undefined) ?? []
-        items = rows.map((r) => r[0]?.trim() ?? "").filter(Boolean)
+      if (isMultiColumnList(d)) {
+        // Multi-column: preserve the full string[][] grid so every column survives.
+        const rows = (d.rows as string[][]) ?? []
+        const columns = (d.columns as Array<Record<string, unknown>>) ?? []
+        inputs[node.id] = { rows: rows.length > 0 ? rows : [columns.map(() => "")] }
       } else {
-        const raw = d.items
-        if (Array.isArray(raw)) {
-          items = raw.map(String).filter(Boolean)
+        // Single-column: collapse column 0 to string[] for ListInputCard
+        // (modern columns+rows wins over the legacy items string).
+        let items: string[] = []
+        if (d.columns) {
+          const rows = (d.rows as string[][] | undefined) ?? []
+          items = rows.map((r) => r[0]?.trim() ?? "").filter(Boolean)
         } else {
-          items = (String(raw || "")).split("\n").map((s: string) => s.trim()).filter(Boolean)
+          const raw = d.items
+          if (Array.isArray(raw)) {
+            items = raw.map(String).filter(Boolean)
+          } else {
+            items = (String(raw || "")).split("\n").map((s: string) => s.trim()).filter(Boolean)
+          }
         }
+        inputs[node.id] = { items: items.length > 0 ? items : [""] }
       }
-      inputs[node.id] = { items: items.length > 0 ? items : [""] }
-    } else if (t === "loop") {
-      const loopData = node.data as Record<string, unknown>
-      const rows = (loopData.rows as string[][]) ?? []
-      const columns = (loopData.columns as Array<Record<string, unknown>>) ?? []
-      inputs[node.id] = { rows: rows.length > 0 ? rows : [columns.map(() => "")] }
     }
   }
   return inputs

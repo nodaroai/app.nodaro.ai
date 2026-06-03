@@ -2,6 +2,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { probeVideoSource } from "../providers/video/ffmpeg-utils.js"
+import { safeUrlSchema } from "../lib/url-validator.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { videoQueue } from "../lib/queue.js"
 import { supabase } from "../lib/supabase.js"
@@ -13,7 +14,10 @@ import { formatZodError } from "../lib/zod-error.js"
 const SEED_MAX = 2 ** 31 - 1
 
 export const VideoSfxBody = z.object({
-  videoUrl: z.string().url(),
+  // safeUrlSchema (not z.string().url()): rejects literal private/reserved IPs
+  // and non-http(s) at the boundary. The DNS-rebinding case is closed at the
+  // ffprobe sink by assertSafeProbeSource in ffmpeg-utils.ts.
+  videoUrl: safeUrlSchema,
   prompt: z.string().max(2000).optional(),
   negativePrompt: z.string().max(500).optional().default("music"),
   cfgStrength: z.number().min(1).max(10).optional().default(4.5),

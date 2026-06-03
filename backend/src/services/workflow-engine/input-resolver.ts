@@ -61,12 +61,16 @@ export function resolveNodeInputs(
   triggerData?: Record<string, unknown>,
   listIterationIndex?: number,
 ): ResolvedInputs {
+  // Build an O(1) node index once (replaces per-edge linear `allNodes.find`
+  // scans, including the teleport-chain walk below).
+  const nodeById = new Map(allNodes.map((n) => [n.id, n] as const))
+
   const incomingEdges = edges.filter((e) => e.target === targetNode.id)
   const inputs: ResolvedInputs = {}
   const ctx = { nodes: allNodes, edges }
 
   for (const edge of incomingEdges) {
-    let sourceNode = allNodes.find((n) => n.id === edge.source)
+    let sourceNode = nodeById.get(edge.source)
     if (!sourceNode) continue
 
     // The effective sourceHandle for downstream resolution. Starts as the
@@ -89,7 +93,7 @@ export function resolveNodeInputs(
         visited.add(current.id)
         const inEdge = edges.find((e) => e.target === current.id)
         if (!inEdge) break
-        const upstream = allNodes.find((n) => n.id === inEdge.source)
+        const upstream = nodeById.get(inEdge.source)
         if (!upstream) break
         // Remember the LAST edge whose source is the final non-teleport
         // upstream — its sourceHandle is the handle on the real source
@@ -280,7 +284,7 @@ export function resolveNodeInputs(
       // more connected-mode lists couldn't propagate items through the
       // orchestrator — the downstream gen-image fell back to collectAncestorRefs
       // and bypassed every filter in between.
-      if (sourceNode.type === "loop" || sourceNode.type === "list") {
+      if (sourceNode.type === "list") {
         const items = resolveListLoopColumnItems(
           sourceNode,
           effectiveSourceHandle,
@@ -288,6 +292,8 @@ export function resolveNodeInputs(
           allNodes,
           nodeStates,
           triggerData,
+          new Set(),
+          nodeById,
         )
         if (items && items.length > 0) {
           const filtered = selectListItems(items, edgeData as SelectorFields | undefined)
@@ -374,12 +380,14 @@ function resolveSelectedNodeFallbacks(
   const mappings = SELECTED_NODE_FALLBACKS[targetNode.type]
   if (!mappings) return
 
+  const nodeById = new Map(allNodes.map((n) => [n.id, n] as const))
+
   for (const { dataField, inputField, guard } of mappings) {
     // Skip if the input is already resolved (custom guard or simple truthy check)
     if (guard ? !guard(inputs) : inputs[inputField]) continue
     const selectedId = targetNode.data[dataField] as string | undefined
     if (!selectedId) continue
-    const node = allNodes.find((n) => n.id === selectedId)
+    const node = nodeById.get(selectedId)
     if (!node) continue
     // Reuse getNodeOutput, with saved-data fallback for previously-executed nodes
     const url = getNodeOutput(node, undefined, nodeStates, triggerData)
@@ -399,7 +407,7 @@ function getSavedNodeOutput(node: SimpleNode): string | undefined {
 // ---------------------------------------------------------------------------
 
 /** Node types whose edges default to "each" output mode (fan-out). */
-const DEFAULT_EACH_TYPES = new Set(["list", "loop", "split-text", "selector"])
+const DEFAULT_EACH_TYPES = new Set(["list", "split-text", "selector"])
 
 /**
  * Resolve the Generate Text (llm-chat) `items` handle into its fan-out list —
@@ -441,6 +449,55 @@ function resolveLlmChatItems(
  *
  * Mirrors the frontend's resolveLoopColumnValues + resolveUpstreamWithEdgeFilter.
  */
+/**
+ * Resolve a legacy global "in" handle (connected mode) on a list/loop node.
+ *
+ * Old `loop` (Table) workflows wired a single upstream to a bare `"in"` target
+ * handle instead of the per-column `${handleId}_in` handles; the node then
+ * splits that upstream's output by the column delimiter and fans out. The
+ * current list/loop node component (`loop-node.tsx::buildHandles`) no longer
+ * emits an `"in"` handle, but un-migrated workflows can still carry such an
+ * edge — `loop-node.tsx::connectedRows` and the frontend `resolveLoopColumnValues`
+ * BOTH still resolve it. Without this, normalizing loop → list would silently
+ * drop the connected-mode fan-out for those legacy nodes (the exact gap the
+ * dedicated `loop` branch in `getListInputForNode` used to cover, case b).
+ *
+ * Applies the "in" edge's own selector internally, exactly like the per-column
+ * branch; the caller's `selectListItems` then applies the consumer edge's
+ * selector on top. Returns undefined when there is no "in" edge / no items.
+ */
+function resolveLegacyInHandleItems(
+  sourceNode: SimpleNode,
+  columns: Array<{ handleId: string; splitDelimiter?: string }> | undefined,
+  edges: SimpleEdge[],
+  allNodes: SimpleNode[],
+  nodeStates: Record<string, NodeExecutionState>,
+  triggerData: Record<string, unknown> | undefined,
+  ctx: { nodes: SimpleNode[]; edges: SimpleEdge[] },
+): string[] | undefined {
+  const legacyInEdge = edges.find(
+    (e) => e.target === sourceNode.id && e.targetHandle === "in",
+  )
+  if (!legacyInEdge) return undefined
+  const upstreamNode = allNodes.find((n) => n.id === legacyInEdge.source)
+  if (!upstreamNode) return undefined
+  const inSelector = legacyInEdge.data as SelectorFields | undefined
+  // Generate Text `items` handle is ALREADY ===NEXT===-split — pass it through
+  // whole rather than re-chopping by the column delimiter.
+  const llmItems = resolveLlmChatItems(upstreamNode, legacyInEdge.sourceHandle, nodeStates)
+  if (llmItems) {
+    const filtered = selectListItems(llmItems, inSelector)
+    if (filtered.length > 0) return filtered
+  }
+  const upstreamText = getNodeOutput(upstreamNode, legacyInEdge.sourceHandle, nodeStates, triggerData, ctx)
+  if (upstreamText) {
+    const lines = splitByLoopDelimiter(upstreamText, columns)
+    const filtered = selectListItems(lines, inSelector)
+    if (filtered.length > 0) return filtered
+  }
+  return undefined
+}
+
 function resolveListLoopColumnItems(
   sourceNode: SimpleNode,
   sourceHandle: string | null | undefined,
@@ -449,6 +506,9 @@ function resolveListLoopColumnItems(
   nodeStates: Record<string, NodeExecutionState>,
   triggerData: Record<string, unknown> | undefined,
   visited: Set<string> = new Set(),
+  // Threaded O(1) node index — built once by the top-level caller and reused
+  // across recursion levels. Falls back to a local build for direct callers.
+  nodeById: Map<string, SimpleNode> = new Map(allNodes.map((n) => [n.id, n] as const)),
 ): string[] | undefined {
   if (visited.has(sourceNode.id)) return undefined
   visited.add(sourceNode.id)
@@ -462,7 +522,15 @@ function resolveListLoopColumnItems(
     return extractSourceNodeOutputAsList(sourceNode, triggerData, sourceHandle, ctx)
   }
   const colIndex = columns.findIndex((c) => c.handleId === sourceHandle)
-  if (colIndex < 0) return extractSourceNodeOutputAsList(sourceNode, triggerData, sourceHandle, ctx)
+  if (colIndex < 0) {
+    // The consumer's sourceHandle doesn't match a column. A legacy `"in"`
+    // connected-mode edge still fans out the same split list regardless of
+    // which column handle the consumer reads (the old `loop` branch checked
+    // `loopInEdges` unconditionally too), so try it before legacy extraction.
+    const legacyItems = resolveLegacyInHandleItems(sourceNode, columns, edges, allNodes, nodeStates, triggerData, ctx)
+    if (legacyItems) return legacyItems
+    return extractSourceNodeOutputAsList(sourceNode, triggerData, sourceHandle, ctx)
+  }
   const col = columns[colIndex]
 
   // Per-column connected source: resolve upstream's items, applying this edge's filter.
@@ -470,7 +538,7 @@ function resolveListLoopColumnItems(
     (e) => e.target === sourceNode.id && e.targetHandle === `${col.handleId}_in`,
   )
   if (colInEdge) {
-    const upstreamNode = allNodes.find((n) => n.id === colInEdge.source)
+    const upstreamNode = nodeById.get(colInEdge.source)
     if (upstreamNode) {
       const edgeSelector = colInEdge.data as SelectorFields | undefined
       let upstreamVals: string[] | undefined
@@ -485,8 +553,8 @@ function resolveListLoopColumnItems(
         if (filtered.length > 0) return filtered
       }
 
-      if (upstreamNode.type === "list" || upstreamNode.type === "loop") {
-        // Recurse into chained lists/loops.
+      if (upstreamNode.type === "list") {
+        // Recurse into chained lists.
         upstreamVals = resolveListLoopColumnItems(
           upstreamNode,
           colInEdge.sourceHandle,
@@ -495,6 +563,7 @@ function resolveListLoopColumnItems(
           nodeStates,
           triggerData,
           visited,
+          nodeById,
         )
       } else if (upstreamNode.type === "selector") {
         // Selector emits picked/rest channels keyed by sourceHandle. Mirrors
@@ -536,6 +605,12 @@ function resolveListLoopColumnItems(
     }
   }
 
+  // Legacy global "in" handle (connected mode), checked AFTER per-column and
+  // BEFORE manual rows — mirroring the frontend `resolveLoopColumnValues`
+  // ordering (per-column edge → legacy "in" → manual rows).
+  const legacyItems = resolveLegacyInHandleItems(sourceNode, columns, edges, allNodes, nodeStates, triggerData, ctx)
+  if (legacyItems) return legacyItems
+
   // Manual mode: extract column values directly from rows.
   const rows = (sourceNode.data.rows as string[][] | undefined) ?? []
   const items = rows.map((row) => row[colIndex]?.trim()).filter(Boolean) as string[]
@@ -562,88 +637,25 @@ export function getListInputForNode(
   // per upstream item and lets resolveNodeInputs populate `inputs.inputs` instead.
   if (FAN_IN_NODE_TYPES.has(targetNode.type)) return undefined
 
+  // Build O(1) lookup indexes once (replaces per-edge linear array scans).
+  const nodeById = new Map(allNodes.map((n) => [n.id, n] as const))
+  const edgesByTarget = new Map<string, SimpleEdge[]>()
+  for (const e of edges) {
+    const list = edgesByTarget.get(e.target)
+    if (list) list.push(e)
+    else edgesByTarget.set(e.target, [e])
+  }
+
   const ctx = { nodes: allNodes, edges }
-  const incomingEdges = edges.filter((e) => e.target === targetNode.id)
+  const incomingEdges = edgesByTarget.get(targetNode.id) ?? []
 
   for (const edge of incomingEdges) {
-    const sourceNode = allNodes.find((n) => n.id === edge.source)
+    const sourceNode = nodeById.get(edge.source)
     if (!sourceNode) continue
 
     // Read range config from the edge
     const edgeData = edge.data as Record<string, unknown> | undefined
     const selectorArg = edgeData as SelectorFields | undefined
-
-    // 1. Loop node — column routing via sourceHandle
-    if (sourceNode.type === "loop") {
-      const columns = sourceNode.data.columns as
-        | Array<{ id: string; handleId: string; type?: string; splitDelimiter?: string; connectedSourceId?: string; connectedSourceHandle?: string }>
-        | undefined
-      const colIndex = (columns ?? []).findIndex(
-        (c) => c.handleId === edge.sourceHandle,
-      )
-
-      // Per-column connected source: find edge targeting this column's input handle
-      if (colIndex >= 0) {
-        const col = columns![colIndex]
-        const colInEdge = edges.find(
-          (e) => e.target === sourceNode.id && e.targetHandle === `${col.handleId}_in`,
-        )
-        if (colInEdge) {
-          const upstreamNode = allNodes.find((n) => n.id === colInEdge.source)
-          if (upstreamNode) {
-            // Generate Text `items` handle is ALREADY split (===NEXT===) — feed
-            // it through whole, NOT re-chopped by the loop column's delimiter.
-            const llmItems = resolveLlmChatItems(upstreamNode, colInEdge.sourceHandle, nodeStates)
-            if (llmItems) {
-              const filtered = selectListItems(llmItems, selectorArg)
-              if (filtered.length > 1) return filtered
-            } else {
-              const upstreamText = getNodeOutput(upstreamNode, colInEdge.sourceHandle, nodeStates, triggerData, ctx)
-              if (upstreamText) {
-                const items = splitByLoopDelimiter(upstreamText, columns)
-                const filtered = selectListItems(items, selectorArg)
-                if (filtered.length > 1) return filtered
-              }
-            }
-          }
-        }
-      }
-
-      // Fallback: check global "in" handle (connected mode)
-      const loopInEdges = edges.filter(
-        (e) => e.target === sourceNode.id && e.targetHandle === "in",
-      )
-      if (loopInEdges.length > 0) {
-        const upstreamEdge = loopInEdges[0]
-        const upstreamNode = allNodes.find((n) => n.id === upstreamEdge.source)
-        if (upstreamNode) {
-          // Generate Text `items` handle is ALREADY split — pass through whole.
-          const llmItems = resolveLlmChatItems(upstreamNode, upstreamEdge.sourceHandle, nodeStates)
-          if (llmItems) {
-            const filtered = selectListItems(llmItems, selectorArg)
-            if (filtered.length > 1) return filtered
-          } else {
-            const upstreamText = getNodeOutput(upstreamNode, upstreamEdge.sourceHandle, nodeStates, triggerData, ctx)
-            if (upstreamText) {
-              const items = splitByLoopDelimiter(upstreamText, columns)
-              const filtered = selectListItems(items, selectorArg)
-              if (filtered.length > 1) return filtered
-            }
-          }
-        }
-      } else if (colIndex >= 0) {
-        // Manual mode: extract column values from rows
-        const rows = sourceNode.data.rows as string[][] | undefined
-        if (rows) {
-          const items = rows
-            .map((row) => row[colIndex]?.trim())
-            .filter(Boolean) as string[]
-          const filtered = selectListItems(items, selectorArg)
-          if (filtered.length > 1) return filtered
-        }
-      }
-      continue
-    }
 
     // generate-script "images" handle fan-out — each scene imagePrompt becomes one item
     if (sourceNode.type === "generate-script" && edge.sourceHandle === "images") {
@@ -681,7 +693,11 @@ export function getListInputForNode(
     const outputMode = edgeOutputMode ?? (DEFAULT_EACH_TYPES.has(sourceNode.type) ? "each" : "last")
     if (outputMode !== "each") continue
 
-    // 2. List node — use the recursive resolver for connected-mode chains.
+    // 1. List node (also covers legacy `loop`, normalized to `list` upstream of
+    //    this code) — use the recursive resolver for connected-mode chains.
+    //    `resolveListLoopColumnItems` handles all three legacy loop modes:
+    //    per-column `${handleId}_in` edges, the global `"in"` connected handle,
+    //    and manual-mode column rows. See loop-list-fanout-parity.test.ts.
     if (sourceNode.type === "list") {
       const items = resolveListLoopColumnItems(
         sourceNode,
@@ -690,6 +706,8 @@ export function getListInputForNode(
         allNodes,
         nodeStates,
         triggerData,
+        new Set(),
+        nodeById,
       )
       if (items && items.length > 1) {
         const filtered = selectListItems(items, selectorArg)
@@ -698,7 +716,7 @@ export function getListInputForNode(
       continue
     }
 
-    // 3. Split-text node — read splitResults from completed state
+    // 2. Split-text node — read splitResults from completed state
     if (sourceNode.type === "split-text") {
       const state = nodeStates[sourceNode.id]
       if (state?.output?.splitResults && state.output.splitResults.length > 1) {
@@ -708,7 +726,7 @@ export function getListInputForNode(
       continue
     }
 
-    // 4. Selector — picked vs rest channel selected by edge.sourceHandle.
+    // 3. Selector — picked vs rest channel selected by edge.sourceHandle.
     //    Mirrors the filter-list family but routes by handle. Selector never
     //    populates listResults, so the generic block below would miss its
     //    output entirely. Prefer state.output, fall back to data.* snapshots
@@ -726,13 +744,13 @@ export function getListInputForNode(
       continue
     }
 
-    // 5. Any node with listResults from a prior fan-out execution
+    // 4. Any node with listResults from a prior fan-out execution
     if (state?.output?.listResults && state.output.listResults.length > 1) {
       const filtered = selectListItems(state.output.listResults, selectorArg)
       if (filtered.length > 1) return filtered
     }
 
-    // 6. Fallback: accumulated generatedResults from multiple manual runs
+    // 5. Fallback: accumulated generatedResults from multiple manual runs
     const savedResults = extractAllGeneratedResults(
       sourceNode.data as Record<string, unknown>,
     )
@@ -741,7 +759,7 @@ export function getListInputForNode(
       if (filtered.length > 1) return filtered
     }
 
-    // 7. JSON array output (e.g. web-scrape generatedJson) — each element is one list item
+    // 6. JSON array output (e.g. web-scrape generatedJson) — each element is one list item
     const jsonItems = extractGeneratedJsonAsList(sourceNode.data as Record<string, unknown>)
     if (jsonItems) {
       const filtered = selectListItems(jsonItems, selectorArg)
@@ -752,12 +770,12 @@ export function getListInputForNode(
   // Transitive fan-out: if a direct parent is a text-prompt whose own upstream
   // is a list-like node with "each" mode, resolve the text template per item.
   for (const edge of incomingEdges) {
-    const sourceNode = allNodes.find((n) => n.id === edge.source)
+    const sourceNode = nodeById.get(edge.source)
     if (!sourceNode || sourceNode.type !== "text-prompt") continue
 
-    const sourceIncoming = edges.filter((e) => e.target === sourceNode.id)
+    const sourceIncoming = edgesByTarget.get(sourceNode.id) ?? []
     for (const srcEdge of sourceIncoming) {
-      const listNode = allNodes.find((n) => n.id === srcEdge.source)
+      const listNode = nodeById.get(srcEdge.source)
       if (!listNode || !DEFAULT_EACH_TYPES.has(listNode.type)) continue
 
       const gpEdgeMode = (srcEdge.data as Record<string, unknown> | undefined)
@@ -767,11 +785,11 @@ export function getListInputForNode(
       // Read range config from the upstream edge
       const gpData = srcEdge.data as Record<string, unknown> | undefined
 
-      // Get list items — list and loop both route through
-      // extractSourceNodeOutputAsList (which handles their columns+rows);
-      // split-text reads its splitResults from execution state.
+      // Get list items — list routes through extractSourceNodeOutputAsList
+      // (which handles its columns+rows); split-text reads its splitResults
+      // from execution state.
       let listItems: string[] | undefined
-      if (listNode.type === "list" || listNode.type === "loop") {
+      if (listNode.type === "list") {
         listItems = extractSourceNodeOutputAsList(listNode, triggerData, srcEdge.sourceHandle, ctx)
       } else if (listNode.type === "split-text") {
         const st = nodeStates[listNode.id]
@@ -882,7 +900,6 @@ function routeVideoOutput(
 const TEXT_SOURCE_NODE_TYPES = new Set([
   "text-prompt",
   "list",
-  "loop",
   "transcribe",
   "suno-lyrics",
   "image-to-text",
@@ -1144,19 +1161,20 @@ function routeOutput(
     }
   }
 
-  // --- Loop/list with typed column — route by column type ---
-  // Modern list/loop nodes store columns with typed handles; the output should
-  // land in the matching input slot (image → referenceImageUrls, etc.), not
-  // always in `prompt`. Without this, list → generate-image (reference image)
-  // drops the wired URL and the downstream node falls back to collectAncestorRefs,
-  // which walks raw upstream and ignores edge filters.
-  if ((srcType === "list" || srcType === "loop") && Array.isArray(src.data.columns) && edge.sourceHandle) {
+  // --- List with typed column — route by column type ---
+  // List nodes store columns with typed handles; the output should land in the
+  // matching input slot (image → referenceImageUrls, etc.), not always in
+  // `prompt`. Without this, list → generate-image (reference image) drops the
+  // wired URL and the downstream node falls back to collectAncestorRefs, which
+  // walks raw upstream and ignores edge filters.
+  if (srcType === "list" && Array.isArray(src.data.columns) && edge.sourceHandle) {
     const columns = src.data.columns as Array<{ handleId: string; type?: string }>
     let col = columns.find((c) => c.handleId === edge.sourceHandle)
-    // List nodes use a fixed "list" output handle (not per-column handles like
-    // loop nodes), so the handleId lookup won't match.  Fall back to the first
-    // column so the user's column-type setting is honoured.
-    if (!col && srcType === "list" && columns.length > 0) {
+    // Natively-created list nodes use a fixed "list" output handle (not the
+    // per-column handles that loop-origin migrated nodes keep), so the handleId
+    // lookup won't match. Fall back to the first column so the user's
+    // column-type setting is honoured.
+    if (!col && columns.length > 0) {
       col = columns[0]
     }
     const colType = col?.type ?? "text"
@@ -1474,6 +1492,22 @@ function routeOutput(
     return
   }
 
+  // --- Voice-changer → audio (audio mode) or video (video mode) ---
+  // Dual-mode like adjust-volume. `output` was already narrowed to the right URL
+  // by getPrimaryOutput via the source handle; route it to the matching slot.
+  // Default (no explicit handle) prefers video when the node produced one.
+  if (srcType === "voice-changer") {
+    const producedVideo =
+      Boolean(nodeStates[src.id]?.output?.videoUrl) ||
+      Boolean(src.data.generatedVideoUrl)
+    if (edge.sourceHandle === "video" || (edge.sourceHandle !== "audio" && producedVideo)) {
+      inputs.videoUrl = output
+    } else {
+      routeAudioOutput(inputs, output, targetType, src.id)
+    }
+    return
+  }
+
   // --- Audio output nodes ---
   if (AUDIO_OUTPUT_NODE_TYPES.has(srcType)) {
     routeAudioOutput(inputs, output, targetType, src.id)
@@ -1541,8 +1575,9 @@ function routeOutput(
     ].filter(Boolean)
     if (allAssetIds.length > 0) {
       // Look for character definition nodes in the workflow
+      const nodeById = new Map(allNodes.map((n) => [n.id, n] as const))
       for (const assetId of allAssetIds) {
-        const assetNode = allNodes.find((n) => n.id === assetId)
+        const assetNode = nodeById.get(assetId)
         if (!assetNode) continue
         const assetState = nodeStates[assetId]
         const refUrl = assetState?.output?.imageUrl ||

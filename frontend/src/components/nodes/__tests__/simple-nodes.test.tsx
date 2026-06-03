@@ -104,7 +104,6 @@ vi.mock("@nodaro/shared", async (importOriginal) => {
 // Component imports (after all mocks)
 // ---------------------------------------------------------------------------
 
-import { ListNode } from "../list-node"
 import { ToneNode } from "../tone-node"
 import { StyleGuideNode } from "../style-guide-node"
 import { ProviderNode } from "../provider-node"
@@ -141,15 +140,6 @@ interface SimpleNodeTestConfig {
 }
 
 const SIMPLE_NODES: SimpleNodeTestConfig[] = [
-  {
-    name: "ListNode",
-    Component: ListNode,
-    expectedCategory: "input",
-    expectedCredits: 0,
-    defaultData: { label: "List", items: "one\ntwo\nthree" },
-    contentAssertion: { text: "3 items" },
-    placeholderAssertion: { text: "No items yet" },
-  },
   {
     name: "ToneNode",
     Component: ToneNode,

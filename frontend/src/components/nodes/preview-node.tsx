@@ -1,12 +1,13 @@
 "use client"
 
 import { memo, useCallback, useEffect } from "react"
+import { CachedImage } from "@/components/ui/cached-image"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Eye, FileText, ImageIcon, Film, Music } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { isMediaUrl } from "@/lib/media-type"
 import { getPreviewItemKey } from "@/lib/preview-items"
@@ -34,12 +35,13 @@ function PreviewItemRow({ item }: { readonly item: PreviewItem }) {
       <div className="flex-1 min-w-0">
         <span className="text-[10px] text-muted-foreground block truncate">{item.sourceNodeLabel}</span>
         {item.type === "image" && isMediaUrl(item.value) ? (
-          <img
+          <CachedImage
             src={item.value}
-            crossOrigin="anonymous"
             alt=""
             className="w-full h-14 object-cover rounded mt-0.5"
             loading="lazy"
+            thumbnail
+            thumbnailWidth={120}
           />
         ) : item.type === "video" && isMediaUrl(item.value) ? (
           <video
@@ -154,8 +156,8 @@ function PreviewNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         )}
       </BaseNode>
-      <HandleWithPopover nodeId={id} nodeType="preview" handleId="in"  type="target" position={Position.Left}  label="Input"  color="#94A3B8" icon={<Eye />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_ANY} />
-      <HandleWithPopover nodeId={id} nodeType="preview" handleId="out" type="source" position={Position.Right} label="Output" color="#94A3B8" icon={<Eye />} side="right" top="24px" />
+      <HandleWithPopover nodeId={id} nodeType="preview" handleId="in"  type="target" position={Position.Left}  label="Input"  color={HANDLE_COLORS.control} icon={<Eye />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_ANY} />
+      <HandleWithPopover nodeId={id} nodeType="preview" handleId="out" type="source" position={Position.Right} label="Output" color={HANDLE_COLORS.control} icon={<Eye />} side="right" top="24px" />
     </div>
   )
 }

@@ -58,7 +58,7 @@ import {
   mixAudioApi,
   combineAudioApi,
   generateImage,
-  getJobStatus,
+  getJobStatusLean,
   llmChatStream,
   setForcePrivate,
   setUserPromptTemplate,
@@ -69,7 +69,7 @@ import {
   executeReduce,
 } from "@/lib/api";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
-import { ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, MODEL_CATALOG, splitGeneratedItems } from "@nodaro/shared";
+import { ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, MODEL_CATALOG, splitGeneratedItems, LLM_FEATURE_DEFAULTS } from "@nodaro/shared";
 import { getGenerateTextTemplate } from "@/lib/generate-text-templates";
 import { buildScenePrompt } from "@/lib/prompt-builder";
 import type {
@@ -186,6 +186,7 @@ import { collectPreviewItems } from "./preview-items";
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
 import { resolveFieldMappings, NODE_MAPPABLE_FIELDS } from "./resolve-field-mappings";
 import { pollJobWithNodeUpdate, guardedToast } from "./poll-job";
+import { shouldAbandonNode } from "./abandon-guard";
 import {
   runImageGeneration,
   runEditImage,
@@ -2058,10 +2059,10 @@ export function executeNode(
       );
       if (startEdge) {
         const startNode = nodes.find((n) => n.id === startEdge.source);
-        if (startNode && startNode.type !== "loop" && startNode.type !== "list") {
+        if (startNode && startNode.type !== "list") {
           startFrameUrl = extractNodeOutput(startNode, startEdge.sourceHandle ?? undefined);
         }
-        // Loop nodes: already resolved via resolveNodeInputs → inputs.startFrameUrl
+        // List nodes: already resolved via resolveNodeInputs → inputs.startFrameUrl
       }
     }
     if (!startFrameUrl && i2vData.selectedStartFrameNodeId) {
@@ -2720,16 +2721,53 @@ export function executeNode(
 
   if (node.type === "voice-changer") {
     const d = node.data as VoiceChangerData;
+    // Video wins when both are wired (matches the backend + node UI).
+    const videoUrl = inputs.videoUrl;
     const audioUrl = inputs.audioUrl;
-    if (!audioUrl) {
-      toast.error(`Node "${d.label}": no audio input found`);
-      return Promise.reject(new Error("No audio input"));
+    if (!videoUrl && !audioUrl) {
+      toast.error(`Node "${d.label}": no audio or video input found`);
+      return Promise.reject(new Error("No input"));
     }
     if (!d.voiceId) {
       toast.error(`Node "${d.label}": no voice selected`);
       return Promise.reject(new Error("No voice selected"));
     }
     setUserPromptTemplate(undefined);
+
+    // Switching modes (audio↔video) drops stale results of the other media
+    // type so the node never shows an audio URL in a video element (or vice
+    // versa) and the results browser stays single-typed.
+    const targetIsVideo = Boolean(videoUrl);
+    const curIsVideo = Boolean(d.generatedVideoUrl);
+    if (targetIsVideo !== curIsVideo) {
+      useWorkflowStore.getState().updateNodeData(node.id, {
+        generatedResults: [],
+        activeResultIndex: 0,
+        generatedVideoUrl: undefined,
+        generatedAudioUrl: undefined,
+      });
+    }
+
+    if (videoUrl) {
+      return runProcessingNode(
+        node.id,
+        () =>
+          voiceChangerApi(
+            undefined,
+            d.voiceId!,
+            ctx.userId,
+            d.stability,
+            d.similarityBoost,
+            d.removeBackgroundNoise,
+            videoUrl,
+          ),
+        "generatedVideoUrl",
+        "Voice Changer",
+        ctx,
+        // Surface the revoiced audio sidecar on the audio output handle.
+        (od) => (od.audioUrl ? { generatedAudioUrl: od.audioUrl as string } : {}),
+      );
+    }
     return runProcessingNode(
       node.id,
       () =>
@@ -2898,10 +2936,20 @@ export function executeNode(
                 return;
               }
               try {
-                const job = await getJobStatus(jobId);
+                const job = await getJobStatusLean(jobId);
                 pollFailures = 0;
                 if (job.status === "processing" && job.progress != null) {
                   updateProgressIfChanged(node.id, job.progress, updateNodeData);
+                }
+
+                if (job.status === "completed" || job.status === "failed") {
+                  if (shouldAbandonNode(node.id, jobId)) {
+                    // Run discarded/replaced — the job still lands in My
+                    // Library, but we must not write its result/error to canvas.
+                    ctx.untrackInterval(poll);
+                    resolve("");
+                    return;
+                  }
                 }
 
                 if (job.status === "completed") {
@@ -2931,6 +2979,11 @@ export function executeNode(
                 pollFailures++;
                 if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
                   ctx.untrackInterval(poll);
+                  if (shouldAbandonNode(node.id, jobId)) {
+                    // Run discarded/replaced — don't write a failure to canvas.
+                    resolve("");
+                    return;
+                  }
                   updateNodeData(node.id, {
                     executionStatus: "failed",
                     currentJobId: undefined,
@@ -3129,10 +3182,20 @@ export function executeNode(
                 return;
               }
               try {
-                const job = await getJobStatus(jobId);
+                const job = await getJobStatusLean(jobId);
                 pollFailures = 0;
                 if (job.progress) {
                   updateProgressIfChanged(node.id, job.progress, updateNodeData);
+                }
+
+                if (job.status === "completed" || job.status === "failed") {
+                  if (shouldAbandonNode(node.id, jobId)) {
+                    // Run discarded/replaced — the job still lands in My
+                    // Library, but we must not write its result/error to canvas.
+                    ctx.untrackInterval(poll);
+                    resolve("");
+                    return;
+                  }
                 }
 
                 if (job.status === "completed") {
@@ -3176,6 +3239,11 @@ export function executeNode(
                 pollFailures++;
                 if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
                   ctx.untrackInterval(poll);
+                  if (shouldAbandonNode(node.id, jobId)) {
+                    // Run discarded/replaced — don't write a failure to canvas.
+                    resolve("");
+                    return;
+                  }
                   updateNodeData(node.id, {
                     executionStatus: "failed",
                     currentJobId: undefined,
@@ -3575,10 +3643,19 @@ export function executeNode(
                 return;
               }
               try {
-                const job = await getJobStatus(jobId);
+                const job = await getJobStatusLean(jobId);
                 pollFailures = 0;
                 if (job.status === "processing" && job.progress != null) {
                   updateProgressIfChanged(node.id, job.progress, updateNodeData);
+                }
+                if (job.status === "completed" || job.status === "failed") {
+                  if (shouldAbandonNode(node.id, jobId)) {
+                    // Run discarded/replaced — the job still lands in My
+                    // Library, but we must not write its result/error to canvas.
+                    ctx.untrackInterval(poll);
+                    resolve("");
+                    return;
+                  }
                 }
                 if (job.status === "completed") {
                   ctx.untrackInterval(poll);
@@ -3650,6 +3727,11 @@ export function executeNode(
                 pollFailures++;
                 if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
                   ctx.untrackInterval(poll);
+                  if (shouldAbandonNode(node.id, jobId)) {
+                    // Run discarded/replaced — don't write a failure to canvas.
+                    resolve("");
+                    return;
+                  }
                   updateNodeData(node.id, {
                     executionStatus: "failed",
                     currentJobId: undefined,
@@ -3814,6 +3896,8 @@ export function executeNode(
       temperature: chatData.temperature ?? 0.7,
       maxTokens: chatData.maxTokens ?? 2048,
       llmModel: chatData.llmModel,
+      // Stop button → aborts this stream mid-flight (cancels the SSE fetch).
+      signal: ctx.signal,
       onToken: (token) => {
         const fresh = useWorkflowStore
           .getState()
@@ -3837,6 +3921,11 @@ export function executeNode(
           userPrompt: userInput,
           listValue: listValue || undefined,
           runId: runId ?? "manual",
+          // Record what actually produced this result so the node + execution
+          // log can show the model and template per result (the config may
+          // change between runs). Falls back to the llm-chat default model.
+          model: chatData.llmModel || LLM_FEATURE_DEFAULTS["llm-chat"],
+          templateId: chatData.templateId || "custom",
         };
         updateNodeData(node.id, {
           executionStatus: "completed",
@@ -3851,6 +3940,12 @@ export function executeNode(
         return result.generatedText ?? "";
       })
       .catch((err: Error) => {
+        // User pressed Stop → the stream's fetch was aborted. Not a failure:
+        // the Stop handler already restored the node (last result / idle), so
+        // don't overwrite it with a "Failed" state or a toast.
+        if (err?.name === "AbortError" || ctx.signal?.aborted) {
+          return "";
+        }
         updateNodeData(node.id, {
           executionStatus: "failed",
           errorMessage: err.message || "Generate Text failed",
@@ -4386,7 +4481,7 @@ export function executeNode(
                     return;
                   }
                   try {
-                    const job = await getJobStatus(jobId);
+                    const job = await getJobStatusLean(jobId);
                     pollFailures = 0;
                     if (job.status === "processing" && job.progress != null) {
                       // Surface the first job's progress only — multi-version
@@ -4416,7 +4511,7 @@ export function executeNode(
                       // Final verification: completion may have raced the
                       // network blip — re-fetch once before giving up.
                       try {
-                        const finalJob = await getJobStatus(jobId);
+                        const finalJob = await getJobStatusLean(jobId);
                         if (finalJob.status === "completed") {
                           const od = (finalJob.output_data ?? {}) as Record<string, unknown>;
                           const url = (od.videoUrl as string | undefined)?.trim();
@@ -4441,6 +4536,12 @@ export function executeNode(
           // failed take(s) will be refunded by the worker's standard flow.
           Promise.all(jobIds.map(pollOne))
             .then((results) => {
+              if (shouldAbandonNode(node.id, jobIds[0])) {
+                // Run discarded/replaced — the jobs still land in My Library,
+                // but we must not write their result onto the canvas.
+                resolve("");
+                return;
+              }
               const primary = results[0];
               const newResults: GeneratedResult[] = results.map((r) => ({
                 url: r.url,
@@ -4465,6 +4566,11 @@ export function executeNode(
               resolve(primary.url);
             })
             .catch((err) => {
+              if (shouldAbandonNode(node.id, jobIds[0])) {
+                // Run discarded/replaced — don't write a failure onto the canvas.
+                resolve("");
+                return;
+              }
               const errMsg = err instanceof Error ? err.message : "Unknown error";
               updateNodeData(node.id, {
                 executionStatus: "failed",
@@ -4551,10 +4657,19 @@ export function executeNode(
                 return;
               }
               try {
-                const job = await getJobStatus(jobId);
+                const job = await getJobStatusLean(jobId);
                 pollFailures = 0;
                 if (job.status === "processing" && job.progress != null) {
                   updateProgressIfChanged(node.id, job.progress, updateNodeData);
+                }
+                if (job.status === "completed" || job.status === "failed") {
+                  if (shouldAbandonNode(node.id, jobId)) {
+                    // Run discarded/replaced — the job still lands in My
+                    // Library, but we must not write its result/error to canvas.
+                    ctx.untrackInterval(poll);
+                    resolve("");
+                    return;
+                  }
                 }
                 if (job.status === "completed") {
                   ctx.untrackInterval(poll);
@@ -4609,9 +4724,14 @@ export function executeNode(
                 pollFailures++;
                 if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
                   ctx.untrackInterval(poll);
+                  if (shouldAbandonNode(node.id, jobId)) {
+                    // Run discarded/replaced — don't write result/failure to canvas.
+                    resolve("");
+                    return;
+                  }
                   // Final verification: the job may have completed while polling was failing
                   try {
-                    const finalJob = await getJobStatus(jobId);
+                    const finalJob = await getJobStatusLean(jobId);
                     if (finalJob.status === "completed") {
                       const od = (finalJob.output_data ?? {}) as Record<string, unknown>;
                       const outImageUrl = od.imageUrl as string | undefined;
@@ -4806,8 +4926,18 @@ export function executeNode(
         updateNodeData(node.id, { currentJobId: jobId });
         const poll = setInterval(async () => {
           try {
-            const job = await getJobStatus(jobId);
+            const job = await getJobStatusLean(jobId);
             if (job.progress != null) updateProgressIfChanged(node.id, job.progress, updateNodeData);
+            if (job.status === "completed" || job.status === "failed") {
+              if (shouldAbandonNode(node.id, jobId)) {
+                // Run discarded/replaced — the job still lands in My Library,
+                // but we must not write its result/error onto the canvas (nor
+                // spawn the per-chunk upload nodes).
+                clearInterval(poll);
+                resolve("");
+                return;
+              }
+            }
             if (job.status === "completed") {
               clearInterval(poll);
               const od = job.output_data as Record<string, unknown>;
@@ -4860,6 +4990,11 @@ export function executeNode(
             }
           } catch {
             clearInterval(poll);
+            if (shouldAbandonNode(node.id, jobId)) {
+              // Run discarded/replaced — don't write a failure to the canvas.
+              resolve("");
+              return;
+            }
             updateNodeData(node.id, { executionStatus: "failed", currentJobId: undefined });
             reject(new Error("Polling failed"));
           }
@@ -6606,7 +6741,7 @@ export function executeNode(
           details: ImageCriticData["details"];
         };
         if ((result as { deduped?: true }).deduped === true) {
-          const job = await getJobStatus(result.jobId);
+          const job = await getJobStatusLean(result.jobId);
           const od = (job?.output_data ?? {}) as Record<string, unknown>;
           payload = {
             jobId: result.jobId,

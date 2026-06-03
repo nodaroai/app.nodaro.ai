@@ -72,7 +72,9 @@ const SOURCE_COLORS: Record<string, string> = {
   expiry: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
 }
 
-const OWNER_EMAIL = "[email removed]"
+// Platform owner whose super_admin row is protected in the UI. Configured via
+// VITE_PLATFORM_OWNER_EMAIL; empty (self-host default) means no protected owner.
+const OWNER_EMAIL = (import.meta.env.VITE_PLATFORM_OWNER_EMAIL as string) || ""
 
 const ROLE_COLORS: Record<string, string> = {
   user: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
@@ -660,7 +662,7 @@ function UserRow({
   const tierClass = TIER_COLORS[user.subscription_tier] ?? TIER_COLORS.free
   const roleClass = ROLE_COLORS[user.role] ?? ROLE_COLORS.user
 
-  const isOwner = user.email === OWNER_EMAIL
+  const isOwner = OWNER_EMAIL !== "" && user.email === OWNER_EMAIL
   const isSuperAdmin = currentUserRole === "super_admin"
   const isSelf = currentUserId === user.id
   const canChangeRole = isSuperAdmin && !isOwner && !isSelf

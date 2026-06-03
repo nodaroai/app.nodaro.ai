@@ -19,8 +19,7 @@ import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { ResizeVideoData } from "@/types/nodes"
 
 function ResizeVideoNodeComponent({ id, data, selected }: NodeProps) {
-  const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as ResizeVideoData | undefined
-  const nodeData = currentNodeData ?? (data as ResizeVideoData)
+  const nodeData = data as ResizeVideoData
   const credits = useModelCredits("ffmpeg", 1)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)

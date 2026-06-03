@@ -32,7 +32,6 @@ export const TEXT_SOURCE_TYPES: ReadonlyArray<string> = [
   "webhook-trigger",
   "schedule-trigger",
   "list",
-  "loop",
   // Parameter nodes — their extractNodeOutput returns the prompt hint.
   "tone",
   "style-guide",
@@ -126,6 +125,68 @@ export function getCompatibleSources(
   })
 }
 
+/**
+ * Structural equality for two `getConnectedSources` results. Compares the
+ * lightweight identity/label/value tuple AND the heavy `nodeData` blob so the
+ * cache below only reuses the previous reference when nothing an upstream
+ * consumer cares about changed. `nodeData` is compared recursively (it is the
+ * upstream node's data record — `liveRefMap` reads its output via
+ * extractNodeOutput, so a change there MUST bust the cache).
+ */
+function deepEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true
+  if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) return false
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false
+    for (let i = 0; i < a.length; i++) {
+      if (!deepEqual(a[i], b[i])) return false
+    }
+    return true
+  }
+  const ao = a as Record<string, unknown>
+  const bo = b as Record<string, unknown>
+  const aKeys = Object.keys(ao)
+  const bKeys = Object.keys(bo)
+  if (aKeys.length !== bKeys.length) return false
+  for (const k of aKeys) {
+    if (!Object.prototype.hasOwnProperty.call(bo, k)) return false
+    if (!deepEqual(ao[k], bo[k])) return false
+  }
+  return true
+}
+
+function sourcesEqual(
+  prev: ReadonlyArray<SourceNodeInfo>,
+  next: ReadonlyArray<SourceNodeInfo>,
+): boolean {
+  if (prev.length !== next.length) return false
+  for (let i = 0; i < prev.length; i++) {
+    const p = prev[i]
+    const n = next[i]
+    if (
+      p.id !== n.id ||
+      p.type !== n.type ||
+      p.label !== n.label ||
+      p.value !== n.value ||
+      p.providerCategory !== n.providerCategory ||
+      p.sourceHandle !== n.sourceHandle ||
+      p.targetHandle !== n.targetHandle ||
+      p.edgeOutputMode !== n.edgeOutputMode
+    ) {
+      return false
+    }
+    if (!deepEqual(p.nodeData, n.nodeData)) return false
+  }
+  return true
+}
+
+// Single-consumer (ConfigPanel) cache of the last result so that typing into
+// the *selected* node — which creates a fresh `nodes` array reference but does
+// not change any upstream source — returns the SAME array reference. This keeps
+// all [sources]-keyed memos in the config panels (and the PromptEditor refs)
+// from thrashing on every keystroke.
+let lastConnectedSources: ReadonlyArray<SourceNodeInfo> = []
+
 export function getConnectedSources(
   nodeId: string,
   edges: ReadonlyArray<WorkflowEdge>,
@@ -149,6 +210,15 @@ export function getConnectedSources(
       edgeOutputMode: (edge.data as Record<string, unknown> | undefined)?.outputMode as string | undefined,
     })
   }
+  // Content-stable: when the freshly-built list is structurally equal to the
+  // previous one, return the previous reference so downstream memos keyed on
+  // [sources] don't invalidate. Consumers that DO need upstream output changes
+  // (liveRefMap → extractNodeOutput) still see them because `sourcesEqual`
+  // deep-compares each source's `nodeData`.
+  if (sourcesEqual(lastConnectedSources, sources)) {
+    return lastConnectedSources
+  }
+  lastConnectedSources = sources
   return sources
 }
 

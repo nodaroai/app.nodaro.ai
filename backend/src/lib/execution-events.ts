@@ -24,6 +24,7 @@ export interface ExecutionEvent {
     | "execution:completed"
     | "execution:failed"
     | "execution:cancelled"
+    | "execution:discarded"
   executionId: string
   /** Full snapshot of all node states — always present. */
   nodeStates: Record<string, NodeExecutionState>

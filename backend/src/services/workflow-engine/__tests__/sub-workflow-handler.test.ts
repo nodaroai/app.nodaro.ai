@@ -34,6 +34,7 @@ vi.mock("../node-executor.js", () => ({
 }))
 
 import { executeSubWorkflow } from "../sub-workflow-handler.js"
+import { executeNode } from "../node-executor.js"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -186,6 +187,28 @@ describe("executeSubWorkflow", () => {
     expect(result).toBeDefined()
     // text-prompt is a source node so its output comes from extractSourceNodeOutput
     expect(result.text).toBe("hello from sub")
+  })
+
+  it("pre-completes parameter-picker nodes instead of executing them (Unknown-node-type regression)", async () => {
+    // A parameter picker (mood/lens/framing/…) inside a sub-workflow has no job
+    // handler. Before the fix it reached executeNode → buildPayload threw
+    // "Unknown node type" and failed the whole sub-workflow. It must be
+    // pre-completed (mirroring the main orchestrator) and never executed.
+    const n = node("sw", "sub-workflow", { workflowId: "ref-wf" })
+    const subNodes: SimpleNode[] = [
+      node("mood", "mood", { mood: "tense" }),
+      node("out", "sub-workflow-output"),
+    ]
+    const subEdges: SimpleEdge[] = [edge("mood", "out")]
+    mockSingle.mockResolvedValue({ data: { nodes: subNodes, edges: subEdges }, error: null })
+
+    await expect(executeSubWorkflow(n, {}, ctx())).resolves.toBeDefined()
+
+    // executeNode must NOT be invoked for the parameter node.
+    const executedMood = vi
+      .mocked(executeNode)
+      .mock.calls.some((c) => (c[0] as SimpleNode)?.type === "mood")
+    expect(executedMood).toBe(false)
   })
 
   it("passes resolved inputs to sub-workflow-input node", async () => {

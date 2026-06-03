@@ -231,9 +231,10 @@ function expandWiredCharacterRefs(
 ): ConnectedReference[] {
   if (!buildCtx?.nodes || !buildCtx.edges) return []
   const out: ConnectedReference[] = []
+  const nodeById = new Map(buildCtx.nodes.map((n) => [n.id, n] as const))
   const incoming = buildCtx.edges.filter((e) => e.target === consumerNodeId)
   for (const e of incoming) {
-    const upstream = buildCtx.nodes.find((n) => n.id === e.source)
+    const upstream = nodeById.get(e.source)
     if (!upstream || upstream.type !== "character") continue
     const charData = upstream.data
     const charName =
@@ -431,14 +432,15 @@ export function expandWiredLocationRefs(
 ): ConnectedReference[] {
   if (!buildCtx?.nodes || !buildCtx.edges) return []
   const out: ConnectedReference[] = []
+  const nodeById = new Map(buildCtx.nodes.map((n) => [n.id, n] as const))
   const incoming = buildCtx.edges.filter((e) => e.target === consumerNodeId)
-  const consumer = buildCtx.nodes.find((n) => n.id === consumerNodeId)
+  const consumer = nodeById.get(consumerNodeId)
   const consumerPrompt =
     (consumer?.data?.prompt as string | undefined) ??
     (consumer?.data?.motionPrompt as string | undefined) ??
     undefined
   for (const e of incoming) {
-    const upstream = buildCtx.nodes.find((n) => n.id === e.source)
+    const upstream = nodeById.get(e.source)
     if (!upstream || upstream.type !== "location") continue
     const locData = upstream.data
     let sourceUrl = locData.sourceImageUrl as string | undefined
@@ -537,9 +539,10 @@ function buildExtraRefCharacterContextLookup(
 ): (slug: string) => ExtraRefCharacterContext | undefined {
   if (!buildCtx?.nodes || !buildCtx.edges) return () => undefined
   const bySlug = new Map<string, ExtraRefCharacterContext>()
+  const nodeById = new Map(buildCtx.nodes.map((n) => [n.id, n] as const))
   const incoming = buildCtx.edges.filter((e) => e.target === consumerNodeId)
   for (const e of incoming) {
-    const upstream = buildCtx.nodes.find((n) => n.id === e.source)
+    const upstream = nodeById.get(e.source)
     if (!upstream || upstream.type !== "character") continue
     const charData = upstream.data
     const charName =
@@ -899,11 +902,12 @@ function applyOrderToReferenceUrls(
   const allNodes = buildCtx.nodes ?? []
   const allEdges = buildCtx.edges ?? []
   const states = buildCtx.nodeStates ?? {}
+  const nodeById = new Map(allNodes.map((n) => [n.id, n] as const))
   const matchedSources: SimpleNode[] = []
   const seenSrcIds = new Set<string>()
   for (const e of allEdges) {
     if (e.target !== consumerNodeId) continue
-    const src = allNodes.find((n) => n.id === e.source)
+    const src = nodeById.get(e.source)
     if (!src) continue
     if (!edgeFilter(e, src)) continue
     if (seenSrcIds.has(src.id)) continue
@@ -975,7 +979,7 @@ function resolvePersona(
 // List-like node helpers for buildNodeRefMap edge-aware output extraction
 // ---------------------------------------------------------------------------
 
-const LIST_LIKE_TYPES = new Set(["list", "loop", "split-text"])
+const LIST_LIKE_TYPES = new Set(["list", "split-text"])
 
 /** Return the outputMode from connecting edges, defaulting to "each" for list-like nodes. */
 function getEdgeOutputMode(
@@ -989,30 +993,34 @@ function getEdgeOutputMode(
   return "each"
 }
 
-/** Parse the list of items from a list/loop/split-text node. */
+/** Parse the list of items from a list/split-text node. */
 function extractListItems(
   node: SimpleNode,
   states: Record<string, NodeExecutionState>,
 ): string[] {
   const data = node.data
   if (node.type === "list") {
-    // Modern format: columns + rows (same as loop). Without this, node refs
-    // like {List Name} resolving to list items only saw the legacy items
-    // string; modern lists returned an empty array.
+    // Modern format: columns + rows. Without this, node refs like {List Name}
+    // resolving to list items only saw the legacy items string; modern lists
+    // returned an empty array.
     const cols = data.columns as Array<{ handleId: string }> | undefined
     if (cols) {
       const rows = data.rows as string[][] | undefined
       return (rows ?? []).map((r) => r[0]?.trim() ?? "").filter(Boolean)
+    }
+    // Rows-only shape (rows present, columns absent) — the loop→list rename
+    // does NOT backfill columns, so a renamed rows-only loop lands here. Read
+    // the first column (as the retired `loop` case did), BEFORE the legacy
+    // `items` fallback, so `list` is a true superset of `loop`.
+    const rowsOnly = data.rows as string[][] | undefined
+    if (rowsOnly) {
+      return rowsOnly.map((r) => r[0]?.trim() ?? "").filter(Boolean)
     }
     // Legacy format: newline-separated items string
     return ((data.items as string | undefined) || "")
       .split("\n")
       .map((l) => l.trim())
       .filter((l) => l.length > 0)
-  }
-  if (node.type === "loop") {
-    const rows = data.rows as string[][] | undefined
-    return (rows ?? []).map((r) => r[0]?.trim() ?? "").filter(Boolean)
   }
   if (node.type === "split-text") {
     const state = states[node.id]
@@ -1057,16 +1065,23 @@ export function buildNodeRefMap(
   const nodes = ctx.nodes
   const edges = ctx.edges
   const states = ctx.nodeStates
+  // Index nodes by id and edges by target once, so the BFS below is O(N+E)
+  // instead of re-scanning every node/edge on each dequeued node.
+  const nodesById = new Map(nodes.map((n) => [n.id, n] as const))
+  const edgesByTarget = new Map<string, SimpleEdge[]>()
+  for (const edge of edges) {
+    const group = edgesByTarget.get(edge.target)
+    if (group) group.push(edge)
+    else edgesByTarget.set(edge.target, [edge])
+  }
   const visited = new Set<string>()
   const queue: Array<{ id: string; connectingEdges: ReadonlyArray<SimpleEdge> }> = []
 
   // Seed BFS with direct parents, grouping edges by source
   const seedEdges = new Map<string, SimpleEdge[]>()
-  for (const edge of edges) {
-    if (edge.target === nodeId) {
-      if (!seedEdges.has(edge.source)) seedEdges.set(edge.source, [])
-      seedEdges.get(edge.source)!.push(edge)
-    }
+  for (const edge of edgesByTarget.get(nodeId) ?? []) {
+    if (!seedEdges.has(edge.source)) seedEdges.set(edge.source, [])
+    seedEdges.get(edge.source)!.push(edge)
   }
   for (const [sourceId, edgeGroup] of seedEdges) {
     visited.add(sourceId)
@@ -1075,7 +1090,7 @@ export function buildNodeRefMap(
 
   while (queue.length > 0) {
     const { id: currentId, connectingEdges } = queue.shift()!
-    const node = nodes.find((n) => n.id === currentId)
+    const node = nodesById.get(currentId)
     if (!node) continue
 
     const label = (node.data.label as string) || node.type || currentId
@@ -1118,8 +1133,8 @@ export function buildNodeRefMap(
 
     // BFS: traverse to parents of current node
     const nextEdges = new Map<string, SimpleEdge[]>()
-    for (const edge of edges) {
-      if (edge.target === currentId && !visited.has(edge.source)) {
+    for (const edge of edgesByTarget.get(currentId) ?? []) {
+      if (!visited.has(edge.source)) {
         if (!nextEdges.has(edge.source)) nextEdges.set(edge.source, [])
         nextEdges.get(edge.source)!.push(edge)
       }
@@ -2890,9 +2905,12 @@ export function buildPayload(
     }
 
     case "voice-changer":
+      // Dual-mode: a wired video input switches the worker to video mode
+      // (demux → STS → remux). Video wins over audio when both are present.
       return simpleResult("voice-changer", "elevenlabs-voice-changer", {
         jobId,
         audioUrl: resolvedInputs.audioUrl || data.audioUrl,
+        videoUrl: resolvedInputs.videoUrl || data.videoUrl,
         voiceId: data.voiceId || data.voice,
         stability: data.stability,
         similarityBoost: data.similarityBoost,

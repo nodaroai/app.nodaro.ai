@@ -4,6 +4,7 @@ import {
   IMAGE_I2I_MODELS,
   VIDEO_I2V_MODELS,
   VIDEO_T2V_MODELS,
+  defaultResolutionFor,
 } from "../model-options"
 
 // ---------------------------------------------------------------------------
@@ -95,5 +96,30 @@ describe("cross-array model sync", () => {
         ).toBeGreaterThan(0)
       }
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// defaultResolutionFor — Flux 2 family default resolution helper
+// ---------------------------------------------------------------------------
+
+describe("defaultResolutionFor", () => {
+  it("returns '2 MP' for flux-2-pro", () => {
+    expect(defaultResolutionFor("flux-2-pro")).toBe("2 MP")
+  })
+
+  it("returns '2 MP' for flux-2-max", () => {
+    expect(defaultResolutionFor("flux-2-max")).toBe("2 MP")
+  })
+
+  it("returns '1 MP' for flux-2-klein", () => {
+    expect(defaultResolutionFor("flux-2-klein")).toBe("1 MP")
+  })
+
+  it("returns undefined for non-flux-2 providers", () => {
+    expect(defaultResolutionFor("nano-banana-pro")).toBeUndefined()
+    expect(defaultResolutionFor("flux")).toBeUndefined()
+    expect(defaultResolutionFor("gpt-image-2")).toBeUndefined()
+    expect(defaultResolutionFor("nano-banana")).toBeUndefined()
   })
 })

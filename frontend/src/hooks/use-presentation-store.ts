@@ -6,6 +6,7 @@
 import { create } from "zustand"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { DEFAULT_PRESENTATION_SETTINGS, type PresentationSettings } from "./use-workflow-store"
+import { migrateListLoopNodes } from "@/lib/list-loop-migration"
 import {
   getSharedWorkflow,
   runSharedWorkflow,
@@ -85,11 +86,19 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
     set({ executionStatus: "loading", shareToken: token })
     try {
       const data = await getSharedWorkflow(token)
+      // Migrate legacy `loop` ("Table") nodes to canonical `list` on load —
+      // shared-workflow snapshots are served raw (no editor/orchestrator
+      // normalization), so without this the presentation render path still
+      // sees `loop`. Mirrors useWorkflowStore.loadWorkflow.
+      const { nodes, edges } = migrateListLoopNodes(
+        data.nodes as WorkflowNode[],
+        data.edges as WorkflowEdge[],
+      )
       set({
         workflowId: data.workflowId,
         workflowName: data.name,
-        nodes: data.nodes as WorkflowNode[],
-        edges: data.edges as WorkflowEdge[],
+        nodes,
+        edges,
         isOwner: data.isOwner,
         estimatedCost: data.estimatedCost ?? 0,
         presentationSettings: data.presentationSettings ?? DEFAULT_PRESENTATION_SETTINGS,

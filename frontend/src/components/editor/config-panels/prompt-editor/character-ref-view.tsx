@@ -8,6 +8,7 @@ import {
   usageModeLabel,
   type UsageMode,
 } from "@nodaro/shared"
+import { optimizedImageUrl } from "@/lib/image"
 import type { CharacterRefAttrs } from "./character-ref-extension"
 
 /** Subset of `RefImageItem` the pill needs to render. Loose shape because the
@@ -150,7 +151,7 @@ export function CharacterRefView(props: NodeViewProps) {
     >
       {ref?.url ? (
         <img
-          src={ref.url}
+          src={optimizedImageUrl(ref.url, { width: 48, quality: 80 })}
           alt=""
           className="character-ref-pill__thumb"
           draggable={false}
@@ -212,7 +213,7 @@ export function CharacterRefView(props: NodeViewProps) {
               aria-hidden
             >
               <img
-                src={ref.url}
+                src={optimizedImageUrl(ref.url, { width: 480 })}
                 alt=""
                 className="block rounded object-contain"
                 style={{ maxWidth: PREVIEW_MAX, maxHeight: PREVIEW_MAX }}

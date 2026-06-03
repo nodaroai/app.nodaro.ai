@@ -113,7 +113,6 @@ describe("ACCEPTS_VIDEO", () => {
     // allowance, the strict validator would reject every adjust-volume →
     // video-ffmpeg edge after the user runs it on video.
     expect(ACCEPTS_VIDEO("adjust-volume")).toBe(true)
-    expect(ACCEPTS_VIDEO("loop")).toBe(true)
     expect(ACCEPTS_VIDEO("list")).toBe(true)
     expect(ACCEPTS_VIDEO("sub-workflow")).toBe(true)
   })
@@ -140,7 +139,7 @@ describe("ACCEPTS_AUDIO", () => {
 
   it("accepts dynamic producers", () => {
     expect(ACCEPTS_AUDIO("adjust-volume")).toBe(true)
-    expect(ACCEPTS_AUDIO("loop")).toBe(true)
+    expect(ACCEPTS_AUDIO("list")).toBe(true)
     expect(ACCEPTS_AUDIO("sub-workflow")).toBe(true)
   })
 
@@ -160,7 +159,7 @@ describe("ACCEPTS_MEDIA", () => {
   })
 
   it("accepts dynamic producers", () => {
-    expect(ACCEPTS_MEDIA("loop")).toBe(true)
+    expect(ACCEPTS_MEDIA("list")).toBe(true)
     expect(ACCEPTS_MEDIA("adjust-volume")).toBe(true)
   })
 

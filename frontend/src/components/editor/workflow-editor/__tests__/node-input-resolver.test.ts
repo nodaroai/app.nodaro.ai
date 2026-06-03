@@ -720,6 +720,14 @@ describe("extractNodeOutputAsList", () => {
     expect(extractNodeOutputAsList(n)).toEqual(["p1===NEXT===p2===NEXT===p3"])
     expect(extractNodeOutputAsList(n, "text")).toEqual(["p1===NEXT===p2===NEXT===p3"])
   })
+
+  it("rows-only list (columns absent, rows present) maps column-0 values — FE/BE parity", () => {
+    // FIX #6: a `list` whose loop→list rename left rows present but columns
+    // absent (and no legacy `items`). The backend extractors + execution-graph
+    // read rows[*][0]; the resolver must mirror that instead of returning undefined.
+    const n = makeNode("1", "list", { rows: [["a"], ["b"]] })
+    expect(extractNodeOutputAsList(n)).toEqual(["a", "b"])
+  })
 })
 
 describe("getListInputForNode (consumption: llm-chat items fan-out)", () => {
@@ -903,75 +911,75 @@ describe("resolveEdgeValuesForTableColumn (UI display helper)", () => {
   })
 })
 
-describe("Loop consumption: llm-chat items handle fans out over ===NEXT=== split", () => {
-  // The Generate Text (llm-chat) `items` handle must fan a Loop out over the
+describe("List consumption: llm-chat items handle fans out over ===NEXT=== split", () => {
+  // The Generate Text (llm-chat) `items` handle must fan a List out over the
   // ===NEXT===-split list, exactly like it already does for Generate Image
   // (getListInputForNode). Both are named consumers — both must work. The
   // upstream node only carries `generatedText` (no generatedResults), so the
   // ONLY way to get the 3 items is via splitGeneratedItems on the `items`
-  // handle. If the loop-resolution path drops the sourceHandle, it falls back
+  // handle. If the list-resolution path drops the sourceHandle, it falls back
   // to the unsplit string and yields ONE item.
-  it("resolveLoopColumnValues: items → loop connected column yields the 3 split items", () => {
+  it("resolveLoopColumnValues: items → list connected column yields the 3 split items", () => {
     const llm = makeNode("llm1", "llm-chat", {
       generatedText: "p1===NEXT===p2===NEXT===p3",
     })
-    const loop = makeNode("loop1", "loop", {
+    const list = makeNode("list1", "list", {
       columns: [{ id: "c1", handleId: "col_a", type: "text" }],
       rows: [],
     })
     const edges = [
       {
-        id: "llm1->loop1",
+        id: "llm1->list1",
         source: "llm1",
-        target: "loop1",
+        target: "list1",
         sourceHandle: "items",
         targetHandle: "col_a_in",
         data: { outputMode: "each" },
       },
     ]
     const vals = resolveLoopColumnValues(
-      loop as any,
+      list as any,
       "col_a",
       edges as any,
-      [llm, loop] as any,
+      [llm, list] as any,
     )
     expect(vals).toEqual(["p1", "p2", "p3"])
   })
 
-  it("resolveLoopColumnValues: items → loop legacy 'in' handle yields the 3 split items", () => {
+  it("resolveLoopColumnValues: items → list legacy 'in' handle yields the 3 split items", () => {
     const llm = makeNode("llm1", "llm-chat", {
       generatedText: "p1===NEXT===p2===NEXT===p3",
     })
-    const loop = makeNode("loop1", "loop", {
+    const list = makeNode("list1", "list", {
       columns: [{ id: "c1", handleId: "col_a", type: "text" }],
       rows: [],
     })
     const edges = [
       {
-        id: "llm1->loop1",
+        id: "llm1->list1",
         source: "llm1",
-        target: "loop1",
+        target: "list1",
         sourceHandle: "items",
         targetHandle: "in",
         data: { outputMode: "each" },
       },
     ]
     const vals = resolveLoopColumnValues(
-      loop as any,
+      list as any,
       "col_a",
       edges as any,
-      [llm, loop] as any,
+      [llm, list] as any,
     )
     expect(vals).toEqual(["p1", "p2", "p3"])
   })
 
-  it("resolveEdgeValuesForTableColumn: items → loop column preview yields the 3 split items", () => {
+  it("resolveEdgeValuesForTableColumn: items → list column preview yields the 3 split items", () => {
     const llm = makeNode("llm1", "llm-chat", {
       generatedText: "p1===NEXT===p2===NEXT===p3",
     })
     const edge = {
       source: "llm1",
-      target: "loop1",
+      target: "list1",
       sourceHandle: "items",
       targetHandle: "col_a_in",
       data: { outputMode: "each" },
@@ -996,7 +1004,7 @@ describe("Loop consumption: llm-chat items handle fans out over ===NEXT=== split
     })
     const edge = {
       source: "llm1",
-      target: "loop1",
+      target: "list1",
       sourceHandle: "items",
       targetHandle: "col_a_in",
       data: { outputMode: "each" },
@@ -1012,35 +1020,35 @@ describe("Loop consumption: llm-chat items handle fans out over ===NEXT=== split
     expect(vals).toEqual(["a, b, c", "d, e", "f"])
   })
 
-  it("resolveNodeInputs: items → loop per-iteration value picks the i-th split item", () => {
+  it("resolveNodeInputs: items → list per-iteration value picks the i-th split item", () => {
     const llm = makeNode("llm1", "llm-chat", {
       generatedText: "p1===NEXT===p2===NEXT===p3",
     })
-    const loop = makeNode("loop1", "loop", {
+    const list = makeNode("list1", "list", {
       columns: [{ id: "c1", handleId: "col_a", type: "text" }],
       rows: [],
     })
-    // generate-image consumes the loop's column output per iteration.
+    // generate-image consumes the list's column output per iteration.
     const target = makeNode("g1", "generate-image")
     const edges = [
       {
-        id: "llm1->loop1",
+        id: "llm1->list1",
         source: "llm1",
-        target: "loop1",
+        target: "list1",
         sourceHandle: "items",
         targetHandle: "col_a_in",
         data: { outputMode: "each" },
       },
       {
-        id: "loop1->g1",
-        source: "loop1",
+        id: "list1->g1",
+        source: "list1",
         target: "g1",
         sourceHandle: "col_a",
         targetHandle: "prompt",
         data: { outputMode: "each" },
       },
     ]
-    const nodes = [llm, loop, target] as any
+    const nodes = [llm, list, target] as any
     expect(resolveNodeInputs(target as any, nodes, edges as any, 0).prompt).toBe("p1")
     expect(resolveNodeInputs(target as any, nodes, edges as any, 1).prompt).toBe("p2")
     expect(resolveNodeInputs(target as any, nodes, edges as any, 2).prompt).toBe("p3")

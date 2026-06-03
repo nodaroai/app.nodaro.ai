@@ -125,14 +125,6 @@ function updateItemContent(items: PresentationItem[], id: string, content: strin
   })
 }
 
-/** Recursively update a group's title by id */
-function updateGroupTitle(items: PresentationItem[], id: string, title: string): PresentationItem[] {
-  return items.map((item) => {
-    if (item.type === "group" && item.id === id) return { ...item, title }
-    return item
-  })
-}
-
 /** Recursively update a group field by id */
 function updateGroupField(items: PresentationItem[], id: string, field: string, value: unknown): PresentationItem[] {
   return items.map((item) => {
@@ -339,44 +331,68 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   // so we merge them into node data for accurate cost calculation.
   const inputValues = isFullscreen ? presInputValues : undefined
   const [dynamicEstimatedCost, setDynamicEstimatedCost] = useState(0)
+  // Debounced so plain text-field keystrokes don't trigger the O(N^2·E) fan-out
+  // recompute on every change. We still depend on the whole inputValues object so
+  // ANY cost-affecting input (loop rows, exposed provider/resolution fields, …) is
+  // captured — the displayed estimate just lags by the debounce interval, which is
+  // acceptable for a pre-run estimate. nodes/edges changes recompute on the same
+  // path; the leading-edge first run keeps the initial estimate prompt.
+  const costFirstRunRef = useRef(true)
   useEffect(() => {
     if (!hasCredits()) return
-    // Merge inputValues into node data so getFanOutMultiplier sees current loop rows
-    const effectiveNodes = inputValues
-      ? nodes.map((n) => {
-          const vals = inputValues[n.id]
-          return vals ? { ...n, data: { ...n.data, ...vals } } : n
-        })
-      : nodes
-    const executableNodes = effectiveNodes.filter((n) => isExecutableNode(n) && !isExpandedClone(n))
 
     const computeEstimate = () => {
-      const total = executableNodes.reduce((sum, node) => {
-        const modelId = getModelIdentifier(node)
-        const cached = getCachedCredits(modelId)
-        const cost = cached !== undefined ? cached : estimateNodeCredits({ type: node.type, data: node.data as Record<string, unknown> })
-        const multiplier = getFanOutMultiplier(node, effectiveNodes, edges)
-        return sum + cost * multiplier
-      }, 0)
-      setDynamicEstimatedCost(total)
-      // Also update the presentation store so other consumers see the live cost
-      if (isFullscreen) {
-        usePresentationStore.setState({ estimatedCost: total })
+      // Merge inputValues into node data so getFanOutMultiplier sees current loop rows
+      const effectiveNodes = inputValues
+        ? nodes.map((n) => {
+            const vals = inputValues[n.id]
+            return vals ? { ...n, data: { ...n.data, ...vals } } : n
+          })
+        : nodes
+      const executableNodes = effectiveNodes.filter((n) => isExecutableNode(n) && !isExpandedClone(n))
+
+      const finish = () => {
+        const total = executableNodes.reduce((sum, node) => {
+          const modelId = getModelIdentifier(node)
+          const cached = getCachedCredits(modelId)
+          const cost = cached !== undefined ? cached : estimateNodeCredits({ type: node.type, data: node.data as Record<string, unknown> })
+          const multiplier = getFanOutMultiplier(node, effectiveNodes, edges)
+          return sum + cost * multiplier
+        }, 0)
+        setDynamicEstimatedCost(total)
+        // Also update the presentation store so other consumers see the live cost
+        if (isFullscreen) {
+          usePresentationStore.setState({ estimatedCost: total })
+        }
       }
+
+      const modelIds = [...new Set(executableNodes.map((n) => getModelIdentifier(n)).filter(Boolean))]
+      const uncached = modelIds.filter((m) => getCachedCredits(m) === undefined)
+
+      if (uncached.length > 0) {
+        prefetchModelCredits(uncached).then(() => {
+          if (!cancelled) finish()
+        })
+        return
+      }
+
+      finish()
     }
 
-    const modelIds = [...new Set(executableNodes.map((n) => getModelIdentifier(n)).filter(Boolean))]
-    const uncached = modelIds.filter((m) => getCachedCredits(m) === undefined)
-
-    if (uncached.length > 0) {
-      let cancelled = false
-      prefetchModelCredits(uncached).then(() => {
-        if (!cancelled) computeEstimate()
-      })
+    let cancelled = false
+    // Run the very first estimate immediately so initial render isn't blank;
+    // subsequent input changes are coalesced behind a 300ms debounce.
+    if (costFirstRunRef.current) {
+      costFirstRunRef.current = false
+      computeEstimate()
       return () => { cancelled = true }
     }
 
-    computeEstimate()
+    const timer = setTimeout(computeEstimate, 300)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
   }, [nodes, edges, inputValues])
 
   const rawEstimatedCost = dynamicEstimatedCost || (isFullscreen ? presEstimatedCost : 0)
@@ -419,7 +435,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     if (!isFullscreen) return []
     return orderedInputNodes
       .filter((n) => {
-        if (n.type !== "loop" && n.type !== "list") return false
+        if (n.type !== "list") return false
         const minRows = ((n.data as Record<string, unknown>).minRows as number) ?? 0
         if (minRows === 0) return false
         const inputVals = presInputValues[n.id] as Record<string, unknown> | undefined
@@ -757,9 +773,9 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
         const inputUrl = presInputValues[nodeId]?.url as string | undefined
         if (inputUrl) return { url: inputUrl, text: undefined }
       }
-      // Loop/table node: user-edited rows are inputs (always shown), but snapshot rows respect suppressOutputFallback
+      // List/table node (loop→list-unified): user-edited rows are inputs (always shown), but snapshot rows respect suppressOutputFallback
       const node = nodeMap.get(nodeId)
-      if (node?.type === "loop" || node?.type === "list") {
+      if (node?.type === "list") {
         const loopRows = presInputValues[nodeId]?.rows as string[][] | undefined
         if (loopRows) return getLoopFirstMedia(node.data as Record<string, unknown>, loopRows)
         if (suppressOutputFallback) return { url: undefined, text: undefined }
@@ -795,21 +811,44 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   }, [])
 
   const handleDividerMouseDown = useCallback((e: React.MouseEvent) => {
+    if (!containerRef.current) return
     e.preventDefault()
     isDraggingDivider.current = true
 
+    // Cache the container rect once at drag-start instead of measuring on every
+    // mousemove, and RAF-coalesce the setState so we commit at most once per frame.
+    const rect = containerRef.current.getBoundingClientRect()
+    let rafId: number | null = null
+    let pendingClamped: number | null = null
+
+    const flush = () => {
+      rafId = null
+      if (pendingClamped !== null) {
+        updatePresentationSettings({ splitRatio: pendingClamped })
+        pendingClamped = null
+      }
+    }
+
     const handleMouseMove = (ev: MouseEvent) => {
-      if (!isDraggingDivider.current || !containerRef.current) return
-      const rect = containerRef.current.getBoundingClientRect()
+      if (!isDraggingDivider.current) return
       const ratio = Math.round(((ev.clientX - rect.left) / rect.width) * 100)
-      const clamped = Math.max(25, Math.min(75, ratio))
-      updatePresentationSettings({ splitRatio: clamped })
+      pendingClamped = Math.max(25, Math.min(75, ratio))
+      if (rafId === null) rafId = requestAnimationFrame(flush)
     }
 
     const handleMouseUp = () => {
       isDraggingDivider.current = false
       document.removeEventListener("mousemove", handleMouseMove)
       document.removeEventListener("mouseup", handleMouseUp)
+      // Commit the final position immediately and drop any queued frame.
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId)
+        rafId = null
+      }
+      if (pendingClamped !== null) {
+        updatePresentationSettings({ splitRatio: pendingClamped })
+        pendingClamped = null
+      }
       dividerCleanupRef.current = null
     }
 
@@ -917,30 +956,55 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     return maps
   }, [orderedInputNodes, nodes, edges])
 
+  // Per-node single-key `inputValues` slice with stable identity. Lets the
+  // memoized InputCard bail out: a keystroke only changes the touched node's
+  // slice identity (updateInputValue copies per-node), so every other card's
+  // slice map stays referentially equal and skips re-render.
+  const inputSliceCache = useRef(new Map<string, { slice: unknown; map: Record<string, Record<string, unknown>> }>())
+  const getInputSliceMap = useCallback((nodeId: string): Record<string, Record<string, unknown>> => {
+    const slice = presInputValues[nodeId]
+    const cached = inputSliceCache.current.get(nodeId)
+    if (cached && cached.slice === slice) return cached.map
+    const map = slice !== undefined ? { [nodeId]: slice } : {}
+    inputSliceCache.current.set(nodeId, { slice, map })
+    return map
+  }, [presInputValues])
+
+  // Per-node merged `display` object with stable identity (memo would otherwise
+  // break on the fresh object literal each render). Recomputed only when the
+  // node-level or card-level display source identities change.
+  const displayCache = useRef(new Map<string, { node: unknown; card: unknown; merged: PresentationDisplay }>())
+  const getMergedDisplay = useCallback((node: WorkflowNode): PresentationDisplay => {
+    const nodeDisplay = (node.data as Record<string, unknown>).presentationDisplay as PresentationDisplay | undefined
+    const cardDisplay = settings.cardMeta?.[node.id]?.display
+    const cached = displayCache.current.get(node.id)
+    if (cached && cached.node === nodeDisplay && cached.card === cardDisplay) return cached.merged
+    const merged = { ...nodeDisplay, ...cardDisplay }
+    displayCache.current.set(node.id, { node: nodeDisplay, card: cardDisplay, merged })
+    return merged
+  }, [settings.cardMeta])
+
   // Render helpers for input/output cards
   const renderInputCard = useCallback((node: WorkflowNode) => {
-    const nodeDisplay = (node.data as Record<string, unknown>).presentationDisplay as PresentationDisplay | undefined
     const meta = settings.cardMeta?.[node.id]
-    const cardDisplay = meta?.display
-    const display = { ...nodeDisplay, ...cardDisplay }
     return (
       <InputCard
         node={node}
         nodes={nodes}
         edges={edges}
         isFullscreen={isFullscreen}
-        inputValues={presInputValues}
+        inputValues={getInputSliceMap(node.id)}
         onUpdateInput={presUpdateInput}
         readOnly={inputsReadOnly ?? (isShareReadOnly || isRunning || isTerminal)}
         onOpenMedia={handleOpenMedia}
         onOpenConfig={setConfigNode}
         refMap={inputRefMaps.get(node.id)}
-        display={display}
+        display={getMergedDisplay(node)}
         inputMode={meta?.inputMode}
         minLines={meta?.minLines}
       />
     )
-  }, [nodes, edges, isFullscreen, presInputValues, presUpdateInput, inputsReadOnly, isShareReadOnly, isRunning, isTerminal, handleOpenMedia, inputRefMaps, settings.cardMeta])
+  }, [nodes, edges, isFullscreen, getInputSliceMap, getMergedDisplay, presUpdateInput, inputsReadOnly, isShareReadOnly, isRunning, isTerminal, handleOpenMedia, inputRefMaps, settings.cardMeta])
 
   // Extract listResults for a node from either fullscreen nodeStates or tab-mode node data
   const getListResults = useCallback(
@@ -1019,6 +1083,47 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     return map
   }, [outputItems, findFieldDef, nodeMap, isFullscreen, presInputValues])
 
+  // Stable per-node OutputCardActions factory. Memoizing the object identity per
+  // node id (instead of rebuilding it inline on every render) lets React.memo'd
+  // output cards skip reconciliation on poll-driven `nodes` replacements — the
+  // returned object only changes when hide-state or the (stable) handlers change.
+  const getNodeActions = useMemo(() => {
+    const cache = new Map<string, OutputCardActions>()
+    return (nodeId: string): OutputCardActions => {
+      const cached = cache.get(nodeId)
+      if (cached) return cached
+      const isNodeHidden = hiddenNodeIds.has(nodeId)
+      const actions: OutputCardActions = {
+        onEdit: handleEditNode,
+        onHide: isNodeHidden ? undefined : handleHideNode,
+        onUnhide: isNodeHidden ? handleUnhideNode : undefined,
+        isRevealed: isNodeHidden && isRevealingHidden,
+      }
+      cache.set(nodeId, actions)
+      return actions
+    }
+  }, [hiddenNodeIds, isRevealingHidden, handleEditNode, handleHideNode, handleUnhideNode])
+
+  // Stable per-result OutputCardActions factory (individual list-result hiding).
+  // Caches both the object and the per-key callbacks so memo'd cards stay stable
+  // across poll ticks; recreated only when result hide-state or handlers change.
+  const getResultActions = useMemo(() => {
+    const cache = new Map<string, OutputCardActions>()
+    return (key: string): OutputCardActions => {
+      const cached = cache.get(key)
+      if (cached) return cached
+      const isResultHidden = hiddenResultKeys.has(key)
+      const actions: OutputCardActions = {
+        onEdit: handleEditNode,
+        onHide: isResultHidden ? undefined : () => handleHideResult(key),
+        onUnhide: isResultHidden ? () => handleUnhideResult(key) : undefined,
+        isRevealed: isResultHidden && isRevealingHidden,
+      }
+      cache.set(key, actions)
+      return actions
+    }
+  }, [hiddenResultKeys, isRevealingHidden, handleEditNode, handleHideResult, handleUnhideResult])
+
   const renderOutputCard = useCallback((node: WorkflowNode) => {
     // Resolve element size from node-level + card-level overrides
     const nodeDisplay = (node.data as Record<string, unknown>).presentationDisplay as PresentationDisplay | undefined
@@ -1026,14 +1131,8 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     const elementSize = cardDisplay?.elementSize ?? nodeDisplay?.elementSize ?? "lg"
     const fieldBadges = fieldBadgesByNode.get(node.id)
 
-    // Build per-node action callbacks for share/edit/hide
-    const isNodeHidden = hiddenNodeIds.has(node.id)
-    const nodeActions: OutputCardActions = {
-      onEdit: handleEditNode,
-      onHide: isNodeHidden ? undefined : handleHideNode,
-      onUnhide: isNodeHidden ? handleUnhideNode : undefined,
-      isRevealed: isNodeHidden && isRevealingHidden,
-    }
+    // Build per-node action callbacks for share/edit/hide (stable object identity)
+    const nodeActions = getNodeActions(node.id)
 
     // Preview node: show all visible items with their actual values
     if (node.type === "preview") {
@@ -1173,13 +1272,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
         <div className="flex flex-col gap-2">
           {visibleResults.map(({ resultUrl, i }) => {
             const key = `${node.id}:${i}`
-            const isResultHidden = hiddenResultKeys.has(key)
-            const resultActions: OutputCardActions = {
-              onEdit: handleEditNode,
-              onHide: isResultHidden ? undefined : () => handleHideResult(key),
-              onUnhide: isResultHidden ? () => handleUnhideResult(key) : undefined,
-              isRevealed: isResultHidden && isRevealingHidden,
-            }
+            const resultActions = getResultActions(key)
             return (
               <OutputCard
                 key={`${node.id}-${i}`}
@@ -1216,7 +1309,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
         actions={nodeActions}
       />
     )
-  }, [getNodeStatus, getResult, getCardTitle, handleOpenMedia, combinedProgress, settings.outputDisplayModes, getListResults, isFullscreen, presNodeStates, settings.cardMeta, fieldBadgesByNode, hiddenNodeIds, hiddenResultKeys, isRevealingHidden, handleHideNode, handleUnhideNode, handleHideResult, handleUnhideResult, handleEditNode])
+  }, [getNodeStatus, getResult, getCardTitle, handleOpenMedia, combinedProgress, settings.outputDisplayModes, getListResults, isFullscreen, presNodeStates, settings.cardMeta, fieldBadgesByNode, hiddenResultKeys, isRevealingHidden, getNodeActions, getResultActions])
 
   // Render a single PresentationItem — dispatches by type for input side
   const renderInputItem = useCallback(
@@ -1283,7 +1376,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
               showBackground={item.showBackground ?? true}
               onTitleChange={(title) => {
                 const items = settings.inputItems ?? []
-                const updated = updateGroupTitle(items, item.id, title)
+                const updated = updateGroupField(items, item.id, "title", title)
                 updatePresentationSettings({ inputItems: updated })
               }}
               onShowTitleChange={(v) => {
@@ -1361,7 +1454,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
               showBackground={item.showBackground ?? true}
               onTitleChange={(title) => {
                 const items = settings.outputItems ?? []
-                const updated = updateGroupTitle(items, item.id, title)
+                const updated = updateGroupField(items, item.id, "title", title)
                 updatePresentationSettings({ outputItems: updated })
               }}
               onShowTitleChange={(v) => {

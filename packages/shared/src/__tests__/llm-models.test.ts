@@ -111,7 +111,7 @@ describe("LLM_MODEL_IDS", () => {
       "claude-sonnet-4.6",
       "gpt-5.2",
       "gemini-3.1-pro",
-      "claude-opus-4.6",
+      "claude-opus-4.7",
       "gpt-5.4",
     ]
     expect(LLM_MODEL_IDS).toEqual(expected)
@@ -133,13 +133,13 @@ describe("getLlmModel", () => {
     expect(model!.outputPricePerM).toBe(0.40)
   })
 
-  it('returns model def for "claude-opus-4.6" with directFallbackModel', () => {
-    const model = getLlmModel("claude-opus-4.6")
+  it('returns model def for "claude-opus-4.7" with directFallbackModel', () => {
+    const model = getLlmModel("claude-opus-4.7")
     expect(model).toBeDefined()
-    expect(model!.id).toBe("claude-opus-4.6")
+    expect(model!.id).toBe("claude-opus-4.7")
     expect(model!.tier).toBe("premium")
     expect(model!.vendor).toBe("anthropic")
-    expect(model!.directFallbackModel).toBe("claude-opus-4-6")
+    expect(model!.directFallbackModel).toBe("claude-opus-4-7")
   })
 
   it('returns model def for "claude-haiku-4.5" with directFallbackModel', () => {
@@ -185,7 +185,7 @@ describe("getLlmTier", () => {
 
   it.each([
     ["gemini-3.1-pro", "premium"],
-    ["claude-opus-4.6", "premium"],
+    ["claude-opus-4.7", "premium"],
     ["gpt-5.4", "premium"],
   ] as const)("%s -> %s", (id, expected) => {
     expect(getLlmTier(id)).toBe(expected)
@@ -229,17 +229,17 @@ describe("calculateLlmCost", () => {
   })
 
   it("returns 0 for zero tokens", () => {
-    const cost = calculateLlmCost("claude-opus-4.6", { inputTokens: 0, outputTokens: 0 })
+    const cost = calculateLlmCost("claude-opus-4.7", { inputTokens: 0, outputTokens: 0 })
     expect(cost).toBe(0)
   })
 
-  it("handles large token counts (1M input + 1M output for claude-opus-4.6)", () => {
-    // (1_000_000 * 15.00 + 1_000_000 * 75.00) / 1_000_000 = 15.00 + 75.00 = 90.00
-    const cost = calculateLlmCost("claude-opus-4.6", {
+  it("handles large token counts (1M input + 1M output for claude-opus-4.7)", () => {
+    // (1_000_000 * 5.00 + 1_000_000 * 25.00) / 1_000_000 = 5.00 + 25.00 = 30.00
+    const cost = calculateLlmCost("claude-opus-4.7", {
       inputTokens: 1_000_000,
       outputTokens: 1_000_000,
     })
-    expect(cost).toBeCloseTo(90.0, 10)
+    expect(cost).toBeCloseTo(30.0, 10)
   })
 
   it("handles input-only usage", () => {
@@ -289,7 +289,7 @@ describe("buildLlmCreditIdentifier", () => {
   })
 
   it('appends ":premium" for premium-tier models', () => {
-    expect(buildLlmCreditIdentifier("scene-graph-ai", "claude-opus-4.6")).toBe(
+    expect(buildLlmCreditIdentifier("scene-graph-ai", "claude-opus-4.7")).toBe(
       "scene-graph-ai:premium",
     )
     expect(buildLlmCreditIdentifier("ai-writer", "gpt-5.4")).toBe("ai-writer:premium")
@@ -317,6 +317,7 @@ describe("buildLlmCreditIdentifier", () => {
       "qa-check",
       "generate-script",
       "translate",
+      "image-critic",
     ]
 
     for (const feature of features) {
@@ -329,7 +330,7 @@ describe("buildLlmCreditIdentifier", () => {
       expect(standard).toBe(feature)
 
       // premium
-      const premium = buildLlmCreditIdentifier(feature, "claude-opus-4.6")
+      const premium = buildLlmCreditIdentifier(feature, "claude-opus-4.7")
       expect(premium).toBe(`${feature}:premium`)
     }
   })
@@ -350,7 +351,7 @@ describe("resolveLlmCreditId", () => {
   })
 
   it("uses llmModel from body when present (premium)", () => {
-    expect(resolveLlmCreditId("ai-writer", { llmModel: "claude-opus-4.6" })).toBe(
+    expect(resolveLlmCreditId("ai-writer", { llmModel: "claude-opus-4.7" })).toBe(
       "ai-writer:premium",
     )
   })

@@ -51,6 +51,7 @@ import {
   buildSaveLocationPayloadFromExport,
 } from "./editor-toolbar-inject-helpers"
 import { createClient } from "@/lib/supabase"
+import { ensureNodePositions } from "@/lib/node-position"
 import type { WorkflowExport } from "@nodaro/shared"
 import type { WorkflowNode, WorkflowEdge, CharacterNodeData, ObjectNodeData, LocationNodeData } from "@/types/nodes"
 
@@ -83,8 +84,12 @@ interface ExportedWorkflow {
 export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab = "editor", onTabChange }: EditorToolbarProps) {
   const workflowName = useWorkflowStore((s) => s.workflowName)
   const setWorkflowName = useWorkflowStore((s) => s.setWorkflowName)
-  const edges = useWorkflowStore((s) => s.edges)
+  // Subscribe to a primitive (whether any connections exist) rather than the
+  // whole edges array — this component only needs the boolean for the variable-
+  // display-mode toggle, so it shouldn't re-render on every edge mutation.
+  const hasConnections = useWorkflowStore((s) => s.edges.length > 0)
   const isDirty = useWorkflowStore((s) => s.isDirty)
+  const isReadOnly = useWorkflowStore((s) => s.isReadOnly)
   const saveStatus = useWorkflowStore((s) => s.saveStatus)
   const saveError = useWorkflowStore((s) => s.saveError)
   const workflowId = useWorkflowStore((s) => s.workflowId)
@@ -232,6 +237,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
   // workflow row). Bundled assets are re-created via the backend asset routes;
   // node/edge id remapping and the offset layout are pure client-side work.
   const handleInject = useCallback(async (data: ExportedWorkflow) => {
+    if (useWorkflowStore.getState().isReadOnly) return
     setImporting(true)
     try {
       let nodesToImport = [...data.nodes]
@@ -323,6 +329,10 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
 
       const importedFlowTemplates =
         (data.settings?.flowPromptTemplates as Record<string, string> | undefined) ?? {}
+
+      // Studio/SDK exports can omit positions; guarantee them before the offset
+      // math (reads n.position.x) and before React Flow renders the merged graph.
+      nodesToImport = ensureNodePositions(nodesToImport).nodes
 
       // Inject: offset imported nodes to the right of existing nodes
       const state = useWorkflowStore.getState()
@@ -482,9 +492,11 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <Button variant="outline" onClick={() => handleImport("inject")}>
-                  Add to Current
-                </Button>
+                {!isReadOnly && (
+                  <Button variant="outline" onClick={() => handleImport("inject")}>
+                    Add to Current
+                  </Button>
+                )}
                 <Button onClick={() => handleImport("new")}>
                   Import as New
                 </Button>
@@ -540,8 +552,10 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* Save Button with integrated state indicator */}
-        {(() => {
+        {/* Save Button with integrated state indicator. Hidden in read-only
+            (Studio/shared) workflows — save is already a no-op via the store's
+            persistence guards, so this is cosmetic. */}
+        {!isReadOnly && (() => {
           // Determine save button state
           const isSaving = saving || saveStatus === "saving"
           const isSaved = showSavedState && !isDirty
@@ -597,7 +611,6 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
         })()}
 
         {(() => {
-          const hasConnections = edges.length > 0
           return hasConnections ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

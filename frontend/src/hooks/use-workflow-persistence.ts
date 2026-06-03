@@ -8,6 +8,7 @@ import { toast } from "sonner"
 import type { WorkflowNode, WorkflowEdge, CharacterDefinition, GeneratedResult, SceneNodeData } from "@/types/nodes"
 import { filterCloneNodes } from "@nodaro/shared"
 import { orderNodesParentFirst } from "@/components/editor/workflow-editor/group-coords"
+import { isStudioWorkflowSettings } from "@/lib/studio"
 
 interface StillRunningJob {
   readonly nodeId: string
@@ -470,6 +471,7 @@ export function useWorkflowPersistence(projectId?: string) {
   const savedFadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const loadWorkflow = useWorkflowStore((s) => s.loadWorkflow)
+  const setIsWorkflowLoading = useWorkflowStore((s) => s.setIsWorkflowLoading)
   const setWorkflowId = useWorkflowStore((s) => s.setWorkflowId)
   const setSaveStatus = useWorkflowStore((s) => s.setSaveStatus)
   const setLoadedUpdatedAt = useWorkflowStore((s) => s.setLoadedUpdatedAt)
@@ -499,6 +501,25 @@ export function useWorkflowPersistence(projectId?: string) {
 
       // Don't save empty workflows
       if (nodes.length === 0) return { success: false, error: "Empty workflow" }
+
+      // isDirty guard: when the row is already persisted and the store has no
+      // unsaved edits, skip the Supabase UPDATE entirely. The pre-Run save
+      // (run-handlers) calls save() on every Run; for a clean editor this is a
+      // pure round-trip with no payload change, so returning the success shape
+      // without a network write makes Run feel instant. A brand-new workflow
+      // (no workflowId yet) must still INSERT, so only short-circuit when an
+      // id exists.
+      if (workflowId && !useWorkflowStore.getState().isDirty) {
+        return { success: true }
+      }
+
+      // Studio workflows are read-only in the app; never persist. (The Studio
+      // app owns writes via the same backend route.) This guard is load-bearing,
+      // NOT belt-and-suspenders: auto-layout on a positionless Studio import
+      // routes through the controlled onNodesChange and flips isDirty even on a
+      // read-only workflow, so the isDirty short-circuit above would otherwise
+      // let those relaid-out positions through.
+      if (useWorkflowStore.getState().isReadOnly) return { success: true }
 
       setSaving(true)
       setSaveStatus("saving")
@@ -645,6 +666,7 @@ export function useWorkflowPersistence(projectId?: string) {
   const load = useCallback(
     async (id: string): Promise<SaveResult> => {
       setLoading(true)
+      setIsWorkflowLoading(true)
 
       // Immediately clear old workflow data so the canvas doesn't flash
       // the previous workflow while the new one is being fetched.
@@ -672,6 +694,19 @@ export function useWorkflowPersistence(projectId?: string) {
         const savedViewport = (settings.viewport ?? null) as { x: number; y: number; zoom: number } | null
         let nodes = data.nodes as unknown as WorkflowNode[]
         const edges = data.edges as unknown as WorkflowEdge[]
+
+        // `__listRunning` is an in-session list-fan-out marker (abandon-guard
+        // exemption). It must never survive a reload: there is no live
+        // executeNodeForList running for a freshly-loaded workflow, so a stale
+        // `true` (autosaved mid-batch before the finally cleared it) would
+        // permanently exempt the node from the abandon-guard. Clear it on load.
+        nodes = nodes.map((n) => {
+          const d = n.data as Record<string, unknown> | undefined
+          if (d?.__listRunning) {
+            return { ...n, data: { ...d, __listRunning: false } as typeof n.data }
+          }
+          return n
+        })
 
         // Sync node results from jobs table via backend API
         // This handles the case where user left while jobs were running
@@ -752,6 +787,10 @@ export function useWorkflowPersistence(projectId?: string) {
         )
         setLoadedUpdatedAt(data.updated_at as string)
 
+        // Studio-origin workflows are view-only in the node editor (the Studio
+        // app edits them). `settings` was computed above from data.settings.
+        useWorkflowStore.setState({ isReadOnly: isStudioWorkflowSettings(settings) })
+
         // Reconcile per-node `generatedResults` against the backend's
         // `jobs.output_data`. When a single-node run gets stuck → backend
         // reconcile finishes it → the frontend's poll wasn't around to see
@@ -782,7 +821,10 @@ export function useWorkflowPersistence(projectId?: string) {
         // optimistic-lock cursor — otherwise the next user-driven autosave
         // would send the pre-side-save version and 0-row-conflict against
         // the row we just bumped here ourselves.
-        if (nodesChanged && projectId) {
+        // Never write back to a read-only (Studio) workflow row. isReadOnly
+        // was set from `settings` just above; the Studio app owns writes via
+        // the same backend route, so even a benign node-heal must not persist.
+        if (nodesChanged && projectId && !useWorkflowStore.getState().isReadOnly) {
           const { data: sideSaved, error: saveError } = await supabase
             .from("workflows")
             .update({ nodes: JSON.parse(JSON.stringify(orderNodesParentFirst(nodes))) })
@@ -809,9 +851,10 @@ export function useWorkflowPersistence(projectId?: string) {
         }
       } finally {
         setLoading(false)
+        setIsWorkflowLoading(false)
       }
     },
-    [loadWorkflow, projectId, setLoadedUpdatedAt, setRemoteUpdatedAt],
+    [loadWorkflow, projectId, setIsWorkflowLoading, setLoadedUpdatedAt, setRemoteUpdatedAt],
   )
 
   // Refresh the ref pointer on every render — read by the save-on-

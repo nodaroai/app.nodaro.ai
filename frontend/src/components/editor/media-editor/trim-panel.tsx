@@ -40,6 +40,8 @@ export function TrimPanel({
   const trackRef = useRef<HTMLDivElement>(null)
   const [dragging, setDragging] = useState<"start" | "end" | "playhead" | "region" | null>(null)
   const regionDragStartRef = useRef<{ time: number; trimStart: number; trimEnd: number } | null>(null)
+  // Cache track bounding rect at drag-start; re-read only on each new drag.
+  const dragRectRef = useRef<DOMRect | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [loopEnabled, setLoopEnabled] = useState(true)
   const [playhead, setPlayhead] = useState(trim.startTime)
@@ -63,9 +65,10 @@ export function TrimPanel({
 
   const getTimeFromX = useCallback(
     (clientX: number) => {
-      const track = trackRef.current
-      if (!track || duration <= 0) return 0
-      const rect = track.getBoundingClientRect()
+      if (duration <= 0) return 0
+      // Use cached rect (set at drag-start) to avoid layout reads on every move.
+      const rect = dragRectRef.current ?? trackRef.current?.getBoundingClientRect()
+      if (!rect) return 0
       return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width)) * duration
     },
     [duration],
@@ -111,6 +114,7 @@ export function TrimPanel({
     const handleEnd = () => {
       setDragging(null)
       regionDragStartRef.current = null
+      dragRectRef.current = null
     }
 
     window.addEventListener("mousemove", handleMove)
@@ -135,6 +139,9 @@ export function TrimPanel({
   // Start drag helper (shared by mouse and touch)
   const startHandleDrag = (clientX: number, type: "start" | "end" | "playhead" | "region") => {
     if (isPlaying) stopPlayback()
+    // Capture bounding rect once at drag-start so getTimeFromX doesn't re-read
+    // layout on every mousemove / touchmove event.
+    dragRectRef.current = trackRef.current?.getBoundingClientRect() ?? null
     if (type === "region") {
       regionDragStartRef.current = { time: getTimeFromX(clientX), trimStart: trim.startTime, trimEnd: trim.endTime }
     }

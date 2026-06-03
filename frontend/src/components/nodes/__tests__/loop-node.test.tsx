@@ -25,7 +25,8 @@ vi.mock("../handle-icon", () => ({
   ),
 }))
 
-vi.mock("../handle-with-popover", () => ({
+vi.mock("../handle-with-popover", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   HandleWithPopover: ({ handleId, label, type }: { handleId: string; label?: string; type: string }) => (
     <div data-testid={`handle-with-popover-${handleId}`} data-label={label ?? ""} data-type={type}>
       {label && <span data-testid="handle-with-popover-label">{label}</span>}
@@ -44,7 +45,7 @@ vi.mock("../base-node", () => ({
 
 vi.mock("lucide-react", () => {
   const I = (p: any) => <span data-testid="mock-icon" {...p} />
-  return { Braces: I, Repeat: I, Type: I, Table2: I, Info: I, Film: I, Image: I, Music: I, Plus: I, GripVertical: I, Link: I, Loader2: I, Upload: I, X: I }
+  return { Braces: I, List: I, Copy: I, Download: I, Expand: I, Type: I, Table2: I, Info: I, Film: I, Image: I, Music: I, Plus: I, GripVertical: I, Link: I, Loader2: I, Upload: I, X: I }
 })
 
 vi.mock("../run-node-button", () => ({

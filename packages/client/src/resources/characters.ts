@@ -54,13 +54,21 @@ export interface Character {
   angles: Array<{ name: string; url: string }> | null
   bodyAngles: Array<{ name: string; url: string }> | null
   motions: Array<{ name: string; url: string }> | null
-  voice: { voiceId: string; voiceName: string; traits: string } | null
+  /** `voiceType` records the selected voice's KIND (premade voices are
+   *  addressed by name; library/custom voices by id at text-to-speech time).
+   *  Optional — a character may have no voice, or a legacy voice predating the
+   *  field. */
+  voice: { voiceId: string; voiceName: string; traits: string; voiceType?: "premade" | "library" | "custom" } | null
   personality: {
     mood: string
     speechStyle: string
     movementStyle: string
     behavioralNotes: string
   } | null
+  /** ~80–120-word LLM-authored visual caption (approve-portrait / recaption).
+   *  Optional on the read surface so existing literal consumers don't break;
+   *  the route always returns it (string | null). */
+  canonicalDescription?: string | null
   deletedAt: string | null
   createdAt: string
   updatedAt: string
@@ -135,7 +143,9 @@ export interface UpsertCharacterInput {
   angles?: Array<{ name: string; url: string }>
   bodyAngles?: Array<{ name: string; url: string }>
   motions?: Array<{ name: string; url: string }>
-  voice?: { voiceId: string; voiceName: string; traits: string } | null
+  /** See `Character.voice.voiceType` — persisted alongside the voice so TTS can
+   *  resolve a library/custom voice by id. Optional. */
+  voice?: { voiceId: string; voiceName: string; traits: string; voiceType?: "premade" | "library" | "custom" } | null
   personality?: {
     mood: string
     speechStyle: string
@@ -204,8 +214,8 @@ export interface GenerateCharacterInput {
   attachToCharacterId?: string
   seedPrompt?: string
   referencePhotos?: ReferencePhoto[]
-  /** 1, 2, or 4 candidate portraits. */
-  count?: 1 | 2 | 4
+  /** 1, 2, 3, or 4 candidate portraits. */
+  count?: 1 | 2 | 3 | 4
   /**
    * Explicit aspect ratio. Highest precedence — overrides both the character
    * node toggle and the per-asset-type default (portraits default to `3:4`).

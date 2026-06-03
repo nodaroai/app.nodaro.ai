@@ -43,7 +43,7 @@ vi.mock("@/lib/api", () => ({
   executeReduce: (...args: unknown[]) => mockExecuteReduce(...args),
   // unrelated stubs needed for import
   generateImage: vi.fn(),
-  getJobStatus: vi.fn(),
+  getJobStatusLean: vi.fn(),
   generateAIWriterStream: vi.fn(),
   generateSceneGraph: vi.fn(),
   generateAfterEffects: vi.fn(),

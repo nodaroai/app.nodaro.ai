@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { safeUrlSchema } from "../lib/url-validator.js"
+import { safeUrlSchema, isAllowedSocialVideoUrl, YOUTUBE_HOSTS } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
@@ -10,14 +10,7 @@ import { formatZodError } from "../lib/zod-error.js"
 
 const extractYouTubeAudioBody = z.object({
   youtubeUrl: safeUrlSchema.refine(
-    (url) => {
-      try {
-        const parsed = new URL(url)
-        return parsed.hostname.includes("youtube.com") || parsed.hostname.includes("youtu.be")
-      } catch {
-        return false
-      }
-    },
+    (url) => isAllowedSocialVideoUrl(url, YOUTUBE_HOSTS),
     { message: "Must be a valid YouTube URL" },
   ),
   userId: z.string().uuid().optional(),

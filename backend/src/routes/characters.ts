@@ -39,7 +39,7 @@ const referencePhoto = z.object({
   kind: z.enum(REFERENCE_PHOTO_KINDS),
 })
 
-const upsertCharacterBody = z.object({
+export const upsertCharacterBody = z.object({
   id: z.string().uuid().optional(),
   userId: z.string().uuid().optional(),
   nodeId: z.string().min(1),
@@ -62,13 +62,17 @@ const upsertCharacterBody = z.object({
   style: z.string().max(50).optional(),
   baseOutfit: z.string().max(1000).optional(),
   sourceImageUrl: safeUrlSchema.optional(),
-  expressions: z.array(z.object({ name: z.string(), url: z.string() })).optional(),
-  poses: z.array(z.object({ name: z.string(), url: z.string() })).optional(),
-  lightingVariations: z.array(z.object({ name: z.string(), url: z.string() })).optional(),
-  angles: z.array(z.object({ name: z.string(), url: z.string() })).optional(),
-  bodyAngles: z.array(z.object({ name: z.string(), url: z.string() })).optional(),
-  motions: z.array(z.object({ name: z.string(), url: z.string() })).optional(),
-  voice: z.object({ voiceId: z.string(), voiceName: z.string(), traits: z.string() }).nullable().optional(),
+  expressions: z.array(z.object({ name: z.string(), url: safeUrlSchema })).optional(),
+  poses: z.array(z.object({ name: z.string(), url: safeUrlSchema })).optional(),
+  lightingVariations: z.array(z.object({ name: z.string(), url: safeUrlSchema })).optional(),
+  angles: z.array(z.object({ name: z.string(), url: safeUrlSchema })).optional(),
+  bodyAngles: z.array(z.object({ name: z.string(), url: safeUrlSchema })).optional(),
+  motions: z.array(z.object({ name: z.string(), url: safeUrlSchema })).optional(),
+  // `voiceType` records the selected voice's KIND so text-to-speech can resolve
+  // a library/custom voice by id (premade voices are addressed by name). Always
+  // OPTIONAL: a character may have no voice, or a legacy voice with no recorded
+  // type. Without this field Zod would strip a client-sent `voiceType` on save.
+  voice: z.object({ voiceId: z.string(), voiceName: z.string(), traits: z.string(), voiceType: z.enum(["premade", "library", "custom"]).optional() }).nullable().optional(),
   personality: z.object({ mood: z.string(), speechStyle: z.string(), movementStyle: z.string(), behavioralNotes: z.string() }).nullable().optional(),
   // Identity-foundation fields (migration 114). Length caps mirror the DB
   // CHECK constraints so we reject at the boundary with a 400 rather than a
@@ -118,7 +122,7 @@ const listCharactersQuery = z.object({
 })
 
 const SELECT_COLUMNS =
-  "id, user_id, node_id, project_id, name, description, gender, style, base_outfit, source_image_url, expressions, poses, lighting_variations, angles, body_angles, motions, voice, personality, lora_training_status, lora_replicate_version, lora_trigger_word, lora_trained_at, deleted_at, created_at, updated_at"
+  "id, user_id, node_id, project_id, name, description, gender, style, base_outfit, source_image_url, expressions, poses, lighting_variations, angles, body_angles, motions, voice, personality, canonical_description, lora_training_status, lora_replicate_version, lora_trigger_word, lora_trained_at, deleted_at, created_at, updated_at"
 
 type CharacterRow = {
   id: string
@@ -137,8 +141,9 @@ type CharacterRow = {
   angles: { name: string; url: string }[] | null
   body_angles: { name: string; url: string }[] | null
   motions: { name: string; url: string }[] | null
-  voice: { voiceId: string; voiceName: string; traits: string } | null
+  voice: { voiceId: string; voiceName: string; traits: string; voiceType?: "premade" | "library" | "custom" } | null
   personality: { mood: string; speechStyle: string; movementStyle: string; behavioralNotes: string } | null
+  canonical_description: string | null
   lora_training_status: string | null
   lora_replicate_version: string | null
   lora_trigger_word: string | null
@@ -168,6 +173,7 @@ function toCamel(c: CharacterRow) {
     motions: c.motions,
     voice: c.voice,
     personality: c.personality,
+    canonicalDescription: c.canonical_description,
     loraTrainingStatus: c.lora_training_status,
     loraReplicateVersion: c.lora_replicate_version,
     loraTriggerWord: c.lora_trigger_word,

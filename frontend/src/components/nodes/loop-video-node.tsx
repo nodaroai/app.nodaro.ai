@@ -19,8 +19,7 @@ import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { LoopVideoData } from "@/types/nodes"
 
 function LoopVideoNodeComponent({ id, data, selected }: NodeProps) {
-  const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as LoopVideoData | undefined
-  const nodeData = currentNodeData ?? (data as LoopVideoData)
+  const nodeData = data as LoopVideoData
   const credits = useEstimatedCredits({ id, type: "loop-video", data: nodeData } as any)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)

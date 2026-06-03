@@ -7,7 +7,7 @@ import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -18,8 +18,7 @@ import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { FadeVideoData } from "@/types/nodes"
 
 function FadeVideoNodeComponent({ id, data, selected }: NodeProps) {
-  const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as FadeVideoData | undefined
-  const nodeData = currentNodeData ?? (data as FadeVideoData)
+  const nodeData = data as FadeVideoData
   const credits = useModelCredits("ffmpeg", 1)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
@@ -131,8 +130,8 @@ function FadeVideoNodeComponent({ id, data, selected }: NodeProps) {
           onVideoLoad={() => setVideoError(false)}
         />
       )}
-      <HandleWithPopover nodeId={id} nodeType="fade-video" handleId="video" type="target" position={Position.Left}  label="Video" color="#A78BFA" icon={<Film />} side="left"  top="calc(100% - 24px)" />
-      <HandleWithPopover nodeId={id} nodeType="fade-video" handleId="video" type="source" position={Position.Right} label="Video" color="#A78BFA" icon={<Film />} side="right" top="24px" />
+      <HandleWithPopover nodeId={id} nodeType="fade-video" handleId="video" type="target" position={Position.Left}  label="Video" color={HANDLE_COLORS.video} icon={<Film />} side="left"  top="calc(100% - 24px)" />
+      <HandleWithPopover nodeId={id} nodeType="fade-video" handleId="video" type="source" position={Position.Right} label="Video" color={HANDLE_COLORS.video} icon={<Film />} side="right" top="24px" />
       {activeUrl && <MediaPreviewModal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} type="video" url={activeUrl} results={results} initialIndex={activeIndex} />}
       <DeleteConfirmationDialog isOpen={deleteConfirm !== null} onClose={() => setDeleteConfirm(null)} onConfirm={() => { if (deleteConfirm !== null) handleDeleteResult(deleteConfirm) }} />
     </div>

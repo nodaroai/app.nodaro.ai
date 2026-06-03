@@ -1,4 +1,5 @@
 import { Heart, Copy, Sparkles, Coins, Layers } from "lucide-react"
+import { PreviewVideo } from "@/components/ui/preview-video"
 import { cn } from "@/lib/utils"
 import type { TemplateBrowseCard } from "@/lib/api"
 import { COMPLEXITY_CONFIG, type Complexity, formatCount } from "@/lib/template-utils"
@@ -30,18 +31,7 @@ export function TemplateMarketplaceCard({
       <div className="relative aspect-video bg-gradient-to-br from-zinc-100 to-zinc-200 dark:from-zinc-800 dark:to-zinc-900 overflow-hidden">
         {template.previewMediaUrl ? (
           template.previewMediaType === "video" ? (
-            <video
-              src={template.previewMediaUrl}
-              className="w-full h-full object-cover"
-              muted
-              loop
-              playsInline
-              onMouseEnter={(e) => e.currentTarget.play()}
-              onMouseLeave={(e) => {
-                e.currentTarget.pause()
-                e.currentTarget.currentTime = 0
-              }}
-            />
+            <PreviewVideo src={template.previewMediaUrl} />
           ) : (
             <img
               src={template.previewMediaUrl}

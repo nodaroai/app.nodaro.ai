@@ -24,6 +24,7 @@ import { hashApiToken, resolveApiToken } from "../lib/api-token-resolver.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
 import { estimateWorkflowCredits } from "../ee/billing/credits.js"
 import type { WorkflowExecutionJob, NodeExecutionState } from "../services/workflow-engine/types.js"
+import { normalizeLegacyNodeTypes } from "../services/workflow-engine/normalize-node-types.js"
 import {
   getInputNodes,
   getOutputNodes,
@@ -519,7 +520,12 @@ export async function apiTokenRoutes(app: FastifyInstance) {
         })
       }
 
-      const nodes = (workflow.nodes ?? []) as GenericNode[]
+      // Normalize legacy node types (incl. loop→list) BEFORE classifying
+      // inputs/outputs. The loop→list PR removed "loop" from NON_OUTPUT_TYPES,
+      // so a raw un-migrated `loop` node would be misclassified as a workflow
+      // OUTPUT in the API/SDK schema. Mirrors the orchestrator's
+      // normalize-before-read invariant.
+      const nodes = normalizeLegacyNodeTypes((workflow.nodes ?? []) as GenericNode[])
       const edges = (workflow.edges ?? []) as GenericEdge[]
 
       // Use curated nodes (presentationVisible) if any exist, otherwise use all
@@ -703,7 +709,13 @@ export async function apiTokenRoutes(app: FastifyInstance) {
 
           if (!exec) break
 
-          if (exec.status === "completed" || exec.status === "failed" || exec.status === "cancelled") {
+          if (
+            exec.status === "completed" ||
+            exec.status === "failed" ||
+            exec.status === "cancelled" ||
+            exec.status === "timed_out" ||
+            exec.status === "discarded"
+          ) {
             return reply.send(formatExecutionResult(
               execution.id,
               exec as Record<string, unknown>,
@@ -806,7 +818,7 @@ export async function apiTokenRoutes(app: FastifyInstance) {
         .eq("id", execution.workflow_id)
         .single()
 
-      const nodes = (workflow?.nodes ?? []) as GenericNode[]
+      const nodes = normalizeLegacyNodeTypes((workflow?.nodes ?? []) as GenericNode[])
 
       return reply.send(formatExecutionResult(
         execution.id,
@@ -841,9 +853,11 @@ function formatExecutionResult(
 ) {
   const nodeStates = (execution.node_states ?? {}) as Record<string, NodeExecutionState>
 
-  // Extract outputs from completed output nodes
+  // Extract outputs from completed output nodes. Normalize legacy node types
+  // (incl. loop→list) defensively so this formatter classifies outputs
+  // correctly regardless of whether the caller already normalized. Idempotent.
   const edges: GenericEdge[] = []
-  const outputNodes = getOutputNodes(workflowNodes, edges, false)
+  const outputNodes = getOutputNodes(normalizeLegacyNodeTypes(workflowNodes), edges, false)
   const outputs: Array<{
     nodeId: string
     label: string

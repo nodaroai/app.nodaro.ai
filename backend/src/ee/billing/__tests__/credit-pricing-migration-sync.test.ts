@@ -156,6 +156,18 @@ const KNOWN_GHOST_IDENTIFIERS: ReadonlySet<string> = new Set([
   "collect:count",
   "collect:vote",
   "collect:merge-json",
+  // ── flux-2-max old resolution-less format (migration 129) — superseded by
+  //    per-MP×ref format in migration 183 (`flux-2-max:<mp>MP:<n>ref`).
+  //    Migration 183 DELETEs these rows, but the scanner sees the legacy INSERTs
+  //    from migration 129. They are no longer in STATIC_CREDIT_COSTS. ──
+  "flux-2-max:1ref",
+  "flux-2-max:2ref",
+  "flux-2-max:3ref",
+  "flux-2-max:4ref",
+  "flux-2-max:5ref",
+  "flux-2-max:6ref",
+  "flux-2-max:7ref",
+  "flux-2-max:8ref",
 ])
 
 describe("model_pricing migrations have no undocumented ghosts", () => {

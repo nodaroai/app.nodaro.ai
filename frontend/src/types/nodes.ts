@@ -223,6 +223,15 @@ export interface PresentationDisplay {
 
 export type InputMode = "prompt" | "multiline" | "oneline" | "inline"
 
+/**
+ * Runtime data shape for the unified List node (and the load-migrated `loop`
+ * alias). Distinct from `ListNodeData` above: this variant treats `columns`/
+ * `rows` as required and adds `minRows`/`defaultRows`, whereas `ListNodeData`
+ * keeps them optional and carries the legacy `items?` field. Both remain in the
+ * `SceneNodeData` union because either shape can appear on a `list` node at
+ * runtime; they are intentionally NOT merged (many distinct call sites + non-
+ * trivial optionality differences — see Task 6 notes).
+ */
 export type LoopNodeData = {
   [key: string]: unknown
   label: string
@@ -2449,6 +2458,10 @@ export type VoiceChangerData = {
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
   generatedAudioUrl?: string
+  /** Set when the node ran in video mode (a video input was wired): the
+   *  revoiced video. Its presence selects the video display + the video
+   *  output handle. The revoiced audio sidecar still lands in generatedAudioUrl. */
+  generatedVideoUrl?: string
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number
   currentJobId?: string
@@ -3502,6 +3515,11 @@ export type LLMChatData = {
   llmModel?: string
   temperature: number
   maxTokens: number
+  /** How many generations to produce per Run click. `llm-chat` is in
+   *  REPEATABLE_NODE_TYPES, so the runtime fans this out into N runs.
+   *  Surfaced by the config panel's "Repeat … times" control (range 1–20)
+   *  and the node's quick toolbar (×1–4). Unset ⇒ 1. */
+  repeatCount?: number
   fieldMappings: FieldMappings
   templateId?: string
   generatedItems?: string[]
@@ -3509,7 +3527,7 @@ export type LLMChatData = {
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
   generatedText?: string
-  generatedResults?: Array<{ text: string; jobId?: string; timestamp?: string; systemPrompt?: string; userPrompt?: string; listValue?: string; runId?: string }>
+  generatedResults?: Array<{ text: string; jobId?: string; timestamp?: string; systemPrompt?: string; userPrompt?: string; listValue?: string; runId?: string; model?: string; templateId?: string }>
   activeResultIndex?: number
   lastSystemPrompt?: string
   lastUserPrompt?: string
@@ -4306,7 +4324,7 @@ export type SceneNodeData =
 export type SceneNodeType =
   | "text-prompt"
   | "list"
-  | "loop"
+  | "loop" // @deprecated — alias of "list"; migrated on load (list-loop-migration.ts)
   | "upload-image"
   | "upload-video"
   | "upload-audio"
@@ -4493,12 +4511,12 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
   // Input
   {
     type: "text-prompt",
-    label: "Text Prompt",
+    label: "Text",
     category: "input",
     creditCost: 0,
     inputs: ["in"],
     outputs: ["prompt"],
-    defaultData: { label: "Text Prompt", text: "", variables: {} },
+    defaultData: { label: "Text", text: "", variables: {} },
   },
   {
     type: "list",
@@ -4508,15 +4526,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: [],
     defaultData: { label: "List", columns: [{ id: "default", name: "Items", handleId: "col_default", type: "text" }], rows: [[""]], fieldMappings: {} } as ListNodeData,
-  },
-  {
-    type: "loop",
-    label: "Table",
-    category: "input",
-    creditCost: 0,
-    inputs: ["in"],
-    outputs: [],
-    defaultData: { label: "Table", columns: [], rows: [], fieldMappings: {} } as LoopNodeData,
   },
   {
     type: "upload-image",

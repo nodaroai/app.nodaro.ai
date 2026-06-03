@@ -226,7 +226,7 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
       style={{ left: x, top: y }}
     >
       <button
-        className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-left disabled:opacity-50"
+        className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-left cursor-pointer disabled:opacity-50"
         onClick={handleRun}
         disabled={isRunning}
       >
@@ -235,7 +235,7 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
       </button>
       {hasDownstream && (
         <button
-          className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-left disabled:opacity-50"
+          className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-left cursor-pointer disabled:opacity-50"
           onClick={handleRunFromHere}
           disabled={isRunning}
         >
@@ -245,7 +245,7 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
       )}
       {selectedCount >= 2 && (
         <button
-          className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-left disabled:opacity-50"
+          className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-left cursor-pointer disabled:opacity-50"
           onClick={handleRunSelected}
           disabled={isRunning}
         >
@@ -254,7 +254,7 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
         </button>
       )}
       <button
-        className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-left"
+        className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-left cursor-pointer"
         onClick={handleToggleSkip}
       >
         {isSkipped ? <CircleCheck className="h-3.5 w-3.5" /> : <CircleSlash className="h-3.5 w-3.5" />}
@@ -262,7 +262,7 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
       </button>
       {thumbnailUrl && (
         <button
-          className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-left"
+          className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-left cursor-pointer"
           onClick={handleSetThumbnail}
         >
           <ImageIcon className="h-3.5 w-3.5" />
@@ -279,17 +279,17 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
           {/* Fixed-width buttons so different glyph widths (−, +, ↺) and
               disabled-state changes don't shift sibling buttons sideways. */}
           <button
-            className="w-6 h-5 flex items-center justify-center hover:bg-accent rounded text-xs"
+            className="w-6 h-5 flex items-center justify-center hover:bg-accent rounded text-xs cursor-pointer"
             onClick={() => handleSetZoom(Math.max(0.5, Math.round((zoom - 0.25) * 100) / 100))}
             title="Decrease zoom"
           >−</button>
           <button
-            className="w-6 h-5 flex items-center justify-center hover:bg-accent rounded text-xs"
+            className="w-6 h-5 flex items-center justify-center hover:bg-accent rounded text-xs cursor-pointer"
             onClick={() => handleSetZoom(Math.min(2.0, Math.round((zoom + 0.25) * 100) / 100))}
             title="Increase zoom"
           >+</button>
           <button
-            className="w-6 h-5 flex items-center justify-center hover:bg-accent rounded text-xs disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+            className="w-6 h-5 flex items-center justify-center hover:bg-accent rounded text-xs cursor-pointer disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed"
             disabled={zoom === 1}
             onClick={() => handleSetZoom(1)}
             title="Reset to 100%"
@@ -297,7 +297,7 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
         </div>
       )}
       <button
-        className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-left"
+        className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-left cursor-pointer"
         onClick={handleFitContent}
       >
         <Maximize2 className="h-3.5 w-3.5" />
@@ -305,7 +305,7 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
       </button>
       <div className="my-1 border-t" />
       <button
-        className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-left"
+        className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-left cursor-pointer"
         onClick={handleDuplicate}
       >
         <Copy className="h-3.5 w-3.5" />
@@ -314,7 +314,7 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
       </button>
       {characterDbId && (
         <button
-          className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-left disabled:opacity-50"
+          className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-left cursor-pointer disabled:opacity-50"
           onClick={handleDuplicateAsNewCharacter}
           disabled={forking}
           title="Create an independent character (default Duplicate shares the same library entry)"
@@ -324,7 +324,7 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
         </button>
       )}
       <button
-        className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-left text-destructive"
+        className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-left cursor-pointer text-destructive"
         onClick={handleDelete}
       >
         <Trash2 className="h-3.5 w-3.5" />

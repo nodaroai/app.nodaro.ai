@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, type ReactNode } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { Eye, FileText, Layers as LayersIcon } from "lucide-react"
+import { useShallow } from "zustand/react/shallow"
 import { getParameterPromptHint } from "@nodaro/shared"
 import { BaseNode, type HandleConfig } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
@@ -52,14 +53,39 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const updateNode = useWorkflowStore((s) => s.updateNode)
   const runFromHere = useWorkflowStore((s) => s.runFromHere)
-  const nodes = useWorkflowStore((s) => s.nodes)
-  const edges = useWorkflowStore((s) => s.edges)
+  const openFullscreenSettings = useWorkflowStore((s) => s.openFullscreenSettings)
 
-  // Only show "Run from here" when this parameter node feeds at least one
-  // downstream node — running with no consumers is a no-op for the user.
-  const hasDownstream = useMemo(() => edges.some((e) => e.source === id), [edges, id])
+  // Narrow subscription: this node object + whether any downstream edge exists
+  // + a primitive fingerprint of incoming connections (for camera-motion /
+  // transition prompt-preview composition). `updateNodeData` preserves object
+  // identity for unrelated nodes, so returning `node` via useShallow
+  // short-circuits re-renders for mutations elsewhere on the graph — this
+  // shell underpins all ~46 parameter pickers, so the whole-array subscription
+  // was re-rendering every picker on a single keystroke anywhere.
+  const { node, hasDownstream, incomingFingerprint } = useWorkflowStore(
+    useShallow((s) => {
+      const n = s.nodes.find((nn) => nn.id === id)
+      let downstream = false
+      // Only camera-motion / transition compose their prompt preview from
+      // connected start/end states; for every other picker type the incoming
+      // fingerprint is irrelevant, so skip the upstream walk entirely.
+      const composes = n?.type === "camera-motion" || n?.type === "transition"
+      let fp = ""
+      for (const e of s.edges) {
+        if (e.source === id) downstream = true
+        if (composes && e.target === id) {
+          const src = s.nodes.find((sn) => sn.id === e.source)
+          // The connected start/end state can be ANY parameter picker, and
+          // getParameterPromptHint reads different value fields per type — so
+          // serialize the source's data wholesale (these are tiny parameter
+          // nodes) to guarantee the prompt preview never goes stale.
+          fp += `${e.id}\x01${e.targetHandle ?? ""}\x01${src?.type ?? ""}\x01${JSON.stringify(src?.data ?? {})}\x02`
+        }
+      }
+      return { node: n, hasDownstream: downstream, incomingFingerprint: fp }
+    }),
+  )
 
-  const node = useMemo(() => nodes.find((n) => n.id === id), [nodes, id])
   const data = (node?.data ?? {}) as Record<string, unknown>
   // Look up the source-handle visual for this picker's node type. Falls back
   // to the indigo HandleIcon if the type isn't registered (forward-compat for
@@ -170,8 +196,12 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
   // composes start/end edges; other types ignore ctx.
   const promptText = useMemo(() => {
     if (!node) return ""
+    // Only camera-motion / transition consult the graph context; for those the
+    // memo re-runs (via the dep array) when `incomingFingerprint` changes. Read
+    // live arrays at compute time so we don't hold a whole-array subscription.
+    const { nodes, edges } = useWorkflowStore.getState()
     return getParameterPromptHint(node, { nodes, edges })
-  }, [node, nodes, edges])
+  }, [node, incomingFingerprint])
 
   return (
     <div ref={wrapperRef} className={cn("group", fluidWidth ? "relative w-full h-full" : "relative max-w-[220px]")}>
@@ -180,6 +210,7 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
           label={label}
           icon={icon}
           onSave={(newLabel) => updateNodeData(id, { label: newLabel })}
+          onIconClick={() => openFullscreenSettings(id)}
         />
       </div>
       <BaseNode

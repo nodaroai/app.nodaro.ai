@@ -36,6 +36,34 @@ vi.mock("../client.js", () => ({
   },
   extractUrl: mocks.mockExtractUrl,
   extractCost: mocks.mockExtractCost,
+  // Faithful stand-in for the real client.ts helper: same create → fire →
+  // wait → extractCost(metrics, costModelKey) envelope, driven by the same
+  // low-level mocks so assertions on mockCreate / mockWait / mockExtractCost
+  // (including the per-model costModelKey arg) still hold.
+  runReplicatePrediction: async (opts: {
+    version?: string
+    model?: string
+    input: Record<string, unknown>
+    label: string
+    reconcileOpts?: { onTaskCreated?: (id: string) => Promise<void> }
+    costModelKey?: string
+  }) => {
+    const createOptions =
+      opts.version !== undefined
+        ? { version: opts.version, input: opts.input }
+        : { model: opts.model, input: opts.input }
+    const prediction = await mocks.mockCreate(createOptions)
+    if (opts.reconcileOpts?.onTaskCreated) {
+      try {
+        await opts.reconcileOpts.onTaskCreated(prediction.id)
+      } catch {
+        /* fireOnTaskCreated swallows */
+      }
+    }
+    const completed = await mocks.mockWait(prediction)
+    const cost = mocks.mockExtractCost(completed.metrics, opts.costModelKey)
+    return { output: completed.output, cost, predictionId: prediction.id }
+  },
 }))
 
 import { replicateLipSync } from "../lip-sync.js"
@@ -403,7 +431,7 @@ describe("replicateLipSync — cost passthrough", () => {
 
     await replicateLipSync("latentsync", FACE, AUDIO)
 
-    expect(mocks.mockExtractCost).toHaveBeenCalledWith({ predict_time: 30 })
+    expect(mocks.mockExtractCost).toHaveBeenCalledWith({ predict_time: 30 }, "latentsync")
   })
 
   it("handles undefined metrics", async () => {
@@ -411,7 +439,7 @@ describe("replicateLipSync — cost passthrough", () => {
 
     await replicateLipSync("latentsync", FACE, AUDIO)
 
-    expect(mocks.mockExtractCost).toHaveBeenCalledWith(undefined)
+    expect(mocks.mockExtractCost).toHaveBeenCalledWith(undefined, "latentsync")
   })
 })
 

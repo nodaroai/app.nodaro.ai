@@ -14,30 +14,23 @@ import { buildCreditModelIdentifier } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 
 /**
- * Decide whether the prompt actually addresses any reference images.
- * `buildImagePrompt` emits the "Use these references for the output image:"
- * header only when at least one `{image:N:label}` mention is present, so
- * checking for that string is a reliable signal that the user wants the
- * model to consume the attached refs (versus just having them attached).
- */
-function promptAddressesReferences(prompt: string): boolean {
-  return prompt.includes("Use these references for the output image:")
-}
-
-/**
- * If the user picked a T2I provider that has an i2i sibling AND the prompt
- * mentions reference images, transparently route to the i2i variant — the
- * T2I endpoint silently ignores ref URLs, while the i2i endpoint actually
- * uses them.
+ * If the user picked a T2I provider that has an i2i sibling AND reference images
+ * are ATTACHED, transparently route to the i2i variant — the T2I endpoint
+ * silently ignores ref URLs, while the i2i endpoint actually consumes them.
+ *
+ * The trigger is attached refs (`referenceImageUrls.length > 0`), NOT a prompt
+ * marker: a plain prompt + a reference still edits, so any caller just sends
+ * `referenceImageUrls` and generate-image honors them — no `{image:N}` mention /
+ * "Use these references…" header required. Providers that already consume refs
+ * natively in their T2I call (Replicate "Open" models, nano-banana) aren't in the
+ * swap map and pass through unchanged.
  */
 function resolveEffectiveProvider(
   provider: string | undefined,
-  prompt: string,
   referenceImageUrls: string[] | undefined,
 ): string | undefined {
   if (!provider) return provider
   if (!referenceImageUrls?.length) return provider
-  if (!promptAddressesReferences(prompt)) return provider
   return T2I_TO_I2I_VARIANT[provider] ?? provider
 }
 
@@ -77,8 +70,9 @@ export const generateImageBody = z.object({
     "auto",
     "1:1", "16:9", "9:16", "4:3", "3:4",
     "3:2", "2:3", "5:4", "4:5", "21:9",
+    "8:1", "1:8", // Wan 2.7 / Wan 2.7 Pro ultra-wide (in the catalog + picker)
   ]).optional(),
-  resolution: z.enum(["1K", "2K", "4K"]).optional(),
+  resolution: z.enum(["1K", "2K", "4K", "0.5 MP", "1 MP", "2 MP", "4 MP"]).optional(),
   quality: z.enum(["medium", "high", "basic"]).optional(),
   negativePrompt: z.string().max(5000).optional(),
   seed: z.number().int().min(0).optional(),
@@ -116,11 +110,10 @@ export async function generateImageRoutes(app: FastifyInstance) {
       return FLUX_LORA_CHARACTER_MODEL_ID
     }
     const rawProvider = (body?.provider as string) ?? "nano-banana"
-    const prompt = (body?.prompt as string) ?? ""
     const refs = body?.referenceImageUrls as string[] | undefined
     // Mirror the auto-swap inside the route handler so credits are reserved
     // for the variant we'll actually invoke.
-    const provider = resolveEffectiveProvider(rawProvider, prompt, refs) ?? rawProvider
+    const provider = resolveEffectiveProvider(rawProvider, refs) ?? rawProvider
     const quality = body?.quality as string | undefined
     const resolution = body?.resolution as string | undefined
     const renderingSpeed = body?.renderingSpeed as string | undefined
@@ -234,11 +227,11 @@ export async function generateImageRoutes(app: FastifyInstance) {
 
     // LoRA inference path bypasses provider auto-routing — the synthetic
     // flux-lora-character provider always lands on Replicate with the trained
-    // version. Otherwise, auto-route T2I providers to their i2i sibling when
-    // the user actually addresses reference images in the prompt.
+    // version. Otherwise, auto-route T2I providers to their i2i sibling whenever
+    // reference images are attached (no prompt-mention required).
     const effectiveProvider = resolvedLora
       ? FLUX_LORA_CHARACTER_MODEL_ID
-      : resolveEffectiveProvider(provider, prompt, referenceImageUrls)
+      : resolveEffectiveProvider(provider, referenceImageUrls)
 
     // Determine model identifier for credit reservation (composite for variable pricing).
     // Must mirror the preHandler's identifier — flux-2-max bills per reference image,

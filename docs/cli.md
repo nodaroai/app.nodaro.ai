@@ -123,6 +123,12 @@ nodaro nodes get <type>                                 # full input schema
 nodaro nodes run <type> --param prompt="…" --param provider=flux [--watch]
 nodaro nodes run <type> --params-file body.json [--watch] [--poll-interval 1000]
 
+# Prompt — AI wizard that turns a rough idea into an optimized prompt
+nodaro prompt wizard [--node-type <type>] [--prompt "…"] [--provider <name>] [--style <name>] [--aspect-ratio <ratio>] [--duration <seconds>] [--llm-model <id>]   # interactive Q&A; node picker if --node-type omitted
+nodaro prompt analyze --node-type <type> [--prompt "…"] [--provider <name>] [--style <name>] [--aspect-ratio <ratio>] [--duration <seconds>] [--llm-model <id>] [--json]   # return guided questions
+nodaro prompt generate --node-type <type> --selection category=value [--selection ...] [--original-prompt "…"] [--provider <name>] [--style <name>] [--aspect-ratio <ratio>] [--duration <seconds>] [--llm-model <id>] [--json]   # build a prompt from selections
+nodaro prompt enhance --node-type <type> --prompt "…" [--provider <name>] [--style <name>] [--aspect-ratio <ratio>] [--duration <seconds>] [--llm-model <id>] [--json]   # one-shot rewrite, no questions
+
 # Executions
 nodaro executions get <id> [--watch] [--json]
 nodaro executions cancel <id> [--mode cancelled|stopping]
@@ -210,6 +216,23 @@ nodaro nodes run generate-image \
   --param resolution=2K \
   --watch --json | jq -r '.outputs.imageUrl'
 ```
+
+### Turn a rough idea into an optimized prompt
+
+```bash
+# one-shot enhance, then feed straight into a node run
+PROMPT=$(nodaro prompt enhance \
+  --node-type generate-image \
+  --prompt "snow leopard" \
+  --json | jq -r '.prompt')
+
+nodaro nodes run generate-image --param prompt="$PROMPT" --watch
+```
+
+Need the wizard's guided questions in a script? Use the two-step path —
+`prompt analyze --json` to fetch the questions, then `prompt generate
+--selection category=value …` to build the final prompt (the interactive
+`prompt wizard` requires a terminal).
 
 ## Programmatic alternative
 

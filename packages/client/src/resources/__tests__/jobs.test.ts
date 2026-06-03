@@ -32,4 +32,43 @@ describe("jobs resource", () => {
     })
     await expect(c.jobs.get("missing")).rejects.toBeInstanceOf(NotFoundError)
   })
+
+  it("getStatus GETs the lean /v1/jobs/:id/status endpoint", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockOk({
+        data: {
+          id: "job-1",
+          status: "completed",
+          progress: 100,
+          output_data: {},
+          error_message: null,
+        },
+      }),
+    )
+    const c = createClient({
+      baseUrl: "https://api.example.com",
+      auth: new StaticTokenAuth("t"),
+      fetch: fetchMock,
+    })
+    await c.jobs.getStatus("job-1")
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      "https://api.example.com/v1/jobs/job-1/status",
+    )
+    expect(fetchMock.mock.calls[0][1].method).toBe("GET")
+  })
+
+  it("getStatus url-encodes the job id", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockOk({ data: { id: "job/1", status: "completed" } }),
+    )
+    const c = createClient({
+      baseUrl: "https://api.example.com",
+      auth: new StaticTokenAuth("t"),
+      fetch: fetchMock,
+    })
+    await c.jobs.getStatus("job/1")
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      "https://api.example.com/v1/jobs/job%2F1/status",
+    )
+  })
 })

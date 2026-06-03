@@ -6,7 +6,7 @@ import { Webhook, Type } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { WebhookOutputData, WebhookParam } from "@/types/nodes"
 
@@ -84,9 +84,9 @@ function WebhookOutputNodeComponent({ id, data, selected }: NodeProps) {
       )}
       </BaseNode>
       {handles.filter(h => h.type === "target").map((h) => (
-        <HandleWithPopover key={h.id} nodeId={id} nodeType="webhook-output" handleId={h.id} type="target" position={Position.Left} label={(h as { label?: string }).label ?? h.id} color="#22c55e" icon={<Type />} side="left" top={(h.customStyle?.top as string) ?? 'calc(100% - 24px)'} />
+        <HandleWithPopover key={h.id} nodeId={id} nodeType="webhook-output" handleId={h.id} type="target" position={Position.Left} label={(h as { label?: string }).label ?? h.id} color={HANDLE_COLORS.approve} icon={<Type />} side="left" top={(h.customStyle?.top as string) ?? 'calc(100% - 24px)'} />
       ))}
-      <HandleWithPopover nodeId={id} nodeType="webhook-output" handleId="out" type="source" position={Position.Right} label="Response" color="#22c55e" icon={<Webhook />} side="right" top="24px" />
+      <HandleWithPopover nodeId={id} nodeType="webhook-output" handleId="out" type="source" position={Position.Right} label="Response" color={HANDLE_COLORS.approve} icon={<Webhook />} side="right" top="24px" />
     </div>
   )
 }

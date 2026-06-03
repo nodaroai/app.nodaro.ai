@@ -252,6 +252,33 @@ function buildKnownSlugSets(refs: readonly RefImageItem[]): KnownSlugSets {
   return { characters, locations }
 }
 
+/**
+ * Shallow structural equality for two reference-image lists. `RefImageItem` is
+ * a flat object of primitives, so a per-key shallow compare is exact. Used to
+ * keep `referenceImages` content-stable inside PromptEditor — the parent often
+ * hands us a freshly `.map()`-ed array on each keystroke even when nothing
+ * changed, which would otherwise fire a redundant ProseMirror transaction (and
+ * recompute the known-slug sets) on every key press.
+ */
+function refImagesEqual(
+  a: readonly RefImageItem[],
+  b: readonly RefImageItem[],
+): boolean {
+  if (a === b) return true
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i] as unknown as Record<string, unknown>
+    const y = b[i] as unknown as Record<string, unknown>
+    if (x === y) continue
+    const xKeys = Object.keys(x)
+    if (xKeys.length !== Object.keys(y).length) return false
+    for (const k of xKeys) {
+      if (x[k] !== y[k]) return false
+    }
+  }
+  return true
+}
+
 export function PromptEditor({
   value,
   onChange,
@@ -261,18 +288,31 @@ export function PromptEditor({
   referenceImages,
   nodeRefs,
 }: PromptEditorProps) {
+  // Content-stabilize the incoming reference list. The parent config panels
+  // build this via `.map()` inside a useMemo, so it can arrive as a fresh array
+  // reference even when nothing changed (e.g. an unrelated keystroke). Reusing
+  // the previous reference when the contents are structurally equal keeps the
+  // refs-changed transaction below (and the known-slug memo) from firing every
+  // keystroke.
+  const stableRefsRef = useRef<readonly RefImageItem[]>(referenceImages ?? [])
+  const incomingRefs = referenceImages ?? []
+  if (!refImagesEqual(stableRefsRef.current, incomingRefs)) {
+    stableRefsRef.current = incomingRefs
+  }
+  const stableReferenceImages = stableRefsRef.current
+
   // Hold the latest reference list in a ref so the suggestion plugin's items()
   // closure (created once at editor mount) always sees fresh data.
-  const refsRef = useRef<readonly RefImageItem[]>(referenceImages ?? [])
-  refsRef.current = referenceImages ?? []
+  const refsRef = useRef<readonly RefImageItem[]>(stableReferenceImages)
+  refsRef.current = stableReferenceImages
   const nodeRefsRef = useRef<readonly NodeRefItem[]>(nodeRefs ?? [])
   nodeRefsRef.current = nodeRefs ?? []
   // Known-slug sets derived from the current reference list. Recomputed when
   // the list changes; the suggestion-plugin's `items()` closure stays stable.
-  const knownSlugsRef = useRef<KnownSlugSets>(buildKnownSlugSets(referenceImages ?? []))
+  const knownSlugsRef = useRef<KnownSlugSets>(buildKnownSlugSets(stableReferenceImages))
   knownSlugsRef.current = useMemo(
-    () => buildKnownSlugSets(referenceImages ?? []),
-    [referenceImages],
+    () => buildKnownSlugSets(stableReferenceImages),
+    [stableReferenceImages],
   )
 
   // Hold the latest onChange so we can call it without recreating the editor.
@@ -670,25 +710,27 @@ export function PromptEditor({
       revision?: number
     }>
     storage.imageRef = storage.imageRef ?? {}
-    storage.imageRef.referenceImages = referenceImages ?? []
+    storage.imageRef.referenceImages = stableReferenceImages
     // Mirror the same list under the characterRef extension's storage so
     // CharacterRefView can resolve `(characterSlug, variantSlug)` without
     // round-tripping through the index — character pills survive slot
     // re-ordering that way (image-ref pills can't, since they're indexed
     // positionally by definition).
     storage.characterRef = storage.characterRef ?? {}
-    storage.characterRef.referenceImages = referenceImages ?? []
+    storage.characterRef.referenceImages = stableReferenceImages
     storage.characterRef.revision = (storage.characterRef.revision ?? 0) + 1
     // Same mirror for the locationRef extension. LocationRefView filters
     // the shared list to entries with `source === "location"` when
     // resolving thumbnails; the extension's `getAttributes` filters to
     // known location slugs when deciding whether to auto-promote.
     storage.locationRef = storage.locationRef ?? {}
-    storage.locationRef.referenceImages = referenceImages ?? []
+    storage.locationRef.referenceImages = stableReferenceImages
     storage.locationRef.revision = (storage.locationRef.revision ?? 0) + 1
     // Force node views to re-read storage by dispatching a no-op transaction.
+    // Gated by `stableReferenceImages` so this only fires when the ref list
+    // actually changes — not on every parent keystroke.
     editor.view.dispatch(editor.state.tr.setMeta("refs-changed", true))
-  }, [editor, referenceImages])
+  }, [editor, stableReferenceImages])
 
   // Sync external value → editor when the prop changes from somewhere other
   // than this editor. Compare against the editor's serialized text to avoid
