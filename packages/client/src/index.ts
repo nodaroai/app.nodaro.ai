@@ -49,6 +49,7 @@ export { ReduceResource } from "./resources/reduce.js"
 export { PromptHelperResource } from "./resources/prompt-helper.js"
 export { VoicesResource } from "./resources/voices.js"
 export { CreditsResource } from "./resources/credits.js"
+export { UploadsResource } from "./resources/uploads.js"
 
 // --- Resource type definitions ---
 export type {
@@ -239,3 +240,5 @@ export type {
   UserBalance,
   ModelCostsResult,
 } from "./resources/credits.js"
+
+export type { UploadResult } from "./resources/uploads.js"
