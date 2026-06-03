@@ -26,6 +26,10 @@ export {
   IDEOGRAM_PROVIDERS,
   DURATION_PRICED_PROVIDERS,
   AUDIO_ADDON_PROVIDERS,
+  VIDEO_AUDIO_CAPABILITY,
+  getVideoAudioCapability,
+  videoModelSupportsAudio,
+  videoModelCanSpeakDialogue,
   VIDEO_VARIABLE_PRICING,
   VIDEO_DURATION_TIERS,
   ASPECT_RATIO_DIMENSIONS,
@@ -124,6 +128,8 @@ export type {
   SceneInputMode,
   ModelPromptingStyle,
   VideoModelCapabilities,
+  VideoAudioMode,
+  VideoAudioCapability,
 } from "./model-constants.js"
 
 export {
