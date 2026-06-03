@@ -64,7 +64,8 @@ export const VIDEO_PRODUCER_TYPES: ReadonlySet<string> = new Set([
  * The orchestrator decides their actual output type at execution time
  * based on what's wired upstream (loop iterates upstream column type;
  * sub-workflow emits its leaf node's type; adjust-volume passes through
- * video or audio based on its `lastInputType` runtime field).
+ * video or audio based on its `lastInputType` runtime field;
+ * voice-changer emits audio in audio mode, video+audio in video mode).
  *
  * Typed-handle validators (frontend/src/lib/{generate-image,generate-
  * video,ffmpeg}-handles.ts) must include these as acceptors on EVERY
@@ -87,6 +88,10 @@ export const DYNAMIC_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   "list",
   "sub-workflow",
   "adjust-volume",
+  // Dual-mode: audio in → audio out; video in → video out (+ revoiced audio).
+  // Listed here so canvas validators accept its output on BOTH audio and video
+  // input handles (it also stays in AUDIO_PRODUCER_TYPES as its default).
+  "voice-changer",
   "reduce",
 ])
 

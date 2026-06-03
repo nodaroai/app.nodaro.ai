@@ -63,4 +63,26 @@ export class VoicesResource {
   async deleteClone(id: string): Promise<void> {
     await this.client.request<void>("DELETE", `/v1/voice-clones/${encodeURIComponent(id)}`)
   }
+
+  /**
+   * Replace the voice in a recording — or in a whole talking video — with a
+   * different voice (`POST /v1/voice-changer`). Pass `audioUrl` to revoice
+   * audio→audio, or `videoUrl` to revoice an entire clip (the server demuxes
+   * the audio, runs speech-to-speech, and remuxes onto the original video,
+   * returning the video plus the new audio track). Exactly one of `audioUrl` /
+   * `videoUrl` is required; when both are sent, video wins. `removeBackgroundNoise`
+   * off keeps the music/SFX bed under the new voice; on yields a clean voice-only
+   * result. Costs credits and runs async — poll `jobs.get(jobId)` for the result
+   * (`output_data.videoUrl` + `output_data.audioUrl` in video mode).
+   */
+  change(input: {
+    voiceId: string
+    audioUrl?: string
+    videoUrl?: string
+    stability?: number
+    similarityBoost?: number
+    removeBackgroundNoise?: boolean
+  }): Promise<{ jobId: string }> {
+    return this.client.request<{ jobId: string }>("POST", "/v1/voice-changer", { body: input })
+  }
 }

@@ -335,6 +335,16 @@ describe("getPrimaryOutput", () => {
     expect(getPrimaryOutput({ audioUrl: "a.mp3" }, "adjust-volume")).toBe("a.mp3")
   })
 
+  it("routes voice-changer by source handle (audio/video), default prefers video", () => {
+    const dual = { videoUrl: "v.mp4", audioUrl: "a.mp3" }
+    // Explicit handles select the matching stream.
+    expect(getPrimaryOutput(dual, "voice-changer", "audio")).toBe("a.mp3")
+    expect(getPrimaryOutput(dual, "voice-changer", "video")).toBe("v.mp4")
+    // Default (no handle) prefers video when present, else audio.
+    expect(getPrimaryOutput(dual, "voice-changer")).toBe("v.mp4")
+    expect(getPrimaryOutput({ audioUrl: "a.mp3" }, "voice-changer")).toBe("a.mp3")
+  })
+
   it("routes social-media-format preferring video", () => {
     expect(getPrimaryOutput({ videoUrl: "v.mp4", imageUrl: "i.png" }, "social-media-format")).toBe("v.mp4")
     expect(getPrimaryOutput({ imageUrl: "i.png" }, "social-media-format")).toBe("i.png")

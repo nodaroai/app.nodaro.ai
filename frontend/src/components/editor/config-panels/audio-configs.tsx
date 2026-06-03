@@ -1344,16 +1344,24 @@ export function VoiceChangerConfig({ data, onUpdate, nodeRefs }: ConfigProps<Voi
         <Input id="vc-similarity" type="range" min={0} max={1} step={0.05} value={data.similarityBoost ?? 0.75} onChange={(e) => onUpdate({ similarityBoost: parseFloat(e.target.value) })} className="h-2" />
         <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5"><span>Low</span><span>High</span></div>
       </div>
-      <div className="flex items-center gap-2">
-        <Checkbox
-          id="vc-remove-bg"
-          checked={data.removeBackgroundNoise ?? false}
-          onCheckedChange={(v: boolean) => onUpdate({ removeBackgroundNoise: v })}
-        />
-        <Label htmlFor="vc-remove-bg">Remove Background Noise</Label>
+      <div>
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id="vc-remove-bg"
+            checked={data.removeBackgroundNoise ?? false}
+            onCheckedChange={(v: boolean) => onUpdate({ removeBackgroundNoise: v })}
+          />
+          <Label htmlFor="vc-remove-bg">Remove Background Noise</Label>
+        </div>
+        <p className="text-[10px] text-muted-foreground mt-1 ml-6">
+          Off: keep the music / SFX bed under the new voice. On: clean, voice-only output.
+        </p>
       </div>
       <p className="text-xs text-muted-foreground">
-        Changes the voice of audio input to the selected voice while preserving emotion and delivery.
+        Replaces the voice with the selected one while preserving emotion, cadence, and timing.
+        Wire <span className="font-medium">audio</span> in for audio out, or <span className="font-medium">video</span> in
+        to revoice a whole talking clip (you get the video back plus the new audio track).
+        If both are wired, video wins and the audio input is ignored.
       </p>
     </div>
   )

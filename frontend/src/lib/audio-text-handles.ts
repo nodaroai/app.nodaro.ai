@@ -172,11 +172,10 @@ export function isValidTextToDialogueConnection(
   }
 }
 
-/** voice-changer: audio (audio producers). Pre-migration this node had
- *  only the legacy `in` target; it has no runtime consumer for a separate
- *  voice-persona pip (execute-node reads `data.voiceId` from the config
- *  panel), so adding a `voice` target would be a UI-only construct that
- *  doesn't route through to the worker. */
+/** voice-changer: audio (audio producers) OR video (video producers). Dual
+ *  mode — an audio input revoices audio→audio; a video input revoices the
+ *  whole talking clip (the backend demuxes the audio, runs speech-to-speech,
+ *  and remuxes onto the original video). Video wins when both are wired. */
 export function isValidVoiceChangerConnection(
   targetHandleId: string,
   sourceType: string,
@@ -184,6 +183,8 @@ export function isValidVoiceChangerConnection(
   switch (targetHandleId) {
     case "audio":
       return ACCEPTS_AUDIO_OR_DYN(sourceType)
+    case "video":
+      return ACCEPTS_VIDEO_OR_DYN(sourceType)
     default:
       return false
   }

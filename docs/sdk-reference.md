@@ -218,7 +218,7 @@ but rarely need to be imported directly:
 `WorkflowsResource`, `ProjectsResource`, `JobsResource`, `ExecutionsResource`,
 `NodesResource`, `CharactersResource`, `LocationsResource`, `ObjectsResource`,
 `PipelinesResource`, `ReduceResource`, `PromptHelperResource`, `AppsResource`,
-`DeveloperAppsResource`, `OAuthResource`.
+`DeveloperAppsResource`, `OAuthResource`, `VoicesResource`.
 
 All "data" responses follow the envelope `{ data: T }` — the SDK returns the
 envelope as-is. Mutation responses (`delete`, `cancel`) return `{ success: true }`.
@@ -1624,6 +1624,50 @@ Public route — no auth needed.
 const info = await client.oauth.getAppInfo("ndr_client_abc123")
 // { name, description, logoUrl, homepageUrl, scopesRequested }
 ```
+
+### `client.voices`
+
+ElevenLabs voices: the premade catalog, the community Voice Library, the
+signed-in user's voice clones, and the **voice changer**.
+
+#### `change(input)`
+
+```ts
+change(input: {
+  voiceId: string
+  audioUrl?: string
+  videoUrl?: string
+  stability?: number
+  similarityBoost?: number
+  removeBackgroundNoise?: boolean
+}): Promise<{ jobId: string }>
+```
+
+Replace the voice in a recording — or in a whole talking video — with a
+different voice (`POST /v1/voice-changer`). Pass **`audioUrl`** to revoice
+audio→audio, or **`videoUrl`** to revoice an entire clip: the server demuxes the
+audio, runs speech-to-speech, and remuxes the new voice onto the original video.
+Exactly one of `audioUrl` / `videoUrl` is required; **when both are sent, video
+wins**. `removeBackgroundNoise` off keeps the music/SFX bed under the new voice;
+on yields a clean voice-only result. Runs async — poll `client.jobs.get(jobId)`.
+
+```ts
+// Audio → audio
+const { jobId } = await client.voices.change({
+  audioUrl: "https://cdn.example.com/speech.mp3",
+  voiceId: "Rachel",
+})
+
+// Video → revoiced video (output_data has videoUrl + audioUrl)
+const job = await client.voices.change({
+  videoUrl: "https://cdn.example.com/talking.mp4",
+  voiceId: "Aria",
+})
+```
+
+The other methods — `list()`, `searchLibrary(params)`, `listClones()`,
+`createClone(input)`, `deleteClone(id)` — cover the premade catalog, the
+community library, and managing custom clones.
 
 ---
 

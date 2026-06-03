@@ -2721,16 +2721,53 @@ export function executeNode(
 
   if (node.type === "voice-changer") {
     const d = node.data as VoiceChangerData;
+    // Video wins when both are wired (matches the backend + node UI).
+    const videoUrl = inputs.videoUrl;
     const audioUrl = inputs.audioUrl;
-    if (!audioUrl) {
-      toast.error(`Node "${d.label}": no audio input found`);
-      return Promise.reject(new Error("No audio input"));
+    if (!videoUrl && !audioUrl) {
+      toast.error(`Node "${d.label}": no audio or video input found`);
+      return Promise.reject(new Error("No input"));
     }
     if (!d.voiceId) {
       toast.error(`Node "${d.label}": no voice selected`);
       return Promise.reject(new Error("No voice selected"));
     }
     setUserPromptTemplate(undefined);
+
+    // Switching modes (audio↔video) drops stale results of the other media
+    // type so the node never shows an audio URL in a video element (or vice
+    // versa) and the results browser stays single-typed.
+    const targetIsVideo = Boolean(videoUrl);
+    const curIsVideo = Boolean(d.generatedVideoUrl);
+    if (targetIsVideo !== curIsVideo) {
+      useWorkflowStore.getState().updateNodeData(node.id, {
+        generatedResults: [],
+        activeResultIndex: 0,
+        generatedVideoUrl: undefined,
+        generatedAudioUrl: undefined,
+      });
+    }
+
+    if (videoUrl) {
+      return runProcessingNode(
+        node.id,
+        () =>
+          voiceChangerApi(
+            undefined,
+            d.voiceId!,
+            ctx.userId,
+            d.stability,
+            d.similarityBoost,
+            d.removeBackgroundNoise,
+            videoUrl,
+          ),
+        "generatedVideoUrl",
+        "Voice Changer",
+        ctx,
+        // Surface the revoiced audio sidecar on the audio output handle.
+        (od) => (od.audioUrl ? { generatedAudioUrl: od.audioUrl as string } : {}),
+      );
+    }
     return runProcessingNode(
       node.id,
       () =>

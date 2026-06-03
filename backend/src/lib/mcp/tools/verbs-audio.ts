@@ -305,16 +305,22 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
     {
       title: "Voice Changer",
       description:
-        "Replace the voice on an existing audio track while preserving the " +
-        "delivery / cadence (ElevenLabs Voice Changer). Provide ONE audio " +
-        "source — audio_url OR audio_asset_id (a Nodaro audio job id) — " +
-        "plus a target voice_id.\n\n" +
+        "Replace the voice on an existing audio track — or in a whole talking " +
+        "video — while preserving the delivery / cadence (ElevenLabs Voice " +
+        "Changer). Provide ONE source: audio_url / audio_asset_id to revoice " +
+        "audio→audio, OR video_url / video_asset_id to revoice an entire clip " +
+        "(the revoiced video is saved to your library; the new audio track is " +
+        "previewed here). Video wins if both are supplied. Plus a target voice_id.\n\n" +
+        "remove_background_noise off keeps the music/SFX bed under the new " +
+        "voice; on yields a clean voice-only result.\n\n" +
         "Use the same voice naming as `generate_speech`: pass a premade " +
         "voice NAME (Rachel, Aria, Roger, ...) or an ElevenLabs UUID for " +
         "a custom clone. Don't invent UUIDs — passing an unknown one fails.",
       inputSchema: {
         audio_url: z.string().url().optional(),
         audio_asset_id: z.string().optional(),
+        video_url: z.string().url().optional().describe("Revoice a talking video — demux audio, run speech-to-speech, remux. Returns video + new audio."),
+        video_asset_id: z.string().optional().describe("A Nodaro video job id to revoice (alternative to video_url)."),
         voice_id: z.string().min(1).describe("Target voice — premade name (Rachel, Aria, Roger, ...) or ElevenLabs UUID for a custom clone."),
         stability: z.number().min(0).max(1).optional(),
         similarity_boost: z.number().min(0).max(1).optional(),
@@ -340,6 +346,16 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       },
     },
     async (args) => {
+      // Video wins when both a video and an audio source are supplied.
+      const videoUrl =
+        args.video_url ??
+        (args.video_asset_id
+          ? await resolveAssetId({
+              assetId: args.video_asset_id,
+              userId: session.userId,
+              expectedKind: "video",
+            })
+          : null)
       const audioUrl =
         args.audio_url ??
         (args.audio_asset_id
@@ -349,16 +365,17 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
               expectedKind: "audio",
             })
           : null)
-      if (!audioUrl) {
+      if (!videoUrl && !audioUrl) {
         return {
           content: [
-            { type: "text", text: "Pass audio_url or audio_asset_id." },
+            { type: "text", text: "Pass audio_url/audio_asset_id to revoice audio, or video_url/video_asset_id to revoice a talking video." },
           ],
           isError: true,
         }
       }
+      const isVideo = Boolean(videoUrl)
       const payload = {
-        audioUrl,
+        ...(isVideo ? { videoUrl } : { audioUrl }),
         voiceId: args.voice_id,
         stability: args.stability,
         similarityBoost: args.similarity_boost,
@@ -366,10 +383,13 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         mcp_client: session.clientName,
         userId: session.userId,
       }
+      // The widget previews audio (the static job-audio template); in video mode
+      // the job also emits an audio sidecar so the preview still plays, and the
+      // full revoiced video is saved to the library.
       return dispatchJob(fastify, session, {
         url: "/v1/voice-changer",
         payload,
-        label: "voice changer",
+        label: isVideo ? "voice changer (video)" : "voice changer",
         widgetKind: "audio",
         widgetData: { prompt: `voice → ${args.voice_id}`, model: "elevenlabs-voice-changer" },
       })

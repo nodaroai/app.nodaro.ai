@@ -2247,18 +2247,18 @@ describe("text-to-dialogue", () => {
 // ---------------------------------------------------------------------------
 
 describe("voice-changer", () => {
-  it("rejects when no audio input", async () => {
+  it("rejects when no audio or video input", async () => {
     mockResolveNodeInputs.mockReturnValue({})
     const promise = executeNode(
       makeNode("voice-changer", { voiceId: "abc" }),
       makeCtx(),
     )
     promise.catch(() => {})
-    await expect(promise).rejects.toThrow("No audio input")
+    await expect(promise).rejects.toThrow("No input")
     expect(mockToastError).toHaveBeenCalled()
   })
 
-  it("calls pollJobWithNodeUpdate on valid input", async () => {
+  it("calls pollJobWithNodeUpdate on valid audio input", async () => {
     mockResolveNodeInputs.mockReturnValue({ audioUrl: "http://audio.mp3" })
     mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
     await executeNode(
@@ -2272,6 +2272,40 @@ describe("voice-changer", () => {
       "Voice Changer",
       expect.anything(),
       undefined,
+    )
+  })
+
+  it("uses video mode (generatedVideoUrl + audio sidecar) when a video is wired", async () => {
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://clip.mp4" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("voice-changer", { voiceId: "abc" }),
+      makeCtx(),
+    )
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
+      "n1",
+      expect.any(Function),
+      "generatedVideoUrl",
+      "Voice Changer",
+      expect.anything(),
+      expect.any(Function),
+    )
+  })
+
+  it("video wins when both audio and video are wired", async () => {
+    mockResolveNodeInputs.mockReturnValue({ audioUrl: "http://a.mp3", videoUrl: "http://clip.mp4" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("voice-changer", { voiceId: "abc" }),
+      makeCtx(),
+    )
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
+      "n1",
+      expect.any(Function),
+      "generatedVideoUrl",
+      "Voice Changer",
+      expect.anything(),
+      expect.any(Function),
     )
   })
 })

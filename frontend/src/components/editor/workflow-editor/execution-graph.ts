@@ -398,7 +398,6 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     type === "suno-cover" ||
     type === "suno-extend" ||
     type === "text-to-dialogue" ||
-    type === "voice-changer" ||
     type === "dubbing" ||
     type === "voice-remix" ||
     type === "audio-isolation" ||
@@ -505,6 +504,19 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
         ? (data.generatedVideoUrl as string | undefined)
         : (data.generatedAudioUrl as string | undefined);
     return results[activeIndex]?.url ?? fallbackUrl;
+  }
+  if (type === "voice-changer") {
+    // Dual-mode: audio in → audio out; video in → video out (+ revoiced audio).
+    // Route by the tapped output handle; default prefers the active result, then
+    // video (video mode), then audio. Mirrors backend getPrimaryOutput.
+    const results =
+      (data.generatedResults as GeneratedResult[] | undefined) ?? [];
+    const activeIndex = (data.activeResultIndex as number | undefined) ?? 0;
+    const videoUrl = data.generatedVideoUrl as string | undefined;
+    const audioUrl = data.generatedAudioUrl as string | undefined;
+    if (sourceHandle === "audio") return audioUrl;
+    if (sourceHandle === "video") return videoUrl;
+    return results[activeIndex]?.url ?? videoUrl ?? audioUrl;
   }
   if (type === "reference-audio") {
     return (data.extractedAudioUrl as string | undefined)?.trim();

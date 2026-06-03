@@ -1492,6 +1492,22 @@ function routeOutput(
     return
   }
 
+  // --- Voice-changer → audio (audio mode) or video (video mode) ---
+  // Dual-mode like adjust-volume. `output` was already narrowed to the right URL
+  // by getPrimaryOutput via the source handle; route it to the matching slot.
+  // Default (no explicit handle) prefers video when the node produced one.
+  if (srcType === "voice-changer") {
+    const producedVideo =
+      Boolean(nodeStates[src.id]?.output?.videoUrl) ||
+      Boolean(src.data.generatedVideoUrl)
+    if (edge.sourceHandle === "video" || (edge.sourceHandle !== "audio" && producedVideo)) {
+      inputs.videoUrl = output
+    } else {
+      routeAudioOutput(inputs, output, targetType, src.id)
+    }
+    return
+  }
+
   // --- Audio output nodes ---
   if (AUDIO_OUTPUT_NODE_TYPES.has(srcType)) {
     routeAudioOutput(inputs, output, targetType, src.id)

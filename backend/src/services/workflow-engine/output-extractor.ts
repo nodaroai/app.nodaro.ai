@@ -633,6 +633,15 @@ export function getPrimaryOutput(
     return output.audioUrl || output.videoUrl
   }
 
+  // Voice-changer is dual-mode: audio in → audio out; video in → video out (+
+  // revoiced audio). Route by the tapped output handle; default prefers video
+  // when the node ran in video mode. Matches frontend extractNodeOutput.
+  if (sourceType === "voice-changer") {
+    if (sourceHandle === "audio") return output.audioUrl
+    if (sourceHandle === "video") return output.videoUrl
+    return output.videoUrl || output.audioUrl
+  }
+
   // Social-media-format: prefer video, fall back to image (matches frontend)
   if (sourceType === "social-media-format") {
     return output.videoUrl || output.imageUrl
@@ -767,7 +776,8 @@ const VIDEO_RESULT_TYPES = new Set([
 ])
 
 /** Audio-generating node types that store results in generatedAudioUrl / generatedResults.
- *  NOTE: suno-separate and voice-design are handled separately (they have extra output fields). */
+ *  NOTE: suno-separate, voice-design, and voice-changer are handled separately
+ *  (they have extra output fields — voice-changer can emit video). */
 const AUDIO_RESULT_TYPES = new Set([
   "text-to-speech",
   "generate-music",
@@ -782,7 +792,6 @@ const AUDIO_RESULT_TYPES = new Set([
   "suno-convert-wav",
   "suno-upload-extend",
   "text-to-dialogue",
-  "voice-changer",
   "dubbing",
   "voice-remix",
   "audio-isolation",
@@ -844,6 +853,22 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
     if (videoUrls[0]) return { videoUrl: videoUrls[0] }
     if (audioUrls[0]) return { audioUrl: audioUrls[0] }
     return undefined
+  }
+
+  // Voice-changer is dual-mode: audio in → audio out; video in → video out (+
+  // the revoiced audio). Prefer the video result so "Run from here" hydrates
+  // downstream video consumers; expose audioUrl too for the audio handle.
+  if (type === "voice-changer") {
+    const videoUrl = data.generatedVideoUrl as string | undefined
+    if (videoUrl) {
+      const out: NodeOutput = { videoUrl }
+      const audioUrl = data.generatedAudioUrl as string | undefined
+      if (audioUrl) out.audioUrl = audioUrl
+      return out
+    }
+    const audioUrl =
+      (data.generatedAudioUrl as string | undefined) ?? getActiveResultUrl(data)
+    return audioUrl ? { audioUrl } : undefined
   }
 
   // Audio-generating nodes → audioUrl from generatedResults or generatedAudioUrl
