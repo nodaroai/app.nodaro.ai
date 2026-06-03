@@ -45,6 +45,7 @@ export { PipelinesResource } from "./resources/pipelines.js"
 export { ReduceResource } from "./resources/reduce.js"
 export { PromptHelperResource } from "./resources/prompt-helper.js"
 export { VoicesResource } from "./resources/voices.js"
+export { CreditsResource } from "./resources/credits.js"
 
 // --- Resource type definitions ---
 export type {
@@ -225,3 +226,8 @@ export type {
   VoiceLibraryParams,
   VoiceLibraryResponse,
 } from "./resources/voices.js"
+
+export type {
+  UserBalance,
+  ModelCostsResult,
+} from "./resources/credits.js"
