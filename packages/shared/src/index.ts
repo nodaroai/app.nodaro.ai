@@ -873,6 +873,7 @@ export {
   qualityOptionsByKind,
   creditRangesAll,
   modelIdsByKindMode,
+  buildModelMenu,
 } from "./model-catalog.js"
 export type {
   ModelCatalogEntry,
@@ -883,6 +884,7 @@ export type {
   PriceVariant,
   ValidationField,
   LabeledOption,
+  ModelMenuOption,
 } from "./model-catalog.js"
 
 export {
@@ -1019,6 +1021,12 @@ export type {
   LocationUsageMode,
   LocationMentionTokenInfo,
 } from "./location-mention-slug.js"
+
+export {
+  toConnectedReference,
+  toConnectedReferences,
+} from "./to-connected-references.js"
+export type { EntityReferenceInput } from "./to-connected-references.js"
 
 export {
   USAGE_MODES,

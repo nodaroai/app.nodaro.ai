@@ -16,6 +16,7 @@ import { ReduceResource } from "./resources/reduce.js"
 import { PromptHelperResource } from "./resources/prompt-helper.js"
 import { VoicesResource } from "./resources/voices.js"
 import { CreditsResource } from "./resources/credits.js"
+import { UploadsResource } from "./resources/uploads.js"
 
 export interface ClientOptions {
   /** Backend base URL, e.g. "https://nodaro.example.com" or empty string for same-origin. */
@@ -33,6 +34,24 @@ interface RequestOptions {
   query?: Record<string, string | number | boolean | undefined>
   headers?: Record<string, string>
   signal?: AbortSignal
+}
+
+/**
+ * The authenticated user's canonical identity (`GET /v1/me`). A token-
+ * introspection primitive: any valid bearer token (first-party Supabase JWT or
+ * a developer-app OAuth token) resolves to its owner's identity. Mirrors the
+ * `profiles` identity columns server-side — the route is the source of truth.
+ */
+export interface UserIdentity {
+  /** Nodaro user id (= the Supabase auth user id). */
+  readonly id: string
+  readonly email: string
+  /** Human-readable display name (from `profiles.full_name`); `null` if unset. */
+  readonly displayName: string | null
+  /** Avatar URL; `null` if unset. */
+  readonly avatarUrl: string | null
+  /** Subscription tier (e.g. "free", "pro"). */
+  readonly tier: string
 }
 
 export class NodaroClient {
@@ -67,6 +86,7 @@ export class NodaroClient {
   readonly promptHelper: PromptHelperResource
   readonly voices: VoicesResource
   readonly credits: CreditsResource
+  readonly uploads: UploadsResource
 
   constructor(opts: ClientOptions) {
     this.baseUrl = opts.baseUrl.replace(/\/$/, "")  // strip trailing slash
@@ -90,14 +110,21 @@ export class NodaroClient {
     this.promptHelper = new PromptHelperResource(this)
     this.voices = new VoicesResource(this)
     this.credits = new CreditsResource(this)
+    this.uploads = new UploadsResource(this)
   }
 
   async request<T>(method: string, path: string, options: RequestOptions = {}): Promise<T> {
     const url = this.buildUrl(path, options.query)
 
     const token = await this.auth.getToken()
+    // A `FormData` body is a multipart upload: let the runtime set
+    // `Content-Type: multipart/form-data; boundary=…` itself (a manual JSON
+    // content-type corrupts the boundary), and send the body as-is rather than
+    // JSON-stringifying it. Every other body stays JSON, exactly as before.
+    const isFormData =
+      typeof FormData !== "undefined" && options.body instanceof FormData
     const headers: Record<string, string> = {
-      "Content-Type": "application/json",
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
       ...(options.headers ?? {}),
     }
     if (token) headers["Authorization"] = `Bearer ${token}`
@@ -112,7 +139,12 @@ export class NodaroClient {
       const res = await this.fetch(url, {
         method,
         headers,
-        body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+        body:
+          options.body === undefined
+            ? undefined
+            : isFormData
+              ? (options.body as FormData)
+              : JSON.stringify(options.body),
         signal: ac.signal,
       })
 
@@ -132,6 +164,16 @@ export class NodaroClient {
     } finally {
       clearTimeout(timeoutId)
     }
+  }
+
+  /**
+   * `GET /v1/me` → the authenticated user's identity (see {@link UserIdentity}).
+   * Unwraps the `{ data }` envelope. Throws `UnauthorizedError` (401) when the
+   * token is missing/invalid, and the SDK's other typed errors as usual.
+   */
+  async me(): Promise<UserIdentity> {
+    const res = await this.request<{ data: UserIdentity }>("GET", "/v1/me")
+    return res.data
   }
 
   private buildUrl(path: string, query?: Record<string, string | number | boolean | undefined>): string {

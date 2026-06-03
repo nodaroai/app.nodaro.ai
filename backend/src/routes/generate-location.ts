@@ -21,10 +21,11 @@ const generateLocationBody = z.object({
   provider: z.string().optional().default("nano-banana"),
   userId: z.string().uuid().optional(),
   // Multi-candidate generation. `1` keeps the legacy single-job behavior and
-  // response shape `{ jobId }`. `2` / `4` insert N jobs in parallel and return
-  // `{ jobIds: string[] }`. Tasks 11+ wire the studio UI to render 1/4 grids
-  // and prompt the user to pick a winner via `POST /v1/locations/:id/approve-main-image`.
-  count: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).optional().default(1),
+  // response shape `{ jobId }`. `2`–`10` insert N jobs in parallel and return
+  // `{ jobIds: string[] }`. Tasks 11+ wire the studio UI to render candidate
+  // grids and prompt the user to pick a winner via
+  // `POST /v1/locations/:id/approve-main-image`.
+  count: z.number().int().min(1).max(10).optional().default(1),
   // Location Studio auto-attach: when set, the worker writes the resulting
   // image URL to `locations.main_image_url` on this row after generation
   // succeeds. Lets the studio survive page closes mid-generation.
@@ -39,25 +40,25 @@ const generateLocationBody = z.object({
 /**
  * Extract `count` from a raw request body for the credit pre-check.
  * The Zod schema isn't parsed yet at preHandler time, so we defensively
- * coerce and clamp to the allowed {1, 2, 3, 4} set. Invalid values fall back
+ * coerce and clamp to the allowed [1, 10] range. Invalid values fall back
  * to 1 so the pre-check never under-charges; the route's Zod validation
  * still 400s on bad input downstream.
  */
-function extractCount(body: unknown): 1 | 2 | 3 | 4 {
+function extractCount(body: unknown): number {
   const raw = (body as { count?: unknown })?.count
-  if (raw === 2) return 2
-  if (raw === 3) return 3
-  if (raw === 4) return 4
-  return 1
+  if (typeof raw !== "number" || !Number.isInteger(raw)) return 1
+  if (raw < 1) return 1
+  if (raw > 10) return 10
+  return raw
 }
 
 export async function generateLocationRoutes(app: FastifyInstance) {
   app.post(
     "/v1/generate-location",
     {
-      // Multi-candidate batch: credits scale linearly with `count` (1, 2, or 4).
+      // Multi-candidate batch: credits scale linearly with `count` (1–10).
       // Mirrors the generate-character pattern — without this, the preHandler
-      // greenlights users who can afford ONE job even when count=4. computeCredits
+      // greenlights users who can afford ONE job even when count=10. computeCredits
       // returns BASE (pre-markup) credits; markup is applied inside creditGuardImpl
       // so the same final number is both checked AND reserved.
       preHandler: creditGuard((req: FastifyRequest) => extractProvider(req.body, "nano-banana"), {
@@ -154,6 +155,34 @@ export async function generateLocationRoutes(app: FastifyInstance) {
       }
 
       // ──────────────────────────────────────────────────────────────────────
+      // Per-job creditOverride correction: the preHandler reserved the BATCH
+      // total (cost×count×markup) once; without resetting the override per job,
+      // the N-call reservation loop below would debit batchTotal×N (an N²
+      // over-charge). Mirror video-sfx: set the override to the per-JOB
+      // marked-up cost before each reserveCreditsForJob call.
+      //
+      // The per-job BASE is `getModelCreditBaseCost(modelIdentifier).creditCost`
+      // — identical to what computeCredits uses (it multiplies that same base
+      // by `count`), so per-job = computeCredits's base ÷ count. We then apply
+      // the SAME markup formula creditGuardImpl uses so the final per-job
+      // number matches what was checked.
+      //
+      // TODO(nodaro): extract a shared per-job-override helper — this block is
+      // duplicated 4 ways (video-sfx + generate-character/location/object).
+      // ──────────────────────────────────────────────────────────────────────
+      let perJobCreditOverride: number | undefined
+      if (hasCredits() && req.creditReservation) {
+        const { getModelCreditBaseCost } = await import("../ee/billing/credits.js")
+        const pricing = await getModelCreditBaseCost(modelIdentifier)
+        const { getAppSettings } = await import("../lib/app-settings.js")
+        const settings = await getAppSettings()
+        perJobCreditOverride =
+          settings.cost_markup_percent > 0 && pricing.creditCost > 0
+            ? Math.ceil(pricing.creditCost * (1 + settings.cost_markup_percent / 100))
+            : pricing.creditCost
+      }
+
+      // ──────────────────────────────────────────────────────────────────────
       // Phase 2A: Reserve credits for every job BEFORE enqueueing any.
       // The preHandler already gated the full batch cost (computeCredits
       // multiplies by `count`), so mid-batch reservation failure is unlikely
@@ -164,10 +193,17 @@ export async function generateLocationRoutes(app: FastifyInstance) {
       //     reserveCreditsForJobImpl on its failure path)
       // We DO NOT call videoQueue.add yet — that happens only in Phase 2B
       // after all reservations have succeeded.
+      //
+      // Per-job creditOverride correction (see comment above): reset
+      // `req.creditReservation.creditOverride` to the per-job number before
+      // each call so reserveCreditsForJobImpl debits per-job, not per-batch.
       // ──────────────────────────────────────────────────────────────────────
       type ReservationRecord = { jobId: string; usageLogId?: string }
       const reservations: ReservationRecord[] = []
       for (const jobId of insertedJobIds) {
+        if (req.creditReservation && perJobCreditOverride !== undefined) {
+          req.creditReservation.creditOverride = perJobCreditOverride
+        }
         const reservation = await reserveCreditsForJob(req, reply, jobId, modelIdentifier)
         if (reply.sent) {
           // Refund reservations that succeeded earlier in this batch.
@@ -228,11 +264,12 @@ export async function generateLocationRoutes(app: FastifyInstance) {
         })
       }
 
-      // Backward-compat response shape: count=1 returns the legacy `{ jobId }`,
-      // count=2/4 returns `{ jobIds }` — the studio UI uses jobIds.length to
-      // decide single-pane vs grid rendering.
+      // `jobIds` is ALWAYS present now (the harmonized contract — matches
+      // characters). `jobId` is kept ONLY for count===1 as a deprecated
+      // back-compat alias for callers that haven't migrated to jobIds yet; drop
+      // it on the next major. (Response shape only — billing is untouched.)
       return parsed.data.count === 1
-        ? { jobId: insertedJobIds[0] }
+        ? { jobId: insertedJobIds[0], jobIds: insertedJobIds }
         : { jobIds: insertedJobIds }
     },
   )

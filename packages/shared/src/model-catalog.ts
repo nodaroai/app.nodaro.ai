@@ -1996,6 +1996,54 @@ export function qualityOptionsByKind(kind: ModelKind): Record<string, LabeledOpt
   return out
 }
 
+/** One shaped model row for a picker — capabilities derived from the catalog. */
+export interface ModelMenuOption {
+  /** Catalog id (the API enum value). */
+  id: string
+  /** Human-readable display name from the catalog. */
+  label: string
+  /** Resolution levers, `[]` when the model exposes none. */
+  resolutions: LabeledOption[]
+  /** Aspect-ratio levers, `[]` when the model exposes none. */
+  aspectRatios: LabeledOption[]
+  /** Duration levers in seconds (union of i2v+t2v modes); `[]` for image / fixed-duration models. */
+  durations: { value: number; label: string }[]
+}
+
+/**
+ * Build shaped picker rows for one catalog `kind` from a caller-supplied id
+ * allowlist (the curation — which ids, in what order, stays the caller's). Every
+ * CAPABILITY is derived from the catalog accessors, never hardcoded, so the menu
+ * can't drift as the catalog evolves. Ids absent from the catalog or of the
+ * wrong kind are skipped (so a stale allowlist entry drops out cleanly). Pure;
+ * returns fresh arrays (never aliases the accessor maps).
+ */
+export function buildModelMenu(
+  kind: ModelKind,
+  allowlist: readonly string[],
+): ModelMenuOption[] {
+  const resByModel = resolutionOptionsByKind(kind)
+  const arByModel = aspectRatioOptionsByKind(kind)
+  const i2v = durationsByMode("i2v")
+  const t2v = durationsByMode("t2v")
+  const out: ModelMenuOption[] = []
+  for (const id of allowlist) {
+    const entry = MODEL_CATALOG[id]
+    if (!entry || entry.kind !== kind) continue
+    const durations = Array.from(new Set([...(i2v[id] ?? []), ...(t2v[id] ?? [])]))
+      .sort((a, b) => a - b)
+      .map((n) => ({ value: n, label: `${n}s` }))
+    out.push({
+      id: entry.id,
+      label: entry.label,
+      resolutions: [...(resByModel[id] ?? [])],
+      aspectRatios: [...(arByModel[id] ?? [])],
+      durations,
+    })
+  }
+  return out
+}
+
 /** All `{modelId: {min, max}}` entries that have variable pricing (>1 variant). */
 export function creditRangesAll(): Record<string, { min: number; max: number }> {
   const out: Record<string, { min: number; max: number }> = {}

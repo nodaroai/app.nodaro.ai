@@ -427,6 +427,8 @@ const VIDEO_OUTPUT_NODE_TYPES = new Set([
   "transcode-video",
   "manual-edit",
   "video-sfx",
+  // Remove Audio → silent video out.
+  "remove-audio",
 ]);
 
 /** Resolved inputs from upstream node outputs — shared return type for resolveNodeInputs */
@@ -598,7 +600,7 @@ const LLM_REF_VIDEO_NODE_TYPES = new Set<string>([
   "video-upscale", "video-composer", "merge-video-audio",
   "resize-video", "social-media-format", "speed-ramp", "loop-video",
   "fade-video", "transcode-video", "add-captions", "manual-edit",
-  "video-sfx",
+  "video-sfx", "remove-audio",
 ]);
 /** Node types whose primary output is an audio URL. */
 const LLM_REF_AUDIO_NODE_TYPES = new Set<string>([
@@ -609,7 +611,7 @@ const LLM_REF_AUDIO_NODE_TYPES = new Set<string>([
   "suno-generate", "suno-cover", "suno-extend", "suno-separate",
   "suno-mashup", "suno-replace-section", "suno-add-instrumental",
   "suno-add-vocals", "suno-convert-wav", "suno-upload-extend",
-  "upload-audio",
+  "upload-audio", "extract-audio",
 ]);
 
 function nodeOutputKind(nodeType: string | undefined): "image" | "video" | "audio" | null {
@@ -1822,6 +1824,7 @@ export function resolveNodeInputs(
       src.type === "trim-audio" ||
       src.type === "mix-audio" ||
       src.type === "combine-audio" ||
+      src.type === "extract-audio" ||
       src.type === "dubbing" ||
       src.type === "voice-remix" ||
       src.type === "voice-design"

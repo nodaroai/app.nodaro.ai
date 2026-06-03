@@ -32,6 +32,8 @@ import { addCaptionsRoutes } from "./routes/add-captions.js"
 import { mixAudioRoutes } from "./routes/mix-audio.js"
 import { combineAudioRoutes } from "./routes/combine-audio.js"
 import { splitMediaRoutes } from "./routes/split-media.js"
+import { extractAudioRoutes } from "./routes/extract-audio.js"
+import { removeAudioRoutes } from "./routes/remove-audio.js"
 import { generateMusicRoutes } from "./routes/generate-music.js"
 import { uploadRoutes } from "./routes/upload.js"
 import { uploadProxyRoutes } from "./routes/upload-proxy.js"
@@ -84,6 +86,7 @@ import { stripeWebhookRoutes } from "./ee/routes/stripe-webhook.js"
 import { billingRoutes } from "./ee/routes/billing.js"
 import { galleryRoutes } from "./routes/gallery.js"
 import { userSettingsRoutes } from "./routes/user-settings.js"
+import { meRoutes } from "./routes/me.js"
 import { adminGalleryReportsRoutes } from "./ee/routes/admin-gallery-reports.js"
 import { adminCreditAuditRoutes } from "./ee/routes/admin-credit-audit.js"
 import { adminCreditAnomalyRoutes } from "./ee/routes/admin-credit-anomalies.js"
@@ -259,6 +262,8 @@ export async function buildApp() {
   await app.register(mixAudioRoutes)
   await app.register(combineAudioRoutes)
   await app.register(splitMediaRoutes)
+  await app.register(extractAudioRoutes)
+  await app.register(removeAudioRoutes)
   await app.register(generateMusicRoutes)
   await app.register(uploadRoutes)
   await app.register(uploadProxyRoutes)
@@ -312,6 +317,7 @@ export async function buildApp() {
   if (hasCredits()) await app.register(billingRoutes)
   await app.register(galleryRoutes)
   await app.register(userSettingsRoutes)
+  await app.register(meRoutes)
   if (hasAdmin()) await app.register(adminGalleryReportsRoutes)
   if (hasAdmin()) await app.register(adminCreditAuditRoutes)
   if (hasAdmin()) await app.register(adminCreditAnomalyRoutes)

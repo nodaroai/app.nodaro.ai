@@ -494,9 +494,11 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
   { type: "transcode-video", label: "Transcode Video", category: "processing", description: "Convert video codec, quality, and resolution.", outputType: "video" },
   { type: "social-media-format", label: "Social Media Format", category: "processing", description: "Auto-format video for specific platform specifications.", outputType: "video" },
   { type: "manual-edit", label: "Manual Edit", category: "processing", description: "Open video in a browser-based web editor for manual adjustments.", outputType: "video" },
+  { type: "remove-audio", label: "Remove Audio", category: "processing", description: "Strip the audio track from a video, leaving a silent clip (stream-copied, lossless).", outputType: "video" },
   { type: "trim-audio", label: "Trim Audio", category: "processing", description: "Extract a section of audio or extract audio from video.", outputType: "audio" },
   { type: "mix-audio", label: "Mix Audio", category: "processing", description: "Blend multiple audio tracks with individual volume control.", outputType: "audio" },
   { type: "combine-audio", label: "Combine Audio", category: "processing", description: "Concatenate audio tracks end-to-end in order, with optional per-segment trim. (Mix Audio layers tracks; this joins them sequentially.)", outputType: "audio" },
+  { type: "extract-audio", label: "Extract Audio", category: "processing", description: "Demux the audio track from a video to a standalone MP3.", outputType: "audio" },
 
   { type: "render-video", label: "Render Video", category: "composition", description: "Render a Remotion composition to MP4.", outputType: "video", creditCost: 15 },
   { type: "after-effects", label: "After Effects", category: "composition", description: "AI-generated post-processing layer.", outputType: "video", creditCost: 2 },

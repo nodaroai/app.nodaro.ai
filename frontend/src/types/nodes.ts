@@ -2711,6 +2711,32 @@ export type TrimAudioData = {
   activeResultIndex?: number
 }
 
+// Extract Audio: video in → audio (MP3) out. No config params.
+export type ExtractAudioData = {
+  currentJobProgress?: number
+  [key: string]: unknown
+  label: string
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedAudioUrl?: string
+  generatedResults?: readonly GeneratedResult[]
+  activeResultIndex?: number
+}
+
+// Remove Audio: video in → silent video out. No config params.
+export type RemoveAudioData = {
+  currentJobProgress?: number
+  [key: string]: unknown
+  label: string
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedVideoUrl?: string
+  generatedResults?: readonly GeneratedResult[]
+  activeResultIndex?: number
+}
+
 export type SplitMediaData = {
   currentJobProgress?: number
   [key: string]: unknown
@@ -4256,6 +4282,8 @@ export type SceneNodeData =
   | SocialMediaFormatData
   | TrimAudioData
   | SplitMediaData
+  | ExtractAudioData
+  | RemoveAudioData
   | MixAudioData
   | CombineAudioData
   | AdjustVolumeData
@@ -4421,6 +4449,8 @@ export type SceneNodeType =
   | "social-media-format"
   | "trim-audio"
   | "split-media"
+  | "extract-audio"
+  | "remove-audio"
   | "mix-audio"
   | "combine-audio"
   | "adjust-volume"
@@ -5754,12 +5784,30 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
   },
   {
     type: "split-media",
-    label: "Split Media",
+    label: "Split into Chunks",
     category: "processing",
     creditCost: 2,
     inputs: ["video-in", "audio-in"],
     outputs: ["video-out", "audio-out"],
-    defaultData: { label: "Split Media", chunkDuration: 10, audioFormat: "mp3", fieldMappings: {} },
+    defaultData: { label: "Split into Chunks", chunkDuration: 10, audioFormat: "mp3", fieldMappings: {} },
+  },
+  {
+    type: "extract-audio",
+    label: "Extract Audio",
+    category: "processing",
+    creditCost: 1,
+    inputs: ["in"],
+    outputs: ["audio"],
+    defaultData: { label: "Extract Audio", fieldMappings: {} },
+  },
+  {
+    type: "remove-audio",
+    label: "Remove Audio",
+    category: "processing",
+    creditCost: 2,
+    inputs: ["in"],
+    outputs: ["video-out"],
+    defaultData: { label: "Remove Audio", fieldMappings: {} },
   },
   {
     type: "mix-audio",

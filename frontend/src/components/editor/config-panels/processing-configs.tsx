@@ -34,6 +34,8 @@ import type {
   ManualEditData,
   SocialMediaFormatData,
   SplitMediaData,
+  ExtractAudioData,
+  RemoveAudioData,
 } from "@/types/nodes"
 import type { WorkflowNode } from "@/types/nodes"
 import { ConnectedMediaList, applyMediaOrder } from "./connected-media-list"
@@ -447,6 +449,26 @@ export function SplitMediaConfig({ data, onUpdate }: ConfigProps<SplitMediaData>
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// Extract Audio has no settings — connect a video and run.
+export function ExtractAudioConfig(_props: ConfigProps<ExtractAudioData>) {
+  return (
+    <div className="flex flex-col gap-2 text-sm text-muted-foreground">
+      <p>Extracts the audio track from the connected video as a standalone MP3.</p>
+      <p className="text-xs">No settings — connect a video to the input and run. Use <span className="font-medium text-foreground">Remove Audio</span> if you want the silent video instead.</p>
+    </div>
+  )
+}
+
+// Remove Audio has no settings — connect a video and run.
+export function RemoveAudioConfig(_props: ConfigProps<RemoveAudioData>) {
+  return (
+    <div className="flex flex-col gap-2 text-sm text-muted-foreground">
+      <p>Strips the audio track from the connected video, leaving a silent clip (lossless — the video is stream-copied, not re-encoded).</p>
+      <p className="text-xs">No settings — connect a video to the input and run. Use <span className="font-medium text-foreground">Extract Audio</span> if you want the audio track instead.</p>
     </div>
   )
 }

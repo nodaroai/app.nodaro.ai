@@ -257,6 +257,7 @@ FFmpeg-based video manipulation.
 | [Fade In/Out](./processing-video/fade-video.md) | Add fade transitions to video | Smooth intro/outro with black or white fades |
 | [Transcode Video](./processing-video/transcode-video.md) | Convert video codec and resolution | Change codec (H.264/H.265), quality, or resolution |
 | [Manual Edit](./processing-video/manual-edit.md) | Open video in web editor | Make manual adjustments in browser-based editor |
+| [Remove Audio](./processing-video/remove-audio.md) | Strip the audio track, output a silent video | Mute a clip losslessly before adding new sound |
 
 ---
 
@@ -267,6 +268,7 @@ FFmpeg-based audio manipulation.
 | Node | Description | When to Use |
 |------|-------------|-------------|
 | [Merge Video & Audio](./processing-audio/merge-video-audio.md) | Combine video with audio tracks | Add voiceover, music, or sound effects to video |
+| [Extract Audio](./processing-audio/extract-audio.md) | Demux a video's audio track to MP3 | Pull audio from a video for transcription, dubbing, or reuse |
 | [Trim Audio](./processing-audio/trim-audio.md) | Extract section of audio file | Cut specific time range from audio |
 | [Mix Audio](./processing-audio/mix-audio.md) | Blend multiple audio tracks with levels | Layer voice, music, and SFX with volume control |
 | [Combine Audio](./processing-audio/combine-audio.md) | Concatenate audio tracks end-to-end, with per-segment trim | Join clips sequentially (vs. Mix Audio's layering) |

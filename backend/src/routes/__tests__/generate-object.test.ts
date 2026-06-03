@@ -36,6 +36,18 @@ vi.mock("@/middleware/credit-guard.js", () => ({
   }),
 }))
 
+// Per-job creditOverride correction relies on these two dynamic imports inside
+// the route (`../ee/billing/credits.js`, `../lib/app-settings.js`). The `@/`
+// alias resolves to the same files, so these mocks intercept those import()s.
+const mockGetModelCreditBaseCost = vi.fn()
+vi.mock("@/ee/billing/credits.js", () => ({
+  getModelCreditBaseCost: mockGetModelCreditBaseCost,
+}))
+const mockGetAppSettings = vi.fn()
+vi.mock("@/lib/app-settings.js", () => ({
+  getAppSettings: mockGetAppSettings,
+}))
+
 vi.mock("@/lib/admin-check.js", () => ({
   warmAdminCache: vi.fn(),
   checkIsAdmin: vi.fn().mockResolvedValue(false),
@@ -66,6 +78,7 @@ vi.mock("@/lib/url-validator.js", async () => {
 import { generateObjectRoutes } from "../generate-object.js"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
+import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
 
 // ---------------------------------------------------------------------------
 // Test app setup
@@ -118,12 +131,13 @@ function setupSupabaseMock(opts: {
   const objectEq1 = vi.fn().mockReturnValue({ eq: objectEq2 })
   const objectSelect = vi.fn().mockReturnValue({ eq: objectEq1 })
 
-  const jobSingle = vi
-    .fn()
-    .mockResolvedValueOnce({ data: { id: "job-1" }, error: null })
-    .mockResolvedValueOnce({ data: { id: "job-2" }, error: null })
-    .mockResolvedValueOnce({ data: { id: "job-3" }, error: null })
-    .mockResolvedValueOnce({ data: { id: "job-4" }, error: null })
+  // N-agnostic: yields job-1, job-2, … on each successive `.single()` call so
+  // the mock supports any `count` (1–10) without enumerating fixed ids.
+  let jobN = 0
+  const jobSingle = vi.fn().mockImplementation(() => {
+    jobN += 1
+    return Promise.resolve({ data: { id: `job-${jobN}` }, error: null })
+  })
   const jobSelect = vi.fn().mockReturnValue({ single: jobSingle })
   const jobInsert = vi.fn().mockReturnValue({ select: jobSelect })
 
@@ -141,7 +155,7 @@ function setupSupabaseMock(opts: {
 // ---------------------------------------------------------------------------
 
 describe("POST /v1/generate-object — multi-candidate + auto-attach (Phase C2a)", () => {
-  it("count=1 (default) returns { jobId } single shape — backward compat", async () => {
+  it("count=1 (default) returns BOTH jobIds AND the deprecated jobId alias (WI-7 harmonized contract)", async () => {
     const { jobInsert } = setupSupabaseMock()
 
     const res = await app.inject({
@@ -153,8 +167,10 @@ describe("POST /v1/generate-object — multi-candidate + auto-attach (Phase C2a)
 
     expect(res.statusCode).toBe(200)
     const body = res.json()
+    // `jobIds` is ALWAYS present now (matches characters). `jobId` is kept as
+    // a deprecated back-compat alias for count=1 only.
+    expect(body.jobIds).toEqual(["job-1"])
     expect(body.jobId).toBe("job-1")
-    expect(body.jobIds).toBeUndefined()
     expect(jobInsert).toHaveBeenCalledTimes(1)
     expect(videoQueue.add).toHaveBeenCalledTimes(1)
   })
@@ -177,6 +193,24 @@ describe("POST /v1/generate-object — multi-candidate + auto-attach (Phase C2a)
     expect(videoQueue.add).toHaveBeenCalledTimes(4)
   })
 
+  it("count=10 (new max) inserts 10 jobs and enqueues 10 — cap raised 4→10 (WI-3)", async () => {
+    const { jobInsert } = setupSupabaseMock()
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-object",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { name: "Ornate Goblet", count: 10 },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().jobIds).toHaveLength(10)
+    // Phase 2B enqueues only after all N reservations succeed, so 10 enqueues
+    // proves all 10 jobs were both inserted AND reserved.
+    expect(jobInsert).toHaveBeenCalledTimes(10)
+    expect(videoQueue.add).toHaveBeenCalledTimes(10)
+  })
+
   it("count=2 returns { jobIds } with length 2", async () => {
     const { jobInsert } = setupSupabaseMock()
 
@@ -195,13 +229,25 @@ describe("POST /v1/generate-object — multi-candidate + auto-attach (Phase C2a)
     expect(videoQueue.add).toHaveBeenCalledTimes(2)
   })
 
-  it("returns 400 for invalid count value (5)", async () => {
+  it("returns 400 for count above the max (11)", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/generate-object",
       headers: { "x-user-id": TEST_USER_ID },
-      // 1/2/3/4 are valid; 5 is out of range.
-      payload: { name: "Ornate Goblet", count: 5 },
+      // 1–10 are valid (WI-3 raised the cap 4→10); 11 is out of range.
+      payload: { name: "Ornate Goblet", count: 11 },
+    })
+
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+  })
+
+  it("returns 400 for count below the min (0)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-object",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { name: "Ornate Goblet", count: 0 },
     })
 
     expect(res.statusCode).toBe(400)
@@ -361,5 +407,107 @@ describe("POST /v1/generate-object — multi-candidate + auto-attach (Phase C2a)
     expect(jobInsert).toHaveBeenCalledTimes(1)
     const insertedPayload = jobInsert.mock.calls[0][0] as { force_private?: unknown }
     expect(insertedPayload.force_private).toBeUndefined()
+  })
+
+  // ───────────────────────────────────────────────────────────────────────
+  // Per-job credit override — the N² over-charge regression guard (WI-3).
+  //
+  // The preHandler (creditGuardImpl) reserves the BATCH total
+  // (base×count×markup) once on req.creditReservation.creditOverride. Without
+  // the per-job correction, the N-call reservation loop reuses that batch
+  // total for EVERY job, debiting batchTotal×N ≈ base×count²×markup.
+  //
+  // Inject a req.creditReservation seeded with the BATCH total, mock
+  // getModelCreditBaseCost + app settings for deterministic per-job math, and
+  // record req.creditReservation.creditOverride at each reserveCreditsForJob
+  // call. The fix is proven iff every recorded value is the PER-JOB amount.
+  // ───────────────────────────────────────────────────────────────────────
+  describe("per-job credit override (N² over-charge guard)", () => {
+    // mock base 4, markup 25%, count 10:
+    //   perJob     = ceil(4 × 1.25)      = 5
+    //   batchTotal = ceil(4 × 10 × 1.25) = 50   (what the preHandler reserves)
+    const BASE_PER_JOB = 4
+    const MARKUP_PERCENT = 25
+    const PER_JOB_OVERRIDE = Math.ceil(BASE_PER_JOB * (1 + MARKUP_PERCENT / 100)) // 5
+
+    let perJobApp: FastifyInstance
+    let recordedOverrides: Array<number | undefined>
+
+    beforeEach(async () => {
+      recordedOverrides = []
+      mockGetModelCreditBaseCost.mockResolvedValue({
+        creditCost: BASE_PER_JOB,
+        isEnabled: true,
+        tierRestriction: null,
+      })
+      mockGetAppSettings.mockResolvedValue({
+        ai_provider: "replicate",
+        cost_markup_percent: MARKUP_PERCENT,
+        carousel_video_autoplay: true,
+        apps_page_video_autoplay: true,
+        featured_app_ids: [],
+        featured_apps_limit: 20,
+        apps_auto_scroll_seconds: 4,
+      })
+      vi.mocked(reserveCreditsForJob).mockImplementation(async (req: any) => {
+        recordedOverrides.push(req.creditReservation?.creditOverride)
+        return { usageLogId: `log-${recordedOverrides.length}`, creditsReserved: PER_JOB_OVERRIDE, watermark: false }
+      })
+
+      perJobApp = Fastify({ logger: false })
+      perJobApp.addHook("preHandler", async (req) => {
+        const header = req.headers["x-user-id"]
+        if (typeof header === "string") req.userId = header
+        const countHeader = req.headers["x-batch-count"]
+        const count = typeof countHeader === "string" ? Number(countHeader) : 1
+        req.creditReservation = {
+          usageLogId: "",
+          creditsReserved: 0,
+          watermark: false,
+          creditOverride: Math.ceil(BASE_PER_JOB * count * (1 + MARKUP_PERCENT / 100)),
+        }
+      })
+      await perJobApp.register(async (instance) => {
+        await generateObjectRoutes(instance)
+      })
+      await perJobApp.ready()
+    })
+
+    afterEach(async () => {
+      await perJobApp.close()
+    })
+
+    it("count=10: every reservation sees the per-job override, not the batch total", async () => {
+      setupSupabaseMock()
+
+      const res = await perJobApp.inject({
+        method: "POST",
+        url: "/v1/generate-object",
+        headers: { "x-user-id": TEST_USER_ID, "x-batch-count": "10" },
+        payload: { name: "Ornate Goblet", count: 10 },
+      })
+
+      expect(res.statusCode).toBe(200)
+      expect(vi.mocked(reserveCreditsForJob)).toHaveBeenCalledTimes(10)
+      // Without the per-job reset, every entry would be 50 (batch total) and
+      // the sum 500 (N²). With the fix every entry is 5 and the sum is 50.
+      expect(recordedOverrides).toEqual(Array(10).fill(PER_JOB_OVERRIDE))
+      const totalDebited = recordedOverrides.reduce((a, b) => (a ?? 0) + (b ?? 0), 0)
+      expect(totalDebited).toBe(10 * PER_JOB_OVERRIDE) // 50, NOT 500
+    })
+
+    it("count=1: the single reservation also sees the per-job override", async () => {
+      setupSupabaseMock()
+
+      const res = await perJobApp.inject({
+        method: "POST",
+        url: "/v1/generate-object",
+        headers: { "x-user-id": TEST_USER_ID, "x-batch-count": "1" },
+        payload: { name: "Ornate Goblet" },
+      })
+
+      expect(res.statusCode).toBe(200)
+      expect(recordedOverrides).toEqual([PER_JOB_OVERRIDE])
+    })
   })
 })

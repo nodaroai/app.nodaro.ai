@@ -55,8 +55,10 @@ export interface ObjectReferencePhoto {
  *   - `referencePhotos` — caller-supplied mood-board refs (cap 20). Objects
  *     do NOT carry a `piiConsentAt` field (location Phase 2 #7 only).
  *   - `canonicalDescription` — ~80–120-word LLM-authored visual caption,
- *     populated by `approveMainImage()` / `recaption()`. Coerced from DB null
- *     to "" on the wire so consumers don't need to defensively `?? ""`.
+ *     populated by `approveMainImage()` / `recaption()`. The wire still sends
+ *     `""` on caption sub-failure (the breaking wire change is deferred to a
+ *     major bump), but `get()` normalizes `""` → `null` so consumers see the
+ *     same `string | null` semantics as characters.
  *   - `styleLock` — whether asset gens should anchor to the canonical style
  *     captured at approval time. Defaults to `true` on new rows.
  *
@@ -79,7 +81,9 @@ export interface Object {
   variations: Array<{ name: string; url: string }>
   motionClips: Array<{ name: string; url: string }>
   referencePhotos: ObjectReferencePhoto[]
-  canonicalDescription: string
+  /** `null` when no caption is set (or the LLM caption sub-failed) — the wire
+   *  sends `""`, normalized to `null` in `get()` to match character semantics. */
+  canonicalDescription: string | null
   styleLock: boolean
   deletedAt: string | null
   createdAt: string
@@ -189,7 +193,7 @@ export interface ListObjectsParams {
 
 /**
  * Input for `client.objects.generate()` — fires the
- * `POST /v1/generate-object` route. Produces 1, 2, or 4 candidate
+ * `POST /v1/generate-object` route. Produces 1–10 candidate
  * main images; each lands as one `jobs` row in `pending` state and is then
  * enqueued for the worker.
  *
@@ -210,8 +214,8 @@ export interface GenerateObjectInput {
   style?: "realistic" | "anime" | "3d-pixar" | "illustration"
   sourceImageUrl?: string
   provider?: string
-  /** 1, 2, 3, or 4 candidate main images. */
-  count?: 1 | 2 | 3 | 4
+  /** Number of candidate images to generate (1–10; server-validated). */
+  count?: number
   /** Auto-attach the result to this object row (single-candidate only). */
   attachToObjectId?: string
   /** Parameter-picker prompt-fragment pass-through. */
@@ -223,11 +227,15 @@ export interface GenerateObjectInput {
 }
 
 /**
- * `generate()` response — `{ jobId }` on `count === 1` (legacy single-job
- * shape) or `{ jobIds }` on `count === 2 | 4`. SDK consumers can discriminate
- * via `"jobIds" in result`.
+ * `generate()` response — `jobIds` is ALWAYS present (the harmonized contract,
+ * matching characters). `jobId` is a deprecated back-compat alias populated only
+ * on `count === 1`; prefer `jobIds`. (Will be removed on the next major.)
  */
-export type GenerateObjectResult = { jobId: string } | { jobIds: string[] }
+export interface GenerateObjectResult {
+  jobIds: string[]
+  /** @deprecated count===1 back-compat alias — use `jobIds`. */
+  jobId?: string
+}
 
 /**
  * Input for `client.objects.generateAsset()` — fires the
@@ -316,11 +324,12 @@ export interface GenerateObjectMotionResult {
 export interface ApproveObjectMainImageResult {
   sourceImageUrl: string
   /**
-   * LLM-authored caption. Coerced to "" (NOT null) when the LLM call
-   * sub-failed during the approval — the main image is still set; call
+   * LLM-authored caption. `null` when the LLM caption sub-failed — the wire
+   * sends `""`, normalized to `null` here so consumers see the same
+   * `string | null` semantics as characters. The main image is still set; call
    * `recaption()` to retry.
    */
-  canonicalDescription: string
+  canonicalDescription: string | null
 }
 
 export interface RecaptionObjectResult {
@@ -359,8 +368,15 @@ export class ObjectsResource {
    * `deleted_at IS NULL` so archived objects 404 (uniform Pass 10 F-90b
    * "not_found" — does not leak the deleted vs non-existent distinction).
    */
-  get(id: string): Promise<ObjectDetail> {
-    return this.client.request("GET", `/v1/objects/${encodeURIComponent(id)}`)
+  async get(id: string): Promise<ObjectDetail> {
+    const res = await this.client.request<ObjectDetail>(
+      "GET",
+      `/v1/objects/${encodeURIComponent(id)}`,
+    )
+    // Normalize the wire `""` caption (DB null / LLM sub-failure) → null so
+    // consumers see the same `string | null` semantics as characters. New
+    // object — never mutate the response.
+    return { ...res, canonicalDescription: res.canonicalDescription || null }
   }
 
   /**
@@ -435,8 +451,13 @@ export class ObjectsResource {
    * the result directly to the row's `source_image_url`; otherwise you must
    * call `approveMainImage()` after picking a candidate.
    */
-  generate(data: GenerateObjectInput): Promise<GenerateObjectResult> {
-    return this.client.request("POST", "/v1/generate-object", { body: data })
+  async generate(data: GenerateObjectInput): Promise<GenerateObjectResult> {
+    const res = await this.client.request<{ jobId?: string; jobIds?: string[] }>(
+      "POST", "/v1/generate-object", { body: data },
+    )
+    // Tolerate the legacy `{ jobId }`-only shape (older server): synthesize jobIds.
+    const jobIds = res.jobIds ?? (res.jobId ? [res.jobId] : [])
+    return res.jobId ? { jobIds, jobId: res.jobId } : { jobIds }
   }
 
   /**
@@ -479,24 +500,28 @@ export class ObjectsResource {
    * Sets `source_image_url` and fires the LLM caption (Claude Sonnet vision)
    * inline. Returns the new main-image URL plus the caption.
    *
-   * Caption-failure semantics: `canonicalDescription` is coerced to `""`
-   * (NOT null) when the LLM call sub-failed — the main image is still set;
-   * call `recaption()` to retry.
+   * Caption-failure semantics: the route still sends `""` on LLM sub-failure,
+   * but the SDK normalizes `""` → `null` here so `canonicalDescription` carries
+   * the same `string | null` semantics as characters. The main image is still
+   * set; call `recaption()` to retry.
    *
    * Optimistic-concurrency: pass `expectedUpdatedAt` to gate the update on
    * the row's current `updated_at`; on mismatch the route returns 409
    * `concurrent_modification` carrying the fresh token.
    */
-  approveMainImage(
+  async approveMainImage(
     id: string,
     candidateJobId: string,
     expectedUpdatedAt?: string,
   ): Promise<ApproveObjectMainImageResult> {
-    return this.client.request(
+    const res = await this.client.request<{ sourceImageUrl: string; canonicalDescription: string | null }>(
       "POST",
       `/v1/objects/${encodeURIComponent(id)}/approve-main-image`,
       { body: { candidateJobId, expectedUpdatedAt } },
     )
+    // Normalize the wire `""` (LLM sub-failure) → null; build a new object
+    // rather than mutating the response.
+    return { sourceImageUrl: res.sourceImageUrl, canonicalDescription: res.canonicalDescription || null }
   }
 
   /**
