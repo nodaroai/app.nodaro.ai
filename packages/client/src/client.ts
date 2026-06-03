@@ -36,6 +36,24 @@ interface RequestOptions {
   signal?: AbortSignal
 }
 
+/**
+ * The authenticated user's canonical identity (`GET /v1/me`). A token-
+ * introspection primitive: any valid bearer token (first-party Supabase JWT or
+ * a developer-app OAuth token) resolves to its owner's identity. Mirrors the
+ * `profiles` identity columns server-side — the route is the source of truth.
+ */
+export interface UserIdentity {
+  /** Nodaro user id (= the Supabase auth user id). */
+  readonly id: string
+  readonly email: string
+  /** Human-readable display name (from `profiles.full_name`); `null` if unset. */
+  readonly displayName: string | null
+  /** Avatar URL; `null` if unset. */
+  readonly avatarUrl: string | null
+  /** Subscription tier (e.g. "free", "pro"). */
+  readonly tier: string
+}
+
 export class NodaroClient {
   readonly baseUrl: string
   readonly auth: Auth
@@ -146,6 +164,16 @@ export class NodaroClient {
     } finally {
       clearTimeout(timeoutId)
     }
+  }
+
+  /**
+   * `GET /v1/me` → the authenticated user's identity (see {@link UserIdentity}).
+   * Unwraps the `{ data }` envelope. Throws `UnauthorizedError` (401) when the
+   * token is missing/invalid, and the SDK's other typed errors as usual.
+   */
+  async me(): Promise<UserIdentity> {
+    const res = await this.request<{ data: UserIdentity }>("GET", "/v1/me")
+    return res.data
   }
 
   private buildUrl(path: string, query?: Record<string, string | number | boolean | undefined>): string {
