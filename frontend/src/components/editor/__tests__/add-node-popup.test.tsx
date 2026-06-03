@@ -13,7 +13,7 @@ vi.mock("lucide-react", () => {
     Type: I, List: I, BookOpen: I, ImageIcon: I, Film: I,
     Merge: I, Upload: I, Video: I, Rss: I, Palette: I,
     PaintBucket: I, Server: I, Hash: I, Clock: I, RatioIcon: I,
-    Mic: I, ShieldCheck: I, Volume2: I, Captions: I, Maximize: I,
+    Mic: I, ShieldCheck: I, Volume2: I, VolumeX: I, Captions: I, Maximize: I,
     AudioLines: I, Music: I, SlidersHorizontal: I, Scissors: I,
     HardDrive: I, Webhook: I, Clapperboard: I, UserPlus: I,
     Package: I, MapPin: I, ChevronRight: I, Search: I, Download: I,
