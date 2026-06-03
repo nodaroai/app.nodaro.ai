@@ -210,6 +210,13 @@ const ALLOWED_PATHS = [
   // routes (ai-writer, qa-check, web-scrape) which are baselined as legacy.
   /^src\/routes\/reduce\.ts$/,
 
+  // Extract Audio / Remove Audio (FFmpeg audio-demux): each creates a jobs row
+  // tagged `user_id: req.userId`, then reserveCreditsForJob runs under the same
+  // service-role client and the worker reads by `job.id` out-of-band. No cross-
+  // user access. Same pattern as video-sfx / video-retake / split-media.
+  /^src\/routes\/extract-audio\.ts$/,
+  /^src\/routes\/remove-audio\.ts$/,
+
   // Test fixtures mock the supabase module.
   /^src\/routes\/__tests__\//,
 ]

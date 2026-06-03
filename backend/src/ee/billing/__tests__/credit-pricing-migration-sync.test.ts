@@ -143,8 +143,6 @@ const KNOWN_GHOST_IDENTIFIERS: ReadonlySet<string> = new Set([
   "bark",
   "whisper",
   "incredibly-fast-whisper",
-  // ── Old node-type aliases ──
-  "extract-audio",
   // ── Collect → Reduce rename (migration 151). The collect:* rows are
   //    inserted by migration 149 and then REPLACE()d to reduce:* by 151.
   //    Both migrations stay on disk forever (Supabase append-only), so the
