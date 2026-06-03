@@ -16,6 +16,7 @@ import { ReduceResource } from "./resources/reduce.js"
 import { PromptHelperResource } from "./resources/prompt-helper.js"
 import { VoicesResource } from "./resources/voices.js"
 import { CreditsResource } from "./resources/credits.js"
+import { UploadsResource } from "./resources/uploads.js"
 
 export interface ClientOptions {
   /** Backend base URL, e.g. "https://nodaro.example.com" or empty string for same-origin. */
@@ -67,6 +68,7 @@ export class NodaroClient {
   readonly promptHelper: PromptHelperResource
   readonly voices: VoicesResource
   readonly credits: CreditsResource
+  readonly uploads: UploadsResource
 
   constructor(opts: ClientOptions) {
     this.baseUrl = opts.baseUrl.replace(/\/$/, "")  // strip trailing slash
@@ -90,14 +92,21 @@ export class NodaroClient {
     this.promptHelper = new PromptHelperResource(this)
     this.voices = new VoicesResource(this)
     this.credits = new CreditsResource(this)
+    this.uploads = new UploadsResource(this)
   }
 
   async request<T>(method: string, path: string, options: RequestOptions = {}): Promise<T> {
     const url = this.buildUrl(path, options.query)
 
     const token = await this.auth.getToken()
+    // A `FormData` body is a multipart upload: let the runtime set
+    // `Content-Type: multipart/form-data; boundary=…` itself (a manual JSON
+    // content-type corrupts the boundary), and send the body as-is rather than
+    // JSON-stringifying it. Every other body stays JSON, exactly as before.
+    const isFormData =
+      typeof FormData !== "undefined" && options.body instanceof FormData
     const headers: Record<string, string> = {
-      "Content-Type": "application/json",
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
       ...(options.headers ?? {}),
     }
     if (token) headers["Authorization"] = `Bearer ${token}`
@@ -112,7 +121,12 @@ export class NodaroClient {
       const res = await this.fetch(url, {
         method,
         headers,
-        body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+        body:
+          options.body === undefined
+            ? undefined
+            : isFormData
+              ? (options.body as FormData)
+              : JSON.stringify(options.body),
         signal: ac.signal,
       })
 
