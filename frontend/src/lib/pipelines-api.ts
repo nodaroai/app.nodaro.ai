@@ -26,6 +26,7 @@ import type {
   ApplyChatProposalResult,
 } from "@nodaro/client"
 import { getAuthHeaders } from "@/lib/api"
+import type { PipelineTimelineInput } from "@remotion-pkg/lib/build-scene-graph-from-pipeline"
 
 // Pipelines API uses the same proxy convention as the rest of the frontend:
 // same-origin relative paths under /v1/* are proxied to the backend by Vite's
@@ -75,6 +76,9 @@ export interface PipelineRecord {
   id: string
   status: PipelineStatus
   current_stage: string | null
+  /** Phase 0 studio — present on the list endpoint (recent-films history). */
+  created_at?: string
+  input_prompt?: string | null
   spent_credits: number
   reserved_credits: number
   upfront_credit_estimate: number
@@ -167,6 +171,21 @@ export const pipelinesApi = {
   create: (body: PipelineInput) => postJson<{ id: string }>("/v1/pipelines", body),
   get: (id: string) => getJson<PipelineRecord>(`/v1/pipelines/${id}`),
   list: () => getJson<PipelineRecord[]>("/v1/pipelines"),
+  /** Phase 0 studio — entities of a type, for the curate-before-generate gate. */
+  getEntities: (
+    id: string,
+    type: "character" | "object" | "location" | "scene",
+  ) =>
+    getJson<
+      Array<{
+        id: string
+        entity_type: string
+        entity_key: string
+        status: string
+        main_asset_url: string | null
+        metadata?: Record<string, unknown> | null
+      }>
+    >(`/v1/pipelines/${id}/entities?type=${type}`),
   cancel: (id: string) => postJson<{ ok: true }>(`/v1/pipelines/${id}/cancel`),
   pendingApprovals: (id: string) =>
     getJson<{ stage_name: PipelineStageName; output: unknown }[]>(
@@ -335,6 +354,64 @@ export const pipelinesApi = {
   getStage: (id: string, stage: PipelineStageName) =>
     getJson<{ status: string; output: unknown; critic_feedback: unknown }>(
       `/v1/pipelines/${id}/stages/${stage}`,
+    ),
+  /**
+   * Phase 0 — assembled timeline (ordered scene composites + their durations +
+   * music/narration URLs) the studio turns into a Remotion SceneGraph.
+   */
+  getTimeline: (id: string) =>
+    getJson<PipelineTimelineInput>(`/v1/pipelines/${id}/timeline`),
+  /**
+   * Phase 3 (Focus composer) — save a per-shot creative edit. Field-merges the
+   * whitelisted fields into `scene_node_data.shots[]` (matched by shotId),
+   * preserving all other fields. Save-only — does not re-render; the new values
+   * take effect when the shot is next animated.
+   */
+  editShot: (
+    pipelineId: string,
+    sceneId: string,
+    shotId: string,
+    patch: {
+      motion_prompt?: string
+      visual_keyframe_prompt?: string
+      action?: string
+      dialogue_line?: string | null
+      duration_seconds?: number
+      camera?: { shot_type?: string; angle?: string; motion?: string }
+      image_model?: string
+      video_model?: string
+    },
+  ): Promise<{ ok: true; shot: Record<string, unknown> }> =>
+    postJson(
+      `/v1/pipelines/${pipelineId}/scenes/${sceneId}/shots/${shotId}/edit`,
+      patch,
+    ),
+  /**
+   * Phase 3 (clip editor) — re-animate a shot into a fresh clip from its current
+   * keyframe + prompt + (per-shot or scene) video model. Synchronous: awaits the
+   * i2v job (needs the media worker) and charges credits. Returns the new clip URL.
+   */
+  reanimateShot: (
+    pipelineId: string,
+    sceneId: string,
+    shotId: string,
+  ): Promise<{ ok: true; video_url: string }> =>
+    postJson(
+      `/v1/pipelines/${pipelineId}/scenes/${sceneId}/shots/${shotId}/reanimate`,
+    ),
+  /**
+   * Phase 3 (Focus composer) — re-roll a shot's keyframe still: regenerates the
+   * image from the shot's current visual_keyframe_prompt + scene refs, persists
+   * the new keyframe_url. Synchronous (awaits the image job → needs the media
+   * worker running) and charges credits like any generation.
+   */
+  regenerateKeyframe: (
+    pipelineId: string,
+    sceneId: string,
+    shotId: string,
+  ): Promise<{ ok: true; keyframe_url: string }> =>
+    postJson(
+      `/v1/pipelines/${pipelineId}/scenes/${sceneId}/shots/${shotId}/regenerate-keyframe`,
     ),
   eventsUrl: (id: string) => `${API_BASE}/v1/pipelines/${id}/events`,
   /**

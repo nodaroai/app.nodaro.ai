@@ -200,6 +200,14 @@ export interface AllocateReferenceSlotsArgs {
    * shots from the same scene SHOULD supply this to avoid N×2 DB queries.
    */
   sceneContext?: SceneRefContext
+  /**
+   * Override the reference budget. The default is the VIDEO model's
+   * `maxReferenceImages` (correct for Stage 7 animate). Stage 6 keyframe gen is
+   * an IMAGE gen, so it passes the image model's higher capability here — being
+   * limited to the video model's 1-ref ceiling was dropping the character
+   * reference views that keep identity consistent.
+   */
+  maxReferences?: number
 }
 
 /**
@@ -346,9 +354,11 @@ export async function allocateReferenceSlots(
     }
   }
 
-  // Cap to the model's maxReferenceImages budget. Default to 1 when unknown
-  // (defensive — every shipped video model declares the field).
-  const budget = VIDEO_MODEL_CAPS[sceneNodeData.video_model]?.maxReferenceImages ?? 1
+  // Cap to the reference budget. Callers may override (Stage 6 keyframe gen
+  // passes the image model's higher cap); otherwise default to the VIDEO
+  // model's maxReferenceImages (Stage 7 animate), or 1 when unknown.
+  const budget =
+    args.maxReferences ?? VIDEO_MODEL_CAPS[sceneNodeData.video_model]?.maxReferenceImages ?? 1
 
   if (budget === 1 && slots.length > 1) {
     // 1-ref provider degradation. Continuity anchor wins, others dropped.

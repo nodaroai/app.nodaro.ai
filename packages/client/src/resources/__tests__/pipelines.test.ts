@@ -287,4 +287,120 @@ describe("pipelines resource", () => {
       "https://api.example.com/v1/pipelines/pipe%2Fwith%2Fslashes/stages/script/chat",
     )
   })
+
+  // ── Control surface (Phase 2 — agent commands the engine) ──────────────────
+
+  function ctrlClient(fetchMock: ReturnType<typeof vi.fn>) {
+    return createClient({
+      baseUrl: "https://api.example.com",
+      auth: new StaticTokenAuth("t"),
+      fetch: fetchMock as unknown as typeof fetch,
+    })
+  }
+
+  it("create POSTs the input to /v1/pipelines and returns the id", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ id: "pipe-new" }, 201))
+    const c = ctrlClient(fetchMock)
+    const result = await c.pipelines.create({
+      pipeline_type: "story_to_video",
+      root_node_id: "n1",
+      story_prompt: "A lighthouse keeper at dawn",
+      target_duration_seconds: 30,
+      format: "reel",
+      output_resolution: "720p",
+      language: "en",
+      mode: "auto",
+      video_critic_frame_count: "first_last",
+    })
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe("https://api.example.com/v1/pipelines")
+    expect(init.method).toBe("POST")
+    expect(JSON.parse(init.body)).toMatchObject({
+      story_prompt: "A lighthouse keeper at dawn",
+      mode: "auto",
+    })
+    expect(result.id).toBe("pipe-new")
+  })
+
+  it("get fetches the pipeline record", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockOk({ id: "p1", status: "running", current_stage: "characters" }),
+    )
+    const c = ctrlClient(fetchMock)
+    const rec = await c.pipelines.get("p1")
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/pipelines/p1")
+    expect(fetchMock.mock.calls[0][1].method).toBe("GET")
+    expect(rec.status).toBe("running")
+  })
+
+  it("list GETs /v1/pipelines", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk([{ id: "p1" }, { id: "p2" }]))
+    const c = ctrlClient(fetchMock)
+    const all = await c.pipelines.list()
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/pipelines")
+    expect(all).toHaveLength(2)
+  })
+
+  it("cancel POSTs to /cancel", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ ok: true }))
+    const c = ctrlClient(fetchMock)
+    const r = await c.pipelines.cancel("p1")
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/pipelines/p1/cancel")
+    expect(fetchMock.mock.calls[0][1].method).toBe("POST")
+    expect(r.ok).toBe(true)
+  })
+
+  it("pendingApprovals GETs the pending stages", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockOk([{ stage_name: "script", output: { plan: {} } }]),
+    )
+    const c = ctrlClient(fetchMock)
+    const pa = await c.pipelines.pendingApprovals("p1")
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      "https://api.example.com/v1/pipelines/p1/pending-approvals",
+    )
+    expect(pa[0]?.stage_name).toBe("script")
+  })
+
+  it("approveStage POSTs to /stages/:stage/approve, wrapping edits", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ ok: true }))
+    const c = ctrlClient(fetchMock)
+    await c.pipelines.approveStage("p1", "script", [
+      { op: "replace", path: "/x", value: 1 },
+    ])
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe("https://api.example.com/v1/pipelines/p1/stages/script/approve")
+    expect(JSON.parse(init.body)).toEqual({
+      edits: [{ op: "replace", path: "/x", value: 1 }],
+    })
+  })
+
+  it("approveStage sends an empty body when no edits given", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ ok: true }))
+    const c = ctrlClient(fetchMock)
+    await c.pipelines.approveStage("p1", "characters")
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({})
+  })
+
+  it("approveSubGate POSTs to /sub-gates/:gate/approve", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockOk({ ok: true, gate: "dialogue_recheck", resumed_at: "2026-06-01T00:00:00Z" }),
+    )
+    const c = ctrlClient(fetchMock)
+    const r = await c.pipelines.approveSubGate("p1", "dialogue_recheck")
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      "https://api.example.com/v1/pipelines/p1/sub-gates/dialogue_recheck/approve",
+    )
+    expect(r.gate).toBe("dialogue_recheck")
+  })
+
+  it("getTimeline GETs the assembled timeline", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockOk({ fps: 30, width: 1280, height: 720, scenes: [] }),
+    )
+    const c = ctrlClient(fetchMock)
+    const tl = await c.pipelines.getTimeline("p1")
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/pipelines/p1/timeline")
+    expect(tl.fps).toBe(30)
+  })
 })

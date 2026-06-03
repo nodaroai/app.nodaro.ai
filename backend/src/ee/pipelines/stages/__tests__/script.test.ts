@@ -92,7 +92,7 @@ describe("runScriptStage", () => {
     if (result.status === "awaiting_approval" || result.status === "approved") {
       expect(result.locationsCoverageCritic).toEqual(passLocationsVerdict)
       expect(result.objectsValidation).toBeDefined()
-      expect(result.objectsValidation.verdict).toBe("pass")
+      expect(result.objectsValidation!.verdict).toBe("pass")
     }
   })
 
@@ -116,7 +116,7 @@ describe("runScriptStage", () => {
       expect(result.scriptCritic).toEqual(passScriptVerdict)
       expect(result.castCoverageCritic).toEqual(passCastVerdict)
       expect(result.locationsCoverageCritic).toEqual(passLocationsVerdict)
-      expect(result.objectsValidation.verdict).toBe("pass")
+      expect(result.objectsValidation!.verdict).toBe("pass")
     }
   })
 

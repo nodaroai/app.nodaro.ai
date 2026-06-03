@@ -306,6 +306,7 @@ const MODEL_PRICING: Record<string, { input: number; output: number; cacheWrite:
   "claude-haiku-4-5":  { input: 1.0, output: 5.0,  cacheWrite: 1.25, cacheRead: 0.10 },
   "claude-sonnet-4-6": { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.30 },
   "claude-opus-4-7":   { input: 15.0, output: 75.0, cacheWrite: 18.75, cacheRead: 1.50 },
+  "claude-opus-4-6":   { input: 15.0, output: 75.0, cacheWrite: 18.75, cacheRead: 1.50 },
 }
 
 function estimateCost(

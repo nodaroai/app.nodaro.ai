@@ -110,8 +110,8 @@ describe.skipIf(!TEST_USER_ID)("E2E Stage 1: Detection → Showrunner → Critic
     expect(result.status).toBe("awaiting_approval")
     if (result.status !== "awaiting_approval") return
     expect(result.plan.title).toBe("Final Mission")
-    expect(result.scriptCritic.verdict).toBe("pass")
-    expect(result.castCoverageCritic.verdict).toBe("pass")
+    expect(result.scriptCritic!.verdict).toBe("pass")
+    expect(result.castCoverageCritic!.verdict).toBe("pass")
 
     const { data: stageRow } = await supabase
       .from("pipeline_stages")

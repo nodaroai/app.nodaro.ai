@@ -5,7 +5,7 @@ import type {
   SceneNodeData,
   ShowrunnerPlan,
 } from "@nodaro/shared"
-import { resolvePipelineModel } from "@nodaro/shared"
+import { resolvePipelineModel, preferredInputModeForModel } from "@nodaro/shared"
 import { bulkApproveStageEntities, ensureStageRow, failStage } from "../stage-utils.js"
 import { pipelineEvents } from "../events.js"
 import { runSceneDirector } from "../llms/scene-director.js"
@@ -67,9 +67,18 @@ export async function runShotListStage(args: RunShotListStageArgs): Promise<void
     return
   }
 
-  // Default shot_input_mode for Phase 1B.2 — `first_frame` unless the pipeline config overrides.
-  // (Provider-aware auto-selection lands in Phase 1C.)
-  const shotInputMode: SceneInputMode = "first_frame"
+  // Resolve the user's model overrides once for the whole stage (config is the
+  // same for every scene). `undefined` = let the Scene Director pick freely.
+  const imageModelOverride = resolvePipelineModel(args.config, "scene_keyframes_image")
+  const videoModelOverride = resolvePipelineModel(args.config, "shots_video")
+
+  // Adapt the shot input mode to the chosen video model: a ref_images model
+  // (Seedance 2 / Kling Omni) feeds the character + location reference portraits
+  // straight into the video model for the strongest identity lock; every other
+  // model anchors on the per-scene keyframe (`first_frame`). No pin → keep
+  // `first_frame` (the Scene Director then picks a compatible model itself).
+  const shotInputMode: SceneInputMode =
+    preferredInputModeForModel(videoModelOverride) ?? "first_frame"
 
   // Materialize one pipeline_entities row per scene (entity_type='scene', idempotent).
   // Batched into a single upsert so we don't pay N round-trips for N scenes.
@@ -116,11 +125,6 @@ export async function runShotListStage(args: RunShotListStageArgs): Promise<void
     const castByKey = new Map(plan.cast.map((c) => [c.key, c]))
     const locationsByKey = new Map(plan.locations.map((l) => [l.key, l]))
     const objectsByKey = new Map(plan.objects.map((o) => [o.key, o]))
-
-    // Resolve user model overrides once for the whole stage (config is the
-    // same for every scene). `undefined` = let the Scene Director pick.
-    const imageModelOverride = resolvePipelineModel(args.config, "scene_keyframes_image")
-    const videoModelOverride = resolvePipelineModel(args.config, "shots_video")
 
     // Bounded concurrency — each runOneScene issues 2-6 Sonnet calls. Without a
     // cap, >6 scenes blows past Anthropic tier-1 rate limits. runOneScene catches
@@ -205,7 +209,13 @@ export async function runShotListStage(args: RunShotListStageArgs): Promise<void
     (refreshed ?? []).every(
       (e) => e.status === "awaiting_approval" || e.status === "approved",
     )
-  if (args.mode === "auto" && allAwaitingOrApproved) {
+  // Studio `auto_advance_production` advances the per-scene shot-plan gate the
+  // same way auto-mode does — the studio's control is the creative entities,
+  // not reviewing each scene's shot list. (post_merge still pauses for the
+  // final cut.)
+  const autoAdvanceProduction =
+    args.mode === "auto" || !!args.config?.auto_advance_production
+  if (autoAdvanceProduction && allAwaitingOrApproved) {
     await bulkApproveStageEntities(supabase, pipelineId, "scene", "shot-list")
     await supabase
       .from("pipeline_stages")
@@ -415,6 +425,13 @@ async function maybeForceSequentialMode(
     .eq("id", pipelineId)
     .single()
   const currentConfig = (pipeline?.config as Record<string, unknown> | null) ?? {}
+  // Studio speed: when the user opts into parallel animation, do NOT auto-force
+  // sequential for continuity. Parallel renders every shot at once (~minutes
+  // instead of ~an hour for a multi-shot reel); continuity chaining is traded
+  // for speed, and each shot's keyframe still carries the identity.
+  if ((currentConfig as { force_parallel_animate?: boolean }).force_parallel_animate) {
+    return
+  }
   const currentMode = (currentConfig as { shot_generation_mode?: string })
     .shot_generation_mode
   if (currentMode === "sequential") return
