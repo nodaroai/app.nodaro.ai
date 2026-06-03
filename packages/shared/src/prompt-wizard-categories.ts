@@ -237,6 +237,7 @@ export const PROVIDER_CAPABILITIES: Record<string, Record<string, string>> = {
     "ltx-2.3-pro":  "Lightricks LTX 2.3 Pro — text/image/audio→video, 6–10s, up to 4K",
     "ltx-2.3-fast": "Lightricks LTX 2.3 Fast — text/image→video, 6–20s, up to 4K",
     "gemini-omni-video": "Google Gemini Omni — multimodal video with native audio, 4–10s, up to 4K.",
+    "grok-imagine-video-1.5": "Grok Imagine 1.5 — image-to-video only; requires an input image",
   },
   "image-to-video": {
     "minimax": "Versatile animation from still images",
@@ -266,6 +267,7 @@ export const PROVIDER_CAPABILITIES: Record<string, Record<string, string>> = {
     "ltx-2.3-pro":  "Lightricks LTX 2.3 Pro — start/end frame i2v + audio→video, 6–10s, up to 4K",
     "ltx-2.3-fast": "Lightricks LTX 2.3 Fast — start/end frame i2v, 6–20s, up to 4K",
     "gemini-omni-video": "Google Gemini Omni — multimodal video with native audio, 4–10s, up to 4K.",
+    "grok-imagine-video-1.5": "Grok Imagine 1.5 — stylized animation, 1–15s, 480p/720p (image required)",
   },
   "video-to-video": {
     "wan": "Style transfer and video transformation",

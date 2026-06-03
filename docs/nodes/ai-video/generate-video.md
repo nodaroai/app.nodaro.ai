@@ -59,6 +59,7 @@ Generate Video covers the union of the legacy image-to-video and text-to-video c
 | Bytedance | `bytedance-lite`, `bytedance-pro`, `bytedance-pro-fast` | T2V (lite, pro), I2V | 5 / 10s |
 | MiniMax | `minimax` | T2V, I2V | Fixed 5s, end-frame supported |
 | Grok | `grok-i2v`, `grok` | `grok-i2v`: I2V only; `grok`: T2V only | 6 / 10s; resolution + mode (fun/normal/spicy) |
+| Grok Imagine 1.5 | `grok-imagine-video-1.5` | I2V (input image required) | 1–15s; 480p / 720p; per-second pricing; offered in the T2V picker too but returns "requires an input image" without one |
 | Sora 2 | `sora2`, `sora2-pro` | T2V, I2V | 5 / 10s; remove-watermark add-on |
 | Wan | `wan`, `wan-i2v`, `wan-turbo`, `wan-2.7-i2v`, `wan-2.7-t2v` | T2V (`wan`, `wan-turbo`, `wan-2.7-t2v`), I2V (others) | 5 / 10 / 15s |
 | HappyHorse | `happyhorse-i2v`, `happyhorse-ref2v`, `happyhorse` | I2V, reference, T2V | 3–15s; 720p / 1080p |
@@ -148,6 +149,11 @@ If neither has the identifier, the route returns HTTP 503 `price_not_configured`
 | `seedance-2` | 8s | 1080p | i2v | with ref | ~75 |
 | `seedance-2-fast` | 8s | 720p | i2v | with ref | ~40 |
 | `sora2-pro` | 10s | — | i2v | remove-watermark | base + 4 |
+| `grok-imagine-video-1.5` | 8s | 480p | i2v | image required | 30 |
+| `grok-imagine-video-1.5` | 8s | 720p | i2v | image required | 51 |
+| `grok-imagine-video-1.5` | 15s | 720p | i2v | image required | 95 |
+
+**Grok Imagine 1.5** uses true per-second pricing via the composite identifier `grok-imagine-video-1.5:<N>s:<resolution>` (N = 1–15, resolution = `480p` / `720p`). Credits = `ceil((rate × seconds + 2) / 4)`, where the per-second rate is 14.5 @ 480p and 25 @ 720p and the `+2` covers the required input image. Examples: 4s/480p = 15, 8s/480p = 30, 8s/720p = 51, 15s/720p = 95.
 
 Cross-check the runtime table in `/admin/models` for the live numbers — the worked examples above match the `STATIC_CREDIT_COSTS` snapshot at the time of this writing.
 

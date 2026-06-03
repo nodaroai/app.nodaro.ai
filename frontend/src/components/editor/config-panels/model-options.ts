@@ -106,6 +106,7 @@ export const VIDEO_I2V_MODELS = [
   { value: "ltx-2.3-pro", label: "LTX 2.3 Pro", desc: "Lightricks LTX 2.3 Pro — text/image/audio→video, up to 4K" },
   { value: "ltx-2.3-fast", label: "LTX 2.3 Fast", desc: "Lightricks LTX 2.3 Fast — text/image→video, durations up to 20s" },
   { value: "gemini-omni-video", label: "Gemini Omni", desc: "Google, 4–10s, 720p/1080p/4K, native audio, refs + video-edit" },
+  { value: "grok-imagine-video-1.5", label: "Grok Imagine 1.5", desc: "xAI Grok, 1–15s, 480p/720p, per-second pricing" },
 ]
 
 export const VIDEO_T2V_MODELS: readonly { value: TextToVideoProvider; label: string; desc: string }[] = [
@@ -131,6 +132,7 @@ export const VIDEO_T2V_MODELS: readonly { value: TextToVideoProvider; label: str
   { value: "ltx-2.3-pro", label: "LTX 2.3 Pro", desc: "Lightricks LTX 2.3 Pro — text/image/audio→video, up to 4K" },
   { value: "ltx-2.3-fast", label: "LTX 2.3 Fast", desc: "Lightricks LTX 2.3 Fast — text/image→video, durations up to 20s" },
   { value: "gemini-omni-video", label: "Gemini Omni", desc: "Google, 4–10s, 720p/1080p/4K, native audio, refs + video-edit" },
+  { value: "grok-imagine-video-1.5", label: "Grok Imagine 1.5", desc: "xAI Grok, 1–15s, 480p/720p (image required)" },
 ]
 
 /** Unified generate-video model list — VIDEO_I2V_MODELS ∪ VIDEO_T2V_MODELS,

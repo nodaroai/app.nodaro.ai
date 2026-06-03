@@ -1030,6 +1030,30 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "grok-i2v:15s", credits: 10 },
     ],
   },
+  // xAI Grok Imagine Video 1.5 — KIE image-to-video (image required). True
+  // per-second billing split 480p/720p. modes:["i2v"] is the honest capability;
+  // it's also surfaced in the text-to-video dropdown for the unified node, where
+  // the t2v route returns a clean "requires an input image" 400.
+  "grok-imagine-video-1.5": {
+    id: "grok-imagine-video-1.5",
+    kind: "video",
+    modes: ["i2v"] as const,
+    features: ["reference-image"],
+    family: "xAI",
+    label: "Grok Imagine Video 1.5",
+    description: "Grok Imagine 1.5 image-to-video — 1–15s, 480p/720p, per-second pricing. Requires an input image.",
+    useCases: ["stylized", "motion"],
+    aspectRatios: ["16:9", "9:16", "1:1", "4:3", "3:4"],
+    durations: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    resolutions: ["480p", "720p"],
+    pricing: [
+      { identifier: "grok-imagine-video-1.5", credits: 30, note: "default 8s 480p — see :Ns:res variants" },
+      { identifier: "grok-imagine-video-1.5:8s:480p", credits: 30, note: "8s 480p" },
+      { identifier: "grok-imagine-video-1.5:8s:720p", credits: 51, note: "8s 720p" },
+      { identifier: "grok-imagine-video-1.5:15s:480p", credits: 55, note: "15s 480p (max)" },
+      { identifier: "grok-imagine-video-1.5:15s:720p", credits: 95, note: "15s 720p (max)" },
+    ],
+  },
 
   // ── Bytedance Seedance ──
   "seedance": {

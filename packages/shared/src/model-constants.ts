@@ -368,6 +368,10 @@ export const IMAGE_TO_VIDEO_PROVIDERS = [
   "gemini-omni-video",
   "ltx-2.3-pro",
   "ltx-2.3-fast",
+  // xAI Grok Imagine Video 1.5 — KIE i2v (image_urls required). Also listed in
+  // TEXT_TO_VIDEO_PROVIDERS so it's offered everywhere in the unified node; the
+  // t2v route guards no-image runs via VIDEO_PROVIDERS_REQUIRING_IMAGE.
+  "grok-imagine-video-1.5",
   // Replicate disabled
   // "runway",
   // "pika",
@@ -399,6 +403,10 @@ export const TEXT_TO_VIDEO_PROVIDERS = [
   "gemini-omni-video",
   "ltx-2.3-pro",
   "ltx-2.3-fast",
+  // Grok Imagine Video 1.5 is i2v-only; present here so the unified node offers
+  // it in every surface. /v1/text-to-video early-returns "requires an input
+  // image" for it (VIDEO_PROVIDERS_REQUIRING_IMAGE) — it never reaches KIE.
+  "grok-imagine-video-1.5",
   // Replicate disabled
   // "runway",
   // "pika",
@@ -648,6 +656,7 @@ export const DURATION_PRICED_PROVIDERS = new Set([
   "seedance",
   "seedance-2",
   "seedance-2-fast",
+  "grok-imagine-video-1.5",
 ])
 
 /**
@@ -705,6 +714,7 @@ export const VIDEO_REF_LIMITS_BY_PROVIDER: Record<
   "bytedance-pro": { images: 1 },
   "bytedance-pro-fast": { images: 1 },
   "gemini-omni-video": { images: 7, videos: 1 },
+  "grok-imagine-video-1.5": { images: 1 },
 }
 
 /**
@@ -713,6 +723,31 @@ export const VIDEO_REF_LIMITS_BY_PROVIDER: Record<
  * Seedance 2.0 family uses per-second billing split 480p/720p × with-ref/no-ref.
  */
 export const RESOLUTION_VIDEO_REF_PRICING = SEEDANCE_2_PROVIDERS
+
+/**
+ * Video models priced by (duration × resolution) WITHOUT a video-ref dimension.
+ * Identifier suffix: `:{resolution}` (480p / 720p), appended after the duration
+ * tier. Distinct from RESOLUTION_VIDEO_REF_PRICING (Seedance), which also adds
+ * the `-ref` variant. Grok Imagine Video 1.5 is the first member.
+ */
+export const RESOLUTION_DURATION_PRICING = new Set<string>([
+  "grok-imagine-video-1.5",
+])
+
+/**
+ * Video providers that REQUIRE an input image (image-to-video only) even though
+ * they're listed in TEXT_TO_VIDEO_PROVIDERS for unified-node visibility. The
+ * `/v1/text-to-video` route early-returns a clean 400 for these before any job
+ * is created, instead of letting the prompt-only request fail at the provider.
+ */
+export const VIDEO_PROVIDERS_REQUIRING_IMAGE = new Set<string>([
+  "grok-imagine-video-1.5",
+])
+
+/** True when a video provider can only run image-to-video (image required). */
+export function videoProviderRequiresImage(provider: string | undefined): boolean {
+  return !!provider && VIDEO_PROVIDERS_REQUIRING_IMAGE.has(provider)
+}
 
 /**
  * Video models where enabling audio/sound incurs an additional cost.
@@ -752,7 +787,7 @@ export const VEO_RESOLUTION_TIERED_PROVIDERS = new Set<string>([
  * "duration" = cost varies by video length
  * "duration+audio" = cost varies by length AND audio on/off
  */
-export const VIDEO_VARIABLE_PRICING: Record<string, "duration" | "duration+audio" | "duration+mode" | "duration+resolution+ref"> = {
+export const VIDEO_VARIABLE_PRICING: Record<string, "duration" | "duration+audio" | "duration+mode" | "duration+resolution+ref" | "duration+resolution"> = {
   "kling-3.0": "duration+audio",
   "kling-3-omni": "duration",
   "kling": "duration+audio",
@@ -766,6 +801,8 @@ export const VIDEO_VARIABLE_PRICING: Record<string, "duration" | "duration+audio
   "seedance": "duration",
   "seedance-2": "duration+resolution+ref",
   "seedance-2-fast": "duration+resolution+ref",
+  // Grok Imagine Video 1.5 — per-second billing split 480p/720p (no video-ref dimension).
+  "grok-imagine-video-1.5": "duration+resolution",
 }
 
 /**
@@ -833,6 +870,26 @@ export const VIDEO_DURATION_TIERS: Record<string, Array<{ maxSeconds: number; su
     { maxSeconds: 4, suffix: "4s" },
     { maxSeconds: 8, suffix: "8s" },
     { maxSeconds: 12, suffix: "12s" },
+    { maxSeconds: 15, suffix: "15s" },
+  ],
+  // Grok Imagine Video 1.5 — true per-second billing (KIE 14.5 cr/s @480p, 25 cr/s
+  // @720p, +2 cr/image). One tier per allowed second (1–15s) so the composite
+  // identifier maps 1:1 to the seeded price — no rounding/overcharge for any on-menu value.
+  "grok-imagine-video-1.5": [
+    { maxSeconds: 1, suffix: "1s" },
+    { maxSeconds: 2, suffix: "2s" },
+    { maxSeconds: 3, suffix: "3s" },
+    { maxSeconds: 4, suffix: "4s" },
+    { maxSeconds: 5, suffix: "5s" },
+    { maxSeconds: 6, suffix: "6s" },
+    { maxSeconds: 7, suffix: "7s" },
+    { maxSeconds: 8, suffix: "8s" },
+    { maxSeconds: 9, suffix: "9s" },
+    { maxSeconds: 10, suffix: "10s" },
+    { maxSeconds: 11, suffix: "11s" },
+    { maxSeconds: 12, suffix: "12s" },
+    { maxSeconds: 13, suffix: "13s" },
+    { maxSeconds: 14, suffix: "14s" },
     { maxSeconds: 15, suffix: "15s" },
   ],
 }
