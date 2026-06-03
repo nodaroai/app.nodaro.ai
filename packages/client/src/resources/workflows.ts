@@ -81,6 +81,17 @@ export class WorkflowsResource {
   }
 
   /**
+   * Get a PUBLICLY-SHARED workflow by id (`GET /v1/public/workflows/:id`) — the
+   * unauthenticated share-by-link read. Returns the workflow's nodes/edges/
+   * settings ONLY when it's opted into sharing server-side (`settings.studio.shared
+   * === true`); otherwise the route 404s (→ `NotFoundError`). No auth required —
+   * a share viewer has no session; the SDK omits the bearer when no token exists.
+   */
+  getPublic(id: string): Promise<{ data: Workflow }> {
+    return this.client.request("GET", `/v1/public/workflows/${encodeURIComponent(id)}`)
+  }
+
+  /**
    * Create a workflow under a project. Returns the full record.
    * NOTE: server route is `POST /v1/projects/:projectId/workflows`.
    */
