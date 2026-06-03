@@ -190,7 +190,7 @@ export interface CharacterUsage {
 
 /**
  * Input for `client.characters.generate()` — fires the
- * `POST /v1/generate-character` route. Produces up to 4 portrait candidates;
+ * `POST /v1/generate-character` route. Produces 1–10 portrait candidates;
  * each lands as one `jobs` row in `pending` state and is then enqueued for
  * the worker.
  *
@@ -214,8 +214,8 @@ export interface GenerateCharacterInput {
   attachToCharacterId?: string
   seedPrompt?: string
   referencePhotos?: ReferencePhoto[]
-  /** 1, 2, 3, or 4 candidate portraits. */
-  count?: 1 | 2 | 3 | 4
+  /** Number of candidate images to generate (1–10; server-validated). */
+  count?: number
   /**
    * Explicit aspect ratio. Highest precedence — overrides both the character
    * node toggle and the per-asset-type default (portraits default to `3:4`).

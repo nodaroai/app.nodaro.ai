@@ -193,7 +193,7 @@ export interface ListObjectsParams {
 
 /**
  * Input for `client.objects.generate()` — fires the
- * `POST /v1/generate-object` route. Produces 1, 2, or 4 candidate
+ * `POST /v1/generate-object` route. Produces 1–10 candidate
  * main images; each lands as one `jobs` row in `pending` state and is then
  * enqueued for the worker.
  *
@@ -214,8 +214,8 @@ export interface GenerateObjectInput {
   style?: "realistic" | "anime" | "3d-pixar" | "illustration"
   sourceImageUrl?: string
   provider?: string
-  /** 1, 2, 3, or 4 candidate main images. */
-  count?: 1 | 2 | 3 | 4
+  /** Number of candidate images to generate (1–10; server-validated). */
+  count?: number
   /** Auto-attach the result to this object row (single-candidate only). */
   attachToObjectId?: string
   /** Parameter-picker prompt-fragment pass-through. */

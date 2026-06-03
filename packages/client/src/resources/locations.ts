@@ -152,7 +152,7 @@ export interface ListLocationsParams {
 
 /**
  * Input for `client.locations.generate()` — fires the
- * `POST /v1/generate-location` route. Produces 1, 2, or 4 candidate
+ * `POST /v1/generate-location` route. Produces 1–10 candidate
  * establishing shots; each lands as one `jobs` row in `pending` state and
  * is then enqueued for the worker.
  *
@@ -169,8 +169,8 @@ export interface GenerateLocationInput {
   style?: "realistic" | "anime" | "3d-pixar" | "illustration"
   sourceImageUrl?: string
   provider?: string
-  /** 1, 2, 3, or 4 candidate main images. */
-  count?: 1 | 2 | 3 | 4
+  /** Number of candidate images to generate (1–10; server-validated). */
+  count?: number
   /** Auto-attach the result to this location row (single-candidate only). */
   attachToLocationId?: string
 }
