@@ -55,6 +55,52 @@ export class StorageExceededError extends NodaroError {
   }
 }
 
+/**
+ * A job reached a terminal `failed`/`cancelled` status while being awaited by
+ * `nodes.runAndWait` / `nodes.runMany`. Not an HTTP-level error (the polls
+ * themselves succeeded), so `status` is 0 — distinguish it by type/`code`.
+ * Carries the job's own `error_message` (as the message) and `jobId`.
+ */
+export class JobFailedError extends NodaroError {
+  constructor(
+    message: string,
+    public readonly jobId: string,
+    /** The terminal status that triggered the failure (`failed` | `cancelled`). */
+    public readonly jobStatus: "failed" | "cancelled" = "failed",
+  ) {
+    super(message, "job_failed", 0)
+    this.name = "JobFailedError"
+  }
+}
+
+/**
+ * `nodes.runAndWait` polled past its `maxMs` deadline without the job reaching
+ * a terminal status. Not an HTTP error — `status` is 0; catch by type/`code`.
+ */
+export class JobTimeoutError extends NodaroError {
+  constructor(
+    message: string,
+    public readonly jobId: string,
+    /** The wall-clock deadline (ms) that was exceeded. */
+    public readonly timeoutMs: number,
+  ) {
+    super(message, "job_timeout", 0)
+    this.name = "JobTimeoutError"
+  }
+}
+
+/**
+ * The caller's `AbortSignal` fired while `nodes.runAndWait` was polling (or it
+ * was already aborted on entry). Polling stops and this rejects. Not an HTTP
+ * error — `status` is 0; catch by type/`code`.
+ */
+export class JobAbortedError extends NodaroError {
+  constructor(message = "Aborted", public readonly jobId?: string) {
+    super(message, "job_aborted", 0)
+    this.name = "JobAbortedError"
+  }
+}
+
 interface ApiErrorBody {
   error?: { code?: string; message?: string; missingScope?: string; required?: number; available?: number; limitBytes?: number; [key: string]: unknown }
 }

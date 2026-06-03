@@ -16,6 +16,9 @@ export {
   RateLimitedError,
   InsufficientCreditsError,
   StorageExceededError,
+  JobFailedError,
+  JobTimeoutError,
+  JobAbortedError,
   throwFromResponse,
 } from "./errors.js"
 
@@ -110,7 +113,12 @@ export type {
   ListAppRunsParams,
   DeleteAppRunResult,
 } from "./resources/apps.js"
-export type { RunNodeResult } from "./resources/nodes.js"
+export type {
+  RunNodeResult,
+  NodeJobOutput,
+  RunAndWaitOptions,
+  RunManyResult,
+} from "./resources/nodes.js"
 
 export type {
   Character,
