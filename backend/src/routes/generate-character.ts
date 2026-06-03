@@ -54,7 +54,7 @@ const generateCharacterBody = z
       )
       .max(20)
       .optional(),
-    count: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).optional().default(1),
+    count: z.number().int().min(1).max(10).optional().default(1),
     // Per-asset-type aspect-ratio defaults (smart-defaults feature). Portrait
     // generation defaults to 3:4 (vertical headshot). Callers can override
     // explicitly via `aspectRatio`, or via `characterNodeAspectRatio` (the
@@ -74,26 +74,26 @@ const generateCharacterBody = z
 /**
  * Extract `count` from a raw request body for the credit pre-check.
  * The Zod schema isn't parsed yet at preHandler time, so we defensively
- * coerce and clamp to the allowed {1, 2, 3, 4} set. Invalid values fall back
+ * coerce and clamp to the allowed [1, 10] range. Invalid values fall back
  * to 1 so the pre-check never under-charges; the route's Zod validation
  * still 400s on bad input downstream.
  */
-function extractCount(body: unknown): 1 | 2 | 3 | 4 {
+function extractCount(body: unknown): number {
   const raw = (body as { count?: unknown })?.count
-  if (raw === 2) return 2
-  if (raw === 3) return 3
-  if (raw === 4) return 4
-  return 1
+  if (typeof raw !== "number" || !Number.isInteger(raw)) return 1
+  if (raw < 1) return 1
+  if (raw > 10) return 10
+  return raw
 }
 
 export async function generateCharacterRoutes(app: FastifyInstance) {
   app.post(
     "/v1/generate-character",
     {
-      // Multi-candidate batch: credits scale linearly with `count` (1, 2, or 4).
+      // Multi-candidate batch: credits scale linearly with `count` (1–10).
       // Without this, the preHandler greenlights users who can afford ONE job
-      // even when count=4 — Phase 2 then either rejects mid-batch (orphan rows
-      // + partial enqueue) or charges 4x silently. computeCredits returns BASE
+      // even when count=10 — Phase 2 then either rejects mid-batch (orphan rows
+      // + partial enqueue) or charges Nx silently. computeCredits returns BASE
       // (pre-markup) credits; markup is applied inside creditGuardImpl so the
       // same final number is both checked AND reserved.
       preHandler: creditGuard((req: FastifyRequest) => extractProvider(req.body, "nano-banana"), {

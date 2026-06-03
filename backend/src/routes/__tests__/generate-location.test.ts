@@ -104,12 +104,13 @@ afterEach(async () => {
  * Returns the top-level insert mock so tests can assert on payload + call count.
  */
 function mockJobsInsertChain() {
-  const single = vi
-    .fn()
-    .mockResolvedValueOnce({ data: { id: "job-1" }, error: null })
-    .mockResolvedValueOnce({ data: { id: "job-2" }, error: null })
-    .mockResolvedValueOnce({ data: { id: "job-3" }, error: null })
-    .mockResolvedValueOnce({ data: { id: "job-4" }, error: null })
+  // N-agnostic: yields job-1, job-2, … on each successive `.single()` call so
+  // the helper supports any `count` (1–10) without enumerating fixed ids.
+  let n = 0
+  const single = vi.fn().mockImplementation(() => {
+    n += 1
+    return Promise.resolve({ data: { id: `job-${n}` }, error: null })
+  })
   const select = vi.fn().mockReturnValue({ single })
   const insert = vi.fn().mockReturnValue({ select })
   return { insert, select, single }
@@ -159,6 +160,25 @@ describe("POST /v1/generate-location — multi-candidate (Task 10)", () => {
     expect(body.jobId).toBeUndefined()
     expect(insert).toHaveBeenCalledTimes(4)
     expect(videoQueue.add).toHaveBeenCalledTimes(4)
+  })
+
+  it("count=10 (new max) inserts 10 jobs and enqueues 10 — cap raised 4→10 (WI-3)", async () => {
+    const { insert } = mockJobsInsertChain()
+    vi.mocked(supabase.from).mockReturnValue({ insert } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-location",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { name: "Forest Glade", count: 10 },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().jobIds).toHaveLength(10)
+    // Phase 2B enqueues only after all N reservations succeed, so 10 enqueues
+    // proves all 10 jobs were both inserted AND reserved.
+    expect(insert).toHaveBeenCalledTimes(10)
+    expect(videoQueue.add).toHaveBeenCalledTimes(10)
   })
 
   it("count=2 returns { jobIds } with length 2", async () => {
@@ -245,13 +265,25 @@ describe("POST /v1/generate-location — multi-candidate (Task 10)", () => {
     }
   })
 
-  it("returns 400 for invalid count value (5)", async () => {
+  it("returns 400 for count above the max (11)", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/generate-location",
       headers: { "x-user-id": TEST_USER_ID },
-      // 1/2/3/4 are valid; 5 is out of range.
-      payload: { name: "Forest Glade", count: 5 },
+      // 1–10 are valid (WI-3 raised the cap 4→10); 11 is out of range.
+      payload: { name: "Forest Glade", count: 11 },
+    })
+
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+  })
+
+  it("returns 400 for count below the min (0)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-location",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { name: "Forest Glade", count: 0 },
     })
 
     expect(res.statusCode).toBe(400)

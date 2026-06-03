@@ -118,12 +118,13 @@ function setupSupabaseMock(opts: {
   const objectEq1 = vi.fn().mockReturnValue({ eq: objectEq2 })
   const objectSelect = vi.fn().mockReturnValue({ eq: objectEq1 })
 
-  const jobSingle = vi
-    .fn()
-    .mockResolvedValueOnce({ data: { id: "job-1" }, error: null })
-    .mockResolvedValueOnce({ data: { id: "job-2" }, error: null })
-    .mockResolvedValueOnce({ data: { id: "job-3" }, error: null })
-    .mockResolvedValueOnce({ data: { id: "job-4" }, error: null })
+  // N-agnostic: yields job-1, job-2, … on each successive `.single()` call so
+  // the mock supports any `count` (1–10) without enumerating fixed ids.
+  let jobN = 0
+  const jobSingle = vi.fn().mockImplementation(() => {
+    jobN += 1
+    return Promise.resolve({ data: { id: `job-${jobN}` }, error: null })
+  })
   const jobSelect = vi.fn().mockReturnValue({ single: jobSingle })
   const jobInsert = vi.fn().mockReturnValue({ select: jobSelect })
 
@@ -179,6 +180,24 @@ describe("POST /v1/generate-object — multi-candidate + auto-attach (Phase C2a)
     expect(videoQueue.add).toHaveBeenCalledTimes(4)
   })
 
+  it("count=10 (new max) inserts 10 jobs and enqueues 10 — cap raised 4→10 (WI-3)", async () => {
+    const { jobInsert } = setupSupabaseMock()
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-object",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { name: "Ornate Goblet", count: 10 },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().jobIds).toHaveLength(10)
+    // Phase 2B enqueues only after all N reservations succeed, so 10 enqueues
+    // proves all 10 jobs were both inserted AND reserved.
+    expect(jobInsert).toHaveBeenCalledTimes(10)
+    expect(videoQueue.add).toHaveBeenCalledTimes(10)
+  })
+
   it("count=2 returns { jobIds } with length 2", async () => {
     const { jobInsert } = setupSupabaseMock()
 
@@ -197,13 +216,25 @@ describe("POST /v1/generate-object — multi-candidate + auto-attach (Phase C2a)
     expect(videoQueue.add).toHaveBeenCalledTimes(2)
   })
 
-  it("returns 400 for invalid count value (5)", async () => {
+  it("returns 400 for count above the max (11)", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/generate-object",
       headers: { "x-user-id": TEST_USER_ID },
-      // 1/2/3/4 are valid; 5 is out of range.
-      payload: { name: "Ornate Goblet", count: 5 },
+      // 1–10 are valid (WI-3 raised the cap 4→10); 11 is out of range.
+      payload: { name: "Ornate Goblet", count: 11 },
+    })
+
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+  })
+
+  it("returns 400 for count below the min (0)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-object",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { name: "Ornate Goblet", count: 0 },
     })
 
     expect(res.statusCode).toBe(400)

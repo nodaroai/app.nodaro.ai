@@ -21,10 +21,11 @@ const generateLocationBody = z.object({
   provider: z.string().optional().default("nano-banana"),
   userId: z.string().uuid().optional(),
   // Multi-candidate generation. `1` keeps the legacy single-job behavior and
-  // response shape `{ jobId }`. `2` / `4` insert N jobs in parallel and return
-  // `{ jobIds: string[] }`. Tasks 11+ wire the studio UI to render 1/4 grids
-  // and prompt the user to pick a winner via `POST /v1/locations/:id/approve-main-image`.
-  count: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).optional().default(1),
+  // response shape `{ jobId }`. `2`–`10` insert N jobs in parallel and return
+  // `{ jobIds: string[] }`. Tasks 11+ wire the studio UI to render candidate
+  // grids and prompt the user to pick a winner via
+  // `POST /v1/locations/:id/approve-main-image`.
+  count: z.number().int().min(1).max(10).optional().default(1),
   // Location Studio auto-attach: when set, the worker writes the resulting
   // image URL to `locations.main_image_url` on this row after generation
   // succeeds. Lets the studio survive page closes mid-generation.
@@ -39,25 +40,25 @@ const generateLocationBody = z.object({
 /**
  * Extract `count` from a raw request body for the credit pre-check.
  * The Zod schema isn't parsed yet at preHandler time, so we defensively
- * coerce and clamp to the allowed {1, 2, 3, 4} set. Invalid values fall back
+ * coerce and clamp to the allowed [1, 10] range. Invalid values fall back
  * to 1 so the pre-check never under-charges; the route's Zod validation
  * still 400s on bad input downstream.
  */
-function extractCount(body: unknown): 1 | 2 | 3 | 4 {
+function extractCount(body: unknown): number {
   const raw = (body as { count?: unknown })?.count
-  if (raw === 2) return 2
-  if (raw === 3) return 3
-  if (raw === 4) return 4
-  return 1
+  if (typeof raw !== "number" || !Number.isInteger(raw)) return 1
+  if (raw < 1) return 1
+  if (raw > 10) return 10
+  return raw
 }
 
 export async function generateLocationRoutes(app: FastifyInstance) {
   app.post(
     "/v1/generate-location",
     {
-      // Multi-candidate batch: credits scale linearly with `count` (1, 2, or 4).
+      // Multi-candidate batch: credits scale linearly with `count` (1–10).
       // Mirrors the generate-character pattern — without this, the preHandler
-      // greenlights users who can afford ONE job even when count=4. computeCredits
+      // greenlights users who can afford ONE job even when count=10. computeCredits
       // returns BASE (pre-markup) credits; markup is applied inside creditGuardImpl
       // so the same final number is both checked AND reserved.
       preHandler: creditGuard((req: FastifyRequest) => extractProvider(req.body, "nano-banana"), {
