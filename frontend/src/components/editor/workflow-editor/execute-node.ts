@@ -207,7 +207,7 @@ import {
   runObjectGeneration,
   runLocationGeneration,
 } from "./asset-executors";
-import { buildImagePrompt, applyReferenceOrderToVideo } from "@nodaro/shared";
+import { buildImagePrompt, assembleImageInput, applyReferenceOrderToVideo } from "@nodaro/shared";
 import { LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind } from "@nodaro/shared";
 import type { CharacterDef, ConnectedReference, ReferenceSource, ExtraRefCharacterContext } from "@nodaro/shared";
 import { characterMentionSlug, findCharacterMentionTokens, resolveCharacterMentions } from "@nodaro/shared";
@@ -1554,8 +1554,13 @@ export function executeNode(
       if (characterId) internalLora = { characterId };
     }
 
-    const result = buildImagePrompt({
-      prompt: prompt ?? "",
+    // Shared node-input assembly (WI-1a) — single source of truth with the
+    // backend payload-builder + Studio. `prompt` is already graph-composed
+    // here (cinematography hints + identity clause folded above), so we pass
+    // it as `userPrompt` with NO `direction`/`structured` (the composer is a
+    // no-op for those) → byte-identical to the previous inline call.
+    const result = assembleImageInput({
+      userPrompt: prompt ?? "",
       provider: providerKey,
       style: hasConnectedStyleNode(node.id, nodes, edges) ? undefined : imgData.style,
       negativePrompt: imgData.negativePrompt,
@@ -1576,7 +1581,9 @@ export function executeNode(
 
     // Post-assembly empty-prompt check: a Character / @-mention / style / etc.
     // could have filled the assembled prompt even if user typed nothing.
-    // Only reject when the FINAL assembled prompt is truly empty.
+    // Only reject when the FINAL assembled prompt is truly empty. Kept inline
+    // (not `throwOnEmpty`) to preserve this branch's toast + Promise.reject
+    // control flow and its exact message.
     if (!result.prompt.trim()) {
       toast.error(`Node "${imgData.label}": no prompt — type one, mention a character, or connect a cinematography source`);
       return Promise.reject(new Error("No prompt"));
