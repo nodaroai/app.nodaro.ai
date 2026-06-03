@@ -58,6 +58,15 @@ export interface PipelineAnimateShotArgs {
    *  guard (interpolation falls back to first_frame on auto mode per spec
    *  §5.13.10). Defaults to "manual" when omitted. */
   pipelineMode?: PipelineMode
+  /** #63 dialogue auto-pick — when set, the shot's spoken line is injected into
+   *  the animate prompt AND the model's audio is enabled so a native-speech
+   *  model (VEO 3.x) bakes the dialogue + lip movement directly. The caller
+   *  (`scene-internal-pipeline`) only sets this for shots whose scene
+   *  `video_model` is `native_speech` per `getVideoAudioCapability`; it then
+   *  revoices the baked clip to the character's voice. Absent for every other
+   *  shot → the payload is byte-identical to the silent-animate path. Only the
+   *  standard i2v/t2v dispatch honors it (Method 3/8/10 ignore it). */
+  spokenDialogue?: string
 }
 
 export interface PipelineAnimateShotResult {
@@ -107,6 +116,7 @@ export async function pipelineAnimateShot(
     priorLastFrameUrl,
     interpolationKeyframeUrls,
     pipelineMode = "manual",
+    spokenDialogue,
   } = args
 
   const mode = sceneNodeData.shot_input_mode
@@ -114,6 +124,14 @@ export async function pipelineAnimateShot(
   const duration = Math.max(1, Math.round(shot.duration_seconds))
   const motionPrompt = shot.motion_prompt
   const prompt = shot.visual_keyframe_prompt
+
+  // #63 — when the scene's model bakes native speech, fold the spoken line into
+  // the visual prompt so the model says it on camera (lip-synced). Only the
+  // standard i2v/t2v dispatch below uses `speechPrompt` + enables audio; the
+  // Method 3/8/10 special paths keep the plain `prompt`.
+  const speechPrompt = spokenDialogue
+    ? `${prompt}\n\nThe on-screen character speaks this line aloud, lip-synced and clearly audible, in the scene's language: "${spokenDialogue.trim()}"`
+    : prompt
 
   // first_last_frame is still deferred (Method 2 paired-keyframes).
   if (mode === "first_last_frame") {
@@ -304,7 +322,7 @@ export async function pipelineAnimateShot(
     pipelineEntityId,
     userId,
     inputData: {
-      prompt,
+      prompt: speechPrompt,
       motionPrompt,
       provider: videoModel,
       duration,
@@ -312,6 +330,10 @@ export async function pipelineAnimateShot(
       referenceImageUrls: refsForPayload,
       type: dispatchKind,
       shot_id: shot.shot_id,
+      // Only enable model audio when baking a spoken line — keeps non-dialogue
+      // shots on the existing (silent / provider-default) path. VEO is not an
+      // AUDIO_ADDON model, so this does not change the credit identifier.
+      ...(spokenDialogue ? { generateAudio: true } : {}),
     },
     queueName: "videoQueue",
     jobName: dispatchKind,
@@ -320,19 +342,21 @@ export async function pipelineAnimateShot(
         ? {
             jobId,
             imageUrl: startFrameUrl,
-            prompt,
+            prompt: speechPrompt,
             motionPrompt,
             provider: videoModel,
             duration,
             referenceImageUrls: refsForPayload,
+            ...(spokenDialogue ? { generateAudio: true } : {}),
             usageLogId,
           }
         : {
             jobId,
-            prompt,
+            prompt: speechPrompt,
             provider: videoModel,
             duration,
             referenceImageUrls: refsForPayload,
+            ...(spokenDialogue ? { generateAudio: true } : {}),
             usageLogId,
           },
     modelIdentifier,

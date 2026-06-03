@@ -12,6 +12,9 @@ vi.mock("../services/pipeline-generate-speech.js", () => ({
 vi.mock("../services/pipeline-lip-sync.js", () => ({
   pipelineLipSync: vi.fn(),
 }))
+vi.mock("../services/pipeline-voice-change.js", () => ({
+  pipelineVoiceChange: vi.fn(),
+}))
 vi.mock("../services/pipeline-combine-videos.js", () => ({
   pipelineCombineVideos: vi.fn(),
 }))
@@ -35,6 +38,7 @@ import { runSceneInternalPipeline } from "../scene-internal-pipeline.js"
 import { pipelineAnimateShot } from "../services/pipeline-animate-shot.js"
 import { pipelineGenerateSpeech } from "../services/pipeline-generate-speech.js"
 import { pipelineLipSync } from "../services/pipeline-lip-sync.js"
+import { pipelineVoiceChange } from "../services/pipeline-voice-change.js"
 import { pipelineCombineVideos } from "../services/pipeline-combine-videos.js"
 import { allocateReferenceSlots, extractLastFrame } from "../continuity.js"
 import { runImageCritic } from "../llms/image-critic.js"
@@ -199,6 +203,119 @@ describe("runSceneInternalPipeline", () => {
     for (const r of result.per_shot_results ?? []) {
       expect(r.last_frame_asset_id).toBeNull()
     }
+  })
+
+  // ─── #63 dialogue auto-pick (revoice vs TTS + lip-sync) ─────────────────────
+
+  it("native-speech model (veo3): bakes the line into animate + revoices to the cast voice", async () => {
+    ;(pipelineAnimateShot as ReturnType<typeof vi.fn>).mockImplementation(
+      async (args: { shot: ShotSpec }) => defaultAnimateSuccess(args.shot.shot_id),
+    )
+    ;(pipelineVoiceChange as ReturnType<typeof vi.fn>).mockResolvedValue({
+      jobId: "revoice-1",
+      assetId: "revoiced-asset",
+      assetUrl: "https://r2/revoiced.mp4",
+      creditsSpent: 4,
+    })
+
+    // supabase mock so loadCastVoiceMap resolves "hero" -> voice-xyz.
+    const supabase = {
+      from: () => {
+        const b: Record<string, unknown> = {}
+        b.select = () => b
+        b.eq = () => b
+        b.in = () =>
+          Promise.resolve({
+            data: [{ entity_key: "hero", metadata: { voice_match: { voice_id: "voice-xyz" } } }],
+            error: null,
+          })
+        return b
+      },
+    } as never
+
+    const sceneData = makeSceneNodeData(1, {
+      video_model: "veo3",
+      cast_keys: ["hero"],
+      shots: [makeShot("shot_01", { dialogue_line: "Hello there." })],
+    })
+    const result = await runSceneInternalPipeline(
+      { supabase, pipelineId: "p1", userId: "u1" },
+      makeSceneEntity({ scene_node_data: sceneData }),
+      { mode: "parallel", lipSyncEnabled: true, runImageCritic: false },
+    )
+
+    expect(result.ok).toBe(true)
+    // animate received the spoken line so VEO bakes speech + lip movement.
+    expect(pipelineAnimateShot).toHaveBeenCalledWith(
+      expect.objectContaining({ spokenDialogue: "Hello there." }),
+    )
+    // revoiced to the cast voice — NOT TTS + lip-sync.
+    expect(pipelineVoiceChange).toHaveBeenCalledWith(
+      expect.objectContaining({ voiceId: "voice-xyz", removeBackgroundNoise: false }),
+    )
+    expect(pipelineGenerateSpeech).not.toHaveBeenCalled()
+    expect(pipelineLipSync).not.toHaveBeenCalled()
+    // The revoiced clip replaced the raw animate clip in the per-shot result.
+    expect(result.per_shot_results?.[0]?.video_url).toBe("https://r2/revoiced.mp4")
+    expect(result.per_shot_results?.[0]?.has_dialogue).toBe(true)
+  })
+
+  it("silent model (minimax): keeps TTS + lip-sync, no revoice, no spokenDialogue", async () => {
+    ;(pipelineAnimateShot as ReturnType<typeof vi.fn>).mockImplementation(
+      async (args: { shot: ShotSpec }) => defaultAnimateSuccess(args.shot.shot_id),
+    )
+    ;(pipelineGenerateSpeech as ReturnType<typeof vi.fn>).mockResolvedValue({
+      assetUrl: "https://r2/tts.mp3",
+      audioDurationSec: 2.5,
+    })
+    ;(pipelineLipSync as ReturnType<typeof vi.fn>).mockResolvedValue({
+      assetId: "lipsync-asset",
+      assetUrl: "https://r2/lipsynced.mp4",
+    })
+
+    const sceneData = makeSceneNodeData(1, {
+      video_model: "minimax",
+      shots: [makeShot("shot_01", { dialogue_line: "Hello there." })],
+    })
+    const result = await runSceneInternalPipeline(
+      makeCtx(),
+      makeSceneEntity({ scene_node_data: sceneData }),
+      { mode: "parallel", lipSyncEnabled: true, runImageCritic: false },
+    )
+
+    expect(result.ok).toBe(true)
+    expect(pipelineAnimateShot).not.toHaveBeenCalledWith(
+      expect.objectContaining({ spokenDialogue: "Hello there." }),
+    )
+    expect(pipelineGenerateSpeech).toHaveBeenCalledTimes(1)
+    expect(pipelineLipSync).toHaveBeenCalledTimes(1)
+    expect(pipelineVoiceChange).not.toHaveBeenCalled()
+  })
+
+  it("native-speech model with no cast voice: bakes into animate, skips revoice (keeps baked voice)", async () => {
+    ;(pipelineAnimateShot as ReturnType<typeof vi.fn>).mockImplementation(
+      async (args: { shot: ShotSpec }) => defaultAnimateSuccess(args.shot.shot_id),
+    )
+
+    const sceneData = makeSceneNodeData(1, {
+      video_model: "veo3_lite",
+      cast_keys: [],
+      shots: [makeShot("shot_01", { dialogue_line: "Hello there." })],
+    })
+    const result = await runSceneInternalPipeline(
+      makeCtx(),
+      makeSceneEntity({ scene_node_data: sceneData }),
+      { mode: "parallel", lipSyncEnabled: true, runImageCritic: false },
+    )
+
+    expect(result.ok).toBe(true)
+    expect(pipelineAnimateShot).toHaveBeenCalledWith(
+      expect.objectContaining({ spokenDialogue: "Hello there." }),
+    )
+    // No voice to swap to + no TTS — the clip keeps the model's baked voice.
+    expect(pipelineVoiceChange).not.toHaveBeenCalled()
+    expect(pipelineGenerateSpeech).not.toHaveBeenCalled()
+    expect(result.per_shot_results?.[0]?.has_dialogue).toBe(true)
   })
 
   it("continuity_break — Image Critic flags blocking continuity_break, scene short-circuits", async () => {
