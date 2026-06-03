@@ -45,6 +45,8 @@ import {
   mergeVideoAudioApi,
   trimAudioApi,
   splitMediaApi,
+  extractAudioApi,
+  removeAudioApi,
   trimVideoApi,
   extractFrameApi,
   transcodeVideoApi,
@@ -127,6 +129,8 @@ import type {
   MergeVideoAudioData,
   TrimAudioData,
   SplitMediaData,
+  ExtractAudioData,
+  RemoveAudioData,
   TrimVideoData,
   ExtractFrameData,
   TranscodeVideoData,
@@ -4912,6 +4916,38 @@ export function executeNode(
     );
   }
 
+  if (node.type === "extract-audio") {
+    const videoUrl = overrideMediaUrl ?? inputs.videoUrl;
+    if (!videoUrl) {
+      toast.error(`Node "${(node.data as ExtractAudioData).label}": no video input`);
+      return Promise.reject(new Error("No video"));
+    }
+    setUserPromptTemplate(undefined);
+    return runProcessingNode(
+      node.id,
+      () => extractAudioApi(videoUrl, ctx.userId),
+      "generatedAudioUrl",
+      "Extract Audio",
+      ctx,
+    );
+  }
+
+  if (node.type === "remove-audio") {
+    const videoUrl = overrideMediaUrl ?? inputs.videoUrl;
+    if (!videoUrl) {
+      toast.error(`Node "${(node.data as RemoveAudioData).label}": no video input`);
+      return Promise.reject(new Error("No video"));
+    }
+    setUserPromptTemplate(undefined);
+    return runProcessingNode(
+      node.id,
+      () => removeAudioApi(videoUrl, ctx.userId),
+      "generatedVideoUrl",
+      "Remove Audio",
+      ctx,
+    );
+  }
+
   if (node.type === "split-media") {
     const d = node.data as SplitMediaData;
     const videoUrl = inputs.videoUrl;
@@ -4931,7 +4967,7 @@ export function executeNode(
         audioFormat: d.audioFormat || "mp3",
         userId: ctx.userId,
       }).then(({ jobId }) => {
-        toast.info("Split Media started", { description: `Job ID: ${jobId}` });
+        toast.info("Split into Chunks started", { description: `Job ID: ${jobId}` });
         updateNodeData(node.id, { currentJobId: jobId });
         const poll = setInterval(async () => {
           try {
@@ -4989,12 +5025,12 @@ export function executeNode(
                 );
               });
 
-              toast.success(`Split Media complete: ${od.chunkCount} chunks`);
+              toast.success(`Split into Chunks complete: ${od.chunkCount} chunks`);
               resolve((audioUrls?.[0] ?? videoUrls?.[0]) as string);
             } else if (job.status === "failed") {
               clearInterval(poll);
               updateNodeData(node.id, { executionStatus: "failed", errorMessage: job.error_message ?? "Failed", currentJobId: undefined });
-              toast.error(`Split Media failed: ${job.error_message}`);
+              toast.error(`Split into Chunks failed: ${job.error_message}`);
               reject(new Error(job.error_message ?? "Failed"));
             }
           } catch {

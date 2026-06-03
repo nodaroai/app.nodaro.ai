@@ -72,6 +72,8 @@ export const FFMPEG_NODE_TYPES: ReadonlySet<string> = new Set([
   "adjust-volume",
   "combine-audio",
   "mix-audio",
+  "extract-audio",
+  "remove-audio",
 ])
 
 /**
@@ -99,6 +101,10 @@ export function isValidFfmpegConnection(
     case "resize-video":
     case "add-captions":
     case "combine-videos":
+    // Extract Audio (video → audio) and Remove Audio (video → silent video)
+    // both take a single video input on their `in` handle.
+    case "extract-audio":
+    case "remove-audio":
       return targetHandle === "in" && ACCEPTS_VIDEO(sourceType)
 
     // Pure audio-input nodes: trim-audio / combine-audio / mix-audio.

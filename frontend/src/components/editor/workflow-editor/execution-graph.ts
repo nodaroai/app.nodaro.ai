@@ -467,7 +467,8 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     type === "loop-video" ||
     type === "fade-video" ||
     type === "manual-edit" ||
-    type === "transcode-video"
+    type === "transcode-video" ||
+    type === "remove-audio"
   ) {
     const results =
       (data.generatedResults as GeneratedResult[] | undefined) ?? [];
@@ -478,13 +479,17 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     );
   }
   if (type === "split-media") {
-    // Return first video or audio chunk URL based on sourceHandle
+    // Return first audio or video chunk URL based on the tapped handle. The
+    // source handle id is "audio"/"video" (legacy "*-out" is migrated on load
+    // in use-workflow-store.ts); accept both forms so the audio leg routes
+    // correctly regardless of migration state. The prior "audio-out"-only
+    // check was dead post-migration and always fell through to video.
     const videoUrls = (data.generatedVideoUrls as string[] | undefined) ?? [];
     const audioUrls = (data.generatedAudioUrls as string[] | undefined) ?? [];
-    if (sourceHandle === "audio-out") return audioUrls[0];
+    if (sourceHandle === "audio" || sourceHandle === "audio-out") return audioUrls[0];
     return videoUrls[0] ?? audioUrls[0];
   }
-  if (type === "trim-audio" || type === "mix-audio" || type === "combine-audio") {
+  if (type === "trim-audio" || type === "mix-audio" || type === "combine-audio" || type === "extract-audio") {
     const results =
       (data.generatedResults as GeneratedResult[] | undefined) ?? [];
     const activeIndex = (data.activeResultIndex as number | undefined) ?? 0;

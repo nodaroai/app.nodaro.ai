@@ -214,6 +214,8 @@ export const TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEnt
   "loop-video":         [{ handleId: "in", label: "Video", accepts: ACCEPTS_VIDEO }],
   "resize-video":       [{ handleId: "in", label: "Video", accepts: ACCEPTS_VIDEO }],
   "add-captions":       [{ handleId: "in", label: "Video", accepts: ACCEPTS_VIDEO }],
+  "extract-audio":      [{ handleId: "in", label: "Video", accepts: ACCEPTS_VIDEO }],
+  "remove-audio":       [{ handleId: "in", label: "Video", accepts: ACCEPTS_VIDEO }],
   "trim-audio":         [{ handleId: "in", label: "Audio", accepts: ACCEPTS_AUDIO }],
   "combine-audio":      [{ handleId: "in", label: "Audio", accepts: ACCEPTS_AUDIO }],
   "mix-audio":          [{ handleId: "in", label: "Audio", accepts: ACCEPTS_AUDIO }],

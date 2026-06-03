@@ -1,43 +1,34 @@
 ---
-node_type: split-media
-generated_at: 2026-06-03T16:56:58.433Z
+node_type: remove-audio
+generated_at: 2026-06-03T16:56:58.445Z
 generated_from: 98514458
 ---
 
-# Split Media
+# Remove Audio
 
 <!-- AUTO-GEN:START node-data-shape -->
-**Type:** `split-media`
+**Type:** `remove-audio`
 **Category:** processing
 **Credit cost:** 2
-**Inputs (target handles):** `video-in`, `audio-in`
-**Outputs (source handles):** `video-out`, `audio-out`
+**Inputs (target handles):** `in`
+**Outputs (source handles):** `video-out`
 
 **Required data fields:**
 - `label: string`
-- `chunkDuration: number`
 - `fieldMappings: FieldMappings`
 
 **Optional data fields:**
 - `currentJobProgress?: number`
-- `audioFormat?: "mp3" | "wav" | "aac"`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
-- `generatedVideoUrls?: string[]`
-- `generatedAudioUrls?: string[]`
-- `selectedAudioChunks?: number[]`
-- `selectedVideoChunks?: number[]`
-- `outputChunkIndex?: number`
+- `generatedVideoUrl?: string`
 - `generatedResults?: readonly GeneratedResult[]`
 - `activeResultIndex?: number`
-- `currentJobId?: string`
 
 **Default data:**
 ```json
 {
-  "label": "Split into Chunks",
-  "chunkDuration": 10,
-  "audioFormat": "mp3",
+  "label": "Remove Audio",
   "fieldMappings": {}
 }
 ```
@@ -59,16 +50,14 @@ generated_from: 98514458
 
 ```json
 {
-  "id": "split-media-1",
-  "type": "split-media",
+  "id": "remove-audio-1",
+  "type": "remove-audio",
   "position": {
     "x": 0,
     "y": 0
   },
   "data": {
-    "label": "Split into Chunks",
-    "chunkDuration": 10,
-    "audioFormat": "mp3",
+    "label": "Remove Audio",
     "fieldMappings": {}
   }
 }

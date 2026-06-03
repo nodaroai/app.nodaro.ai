@@ -103,6 +103,8 @@ import { ResizeVideoNode } from "./resize-video-node";
 import { SocialMediaFormatNode } from "./social-media-format-node";
 import { TrimAudioNode } from "./trim-audio-node";
 import { SplitMediaNode } from "./split-media-node";
+import { ExtractAudioNode } from "./extract-audio-node";
+import { RemoveAudioNode } from "./remove-audio-node";
 import { MixAudioNode } from "./mix-audio-node";
 import { CombineAudioNode } from "./combine-audio-node";
 import { AdjustVolumeNode } from "./adjust-volume-node";
@@ -278,6 +280,8 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "social-media-format": SocialMediaFormatNode,
   "trim-audio": TrimAudioNode,
   "split-media": SplitMediaNode,
+  "extract-audio": ExtractAudioNode,
+  "remove-audio": RemoveAudioNode,
   "mix-audio": MixAudioNode,
   "combine-audio": CombineAudioNode,
   "adjust-volume": AdjustVolumeNode,

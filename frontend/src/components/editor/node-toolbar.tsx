@@ -6,7 +6,7 @@ import {
   Type, List, BookOpen, ImageIcon, Film, Merge, Plus, X,
   Upload, Video, Rss, Palette, PaintBucket, Server, Brush, Mountain,
   Hash, Clock, RatioIcon, Mic, ShieldCheck, StickyNote,
-  Volume2, Captions, Maximize, AudioLines, Music,
+  Volume2, VolumeX, Captions, Maximize, AudioLines, Music,
   SlidersHorizontal, Scissors, Frame, Aperture, Lightbulb, SwatchBook, CloudFog, Globe, HardDrive, Webhook, Clapperboard, UserPlus, SmilePlus, Package, MapPin, Wand2, Layers, Disc3, FastForward, FileText, Users, Waypoints, Sparkles, Repeat, Gauge, SunDim, Box, Shapes, AudioWaveform, ArrowUpFromLine, RefreshCw, Eye, Languages, AlignLeft, Workflow, LogIn, LogOut, Share2, Instagram, Youtube, Linkedin, Twitter, Facebook, UserRound, Send, Download, GitBranch, Puzzle, MessageSquare, ZoomIn, Eraser, ListMusic, Braces, Filter, Funnel, ListFilter, ListTree, CopyMinus, GitMerge, ArrowUpDown, Smile, PersonStanding, PawPrint, Car, Swords, Armchair, Camera, LayoutDashboard, HandMetal, Hourglass, Cpu, Zap, Activity, Piano, User, MessageCircle, ScanFace, VenetianMask, Gem,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -170,7 +170,9 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   // Processing — Audio
   { type: "merge-video-audio", label: "Merge Video & Audio", icon: <Volume2 className="h-4 w-4" />, category: "Processing", group: "Audio" },
   { type: "trim-audio", label: "Trim Audio", icon: <AudioLines className="h-4 w-4" />, category: "Processing", group: "Audio" },
-  { type: "split-media", label: "Split Media", icon: <Scissors className="h-4 w-4" />, category: "Processing", group: "Audio" },
+  { type: "split-media", label: "Split into Chunks", icon: <Scissors className="h-4 w-4" />, category: "Processing", group: "Audio" },
+  { type: "extract-audio", label: "Extract Audio", icon: <AudioLines className="h-4 w-4" />, category: "Processing", group: "Audio", keywords: ["extract audio", "rip audio", "audio from video", "demux", "detach audio", "mp3", "split video audio"] },
+  { type: "remove-audio", label: "Remove Audio", icon: <VolumeX className="h-4 w-4" />, category: "Processing", group: "Audio", keywords: ["remove audio", "mute", "strip audio", "silent video", "no sound", "detach audio", "split video audio"] },
   { type: "mix-audio", label: "Mix Audio", icon: <Music className="h-4 w-4" />, category: "Processing", group: "Audio" },
   { type: "combine-audio", label: "Combine Audio", icon: <ListMusic className="h-4 w-4" />, category: "Processing", group: "Audio" },
   { type: "adjust-volume", label: "Adjust Volume", icon: <SlidersHorizontal className="h-4 w-4" />, category: "Processing", group: "Audio" },

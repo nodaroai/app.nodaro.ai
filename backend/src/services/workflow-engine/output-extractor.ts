@@ -642,6 +642,17 @@ export function getPrimaryOutput(
     return output.videoUrl || output.audioUrl
   }
 
+  // Split-media ("Split into Chunks"): dual-output time chunker. Route by the
+  // tapped handle so an audio-handle wire gets the audio chunk and a video-
+  // handle wire gets the video chunk. Accepts the legacy "*-out" handle ids as
+  // a safety net for edges that bypassed the load-time handle migration
+  // (use-workflow-store.ts) — mirrors the suno-separate dual-handle case.
+  if (sourceType === "split-media") {
+    if (sourceHandle === "audio" || sourceHandle === "audio-out") return output.audioUrl
+    if (sourceHandle === "video" || sourceHandle === "video-out") return output.videoUrl
+    return output.videoUrl || output.audioUrl
+  }
+
   // Social-media-format: prefer video, fall back to image (matches frontend)
   if (sourceType === "social-media-format") {
     return output.videoUrl || output.imageUrl
@@ -773,6 +784,8 @@ const VIDEO_RESULT_TYPES = new Set([
   "fade-video",
   "transcode-video",
   "manual-edit",
+  // Remove Audio: video in → silent video out (stores generatedVideoUrl).
+  "remove-audio",
 ])
 
 /** Audio-generating node types that store results in generatedAudioUrl / generatedResults.
@@ -798,6 +811,8 @@ const AUDIO_RESULT_TYPES = new Set([
   "trim-audio",
   "mix-audio",
   "combine-audio",
+  // Extract Audio: video in → audio out (stores generatedAudioUrl).
+  "extract-audio",
 ])
 
 /** Entity node types that store sourceImageUrl / generatedResults */
@@ -846,13 +861,17 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
     return undefined
   }
 
-  // Split media → first video or audio chunk
+  // Split media (UI: "Split into Chunks") → expose BOTH the first video and
+  // the first audio chunk so getPrimaryOutput can route by the tapped handle
+  // (a wire from the video handle must not get the audio chunk, and vice
+  // versa). Populating only one field would strand the other handle.
   if (type === "split-media") {
     const videoUrls = (data.generatedVideoUrls as string[] | undefined) ?? []
     const audioUrls = (data.generatedAudioUrls as string[] | undefined) ?? []
-    if (videoUrls[0]) return { videoUrl: videoUrls[0] }
-    if (audioUrls[0]) return { audioUrl: audioUrls[0] }
-    return undefined
+    const out: NodeOutput = {}
+    if (videoUrls[0]) out.videoUrl = videoUrls[0]
+    if (audioUrls[0]) out.audioUrl = audioUrls[0]
+    return out.videoUrl || out.audioUrl ? out : undefined
   }
 
   // Voice-changer is dual-mode: audio in → audio out; video in → video out (+

@@ -36,10 +36,12 @@ const ALL_FFMPEG: ReadonlyArray<string> = [
   "adjust-volume",
   "combine-audio",
   "mix-audio",
+  "extract-audio",
+  "remove-audio",
 ]
 
 describe("FFMPEG_NODE_TYPES set contents", () => {
-  it("contains exactly the 11 expected node types", () => {
+  it("contains exactly the 13 expected node types", () => {
     expect(new Set(FFMPEG_NODE_TYPES)).toEqual(new Set(ALL_FFMPEG))
   })
 })
@@ -60,6 +62,8 @@ describe("isValidFfmpegConnection switch coverage", () => {
     "adjust-volume":      "upload-audio",
     "combine-audio":      "upload-audio",
     "mix-audio":          "upload-audio",
+    "extract-audio":      "upload-video",
+    "remove-audio":       "upload-video",
   }
 
   it("every node in FFMPEG_NODE_TYPES has a switch case that accepts at least one source", () => {

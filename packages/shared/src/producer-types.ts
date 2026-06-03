@@ -56,6 +56,8 @@ export const VIDEO_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   "fade-video",
   "transcode-video",
   "manual-edit",
+  // Remove Audio: strips the audio track, emits a silent video.
+  "remove-audio",
 ])
 
 /**
@@ -93,6 +95,14 @@ export const DYNAMIC_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   // input handles (it also stays in AUDIO_PRODUCER_TYPES as its default).
   "voice-changer",
   "reduce",
+  // Dual-output time chunker (UI label "Split into Chunks"; type id stays
+  // "split-media"): video in → video chunks, audio in → audio chunks — two
+  // independent lanes on two output handles. Like voice-changer, the canvas
+  // validator only sees the source NODE type, not which handle a wire leaves,
+  // so it lives here to be accepted on BOTH audio and video input handles. The
+  // backend routes the correct lane by sourceHandle in getPrimaryOutput
+  // (output-extractor.ts); the frontend does so in extractNodeOutput.
+  "split-media",
 ])
 
 /**
@@ -125,4 +135,6 @@ export const AUDIO_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   "dubbing",
   "voice-remix",
   "voice-design",
+  // Extract Audio: demuxes a video's audio track to a standalone MP3.
+  "extract-audio",
 ])

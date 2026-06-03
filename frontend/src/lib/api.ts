@@ -2007,6 +2007,30 @@ export async function splitMediaApi(opts: { videoUrl?: string; audioUrl?: string
   })
 }
 
+export async function extractAudioApi(videoUrl: string, userId?: string): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { videoUrl }
+  if (userId) {
+    body.userId = userId
+  }
+  return apiJson("/v1/extract-audio", {
+    body,
+    workflowId: true,
+    label: "Failed to start extract-audio",
+  })
+}
+
+export async function removeAudioApi(videoUrl: string, userId?: string): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { videoUrl }
+  if (userId) {
+    body.userId = userId
+  }
+  return apiJson("/v1/remove-audio", {
+    body,
+    workflowId: true,
+    label: "Failed to start remove-audio",
+  })
+}
+
 export async function trimVideoApi(
   videoUrl: string,
   startTime: number,

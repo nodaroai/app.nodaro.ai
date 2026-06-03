@@ -3279,6 +3279,20 @@ export function buildPayload(
         usageLogId,
       })
 
+    case "extract-audio":
+      return ffmpegResult("extract-audio", {
+        jobId,
+        videoUrl: resolvedInputs.videoUrl || data.videoUrl,
+        usageLogId,
+      })
+
+    case "remove-audio":
+      return ffmpegResult("remove-audio", {
+        jobId,
+        videoUrl: resolvedInputs.videoUrl || data.videoUrl,
+        usageLogId,
+      })
+
     case "trim-video": {
       const trimMode = (data.trimMode as string | undefined) ?? "time"
       return ffmpegResult("trim-video", {

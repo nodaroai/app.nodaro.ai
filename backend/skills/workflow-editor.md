@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-06-01T20:05:20.439Z
-generated_from: c8fd1e03
+generated_at: 2026-06-03T16:56:57.826Z
+generated_from: 98514458
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -92,6 +92,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `era` — Era / Period
 - `exposure-settings` — Exposure Settings
 - `extend-video` — Extend Video
+- `extract-audio` — Extract Audio
 - `extract-field` — Extract Field
 - `extract-frame` — Extract Frame
 - `face` — Face
@@ -149,6 +150,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `qa-check` — QA Check
 - `reduce` — Reduce
 - `reference-audio` — Reference Audio
+- `remove-audio` — Remove Audio
 - `remove-background` — Remove Background
 - `render-quality` — Render Quality
 - `render-video` — Render Video
@@ -165,7 +167,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `sort-list` — Sort List
 - `speech-to-video` — Speech to Video
 - `speed-ramp` — Adjust Speed
-- `split-media` — Split Media
+- `split-media` — Split into Chunks
 - `split-text` — Split Text
 - `sticky-note` — Sticky Note
 - `style` — Style

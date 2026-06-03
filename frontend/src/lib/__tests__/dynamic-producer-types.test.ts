@@ -32,6 +32,9 @@ describe("DYNAMIC_PRODUCER_TYPES — shared set contents", () => {
       // Dual-mode: audio in → audio out; video in → video out (+ revoiced audio).
       "voice-changer",
       "reduce",
+      // Dual-output time chunker ("Split into Chunks"): video chunks + audio
+      // chunks on two handles; routed by sourceHandle at execution time.
+      "split-media",
     ]))
   })
 
