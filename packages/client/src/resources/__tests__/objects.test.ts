@@ -472,6 +472,52 @@ describe("objects resource", () => {
     const body = JSON.parse(fetchMock.mock.calls[0][1].body)
     expect(body.candidateJobId).toBe("job-1")
     expect(result.sourceImageUrl).toBe("https://r2/x.png")
+    // A real caption passes through untouched.
+    expect(result.canonicalDescription).toBe("A medieval longsword...")
+  })
+
+  it("approveMainImage normalizes the wire \"\" caption → null (WI-7, matches characters)", async () => {
+    // The route still sends "" on LLM sub-failure; the SDK normalizes it to
+    // null so consumers see the same `string | null` semantics as characters.
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockOk({ sourceImageUrl: "https://r2/x.png", canonicalDescription: "" }),
+    )
+    const c = createClient({
+      baseUrl: "https://api.example.com",
+      auth: new StaticTokenAuth("t"),
+      fetch: fetchMock,
+    })
+    const result = await c.objects.approveMainImage("uuid-1", "job-1")
+    expect(result.sourceImageUrl).toBe("https://r2/x.png")
+    expect(result.canonicalDescription).toBeNull()
+  })
+
+  it("get normalizes the wire \"\" caption → null (WI-7)", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockOk({ id: "uuid-1", name: "Magic Sword", canonicalDescription: "" }),
+    )
+    const c = createClient({
+      baseUrl: "https://api.example.com",
+      auth: new StaticTokenAuth("t"),
+      fetch: fetchMock,
+    })
+    const result = await c.objects.get("uuid-1")
+    expect(result.canonicalDescription).toBeNull()
+    // Other fields pass through unchanged.
+    expect(result.name).toBe("Magic Sword")
+  })
+
+  it("get passes a real caption through unchanged (WI-7)", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(
+      mockOk({ id: "uuid-1", name: "Magic Sword", canonicalDescription: "A medieval longsword." }),
+    )
+    const c = createClient({
+      baseUrl: "https://api.example.com",
+      auth: new StaticTokenAuth("t"),
+      fetch: fetchMock,
+    })
+    const result = await c.objects.get("uuid-1")
+    expect(result.canonicalDescription).toBe("A medieval longsword.")
   })
 
   it("approveMainImage threads expectedUpdatedAt when supplied", async () => {

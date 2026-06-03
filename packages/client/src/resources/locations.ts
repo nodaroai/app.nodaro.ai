@@ -49,8 +49,10 @@ export interface LocationReferencePhoto {
  * Identity-foundation fields:
  *   - `referencePhotos` — caller-supplied mood-board refs (cap 20).
  *   - `canonicalDescription` — ~80–120-word LLM-authored visual caption,
- *     populated by `approveMainImage()` / `recaption()`. Coerced from DB null
- *     to "" on the wire so consumers don't need to defensively `?? ""`.
+ *     populated by `approveMainImage()` / `recaption()`. The wire still sends
+ *     `""` on caption sub-failure (the breaking wire change is deferred to a
+ *     major bump), but `get()` normalizes `""` → `null` so consumers see the
+ *     same `string | null` semantics as characters.
  *   - `styleLock` — whether asset gens should anchor to the canonical style
  *     captured at approval time. Defaults to `true` on new rows.
  */
@@ -71,7 +73,9 @@ export interface Location {
   seasons: Array<{ name: string; url: string }>
   atmosphereMotions: Array<{ name: string; url: string }>
   referencePhotos: LocationReferencePhoto[]
-  canonicalDescription: string
+  /** `null` when no caption is set (or the LLM caption sub-failed) — the wire
+   *  sends `""`, normalized to `null` in `get()` to match character semantics. */
+  canonicalDescription: string | null
   styleLock: boolean
   deletedAt: string | null
   createdAt: string
@@ -251,11 +255,12 @@ export interface GenerateLocationMotionInput {
 export interface ApproveMainImageResult {
   sourceImageUrl: string
   /**
-   * LLM-authored caption. Coerced to "" (NOT null) when the LLM call
-   * sub-failed during the approval — the main image is still set; call
+   * LLM-authored caption. `null` when the LLM caption sub-failed — the wire
+   * sends `""`, normalized to `null` here so consumers see the same
+   * `string | null` semantics as characters. The main image is still set; call
    * `recaption()` to retry.
    */
-  canonicalDescription: string
+  canonicalDescription: string | null
 }
 
 export interface RecaptionLocationResult {
@@ -291,8 +296,15 @@ export class LocationsResource {
    * (archived) rows are returned by id intentionally so canvas nodes that
    * hold a stale `locationDbId` keep loading.
    */
-  get(id: string): Promise<LocationDetail> {
-    return this.client.request("GET", `/v1/locations/${encodeURIComponent(id)}`)
+  async get(id: string): Promise<LocationDetail> {
+    const res = await this.client.request<LocationDetail>(
+      "GET",
+      `/v1/locations/${encodeURIComponent(id)}`,
+    )
+    // Normalize the wire `""` caption (DB null / LLM sub-failure) → null so
+    // consumers see the same `string | null` semantics as characters. New
+    // object — never mutate the response.
+    return { ...res, canonicalDescription: res.canonicalDescription || null }
   }
 
   /**
@@ -388,16 +400,20 @@ export class LocationsResource {
    * Sets `source_image_url` and fires the LLM caption (Claude Sonnet vision)
    * inline. Returns the new main-image URL plus the caption.
    *
-   * Caption-failure semantics: `canonicalDescription` is coerced to `""`
-   * (NOT null) when the LLM call sub-failed — the main image is still set;
-   * call `recaption()` to retry.
+   * Caption-failure semantics: the route still sends `""` on LLM sub-failure,
+   * but the SDK normalizes `""` → `null` here so `canonicalDescription` carries
+   * the same `string | null` semantics as characters. The main image is still
+   * set; call `recaption()` to retry.
    */
-  approveMainImage(id: string, candidateJobId: string): Promise<ApproveMainImageResult> {
-    return this.client.request(
+  async approveMainImage(id: string, candidateJobId: string): Promise<ApproveMainImageResult> {
+    const res = await this.client.request<{ sourceImageUrl: string; canonicalDescription: string | null }>(
       "POST",
       `/v1/locations/${encodeURIComponent(id)}/approve-main-image`,
       { body: { candidateJobId } },
     )
+    // Normalize the wire `""` (LLM sub-failure) → null; build a new object
+    // rather than mutating the response.
+    return { sourceImageUrl: res.sourceImageUrl, canonicalDescription: res.canonicalDescription || null }
   }
 
   /**
