@@ -1726,6 +1726,11 @@ export async function pipelinesRoutes(app: FastifyInstance) {
           motion: z.string().max(64).optional(),
         })
         .optional(),
+      // Per-shot model overrides (Focus / clip editor). Stored on the shot;
+      // the keyframe re-roll uses image_model, the re-animate uses video_model.
+      // Frontend constrains the choices to the pinnable allowlists.
+      image_model: z.string().max(64).optional(),
+      video_model: z.string().max(64).optional(),
     })
     .strict()
 
@@ -1919,7 +1924,8 @@ export async function pipelinesRoutes(app: FastifyInstance) {
           pipelineEntityId: req.params.scene_id,
           userId,
           prompt,
-          modelIdentifier: snd.image_model ?? "nano-banana",
+          modelIdentifier:
+            (shot.image_model as string | undefined) ?? snd.image_model ?? "nano-banana",
           referenceImageUrls,
         })
       } catch (e) {
@@ -1949,6 +1955,119 @@ export async function pipelinesRoutes(app: FastifyInstance) {
       }
 
       return reply.send({ ok: true, keyframe_url: result.assetUrl })
+    },
+  )
+
+  // ── POST /v1/pipelines/:id/scenes/:scene_id/shots/:shot_id/reanimate ───────
+  //
+  // Phase 3 — clip editor "Regenerate clip": re-animate ONE shot into a fresh
+  // video from its current keyframe + prompt + (per-shot or scene) video model,
+  // then persist the new `video_url`. Reuses the Stage-7 `pipelineAnimateShot`
+  // path. Synchronous (awaits the i2v job → needs the media worker) and charges
+  // credits. Lets the user redo a clip with an edited prompt or a new model.
+  app.post<{ Params: { id: string; scene_id: string; shot_id: string } }>(
+    "/v1/pipelines/:id/scenes/:scene_id/shots/:shot_id/reanimate",
+    async (req, reply) => {
+      if (!gateEdition(reply)) return
+      if (!gateScope(req, reply, "pipelines:execute")) return
+      const userId = gateAuth(req, reply)
+      if (!userId) return
+
+      const { data: owner } = await supabase
+        .from("pipelines")
+        .select("user_id")
+        .eq("id", req.params.id)
+        .maybeSingle()
+      if (!owner || owner.user_id !== userId) {
+        return reply.status(404).send({ error: { code: "not_found" } })
+      }
+
+      const { data: scene } = await supabase
+        .from("pipeline_entities")
+        .select("id, metadata")
+        .eq("id", req.params.scene_id)
+        .eq("pipeline_id", req.params.id)
+        .eq("entity_type", "scene")
+        .maybeSingle()
+      if (!scene) {
+        return reply.status(404).send({ error: { code: "scene_not_found" } })
+      }
+
+      const metadata = (scene.metadata as Record<string, unknown> | null) ?? {}
+      const snd = metadata.scene_node_data as
+        | { shots?: Array<Record<string, unknown>>; video_model?: string; cast_keys?: string[] }
+        | undefined
+      const shots = snd?.shots
+      if (!snd || !Array.isArray(shots)) {
+        return reply.status(409).send({ error: { code: "scene_not_planned" } })
+      }
+      const idx = shots.findIndex(
+        (s) => (s as { shot_id?: string }).shot_id === req.params.shot_id,
+      )
+      if (idx === -1) {
+        return reply.status(404).send({ error: { code: "shot_not_found" } })
+      }
+      const shot = shots[idx] as Record<string, unknown>
+      const startFrameUrl = (shot.keyframe_url as string | undefined) ?? null
+      if (!startFrameUrl) {
+        return reply.status(409).send({ error: { code: "shot_missing_keyframe" } })
+      }
+
+      const { allocateReferenceSlots } = await import("../ee/pipelines/continuity.js")
+      const { pipelineAnimateShot } = await import(
+        "../ee/pipelines/services/pipeline-animate-shot.js"
+      )
+
+      // Per-shot video model wins over the scene default for this re-animate.
+      const sndForAnimate = {
+        ...snd,
+        video_model: (shot.video_model as string | undefined) ?? snd.video_model,
+      }
+      const refs = await allocateReferenceSlots({
+        supabase,
+        pipelineId: req.params.id,
+        scene: { id: req.params.scene_id },
+        shot: shot as never,
+        sceneNodeData: sndForAnimate as never,
+        priorLastFrame: null,
+      })
+
+      let result: { assetUrl: string }
+      try {
+        result = await pipelineAnimateShot({
+          supabase,
+          pipelineId: req.params.id,
+          pipelineEntityId: req.params.scene_id,
+          userId,
+          shot: shot as never,
+          sceneNodeData: sndForAnimate as never,
+          startFrameUrl,
+          referenceUrls: refs.map((r) => r.url),
+          pipelineMode: "manual",
+        })
+      } catch (e) {
+        return reply.status(502).send({
+          error: {
+            code: "reanimate_failed",
+            detail: e instanceof Error ? e.message : String(e),
+          },
+        })
+      }
+
+      const mergedShot = { ...shot, video_url: result.assetUrl }
+      const newShots = shots.map((s, i) => (i === idx ? mergedShot : s))
+      const { error: updErr } = await supabase
+        .from("pipeline_entities")
+        .update({ metadata: { ...metadata, scene_node_data: { ...snd, shots: newShots } } })
+        .eq("id", req.params.scene_id)
+        .eq("pipeline_id", req.params.id)
+      if (updErr) {
+        return reply
+          .status(500)
+          .send({ error: { code: "db_error", detail: updErr.message } })
+      }
+
+      return reply.send({ ok: true, video_url: result.assetUrl })
     },
   )
 

@@ -30,6 +30,7 @@ import { buildSceneGraphFromPipeline } from "@remotion-pkg/lib/build-scene-graph
 import type { SceneGraph } from "@remotion-pkg/scene-graph"
 import { SceneGraphPlayerPreview } from "@/components/editor/scene-graph-player-preview"
 import { ComposerSpec } from "@/components/studio/composer-spec"
+import { ClipEditor } from "@/components/studio/clip-editor"
 import { CinemaTopBar, FlowGraphModal } from "@/components/studio/cinema-top-bar"
 import { AiDirectorPanel } from "@/components/studio/ai-director-panel"
 import { ReelPipeline } from "@/components/studio/reel-pipeline"
@@ -1449,6 +1450,12 @@ function StudioSession({ pipelineId }: { pipelineId: string }) {
   // Cinematic shell: Pro Control vs Autopilot AR + the Flow Graph modal.
   const [autopilot, setAutopilot] = useState(false)
   const [flowOpen, setFlowOpen] = useState(false)
+  // Clip selected from the reel — plays in the main screen + opens its editor.
+  const [selectedClip, setSelectedClip] = useState<{
+    url: string
+    label: string
+    sceneId: string
+  } | null>(null)
   // Account Gen-Credits shown in the top bar — refreshed every 30s.
   const [credits, setCredits] = useState<number | null>(null)
   useEffect(() => {
@@ -1819,6 +1826,39 @@ function StudioSession({ pipelineId }: { pipelineId: string }) {
             }
           />
 
+          {/* Clip selected from the reel — plays here in the main screen. */}
+          {selectedClip && (
+            <div className="mb-4 overflow-hidden rounded-lg border border-[#1d1d1d] bg-black">
+              <div className="flex items-center justify-between border-b border-[#1d1d1d] px-3 py-1.5">
+                <span className="font-mono text-[11px] uppercase tracking-wide text-[#ff0073]">
+                  ▶ {selectedClip.label}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedClip(null)}
+                  className="font-mono text-[10px] text-muted-foreground hover:text-foreground"
+                >
+                  Close [X]
+                </button>
+              </div>
+              {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+              <video
+                key={selectedClip.url}
+                src={selectedClip.url}
+                controls
+                autoPlay
+                className="max-h-[55vh] w-full bg-black"
+              />
+              <ClipEditor
+                pipelineId={pipelineId}
+                sceneId={selectedClip.sceneId}
+                onRegenerated={(url) =>
+                  setSelectedClip((c) => (c ? { ...c, url } : c))
+                }
+              />
+            </div>
+          )}
+
           {/* Global status: what the engine is doing right now, independent of
               which tab is open. When a gate is open on a stage you're not
               viewing, the banner is a button that jumps you there. */}
@@ -1993,7 +2033,10 @@ npm run pipeline-worker:dev
         />
       </div>
 
-      <ReelPipeline pipelineId={pipelineId} />
+      <ReelPipeline
+        pipelineId={pipelineId}
+        onPlayClip={(url, label, sceneId) => setSelectedClip({ url, label, sceneId })}
+      />
 
       {flowOpen && (
         <FlowGraphModal

@@ -75,7 +75,15 @@ function deriveStatus(
   return { kind: "draft", label: "DRAFT" }
 }
 
-export function ReelPipeline({ pipelineId }: { pipelineId: string }) {
+export function ReelPipeline({
+  pipelineId,
+  onPlayClip,
+}: {
+  pipelineId: string
+  /** When provided, clicking a clip lifts it to the main screen (with its scene
+   *  id so the editor can load it) instead of opening the local popup. */
+  onPlayClip?: (url: string, label: string, sceneId: string) => void
+}) {
   const [scenes, setScenes] = useState<SceneEntity[] | null>(null)
   const [view, setView] = useState<"feed" | "timeline">("feed")
   const [playing, setPlaying] = useState<string | null>(null)
@@ -166,7 +174,10 @@ export function ReelPipeline({ pipelineId }: { pipelineId: string }) {
             >
               <button
                 type="button"
-                onClick={() => r.video && setPlaying(r.video)}
+                onClick={() =>
+                  r.video &&
+                  (onPlayClip ? onPlayClip(r.video, r.title, r.id) : setPlaying(r.video))
+                }
                 disabled={!r.video}
                 title={r.video ? "Play clip" : "Clip not rendered yet"}
                 className="group/clip relative block h-24 w-full bg-black"

@@ -625,7 +625,7 @@ describe("POST /v1/pipelines/:id/scenes/:scene_id/shots/:shot_id/edit", () => {
     const res = await app.inject({
       method: "POST",
       url: editUrl(SCENE_ID, SHOT_ID),
-      payload: { video_model: "veo3" },
+      payload: { bogus_field: "x" },
     })
     expect(res.statusCode).toBe(400)
     expect(res.json().error.code).toBe("validation_error")
@@ -700,6 +700,44 @@ describe("POST /v1/pipelines/:id/scenes/:scene_id/shots/:shot_id/regenerate-keyf
     const res = await app.inject({ method: "POST", url: rerollUrl(SCENE_ID, SHOT_ID) })
     expect(res.statusCode).toBe(409)
     expect(res.json().error.code).toBe("shot_missing_keyframe_prompt")
+    await app.close()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Phase 3 — clip re-animate (guards only; the animate path needs the worker)
+// ---------------------------------------------------------------------------
+
+describe("POST /v1/pipelines/:id/scenes/:scene_id/shots/:shot_id/reanimate", () => {
+  const reanimateUrl = (sceneId: string, shotId: string) =>
+    `/v1/pipelines/${PIPELINE_ID}/scenes/${sceneId}/shots/${shotId}/reanimate`
+
+  it("404 not_found when the pipeline isn't owned by the caller", async () => {
+    seedSceneWithFailedShot({ shotPatch: { keyframe_url: "https://r2/kf.png" } })
+    const app = await makeApp(OTHER_USER_ID)
+    const res = await app.inject({ method: "POST", url: reanimateUrl(SCENE_ID, SHOT_ID) })
+    expect(res.statusCode).toBe(404)
+    expect(res.json().error.code).toBe("not_found")
+    await app.close()
+  })
+
+  it("404 shot_not_found for an unknown shot_id", async () => {
+    seedSceneWithFailedShot({ shotPatch: { keyframe_url: "https://r2/kf.png" } })
+    const app = await makeApp()
+    const res = await app.inject({ method: "POST", url: reanimateUrl(SCENE_ID, "nope") })
+    expect(res.statusCode).toBe(404)
+    expect(res.json().error.code).toBe("shot_not_found")
+    await app.close()
+  })
+
+  it("409 shot_missing_keyframe when the shot has no keyframe to animate from", async () => {
+    // Default seed shot has no keyframe_url — the guard fires before any
+    // animation is attempted.
+    seedSceneWithFailedShot()
+    const app = await makeApp()
+    const res = await app.inject({ method: "POST", url: reanimateUrl(SCENE_ID, SHOT_ID) })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe("shot_missing_keyframe")
     await app.close()
   })
 })

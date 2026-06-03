@@ -378,11 +378,26 @@ export const pipelinesApi = {
       dialogue_line?: string | null
       duration_seconds?: number
       camera?: { shot_type?: string; angle?: string; motion?: string }
+      image_model?: string
+      video_model?: string
     },
   ): Promise<{ ok: true; shot: Record<string, unknown> }> =>
     postJson(
       `/v1/pipelines/${pipelineId}/scenes/${sceneId}/shots/${shotId}/edit`,
       patch,
+    ),
+  /**
+   * Phase 3 (clip editor) — re-animate a shot into a fresh clip from its current
+   * keyframe + prompt + (per-shot or scene) video model. Synchronous: awaits the
+   * i2v job (needs the media worker) and charges credits. Returns the new clip URL.
+   */
+  reanimateShot: (
+    pipelineId: string,
+    sceneId: string,
+    shotId: string,
+  ): Promise<{ ok: true; video_url: string }> =>
+    postJson(
+      `/v1/pipelines/${pipelineId}/scenes/${sceneId}/shots/${shotId}/reanimate`,
     ),
   /**
    * Phase 3 (Focus composer) — re-roll a shot's keyframe still: regenerates the
