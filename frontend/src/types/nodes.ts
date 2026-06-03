@@ -2453,6 +2453,9 @@ export type VoiceChangerData = {
   voiceType: "premade" | "custom" | "library"
   stability: number
   similarityBoost: number
+  /** Style exaggeration (0–1). Default 0; >0 amplifies the source's delivery
+   *  but adds latency and can reduce stability. */
+  style?: number
   removeBackgroundNoise: boolean
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"

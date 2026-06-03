@@ -324,6 +324,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         voice_id: z.string().min(1).describe("Target voice — premade name (Rachel, Aria, Roger, ...) or ElevenLabs UUID for a custom clone."),
         stability: z.number().min(0).max(1).optional(),
         similarity_boost: z.number().min(0).max(1).optional(),
+        style: z.number().min(0).max(1).optional().describe("Style exaggeration 0..1 — amplifies the source's stylistic delivery. Default 0; values >0 add latency and can reduce stability."),
         remove_background_noise: z.boolean().optional(),
       },
       outputSchema: {
@@ -379,6 +380,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         voiceId: args.voice_id,
         stability: args.stability,
         similarityBoost: args.similarity_boost,
+        style: args.style,
         removeBackgroundNoise: args.remove_background_noise,
         mcp_client: session.clientName,
         userId: session.userId,

@@ -1345,6 +1345,14 @@ export function VoiceChangerConfig({ data, onUpdate, nodeRefs }: ConfigProps<Voi
         <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5"><span>Low</span><span>High</span></div>
       </div>
       <div>
+        <Label htmlFor="vc-style">Style Exaggeration ({data.style ?? 0})</Label>
+        <Input id="vc-style" type="range" min={0} max={1} step={0.05} value={data.style ?? 0} onChange={(e) => onUpdate({ style: parseFloat(e.target.value) })} className="h-2" />
+        <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5"><span>None</span><span>Exaggerated</span></div>
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Amplifies the source's delivery. Keep at 0 unless you want more drama — higher values add latency and can reduce stability.
+        </p>
+      </div>
+      <div>
         <div className="flex items-center gap-2">
           <Checkbox
             id="vc-remove-bg"

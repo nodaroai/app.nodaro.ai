@@ -18,6 +18,7 @@ In both cases the target voice's identity is applied while the original pacing, 
 | Voice Type | `"premade" \| "custom" \| "library"` | `"premade"` | Source of the selected target voice |
 | Stability | `number` (0-1) | `0.5` | Voice consistency. Lower = more expressive, higher = more uniform |
 | Similarity Boost | `number` (0-1) | `0.75` | How closely the output matches the target voice timbre |
+| Style Exaggeration | `number` (0-1) | `0` | Amplifies the source speaker's stylistic delivery in the target voice. Keep at `0` unless you want extra drama — values above 0 add latency and can reduce stability. Only sent to the model when above its default. |
 | Remove Background Noise | `boolean` | `false` | **Off** keeps the music / SFX bed under the new voice. **On** removes background and yields a clean, voice-only result. |
 
 ## Inputs & Outputs
@@ -46,6 +47,7 @@ This collapses what used to be a four-node chain (generate video → extract aud
 ## Best Practices
 
 - Start with Stability at 0.5 and Similarity Boost at 0.75, then adjust based on results. Higher similarity produces more accurate voice matching but can reduce naturalness.
+- Leave Style Exaggeration at 0 for most work — it carries the source delivery into the new voice but trades off latency and stability when pushed up. Nudge it up only when you want the new voice to lean harder into the original performance's drama.
 - For video mode, prefer source clips whose audio is mostly speech. Heavy music under the dialogue can bleed into the conversion — turn on Remove Background Noise if you want a clean voice and don't need the original bed.
 - Use clean, well-recorded source audio for best results. The model preserves delivery characteristics from the input, so poor input quality carries through.
 - For dramatic voice changes (e.g., male to female), allow for some loss of nuance -- the further the source and target voices differ, the more processing artifacts may appear.

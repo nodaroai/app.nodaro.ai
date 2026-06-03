@@ -1,7 +1,7 @@
 ---
 node_type: voice-changer
-generated_at: 2026-06-03T08:01:22.366Z
-generated_from: 09dbdce0
+generated_at: 2026-06-03T12:31:40.625Z
+generated_from: 57683c07
 ---
 
 # Voice Changer
@@ -24,6 +24,7 @@ generated_from: 09dbdce0
 - `fieldMappings: FieldMappings`
 
 **Optional data fields:**
+- `style?: number`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
 - `generatedAudioUrl?: string`
@@ -66,6 +67,7 @@ generated_from: 09dbdce0
 - `voice_id`
 - `stability`
 - `similarity_boost`
+- `style`
 - `remove_background_noise`
 <!-- AUTO-GEN:END mcp-call -->
 

@@ -277,11 +277,11 @@ const handleTextToDialogue: HandlerFn = async function handleTextToDialogue(job,
 }
 
 const handleVoiceChanger: HandlerFn = async function handleVoiceChanger(job, ctx) {
-  const { audioUrl, videoUrl, voiceId, stability, similarityBoost, removeBackgroundNoise } = job.data as {
+  const { audioUrl, videoUrl, voiceId, stability, similarityBoost, style, removeBackgroundNoise } = job.data as {
     jobId: string; audioUrl?: string; videoUrl?: string; voiceId: string
-    stability?: number; similarityBoost?: number; removeBackgroundNoise?: boolean
+    stability?: number; similarityBoost?: number; style?: number; removeBackgroundNoise?: boolean
   }
-  const opts = { stability, similarityBoost, removeBackgroundNoise }
+  const opts = { stability, similarityBoost, style, removeBackgroundNoise }
 
   // --- Video mode: demux audio → speech-to-speech → remux onto the original
   // video. Video takes precedence when both inputs are wired (matches the route

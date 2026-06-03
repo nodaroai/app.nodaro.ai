@@ -2447,7 +2447,7 @@ export async function textToDialogueApi(
   })
 }
 
-export async function voiceChangerApi(audioUrl: string | undefined, voiceId: string, userId?: string, stability?: number, similarityBoost?: number, removeBackgroundNoise?: boolean, videoUrl?: string): Promise<{ jobId: string }> {
+export async function voiceChangerApi(audioUrl: string | undefined, voiceId: string, userId?: string, stability?: number, similarityBoost?: number, style?: number, removeBackgroundNoise?: boolean, videoUrl?: string): Promise<{ jobId: string }> {
   // Audio mode (audioUrl) or video mode (videoUrl → revoiced video + audio).
   // Video wins server-side when both are sent; the caller only sends one.
   const body: Record<string, unknown> = { voiceId }
@@ -2456,6 +2456,7 @@ export async function voiceChangerApi(audioUrl: string | undefined, voiceId: str
   if (userId) body.userId = userId
   if (stability != null) body.stability = stability
   if (similarityBoost != null) body.similarityBoost = similarityBoost
+  if (style != null) body.style = style
   if (removeBackgroundNoise != null) body.removeBackgroundNoise = removeBackgroundNoise
   return apiJson("/v1/voice-changer", {
     body,
