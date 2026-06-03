@@ -2,6 +2,10 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { z } from "zod"
 import {
   PIPELINE_STAGE_NAMES,
+  PIPELINE_FORMATS,
+  PIPELINE_MODES,
+  PIPELINE_OUTPUT_RESOLUTIONS,
+  PipelineInputSchema,
   CHAT_ENABLED_STAGES,
   CHAT_TURN_CAPS,
   type ChatEnabledStage,
@@ -11,6 +15,7 @@ import {
 import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
+import { randomUUID } from "node:crypto"
 
 const executeGate: ToolGate = { required: ["pipelines:execute"] }
 const approveGate: ToolGate = { required: ["pipelines:approve"] }
@@ -93,6 +98,89 @@ export function registerPipelineTools({ server, session }: RegisterPipelineTools
             return err(msgMap[e.code] ?? `Branch failed: ${e.message}`)
           }
           throw e
+        }
+      },
+    )
+
+    // ── start_pipeline (pipelines:execute) ───────────────────────────────────
+    // Phase 2 (§7.1) — the programmatic entry an agent uses to drive the engine.
+    // Calls the shared createPipeline service (same path as POST /v1/pipelines).
+    server.registerTool(
+      "start_pipeline",
+      {
+        title: "Start Pipeline",
+        description:
+          "Start a new Story->Video pipeline from a prompt. The engine runs autonomously (default mode 'auto' completes end-to-end). Returns the new pipeline id; subscribe to events / poll status to watch progress.",
+        inputSchema: {
+          story_prompt: z
+            .string()
+            .min(1)
+            .max(4000)
+            .describe("What the film is about."),
+          target_duration_seconds: z
+            .number()
+            .int()
+            .min(5)
+            .max(600)
+            .default(15)
+            .describe("Total film length in seconds (5-600)."),
+          format: z.enum(PIPELINE_FORMATS).default("reel").describe("Film format."),
+          mode: z
+            .enum(PIPELINE_MODES)
+            .default("auto")
+            .describe(
+              "'auto' runs end-to-end unattended; 'manual'/'guided' pause at approval gates.",
+            ),
+          output_resolution: z.enum(PIPELINE_OUTPUT_RESOLUTIONS).default("720p"),
+          music_enabled: z.boolean().default(true),
+          // Off by default for agent runs (the HTTP route defaults narration/
+          // lipsync ON) — autonomous runs shouldn't silently incur those credits.
+          narration_enabled: z.boolean().default(false),
+          lipsync_enabled: z.boolean().default(false),
+        },
+        annotations: { readOnlyHint: false, destructiveHint: false },
+      },
+      async (args) => {
+        try {
+          const { createPipeline } = await import(
+            "../../../ee/pipelines/create-pipeline.js"
+          )
+          // No canvas node in the agent/MCP context — synthesize a root id; the
+          // engine's canvas-node materialization is a no-op when none exists.
+          const input = PipelineInputSchema.parse({
+            pipeline_type: "story_to_video",
+            root_node_id: randomUUID(),
+            story_prompt: args.story_prompt,
+            target_duration_seconds: args.target_duration_seconds,
+            format: args.format,
+            mode: args.mode,
+            output_resolution: args.output_resolution,
+            config: {
+              music_enabled: args.music_enabled,
+              narration_enabled: args.narration_enabled,
+              lipsync_enabled: args.lipsync_enabled,
+            },
+          })
+          const result = await createPipeline({
+            supabase,
+            userId: session.userId,
+            input,
+          })
+          if (!result.ok) {
+            return err(
+              `Could not start pipeline (${result.code})` +
+                (result.message ? `: ${result.message}` : ""),
+            )
+          }
+          return okJson({
+            pipeline_id: result.pipelineId,
+            status: "queued",
+            mode: input.mode,
+          })
+        } catch (e) {
+          return err(
+            `start_pipeline failed: ${e instanceof Error ? e.message : String(e)}`,
+          )
         }
       },
     )
@@ -442,6 +530,72 @@ export function registerPipelineTools({ server, session }: RegisterPipelineTools
           return err(`Failed to load chat history: ${error.message}`)
         }
         return okJson({ turns: turns ?? [] })
+      },
+    )
+
+    // ── get_pipeline_status (pipelines:read) ─────────────────────────────────
+    // Phase 2 (§7.1) — lets an agent monitor a headless Auto run to completion:
+    // poll status / current_stage / failure_reason after start_pipeline.
+    server.registerTool(
+      "get_pipeline_status",
+      {
+        title: "Get Pipeline Status",
+        description:
+          "Get the current state of a pipeline: status (pending/running/awaiting_approval/completed/failed), current_stage, credit counters, mode, and failure_reason (set when status='failed'). Poll this after start_pipeline to track an Auto run to completion.",
+        inputSchema: {
+          pipeline_id: z.string().uuid().describe("The id of the pipeline"),
+        },
+        annotations: { readOnlyHint: true, destructiveHint: false },
+      },
+      async (args) => {
+        const { data, error } = await supabase
+          .from("pipelines")
+          .select(
+            "id,status,current_stage,spent_credits,reserved_credits,upfront_credit_estimate,mode,failure_reason,current_progress_message,user_id",
+          )
+          .eq("id", args.pipeline_id)
+          .maybeSingle()
+        if (error) return err(`Failed to load pipeline: ${error.message}`)
+        if (!data || data.user_id !== session.userId) {
+          return err(`Pipeline ${args.pipeline_id} not found.`)
+        }
+        const { user_id: _omit, ...pub } = data
+        return okJson(pub)
+      },
+    )
+
+    // ── pipeline_pending_approvals (pipelines:read) ──────────────────────────
+    // Stages currently awaiting approval — empty during a clean Auto run, one
+    // or more entries at each gate in manual/guided mode. An agent reads this
+    // to decide what to approve next (via the SDK's approveStage / the HTTP
+    // approve route).
+    server.registerTool(
+      "pipeline_pending_approvals",
+      {
+        title: "Pipeline Pending Approvals",
+        description:
+          "List the pipeline stages currently awaiting approval (status='awaiting_approval'), each with its output snapshot. An empty array means nothing is gated right now (a clean Auto run, or the pipeline is still generating).",
+        inputSchema: {
+          pipeline_id: z.string().uuid().describe("The id of the pipeline"),
+        },
+        annotations: { readOnlyHint: true, destructiveHint: false },
+      },
+      async (args) => {
+        const { data: pipeline } = await supabase
+          .from("pipelines")
+          .select("user_id")
+          .eq("id", args.pipeline_id)
+          .maybeSingle()
+        if (!pipeline || pipeline.user_id !== session.userId) {
+          return err(`Pipeline ${args.pipeline_id} not found.`)
+        }
+        const { data: stages, error } = await supabase
+          .from("pipeline_stages")
+          .select("stage_name,output")
+          .eq("pipeline_id", args.pipeline_id)
+          .eq("status", "awaiting_approval")
+        if (error) return err(`Failed to load approvals: ${error.message}`)
+        return okJson({ pending: stages ?? [] })
       },
     )
   }

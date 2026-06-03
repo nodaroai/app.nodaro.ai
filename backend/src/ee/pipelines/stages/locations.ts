@@ -10,6 +10,8 @@ import {
   ensureStageRow,
   failPipelineWithCriticReason,
   failStage,
+  recoverFailedEntitiesToChoose,
+  rejectFeedbackSuffix,
 } from "../stage-utils.js"
 import {
   transitionEntityNodeAndEmit,
@@ -93,7 +95,21 @@ export async function runLocationsStage(args: RunLocationsStageArgs): Promise<vo
     return
   }
 
-  // Materialize entity rows for each location (idempotent).
+  // Mark the stage active so the studio breadcrumb highlights "Locations" while
+  // the user is at the gate (mirrors objects/characters). Auto mode emits
+  // `approved` below; this covers the manual/guided pause window.
+  pipelineEvents.publish({
+    type: "stage:status",
+    pipelineId,
+    stageName: "locations",
+    status: "running",
+  })
+
+  // Materialize entity rows for each location (idempotent). New locations start
+  // at `pending_description` so manual/guided pipelines pause for the user's
+  // Step A choice (edit the prompt / Generate / Upload / Reuse / Skip) BEFORE
+  // any credits are spent — mirrors Stage 2 (characters). Auto mode bulk-flips
+  // them to `pending` just below so the existing parallel-gen flow runs.
   for (const loc of plan.locations) {
     await supabase
       .from("pipeline_entities")
@@ -103,7 +119,7 @@ export async function runLocationsStage(args: RunLocationsStageArgs): Promise<vo
           stage_id: stageId,
           entity_type: "location",
           entity_key: loc.key,
-          status: "pending",
+          status: "pending_description",
           metadata: {
             entity_type: "location",
             name: loc.name,
@@ -113,6 +129,18 @@ export async function runLocationsStage(args: RunLocationsStageArgs): Promise<vo
         },
         { onConflict: "pipeline_id,entity_type,entity_key", ignoreDuplicates: true },
       )
+  }
+
+  // Auto mode short-circuits the Step A wizard: flip every freshly-inserted
+  // `pending_description` location to `pending` so the generation loop below
+  // picks them up exactly as before. Manual/guided pause at the gate.
+  if (args.mode === "auto") {
+    await supabase
+      .from("pipeline_entities")
+      .update({ status: "pending" })
+      .eq("pipeline_id", pipelineId)
+      .eq("entity_type", "location")
+      .eq("status", "pending_description")
   }
 
   const { data: entities } = await supabase
@@ -139,9 +167,33 @@ export async function runLocationsStage(args: RunLocationsStageArgs): Promise<vo
   // does NOT cancel siblings — failure metadata has already been persisted
   // by the inner handler before the throw. `failFast=false` on the wrapper
   // is belt-and-suspenders.
+  // Failed locations go back to the choose-gate so the stage stays open and the
+  // user can edit / regenerate / upload / reuse / skip them
+  // (recoverFailedEntitiesToChoose). Auto: no-op. This is the fix for a run
+  // advancing to Shots with every location failed on a credit error.
+  const recovered = await recoverFailedEntitiesToChoose(
+    supabase,
+    pipelineId,
+    "location",
+    entities ?? [],
+    args.mode,
+  )
+
   let anyAwaiting = false
-  const tasks = (entities ?? []).map((entity) => async () => {
+  const tasks = recovered.map((entity) => async () => {
     try {
+      // Manual/guided pipelines pause here for the user's Step A click
+      // (approve-description). Auto mode bulk-flipped pending_description →
+      // pending above, so this branch is never hit in auto.
+      if (entity.status === "pending_description") {
+        anyAwaiting = true
+        return
+      }
+      // Skipped is a terminal opt-out — no main image, no variants. It doesn't
+      // block the stage (the variant-batch gate filters skipped out below).
+      if (entity.status === "skipped") {
+        return
+      }
       if (entity.status === "approved") {
         await ensureLocationVariants(supabase, pipelineId, userId, entity, plan, imageOverride)
         return
@@ -227,12 +279,19 @@ export async function runLocationsStage(args: RunLocationsStageArgs): Promise<vo
   // (Section G's stale-snapshot fix applied preemptively here.)
   const { data: refreshedEntities } = await supabase
     .from("pipeline_entities")
-    .select("metadata")
+    .select("status, metadata")
     .eq("pipeline_id", pipelineId)
     .eq("entity_type", "location")
+  // Skipped locations are terminal opt-outs with no variants — filter them out
+  // of the variant-batch gate (mirrors characters.ts). If EVERY location was
+  // skipped, nonSkipped.length === 0 → allVariantsAwaiting=false → falls
+  // through to the stage-approved branch, which is correct.
+  const nonSkippedEntities = (refreshedEntities ?? []).filter(
+    (e) => e.status !== "skipped",
+  )
   const allVariantsAwaiting =
-    (refreshedEntities ?? []).length > 0 &&
-    (refreshedEntities ?? []).every(
+    nonSkippedEntities.length > 0 &&
+    nonSkippedEntities.every(
       (e) =>
         (e.metadata as Record<string, unknown> | null)?.variants_awaiting_approval === true,
     )
@@ -355,7 +414,7 @@ async function generateLocationMain(
     status: "generating",
   })
 
-  const prompt = `${loc.visual_description}, ${plan.global_style.visual_style}, ${plan.global_style.lighting}, wide establishing shot, no people`
+  const prompt = `${loc.visual_description}, ${plan.global_style.visual_style}, ${plan.global_style.lighting}, wide establishing shot, no people${rejectFeedbackSuffix(entity.metadata)}`
 
   try {
     const initialAsset = await pipelineGenerateImage({

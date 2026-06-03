@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import type { MatchCutVerdict, SceneNodeData, ShotSpec, ShowrunnerPlan } from "@nodaro/shared"
+import type { MatchCutVerdict, PipelineConfig, SceneNodeData, ShotSpec, ShowrunnerPlan } from "@nodaro/shared"
+import { getIdentityLockClause } from "@nodaro/shared"
 import { bulkApproveStageEntities, ensureStageRow, failStage } from "../stage-utils.js"
 import { pipelineEvents } from "../events.js"
 import { pipelineGenerateImage } from "../services/pipeline-generate-image.js"
@@ -34,6 +35,8 @@ export interface RunSceneImagesStageArgs {
    * Defaults to `"manual"`, preserving the prior pause-for-user behavior.
    */
   mode?: "manual" | "auto" | "guided"
+  /** Pipeline `config`; `auto_advance_production` advances the keyframe-review + match-cut gates like auto-mode (studio production stages). */
+  config?: Partial<PipelineConfig> | null
 }
 
 /**
@@ -43,6 +46,39 @@ export interface RunSceneImagesStageArgs {
  * so we never blow Anthropic / KIE / Replicate tier-1 rate limits.
  */
 const CROSS_SCENE_CONCURRENCY = 5
+
+// Keyframe reference budget: primary character portrait + a few variant views
+// (+ location). Multi-image models use these to hold facial identity across a
+// new scene. Capped so we don't over-stuff providers that ignore extras.
+const KEYFRAME_REF_BUDGET = 4
+
+/**
+ * Approved variant image URLs for an entity — the extra character views
+ * (front / angle / expression) the Cast stage generated. Used to strengthen
+ * the keyframe identity lock: a single portrait drifts across new scenes;
+ * multiple views give the image model far more to lock the same face onto.
+ */
+async function fetchApprovedVariantUrls(
+  supabase: SupabaseClient,
+  entityId: string,
+): Promise<string[]> {
+  const { data: variants } = await supabase
+    .from("pipeline_entity_variants")
+    .select("asset_id")
+    .eq("entity_id", entityId)
+    .eq("status", "approved")
+  const assetIds = (variants ?? [])
+    .map((v) => v.asset_id as string | null)
+    .filter((id): id is string => !!id)
+  if (assetIds.length === 0) return []
+  const { data: assets } = await supabase
+    .from("assets")
+    .select("r2_url")
+    .in("id", assetIds)
+  return (assets ?? [])
+    .map((a) => a.r2_url as string | null)
+    .filter((u): u is string => !!u)
+}
 
 /**
  * Stage 6 (`scene_images`). For every approved scene entity from Stage 5,
@@ -71,6 +107,10 @@ const CROSS_SCENE_CONCURRENCY = 5
  */
 export async function runSceneImagesStage(args: RunSceneImagesStageArgs): Promise<void> {
   const { supabase, pipelineId, userId, mode } = args
+  // Studio production-stage auto-advance: skip the keyframe-review pause AND
+  // auto-accept match-cut breaks (the studio's control is the creative entities;
+  // the engine produces the film). Mirrors auto-mode's advance for this stage.
+  const autoAdvanceProduction = mode === "auto" || !!args.config?.auto_advance_production
 
   const stageId = await ensureStageRow(supabase, pipelineId, "scene_images", 6)
 
@@ -143,7 +183,7 @@ export async function runSceneImagesStage(args: RunSceneImagesStageArgs): Promis
   // the prior pass and was cleared by `acceptMatchCutBreak` — auto-mode never
   // bypasses the critic, only the human-only keyframe-review pause.
   if (resumingFromMatchCutGate) {
-    if (mode === "auto") {
+    if (autoAdvanceProduction) {
       await advanceToApproved(supabase, pipelineId, stageId, userId, existingOutput)
     } else {
       await advanceToAwaitingApproval(supabase, pipelineId, stageId, existingOutput)
@@ -234,8 +274,12 @@ export async function runSceneImagesStage(args: RunSceneImagesStageArgs): Promis
     allPendingBreaks.push(...pendingBreaks)
   }
 
-  if (allPendingBreaks.length > 0) {
+  if (allPendingBreaks.length > 0 && !args.config?.auto_advance_production) {
     // Sub-gate: user must accept each break before Stage 7 can proceed.
+    // Auto mode still pauses here by design (a match-cut break is a real visual
+    // discontinuity worth surfacing). Only the studio's `auto_advance_production`
+    // skips it — there the engine produces the film hands-off, taking the hard
+    // cut as the fallback for any unaccepted break.
     // Write verdicts + pending list to stage output, set current_sub_gate,
     // and pause at awaiting_approval. The accept_match_cut_break route will
     // remove shots from the list; when the list empties it sets status back
@@ -317,7 +361,7 @@ export async function runSceneImagesStage(args: RunSceneImagesStageArgs): Promis
     )
   }
 
-  if (mode === "auto") {
+  if (autoAdvanceProduction) {
     await advanceToApproved(supabase, pipelineId, stageId, userId, sharedOutput)
   } else {
     await advanceToAwaitingApproval(supabase, pipelineId, stageId, sharedOutput)
@@ -530,14 +574,43 @@ async function generateKeyframesForScene(
         shot,
         sceneNodeData,
         priorLastFrame: null,
+        // Keyframe is an IMAGE gen — don't inherit the video model's 1-ref cap.
+        maxReferences: KEYFRAME_REF_BUDGET,
       })
-      const referenceImageUrls = refs.map((r) => r.url)
+      let referenceImageUrls = refs.map((r) => r.url)
+      // Identity lock: a single portrait isn't enough to hold a face across a
+      // brand-new scene composition, so feed the primary character's VARIANT
+      // views (front / angle / expression) as extra references. Multi-image
+      // models (nano-banana-pro, etc.) use them to keep the same person.
+      const primaryCharSlot = refs.find((r) => r.kind === "primary_character")
+      if (primaryCharSlot?.sourceId) {
+        const variantUrls = await fetchApprovedVariantUrls(
+          supabase,
+          primaryCharSlot.sourceId,
+        )
+        if (variantUrls.length > 0) {
+          referenceImageUrls = Array.from(
+            new Set([primaryCharSlot.url, ...variantUrls, ...referenceImageUrls]),
+          ).slice(0, KEYFRAME_REF_BUDGET)
+        }
+      }
+      // Phase 1 identity-lock — when the scene has cast, append the facial-
+      // identity preservation clause so keyframes lock to the character
+      // reference(s) and don't drift across shots. Reuses the same shared helper
+      // the workflow-engine applies via buildImagePrompt; gated on the scene's
+      // cast_keys so location-only scenes don't get facial constraints.
+      const lockClause =
+        sceneNodeData.cast_keys.length > 0 && referenceImageUrls.length > 0
+          ? getIdentityLockClause("strict")
+          : ""
+      const withIdentityLock = (p: string) =>
+        lockClause ? `${p}\n\n${lockClause}` : p
       const result = await pipelineGenerateImage({
         supabase,
         pipelineId,
         pipelineEntityId: scene.id,
         userId,
-        prompt: shot.visual_keyframe_prompt,
+        prompt: withIdentityLock(shot.visual_keyframe_prompt),
         modelIdentifier: sceneNodeData.image_model,
         referenceImageUrls,
       })
@@ -562,7 +635,7 @@ async function generateKeyframesForScene(
               pipelineId,
               pipelineEntityId: scene.id,
               userId,
-              prompt: kf.prompt,
+              prompt: withIdentityLock(kf.prompt),
               modelIdentifier: sceneNodeData.image_model,
               referenceImageUrls,
             })

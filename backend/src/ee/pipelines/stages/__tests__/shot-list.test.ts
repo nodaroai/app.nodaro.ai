@@ -330,6 +330,65 @@ describe("runShotListStage", () => {
     }
   })
 
+  it("derives ref_images mode when a ref_images video model is pinned (seedance-2)", async () => {
+    ;(runSceneDirector as ReturnType<typeof vi.fn>).mockResolvedValue(fakeSceneNodeData(1))
+    ;(runShotListCritic as ReturnType<typeof vi.fn>).mockResolvedValue({
+      verdict: "pass",
+      issues: [],
+      duration_analysis: {
+        target_seconds: 20,
+        actual_sum_seconds: 20,
+        deviation_percent: 0,
+        within_tolerance: true,
+      },
+    })
+
+    const supabase = makeSupabase()
+    await runShotListStage({
+      supabase,
+      pipelineId: "p1",
+      userId: "u1",
+      userTier: "pro",
+      config: { video_model: "seedance-2" },
+    })
+
+    expect(runSceneDirector).toHaveBeenCalled()
+    for (const call of (runSceneDirector as ReturnType<typeof vi.fn>).mock.calls) {
+      expect(call[0]).toMatchObject({
+        shotInputMode: "ref_images",
+        videoModelOverride: "seedance-2",
+      })
+    }
+  })
+
+  it("keeps first_frame mode when a keyframe-only model is pinned (kling-turbo)", async () => {
+    ;(runSceneDirector as ReturnType<typeof vi.fn>).mockResolvedValue(fakeSceneNodeData(1))
+    ;(runShotListCritic as ReturnType<typeof vi.fn>).mockResolvedValue({
+      verdict: "pass",
+      issues: [],
+      duration_analysis: {
+        target_seconds: 20,
+        actual_sum_seconds: 20,
+        deviation_percent: 0,
+        within_tolerance: true,
+      },
+    })
+
+    const supabase = makeSupabase()
+    await runShotListStage({
+      supabase,
+      pipelineId: "p1",
+      userId: "u1",
+      userTier: "pro",
+      config: { video_model: "kling-turbo" },
+    })
+
+    expect(runSceneDirector).toHaveBeenCalled()
+    for (const call of (runSceneDirector as ReturnType<typeof vi.fn>).mock.calls) {
+      expect(call[0]).toMatchObject({ shotInputMode: "first_frame" })
+    }
+  })
+
   it("retries Scene Director on blocking critic fail (up to 2 retries)", async () => {
     ;(runSceneDirector as ReturnType<typeof vi.fn>).mockResolvedValue(fakeSceneNodeData(1))
     ;(runShotListCritic as ReturnType<typeof vi.fn>)

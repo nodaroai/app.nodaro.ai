@@ -132,11 +132,22 @@ function makeSupabase(opts: { seedEntities?: Array<Record<string, unknown>> } = 
 }
 
 describe("runObjectsStage", () => {
-  it("generates one image per object", async () => {
+  it("generates one image per object whose description was approved (status=pending)", async () => {
     ;(pipelineGenerateImage as ReturnType<typeof vi.fn>).mockResolvedValue({
       jobId: "j1", assetId: "a1", assetUrl: "https://r2/helmet.png", creditsSpent: 2,
     })
-    const supabase = makeSupabase()
+    // Seed `pending` — i.e. the user already passed the Step A description gate
+    // (Generate). New objects now start at `pending_description` (see the
+    // pause test below), so generation only runs once a description is approved.
+    const supabase = makeSupabase({
+      seedEntities: [
+        {
+          id: "e-helmet", entity_key: "helmet", pipeline_id: "p1",
+          entity_type: "object", status: "pending",
+          metadata: { entity_type: "object", name: "Helmet", visual_description: "x" },
+        },
+      ],
+    })
     await runObjectsStage({ supabase, pipelineId: "p1", userId: "u1", userTier: "pro" })
     expect(pipelineGenerateImage).toHaveBeenCalledTimes(1)
     const row = (supabase as never as { _entities: Map<string, Record<string, unknown>> })._entities.get("e-helmet")
@@ -294,7 +305,7 @@ describe("runObjectsStage", () => {
     })
   })
 
-  it("manual-mode: existing behavior unchanged — pauses after generation", async () => {
+  it("manual-mode: new objects pause at pending_description for the Step A gate (no spend)", async () => {
     ;(pipelineGenerateImage as ReturnType<typeof vi.fn>).mockResolvedValue({
       jobId: "j1", assetId: "a1", assetUrl: "https://r2/helmet.png", creditsSpent: 2,
     })
@@ -305,8 +316,62 @@ describe("runObjectsStage", () => {
     const row = (supabase as never as {
       _entities: Map<string, Record<string, unknown>>
     })._entities.get("e-helmet")
-    // Entity sits at awaiting_approval — manual mode waits for the user.
-    expect(row?.status).toBe("awaiting_approval")
+    // No image yet — the object waits at the description gate for the user's
+    // Generate / Upload / Reuse / Skip choice before any credits are spent.
+    expect(row?.status).toBe("pending_description")
+    expect(pipelineGenerateImage).not.toHaveBeenCalled()
+    expect(enqueuePipelineRun).not.toHaveBeenCalled()
+  })
+
+  it("manual-mode: a skipped object counts as resolved and doesn't block stage advance", async () => {
+    const supabase = makeSupabase({
+      seedEntities: [
+        {
+          id: "e-helmet", entity_key: "helmet", pipeline_id: "p1-skip",
+          entity_type: "object", status: "skipped",
+          metadata: { entity_type: "object", name: "Helmet", visual_description: "x" },
+        },
+      ],
+    })
+    await runObjectsStage({
+      supabase, pipelineId: "p1-skip", userId: "u1", userTier: "pro", mode: "manual",
+    })
+    const stageUpdates = (supabase as never as {
+      _stageUpdates: Array<Record<string, unknown>>
+    })._stageUpdates
+    expect(stageUpdates.find((u) => u.status === "approved")).toBeDefined()
+    expect(pipelineGenerateImage).not.toHaveBeenCalled()
+    expect(enqueuePipelineRun).toHaveBeenCalled()
+  })
+
+  it("manual-mode: a failed object is recovered to the choose-gate, NOT advanced past (regression)", async () => {
+    // Repro of the bug: a location/object that failed (e.g. credit error) used
+    // to let the stage fall through to 'approved' and advance. It must instead
+    // go back to pending_description so the stage holds open + the user recovers.
+    const supabase = makeSupabase({
+      seedEntities: [
+        {
+          id: "e-helmet", entity_key: "helmet", pipeline_id: "p1-obj-failrec",
+          entity_type: "object", status: "failed",
+          metadata: {
+            entity_type: "object", name: "Helmet", visual_description: "x",
+            last_error: "Credit reservation failed: Insufficient credits",
+          },
+        },
+      ],
+    })
+    await runObjectsStage({
+      supabase, pipelineId: "p1-obj-failrec", userId: "u1", userTier: "pro", mode: "manual",
+    })
+    const row = (supabase as never as {
+      _entities: Map<string, Record<string, unknown>>
+    })._entities.get("e-helmet")
+    expect(row?.status).toBe("pending_description") // recovered to the gate
+    expect(pipelineGenerateImage).not.toHaveBeenCalled()
+    const stageUpdates = (supabase as never as {
+      _stageUpdates: Array<Record<string, unknown>>
+    })._stageUpdates
+    expect(stageUpdates.find((u) => u.status === "approved")).toBeUndefined() // did NOT advance
     expect(enqueuePipelineRun).not.toHaveBeenCalled()
   })
 })

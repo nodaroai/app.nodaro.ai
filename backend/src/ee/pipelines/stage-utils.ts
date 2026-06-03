@@ -4,6 +4,70 @@ import { IMAGE_CRITIC_UNRESOLVABLE } from "@nodaro/shared"
 import { pipelineEvents } from "./events.js"
 
 /**
+ * When the user hits "Redo" on a generated entity image at the approval gate,
+ * `rejectEntity` stores their note in `metadata.last_reject_feedback` and
+ * re-drives the stage. This appends that note to the regeneration prompt so the
+ * new image actually addresses what the user disliked — without it, a Redo just
+ * re-rolls the same prompt and the feedback is silently dropped. Returns "" when
+ * there's no feedback so the prompt is unchanged on a first generation.
+ */
+export function rejectFeedbackSuffix(
+  metadata: Record<string, unknown> | null | undefined,
+): string {
+  const fb = metadata?.last_reject_feedback
+  if (typeof fb !== "string" || !fb.trim()) return ""
+  return `. Revision note — address this feedback from the previous attempt: ${fb.trim()}`
+}
+
+/**
+ * Manual/guided recovery for `failed` entities. A failed entity must NOT let the
+ * stage advance — the engine used to fall through to "stage approved" past a
+ * failed entity (e.g. an image that failed on a credit error), silently moving
+ * the run on with a missing asset. This sends every `failed` entity back to the
+ * `pending_description` choose-gate, which both:
+ *   1. holds the stage open (pending_description always pauses for the user), and
+ *   2. lets the user edit the description / regenerate / upload / reuse / skip
+ *      via the normal Step A gate — no separate failed-entity UI needed.
+ *
+ * Returns a NEW array with the failed rows' status normalized to
+ * `pending_description` so the caller's loop sees the recovered state without a
+ * re-fetch. The DB write + SSE happen here. Auto mode is a no-op — its failure
+ * path is the image-critic aggregator, not user recovery.
+ */
+export async function recoverFailedEntitiesToChoose<
+  T extends { id: string; entity_key: string; status: string },
+>(
+  supabase: SupabaseClient,
+  pipelineId: string,
+  entityType: "character" | "object" | "location",
+  entities: ReadonlyArray<T>,
+  mode: string | undefined,
+): Promise<T[]> {
+  if (mode === "auto") return [...entities]
+  const out: T[] = []
+  for (const e of entities) {
+    if (e.status !== "failed") {
+      out.push(e)
+      continue
+    }
+    await supabase
+      .from("pipeline_entities")
+      .update({ status: "pending_description" })
+      .eq("id", e.id)
+    pipelineEvents.publish({
+      type: "entity:status",
+      pipelineId,
+      entityId: e.id,
+      entityType,
+      entityKey: e.entity_key,
+      status: "pending_description",
+    })
+    out.push({ ...e, status: "pending_description" })
+  }
+  return out
+}
+
+/**
  * Atomically increments pipeline_stages.critic_retry_count by 1.
  * The DB CHECK enforces critic_retry_count <= 2 — if this would exceed it,
  * the UPDATE fails and the caller should treat it as "retry budget exhausted."

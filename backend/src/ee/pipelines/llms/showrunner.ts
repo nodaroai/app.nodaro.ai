@@ -97,6 +97,11 @@ Produce the ShowrunnerPlan as JSON via the emit tool.`
     userId: args.userId,
     role: "showrunner",
     task: "script",
+    // The Showrunner is the creative core (plan + script). Default to Sonnet
+    // for a FAST draft — real testing showed an Opus default made the slowest
+    // (and first-visible) stage painfully slow. Opus stays available via
+    // scriptLlmOverride and is the right pick for the on-demand critic/refine
+    // (quality on demand, per the script-checkpoint design).
     modelId: args.scriptLlmOverride ?? "claude-sonnet-4-6",
     temperature: 0.4,
     systemPrompt: '[REDACTED]',

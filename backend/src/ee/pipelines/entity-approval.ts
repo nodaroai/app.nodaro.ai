@@ -307,9 +307,10 @@ function computeCanvasPosition(
 /**
  * Rejects + records feedback. Caller (engine) re-runs generation.
  *
- * NOTE: rejection bumps a per-entity retry counter to bound flapping.
- * Currently uses pipeline_entities.metadata.reject_count (not a dedicated column —
- * keeps the schema migration count down). Cap at 2.
+ * NOTE: rejection bumps a per-entity `reject_count` in
+ * pipeline_entities.metadata for info/debugging only. It is intentionally NOT
+ * capped — a Redo is user-driven (the user reviews and pays for each attempt),
+ * so they can regenerate as many times as they want.
  */
 export async function rejectEntity(
   supabase: SupabaseClient,
@@ -317,7 +318,7 @@ export async function rejectEntity(
   entityId: string,
   feedback: string,
 ): Promise<{ ok: true } | { ok: false; reason: string }> {
-  // Fetch + check cap.
+  // Fetch the entity (status gate only — no redo cap).
   const { data: current } = await supabase
     .from("pipeline_entities")
     .select("metadata, entity_type, entity_key, status")
@@ -330,7 +331,6 @@ export async function rejectEntity(
   }
   const metadata = (current.metadata ?? {}) as Record<string, unknown>
   const rejectCount = ((metadata.reject_count as number) ?? 0) + 1
-  if (rejectCount > 2) return { ok: false, reason: "reject_cap_reached" }
 
   const { data, error } = await supabase
     .from("pipeline_entities")

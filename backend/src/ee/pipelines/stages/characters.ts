@@ -18,6 +18,8 @@ import {
   ensureStageRow,
   failPipelineWithCriticReason,
   failStage,
+  recoverFailedEntitiesToChoose,
+  rejectFeedbackSuffix,
 } from "../stage-utils.js"
 import {
   transitionEntityNodeAndEmit,
@@ -150,8 +152,19 @@ export async function runCharactersStage(args: RunCharactersStageArgs): Promise<
   // is belt-and-suspenders: even if a task escaped its catch, sibling tasks
   // continue. The settled wrapper returns all-fulfilled results because
   // catches consume rejections.
+  // Failed entities (e.g. image gen that hit a credit error) go back to the
+  // choose-gate so the stage stays open and the user can edit / regenerate /
+  // upload / reuse / skip them (recoverFailedEntitiesToChoose). Auto: no-op.
+  const recovered = await recoverFailedEntitiesToChoose(
+    supabase,
+    pipelineId,
+    "character",
+    entities ?? [],
+    args.mode,
+  )
+
   let anyAwaiting = false
-  const tasks = (entities ?? []).map((entity) => async () => {
+  const tasks = recovered.map((entity) => async () => {
     try {
       // Phase 3 (granular-pipeline-control) — manual/guided pipelines pause
       // here for the user's Step A click. Auto mode is impossible here
@@ -445,8 +458,10 @@ async function generateCharacterMain(
     status: "generating",
   })
 
-  // Image prompt: visual_description + global style (read from plan).
-  const prompt = `${cast.visual_description}, ${plan.global_style.visual_style}, ${plan.global_style.lighting}, portrait, neutral expression, front-facing`
+  // Image prompt: visual_description + global style (read from plan). A gate
+  // "Redo" stashes the user's note on the entity; append it so the regen
+  // addresses it (rejectFeedbackSuffix returns "" on a first generation).
+  const prompt = `${cast.visual_description}, ${plan.global_style.visual_style}, ${plan.global_style.lighting}, portrait, neutral expression, front-facing${rejectFeedbackSuffix(entity.metadata)}`
 
   try {
     const initialAsset = await pipelineGenerateImage({
