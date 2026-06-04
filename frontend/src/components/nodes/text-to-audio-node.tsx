@@ -41,7 +41,7 @@ function TextToAudioNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <div className="relative" style={{ maxWidth: '220px' }}>
+    <div className="relative" style={{ width: 220, overflow: 'visible' }}>
     {/* Floating label above node */}
     <EditableNodeLabel
       label={nodeData.label}
@@ -56,6 +56,7 @@ function TextToAudioNodeComponent({ id, data, selected }: NodeProps) {
       credits={credits}
       selected={selected}
       isRunning={status === "running"}
+      minHeight={140}
       hideHeader
       topToolbarContent={
                   <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />
@@ -90,9 +91,9 @@ function TextToAudioNodeComponent({ id, data, selected }: NodeProps) {
         { id: "audio",       type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
       ]}
     >
-      <div className="flex flex-col gap-2 p-3" style={{ minHeight: 180 }}>
+      <div className="flex flex-col gap-2 p-3" style={{ minHeight: 140 }}>
         {status === "running" && !activeUrl && (
-          <div className="flex flex-col items-center justify-center gap-2 h-12 rounded-md bg-muted/30">
+          <div className="flex-1 flex flex-col items-center justify-center gap-2 min-h-[96px] rounded-md bg-muted/30">
             <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
             <NodeJobProgress progress={nodeData.currentJobProgress} />
           </div>
@@ -122,7 +123,7 @@ function TextToAudioNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         {status === "failed" && !activeUrl && (
-          <div className="flex flex-col items-center justify-center gap-1 h-12 rounded-md bg-red-500/5 text-red-500 p-2">
+          <div className="flex-1 flex flex-col items-center justify-center gap-1 min-h-[96px] rounded-md bg-red-500/5 text-red-500 p-2">
             <div className="flex items-center gap-1.5">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span className="font-medium">Failed</span>
