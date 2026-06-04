@@ -194,6 +194,8 @@ const QUALITY_MAP: Record<string, QualityMapping> = {
   "ltx-2.3-pro":         { field: "resolution", values: { low: "1080p", mid: "2k", high: "4k" } },
   "ltx-2.3-fast":        { field: "resolution", values: { low: "1080p", mid: "2k", high: "4k" } },
   "gemini-omni-video":   { field: "resolution", values: { low: "720p", mid: "1080p", high: "4k" } },
+  // Grok Imagine Video 1.5 — only 480p/720p (no 1080p tier); high clamps to 720p.
+  "grok-imagine-video-1.5": { field: "resolution", values: { low: "480p", mid: "720p", high: "720p" } },
   // Replicate Flux 2 family — MP-based resolution (matching IMAGE_RESOLUTION_OPTIONS["flux-2-*"]).
   // `field: "resolution"` is mandatory — see Provider Enum Sync pitfall 4.
   // mid = provider default: 1 MP for Klein, 2 MP for Pro/Max.

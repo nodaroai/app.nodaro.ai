@@ -18,13 +18,13 @@ import {
 } from "@xyflow/react"
 import { useSearchParams, useNavigate } from "react-router-dom"
 import { cn } from "@/lib/utils"
+import { nodeHasPromptField } from "@/lib/prompt-fields"
 import "@xyflow/react/dist/style.css"
 
 import { nodeTypes } from "@/components/nodes"
 import { NodeContextMenu } from "./node-context-menu"
 import { CanvasContextMenu } from "./canvas-context-menu"
 import { CanvasToolbar } from "./canvas-toolbar"
-import { ViewModeToggle } from "./canvas-toolbar/view-mode-toggle"
 import { CanvasControls } from "./canvas-controls"
 import { AddNodePopup } from "./add-node-popup"
 import { buildAdjacency, isValidWorkflowConnection } from "@/lib/connection-validation"
@@ -1513,6 +1513,24 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         return
       }
 
+      // Cmd/Ctrl+E — toggle the quick-edit Prompt modal for the selected node
+      // (runs BEFORE the overlay guard so it can close its own dialog).
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "e" && !e.shiftKey && !e.altKey) {
+        const state = useWorkflowStore.getState()
+        if (state.promptEditNodeId) {
+          e.preventDefault()
+          state.closePromptEditor()
+          return
+        }
+        const nodeId = state.selectedNodeId ?? state.nodes.find((n) => n.selected)?.id
+        const nodeType = nodeId ? state.nodes.find((n) => n.id === nodeId)?.type : undefined
+        if (nodeId && nodeHasPromptField(nodeType)) {
+          e.preventDefault()
+          state.openPromptEditor(nodeId)
+        }
+        return
+      }
+
       // Escape — close fullscreen first, then two-step deselect (must run BEFORE overlayOpen guard)
       if (e.key === "Escape") {
         setAddNodePopupOpen(false)
@@ -2357,14 +2375,6 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           >
             Follow build →
           </Button>
-        )}
-        {/* Phase 1C.2 — Canvas-wide Scene View Modes toggle. Floats top-
-            center on desktop; hidden on mobile where the canvas already
-            optimizes for one-scene-at-a-time. */}
-        {!isMobile && (
-          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30">
-            <ViewModeToggle />
-          </div>
         )}
         {/* Workflow-loading surface. Shown for the whole fetch window
             (`isWorkflowLoading` is set true at the start of load() and

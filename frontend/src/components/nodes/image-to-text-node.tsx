@@ -8,7 +8,7 @@ import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-wi
 import { isValidImageToTextConnection } from "@/lib/image-producer-handles"
 import { computeDeleteResultUpdates, copyToClipboard, downloadTextFile } from "@/lib/utils"
 import { BaseNode } from "./base-node"
-import { RunNodeButton } from "./run-node-button"
+import { NodeQuickStrip } from "./node-quick-strip"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { NodeJobProgress } from "./node-job-progress"
@@ -115,7 +115,7 @@ function ImageToTextNodeComponent({ id, data, selected }: NodeProps) {
       minHeight={350}
       hideHeader
       topToolbarContent={
-                  <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+                  <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />
       }
       handles={[
         { id: "image", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },

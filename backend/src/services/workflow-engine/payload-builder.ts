@@ -10,7 +10,7 @@ import { collectAncestorRefs as sharedCollectAncestorRefs } from "@nodaro/shared
 import { buildImagePrompt, assembleImageInput, buildScenePrompt, applyReferenceOrderToVideo } from "@nodaro/shared"
 import { collectIdentityLockClause as sharedCollectIdentityLockClause } from "@nodaro/shared"
 import { resolveTemplate, applyTemplate } from "@nodaro/shared"
-import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt } from "@nodaro/shared"
+import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt, resolveVideoProviderForMode } from "@nodaro/shared"
 import { resolveNodeRefs } from "@nodaro/shared"
 import { composeCameraMotionHintFromConnections } from "@nodaro/shared"
 import {
@@ -2331,6 +2331,14 @@ export function buildPayload(
       const effectiveMode: "image-to-video" | "text-to-video" =
         (provider === "gemini-omni-video" && hasVideoRef) ? "image-to-video" : mode
 
+      // Split-id video models (Grok Imagine 1, Wan 2.6/2.7) use a different KIE
+      // id per mode but are one user-facing model in the unified picker. Remap
+      // the stored id to the concrete id for the chosen mode so BOTH the worker
+      // model lookup (payload.provider) AND the credit identifier are correct.
+      // No-op for single-id providers. Mirrors the frontend executor
+      // (execute-node.ts) — shared source of truth in @nodaro/shared.
+      const resolvedProvider = resolveVideoProviderForMode(provider, effectiveMode)
+
       // Prompt composition: prefer upstream → data.prompt → data.motionPrompt
       // (legacy field still emitted by the inline picker). composeVideoPrompt
       // appends cinematography hints + optional motion-hint + identity-lock.
@@ -2395,7 +2403,7 @@ export function buildPayload(
         jobName: effectiveMode,
         queueName: "video-generation",
         modelIdentifier: buildVideoCreditModelIdentifier(
-          provider,
+          resolvedProvider,
           data.duration as number | string | undefined,
           (data.sound ?? data.kling3Sound) as boolean | undefined,
           effectiveMode,
@@ -2405,7 +2413,7 @@ export function buildPayload(
         ),
         payload: {
           jobId,
-          provider,
+          provider: resolvedProvider,
           prompt: composedPrompt,
           // Typed `negative` handle takes precedence over the config-panel
           // field, with the config field as fallback (parallel to `prompt`).

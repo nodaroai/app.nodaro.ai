@@ -5,7 +5,7 @@ import { Position, type NodeProps } from "@xyflow/react"
 import { Mic, Loader2, AlertCircle, Volume2, AudioWaveform, LayoutGrid, Sparkles } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
-import { RunNodeButton } from "./run-node-button"
+import { NodeQuickStrip } from "./node-quick-strip"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { isValidVoiceRemixConnection } from "@/lib/audio-text-handles"
@@ -56,7 +56,7 @@ function VoiceRemixNodeComponent({ id, data, selected }: NodeProps) {
       isRunning={status === "running"}
       hideHeader
       topToolbarContent={
-                  <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+                  <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />
       }
       bottomToolbarContent={
         showThumbnails && results.length > 1 ? (

@@ -188,6 +188,8 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   "seedance-2-fast:8s:1080p":     { provider: "KIE.ai", providerCostUsd: 0.495, markupPct: 25 },  // 99 KIE cr (8s, 1080p, no ref; 1.5× 720p)
   "seedance-2-fast:8s:1080p-ref": { provider: "KIE.ai", providerCostUsd: 0.300, markupPct: 25 },  // 60 KIE cr (8s, 1080p, w/ref)
   "grok-i2v":          { provider: "KIE.ai",    providerCostUsd: 0.100, markupPct: 25 },  // 20 KIE cr (6s 720p)
+  "grok-imagine-video-1.5":        { provider: "KIE.ai", providerCostUsd: 0.590, markupPct: 25 },  // 118 KIE cr (8s 480p default; per-sec 14.5/25 cr/s + 2/img)
+  "grok-imagine-video-1.5:8s:720p": { provider: "KIE.ai", providerCostUsd: 1.010, markupPct: 25 },  // 202 KIE cr (8s 720p)
   "wan-i2v":           { provider: "KIE.ai",    providerCostUsd: 0.350, markupPct: 25 },  // 70 KIE cr (wan 2.6, 5s, 720p)
   "wan-turbo":         { provider: "KIE.ai",    providerCostUsd: 0.200, markupPct: 25 },  // 40 KIE cr (wan 2.2, 5s, 480p)
   "hailuo-2.3-pro":    { provider: "KIE.ai",    providerCostUsd: 0.400, markupPct: 25 },  // 80 KIE cr (10s actual from audit)

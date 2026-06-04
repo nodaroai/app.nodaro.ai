@@ -17,7 +17,7 @@ import type {
   ProviderOptions,
   ReconcileOpts,
 } from "../provider.interface.js"
-import { SEEDANCE_2_REF_LIMITS, isSeedance2Provider, isVeoProvider, getLipSyncMaxAudioSeconds, applyVideoNegativePrompt } from "@nodaro/shared"
+import { SEEDANCE_2_REF_LIMITS, isSeedance2Provider, isVeoProvider, getLipSyncMaxAudioSeconds, applyVideoNegativePrompt, getModel } from "@nodaro/shared"
 import {
   createSanitizedError,
   runKieTask,
@@ -50,6 +50,19 @@ import sharp from "sharp"
 function mapAspectRatio(_provider: string, aspectRatio: string): string {
   return aspectRatio
 }
+
+/**
+ * Aspect ratios we forward to KIE for grok-imagine-video-1.5 — derived from the
+ * model catalog (the single source for the picker) plus the "auto" default, so
+ * the runtime allowlist can't drift from what the UI offers. An aspect_ratio is
+ * forwarded only when it's in this set; anything else (e.g. 21:9 from the shared
+ * Zod enum) falls back to the extraParams "auto" default instead of erroring at
+ * KIE. "Auto"/"adaptive" normalize to "auto".
+ */
+const GROK_VIDEO_15_ASPECT_RATIOS = new Set<string>([
+  ...(getModel("grok-imagine-video-1.5")?.aspectRatios ?? []),
+  "auto",
+])
 
 /**
  * Merge Seedance 2.0 options into the KIE payload (I2V + T2V).
@@ -792,6 +805,17 @@ export class KieVideoProvider
     if (provider === "seedance") {
       if (options?.generateAudio !== undefined) input.generate_audio = options.generateAudio
       if (options?.aspectRatio) input.aspect_ratio = options.aspectRatio
+    }
+
+    // Grok Imagine Video 1.5 — forward aspect_ratio when KIE accepts the value
+    // (Auto/adaptive → "auto"). resolution + duration + image_urls are already
+    // applied by the generic path above; image_urls is required by this model.
+    if (provider === "grok-imagine-video-1.5") {
+      const arRaw = options?.aspectRatio
+      const ar = arRaw === "Auto" || arRaw === "adaptive" ? "auto" : arRaw
+      if (ar && GROK_VIDEO_15_ASPECT_RATIOS.has(ar)) {
+        input.aspect_ratio = ar
+      }
     }
 
     if (isSeedance2Provider(provider)) {

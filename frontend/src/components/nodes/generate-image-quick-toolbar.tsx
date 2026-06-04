@@ -13,8 +13,10 @@ import {
 import { ModelSearchSelect } from "@/components/editor/config-panels/model-search-select"
 import { RatioIcon } from "@/components/editor/config-panels/aspect-ratio-selector"
 import { RunNodeButton } from "./run-node-button"
+import { PromptEditButton } from "./prompt-edit-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { NODE_VISUAL_SCALE_FLOOR } from "@/lib/zoom-floor"
+import { useNodeVisuallyCompact } from "@/lib/node-visual-compact"
 import type { GenerateImageData } from "@/types/nodes"
 
 interface GenerateImageQuickToolbarProps {
@@ -56,22 +58,13 @@ export function GenerateImageQuickToolbar({
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
 
-  // Compact threshold = (toolbar natural width) > 1.5 × (visible node width).
-  // The toolbar renders at fixed DOM scale (NodeToolbar's portal isn't
-  // zoom-scaled), while the node IS scaled by the canvas zoom. So when
-  // the canvas zooms out far OR the user resizes the node narrow, the
-  // toolbar visually dwarfs the node — collapse to the single pill.
-  // TOOLBAR_NATURAL_WIDTH is hand-tuned from the full-strip layout
-  // (4 ghost selects + dot + run button).
-  const TOOLBAR_NATURAL_WIDTH = 400
-  const nodeWidth = useWorkflowStore((s) => {
-    const n = s.nodes.find((nn) => nn.id === nodeId)
-    const w = (n?.width as number | undefined) ?? (n?.measured?.width as number | undefined)
-    return typeof w === "number" && w > 0 ? w : 320
-  })
+  // Collapse to the single summary pill when the node is visually compact.
+  // Shared threshold (`useNodeVisuallyCompact`) with the typed-handle labels,
+  // so the toolbar and the pip labels switch modes at the exact same
+  // on-screen size — whether the canvas is zoomed out or the node is resized
+  // narrow.
+  const isCompact = useNodeVisuallyCompact(nodeId)
   const zoom = useStore((s) => s.transform[2])
-  const visibleNodeWidth = nodeWidth * zoom
-  const isCompact = TOOLBAR_NATURAL_WIDTH > visibleNodeWidth * 1.5
 
   // NodeToolbar renders at fixed DOM scale (its portal sits outside the
   // React Flow zoom transform), so its visual size doesn't track zoom by
@@ -208,6 +201,7 @@ export function GenerateImageQuickToolbar({
         style={toolbarTransform}
         onClick={(e) => e.stopPropagation()}
       >
+        <PromptEditButton nodeId={nodeId} compact />
         <Popover onOpenChange={handleOpenChange}>
           <PopoverTrigger asChild>
             <button
@@ -309,6 +303,8 @@ export function GenerateImageQuickToolbar({
       style={toolbarTransform}
       onClick={(e) => e.stopPropagation()}
     >
+      <PromptEditButton nodeId={nodeId} />
+
       {/* Model selector */}
       {isMulti ? (
         <span

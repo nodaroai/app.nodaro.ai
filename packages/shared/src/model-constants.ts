@@ -368,6 +368,10 @@ export const IMAGE_TO_VIDEO_PROVIDERS = [
   "gemini-omni-video",
   "ltx-2.3-pro",
   "ltx-2.3-fast",
+  // xAI Grok Imagine Video 1.5 — KIE i2v (image_urls required). Also listed in
+  // TEXT_TO_VIDEO_PROVIDERS so it's offered everywhere in the unified node; the
+  // t2v route guards no-image runs via VIDEO_PROVIDERS_REQUIRING_IMAGE.
+  "grok-imagine-video-1.5",
   // Replicate disabled
   // "runway",
   // "pika",
@@ -399,6 +403,10 @@ export const TEXT_TO_VIDEO_PROVIDERS = [
   "gemini-omni-video",
   "ltx-2.3-pro",
   "ltx-2.3-fast",
+  // Grok Imagine Video 1.5 is i2v-only; present here so the unified node offers
+  // it in every surface. /v1/text-to-video early-returns "requires an input
+  // image" for it (VIDEO_PROVIDERS_REQUIRING_IMAGE) — it never reaches KIE.
+  "grok-imagine-video-1.5",
   // Replicate disabled
   // "runway",
   // "pika",
@@ -415,6 +423,67 @@ export const VIDEO_GEN_PROVIDERS = [
   ),
 ] as const
 export type VideoGenProvider = typeof VIDEO_GEN_PROVIDERS[number]
+
+/**
+ * Video models that expose DISTINCT provider ids per mode (text-to-video vs
+ * image-to-video) but represent ONE user-facing model. KIE keys i2v and t2v off
+ * different ids in different maps (KIE_VIDEO_MODELS vs KIE_TEXT_TO_VIDEO_MODELS),
+ * so each id only resolves to a real model in its native mode.
+ *
+ * The unified Generate Video node shows ONE picker row (the `base` id) and
+ * auto-selects the mode by whether an input image is present; execution remaps
+ * base→mode id via {@link resolveVideoProviderForMode}. This registry is the
+ * single source of truth shared by the picker collapse (frontend
+ * `model-options.ts`), the frontend DAG executor (`execute-node.ts`), and the
+ * backend orchestrator (`payload-builder.ts`) so they can't drift.
+ *
+ * `base` MUST be one of the group's own mode ids (kept = the i2v id, since the
+ * unified picker's i2v entries win on collision). Honesty invariants are guarded
+ * in `__tests__/video-mode-aliases.test.ts`.
+ */
+export interface VideoModeAlias {
+  /** Canonical id stored on the node + shown in the unified picker. */
+  base: string
+  /** KIE id to use when an input image is present (image-to-video). */
+  i2v: string
+  /** KIE id to use for pure text-to-video. */
+  t2v: string
+}
+
+export const VIDEO_MODE_ALIASES: readonly VideoModeAlias[] = [
+  { base: "grok-i2v", i2v: "grok-i2v", t2v: "grok" },
+  { base: "wan-i2v", i2v: "wan-i2v", t2v: "wan" },
+  { base: "wan-2.7-i2v", i2v: "wan-2.7-i2v", t2v: "wan-2.7-t2v" },
+] as const
+
+/**
+ * Resolve a (possibly base / cross-mode) video provider id to the concrete KIE
+ * id for the given execution mode. Accepts any member id of an alias group
+ * (base, i2v, or t2v) so existing workflows that stored either mode's id keep
+ * working. Non-aliased providers (single-id models, VEO, Replicate, etc.) pass
+ * through unchanged.
+ */
+export function resolveVideoProviderForMode(
+  provider: string,
+  mode: "image-to-video" | "text-to-video",
+): string {
+  for (const g of VIDEO_MODE_ALIASES) {
+    if (provider === g.base || provider === g.i2v || provider === g.t2v) {
+      return mode === "image-to-video" ? g.i2v : g.t2v
+    }
+  }
+  return provider
+}
+
+/**
+ * t2v twin ids hidden from the unified Generate Video picker — the i2v/base
+ * entry already represents both modes (execution remaps by image presence).
+ * Only includes twins whose `base` is NOT the t2v id, so the surviving picker
+ * entry is the base. Consumed by the frontend `VIDEO_GEN_MODELS` collapse.
+ */
+export const VIDEO_GEN_COLLAPSED_T2V_IDS: ReadonlySet<string> = new Set(
+  VIDEO_MODE_ALIASES.filter((g) => g.t2v !== g.base).map((g) => g.t2v),
+)
 
 /** Video-to-video providers */
 export const VIDEO_TO_VIDEO_PROVIDERS = [
@@ -648,6 +717,7 @@ export const DURATION_PRICED_PROVIDERS = new Set([
   "seedance",
   "seedance-2",
   "seedance-2-fast",
+  "grok-imagine-video-1.5",
 ])
 
 /**
@@ -705,6 +775,7 @@ export const VIDEO_REF_LIMITS_BY_PROVIDER: Record<
   "bytedance-pro": { images: 1 },
   "bytedance-pro-fast": { images: 1 },
   "gemini-omni-video": { images: 7, videos: 1 },
+  "grok-imagine-video-1.5": { images: 1 },
 }
 
 /**
@@ -713,6 +784,31 @@ export const VIDEO_REF_LIMITS_BY_PROVIDER: Record<
  * Seedance 2.0 family uses per-second billing split 480p/720p × with-ref/no-ref.
  */
 export const RESOLUTION_VIDEO_REF_PRICING = SEEDANCE_2_PROVIDERS
+
+/**
+ * Video models priced by (duration × resolution) WITHOUT a video-ref dimension.
+ * Identifier suffix: `:{resolution}` (480p / 720p), appended after the duration
+ * tier. Distinct from RESOLUTION_VIDEO_REF_PRICING (Seedance), which also adds
+ * the `-ref` variant. Grok Imagine Video 1.5 is the first member.
+ */
+export const RESOLUTION_DURATION_PRICING = new Set<string>([
+  "grok-imagine-video-1.5",
+])
+
+/**
+ * Video providers that REQUIRE an input image (image-to-video only) even though
+ * they're listed in TEXT_TO_VIDEO_PROVIDERS for unified-node visibility. The
+ * `/v1/text-to-video` route early-returns a clean 400 for these before any job
+ * is created, instead of letting the prompt-only request fail at the provider.
+ */
+export const VIDEO_PROVIDERS_REQUIRING_IMAGE = new Set<string>([
+  "grok-imagine-video-1.5",
+])
+
+/** True when a video provider can only run image-to-video (image required). */
+export function videoProviderRequiresImage(provider: string | undefined): boolean {
+  return !!provider && VIDEO_PROVIDERS_REQUIRING_IMAGE.has(provider)
+}
 
 /**
  * Video models where enabling audio/sound incurs an additional cost.
@@ -752,7 +848,7 @@ export const VEO_RESOLUTION_TIERED_PROVIDERS = new Set<string>([
  * "duration" = cost varies by video length
  * "duration+audio" = cost varies by length AND audio on/off
  */
-export const VIDEO_VARIABLE_PRICING: Record<string, "duration" | "duration+audio" | "duration+mode" | "duration+resolution+ref"> = {
+export const VIDEO_VARIABLE_PRICING: Record<string, "duration" | "duration+audio" | "duration+mode" | "duration+resolution+ref" | "duration+resolution"> = {
   "kling-3.0": "duration+audio",
   "kling-3-omni": "duration",
   "kling": "duration+audio",
@@ -766,6 +862,8 @@ export const VIDEO_VARIABLE_PRICING: Record<string, "duration" | "duration+audio
   "seedance": "duration",
   "seedance-2": "duration+resolution+ref",
   "seedance-2-fast": "duration+resolution+ref",
+  // Grok Imagine Video 1.5 — per-second billing split 480p/720p (no video-ref dimension).
+  "grok-imagine-video-1.5": "duration+resolution",
 }
 
 /**
@@ -833,6 +931,26 @@ export const VIDEO_DURATION_TIERS: Record<string, Array<{ maxSeconds: number; su
     { maxSeconds: 4, suffix: "4s" },
     { maxSeconds: 8, suffix: "8s" },
     { maxSeconds: 12, suffix: "12s" },
+    { maxSeconds: 15, suffix: "15s" },
+  ],
+  // Grok Imagine Video 1.5 — true per-second billing (KIE 14.5 cr/s @480p, 25 cr/s
+  // @720p, +2 cr/image). One tier per allowed second (1–15s) so the composite
+  // identifier maps 1:1 to the seeded price — no rounding/overcharge for any on-menu value.
+  "grok-imagine-video-1.5": [
+    { maxSeconds: 1, suffix: "1s" },
+    { maxSeconds: 2, suffix: "2s" },
+    { maxSeconds: 3, suffix: "3s" },
+    { maxSeconds: 4, suffix: "4s" },
+    { maxSeconds: 5, suffix: "5s" },
+    { maxSeconds: 6, suffix: "6s" },
+    { maxSeconds: 7, suffix: "7s" },
+    { maxSeconds: 8, suffix: "8s" },
+    { maxSeconds: 9, suffix: "9s" },
+    { maxSeconds: 10, suffix: "10s" },
+    { maxSeconds: 11, suffix: "11s" },
+    { maxSeconds: 12, suffix: "12s" },
+    { maxSeconds: 13, suffix: "13s" },
+    { maxSeconds: 14, suffix: "14s" },
     { maxSeconds: 15, suffix: "15s" },
   ],
 }

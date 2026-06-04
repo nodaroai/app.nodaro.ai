@@ -375,9 +375,9 @@ Stage 8 is now a pure approval gate. Auto mode flips `pipelines.status='complete
 
 Approve clears `pipeline_stages.output.current_sub_gate`, flips stage status back to `running`, and re-enqueues `drivePipeline`. Reject marks the stage failed with `failure_reason='sub_gate_rejected:<gate>'`, cascades the pipeline to `failed`, and refunds unspent credits. Proper branch-from-stage integration on reject lands in Phase 1D.
 
-## Canvas-wide Scene View Modes (Phase 1C.2)
+## Scene View Modes
 
-A new toolbar toggle in the canvas (`<ViewModeToggle>`) switches ALL SceneNodes between `default` / `storyboard` / `video` / `scripting` view modes simultaneously. Per-node toggle still works; the canvas-wide override wins when set (clicking the active button again clears the override and returns to per-node selection).
+Each SceneNode renders in one of four view modes — `default` / `storyboard` / `video` / `scripting` — chosen **per node** from its config panel. (The earlier canvas-wide toggle that switched every SceneNode at once has been removed; view mode is now a per-node setting.)
 
 ## Phase 1C.2.1 additions (cleanup + narration + FCPXML)
 

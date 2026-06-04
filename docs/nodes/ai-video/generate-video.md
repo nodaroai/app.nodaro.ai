@@ -58,15 +58,18 @@ Generate Video covers the union of the legacy image-to-video and text-to-video c
 | Hailuo | `hailuo-2.3-pro`, `hailuo-2.3`, `hailuo-standard` | T2V (`hailuo-standard`), I2V | 6 / 10s |
 | Bytedance | `bytedance-lite`, `bytedance-pro`, `bytedance-pro-fast` | T2V (lite, pro), I2V | 5 / 10s |
 | MiniMax | `minimax` | T2V, I2V | Fixed 5s, end-frame supported |
-| Grok | `grok-i2v`, `grok` | `grok-i2v`: I2V only; `grok`: T2V only | 6 / 10s; resolution + mode (fun/normal/spicy) |
+| Grok Imagine 1 | `grok-i2v` (one picker row; remaps to `grok` for T2V) | T2V + I2V — mode auto-selected by image presence | 6 / 10s; resolution + mode (fun/normal/spicy) |
+| Grok Imagine 1.5 | `grok-imagine-video-1.5` | I2V (input image required) | 1–15s; 480p / 720p; per-second pricing; offered in the T2V picker too but returns "requires an input image" without one |
 | Sora 2 | `sora2`, `sora2-pro` | T2V, I2V | 5 / 10s; remove-watermark add-on |
-| Wan | `wan`, `wan-i2v`, `wan-turbo`, `wan-2.7-i2v`, `wan-2.7-t2v` | T2V (`wan`, `wan-turbo`, `wan-2.7-t2v`), I2V (others) | 5 / 10 / 15s |
+| Wan | `wan-i2v` (Wan 2.6), `wan-2.7-i2v` (Wan 2.7), `wan-turbo` | T2V + I2V — Wan 2.6/2.7 are one picker row each (remap to `wan` / `wan-2.7-t2v` for T2V); `wan-turbo` fixed 5s | 5 / 10 / 15s |
 | HappyHorse | `happyhorse-i2v`, `happyhorse-ref2v`, `happyhorse` | I2V, reference, T2V | 3–15s; 720p / 1080p |
 | Runway (KIE) | `runway-kie` | T2V, I2V | Fixed configurations |
 | Kling 3 Omni | `kling-3-omni` | I2V | — |
 | LTX 2.3 | `ltx-2.3-pro`, `ltx-2.3-fast` | T2V, I2V, audio→V (Pro only) | Pro: 6 / 8 / 10s; Fast: 6–20s; 1080p / 2k / 4k; aspect 16:9 / 9:16; fps 24 / 25 / 48 / 50; supports `last_frame_image` (end-frame interpolation). Fast does not accept audio. |
 
 Source of truth: `IMAGE_TO_VIDEO_PROVIDERS` + `TEXT_TO_VIDEO_PROVIDERS` in `packages/shared/src/model-constants.ts`. Full per-provider pricing and parameters: `/admin/models` in the admin panel, or the `model_pricing` table.
+
+> **Unified picker collapse.** A few models expose a *different* provider id per mode but are one user-facing model — Grok Imagine 1 (`grok-i2v` / `grok`), Wan 2.6 (`wan-i2v` / `wan`), Wan 2.7 (`wan-2.7-i2v` / `wan-2.7-t2v`). The picker shows a **single row** for each (keyed by the image-to-video id); execution remaps it to the correct mode-specific endpoint based on image presence via `resolveVideoProviderForMode` (driven by `VIDEO_MODE_ALIASES` in `@nodaro/shared`). Picking one row therefore works in both text-to-video and image-to-video. Single-id models (VEO, Kling, Seedance, Grok Imagine 1.5, …) are unaffected.
 
 ### End-frame support
 
@@ -148,6 +151,11 @@ If neither has the identifier, the route returns HTTP 503 `price_not_configured`
 | `seedance-2` | 8s | 1080p | i2v | with ref | ~75 |
 | `seedance-2-fast` | 8s | 720p | i2v | with ref | ~40 |
 | `sora2-pro` | 10s | — | i2v | remove-watermark | base + 4 |
+| `grok-imagine-video-1.5` | 8s | 480p | i2v | image required | 30 |
+| `grok-imagine-video-1.5` | 8s | 720p | i2v | image required | 51 |
+| `grok-imagine-video-1.5` | 15s | 720p | i2v | image required | 95 |
+
+**Grok Imagine 1.5** uses true per-second pricing via the composite identifier `grok-imagine-video-1.5:<N>s:<resolution>` (N = 1–15, resolution = `480p` / `720p`). Credits = `ceil((rate × seconds + 2) / 4)`, where the per-second rate is 14.5 @ 480p and 25 @ 720p and the `+2` covers the required input image. Examples: 4s/480p = 15, 8s/480p = 30, 8s/720p = 51, 15s/720p = 95.
 
 Cross-check the runtime table in `/admin/models` for the live numbers — the worked examples above match the `STATIC_CREDIT_COSTS` snapshot at the time of this writing.
 

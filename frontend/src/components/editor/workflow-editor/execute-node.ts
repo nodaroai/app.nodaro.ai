@@ -71,7 +71,7 @@ import {
   executeReduce,
 } from "@/lib/api";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
-import { ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, MODEL_CATALOG, splitGeneratedItems, LLM_FEATURE_DEFAULTS } from "@nodaro/shared";
+import { ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, MODEL_CATALOG, splitGeneratedItems, LLM_FEATURE_DEFAULTS, resolveVideoProviderForMode } from "@nodaro/shared";
 import { getGenerateTextTemplate } from "@/lib/generate-text-templates";
 import { buildScenePrompt } from "@/lib/prompt-builder";
 import type {
@@ -2054,8 +2054,21 @@ export function executeNode(
     const hasGeminiVideoRef =
       (node.data as { provider?: string } | undefined)?.provider === "gemini-omni-video" &&
       Boolean((inputs.referenceVideoUrls as string[] | undefined)?.length);
-    const syntheticType = ((hasImage || hasGeminiVideoRef) ? "image-to-video" : "text-to-video") as SceneNodeType;
-    const syntheticNode = { ...node, type: syntheticType } as WorkflowNode;
+    const mode: "image-to-video" | "text-to-video" = (hasImage || hasGeminiVideoRef) ? "image-to-video" : "text-to-video";
+    // Split-id video models (Grok Imagine 1, Wan 2.6/2.7) use a different provider
+    // id per mode but are one user-facing model in the unified picker. Remap the
+    // stored id to the concrete KIE id for the chosen mode so the i2v/t2v handler,
+    // backend route, and credit guard all see a valid id. No-op for single-id
+    // providers. Shared with the backend orchestrator (payload-builder.ts).
+    const rawProvider = (node.data as { provider?: string } | undefined)?.provider;
+    const resolvedProvider = rawProvider ? resolveVideoProviderForMode(rawProvider, mode) : rawProvider;
+    const syntheticNode = {
+      ...node,
+      type: mode as SceneNodeType,
+      data: resolvedProvider && resolvedProvider !== rawProvider
+        ? { ...node.data, provider: resolvedProvider }
+        : node.data,
+    } as WorkflowNode;
     return executeNode(syntheticNode, ctx, overridePrompt, overrideMediaUrl, listIterationIndex, runId);
   }
 

@@ -70,6 +70,7 @@ import { getModelIdentifier } from "@/components/editor/config-panels/helpers";
 import { useStats } from "@/hooks/queries/use-stats-queries";
 import { InsufficientCreditsModal } from "@/ee/components/credits/InsufficientCreditsModal";
 import { StorageExceededModal } from "@/ee/components/credits/StorageExceededModal";
+import { PromptQuickEditModal } from "@/components/nodes/prompt-quick-edit-modal";
 import {
   NODE_CREDIT_COSTS,
   estimateNodeCredits,
@@ -1356,6 +1357,10 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         quotaBytes={storageExceededData?.quotaBytes ?? 0}
         tier={storageExceededData?.tier ?? "free"}
       />
+
+      {/* Quick-edit Prompt modal — opens for store.promptEditNodeId. Mounted at
+          root so it survives a node's hover-toolbar unmounting mid-edit. */}
+      <PromptQuickEditModal />
 
       {/* Confirm dialog for the fallback single-node discard / run-instead. */}
       <AlertDialog

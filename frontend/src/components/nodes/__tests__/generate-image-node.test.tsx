@@ -127,6 +127,19 @@ vi.mock("@/hooks/use-handle-connections", () => ({
   useHandleConnections: () => [],
 }))
 
+// The result-info pill fetches the job's input_data via React Query; stub the
+// hook so the node test stays isolated from network + QueryClientProvider.
+// The pure patch-builder keeps its real implementation (tested separately).
+vi.mock("@/hooks/use-result-generation-settings", async (importOriginal) => {
+  const actual = await importOriginal<
+    typeof import("@/hooks/use-result-generation-settings")
+  >()
+  return {
+    ...actual,
+    useResultGenerationSettings: () => ({ data: undefined, isLoading: false }),
+  }
+})
+
 // ---------------------------------------------------------------------------
 // Component import (after all mocks)
 // ---------------------------------------------------------------------------

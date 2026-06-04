@@ -6,7 +6,7 @@ import { Position, type NodeProps } from "@xyflow/react"
 import { BookOpen, Loader2, AlertCircle, X, FileText, Sparkles, ImageIcon, Film, Maximize2, Type, MessageSquare, Music, Volume2, User, MapPin, Copy, Braces } from "lucide-react"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import { BaseNode } from "./base-node"
-import { RunNodeButton } from "./run-node-button"
+import { NodeQuickStrip } from "./node-quick-strip"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { isValidGenerateScriptConnection } from "@/lib/audio-text-handles"
@@ -67,7 +67,7 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
       isRunning={status === "running"}
       hideHeader
       topToolbarContent={
-                  <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+                  <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />
       }
       handles={[
         { id: "prompt",     type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },

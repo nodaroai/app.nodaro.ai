@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { RunNodeButton } from "./run-node-button"
+import { PromptEditButton } from "./prompt-edit-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { NODE_VISUAL_SCALE_FLOOR } from "@/lib/zoom-floor"
 import { LLM_MODELS, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
@@ -186,6 +187,7 @@ export function LlmChatQuickToolbar({
   if (isCompact) {
     return (
       <div className={`${containerClass} gap-1.5`} style={toolbarTransform} onClick={(e) => e.stopPropagation()}>
+        <PromptEditButton nodeId={nodeId} compact />
         <Popover onOpenChange={handleOpenChange}>
           <PopoverTrigger asChild>
             <button
@@ -235,6 +237,7 @@ export function LlmChatQuickToolbar({
   // ── Default mode: ghost selects ────────────────────────────────────────
   return (
     <div className={`${containerClass} gap-0.5`} style={toolbarTransform} onClick={(e) => e.stopPropagation()}>
+      <PromptEditButton nodeId={nodeId} />
       {/* AI Model */}
       <Select disabled={isRunning} value={currentModel} onValueChange={handleModelChange} onOpenChange={handleOpenChange}>
         <SelectTrigger className={`${ghostTriggerClass} max-w-[150px]`} title="AI model">

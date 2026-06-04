@@ -7,6 +7,7 @@ import {
   creditRangesAll,
   modelsWithFeature,
   isFlux2Model,
+  VIDEO_GEN_COLLAPSED_T2V_IDS,
   type LabeledOption,
 } from "@nodaro/shared"
 
@@ -81,7 +82,7 @@ export const VIDEO_I2V_MODELS = [
   { value: "bytedance-lite", label: "Bytedance Lite", desc: "Light, fast, end frame support" },
   { value: "bytedance-pro", label: "Bytedance Pro", desc: "Higher quality Bytedance" },
   { value: "bytedance-pro-fast", label: "Bytedance Pro Fast", desc: "Fast pro generation" },
-  { value: "grok-i2v", label: "Grok", desc: "Creative, stylized motion" },
+  { value: "grok-i2v", label: "Grok Imagine 1", desc: "Creative, stylized motion" },
   { value: "hailuo-2.3", label: "Hailuo 2.3", desc: "Latest Hailuo, 6-10s standard" },
   { value: "hailuo-2.3-pro", label: "Hailuo 2.3 Pro", desc: "Latest Hailuo, 6-10s pro quality" },
   { value: "hailuo-standard", label: "Hailuo Standard", desc: "Hailuo 02, end frame support" },
@@ -106,12 +107,13 @@ export const VIDEO_I2V_MODELS = [
   { value: "ltx-2.3-pro", label: "LTX 2.3 Pro", desc: "Lightricks LTX 2.3 Pro — text/image/audio→video, up to 4K" },
   { value: "ltx-2.3-fast", label: "LTX 2.3 Fast", desc: "Lightricks LTX 2.3 Fast — text/image→video, durations up to 20s" },
   { value: "gemini-omni-video", label: "Gemini Omni", desc: "Google, 4–10s, 720p/1080p/4K, native audio, refs + video-edit" },
+  { value: "grok-imagine-video-1.5", label: "Grok Imagine 1.5", desc: "xAI Grok, 1–15s, 480p/720p, per-second pricing" },
 ]
 
 export const VIDEO_T2V_MODELS: readonly { value: TextToVideoProvider; label: string; desc: string }[] = [
   { value: "bytedance-lite", label: "Bytedance Lite", desc: "Fast, 5-10s" },
   { value: "bytedance-pro", label: "Bytedance Pro", desc: "High quality, 5-10s" },
-  { value: "grok", label: "Grok", desc: "Creative, stylized motion" },
+  { value: "grok", label: "Grok Imagine 1", desc: "Creative, stylized motion" },
   { value: "kling", label: "Kling", desc: "Versatile, 5-10s clips" },
   { value: "kling-3.0", label: "Kling 3.0", desc: "Latest Kling, 3-15s variable duration" },
   { value: "kling-turbo", label: "Kling Turbo", desc: "Fast generation, 5-10s" },
@@ -131,6 +133,7 @@ export const VIDEO_T2V_MODELS: readonly { value: TextToVideoProvider; label: str
   { value: "ltx-2.3-pro", label: "LTX 2.3 Pro", desc: "Lightricks LTX 2.3 Pro — text/image/audio→video, up to 4K" },
   { value: "ltx-2.3-fast", label: "LTX 2.3 Fast", desc: "Lightricks LTX 2.3 Fast — text/image→video, durations up to 20s" },
   { value: "gemini-omni-video", label: "Gemini Omni", desc: "Google, 4–10s, 720p/1080p/4K, native audio, refs + video-edit" },
+  { value: "grok-imagine-video-1.5", label: "Grok Imagine 1.5", desc: "xAI Grok, 1–15s, 480p/720p (image required)" },
 ]
 
 /** Unified generate-video model list — VIDEO_I2V_MODELS ∪ VIDEO_T2V_MODELS,
@@ -138,13 +141,19 @@ export const VIDEO_T2V_MODELS: readonly { value: TextToVideoProvider; label: str
  *  image (i2v path) or pure text (t2v path) per provider's modes, so the
  *  picker exposes every provider that participates in at least one mode.
  *  I2V entries win on collision because their label/desc is the more
- *  general "image-or-text" descriptor in most cases. */
+ *  general "image-or-text" descriptor in most cases.
+ *
+ *  Split-id models (Grok Imagine 1, Wan 2.6, Wan 2.7) expose one id per mode
+ *  but are ONE user-facing model. We hide the t2v twin (VIDEO_GEN_COLLAPSED_T2V_IDS)
+ *  so the picker shows a single row; execution remaps base→mode id by image
+ *  presence via resolveVideoProviderForMode (shared). Single source of truth. */
 export const VIDEO_GEN_MODELS: readonly { value: VideoGenProvider; label: string; desc: string }[] =
   (() => {
     const seen = new Set<string>()
     const out: { value: VideoGenProvider; label: string; desc: string }[] = []
     for (const m of [...VIDEO_I2V_MODELS, ...VIDEO_T2V_MODELS]) {
       if (seen.has(m.value)) continue
+      if (VIDEO_GEN_COLLAPSED_T2V_IDS.has(m.value)) continue
       seen.add(m.value)
       out.push(m as { value: VideoGenProvider; label: string; desc: string })
     }
@@ -159,6 +168,12 @@ export const VIDEO_V2V_MODELS: readonly { value: VideoToVideoProvider; label: st
   { value: "wan", label: "Wan 2.6", desc: "High quality video-to-video" },
   { value: "wan-flash", label: "Wan 2.6 Flash", desc: "Fast V2V with audio & multi-shot" },
 ]
+
+export const EXTEND_VIDEO_MODELS = [
+  { value: "runway-extend", label: "Runway Extend" },
+  { value: "veo-extend", label: "VEO Extend" },
+  { value: "ltx-2.3-pro", label: "LTX 2.3 Pro" },
+] as const
 
 export const V2V_DURATION_OPTIONS = [
   { value: "5", label: "5 seconds" },

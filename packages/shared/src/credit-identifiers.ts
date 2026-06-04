@@ -12,6 +12,7 @@ import {
   AUDIO_ADDON_PROVIDERS,
   MODE_ADDON_PROVIDERS,
   RESOLUTION_VIDEO_REF_PRICING,
+  RESOLUTION_DURATION_PRICING,
   VEO_RESOLUTION_TIERED_PROVIDERS,
   VIDEO_DURATION_TIERS,
   MOTION_DURATION_TIERS,
@@ -167,6 +168,12 @@ export function buildVideoCreditModelIdentifier(
     const res = resolution === "1080p" ? "1080p" : resolution === "720p" ? "720p" : "480p"
     identifier += `:${res}`
     if (hasVideoRef) identifier += "-ref"
+  }
+
+  // Grok Imagine Video 1.5 family: per-second billing split 480p/720p, no video-ref.
+  // KIE supports only 480p/720p here, so anything non-720p collapses to 480p (the default).
+  if (RESOLUTION_DURATION_PRICING.has(effectiveProvider)) {
+    identifier += resolution === "720p" ? ":720p" : ":480p"
   }
 
   return identifier

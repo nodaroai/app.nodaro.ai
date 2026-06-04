@@ -117,6 +117,13 @@ const DIRECT_API_EXEMPTIONS = new Set<string>([
   // Zod/UI but NOT registered in KIE_VIDEO_MODELS / KIE_TEXT_TO_VIDEO_MODELS.
   "ltx-2.3-pro",
   "ltx-2.3-fast",
+  // ── Grok Imagine Video 1.5 — image-to-video only ──────────────────────
+  // Registered in KIE_VIDEO_MODELS (i2v works), but deliberately NOT in
+  // KIE_TEXT_TO_VIDEO_MODELS. It's listed in TEXT_TO_VIDEO_PROVIDERS so the
+  // unified Generate Video node offers it everywhere, but KIE requires an
+  // input image — so /v1/text-to-video early-returns a clean "requires an
+  // input image" 400 (videoProviderRequiresImage) before reaching a provider.
+  "grok-imagine-video-1.5",
 ])
 
 /**

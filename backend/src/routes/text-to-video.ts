@@ -9,7 +9,7 @@ import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.j
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
-import { TEXT_TO_VIDEO_PROVIDERS, SEEDANCE_2_REF_LIMITS } from "@nodaro/shared"
+import { TEXT_TO_VIDEO_PROVIDERS, SEEDANCE_2_REF_LIMITS, videoProviderRequiresImage } from "@nodaro/shared"
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 
@@ -69,6 +69,20 @@ export async function textToVideoRoutes(app: FastifyInstance) {
     if (!userId) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
+    // Image-to-video-only models (e.g. Grok Imagine Video 1.5) are surfaced in the
+    // T2V provider set for unified-node visibility, but KIE requires an input image.
+    // Fail fast with a clear message instead of letting the prompt-only request
+    // reach the provider. The creditGuard preHandler only checks balance — no
+    // reservation happens until reserveCreditsForJob below, so returning here is clean.
+    if (videoProviderRequiresImage(provider)) {
+      return reply.status(400).send({
+        error: {
+          code: "image_required",
+          message: `${provider} requires an input image — use it in image-to-video (connect an image).`,
+        },
       })
     }
 

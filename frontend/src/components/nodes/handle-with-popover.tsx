@@ -10,6 +10,7 @@ import { TARGET_HANDLE_ACCEPTS } from "@/lib/target-handle-registry"
 import { HANDLE_COLORS } from "@/lib/handle-colors"
 import { getDragAncestorSet } from "@/lib/connection-validation"
 import { NODE_VISUAL_SCALE_FLOOR } from "@/lib/zoom-floor"
+import { useNodeVisuallyCompact } from "@/lib/node-visual-compact"
 
 // HandlePopover transitively pulls the parameter-picker registry (and ~30
 // picker-preview components + ~30 catalogs) for in-node visuals on picker
@@ -144,6 +145,12 @@ export function HandleWithPopover({
   // readable without making it dominant at zoom-in (`scale = 1` then).
   const zoom = useStore((s) => s.transform[2])
   const labelCompensateScale = Math.max(1, NODE_VISUAL_SCALE_FLOOR / Math.max(zoom, 0.01))
+  // When the node is visually compact (small on screen), the typed-handle
+  // labels declutter: only CONNECTED pips keep their label at rest, and the
+  // full set is revealed on node hover. Driven by the `.is-compact` /
+  // `.is-connected` label classes + the `globals.css` rules — shares the
+  // exact compact threshold with the Generate Image quick toolbar.
+  const compact = useNodeVisuallyCompact(nodeId)
 
   // Per-pip compatibility check for the in-progress drag. The pip lights up
   // as a valid candidate when ALL of these are true:
@@ -360,7 +367,7 @@ export function HandleWithPopover({
             // `--always` modifier keeps the label visible at rest (used for
             // ambiguous input pips like camera-motion's startState/endState
             // which look identical without their labels).
-            className={`handle-typed-pip-label absolute text-[12px] font-medium whitespace-nowrap pointer-events-none text-muted-foreground${alwaysShowLabel ? " handle-typed-pip-label--always" : ""}`}
+            className={`handle-typed-pip-label absolute text-[12px] font-medium whitespace-nowrap pointer-events-none text-muted-foreground${alwaysShowLabel ? " handle-typed-pip-label--always" : ""}${compact ? " is-compact" : ""}${isConnected ? " is-connected" : ""}`}
             style={{
               top: "50%",
               [side === "left" ? "right" : "left"]: "calc(100% + 14px)",

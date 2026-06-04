@@ -169,7 +169,7 @@ function BaseNodeComponent({
   // applyNodeChanges / onNodesChange). Subscribing to it lets the floor-clamp
   // effect re-fire once RF completes the first measurement of a new node,
   // instead of prematurely pinning the node before measurement arrives.
-  const { zoom, visualW, visualH, measuredH, isSkipped, isPending } = useWorkflowStore(
+  const { zoom, visualW, visualH, measuredH, isSkipped, isPending, quickStripPinned } = useWorkflowStore(
     useShallow((s) => {
       const node = s.nodes.find((n) => n.id === id)
       const data = node?.data as Record<string, unknown> | undefined
@@ -181,6 +181,7 @@ function BaseNodeComponent({
         measuredH: node?.measured?.height,
         isSkipped: !!data?.skipped,
         isPending: data?.executionStatus === "pending",
+        quickStripPinned: s.quickStripPinnedNodeId === id,
       }
     }),
   )
@@ -582,7 +583,7 @@ function BaseNodeComponent({
     </div>
       {/* Content below card (e.g. run button) */}
       {topToolbarContent && (
-        <NodeToolbar align="center" isVisible={isHovered || !!keepTopToolbarVisible || isRunning || isPending} position={Position.Bottom} offset={4}>
+        <NodeToolbar align="center" isVisible={isHovered || !!keepTopToolbarVisible || isRunning || isPending || quickStripPinned} position={Position.Bottom} offset={4}>
           <div
             // The bottom toolbar renders in a portal outside the node's DOM
             // subtree, so hovering it doesn't trigger the node's

@@ -3,7 +3,7 @@
 import { memo, useState, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { Position, type NodeProps } from "@xyflow/react"
-import { ImageIcon, Loader2, AlertCircle, ShieldAlert, X, Scissors, Settings, LayoutGrid, Expand, Download, Link, Type, Pencil, Aperture, Minus, Users, Sparkles } from "lucide-react"
+import { ImageIcon, Loader2, AlertCircle, ShieldAlert, X, Scissors, LayoutGrid, Expand, Download, Link, Type, Pencil, Aperture, Minus, Users, Sparkles } from "lucide-react"
 import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { isValidGenerateImageConnection } from "@/lib/generate-image-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
@@ -30,6 +30,7 @@ import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { CachedImage } from "@/components/ui/cached-image"
 import { ResultsThumbnailsPanel } from "./results-thumbnails-panel"
 import { GenerateImageQuickToolbar } from "./generate-image-quick-toolbar"
+import { GenerateImageResultInfo } from "./generate-image-result-info"
 import { useFullResolution } from "@/hooks/use-full-resolution"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 
@@ -46,7 +47,6 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   // toolbar visible so the cursor moving into the portaled menu doesn't
   // dismiss it via the node-hover timer.
   const [toolbarDropdownOpen, setToolbarDropdownOpen] = useState(false)
-  const selectNode = useWorkflowStore((s) => s.selectNode)
   const isSettingsOpen = useWorkflowStore((s) => s.selectedNodeId === id)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
@@ -276,11 +276,11 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
                 <Link className="w-3.5 h-3.5" />
               </button>
             </div>
-            <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button type="button" aria-label="Settings" className={`w-7 h-7 flex items-center justify-center bg-black/50 hover:bg-black/70 border border-white/10 text-white rounded-full shadow-sm${isSettingsOpen ? " ring-1 ring-white/30" : ""}`}
-                onClick={(e) => { e.stopPropagation(); selectNode(isSettingsOpen ? null : id) }} title="Settings">
-                <Settings className="w-3.5 h-3.5" />
-              </button>
+            {/* Hover-revealed by default; pinned always-on while the versions
+                panel is open (showThumbnails) so each result's settings stay
+                visible as the user switches between versions. */}
+            <div className={`absolute bottom-2 right-2 transition-opacity ${showThumbnails ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
+              <GenerateImageResultInfo nodeId={id} result={activeResult} data={nodeData} />
             </div>
           </>
         )}

@@ -4,7 +4,7 @@ import { memo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { ShieldCheck, Type, Check, X } from "lucide-react"
 import { BaseNode } from "./base-node"
-import { RunNodeButton } from "./run-node-button"
+import { NodeQuickStrip } from "./node-quick-strip"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -37,7 +37,7 @@ function QACheckNodeComponent({ id, data, selected }: NodeProps) {
         hideHeader
         minWidth={220}
         topToolbarContent={
-                      <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+                      <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />
         }
         handles={[
           { id: "in",       type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
