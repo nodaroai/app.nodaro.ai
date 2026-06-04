@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, screen, fireEvent } from "@testing-library/react"
+import { describe, it, expect, vi, afterEach } from "vitest"
+import { render, screen, fireEvent, act } from "@testing-library/react"
 
 // Mock React Flow's hook — CanvasControls only uses useReactFlow().
 const zoomTo = vi.fn()
@@ -12,34 +12,88 @@ vi.mock("@xyflow/react", () => ({
   }),
 }))
 
-import { CanvasControls, formatZoomPercent } from "../canvas-controls"
+import { CanvasControls, ZoomControl } from "../canvas-controls"
 
-describe("formatZoomPercent", () => {
-  it("formats a 1.0 zoom as a round 100%", () => {
-    expect(formatZoomPercent(1)).toBe("100%")
+// jsdom doesn't implement Pointer Capture; stub so the handlers don't throw.
+Object.defineProperty(HTMLElement.prototype, "setPointerCapture", { configurable: true, writable: true, value: () => {} })
+Object.defineProperty(HTMLElement.prototype, "releasePointerCapture", { configurable: true, writable: true, value: () => {} })
+
+function pointer(el: HTMLElement, type: "down" | "move" | "up", x: number, y: number, pointerId = 1) {
+  fireEvent[type === "down" ? "pointerDown" : type === "move" ? "pointerMove" : "pointerUp"](el, {
+    clientX: x,
+    clientY: y,
+    pointerId,
+  })
+}
+
+afterEach(() => {
+  vi.useRealTimers()
+  zoomTo.mockClear()
+})
+
+describe("ZoomControl", () => {
+  function setup(zoom = 0.882) {
+    const onSetZoom = vi.fn()
+    const onReset = vi.fn()
+    render(<ZoomControl zoom={zoom} onSetZoom={onSetZoom} onReset={onReset} />)
+    return { onSetZoom, onReset, el: screen.getByTestId("zoom-value") }
+  }
+
+  it("displays the current zoom percentage", () => {
+    setup(0.882)
+    expect(screen.getByText("88.2%")).toBeInTheDocument()
   })
 
-  it("keeps one decimal for non-round zooms", () => {
-    expect(formatZoomPercent(0.882)).toBe("88.2%")
-    expect(formatZoomPercent(1.8)).toBe("180%")
+  it("double-tap (two quick taps) resets to 100% and does not scrub", () => {
+    const { onReset, onSetZoom, el } = setup(0.5)
+    pointer(el, "down", 100, 100)
+    pointer(el, "up", 100, 100)
+    pointer(el, "down", 101, 100) // 2nd tap, < threshold apart → double
+    pointer(el, "up", 101, 100)
+    expect(onReset).toHaveBeenCalledTimes(1)
+    expect(onSetZoom).not.toHaveBeenCalled()
   })
 
-  it("drops the trailing .0 for whole percentages", () => {
-    expect(formatZoomPercent(0.75)).toBe("75%")
-    expect(formatZoomPercent(0.2)).toBe("20%")
-    expect(formatZoomPercent(8)).toBe("800%")
+  it("single tap opens the number editor; typing + Enter sets the zoom", () => {
+    vi.useFakeTimers()
+    const { onSetZoom, el } = setup(0.5)
+    pointer(el, "down", 100, 100)
+    pointer(el, "up", 100, 100)
+    act(() => {
+      vi.advanceTimersByTime(260) // tap timer fires → edit mode
+    })
+    const input = screen.getByRole("textbox")
+    fireEvent.change(input, { target: { value: "150" } })
+    fireEvent.keyDown(input, { key: "Enter" })
+    expect(onSetZoom).toHaveBeenCalledWith(1.5, expect.anything())
   })
 
-  it("rounds to a single decimal place", () => {
-    expect(formatZoomPercent(0.8823)).toBe("88.2%")
-    expect(formatZoomPercent(0.33337)).toBe("33.3%")
+  it("Escape cancels the editor without changing zoom", () => {
+    vi.useFakeTimers()
+    const { onSetZoom, el } = setup(0.5)
+    pointer(el, "down", 100, 100)
+    pointer(el, "up", 100, 100)
+    act(() => {
+      vi.advanceTimersByTime(260)
+    })
+    const input = screen.getByRole("textbox")
+    fireEvent.keyDown(input, { key: "Escape" })
+    expect(onSetZoom).not.toHaveBeenCalled()
+  })
+
+  it("dragging up scrubs the zoom higher", () => {
+    const { onSetZoom, el } = setup(1)
+    pointer(el, "down", 100, 200)
+    pointer(el, "move", 100, 100) // moved up 100px → zoom in
+    expect(onSetZoom).toHaveBeenCalled()
+    const lastZoom = onSetZoom.mock.calls.at(-1)![0]
+    expect(lastZoom).toBeGreaterThan(1)
+    pointer(el, "up", 100, 100)
   })
 })
 
-describe("CanvasControls zoom indicator", () => {
-  beforeEach(() => zoomTo.mockClear())
-
-  function renderControls(zoom = 0.882) {
+describe("CanvasControls", () => {
+  function renderControls(zoom = 1) {
     return render(
       <CanvasControls
         zoom={zoom}
@@ -53,14 +107,17 @@ describe("CanvasControls zoom indicator", () => {
     )
   }
 
-  it("shows the current zoom percentage", () => {
+  it("renders the live zoom percentage", () => {
     renderControls(0.882)
     expect(screen.getByText("88.2%")).toBeInTheDocument()
   })
 
-  it("resets the canvas to 100% when the percentage is clicked", () => {
-    renderControls(0.5)
-    fireEvent.click(screen.getByRole("button", { name: /reset to 100%/i }))
-    expect(zoomTo).toHaveBeenCalledWith(1, expect.objectContaining({ duration: expect.any(Number) }))
+  it("+ / − snap to the ladder (100% → 125% / 75%)", () => {
+    renderControls(1)
+    fireEvent.click(screen.getByRole("button", { name: "Zoom In" }))
+    expect(zoomTo).toHaveBeenCalledWith(1.25, expect.anything())
+    zoomTo.mockClear()
+    fireEvent.click(screen.getByRole("button", { name: "Zoom Out" }))
+    expect(zoomTo).toHaveBeenCalledWith(0.75, expect.anything())
   })
 })

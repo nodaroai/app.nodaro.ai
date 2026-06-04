@@ -26,6 +26,7 @@ import { NodeContextMenu } from "./node-context-menu"
 import { CanvasContextMenu } from "./canvas-context-menu"
 import { CanvasToolbar } from "./canvas-toolbar"
 import { CanvasControls } from "./canvas-controls"
+import { ZOOM_MIN, ZOOM_MAX, snapZoom } from "@/lib/zoom"
 import { AddNodePopup } from "./add-node-popup"
 import { buildAdjacency, isValidWorkflowConnection } from "@/lib/connection-validation"
 import { pickEdgeAccent } from "@/lib/edge-accent"
@@ -454,7 +455,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const addNodeAndOpenPicker = useWorkflowStore((s) => s.addNodeAndOpenPicker)
   const updateEdgeData = useWorkflowStore((s) => s.updateEdgeData)
   const replaceEdgeWithTeleporter = useWorkflowStore((s) => s.replaceEdgeWithTeleporter)
-  const { screenToFlowPosition, setNodes, setEdges, getNode, getNodes, getEdges, setCenter, fitView, getViewport, setViewport } = useReactFlow()
+  const { screenToFlowPosition, setNodes, setEdges, getNode, getNodes, getEdges, setCenter, fitView, getViewport, setViewport, zoomTo } = useReactFlow()
   const updateNodeInternals = useUpdateNodeInternals()
   const savedViewport = useWorkflowStore((s) => s.savedViewport)
 
@@ -1526,9 +1527,30 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         return
       }
 
-      // Cmd/Ctrl+E — toggle the quick-edit Prompt modal for the selected node
-      // (runs BEFORE the overlay guard so it can close its own dialog).
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "e" && !e.shiftKey && !e.altKey) {
+      // Alt/Option + = / - — snap zoom in / out. Cmd/Ctrl + ± is the browser's
+      // native page zoom and is deliberately left untouched. Match on e.code
+      // because on macOS Option composes the character (Option+= → "≠"), so
+      // e.key is unreliable; e.code is the physical key.
+      if (e.altKey && !e.ctrlKey && !e.metaKey) {
+        const zoomIn = e.code === "Equal" || e.code === "NumpadAdd"
+        const zoomOut = e.code === "Minus" || e.code === "NumpadSubtract"
+        if (zoomIn || zoomOut) {
+          e.preventDefault()
+          const current = getViewport().zoom
+          zoomTo(snapZoom(current, zoomIn ? 1 : -1), { duration: 200 })
+          return
+        }
+      }
+
+      // Cmd/Ctrl+E (or Alt/Option+E) — toggle the quick-edit Prompt modal for the
+      // selected node (runs BEFORE the overlay guard so it can close its own
+      // dialog). Alt+E is the escape hatch: the "Claude in Chrome" extension binds
+      // ⌘E to its side panel, swallowing it before the page sees it. Alt+E matches
+      // on e.code ("KeyE") since macOS Option+E is a dead key (composes "´").
+      const isPromptToggle =
+        ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "e") ||
+        (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.code === "KeyE")
+      if (isPromptToggle) {
         const state = useWorkflowStore.getState()
         if (state.promptEditNodeId) {
           e.preventDefault()
@@ -2367,8 +2389,8 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           zoomOnPinch
           panOnDrag
           elevateNodesOnSelect
-          minZoom={0.2}
-          maxZoom={8}
+          minZoom={ZOOM_MIN}
+          maxZoom={ZOOM_MAX}
           proOptions={{ hideAttribution: true }}
         >
           {!isMobile && showMiniMap && (
