@@ -380,11 +380,11 @@ export function LibraryMediaBrowser({
       </div>
       )}
 
-      {previewAsset && (previewAsset.type === "image" || previewAsset.type === "video") && (
+      {previewAsset && (previewAsset.type === "image" || previewAsset.type === "video" || previewAsset.type === "audio") && (
         <MediaPreviewModal
           isOpen={Boolean(previewAsset)}
           onClose={() => setPreviewAsset(null)}
-          type={previewAsset.type as "image" | "video"}
+          type={previewAsset.type as "image" | "video" | "audio"}
           url={previewAsset.url}
         />
       )}

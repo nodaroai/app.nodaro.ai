@@ -1,9 +1,11 @@
 "use client"
 
-import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react"
-import { Maximize2, ZoomIn, ZoomOut, Map, Magnet, Ruler } from "lucide-react"
-import { useReactFlow } from "@xyflow/react"
+import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent } from "react"
+import { Maximize2, ZoomIn, ZoomOut, Map, Magnet, Ruler, Crosshair } from "lucide-react"
+import { useReactFlow, useStoreApi } from "@xyflow/react"
 import { cn } from "@/lib/utils"
+import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { findNodeNearestToPoint } from "@/lib/canvas-navigation"
 import {
   Tooltip,
   TooltipContent,
@@ -255,7 +257,27 @@ function ZoomControl({
 export { ZoomControl }
 
 export function CanvasControls({ zoom, showMiniMap, onToggleMiniMap, snapEnabled, onToggleSnap, alignmentEnabled, onToggleAlignment, isMobile }: CanvasControlsProps) {
-  const { fitView, zoomTo } = useReactFlow()
+  const { fitView, zoomTo, getNodes, setCenter } = useReactFlow()
+  const storeApi = useStoreApi()
+  const selectNode = useWorkflowStore((s) => s.selectNode)
+
+  // Center the canvas on the node nearest the current screen center (keeping the
+  // current zoom) and select it so it highlights. Pane size + transform are read
+  // imperatively so the control bar doesn't re-render on every pan.
+  const handleAutoFocus = useCallback(() => {
+    const { width, height, transform } = storeApi.getState()
+    const [tx, ty, z] = transform
+    const center = { x: (width / 2 - tx) / z, y: (height / 2 - ty) / z }
+    const nodes = getNodes()
+    const nearestId = findNodeNearestToPoint(nodes, center)
+    if (!nearestId) return
+    const target = nodes.find((n) => n.id === nearestId)
+    if (!target) return
+    const w = target.measured?.width ?? 200
+    const h = target.measured?.height ?? 100
+    setCenter(target.position.x + w / 2, target.position.y + h / 2, { zoom: z, duration: 400 })
+    selectNode(nearestId)
+  }, [storeApi, getNodes, setCenter, selectNode])
 
   return (
     <div
@@ -274,6 +296,11 @@ export function CanvasControls({ zoom, showMiniMap, onToggleMiniMap, snapEnabled
         icon={<Maximize2 className="w-4 h-4" />}
         label="Fit to Screen"
         onClick={() => fitView({ padding: 0.2 })}
+      />
+      <ControlButton
+        icon={<Crosshair className="w-4 h-4" />}
+        label="Focus nearest node"
+        onClick={handleAutoFocus}
       />
       {/* Familiar  −  100%  +  cluster. +/− snap to the zoom ladder; the % reads
           the live zoom and is itself an editor/scrubber/reset (see ZoomControl). */}

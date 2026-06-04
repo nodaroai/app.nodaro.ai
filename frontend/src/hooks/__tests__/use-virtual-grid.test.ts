@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { renderHook } from "@testing-library/react"
+import { createElement as h } from "react"
+import { renderHook, render } from "@testing-library/react"
 
 // ---------------------------------------------------------------------------
 // Mock @tanstack/react-virtual so the hook's pure logic (column count,
@@ -49,6 +50,7 @@ import {
   useVirtualGrid,
   columnsForWidth,
   rowItems,
+  findScrollParent,
   GRID_BREAKPOINTS,
   type GridBreakpoint,
 } from "../use-virtual-grid"
@@ -248,5 +250,100 @@ describe("useVirtualGrid", () => {
     setViewportWidth(1024) // 20 rows × 240 = 4800
     const { result } = renderGrid({ itemCount: 100 })
     expect(result.current.totalSize).toBe(20 * 240)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// findScrollParent — resolves the scroll viewport by the overflow DECLARATION,
+// not by transient scrollability. A container is the scroll parent the moment
+// it declares overflow-y:auto/scroll, even before its async content makes it
+// tall enough to actually scroll (jsdom has no layout: scrollHeight === 0).
+// ---------------------------------------------------------------------------
+describe("findScrollParent", () => {
+  it("detects an overflow-y:auto ancestor even before its content overflows", () => {
+    const scroller = document.createElement("div")
+    scroller.style.overflowY = "auto"
+    const inner = document.createElement("div")
+    const grid = document.createElement("div")
+    inner.appendChild(grid)
+    scroller.appendChild(inner)
+    document.body.appendChild(scroller)
+    expect(findScrollParent(grid)).toBe(scroller)
+    document.body.removeChild(scroller)
+  })
+
+  it("detects an overflow-y:scroll ancestor", () => {
+    const scroller = document.createElement("div")
+    scroller.style.overflowY = "scroll"
+    const grid = document.createElement("div")
+    scroller.appendChild(grid)
+    document.body.appendChild(scroller)
+    expect(findScrollParent(grid)).toBe(scroller)
+    document.body.removeChild(scroller)
+  })
+
+  it("returns null when no ancestor declares vertical overflow (window-scrolled)", () => {
+    const root = document.createElement("div")
+    const grid = document.createElement("div")
+    root.appendChild(grid)
+    document.body.appendChild(root)
+    expect(findScrollParent(grid)).toBeNull()
+    document.body.removeChild(root)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Scroll-context resolution — the grid mounts AFTER the initial render (the
+// consumer shows a loading spinner first, then the grid once items load). The
+// hook must detect the scroll parent on that later attach, not just on mount —
+// otherwise the dashboard's inner <main overflow-auto> is missed and infinite
+// scroll breaks (the gallery bug). This reproduces it end-to-end.
+// ---------------------------------------------------------------------------
+describe("useVirtualGrid scroll-context resolution", () => {
+  function Probe(props: { readonly showGrid: boolean }) {
+    const { gridRef } = useVirtualGrid({
+      itemCount: 100,
+      breakpoints: GALLERY_BPS,
+      estimateRowHeight: 240,
+      gap: 16,
+      fetchNextPage: () => {},
+      hasNextPage: true,
+      isFetchingNextPage: false,
+    })
+    return h(
+      "div",
+      { style: { overflowY: "auto" } },
+      props.showGrid ? h("div", { ref: gridRef }) : "loading",
+    )
+  }
+
+  it("binds the element virtualizer when the grid mounts after load inside an overflow-auto scroll parent", () => {
+    setViewportWidth(1024)
+    const { rerender } = render(h(Probe, { showGrid: false }))
+    // Grid not yet in the DOM (loading) — nothing to detect against yet.
+    rerender(h(Probe, { showGrid: true }))
+    // Grid now attached inside the overflow-auto container → must virtualize
+    // against THAT element, not the window (which never scrolls in a dashboard).
+    expect(lastElementOptions?.enabled).toBe(true)
+    expect(lastWindowOptions?.enabled).toBe(false)
+  })
+
+  it("stays in window mode when the grid has no overflow-auto ancestor (standalone route)", () => {
+    setViewportWidth(1024)
+    function WindowProbe() {
+      const { gridRef } = useVirtualGrid({
+        itemCount: 100,
+        breakpoints: GALLERY_BPS,
+        estimateRowHeight: 240,
+        gap: 16,
+        fetchNextPage: () => {},
+        hasNextPage: true,
+        isFetchingNextPage: false,
+      })
+      return h("div", null, h("div", { ref: gridRef }))
+    }
+    render(h(WindowProbe))
+    expect(lastWindowOptions?.enabled).toBe(true)
+    expect(lastElementOptions?.enabled).toBe(false)
   })
 })

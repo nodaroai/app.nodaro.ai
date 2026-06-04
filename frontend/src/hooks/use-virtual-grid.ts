@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import {
   useVirtualizer,
   useWindowVirtualizer,
@@ -74,7 +74,7 @@ export interface UseVirtualGridOptions {
 
 export interface UseVirtualGrid {
   /** Attach to the grid container `div` (height = totalSize, position relative). */
-  readonly gridRef: React.RefObject<HTMLDivElement | null>
+  readonly gridRef: (node: HTMLDivElement | null) => void
   /** Visible (+overscan) virtual rows from `getVirtualItems()`. */
   readonly virtualRows: VirtualItem[]
   /** Total scrollable height of all rows in px (the container's height). */
@@ -111,16 +111,19 @@ function readViewportWidth(): number {
  * and embedded (inner `<main className="overflow-auto">`) renders of the same
  * grid without the caller knowing its routing context.
  */
-function findScrollParent(el: HTMLElement | null): HTMLElement | null {
+export function findScrollParent(el: HTMLElement | null): HTMLElement | null {
   if (typeof window === "undefined") return null
   let node = el?.parentElement ?? null
   while (node) {
-    const style = window.getComputedStyle(node)
-    const overflowY = style.overflowY
-    const scrollable =
-      (overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay") &&
-      node.scrollHeight > node.clientHeight
-    if (scrollable) return node
+    // Resolve by the overflow DECLARATION, not by `scrollHeight > clientHeight`.
+    // An overflow-y:auto/scroll container IS the scroll viewport even before its
+    // (async-loaded) content is tall enough to scroll — and these grids mount
+    // their rows after the first paint, so a transient "not scrollable yet"
+    // check mis-resolves to window mode on mount and never recovers.
+    const overflowY = window.getComputedStyle(node).overflowY
+    if (overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay") {
+      return node
+    }
     node = node.parentElement
   }
   return null
@@ -139,27 +142,35 @@ export function useVirtualGrid({
   hasNextPage,
   isFetchingNextPage,
 }: UseVirtualGridOptions): UseVirtualGrid {
-  const gridRef = useRef<HTMLDivElement | null>(null)
+  // Track the grid element via a CALLBACK ref (not a bare useRef) so the
+  // detection + measurement effects below re-run when the grid actually attaches
+  // to the DOM. Consumers render the grid only AFTER their async items load (a
+  // loading spinner shows first), so a useRef read on mount sees null — which
+  // silently resolved the scroll context to "window" and broke infinite scroll
+  // inside the dashboard's inner <main overflow-auto> (the grid's real scroll
+  // parent). The callback fires on attach, so every dependent effect re-runs.
+  const gridElRef = useRef<HTMLDivElement | null>(null)
+  const [gridEl, setGridEl] = useState<HTMLDivElement | null>(null)
+  const gridRef = useCallback((node: HTMLDivElement | null) => {
+    gridElRef.current = node
+    setGridEl(node)
+  }, [])
 
   // Resolve the scroll context. An explicit ref always wins (modal). Otherwise
-  // auto-detect the nearest scrollable ancestor on mount: an inner scroll
-  // container (embedded `/_gallery`, `/my-files`) → element virtualizer; none
-  // (standalone `/gallery`) → window virtualizer. Detected once the grid mounts.
+  // auto-detect the nearest scroll-overflow ancestor: an inner scroll container
+  // (embedded `/_gallery`, `/my-files`) → element virtualizer; none (standalone
+  // `/gallery`) → window virtualizer. Default is window mode until the grid
+  // attaches; `useLayoutEffect` upgrades to the real scroll parent BEFORE paint
+  // (re-running on every attach) so we never paint the wrong virtualizer.
   const [detectedScrollParent, setDetectedScrollParent] = useState<HTMLElement | null>(null)
-  const [scrollResolved, setScrollResolved] = useState(false)
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (scrollElementRef) return
-    setDetectedScrollParent(findScrollParent(gridRef.current))
-    setScrollResolved(true)
-  }, [scrollElementRef])
+    if (!gridEl) return
+    setDetectedScrollParent(findScrollParent(gridEl))
+  }, [scrollElementRef, gridEl])
 
-  // Window mode = no explicit ref AND no detected scrollable ancestor.
+  // Window mode = no explicit ref AND no detected scroll-overflow ancestor.
   const isWindow = !scrollElementRef && !detectedScrollParent
-
-  // Don't enable EITHER virtualizer until the scroll context is resolved (for
-  // the auto-detect path) so we never briefly mount the wrong one. An explicit
-  // ref needs no detection step.
-  const ready = scrollElementRef != null || scrollResolved
 
   // Column count is derived from the viewport width (Tailwind responsive grids
   // are viewport-media-query driven), recomputed on resize.
@@ -189,7 +200,7 @@ export function useVirtualGrid({
   // before the first measurement (and in jsdom, which has no layout).
   const [gridWidth, setGridWidth] = useState(0)
   useEffect(() => {
-    const el = gridRef.current
+    const el = gridElRef.current
     if (!el || typeof ResizeObserver === "undefined") return
     const ro = new ResizeObserver((entries) => {
       const w = entries[0]?.contentRect.width ?? 0
@@ -197,7 +208,7 @@ export function useVirtualGrid({
     })
     ro.observe(el)
     return () => ro.disconnect()
-  }, [])
+  }, [gridEl])
 
   const rowHeight = useMemo(() => {
     if (!squareTiles || gridWidth <= 0 || columns <= 0) return estimateRowHeight
@@ -214,9 +225,9 @@ export function useVirtualGrid({
   // Recomputed on resize and whenever the scroll context / layout changes.
   const [scrollMargin, setScrollMargin] = useState(0)
   useEffect(() => {
-    if (!ready) return
+    if (!gridEl) return
     const update = () => {
-      const el = gridRef.current
+      const el = gridElRef.current
       if (!el) return
       const gridTop = el.getBoundingClientRect().top
       const scrollEl = scrollElementRef?.current ?? detectedScrollParent
@@ -229,7 +240,7 @@ export function useVirtualGrid({
     window.addEventListener("resize", update)
     return () => window.removeEventListener("resize", update)
     // viewportWidth/itemCount change the header/layout height → recompute offset.
-  }, [ready, scrollElementRef, detectedScrollParent, viewportWidth, itemCount])
+  }, [gridEl, scrollElementRef, detectedScrollParent, viewportWidth, itemCount])
 
   const commonOptions = {
     count: rowCount,
@@ -241,14 +252,14 @@ export function useVirtualGrid({
   const windowVirtualizer = useWindowVirtualizer({
     ...commonOptions,
     scrollMargin,
-    enabled: ready && isWindow,
+    enabled: isWindow,
   })
 
   const elementVirtualizer = useVirtualizer({
     ...commonOptions,
     getScrollElement: () => scrollElementRef?.current ?? detectedScrollParent,
     scrollMargin,
-    enabled: ready && !isWindow,
+    enabled: !isWindow,
   })
 
   const virtualizer = isWindow ? windowVirtualizer : elementVirtualizer

@@ -26,12 +26,15 @@ import { NodeContextMenu } from "./node-context-menu"
 import { CanvasContextMenu } from "./canvas-context-menu"
 import { CanvasToolbar } from "./canvas-toolbar"
 import { CanvasControls } from "./canvas-controls"
+import { MediaPreviewModal } from "./media-preview-modal"
 import { ZOOM_MIN, ZOOM_MAX, snapZoom } from "@/lib/zoom"
 import { AddNodePopup } from "./add-node-popup"
 import { buildAdjacency, isValidWorkflowConnection } from "@/lib/connection-validation"
 import { pickEdgeAccent } from "@/lib/edge-accent"
 import { getEdgeTypeColor } from "@/lib/edge-type-color"
 import { getHandleConnectionLimit } from "@/lib/handle-limits"
+import { panDelta, PAN_STEP_PX } from "@/lib/canvas-navigation"
+import { getFocusedNodeMedia } from "@/lib/focused-node-media"
 const SearchModal = lazy(() => import("./search-modal").then(m => ({ default: m.SearchModal })))
 const NodeSearchModal = lazy(() => import("./node-search-modal").then(m => ({ default: m.NodeSearchModal })))
 import { AnimatedFlowEdge } from "./animated-flow-edge"
@@ -520,6 +523,12 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const navigate = useNavigate()
   const createWorkflow = useProjectsStore((s) => s.createWorkflow)
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null)
+  // Alt/Option+F — id of the node whose result is shown in the fullscreen lightbox.
+  const [fullscreenNodeId, setFullscreenNodeId] = useState<string | null>(null)
+  // Mirror for the document keydown closure (its deps don't include this state),
+  // so Escape can tell whether the lightbox is the topmost overlay to dismiss.
+  const fullscreenNodeIdRef = useRef<string | null>(null)
+  useEffect(() => { fullscreenNodeIdRef.current = fullscreenNodeId }, [fullscreenNodeId])
   const wasDraggingRef = useRef(false)
   const [snapEnabled, setSnapEnabled] = useState(() => localStorage.getItem("nodaro:snapToGrid") === "true")
   const [alignmentEnabled, setAlignmentEnabled] = useState(() => localStorage.getItem("nodaro:alignmentGuides") !== "false")
@@ -1543,6 +1552,21 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         }
       }
 
+      // Ctrl/Control + Alt/Option + Arrow — pan the canvas. Placed BEFORE the
+      // arrow-key node-nav/nudge branches below (which match e.key and ignore
+      // modifiers) so it wins and returns. Requiring Alt (not plain Ctrl+Arrow)
+      // sidesteps the macOS Mission Control "switch Spaces" binding. Match on
+      // e.code so it is keyboard-layout/compose independent.
+      if (e.ctrlKey && e.altKey && !e.metaKey && !e.shiftKey) {
+        const delta = panDelta(e.code, PAN_STEP_PX)
+        if (delta) {
+          e.preventDefault()
+          const vp = getViewport()
+          setViewport({ x: vp.x + delta.dx, y: vp.y + delta.dy, zoom: vp.zoom }, { duration: 0 })
+          return
+        }
+      }
+
       // Cmd/Ctrl+E (or Alt/Option+E) — toggle the quick-edit Prompt modal for the
       // selected node (runs BEFORE the overlay guard so it can close its own
       // dialog). Alt+E is the escape hatch: the "Claude in Chrome" extension binds
@@ -1567,8 +1591,33 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         return
       }
 
+      // Alt/Option+F — toggle the focused node's result in the fullscreen
+      // lightbox. Matches on e.code "KeyF" because macOS Option+F composes "ƒ"
+      // (e.key is unreliable). Runs BEFORE the overlay guard so a second press
+      // closes it. No-op (but still consumes the combo) when the focused node has
+      // no previewable image/video/audio result.
+      if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.code === "KeyF") {
+        e.preventDefault()
+        setFullscreenNodeId((cur) => {
+          if (cur) return null // already open → toggle off
+          const state = useWorkflowStore.getState()
+          const nodeId = state.selectedNodeId ?? state.nodes.find((n) => n.selected)?.id
+          const node = nodeId ? state.nodes.find((n) => n.id === nodeId) : undefined
+          return node && getFocusedNodeMedia(node) ? node.id : null
+        })
+        return
+      }
+
       // Escape — close fullscreen first, then two-step deselect (must run BEFORE overlayOpen guard)
       if (e.key === "Escape") {
+        // The Alt+F result lightbox is the topmost overlay — dismiss just it and
+        // keep the node selected underneath (this capture handler runs before the
+        // modal's own Escape, so without this it would also deselect the node).
+        if (fullscreenNodeIdRef.current) {
+          e.stopPropagation()
+          setFullscreenNodeId(null)
+          return
+        }
         setAddNodePopupOpen(false)
         setCanvasContextMenu(null)
         setNodeContextMenu(null)
@@ -2257,6 +2306,25 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           />
         </Suspense>
       )}
+
+      {/* Alt/Option+F — focused node's result in the fullscreen lightbox. Derived
+          from the live node each render so streaming results stay fresh; closes
+          itself if the node loses its result or is removed. */}
+      {fullscreenNodeId && (() => {
+        const node = nodes.find((n) => n.id === fullscreenNodeId)
+        const media = node ? getFocusedNodeMedia(node) : null
+        if (!media) return null
+        return (
+          <MediaPreviewModal
+            isOpen
+            onClose={() => setFullscreenNodeId(null)}
+            type={media.type}
+            url={media.url}
+            results={media.results}
+            initialIndex={media.initialIndex}
+          />
+        )
+      })()}
 
       {/* My Library Modal */}
       {assetLibraryOpen && (
