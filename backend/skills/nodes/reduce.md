@@ -1,7 +1,7 @@
 ---
 node_type: reduce
-generated_at: 2026-05-21T13:11:05.755Z
-generated_from: 1f6ec624
+generated_at: 2026-06-04T12:41:29.209Z
+generated_from: 9bf1388db
 ---
 
 # Reduce
@@ -12,6 +12,20 @@ generated_from: 1f6ec624
 **Credit cost:** 0
 **Inputs (target handles):** `in`
 **Outputs (source handles):** `out`
+
+**Required data fields:**
+- `label: string`
+- `strategyId: ReduceStrategyId`
+- `strategyConfig: Record<string, unknown>`
+
+**Optional data fields:**
+- `result?: string`
+- `lastInputs?: string[]`
+- `lastMeta?: ReduceMeta`
+- `executionStatus?: "idle" | "running" | "completed" | "failed"`
+- `errorMessage?: string`
+- `currentJobId?: string`
+- `currentJobProgress?: number`
 
 **Default data:**
 ```json

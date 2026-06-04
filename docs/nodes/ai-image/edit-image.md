@@ -1,6 +1,8 @@
 # Edit Image
 > Apply AI-powered image operations including upscaling, background removal, and context-aware editing to an existing image.
 
+> **Note:** This page documents the `edit-image` API endpoint / legacy node. In the editor, this functionality has been split into dedicated nodes: **Upscale Image** (see [upscale-image.md](./upscale-image.md)), **Remove Background** (see [remove-background.md](./remove-background.md)), and **Modify Image** (see [modify-image.md](./modify-image.md)).
+
 ## Overview
 
 Edit Image takes an existing image as input and applies a transformation operation. It supports five operations: AI upscaling (Recraft, Topaz, and Grok), background removal (Recraft), and context-aware prompt-based editing (Nano Banana Edit). Unlike Generate Image or Image to Image, this node focuses on non-destructive enhancement and utility operations rather than creative generation. The default operation is Recraft Upscale.

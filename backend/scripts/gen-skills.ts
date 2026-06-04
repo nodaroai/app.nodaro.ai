@@ -114,12 +114,12 @@ const NODE_TYPE_TO_TOOL: Record<string, string> = {
  * 3d-title → 3dTitleData. parseDataInterface returns undefined when no
  * matching interface/type alias exists; render-skill.ts handles that gracefully.
  */
-function nodeTypeToInterfaceName(type: string): string {
+function nodeTypeToInterfaceName(type: string, suffix = "Data"): string {
   const pascal = type
     .split("-")
     .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
     .join("")
-  return `${pascal}Data`
+  return `${pascal}${suffix}`
 }
 
 function gitShortSha(): string {
@@ -243,8 +243,13 @@ async function main(): Promise<void> {
       created = true
     }
 
-    const interfaceName = nodeTypeToInterfaceName(def.type)
-    const shape = parseDataInterface(FRONTEND_NODES, interfaceName)
+    // Node data interfaces use either `<Pascal>Data` or `<Pascal>NodeData`
+    // (e.g. WebScrapeNodeData, GenerateVideoNodeData, ListNodeData). Try the
+    // bare suffix first, then fall back to `NodeData` so the data-shape block
+    // isn't silently empty for the `*NodeData` variants.
+    const shape =
+      parseDataInterface(FRONTEND_NODES, nodeTypeToInterfaceName(def.type)) ??
+      parseDataInterface(FRONTEND_NODES, nodeTypeToInterfaceName(def.type, "NodeData"))
 
     const shapeBody = renderNodeDataShapeBlock(def, shape)
     source = rewriteBlock(source, "node-data-shape", shapeBody)

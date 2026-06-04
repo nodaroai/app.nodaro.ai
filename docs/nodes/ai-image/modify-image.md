@@ -44,7 +44,7 @@ Modify Image exposes the full image-to-image provider catalog plus Nano Banana E
 
 ## Pricing
 
-Credits depend on the selected provider, and several providers cost more at higher quality/resolution settings. Typical costs range from **1 to ~18 credits**. Representative base rates:
+Credits depend on the selected provider, and several providers cost more at higher quality/resolution settings. Typical costs range from **1 credit** (Nano Banana) to **~62 credits** (Flux 2 Max at 4 MP with 8 references). Representative base rates:
 
 | Provider | Credits |
 |----------|---------|
@@ -56,6 +56,6 @@ Credits depend on the selected provider, and several providers cost more at high
 | GPT Image | 4 (medium) → 6 (high) |
 | Ideogram Edit / Remix | 5 (Balanced) → 3 (Turbo) / 6 (Quality) |
 | Nano Banana Pro | 5 (1K/2K) → 6 (4K) |
-| Flux 2 Max | 5–18 (variable) |
+| Flux 2 Max | ~7 credits at default (2 MP, 0 refs); ranges ~2–62 depending on resolution and reference count |
 
 The exact credit cost for the selected provider and settings is shown on the node's Run button before you generate.

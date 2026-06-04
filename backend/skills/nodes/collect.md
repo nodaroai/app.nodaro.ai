@@ -1,7 +1,7 @@
 ---
 node_type: collect
-generated_at: 2026-05-23T20:50:46.922Z
-generated_from: ad581d77
+generated_at: 2026-06-04T12:41:29.239Z
+generated_from: 9bf1388db
 ---
 
 # Collect
@@ -12,6 +12,10 @@ generated_from: ad581d77
 **Credit cost:** 0
 **Inputs (target handles):** `in`
 **Outputs (source handles):** `out`
+
+**Required data fields:**
+- `label: string`
+- `order: string[]`
 
 **Default data:**
 ```json

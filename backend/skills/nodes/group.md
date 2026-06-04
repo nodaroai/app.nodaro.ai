@@ -1,7 +1,7 @@
 ---
 node_type: group
-generated_at: 2026-05-23T20:50:46.917Z
-generated_from: ad581d77
+generated_at: 2026-06-04T12:41:29.226Z
+generated_from: 9bf1388db
 ---
 
 # Group
@@ -12,6 +12,9 @@ generated_from: ad581d77
 **Credit cost:** 0
 **Inputs (target handles):** (none)
 **Outputs (source handles):** (none)
+
+**Required data fields:**
+- `label: string`
 
 **Default data:**
 ```json

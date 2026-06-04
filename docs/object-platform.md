@@ -18,7 +18,7 @@ This guide explains the data model, the four surfaces, and the canonical
 | REST | curl-able, language-agnostic, simplest | `/v1/objects*`, `/v1/generate-object*` |
 | SDK (`@nodaro/client`) | Building a typed integration in Node / browser / Bun / Deno | `client.objects.*` |
 | CLI (`nodaro` / `@nodaro/cli`) | Terminal scripts, cron, CI, ad-hoc one-shots | `nodaro objects …` |
-| MCP | An LLM agent (Claude.ai, Cursor, etc.) is driving the work | `create_object`, `approve_object_main_image`, etc. |
+| MCP | An LLM agent (Claude.ai, Cursor, etc.) is driving the work | `generate_object`, `approve_object_main_image`, etc. |
 
 All four surfaces share the same database row and the same Worker pipeline;
 they're four ways to call the same routes.
@@ -559,9 +559,11 @@ to poll until completion. Multi-profile auth lives at
 
 Three object tools are exposed, gated by scope. They mirror the location
 platform's "Studio-grade ops" subset: approve, recaption, and motion-
-animate. Generation (main image + variants) and identity edits flow
-through the shared `generate_object` / `create_object` / `update_object`
-tools registered alongside the other verb-style entries.
+animate. Generation (main image + variants) flows through the shared
+`generate_object` tool registered alongside the other verb-style entries.
+(Unlike characters and locations, objects have no `create_object` /
+`update_object` MCP tools — creation happens via `generate_object`, and
+identity edits are done through the REST/SDK surface.)
 
 | Tool | Scope | What it does |
 |---|---|---|

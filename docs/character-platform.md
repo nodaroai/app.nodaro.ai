@@ -111,8 +111,9 @@ matching key's URL list automatically.
 
 Generating a portrait is a three-step pipeline:
 
-1. **Generate** — `POST /v1/generate-character` produces 1, 2, or 4 candidate
-   jobs. With `attachToCharacterId` set, the worker writes the result to
+1. **Generate** — `POST /v1/generate-character` produces 1–10 candidate
+   jobs (API accepts 1–10; common UI presets are 1, 2, or 4). With
+   `attachToCharacterId` set, the worker writes the result to
    `source_image_url` for the FIRST job to complete (auto-approve for
    single-candidate runs).
 2. **Approve** — for multi-candidate runs, `POST /v1/characters/:id/approve-portrait`

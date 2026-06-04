@@ -1,7 +1,7 @@
 ---
 node_type: video-sfx
-generated_at: 2026-05-27T21:51:50.286Z
-generated_from: fc154a3f
+generated_at: 2026-06-04T12:41:28.581Z
+generated_from: 9bf1388db
 ---
 
 # Video SFX
@@ -12,6 +12,29 @@ generated_from: fc154a3f
 **Credit cost:** 2
 **Inputs (target handles):** `prompt`, `negative`, `video`
 **Outputs (source handles):** `video`
+
+**Required data fields:**
+- `label: string`
+- `provider: "replicate-mmaudio"`
+- `versions: number`
+- `prompt: string`
+- `negativePrompt: string`
+- `cfgStrength: number`
+- `numSteps: number`
+- `fieldMappings: FieldMappings`
+
+**Optional data fields:**
+- `seed?: number`
+- `videoUrl?: string`
+- `activeResultIndex?: number`
+- `generatedResults?: GeneratedResult[]`
+- `generatedVideoUrl?: string`
+- `executionStatus?: "idle" | "running" | "completed" | "failed"`
+- `errorMessage?: string`
+- `currentJobId?: string`
+- `currentJobProgress?: number`
+- `videoPlayState?: "loop" | "paused" | "stopped"`
+- `pausedAtTime?: number`
 
 **Default data:**
 ```json

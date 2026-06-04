@@ -79,6 +79,13 @@ All responses use the same envelope: success returns the payload directly
 
 The full route handler is at `backend/src/routes/api-tokens.ts`.
 
+**OAuth scope note:** the `workflows:read` scope also gates the broader
+workflow REST routes: `GET /v1/workflows` (flat list across all projects),
+`GET /v1/workflows/:id`, and `GET /v1/workflows/:id/export` — in addition
+to the project-scoped `GET /v1/projects/:projectId/workflows`. If your
+OAuth token will call any of these, request `workflows:read` in the
+authorization scope.
+
 ## 4. Worked example: generate an image
 
 End-to-end bash. Assumes you've copied your token into `$TOKEN` and have
@@ -198,8 +205,9 @@ internally every 60 seconds.
 Per-token, in-memory bucket:
 
 - Default `30` requests/minute, configurable up to `120` per token.
-- Counts every authenticated call: `/run`, `/status/:execId`,
-  `/result/:execId`, and `/workflows`.
+- Counts only the mutating / heavy calls: `POST /v1/api/run` and
+  `GET /v1/api/workflows`. Read-only poll routes (`/status/:execId`,
+  `/result/:execId`, `/schema`) do **not** consume the bucket.
 - Bucket resets once per minute; a 429 response carries
   `{ error: { code: "rate_limited", message: "Too many requests. Max N per minute." } }`.
 
@@ -223,16 +231,16 @@ All errors share the same shape:
 { "error": { "code": "rate_limited", "message": "Too many requests. Max 30 per minute." } }
 ```
 
-| HTTP | code | When |
-|---|---|---|
-| 400 | `validation_error` | Malformed body, bad UUID, invalid field. |
-| 401 | `unauthorized` | Missing/invalid/expired/revoked token. |
-| 402 | `insufficient_credits` | (Cloud edition only) Account out of credits. |
-| 403 | `forbidden` | Token isn't authorized for this workflow (workflow scoping). |
-| 403 | `edition_restricted` | Endpoint requires Business or Cloud edition. |
-| 404 | `not_found` | Workflow, execution, or token not found. |
-| 429 | `rate_limited` | You've exceeded the per-minute bucket. Back off. |
-| 500 | `internal_error` | Server bug or downstream dependency failure. Retry with backoff. |
+| HTTP | code | Extra field | When / route family |
+|---|---|---|---|
+| 400 | `validation_error` | — | Malformed body, bad UUID, invalid field. |
+| 401 | `unauthorized` | — | Missing/invalid/expired/revoked token. |
+| 402 | `insufficient_credits` | — | (Cloud edition only) Account out of credits. |
+| 403 | `forbidden` | — | Token isn't authorized for this workflow (workflow scoping). |
+| 403 | `edition_required` | `required_edition: "<edition>"` (+ `message`) | Endpoint needs a higher edition than the caller has. `required_edition` is the minimum: `"cloud"` for pipeline (`POST /v1/pipelines/:id/branch`) + scene-helper routes; `"business"` for API-token management (`POST /v1/api-tokens`, `DELETE /v1/api-tokens/:id`). |
+| 404 | `not_found` | — | Workflow, execution, or token not found. |
+| 429 | `rate_limited` | — | You've exceeded the per-minute bucket. Back off. |
+| 500 | `internal_error` | — | Server bug or downstream dependency failure. Retry with backoff. |
 
 Treat anything in the 5xx range as transient — retry with exponential
 backoff. Treat 4xx as terminal — don't retry without fixing the request.
@@ -469,7 +477,57 @@ draft on `generate-object-asset`, the 5-tab Studio surface, and using
 object assets as references in downstream image/video calls — is in
 [Object Platform](./object-platform.md).
 
-## 11. Pipelines
+## 11. Node discovery
+
+`GET /v1/nodes` and `GET /v1/nodes/:type` let clients enumerate every
+node type the server has registered without hard-coding a list.
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/v1/nodes` | Return the full node registry (`{ data: NodeDescriptor[] }`). Responses are cached for 5 minutes (`Cache-Control: public, max-age=300`). |
+| `GET` | `/v1/nodes/:type` | Return a single descriptor by node type string. 404 `not_found` when the type doesn't exist. |
+
+`NodeDescriptor` fields (subset): `type`, `label`, `category`,
+`outputType`, `creditCost` (static credit cost when known), `inputSchema`
+(JSON Schema for the node's config fields), `providers` (supported
+provider slugs), `capabilities` (feature flags the node exposes). The
+exact shape grows over time — treat unknown fields as forward-compatible.
+
+Neither endpoint requires authentication; they expose only static
+registry metadata. No scopes required.
+
+## 12. Credits (Cloud edition)
+
+Two endpoints surface the caller's credit balance and transaction
+history. Both are **Cloud-edition only** — on Community/Business they are
+not registered and return 404.
+
+| Method | Path | Query | Purpose |
+|---|---|---|---|
+| `GET` | `/v1/credits/balance` | — | Return `{ total, subscription, topup, tier }`. `total = subscription + topup`. |
+| `GET` | `/v1/credits/transactions` | `limit` (1–50, default 20), `cursor` (ISO timestamp for page-forward) | Return `{ data: Transaction[], nextCursor }`. Cursor is the `created_at` of the last row; pass it as `?cursor=` on the next request. `nextCursor` is `null` when there are no more rows. |
+
+`Transaction` fields: `id`, `created_at`, `credits_used`, `action`,
+`provider`, `metadata`.
+
+Both routes use the same bearer-token auth as every other endpoint
+(`ndr_…` / `ndr_app_…` / Supabase JWT).
+
+## 13. Job batch polling
+
+Two endpoints let you poll multiple job statuses in a single round trip
+(useful for workflow UIs that track many concurrent jobs):
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/v1/jobs/status?ids=a,b,c` | Comma-separated IDs, max 100. Returns `{ jobs: { id, status, output_data }[] }`. Cross-user / non-existent IDs are silently omitted — reconcile locally. |
+| `POST` | `/v1/jobs/batch-status` | Body `{ jobIds: string[] }`, max 100. Returns `{ data: { id, status, output_data, error_message }[] }`. |
+
+Both require `jobs:read` scope when using an OAuth token; admin tokens may
+see cross-user jobs. These endpoints are public API — they are used by the
+editor but are equally suited to external polling clients.
+
+## 14. Pipelines
 
 Story-to-Video pipelines orchestrate multi-stage AI production: script → characters
 → objects → locations → shot list → scene images → animate + audio + edit → post merge.
@@ -496,7 +554,7 @@ Asset rows are NOT duplicated — pipeline entities reference the same asset_ids
 Chat turns (Guided Mode, Phase 1D.2) explicitly do NOT clone — the branched
 pipeline starts with empty chat history per chat-enabled stage.
 
-## 12. Prompt Wizard
+## 15. Prompt Wizard
 
 AI assistance for writing prompts for generation nodes. One endpoint, three
 actions — discriminated by the `action` field. Credit-guarded (reserves
@@ -529,7 +587,7 @@ The same endpoint is wrapped by the SDK (`client.promptHelper.{analyze,
 generate,enhance}`), the MCP tools (`analyze_prompt` / `generate_prompt` /
 `enhance_prompt`), and the CLI (`nodaro prompt wizard/analyze/generate/enhance`).
 
-## 13. SDK alternative (TypeScript)
+## 16. SDK alternative (TypeScript)
 
 The same backend is fronted by a typed TypeScript client:
 
@@ -579,7 +637,12 @@ to `StaticTokenAuth`. It also has `supabaseAuth` for browser apps. See
 Reserves **150 credits** and submits a training to Replicate. Requires the
 character to have **≥ 4** reference photos across:
 `source_image_url`, `reference_photos`, `expressions`, `poses`, `angles`,
-`body_angles`, `lighting_variations`, `character_sheet`.
+`body_angles`, `lighting_variations`.
+
+> `character_sheet` is **excluded** from the training-image count. Its
+> composite views (front/side/back) overlap with `angles`/`body_angles` and
+> its DB column shape cannot be reduced to a simple URL list, so the
+> training helper ignores it entirely.
 
 **Response (202):**
 ```json

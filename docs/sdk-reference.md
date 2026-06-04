@@ -23,6 +23,9 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
   - [`client.apps`](#clientapps)
   - [`client.developerApps`](#clientdeveloperapps)
   - [`client.oauth`](#clientoauth)
+  - [`client.voices`](#clientvoices)
+  - [`client.credits`](#clientcredits)
+  - [`client.uploads`](#clientuploads)
 - [Type re-exports](#type-re-exports)
 
 ---
@@ -50,11 +53,12 @@ const client = createClient({
 | `fetch` | `typeof fetch` | no | Custom fetch implementation. Default: `globalThis.fetch`. |
 | `timeoutMs` | `number` | no | Per-request timeout. Default: `60_000`. |
 
-The instance exposes 14 resource objects: `workflows`, `projects`, `jobs`,
+The instance exposes 17 resource objects: `workflows`, `projects`, `jobs`,
 `executions`, `nodes`, `characters`, `locations`, `objects`, `pipelines`,
-`reduce`, `promptHelper`, `apps`, `developerApps`, `oauth`. It also exposes a
-low-level `request<T>(method, path, options)` method for endpoints not yet
-wrapped by a resource.
+`reduce`, `promptHelper`, `apps`, `developerApps`, `oauth`, `voices`,
+`credits`, `uploads`. It also exposes a low-level
+`request<T>(method, path, options)` method for endpoints not yet wrapped by a
+resource.
 
 ### `class NodaroClient`
 
@@ -218,7 +222,8 @@ but rarely need to be imported directly:
 `WorkflowsResource`, `ProjectsResource`, `JobsResource`, `ExecutionsResource`,
 `NodesResource`, `CharactersResource`, `LocationsResource`, `ObjectsResource`,
 `PipelinesResource`, `ReduceResource`, `PromptHelperResource`, `AppsResource`,
-`DeveloperAppsResource`, `OAuthResource`, `VoicesResource`.
+`DeveloperAppsResource`, `OAuthResource`, `VoicesResource`, `CreditsResource`,
+`UploadsResource`.
 
 All "data" responses follow the envelope `{ data: T }` — the SDK returns the
 envelope as-is. Mutation responses (`delete`, `cancel`) return `{ success: true }`.
@@ -250,6 +255,22 @@ Fetches a workflow including its full nodes/edges/settings.
 
 ```ts
 const { data: wf } = await client.workflows.get(workflowId)
+```
+
+#### `getPublic(id)`
+
+```ts
+getPublic(id: string): Promise<{ data: Workflow }>
+```
+
+Fetches a publicly-shared workflow by id (`GET /v1/public/workflows/:id`) — the
+unauthenticated share-by-link read. Returns the workflow's nodes/edges/settings
+ONLY when the workflow is opted into sharing server-side
+(`settings.studio.shared === true`); otherwise throws `NotFoundError`.
+No auth required — the SDK omits the bearer when no token exists.
+
+```ts
+const { data: wf } = await client.workflows.getPublic(workflowId)
 ```
 
 #### `create(input)`
@@ -416,6 +437,22 @@ The returned `Job` uses snake_case fields to match the wire format. Sensitive
 fields (`provider`, `provider_cost`, `credits_actual`) are stripped server-side
 for non-admin callers.
 
+#### `getStatus(id)`
+
+```ts
+getStatus(id: string): Promise<{ data: JobStatusResult }>
+```
+
+Returns the lean status of a job — id, status, progress, output_data, and
+error_message (`GET /v1/jobs/:id/status`). Far less wire + CPU cost than
+`get()` because it skips `input_data` JSONB and the public sanitize pass.
+Intended for poll loops. Same auth and ownership semantics as `get()`.
+
+```ts
+const { data } = await client.jobs.getStatus(jobId)
+if (data.status === "completed") console.log(data.output_data)
+```
+
 #### `cancel(id)`
 
 ```ts
@@ -533,6 +570,99 @@ Fetches one descriptor by its type slug (e.g. `"generate-image"`,
 ```ts
 const { data } = await client.nodes.get("generate-image")
 console.log(data.providers, data.creditCost)
+```
+
+#### `run(type, params?)`
+
+```ts
+run(type: string, params?: Record<string, unknown>): Promise<RunNodeResult>
+```
+
+Run a single node directly without wrapping it in a workflow. Posts `params`
+as the request body to `POST /v1/<type>` — the route convention every
+generation node follows (`generate-image`, `image-to-video`, `text-to-speech`,
+etc.). This is the SDK equivalent of the MCP server's verb tools and the path
+the Nodaro CLI uses for `nodaro nodes run <type>`.
+
+Most node types are async: the response includes `{ jobId }` and the actual
+generation runs on a worker. Poll `client.jobs.get(jobId)` until completed.
+Inline node types (`combine-text`, etc.) return their full result synchronously
+without a `jobId` field.
+
+```ts
+const result = await client.nodes.run("generate-image", {
+  prompt: "a snow leopard in the mountains",
+  provider: "recraft",
+})
+if ("jobId" in result) {
+  const { data: job } = await client.jobs.get(result.jobId)
+  console.log(job.output_data)
+}
+```
+
+#### `runAndWait(type, params?, opts?)`
+
+```ts
+runAndWait(
+  type: string,
+  params?: Record<string, unknown>,
+  opts?: RunAndWaitOptions,
+): Promise<NodeJobOutput>
+```
+
+Runs a single async node to completion: calls `run()`, extracts the `jobId`,
+then client-polls `jobs.getStatus(jobId)` every `opts.pollMs` (default 2000 ms)
+until a terminal status, up to `opts.maxMs` (default ~15 min).
+
+Resolves the job's typed `output_data` (`NodeJobOutput`) on `completed`.
+
+**`RunAndWaitOptions`:**
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `signal` | `AbortSignal` | — | Abort the poll loop; rejects with `JobAbortedError`. |
+| `onProgress` | `(status: JobStatusResult) => void` | — | Called with each lean status observed. |
+| `pollMs` | `number` | `2000` | Poll interval in ms. |
+| `maxMs` | `number` | `900_000` | Wall-clock cap before `JobTimeoutError`. |
+
+Throws (all typed, catchable by `instanceof`):
+- `InsufficientCreditsError` / `StorageExceededError` — surfaced by `run()` before any poll.
+- `JobFailedError` — terminal `failed`/`cancelled` (carries `error_message` + `jobId`).
+- `JobTimeoutError` — `maxMs` deadline exceeded.
+- `JobAbortedError` — `signal` fired.
+
+```ts
+const output = await client.nodes.runAndWait("generate-image", {
+  prompt: "a snow leopard in the mountains",
+  provider: "recraft",
+})
+console.log(output.imageUrl)
+```
+
+#### `runMany(type, paramsList, opts?)`
+
+```ts
+runMany(
+  type: string,
+  paramsList: Record<string, unknown>[],
+  opts?: RunAndWaitOptions,
+): Promise<RunManyResult[]>
+```
+
+Fan out N async runs of the same node type concurrently — the candidate-grid
+path (generate N stills/clips in parallel). Each runs via `runAndWait()`;
+resolves once ALL settle, to an array of `{ jobId, output }` in input order.
+Rejects if any single run rejects. A shared `signal` aborts the whole batch.
+
+```ts
+const results = await client.nodes.runMany("generate-image", [
+  { prompt: "snow leopard, sunrise" },
+  { prompt: "snow leopard, golden hour" },
+  { prompt: "snow leopard, blue hour" },
+])
+for (const { jobId, output } of results) {
+  console.log(jobId, output.imageUrl)
+}
 ```
 
 ---
@@ -768,6 +898,20 @@ const { locations } = await client.locations.list()
 const { locations: archived } = await client.locations.list({ archived: true })
 ```
 
+#### `listArchived(params?)`
+
+```ts
+listArchived(params?: Omit<ListLocationsParams, "archived">): Promise<{ locations: Location[] }>
+```
+
+Convenience wrapper for `list({ archived: true })`. Returns soft-deleted
+rows so callers can drive a UI "Archived" tab without re-encoding the
+query param. Mirrors `client.objects.listArchived`.
+
+```ts
+const { locations: archived } = await client.locations.listArchived()
+```
+
 #### `get(id)`
 
 ```ts
@@ -796,6 +940,21 @@ SDK callers without a canvas node, use the `"mcp-managed"` sentinel.
 `update()` is a partial — only the fields you pass get written. Worker-
 owned asset buckets are intentionally NOT exposed on this surface (a stale
 snapshot save would clobber `append_location_asset` writes from a worker).
+
+**`UpdateLocationInput` fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `string` | Location name. |
+| `description` | `string` | Free-text description. |
+| `category` | `string` | Location category. |
+| `style` | `string` | Visual style (e.g. `"realistic"`, `"anime"`). |
+| `sourceImageUrl` | `string` | Main establishing-shot URL. |
+| `referencePhotos` | `LocationReferencePhoto[]` | Mood-board refs (cap 20). |
+| `canonicalDescription` | `string` | LLM-authored caption. |
+| `styleLock` | `boolean` | Whether asset gens should anchor to canonical style. |
+| `piiConsentAt` | `string` | ISO-8601 timestamp recording when PII consent was captured for reference photos. |
+| `expectedUpdatedAt` | `string` | Optimistic-concurrency token (row's current `updated_at`). |
 
 Optimistic-concurrency: pass `expectedUpdatedAt` to require the row's
 `updated_at` still matches; on mismatch the route returns 409
@@ -902,11 +1061,6 @@ image-to-video mode). The attach column is hardcoded server-side to
 `atmosphere_motions` (locations have a single motion bucket so callers
 don't supply `attachToColumn`).
 
-Pass `refineFromVideoUrl` to route through video-to-video using that clip
-as the source instead of running Generate Video from `sourceImageUrl` —
-use to iterate an existing clip with a new prompt without shifting
-composition.
-
 ```ts
 // New atmosphere clip from the approved main image
 const { jobId } = await client.locations.generateMotion({
@@ -916,16 +1070,6 @@ const { jobId } = await client.locations.generateMotion({
   provider: "kling",
   attachToLocationId: locationId,
   attachName: "neon dolly-in",
-})
-
-// Refine an existing clip (video-to-video)
-const { jobId: refineJobId } = await client.locations.generateMotion({
-  name: "Rainy Tokyo Alley",
-  motionPrompt: "same shot but light rain instead of fog",
-  sourceImageUrl: mainImageUrl,
-  refineFromVideoUrl: existingFogClipUrl,
-  provider: "wan-i2v",
-  attachToLocationId: locationId,
 })
 ```
 
@@ -939,9 +1083,10 @@ Approves a completed `generate()` candidate as the location's main image.
 Sets `source_image_url` + fires the LLM caption (Claude Sonnet vision)
 inline. Returns the new main-image URL plus the caption.
 
-Caption-failure semantics: `canonicalDescription` is coerced to `""` (not
-`null`) when the LLM sub-call failed — the main image is still set; call
-`recaption()` to retry.
+Caption-failure semantics: `canonicalDescription` is `null` when the LLM
+sub-call failed (the wire sends `""`, but the SDK normalizes `""` → `null`
+before returning so callers see `string | null`). The main image is still set;
+call `recaption()` to retry.
 
 ```ts
 const { sourceImageUrl, canonicalDescription } =
@@ -956,7 +1101,8 @@ recaption(id: string): Promise<RecaptionLocationResult>
 
 Re-fires the LLM caption against the location's current main image. 502s
 on LLM failure (unlike `approveMainImage` which preserves the side-effect
-and returns `""`); 400 `no_source_image` if no main image is set yet.
+and normalizes the caption to `null`); 400 `no_source_image` if no main
+image is set yet.
 
 ```ts
 const { canonicalDescription } = await client.locations.recaption(locationId)
@@ -999,7 +1145,7 @@ const { objects: archived } = await client.objects.list({ archived: true })
 #### `listArchived(params?)`
 
 ```ts
-listArchived(params?: ListObjectsParams): Promise<{ objects: Object[] }>
+listArchived(params?: Omit<ListObjectsParams, "archived">): Promise<{ objects: Object[] }>
 ```
 
 Convenience wrapper for `list({ archived: true })`. Returns soft-deleted
@@ -1118,9 +1264,9 @@ When `attachToObjectId` is set AND `count === 1`, the worker writes the
 result directly to the row's `source_image_url`; otherwise call
 `approveMainImage()` after picking a candidate.
 
-`GenerateObjectResult` is a **discriminated union**: `{ jobId }` for
-`count: 1` (default) and `{ jobIds: string[] }` for `count: 2 | 4`. SDK
-consumers should type-guard via `"jobIds" in result`:
+`GenerateObjectResult` **always** returns `{ jobIds: string[] }` (one id per
+candidate). `jobId?` is a deprecated `count === 1` back-compat alias — prefer
+`jobIds`. Iterate `result.jobIds` regardless of `count`:
 
 ```ts
 // Single candidate — auto-attaches on completion
@@ -1130,13 +1276,9 @@ const result = await client.objects.generate({
   attachToObjectId: objectId,
 })
 
-if ("jobIds" in result) {
-  for (const jobId of result.jobIds) {
-    // poll each candidate
-  }
-} else {
-  // single jobId — worker auto-attaches on completion
-  console.log(result.jobId)
+// jobIds is always present — one entry per candidate
+for (const jobId of result.jobIds) {
+  // poll each candidate (worker auto-attaches on completion when count === 1)
 }
 ```
 
@@ -1245,9 +1387,10 @@ Approves a completed `generate()` candidate as the object's main image.
 Sets `source_image_url` + fires the LLM caption (Claude Sonnet vision)
 inline. Returns the new main-image URL plus the caption.
 
-Caption-failure semantics: `canonicalDescription` is coerced to `""` (not
-`null`) when the LLM sub-call failed — the main image is still set; call
-`recaption()` to retry.
+Caption-failure semantics: `canonicalDescription` is `null` when the LLM
+sub-call failed (the wire sends `""`, but the SDK normalizes `""` → `null`
+before returning so callers see `string | null`). The main image is still set;
+call `recaption()` to retry.
 
 Optimistic-concurrency: pass `expectedUpdatedAt` to gate the update on
 the row's current `updated_at`; on mismatch the route returns 409
@@ -1266,7 +1409,8 @@ recaption(id: string): Promise<RecaptionObjectResult>
 
 Re-fires the LLM caption against the object's current main image. 502s
 on LLM failure (unlike `approveMainImage` which preserves the side-effect
-and returns `""`); 400 `main_image_required` if no main image is set yet.
+and normalizes the caption to `null`); 400 `main_image_required` if no
+main image is set yet.
 
 The route is a **pure idempotent retry** — it does NOT accept an
 `expectedUpdatedAt` parameter (per Phase E1 calibration finding: backend
@@ -1281,23 +1425,233 @@ const { canonicalDescription } = await client.objects.recaption(objectId)
 
 ### `client.pipelines`
 
-Story-to-Video pipeline operations. Pipelines orchestrate multi-stage AI production
-runs (script → characters → objects → locations → shot list → scene images →
-animate + audio + edit → post merge).
+Story-to-Video pipeline operations. Pipelines orchestrate multi-stage AI
+production runs (script → characters → objects → locations → shot list →
+scene images → animate + audio + edit → post merge).
 
-#### `client.pipelines.branch(id, { fromStage })`
+#### `create(input)`
+
+```ts
+create(input: PipelineInput): Promise<{ id: string }>
+```
+
+Start a new pipeline (headless film generation) — the programmatic equivalent
+of the studio's "Create film". In Auto mode the engine self-advances to
+completion; poll `get()` for status and `getTimeline()` for the assembled
+output. In manual/guided mode, drive it with `pendingApprovals()` +
+`approveStage()` / `approveSubGate()`. Requires `pipelines:execute` scope.
+
+```ts
+const { id } = await client.pipelines.create({ /* PipelineInput */ })
+```
+
+#### `get(id)`
+
+```ts
+get(id: string): Promise<PipelineRecord>
+```
+
+Fetch current pipeline state: `status`, `current_stage`, credit counters,
+`mode`, and `failure_reason` (set when `status='failed'`). Poll this to track
+a headless Auto run to completion. Requires `pipelines:read`.
+
+```ts
+const pipeline = await client.pipelines.get(id)
+console.log(pipeline.status, pipeline.current_stage)
+```
+
+#### `list()`
+
+```ts
+list(): Promise<PipelineRecord[]>
+```
+
+List the caller's pipelines (most recent first). Requires `pipelines:read`.
+
+```ts
+const pipelines = await client.pipelines.list()
+```
+
+#### `cancel(id)`
+
+```ts
+cancel(id: string): Promise<{ ok: true }>
+```
+
+Cancel a running pipeline. Unspent reserved credits refund. Idempotent on an
+already-terminal pipeline. Requires `pipelines:execute`.
+
+```ts
+await client.pipelines.cancel(id)
+```
+
+#### `pendingApprovals(id)`
+
+```ts
+pendingApprovals(id: string): Promise<PendingApproval[]>
+```
+
+Stages currently `awaiting_approval`. Empty in a clean Auto run (the engine
+self-approves); populated in manual/guided mode at each gate.
+Requires `pipelines:read`.
+
+```ts
+const approvals = await client.pipelines.pendingApprovals(id)
+```
+
+#### `approveStage(id, stage, edits?)`
+
+```ts
+approveStage(id: string, stage: PipelineStageName, edits?: unknown): Promise<{ ok: true }>
+```
+
+Approve a stage so the engine advances. An optional `edits` JSON-Patch is
+applied to the stage output before approval. Requires `pipelines:approve`.
+
+```ts
+await client.pipelines.approveStage(id, "script")
+// With edits (JSON Patch):
+await client.pipelines.approveStage(id, "script", [{ op: "replace", path: "/title", value: "New Title" }])
+```
+
+#### `rejectStage(id, stage, feedback)`
+
+```ts
+rejectStage(id: string, stage: PipelineStageName, feedback: string): Promise<{ ok: true }>
+```
+
+Reject a stage with feedback; the engine re-runs it incorporating the note.
+Requires `pipelines:approve`.
+
+```ts
+await client.pipelines.rejectStage(id, "script", "Make the story darker and more suspenseful")
+```
+
+#### `approveSubGate(id, gate)`
+
+```ts
+approveSubGate(id: string, gate: SubGateName): Promise<{ ok: true; gate: SubGateName; resumed_at: string }>
+```
+
+Approve a Stage-7 sub-gate (`dialogue_recheck` / `silent_cut`) so the
+orchestrator resumes from the next sub-step. Requires `pipelines:approve`.
+
+```ts
+await client.pipelines.approveSubGate(id, "dialogue_recheck")
+```
+
+#### `getStage(id, stage)`
+
+```ts
+getStage(id: string, stage: PipelineStageName): Promise<{ status: string; output: unknown; critic_feedback: unknown }>
+```
+
+Read a single stage's `status`, `output`, and `critic_feedback`. Useful for
+inspecting the script/plan before approving. Requires `pipelines:read`.
+
+```ts
+const { status, output } = await client.pipelines.getStage(id, "script")
+```
+
+#### `getTimeline(id)`
+
+```ts
+getTimeline(id: string): Promise<PipelineTimeline>
+```
+
+Assembled timeline — ordered scene composites + durations + audio URLs +
+live animate progress (`animateProgress`). The output a headless caller
+renders or hands to a downstream editor. Requires `pipelines:read`.
+
+```ts
+const timeline = await client.pipelines.getTimeline(id)
+for (const scene of timeline.scenes) {
+  console.log(scene.compositeUrl, scene.durationSeconds)
+}
+```
+
+#### `branch(id, { fromStage })`
+
+```ts
+branch(id: string, input: BranchPipelineInput): Promise<BranchPipelineResult>
+```
 
 Re-run a completed pipeline from a specific stage. Creates a new pipeline with
-lineage tracked.
+lineage tracked. Upstream stages are cloned as approved. The original pipeline
+remains in `status='completed'`. Requires `pipelines:execute` scope.
 
 ```ts
 const result = await client.pipelines.branch("pipe-1", { fromStage: "scene_images" })
 console.log(`New pipeline: ${result.pipelineId}`)
+// result: { pipelineId, clonedStages, clonedEntities }
 ```
 
-Returns `{ pipelineId, clonedStages, clonedEntities }`. The original pipeline
-remains in `status='completed'`. Throws on the same errors as the underlying
-route (see api-integration.md `POST /v1/pipelines/:id/branch`).
+#### `chatStage(pipelineId, stage, message)`
+
+```ts
+chatStage(
+  pipelineId: string,
+  stage: ChatEnabledStage,
+  message: string,
+): Promise<ChatStageResult>
+```
+
+Send a chat message to the Showrunner Refinement Director (Guided Mode).
+Persists user + assistant turns; returns the assistant's reply and an optional
+`proposed_change` the user can `applyChatProposal()` to commit.
+
+Requires `pipelines:approve` scope. The pipeline must have `mode='guided'` and
+the stage must be `awaiting_approval`.
+
+```ts
+const { content, proposed_change } = await client.pipelines.chatStage(
+  id,
+  "script",
+  "Can you make the protagonist's motivation clearer in scene 2?",
+)
+```
+
+#### `applyChatProposal(pipelineId, stage, turnId)`
+
+```ts
+applyChatProposal(
+  pipelineId: string,
+  stage: ChatEnabledStage,
+  turnId: string,
+): Promise<ApplyChatProposalResult>
+```
+
+Accept a proposed change from a prior assistant turn. Routes through
+`applyStageEdit` (validates JSON Patch + per-stage schema + reference
+integrity, inserts a new attempt row, flips the stage to approved).
+
+Returns `{ applied: true, attemptId, newOutput }` on success, or
+`{ applied: false, error }` on recoverable failures (the backend already
+inserted a follow-up assistant turn with a hint). Hard failures throw via the
+standard error pipeline (HTTP 409). Requires `pipelines:approve` scope.
+
+```ts
+const result = await client.pipelines.applyChatProposal(id, "script", turnId)
+if (result.applied) {
+  console.log("Approved:", result.newOutput)
+} else {
+  console.log("Recoverable failure:", result.error.code)
+}
+```
+
+#### `getStageChat(pipelineId, stage)`
+
+```ts
+getStageChat(pipelineId: string, stage: ChatEnabledStage): Promise<{ turns: ChatTurn[] }>
+```
+
+Fetch the chat history for a stage. Returns an empty array when no turns exist
+yet. Used by the frontend chat panel on initial mount; subsequent updates arrive
+via SSE (`chat:turn` events). Requires `pipelines:read` scope.
+
+```ts
+const { turns } = await client.pipelines.getStageChat(id, "script")
+```
 
 ---
 
@@ -1630,6 +1984,77 @@ const info = await client.oauth.getAppInfo("ndr_client_abc123")
 ElevenLabs voices: the premade catalog, the community Voice Library, the
 signed-in user's voice clones, and the **voice changer**.
 
+#### `list()`
+
+```ts
+list(): Promise<Voice[]>
+```
+
+List the premade ElevenLabs voices (`GET /v1/voices`). Falls back to a curated
+set server-side when no ElevenLabs API key is configured.
+
+```ts
+const voices = await client.voices.list()
+```
+
+#### `searchLibrary(params?)`
+
+```ts
+searchLibrary(params?: VoiceLibraryParams): Promise<VoiceLibraryResponse>
+```
+
+Search the shared/community Voice Library (`GET /v1/voices/library`). All
+params are optional and forwarded as a querystring; `undefined` / `null` /
+empty-string values are omitted so server defaults apply. `hasMore` in the
+response drives "load more" pagination.
+
+```ts
+const { voices, hasMore } = await client.voices.searchLibrary({ search: "deep", language: "en" })
+```
+
+#### `listClones()`
+
+```ts
+listClones(): Promise<VoiceClone[]>
+```
+
+List the signed-in user's voice clones (`GET /v1/voice-clones`). Unwraps the
+`{ voiceClones }` envelope to the bare array.
+
+```ts
+const clones = await client.voices.listClones()
+```
+
+#### `createClone(input)`
+
+```ts
+createClone(input: { name: string; audioUrl: string }): Promise<VoiceClone>
+```
+
+Clone a voice from an already-uploaded audio URL (`POST /v1/voice-clones/from-url`).
+Costs credits. Returns the created `VoiceClone` — `elevenlabsVoiceId` is the
+id to use at text-to-speech time.
+
+```ts
+const clone = await client.voices.createClone({
+  name: "My Custom Voice",
+  audioUrl: "https://cdn.example.com/sample.mp3",
+})
+console.log(clone.elevenlabsVoiceId)
+```
+
+#### `deleteClone(id)`
+
+```ts
+deleteClone(id: string): Promise<void>
+```
+
+Delete one of the user's voice clones (`DELETE /v1/voice-clones/:id`).
+
+```ts
+await client.voices.deleteClone(cloneId)
+```
+
 #### `change(input)`
 
 ```ts
@@ -1639,6 +2064,7 @@ change(input: {
   videoUrl?: string
   stability?: number
   similarityBoost?: number
+  style?: number
   removeBackgroundNoise?: boolean
 }): Promise<{ jobId: string }>
 ```
@@ -1648,8 +2074,10 @@ different voice (`POST /v1/voice-changer`). Pass **`audioUrl`** to revoice
 audio→audio, or **`videoUrl`** to revoice an entire clip: the server demuxes the
 audio, runs speech-to-speech, and remuxes the new voice onto the original video.
 Exactly one of `audioUrl` / `videoUrl` is required; **when both are sent, video
-wins**. `removeBackgroundNoise` off keeps the music/SFX bed under the new voice;
-on yields a clean voice-only result. Runs async — poll `client.jobs.get(jobId)`.
+wins**. `style` is a style exaggeration factor (0–1; default 0 — >0 amplifies
+delivery at the cost of latency/stability). `removeBackgroundNoise` off keeps
+the music/SFX bed under the new voice; on yields a clean voice-only result.
+Runs async — poll `client.jobs.get(jobId)`.
 
 ```ts
 // Audio → audio
@@ -1659,15 +2087,107 @@ const { jobId } = await client.voices.change({
 })
 
 // Video → revoiced video (output_data has videoUrl + audioUrl)
-const job = await client.voices.change({
+const { jobId: vjobId } = await client.voices.change({
   videoUrl: "https://cdn.example.com/talking.mp4",
   voiceId: "Aria",
 })
 ```
 
-The other methods — `list()`, `searchLibrary(params)`, `listClones()`,
-`createClone(input)`, `deleteClone(id)` — cover the premade catalog, the
-community library, and managing custom clones.
+---
+
+### `client.credits`
+
+Authenticated user's credit balance and per-model cost previews.
+
+#### `balance()`
+
+```ts
+balance(): Promise<UserBalance>
+```
+
+`GET /v1/user/credits` → the authenticated user's credit balance and tier info.
+Throws `UnauthorizedError` (401) when signed out.
+
+**`UserBalance`:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `total` | `number` | Total available credits. |
+| `subscription` | `number` | Credits from the current subscription cycle. |
+| `topup` | `number` | One-off purchased credits. |
+| `dailySpent` | `number` | Credits spent in the current calendar day. |
+| `dailyLimit` | `number \| null` | Daily spending cap (`null` = no cap). |
+| `monthlyAllocation` | `number` | Credits allocated per billing cycle. |
+| `tier` | `string` | Subscription tier (e.g. `"free"`, `"pro"`). |
+| `features` | `Record<string, unknown>` | Feature flags for the tier. |
+| `periodEnd` | `string \| null` | ISO-8601 end of the billing period. |
+| `appCreditsAllowance` | `number` | Credits earned for app usage (free tier only). |
+
+```ts
+const balance = await client.credits.balance()
+console.log(`${balance.total} credits available (${balance.tier} tier)`)
+```
+
+#### `modelCosts(ids)`
+
+```ts
+modelCosts(ids: string[]): Promise<ModelCostsResult>
+```
+
+`POST /v1/credits/model-costs` → batch credit cost lookup for editor cost
+previews. Capped at the first 50 identifiers. Preserves fault-isolation:
+identifiers with no pricing row land in `missing`; lookup failures in `errors`,
+instead of failing the whole batch.
+
+**`ModelCostsResult`:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `data` | `Record<string, number>` | Priced identifier → credit cost. |
+| `missing` | `string[]` | Identifiers with no pricing row (render `'—'`). |
+| `errors` | `string[]` | Identifiers where the lookup itself failed. |
+
+```ts
+const { data, missing } = await client.credits.modelCosts(["recraft:v3", "kling:v2.1"])
+console.log(data["recraft:v3"])  // e.g. 2
+if (missing.length) console.warn("No price for:", missing)
+```
+
+---
+
+### `client.uploads`
+
+Upload a file to R2 and get back a public URL + storage metadata.
+
+#### `upload(file)`
+
+```ts
+upload(file: File): Promise<UploadResult>
+```
+
+Upload one file (`POST /v1/upload`, multipart). The SDK's `request` method
+detects the `FormData` body and lets the runtime set the multipart boundary.
+Returns the persisted asset's public URL and storage metadata. Throws
+`StorageExceededError` (413) over the storage cap.
+
+**`UploadResult`:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `url` | `string` | Public R2 URL of the stored asset. |
+| `assetId` | `string \| null` | Storage row id; `null` when unauthenticated. |
+| `thumbnailUrl` | `string \| null` | Generated thumbnail URL (images/video); `null` for audio or on failure. |
+| `category` | `string` | Server-classified asset category (`"image"` / `"video"` / `"audio"`). |
+| `filename` | `string` | Display filename (server override or original). |
+| `mimeType` | `string` | Final MIME type after server normalization. |
+| `sizeBytes` | `number` | Stored byte size. |
+| `r2Key` | `string` | R2 object key. |
+
+```ts
+const result = await client.uploads.upload(file)
+console.log(result.url)        // use as sourceImageUrl / audioUrl / videoUrl
+console.log(result.assetId)    // reference back to the storage row
+```
 
 ---
 
@@ -1694,6 +2214,7 @@ Every type used in a public method signature is re-exported from
 
 - `Job` — snake_case wire shape
 - `JobStatus` — `"pending" | "queued" | "processing" | "completed" | "failed" | "cancelled"`
+- `JobStatusResult` — lean poll shape: `{ id, status, progress?, output_data?, error_message? }`
 - `CancelJobResult` — `{ success: true, cancelled: number }`
 
 ### Executions
@@ -1713,6 +2234,10 @@ Every type used in a public method signature is re-exported from
 - `NodeCategory` — union of category slugs
 - `OutputType` — `"text" | "image" | "video" | "audio" | "data" | "none"`
 - `NodeInputField`, `NodeInputSchema` — input-schema shapes
+- `RunNodeResult` — `{ jobId: string; ... } | Record<string, unknown>` (discriminated on presence of `jobId`)
+- `NodeJobOutput` — typed `output_data` shape: `{ audioUrl?, videoUrl?, imageUrl?, thumbnailUrl?, [k]: unknown }`
+- `RunAndWaitOptions` — `{ signal?, onProgress?, pollMs?, maxMs? }`
+- `RunManyResult` — `{ jobId: string; output: NodeJobOutput }`
 
 ### Characters
 
@@ -1742,17 +2267,47 @@ Every type used in a public method signature is re-exported from
 - `CreateObjectInput`, `UpdateObjectInput`, `UpsertObjectInput` — bodies for `create()` / `update()` / `upsert()`. `expectedUpdatedAt` lives on `UpdateObjectInput` + `UpsertObjectInput`.
 - `UpdateObjectResult`, `UpsertObjectResult` — `{ id }` (create) or `{ id, updatedAt }` (update).
 - `ListObjectsParams` — `{ archived?, projectId? }`.
-- `GenerateObjectInput`, `GenerateObjectResult` — body + discriminated-union response (`{ jobId } | { jobIds: string[] }`).
+- `GenerateObjectInput`, `GenerateObjectResult` — body + response (always `{ jobIds: string[] }`; `jobId?` is a deprecated `count === 1` alias).
 - `GenerateObjectAssetInput`, `GenerateObjectAssetResult` — `{ jobId }`.
 - `GenerateObjectMotionInput`, `GenerateObjectMotionResult` — `{ jobId }`. `aspectRatio` field is `ObjectAspectRatio` (5-value union).
-- `ApproveObjectMainImageResult` — `{ sourceImageUrl, canonicalDescription }` (caption coerced to `""` on LLM sub-failure).
+- `ApproveObjectMainImageResult` — `{ sourceImageUrl, canonicalDescription: string | null }` (the wire sends `""` on LLM sub-failure but the SDK normalizes `""` → `null` before returning).
 - `RecaptionObjectResult` — `{ canonicalDescription }`.
+
+### Pipelines
+
+- `PipelineRecord` — pipeline state: `{ id, status, current_stage, spent_credits, reserved_credits, upfront_credit_estimate, branched_from_pipeline_id, branched_from_stage, mode, failure_reason, current_progress_message }`
+- `PipelineStatus`, `PipelineMode`, `PipelineStageName`, `SubGateName`, `ChatEnabledStage` — re-exported from `@nodaro/shared`
+- `PipelineInput` — body for `create()`, re-exported from `@nodaro/shared`
+- `PendingApproval` — `{ stage_name: PipelineStageName; output: unknown }`
+- `PipelineTimeline` — `{ fps, width, height, scenes, musicUrl?, narrationUrl?, animateProgress? }`
+- `BranchPipelineInput` — `{ fromStage: PipelineStageName }`
+- `BranchPipelineResult` — `{ pipelineId, clonedStages, clonedEntities }`
+- `ChatTurn` — one persisted turn: `{ id, turn_n, role, content, proposed_change, llm_call_id, applied_to_attempt_id, created_at }`
+- `ChatStageResult` — assistant reply: `{ turnId, role: "assistant", content, proposed_change }`
+- `ApplyChatProposalResult` — `{ applied: true; attemptId; newOutput } | { applied: false; error: { code, detail? } }`
+- `ProposedChange` — discriminated union re-exported from `@nodaro/shared`
+
+### Voices
+
+- `Voice` — premade ElevenLabs voice record, re-exported from `@nodaro/shared`
+- `VoiceClone` — user clone record (`elevenlabsVoiceId` is the TTS-time id), re-exported from `@nodaro/shared`
+- `VoiceLibraryParams` — query params for `searchLibrary()`, re-exported from `@nodaro/shared`
+- `VoiceLibraryResponse` — `{ voices: Voice[]; hasMore: boolean; ... }`, re-exported from `@nodaro/shared`
+
+### Credits
+
+- `UserBalance` — full balance + tier record (see `balance()` table above)
+- `ModelCostsResult` — `{ data: Record<string, number>; missing: string[]; errors: string[] }`
+
+### Uploads
+
+- `UploadResult` — `{ url, assetId, thumbnailUrl, category, filename, mimeType, sizeBytes, r2Key }` (see `upload()` table above)
 
 ### Developer apps
 
 - `DeveloperApp` — app record (without secret)
 - `DeveloperAppScope` — union of valid scope strings
-- `DeveloperAppStatus` — `"active" | "suspended" | "pending"`
+- `DeveloperAppStatus` — `"active" | "suspended" | "pending_review"`
 - `CreateDeveloperAppInput`, `UpdateDeveloperAppInput`
 - `CreateDeveloperAppResult` — `DeveloperApp & { clientSecret }`
 - `RotateSecretResult` — `{ clientSecret }`

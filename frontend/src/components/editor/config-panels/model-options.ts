@@ -51,6 +51,7 @@ export const IMAGE_I2I_MODELS: readonly { value: ImageI2IProvider; label: string
   { value: "ideogram-reframe", label: "Ideogram Reframe", desc: "Change aspect ratio intelligently" },
   { value: "ideogram-remix", label: "Ideogram Remix", desc: "Restyle with character consistency" },
   { value: "nano-banana", label: "Nano Banana", desc: "Fast iteration, quick transforms" },
+  { value: "nano-banana-2", label: "Nano Banana 2", desc: "Updated Nano Banana — web-grounded transforms, up to 4K" },
   { value: "nano-banana-pro", label: "Nano Banana Pro", desc: "Higher detail, production images" },
   { value: "qwen-i2i", label: "Qwen", desc: "Versatile image transformation" },
   { value: "qwen-edit", label: "Qwen Edit", desc: "Targeted image editing" },

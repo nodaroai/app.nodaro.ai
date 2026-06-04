@@ -113,6 +113,9 @@ jobs:
       - name: Typecheck backend
         run: npx tsc --noEmit
         working-directory: backend
+      - name: Typecheck CLI
+        run: npx tsc --noEmit
+        working-directory: packages/cli
 
   tenant-scope-lint:
     name: Tenant Scope Lint

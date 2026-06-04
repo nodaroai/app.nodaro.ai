@@ -1,6 +1,6 @@
 # CLI
 
-`@nodaro/cli` is a terminal client for Nodaro. Same surface area as the SDK — list and run workflows, run apps, run a single node directly, watch executions until they finish — wrapped in a small `commander` binary with multi-profile auth, JSON output for scripts, and `--watch` mode for interactive runs.
+`@nodaro/cli` is a terminal client for Nodaro. It covers the core workflow/studio surface of the SDK — list and run workflows, run apps, run a single node directly, watch executions until they finish — wrapped in a small `commander` binary with multi-profile auth, JSON output for scripts, and `--watch` mode for interactive runs. (The CLI intentionally omits credits, developer-apps, OAuth, pipelines, reduce, and upload helpers — use the SDK directly for those.)
 
 If you're integrating from code, prefer the [SDK](./sdk-quickstart.md) directly. The CLI is the convenience wrapper for terminal work, cron jobs, CI pipelines, and ad-hoc inspection.
 
@@ -48,8 +48,9 @@ Windows: download `nodaro-windows-x64.exe` from the [releases page](https://gith
 Generate a token at `https://app.nodaro.ai/settings/api`, then save it locally:
 
 ```bash
-nodaro auth login                                   # interactive
+nodaro auth login                                   # interactive (opens a browser by default; use --no-browser to paste a token)
 nodaro auth login --token "$NODARO_TOKEN"           # non-interactive
+nodaro auth login --no-browser                      # skip browser flow, paste token instead
 nodaro auth login --profile staging --base-url https://next.nodaro.ai
 ```
 
@@ -88,7 +89,7 @@ The `nodes run` path is the SDK / CLI equivalent of the MCP server's verb tools 
 
 ```bash
 # Auth
-nodaro auth login [--profile <name>] [--token <token>] [--base-url <url>]
+nodaro auth login [--profile <name>] [--token <token>] [--base-url <url>] [--no-browser]
 nodaro auth status [--profile <name>] [--json]
 nodaro auth logout [--profile <name>]
 
@@ -101,7 +102,7 @@ nodaro projects delete <id> [--json]
 
 # Workflows
 nodaro workflows list --project <projectId> [--json]
-nodaro workflows get <id>
+nodaro workflows get <id> [--json]
 nodaro workflows create --project <projectId> --name <name> [--file bundle.json] [--json]
 nodaro workflows update <id> [--name <name>] [--file nodes-edges.json] [--json]
 nodaro workflows delete <id> [--json]
@@ -110,15 +111,15 @@ nodaro workflows import <file> --project <projectId> [--json]
 nodaro workflows run <id> [--watch] [--node n1 n2 ...] [--json]
 
 # Apps — workflows wrapped in a curated UI
-nodaro apps list [--search <query>] [--limit 20] [--cursor <token>] [--category <slug>]
+nodaro apps list [--search <query>] [--limit <n>] [--cursor <token>] [--category <slug>]
 nodaro apps get <slug>                                  # show input schema + outputs
 nodaro apps run <slug> --input prompt="…" [--watch]
 nodaro apps run <slug> --params-file inputs.json [--watch]
-nodaro apps runs <slug>                                 # list past runs
+nodaro apps runs <slug> [--limit <n>] [--cursor <token>] [--json]  # list past runs
 nodaro apps run-get <slug> <runId>
 
 # Nodes — list types + run a single node directly
-nodaro nodes list [--category ai|processing|input|...]
+nodaro nodes list [--category input|parameter|ai-image|ai-video|ai-audio|ai-text|processing|composition|output|control|entity|trigger|utility] [--json]
 nodaro nodes get <type>                                 # full input schema
 nodaro nodes run <type> --param prompt="…" --param provider=flux [--watch]
 nodaro nodes run <type> --params-file body.json [--watch] [--poll-interval 1000]
@@ -134,23 +135,52 @@ nodaro executions get <id> [--watch] [--json]
 nodaro executions cancel <id> [--mode cancelled|stopping]
 
 # Jobs
-nodaro jobs get <id>
-nodaro jobs cancel <id>
+nodaro jobs get <id> [--json]
+nodaro jobs cancel <id> [--json]
 
 # Characters — full lifecycle + studio operations
 nodaro characters list [--project <id>] [--archived] [--limit <n>] [--json]
 nodaro characters get <id>
-nodaro characters create --name <name> [--description "..."] [--style realistic|anime|3d-pixar|illustration] [--seed-prompt "..."] [--node-id <id>] [--project <id>]
-nodaro characters update <id> [--name <name>] [--description "..."] [--style ...]
+nodaro characters create --name <name> [--description "..."] [--gender <gender>] [--style realistic|anime|3d-pixar|illustration] [--base-outfit "..."] [--seed-prompt "..."] [--node-id <id>] [--project <id>]
+nodaro characters update <id> [--name <name>] [--description "..."] [--gender <gender>] [--style realistic|anime|3d-pixar|illustration] [--base-outfit "..."] [--seed-prompt "..."]
 nodaro characters delete <id>
 nodaro characters restore <id>
 nodaro characters duplicate <id> [--node-id <id>] [--project <id>]
 nodaro characters usage <id>
-nodaro characters generate <id> [--seed-prompt "..."] [--count 1|2|4] [--provider <p>] [--watch]
-nodaro characters generate-asset <id> --asset-type expressions|poses|lighting|angles|headAngles|bodyAngles|custom --variant <name> [--provider <p>] [--watch]
-nodaro characters generate-motion <id> --motion-prompt "..." [--provider <p>] [--watch]
+nodaro characters generate <id> [--seed-prompt "..."] [--description "..."] [--name <name>] [--count 1|2|4] [--provider <p>] [--watch]
+nodaro characters generate-asset <id> --asset-type expressions|poses|lighting|angles|headAngles|bodyAngles|custom --variant <name> [--user-prompt "..."] [--description "..."] [--column <col>] [--attach-name <name>] [--provider <p>] [--watch]
+nodaro characters generate-motion <id> --motion-prompt "..." [--attach-name <name>] [--description "..."] [--motion-description "..."] [--provider <p>] [--watch]
 nodaro characters approve-portrait <id> --job <jobId>
 nodaro characters recaption <id>
+
+# Locations — full lifecycle + studio operations
+nodaro locations list [--archived] [--json]
+nodaro locations get <id> [--json]
+nodaro locations create <name> --node-id <id> [--description "..."] [--category indoor|outdoor|urban|nature|fantasy|sci-fi|historical|futuristic|other] [--style realistic|anime|3d-pixar|illustration] [--project <id>] [--json]
+nodaro locations update <id> [--name <name>] [--description "..."] [--category <category>] [--style <style>] [--style-lock true|false] [--canonical-description "..."] [--expected-updated-at <iso>] [--json]
+nodaro locations delete <id> [--json]
+nodaro locations restore <id> [--json]
+nodaro locations generate --name <name> [--description "..."] [--user-prompt "..."] [--category <category>] [--style <style>] [--provider <p>] [--count 1|2|4] [--attach-to-location-id <id>] [--watch] [--json]
+nodaro locations generate-asset <id> --asset-type timeOfDay|weather|seasons|angles|lighting|custom --variant <name> [--user-prompt "..."] [--description "..."] [--column <col>] [--attach-name <name>] [--provider <p>] [--watch] [--json]
+nodaro locations generate-motion --name <name> --motion-prompt "..." --source-image-url <url> [--provider kling|kling-turbo|kling-3.0|wan-i2v|wan-2.7-i2v|seedance-2] [--style realistic|anime|3d-pixar|illustration] [--canonical-description "..."] [--attach-to-location-id <id>] [--attach-name <name>] [--aspect-ratio 1:1|3:4|16:9|9:16] [--watch] [--json]
+nodaro locations approve-main-image <id> --candidate-job-id <jobId> [--json]
+nodaro locations recaption <id> [--json]
+
+# Objects — full lifecycle + studio operations
+nodaro objects list [--project <id>] [--archived] [--json]
+nodaro objects get <id> [--json]
+nodaro objects create <name> --node-id <id> [--description "..."] [--category furniture|vehicle|weapon|food|clothing|electronics|nature|tool|animal|other] [--style realistic|anime|3d-pixar|illustration] [--project <id>] [--json]
+nodaro objects update <id> [--name <name>] [--description "..."] [--category <category>] [--style <style>] [--style-lock true|false] [--canonical-description "..."] [--expected-updated-at <iso>] [--json]
+nodaro objects delete <id> [--permanent] [--json]          # --permanent erases archived rows; default is soft-delete
+nodaro objects restore <id> [--json]
+nodaro objects generate --name <name> [--description "..."] [--user-prompt "..."] [--category <category>] [--style <style>] [--provider <p>] [--count 1|2|4] [--attach-to-object-id <id>] [--seed-prompt-hint "..."] [--watch] [--json]
+nodaro objects generate-asset --asset-type angles|materials|variations|motion|custom --variant <name> --attach-to-object-id <id> [--attach-to-column <col>] [--name <name>] [--description "..."] [--seed-prompt-hint "..."] [--watch] [--json]
+nodaro objects generate-motion --name <name> --motion-prompt "..." --source-image-url <url> [--provider kling-turbo|kling|kling-3.0|minimax|hailuo-2.3|wan-i2v|seedance|bytedance-lite] [--style realistic|anime|3d-pixar|illustration] [--canonical-description "..."] [--attach-to-object-id <id>] [--attach-name <name>] [--aspect-ratio 1:1|3:4|16:9|9:16|4:3] [--seed-prompt-hint "..."] [--watch] [--json]
+nodaro objects approve-main-image <id> --candidate-job-id <jobId> [--expected-updated-at <iso>] [--json]
+nodaro objects recaption <id> [--json]
+
+# Voice — revoice an audio track or a talking video
+nodaro voice changer --voice <id> --audio <url>|--video <url> [--stability <0..1>] [--similarity <0..1>] [--style <0..1>] [--remove-background-noise] [--watch] [--poll-interval <ms>] [--json]
 ```
 
 ## Param syntax

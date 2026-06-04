@@ -1,7 +1,7 @@
 ---
 node_type: merge-lists
-generated_at: 2026-05-18T13:23:37.789Z
-generated_from: cb1e786d
+generated_at: 2026-06-04T12:41:29.149Z
+generated_from: 9bf1388db
 ---
 
 # Merge Lists
@@ -12,6 +12,17 @@ generated_from: cb1e786d
 **Credit cost:** 0
 **Inputs (target handles):** `in`
 **Outputs (source handles):** `out`
+
+**Required data fields:**
+- `label: string`
+- `deduplicate: boolean`
+
+**Optional data fields:**
+- `mode?: "concat" | "zip"`
+- `listResults?: string[]`
+- `__listResults?: string[]`
+- `executionStatus?: "idle" | "running" | "completed" | "failed"`
+- `errorMessage?: string`
 
 **Default data:**
 ```json

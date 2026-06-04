@@ -1,15 +1,15 @@
 # Generate Image
-> Create AI-generated images from text prompts using 21 provider models with configurable style, aspect ratio, resolution, and quality.
+> Create AI-generated images from text prompts using 23 provider models with configurable style, aspect ratio, resolution, and quality.
 
 ## Overview
 
-Generate Image is the primary text-to-image node. It accepts a text prompt (with optional style presets, negative prompts, and reference images) and produces an image via one of 21 AI providers. The default provider is Nano Banana Pro at 16:9 aspect ratio.
+Generate Image is the primary text-to-image node. It accepts a text prompt (with optional style presets, negative prompts, and reference images) and produces an image via one of 23 AI providers. The default provider is Nano Banana Pro at 16:9 aspect ratio.
 
 ## Configuration
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| Provider | select | `nano-banana-pro` | AI model to use for generation (21 options) |
+| Provider | select | `nano-banana-pro` | AI model to use for generation (23 options) |
 | Prompt | text | `""` | Text description of the image to generate |
 | Style | select | `""` | One of 16 presets (Photorealistic, Cinematic, Anime, Digital Art, Oil Painting, Watercolor, Children's Book, Comic Book, Pixel Art, 3D Render, Pencil Sketch, Pop Art, Minimalist, Retro/Vintage, Fantasy, Noir) or "Custom..." free text. Style text is appended to the prompt at execution time. |
 | Negative Prompt | text | `""` | Elements to exclude. Sent natively for imagen4, ideogram, qwen; appended as "Avoid:..." for other providers. |
@@ -66,6 +66,7 @@ The migration runs on the frontend (`loadWorkflow`) plus three defensive backend
 | flux-kontext | Flux Kontext | Context-aware generation and editing | 1:1, 16:9, 9:16, 4:3, 3:4, 21:9 |
 | flux-kontext-max | Flux Kontext Max | Highest quality Kontext generation | Same as Flux Kontext |
 | gpt-image | GPT Image | Text rendering, complex compositions | 1:1, 3:2, 2:3 |
+| gpt-image-2 | GPT Image 2 | Higher resolution GPT Image; supports 1K/2K/4K | 1:1, 16:9, 9:16, 4:3, 3:4 |
 | imagen4 | Imagen 4 | Google's latest, strong prompt adherence | 1:1, 16:9, 9:16, 4:3, 3:4 |
 | imagen4-fast | Imagen 4 Fast | Fast Imagen, lower latency | Same as Imagen 4 |
 | imagen4-ultra | Imagen 4 Ultra | Highest quality Google image gen | Same as Imagen 4 |
@@ -76,9 +77,9 @@ The migration runs on the frontend (`loadWorkflow`) plus three defensive backend
 | z-image | Z-Image | Fast, lightweight generation | 1:1, 16:9, 9:16, 4:3, 3:4 |
 | wan-2.7 | Wan 2.7 | Text-to-image, 1K/2K/4K resolution, up to 9 optional reference images | 1:1, 16:9, 9:16, 4:3, 3:4, 21:9, 8:1, 1:8 |
 | wan-2.7-pro | Wan 2.7 Pro | Higher quality text-to-image, 1K/2K/4K resolution | 1:1, 16:9, 9:16, 4:3, 3:4, 21:9, 8:1, 1:8 |
-| flux-2-klein | Flux 2 Klein (Open) | BFL Flux 2 9B Klein via Replicate — fast, no safety filter. Resolution 0.5 / 1 / 2 / 4 MP (default 1 MP). ~2 credits at 1 MP. | Same as Flux |
-| flux-2-pro | Flux 2 Pro (Safety Tolerance) | BFL Flux 2 Pro flagship via Replicate — `safety_tolerance` pinned to 5 (max for Pro). Resolution 0.5 / 1 / 2 / 4 MP (**default 2 MP**). Per-megapixel pricing ($0.015 + $0.015/MP in+out): ~4 credits at 2 MP. | Same as Flux |
-| flux-2-max | Flux 2 Max (Safety Tolerance) | BFL Flux 2 Max via Replicate — `safety_tolerance=5`, up to 8 reference images. Resolution 0.5 / 1 / 2 / 4 MP (**default 2 MP**). **Per-megapixel pricing** ($0.07/output-MP + $0.03/MP per reference): ~9 credits at 2 MP (0 refs), scaling with resolution and refs (e.g. ~18 credits at 4 MP, more per reference). | Same as Flux |
+| flux-2-klein | Flux 2 Klein (Open) | BFL Flux 2 9B Klein via Replicate — fast, no safety filter. Resolution 0.5 / 1 / 2 / 4 MP (default 1 MP). **1 credit at 1 MP** (`ceil([figures removed])`). | Same as Flux |
+| flux-2-pro | Flux 2 Pro (Safety Tolerance) | BFL Flux 2 Pro flagship via Replicate — `safety_tolerance` pinned to 5 (max for Pro). Resolution 0.5 / 1 / 2 / 4 MP (**default 2 MP**). Per-megapixel pricing ($0.015 base + $0.015/output-MP): **3 credits at 2 MP**. | Same as Flux |
+| flux-2-max | Flux 2 Max (Safety Tolerance) | BFL Flux 2 Max via Replicate — `safety_tolerance=5`, up to 8 reference images. Resolution 0.5 / 1 / 2 / 4 MP (**default 2 MP**). **Per-megapixel pricing** ($0.07/output-MP + $0.03/ref-MP): **7 credits at 2 MP** (0 refs), **14 credits at 4 MP** (0 refs), scaling with resolution and refs. | Same as Flux |
 
 ## Best Practices
 

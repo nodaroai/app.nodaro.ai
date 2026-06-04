@@ -185,8 +185,9 @@ timestamp on the `locations.pii_consent_at` column.
 
 Generating an establishing shot is a three-step pipeline:
 
-1. **Generate** — `POST /v1/generate-location` produces 1, 2, or 4 candidate
-   jobs. With `attachToLocationId` set AND `count === 1`, the worker writes
+1. **Generate** — `POST /v1/generate-location` produces 1–10 candidate
+   jobs (API accepts 1–10; common UI presets are 1, 2, or 4). With
+   `attachToLocationId` set AND `count === 1`, the worker writes
    the result to `source_image_url` for the single job (auto-approve for
    single-candidate runs).
 2. **Approve** — for multi-candidate runs,
@@ -360,7 +361,7 @@ curl -s -X POST "$BASE/v1/generate-location-motion" \
 | `POST` | `/v1/locations/:id/restore` | JWT / `ndr_` | Un-archive. Auto-suffixes `"(restored)"` on name collision. |
 | `POST` | `/v1/locations/:id/approve-main-image` | JWT / `ndr_` | Approve a candidate; sets `source_image_url`, fires LLM caption inline. |
 | `POST` | `/v1/locations/:id/llm-caption` | JWT / `ndr_` | Re-run LLM caption against the current main image. |
-| `POST` | `/v1/generate-location` | JWT / `ndr_` | Generate 1, 2, or 4 candidate establishing shots. |
+| `POST` | `/v1/generate-location` | JWT / `ndr_` | Generate 1–10 candidate establishing shots. |
 | `POST` | `/v1/generate-location-asset` | JWT / `ndr_` | Generate one variant for any of the 5 image buckets (or `custom`). |
 | `POST` | `/v1/generate-location-motion` | JWT / `ndr_` | Animate the establishing shot into an atmosphere motion clip via i2v. |
 
@@ -391,7 +392,7 @@ const generated = await client.locations.generate({
   count: 1,
   attachToLocationId: locationId,
 })
-// `count === 1` returns `{ jobId }`; `count === 2 | 4` returns `{ jobIds }`.
+// Always returns `{ jobIds: string[] }` (`jobId` is a deprecated alias for single-candidate runs).
 
 // Poll the job; with count=1 the worker auto-attaches the result on completion.
 
@@ -497,11 +498,12 @@ to poll until completion. Multi-profile auth lives at
 
 ### MCP
 
-Seven location tools are exposed, gated by scope. The seventh
-(`generate_location`) is the verb-style entry that handles both main-image
-and variant-asset generation — it lives in the shared `verbs-*` registry
-alongside `generate_image` and `generate_character`, while the other six
-live in the dedicated `locations.ts` MCP module.
+Eight location tools are exposed, gated by scope. Two
+(`generate_location`, `generate_location_motion`) are verb-style entries
+that live in the shared `verbs-*` / `locations.ts` registry alongside
+`generate_image` and `generate_character`, while the other six
+(list, get, create, update, approve, recaption) live in the dedicated
+`locations.ts` MCP module.
 
 | Tool | Scope | What it does |
 |---|---|---|

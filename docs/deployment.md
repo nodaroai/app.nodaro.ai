@@ -407,7 +407,9 @@ a user's behalf via OAuth. It is gated behind `MCP_ENABLED` (default
    ```
    MCP_DYNAMIC_REGISTRATION=open                 # default: "allowlist" (recommended)
    MCP_DCR_ALLOWLIST=Claude,Cursor,Cline,Continue,Goose,YourCustomClient
-                                                 # default already includes the 5 popular clients
+                                                 # default already includes 14 clients: Claude, Claude Code, Cursor,
+                                                 # Cline, Continue, Goose, ChatGPT, OpenAI, Lovable, Gemini,
+                                                 # Gemini CLI, Codex, MCP Inspector, mcp-inspector
    ```
 
 3. **Verify discovery endpoints** are reachable:
@@ -420,9 +422,11 @@ a user's behalf via OAuth. It is gated behind `MCP_ENABLED` (default
 4. **Add the connector** in your MCP client. In Claude.ai: Settings →
    Connectors → Add custom connector → URL `https://mcp.your-domain.com/mcp`.
 
-The MCP feature ships incrementally over phases v1.0 → v3.0. v1.0 (auth
-skeleton) shows a single placeholder `ping` tool; later phases add the
-real generation tools, gallery, dynamic per-user tools, and widgets.
+The MCP server is fully shipped with 122+ tools across ~20 tool files,
+covering all generation verbs (image, video, audio, character, location,
+object), gallery, workflows, apps, saved components, characters, locations,
+objects, pipelines, models, and more. Authentication is via OAuth
+(Dynamic Client Registration for supported clients).
 
 ## See also
 

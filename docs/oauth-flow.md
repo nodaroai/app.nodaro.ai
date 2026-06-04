@@ -420,8 +420,8 @@ The fastest end-to-end test loop:
 
 1. **Run a local Nodaro** via the community-edition docker-compose
    (see [Community Edition Quickstart](./community-edition-quickstart.md)).
-   This gives you `http://localhost:3000` for the frontend and
-   `http://localhost:3001` for the backend.
+   This gives you `http://localhost:3000` — Caddy serves the frontend and
+   proxies all `/v1/*` API requests to the backend on its internal port.
 
 2. **Register an app** at
    `http://localhost:3000/settings/developer-apps`:
@@ -438,7 +438,7 @@ The fastest end-to-end test loop:
 
    app.get("/cb", async (req, res) => {
      const client = createClient({
-       baseUrl: "http://localhost:3001",
+       baseUrl: "http://localhost:3000",
        auth: new StaticTokenAuth(""),
      })
      const tokens = await client.oauth.exchangeCode({
@@ -474,11 +474,15 @@ The fastest end-to-end test loop:
 
 Where Nodaro intentionally simplifies or extends the standard:
 
-- **No PKCE.** Nodaro's authorization-code flow is server-to-server
-  (the `client_secret` lives on a backend you control). PKCE is the
-  defense for public clients (mobile, SPA) that can't keep a secret;
-  if Nodaro adds a public-client mode in the future, PKCE will land
-  with it.
+- **PKCE supported (RFC 7636).** Public clients (mobile, SPA, CLI tools)
+  that cannot securely hold a `client_secret` should use PKCE instead:
+  include `code_challenge` (SHA-256 of your verifier, base64url-encoded)
+  and `code_challenge_method=S256` on the authorize redirect, then send
+  `code_verifier` at token exchange in place of `client_secret`. The
+  server performs timing-safe `SHA256(code_verifier) == code_challenge`
+  verification. Confidential clients (server-to-server with a stored
+  `client_secret`) may use either path; if both `code_challenge` and
+  `client_secret` are present the server verifies both.
 - **No refresh tokens.** Access tokens last 90 days. When they
   expire, re-prompt the user. The tradeoff is simplicity (one token
   type, one storage path, one expiry policy) at the cost of a

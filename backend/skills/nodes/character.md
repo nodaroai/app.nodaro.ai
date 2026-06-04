@@ -1,7 +1,7 @@
 ---
 node_type: character
-generated_at: 2026-05-18T13:23:37.718Z
-generated_from: cb1e786d
+generated_at: 2026-06-04T12:41:29.006Z
+generated_from: 9bf1388db
 ---
 
 # Character
@@ -12,6 +12,66 @@ generated_from: cb1e786d
 **Credit cost:** 5
 **Inputs (target handles):** `in`
 **Outputs (source handles):** `characterRef`
+
+**Required data fields:**
+- `label: string`
+- `characterDbId: string`
+- `characterName: string`
+- `description: string`
+- `sourceImageUrl: string`
+- `gender: "male" | "female" | "other"`
+- `style: "realistic" | "anime" | "3d-pixar" | "illustration"`
+- `baseOutfit: string`
+- `characterSheet: CharacterSheet | null`
+- `projectId: string`
+- `createdAt: string`
+- `executionStatus: "idle" | "running" | "completed" | "failed"`
+- `generatedResults: GeneratedResult[]`
+- `activeResultIndex: number`
+- `fieldMappings: FieldMappings`
+- `expressionSheet: string`
+- `poseSheet: string`
+- `lightingSheet: string`
+- `anglesSheet: string`
+- `expressions: CharacterAssetItem[]`
+- `poses: CharacterAssetItem[]`
+- `lightingVariations: CharacterAssetItem[]`
+- `angles: CharacterAssetItem[]`
+- `bodyAngles: CharacterAssetItem[]`
+- `expressionStatus: "idle" | "running" | "completed" | "failed"`
+- `poseStatus: "idle" | "running" | "completed" | "failed"`
+- `lightingStatus: "idle" | "running" | "completed" | "failed"`
+- `anglesStatus: "idle" | "running" | "completed" | "failed"`
+- `bodyAnglesStatus: "idle" | "running" | "completed" | "failed"`
+- `customVariations: Array<{ prompt: string; url: string; createdAt: string }>`
+- `motions: CharacterAssetItem[]`
+- `motionStatus: "idle" | "running" | "completed" | "failed"`
+- `voice: CharacterVoice | null`
+- `personality: CharacterPersonality | null`
+
+**Optional data fields:**
+- `provider?: string`
+- `identityLock?: "off" | "soft" | "strict"`
+- `defaultUsageMode?: import("@nodaro/shared").UsageMode`
+- `currentJobProgress?: number`
+- `errorMessage?: string`
+- `scriptCharacterIndex?: number`
+- `referencePhotos?: ReadonlyArray<{ url: string; kind: ReferencePhotoKind }>`
+- `seedPrompt?: string`
+- `canonicalDescription?: string`
+- `realLifeRefsByVariant?: Readonly<Record<string, ReadonlyArray<string>>>`
+- `injectIdentityInPrompts?: boolean`
+- `loraReplicateVersion?: string | null`
+- `loraTriggerWord?: string | null`
+- `loraTrainingStatus?: "queued" | "training" | "succeeded" | "failed" | "cancelled" | null`
+- `defaultAssetUrl?: string`
+- `defaultAssetName?: string`
+- `defaultAssetAspectRatio?: CharacterAspectRatio`
+- `pipeline_id?: string`
+- `pipeline_entity_id?: string`
+- `pipeline_owned?: boolean`
+- `pipeline_state?: PipelineState`
+- `is_stale?: boolean`
 
 **Default data:**
 ```json

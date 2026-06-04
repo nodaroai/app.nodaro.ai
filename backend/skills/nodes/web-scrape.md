@@ -1,7 +1,7 @@
 ---
 node_type: web-scrape
-generated_at: 2026-05-18T13:23:37.050Z
-generated_from: cb1e786d
+generated_at: 2026-06-04T12:41:28.217Z
+generated_from: 9bf1388db
 ---
 
 # Web Scrape
@@ -12,6 +12,22 @@ generated_from: cb1e786d
 **Credit cost:** 5
 **Inputs (target handles):** `in`
 **Outputs (source handles):** `json`
+
+**Required data fields:**
+- `label: string`
+
+**Optional data fields:**
+- `actor?: ScraperActorId`
+- `url?: string`
+- `mode?: "page" | "site"`
+- `query?: string`
+- `maxResults?: number`
+- `countryCode?: string`
+- `target?: string`
+- `resultsLimit?: number`
+- `executionStatus?: "idle" | "running" | "completed" | "failed"`
+- `errorMessage?: string`
+- `generatedJson?: unknown`
 
 **Default data:**
 ```json

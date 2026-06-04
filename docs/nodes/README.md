@@ -4,8 +4,8 @@ Complete reference for all nodes available in the Nodaro.ai visual workflow edit
 
 ## Quick Reference
 
-- **Total Nodes:** 90+
-- **Categories:** 15
+- **Total Nodes:** 150+
+- **Categories:** 16
 
 ---
 
@@ -42,6 +42,7 @@ Provide data to your workflow: text, images, video, audio, or external triggers.
 | [Upload Video](./input/upload-video.md) | Upload or provide a video URL | Source video for processing, effects, or transformation |
 | [Upload Audio](./input/upload-audio.md) | Upload or provide an audio URL | Source audio for TTS, lip sync, dubbing, or mixing |
 | [RSS Feed](./input/rss-feed.md) | Pull content from RSS/Atom feeds | Automated content pipelines from blogs or news sources |
+| [Web Scrape](./input/web-scrape.md) | Scrape Google Search, web pages, RSS, Instagram, or TikTok (5 actors, dynamic credit cost) | Data ingestion pipelines; seed generation workflows with live search results or social post metadata |
 | [Video URL](./input/youtube-video.md) | Download video/audio from YouTube or other URLs | Import video from YouTube, TikTok, Instagram, Facebook, X |
 | [Reference Audio](./input/reference-audio.md) | Extract audio from YouTube or uploaded video | Extract audio tracks for dubbing, remixing, or analysis |
 | [Webhook Trigger](./input/webhook-trigger.md) | Trigger workflow via HTTP webhook endpoint | Integrate with external systems, APIs, n8n, or Zapier |
@@ -164,12 +165,12 @@ Generate, edit, and transform images using 20+ AI providers.
 
 | Node | Description | When to Use |
 |------|-------------|-------------|
-| [Generate Image](./ai-image/generate-image.md) | AI image generation from text (21 providers) | Create images from prompts with style, aspect ratio, and quality controls |
-| [Edit Image](./ai-image/edit-image.md) | Upscale, remove background, or AI-edit images | Enhance, upscale, or modify existing images |
+| [Generate Image](./ai-image/generate-image.md) | AI image generation from text (23 providers) | Create images from prompts with style, aspect ratio, and quality controls |
+| [Edit Image](./ai-image/edit-image.md) *(legacy API endpoint)* | Documents the legacy `edit-image` REST endpoint (upscale / remove-bg / nano-banana-edit). **Editor users:** use [Upscale Image](./ai-image/upscale-image.md), [Remove Background](./ai-image/remove-background.md), or [Modify Image](./ai-image/modify-image.md) instead. | Reference for `edit-image` API calls; new workflows should use the dedicated nodes |
 | [Modify Image](./ai-image/modify-image.md) | Transform an image with a text prompt (20+ providers) | Prompt-driven editing: style transfer, inpainting, instruction edits |
 | [Upscale Image](./ai-image/upscale-image.md) | Increase image resolution (Recraft, Topaz) | Enhance generated or uploaded images to 2K/4K/8K |
 | [Remove Background](./ai-image/remove-background.md) | Strip the background to a transparent PNG (Recraft) | Cut out subjects for compositing or product shots |
-| [Image to Image](./ai-image/image-to-image.md) | Transform image with AI prompt (15 providers) | Style transfer, inpainting, reframing, or prompt-guided transformation |
+| [Image to Image](./ai-image/image-to-image.md) *(legacy API endpoint)* | Documents the legacy `image-to-image` REST endpoint (20 providers). **Editor users:** use [Modify Image](./ai-image/modify-image.md) instead — it consolidates all prompt-driven image transformation. | Reference for `image-to-image` API calls; new workflows should use Modify Image |
 | [Generate Mask](./ai-image/generate-mask.md) | Text-prompted segmentation mask (Grounded SAM) | Create a mask for inpainting from a description; passes image through for chaining |
 | [Image Critic](./ai-image/image-critic.md) | Score an image on realism / character consistency / prompt adherence / anatomy / aesthetic / style-match via VLM | QC pipeline gates, automated regeneration loops with modify-image, batch quality scoring |
 | [Describe Image](./ai-image/image-to-text.md) | Extract text description from image | Auto-caption images, extract prompts from art, accessibility |
@@ -190,7 +191,6 @@ Generate video from images, text, or other video using state-of-the-art models.
 | [Video SFX](./ai-video/video-sfx.md) | Generate synced sound effects, foley, or ambience for a video (replaces existing audio) | Add SFX or atmosphere to silent or AI-generated clips via Replicate's mmaudio |
 | [Face Swap](./ai-video/face-swap.md) | Replace face in video with reference image | Character replacement and creative remixing |
 | [Speech to Video](./ai-video/speech-to-video.md) | Generate video from speech (Wan 2.2) | Create video driven by speech audio input |
-| [Sora Storyboard](./ai-video/sora-storyboard.md) | Multi-shot video from scene descriptions | Create multi-scene video with per-shot control |
 | [Motion Transfer](./ai-video/motion-transfer.md) | Apply video motion to static character | Transfer movement from reference video to character image |
 | [Extend Video](./ai-video/extend-video.md) | Continue video generation with new prompt | Extend VEO, Runway, or LTX 2.3 Pro video with new footage at the start or end |
 | [Video Retake](./ai-video/video-retake.md) | Replace a time window of an existing video — audio, video, or both (LTX 2.3 Pro) | Surgically fix a few seconds of dialogue, repaint a botched shot, or re-score a specific beat |
@@ -212,7 +212,7 @@ Text-to-speech, voice processing, and audio generation using ElevenLabs and othe
 | [Voice Remix](./ai-audio/voice-remix.md) | Generate voice from natural language description | Create custom voice from text description |
 | [Voice Design](./ai-audio/voice-design.md) | Design custom voices with full controls | Create reusable voices with loudness, guidance, and quality controls |
 | [Forced Alignment](./ai-audio/forced-alignment.md) | Word-level timestamp alignment | Get precise word timing for captions or animation sync |
-| [Generate Music](./ai-audio/generate-music.md) | AI music generation (Suno, Udio) | Create background music or full songs from prompts |
+| [Generate Music](./ai-audio/generate-music.md) | AI music generation (MiniMax) — for Suno use the dedicated Suno nodes | Create background music or full songs from prompts |
 
 ---
 
@@ -267,6 +267,7 @@ FFmpeg-based audio manipulation.
 
 | Node | Description | When to Use |
 |------|-------------|-------------|
+| [Split into Chunks](./processing-audio/split-media.md) | Divide a video or audio file into equal-duration segments (2 CR) | Batch transcription, per-scene processing, or chunked dubbing of long recordings |
 | [Merge Video & Audio](./processing-audio/merge-video-audio.md) | Combine video with audio tracks | Add voiceover, music, or sound effects to video |
 | [Extract Audio](./processing-audio/extract-audio.md) | Demux a video's audio track to MP3 | Pull audio from a video for transcription, dubbing, or reuse |
 | [Trim Audio](./processing-audio/trim-audio.md) | Extract section of audio file | Cut specific time range from audio |
@@ -344,6 +345,7 @@ Build modular, reusable workflows with sub-workflow nesting.
 | [Sub-Workflow Input](./workflow/sub-workflow-input.md) | Define input ports for nested workflow | Create reusable workflow entry points with typed ports |
 | [Sub-Workflow Output](./workflow/sub-workflow-output.md) | Define output ports for nested workflow | Define what a sub-workflow returns to its caller |
 | [Sub-Workflow](./workflow/sub-workflow.md) | Embed another workflow as a node, with inline editing and breadcrumb nesting | Compose complex pipelines from reusable workflow modules -- create a fresh child or reference an existing standalone workflow |
+| [Component](./workflow/component.md) | Embed a published Nodaro Component (versioned marketplace sub-workflow) with exposed settings | Drop a community or personal published component into any workflow; configure its inputs and settings inline |
 
 ---
 
@@ -374,5 +376,9 @@ Helpers for debugging and workflow organization.
 | [Deduplicate](./utility/deduplicate.md) | Remove duplicate list items by value or field | Drop repeats from scraped or merged lists |
 | [Merge Lists](./utility/merge-lists.md) | Combine lists by concatenation or element-wise zip | Join parallel lists; inject a shared value into every item |
 | [JSON Process](./utility/json-process.md) | Filter, project, and extract paths from JSON data | Reshape scraped/API JSON; drill into nested payloads |
+| [Extract Field](./utility/extract-field.md) | Pull a specific field or dot-notation path from upstream JSON | Extract `title`, `url`, or a nested property from Web Scrape or JSON Process output |
+| [Router](./utility/router.md) | Split execution into named routes via radio, checkbox, or data-driven conditional rules | Build branching workflows, A/B paths, or data-conditional pipelines |
+| [Teleport Send](./utility/teleport-send.md) | Broadcast a value on a named channel without a visible wire | Declutter large canvases; share one upstream value with distant or multiple downstream nodes |
+| [Teleport Receive](./utility/teleport-receive.md) | Receive a value from a Teleport Send on the same channel | Pick up a wirelessly broadcast value anywhere on the canvas |
 
 ---
