@@ -14,7 +14,7 @@ import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
-import { VIDEO_NODE_MIN_WIDTH, VIDEO_NODE_DEFAULT_ASPECT } from "./video-node-defaults"
+import { videoNodeSizing } from "./video-node-defaults"
 import { buildMotionCreditModelIdentifier } from "@nodaro/shared"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { EditableNodeLabel } from "./editable-node-label"
@@ -131,11 +131,7 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
       credits={credits}
       selected={selected}
       isRunning={status === "running"}
-      minWidth={VIDEO_NODE_MIN_WIDTH}
-      // 5 input pips spanning 24..160px from bottom + 28px headroom → floor 188.
-      // Once a result lands, mediaAspectRatio drives the size but never below 188.
-      minHeight={mediaAspectRatio ? Math.max(188, Math.round(200 / mediaAspectRatio)) : 188}
-      imageAspectRatio={mediaAspectRatio ?? VIDEO_NODE_DEFAULT_ASPECT}
+      {...videoNodeSizing(mediaAspectRatio)}
       hideHeader
       bottomToolbarContent={
         showThumbnails && results.length > 1 ? (

@@ -17,7 +17,7 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { VideoResultOverlay } from "./video-result-overlay"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
-import { VIDEO_NODE_MIN_WIDTH, VIDEO_NODE_DEFAULT_ASPECT } from "./video-node-defaults"
+import { videoNodeSizing } from "./video-node-defaults"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { ExtendVideoData } from "@/types/nodes"
 
@@ -75,8 +75,7 @@ function ExtendVideoNodeComponent({ id, data, selected }: NodeProps) {
         credits={credits}
         selected={selected}
         isRunning={status === "running"}
-        minWidth={VIDEO_NODE_MIN_WIDTH}
-        imageAspectRatio={mediaAspectRatio ?? VIDEO_NODE_DEFAULT_ASPECT}
+        {...videoNodeSizing(mediaAspectRatio)}
         className={hasResult ? "!border-0 !shadow-none !bg-transparent" : undefined}
         hideHeader
         topToolbarContent={

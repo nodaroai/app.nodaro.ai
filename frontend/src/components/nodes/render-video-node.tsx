@@ -12,6 +12,8 @@ import { CachedImage } from "@/components/ui/cached-image"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { VideoResultOverlay } from "./video-result-overlay"
+import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
+import { videoNodeSizing } from "./video-node-defaults"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { RenderVideoData } from "@/types/nodes"
 
@@ -31,11 +33,14 @@ function RenderVideoNodeComponent({ id, data, selected }: NodeProps) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [videoError, setVideoError] = useState(false)
-  const [videoDimensions, setVideoDimensions] = useState<{ width: number; height: number } | null>(null)
+
+  // Result aspect drives node sizing — 16:9 until a result lands, then snaps to
+  // the real video aspect (raw dims fed in via the overlay's onRawDimensions).
+  const { aspectRatio: mediaAspectRatio, onLoadDimensions: handleLoadDimensions } =
+    useResultAspectRatio(id, results, activeIndex)
 
   useEffect(() => {
     setVideoError(false)
-    setVideoDimensions(null)
   }, [activeUrl])
 
   const hasResult = status !== "running" && !!activeUrl && !videoError
@@ -45,7 +50,7 @@ function RenderVideoNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <div className="relative group/node" style={{ width: hasResult ? (videoDimensions?.width ?? 220) : 220, height: hasResult ? (videoDimensions?.height ?? 160) : undefined, overflow: 'visible' }}>
+    <div className="relative group/node" style={{ width: '100%', height: '100%', overflow: 'visible' }}>
       <EditableNodeLabel
         label={nodeData.label}
         icon={<Film className="w-3.5 h-3.5" />}
@@ -61,7 +66,7 @@ function RenderVideoNodeComponent({ id, data, selected }: NodeProps) {
         isRunning={isRunning}
         className={hasResult ? "!border-0 !shadow-none !bg-transparent" : undefined}
         hideHeader
-        minWidth={220}
+        {...videoNodeSizing(mediaAspectRatio)}
         topToolbarContent={
           !isRunning ? (
             <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
@@ -184,7 +189,7 @@ function RenderVideoNodeComponent({ id, data, selected }: NodeProps) {
           hasResults={results.length > 0}
           onExpand={() => setPreviewOpen(true)}
           onDelete={() => setDeleteConfirm(activeIndex)}
-          onDimensionsChange={setVideoDimensions}
+          onRawDimensions={handleLoadDimensions}
           onVideoError={() => setVideoError(true)}
           onVideoLoad={() => setVideoError(false)}
         />

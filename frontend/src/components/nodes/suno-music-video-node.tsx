@@ -14,6 +14,8 @@ import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { VideoResultOverlay } from "./video-result-overlay"
+import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
+import { videoNodeSizing } from "./video-node-defaults"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { SunoMusicVideoData } from "@/types/nodes"
 
@@ -31,16 +33,18 @@ function SunoMusicVideoNodeComponent({ id, data, selected }: NodeProps) {
   const activeIndex = nodeData.activeResultIndex ?? 0
   const activeResult = results?.[activeIndex]
   const activeUrl = activeResult?.url ?? videoUrl
+  // Result aspect drives node sizing — 16:9 until a result lands, then snaps to
+  // the real video aspect (raw dims fed in via the overlay's onRawDimensions).
+  const { aspectRatio: mediaAspectRatio, onLoadDimensions: handleLoadDimensions } =
+    useResultAspectRatio(id, results ?? [], activeIndex)
   const credits = useModelCredits("suno-music-video", 5)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [videoError, setVideoError] = useState(false)
   const [showThumbnails, setShowThumbnails] = useState(false)
-  const [videoDimensions, setVideoDimensions] = useState<{ width: number; height: number } | null>(null)
 
   useEffect(() => {
     setVideoError(false)
-    setVideoDimensions(null)
   }, [activeUrl])
 
   const hasResult = status !== "running" && !!activeUrl && !videoError
@@ -50,7 +54,7 @@ function SunoMusicVideoNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <div className="relative group/node" style={{ maxWidth: '220px' }}>
+    <div className="relative group/node" style={{ width: '100%', height: '100%', overflow: 'visible' }}>
       <EditableNodeLabel
         label={nodeData.label}
         icon={<Film className="w-3.5 h-3.5" />}
@@ -64,6 +68,7 @@ function SunoMusicVideoNodeComponent({ id, data, selected }: NodeProps) {
         credits={credits}
         selected={selected}
         isRunning={status === "running"}
+        {...videoNodeSizing(mediaAspectRatio)}
         className={hasResult ? "!border-0 !shadow-none !bg-transparent" : undefined}
         hideHeader
         topToolbarContent={
@@ -150,7 +155,7 @@ function SunoMusicVideoNodeComponent({ id, data, selected }: NodeProps) {
           hasResults={!!results && results.length > 0}
           onExpand={() => setPreviewOpen(true)}
           onDelete={() => setDeleteConfirm(activeIndex)}
-          onDimensionsChange={setVideoDimensions}
+          onRawDimensions={handleLoadDimensions}
           onVideoError={() => setVideoError(true)}
           onVideoLoad={() => setVideoError(false)}
         />

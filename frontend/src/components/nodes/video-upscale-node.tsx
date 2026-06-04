@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useState, useEffect } from "react"
+import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { ArrowUpFromLine, Film, Loader2, AlertCircle, X } from "lucide-react"
 import { NodeJobProgress } from "./node-job-progress"
@@ -14,6 +14,8 @@ import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { VideoResultOverlay } from "./video-result-overlay"
+import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
+import { videoNodeSizing } from "./video-node-defaults"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { VideoUpscaleData } from "@/types/nodes"
 
@@ -30,8 +32,11 @@ function VideoUpscaleNodeComponent({ id, data, selected }: NodeProps) {
   const activeIndex = nodeData.activeResultIndex ?? 0
   const activeResult = results[activeIndex]
   const activeUrl = activeResult?.url ?? nodeData.generatedVideoUrl
+  // Result aspect drives node sizing — 16:9 until a result lands, then snaps to
+  // the real video aspect (raw dims fed in via the overlay's onRawDimensions).
+  const { aspectRatio: mediaAspectRatio, onLoadDimensions: handleLoadDimensions } =
+    useResultAspectRatio(id, results, activeIndex)
   const [previewOpen, setPreviewOpen] = useState(false)
-  const [videoDimensions, setVideoDimensions] = useState<{ width: number; height: number } | null>(null)
   const upscaleProvider = (nodeData.provider as string | undefined) ?? "topaz"
   // Mirror the backend's upscaleCreditModel() in routes/video-upscale.ts:
   // topaz selector maps to the "topaz-video" credit row (charges 19 CR);
@@ -47,8 +52,6 @@ function VideoUpscaleNodeComponent({ id, data, selected }: NodeProps) {
   const upscaleFallback = creditIdentifier === "veo-4k" ? 38 : creditIdentifier === "veo-1080p" ? 2 : 19
   const credits = useModelCredits(creditIdentifier, upscaleFallback)
 
-  useEffect(() => { setVideoDimensions(null) }, [activeUrl])
-
   const hasResult = status !== "running" && !!activeUrl
 
   function handleDeleteResult(indexToDelete: number) {
@@ -58,11 +61,7 @@ function VideoUpscaleNodeComponent({ id, data, selected }: NodeProps) {
   return (
     <div
       className="relative group/node"
-      style={{
-        width: hasResult ? (videoDimensions?.width ?? 220) : 220,
-        height: hasResult ? (videoDimensions?.height ?? 160) : undefined,
-        overflow: 'visible',
-      }}
+      style={{ width: '100%', height: '100%', overflow: 'visible' }}
     >
       <EditableNodeLabel
         label={nodeData.label}
@@ -78,7 +77,7 @@ function VideoUpscaleNodeComponent({ id, data, selected }: NodeProps) {
         selected={selected}
         isRunning={status === "running"}
         hideHeader
-        minWidth={220}
+        {...videoNodeSizing(mediaAspectRatio)}
         className={hasResult ? "!border-0 !shadow-none !bg-transparent" : undefined}
         topToolbarContent={
                       <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
@@ -184,7 +183,7 @@ function VideoUpscaleNodeComponent({ id, data, selected }: NodeProps) {
           hasResults={results.length > 0}
           onExpand={() => setPreviewOpen(true)}
           onDelete={() => handleDeleteResult(activeIndex)}
-          onDimensionsChange={setVideoDimensions}
+          onRawDimensions={handleLoadDimensions}
         />
       )}
       <HandleWithPopover nodeId={id} nodeType="video-upscale" handleId="video" type="target" position={Position.Left}  label="Video" color={HANDLE_COLORS.video} icon={<Film />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_VIDEO} />

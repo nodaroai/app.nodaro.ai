@@ -149,6 +149,8 @@ Enterprise code lives under `backend/src/ee/` and `frontend/src/ee/` and is gove
 
 **Steps 8 and 9 are separate node lists — missing either means the node won't appear in that UI.**
 
+**Video-output nodes:** if the node renders a video result preview, drive `mediaAspectRatio` via `useResultAspectRatio(id, results, activeIndex)` and spread `videoNodeSizing(mediaAspectRatio)` (from `frontend/src/components/nodes/video-node-defaults.ts`) onto its `<BaseNode>` — this gives the shared, consistent 16:9-until-result sizing every video node uses. Don't hand-pick `minWidth`/`minHeight`/`imageAspectRatio` (that's what caused per-node size drift). Overlay-based nodes feed raw dims via `<VideoResultOverlay onRawDimensions={…}>`; inline-`<video>` nodes via `onLoadedMetadata`.
+
 ***REDACTED-OSS-SCRUB***
 
 ### Parameter Picker Node Registration (CRITICAL)

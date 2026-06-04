@@ -17,7 +17,7 @@ import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { AudioResultOverlay } from "./audio-result-overlay"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
-import { VIDEO_NODE_MIN_WIDTH, VIDEO_NODE_DEFAULT_ASPECT } from "./video-node-defaults"
+import { videoNodeSizing } from "./video-node-defaults"
 import type { VoiceChangerData } from "@/types/nodes"
 
 const ACCEPTS_AUDIO = (t: string) => isValidVoiceChangerConnection("audio", t)
@@ -74,8 +74,7 @@ function VoiceChangerNodeComponent({ id, data, selected }: NodeProps) {
       credits={credits}
       selected={selected}
       isRunning={status === "running"}
-      minWidth={isVideoResult ? VIDEO_NODE_MIN_WIDTH : undefined}
-      imageAspectRatio={isVideoResult ? (mediaAspectRatio ?? VIDEO_NODE_DEFAULT_ASPECT) : undefined}
+      {...(isVideoResult ? videoNodeSizing(mediaAspectRatio) : {})}
       hideHeader
       topToolbarContent={
                   <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />
