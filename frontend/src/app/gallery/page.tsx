@@ -4,6 +4,7 @@ import { ArrowLeft, ChevronLeft, ChevronRight, Download, Maximize2, Minimize2, X
 import { NodaroLogo } from "@/components/nodaro-logo"
 import { cn } from "@/lib/utils"
 import { CachedImage } from "@/components/ui/cached-image"
+import { WaveformAudioPlayer } from "@/components/audio-player"
 import { optimizedImageUrl } from "@/lib/image"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { toast } from "sonner"
@@ -756,7 +757,7 @@ export default function GalleryPage() {
                   <video key={selectedItem.id} src={selectedItem.outputUrl} controls autoPlay playsInline className="max-w-full max-h-full" />
                 ) : (
                   <div className="p-8 w-full">
-                    <audio key={selectedItem.id} src={selectedItem.outputUrl} controls autoPlay className="w-full" />
+                    <WaveformAudioPlayer key={selectedItem.id} url={selectedItem.outputUrl} variant="full" autoPlay className="w-full" />
                   </div>
                 )}
 
@@ -883,7 +884,7 @@ export default function GalleryPage() {
           ) : selectedItem.type === "video" ? (
             <video key={selectedItem.id} src={selectedItem.outputUrl} controls autoPlay playsInline className="max-w-full max-h-full" />
           ) : (
-            <audio key={selectedItem.id} src={selectedItem.outputUrl} controls autoPlay />
+            <WaveformAudioPlayer key={selectedItem.id} url={selectedItem.outputUrl} variant="full" autoPlay className="w-full" />
           )}
 
           {/* Left arrow */}

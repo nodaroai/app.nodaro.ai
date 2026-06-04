@@ -12,6 +12,7 @@ import { isValidSplitMediaConnection } from "@/lib/audio-text-handles"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import type { SplitMediaData } from "@/types/nodes"
+import { WaveformAudioPlayer } from "@/components/audio-player"
 
 const ACCEPTS_VIDEO = (t: string) => isValidSplitMediaConnection("video", t)
 const ACCEPTS_AUDIO = (t: string) => isValidSplitMediaConnection("audio", t)
@@ -76,7 +77,7 @@ function SplitMediaNodeComponent({ id, data, selected }: NodeProps) {
                   {audioChunks.map((url, i) => (
                     <div key={`a-${i}`} className="flex flex-col gap-0.5" onClick={(e) => e.stopPropagation()}>
                       <span className="text-[10px] text-muted-foreground">Chunk {i + 1}</span>
-                      <audio controls src={url} className="w-full h-7" style={{ height: '28px' }} />
+                      <WaveformAudioPlayer url={url} variant="mini" isInsideCanvas className="w-full" />
                     </div>
                   ))}
                   {videoChunks.map((url, i) => (

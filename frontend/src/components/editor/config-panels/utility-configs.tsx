@@ -56,6 +56,7 @@ import {
 } from "@/components/ui/accordion"
 import type { ConfigProps, SourceNodeInfo } from "./types"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { WaveformAudioPlayer } from "@/components/audio-player"
 
 const SEPARATOR_OPTIONS = [
   { value: "newline", label: "New Line (\\n)" },
@@ -799,7 +800,7 @@ export function PreviewConfig({ data, onUpdate }: { data: PreviewNodeData; onUpd
                 ) : item.type === "video" && isMediaUrl(item.value) ? (
                   <video src={item.value} className="w-full max-h-40 object-contain rounded border border-border" controls muted playsInline preload="none" />
                 ) : item.type === "audio" && isMediaUrl(item.value) ? (
-                  <audio src={item.value} className="w-full" controls />
+                  <WaveformAudioPlayer url={item.value} variant="compact" className="w-full" />
                 ) : (
                   <Textarea rows={Math.min((item.value.match(/\n/g) || []).length + 1, 6)} value={item.value} readOnly className="text-xs opacity-70" />
                 )}

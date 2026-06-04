@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react"
+import { WaveformAudioPlayer } from "@/components/audio-player"
 import { toast } from "sonner"
 import { spliceDelimitedRows, NO_SPLIT_DELIMITER } from "@nodaro/shared"
 import { Plus, X, Upload, Film, Maximize2, Download, Link, Link2, GripVertical } from "lucide-react"
@@ -159,7 +160,7 @@ function RichMediaCell({
         )}
         {mimePrefix === "audio/" && (
           <div className="relative group flex items-center gap-2 rounded-lg p-2">
-            <audio src={value} controls className="flex-1 h-8 [&::-webkit-media-controls-panel]:bg-transparent" />
+            <WaveformAudioPlayer url={value} variant="compact" className="flex-1" />
             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
               <GlassButton onClick={() => downloadFile(value, getFilenameFromUrl(value))} title="Download">
                 <Download className="w-3.5 h-3.5" />

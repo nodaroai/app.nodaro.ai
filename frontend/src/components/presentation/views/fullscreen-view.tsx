@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react"
+import { WaveformAudioPlayer } from "@/components/audio-player"
 import { ChevronLeft, ChevronRight, ImageIcon, VideoIcon, Music, FileText } from "lucide-react"
 import { CachedImage } from "@/components/ui/cached-image"
 import { getOutputType, type OutputType } from "@/lib/presentation-utils"
@@ -161,7 +162,7 @@ export function FullscreenView({
           <GlassCard className="w-full max-w-md">
             <div className="flex flex-col items-center gap-4 py-4">
               <WaveformBars />
-              <audio key={currentIndex} src={current.url} controls autoPlay className="w-full" />
+              <WaveformAudioPlayer key={currentIndex} url={current.url} variant="full" autoPlay className="w-full" />
             </div>
           </GlassCard>
         ) : current.text ? (

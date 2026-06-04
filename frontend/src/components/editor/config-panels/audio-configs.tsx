@@ -61,6 +61,7 @@ import { FinalAudioPromptPreview } from "./final-audio-prompt-preview"
 import { LIP_SYNC_MODELS, TTS_MODELS, SUNO_MODELS } from "./model-options"
 import { REPLICATE_LIP_SYNC_PROVIDERS, getEffectiveSunoCustomMode, SUNO_ADD_TRACK_MODELS } from "@nodaro/shared"
 import { InjectedReferenceList } from "./injected-reference-list"
+import { WaveformAudioPlayer } from "@/components/audio-player"
 import { removeMentionToken, makeRemoveWiredSource, appendSuppressedSlug } from "./injected-reference-helpers"
 import { buildConnectedRefsFromSources } from "./connected-refs-builder"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -654,13 +655,13 @@ export function SunoSeparateConfig({ data, onUpdate }: { readonly data: SunoSepa
       {data.vocalUrl && (
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-muted-foreground">Vocal</label>
-          <audio src={data.vocalUrl} controls className="w-full h-8" preload="none" />
+          <WaveformAudioPlayer url={data.vocalUrl} variant="compact" className="w-full" />
         </div>
       )}
       {data.instrumentalUrl && (
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-muted-foreground">Instrumental</label>
-          <audio src={data.instrumentalUrl} controls className="w-full h-8" preload="none" />
+          <WaveformAudioPlayer url={data.instrumentalUrl} variant="compact" className="w-full" />
         </div>
       )}
       {data.stems && Object.keys(data.stems).length > 0 && (
@@ -669,7 +670,7 @@ export function SunoSeparateConfig({ data, onUpdate }: { readonly data: SunoSepa
           {Object.entries(data.stems).map(([name, url]) => (
             <div key={name} className="flex flex-col gap-0.5">
               <span className="text-[10px] text-muted-foreground capitalize">{name.replace(/_/g, " ")}</span>
-              <audio src={url} controls className="w-full h-8" preload="none" />
+              <WaveformAudioPlayer url={url} variant="compact" className="w-full" />
             </div>
           ))}
         </div>

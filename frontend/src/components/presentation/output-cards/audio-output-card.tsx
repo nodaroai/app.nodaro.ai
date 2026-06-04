@@ -1,10 +1,10 @@
 import { memo } from "react"
+import { WaveformAudioPlayer } from "@/components/audio-player"
 import { Download, Music } from "lucide-react"
 import { StatusBadge, GlassCard, GlassButton, downloadFile, UnhideBanner, resolveCardActions, type OutputStatus, type OutputCardActions } from "./shared"
 import { ActionMenu } from "./action-menu"
 import { ActionBar } from "./action-bar"
 import { shareMedia } from "./share-utils"
-import { WaveformBars } from "../input-cards/shared"
 import { ELEMENT_SIZES } from "@/lib/presentation-display"
 
 /** Heights for the 7-bar loading waveform */
@@ -56,9 +56,8 @@ function AudioOutputCardImpl({ label, status, url, nodeId, elementSize, actions 
         </div>
       ) : url ? (
         <>
-          <div className={`flex items-center gap-3 bg-muted/30 rounded-lg p-3 border border-border ${heightClass}`}>
-            <WaveformBars />
-            <audio src={url} controls className="flex-1 h-8 [&::-webkit-media-controls-panel]:bg-transparent" />
+          <div className="flex items-center gap-3 bg-muted/30 rounded-lg p-3 border border-border">
+            <WaveformAudioPlayer url={url} variant="compact" className="flex-1" />
             <GlassButton onClick={() => downloadFile(url, `${label.replace(/\s+/g, "-").toLowerCase()}.mp3`)} title="Download">
               <Download className="w-3.5 h-3.5" />
             </GlassButton>
