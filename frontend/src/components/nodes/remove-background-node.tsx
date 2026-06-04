@@ -8,6 +8,7 @@ import { isValidRemoveBackgroundConnection } from "@/lib/image-producer-handles"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
+import { imageNodeSizing } from "./video-node-defaults"
 import { NodeQuickStrip } from "./node-quick-strip"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
@@ -15,6 +16,7 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 import { CachedImage } from "@/components/ui/cached-image"
 import { useFullResolution } from "@/hooks/use-full-resolution"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
+import { useUpstreamImageAspect } from "@/hooks/use-upstream-image-aspect"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { EditableNodeLabel } from "./editable-node-label"
 import type { RemoveBackgroundData } from "@/types/nodes"
@@ -41,6 +43,7 @@ function RemoveBackgroundNodeComponent({ id, data, selected }: NodeProps) {
   const isSettingsOpen = useWorkflowStore((s) => s.selectedNodeId === id)
   const { aspectRatio: imgAspectRatio, onLoadDimensions: handleLoadDimensions } =
     useResultAspectRatio(id, results, activeIndex)
+  const upstreamImageAspect = useUpstreamImageAspect(id)
 
   function handleDeleteResult(indexToDelete: number) {
     updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedImageUrl"))
@@ -61,10 +64,8 @@ function RemoveBackgroundNodeComponent({ id, data, selected }: NodeProps) {
       credits={credits}
       selected={selected}
       isRunning={status === "running"}
-      minWidth={200}
-      minHeight={imgAspectRatio ? Math.round(200 / imgAspectRatio) : 150}
+      {...imageNodeSizing(imgAspectRatio, upstreamImageAspect)}
       hideHeader
-      imageAspectRatio={imgAspectRatio}
       bottomToolbarContent={
         showThumbnails && results.length > 1 ? (
           <div className="flex gap-2 px-2 py-1.5 bg-black/60 backdrop-blur-sm rounded-xl border border-white/10">

@@ -57,3 +57,22 @@ export function videoNodeSizing(mediaAspectRatio: number | undefined): {
     imageAspectRatio: mediaAspectRatio ?? VIDEO_NODE_DEFAULT_ASPECT,
   }
 }
+
+/**
+ * Sizing for an **image-output** node. Same minimum size as a video node, but
+ * the idle aspect resolves through a richer fallback chain:
+ *
+ *   rendered result  →  connected upstream image  →  16:9
+ *
+ * so a node with no result of its own still previews at the aspect of the image
+ * it will transform (e.g. Edit Image fed a 3:4 photo previews 3:4), instead of a
+ * generic 16:9 box. Pass `useResultAspectRatio(...).aspectRatio` as `resultAspect`
+ * and `useUpstreamImageAspect(id)` as `upstreamAspect`. Delegates to
+ * `videoNodeSizing` so video and image nodes share one sizing characteristic.
+ */
+export function imageNodeSizing(
+  resultAspect: number | undefined,
+  upstreamAspect: number | undefined,
+): { minWidth: number; minHeight: number; imageAspectRatio: number } {
+  return videoNodeSizing(resultAspect ?? upstreamAspect)
+}

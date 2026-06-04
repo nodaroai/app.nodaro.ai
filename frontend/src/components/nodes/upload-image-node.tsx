@@ -17,6 +17,8 @@ import { StorageExceededModal } from "@/ee/components/credits/StorageExceededMod
 import { CachedImage } from "@/components/ui/cached-image"
 import { useFullResolution } from "@/hooks/use-full-resolution"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
+import { useUpstreamImageAspect } from "@/hooks/use-upstream-image-aspect"
+import { imageNodeSizing } from "./video-node-defaults"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { copyToClipboard, computeDeleteResultUpdates } from "@/lib/utils"
 import type { UploadImageData, GeneratedResult } from "@/types/nodes"
@@ -143,6 +145,7 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
   const hasImage = Boolean(imageUrl)
   const { aspectRatio: imgAspectRatio, onLoadDimensions: handleLoadDimensions } =
     useResultAspectRatio(id, results, activeIndex)
+  const upstreamImageAspect = useUpstreamImageAspect(id)
 
   // Legacy + upstream migration: when externalUrl/url is set but no result
   // exists yet (legacy workflow state, or upstream connected post-mount via
@@ -257,11 +260,9 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
           category="input"
           credits={0}
           selected={selected}
-          minWidth={200}
-          minHeight={imgAspectRatio ? Math.round(200 / imgAspectRatio) : 150}
+          {...imageNodeSizing(imgAspectRatio, upstreamImageAspect)}
           hideHeader
           handles={HANDLES}
-          imageAspectRatio={imgAspectRatio}
           bottomToolbarContent={
             showThumbnails && results.length > 1 ? (
               <div className="flex gap-1.5 px-2 py-1.5 bg-black/60 backdrop-blur-sm rounded-xl border border-white/10">

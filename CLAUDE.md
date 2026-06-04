@@ -149,7 +149,11 @@ Enterprise code lives under `backend/src/ee/` and `frontend/src/ee/` and is gove
 
 **Steps 8 and 9 are separate node lists — missing either means the node won't appear in that UI.**
 
-**Video-output nodes:** if the node renders a video result preview, drive `mediaAspectRatio` via `useResultAspectRatio(id, results, activeIndex)` and spread `videoNodeSizing(mediaAspectRatio)` (from `frontend/src/components/nodes/video-node-defaults.ts`) onto its `<BaseNode>` — this gives the shared, consistent 16:9-until-result sizing every video node uses. Don't hand-pick `minWidth`/`minHeight`/`imageAspectRatio` (that's what caused per-node size drift). Overlay-based nodes feed raw dims via `<VideoResultOverlay onRawDimensions={…}>`; inline-`<video>` nodes via `onLoadedMetadata`.
+**Video/image-output nodes (shared sizing):** any node rendering a video OR image result preview must size through the shared helper in `frontend/src/components/nodes/video-node-defaults.ts` — never hand-pick `minWidth`/`minHeight`/`imageAspectRatio` (that's what caused per-node size drift). Drive the result aspect via `useResultAspectRatio(id, results, activeIndex)`, then spread onto `<BaseNode>`:
+- **video** → `{...videoNodeSizing(mediaAspectRatio)}` — aspect = result → 16:9.
+- **image** → `{...imageNodeSizing(resultAspect, useUpstreamImageAspect(id))}` — aspect = result → connected upstream image → 16:9.
+
+All video and image nodes thus share ONE sizing characteristic (240 min width, 368 min height; height is the lever so portrait stays proportioned). Overlay nodes feed raw dims via `<VideoResultOverlay onRawDimensions={…}>`; inline `<video>`/`<CachedImage>` via `onLoadedMetadata`/`onLoadDimensions`. The invariant is guarded by `frontend/src/components/nodes/__tests__/media-node-sizing.test.ts` — a new media node that hand-picks sizing fails that test.
 
 ***REDACTED-OSS-SCRUB***
 

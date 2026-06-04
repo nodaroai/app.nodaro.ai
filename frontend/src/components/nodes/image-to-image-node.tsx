@@ -16,6 +16,8 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 import { CachedImage } from "@/components/ui/cached-image"
 import { useFullResolution } from "@/hooks/use-full-resolution"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
+import { imageNodeSizing } from "./video-node-defaults"
+import { useUpstreamImageAspect } from "@/hooks/use-upstream-image-aspect"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { buildCreditModelIdentifier } from "@/components/editor/config-panels/helpers"
 import { EditableNodeLabel } from "./editable-node-label"
@@ -52,6 +54,7 @@ function ImageToImageNodeComponent({ id, data, selected }: NodeProps) {
   const useFull = useFullResolution(id)
   const { aspectRatio: imgAspectRatio, onLoadDimensions: handleLoadDimensions } =
     useResultAspectRatio(id, results, activeIndex)
+  const upstreamImageAspect = useUpstreamImageAspect(id)
 
   function handleDeleteResult(indexToDelete: number) {
     updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedImageUrl"))
@@ -72,8 +75,7 @@ function ImageToImageNodeComponent({ id, data, selected }: NodeProps) {
       credits={credits}
       selected={selected}
       isRunning={status === "running"}
-      minWidth={200}
-      minHeight={imgAspectRatio ? Math.round(200 / imgAspectRatio) : 150}
+      {...imageNodeSizing(imgAspectRatio, upstreamImageAspect)}
       hideHeader
       bottomToolbarContent={
         showThumbnails && results.length > 1 ? (
@@ -107,7 +109,6 @@ function ImageToImageNodeComponent({ id, data, selected }: NodeProps) {
         { id: "cinematography", type: "target", position: Position.Left,  customStyle: { top: `calc(100% - ${supportsMask ? 88 : 56}px)`, left: '-29px' }, external: true },
         { id: "image",          type: "source", position: Position.Right, customStyle: { top: '24px', right: '-29px' }, external: true },
       ]}
-      imageAspectRatio={imgAspectRatio}
     >
       <div className="relative w-full h-full group">
         {/* Image fills entire node */}

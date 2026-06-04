@@ -18,6 +18,8 @@ import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { isValidGenerateMaskConnection } from "@/lib/image-producer-handles"
 import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
+import { imageNodeSizing } from "./video-node-defaults"
+import { useUpstreamImageAspect } from "@/hooks/use-upstream-image-aspect"
 import { NodeQuickStrip } from "./node-quick-strip"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
@@ -57,6 +59,7 @@ function GenerateMaskNodeComponent({ id, data, selected }: NodeProps) {
   // Component-local aspect ratio — results use a bespoke {imageUrl, maskUrl}
   // shape (not GeneratedResult[]), so we can't use useResultAspectRatio.
   const [aspectRatio, setAspectRatio] = useState<number | undefined>(undefined)
+  const upstreamImageAspect = useUpstreamImageAspect(id)
 
   const handleLoadDimensions = useCallback((dim: { width: number; height: number }) => {
     if (dim.width > 0 && dim.height > 0) {
@@ -104,9 +107,7 @@ function GenerateMaskNodeComponent({ id, data, selected }: NodeProps) {
         credits={credits}
         selected={selected}
         isRunning={status === "running"}
-        minWidth={200}
-        minHeight={aspectRatio ? Math.round(200 / aspectRatio) : 150}
-        imageAspectRatio={aspectRatio}
+        {...imageNodeSizing(aspectRatio, upstreamImageAspect)}
         hideHeader
         topToolbarContent={
           <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />

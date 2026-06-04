@@ -15,6 +15,9 @@ import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
+import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
+import { useUpstreamImageAspect } from "@/hooks/use-upstream-image-aspect"
+import { imageNodeSizing } from "./video-node-defaults"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import type { ExtractFrameData } from "@/types/nodes"
 
@@ -30,6 +33,9 @@ function ExtractFrameNodeComponent({ id, data, selected }: NodeProps) {
   const activeIndex = nodeData.activeResultIndex ?? 0
   const activeResult = results[activeIndex]
   const activeUrl = activeResult?.url ?? nodeData.generatedImageUrl
+  const { aspectRatio: imgAspectRatio, onLoadDimensions: handleLoadDimensions } =
+    useResultAspectRatio(id, results, activeIndex)
+  const upstreamImageAspect = useUpstreamImageAspect(id)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [imgError, setImgError] = useState(false)
@@ -46,10 +52,10 @@ function ExtractFrameNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <div className="relative group/node" style={{ width: 220 }}>
+    <div className="relative group/node" style={{ width: '100%', height: '100%', overflow: 'visible' }}>
       <EditableNodeLabel label={nodeData.label} icon={<Frame className="w-3.5 h-3.5" />} onSave={(newLabel) => updateNodeData(id, { label: newLabel })} />
       <BaseNode id={id} label={nodeData.label} icon={<Frame className="h-4 w-4" />} category="processing" credits={credits} selected={selected} isRunning={status === "running"}
-        hideHeader minWidth={220}
+        hideHeader {...imageNodeSizing(imgAspectRatio, upstreamImageAspect)}
         topToolbarContent={<RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />}
         bottomToolbarContent={
           showThumbnails && results.length > 1 ? (
@@ -92,7 +98,7 @@ function ExtractFrameNodeComponent({ id, data, selected }: NodeProps) {
                   <span className="text-[11px] font-medium">{results.length}</span>
                 </button>
               )}
-              <CachedImage src={activeUrl!} alt="Extracted frame" className="w-full rounded-md object-cover" thumbnail thumbnailWidth={320} onError={() => setImgError(true)} />
+              <CachedImage src={activeUrl!} alt="Extracted frame" className="w-full h-full object-cover rounded-md" thumbnail thumbnailWidth={320} onLoadDimensions={handleLoadDimensions} onError={() => setImgError(true)} />
               <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1 rounded">{modeLabel}</div>
               <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button type="button" aria-label="Expand" className="w-6 h-6 flex items-center justify-center bg-black/60 hover:bg-black/80 text-white rounded-full" onClick={(e) => { e.stopPropagation(); setPreviewOpen(true) }}><Expand className="w-3 h-3" /></button>
