@@ -294,6 +294,60 @@ describe("buildPayload", () => {
       expect(result.payload.mode).toBe("pro")
       expect(result.payload.sound).toBe(true)
     })
+
+    // 10. Split-id models (Grok Imagine 1, Wan 2.6/2.7) show as ONE picker row
+    //     keyed by the base (i2v) id, but KIE keys i2v and t2v off different ids
+    //     in different maps. The orchestrator MUST remap base→mode id so BOTH the
+    //     worker model lookup (payload.provider) AND the credit identifier match
+    //     the chosen mode. Mirrors the frontend executor.
+    it("Grok base (grok-i2v) + no image → t2v id 'grok'", () => {
+      const n = node("n1", "generate-video", { provider: "grok-i2v", prompt: "a fox" })
+      const result = buildPayload(n, jobId, {})
+      expect(result.jobName).toBe("text-to-video")
+      expect(result.payload.provider).toBe("grok") // worker → grok-imagine/text-to-video
+      // Billing: T2V_CREDIT_OVERRIDES maps t2v 'grok' → the grok-i2v rate
+      // (20 KIE cr), NOT the 4cr image grok. The remap (→'grok') and the override
+      // compose correctly.
+      expect(result.modelIdentifier.startsWith("grok-i2v")).toBe(true)
+    })
+
+    it("Grok base (grok-i2v) + start frame → i2v id 'grok-i2v'", () => {
+      const n = node("n1", "generate-video", { provider: "grok-i2v" })
+      const result = buildPayload(n, jobId, { startFrameUrl: "https://cdn/f.png" })
+      expect(result.jobName).toBe("image-to-video")
+      expect(result.payload.provider).toBe("grok-i2v")
+      expect(result.modelIdentifier.startsWith("grok-i2v")).toBe(true)
+    })
+
+    it("legacy t2v twin 'grok' + start frame → remaps to i2v 'grok-i2v' (footgun fix)", () => {
+      // Picking the t2v 'grok' and connecting an image used to send 'grok' to the
+      // i2v worker where KIE_VIDEO_MODELS['grok'] is undefined → crash.
+      const n = node("n1", "generate-video", { provider: "grok" })
+      const result = buildPayload(n, jobId, { startFrameUrl: "https://cdn/f.png" })
+      expect(result.jobName).toBe("image-to-video")
+      expect(result.payload.provider).toBe("grok-i2v")
+    })
+
+    it("Wan 2.6 base (wan-i2v) remaps by mode", () => {
+      const t2v = buildPayload(node("n1", "generate-video", { provider: "wan-i2v", prompt: "x" }), jobId, {})
+      expect(t2v.payload.provider).toBe("wan")
+      const i2v = buildPayload(node("n2", "generate-video", { provider: "wan-i2v" }), jobId, { startFrameUrl: "https://cdn/f.png" })
+      expect(i2v.payload.provider).toBe("wan-i2v")
+    })
+
+    it("Wan 2.7 base (wan-2.7-i2v) remaps by mode", () => {
+      const t2v = buildPayload(node("n1", "generate-video", { provider: "wan-2.7-i2v", prompt: "x" }), jobId, {})
+      expect(t2v.payload.provider).toBe("wan-2.7-t2v")
+      const i2v = buildPayload(node("n2", "generate-video", { provider: "wan-2.7-i2v" }), jobId, { startFrameUrl: "https://cdn/f.png" })
+      expect(i2v.payload.provider).toBe("wan-2.7-i2v")
+    })
+
+    it("non-split-id providers are unaffected by the remap (kling)", () => {
+      const t2v = buildPayload(node("n1", "generate-video", { provider: "kling", prompt: "x" }), jobId, {})
+      expect(t2v.payload.provider).toBe("kling")
+      const i2v = buildPayload(node("n2", "generate-video", { provider: "kling" }), jobId, { startFrameUrl: "https://cdn/f.png" })
+      expect(i2v.payload.provider).toBe("kling")
+    })
   })
 
   describe("video-to-video", () => {

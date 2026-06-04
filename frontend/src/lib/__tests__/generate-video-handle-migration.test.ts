@@ -98,6 +98,29 @@ describe("migrateGenerateVideoNodes", () => {
     expect(data.kling3Sound).toBeUndefined()
   })
 
+  it("normalizes a converted t2v split-id provider to the unified base (grok → grok-i2v)", () => {
+    const result = migrateGenerateVideoNodes([mkNode("t2v", "text-to-video", { provider: "grok" })], [])
+    expect(result.nodes[0].type).toBe("generate-video")
+    expect((result.nodes[0].data as Record<string, unknown>).provider).toBe("grok-i2v")
+  })
+
+  it("normalizes a pre-existing generate-video node carrying a hidden t2v twin (wan → wan-i2v)", () => {
+    const result = migrateGenerateVideoNodes([mkNode("gv", "generate-video", { provider: "wan" })], [])
+    expect((result.nodes[0].data as Record<string, unknown>).provider).toBe("wan-i2v")
+  })
+
+  it("normalizes wan-2.7-t2v → wan-2.7-i2v", () => {
+    const result = migrateGenerateVideoNodes([mkNode("gv", "generate-video", { provider: "wan-2.7-t2v" })], [])
+    expect((result.nodes[0].data as Record<string, unknown>).provider).toBe("wan-2.7-i2v")
+  })
+
+  it("leaves non-split-id providers unchanged (veo3, grok-i2v base)", () => {
+    const veo = migrateGenerateVideoNodes([mkNode("gv", "generate-video", { provider: "veo3" })], [])
+    expect((veo.nodes[0].data as Record<string, unknown>).provider).toBe("veo3")
+    const grokI2v = migrateGenerateVideoNodes([mkNode("t2v", "image-to-video", { provider: "grok-i2v" })], [])
+    expect((grokI2v.nodes[0].data as Record<string, unknown>).provider).toBe("grok-i2v")
+  })
+
   it("is idempotent — running twice yields the same result", () => {
     const nodes = [mkNode("i2v", "image-to-video", { kling3Mode: "pro", connectedRefImageOrder: ["a"] })]
     const edges = [mkEdge("e1", "s", "i2v", "image", "references")]

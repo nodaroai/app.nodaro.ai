@@ -424,6 +424,67 @@ export const VIDEO_GEN_PROVIDERS = [
 ] as const
 export type VideoGenProvider = typeof VIDEO_GEN_PROVIDERS[number]
 
+/**
+ * Video models that expose DISTINCT provider ids per mode (text-to-video vs
+ * image-to-video) but represent ONE user-facing model. KIE keys i2v and t2v off
+ * different ids in different maps (KIE_VIDEO_MODELS vs KIE_TEXT_TO_VIDEO_MODELS),
+ * so each id only resolves to a real model in its native mode.
+ *
+ * The unified Generate Video node shows ONE picker row (the `base` id) and
+ * auto-selects the mode by whether an input image is present; execution remaps
+ * base→mode id via {@link resolveVideoProviderForMode}. This registry is the
+ * single source of truth shared by the picker collapse (frontend
+ * `model-options.ts`), the frontend DAG executor (`execute-node.ts`), and the
+ * backend orchestrator (`payload-builder.ts`) so they can't drift.
+ *
+ * `base` MUST be one of the group's own mode ids (kept = the i2v id, since the
+ * unified picker's i2v entries win on collision). Honesty invariants are guarded
+ * in `__tests__/video-mode-aliases.test.ts`.
+ */
+export interface VideoModeAlias {
+  /** Canonical id stored on the node + shown in the unified picker. */
+  base: string
+  /** KIE id to use when an input image is present (image-to-video). */
+  i2v: string
+  /** KIE id to use for pure text-to-video. */
+  t2v: string
+}
+
+export const VIDEO_MODE_ALIASES: readonly VideoModeAlias[] = [
+  { base: "grok-i2v", i2v: "grok-i2v", t2v: "grok" },
+  { base: "wan-i2v", i2v: "wan-i2v", t2v: "wan" },
+  { base: "wan-2.7-i2v", i2v: "wan-2.7-i2v", t2v: "wan-2.7-t2v" },
+] as const
+
+/**
+ * Resolve a (possibly base / cross-mode) video provider id to the concrete KIE
+ * id for the given execution mode. Accepts any member id of an alias group
+ * (base, i2v, or t2v) so existing workflows that stored either mode's id keep
+ * working. Non-aliased providers (single-id models, VEO, Replicate, etc.) pass
+ * through unchanged.
+ */
+export function resolveVideoProviderForMode(
+  provider: string,
+  mode: "image-to-video" | "text-to-video",
+): string {
+  for (const g of VIDEO_MODE_ALIASES) {
+    if (provider === g.base || provider === g.i2v || provider === g.t2v) {
+      return mode === "image-to-video" ? g.i2v : g.t2v
+    }
+  }
+  return provider
+}
+
+/**
+ * t2v twin ids hidden from the unified Generate Video picker — the i2v/base
+ * entry already represents both modes (execution remaps by image presence).
+ * Only includes twins whose `base` is NOT the t2v id, so the surviving picker
+ * entry is the base. Consumed by the frontend `VIDEO_GEN_MODELS` collapse.
+ */
+export const VIDEO_GEN_COLLAPSED_T2V_IDS: ReadonlySet<string> = new Set(
+  VIDEO_MODE_ALIASES.filter((g) => g.t2v !== g.base).map((g) => g.t2v),
+)
+
 /** Video-to-video providers */
 export const VIDEO_TO_VIDEO_PROVIDERS = [
   "wan",
