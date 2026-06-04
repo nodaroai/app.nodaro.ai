@@ -3034,6 +3034,12 @@ export async function lipSyncApi(
     still?: boolean
     poseStyle?: number
     expressionScale?: number
+    enableDynamicDuration?: boolean
+    disableMusicTrack?: boolean
+    enableSpeechEnhancement?: boolean
+    syncMode?: string
+    temperature?: number
+    activeSpeaker?: boolean
   } = {},
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { audioUrl }
@@ -3056,6 +3062,12 @@ export async function lipSyncApi(
   if (opts.still !== undefined) body.still = opts.still
   if (opts.poseStyle !== undefined) body.poseStyle = opts.poseStyle
   if (opts.expressionScale !== undefined) body.expressionScale = opts.expressionScale
+  if (opts.enableDynamicDuration !== undefined) body.enableDynamicDuration = opts.enableDynamicDuration
+  if (opts.disableMusicTrack !== undefined) body.disableMusicTrack = opts.disableMusicTrack
+  if (opts.enableSpeechEnhancement !== undefined) body.enableSpeechEnhancement = opts.enableSpeechEnhancement
+  if (opts.syncMode !== undefined) body.syncMode = opts.syncMode
+  if (opts.temperature !== undefined) body.temperature = opts.temperature
+  if (opts.activeSpeaker !== undefined) body.activeSpeaker = opts.activeSpeaker
   return apiJson("/v1/lip-sync", {
     body,
     workflowId: true,

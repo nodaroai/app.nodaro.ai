@@ -1118,6 +1118,57 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
         </>
       )}
 
+      {/* HeyGen Lipsync Precision params */}
+      {provider === "heygen-lipsync-precision" && (
+        <>
+          <div className="flex items-center justify-between">
+            <Label>Dynamic Duration</Label>
+            <Switch checked={data.enableDynamicDuration !== false} onCheckedChange={(v) => onUpdate({ enableDynamicDuration: v })} />
+          </div>
+          <p className="text-xs text-muted-foreground -mt-1">Adjust the output length to match the new audio (recommended)</p>
+          <div className="flex items-center justify-between">
+            <Label>Remove Music Track</Label>
+            <Switch checked={data.disableMusicTrack ?? false} onCheckedChange={(v) => onUpdate({ disableMusicTrack: v })} />
+          </div>
+          <p className="text-xs text-muted-foreground -mt-1">Strip background music from the source video</p>
+          <div className="flex items-center justify-between">
+            <Label>Speech Enhancement</Label>
+            <Switch checked={data.enableSpeechEnhancement ?? false} onCheckedChange={(v) => onUpdate({ enableSpeechEnhancement: v })} />
+          </div>
+          <p className="text-xs text-muted-foreground -mt-1">Improve speech clarity in the output</p>
+        </>
+      )}
+
+      {/* Sync Lipsync 2 Pro params */}
+      {provider === "lipsync-2-pro" && (
+        <>
+          <div>
+            <Label>Sync Mode</Label>
+            <Select value={data.syncMode ?? "loop"} onValueChange={(v) => onUpdate({ syncMode: v as LipSyncData["syncMode"] })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="loop">Loop</SelectItem>
+                <SelectItem value="bounce">Bounce</SelectItem>
+                <SelectItem value="cut_off">Cut off</SelectItem>
+                <SelectItem value="silence">Silence</SelectItem>
+                <SelectItem value="remap">Remap</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-1">Behavior when audio and video durations differ</p>
+          </div>
+          <div>
+            <Label>Temperature ({(data.temperature ?? 0.5).toFixed(1)})</Label>
+            <Slider min={0} max={1} step={0.1} value={[data.temperature ?? 0.5]} onValueChange={(vals) => onUpdate({ temperature: vals[0] })} />
+            <p className="text-xs text-muted-foreground mt-1">How expressive the lip sync can be (0–1)</p>
+          </div>
+          <div className="flex items-center justify-between">
+            <Label>Active Speaker Detection</Label>
+            <Switch checked={data.activeSpeaker ?? false} onCheckedChange={(v) => onUpdate({ activeSpeaker: v })} />
+          </div>
+          <p className="text-xs text-muted-foreground -mt-1">Lip-sync whoever is speaking in the clip</p>
+        </>
+      )}
+
       {/* Video-Retalking has no configurable params */}
       {provider === "video-retalking" && (
         <p className="text-xs text-muted-foreground">
@@ -1144,6 +1195,16 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
       {provider === "sadtalker" && (
         <p className="text-xs text-muted-foreground">
           Connect a portrait image and audio to generate a talking head with natural motion.
+        </p>
+      )}
+      {provider === "heygen-lipsync-precision" && (
+        <p className="text-xs text-muted-foreground">
+          Connect a video and an audio track to replace/dub the speech with high-accuracy avatar-inference lip sync. Billed per second of output.
+        </p>
+      )}
+      {provider === "lipsync-2-pro" && (
+        <p className="text-xs text-muted-foreground">
+          Connect a video (.mp4) and an audio track (.wav) for studio-grade lip sync. Billed per second of output.
         </p>
       )}
     </div>

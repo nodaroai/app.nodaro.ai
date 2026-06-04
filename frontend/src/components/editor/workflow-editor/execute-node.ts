@@ -4121,6 +4121,12 @@ export function executeNode(
             still: lsData.still,
             poseStyle: lsData.poseStyle,
             expressionScale: lsData.expressionScale,
+            enableDynamicDuration: lsData.enableDynamicDuration,
+            disableMusicTrack: lsData.disableMusicTrack,
+            enableSpeechEnhancement: lsData.enableSpeechEnhancement,
+            syncMode: lsData.syncMode,
+            temperature: lsData.temperature,
+            activeSpeaker: lsData.activeSpeaker,
           },
         );
       },

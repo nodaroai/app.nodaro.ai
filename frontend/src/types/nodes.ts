@@ -1865,6 +1865,14 @@ export type LipSyncData = {
   still?: boolean
   poseStyle?: number
   expressionScale?: number
+  // HeyGen Lipsync Precision params
+  enableDynamicDuration?: boolean
+  disableMusicTrack?: boolean
+  enableSpeechEnhancement?: boolean
+  // Sync Lipsync 2 Pro params
+  syncMode?: "loop" | "bounce" | "cut_off" | "silence" | "remap"
+  temperature?: number
+  activeSpeaker?: boolean
   /** See GenerateImageData.referenceOrder. */
   referenceOrder?: readonly string[]
   /** See GenerateImageData.suppressedCanonicalCharacterIds. */

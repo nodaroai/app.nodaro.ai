@@ -93,6 +93,8 @@ const PROVIDER_LABELS: Record<string, string> = {
   "wav2lip": "Wav2Lip",
   "video-retalking": "Video-Retalking",
   "sadtalker": "SadTalker",
+  "heygen-lipsync-precision": "HeyGen Lipsync Precision",
+  "lipsync-2-pro": "Lipsync 2 Pro",
 }
 
 interface ConnectedNodeInfo {

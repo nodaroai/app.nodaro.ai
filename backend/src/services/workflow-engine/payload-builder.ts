@@ -11,6 +11,7 @@ import { buildImagePrompt, assembleImageInput, buildScenePrompt, applyReferenceO
 import { collectIdentityLockClause as sharedCollectIdentityLockClause } from "@nodaro/shared"
 import { resolveTemplate, applyTemplate } from "@nodaro/shared"
 import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt, resolveVideoProviderForMode } from "@nodaro/shared"
+import { buildLipSyncCreditId, isPerSecondLipSyncProvider } from "@nodaro/shared"
 import { resolveNodeRefs } from "@nodaro/shared"
 import { composeCameraMotionHintFromConnections } from "@nodaro/shared"
 import {
@@ -2583,11 +2584,21 @@ export function buildPayload(
 
     case "lip-sync": {
       const provider = (data.provider as string) ?? "kling-avatar"
-      // infinitalk is tier-priced by resolution — `/v1/lip-sync` reserves
-      // credits using the composite `infinitalk:{resolution}` identifier.
+      // infinitalk is tier-priced by resolution. Per-second providers
+      // (kling-avatar(-pro), heygen-lipsync-precision, lipsync-2-pro) bucket by
+      // the persisted audio duration when it's known — mirroring the route's
+      // resolveLipSyncIdentifier. When the duration is unknown (e.g. audio is
+      // produced by an upstream node at runtime), fall back to the bare provider
+      // id: for HeyGen/Sync that bare entry is the 5-min ceiling (billing-safe),
+      // and kling-avatar(-pro) keep their existing bare reservation unchanged.
       const lipSyncResolution = (data.resolution as string | undefined) ?? "720p"
+      const audioDurationSec = typeof data.audioDurationSec === "number" ? data.audioDurationSec : undefined
       const lipSyncIdentifier =
-        provider === "infinitalk" ? `infinitalk:${lipSyncResolution}` : provider
+        provider === "infinitalk"
+          ? `infinitalk:${lipSyncResolution}`
+          : isPerSecondLipSyncProvider(provider) && audioDurationSec !== undefined
+            ? buildLipSyncCreditId(provider, audioDurationSec)
+            : provider
       return {
         jobName: "lip-sync",
         queueName: "video-generation",
@@ -2600,6 +2611,7 @@ export function buildPayload(
           prompt: resolvedInputs.prompt || data.prompt || "A person talking naturally",
           provider,
           resolution: data.resolution,
+          audioDurationSec,
           guidanceScale: data.guidanceScale,
           inferenceSteps: data.inferenceSteps,
           seed: data.seed,
@@ -2612,6 +2624,12 @@ export function buildPayload(
           still: data.still,
           poseStyle: data.poseStyle,
           expressionScale: data.expressionScale,
+          enableDynamicDuration: data.enableDynamicDuration,
+          disableMusicTrack: data.disableMusicTrack,
+          enableSpeechEnhancement: data.enableSpeechEnhancement,
+          syncMode: data.syncMode,
+          temperature: data.temperature,
+          activeSpeaker: data.activeSpeaker,
           usageLogId,
         },
       }

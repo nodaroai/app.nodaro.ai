@@ -532,6 +532,8 @@ export const LIP_SYNC_MODELS: readonly { value: LipSyncProvider; label: string; 
   { value: "wav2lip", label: "Wav2Lip", desc: "Fastest and cheapest, image or video input" },
   { value: "video-retalking", label: "Video-Retalking", desc: "Built-in face enhancement, clean output" },
   { value: "sadtalker", label: "SadTalker", desc: "Talking avatar from single image" },
+  { value: "heygen-lipsync-precision", label: "HeyGen Lipsync Precision", desc: "Avatar-inference dubbing on a video. Dynamic duration, premium." },
+  { value: "lipsync-2-pro", label: "Lipsync 2 Pro", desc: "Studio-grade sync.so lip sync. Video input, expressive." },
 ]
 
 export const TTS_MODELS: readonly { value: string; label: string; desc: string }[] = [

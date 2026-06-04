@@ -1,7 +1,8 @@
 /**
  * Replicate Lip-Sync Provider
  *
- * Supports four models: LatentSync, Wav2Lip, Video-Retalking, SadTalker.
+ * Supports six models: LatentSync, Wav2Lip, Video-Retalking, SadTalker,
+ * HeyGen Lipsync Precision, and Sync Lipsync 2 Pro.
  * Follows the VIDEO_MODEL_CONFIGS pattern from replicate/video.ts.
  */
 
@@ -36,6 +37,18 @@ const LIP_SYNC_MODEL_CONFIGS: Record<string, LipSyncModelConfig> = {
     faceParam: "source_image",
     audioParam: "driven_audio",
   },
+  // HeyGen Lipsync Precision — avatar-inference dubbing on an existing video.
+  "heygen-lipsync-precision": {
+    version: "03d0f07dd626f1ef31febe77bcd36109359811887a9e358803747a9da2707d28",
+    faceParam: "video",
+    audioParam: "audio",
+  },
+  // Sync Lipsync 2 Pro — studio-grade lip sync (sync.so).
+  "lipsync-2-pro": {
+    version: "11f76931a8a9dbaea7958865fced66b2ee03ec0fda2928dbc7cb432c7bb48c6c",
+    faceParam: "video",
+    audioParam: "audio",
+  },
 }
 
 export interface ReplicateLipSyncParams {
@@ -54,6 +67,14 @@ export interface ReplicateLipSyncParams {
   still?: boolean
   poseStyle?: number
   expressionScale?: number
+  // HeyGen Lipsync Precision
+  enableDynamicDuration?: boolean
+  disableMusicTrack?: boolean
+  enableSpeechEnhancement?: boolean
+  // Sync Lipsync 2 Pro
+  syncMode?: string
+  temperature?: number
+  activeSpeaker?: boolean
 }
 
 export async function replicateLipSync(
@@ -98,6 +119,20 @@ export async function replicateLipSync(
     if (params.still !== undefined) input.still = params.still
     if (params.poseStyle !== undefined) input.pose_style = params.poseStyle
     if (params.expressionScale !== undefined) input.expression_scale = params.expressionScale
+  }
+
+  // HeyGen Lipsync Precision params
+  if (provider === "heygen-lipsync-precision") {
+    if (params.enableDynamicDuration !== undefined) input.enable_dynamic_duration = params.enableDynamicDuration
+    if (params.disableMusicTrack !== undefined) input.disable_music_track = params.disableMusicTrack
+    if (params.enableSpeechEnhancement !== undefined) input.enable_speech_enhancement = params.enableSpeechEnhancement
+  }
+
+  // Sync Lipsync 2 Pro params
+  if (provider === "lipsync-2-pro") {
+    if (params.syncMode !== undefined) input.sync_mode = params.syncMode
+    if (params.temperature !== undefined) input.temperature = params.temperature
+    if (params.activeSpeaker !== undefined) input.active_speaker = params.activeSpeaker
   }
 
   console.log(`[Replicate:lipSync] Request:`, JSON.stringify({ version: cfg.version.slice(0, 12), input }, null, 2))

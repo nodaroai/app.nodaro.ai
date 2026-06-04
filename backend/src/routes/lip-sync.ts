@@ -6,7 +6,7 @@ import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { LIP_SYNC_PROVIDERS, buildLipSyncCreditId } from "@nodaro/shared"
+import { LIP_SYNC_PROVIDERS, buildLipSyncCreditId, isPerSecondLipSyncProvider } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 
 const lipSyncBody = z.object({
@@ -37,6 +37,14 @@ const lipSyncBody = z.object({
   still: z.boolean().optional(),
   poseStyle: z.number().int().min(0).max(45).optional(),
   expressionScale: z.number().min(0).max(3).optional(),
+  // HeyGen Lipsync Precision params
+  enableDynamicDuration: z.boolean().optional(),
+  disableMusicTrack: z.boolean().optional(),
+  enableSpeechEnhancement: z.boolean().optional(),
+  // Sync Lipsync 2 Pro params
+  syncMode: z.enum(["loop", "bounce", "cut_off", "silence", "remap"]).optional(),
+  temperature: z.number().min(0).max(1).optional(),
+  activeSpeaker: z.boolean().optional(),
   userId: z.string().uuid().optional(),
 })
 
@@ -57,10 +65,12 @@ function resolveLipSyncIdentifier(body: Record<string, unknown> | undefined): st
   if (provider === "seedance-2" || provider === "seedance-2-fast") {
     return `${provider}:8s:${(body?.resolution as string) ?? "720p"}-ref`
   }
-  // Kling AI Avatar 2.0 — per-second billing, bucketed by audio length. Missing
-  // audioDurationSec falls back to the 5-min bucket (worst case); the worker
-  // refunds the diff once actual KIE costTime is known.
-  if (provider === "kling-avatar" || provider === "kling-avatar-pro") {
+  // Per-second-billed providers (Kling AI Avatar 2.0, HeyGen Lipsync Precision,
+  // Sync Lipsync 2 Pro) — bucketed by audio length. Missing audioDurationSec
+  // falls back to the 5-min bucket (worst case); for Kling the worker refunds
+  // the diff once actual KIE costTime is known. Data-driven off
+  // PER_SECOND_LIP_SYNC_PROVIDERS so new per-second models wire themselves.
+  if (isPerSecondLipSyncProvider(provider)) {
     const dur = typeof body?.audioDurationSec === "number" ? body.audioDurationSec : undefined
     return buildLipSyncCreditId(provider, dur)
   }
@@ -84,6 +94,8 @@ export async function lipSyncRoutes(app: FastifyInstance) {
       guidanceScale, inferenceSteps, seed,
       pads, smooth, fps, resizeFactor,
       enhancer, preprocess, still, poseStyle, expressionScale,
+      enableDynamicDuration, disableMusicTrack, enableSpeechEnhancement,
+      syncMode, temperature, activeSpeaker,
     } = parsed.data
     const userId = req.userId
 
@@ -136,6 +148,8 @@ export async function lipSyncRoutes(app: FastifyInstance) {
       guidanceScale, inferenceSteps, seed,
       pads, smooth, fps, resizeFactor,
       enhancer, preprocess, still, poseStyle, expressionScale,
+      enableDynamicDuration, disableMusicTrack, enableSpeechEnhancement,
+      syncMode, temperature, activeSpeaker,
       usageLogId,
     })
 

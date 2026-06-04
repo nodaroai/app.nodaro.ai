@@ -527,6 +527,11 @@ export const LIP_SYNC_PROVIDERS = [
   "wav2lip",
   "video-retalking",
   "sadtalker",
+  // HeyGen Lipsync Precision + Sync Lipsync 2 Pro — Replicate-hosted, video-input
+  // dubbing models billed per second of output. Routed through replicateLipSync;
+  // priced per-second via buildLipSyncCreditId (see lip-sync-pricing.ts).
+  "heygen-lipsync-precision",
+  "lipsync-2-pro",
   // Seedance 2 / 2 Fast — not "lip-sync models" per se, but ByteDance's
   // multimodal video models do native phoneme-level lip sync in 8+
   // languages when fed `reference_audio_urls` alongside a `first_frame_url`.
@@ -550,12 +555,16 @@ export const REPLICATE_LIP_SYNC_PROVIDERS = new Set([
   "wav2lip",
   "video-retalking",
   "sadtalker",
+  "heygen-lipsync-precision",
+  "lipsync-2-pro",
 ] as const)
 
 /** Lip-sync providers that require video input (not image) */
 export const VIDEO_INPUT_LIP_SYNC_PROVIDERS = new Set([
   "latentsync",
   "video-retalking",
+  "heygen-lipsync-precision",
+  "lipsync-2-pro",
 ] as const)
 
 /** Lip-sync providers that accept either video or image input */

@@ -527,6 +527,8 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
     guidanceScale, inferenceSteps, seed,
     pads, smooth, fps, resizeFactor,
     enhancer, preprocess, still, poseStyle, expressionScale,
+    enableDynamicDuration, disableMusicTrack, enableSpeechEnhancement,
+    syncMode, temperature, activeSpeaker,
   } = job.data as {
     jobId: string
     imageUrl?: string
@@ -548,6 +550,12 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
     still?: boolean
     poseStyle?: number
     expressionScale?: number
+    enableDynamicDuration?: boolean
+    disableMusicTrack?: boolean
+    enableSpeechEnhancement?: boolean
+    syncMode?: string
+    temperature?: number
+    activeSpeaker?: boolean
   }
 
   const resolvedProvider = provider ?? "kling-avatar"
@@ -590,7 +598,7 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
       resolvedProvider,
       faceUrl,
       audioUrl,
-      { guidanceScale, inferenceSteps, seed, pads, smooth, fps, resizeFactor, enhancer, preprocess, still, poseStyle, expressionScale },
+      { guidanceScale, inferenceSteps, seed, pads, smooth, fps, resizeFactor, enhancer, preprocess, still, poseStyle, expressionScale, enableDynamicDuration, disableMusicTrack, enableSpeechEnhancement, syncMode, temperature, activeSpeaker },
       { onTaskCreated: lipSyncOnTaskCreated },
     )
     resultUrl = outUrl

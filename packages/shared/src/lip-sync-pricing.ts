@@ -30,6 +30,12 @@ export const LIP_SYNC_MAX_AUDIO_SECONDS: Record<string, number> = {
   "kling-avatar": 300,
   "kling-avatar-pro": 300,
   "infinitalk": 15,
+  // HeyGen Lipsync Precision + Sync Lipsync 2 Pro — billed per output second.
+  // 5-min ceiling for credit bucketing (mirrors kling-avatar). MUST be set:
+  // the default fallback below is 15s, which would clamp every request to the
+  // 15s bucket and silently under-charge long clips.
+  "heygen-lipsync-precision": 300,
+  "lipsync-2-pro": 300,
 }
 
 export function getLipSyncMaxAudioSeconds(provider: string): number {
@@ -37,7 +43,12 @@ export function getLipSyncMaxAudioSeconds(provider: string): number {
 }
 
 /** Providers whose credit cost varies with audio duration. */
-const PER_SECOND_LIP_SYNC_PROVIDERS = new Set(["kling-avatar", "kling-avatar-pro"])
+const PER_SECOND_LIP_SYNC_PROVIDERS = new Set([
+  "kling-avatar",
+  "kling-avatar-pro",
+  "heygen-lipsync-precision",
+  "lipsync-2-pro",
+])
 
 export function isPerSecondLipSyncProvider(provider: string): boolean {
   return PER_SECOND_LIP_SYNC_PROVIDERS.has(provider)
