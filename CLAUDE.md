@@ -113,6 +113,7 @@ Enterprise code lives under `backend/src/ee/` and `frontend/src/ee/` and is gove
 | 11 | `frontend/src/lib/pricing-data.ts` | `PRICING_TIERS` if tier features/prices change |
 | 12 | `packages/shared/src/node-default-mappings.ts` | `QUALITY_MAP` + `deriveLinkedFields` — each entry MUST declare `field: "resolution" \| "quality"` (see pitfall 4) |
 | 12b | Config panel for the node type | Provider-aware dropdowns MUST have `useEffect([currentProvider])` that snaps stale values to a valid option, or clears them when the new provider has no such lever (see pitfall 5). Reference: `image-configs.tsx::GenerateImageConfig`, `video-configs.tsx::ImageToVideoConfig`, `audio-configs.tsx::LipSyncConfig` |
+| 13 | `backend/skills/nodes/<type>.md` (generated) | If step 1 added/renamed node data fields, regenerate: `cd backend && npm run gen:skills`. The `gen:skills:check` CI job hard-fails on drift (see pitfall 6). |
 
 **Common pitfalls (each has caused a recurring outage):**
 1. **Step 2b registry drift** — a provider rendered in JSX but missing from `model-options.ts` won't have its stale state cleared by the fail-safe useEffect.
@@ -120,6 +121,7 @@ Enterprise code lives under `backend/src/ee/` and `frontend/src/ee/` and is gove
 3. **Step 9 DB migration forgotten** — model invisible in `/admin/models` (the admin UI reads from DB only, not `STATIC_CREDIT_COSTS`). Audit with `audit-credits` skill.
 4. **Step 12 `field` discriminator wrong** — silently writes a quality value into `data.resolution` (or vice versa), then the route's Zod enum rejects at generate-time.
 5. **Step 12b fail-safe useEffect missing** — node configured for provider A carries A's resolution after switching to B; dropdown hides while data persists; B's Zod enum rejects A's value.
+6. **Step 13 `gen:skills` not run** — `backend/skills/` docs are generated from `nodes.ts`; changing node data fields without `npm run gen:skills` fails the `gen:skills:check` CI ("DRIFT DETECTED"), red on dev AND main. The script needs `INTERNAL_ORCHESTRATOR_SECRET` (≥32 chars, NOT in `.env`) — pass inline: `INTERNAL_ORCHESTRATOR_SECRET="<32+ chars>" npm run gen:skills`.
 
 ### New Node Registration (CRITICAL)
 
@@ -146,6 +148,7 @@ Enterprise code lives under `backend/src/ee/` and `frontend/src/ee/` and is gove
 | 17 | `frontend/src/components/editor/workflow-editor/execution-graph.ts` | `extractNodeOutput()` |
 | 18 | `frontend/src/components/editor/workflow-editor/node-input-resolver.ts` | Input source mapping |
 | 19 | `backend/src/lib/node-registry.ts` | `NODE_REGISTRY` entry — descriptor (label, category, outputType, optional creditCost/inputSchema/providers/capabilities) for `GET /v1/nodes` discovery API |
+| 20 | `backend/skills/` (generated — do NOT hand-edit) | Run `cd backend && npm run gen:skills` to regenerate node skill docs + the `workflow-editor.md` catalog from `NODE_DEFINITIONS`. `gen:skills:check` CI hard-fails on drift; the script needs `INTERNAL_ORCHESTRATOR_SECRET` (≥32 chars, NOT in `.env`) passed inline. |
 
 **Steps 8 and 9 are separate node lists — missing either means the node won't appear in that UI.**
 
