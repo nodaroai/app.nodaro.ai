@@ -419,6 +419,30 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
     },
   },
   {
+    type: "ai-avatar",
+    label: "AI Avatar",
+    category: "ai-video",
+    description: "Generate a talking-avatar video from a HeyGen avatar + voice + script, or wired audio.",
+    outputType: "video",
+    // Duration-bucketed (heygen-<engine>:<resolution>:<bucket>s in STATIC_CREDIT_COSTS).
+    // 2 engines × 3 resolutions × 7 buckets (30–900s); range shown is for avatar-iv 720p.
+    creditCost: "135-4050",
+    providers: ["heygen"],
+    capabilities: ["text-to-speech", "audio-input", "captions"],
+    inputSchema: {
+      fields: [
+        { key: "avatarId", type: "text", required: true },
+        { key: "speechMode", type: "select", required: true, options: ["text", "audio"] },
+        { key: "script", type: "text" },
+        { key: "voiceId", type: "text" },
+        { key: "audioUrl", type: "audio-url" },
+        { key: "engine", type: "select", options: ["avatar-iv", "avatar-v"] },
+        { key: "resolution", type: "select", options: ["720p", "1080p", "4k"] },
+        { key: "aspectRatio", type: "select", options: ["16:9", "9:16"] },
+      ],
+    },
+  },
+  {
     type: "motion-transfer",
     label: "Motion Transfer",
     category: "ai-video",

@@ -3012,6 +3012,40 @@ export async function speechToVideoApi(opts: {
   })
 }
 
+export async function runAiAvatar(input: {
+  engine?: "avatar-v" | "avatar-iv"
+  avatarId: string
+  speechMode: "text" | "audio"
+  script?: string
+  voiceId?: string
+  voiceSpeed?: number
+  audioUrl?: string
+  resolution?: "720p" | "1080p" | "4k"
+  aspectRatio?: "16:9" | "9:16"
+  caption?: boolean
+  workflowId?: string
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = {
+    avatarId: input.avatarId,
+    speechMode: input.speechMode,
+  }
+  if (input.engine !== undefined) body.engine = input.engine
+  if (input.script !== undefined) body.script = input.script
+  if (input.voiceId !== undefined) body.voiceId = input.voiceId
+  if (input.voiceSpeed !== undefined) body.voiceSpeed = input.voiceSpeed
+  if (input.audioUrl !== undefined) body.audioUrl = input.audioUrl
+  if (input.resolution !== undefined) body.resolution = input.resolution
+  if (input.aspectRatio !== undefined) body.aspectRatio = input.aspectRatio
+  if (input.caption !== undefined) body.caption = input.caption
+  if (input.userId !== undefined) body.userId = input.userId
+  return apiJson("/v1/ai-avatar", {
+    body,
+    workflowId: true,
+    label: "Failed to start AI avatar generation",
+  })
+}
+
 export async function lipSyncApi(
   imageUrl: string | undefined,
   audioUrl: string,
@@ -4066,6 +4100,61 @@ export async function getVoices(): Promise<ElevenLabsVoice[]> {
   const res = await fetch(`${API_BASE_URL}/v1/voices`)
   if (!res.ok) {
     throw new Error("Failed to fetch voices")
+  }
+  const body = await res.json()
+  return body.voices
+}
+
+// ---------------------------------------------------------------------------
+// HeyGen catalog — avatar looks + voices (public endpoints)
+// ---------------------------------------------------------------------------
+
+/** A single photo-avatar look from /v3/avatars/looks (photo_avatar type only). */
+export interface HeygenAvatar {
+  avatarId: string
+  groupId?: string
+  name: string
+  gender: string
+  previewImageUrl: string
+  defaultVoiceId?: string
+  preferredOrientation?: string
+}
+
+/** A single voice from /v2/voices. */
+export interface HeygenVoice {
+  voiceId: string
+  name: string
+  language: string
+  gender: string
+  previewAudio: string
+  supportPause: boolean
+  emotionSupport: boolean
+  supportLocale: boolean
+}
+
+/**
+ * Fetches the list of HeyGen photo-avatar looks.
+ * Public endpoint — no auth required.
+ * Returns [] when HEYGEN_API_KEY is not configured on the server.
+ */
+export async function getHeygenAvatars(): Promise<HeygenAvatar[]> {
+  const res = await fetch(`${API_BASE_URL}/v1/heygen/avatars`)
+  if (!res.ok) {
+    throw new Error("Failed to fetch HeyGen avatars")
+  }
+  const body = await res.json()
+  return body.avatars
+}
+
+/**
+ * Fetches the list of HeyGen voices.
+ * Public endpoint — no auth required.
+ * Returns [] when HEYGEN_API_KEY is not configured on the server.
+ */
+export async function getHeygenVoices(): Promise<HeygenVoice[]> {
+  const res = await fetch(`${API_BASE_URL}/v1/heygen/voices`)
+  if (!res.ok) {
+    throw new Error("Failed to fetch HeyGen voices")
   }
   const body = await res.json()
   return body.voices

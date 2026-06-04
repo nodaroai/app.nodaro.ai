@@ -771,6 +771,7 @@ const VIDEO_RESULT_TYPES = new Set([
   // downstream consumer from a previously-executed face-swap without re-running.
   "face-swap",
   "video-retake",
+  "ai-avatar",
   "suno-music-video",
   "render-video",
   "combine-videos",

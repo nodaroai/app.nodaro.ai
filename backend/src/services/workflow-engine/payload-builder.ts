@@ -2676,6 +2676,38 @@ export function buildPayload(
       }
     }
 
+    case "ai-avatar": {
+      // The `script` field is verbatim TTS — do NOT fold cinematography or
+      // identity hints into it (unlike the speech-to-video case). The avatar
+      // reads it aloud exactly as written.
+      const aiAvatarEngine = (data.engine as string) ?? "avatar-iv"
+      const aiAvatarResolution = (data.resolution as string) ?? "720p"
+      // Credit identifier is resolved by the route's creditGuard at reservation
+      // time (resolveAiAvatarCreditId), NOT here — payload-builder only needs
+      // the CREDIT_COSTS entry key for the fallback modelIdentifier path.
+      // We pass a representative identifier so the orchestrator can report it.
+      const aiAvatarCreditId = `heygen-${aiAvatarEngine}:${aiAvatarResolution}:330s`
+      return {
+        jobName: "ai-avatar",
+        queueName: "video-generation",
+        modelIdentifier: aiAvatarCreditId,
+        payload: {
+          jobId,
+          engine: aiAvatarEngine,
+          avatarId: data.avatarId,
+          speechMode: data.speechMode ?? "text",
+          script: resolvedInputs.script ?? (data.script as string | undefined),
+          voiceId: data.voiceId,
+          voiceSpeed: data.voiceSpeed,
+          audioUrl: resolvedInputs.audioUrl || (data.audioUrl as string | undefined),
+          resolution: aiAvatarResolution,
+          aspectRatio: data.aspectRatio ?? "16:9",
+          caption: data.caption,
+          usageLogId,
+        },
+      }
+    }
+
     case "motion-transfer": {
       const mtProvider = (data.provider as string) ?? "kling"
       const mtResolution = (data.resolution as string) ?? "720p"

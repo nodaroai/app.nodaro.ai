@@ -298,6 +298,45 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   "suno-add-vocals":   { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 },
   "suno-convert-wav":  { provider: "KIE.ai",    providerCostUsd: 0.002, markupPct: 25 },  // 0.4 KIE cr
   "suno-upload-extend": { provider: "KIE.ai",   providerCostUsd: 0.060, markupPct: 25 },
+  // ── AI Avatar (HeyGen) — duration-bucketed reserve holds (metered, actual = durationSec × $/sec) ──
+  // Format: `heygen-<engine>:<resolution>:<bucket>s`
+  // providerCostUsd = ceiling for the bucket (actual charge is metered at commit, surplus refunded).
+  // avatar-iv 720p ($0.06/s) — anchored by live test
+  "heygen-avatar-iv:720p:30s":  { provider: "HeyGen", providerCostUsd: 1.80, markupPct: 25 },
+  "heygen-avatar-iv:720p:60s":  { provider: "HeyGen", providerCostUsd: 3.60, markupPct: 25 },
+  "heygen-avatar-iv:720p:120s": { provider: "HeyGen", providerCostUsd: 7.20, markupPct: 25 },
+  "heygen-avatar-iv:720p:240s": { provider: "HeyGen", providerCostUsd: 14.40, markupPct: 25 },
+  "heygen-avatar-iv:720p:330s": { provider: "HeyGen", providerCostUsd: 19.80, markupPct: 25 },
+  // avatar-iv 1080p ($0.08/s — rounded from ~$4/min)
+  "heygen-avatar-iv:1080p:30s":  { provider: "HeyGen", providerCostUsd: 2.40, markupPct: 25 },
+  "heygen-avatar-iv:1080p:60s":  { provider: "HeyGen", providerCostUsd: 4.80, markupPct: 25 },
+  "heygen-avatar-iv:1080p:120s": { provider: "HeyGen", providerCostUsd: 9.60, markupPct: 25 },
+  "heygen-avatar-iv:1080p:240s": { provider: "HeyGen", providerCostUsd: 19.20, markupPct: 25 },
+  "heygen-avatar-iv:1080p:330s": { provider: "HeyGen", providerCostUsd: 26.40, markupPct: 25 },
+  // avatar-iv 4k ($0.16/s — estimate, ~2× 1080p)
+  "heygen-avatar-iv:4k:30s":  { provider: "HeyGen", providerCostUsd: 4.80, markupPct: 25 },
+  "heygen-avatar-iv:4k:60s":  { provider: "HeyGen", providerCostUsd: 9.60, markupPct: 25 },
+  "heygen-avatar-iv:4k:120s": { provider: "HeyGen", providerCostUsd: 19.20, markupPct: 25 },
+  "heygen-avatar-iv:4k:240s": { provider: "HeyGen", providerCostUsd: 38.40, markupPct: 25 },
+  "heygen-avatar-iv:4k:330s": { provider: "HeyGen", providerCostUsd: 52.80, markupPct: 25 },
+  // avatar-v 720p ($0.08/s — UNPINNED ESTIMATE; confirmed before avatar-v ships)
+  "heygen-avatar-v:720p:30s":  { provider: "HeyGen", providerCostUsd: 2.40, markupPct: 25 },
+  "heygen-avatar-v:720p:60s":  { provider: "HeyGen", providerCostUsd: 4.80, markupPct: 25 },
+  "heygen-avatar-v:720p:120s": { provider: "HeyGen", providerCostUsd: 9.60, markupPct: 25 },
+  "heygen-avatar-v:720p:240s": { provider: "HeyGen", providerCostUsd: 19.20, markupPct: 25 },
+  "heygen-avatar-v:720p:330s": { provider: "HeyGen", providerCostUsd: 26.40, markupPct: 25 },
+  // avatar-v 1080p ($0.10/s — UNPINNED ESTIMATE)
+  "heygen-avatar-v:1080p:30s":  { provider: "HeyGen", providerCostUsd: 3.00, markupPct: 25 },
+  "heygen-avatar-v:1080p:60s":  { provider: "HeyGen", providerCostUsd: 6.00, markupPct: 25 },
+  "heygen-avatar-v:1080p:120s": { provider: "HeyGen", providerCostUsd: 12.00, markupPct: 25 },
+  "heygen-avatar-v:1080p:240s": { provider: "HeyGen", providerCostUsd: 24.00, markupPct: 25 },
+  "heygen-avatar-v:1080p:330s": { provider: "HeyGen", providerCostUsd: 33.00, markupPct: 25 },
+  // avatar-v 4k ($0.20/s — UNPINNED ESTIMATE)
+  "heygen-avatar-v:4k:30s":  { provider: "HeyGen", providerCostUsd: 6.00, markupPct: 25 },
+  "heygen-avatar-v:4k:60s":  { provider: "HeyGen", providerCostUsd: 12.00, markupPct: 25 },
+  "heygen-avatar-v:4k:120s": { provider: "HeyGen", providerCostUsd: 24.00, markupPct: 25 },
+  "heygen-avatar-v:4k:240s": { provider: "HeyGen", providerCostUsd: 48.00, markupPct: 25 },
+  "heygen-avatar-v:4k:330s": { provider: "HeyGen", providerCostUsd: 66.00, markupPct: 25 },
   // ── Processing ──
   "topaz":             { provider: "KIE.ai",    providerCostUsd: null,  markupPct: 25 },  // variable
   "speech-to-video":   { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 },  // 12 KIE cr (480p)

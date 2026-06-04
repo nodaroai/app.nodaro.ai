@@ -23,6 +23,13 @@ const PickerInputCard = lazy(() =>
   import("./input-cards/picker-input-card").then((m) => ({ default: m.PickerInputCard })),
 )
 
+// Lazy-load the ai-avatar card: pulls in the HeyGen avatar+voice pickers
+// which import @tanstack/react-virtual and the catalog fetchers — keep them
+// out of the main app-runner chunk for apps that don't use ai-avatar nodes.
+const AiAvatarInputCard = lazy(() =>
+  import("./input-cards/ai-avatar-input-card").then((m) => ({ default: m.AiAvatarInputCard })),
+)
+
 /** System-wide ceiling for fan-out items. Will be fetched from app_settings in future. */
 export const DEFAULT_SYSTEM_MAX_FANOUT = 20
 
@@ -180,6 +187,19 @@ function InputCardInner({
         />
       )
     }
+
+    case "ai-avatar":
+      return (
+        <Suspense fallback={null}>
+          <AiAvatarInputCard
+            node={node}
+            isFullscreen={isFullscreen}
+            inputValues={inputValues}
+            onUpdateInput={onUpdateInput}
+            readOnly={readOnly}
+          />
+        </Suspense>
+      )
 
     default: {
       // Parameter pickers (setting, mood, animal, etc.) get their own

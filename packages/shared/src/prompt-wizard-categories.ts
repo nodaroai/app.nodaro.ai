@@ -288,6 +288,9 @@ export const PROVIDER_CAPABILITIES: Record<string, Record<string, string>> = {
   "speech-to-video": {
     "wan-speech": "Wan 2.2 speech-driven video generation",
   },
+  "ai-avatar": {
+    "heygen": "HeyGen — industry-standard AI avatars; Avatar IV for established quality, Avatar V for premium fidelity",
+  },
   "generate-music": {
     "minimax": "General music generation, multiple genres",
   },

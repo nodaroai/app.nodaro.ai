@@ -5,6 +5,14 @@ import { FREE_TIER_RESTRICTIONS, TIER_STORAGE_LIMITS } from "./stripe-config.js"
 import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier } from "@nodaro/shared"
 import { buildLlmCreditIdentifier } from "@nodaro/shared"
 import { flux2BaseCredits, FLUX2_RES_MP, type Flux2Model } from "@nodaro/shared"
+import {
+  AI_AVATAR_DURATION_BUCKETS,
+  AI_AVATAR_RATE_USD_PER_SEC,
+  aiAvatarHoldCredits,
+  resolveAiAvatarCreditId,
+  type AiAvatarEngine,
+  type AiAvatarResolution,
+} from "@nodaro/shared"
 
 // ── Flux 2 per-MP×ref static costs (generated from flux2BaseCredits formula) ──
 // Identifier format: `<model>:<mp>MP:<n>ref` (e.g. `flux-2-max:2MP:1ref`)
@@ -14,6 +22,23 @@ for (const m of ["flux-2-klein", "flux-2-pro", "flux-2-max"] as Flux2Model[]) {
   for (const mp of FLUX2_RES_MP) {
     for (let r = 0; r <= 8; r++) {
       FLUX2_STATIC[`${m}:${mp}MP:${r}ref`] = flux2BaseCredits(m, Number(mp), r)
+    }
+  }
+}
+
+// ── AI Avatar (HeyGen) duration-bucketed reserve holds ──
+// 42 ids: 2 engines × 3 resolutions × 7 buckets (30/60/120/240/360/600/900s).
+// Formula: [formula removed]  — the 1.5× safety factor guarantees the hold
+// is always ≥ the metered actual at default configured pricing factor (1.25×). The actual
+// charge is recomputed at job completion by commitJobCredits/computeActualCredits
+// from the provider's real USD cost; commit_credits refunds any surplus.
+// A missing id causes a hard 503 `price_not_configured` at runtime.
+const AI_AVATAR_STATIC: Record<string, number> = {}
+for (const engine of Object.keys(AI_AVATAR_RATE_USD_PER_SEC) as AiAvatarEngine[]) {
+  for (const resolution of Object.keys(AI_AVATAR_RATE_USD_PER_SEC[engine]) as AiAvatarResolution[]) {
+    for (const bucketSec of AI_AVATAR_DURATION_BUCKETS) {
+      const id = `heygen-${engine}:${resolution}:${bucketSec}s`
+      AI_AVATAR_STATIC[id] = aiAvatarHoldCredits(engine, resolution, bucketSec)
     }
   }
 }
@@ -150,6 +175,10 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // Full per-MP×ref grid for Flux 2 family (108 entries, see flux2BaseCredits formula).
   // Identifier format: `<model>:<mp>MP:<n>ref` (mp ∈ {0.5,1,2,4}, n ∈ 0..8).
   ...FLUX2_STATIC,
+  // AI Avatar (HeyGen) — 30 duration-bucketed reserve holds (2 engines × 3 resolutions × 5 buckets).
+  // Format: `heygen-<engine>:<resolution>:<bucketSec>s`  e.g. `heygen-avatar-iv:720p:60s`.
+  ***REDACTED-OSS-SCRUB***
+  ...AI_AVATAR_STATIC,
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
   // ── Image Editing ──
@@ -814,6 +843,10 @@ export const CREDIT_COSTS: Record<string, (data: Record<string, unknown>) => str
   // Reduce (fan-in): composite key = `reduce:<strategyId>`. Default to
   // `concat` (the cheapest pure-logic strategy) when strategyId is absent.
   "reduce": (data) => `reduce:${(data as { strategyId?: string }).strategyId ?? "concat"}`,
+
+  // AI Avatar (HeyGen): delegates to resolveAiAvatarCreditId — same body-reading
+  // logic the creditGuard preHandler uses directly at request time.
+  "ai-avatar": (data) => resolveAiAvatarCreditId(data),
 }
 
 // Tier order for restriction checks

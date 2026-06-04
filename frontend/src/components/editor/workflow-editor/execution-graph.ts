@@ -338,6 +338,7 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     type === "generate-video" ||
     type === "lip-sync" ||
     type === "speech-to-video" ||
+    type === "ai-avatar" ||
     type === "motion-transfer" ||
     type === "video-upscale" ||
     type === "extend-video" ||
@@ -854,6 +855,7 @@ export const VIDEO_SOURCE_TYPES_FOR_RENDER = new Set([
   "combine-videos",
   "lip-sync",
   "speech-to-video",
+  "ai-avatar",
   "motion-transfer",
   "video-upscale",
   "extend-video",

@@ -185,6 +185,7 @@ export const EXECUTABLE_TYPES = new Set([
   "transcribe",
   "lip-sync",
   "speech-to-video",
+  "ai-avatar",
   "motion-transfer",
   "video-upscale",
   "extend-video",

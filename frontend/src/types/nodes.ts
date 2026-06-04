@@ -1913,6 +1913,37 @@ export type SpeechToVideoData = {
   pausedAtTime?: number
 }
 
+// AI Avatar (HeyGen): talking-avatar video from a curated photo-avatar + voice/script or wired audio
+export type AiAvatarData = {
+  [key: string]: unknown
+  label: string
+  provider: "heygen"
+  engine: "avatar-v" | "avatar-iv"
+  avatarId: string
+  avatarGroupId?: string
+  avatarName?: string
+  avatarPreviewUrl?: string        // preview_image_url from /v3/avatars/looks (image only — no video URL on looks)
+  speechMode: "text" | "audio"
+  script?: string                  // text mode — DISTINCT verbatim field, NOT `prompt`; ≤5000 chars
+  voiceId?: string
+  voiceName?: string
+  voiceSpeed?: number              // 0.5–1.5, default 1.0
+  audioUrl?: string                // audio mode (wired upstream audio)
+  resolution: "720p" | "1080p" | "4k"
+  aspectRatio: "16:9" | "9:16"
+  caption?: boolean
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedVideoUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
+  currentJobId?: string
+  currentJobProgress?: number
+  videoPlayState?: "loop" | "paused" | "stopped"
+  pausedAtTime?: number
+}
+
 // Motion Transfer: Apply motion from video to image character
 // KIE.ai models: kling-2.6/motion-control, kling-3.0/motion-control
 export type MotionTransferData = {
@@ -4311,6 +4342,7 @@ export type SceneNodeData =
   | ManualEditData
   | LipSyncData
   | SpeechToVideoData
+  | AiAvatarData
   | MotionTransferData
   | VideoUpscaleData
   | ExtendVideoData
@@ -4478,6 +4510,7 @@ export type SceneNodeType =
   | "manual-edit"
   | "lip-sync"
   | "speech-to-video"
+  | "ai-avatar"
   | "motion-transfer"
   | "video-upscale"
   | "extend-video"
@@ -6091,6 +6124,47 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       generatedResults: [],
       activeResultIndex: 0,
     } as SpeechToVideoData,
+  },
+  // AI Avatar (HeyGen V1 — default engine avatar-iv per ship gate)
+  {
+    type: "ai-avatar",
+    label: "AI Avatar",
+    category: "ai",
+    creditCost: 9,
+    inputs: ["script", "audio"],
+    outputs: ["video"],
+    defaultData: {
+      label: "AI Avatar",
+      provider: "heygen",
+      engine: "avatar-iv",
+      avatarId: "",
+      speechMode: "text",
+      resolution: "720p",
+      aspectRatio: "16:9",
+      caption: false,
+      fieldMappings: {},
+      executionStatus: "idle",
+      generatedResults: [],
+      activeResultIndex: 0,
+    } as AiAvatarData,
+    exposableOutputs: [{ key: "result", label: "Result", outputType: "video" as const }],
+    exposableFields: [
+      {
+        key: "engine", label: "Engine", type: "select" as const,
+        options: [
+          { value: "avatar-iv", label: "Avatar IV" },
+          { value: "avatar-v", label: "Avatar V" },
+        ],
+      },
+      {
+        key: "resolution", label: "Resolution", type: "select" as const,
+        options: [
+          { value: "720p", label: "720p" },
+          { value: "1080p", label: "1080p" },
+          { value: "4k", label: "4K" },
+        ],
+      },
+    ],
   },
   // Motion Transfer (Kling 2.6 Motion Control)
   {

@@ -31,6 +31,7 @@ import {
   isValidLipSyncConnection,
   isValidSpeechToVideoConnection,
   isValidMotionTransferConnection,
+  isValidAiAvatarConnection,
 } from "./video-producer-handles"
 import {
   IDENTITY_HANDLE_LABELS,
@@ -445,6 +446,10 @@ export const TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEnt
   ],
   "motion-transfer": [
     { handleId: "video", label: VIDEO_PRODUCER_HANDLE_LABELS["motion-transfer"].video, accepts: (s) => isValidMotionTransferConnection("video", s) },
+  ],
+  "ai-avatar": [
+    { handleId: "script", label: VIDEO_PRODUCER_HANDLE_LABELS["ai-avatar"].script, accepts: (s) => isValidAiAvatarConnection("script", s, isVisualPickerType) },
+    { handleId: "audio",  label: VIDEO_PRODUCER_HANDLE_LABELS["ai-avatar"].audio,  accepts: (s) => isValidAiAvatarConnection("audio",  s, isVisualPickerType) },
   ],
 
   // ─── Identity nodes (Phase 23 of typed-handles migration) ────────────

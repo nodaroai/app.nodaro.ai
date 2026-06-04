@@ -393,6 +393,21 @@ export type { LipSyncDurationBucket } from "./lip-sync-pricing.js"
 export { flux2CostUsd, flux2BaseCredits, isFlux2Model, FLUX2_RES_MP } from "./flux2-pricing.js"
 export type { Flux2Model } from "./flux2-pricing.js"
 
+export {
+  AI_AVATAR_RATE_USD_PER_SEC,
+  AI_AVATAR_MAX_DURATION_SEC,
+  AI_AVATAR_DURATION_BUCKETS,
+  AI_AVATAR_RESERVE_IDS,
+  aiAvatarUsdCost,
+  aiAvatarReserveCreditId,
+  aiAvatarHoldCredits,
+  resolveAiAvatarCreditId,
+  aiAvatarReserveCeilingUsd,
+  estimateScriptDurationSec,
+  pickAiAvatarBucket,
+} from "./ai-avatar-pricing.js"
+export type { AiAvatarEngine, AiAvatarResolution, AiAvatarDurationBucket } from "./ai-avatar-pricing.js"
+
 export { splitByLoopDelimiter, spliceDelimitedRows, NO_SPLIT_DELIMITER } from "./loop-delimiter.js"
 
 export { splitGeneratedItems, GENERATE_TEXT_DELIMITER } from "./generate-text-items.js"
