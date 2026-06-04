@@ -24,6 +24,7 @@ import { mapScriptSceneToNodeData, getSceneCharacterNames } from "@/types/nodes"
 import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS } from "@/components/editor/config-panels/model-options"
 import { ModelSelectOption } from "@/components/editor/config-panels/model-select-option"
 import { prefetchModelCredits } from "@/ee/hooks/use-model-credits"
+import { WaveformAudioPlayer } from "@/components/audio-player"
 
 type WizardStep = 1 | 2 | 3 | 4
 
@@ -1081,11 +1082,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
                     </div>
                   )}
                   {activeAudio && (
-                    <audio
-                      src={activeAudio.url}
-                      controls
-                      className="w-full h-7 [&::-webkit-media-controls-panel]:h-7"
-                    />
+                    <WaveformAudioPlayer url={activeAudio.url} variant="compact" className="w-full" />
                   )}
                 </div>
               )
@@ -1193,11 +1190,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
                   </div>
                   {/* Audio player */}
                   {ca.url && (
-                    <audio
-                      src={ca.url}
-                      controls
-                      className="w-full h-7 [&::-webkit-media-controls-panel]:h-7"
-                    />
+                    <WaveformAudioPlayer url={ca.url} variant="compact" className="w-full" />
                   )}
                   {!ca.url && (
                     <p className="text-[9px] text-muted-foreground italic">No audio generated yet</p>

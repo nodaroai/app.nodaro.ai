@@ -30,13 +30,40 @@ export async function getElk(): Promise<ElkInstance> {
 export const ELK_LAYOUT_OPTIONS = {
   "elk.algorithm": "layered",
   "elk.direction": "RIGHT",
-  "elk.spacing.nodeNode": "40",
-  "elk.layered.spacing.nodeNodeBetweenLayers": "60",
+  // Airy gaps — nodes here are large media cards (~200–650px), so small
+  // spacings read as cramped. Vertical gap between stacked siblings, horizontal
+  // gap between columns, and the gap between disconnected sub-graphs.
+  "elk.spacing.nodeNode": "140",
+  "elk.layered.spacing.nodeNodeBetweenLayers": "200",
   "elk.edgeRouting": "ORTHOGONAL",
   "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
   "elk.separateConnectedComponents": "true",
-  "elk.spacing.componentComponent": "80",
+  "elk.spacing.componentComponent": "240",
 } as const
+
+/**
+ * Vertical room (px) reserved above each node for its floating label.
+ * `EditableNodeLabel` is rendered `absolute -top-6` — ~24px ABOVE the node and
+ * OUTSIDE React Flow's `measured.height`. ELK only sees the measured box, so
+ * without this it packs nodes such that the lower node's label overlaps the
+ * node above it, collapsing the visible gap (worst on short nodes like text
+ * prompts). Folding it into each node's height makes ELK leave room for it.
+ */
+export const NODE_LABEL_RESERVE_PX = 28
+
+/** Build an ELK child box from a React Flow node, reserving label room so
+ *  vertical gaps aren't eaten by the floating node labels. Shared by the
+ *  live-build auto-layout AND the manual Tidy Up so they stay identical. */
+export function toElkLayoutNode(n: {
+  id: string
+  measured?: { width?: number; height?: number }
+}): { id: string; width: number; height: number } {
+  return {
+    id: n.id,
+    width: n.measured?.width ?? 200,
+    height: (n.measured?.height ?? 120) + NODE_LABEL_RESERVE_PX,
+  }
+}
 
 /**
  * Debounce window for the live-build auto-layout. Stage 2/3/4 fan-out can

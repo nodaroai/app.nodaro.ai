@@ -18,6 +18,7 @@ import { COMPOSITION_RATIOS } from "./model-options"
 import { CombineTransitionPicker } from "./combine-transition-picker"
 import { AUDIO_CROSSFADE_CURVES, DEFAULT_AUDIO_CROSSFADE_CURVE_ID } from "@nodaro/shared"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { WaveformAudioPlayer } from "@/components/audio-player"
 import type {
   CombineVideosData,
   AddCaptionsData,
@@ -403,7 +404,7 @@ export function SplitMediaConfig({ data, onUpdate }: ConfigProps<SplitMediaData>
                   <span className="text-[11px] text-muted-foreground">Chunk {i + 1}</span>
                   <a href={url} download className="text-[10px] text-primary hover:underline ml-auto" onClick={(e) => e.stopPropagation()}>Download</a>
                 </div>
-                <audio controls src={url} className="w-full" />
+                <WaveformAudioPlayer url={url} variant="compact" className="w-full" />
               </div>
             ))}
           </div>

@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react"
+import { WaveformAudioPlayer } from "@/components/audio-player"
 import { ArrowLeftRight, Maximize2, X } from "lucide-react"
 import { CachedImage } from "@/components/ui/cached-image"
 import {
@@ -13,7 +14,6 @@ import {
 import { getOutputType, type OutputType } from "@/lib/presentation-utils"
 import { isVideoUrl, isImageUrl, isAudioUrl } from "@/lib/media-type"
 import { GlassCard } from "../output-cards/shared"
-import { WaveformBars } from "../input-cards/shared"
 import type { ViewProps } from "./types"
 
 /** Resolve output type from node type, falling back to URL-based detection for data types (e.g. loop nodes) */
@@ -239,19 +239,17 @@ export function CompareView({
               <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider block mb-2">
                 {leftItem.title}
               </span>
-              <div className="flex items-center gap-3">
-                <WaveformBars />
-                <audio src={leftItem.url} controls className="flex-1 h-8" />
-              </div>
+              {leftItem.url && (
+                <WaveformAudioPlayer url={leftItem.url} variant="compact" className="w-full" />
+              )}
             </GlassCard>
             <GlassCard>
               <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider block mb-2">
                 {rightItem.title}
               </span>
-              <div className="flex items-center gap-3">
-                <WaveformBars />
-                <audio src={rightItem.url} controls className="flex-1 h-8" />
-              </div>
+              {rightItem.url && (
+                <WaveformAudioPlayer url={rightItem.url} variant="compact" className="w-full" />
+              )}
             </GlassCard>
           </div>
         ) : (
@@ -476,10 +474,7 @@ function CompareItemDisplay({ item }: { item: CompareItem }) {
       ) : item.outputType === "video" && item.url ? (
         <video src={item.url} controls className="w-full rounded-lg" />
       ) : item.outputType === "audio" && item.url ? (
-        <div className="flex items-center gap-3">
-          <WaveformBars />
-          <audio src={item.url} controls className="flex-1 h-8" />
-        </div>
+        <WaveformAudioPlayer url={item.url} variant="compact" className="w-full" />
       ) : item.text ? (
         <div className="text-sm text-foreground whitespace-pre-wrap max-h-64 overflow-y-auto leading-relaxed">
           {item.text}

@@ -13,6 +13,7 @@ import { useFullResolution } from "@/hooks/use-full-resolution"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { copyToClipboard } from "@/lib/utils"
 import { isImageUrl, isVideoUrl, isAudioUrl } from "@/lib/media-type"
+import { WaveformAudioPlayer } from "@/components/audio-player"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { ComponentNodeData } from "@/types/nodes"
 import type { ComponentHandle } from "@nodaro/shared"
@@ -205,12 +206,7 @@ function ComponentNodeComponent({ id, data, selected }: NodeProps) {
                     />
                   ) : isAudio ? (
                     <div className="flex items-center justify-center rounded-xl bg-muted/10 h-[120px] px-2">
-                      <audio
-                        src={previewValue}
-                        crossOrigin="anonymous"
-                        controls
-                        className="w-full"
-                      />
+                      <WaveformAudioPlayer url={previewValue} variant="compact" isInsideCanvas className="w-full" />
                     </div>
                   ) : (
                     <div className="flex items-center justify-center rounded-xl bg-muted/10 p-3 h-[120px]">

@@ -8,6 +8,7 @@ import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { cn } from "@/lib/utils"
 import { CachedImage } from "@/components/ui/cached-image"
+import { WaveformAudioPlayer } from "@/components/audio-player"
 
 const VIDEO_TYPES = new Set(["image-to-video", "video-to-video", "text-to-video", "video-upscale", "motion-transfer", "lip-sync", "suno-music-video"])
 const AUDIO_TYPES = new Set(["text-to-speech", "generate-music", "text-to-audio", "suno-generate", "suno-cover", "suno-extend", "suno-separate"])
@@ -231,11 +232,7 @@ function IterationCard({
                 />
               )}
               {resultIsUrl && mediaType === "audio" && (
-                <audio
-                  src={result}
-                  controls
-                  className="w-full mt-1"
-                />
+                <WaveformAudioPlayer url={result} variant="compact" className="w-full" />
               )}
               {!resultIsUrl && (
                 <p className="text-[11px] text-gray-600 dark:text-[#ccc] mt-0.5 whitespace-pre-wrap break-words line-clamp-6">

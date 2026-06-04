@@ -236,6 +236,14 @@ export function HandleWithPopover({
     downRef.current = null
   }, [])
 
+  // Stop a pip *click* from bubbling to the node. React Flow selects a node and
+  // fires onNodeClick on the click event, so without this a tap on a handle
+  // changes node focus + opens settings. A drag-to-connect produces no click,
+  // so it's already inert — this makes a plain tap behave the same way.
+  const stopClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    e.stopPropagation()
+  }, [])
+
   const onPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     const start = downRef.current
     downRef.current = null
@@ -282,6 +290,7 @@ export function HandleWithPopover({
           onPointerUpCapture={onPointerUp}
           onPointerCancel={cancelDown}
           onPointerLeave={cancelDown}
+          onClick={stopClick}
           onKeyDown={onKeyDown}
           // A11y: pips are tab-stoppable AND announce as buttons that open
           // a dialog (the popover). The trade-off: a node with 6-7 typed

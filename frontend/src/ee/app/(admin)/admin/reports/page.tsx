@@ -3,6 +3,7 @@ import { Loader2, CheckCircle, XCircle, Eye, Trash2, ExternalLink } from "lucide
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { CachedImage } from "@/components/ui/cached-image"
+import { WaveformAudioPlayer } from "@/components/audio-player"
 import { useAuth } from "@/hooks/use-auth"
 import { toast } from "sonner"
 import {
@@ -359,7 +360,7 @@ export default function AdminGalleryReportsPage() {
                     <video src={outputUrl} controls className="max-w-full max-h-[60vh]" />
                   ) : outputUrl && outputType === "audio" ? (
                     <div className="p-8">
-                      <audio src={outputUrl} controls className="w-full" />
+                      <WaveformAudioPlayer url={outputUrl} variant="compact" className="w-full" />
                     </div>
                   ) : (
                     <p className="text-white/50 p-8">No preview available</p>

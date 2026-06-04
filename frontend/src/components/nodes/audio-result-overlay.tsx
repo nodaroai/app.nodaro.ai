@@ -4,6 +4,7 @@ import { memo } from "react"
 import { X, Expand, Download, Link } from "lucide-react"
 import { copyToClipboard } from "@/lib/utils"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
+import { WaveformAudioPlayer } from "@/components/audio-player"
 
 interface AudioResultOverlayProps {
   url: string
@@ -22,13 +23,7 @@ function AudioResultOverlayComponent({
 }: AudioResultOverlayProps) {
   return (
     <div className="relative group/audio">
-      <audio
-        src={url}
-        crossOrigin="anonymous"
-        controls
-        className="w-full h-8"
-        onClick={(e) => e.stopPropagation()}
-      />
+      <WaveformAudioPlayer url={url} variant="compact" label={label} isInsideCanvas download={false} />
       {/* Action buttons - appear on hover below the player */}
       <div className="flex items-center justify-between mt-1 opacity-0 group-hover/audio:opacity-100 transition-opacity">
         <div className="flex gap-1">

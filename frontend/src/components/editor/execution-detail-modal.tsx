@@ -8,6 +8,7 @@ import { deleteJob } from "@/lib/api"
 import { isCloud } from "@/lib/edition"
 import { toast } from "sonner"
 import { CachedImage } from "@/components/ui/cached-image"
+import { WaveformAudioPlayer } from "@/components/audio-player"
 import { type NodeState, formatNodeType } from "./execution-utils"
 
 const STATUS_COLORS: Record<string, string> = {
@@ -550,7 +551,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                         </div>
                       ) : stateOutputUrl && isAudioUrl(stateOutputUrl) ? (
                         <div className="rounded-lg bg-gray-100 dark:bg-[#0D0D0D] border border-gray-200 dark:border-[#2D2D2D] p-6">
-                          <audio src={stateOutputUrl} controls className="w-full" />
+                          <WaveformAudioPlayer url={stateOutputUrl} variant="compact" className="w-full" />
                         </div>
                       ) : stateOutputText ? (
                         <div className="rounded-lg bg-gray-100 dark:bg-[#0D0D0D] border border-gray-200 dark:border-[#2D2D2D] p-4">
@@ -821,7 +822,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                           />
                         ) : isAudio ? (
                           <div className="p-4 flex items-center justify-center">
-                            <audio src={outputUrl} controls className="w-full" />
+                            <WaveformAudioPlayer url={outputUrl} variant="compact" className="w-full" />
                           </div>
                         ) : (
                           <CachedImage

@@ -63,6 +63,7 @@ import { PromptHelperButton } from "./prompt-helper-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { resolveEdgeValuesForTableColumn } from "@/components/editor/workflow-editor/node-input-resolver"
 import { SUNO_LYRICS_SUGGESTION_ITEMS } from "@/lib/suno-tags"
+import { WaveformAudioPlayer } from "@/components/audio-player"
 
 const COLUMN_ACCEPT: Record<string, string> = {
   "image-url": "image/png,image/jpeg,image/webp,image/gif,image/avif,image/heic,image/heif",
@@ -1012,7 +1013,7 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId 
                               ) : col.type === "video-url" ? (
                                 <video src={val} crossOrigin="anonymous" className="w-16 h-12 rounded object-cover" muted playsInline />
                               ) : (
-                                <audio src={val} controls className="h-8 w-full max-w-[160px]" style={{ minWidth: 0 }} />
+                                <WaveformAudioPlayer url={val} variant="compact" className="w-full max-w-[160px]" />
                               )
                             ) : isConnected ? (
                               <span className="text-muted-foreground/70">{val || <span className="italic text-muted-foreground/50">Waiting...</span>}</span>
@@ -1481,7 +1482,7 @@ export function ReferenceAudioConfig({ data, onUpdate }: ConfigProps<ReferenceAu
       {data.extractionStatus === "ready" && data.extractedAudioUrl && (
         <div className="flex flex-col gap-1">
           <p className="text-xs text-green-600">Audio ready</p>
-          <audio src={data.extractedAudioUrl} controls className="w-full h-8" />
+          <WaveformAudioPlayer url={data.extractedAudioUrl} variant="compact" className="w-full" />
         </div>
       )}
       {data.extractionStatus === "failed" && (

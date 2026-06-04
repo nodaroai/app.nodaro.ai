@@ -1,10 +1,11 @@
 import { X, Download, Copy } from "lucide-react"
+import { WaveformAudioPlayer } from "@/components/audio-player"
 import { MediaEditorModal } from "@/components/editor/media-editor"
 import { GlassCard, GlassButton, copyUrl, downloadFile } from "../output-cards/shared"
 import { ActionMenu } from "../output-cards/action-menu"
 import { ActionBar } from "../output-cards/action-bar"
 import { shareMedia } from "../output-cards/share-utils"
-import { useMediaUpload, FileDropZone, UrlInputRow, WaveformBars } from "./shared"
+import { useMediaUpload, FileDropZone, UrlInputRow } from "./shared"
 
 interface AudioUploadCardProps {
   label: string
@@ -30,8 +31,7 @@ export function AudioUploadCard({ label, url, nodeId, isFullscreen, inputValues,
           <>
             <div className="relative group">
               <div className="flex items-center gap-3 bg-muted/30 rounded-lg p-3 border border-border">
-                <WaveformBars />
-                <audio src={media.effectiveUrl} controls className="flex-1 h-8 [&::-webkit-media-controls-panel]:bg-transparent" />
+                <WaveformAudioPlayer url={media.effectiveUrl} variant="compact" className="flex-1" />
                 {/* Desktop inline actions */}
                 <div className="hidden md:flex gap-1.5 flex-shrink-0">
                   <GlassButton onClick={() => downloadFile(media.effectiveUrl!, `${label.replace(/\s+/g, "-").toLowerCase()}.mp3`)} title="Download">

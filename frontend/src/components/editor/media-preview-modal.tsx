@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import { createPortal } from "react-dom"
 import { X, ChevronLeft, ChevronRight, Play, Pause, RotateCcw, Repeat, Square, Volume2, VolumeX } from "lucide-react"
 import { CachedImage } from "@/components/ui/cached-image"
+import { WaveformAudioPlayer } from "@/components/audio-player"
 
 interface MediaPreviewModalProps {
   readonly isOpen: boolean
@@ -385,7 +386,9 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
             </div>
           </div>
         ) : effectiveType === "audio" ? (
-          <audio key={effectiveUrl} src={effectiveUrl} controls autoPlay className="w-full" />
+          <div className="w-full max-w-2xl rounded-xl bg-black/40 p-5 backdrop-blur-sm">
+            <WaveformAudioPlayer key={effectiveUrl} url={effectiveUrl} variant="full" autoPlay />
+          </div>
         ) : (
           /* effectiveType === "image" — final else, no implicit fallback */
           <CachedImage src={effectiveUrl} alt="Preview" className="max-w-full max-h-[90vh] rounded-lg object-contain" />

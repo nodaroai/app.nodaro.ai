@@ -1,6 +1,7 @@
 "use client"
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { WaveformAudioPlayer } from "@/components/audio-player"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { Braces, Copy, Download, Expand, Film, GripVertical, Image, Info, Link, List, Loader2, Music, Plus, Table2, Type, Upload, X } from "lucide-react"
 import {
@@ -666,7 +667,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
             <Expand className="w-3 h-3" />
           </button>
           <div className="nodrag nopan">
-            <audio src={cell} controls className="w-full h-8 rounded" style={{ minWidth: 0 }} />
+            <WaveformAudioPlayer url={cell} variant="mini" isInsideCanvas className="w-full" />
           </div>
         </div>
         <span className="absolute -top-1.5 -left-1.5 z-10 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-neutral-100 dark:bg-neutral-900 text-black dark:text-white text-[9px] font-medium tabular-nums shadow-sm">{rowIdx + 1}</span>

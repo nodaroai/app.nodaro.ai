@@ -1,4 +1,5 @@
 import { IterationProgress, type GalleryOutputProps } from "./shared"
+import { WaveformAudioPlayer } from "@/components/audio-player"
 
 export function AudioListOutput({
   results,
@@ -20,12 +21,7 @@ export function AudioListOutput({
             <span className="text-xs text-muted-foreground font-medium min-w-[24px]">
               #{i + 1}
             </span>
-            <audio
-              controls
-              src={url}
-              className="flex-1 h-8"
-              style={{ minWidth: 0 }}
-            />
+            <WaveformAudioPlayer url={url} variant="compact" className="flex-1" />
           </div>
         ))}
       </div>

@@ -3,6 +3,7 @@ import {
   extractTextFields,
   type ExtractedAsset,
 } from "./job-asset-view-extractors"
+import { WaveformAudioPlayer } from "@/components/audio-player"
 
 interface JobAssetViewProps {
   readonly data: Record<string, unknown> | null
@@ -82,7 +83,7 @@ function renderAsset(asset: ExtractedAsset) {
         </a>
       )
     case "audio":
-      return <audio controls preload="metadata" className="w-full" src={asset.url} />
+      return <WaveformAudioPlayer url={asset.url} variant="compact" className="w-full" />
     case "other":
       return (
         <a

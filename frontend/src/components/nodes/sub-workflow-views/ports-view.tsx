@@ -9,6 +9,7 @@ import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { NodeJobProgress } from "../node-job-progress"
 import { useFullResolution } from "@/hooks/use-full-resolution"
+import { WaveformAudioPlayer } from "@/components/audio-player"
 
 export function PortsView({ nodeId, data }: SubWorkflowViewProps) {
   const useFull = useFullResolution(nodeId)
@@ -62,7 +63,7 @@ export function PortsView({ nodeId, data }: SubWorkflowViewProps) {
         {status === "completed" && previewUrl && (
           isAudio ? (
             <div className="mt-2">
-              <audio src={previewUrl} crossOrigin="anonymous" controls className="w-full h-8" />
+              <WaveformAudioPlayer url={previewUrl} variant="compact" isInsideCanvas className="w-full" />
             </div>
           ) : (
             <div className="mt-2 cursor-pointer" onClick={() => setLightboxOpen(true)}>
