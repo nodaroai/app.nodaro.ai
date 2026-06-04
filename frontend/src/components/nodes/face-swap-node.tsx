@@ -13,6 +13,8 @@ import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
+import { imageNodeSizing } from "./video-node-defaults"
+import { useUpstreamImageAspect } from "@/hooks/use-upstream-image-aspect"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { EditableNodeLabel } from "./editable-node-label"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
@@ -44,6 +46,7 @@ function FaceSwapNodeComponent({ id, data, selected }: NodeProps) {
   const credits = useModelCredits("roop-face-swap", 16)
   const { aspectRatio: mediaAspectRatio, onLoadDimensions: handleLoadDimensions } =
     useResultAspectRatio(id, results, activeIndex)
+  const upstreamImageAspect = useUpstreamImageAspect(id)
 
   useEffect(() => {
     const v = videoRef.current
@@ -82,9 +85,7 @@ function FaceSwapNodeComponent({ id, data, selected }: NodeProps) {
       credits={credits}
       selected={selected}
       isRunning={status === "running"}
-      minWidth={200}
-      minHeight={mediaAspectRatio ? Math.round(200 / mediaAspectRatio) : 150}
-      imageAspectRatio={mediaAspectRatio}
+      {...imageNodeSizing(mediaAspectRatio, upstreamImageAspect)}
       hideHeader
       bottomToolbarContent={
         showThumbnails && results.length > 1 ? (

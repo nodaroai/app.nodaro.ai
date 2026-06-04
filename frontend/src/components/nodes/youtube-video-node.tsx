@@ -13,6 +13,7 @@ import type { DownloadProgressEvent } from "@/lib/api"
 import type { YouTubeVideoData } from "@/types/nodes"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useFullResolution } from "@/hooks/use-full-resolution"
+import { videoNodeSizing } from "./video-node-defaults"
 
 type VideoPlatform = "youtube" | "facebook" | "tiktok" | "instagram" | "twitter" | "unknown"
 
@@ -297,7 +298,7 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
 
   return (
     <>
-      <div className="relative max-w-[220px]">
+      <div className="relative" style={{ width: '100%', height: '100%', overflow: 'visible' }}>
         {/* Floating label above node */}
         <EditableNodeLabel
           label={nodeData.label}
@@ -311,7 +312,7 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
           category="input"
           credits={0}
           selected={selected}
-          minWidth={220}
+          {...videoNodeSizing(undefined)}
           hideHeader
           handles={HANDLES}
         >

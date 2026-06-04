@@ -18,6 +18,8 @@ import { useFullResolution } from "@/hooks/use-full-resolution"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { EditableNodeLabel } from "./editable-node-label"
+import { imageNodeSizing } from "./video-node-defaults"
+import { useUpstreamImageAspect } from "@/hooks/use-upstream-image-aspect"
 import type { EditImageData } from "@/types/nodes"
 
 const isPickerType = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
@@ -45,6 +47,7 @@ function EditImageNodeComponent({ id, data, selected }: NodeProps) {
   const isSettingsOpen = useWorkflowStore((s) => s.selectedNodeId === id)
   const { aspectRatio: imgAspectRatio, onLoadDimensions: handleLoadDimensions } =
     useResultAspectRatio(id, results, activeIndex)
+  const upstreamImageAspect = useUpstreamImageAspect(id)
 
   function handleDeleteResult(indexToDelete: number) {
     updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedImageUrl"))
@@ -65,10 +68,8 @@ function EditImageNodeComponent({ id, data, selected }: NodeProps) {
       credits={credits}
       selected={selected}
       isRunning={status === "running"}
-      minWidth={200}
-      minHeight={imgAspectRatio ? Math.round(200 / imgAspectRatio) : 150}
+      {...imageNodeSizing(imgAspectRatio, upstreamImageAspect)}
       hideHeader
-      imageAspectRatio={imgAspectRatio}
       bottomToolbarContent={
         showThumbnails && results.length > 1 ? (
           <div className="flex gap-2 px-2 py-1.5 bg-black/60 backdrop-blur-sm rounded-xl border border-white/10">

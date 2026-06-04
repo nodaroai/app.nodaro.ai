@@ -22,6 +22,7 @@ const ACCEPTS_LOOK       = (t: string) => isValidGenerateImageConnection("look",
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
+import { imageNodeSizing } from "./video-node-defaults"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
@@ -33,6 +34,7 @@ import { GenerateImageQuickToolbar } from "./generate-image-quick-toolbar"
 import { GenerateImageResultInfo } from "./generate-image-result-info"
 import { useFullResolution } from "@/hooks/use-full-resolution"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
+import { useUpstreamImageAspect } from "@/hooks/use-upstream-image-aspect"
 
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { useProvidersCreditsSum } from "@/ee/hooks/use-providers-credits-sum"
@@ -70,6 +72,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   const useFull = useFullResolution(id)
   const { aspectRatio: imgAspectRatio, onLoadDimensions: handleLoadDimensions } =
     useResultAspectRatio(id, results, activeIndex)
+  const upstreamImageAspect = useUpstreamImageAspect(id)
   // Node sizing (floor-clamp to handle-derived minHeight + aspect-fit when
   // an image is present + handle bounds re-measure) is owned by BaseNode —
   // see the unified sizing effect in `base-node.tsx`. No per-node sizing
@@ -133,14 +136,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
       credits={credits}
       selected={selected}
       isRunning={status === "running"}
-      minWidth={200}
-      // 6 input handles stacked from bottom up — the topmost pip ("Look")
-      // sits at top: calc(100% - 184px), so the node body needs at least
-      // ~200px to keep handles in view. Floor-clamp the aspect-ratio-driven
-      // height to 200 so freshly-created nodes (image not loaded yet) AND
-      // landscape-image nodes (computed height < 200) both render with
-      // handles on the visible body.
-      minHeight={Math.max(200, imgAspectRatio ? Math.round(200 / imgAspectRatio) : 150)}
+      {...imageNodeSizing(imgAspectRatio, upstreamImageAspect)}
       listCount={listTotal}
       listProgress={isNodeRunning && listTotal ? `${listCompleted ?? 0}/${listTotal}` : undefined}
       listProgressPercent={isNodeRunning ? listProgressPercent : undefined}
@@ -179,7 +175,6 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
         { id: "look",       type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 184px)', left: '-29px' }, external: true },
         { id: "image",      type: "source", position: Position.Right, customStyle: { top: '24px',               right: '-29px' }, external: true },
       ]}
-      imageAspectRatio={imgAspectRatio}
     >
       <div className="relative w-full h-full group">
         {/* Running state — fills the node instead of forcing 180px, so the

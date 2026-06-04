@@ -12,6 +12,7 @@ import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useUpstreamUrl } from "@/hooks/use-upstream-url"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
+import { videoNodeSizing } from "./video-node-defaults"
 import { copyToClipboard } from "@/lib/utils"
 import { useFileUpload } from "@/hooks/use-file-upload"
 import { useMediaEditor, MediaEditorModal } from "@/components/editor/media-editor"
@@ -173,8 +174,7 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
         category="input"
         credits={0}
         selected={selected}
-        minWidth={220}
-        imageAspectRatio={mediaAspectRatio}
+        {...videoNodeSizing(mediaAspectRatio)}
         hideHeader
         handles={HANDLES}
         bottomToolbarContent={

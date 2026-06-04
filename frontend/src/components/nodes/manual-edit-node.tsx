@@ -12,6 +12,8 @@ import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
+import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
+import { videoNodeSizing } from "./video-node-defaults"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { ManualEditData } from "@/types/nodes"
 
@@ -46,6 +48,8 @@ function ManualEditNodeComponent({ id, data, selected }: NodeProps) {
   const activeIndex = nodeData.activeResultIndex ?? 0
   const activeResult = results[activeIndex]
   const activeUrl = activeResult?.url ?? nodeData.generatedVideoUrl
+  const { aspectRatio: mediaAspectRatio, onLoadDimensions: handleLoadDimensions } =
+    useResultAspectRatio(id, results, activeIndex)
   const activeThumbnail = activeResult?.thumbnailUrl
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
@@ -104,11 +108,11 @@ function ManualEditNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <div className="relative" style={{ maxWidth: '220px' }}>
+    <div className="relative" style={{ width: '100%', height: '100%', overflow: 'visible' }}>
       <EditableNodeLabel label={nodeData.label} icon={<Scissors className="w-3.5 h-3.5" />} onSave={(newLabel) => updateNodeData(id, { label: newLabel })} />
     <BaseNode id={id} label={nodeData.label} icon={<Scissors className="h-4 w-4" />} category="processing" credits={credits} selected={selected} isRunning={status === "running"}
       hideHeader
-      minWidth={220}
+      {...videoNodeSizing(mediaAspectRatio)}
       handles={[
         { id: "in",    type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
         { id: "video", type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
@@ -138,13 +142,14 @@ function ManualEditNodeComponent({ id, data, selected }: NodeProps) {
               src={activeUrl}
               crossOrigin="anonymous"
               poster={activeThumbnail || undefined}
-              className="w-full h-28 object-cover rounded-md bg-black"
+              className="w-full h-full object-cover rounded-md bg-black"
               autoPlay={shouldPlay}
               muted
               loop={shouldPlay}
               playsInline
               onError={() => setVideoError(true)}
               onLoadedData={() => setVideoError(false)}
+              onLoadedMetadata={(e) => { const v = e.currentTarget; if (v.videoWidth > 0) handleLoadDimensions({ width: v.videoWidth, height: v.videoHeight }) }}
             />
             <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1 rounded">Edited</div>
             <button type="button" onClick={handleOpenEditor} className="absolute bottom-1 left-1 px-2 py-0.5 text-[10px] font-medium rounded bg-[#ff0073] text-white opacity-0 group-hover:opacity-100 transition-opacity">Re-edit</button>
