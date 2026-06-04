@@ -1,7 +1,7 @@
 ---
 node_type: location
-generated_at: 2026-05-18T20:51:29.005Z
-generated_from: af4193bd
+generated_at: 2026-06-04T12:41:29.043Z
+generated_from: 9bf1388db
 ---
 
 # Location
@@ -12,6 +12,51 @@ generated_from: af4193bd
 **Credit cost:** 5
 **Inputs (target handles):** `in`
 **Outputs (source handles):** `locationRef`
+
+**Required data fields:**
+- `label: string`
+- `locationDbId: string`
+- `locationName: string`
+- `description: string`
+- `category: "indoor" | "outdoor" | "urban" | "nature" | "fantasy" | "sci-fi" | "historical" | "futuristic" | "other"`
+- `style: "realistic" | "anime" | "3d-pixar" | "illustration"`
+- `sourceImageUrl: string`
+- `projectId: string`
+- `createdAt: string`
+- `executionStatus: "idle" | "running" | "completed" | "failed"`
+- `generatedResults: GeneratedResult[]`
+- `activeResultIndex: number`
+- `fieldMappings: FieldMappings`
+- `timeOfDay: LocationAssetItem[]`
+- `weather: LocationAssetItem[]`
+- `angles: LocationAssetItem[]`
+- `lighting: LocationAssetItem[]`
+- `lightingStatus: AssetStatus`
+- `seasons: LocationAssetItem[]`
+- `seasonsStatus: AssetStatus`
+- `atmosphereMotions: LocationAssetItem[]`
+- `atmosphereStatus: AssetStatus`
+- `referencePhotos: LocationReferencePhoto[]`
+- `canonicalDescription: string`
+- `styleLock: boolean`
+- `timeOfDayStatus: "idle" | "running" | "completed" | "failed"`
+- `weatherStatus: "idle" | "running" | "completed" | "failed"`
+- `anglesStatus: "idle" | "running" | "completed" | "failed"`
+- `customVariations: Array<{ prompt: string; url: string; createdAt: string }>`
+
+**Optional data fields:**
+- `updatedAt?: string`
+- `provider?: string`
+- `currentJobProgress?: number`
+- `errorMessage?: string`
+- `scriptLocationIndex?: number`
+- `piiConsentAt?: string`
+- `selectedVariant?: string`
+- `pipeline_id?: string`
+- `pipeline_entity_id?: string`
+- `pipeline_owned?: boolean`
+- `pipeline_state?: PipelineState`
+- `is_stale?: boolean`
 
 **Default data:**
 ```json

@@ -56,7 +56,7 @@ export function nodesCommand(): Command {
   cmd
     .command("list")
     .description("list all known node types — same data the editor uses")
-    .option("--category <name>", "filter to one category (input/parameter/ai/processing/output/utility)")
+    .option("--category <name>", "filter to one category (input, parameter, ai-image, ai-video, ai-audio, ai-text, processing, composition, output, control, entity, trigger, utility)")
     .option("--profile <name>")
     .option("--json")
     .action(async (opts: { category?: string } & GlobalOpts) => {

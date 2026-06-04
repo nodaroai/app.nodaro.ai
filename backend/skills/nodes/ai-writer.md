@@ -6,10 +6,15 @@ generated_from: cb1e786d
 
 # AI Agent
 
+> **Deprecated node type.** `ai-writer` is a legacy type — the editor auto-migrates
+> it to `llm-chat` on workflow load. The backend still executes `ai-writer` for
+> in-flight / server-side runs, so this skill is kept for `get_node_skill("ai-writer")`.
+> For new workflows use `llm-chat` (chat/completion) or `generate-script` (multi-prompt).
+
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `ai-writer`
 **Category:** ai
-**Credit cost:** 2
+**Credit cost:** 3
 **Inputs (target handles):** `in`
 **Outputs (source handles):** `text`
 

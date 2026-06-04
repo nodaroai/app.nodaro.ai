@@ -1,7 +1,7 @@
 ---
 node_type: router
-generated_at: 2026-05-18T13:23:37.808Z
-generated_from: cb1e786d
+generated_at: 2026-06-04T12:41:29.197Z
+generated_from: 9bf1388db
 ---
 
 # Router
@@ -12,6 +12,17 @@ generated_from: cb1e786d
 **Credit cost:** 0
 **Inputs (target handles):** `in`
 **Outputs (source handles):** `route_a`, `route_b`
+
+**Required data fields:**
+- `label: string`
+- `mode: "radio" | "checkbox" | "conditional"`
+- `routes: Array<{ id: string; name: string; active: boolean }>`
+
+**Optional data fields:**
+- `conditionGroups?: RouterConditionGroup[]`
+- `activeRoutes?: string[]`
+- `routeOutputs?: Record<string, string | undefined>`
+- `executionStatus?: "idle" | "running" | "completed" | "failed"`
 
 **Default data:**
 ```json

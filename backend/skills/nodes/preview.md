@@ -1,7 +1,7 @@
 ---
 node_type: preview
-generated_at: 2026-05-18T13:23:37.801Z
-generated_from: cb1e786d
+generated_at: 2026-06-04T12:41:29.185Z
+generated_from: 9bf1388db
 ---
 
 # Preview
@@ -12,6 +12,15 @@ generated_from: cb1e786d
 **Credit cost:** 0
 **Inputs (target handles):** `in`
 **Outputs (source handles):** `out`
+
+**Required data fields:**
+- `label: string`
+- `previewItems: PreviewItem[]`
+- `itemOrder: string[]`
+
+**Optional data fields:**
+- `executionStatus?: "idle" | "running" | "completed" | "failed"`
+- `errorMessage?: string`
 
 **Default data:**
 ```json

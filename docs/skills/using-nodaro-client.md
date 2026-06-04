@@ -1,6 +1,6 @@
 ---
 name: using-nodaro-client
-description: Use when integrating the @nodaro/client TypeScript SDK into an application — server-side automation, browser frontends talking to a Nodaro instance, or third-party OAuth apps. Covers install, three auth modes (StaticTokenAuth, supabaseAuth, CallbackAuth), the seven resource classes (workflows, projects, jobs, executions, nodes, developerApps, oauth), and the typed error hierarchy.
+description: Use when integrating the @nodaro/client TypeScript SDK into an application — server-side automation, browser frontends talking to a Nodaro instance, or third-party OAuth apps. Covers install, three auth modes (StaticTokenAuth, supabaseAuth, CallbackAuth), the 17 resource classes (workflows, projects, jobs, executions, nodes, characters, locations, objects, pipelines, reduce, promptHelper, apps, developerApps, oauth, voices, credits, uploads), and the typed error hierarchy.
 ---
 
 # Using @nodaro/client
@@ -60,16 +60,26 @@ const client = createClient({
 })
 ```
 
-## Seven resources
+## 17 resources
 
 ```typescript
-client.workflows       // list, get, create, update, delete, run
+client.workflows       // list, get, getPublic, create, update, delete, run, export, import
 client.projects        // list, get, create, update, delete
-client.jobs            // get, cancel
+client.jobs            // get, getStatus, cancel
 client.executions      // get, listForWorkflow, cancel
-client.nodes           // list, get
+client.nodes           // list, get, run, runAndWait, runMany
+client.characters      // list, get, create, update, upsert, delete, restore, duplicate, usage, generate, generateAsset, generateMotion, approvePortrait, recaption
+client.locations       // list, listArchived, get, create, update, delete, restore, generate, generateAsset, generateMotion, approveMainImage, recaption
+client.objects         // list, listArchived, get, create, update, delete, restore, permanentDelete, generate, generateAsset, generateMotion, approveMainImage, recaption
+client.pipelines       // create, get, list, cancel, pendingApprovals, approveStage, rejectStage, approveSubGate, getStage, getTimeline, branch, chatStage, applyChatProposal, getStageChat
+client.reduce          // run
+client.promptHelper    // analyze, generate, enhance
+client.apps            // list, get, run, listRuns, getRun, deleteRun
 client.developerApps   // list, get, create, update, delete, rotateSecret
 client.oauth           // exchangeCode, revoke, getAppInfo
+client.voices          // list, searchLibrary, listClones, createClone, deleteClone, change
+client.credits         // balance, modelCosts
+client.uploads         // upload
 ```
 
 Method signatures match the underlying `/v1/*` REST routes. All return `Promise<{ data: T }>` or `Promise<T>` per the route's response envelope.
@@ -134,7 +144,17 @@ This is exposed via `client.workflows.run` if the param is supported — check t
 ## When NOT to use the SDK
 
 - **SSE / streaming endpoints** (e.g. the Generate Text node's `/v1/llm-chat/generate-stream`, or the legacy back-compat `/v1/ai-writer/generate-stream`): the SDK doesn't yet expose SSE. Use the project's `streamRequest` helper or raw fetch with a `ReadableStream`.
-- **Single-node single-shot routes** (e.g. `/v1/generate-image` directly): if you're just calling one provider, the SDK currently routes through `client.workflows.run` which expects a workflow. For raw single-route calls, use fetch.
+
+For all other cases — including single-node single-shot routes — the SDK is the right tool. `client.nodes.run(type, params)` calls `POST /v1/<type>` directly without needing a workflow, and `client.nodes.runAndWait(type, params)` polls to completion for you:
+
+```typescript
+// Run a single node directly — no workflow needed
+const output = await client.nodes.runAndWait("generate-image", {
+  prompt: "a snow leopard in the mountains",
+  provider: "recraft",
+})
+console.log(output.imageUrl)
+```
 
 ## Custom fetch / timeout
 

@@ -317,10 +317,9 @@ export function objectsCommand(): Command {
             attachToObjectId: opts.attachToObjectId,
             seedPromptHint: opts.seedPromptHint,
           })
-          // Normalize both response shapes to a uniform string[] of job ids
-          // for downstream rendering. `count=1` returns `{ jobId }`; multi
-          // returns `{ jobIds }`.
-          const jobIds = "jobIds" in result ? result.jobIds : [result.jobId]
+          // The SDK normalizes to `{ jobIds: string[] }` (one id per
+          // candidate); fall back to the legacy `{ jobId }` shape defensively.
+          const jobIds = result.jobIds ?? (result.jobId ? [result.jobId] : [])
           if (opts.json && !opts.watch) {
             emit(result, opts)
             return

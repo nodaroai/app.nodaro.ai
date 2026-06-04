@@ -1,6 +1,6 @@
 # MCP Tool Reference
 
-Complete reference for the tools exposed by the Nodaro MCP server.
+Complete reference for the 122 tools exposed by the Nodaro MCP server.
 
 ## Scopes
 
@@ -10,13 +10,19 @@ authorizing the connector; missing scopes cause tools to be omitted entirely
 
 | Scope | Controls |
 |-------|----------|
-| `workflows:read` | `list_projects`, `get_project`, `list_workflows`, `get_workflow`, `get_workflow_json`, `export_workflow` |
+| `workflows:read` | `list_projects`, `get_project`, `list_workflows`, `get_workflow`, `get_workflow_json`, `export_workflow`, `list_components`, `get_component_inputs` |
 | `workflows:write` | `create_workflow`, `delete_workflow`, `update_workflow_json`, `import_workflow` |
-| `workflows:execute` | `run_workflow`, `generate_character` (kind=`main`/`asset`), `generate_character_motion`, `analyze_prompt`, `generate_prompt`, `enhance_prompt` |
+| `workflows:execute` | `run_workflow`, all generation verbs (image/video/audio/Suno/character/location/object), `run_component`, `run_app`, `delete_app_run`, `analyze_prompt`, `generate_prompt`, `enhance_prompt`, `reduce` |
 | `jobs:read` | `list_jobs`, `get_job` |
-| `assets:read` | `browse_gallery`, `list_favorites`, `get_asset`, `list_characters`, `get_character` |
-| `assets:write` | `favorite_asset`, `create_character`, `update_character`, `approve_portrait`, `recaption_character` |
-| `generation:write` | All generation verbs (`generate_image`, `generate_video`, etc.) |
+| `assets:read` | `browse_gallery`, `browse_uploads`, `list_favorites`, `get_asset`, `display_asset`, `get_app_run`, `list_characters`, `get_character`, `list_locations`, `get_location` |
+| `assets:write` | `favorite_asset`, `create_character`, `update_character`, `approve_portrait`, `recaption_character`, `create_location`, `update_location`, `approve_main_image`, `recaption_location`, `approve_object_main_image`, `recaption_object`, `upload_image_widget`, `upload_audio_widget`, `upload_video_widget`, `request_image_upload`, `request_audio_upload`, `request_video_upload`, `prepare_image_upload`, `prepare_audio_upload`, `prepare_video_upload` |
+| `credits:read` | `check_balance`, `credit_transactions` |
+| `apps:read` | `list_apps`, `get_app_inputs` |
+| `pipelines:read` | `get_pipeline_stage_chat`, `get_pipeline_status`, `pipeline_pending_approvals` |
+| `pipelines:execute` | `branch_pipeline`, `start_pipeline` |
+| `pipelines:approve` | `chat_pipeline_stage`, `apply_chat_proposal` |
+
+**Ungated (always visible):** `ping`, `list_models`, `start_film_director`, `start_workflow_editor`, `get_node_skill`
 
 ---
 
@@ -153,22 +159,6 @@ Returns metadata for a single workflow in the mcp project.
 | Field | Type | Notes |
 |-------|------|-------|
 | `workflow_id` | UUID string | Must be in the mcp project |
-
-**Response shape:**
-```json
-{
-  "data": {
-    "id": "uuid",
-    "project_id": "uuid",
-    "name": "My Workflow",
-    "description": null,
-    "version": 1,
-    "thumbnail_url": null,
-    "created_at": "2026-05-01T12:00:00.000Z",
-    "updated_at": "2026-05-01T12:00:00.000Z"
-  }
-}
-```
 
 ---
 
@@ -341,8 +331,9 @@ support the `tasks/*` API and widget rendering will show live progress inline.
 AI assistance for writing prompts for generation nodes. All three delegate to
 `POST /v1/prompt-helper/wizard` (the same endpoint as the SDK
 `client.promptHelper` and the CLI `nodaro prompt` commands) and reserve credits
-per call. Mirrored on the SDK at
-[`client.promptHelper`](../sdk-reference.md#clientprompthelper).
+per call.
+
+**Scope (all three):** `workflows:execute`
 
 ### `analyze_prompt`
 
@@ -350,19 +341,13 @@ Turns a rough idea into guided questions with options for a target node type
 (e.g. `generate-image`, `image-to-video`, `generate-music`). Pair with
 `generate_prompt`.
 
-**Scope:** `workflows:execute`
-
 **Input:**
 
 | Field | Type | Notes |
 |-------|------|-------|
 | `nodeType` | string | Required. Target node type. |
 | `prompt` | string (max 5000) | Optional. The rough idea. Omit to build from scratch. |
-| `provider` | string | Optional. |
-| `style` | string | Optional. |
-| `aspectRatio` | string | Optional. |
-| `duration` | number | Optional. |
-| `llmModel` | enum | Optional. One of the supported LLM model ids. |
+| `provider` / `style` / `aspectRatio` / `duration` / `llmModel` | — | Optional. |
 
 **Response:** `{ jobId, questions }` — each question is
 `{ category, label, options[], selected, allowCustom, multi? }`.
@@ -371,8 +356,6 @@ Turns a rough idea into guided questions with options for a target node type
 
 Builds a single optimized prompt from `analyze_prompt` selections.
 
-**Scope:** `workflows:execute`
-
 **Input:**
 
 | Field | Type | Notes |
@@ -380,7 +363,7 @@ Builds a single optimized prompt from `analyze_prompt` selections.
 | `nodeType` | string | Required. |
 | `selections` | array | Required. One `{ category, value, isCustom }` per answered question. |
 | `originalPrompt` | string (max 5000) | Optional. Woven into the result. |
-| `provider` / `style` / `aspectRatio` / `duration` / `llmModel` | — | Optional, as in `analyze_prompt`. |
+| `provider` / `style` / `aspectRatio` / `duration` / `llmModel` | — | Optional. |
 
 **Response:** `{ jobId, prompt, recommendedModel? }`.
 
@@ -389,17 +372,99 @@ Builds a single optimized prompt from `analyze_prompt` selections.
 One-shot "improve this prompt" — rewrites a rough idea into one optimized
 prompt with no questions round-trip.
 
-**Scope:** `workflows:execute`
-
 **Input:**
 
 | Field | Type | Notes |
 |-------|------|-------|
 | `nodeType` | string | Required. |
-| `prompt` | string (max 5000) | Optional. The rough idea to improve. Omit to build from scratch. |
-| `provider` / `style` / `aspectRatio` / `duration` / `llmModel` | — | Optional, as in `analyze_prompt`. |
+| `prompt` | string (max 5000) | Optional. The rough idea to improve. |
+| `provider` / `style` / `aspectRatio` / `duration` / `llmModel` | — | Optional. |
 
 **Response:** `{ jobId, prompt, recommendedModel? }`.
+
+---
+
+## Image generation tools
+
+**Scope (all):** `workflows:execute`
+
+| Tool | Description |
+|------|-------------|
+| `generate_image` | Text-to-image or reference-guided image generation. Accepts `prompt`, `model`, `aspect_ratio`, `quality`, `reference_images[]`, etc. |
+| `modify_image` | Image-to-image transformation — apply a style, change colors, swap backgrounds. Accepts `image_url`, `prompt`, and strength controls. |
+| `image_to_image` | Structural image-to-image (i2i) using a dedicated i2i model. Distinct from `modify_image` in that it uses models optimized for structural transfer. |
+| `edit_image` | Targeted edits: remove background, upscale, inpaint, or use Nodaro's nano-banana-edit model. |
+| `generate_mask` | Generate or refine a segmentation mask for inpainting workflows. |
+| `image_to_text` | Extract a text description (caption/transcription) from an image using a vision model. |
+| `generate_script` | Generate a short video script from a prompt (LLM-backed; outputs scene-by-scene copy). |
+| `save_image_defaults` | Persist preferred `model`, `aspect_ratio`, and `quality` values so they become the defaults for subsequent `generate_image` calls in the same session. |
+
+---
+
+## Video generation tools
+
+**Scope (all):** `workflows:execute`
+
+| Tool | Description |
+|------|-------------|
+| `generate_video` | Text-to-video generation. Accepts `prompt`, `model`, `aspect_ratio`, `duration`, and optional `start_image_url` / `end_image_url`. |
+| `animate_image` | Image-to-video animation — bring a still image to life. Accepts `image_url`, `motion_prompt`, `model`, `duration`. |
+| `extend_video` | Extend an existing video clip forward in time. Accepts `video_url`, `prompt`, `model`, `duration`. |
+| `loop_video` | Create a seamless looping clip from a short video segment. Accepts `video_url` and optional loop-trim parameters. |
+| `modify_video` | Video-to-video transformation — apply a style or prompt transformation to an existing clip. |
+| `trim_video` | Trim a video to a start/end timestamp. Accepts `video_url`, `start`, `end`. |
+| `combine_videos` | Concatenate multiple video clips with optional transitions. Accepts `video_urls[]`, `transition`, `transition_duration`. |
+| `merge_video_audio` | Merge a video track and an audio track into a single output file. |
+| `add_captions` | Burn subtitles/captions onto a video. Accepts `video_url` and caption style options. |
+| `extract_frame` | Extract a single frame from a video at a given timestamp. Returns an image URL. |
+| `lip_sync` | Drive lip-sync on a video or portrait image from an audio track. Accepts `video_url` / `image_url` + `audio_url`. |
+| `speech_to_video` | Generate a talking-head video from a portrait + speech audio. |
+| `motion_transfer` | Transfer the motion pattern from one video onto a target image or video. |
+| `face_swap` | Swap a face in a source image/video with a reference face. |
+| `video_upscale` | AI upscale a video to a higher resolution (powered by Topaz via KIE). |
+
+---
+
+## Audio generation tools
+
+**Scope (all):** `workflows:execute`
+
+| Tool | Description |
+|------|-------------|
+| `generate_music` | Text-to-music generation (Suno v4/v5 via KIE). Accepts `prompt`, `style`, `duration`, `model`. |
+| `generate_speech` | Text-to-speech. Accepts `text`, `voice_id`, `model`. Supports ElevenLabs v3 (default) and KIE v2 models. |
+| `text_to_audio` | Text-to-sound-effect (ElevenLabs SFX). Accepts `prompt` and optional `duration`. |
+| `voice_clone` | Instant voice clone from a reference audio clip (ElevenLabs). Returns a `voice_id` for use with `generate_speech`. |
+| `voice_design` | Design a new synthetic voice from text descriptors (ElevenLabs `/v1/text-to-voice/design`). Returns a `voice_id`. |
+| `voice_changer` | Transform the speaker identity in an audio clip to a target voice. |
+| `voice_remix` | Re-stylize or re-arrange an existing audio clip. |
+| `dubbing` | Dub a video or audio clip into a target language with voice preservation. |
+| `transcribe` | Speech-to-text transcription. Returns a transcript + optional timestamps. |
+| `audio_isolation` | Separate vocals from background music / noise (stem isolation). |
+| `trim_audio` | Trim an audio file to a start/end timestamp. |
+| `download_youtube_audio` | Download the audio track from a YouTube URL. Returns an audio asset URL. |
+
+---
+
+## Suno music tools
+
+All Suno tools require `workflows:execute`.
+
+| Tool | Description |
+|------|-------------|
+| `suno_generate` | Generate a new song from a prompt or lyrics using Suno v4/v5. |
+| `suno_lyrics` | Generate song lyrics from a prompt. |
+| `suno_extend` | Extend an existing Suno song clip. |
+| `suno_cover` | Generate a cover version of a song. |
+| `suno_upload_extend` | Upload an audio clip and extend it with Suno. |
+| `suno_music_video` | Generate a music video from a Suno song clip. |
+| `suno_mashup` | Blend two audio clips into a mashup. |
+| `suno_replace_section` | Replace a section of a Suno song with new generated audio. |
+| `suno_style_boost` | Apply a style transfer / boost to a Suno song. |
+| `suno_add_instrumental` | Add an instrumental track to a Suno song. |
+| `suno_add_vocals` | Add a vocal layer to an instrumental track. |
+| `suno_separate_stems` | Separate a song into vocal + instrumental stems. |
+| `suno_convert_wav` | Convert a Suno output to WAV format. |
 
 ---
 
@@ -407,484 +472,113 @@ prompt with no questions round-trip.
 
 Character tools surface the caller's saved characters from Character Studio so
 an LLM client can pick the right asset URL to pass as a reference image into
-a subsequent generation call. They are **read-only**: editing characters still
-flows through the web app or the REST API.
-
-The intended workflow is:
-
-1. Call `list_characters` to discover which characters are available, with
-   their asset counts and short identity copy.
-2. Call `get_character(id)` for the character(s) you want to use, which
-   returns every expression / pose / motion / angle / lighting variant with
-   its URL.
-3. Pick the URL that matches the user's intent (e.g. an expression named
-   `"smile"` or `"laughing"`) and pass it as a reference image into
-   `generate_image`, `image_to_image`, or `generate_video`.
-
-Both tools are scoped to the calling user — characters owned by other users
-are invisible. Archived characters are excluded.
+a subsequent generation call.
 
 ### `list_characters`
+
+**Scope:** `assets:read`
 
 Lists the caller's characters with summary fields, ordered by most recently
 updated.
 
-**Scope:** `assets:read`
+**Input:** `{ limit?: integer }` — default 50, max 100.
 
-**Input:**
-
-| Field | Type | Notes |
-|-------|------|-------|
-| `limit` | integer | Optional. Max characters to return. Default 50, max 100. |
-
-**Response shape:**
-```json
-{
-  "data": [
-    {
-      "id": "uuid",
-      "name": "Kira",
-      "description": "freckled redhead protagonist",
-      "canonicalDescription": "young woman with auburn hair and green eyes…",
-      "portraitUrl": "https://example.com/kira-portrait.png",
-      "seedPrompt": "kira portrait",
-      "gender": "female",
-      "style": "photoreal",
-      "baseOutfit": "denim jacket",
-      "assetCounts": {
-        "expressions": 5,
-        "poses": 3,
-        "motions": 2,
-        "angles": 1,
-        "bodyAngles": 0,
-        "lightingVariations": 0
-      },
-      "updatedAt": "2026-05-10T00:00:00.000Z"
-    }
-  ]
-}
-```
+---
 
 ### `get_character`
 
-Returns full asset detail for one character. Use the `id` from
-`list_characters`.
-
 **Scope:** `assets:read`
 
-**Input:**
+Returns full asset detail for one character including every expression / pose /
+motion / angle / lighting variant with its URL.
 
-| Field | Type | Notes |
-|-------|------|-------|
-| `id` | UUID string | The character's id, from `list_characters` |
+**Input:** `{ id: uuid }`
 
-**Response shape:**
-```json
-{
-  "data": {
-    "id": "uuid",
-    "name": "Kira",
-    "description": "freckled redhead protagonist",
-    "canonicalDescription": "young woman with auburn hair and green eyes…",
-    "portraitUrl": "https://example.com/kira-portrait.png",
-    "seedPrompt": "kira portrait",
-    "gender": "female",
-    "style": "photoreal",
-    "baseOutfit": "denim jacket",
-    "expressions": [
-      { "name": "smile", "url": "https://example.com/kira-smile.png" },
-      { "name": "frown", "url": "https://example.com/kira-frown.png" }
-    ],
-    "poses": [
-      { "name": "standing", "url": "https://example.com/kira-stand.png" }
-    ],
-    "motions": [
-      { "name": "wave", "url": "https://example.com/kira-wave.mp4" }
-    ],
-    "angles": [
-      { "name": "profile-left", "url": "https://example.com/kira-profile.png" }
-    ],
-    "bodyAngles": [],
-    "lightingVariations": [
-      { "name": "golden-hour", "url": "https://example.com/kira-golden.png" }
-    ],
-    "referencePhotos": [
-      { "url": "https://example.com/kira-ref-1.jpg", "kind": "frontFace" }
-    ],
-    "realLifeRefsByVariant": {
-      "smile": ["https://example.com/laugh-ref.jpg"]
-    },
-    "createdAt": "2026-04-01T00:00:00.000Z",
-    "updatedAt": "2026-05-10T00:00:00.000Z"
-  }
-}
-```
-
-Returns an error if the id doesn't resolve to a character owned by the caller.
-
-**Example walkthrough** ("make a photo of Kira smiling and Shira laughing at
-the park"):
-
-```jsonc
-// Step 1 — discover available characters
-list_characters({})
-// → { data: [{ id: "kira-uuid", name: "Kira", … }, { id: "shira-uuid", name: "Shira", … }] }
-
-// Step 2 — fetch Kira's full detail
-get_character({ id: "kira-uuid" })
-// → { data: { expressions: [{ name: "smile", url: "https://…/kira-smile.png" }, …], … } }
-
-// Step 3 — fetch Shira's full detail
-get_character({ id: "shira-uuid" })
-// → { data: { expressions: [{ name: "laughing", url: "https://…/shira-laugh.png" }, …], … } }
-
-// Step 4 — generate the composite scene with both URLs as references
-generate_image({
-  prompt: "Kira smiling and Shira laughing in a sunlit park",
-  reference_images: [
-    "https://…/kira-smile.png",
-    "https://…/shira-laugh.png"
-  ]
-})
-```
+---
 
 ### `create_character`
 
-Creates a new character row with identity fields. No portrait — call
-`generate_character` (kind=`"main"`) afterwards. The character is scoped to
-the calling user and visible in the editor under the user's library.
-
 **Scope:** `assets:write`
 
-**Input:**
+Creates a new character row with identity fields. No portrait — call
+`generate_character` (kind=`"main"`) afterwards.
 
-| Field | Type | Notes |
-|-------|------|-------|
-| `name` | string (1–200) | Display name; must be unique among the user's active characters. |
-| `description` | string (max 2000) | Identity notes (height, hair, vibe). |
-| `gender` | string (max 50) | Optional. |
-| `style` | enum | `realistic` / `anime` / `3d-pixar` / `illustration`. |
-| `base_outfit` | string (max 1000) | Default wardrobe description. |
-| `seed_prompt` | string (max 2000) | Scaffold prompt for portrait generation. |
+**Input:** `name`, `description`, `gender`, `style` (`realistic`/`anime`/`3d-pixar`/`illustration`), `base_outfit`, `seed_prompt`
 
-**Response:** `{ id, name }` in structured content. A 409
-`A character named "X" already exists.` error is returned on name conflict.
+---
 
 ### `update_character`
 
-Patches an existing character. Only the fields you supply are written;
-omitted fields are left untouched.
-
 **Scope:** `assets:write`
 
-**Input:**
+Patches an existing character. Only the fields you supply are written.
+Supports optimistic concurrency via `expected_updated_at`.
 
-| Field | Type | Notes |
-|-------|------|-------|
-| `id` | UUID | Required. |
-| `name` | string (1–200) | Optional. 409 on name conflict. |
-| `description` | string (max 2000) | Optional. |
-| `gender` | string (max 50) | Optional. |
-| `style` | enum | Optional. |
-| `base_outfit` | string (max 1000) | Optional. |
-| `seed_prompt` | string (max 2000) | Optional. |
-| `expected_updated_at` | string (ISO 8601) | Optional; enables optimistic concurrency. |
-
-**Optimistic concurrency:** pass the `updatedAt` from a prior `get_character`
-call as `expected_updated_at`. The token is folded into the UPDATE itself
-(`WHERE updated_at = :expected_updated_at`) so the check is atomic — if the
-row changed since you read it the UPDATE matches zero rows and the call
-returns a conflict error instead of overwriting.
-
-### Destructive operations — intentionally NOT exposed via MCP
-
-`delete_character` and `restore_character` are **not** available through
-the MCP surface. Destructive (or destructive-adjacent) operations driven
-by an LLM are dangerous — prompt injection or hallucination can trigger
-them unexpectedly, and the LLM doesn't always have the user context to
-make those calls safely.
-
-To archive or restore a character, use the REST API, SDK, or CLI directly
-— those are explicit user actions, not LLM-driven:
-
-| Surface | How |
-|---------|-----|
-| REST | `DELETE /v1/characters/:id` (archive) / `POST /v1/characters/:id/restore` |
-| SDK | `client.characters.delete(id)` / `client.characters.restore(id)` |
-| CLI | `nodaro characters delete <id>` / `nodaro characters restore <id>` |
-
-The same principle applies to every MCP tool family: MCP exposes
-creation, modification, and generation (all reversible); deletion,
-restoration, and permanent state changes stay REST/SDK/CLI only.
+---
 
 ### `approve_portrait`
 
-Approves a completed `generate_character` job as the character's canonical
-portrait. Sets `source_image_url` and fires an LLM caption (Claude Sonnet
-vision) inline to populate `canonical_description`.
-
 **Scope:** `assets:write`
 
-**Input:**
+Approves a completed `generate_character` job as the character's canonical
+portrait. Fires an LLM caption inline to populate `canonical_description`.
 
-| Field | Type | Notes |
-|-------|------|-------|
-| `character_id` | UUID | Required. |
-| `candidate_job_id` | UUID | The job id from a completed `generate_character` call. |
+**Input:** `{ character_id: uuid, candidate_job_id: uuid }`
 
-**Response:** `{ characterId, portraitUrl, canonicalDescription }` — the
-caption is `null` on LLM sub-failure (portrait still set; retry via
-`recaption_character`).
+---
 
 ### `recaption_character`
 
-Re-runs the LLM caption against the character's current portrait and
-persists the new `canonical_description`. Returns 400 `no_portrait` when no
-portrait is set; 502 on LLM failure.
-
 **Scope:** `assets:write`
 
-**Input:** `{ id: <uuid> }`
+Re-runs the LLM caption against the character's current portrait and
+persists the new `canonical_description`.
 
-**Response:** `{ id, canonicalDescription }` in structured content.
+**Input:** `{ id: uuid }`
+
+---
 
 ### `generate_character`
 
-Generates either a fresh portrait (`kind: "main"`) or an asset variant
-(`kind: "asset"`) for a named character. The single tool covers two routes
-under the hood: `POST /v1/generate-character` (main portrait) and
-`POST /v1/generate-character-asset` (variants — expressions, poses, head
-angles, body angles, lighting, custom). Use `generate_character_motion`
-for animated clips — that's a separate route with its own input shape.
-
-**`kind: "main"` — generate a portrait**
-
-Creates a new character image with the supplied identity fields. Returns
-the image-generation job id; poll via `get_job` until completion, then
-approve it with `approve_portrait` to anchor it as the character's
-canonical portrait.
-
-**`kind: "asset"` — generate a variant**
-
-Generates a new variant for an existing character — expression (smile,
-sad, angry, surprised, talking, laughing, disgusted, fearful, smirk,
-crying, neutral), head angle (front, 3/4 left, left profile, right
-profile, 3/4 right), body angle (same set plus back, full-body framing),
-pose (standing, walking, sitting, running, crouching, pointing, fighting
-stance, jumping, turning), lighting variation (daylight, night,
-dramatic), or a freeform `custom` prompt. When `attach_to_character_id`
-is set, the character's anchor portrait is used as the image-to-image
-source AND the result auto-attaches to the appropriate bucket on
-completion. The character must have an approved portrait — the route
-returns 400 `portrait_required` otherwise.
-
 **Scope:** `workflows:execute`
 
-**Input:**
+Generates either a fresh portrait (`kind: "main"`) or an asset variant
+(`kind: "asset"`) for a named character. The single tool covers two routes:
+`POST /v1/generate-character` (main portrait) and
+`POST /v1/generate-character-asset` (variants — expressions, poses, head
+angles, body angles, lighting, custom).
 
-| Field | Type | Notes |
-|-------|------|-------|
-| `kind` | `"main"` \| `"asset"` | Defaults to `"main"`. |
-| `name` | string (1–200) | Required. Character name; pass the same name as the character row. |
-| `description` | string (max 2000) | Optional. Identity description used in the prompt. |
-| `gender` | string (max 50) | Optional. |
-| `style` | enum | Optional. `realistic` \| `anime` \| `3d-pixar` \| `illustration`. |
-| `base_outfit` | string (max 1000) | Optional. |
-| `source_image_url` | URL | Optional. For kind=`asset`: overrides the i2i source. Required when `attach_to_character_id` is omitted (no portrait to fall back on). |
-| `model` | string | Optional. Image-generation provider; defaults to `nano-banana`. Other options: `nano-banana-pro`, `flux`, `grok`, `gpt-image`, `ideogram`. |
-| `asset_type` | enum | Required when `kind="asset"`. `expressions` \| `poses` \| `lighting` \| `angles` \| `headAngles` \| `bodyAngles` \| `custom`. `angles` is the legacy alias for `headAngles`; prefer `headAngles`. For motion clips use `generate_character_motion`. |
-| `variant` | string (1–100) | Required when `kind="asset"`. Variant name — e.g. `smile`, `3/4 left`, `back`, `walking`, `daylight`, or any short label for custom. |
-| `attach_to_character_id` | UUID | Optional. Studio mode: auto-attach to the character's row and reuse the anchor portrait as the i2i source. |
-| `attach_to_column` | enum | Required with `attach_to_character_id` when `asset_type="custom"` (the worker can't infer the bucket). One of `expressions` \| `poses` \| `angles` \| `body_angles` \| `lighting_variations`. Canonical asset types derive the column automatically. |
-| `attach_name` | string (1–200) | Optional. Display name stored on the attached asset entry; defaults to `variant`. |
+**Input (main):** `kind`, `name`, `description`, `gender`, `style`, `base_outfit`, `model`
 
-**Response:** `{ jobId }` in structured content. Poll via `get_job` until
-status=completed. For `kind="asset"` with `attach_to_character_id` set,
-the asset auto-attaches to the matching bucket on completion.
+**Input (asset):** `kind`, `name`, `asset_type`, `variant`, `attach_to_character_id`, `attach_to_column`, `attach_name`, `source_image_url`
 
-**Example: portrait**
-
-```jsonc
-generate_character({
-  kind: "main",
-  name: "Kira",
-  description: "young protagonist, auburn hair, green eyes",
-  style: "realistic"
-})
-// → { content: [text], structuredContent: { jobId: "job-portrait" } }
-```
-
-**Example: smile expression**
-
-```jsonc
-generate_character({
-  kind: "asset",
-  name: "Kira",
-  asset_type: "expressions",
-  variant: "smile",
-  attach_to_character_id: "kira-uuid"
-})
-// → { content: [text], structuredContent: { jobId: "job-asset-1" } }
-```
-
-**Example: 3/4-left head angle**
-
-```jsonc
-generate_character({
-  kind: "asset",
-  name: "Kira",
-  asset_type: "headAngles",
-  variant: "3/4 left",
-  attach_to_character_id: "kira-uuid",
-  attach_name: "Three-quarter left"
-})
-```
-
-**Example: back body angle**
-
-```jsonc
-generate_character({
-  kind: "asset",
-  name: "Kira",
-  asset_type: "bodyAngles",
-  variant: "back",
-  attach_to_character_id: "kira-uuid"
-})
-```
-
-**Example: custom asset with explicit column**
-
-```jsonc
-generate_character({
-  kind: "asset",
-  name: "Kira",
-  asset_type: "custom",
-  variant: "noir",
-  attach_to_character_id: "kira-uuid",
-  attach_to_column: "lighting_variations",
-  attach_name: "Noir"
-})
-```
+---
 
 ### `generate_character_motion`
 
-Animates a character into a motion clip via image-to-video. When
-`attach_to_character_id` is set, the source frame is auto-resolved from
-the character row and the resulting clip is appended to the row's
-`motions[]` bucket on completion.
-
-**Source-frame priority** (when `attach_to_character_id` is set):
-
-1. Explicit `source_image_url` (override — always wins).
-2. The character's `front` body angle — full-body framing produces much
-   better motion than a portrait headshot.
-3. Any other body angle (most recently saved).
-4. The anchor portrait (`source_image_url` on the row).
-
-Generate body angles first via `generate_character_asset` with
-`asset_type=bodyAngles` and `attach_to_column=body_angles` for the best
-motion results.
-
 **Scope:** `workflows:execute`
 
-**Input:**
+Animates a character into a motion clip via image-to-video. When
+`attach_to_character_id` is set, the source frame is auto-resolved from
+the character row and the resulting clip is appended to the `motions[]` bucket.
 
-| Field | Type | Notes |
-|-------|------|-------|
-| `motion_prompt` | string (1–2000) | Required. What moves and how. |
-| `name` | string (1–200) | Required. Used in the prompt. |
-| `attach_to_character_id` | UUID | Optional. Auto-attach + auto-resolve source frame. |
-| `attach_name` | string (1–200) | Optional. Display name in the motions[] bucket. |
-| `source_image_url` | URL | Override source frame. Required when `attach_to_character_id` is omitted. |
-| `description` | string (max 1000) | Optional. Visual scaffolding. |
-| `motion_description` | string (max 500) | Optional. Tight description of rhythm + feel. |
-| `provider` | string | Defaults to `kling`. |
-
-**Response:** `{ jobId }` in structured content. Poll via `get_job` until
-status=completed.
-
-### Studio walkthrough — create + portrait + asset
-
-```jsonc
-// Step 1 — create the character row
-create_character({
-  name: "Kira",
-  description: "young protagonist with auburn hair",
-  style: "realistic",
-  seed_prompt: "kira portrait, warm natural lighting"
-})
-// → { id: "kira-uuid", name: "Kira" }
-
-// Step 2 — generate 4 portrait candidates auto-attaching to the row
-generate_character({
-  kind: "main",
-  name: "Kira",
-  // count is not exposed to MCP yet — single candidate per call
-})
-// → { content: [text], structuredContent: { jobId: "job-1" } }
-
-// Step 3 — after the job completes, approve the candidate
-approve_portrait({
-  character_id: "kira-uuid",
-  candidate_job_id: "job-1"
-})
-// → { portraitUrl: "https://…/kira-portrait.png", canonicalDescription: "…" }
-
-// Step 4 — layer a smile expression from the portrait
-generate_character({
-  kind: "asset",
-  name: "Kira",
-  asset_type: "expressions",
-  variant: "smile",
-  attach_to_character_id: "kira-uuid"
-})
-
-// Step 5 — add a 3/4-left head angle for cross-shot framing
-generate_character({
-  kind: "asset",
-  name: "Kira",
-  asset_type: "headAngles",
-  variant: "3/4 left",
-  attach_to_character_id: "kira-uuid"
-})
-
-// Step 6 — animate the portrait
-generate_character_motion({
-  motion_prompt: "slow head turn left, soft smile",
-  name: "Kira",
-  attach_to_character_id: "kira-uuid",
-  attach_name: "head turn"
-})
-```
+**Input:** `motion_prompt`, `name`, `attach_to_character_id`, `source_image_url`, `description`, `motion_description`, `provider`
 
 ---
 
 ## Location tools
 
 Eight tools for the location lifecycle — identity edits, establishing-shot
-generation, atmospheric motion clips, and LLM-captioned approval. Scope-
-gated and mirrored on the SDK at [`client.locations`](../sdk-reference.md#clientlocations).
-For the full data model + worked examples on all four surfaces, see
-[Location Platform](../location-platform.md).
-
-### Destructive operations — intentionally NOT exposed via MCP
-
-`delete_location` and `restore_location` are deliberately omitted from
-MCP. Soft-delete is destructive-adjacent and recovery requires context an
-LLM doesn't have; users (and SDK / CLI integrations on their behalf) can
-still archive + restore through REST.
+generation, atmospheric motion clips, and LLM-captioned approval. Mirrored on
+the SDK at [`client.locations`](../sdk-reference.md#clientlocations).
 
 ### `list_locations`
 
 **Scope:** `assets:read`
 
-Summary list (name, main image URL, asset counts, identity copy). Pass
-`archived: true` for the archive.
+Summary list (name, main image URL, asset counts, identity copy).
 
-```jsonc
-list_locations({ archived: false })
-// → { locations: [ { id, name, sourceImageUrl, assetCounts, ... } ] }
-```
+**Input:** `{ archived?: boolean }`
 
 ---
 
@@ -892,12 +586,9 @@ list_locations({ archived: false })
 
 **Scope:** `assets:read`
 
-Full detail including all six asset arrays + reference photos +
-`pendingJobs` (in-flight asset generations).
+Full detail including all asset arrays + reference photos + `pendingJobs`.
 
-```jsonc
-get_location({ id: "loc-uuid" })
-```
+**Input:** `{ id: uuid }`
 
 ---
 
@@ -907,15 +598,7 @@ get_location({ id: "loc-uuid" })
 
 Create a new row with name + optional description / category / style.
 
-```jsonc
-create_location({
-  name: "Rainy Tokyo Alley",
-  description: "Neon-soaked alley with vending machines",
-  category: "urban",
-  style: "realistic"
-})
-// → { id: "loc-uuid" }
-```
+**Input:** `name`, `description`, `category`, `style`
 
 ---
 
@@ -924,21 +607,8 @@ create_location({
 **Scope:** `assets:write`
 
 Update identity fields (`name`, `description`, `category`, `style`,
-`styleLock`, `canonicalDescription`). Worker-owned asset buckets are NOT
-exposed — a stale-snapshot save would clobber atomic
-`append_location_asset` writes.
-
-Optimistic-concurrency via `expected_updated_at` — on mismatch returns 409
-`concurrent_modification`. Re-fetch + merge + retry.
-
-```jsonc
-update_location({
-  id: "loc-uuid",
-  canonical_description: "...",
-  style_lock: false,
-  expected_updated_at: "2026-05-20T01:23:45.678Z"
-})
-```
+`styleLock`, `canonicalDescription`). Supports optimistic concurrency via
+`expected_updated_at`.
 
 ---
 
@@ -947,19 +617,9 @@ update_location({
 **Scope:** `assets:write`
 
 Approve a completed `generate_location` candidate as the location's main
-image. Fires the LLM caption (Claude Sonnet vision) inline.
+image. Fires the LLM caption inline.
 
-Caption-failure semantics: `canonicalDescription` is coerced to `""` (not
-`null`) when the LLM sub-call failed — the main image is still set; call
-`recaption_location` to retry.
-
-```jsonc
-approve_main_image({
-  location_id: "loc-uuid",
-  candidate_job_id: "job-uuid"
-})
-// → { sourceImageUrl, canonicalDescription }
-```
+**Input:** `{ location_id: uuid, candidate_job_id: uuid }`
 
 ---
 
@@ -967,14 +627,9 @@ approve_main_image({
 
 **Scope:** `assets:write`
 
-Re-run the LLM caption against the current main image. Errors with 502 on
-LLM failure (unlike `approve_main_image` which preserves the side-effect
-and returns `""`); 400 `no_source_image` if no main image is set yet.
+Re-run the LLM caption against the current main image.
 
-```jsonc
-recaption_location({ id: "loc-uuid" })
-// → { canonicalDescription }
-```
+**Input:** `{ id: uuid }`
 
 ---
 
@@ -982,37 +637,7 @@ recaption_location({ id: "loc-uuid" })
 
 **Scope:** `workflows:execute`
 
-Generate a main image (`kind: "main"`) or a variant asset (`kind: "asset"`
-+ `asset_type` + `variant`). Lives in the shared verb-style registry
-alongside `generate_image` and `generate_character`.
-
-For main-image generation with `count > 1`, all jobs are reserved up-front;
-mid-batch failures roll back atomically. With `count === 1` AND
-`attach_to_location_id` set, the worker writes the result directly to the
-row's `source_image_url`; otherwise call `approve_main_image` after picking
-a candidate.
-
-Variant names for canonical asset types are listed in
-[Location Platform → MCP](../location-platform.md#mcp).
-
-```jsonc
-// Main image (single candidate — auto-attaches on completion)
-generate_location({
-  kind: "main",
-  name: "Rainy Tokyo Alley",
-  attach_to_location_id: "loc-uuid"
-})
-
-// Variant asset (auto-attaches to the named bucket)
-generate_location({
-  kind: "asset",
-  name: "Rainy Tokyo Alley",
-  asset_type: "weather",
-  variant: "storm",
-  attach_to_location_id: "loc-uuid",
-  attach_name: "storm"
-})
-```
+Generate a main image (`kind: "main"`) or a variant asset (`kind: "asset"` + `asset_type` + `variant`).
 
 ---
 
@@ -1021,90 +646,33 @@ generate_location({
 **Scope:** `workflows:execute`
 
 Animate the location's establishing shot into an atmospheric motion clip
-(image-to-video). The attach column is hardcoded server-side to
-`atmosphere_motions` so callers DON'T supply `attach_to_column`.
-
-**Refinement:** pass `refine_from_video_url` to route the worker through
-video-to-video using THAT clip as the source instead of running image-to-
-video from `source_image_url`. Use to iterate on an existing atmosphere
-clip with a new prompt without shifting composition. Routes through
-providers with `video-to-video` capability (currently Wan 2.6 via KIE).
-
-```jsonc
-// New atmosphere clip
-generate_location_motion({
-  motion_prompt: "slow dolly-in, neon signs flicker, light rain falling",
-  source_image_url: "https://r2/loc-main.png",
-  provider: "kling",
-  name: "Rainy Tokyo Alley",
-  attach_to_location_id: "loc-uuid",
-  attach_name: "neon dolly-in"
-})
-
-// Refine an existing clip (video-to-video)
-generate_location_motion({
-  motion_prompt: "same shot but light rain instead of fog",
-  source_image_url: "https://r2/loc-main.png",
-  refine_from_video_url: "https://r2/loc-fog.mp4",
-  provider: "wan-i2v",
-  name: "Rainy Tokyo Alley"
-})
-```
+(image-to-video). Pass `refine_from_video_url` to route through video-to-video
+for iterating on an existing clip.
 
 ---
 
 ## Object tools
 
-Three tools for the object (prop / product / vehicle / etc.) lifecycle —
-main-image approval, LLM recaption, and i2v motion clips. Scope-gated and
-mirrored on the SDK at [`client.objects`](../sdk-reference.md#clientobjects).
-For the full data model + worked examples on all four surfaces, see
-[Object Platform](../object-platform.md).
+Four tools for the object (prop / product / vehicle / etc.) lifecycle —
+main-image approval, LLM recaption, motion clips, and verb-style generation.
+Mirrored on the SDK at [`client.objects`](../sdk-reference.md#clientobjects).
 
-The MCP surface intentionally exposes a **smaller subset** than the SDK:
-generation (main image + variants) and identity edits flow through the
-shared `generate_object` / `create_object` / `update_object` tools
-registered alongside the other verb-style entries; the 3 tools below
-cover the Studio-grade operations (approve, recaption, motion-animate)
-that need their own input shape.
+### `generate_object`
 
-### Destructive operations — intentionally NOT exposed via MCP
+**Scope:** `workflows:execute`
 
-`delete_object`, `restore_object`, and `permanent_delete_object` are
-deliberately omitted from MCP. Soft-delete is destructive-adjacent and
-recovery requires context an LLM doesn't have; users (and SDK / CLI
-integrations on their behalf) can still archive + restore through REST.
+Generate a main image or variant asset for an object. Parallel to `generate_character` / `generate_location`.
+
+---
 
 ### `approve_object_main_image`
 
 **Scope:** `assets:write`
 
 Approve a completed `generate_object` candidate as the object's main
-image. Fires the LLM caption (Claude Sonnet vision) inline. Returns the
-new main-image URL plus the caption.
+image. Fires the LLM caption inline.
 
-Caption-failure semantics: `canonicalDescription` is coerced to `""` (not
-`null`) when the LLM sub-call failed — the main image is still set; call
-`recaption_object` to retry.
-
-Optimistic-concurrency via `expected_updated_at` — on mismatch the route
-returns 409 `concurrent_modification` carrying the fresh token. Re-fetch
-+ merge + retry.
-
-```jsonc
-approve_object_main_image({
-  object_id: "obj-uuid",
-  candidate_job_id: "job-uuid"
-})
-// → { sourceImageUrl, canonicalDescription }
-
-// With optimistic-concurrency
-approve_object_main_image({
-  object_id: "obj-uuid",
-  candidate_job_id: "job-uuid",
-  expected_updated_at: "2026-05-20T01:23:45.678Z"
-})
-```
+**Input:** `{ object_id: uuid, candidate_job_id: uuid }` + optional `expected_updated_at`
 
 ---
 
@@ -1112,20 +680,9 @@ approve_object_main_image({
 
 **Scope:** `assets:write`
 
-Re-run the LLM caption against the current main image. Errors with 502
-on LLM failure (unlike `approve_object_main_image` which preserves the
-side-effect and returns `""`); 400 `main_image_required` if no main
-image is set yet.
+Re-run the LLM caption against the current main image.
 
-The route is a **pure idempotent retry** — it does NOT accept an
-`expected_updated_at` parameter (per Phase E1 calibration finding: the
-backend `object-llm-caption.ts` route is an idempotent retry rather than
-gated on optimistic-concurrency).
-
-```jsonc
-recaption_object({ id: "obj-uuid" })
-// → { canonicalDescription }
-```
+**Input:** `{ id: uuid }`
 
 ---
 
@@ -1133,62 +690,339 @@ recaption_object({ id: "obj-uuid" })
 
 **Scope:** `workflows:execute`
 
-Animate the object's main image into a motion clip (image-to-video). The
-attach column is hardcoded server-side to `motion_clips` so callers
-DON'T supply `attach_to_column`.
+Animate the object's main image into a motion clip (image-to-video).
+Provider defaults to `"kling-turbo"`, aspect ratio defaults to `"1:1"`.
+Pass `refine_from_video_url` to use video-to-video refinement.
 
-**Object-specific defaults vs. location:**
+**Input:** `motion_prompt`, `source_image_url` (required), `name`, `attach_to_object_id`, `provider`, `aspect_ratio`, `refine_from_video_url`
 
-- `provider` defaults to `"kling-turbo"` (not location's `"kling"`) — the
-  fastest variant in the object set, favouring product-showcase
-  turnarounds over cinematic atmospheres.
-- `aspect_ratio` defaults to `"1:1"` server-side via
-  `resolveObjectAspectRatio({ assetType: "motion" })` — product-showcase
-  framing favours square. Objects have their own 5-value enum
-  (`1:1` / `3:4` / `16:9` / `9:16` / `4:3`) with `4:3` added vs. the
-  character set to support classic product-catalogue framing.
+---
 
-**Refinement:** pass `refine_from_video_url` to route the worker through
-video-to-video using THAT clip as the source instead of running image-to-
-video from `source_image_url`. Use to iterate on an existing motion clip
-with a new prompt without shifting composition. Routes through providers
-with `video-to-video` capability (currently Wan 2.6 via KIE).
+## Gallery and asset tools
 
-Supported i2v providers (8 total, from `OBJECT_MOTION_PROVIDERS` in
-`@nodaro/shared/model-constants.ts`): `kling-turbo`, `kling`, `kling-3.0`,
-`minimax`, `hailuo-2.3`, `wan-i2v`, `seedance`, `bytedance-lite`.
+### `browse_gallery`
 
-> `source_image_url` is REQUIRED. The route has no fallback — typically
-> the object's approved main image URL.
+**Scope:** `assets:read`
 
-```jsonc
-// New motion clip from the approved main image
-generate_object_motion({
-  motion_prompt: "slow 360 rotation, soft golden rim light",
-  source_image_url: "https://r2/obj-main.png",
-  provider: "kling-turbo",
-  name: "Antique Lantern",
-  attach_to_object_id: "obj-uuid",
-  attach_name: "rotate-360"
-})
+Browse your gallery or the public gallery. Renders an interactive grid
+widget in compatible clients.
 
-// Refine an existing clip (video-to-video)
-generate_object_motion({
-  motion_prompt: "same shot but slow hover instead of rotation",
-  source_image_url: "https://r2/obj-main.png",
-  refine_from_video_url: "https://r2/obj-rotation.mp4",
-  provider: "wan-i2v",
-  name: "Antique Lantern"
-})
+**Input:** `scope` (`"mine"` default / `"public"`), `limit`, `cursor`, `kinds[]`, `query`
 
-// Aspect override (product-catalogue 4:3 framing)
-generate_object_motion({
-  motion_prompt: "slow drone orbit, glossy product reflection",
-  source_image_url: "https://r2/obj-main.png",
-  provider: "kling-turbo",
-  aspect_ratio: "4:3",
-  name: "Antique Lantern",
-  attach_to_object_id: "obj-uuid",
-  attach_name: "drone-orbit"
-})
-```
+---
+
+### `browse_uploads`
+
+**Scope:** `assets:read`
+
+Browse assets you've uploaded (source files — distinct from generated
+outputs). Use to retrieve existing upload URLs to feed into generation
+tools.
+
+**Input:** `kind`, `limit`, `cursor`
+
+---
+
+### `list_favorites`
+
+**Scope:** `assets:read`
+
+List your favorited gallery items, most recent first.
+
+**Input:** `limit`, `cursor`
+
+---
+
+### `get_asset`
+
+**Scope:** `assets:read`
+
+Fetch metadata for a single asset (job) by id, including output URL, prompt,
+provider. Visible for your own jobs (any status) and any user's public
+completed jobs.
+
+**Input:** `{ job_id: string }`
+
+---
+
+### `display_asset`
+
+**Scope:** `assets:read`
+
+Render an asset visually in chat (the user sees the image, not JSON). Best
+for image assets — the bound widget renders inline with Edit / Animate /
+Use-as-reference buttons. For video/audio assets returns a direct link.
+
+**Input:** `{ job_id: string }`
+
+---
+
+### `get_app_run`
+
+**Scope:** `assets:read`
+
+Fetch status of a workflow / published-app execution by id. Returns
+per-node states and output URLs produced so far. Used by widgets to poll
+progress.
+
+**Input:** `{ execution_id: string }`
+
+---
+
+### `favorite_asset`
+
+**Scope:** `assets:write`
+
+Mark or unmark a gallery asset as a favorite.
+
+**Input:** `{ job_id: string, favorited: boolean }`
+
+---
+
+## Jobs tools
+
+### `list_jobs`
+
+**Scope:** `jobs:read`
+
+List your recent jobs with status, job type, and output URL. Supports
+cursor pagination.
+
+**Input:** `limit`, `cursor`, `status`, `job_type`
+
+---
+
+### `get_job`
+
+**Scope:** `jobs:read`
+
+Fetch full metadata for a single job by id, including `output_url`,
+`status`, `progress`, `provider`, and `output_data`.
+
+**Input:** `{ job_id: uuid }`
+
+---
+
+## Apps tools
+
+### `list_apps`
+
+**Scope:** `apps:read`
+
+List published apps. Supports `scope: "public" | "mine"` and ordering by
+recency.
+
+**Input:** `scope`, `limit`, `cursor`
+
+---
+
+### `get_app_inputs`
+
+**Scope:** `apps:read`
+
+Returns the typed input schema for a published app (the same schema the
+published-app page renders). Use this before `run_app` to learn the
+available input keys and their types.
+
+**Input:** `{ slug: string }`
+
+---
+
+### `run_app`
+
+**Scope:** `workflows:execute`
+
+Run a published app by slug. `inputs` is a FLAT object keyed by the schema
+input keys (from `get_app_inputs`). Returns an `execution_id`.
+
+**Input:** `slug`, `inputs?`
+
+---
+
+### `delete_app_run`
+
+**Scope:** `workflows:execute`
+
+Soft-delete (archive) a published-app run. The run can be restored or
+permanently deleted from the Nodaro web UI at `/archived-runs`.
+
+**Input:** `{ slug: string, runId: uuid }`
+
+---
+
+## Component tools
+
+### `list_components`
+
+**Scope:** `workflows:read`
+
+List your saved workflow components (reusable sub-graphs). Ordered by most
+recently updated.
+
+**Input:** `limit`, `cursor`
+
+---
+
+### `get_component_inputs`
+
+**Scope:** `workflows:read`
+
+Returns the typed input schema for a saved component. Use before
+`run_component` to learn available input keys.
+
+**Input:** `{ component_id: uuid }`
+
+---
+
+### `run_component`
+
+**Scope:** `workflows:execute`
+
+Execute a saved component by id. `inputs` is a FLAT object keyed by the
+component's input schema keys. Returns an `execution_id`.
+
+**Input:** `component_id`, `inputs?`
+
+---
+
+## Models and credits tools
+
+### `list_models`
+
+**Scope:** none (always visible)
+
+Browse AI models available on this Nodaro instance. Returns grouped JSON
+with per-model capability sheets (aspect ratios, resolutions, qualities,
+durations, features, per-variant credit pricing) and a `recommendations`
+array.
+
+**Input:** `kind` (`image`/`video`/`audio`), `mode`, `family`, `featuredOnly`
+
+---
+
+### `check_balance`
+
+**Scope:** `credits:read` (cloud edition only)
+
+Returns your current credit balance split by pool (`subscription_credits`
+vs `topup_credits`).
+
+**Input:** none
+
+---
+
+### `credit_transactions`
+
+**Scope:** `credits:read` (cloud edition only)
+
+Lists recent credit transactions (deductions and top-ups) with amounts,
+model identifiers, and timestamps.
+
+**Input:** `limit`, `cursor`
+
+---
+
+## Upload tools
+
+All upload tools require `assets:write`. Three upload strategies are provided
+— prefer the one suited to your client environment.
+
+### Widget uploads (preferred for Claude.ai web)
+
+| Tool | Description |
+|------|-------------|
+| `upload_image_widget` | Opens an in-chat file picker for images. Supports `max_files` (1–10). Auto-announces the resulting URL(s) back to the chat. |
+| `upload_audio_widget` | Opens an in-chat file picker for audio. |
+| `upload_video_widget` | Opens an in-chat file picker for video. |
+
+### Browser-handoff uploads (works everywhere)
+
+| Tool | Description |
+|------|-------------|
+| `request_image_upload` | Returns an `upload_page_url` the user opens in their browser to drop the file, plus the deterministic `public_url`. Works in all MCP clients including Claude.ai web/Android. |
+| `request_audio_upload` | Browser-handoff for audio. |
+| `request_video_upload` | Browser-handoff for video. |
+
+### Presigned-URL uploads (CLI clients with unrestricted bash)
+
+| Tool | Description |
+|------|-------------|
+| `prepare_image_upload` | Returns a presigned R2 PUT URL. Stream the file via `curl -X PUT --data-binary @file -H 'Content-Type: <mime>'`. Use in Cursor / Cline / Claude Desktop / Claude Code only — fails on Claude.ai web/Android. |
+| `prepare_audio_upload` | Presigned upload for audio. |
+| `prepare_video_upload` | Presigned upload for video. |
+
+---
+
+## Pipeline tools
+
+The pipeline tools drive the Nodaro Story-to-Video pipeline engine. Only
+available when the pipeline feature is enabled on your instance.
+
+| Tool | Scope | Description |
+|------|-------|-------------|
+| `branch_pipeline` | `pipelines:execute` | Create a branch of an existing pipeline from a given stage. |
+| `start_pipeline` | `pipelines:execute` | Start a new Story→Video pipeline from a prompt. Mode `"auto"` runs end-to-end unattended; `"manual"`/`"guided"` pause at approval gates. |
+| `chat_pipeline_stage` | `pipelines:approve` | Send a chat message to the Showrunner Refinement Director for a stage awaiting approval (guided mode). Returns the assistant reply and an optional `proposed_change` JSON Patch. |
+| `apply_chat_proposal` | `pipelines:approve` | Accept a proposed edit from a prior `chat_pipeline_stage` reply and advance the stage to approved. |
+| `get_pipeline_stage_chat` | `pipelines:read` | List all chat turns for a pipeline stage ordered by turn number. |
+| `get_pipeline_status` | `pipelines:read` | Get current pipeline state: status, current_stage, credit counters, mode, failure_reason. Poll after `start_pipeline` to track an Auto run. |
+| `pipeline_pending_approvals` | `pipelines:read` | List stages currently awaiting approval with their output snapshots. |
+
+---
+
+## Utility tools
+
+### `reduce`
+
+**Scope:** `workflows:execute`
+
+Summarize or reduce a list of text items using an LLM. Useful for
+post-processing arrays of generated captions or descriptions into a single
+coherent output.
+
+---
+
+### `ping`
+
+**Scope:** none (always visible)
+
+Returns `"pong"` plus the authenticated Nodaro user id and the calling MCP
+client name. Use to verify the connector is wired up correctly.
+
+**Input:** none
+
+---
+
+### `start_film_director`
+
+**Scope:** none (always visible)
+
+Returns the Film Director skill — a multi-step prompt that instructs the
+LLM to drive a 10-stage director workflow (script → characters →
+storyboard → animation → audio → final cut) and assemble an editable
+Nodaro workflow on your canvas in real-time.
+
+**Input:** none
+
+---
+
+### `start_workflow_editor`
+
+**Scope:** none (always visible)
+
+Returns the Workflow Editor skill — a step-by-step guide instructing the
+LLM how to create, edit, and run Nodaro workflows via MCP tools.
+
+**Input:** none
+
+---
+
+### `get_node_skill`
+
+**Scope:** none (always visible)
+
+Returns documentation for a specific node type — accepted inputs, outputs,
+and configuration options — so the LLM can correctly populate that node
+when building or editing a workflow.
+
+**Input:** `{ node_type: string }`

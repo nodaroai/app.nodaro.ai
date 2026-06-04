@@ -1,7 +1,7 @@
 ---
 node_type: object
-generated_at: 2026-05-21T06:51:07.953Z
-generated_from: a22daa77
+generated_at: 2026-06-04T12:41:29.031Z
+generated_from: 9bf1388db
 ---
 
 # Object
@@ -12,6 +12,52 @@ generated_from: a22daa77
 **Credit cost:** 5
 **Inputs (target handles):** `in`
 **Outputs (source handles):** `objectRef`
+
+**Required data fields:**
+- `label: string`
+- `objectDbId: string`
+- `objectName: string`
+- `description: string`
+- `category: "furniture" | "vehicle" | "weapon" | "food" | "clothing" | "electronics" | "nature" | "tool" | "animal" | "other"`
+- `style: "realistic" | "anime" | "3d-pixar" | "illustration"`
+- `sourceImageUrl: string`
+- `projectId: string`
+- `createdAt: string`
+- `executionStatus: "idle" | "running" | "completed" | "failed"`
+- `generatedResults: GeneratedResult[]`
+- `activeResultIndex: number`
+- `fieldMappings: FieldMappings`
+- `angles: ObjectAssetItem[]`
+- `materials: ObjectAssetItem[]`
+- `variations: ObjectAssetItem[]`
+- `anglesStatus: "idle" | "running" | "completed" | "failed"`
+- `materialsStatus: "idle" | "running" | "completed" | "failed"`
+- `variationsStatus: "idle" | "running" | "completed" | "failed"`
+- `customVariations: Array<{ prompt: string; url: string; createdAt: string }>`
+- `motionClips: ObjectAssetItem[]`
+- `motionStatus: AssetStatus`
+- `referencePhotos: ObjectReferencePhoto[]`
+- `canonicalDescription: string`
+- `styleLock: boolean`
+
+**Optional data fields:**
+- `provider?: string`
+- `animalId?: string`
+- `vehicleId?: string`
+- `furnitureId?: string`
+- `weaponId?: string`
+- `currentJobProgress?: number`
+- `errorMessage?: string`
+- `updatedAt?: string`
+- `legacyPickerSelection?: {
+    kind: "animal" | "vehicle" | "furniture" | "weapon"
+    id: string
+  } | null`
+- `pipeline_id?: string`
+- `pipeline_entity_id?: string`
+- `pipeline_owned?: boolean`
+- `pipeline_state?: PipelineState`
+- `is_stale?: boolean`
 
 **Default data:**
 ```json

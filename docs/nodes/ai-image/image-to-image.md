@@ -1,15 +1,17 @@
 # Image to Image
 > Transform an existing image using AI with a text prompt, preserving structure while applying new styles, subjects, or modifications.
 
+> **Note:** This page documents the `image-to-image` API endpoint / legacy node. In the editor, image-to-image is now part of the **Modify Image** node (see [modify-image.md](./modify-image.md)).
+
 ## Overview
 
-Image to Image takes a source image and a text prompt to generate a transformed version. Unlike Edit Image (which focuses on utility operations like upscaling), Image to Image performs creative transformations: restyling, subject replacement, inpainting, reframing, and remix operations. It supports 15 provider models with varying capabilities including strength control, mask-based inpainting, guidance scale, and resolution options. The default provider is Nano Banana.
+Image to Image takes a source image and a text prompt to generate a transformed version. Unlike Edit Image (which focuses on utility operations like upscaling), Image to Image performs creative transformations: restyling, subject replacement, inpainting, reframing, and remix operations. It supports 20 provider models with varying capabilities including strength control, mask-based inpainting, guidance scale, and resolution options. The default provider is Nano Banana.
 
 ## Configuration
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| Provider | select | `nano-banana` | AI model to use for transformation (15 options) |
+| Provider | select | `nano-banana` | AI model to use for transformation (20 options) |
 | Prompt | text | `""` | Description of the desired transformation |
 | Style | select | `""` | 16 presets + "Custom..." free text (same as Generate Image) |
 | Negative Prompt | text | `""` | Elements to exclude from the result |
@@ -35,11 +37,13 @@ Image to Image takes a source image and a text prompt to generate a transformed 
 | Provider | Label | Description | Key Capability |
 |----------|-------|-------------|----------------|
 | nano-banana | Nano Banana | Fast iteration, quick transforms | General I2I |
+| nano-banana-2 | Nano Banana 2 | Updated Nano Banana; 1K/2K/4K resolution | General I2I, resolution options |
 | nano-banana-pro | Nano Banana Pro | Higher detail, production images | General I2I, resolution options |
 | grok-i2i | Grok | Creative and stylized imagery | Stylized transforms |
 | flux-i2i | Flux-2 | Style-faithful transformations | Resolution options (1K/2K) |
 | flux-pro-i2i | Flux-2 Pro | Premium quality image transforms | Resolution options (1K/2K) |
 | gpt-image-i2i | GPT Image | Text rendering, complex compositions | Quality options (medium/high) |
+| gpt-image-2-i2i | GPT Image 2 | Higher resolution GPT Image; 1K/2K/4K | Resolution options |
 | ideogram-edit | Ideogram Edit | AI-guided image editing | Mask-based inpainting |
 | ideogram-remix | Ideogram Remix | Restyle with character consistency | Character-consistent restyling |
 | ideogram-reframe | Ideogram Reframe | Change aspect ratio intelligently | Aspect ratio adjustment |
@@ -49,9 +53,9 @@ Image to Image takes a source image and a text prompt to generate a transformed 
 | seedream-5-lite-i2i | Seedream 5 Lite | Latest Seedream image-to-image | Quality options (basic/high) |
 | flux-kontext | Flux Kontext | Context-aware editing via Kontext | Context-aware transforms |
 | flux-kontext-max | Flux Kontext Max | Highest quality Kontext editing | Premium context-aware transforms |
-| kontext-multi | Kontext Multi (Open) | Multi-image Flux Kontext Pro via Replicate — no safety filter | Up to 2 reference images. 4 credits |
-| flux-2-pro | Flux 2 Pro (Safety Tolerance) | BFL Flux 2 Pro flagship via Replicate — `safety_tolerance` pinned to 5 | Up to 4 reference images. Resolution 0.5 / 1 / 2 / 4 MP (default 2 MP); per-MP pricing — ~5 credits at 2 MP with the primary image. |
-| flux-2-max | Flux 2 Max (Safety Tolerance) | BFL Flux 2 Max via Replicate — `safety_tolerance=5`, up to 8 reference images | Resolution 0.5 / 1 / 2 / 4 MP (default 2 MP). **Per-megapixel pricing** ($0.07/output-MP + $0.03/MP per input image): ~13 credits at 2 MP with the primary image, scaling with resolution and extra references. |
+| kontext-multi | Kontext Multi (Open) | Multi-image Flux Kontext Pro via Replicate — no safety filter | Up to 2 reference images. 3 credits |
+| flux-2-pro | Flux 2 Pro (Safety Tolerance) | BFL Flux 2 Pro flagship via Replicate — `safety_tolerance` pinned to 5 | Up to 4 reference images. Resolution 0.5 / 1 / 2 / 4 MP (default 2 MP); per-MP pricing — ~4 credits at 2 MP with the primary image. |
+| flux-2-max | Flux 2 Max (Safety Tolerance) | BFL Flux 2 Max via Replicate — `safety_tolerance=5`, up to 8 reference images | Resolution 0.5 / 1 / 2 / 4 MP (default 2 MP). **Per-megapixel pricing** ($0.07/output-MP + $0.03/ref-MP): ~10 credits at 2 MP with the primary image (1 ref), scaling with resolution and extra references. |
 
 ## Best Practices
 

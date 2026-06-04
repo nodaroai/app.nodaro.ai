@@ -179,7 +179,7 @@ export async function apiTokenRoutes(app: FastifyInstance) {
 
     if (!hasAdmin()) {
       return reply.status(403).send({
-        error: { code: "edition_restricted", message: "API tokens require Business or Cloud edition" },
+        error: { code: "edition_required", required_edition: "business", message: "API tokens require Business or Cloud edition" },
       })
     }
 
@@ -256,7 +256,7 @@ export async function apiTokenRoutes(app: FastifyInstance) {
 
     if (!hasAdmin()) {
       return reply.status(403).send({
-        error: { code: "edition_restricted", message: "API tokens require Business or Cloud edition" },
+        error: { code: "edition_required", required_edition: "business", message: "API tokens require Business or Cloud edition" },
       })
     }
 

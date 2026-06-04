@@ -1,7 +1,7 @@
 ---
 node_type: list
-generated_at: 2026-05-18T13:23:36.996Z
-generated_from: cb1e786d
+generated_at: 2026-06-04T12:41:28.155Z
+generated_from: 9bf1388db
 ---
 
 # List
@@ -12,6 +12,22 @@ generated_from: cb1e786d
 **Credit cost:** 0
 **Inputs (target handles):** `in`
 **Outputs (source handles):** (none)
+
+**Required data fields:**
+- `label: string`
+- `fieldMappings: Record<string, string>`
+
+**Optional data fields:**
+- `items?: string`
+- `columns?: LoopColumn[]`
+- `rows?: string[][]`
+- `maxItems?: number`
+- `showData?: boolean`
+- `thumbnailSize?: "sm" | "md" | "lg"`
+- `galleryCols?: number`
+- `viewMode?: "list" | "gallery" | "packed"`
+- `textMaxLines?: number`
+- `textFontSize?: TextFontSize`
 
 **Default data:**
 ```json

@@ -34,7 +34,7 @@ graph TB
         External["External app<br/>@nodaro/client SDK<br/>or raw REST"]
     end
     subgraph Backend
-        API[Fastify /v1/*<br/>~120 route files]
+        API[Fastify /v1/*<br/>~138 route files]
         Auth[Auth middleware<br/>3 token modes]
         Orchestrator[BullMQ Orchestrator]
         Worker[Video / Render Worker]
@@ -86,7 +86,7 @@ via React Flow's own store.
 
 ### Backend
 
-Fastify (Node.js 22, TypeScript). ~120 route files under
+Fastify (Node.js 22, TypeScript). ~138 route files under
 `backend/src/routes/` registered via `app.register()` in `app.ts` —
 each file may export multiple HTTP endpoints. Auth is a single global
 `preHandler` hook in `middleware/auth.ts`. Each route declares its
@@ -152,10 +152,12 @@ that used to live in two places.
 
 `packages/client/` (published as `@nodaro/client` on npm) is a typed
 REST wrapper around the public API. Three auth strategies
-(`StaticTokenAuth`, `supabaseAuth`, `OAuthFlowAuth`), seven resource
-classes (`workflows`, `nodes`, `developerApps`, `oauth`, `apps`,
-`templates`, `executions`). The frontend dogfoods the SDK for its
-execution endpoints. See [SDK Reference](./sdk-reference.md).
+(`StaticTokenAuth`, `CallbackAuth`, `supabaseAuth`), 17 resource
+classes (`workflows`, `projects`, `jobs`, `executions`, `nodes`,
+`developerApps`, `oauth`, `apps`, `characters`, `locations`, `objects`,
+`pipelines`, `reduce`, `promptHelper`, `voices`, `credits`, `uploads`).
+The frontend dogfoods the SDK for its execution endpoints. See
+[SDK Reference](./sdk-reference.md).
 
 ## 4. Data model overview
 

@@ -60,7 +60,6 @@ Generate Video covers the union of the legacy image-to-video and text-to-video c
 | MiniMax | `minimax` | T2V, I2V | Fixed 5s, end-frame supported |
 | Grok Imagine 1 | `grok-i2v` (one picker row; remaps to `grok` for T2V) | T2V + I2V — mode auto-selected by image presence | 6 / 10s; resolution + mode (fun/normal/spicy) |
 | Grok Imagine 1.5 | `grok-imagine-video-1.5` | I2V (input image required) | 1–15s; 480p / 720p; per-second pricing; offered in the T2V picker too but returns "requires an input image" without one |
-| Sora 2 | `sora2`, `sora2-pro` | T2V, I2V | 5 / 10s; remove-watermark add-on |
 | Wan | `wan-i2v` (Wan 2.6), `wan-2.7-i2v` (Wan 2.7), `wan-turbo` | T2V + I2V — Wan 2.6/2.7 are one picker row each (remap to `wan` / `wan-2.7-t2v` for T2V); `wan-turbo` fixed 5s | 5 / 10 / 15s |
 | HappyHorse | `happyhorse-i2v`, `happyhorse-ref2v`, `happyhorse` | I2V, reference, T2V | 3–15s; 720p / 1080p |
 | Runway (KIE) | `runway-kie` | T2V, I2V | Fixed configurations |
@@ -150,7 +149,6 @@ If neither has the identifier, the route returns HTTP 503 `price_not_configured`
 | `seedance-2` | 8s | 720p | i2v | no ref | ~82 |
 | `seedance-2` | 8s | 1080p | i2v | with ref | ~75 |
 | `seedance-2-fast` | 8s | 720p | i2v | with ref | ~40 |
-| `sora2-pro` | 10s | — | i2v | remove-watermark | base + 4 |
 | `grok-imagine-video-1.5` | 8s | 480p | i2v | image required | 30 |
 | `grok-imagine-video-1.5` | 8s | 720p | i2v | image required | 51 |
 | `grok-imagine-video-1.5` | 15s | 720p | i2v | image required | 95 |

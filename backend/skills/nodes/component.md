@@ -1,7 +1,7 @@
 ---
 node_type: component
-generated_at: 2026-05-18T13:23:37.889Z
-generated_from: cb1e786d
+generated_at: 2026-06-04T12:41:29.367Z
+generated_from: 9bf1388db
 ---
 
 # Component
@@ -12,6 +12,24 @@ generated_from: cb1e786d
 **Credit cost:** 0
 **Inputs (target handles):** `in`
 **Outputs (source handles):** `out`
+
+**Required data fields:**
+- `label: string`
+- `appSlug: string`
+- `appVersionId: string`
+- `pinnedVersion: number`
+- `componentMetadata: ComponentMetadata`
+- `exposedSettings: Record<string, unknown>`
+- `creatorName: string`
+- `creatorId: string`
+- `estimatedCredits: number`
+- `executionStatus: "idle" | "running" | "completed" | "failed"`
+
+**Optional data fields:**
+- `outputResults?: Record<string, string>`
+- `errorMessage?: string`
+- `generatedResults?: GeneratedResult[]`
+- `activeResultIndex?: number`
 
 **Default data:**
 ```json

@@ -1,7 +1,7 @@
 ---
 node_type: selector
-generated_at: 2026-05-28T00:00:00.000Z
-generated_from: 67689164
+generated_at: 2026-06-04T12:41:29.174Z
+generated_from: 9bf1388db
 ---
 
 # Selector
@@ -12,6 +12,20 @@ generated_from: 67689164
 **Credit cost:** 0
 **Inputs (target handles):** `in`
 **Outputs (source handles):** `picked`, `rest`
+
+**Required data fields:**
+- `label: string`
+- `config: SelectorConfig`
+
+**Optional data fields:**
+- `pickedResults?: string[]`
+- `__pickedResults?: string[]`
+- `__pickedTotal?: number`
+- `restResults?: string[]`
+- `__restResults?: string[]`
+- `__restTotal?: number`
+- `executionStatus?: "idle" | "running" | "completed" | "failed"`
+- `errorMessage?: string`
 
 **Default data:**
 ```json

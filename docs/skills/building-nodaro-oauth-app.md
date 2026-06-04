@@ -224,7 +224,7 @@ catch (err) {
 
 ## Differences from RFC 6749 / 7009
 
-- No PKCE in the MVP (server-to-server flow only)
+- PKCE (RFC 7636) supported — public clients may omit `client_secret` and instead send `code_challenge` + `code_challenge_method=S256` at authorize and `code_verifier` at token exchange
 - No refresh tokens — re-consent on 90-day expiry
 - Token format: `ndr_app_<64hex>` (RFC 6749 doesn't mandate format; type is `Bearer`)
 - Code format: `ndr_code_<48hex>`

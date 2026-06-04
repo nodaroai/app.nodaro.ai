@@ -1,7 +1,7 @@
 ---
 node_type: generative-pipeline
-generated_at: 2026-05-24T12:49:47.232Z
-generated_from: b2943819
+generated_at: 2026-06-04T12:41:29.378Z
+generated_from: 9bf1388db
 ---
 
 # Story → Video
@@ -12,6 +12,29 @@ generated_from: b2943819
 **Credit cost:** 30
 **Inputs (target handles):** `story_prompt`
 **Outputs (source handles):** `final_video`
+
+**Optional data fields:**
+- `label?: string`
+- `story_prompt?: string`
+- `target_duration_seconds?: number`
+- `format?: PipelineFormat`
+- `output_resolution?: "480p" | "720p" | "1080p" | "4K"`
+- `mode?: PipelineMode`
+- `video_critic_frame_count?: VideoCriticFrameMode`
+- `image_model?: PipelinePinnableImageModel`
+- `video_model?: PipelinePinnableVideoModel`
+- `script_llm?: PipelinePinnableScriptLlm`
+- `stage_models?: {
+    characters_image?: PipelinePinnableImageModel
+    locations_image?: PipelinePinnableImageModel
+    objects_image?: PipelinePinnableImageModel
+    scene_keyframes_image?: PipelinePinnableImageModel
+    shots_video?: PipelinePinnableVideoModel
+    script_llm?: PipelinePinnableScriptLlm
+  }`
+- `pipeline_id?: string`
+- `status?: "queued" | "running" | "awaiting_approval" | "completed" | "failed" | "cancelled"`
+- `current_stage?: string | null`
 
 **Default data:**
 ```json

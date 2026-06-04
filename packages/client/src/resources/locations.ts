@@ -137,6 +137,8 @@ export interface UpdateLocationInput {
   referencePhotos?: LocationReferencePhoto[]
   canonicalDescription?: string
   styleLock?: boolean
+  /** ISO-8601 timestamp recording when PII consent was captured for this location. */
+  piiConsentAt?: string
   expectedUpdatedAt?: string
 }
 
