@@ -176,10 +176,27 @@ describe("lip-sync — infinitalk composite credit identifier", () => {
     expect(result.modelIdentifier).toBe("infinitalk:480p")
   })
 
-  it("uses bare provider id for non-infinitalk providers", () => {
+  it("uses bare provider id for per-second providers when duration is unknown", () => {
+    // kling-avatar keeps its existing bare reservation when audioDurationSec is absent.
     const n = node("l1", "lip-sync", { provider: "kling-avatar" })
     const result = buildPayload(n, JOB_ID, {})
     expect(result.modelIdentifier).toBe("kling-avatar")
+  })
+
+  it("buckets per-second providers by audio duration when it is known", () => {
+    const kling = buildPayload(node("l1", "lip-sync", { provider: "kling-avatar", audioDurationSec: 12 }), JOB_ID, {})
+    expect(kling.modelIdentifier).toBe("kling-avatar:15s")
+    const heygen = buildPayload(node("l2", "lip-sync", { provider: "heygen-lipsync-precision", audioDurationSec: 45 }), JOB_ID, {})
+    expect(heygen.modelIdentifier).toBe("heygen-lipsync-precision:60s")
+    const sync = buildPayload(node("l3", "lip-sync", { provider: "lipsync-2-pro", audioDurationSec: 200 }), JOB_ID, {})
+    expect(sync.modelIdentifier).toBe("lipsync-2-pro:300s")
+  })
+
+  it("falls back to the bare (5-min ceiling) id for HeyGen/Sync when duration is unknown", () => {
+    const heygen = buildPayload(node("l1", "lip-sync", { provider: "heygen-lipsync-precision" }), JOB_ID, {})
+    expect(heygen.modelIdentifier).toBe("heygen-lipsync-precision")
+    const sync = buildPayload(node("l2", "lip-sync", { provider: "lipsync-2-pro" }), JOB_ID, {})
+    expect(sync.modelIdentifier).toBe("lipsync-2-pro")
   })
 
   it("defaults infinitalk resolution to 720p", () => {

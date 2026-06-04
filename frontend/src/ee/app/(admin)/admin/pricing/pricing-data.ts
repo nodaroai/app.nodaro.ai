@@ -253,6 +253,20 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   "kling-avatar-pro:300s": { provider: "KIE.ai",    providerCostUsd: 24.000, markupPct: 25 }, // 5-min ceiling
   "infinitalk":        { provider: "KIE.ai",    providerCostUsd: 0.525, markupPct: 25 },  // 3–12 KIE cr/sec × ~14s (avg 480p/720p)
   "hailuo-avatar":     { provider: "KIE.ai",    providerCostUsd: 0.350, markupPct: 25 },  // estimated
+  // HeyGen Lipsync Precision ($0.0667/s) + Sync Lipsync 2 Pro ($0.08325/s) — Replicate,
+  // per second of output, billed at cost (0% markup). Buckets 15/30/60/120/300s.
+  "heygen-lipsync-precision":      { provider: "Replicate", providerCostUsd: 20.0100, markupPct: 0 },  // bare = 300s ceiling
+  "heygen-lipsync-precision:15s":  { provider: "Replicate", providerCostUsd: 1.0005,  markupPct: 0 },
+  "heygen-lipsync-precision:30s":  { provider: "Replicate", providerCostUsd: 2.0010,  markupPct: 0 },
+  "heygen-lipsync-precision:60s":  { provider: "Replicate", providerCostUsd: 4.0020,  markupPct: 0 },
+  "heygen-lipsync-precision:120s": { provider: "Replicate", providerCostUsd: 8.0040,  markupPct: 0 },
+  "heygen-lipsync-precision:300s": { provider: "Replicate", providerCostUsd: 20.0100, markupPct: 0 },  // 5-min ceiling
+  "lipsync-2-pro":                 { provider: "Replicate", providerCostUsd: 24.9750, markupPct: 0 },  // bare = 300s ceiling
+  "lipsync-2-pro:15s":             { provider: "Replicate", providerCostUsd: 1.2488,  markupPct: 0 },
+  "lipsync-2-pro:30s":             { provider: "Replicate", providerCostUsd: 2.4975,  markupPct: 0 },
+  "lipsync-2-pro:60s":             { provider: "Replicate", providerCostUsd: 4.9950,  markupPct: 0 },
+  "lipsync-2-pro:120s":            { provider: "Replicate", providerCostUsd: 9.9900,  markupPct: 0 },
+  "lipsync-2-pro:300s":            { provider: "Replicate", providerCostUsd: 24.9750, markupPct: 0 },  // 5-min ceiling
   // ── Audio / TTS / Music ──
   "elevenlabs-v3":     { provider: "ElevenLabs", providerCostUsd: 0.050, markupPct: 25 },  // direct ElevenLabs API
   "elevenlabs-turbo":       { provider: "KIE.ai",    providerCostUsd: 0.030, markupPct: 25 },  // 6 KIE cr

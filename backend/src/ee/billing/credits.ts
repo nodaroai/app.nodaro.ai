@@ -493,6 +493,22 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "kling-avatar-pro:60s": 240,    // 60s × 4 cr/sec
   "kling-avatar-pro:120s": 480,   // 120s × 4 cr/sec
   "kling-avatar-pro:300s": 1200,  // 300s × 4 cr/sec — 5-min ceiling
+  // HeyGen Lipsync Precision + Sync Lipsync 2 Pro (Replicate, video-input dubbing).
+  // Billed per second of output; bucketed like kling-avatar via buildLipSyncCreditId.
+  ***REDACTED-OSS-SCRUB***
+  // sets no meteredCost, so the worker commits the reserved bucket as the charge.
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
   // ── Replicate MMAudio (video-sfx node) ──
   // BASE credits (pre-markup). creditGuard applies cost_markup_percent at request time.
   ***REDACTED-OSS-SCRUB***
