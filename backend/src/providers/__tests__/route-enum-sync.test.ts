@@ -92,6 +92,8 @@ const DIRECT_API_EXEMPTIONS = new Set<string>([
   "wav2lip",
   "video-retalking",
   "sadtalker",
+  "heygen-lipsync-precision",
+  "lipsync-2-pro",
   // Seedance 2 / 2-fast — go through the i2v worker with audio plumbed
   // as reference_audio_urls. They appear in LIP_SYNC_PROVIDERS for UX
   // purposes but the lip-sync route delegates to the i2v code path.
