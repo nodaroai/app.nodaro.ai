@@ -73,6 +73,10 @@ nodaro auth login --profile local   --base-url http://localhost:8000
 nodaro projects list --profile staging
 ```
 
+When you omit `--profile`, the CLI uses the profile named `production`.
+The **first profile you create becomes the default**, so a single
+`nodaro auth login` (no `--profile`) sets you up without any extra flags.
+
 ## Three ways to run something
 
 The CLI exposes the three execution paths the platform supports — pick the one that matches what you've already built.
@@ -181,6 +185,7 @@ nodaro objects recaption <id> [--json]
 
 # Voice — revoice an audio track or a talking video
 nodaro voice changer --voice <id> --audio <url>|--video <url> [--stability <0..1>] [--similarity <0..1>] [--style <0..1>] [--remove-background-noise] [--watch] [--poll-interval <ms>] [--json]
+nodaro voice change ...                                  # alias of `voice changer`
 ```
 
 ## Param syntax
@@ -244,7 +249,7 @@ nodaro nodes run generate-image \
   --param prompt="a snow leopard on a mountain ridge, cinematic" \
   --param provider=flux \
   --param resolution=2K \
-  --watch --json | jq -r '.outputs.imageUrl'
+  --watch --json | jq -r '.output_data.imageUrl'
 ```
 
 ### Turn a rough idea into an optimized prompt

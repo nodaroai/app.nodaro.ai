@@ -51,17 +51,17 @@ Eleven scopes, all of which exist in your app's `scopes_requested`:
 
 | Scope | What it grants | Routes gated |
 |---|---|---|
-| `workflows:read` | Read user's workflows | `GET /v1/projects/:projectId/workflows` |
-| `workflows:write` | Create / modify workflows | (reserved — no gated routes yet) |
+| `workflows:read` | Read user's workflows | `GET /v1/projects/:projectId/workflows`, `GET /v1/workflows`, `GET /v1/workflows/:id`, `GET /v1/workflows/:id/export` |
+| `workflows:write` | Create / modify workflows | `POST /v1/projects/:projectId/workflows`, `POST /v1/workflows`, `PATCH /v1/workflows/:id`, `DELETE /v1/workflows/:id`, `POST /v1/workflows/import`, `POST /v1/workflows/:parentId/sub-workflows` |
 | `workflows:execute` | Run workflows | `POST /v1/workflows/:id/run`; prompt-wizard MCP tools |
-| `jobs:read` | Read job status / results | `GET /v1/jobs/:id` |
+| `jobs:read` | Read job status / results | `GET /v1/jobs/status`, `GET /v1/jobs/:id`, `GET /v1/jobs/:id/status`, `GET /v1/jobs`, `POST /v1/jobs/batch-status` |
 | `assets:read` | Read user's uploaded assets | (reserved) |
 | `assets:write` | Upload assets | (reserved) |
 | `credits:read` | See user's credit balance | (reserved) |
 | `apps:read` | Read public apps | (reserved) |
 | `pipelines:read` | Read Story-to-Video pipelines | `GET /v1/pipelines/*` |
 | `pipelines:execute` | Run / branch pipeline stages | `POST /v1/pipelines/:id/branch` and run routes |
-| `pipelines:approve` | Approve pipeline stage output | pipeline approval routes |
+| `pipelines:approve` | Approve pipeline stage output | pipeline approval routes; the scene-helper routes (`POST /v1/pipelines/:id/entities/:sceneId/helpers/*`) |
 
 **Request only what you need.** Users see the requested scopes on the consent screen; over-asking causes drop-off.
 
@@ -118,10 +118,9 @@ const client = createClient({
 })
 
 const tokens = await client.oauth.exchangeCode({
-  grant_type: "authorization_code",
   client_id: process.env.NODARO_CLIENT_ID!,
   client_secret: process.env.NODARO_CLIENT_SECRET!,
-  code: req.query.code,
+  code: req.query.code as string,
   redirect_uri: "https://yourapp.com/oauth/callback",
 })
 // tokens.access_token  → "ndr_app_<64hex>"

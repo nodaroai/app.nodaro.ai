@@ -27,7 +27,7 @@ There is no provider selection -- the node uses Grounded SAM on Replicate. The m
 
 ## Credits
 
-**2 credits per generation** (flat, no variable pricing).
+**5 credits per generation** (flat, no variable pricing).
 
 ## Typical Workflow
 

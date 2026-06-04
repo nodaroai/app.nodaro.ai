@@ -4,7 +4,7 @@ Drop-in skill files for Claude Code, Cursor, and similar LLM coding harnesses. E
 
 ## Available skills
 
-- [`using-nodaro-client`](./using-nodaro-client.md) — integrate the `@nodaro/client` TypeScript SDK (install, three auth modes, seven resources, error hierarchy, common recipes, when NOT to use the SDK)
+- [`using-nodaro-client`](./using-nodaro-client.md) — integrate the `@nodaro/client` TypeScript SDK (install, three auth modes, 17 resources, error hierarchy, common recipes, when NOT to use the SDK)
 - [`building-nodaro-oauth-app`](./building-nodaro-oauth-app.md) — implement OAuth 2.0 against a Nodaro instance (app registration, scope vocabulary, redirect URL, code exchange, token storage, revocation, common errors)
 
 ## Installing in Claude Code

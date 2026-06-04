@@ -16,7 +16,7 @@ Existing workflows continue to work — `text-to-video` nodes auto-migrate to `g
 
 ## Pricing & parameters
 
-All text-to-video pricing examples (VEO 3.x, Kling, Seedance 2, Hailuo Standard, Bytedance, MiniMax, Sora 2, Wan, HappyHorse, Runway, …), per-provider parameter tables, and the dispatch rules that route a wireless node to `text-to-video` mode are documented on the [Generate Video](./generate-video.md) page.
+All text-to-video pricing examples (VEO 3.x, Kling, Seedance 2, Hailuo Standard, Bytedance, MiniMax, Wan, HappyHorse, Runway, …), per-provider parameter tables, and the dispatch rules that route a wireless node to `text-to-video` mode are documented on the [Generate Video](./generate-video.md) page.
 
 ## See also
 

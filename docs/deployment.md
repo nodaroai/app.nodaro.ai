@@ -278,7 +278,7 @@ container: API server + video worker + render worker + orchestrator +
 Redis + Caddy. That's fine up to ~5 active users.
 
 For more scale, split the workers into separate containers. Inspect
-`/app/start.sh` (baked into the image) — it launches four Node
+`/app/start.sh` (baked into the image) — it launches five Node
 processes side by side:
 
 | Process | What it does | CPU/mem profile |
@@ -287,6 +287,7 @@ processes side by side:
 | `node dist/worker.js` | Video worker (per-node BullMQ jobs, calls AI providers) | I/O-bound, high concurrency |
 | `node dist/render-worker.js` | Remotion renderer (headless Chrome) | CPU-bound, 1–2 per box |
 | `node dist/orchestrator.js` | Workflow orchestrator (DAG executor) | I/O-bound, low CPU |
+| `node dist/pipeline-worker.js` | Story-to-Video pipeline orchestration (all editions; exits cleanly on non-cloud) | I/O-bound, low CPU |
 
 A typical split:
 

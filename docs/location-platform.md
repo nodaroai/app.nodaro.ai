@@ -688,7 +688,7 @@ generation routes:
 - `POST /v1/generate-location-asset` — `creditCost(provider)` credits per
   variant. Same per-provider table as `generate-image`.
 - `POST /v1/generate-location-motion` — `creditCost(provider)` credits per
-  motion clip. Provider defaults to `kling` (~22 credits / 5-second clip).
+  motion clip. Provider defaults to `kling` (~28 credits / 5-second clip).
   See `docs/nodes/ai-video/generate-video.md` for the full per-provider
   table.
 - `POST /v1/locations/:id/approve-main-image` — currently free; the LLM

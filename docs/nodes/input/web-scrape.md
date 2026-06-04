@@ -38,7 +38,7 @@ The Web Scrape node retrieves data from external sources using configurable acto
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | Start URL | text | — | URL of the page or site root. Use `{}` to inject upstream |
-| Crawl mode | select | `page` | `Single page` (3 CR) — one URL; `Site crawl, up to 20 pages` (10 CR) |
+| Crawl mode | select | `page` | `Single page` (1 CR) — one URL; `Site crawl, up to 20 pages` (5 CR) |
 
 ### RSS fields
 
@@ -64,11 +64,11 @@ The Web Scrape node retrieves data from external sources using configurable acto
 
 | SKU | Credits |
 |-----|---------|
-| Google Search | 2 CR |
-| Content Crawler — single page | 3 CR |
-| Content Crawler — site crawl | 10 CR |
-| Instagram | 5 CR |
-| TikTok | 5 CR |
+| Google Search | 3 CR |
+| Content Crawler — single page | 1 CR |
+| Content Crawler — site crawl | 5 CR |
+| Instagram | 1 CR |
+| TikTok | 1 CR |
 | RSS | 1 CR |
 
 ## Common Use Cases

@@ -338,8 +338,8 @@ const result = await client.objects.generate({
   count: 4,
 })
 
-// `generate()` returns a discriminated union — type-guard for count > 1.
-if (!("jobIds" in result)) throw new Error("expected jobIds (count: 4)")
+// `jobIds` is always present — one entry per candidate (synthesized even from
+// legacy single-job responses). `jobId` is a deprecated count===1 alias.
 const { jobIds } = result
 
 // 3. Wait for all 4 to complete, then pick a candidate.

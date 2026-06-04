@@ -115,6 +115,65 @@ expire (or refresh, if you mint new ones).
 
 You can register up to **5 apps per user**.
 
+## Discovery & Dynamic Client Registration (MCP clients)
+
+Manual app registration (above) is the path for traditional web/SaaS
+products. MCP clients (Claude.ai, Cursor, etc.) instead expect to
+**discover** the OAuth endpoints automatically and, optionally,
+**register themselves** at runtime — no human visiting a dashboard. Both
+are supported.
+
+### Discovery endpoints
+
+Two metadata documents are served at well-known URLs:
+
+| Endpoint | RFC | Purpose |
+|----------|-----|---------|
+| `GET /.well-known/oauth-authorization-server` | [RFC 8414](https://www.rfc-editor.org/rfc/rfc8414) | Authorization-server metadata (where to authorize, get tokens, register, revoke). |
+| `GET /.well-known/oauth-protected-resource` | [RFC 9728](https://www.rfc-editor.org/rfc/rfc9728) | Binds the MCP resource (`https://mcp.nodaro.ai/mcp`) to its authoritative auth server. |
+
+Each is also served at a `/mcp`-suffixed variant
+(`/.well-known/oauth-authorization-server/mcp` and
+`/.well-known/oauth-protected-resource/mcp`) because some strict clients
+(notably Cursor) probe the resource-path form **first** and treat a 404
+there as a hard auth failure.
+
+The issuer is `PUBLIC_URL` (default `https://app.nodaro.ai`). The
+authorization-server document advertises:
+
+- `authorization_endpoint`, `token_endpoint`, `registration_endpoint`,
+  `revocation_endpoint`
+- `response_types_supported: ["code"]`,
+  `grant_types_supported: ["authorization_code"]`
+- `code_challenge_methods_supported: ["S256"]` (PKCE — S256 only)
+- `token_endpoint_auth_methods_supported: ["client_secret_post"]`
+- all 11 entries in `scopes_supported`
+
+### Dynamic Client Registration (DCR)
+
+```
+POST /v1/oauth/register
+```
+
+Per [RFC 7591](https://www.rfc-editor.org/rfc/rfc7591), a client can
+register itself and receive a `client_id` (format `ndr_dcr_<32hex>`) plus
+a `client_secret`. The endpoint is **rate-limited to 10 requests/minute
+per IP**.
+
+DCR is governed by the `MCP_DYNAMIC_REGISTRATION` operator setting:
+
+| Mode | Behaviour |
+|------|-----------|
+| `allowlist` (default) | Only `client_name`s on `MCP_DCR_ALLOWLIST` may register; others get 403 `client_not_allowed`. |
+| `open` | Any client may register, but there's a cap of **5 unconsumed registrations per (`client_name` + `redirect_uris`)** within a 24h window (429 `too_many_open_registrations` once exceeded). |
+| `off` | DCR is disabled entirely (403 `dcr_disabled`); operators hand out a static `client_id`/`client_secret` instead. |
+
+A dynamically-registered client carries `kind=dynamic_mcp`. Because it
+self-claimed its name, the consent screen renders an extra warning so the
+user knows the app identity wasn't vetted by an operator. Its declared
+scopes are informational — the user-controlled consent screen is the
+actual gate, so any valid Nodaro scope may be requested at authorize-time.
+
 ## 4. Scope vocabulary
 
 There are 11 scopes total. The canonical list lives in
@@ -122,24 +181,24 @@ There are 11 scopes total. The canonical list lives in
 
 | Scope | What it grants | Routes gated today |
 |-------|----------------|--------------------|
-| `workflows:read` | Read the user's workflows | `GET /v1/projects/:projectId/workflows` |
-| `workflows:write` | Create and modify workflows | (reserved — no routes gated yet) |
+| `workflows:read` | Read the user's workflows | `GET /v1/projects/:projectId/workflows`, `GET /v1/workflows`, `GET /v1/workflows/:id`, `GET /v1/workflows/:id/export` |
+| `workflows:write` | Create and modify workflows | `POST /v1/projects/:projectId/workflows`, `POST /v1/workflows`, `PATCH /v1/workflows/:id`, `DELETE /v1/workflows/:id`, `POST /v1/workflows/import`, `POST /v1/workflows/:parentId/sub-workflows` |
 | `workflows:execute` | Run workflows on the user's behalf | `POST /v1/workflows/:id/run`; the prompt-wizard MCP tools |
-| `jobs:read` | Read job status and results | `GET /v1/jobs/:id` |
+| `jobs:read` | Read job status and results | `GET /v1/jobs/status`, `GET /v1/jobs/:id`, `GET /v1/jobs/:id/status`, `GET /v1/jobs`, `POST /v1/jobs/batch-status` |
 | `assets:read` | Read the user's uploaded assets | (reserved) |
 | `assets:write` | Upload assets to the user's account | (reserved) |
 | `credits:read` | See the user's credit balance | (reserved) |
 | `apps:read` | Read published apps | (reserved) |
 | `pipelines:read` | Read the user's Story-to-Video pipelines | `GET /v1/pipelines/*` |
 | `pipelines:execute` | Run / branch pipeline stages | `POST /v1/pipelines/:id/branch` and run routes |
-| `pipelines:approve` | Approve pipeline stage output | pipeline approval routes |
+| `pipelines:approve` | Approve pipeline stage output | pipeline approval routes; the scene-helper routes (`POST /v1/pipelines/:id/entities/:sceneId/helpers/*`) |
 
-> **Honest disclosure:** the gated scopes today are `workflows:read`,
-> `workflows:execute`, `jobs:read`, and the three `pipelines:*` scopes.
-> The other five (`workflows:write`, `assets:read`, `assets:write`,
-> `credits:read`, `apps:read`) are reserved names that future routes will
-> gate. Request scopes only if you actually intend to use them — minimal
-> scope sets earn user trust.
+> **Honest disclosure:** most scopes gate real routes today —
+> `workflows:read`, `workflows:write`, `workflows:execute`, `jobs:read`,
+> and the three `pipelines:*` scopes. Only four are reserved names that
+> future routes will gate: `assets:read`, `assets:write`, `credits:read`,
+> and `apps:read`. Request scopes only if you actually intend to use them —
+> minimal scope sets earn user trust.
 
 The exact scope description shown to the user on the consent screen is
 defined in [`frontend/src/app/oauth/authorize/page.tsx`](https://github.com/nodaroai/app.nodaro.ai/blob/main/frontend/src/app/oauth/authorize/page.tsx).
@@ -266,6 +325,48 @@ Response (snake_case per RFC 6749):
 > most once. A second attempt returns HTTP 400 `invalid_grant`.
 > Codes also expire 10 minutes after issue — design your callback
 > handler to redeem immediately, not lazily.
+
+### Public clients (PKCE)
+
+Mobile apps, SPAs, and CLI tools cannot keep a `client_secret`. Use PKCE
+([RFC 7636](https://www.rfc-editor.org/rfc/rfc7636)) instead. **S256 is
+the only supported method** — `plain` is rejected with HTTP 400
+`invalid_request`.
+
+1. **Before the redirect**, generate a high-entropy `code_verifier` and
+   derive `code_challenge = base64url(SHA256(code_verifier))`.
+2. **On the authorize request (§5)**, add `code_challenge` and
+   `code_challenge_method=S256` to the query string:
+
+   ```text
+   https://nodaro.example.com/oauth/authorize?
+     client_id=app_<32hex>&
+     redirect_uri=https://yourapp.com/oauth/callback&
+     response_type=code&
+     scope=workflows:read+workflows:execute&
+     state=<random_csrf_token>&
+     code_challenge=<base64url_sha256>&
+     code_challenge_method=S256
+   ```
+
+3. **On the token exchange (this section)**, send `code_verifier`
+   instead of `client_secret`:
+
+   ```bash
+   curl -X POST https://nodaro.example.com/v1/oauth/token \
+     -H "Content-Type: application/json" \
+     -d '{
+       "grant_type": "authorization_code",
+       "client_id": "app_...",
+       "code": "ndr_code_...",
+       "redirect_uri": "https://yourapp.com/oauth/callback",
+       "code_verifier": "<original_verifier>"
+     }'
+   ```
+
+`client_secret` is optional for the PKCE path. Confidential clients may
+send both — the server verifies whichever is present (and both, if both
+are supplied).
 
 ## 7. Step 4: Use the token
 
@@ -499,9 +600,12 @@ Where Nodaro intentionally simplifies or extends the standard:
 - **Strict redirect-URI matching.** No wildcards, no path-prefix
   matching — only byte-for-byte equality against the registered list.
   This is a deliberate hardening over the RFC's looser language.
-- **Application/JSON token endpoint.** RFC 6749 §4.1.3 specifies
-  `application/x-www-form-urlencoded`; Nodaro accepts JSON, which is
-  consistent with the rest of the API and easier for SDK callers.
+- **Token endpoint accepts both `application/json` and
+  `application/x-www-form-urlencoded`.** RFC 6749 §4.1.3 specifies only
+  form-encoding; Nodaro additionally accepts JSON (consistent with the
+  rest of the API and easier for SDK callers). Standard OAuth clients
+  that post form-encoded bodies work unchanged — `client_secret_post` is
+  advertised in the discovery metadata.
 
 ---
 

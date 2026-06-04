@@ -18,12 +18,12 @@ export const SCRAPER_ACTOR_LABELS: Record<ScraperActorId, string> = {
 
 /** Credit costs per composite SKU — must stay in sync with STATIC_CREDIT_COSTS in backend. */
 export const SCRAPER_CREDIT_COSTS: Record<string, number> = {
-  "web-scrape": 5,
-  "web-scrape:google-search": 2,
-  "web-scrape:content-crawler": 3,
-  "web-scrape:content-crawler:site": 10,
-  "web-scrape:instagram": 5,
-  "web-scrape:tiktok": 5,
+  "web-scrape": 2,
+  "web-scrape:google-search": 3,
+  "web-scrape:content-crawler": 1,
+  "web-scrape:content-crawler:site": 5,
+  "web-scrape:instagram": 1,
+  "web-scrape:tiktok": 1,
   "web-scrape:rss": 1,
 }
 
@@ -46,8 +46,8 @@ export function buildScraperCreditId(input: ScraperCreditInput): string {
 
 /**
  * Resolve the credit identifier from an unvalidated request body.
- * Falls back to the cheapest SKU (google-search) on missing/invalid actor
- * so misrouted requests don't accidentally reserve the max-cost tier.
+ * Falls back to a fixed default SKU (google-search) on missing/invalid actor
+ * so misrouted requests reserve a known mid-tier price, not the max-cost tier.
  */
 export function resolveScraperCreditId(body: unknown): string {
   const raw = body as { actor?: unknown; mode?: unknown } | undefined

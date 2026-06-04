@@ -25,7 +25,7 @@ The Provider parameter node allows you to centralize provider/model selection fo
 The available providers depend on the selected category:
 
 - **Image**: All 21 Generate Image providers (nano-banana, nano-banana-pro, flux, grok, gpt-image, imagen4, ideogram-v3, qwen, seedream, etc.)
-- **Video**: All Image-to-Video and Text-to-Video providers (minimax, veo3, kling, sora2-pro, seedance, wan, etc.)
+- **Video**: All Image-to-Video and Text-to-Video providers (minimax, veo3, kling, seedance, wan, etc.)
 - **Voice**: Text-to-Speech providers (elevenlabs-v3, elevenlabs-turbo, elevenlabs-multilingual)
 - **Script**: Script generation providers (gemini)
 

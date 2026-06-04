@@ -16,7 +16,7 @@ Existing workflows continue to work — `image-to-video` nodes auto-migrate to `
 
 ## Pricing & parameters
 
-All image-to-video pricing examples (VEO 3.x, Kling, Seedance 2, Hailuo, Bytedance, MiniMax, Sora 2, Wan, HappyHorse, Runway, …), per-provider parameter tables, end-frame support, multimodal reference limits, and the Loop Trim add-on formula are documented on the [Generate Video](./generate-video.md) page.
+All image-to-video pricing examples (VEO 3.x, Kling, Seedance 2, Hailuo, Bytedance, MiniMax, Wan, HappyHorse, Runway, …), per-provider parameter tables, end-frame support, multimodal reference limits, and the Loop Trim add-on formula are documented on the [Generate Video](./generate-video.md) page.
 
 ## See also
 

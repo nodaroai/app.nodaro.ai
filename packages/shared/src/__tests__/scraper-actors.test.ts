@@ -57,11 +57,11 @@ describe("scraper-actors", () => {
   })
 
   it("credit costs include bare fallback + every composite SKU", () => {
-    expect(SCRAPER_CREDIT_COSTS["web-scrape"]).toBe(5)
-    expect(SCRAPER_CREDIT_COSTS["web-scrape:google-search"]).toBe(2)
-    expect(SCRAPER_CREDIT_COSTS["web-scrape:content-crawler"]).toBe(3)
-    expect(SCRAPER_CREDIT_COSTS["web-scrape:content-crawler:site"]).toBe(10)
-    expect(SCRAPER_CREDIT_COSTS["web-scrape:instagram"]).toBe(5)
-    expect(SCRAPER_CREDIT_COSTS["web-scrape:tiktok"]).toBe(5)
+    expect(SCRAPER_CREDIT_COSTS["web-scrape"]).toBe(2)
+    expect(SCRAPER_CREDIT_COSTS["web-scrape:google-search"]).toBe(3)
+    expect(SCRAPER_CREDIT_COSTS["web-scrape:content-crawler"]).toBe(1)
+    expect(SCRAPER_CREDIT_COSTS["web-scrape:content-crawler:site"]).toBe(5)
+    expect(SCRAPER_CREDIT_COSTS["web-scrape:instagram"]).toBe(1)
+    expect(SCRAPER_CREDIT_COSTS["web-scrape:tiktok"]).toBe(1)
   })
 })

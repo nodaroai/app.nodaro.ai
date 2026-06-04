@@ -113,16 +113,16 @@ Composite credit identifier: `gemini-omni-video:<resolution_prefix>:<duration>` 
 
 | Setting | Credits |
 |---|---|
-| 720p / 1080p · 4 s | 29 |
-| 720p / 1080p · 6 s | 38 |
-| 720p / 1080p · 8 s | 47 |
-| 720p / 1080p · 10 s | 57 |
-| 4K · 4 s | 66 |
-| 4K · 6 s | 75 |
-| 4K · 8 s | 85 |
-| 4K · 10 s | 94 |
-| Video-edit · 720p / 1080p (flat) | 75 |
-| Video-edit · 4K (flat) | 113 |
+| 720p / 1080p · 4 s | 23 |
+| 720p / 1080p · 6 s | 30 |
+| 720p / 1080p · 8 s | 38 |
+| 720p / 1080p · 10 s | 45 |
+| 4K · 4 s | 53 |
+| 4K · 6 s | 60 |
+| 4K · 8 s | 68 |
+| 4K · 10 s | 75 |
+| Video-edit · 720p / 1080p (flat) | 60 |
+| Video-edit · 4K (flat) | 90 |
 
 > **Note:** 4K is blocked on the free tier. Free-tier requests at 4K resolution are rejected with a `tier_restriction` error — upgrade to Basic or higher to use 4K output.
 
@@ -140,12 +140,12 @@ If neither has the identifier, the route returns HTTP 503 `price_not_configured`
 
 | Provider | Duration | Resolution | Mode | Refs | Credits |
 |---|---|---|---|---|---|
-| `veo3` (Quality) | 8s | 1080p | i2v | — | 125 |
-| `veo3.1` (Fast) | 8s | 1080p | i2v | — | 40 |
-| `veo3_lite` | 8s | 720p | t2v | — | 30 |
-| `kling-turbo` | 5s | — | i2v | — | 10 |
+| `veo3` (Quality) | 8s | 1080p | i2v | — | 63 |
+| `veo3.1` (Fast) | 8s | 1080p | i2v | — | 17 |
+| `veo3_lite` | 8s | 720p | t2v | — | 8 |
+| `kling-turbo` | 5s | — | i2v | — | 11 |
 | `kling-3.0` | 10s | — | i2v | sound on | doubles base cost |
-| `minimax` | 5s | — | i2v | — | 25 |
+| `minimax` | 5s | — | i2v | — | 15 |
 | `seedance-2` | 8s | 720p | i2v | no ref | ~82 |
 | `seedance-2` | 8s | 1080p | i2v | with ref | ~75 |
 | `seedance-2-fast` | 8s | 720p | i2v | with ref | ~40 |

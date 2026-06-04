@@ -60,6 +60,7 @@ const NODE_TYPE_TO_TOOL: Record<string, string> = {
   "image-to-image": "image_to_image",
   "image-to-video": "animate_image",
   "text-to-video": "generate_video",
+  "generate-video": "generate_video",
   "generate-music": "generate_music",
   "text-to-speech": "generate_speech",
   "text-to-audio": "text_to_audio",

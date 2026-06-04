@@ -390,9 +390,9 @@ prompt with no questions round-trip.
 
 | Tool | Description |
 |------|-------------|
-| `generate_image` | Text-to-image or reference-guided image generation. Accepts `prompt`, `model`, `aspect_ratio`, `quality`, `reference_images[]`, etc. |
+| `generate_image` | Text-to-image generation. Accepts `prompt`, `model`, `aspect_ratio`, `resolution`, `quality`, `negative_prompt`, and optional `structured` fields. For reference-guided / multi-reference generation use `image_to_image`. |
 | `modify_image` | Image-to-image transformation — apply a style, change colors, swap backgrounds. Accepts `image_url`, `prompt`, and strength controls. |
-| `image_to_image` | Structural image-to-image (i2i) using a dedicated i2i model. Distinct from `modify_image` in that it uses models optimized for structural transfer. |
+| `image_to_image` | Structural image-to-image (i2i) using a dedicated i2i model. Distinct from `modify_image` in that it uses models optimized for structural transfer. Supports multi-reference composition via `reference_image_urls` (up to 13). |
 | `edit_image` | Targeted edits: remove background, upscale, inpaint, or use Nodaro's nano-banana-edit model. |
 | `generate_mask` | Generate or refine a segmentation mask for inpainting workflows. |
 | `image_to_text` | Extract a text description (caption/transcription) from an image using a vision model. |
@@ -407,8 +407,8 @@ prompt with no questions round-trip.
 
 | Tool | Description |
 |------|-------------|
-| `generate_video` | Text-to-video generation. Accepts `prompt`, `model`, `aspect_ratio`, `duration`, and optional `start_image_url` / `end_image_url`. |
-| `animate_image` | Image-to-video animation — bring a still image to life. Accepts `image_url`, `motion_prompt`, `model`, `duration`. |
+| `generate_video` | Text-to-video generation. Accepts `prompt`, `model`, `duration`, `aspect_ratio`, `resolution`, `sound`, `negative_prompt`, `seed`, and optional `structured` fields. To animate from a still or use start/end frames, use `animate_image`. |
+| `animate_image` | Image-to-video animation — bring a still image to life. Accepts `image_url` / `image_asset_id`, optional `prompt`, `model`, `duration`, `aspect_ratio`, `sound`, and `end_frame_url` (start/end-frame animation). |
 | `extend_video` | Extend an existing video clip forward in time. Accepts `video_url`, `prompt`, `model`, `duration`. |
 | `loop_video` | Create a seamless looping clip from a short video segment. Accepts `video_url` and optional loop-trim parameters. |
 | `modify_video` | Video-to-video transformation — apply a style or prompt transformation to an existing clip. |
@@ -431,7 +431,7 @@ prompt with no questions round-trip.
 
 | Tool | Description |
 |------|-------------|
-| `generate_music` | Text-to-music generation (Suno v4/v5 via KIE). Accepts `prompt`, `style`, `duration`, `model`. |
+| `generate_music` | Text-to-music generation (Suno v4/v5 via KIE). Accepts `prompt`, `genre`, `mood`, `duration`, `model`. |
 | `generate_speech` | Text-to-speech. Accepts `text`, `voice_id`, `model`. Supports ElevenLabs v3 (default) and KIE v2 models. |
 | `text_to_audio` | Text-to-sound-effect (ElevenLabs SFX). Accepts `prompt` and optional `duration`. |
 | `voice_clone` | Instant voice clone from a reference audio clip (ElevenLabs). Returns a `voice_id` for use with `generate_speech`. |
@@ -955,8 +955,9 @@ All upload tools require `assets:write`. Three upload strategies are provided
 
 ## Pipeline tools
 
-The pipeline tools drive the Nodaro Story-to-Video pipeline engine. Only
-available when the pipeline feature is enabled on your instance.
+Pipeline tools appear only when your authorization grants the relevant
+`pipelines:read` / `pipelines:execute` / `pipelines:approve` scopes (the
+enterprise Story-to-Video pipeline engine; Cloud/Business).
 
 | Tool | Scope | Description |
 |------|-------|-------------|

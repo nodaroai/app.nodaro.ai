@@ -98,7 +98,7 @@ function loadWorkflowEditorContent(): string {
  * this at the boundary; this constant is also used by `loadNodeSkillContent`
  * for defense-in-depth so the loader never trusts unvalidated input.
  */
-const NODE_TYPE_RE = /^[a-z][a-z0-9-]*$/
+const NODE_TYPE_RE = /^[a-z0-9][a-z0-9-]*$/
 
 function loadNodeSkillContent(nodeType: string): string | null {
   // Defense-in-depth: even though the Zod regex blocks bad input at the API
@@ -204,7 +204,7 @@ export function registerSkillLoaders(
           .max(64)
           .regex(
             NODE_TYPE_RE,
-            "must be kebab-case (lowercase a-z, digits, hyphens; no leading dash/digit)",
+            "must be kebab-case (lowercase a-z, digits, hyphens; no leading dash)",
           )
           .describe(
             "Kebab-case node type, e.g. 'generate-image'. Get the full catalog from start_workflow_editor.",

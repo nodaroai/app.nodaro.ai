@@ -223,6 +223,14 @@ Recommended client behaviour:
 Webhook triggers (`POST /v1/webhooks/:token`) are rate-limited
 **separately** — 10 requests/minute per webhook trigger.
 
+**Two distinct 429 codes.** The per-token bucket above (the `/v1/api/*`
+routes) returns `rate_limited`. A separate **global** limiter
+(`@fastify/rate-limit`) protects a handful of unauthenticated endpoints —
+e.g. OAuth Dynamic Client Registration (`POST /v1/oauth/register`,
+10/min/IP) — and returns the code `rate_limit_exceeded` instead. Match on
+the HTTP 429 status for retry logic; use the `code` only to tell the two
+limiters apart.
+
 ## 8. Error envelope
 
 All errors share the same shape:
@@ -237,10 +245,12 @@ All errors share the same shape:
 | 401 | `unauthorized` | — | Missing/invalid/expired/revoked token. |
 | 402 | `insufficient_credits` | — | (Cloud edition only) Account out of credits. |
 | 403 | `forbidden` | — | Token isn't authorized for this workflow (workflow scoping). |
+| 403 | `insufficient_scope` | `missingScope` (+ `message`) | (OAuth tokens only) The token is missing a scope the route requires. Re-run the OAuth consent with the broader scope. See [OAuth Flow §4](./oauth-flow.md#4-scope-vocabulary). |
 | 403 | `edition_required` | `required_edition: "<edition>"` (+ `message`) | Endpoint needs a higher edition than the caller has. `required_edition` is the minimum: `"cloud"` for pipeline (`POST /v1/pipelines/:id/branch`) + scene-helper routes; `"business"` for API-token management (`POST /v1/api-tokens`, `DELETE /v1/api-tokens/:id`). |
 | 404 | `not_found` | — | Workflow, execution, or token not found. |
 | 429 | `rate_limited` | — | You've exceeded the per-minute bucket. Back off. |
 | 500 | `internal_error` | — | Server bug or downstream dependency failure. Retry with backoff. |
+| 503 | `price_not_configured` | — | (Cloud edition only) No pricing row exists for the requested model — the server hard-fails rather than silently mis-billing. Operator must seed the price; the call is not retryable as-is. |
 
 Treat anything in the 5xx range as transient — retry with exponential
 backoff. Treat 4xx as terminal — don't retry without fixing the request.

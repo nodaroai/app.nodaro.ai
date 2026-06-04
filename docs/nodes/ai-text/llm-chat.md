@@ -114,11 +114,11 @@ Cost depends on the selected model's tier. Formula: `[formula removed]` (1 credi
 
 | Tier | Example models | Credits |
 |------|----------------|---------|
-| Economy | Gemini Flash, Claude Haiku | **3** |
-| Standard | Claude Sonnet, GPT-5.2 | **5** |
-| Premium | Claude Opus, GPT-5.4, Gemini Pro | **15** |
+| Economy | Gemini Flash, Claude Haiku | **1** |
+| Standard | Claude Sonnet, GPT-5.2 | **2** |
+| Premium | Claude Opus, GPT-5.4, Gemini Pro | **3** |
 
-The credit identifier is `llm-chat` (standard), `llm-chat:economy`, or `llm-chat:premium`, built from the selected model at request time. These match the runtime `STATIC_CREDIT_COSTS` values (`llm-chat` = 5, `llm-chat:economy` = 3, `llm-chat:premium` = 15).
+The credit identifier is `llm-chat` (standard), `llm-chat:economy`, or `llm-chat:premium`, built from the selected model at request time. These match the runtime `STATIC_CREDIT_COSTS` values (`llm-chat` = 2, `llm-chat:economy` = 1, `llm-chat:premium` = 3).
 
 ## Best Practices
 
@@ -127,7 +127,7 @@ The credit identifier is `llm-chat` (standard), `llm-chat:economy`, or `llm-chat
 - Keep Temperature at 0.7 for a balance of creativity and coherence. Lower it for factual or structured output; raise it for brainstorming.
 - For long-form content, raise Max Tokens. The default (2048) handles most cases but may truncate very long outputs.
 - For image-prompt fan-out (Photo Shoot Planner / Product Catalog Writer / Storyboard Writer), connect a reference image upstream — running these templates is blocked without one. The Custom template does not require one.
-- Pick the cheapest model that meets your quality bar — economy (3 cr) is plenty for rewriting and captioning; reserve premium (15 cr) for complex reasoning.
+- Pick the cheapest model that meets your quality bar — economy (1 cr) is plenty for rewriting and captioning; reserve premium (3 cr) for complex reasoning.
 - To process a video or audio reference, select a Gemini model.
 
 ## Common Use Cases
