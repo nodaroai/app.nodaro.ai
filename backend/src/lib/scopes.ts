@@ -42,7 +42,7 @@ export function hasScope(granted: readonly string[], required: Scope): boolean {
 
 export interface ScopeError {
   statusCode: 403
-  body: { error: { code: "insufficient_scope"; message: string } }
+  body: { error: { code: "insufficient_scope"; message: string; missingScope: Scope } }
 }
 
 /**
@@ -53,6 +53,6 @@ export function requireScope(granted: readonly string[], required: Scope): Scope
   if (hasScope(granted, required)) return null
   return {
     statusCode: 403,
-    body: { error: { code: "insufficient_scope", message: `Missing required scope: ${required}` } },
+    body: { error: { code: "insufficient_scope", message: `Missing required scope: ${required}`, missingScope: required } },
   }
 }

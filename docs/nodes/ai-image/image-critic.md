@@ -13,7 +13,7 @@ The Image Critic node uses a vision-language model to evaluate an image against 
 | Mode | select | `realism` | One of: `character-consistency`, `realism`, `prompt-adherence`, `anatomy`, `aesthetic`, `style-match`, `all` |
 | Threshold | number 0-1 | `0.7` | `approved = score >= threshold`. Below the threshold, the `rejected` handle fires instead. |
 | Prompt | text | `""` | Required for `prompt-adherence` and `all` modes. Can be wired via the `prompt` input edge -- the edge wins when present. |
-| LLM model | select | Claude Sonnet 4.6 | Any vision-capable model. Pricing varies by tier (3 / 5 / 15 credits for economy / standard / premium). |
+| LLM model | select | Claude Sonnet 4.6 | Any vision-capable model. Pricing varies by tier (1 / 1 / 2 credits for economy / standard / premium). |
 
 ## Inputs & Outputs
 
@@ -44,9 +44,9 @@ Any vision-capable LLM configured in the editor. The default is Claude Sonnet 4.
 
 | LLM tier | Credits per call |
 |----------|-----------------|
-| Economy (Gemini Flash, Claude Haiku) | 3 |
-| Standard (Claude Sonnet 4.6, GPT-5.2) -- default | 5 |
-| Premium (Claude Opus 4.6, GPT-5.4, Gemini Pro) | 15 |
+| Economy (Gemini Flash, Claude Haiku) | 1 |
+| Standard (Claude Sonnet 4.6, GPT-5.2) -- default | 1 |
+| Premium (Claude Opus 4.6, GPT-5.4, Gemini Pro) | 2 |
 
 The `all` mode does NOT multiply the cost -- every dimension is scored in a single VLM call.
 

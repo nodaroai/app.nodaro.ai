@@ -49,6 +49,6 @@ The Speech to Video node creates video content driven by speech audio. It uses W
 
 ## Tips
 
-- 480p (4cr) is great for quick previews; use 720p (8cr) for final output
+- 480p (3cr) is great for quick previews; 580p (5cr) is a middle option; use 720p (6cr) for final output
 - Increase inference steps for more detailed results at the cost of longer processing
 - The Guidance Scale controls how closely the output follows your prompt — higher values are more faithful but less creative

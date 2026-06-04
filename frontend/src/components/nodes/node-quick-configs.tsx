@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect } from "react"
 import type { LucideIcon } from "lucide-react"
 import { Sparkles, Languages } from "lucide-react"
 import {
@@ -14,6 +15,7 @@ import {
   MODIFY_IMAGE_MODELS,
   UPSCALE_IMAGE_MODELS,
   VIDEO_V2V_MODELS,
+  V2V_RESOLUTION_OPTIONS,
   EXTEND_VIDEO_MODELS,
   LIP_SYNC_MODELS,
   TTS_MODELS,
@@ -39,9 +41,26 @@ export interface QuickConfigControl {
   readonly field: string
   readonly ariaLabel: string
   readonly icon?: LucideIcon
-  readonly options: ReadonlyArray<QuickConfigOption>
+  /** Dropdown options. Pass a function to make the list provider-aware (it
+   *  receives the node's `data`); return `[]` when the current provider has no
+   *  such lever — {@link QuickConfigSelect} then HIDES the control and clears
+   *  any stale value, so a provider switch can't leave an out-of-range value
+   *  that the route's Zod enum would reject (the recurring provider-sync trap).
+   *  The valid set must come from the SAME source the config panel uses
+   *  (model-options.ts) so the two can't drift. */
+  readonly options:
+    | ReadonlyArray<QuickConfigOption>
+    | ((data: Record<string, unknown>) => ReadonlyArray<QuickConfigOption>)
   /** Write the chosen value as a number (option values are strings). */
   readonly numeric?: boolean
+}
+
+/** Resolve a control's options against the node's current data. */
+function resolveOptions(
+  control: QuickConfigControl,
+  data: Record<string, unknown>,
+): ReadonlyArray<QuickConfigOption> {
+  return typeof control.options === "function" ? control.options(data) : control.options
 }
 
 const toOptions = (
@@ -143,6 +162,14 @@ const removeBgMotionControl: QuickConfigControl = {
     { value: "dynamic", label: "Dynamic" },
   ],
 }
+/** video-to-video resolution. Provider-aware: runway-aleph has no resolution
+ *  lever (it uses an aspect-ratio control instead — see video-configs.tsx), so
+ *  return `[]` there and QuickConfigSelect hides + clears the field. Options are
+ *  the SAME V2V_RESOLUTION_OPTIONS the panel renders, so they can't drift. */
+const v2vResolutionControl: QuickConfigControl = {
+  field: "v2vResolution", ariaLabel: "Resolution", icon: Sparkles,
+  options: (data) => (data.provider === "runway-aleph" ? [] : toOptions(V2V_RESOLUTION_OPTIONS)),
+}
 /** generate-mask segmentation threshold (numeric — Grounded SAM confidence). */
 const maskThresholdControl: QuickConfigControl = {
   field: "threshold", ariaLabel: "Threshold", icon: Sparkles, numeric: true,
@@ -158,7 +185,7 @@ export const NODE_QUICK_CONFIGS: Readonly<Record<string, ReadonlyArray<QuickConf
   // (not creatable, never mounted) — no quick-config entry; guard test enforces.
   "modify-image": [providerControl(MODIFY_IMAGE_MODELS)],
   "upscale-image": [providerControl(UPSCALE_IMAGE_MODELS)],
-  "video-to-video": [providerControl(VIDEO_V2V_MODELS)],
+  "video-to-video": [providerControl(VIDEO_V2V_MODELS), v2vResolutionControl],
   "extend-video": [providerControl(EXTEND_VIDEO_MODELS)],
   "lip-sync": [providerControl(LIP_SYNC_MODELS)],
   "text-to-speech": [providerControl(TTS_MODELS)],
@@ -220,18 +247,43 @@ export function QuickConfigSelect({
   nodeId,
   control,
   value,
+  data,
   disabled,
   onOpenChange,
 }: {
   readonly nodeId: string
   readonly control: QuickConfigControl
   readonly value: string
+  /** Full node data — drives provider-aware option lists (see {@link QuickConfigControl.options}). */
+  readonly data: Record<string, unknown>
   readonly disabled?: boolean
   readonly onOpenChange?: (open: boolean) => void
 }) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const Icon = control.icon
-  const current = control.options.find((o) => o.value === value)
+  const options = resolveOptions(control, data)
+
+  // Fail-safe (mirrors the config panels' provider-change snap; valid set is
+  // single-sourced from model-options): if the current provider invalidated
+  // this field, snap a stale value to the first valid option, or clear it when
+  // the provider has no such lever. Keeps the strip from leaving an
+  // out-of-range value the route's Zod enum would reject. (For static option
+  // lists `options` is a stable ref, so this only runs when `value` changes.)
+  useEffect(() => {
+    if (value === "" || value == null) return
+    if (options.length === 0) {
+      updateNodeData(nodeId, { [control.field]: undefined })
+    } else if (!options.some((o) => o.value === value)) {
+      const next = options[0].value
+      updateNodeData(nodeId, { [control.field]: control.numeric ? Number(next) : next })
+    }
+  }, [value, options, nodeId, control, updateNodeData])
+
+  // No lever for the current provider → render nothing (matches the panel,
+  // which hides provider-irrelevant controls).
+  if (options.length === 0) return null
+
+  const current = options.find((o) => o.value === value)
   return (
     <Select
       value={value || undefined}
@@ -244,7 +296,7 @@ export function QuickConfigSelect({
         <SelectValue>{current?.label ?? value}</SelectValue>
       </SelectTrigger>
       <SelectContent className="node-menu-surface">
-        {control.options.map((o) => (
+        {options.map((o) => (
           <SelectItem key={o.value} value={o.value} className="text-xs">
             {o.label}
           </SelectItem>

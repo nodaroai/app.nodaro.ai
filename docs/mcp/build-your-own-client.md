@@ -10,9 +10,13 @@ MCP-compatible client by:
 
 ## Allowlist gate
 
-By default, dynamic registration only accepts known client names (Claude, Cursor,
-Cline, Continue, Goose). If you operate a hosted Nodaro instance and want any
-client to register, set `MCP_DYNAMIC_REGISTRATION=open` in the backend env.
+By default, dynamic registration only accepts known client names. The default
+allowlist is: Claude, Claude Code, Cursor, Cline, Continue, Goose, ChatGPT,
+OpenAI, Lovable, Gemini, Gemini CLI, Codex, MCP Inspector, mcp-inspector. The
+operator controls this via two env vars: `MCP_DCR_ALLOWLIST` (comma-separated
+client names) and `MCP_DYNAMIC_REGISTRATION` (`allowlist` — the default — / `open`
+to accept any client / `off` to disable DCR entirely). To let any client register
+on a hosted instance, set `MCP_DYNAMIC_REGISTRATION=open` in the backend env.
 
 ## Manual registration
 

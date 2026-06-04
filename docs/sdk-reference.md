@@ -69,6 +69,30 @@ typechecking (`function takesClient(c: NodaroClient) { ... }`).
 import { NodaroClient } from "@nodaro/client"
 ```
 
+### `client.me()`
+
+Resolves the authenticated user's canonical identity (`GET /v1/me`). A token-
+introspection primitive: any valid bearer token (a first-party Supabase JWT or
+a developer-app OAuth token) resolves to its owner's identity. Throws
+`UnauthorizedError` (401) when the token is missing or invalid.
+
+```ts
+const me = await client.me()
+// { id, email, displayName, avatarUrl, tier }
+```
+
+**Signature:** `me(): Promise<UserIdentity>`
+
+Returns `UserIdentity`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `string` | Nodaro user id (= the Supabase auth user id). |
+| `email` | `string` | The user's email. |
+| `displayName` | `string \| null` | Human-readable display name (from `profiles.full_name`); `null` if unset. |
+| `avatarUrl` | `string \| null` | Avatar URL; `null` if unset. |
+| `tier` | `string` | Subscription tier (e.g. `"free"`, `"pro"`). |
+
 ---
 
 ## Auth providers
@@ -1975,7 +1999,7 @@ Fetches public metadata about a developer app for rendering a consent screen.
 Public route — no auth needed.
 
 ```ts
-const info = await client.oauth.getAppInfo("ndr_client_abc123")
+const info = await client.oauth.getAppInfo("app_1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d")
 // { name, description, logoUrl, homepageUrl, scopesRequested }
 ```
 
@@ -2196,6 +2220,11 @@ console.log(result.assetId)    // reference back to the storage row
 Every type used in a public method signature is re-exported from
 `@nodaro/client`. Import them with `import type { ... }`.
 
+### Client identity
+
+- `UserIdentity` — return type of `client.me()`: `{ id, email, displayName: string | null, avatarUrl: string | null, tier }`
+- `ClientOptions` — `createClient` options: `{ baseUrl, auth, fetch?, timeoutMs? }`
+
 ### Workflows
 
 - `Workflow` — workflow record (full record on `get`/`create`/`update`, metadata only on `list`)
@@ -2247,13 +2276,28 @@ Every type used in a public method signature is re-exported from
 - `ReferencePhoto`, `ReferencePhotoKind` — identity reference photo shapes
 - `UpsertCharacterInput` — body for `upsert()` / `create()` / `update()`
 - `UpsertCharacterResult` — `{ id, name? }`
-- `ListCharactersParams` — `{ projectId?, archived? }`
+- `ListCharactersParams` — `{ projectId?, archived?, limit? }`
 - `DuplicateCharacterInput` — `{ nodeId?, projectId? }`
 - `GenerateCharacterInput` — body for `generate()`
 - `GenerateCharacterResult` — `{ jobId, jobIds[] }`
 - `GenerateAssetInput`, `GenerateMotionInput` — bodies for asset / motion generation
 - `ApprovePortraitResult` — `{ portraitUrl, canonicalDescription: string | null }`
 - `RecaptionResult` — `{ canonicalDescription }`
+
+### Locations
+
+- `Location` — full location record (camelCase)
+- `LocationDetail` — `Location` plus in-flight job state
+- `LocationReferencePhoto`, `LocationReferencePhotoKind` — mood-board reference shapes
+- `CreateLocationInput`, `UpdateLocationInput` — bodies for `create()` / `update()`
+- `UpdateLocationResult` — `{ id, updatedAt }`
+- `ListLocationsParams` — query params for `list()`
+- `GenerateLocationInput`, `GenerateLocationResult` — body + response for `generate()`
+- `GenerateLocationAssetInput` — body for `generateAsset()`
+- `ApproveMainImageResult` — `{ ..., canonicalDescription: string | null }`
+- `RecaptionLocationResult` — `{ canonicalDescription }`
+- `LocationAssetType` — asset-bucket enum (re-exported alongside `LOCATION_ASSET_TYPES` runtime tuple)
+- `LocationAttachColumn` — attach-column enum (re-exported alongside `LOCATION_ATTACH_COLUMNS` runtime tuple)
 
 ### Objects
 
@@ -2287,6 +2331,23 @@ Every type used in a public method signature is re-exported from
 - `ApplyChatProposalResult` — `{ applied: true; attemptId; newOutput } | { applied: false; error: { code, detail? } }`
 - `ProposedChange` — discriminated union re-exported from `@nodaro/shared`
 
+### Reduce
+
+- `ReduceStrategyId` — union of reduction-strategy slugs
+- `ReduceMeta` — per-reduction metadata
+- `ReduceInput` — body for `reduce()`
+- `ReduceResult` — reduction response
+
+### Prompt helper
+
+- `AnalyzeInput`, `AnalyzeResult` — body + response for `analyze()`
+- `GenerateInput` — body for `generate()`
+- `EnhanceInput` — body for `enhance()`
+- `PromptResult` — shared prompt response shape
+- `WizardQuestion`, `WizardOption`, `WizardSelection` — prompt-wizard Q&A shapes (re-exported from `@nodaro/shared`)
+- `RecommendedModel` — wizard model recommendation (re-exported from `@nodaro/shared`)
+- `WizardNodeContext` — node context passed into the wizard (re-exported from `@nodaro/shared`)
+
 ### Voices
 
 - `Voice` — premade ElevenLabs voice record, re-exported from `@nodaro/shared`
@@ -2317,6 +2378,17 @@ Every type used in a public method signature is re-exported from
 - `ExchangeCodeInput` — `{ client_id, client_secret, code, redirect_uri }`
 - `AccessTokenResponse` — `{ access_token, token_type, scope, expires_in }`
 - `OAuthAppInfo` — public app metadata for consent screens
+
+### Apps
+
+- `PublishedApp` — published-app list/summary record
+- `PublishedAppDetail` — full published-app record with input schema
+- `ListAppsParams` — query params for `list()`
+- `ListAppsResult` — paginated `list()` response
+- `AppRunResult` — response from running an app
+- `AppRun` — a single app-run record
+- `ListAppRunsParams` — query params for `listRuns()`
+- `DeleteAppRunResult` — `{ success }`-style delete response
 
 ### Generic node/edge
 

@@ -1,4 +1,4 @@
-# Video Upscale
+# Upscale Video
 
 > Upscale video resolution using Topaz or VEO AI.
 

@@ -69,15 +69,15 @@ Vite + React 19 + React Router 7 SPA, served as static files by
 Caddy. Two top-level products live in the same bundle:
 
 - **The visual editor** (`frontend/src/components/editor/`) — React
-  Flow canvas, ~100 custom node components, config panels per node
+  Flow canvas, ~190 node components (~167 registered node types), config panels per node
   category, an in-browser DAG executor for live runs.
-- **The app runner** (`frontend/src/components/presentation/`) — a
+- **The app runner** (`frontend/src/components/app-runner/`) — a
   consumer-facing surface that renders a published workflow as a
   guided form (inputs → outputs).
-- **The admin panel** (`frontend/src/app/(admin)/`) — Business and
+- **The admin panel** (`frontend/src/ee/app/(admin)/`) — Business and
   Cloud only. Pricing config, user management, jobs, models, alerts,
   credit audit, KIE.ai balance, etc.
-- **The OAuth consent screen** (`frontend/src/app/(auth)/oauth/`) —
+- **The OAuth consent screen** (`frontend/src/app/oauth/`) —
   rendered when third-party apps redirect users into
   `/oauth/authorize`.
 
@@ -92,7 +92,7 @@ each file may export multiple HTTP endpoints. Auth is a single global
 `preHandler` hook in `middleware/auth.ts`. Each route declares its
 own Zod schemas for request/response validation.
 
-Three sibling Node processes ship as part of the backend image:
+Five sibling Node processes ship as part of the backend image:
 
 | Process | Entrypoint | Role |
 |---|---|---|
@@ -100,8 +100,9 @@ Three sibling Node processes ship as part of the backend image:
 | Video worker | `worker.ts` | Pulls per-node BullMQ jobs, calls AI providers, uploads outputs to R2. |
 | Render worker | `render-worker.ts` | Remotion renderer. CPU-heavy; runs headless Chrome. |
 | Orchestrator | `orchestrator.ts` → `workers/orchestrator-worker.ts` | Workflow-level DAG execution. |
+| Pipeline worker | `pipeline-worker.ts` | Story-to-Video pipeline orchestration. Ships in all editions; exits cleanly on non-cloud. |
 
-In Docker, all four launch from a single `start.sh` and Caddy fronts
+In Docker, all five launch from a single `start.sh` and Caddy fronts
 the API server. In a scaled deployment, each can run in its own
 container — they coordinate only through Redis (BullMQ queues) and
 Postgres (`workflow_executions.node_states`).
@@ -125,10 +126,12 @@ Postgres (`workflow_executions.node_states`).
 
 Cross-cutting logic that doesn't belong in a route:
 
-- `services/workflow-engine/` — DAG execution. 8 files: type
+- `services/workflow-engine/` — DAG execution. 10 files: type
   definitions, topological sort, input resolution, output extraction,
   payload building, the node executor, an inline executor for nodes
-  that don't queue, and a sub-workflow handler.
+  that don't queue, a sub-workflow handler, node-type normalization
+  (`normalize-node-types.ts`), and field-mapping resolution
+  (`resolve-field-mappings.ts`).
 - `services/social/` — OAuth + publishing for Instagram, TikTok,
   YouTube, LinkedIn, X, Facebook. Includes AES-256-GCM token
   encryption and per-platform adapters.
@@ -175,7 +178,7 @@ Highlights:
 | `assets` | Generated files in R2 (image/video/audio), keyed by `r2_key`. |
 | `model_pricing` | Credit cost per model identifier; admin-configurable. |
 | `credit_transactions` | Audit log for grants, charges, refunds. |
-| `developer_apps` | OAuth client registry (Phase 2). |
+| `developer_apps` | OAuth client registry. |
 | `developer_app_authorizations` | Per-(user, app) consent grant; carries scopes. |
 | `developer_app_tokens` | Issued OAuth access tokens (`ndr_app_…`). |
 | `api_tokens` | Personal API tokens (`ndr_…`). |
@@ -318,10 +321,12 @@ A few of the more opinionated decisions:
   fallback) means we can swap providers per model without touching
   feature code. Same shape for image/video providers — `providers/`
   has pluggable clients per vendor.
-- **Polling, not realtime, for execution status.** Simpler to deploy.
-  No WebSocket/SSE infrastructure to scale. Workflow status changes
-  at second-scale, not millisecond-scale; polling every 2–5s is
-  cheap.
+- **Polling for status, SSE for streaming output.** Job and execution
+  *status* is polled (every 2–5s) — workflow status changes at
+  second-scale, not millisecond-scale, so polling is cheap and simple
+  to deploy. Streaming token/progress *output* (AI writer, LLM chat,
+  workflow execution, pipelines) uses Server-Sent Events via
+  `backend/src/lib/sse.ts`.
 
 ## See also
 

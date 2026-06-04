@@ -447,7 +447,7 @@ generation routes:
 - `POST /v1/generate-character-asset` — `creditCost(provider)` credits per
   variant.
 - `POST /v1/generate-character-motion` — `creditCost(provider)` credits per
-  motion clip. Provider defaults to `kling` (~22 credits / 5-second clip).
+  motion clip. Provider defaults to `kling` (~28 credits / 5-second clip).
 - `POST /v1/characters/:id/approve-portrait` — currently free; the LLM
   caption is uncharged. (See the route's TODO comment in
   `backend/src/routes/character-portrait-approval.ts` for the pending 1-CR

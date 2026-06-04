@@ -164,6 +164,10 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as YouTubeVideoData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const [playerOpen, setPlayerOpen] = useState(false)
+  // Aspect of the displayed thumbnail — for downloaded non-YouTube clips
+  // (TikTok/Reels/etc.) this is the real video aspect (vertical); for YouTube
+  // it's the 16:9 thumbnail, matching the embed. Drives node + container size.
+  const [thumbAspect, setThumbAspect] = useState<number | undefined>(undefined)
   const [loading, setLoading] = useState(false)
 
   const platform = detectPlatform(nodeData.youtubeUrl || "")
@@ -295,6 +299,7 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
   const canPlay = canEmbed || !!nodeData.downloadedVideoUrl
   const useFull = useFullResolution(id)
   const displayThumbnail = nodeData.downloadedThumbnailUrl || nodeData.thumbnailUrl
+  useEffect(() => { setThumbAspect(undefined) }, [displayThumbnail])
 
   return (
     <>
@@ -312,7 +317,7 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
           category="input"
           credits={0}
           selected={selected}
-          {...videoNodeSizing(undefined)}
+          {...videoNodeSizing(thumbAspect)}
           hideHeader
           handles={HANDLES}
         >
@@ -387,7 +392,8 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
             {!loading && !isDownloading && nodeData.videoId && displayThumbnail && downloadStatus !== "failed" && (
               <div className="relative group">
                 <div
-                  className={`w-full aspect-video rounded-md overflow-hidden bg-muted/30 relative ${canPlay ? "cursor-pointer hover:opacity-90" : ""} transition-opacity`}
+                  className={`w-full rounded-md overflow-hidden bg-muted/30 relative ${canPlay ? "cursor-pointer hover:opacity-90" : ""} transition-opacity`}
+                  style={{ aspectRatio: thumbAspect ?? 16 / 9 }}
                   onClick={(e) => {
                     if (!canPlay) return
                     e.stopPropagation()
@@ -400,6 +406,7 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
                     className="w-full h-full object-cover"
                     thumbnail={!useFull}
                     thumbnailWidth={320}
+                    onLoadDimensions={({ width, height }) => { if (width > 0 && height > 0) setThumbAspect(width / height) }}
                   />
                   {/* Platform badge (non-YouTube) */}
                   {!canEmbed && (

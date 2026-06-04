@@ -9,6 +9,7 @@ import { useShallow } from "zustand/react/shallow"
 import { useAltKeyStore } from "@/hooks/use-alt-key"
 import { useMobileCanvas } from "@/components/editor/mobile-canvas-context"
 import { CustomHandle } from "./custom-handle"
+import { NodeRunStripShell } from "./node-run-strip-shell"
 import { computeZoomFromDrag, computeVisualSize, applyMagnet } from "./zoom-math"
 import { useNodeInsertAnimation } from "@/components/editor/workflow-editor/use-node-insert-animation"
 
@@ -44,7 +45,16 @@ interface BaseNodeProps {
   readonly toolbarActions?: ReactNode
   readonly hideHeader?: boolean
   readonly bottomToolbarContent?: ReactNode
+  /** Bottom run strip. BaseNode frames it in the shared zoom-scaled pill
+   *  ({@link NodeRunStripShell}) so every node's run affordance looks identical
+   *  — pass a bare {@link RunNodeButton} or a {@link NodeQuickStrip}. For a
+   *  self-framing bespoke toolbar (its own pill + compact mode), use
+   *  {@link rawToolbarContent} instead to avoid double-wrapping. */
   readonly topToolbarContent?: ReactNode
+  /** Bottom run strip rendered AS-IS (no shell pill). For bespoke quick
+   *  toolbars that supply their own zoom-scaled pill. Mutually exclusive with
+   *  {@link topToolbarContent}. */
+  readonly rawToolbarContent?: ReactNode
   /** Force `topToolbarContent`'s NodeToolbar to stay visible regardless of
    *  hover. Used when the toolbar contains dropdowns/popovers whose portaled
    *  content lands outside the node's hover boundary — without this the
@@ -135,6 +145,7 @@ function BaseNodeComponent({
   hideHeader = false,
   bottomToolbarContent,
   topToolbarContent,
+  rawToolbarContent,
   keepTopToolbarVisible,
   className,
   imageAspectRatio,
@@ -581,8 +592,10 @@ function BaseNodeComponent({
           : <div className="px-3 py-2 text-xs overflow-hidden flex-1 min-h-0 bg-white dark:bg-transparent text-[#1E293B] dark:text-card-foreground">{children}</div>
       )}
     </div>
-      {/* Content below card (e.g. run button) */}
-      {topToolbarContent && (
+      {/* Content below card (the run strip). `topToolbarContent` is framed in
+          the shared zoom-scaled pill so every node matches; `rawToolbarContent`
+          (bespoke self-framing toolbars) renders as-is. */}
+      {(topToolbarContent || rawToolbarContent) && (
         <NodeToolbar align="center" isVisible={isHovered || !!keepTopToolbarVisible || isRunning || isPending || quickStripPinned} position={Position.Bottom} offset={4}>
           <div
             // The bottom toolbar renders in a portal outside the node's DOM
@@ -598,7 +611,9 @@ function BaseNodeComponent({
               leaveTimerRef.current = setTimeout(() => setIsHovered(false), 600)
             }}
           >
-            {topToolbarContent}
+            {rawToolbarContent
+              ? rawToolbarContent
+              : <NodeRunStripShell>{topToolbarContent}</NodeRunStripShell>}
           </div>
         </NodeToolbar>
       )}

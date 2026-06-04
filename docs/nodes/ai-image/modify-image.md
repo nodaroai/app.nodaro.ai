@@ -38,7 +38,7 @@ Modify Image exposes the full image-to-image provider catalog plus Nano Banana E
 | Nano Banana / Nano Banana Pro | Fast iteration; Pro for higher detail |
 | Qwen / Qwen Edit | Versatile transformation and targeted editing |
 | Seedream 5 Lite / Seedream Edit | Latest Seedream image-to-image and photorealistic editing |
-| Kontext Multi (Open) | Multi-image Flux Kontext via Replicate (up to 4 refs) |
+| Kontext Multi (Open) | Multi-image Flux Kontext via Replicate (up to 2 reference images) |
 | Flux 2 Pro / Flux 2 Max (Safety Tolerance) | BFL Flux 2 via Replicate; Max supports up to 8 refs |
 | Nano Banana Edit | Context-aware editing from a text instruction (style presets, negative prompt, aspect ratio, seed, asset references) |
 

@@ -181,7 +181,7 @@ function VideoSfxNodeComponent({ id, data, selected }: NodeProps) {
         hideHeader
         {...videoNodeSizing(mediaAspectRatio)}
         handles={handles}
-        topToolbarContent={
+        rawToolbarContent={
           <VideoSfxQuickToolbar
             nodeId={id}
             data={nodeData}

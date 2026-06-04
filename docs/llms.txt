@@ -13,7 +13,7 @@ Nodaro is a Fastify backend + Vite/React frontend, source-available under the [S
 ## SDK & CLI
 
 - [SDK Quickstart](https://nodaroai.github.io/app.nodaro.ai/sdk-quickstart.md): install `@nodaro/client`, three auth modes, error handling, common recipes
-- [SDK Reference](https://nodaroai.github.io/app.nodaro.ai/sdk-reference.md): every public export — `createClient`, auth providers, error classes, 14 resource classes (workflows, projects, jobs, executions, nodes, characters, locations, objects, pipelines, reduce, promptHelper, apps, developerApps, oauth)
+- [SDK Reference](https://nodaroai.github.io/app.nodaro.ai/sdk-reference.md): every public export — `createClient`, auth providers, error classes, 17 resource classes (workflows, projects, jobs, executions, nodes, characters, locations, objects, pipelines, reduce, promptHelper, apps, developerApps, oauth, voices, credits, uploads)
 - [CLI](https://nodaroai.github.io/app.nodaro.ai/cli.md): terminal client `@nodaro/cli` — multi-profile auth, `--watch` polling, JSON output, single-binary distribution via `bun build --compile` for darwin/linux/windows
 
 ## API & integrations

@@ -105,6 +105,6 @@ The migration runs on the frontend (`loadWorkflow`) plus three defensive backend
 
 ## Trained character routing (Cloud edition)
 
-When you `@mention` a [trained character](../../features/character-training.md) — a character with a successful LoRA — in the prompt, this node automatically routes through the trained Flux LoRA on Replicate instead of the selected provider. The dropdown provider's price is **replaced** by 3 credits/image.
+When you `@mention` a [trained character](../../features/character-training.md) — a character with a successful LoRA — in the prompt, this node automatically routes through the trained Flux LoRA on Replicate instead of the selected provider. The dropdown provider's price is **replaced** by 2 credits/image.
 
 Two or more trained `@-mentions` in one prompt fall back to the selected provider + reference-image injection (multi-character LoRA composition is Phase 2).

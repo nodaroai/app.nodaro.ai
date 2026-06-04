@@ -100,6 +100,14 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
     description: "Pull content from RSS/Atom feeds for automated content pipelines.",
     outputType: "data",
   },
+  {
+    type: "web-scrape",
+    label: "Web Scrape",
+    category: "input",
+    // outputType: data — emits a structured JSON array via the `json` handle (creditCost auto-filled from STATIC_CREDIT_COSTS = 2).
+    description: "Fetch data from web pages, Google Search, Instagram, TikTok, or RSS feeds and emit structured JSON.",
+    outputType: "data",
+  },
 
   {
     type: "generate-image",
@@ -488,6 +496,7 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
   { type: "extract-frame", label: "Extract Frame", category: "processing", description: "Extract a single frame as an image.", outputType: "image" },
   { type: "add-captions", label: "Add Captions", category: "processing", description: "Burn captions into a video. Static (subtitle) is FFmpeg/free; kinetic styles (word-highlight, karaoke, tiktok-words, word-pop, bouncy) render via Remotion at 5 credits.", outputType: "video", creditCost: "0-5" },
   { type: "speed-ramp", label: "Adjust Speed", category: "processing", description: "Change playback speed (0.05x to 100x), reverse, choose audio treatment (pitch-preserve / pitch-shift / drop), opt into motion-compensated frame interpolation (smooth slow-mo), or define a piecewise speed ramp via segments. FFmpeg only.", outputType: "video", creditCost: "2-5" },
+  { type: "split-media", label: "Split into Chunks", category: "processing", description: "Split a video or audio file into equal-duration chunks for batch processing — emits a video clip and an audio file per chunk. (creditCost auto-filled from STATIC_CREDIT_COSTS = 2)", outputType: "video" },
   // ---- Additional processing nodes (video → VIDEO_OUTPUT_NODE_TYPES, audio → AUDIO_OUTPUT_NODE_TYPES in input-resolver.ts; creditCost auto-filled from STATIC_CREDIT_COSTS) ----
   { type: "loop-video", label: "Loop Video", category: "processing", description: "Repeat video to reach a target duration or count, with optional smart-loop-cut for seamless seams.", outputType: "video" },
   { type: "fade-video", label: "Fade Video", category: "processing", description: "Add fade transitions to the beginning and end of video.", outputType: "video" },
@@ -499,6 +508,7 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
   { type: "mix-audio", label: "Mix Audio", category: "processing", description: "Blend multiple audio tracks with individual volume control.", outputType: "audio" },
   { type: "combine-audio", label: "Combine Audio", category: "processing", description: "Concatenate audio tracks end-to-end in order, with optional per-segment trim. (Mix Audio layers tracks; this joins them sequentially.)", outputType: "audio" },
   { type: "extract-audio", label: "Extract Audio", category: "processing", description: "Demux the audio track from a video to a standalone MP3.", outputType: "audio" },
+  { type: "adjust-volume", label: "Adjust Volume", category: "processing", description: "Change audio volume with optional normalize and fade-in / fade-out transitions (FFmpeg). (creditCost auto-filled from STATIC_CREDIT_COSTS = 1)", outputType: "audio" },
 
   { type: "render-video", label: "Render Video", category: "composition", description: "Render a Remotion composition to MP4.", outputType: "video", creditCost: 15 },
   { type: "after-effects", label: "After Effects", category: "composition", description: "AI-generated post-processing layer.", outputType: "video", creditCost: 2 },
@@ -507,6 +517,7 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
   // composition siblings of after-effects / motion-graphics / 3d-title (rendered video output).
   { type: "video-composer", label: "Video Composer", category: "composition", description: "AI-powered scene-graph video composition from natural language prompts.", outputType: "video", creditCost: "1-4" },
   { type: "lottie-overlay", label: "Lottie Overlay", category: "composition", description: "AI-placed timed Lottie animations overlaid on video.", outputType: "video", creditCost: "1-2" },
+  { type: "composite", label: "Composite", category: "composition", description: "Multi-layer video compositor (up to 4 layers) with per-layer positioning, scale, blending, and opacity. Client-side plan, no AI — deterministic and free.", outputType: "video", creditCost: 0 },
 
   { type: "webhook-trigger", label: "Webhook Trigger", category: "trigger", description: "Trigger the workflow via HTTP POST.", outputType: "data" },
   { type: "schedule-trigger", label: "Schedule Trigger", category: "trigger", description: "Trigger the workflow on a cron/interval.", outputType: "data" },
@@ -526,12 +537,17 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
   { type: "list", label: "List", category: "control", description: "Static list of items for fan-out.", outputType: "data" },
   { type: "group", label: "Group", category: "utility", description: "Visual container that groups child nodes via React Flow parentId — emits members as a structured list to downstream consumers (Loop, Merge Lists, sub-workflow).", outputType: "data" },
   { type: "collect", label: "Collect", category: "utility", description: "Explicit list-builder — multiple inputs converge on a single 'in' handle in connection order and emit as a structured list downstream.", outputType: "data" },
+  { type: "teleport-send", label: "Teleport Send", category: "utility", description: "Broadcast its upstream value on a named channel (A-F) without a visible wire — every Teleport Receive tuned to the same channel gets the value.", outputType: "data", creditCost: 0 },
+  { type: "teleport-receive", label: "Teleport Receive", category: "utility", description: "Receive a value from a Teleport Send node on the same channel (A-F), without a visible wire. Multiple receivers can listen on one channel.", outputType: "data", creditCost: 0 },
   // ---- List / JSON utility nodes (inline-executor; outputType data; free — STATIC_CREDIT_COSTS = 0) ----
   { type: "filter-list", label: "Filter List", category: "utility", description: "Keep only the upstream list items matching one or more field conditions (AND/OR), with 12 operators (equals, contains, regex, in-list, ...).", outputType: "data", creditCost: 0 },
   { type: "sort-list", label: "Sort List", category: "utility", description: "Sort an upstream list by value or by a dot-path field, with Auto/Text/Number/Date comparison and asc/desc direction (missing values sort last).", outputType: "data", creditCost: 0 },
   { type: "deduplicate", label: "Deduplicate", category: "utility", description: "Remove duplicate items from an upstream list, keeping the first occurrence. Compares whole items or a dot-path field.", outputType: "data", creditCost: 0 },
   { type: "merge-lists", label: "Merge Lists", category: "utility", description: "Combine multiple upstream lists into one — concatenate (append in edge order) or zip (element-wise merge with modulo-wrap), with optional dedupe.", outputType: "data", creditCost: 0 },
   { type: "json-process", label: "JSON Process", category: "utility", description: "Transform upstream JSON — input-path drill, filter conditions, and field projection via a visual builder, or a raw transformation expression in Advanced mode.", outputType: "data", creditCost: 0 },
+  { type: "extract-field", label: "Extract Field", category: "utility", description: "Pull a specific field or dot-notation path from upstream JSON — output can be a single string, a list for fan-out, or a raw JSON value.", outputType: "data", creditCost: 0 },
+  { type: "router", label: "Router", category: "utility", description: "Conditionally split workflow execution into one or more named routes (radio / checkbox / conditional modes). Passes the upstream value through to each active route.", outputType: "data", creditCost: 0 },
+  { type: "preview", label: "Preview", category: "utility", description: "Display any upstream result (text, image, video, or audio) inline on the canvas for inspection. Display-only sink — no downstream output.", outputType: "none", creditCost: 0 },
   { type: "sticky-note", label: "Sticky Note", category: "utility", description: "Place annotated notes on the workflow canvas for documentation and organization.", outputType: "none" },
   { type: "selector", label: "Selector", category: "utility", description: "Pick item(s) from a list — supports item/range/list/random/modulo/predicate/named-key modes. Two outputs: picked + rest.", outputType: "text", creditCost: 0 },
   { type: "combine-text", label: "Combine Text", category: "control", description: "Concatenate text inputs.", outputType: "text" },
@@ -539,6 +555,8 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
   { type: "sub-workflow", label: "Sub-Workflow", category: "control", description: "Embed another workflow as a node. Selects a route (matched input+output pair) on the referenced workflow; ports become handles on the parent canvas. Expand opens the child for editing with a breadcrumb back to the parent.", outputType: "data", creditCost: 0 },
   { type: "sub-workflow-input", label: "Sub-Workflow Input", category: "control", description: "Entry boundary of a callable sub-workflow route. Declares per-port handles consumed by nodes inside the sub-workflow.", outputType: "data", creditCost: 0 },
   { type: "sub-workflow-output", label: "Sub-Workflow Output", category: "control", description: "Exit boundary of a callable sub-workflow route. Declares per-port handles collected from inner nodes and returned to the caller.", outputType: "none", creditCost: 0 },
+  // category: utility per NODE_DEFINITIONS; placed near the sub-workflow nodes as a workflow-embedding construct.
+  { type: "component", label: "Component", category: "utility", description: "Embed a published Nodaro Component (a curated, versioned sub-workflow from the marketplace or your own apps) as a black-box node — its exposed inputs/settings/outputs surface in the config panel.", outputType: "data", creditCost: 0 },
   {
     type: "reduce",
     label: "Reduce",
@@ -597,6 +615,7 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
   { type: "voice-delivery",  label: "Voice Delivery",  category: "parameter", description: "Pick pace + emotion + archetype for ElevenLabs Voice Design.", outputType: "text" },
 
   // ---- Text / value parameter pickers (PARAMETER_NODE_TYPES in @nodaro/shared → outputType text) ----
+  { type: "provider",     label: "Provider",     category: "parameter", description: "Select an AI provider and model (image / video / voice / script) to override the default provider on connected generation nodes.", outputType: "text", creditCost: 0 },
   { type: "tone",         label: "Tone",         category: "parameter", description: "Define a tone or style modifier text (e.g., \"cinematic\", \"cheerful\") to influence connected AI nodes.", outputType: "text" },
   { type: "style-guide",  label: "Style Guide",  category: "parameter", description: "Define visual style reference text for consistent aesthetics across AI generation nodes in a workflow.", outputType: "text" },
   { type: "motion",       label: "Motion",       category: "parameter", description: "Define the motion intensity level for connected video generation nodes.", outputType: "text" },

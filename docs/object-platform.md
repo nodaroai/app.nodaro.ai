@@ -712,7 +712,7 @@ generation routes:
   variant. Same per-provider table as `generate-image`.
 - `POST /v1/generate-object-motion` — `creditCost(provider)` credits per
   motion clip. Provider defaults to `kling-turbo` (the fastest variant
-  in the object set; ~15 credits / 5-second clip — cheaper than the
+  in the object set; ~11 credits / 5-second clip — cheaper than the
   cinematic kling default used by locations). See
   `docs/nodes/ai-video/generate-video.md` for the full per-provider
   table.

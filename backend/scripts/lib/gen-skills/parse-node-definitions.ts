@@ -383,17 +383,157 @@ export function parseDataInterface(
   const members = collectInterfaceMembers(sourceFile, interfaceName)
   if (!members) return undefined
 
+  const fields = membersToFields(members)
+  // A plain interface or `type X = { ... }` yields its fields directly.
+  if (fields.length > 0) return { name: interfaceName, fields }
+
+  // The name exists but has no direct member list — it's an intersection /
+  // Omit / Pick / mapped type (e.g. `GenerateVideoNodeData =
+  // Omit<ImageToVideoData,…> & Omit<TextToVideoData,…> & { … }`). Expand it
+  // through the ts-morph type checker, which flattens those forms into a
+  // concrete property set. Union aliases (e.g. SceneNodeData) are left empty —
+  // they have no single data shape.
+  const resolved = resolveIntersectionFields(sourceFile, interfaceName)
+  return { name: interfaceName, fields: resolved ?? [] }
+}
+
+function membersToFields(members: import("ts-morph").Node[]): InterfaceField[] {
   const fields: InterfaceField[] = []
   for (const member of members) {
     if (member.getKind() !== SyntaxKind.PropertySignature) continue
     const ps = member.asKindOrThrow(SyntaxKind.PropertySignature)
-    const name = ps.getName()
     const typeNode = ps.getTypeNode()
-    const type = typeNode ? typeNode.getText() : "unknown"
-    const optional = ps.hasQuestionToken()
-    fields.push({ name, type, optional })
+    fields.push({
+      name: ps.getName(),
+      type: typeNode ? typeNode.getText() : "unknown",
+      optional: ps.hasQuestionToken(),
+    })
   }
-  return { name: interfaceName, fields }
+  return fields
+}
+
+/**
+ * Flatten an intersection / Omit / Pick alias into a concrete field list by
+ * walking the AST (NOT the type checker — gen-skills runs ts-morph without a
+ * tsconfig/lib, so the checker can't evaluate the `Omit<…>` utility and would
+ * silently drop the omitted bases, leaving only the inline literal). Used ONLY
+ * as a fallback when {@link collectInterfaceMembers} found the name but it had
+ * no direct member list — plain interfaces / `type X = { … }` keep their fast
+ * path. Returns undefined for union aliases (no single shape) so the caller
+ * renders an empty block, preserving prior behavior for types like
+ * SceneNodeData.
+ */
+function resolveIntersectionFields(
+  sourceFile: import("ts-morph").SourceFile,
+  name: string,
+): InterfaceField[] | undefined {
+  const alias = sourceFile.getTypeAlias(name)
+  if (!alias) return undefined
+  const typeNode = alias.getTypeNode()
+  if (!typeNode) return undefined
+  if (typeNode.getKind() === SyntaxKind.UnionType) return undefined
+  return resolveTypeNodeFields(sourceFile, typeNode, new Set([name]))
+}
+
+/**
+ * Resolve a type NODE to a field list, following same-file interface/alias
+ * references and interpreting `Omit` / `Pick` / `Partial` / `Required` /
+ * `Readonly` / intersections. `seen` guards against reference cycles. Returns
+ * undefined for shapes with no field list (e.g. unions, unresolved externals).
+ */
+function resolveTypeNodeFields(
+  sourceFile: import("ts-morph").SourceFile,
+  typeNode: import("ts-morph").Node,
+  seen: Set<string>,
+): InterfaceField[] | undefined {
+  const kind = typeNode.getKind()
+
+  if (kind === SyntaxKind.TypeLiteral) {
+    return membersToFields(typeNode.asKindOrThrow(SyntaxKind.TypeLiteral).getMembers())
+  }
+
+  if (kind === SyntaxKind.IntersectionType) {
+    // Merge constituents left → right; later members override earlier by name
+    // (so `GenerateVideoNodeData`'s inline block wins over the Omit'd bases).
+    const merged = new Map<string, InterfaceField>()
+    for (const constituent of typeNode.asKindOrThrow(SyntaxKind.IntersectionType).getTypeNodes()) {
+      for (const f of resolveTypeNodeFields(sourceFile, constituent, seen) ?? []) {
+        merged.set(f.name, f)
+      }
+    }
+    return [...merged.values()]
+  }
+
+  if (kind === SyntaxKind.TypeReference) {
+    const ref = typeNode.asKindOrThrow(SyntaxKind.TypeReference)
+    const typeName = ref.getTypeName().getText()
+    const args = ref.getTypeArguments()
+    if (typeName === "Omit" && args.length === 2) {
+      const base = resolveTypeNodeFields(sourceFile, args[0], seen) ?? []
+      const keys = extractStringLiteralKeys(args[1])
+      return base.filter((f) => !keys.has(f.name))
+    }
+    if (typeName === "Pick" && args.length === 2) {
+      const base = resolveTypeNodeFields(sourceFile, args[0], seen) ?? []
+      const keys = extractStringLiteralKeys(args[1])
+      return base.filter((f) => keys.has(f.name))
+    }
+    if (args.length === 1 && (typeName === "Partial" || typeName === "Required" || typeName === "Readonly")) {
+      const base = resolveTypeNodeFields(sourceFile, args[0], seen) ?? []
+      if (typeName === "Partial") return base.map((f) => ({ ...f, optional: true }))
+      if (typeName === "Required") return base.map((f) => ({ ...f, optional: false }))
+      return base
+    }
+    // Plain reference to an interface / alias declared in this file.
+    return resolveNamedTypeFields(sourceFile, typeName, seen)
+  }
+
+  return undefined
+}
+
+function resolveNamedTypeFields(
+  sourceFile: import("ts-morph").SourceFile,
+  name: string,
+  seen: Set<string>,
+): InterfaceField[] | undefined {
+  if (seen.has(name)) return [] // cycle guard
+  seen.add(name)
+
+  const iface = sourceFile.getInterface(name)
+  if (iface) {
+    // Own members first; follow `extends` clauses so derived interfaces resolve fully.
+    const fields = new Map<string, InterfaceField>()
+    for (const ext of iface.getExtends()) {
+      for (const f of resolveTypeNodeFields(sourceFile, ext, seen) ?? []) fields.set(f.name, f)
+    }
+    for (const f of membersToFields(iface.getMembers())) fields.set(f.name, f)
+    return [...fields.values()]
+  }
+
+  const alias = sourceFile.getTypeAlias(name)
+  if (!alias) return undefined
+  const typeNode = alias.getTypeNode()
+  if (!typeNode || typeNode.getKind() === SyntaxKind.UnionType) return undefined
+  return resolveTypeNodeFields(sourceFile, typeNode, seen)
+}
+
+/** Collect string-literal keys from a `K` type node (single literal or a union). */
+function extractStringLiteralKeys(node: import("ts-morph").Node): Set<string> {
+  const keys = new Set<string>()
+  const visit = (n: import("ts-morph").Node): void => {
+    if (n.getKind() === SyntaxKind.UnionType) {
+      for (const t of n.asKindOrThrow(SyntaxKind.UnionType).getTypeNodes()) visit(t)
+      return
+    }
+    if (n.getKind() === SyntaxKind.LiteralType) {
+      const lit = n.asKindOrThrow(SyntaxKind.LiteralType).getLiteral()
+      if (lit.getKind() === SyntaxKind.StringLiteral) {
+        keys.add(lit.asKindOrThrow(SyntaxKind.StringLiteral).getLiteralText())
+      }
+    }
+  }
+  visit(node)
+  return keys
 }
 
 function collectInterfaceMembers(
@@ -411,8 +551,9 @@ function collectInterfaceMembers(
   if (typeNode.getKind() === SyntaxKind.TypeLiteral) {
     return typeNode.asKindOrThrow(SyntaxKind.TypeLiteral).getMembers()
   }
-  // Other type alias shapes (unions, intersections, references) don't have
-  // a simple member list — surface as "no fields" rather than throwing so
-  // callers can still detect the alias exists with `parseDataInterface !== undefined`.
+  // Other type alias shapes (unions, intersections, references) don't have a
+  // simple member list — surface as "no fields" (empty array, not undefined)
+  // so parseDataInterface knows the alias EXISTS and can try the type-checker
+  // fallback (resolveIntersectionFields) for intersections / Omit / Pick.
   return []
 }

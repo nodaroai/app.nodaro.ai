@@ -38,9 +38,7 @@ function CompositeNodeComponent({ id, data, selected }: NodeProps) {
       hideHeader
       minWidth={220}
       topToolbarContent={
-        !isRunning ? (
-          <RunNodeButton nodeId={id} credits={0} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
-        ) : undefined
+        <RunNodeButton nodeId={id} credits={0} isRunning={isRunning} onRun={(nid) => runSingleNode?.(nid)} />
       }
       handles={[
         { id: "video1",      type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 120px)', left: '-29px' }, external: true },

@@ -13,6 +13,9 @@ export type DeveloperAppScope =
   | "assets:write"
   | "credits:read"
   | "apps:read"
+  | "pipelines:read"
+  | "pipelines:execute"
+  | "pipelines:approve"
 
 export type DeveloperAppStatus = "active" | "suspended" | "pending_review"
 

@@ -57,7 +57,7 @@ describe("scopes", () => {
     const err = requireScope(["workflows:read"], "workflows:write")
     expect(err).toEqual({
       statusCode: 403,
-      body: { error: { code: "insufficient_scope", message: "Missing required scope: workflows:write" } },
+      body: { error: { code: "insufficient_scope", message: "Missing required scope: workflows:write", missingScope: "workflows:write" } },
     })
   })
 })

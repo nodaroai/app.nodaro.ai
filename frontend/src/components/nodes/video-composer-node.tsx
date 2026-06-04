@@ -43,9 +43,7 @@ function VideoComposerNodeComponent({ id, data, selected }: NodeProps) {
       hideHeader
       minWidth={220}
       topToolbarContent={
-        !isRunning ? (
-          <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
-        ) : undefined
+        <RunNodeButton nodeId={id} credits={credits} isRunning={isRunning} onRun={(nid) => runSingleNode?.(nid)} />
       }
       handles={[
         { id: "in",          type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },

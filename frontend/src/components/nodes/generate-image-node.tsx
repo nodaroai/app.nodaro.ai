@@ -141,7 +141,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
       listProgress={isNodeRunning && listTotal ? `${listCompleted ?? 0}/${listTotal}` : undefined}
       listProgressPercent={isNodeRunning ? listProgressPercent : undefined}
       hideHeader
-      topToolbarContent={
+      rawToolbarContent={
         <GenerateImageQuickToolbar
           nodeId={id}
           data={nodeData}

@@ -25,7 +25,7 @@ The Face Swap node takes a video and a reference face image and replaces the fac
 
 | Provider | Credits |
 |----------|---------|
-| roop | 16 credits |
+| roop | 13 credits |
 
 ## Best Practices
 

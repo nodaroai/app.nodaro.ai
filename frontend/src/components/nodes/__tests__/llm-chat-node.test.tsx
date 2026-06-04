@@ -19,7 +19,7 @@ vi.mock("@xyflow/react", () => ({
 vi.mock("../base-node", () => ({
   BaseNode: ({
     children, label, category, credits, id, isRunning, handles,
-    topToolbarContent, bottomToolbarContent, enableZoomHandle, keepTopToolbarVisible,
+    topToolbarContent, rawToolbarContent, bottomToolbarContent, enableZoomHandle, keepTopToolbarVisible,
   }: any) => (
     <div
       data-testid="base-node"
@@ -35,6 +35,7 @@ vi.mock("../base-node", () => ({
         <div key={`${h.type}-${h.id}`} data-testid={`handle-${h.type}-${h.id}`} data-type={h.type} data-position={h.position} />
       ))}
       {topToolbarContent}
+      {rawToolbarContent}
       {bottomToolbarContent}
       {children}
     </div>

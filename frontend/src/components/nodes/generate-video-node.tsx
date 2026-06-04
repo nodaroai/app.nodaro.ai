@@ -219,7 +219,7 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
         // satisfies this node's 11-pip handle stack.)
         {...videoNodeSizing(mediaAspectRatio)}
         handles={handles}
-        topToolbarContent={
+        rawToolbarContent={
           <GenerateVideoQuickToolbar
             nodeId={id}
             data={nodeData}

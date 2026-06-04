@@ -125,7 +125,7 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
         hideHeader
         enableZoomHandle
         keepTopToolbarVisible={toolbarDropdownOpen}
-        topToolbarContent={
+        rawToolbarContent={
           <LlmChatQuickToolbar
             nodeId={id}
             data={nodeData}

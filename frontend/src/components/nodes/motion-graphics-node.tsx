@@ -41,9 +41,7 @@ function MotionGraphicsNodeComponent({ id, data, selected }: NodeProps) {
       isRunning={isRunning}
       hideHeader
       topToolbarContent={
-        !isRunning ? (
-          <NodeQuickStrip nodeId={id} credits={credits} isRunning={false} />
-        ) : undefined
+        <NodeQuickStrip nodeId={id} credits={credits} isRunning={isRunning} />
       }
       handles={[
         { id: "video",       type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },

@@ -27,7 +27,7 @@ The repo is a single npm workspaces monorepo. Top-level folders:
 | `backend/` | Fastify HTTP API, BullMQ workers, orchestrator. Node 22, TypeScript. |
 | `frontend/` | Vite SPA — visual editor + presentation/app-runner + admin panel. React 19, React Router 7, React Flow. |
 | `packages/shared/` | Pure logic shared across the stack: types, model registries, prompt builders. Publishes as [`@nodaro/shared`](https://www.npmjs.com/package/@nodaro/shared). |
-| `packages/client/` | Typed REST SDK with three auth modes and seven resource classes. Publishes as [`@nodaro/client`](https://www.npmjs.com/package/@nodaro/client). |
+| `packages/client/` | Typed REST SDK with three auth modes and 17 resource classes. Publishes as [`@nodaro/client`](https://www.npmjs.com/package/@nodaro/client). |
 | `packages/remotion/` | Remotion video compositions (slideshow, scene-graph, motion-graphics, etc.). |
 | `supabase/migrations/` | Database schema as forward-only SQL migrations. |
 | `docs/` | Public docs — this folder is published to GitHub Pages. |
