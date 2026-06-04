@@ -1,15 +1,30 @@
 import { describe, it, expect, vi, afterEach } from "vitest"
 import { render, screen, fireEvent, act } from "@testing-library/react"
 
-// Mock React Flow's hook — CanvasControls only uses useReactFlow().
+// Mock React Flow's hooks used by CanvasControls.
 const zoomTo = vi.fn()
+const setCenter = vi.fn()
+const selectNode = vi.fn()
+let flowNodes: Array<Record<string, unknown>> = []
+let storeState: { width: number; height: number; transform: [number, number, number] } = {
+  width: 1000,
+  height: 800,
+  transform: [0, 0, 1],
+}
 vi.mock("@xyflow/react", () => ({
   useReactFlow: () => ({
     fitView: vi.fn(),
     zoomIn: vi.fn(),
     zoomOut: vi.fn(),
     zoomTo,
+    getNodes: () => flowNodes,
+    setCenter,
   }),
+  useStoreApi: () => ({ getState: () => storeState }),
+}))
+vi.mock("@/hooks/use-workflow-store", () => ({
+  useWorkflowStore: (selector: (s: { selectNode: typeof selectNode }) => unknown) =>
+    selector({ selectNode }),
 }))
 
 import { CanvasControls, ZoomControl } from "../canvas-controls"
@@ -29,6 +44,10 @@ function pointer(el: HTMLElement, type: "down" | "move" | "up", x: number, y: nu
 afterEach(() => {
   vi.useRealTimers()
   zoomTo.mockClear()
+  setCenter.mockClear()
+  selectNode.mockClear()
+  flowNodes = []
+  storeState = { width: 1000, height: 800, transform: [0, 0, 1] }
 })
 
 describe("ZoomControl", () => {
@@ -119,5 +138,27 @@ describe("CanvasControls", () => {
     zoomTo.mockClear()
     fireEvent.click(screen.getByRole("button", { name: "Zoom Out" }))
     expect(zoomTo).toHaveBeenCalledWith(0.75, expect.anything())
+  })
+
+  it("auto-focus centers on the node nearest the screen center and selects it", () => {
+    // Pane 1000x800, viewport at origin, zoom 1 → screen center in flow = (500, 400).
+    storeState = { width: 1000, height: 800, transform: [0, 0, 1] }
+    flowNodes = [
+      { id: "far", position: { x: 2000, y: 2000 }, measured: { width: 100, height: 100 } },
+      // center (450+50, 350+50) = (500, 400) — exactly the screen center
+      { id: "near", position: { x: 450, y: 350 }, measured: { width: 100, height: 100 } },
+    ]
+    renderControls()
+    fireEvent.click(screen.getByRole("button", { name: "Focus nearest node" }))
+    expect(setCenter).toHaveBeenCalledWith(500, 400, expect.objectContaining({ zoom: 1 }))
+    expect(selectNode).toHaveBeenCalledWith("near")
+  })
+
+  it("auto-focus is a no-op when there are no eligible nodes", () => {
+    flowNodes = []
+    renderControls()
+    fireEvent.click(screen.getByRole("button", { name: "Focus nearest node" }))
+    expect(setCenter).not.toHaveBeenCalled()
+    expect(selectNode).not.toHaveBeenCalled()
   })
 })
