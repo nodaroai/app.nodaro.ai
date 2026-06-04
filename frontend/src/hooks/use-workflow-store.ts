@@ -525,6 +525,16 @@ interface WorkflowState {
   readonly duplicateNode: (nodeId: string, position?: { x: number; y: number }) => void
   readonly duplicateNodes: (ids: string[]) => void
   readonly selectNode: (nodeId: string | null) => void
+  /** Node id whose quick-edit Prompt modal is open, or null. Set by any prompt
+   *  entry point (per-node button, ⌘/Ctrl+E, prompt-handle popover). */
+  readonly promptEditNodeId: string | null
+  readonly openPromptEditor: (nodeId: string) => void
+  readonly closePromptEditor: () => void
+  /** Node id whose bottom-strip config dropdown is open. Keeps that node's
+   *  hover toolbar pinned while a Radix Select/Popover portal (rendered outside
+   *  the node) has focus, so the dropdown doesn't vanish mid-pick. */
+  readonly quickStripPinnedNodeId: string | null
+  readonly setQuickStripPinned: (nodeId: string | null) => void
   readonly setUserPromptTemplates: (templates: Record<string, string>) => void
   readonly setUserTextTemplates: (templates: GenerateTextTemplate[]) => void
   readonly setFlowPromptTemplates: (templates: Record<string, string>) => void
@@ -833,6 +843,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   nodes: [],
   edges: [],
   selectedNodeId: null,
+  promptEditNodeId: null,
+  quickStripPinnedNodeId: null,
   configPanelFullscreen: false,
   setConfigPanelFullscreen: (open) => set({ configPanelFullscreen: open }),
   skipNextViewportAnimation: false,
@@ -1309,6 +1321,15 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     if (id) get().openPickerForNode(id, type)
     return id
   },
+
+  openPromptEditor: (nodeId) => {
+    // Select the node first so the inline "Generate with AI" wizard can read
+    // its connected-input context (it keys off selectedNodeId).
+    get().selectNode(nodeId)
+    set({ promptEditNodeId: nodeId })
+  },
+  closePromptEditor: () => set({ promptEditNodeId: null }),
+  setQuickStripPinned: (nodeId) => set({ quickStripPinnedNodeId: nodeId }),
 
   openFullscreenSettings: (nodeId) => {
     const prev = get()

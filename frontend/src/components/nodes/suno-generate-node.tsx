@@ -5,7 +5,7 @@ import { Position, type NodeProps } from "@xyflow/react"
 import { Music, Loader2, AlertCircle, Volume2, Type, LayoutGrid, Sparkles, Mic } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
-import { RunNodeButton } from "./run-node-button"
+import { NodeQuickStrip } from "./node-quick-strip"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { isValidSunoGenerateConnection } from "@/lib/audio-text-handles"
@@ -60,7 +60,7 @@ function SunoGenerateNodeComponent({ id, data, selected }: NodeProps) {
       minHeight={180}
       hideHeader
       topToolbarContent={
-        <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+        <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />
       }
       bottomToolbarContent={
         showThumbnails && results.length > 1 ? (

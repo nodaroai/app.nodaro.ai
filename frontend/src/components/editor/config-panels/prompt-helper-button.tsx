@@ -15,6 +15,10 @@ interface PromptHelperButtonProps {
   readonly aspectRatio?: string
   readonly duration?: number
   readonly onAccept: (enhancedPrompt: string, modelChange?: ModelChange) => void
+  /** Visual size. "sm" (default) is the inline config-panel chip; "md" is a
+   *  slightly larger, more prominent variant for surfaces where it's the
+   *  primary action (e.g. the quick-edit Prompt modal). */
+  readonly size?: "sm" | "md"
 }
 
 const IMAGE_SOURCE_TYPES = new Set([
@@ -28,6 +32,7 @@ export function PromptHelperButton({
   aspectRatio,
   duration,
   onAccept,
+  size = "sm",
 }: PromptHelperButtonProps) {
   const [open, setOpen] = useState(false)
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
@@ -104,9 +109,14 @@ export function PromptHelperButton({
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="inline-flex items-center gap-1 px-2 py-0.5 min-h-[32px] sm:min-h-0 justify-center rounded-md border border-[#ff0073]/30 bg-[#ff0073]/5 text-[#ff0073] hover:bg-[#ff0073]/15 hover:border-[#ff0073]/50 transition-colors text-[10px] font-medium whitespace-nowrap"
+            className={
+              "inline-flex items-center gap-1 justify-center rounded-md border border-[#ff0073]/30 bg-[#ff0073]/5 text-[#ff0073] hover:bg-[#ff0073]/15 hover:border-[#ff0073]/50 transition-colors font-medium whitespace-nowrap " +
+              (size === "md"
+                ? "px-2.5 py-1.5 text-xs"
+                : "px-2 py-0.5 min-h-[32px] sm:min-h-0 text-[10px]")
+            }
           >
-            <Sparkles className="w-3 h-3" />
+            <Sparkles className={size === "md" ? "w-3.5 h-3.5" : "w-3 h-3"} />
             Generate with AI
           </button>
         </TooltipTrigger>

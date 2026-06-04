@@ -162,6 +162,12 @@ export const VIDEO_V2V_MODELS: readonly { value: VideoToVideoProvider; label: st
   { value: "wan-flash", label: "Wan 2.6 Flash", desc: "Fast V2V with audio & multi-shot" },
 ]
 
+export const EXTEND_VIDEO_MODELS = [
+  { value: "runway-extend", label: "Runway Extend" },
+  { value: "veo-extend", label: "VEO Extend" },
+  { value: "ltx-2.3-pro", label: "LTX 2.3 Pro" },
+] as const
+
 export const V2V_DURATION_OPTIONS = [
   { value: "5", label: "5 seconds" },
   { value: "10", label: "10 seconds" },

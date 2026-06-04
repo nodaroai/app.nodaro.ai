@@ -18,6 +18,7 @@ import {
 } from "@xyflow/react"
 import { useSearchParams, useNavigate } from "react-router-dom"
 import { cn } from "@/lib/utils"
+import { nodeHasPromptField } from "@/lib/prompt-fields"
 import "@xyflow/react/dist/style.css"
 
 import { nodeTypes } from "@/components/nodes"
@@ -1508,6 +1509,24 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         if (nodeId) {
           e.preventDefault()
           openFullscreenSettings(nodeId)
+        }
+        return
+      }
+
+      // Cmd/Ctrl+E — toggle the quick-edit Prompt modal for the selected node
+      // (runs BEFORE the overlay guard so it can close its own dialog).
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "e" && !e.shiftKey && !e.altKey) {
+        const state = useWorkflowStore.getState()
+        if (state.promptEditNodeId) {
+          e.preventDefault()
+          state.closePromptEditor()
+          return
+        }
+        const nodeId = state.selectedNodeId ?? state.nodes.find((n) => n.selected)?.id
+        const nodeType = nodeId ? state.nodes.find((n) => n.id === nodeId)?.type : undefined
+        if (nodeId && nodeHasPromptField(nodeType)) {
+          e.preventDefault()
+          state.openPromptEditor(nodeId)
         }
         return
       }

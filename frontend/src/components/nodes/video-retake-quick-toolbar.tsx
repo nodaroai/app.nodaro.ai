@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { RatioIcon } from "@/components/editor/config-panels/aspect-ratio-selector"
 import { RunNodeButton } from "./run-node-button"
+import { PromptEditButton } from "./prompt-edit-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { NODE_VISUAL_SCALE_FLOOR } from "@/lib/zoom-floor"
 import type { VideoRetakeData } from "@/types/nodes"
@@ -169,6 +170,7 @@ export function VideoRetakeQuickToolbar({
         style={toolbarTransform}
         onClick={(e) => e.stopPropagation()}
       >
+        <PromptEditButton nodeId={nodeId} compact />
         <Popover onOpenChange={handleOpenChange}>
           <PopoverTrigger asChild>
             <button
@@ -263,6 +265,7 @@ export function VideoRetakeQuickToolbar({
       style={toolbarTransform}
       onClick={(e) => e.stopPropagation()}
     >
+      <PromptEditButton nodeId={nodeId} />
       {/* Model selector — locked to LTX 2.3 Pro for now, dropdown rendered
           for forward-compat (additional retake providers slot in here). */}
       <Select disabled={isRunning} value={currentProvider} onValueChange={handleModelChange} onOpenChange={handleOpenChange}>

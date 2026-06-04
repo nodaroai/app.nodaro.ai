@@ -13,6 +13,7 @@ import {
 import { ModelSearchSelect } from "@/components/editor/config-panels/model-search-select"
 import { RatioIcon } from "@/components/editor/config-panels/aspect-ratio-selector"
 import { RunNodeButton } from "./run-node-button"
+import { PromptEditButton } from "./prompt-edit-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { NODE_VISUAL_SCALE_FLOOR } from "@/lib/zoom-floor"
 import { useNodeVisuallyCompact } from "@/lib/node-visual-compact"
@@ -200,6 +201,7 @@ export function GenerateImageQuickToolbar({
         style={toolbarTransform}
         onClick={(e) => e.stopPropagation()}
       >
+        <PromptEditButton nodeId={nodeId} compact />
         <Popover onOpenChange={handleOpenChange}>
           <PopoverTrigger asChild>
             <button
@@ -301,6 +303,8 @@ export function GenerateImageQuickToolbar({
       style={toolbarTransform}
       onClick={(e) => e.stopPropagation()}
     >
+      <PromptEditButton nodeId={nodeId} />
+
       {/* Model selector */}
       {isMulti ? (
         <span

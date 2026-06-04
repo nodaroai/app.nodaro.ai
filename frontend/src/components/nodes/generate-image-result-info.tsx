@@ -89,7 +89,7 @@ export function GenerateImageResultInfo({
           onClick={(e) => e.stopPropagation()}
         >
           <DialogHeader>
-            <DialogTitle>Apply this output&apos;s settings?</DialogTitle>
+            <DialogTitle className="text-primary">Apply this output&apos;s settings?</DialogTitle>
             <DialogDescription>
               {isLoading
                 ? "Loading the settings that produced this output…"

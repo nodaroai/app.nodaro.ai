@@ -5,7 +5,7 @@ import { Position, type NodeProps } from "@xyflow/react"
 import { Eye, Image as ImageIcon, FileText, Check, X } from "lucide-react"
 import { createPortal } from "react-dom"
 import { BaseNode } from "./base-node"
-import { RunNodeButton } from "./run-node-button"
+import { NodeQuickStrip } from "./node-quick-strip"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -142,12 +142,7 @@ function ImageCriticNodeComponent({ id, data, selected }: NodeProps) {
         hideHeader
         minWidth={240}
         topToolbarContent={
-          <RunNodeButton
-            nodeId={id}
-            credits={credits}
-            isRunning={status === "running"}
-            onRun={(nid) => runSingleNode?.(nid)}
-          />
+          <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />
         }
         handles={[
           { id: "image",     type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },

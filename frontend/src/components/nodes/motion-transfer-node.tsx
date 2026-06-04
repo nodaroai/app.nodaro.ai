@@ -8,7 +8,7 @@ import { isValidMotionTransferConnection } from "@/lib/video-producer-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
-import { RunNodeButton } from "./run-node-button"
+import { NodeQuickStrip } from "./node-quick-strip"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -176,7 +176,7 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
         ) : undefined
       }
       topToolbarContent={
-                  <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+                  <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />
       }
       handles={handles}
     >

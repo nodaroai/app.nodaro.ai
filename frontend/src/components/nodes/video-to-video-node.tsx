@@ -8,7 +8,7 @@ import { isValidVideoToVideoConnection } from "@/lib/video-producer-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
-import { RunNodeButton } from "./run-node-button"
+import { NodeQuickStrip } from "./node-quick-strip"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -141,7 +141,7 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
         ) : undefined
       }
       topToolbarContent={
-                  <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+                  <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />
       }
       handles={[
         { id: "video",          type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)',  left: '-29px' }, external: true },

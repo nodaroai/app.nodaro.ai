@@ -6,7 +6,7 @@ import { Sparkles, Loader2, AlertCircle, Type, Copy, X } from "lucide-react"
 import { copyToClipboard } from "@/lib/utils"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
-import { RunNodeButton } from "./run-node-button"
+import { NodeQuickStrip } from "./node-quick-strip"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { isValidSunoStyleBoostConnection } from "@/lib/audio-text-handles"
@@ -45,7 +45,7 @@ function SunoStyleBoostNodeComponent({ id, data, selected }: NodeProps) {
       isRunning={status === "running"}
       hideHeader
       topToolbarContent={
-        <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+        <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />
       }
       handles={[
         { id: "prompt", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },

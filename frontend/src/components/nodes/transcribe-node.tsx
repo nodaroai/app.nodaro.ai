@@ -6,7 +6,7 @@ import { FileText, Loader2, AlertCircle, X, Type, AudioWaveform, Copy, Download 
 import { createPortal } from "react-dom"
 import { computeDeleteResultUpdates, copyToClipboard, downloadTextFile } from "@/lib/utils"
 import { BaseNode } from "./base-node"
-import { RunNodeButton } from "./run-node-button"
+import { NodeQuickStrip } from "./node-quick-strip"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { isValidTranscribeConnection } from "@/lib/audio-text-handles"
@@ -104,7 +104,7 @@ function TranscribeNodeComponent({ id, data, selected }: NodeProps) {
           minHeight={350}
           hideHeader
           topToolbarContent={
-                          <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+                          <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />
           }
           handles={[
             { id: "audio", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },

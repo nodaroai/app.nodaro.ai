@@ -18,7 +18,7 @@ import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { isValidGenerateMaskConnection } from "@/lib/image-producer-handles"
 import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
-import { RunNodeButton } from "./run-node-button"
+import { NodeQuickStrip } from "./node-quick-strip"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -109,12 +109,7 @@ function GenerateMaskNodeComponent({ id, data, selected }: NodeProps) {
         imageAspectRatio={aspectRatio}
         hideHeader
         topToolbarContent={
-          <RunNodeButton
-            nodeId={id}
-            credits={credits}
-            isRunning={status === "running"}
-            onRun={(nid) => runSingleNode?.(nid)}
-          />
+          <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />
         }
         bottomToolbarContent={
           showThumbnails && results.length > 1 ? (

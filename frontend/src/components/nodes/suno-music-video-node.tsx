@@ -5,7 +5,7 @@ import { Position, type NodeProps } from "@xyflow/react"
 import { Film, Loader2, AlertCircle, LayoutGrid } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
-import { RunNodeButton } from "./run-node-button"
+import { NodeQuickStrip } from "./node-quick-strip"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { isValidSunoMusicVideoConnection } from "@/lib/audio-text-handles"
@@ -67,7 +67,7 @@ function SunoMusicVideoNodeComponent({ id, data, selected }: NodeProps) {
         className={hasResult ? "!border-0 !shadow-none !bg-transparent" : undefined}
         hideHeader
         topToolbarContent={
-          <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+          <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />
         }
         bottomToolbarContent={
           showThumbnails && results && results.length > 1 ? (

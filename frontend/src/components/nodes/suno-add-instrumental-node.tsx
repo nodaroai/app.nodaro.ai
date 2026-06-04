@@ -5,7 +5,7 @@ import { Position, type NodeProps } from "@xyflow/react"
 import { Piano, Loader2, AlertCircle, Volume2, LayoutGrid, Music } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
-import { RunNodeButton } from "./run-node-button"
+import { NodeQuickStrip } from "./node-quick-strip"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { isValidSunoAddInstrumentalConnection } from "@/lib/audio-text-handles"
@@ -49,7 +49,7 @@ function SunoAddInstrumentalNodeComponent({ id, data, selected }: NodeProps) {
       selected={selected}
       isRunning={status === "running"}
       hideHeader
-      topToolbarContent={(<RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />)}
+      topToolbarContent={(<NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />)}
       bottomToolbarContent={
         showThumbnails && results.length > 1 ? (
           <div className="flex gap-2 px-2 py-1.5 bg-black/60 backdrop-blur-sm rounded-xl border border-white/10">

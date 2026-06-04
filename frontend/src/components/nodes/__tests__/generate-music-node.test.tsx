@@ -62,9 +62,14 @@ vi.mock("../run-node-button", () => ({
   ),
 }))
 
-vi.mock("lucide-react", () => {
+// Partial mock: stub the icons this test cares about, but fall back to the real
+// exports for everything else (e.g. the bottom-strip icons Sparkles/Languages/
+// Pencil/Paintbrush/Settings2 pulled in via NodeQuickStrip) so adding an icon to
+// the strip can never crash this test at import.
+vi.mock("lucide-react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("lucide-react")>()
   const I = (p: any) => <span data-testid="mock-icon" {...p} />
-  return { Music: I, Loader2: I, AlertCircle: I, X: I, AudioLines: I, Volume2: I, Type: I, LayoutGrid: I, Sparkles: I }
+  return { ...actual, Music: I, Loader2: I, AlertCircle: I, X: I, AudioLines: I, Volume2: I, Type: I, LayoutGrid: I, Sparkles: I }
 })
 
 vi.mock("@/hooks/use-workflow-store", () => ({

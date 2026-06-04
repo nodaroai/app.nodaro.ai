@@ -34,7 +34,7 @@ import type {
   GeneratedScriptResult,
   CharacterNodeData,
 } from "@/types/nodes"
-import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, VIDEO_GEN_MODELS, MOTION_TRANSFER_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, VIDEO_DURATION_OPTIONS, VIDEO_FPS_OPTIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, getVideoResolutionOptions, getAspectRatiosForVideoModel, getVideoModelCapabilitiesTooltip } from "./model-options"
+import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, VIDEO_GEN_MODELS, MOTION_TRANSFER_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, VIDEO_DURATION_OPTIONS, VIDEO_FPS_OPTIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, EXTEND_VIDEO_MODELS, getVideoResolutionOptions, getAspectRatiosForVideoModel, getVideoModelCapabilitiesTooltip } from "./model-options"
 import { isSeedance2Provider, SEEDANCE_2_REF_LIMITS, characterMentionSlug, DEFAULT_LABEL_BY_SOURCE, locationMentionSlug } from "@nodaro/shared"
 import type { ReferenceSource } from "@nodaro/shared"
 import { ModelSearchSelect } from "./model-search-select"
@@ -2893,9 +2893,9 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
         >
           <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="runway-extend">Runway Extend</SelectItem>
-            <SelectItem value="veo-extend">VEO Extend</SelectItem>
-            <SelectItem value="ltx-2.3-pro">LTX 2.3 Pro</SelectItem>
+            {EXTEND_VIDEO_MODELS.map((m) => (
+              <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </MappableField>

@@ -5,6 +5,7 @@ import { useStore } from "@xyflow/react"
 import { Copy, Music2 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { RunNodeButton } from "./run-node-button"
+import { PromptEditButton } from "./prompt-edit-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useUpstreamVideoDuration } from "@/hooks/use-upstream-video-duration"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
@@ -169,6 +170,7 @@ export function VideoSfxQuickToolbar({
       style={toolbarTransform}
       onClick={(e) => e.stopPropagation()}
     >
+      <PromptEditButton nodeId={nodeId} />
       {/* Provider pill — Replicate MMAudio is the only supported model.
           Renders as a static chip (not a dropdown) so the visual rhythm
           matches other quick toolbars without misleading the user into

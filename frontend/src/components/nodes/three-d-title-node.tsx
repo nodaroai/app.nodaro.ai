@@ -2,7 +2,7 @@ import { memo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Box, ImageIcon, Loader2, AlertCircle } from "lucide-react"
 import { BaseNode } from "./base-node"
-import { RunNodeButton } from "./run-node-button"
+import { NodeQuickStrip } from "./node-quick-strip"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -42,7 +42,7 @@ function ThreeDTitleNodeComponent({ id, data, selected }: NodeProps) {
       hideHeader
       topToolbarContent={
         !isRunning ? (
-          <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
+          <NodeQuickStrip nodeId={id} credits={credits} isRunning={false} />
         ) : undefined
       }
       handles={[
