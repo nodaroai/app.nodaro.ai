@@ -7,6 +7,7 @@ import {
   cleanupWorkDir,
   downloadFile,
   getVideoDuration,
+  hasAudioStream,
   runFfmpeg,
   normalizeVideoForCombine,
 } from "../../../providers/video/ffmpeg-utils.js"
@@ -374,67 +375,75 @@ async function mergeScenesWithMusic(args: MergeArgs): Promise<number> {
 
   const hasMusic = !!musicAssetUrl
   const hasNarration = !!narrationAssetUrl
+  // Scene dialogue rides on the concat's audio stream (0:a) — preserved on the
+  // hard-cut concat path (the xfade/transition path still drops it; see
+  // chainCombineWithTransitions). Probe so silent films don't break the mix.
+  const dialoguePresent = await hasAudioStream(concatPath)
+  // Role-aware: the music score ducks under any PRIMARY speech track —
+  // narration VO and/or scene dialogue — so it never drowns the voices.
+  // (Constant duck; sidechain compression is a follow-up.)
+  const duckMusic = hasNarration || dialoguePresent
 
   if (hasMusic || hasNarration) {
     try {
-      if (hasMusic && hasNarration) {
-        // Case a: music + narration. amix both tracks with music ducked to
-        // 60% volume (constant — sidechain ducking is a follow-up). Music
-        // also gets its tail fade-out preserved from the 1C.2 path.
-        // Inputs: [0]=video, [1]=music, [2]=narration.
-        await runFfmpeg([
-          "-y",
-          "-i", concatPath,
-          "-i", musicPath,
-          "-i", narrationPath,
-          "-filter_complex",
-          [
-            `[1:a]volume=${MUSIC_DUCK_VOLUME_WITH_NARRATION},afade=t=out:st=${fadeStartStr}:d=${fadeOutDurationSec}[music_ducked]`,
-            `[2:a]volume=1.0[narr]`,
-            `[music_ducked][narr]amix=inputs=2:duration=longest:dropout_transition=0[aout]`,
-          ].join(";"),
-          "-map", "0:v",
-          "-map", "[aout]",
-          "-c:v", "copy",
-          "-c:a", "aac",
-          "-shortest",
-          outputPath,
-        ])
-      } else if (hasNarration) {
-        // Case b: narration only. Narration replaces video audio entirely.
-        // Inputs: [0]=video, [1]=narration.
-        await runFfmpeg([
-          "-y",
-          "-i", concatPath,
-          "-i", narrationPath,
-          "-filter_complex",
-          `[1:a]afade=t=out:st=${fadeStartStr}:d=${fadeOutDurationSec}[aout]`,
-          "-map", "0:v",
-          "-map", "[aout]",
-          "-c:v", "copy",
-          "-c:a", "aac",
-          "-shortest",
-          outputPath,
-        ])
-      } else {
-        // Case c: music only. Existing 1C.2 behavior — music with tail fade.
-        await runFfmpeg([
-          "-y",
-          "-i", concatPath,
-          "-i", musicPath,
-          // Replace video audio with the music track. -shortest caps duration
-          // at the shorter of the two; the music track was already trimmed in
-          // 7g to match concatDur. afade applies the music fade-out.
-          "-filter_complex",
-          `[1:a]afade=t=out:st=${fadeStartStr}:d=${fadeOutDurationSec}[aout]`,
-          "-map", "0:v",
-          "-map", "[aout]",
-          "-c:v", "copy",
-          "-c:a", "aac",
-          "-shortest",
-          outputPath,
-        ])
+      // Build the mix dynamically so dialogue (0:a) + narration + (ducked)
+      // music are MIXED, rather than music/narration REPLACING the dialogue
+      // (the prior bug: `-map [aout]` dropped 0:a whenever music/narration
+      // was present). Fixed input order: [0]=video(+dialogue), then music,
+      // then narration.
+      const inputs: string[] = ["-i", concatPath]
+      let musicIdx = -1
+      let narrIdx = -1
+      let nextIdx = 1
+      if (hasMusic) {
+        inputs.push("-i", musicPath)
+        musicIdx = nextIdx++
       }
+      if (hasNarration) {
+        inputs.push("-i", narrationPath)
+        narrIdx = nextIdx++
+      }
+
+      const filters: string[] = []
+      const mixLabels: string[] = []
+      if (dialoguePresent) {
+        filters.push(`[0:a]volume=1.0[dlg]`)
+        mixLabels.push("[dlg]")
+      }
+      if (hasNarration) {
+        // Narration VO gets the same tail fade as the music bed so it doesn't
+        // cut off abruptly when it runs to the end of the film.
+        filters.push(
+          `[${narrIdx}:a]volume=1.0,afade=t=out:st=${fadeStartStr}:d=${fadeOutDurationSec}[narr]`,
+        )
+        mixLabels.push("[narr]")
+      }
+      if (hasMusic) {
+        const musicVol = duckMusic ? MUSIC_DUCK_VOLUME_WITH_NARRATION : 1.0
+        filters.push(
+          `[${musicIdx}:a]volume=${musicVol},afade=t=out:st=${fadeStartStr}:d=${fadeOutDurationSec}[music]`,
+        )
+        mixLabels.push("[music]")
+      }
+      // Single source → passthrough; multiple → amix (default normalize keeps
+      // the pre-existing 2-input loudness behavior).
+      filters.push(
+        mixLabels.length === 1
+          ? `${mixLabels[0]}anull[aout]`
+          : `${mixLabels.join("")}amix=inputs=${mixLabels.length}:duration=longest:dropout_transition=0[aout]`,
+      )
+
+      await runFfmpeg([
+        "-y",
+        ...inputs,
+        "-filter_complex", filters.join(";"),
+        "-map", "0:v",
+        "-map", "[aout]",
+        "-c:v", "copy",
+        "-c:a", "aac",
+        "-shortest",
+        outputPath,
+      ])
     } catch (err) {
       // Audio mix failed — fall back to fade-only output so the pipeline
       // still ships a final MP4. Mirrors the original 1C.2 music-only

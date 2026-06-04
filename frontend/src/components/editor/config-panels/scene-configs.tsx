@@ -4,6 +4,7 @@ import type { SceneNodeFrontendData } from "@/types/nodes"
 import { CachedImage } from "@/components/ui/cached-image"
 import {
   clearVideoCriticMetadata,
+  videoModelCanSpeakDialogue,
   VIDEO_CRITIC_MIN_ADHERENCE_SCORE,
   type MatchCutVerdict,
   type ShotSpec,
@@ -281,6 +282,25 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
               value={data.video_model ?? ""}
               onChange={(e) => onUpdate({ video_model: e.target.value })}
             />
+            {/* #63 — illustrate (never restrict) whether the chosen model can
+                speak dialogue in-model. VEO 3.x bakes the line on camera +
+                revoices it to the character's voice; Seedance 2.0 lip-syncs the
+                character's voice from reference audio. Every other model uses
+                TTS + lip-sync. Reads the shared video-audio-capability SSOT
+                (same gate the pipeline backend uses). */}
+            {data.video_model
+              ? videoModelCanSpeakDialogue(data.video_model)
+                ? (
+                  <p className="text-[10px] text-emerald-500/80 mt-1">
+                    Speaks dialogue in-model — the character&apos;s voice is lip-synced automatically.
+                  </p>
+                )
+                : (
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    This model can&apos;t sync spoken dialogue — dialogue lines fall back to TTS + lip-sync.
+                  </p>
+                )
+              : null}
           </div>
           <div>
             <Label htmlFor="scene-continuity">Continuity from previous</Label>

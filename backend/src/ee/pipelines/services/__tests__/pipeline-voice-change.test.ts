@@ -6,7 +6,7 @@ vi.mock("../../../../lib/queue.js", () => ({
 vi.mock("../../../billing/credits.js", () => ({
   CreditsService: {
     reserveCredits: vi.fn().mockResolvedValue({
-      usageLogId: "log-music-1",
+      usageLogId: "log-vc-1",
       creditsReserved: 0,
       watermark: false,
     }),
@@ -15,7 +15,7 @@ vi.mock("../../../billing/credits.js", () => ({
 
 import { videoQueue } from "../../../../lib/queue.js"
 import { CreditsService } from "../../../billing/credits.js"
-import { pipelineGenerateMusic } from "../pipeline-generate-music.js"
+import { pipelineVoiceChange } from "../pipeline-voice-change.js"
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -37,7 +37,7 @@ function makeSupabaseMock(opts: {
         return {
           insert: () => ({
             select: () => ({
-              single: async () => ({ data: { id: "music-job-1" }, error: null }),
+              single: async () => ({ data: { id: "vc-job-1" }, error: null }),
             }),
           }),
           select: () => ({
@@ -80,96 +80,54 @@ async function runUntilSettled<T>(p: Promise<T>, stepMs = 3500, maxSteps = 30): 
   return p
 }
 
-describe("pipelineGenerateMusic", () => {
-  it("generates music on happy path", async () => {
+describe("pipelineVoiceChange", () => {
+  it("revoices a talking clip on the happy path (keeps music bed by default)", async () => {
     const supabase = makeSupabaseMock({
       jobStates: [
         {
           status: "completed",
-          output_data: { audioUrl: "https://r2/music.mp3" },
-          credits_actual: 0,
+          output_data: { videoUrl: "https://r2/revoiced.mp4", audioUrl: "https://r2/revoiced.mp3" },
+          credits_actual: 4,
         },
       ],
-      assetRow: { id: "asset-music-1" },
+      assetRow: { id: "asset-vc-1" },
     })
 
-    const promise = pipelineGenerateMusic({
+    const promise = pipelineVoiceChange({
       supabase,
       pipelineId: "p1",
       userId: "u1",
-      prompt: "cinematic instrumental score",
-      durationSec: 65,
+      videoUrl: "https://r2/shot.mp4",
+      voiceId: "River",
     })
     const result = await runUntilSettled(promise)
 
-    expect(result.assetUrl).toBe("https://r2/music.mp3")
-    expect(result.assetId).toBe("asset-music-1")
+    expect(result.assetUrl).toBe("https://r2/revoiced.mp4")
+    expect(result.assetId).toBe("asset-vc-1")
     expect(CreditsService.reserveCredits).toHaveBeenCalledWith(
-      "u1", "music-job-1", "generate-music", 0, 0, { isAppRun: false },
+      "u1", "vc-job-1", "elevenlabs-voice-changer", 0, 0, { isAppRun: false },
     )
     expect(videoQueue.add).toHaveBeenCalledWith(
-      "generate-music",
+      "voice-changer",
       expect.objectContaining({
-        jobId: "music-job-1",
-        prompt: "cinematic instrumental score",
-        provider: "minimax",
-        duration: 65,
+        jobId: "vc-job-1",
+        videoUrl: "https://r2/shot.mp4",
+        voiceId: "River",
+        removeBackgroundNoise: false,
       }),
     )
   })
 
-  it("routes to the suno-generate worker when provider is suno", async () => {
-    const supabase = makeSupabaseMock({
-      jobStates: [
-        {
-          status: "completed",
-          output_data: { audioUrl: "https://r2/suno.mp3" },
-          credits_actual: 0,
-        },
-      ],
-      assetRow: { id: "asset-suno-1" },
-    })
-
-    const promise = pipelineGenerateMusic({
-      supabase,
-      pipelineId: "p1",
-      userId: "u1",
-      prompt: "cinematic instrumental score",
-      durationSec: 65,
-      provider: "suno",
-    })
-    const result = await runUntilSettled(promise)
-
-    expect(result.assetUrl).toBe("https://r2/suno.mp3")
-    expect(CreditsService.reserveCredits).toHaveBeenCalledWith(
-      "u1", "music-job-1", "suno-v5_5", 0, 0, { isAppRun: false },
-    )
-    expect(videoQueue.add).toHaveBeenCalledWith(
-      "suno-generate",
-      expect.objectContaining({
-        jobId: "music-job-1",
-        prompt: "cinematic instrumental score",
-        model: "V5_5",
-        instrumental: true,
-        customMode: false,
+  it("rejects when no voiceId is supplied", async () => {
+    const supabase = makeSupabaseMock({ jobStates: [] })
+    await expect(
+      pipelineVoiceChange({
+        supabase,
+        pipelineId: "p1",
+        userId: "u1",
+        videoUrl: "https://r2/shot.mp4",
+        voiceId: "",
       }),
-    )
-  })
-
-  it("throws when generate-music job fails", async () => {
-    const supabase = makeSupabaseMock({
-      jobStates: [{ status: "failed", error_message: "Suno backend error" }],
-    })
-
-    const promise = pipelineGenerateMusic({
-      supabase,
-      pipelineId: "p1",
-      userId: "u1",
-      prompt: "x",
-      durationSec: 30,
-    })
-    promise.catch(() => undefined)
-    await runUntilSettled(promise.then(() => undefined, () => undefined))
-    await expect(promise).rejects.toThrow(/Job failed: Suno backend error/)
+    ).rejects.toThrow(/requires a voiceId/)
   })
 })

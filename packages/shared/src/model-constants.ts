@@ -820,6 +820,100 @@ export const AUDIO_ADDON_PROVIDERS = new Set([
 ])
 
 /**
+ * How a video model handles an audio track. Single source of truth for
+ * audio/speech capability across the whole stack — the config-panel audio
+ * toggle (show / lock / disable + warn), the Story→Video dialogue auto-pick
+ * (revoice vs TTS + lip-sync), provider option wiring (`sound` vs
+ * `generateAudio`), and the audio credit suffix.
+ *
+ * Consolidates signals that were previously scattered + inconsistent:
+ *   - `KIE_VIDEO_MODELS` / `KIE_TEXT_TO_VIDEO_MODELS` `extraParams.sound` (Kling)
+ *   - `…extraParams.generate_audio` (Seedance)
+ *   - VEO native audio (implicit, always on)
+ *   - `AUDIO_ADDON_PROVIDERS` (cost) + `SEEDANCE_2_PROVIDERS` (reference audio)
+ *
+ *   "none"          — silent model; no audio output. UI disables the audio
+ *                     toggle with an explanatory note; the pipeline uses TTS +
+ *                     lip-sync for any dialogue.
+ *   "ambient"       — generates ambient sound / SFX matched to the scene, NOT
+ *                     lip-synced spoken dialogue. Toggle is offered; the
+ *                     pipeline still uses TTS + lip-sync for dialogue.
+ *   "native_speech" — bakes spoken dialogue + lip movement from the prompt
+ *                     (VEO 3.x). The pipeline injects the dialogue line, enables
+ *                     audio, and revoices the clip to the character's saved voice.
+ *   "audio_driven"  — lip-syncs to a supplied reference-audio track (Seedance
+ *                     2.0 multimodal). The pipeline synthesises the character's
+ *                     voice first, feeds it as reference audio, and skips the
+ *                     separate lip-sync pass.
+ */
+export type VideoAudioMode = "none" | "ambient" | "native_speech" | "audio_driven"
+
+export interface VideoAudioCapability {
+  mode: VideoAudioMode
+  /** Provider-option field carrying the on/off toggle, when user-controllable. */
+  field?: "generateAudio" | "sound"
+  /** Audio is always produced and can't be turned off by the user (VEO 3.x). */
+  alwaysOn?: boolean
+  /** Enabling audio raises the credit cost (Kling — see AUDIO_ADDON_PROVIDERS). */
+  affectsCost?: boolean
+}
+
+/**
+ * Per-model audio capability. Only models that produce SOME audio are listed;
+ * anything absent defaults to `{ mode: "none" }` via `getVideoAudioCapability`,
+ * so silent models (minimax, hailuo, wan, grok-i2v, gemini-omni-video, runway,
+ * pika, …) need no entry. New audio-capable models MUST be added here — the
+ * `video-audio-capability` guard test cross-checks this map against the model
+ * configs' `extraParams.sound` / `generate_audio` + VEO/Seedance-2 sets so a
+ * forgotten entry fails CI rather than silently disabling audio.
+ */
+export const VIDEO_AUDIO_CAPABILITY: Record<string, VideoAudioCapability> = {
+  // VEO 3.x — native spoken dialogue + lip movement; always on (no toggle).
+  veo3: { mode: "native_speech", alwaysOn: true },
+  "veo3.1": { mode: "native_speech", alwaysOn: true },
+  veo3_lite: { mode: "native_speech", alwaysOn: true },
+  // Kling 2.6 / 3.0 — ambient sound/SFX toggle; not lip-synced speech. Cost-affecting.
+  kling: { mode: "ambient", field: "sound", affectsCost: true },
+  "kling-3.0": { mode: "ambient", field: "sound", affectsCost: true },
+  // Seedance 1.x — optional ambient audio (generate_audio); not dialogue.
+  seedance: { mode: "ambient", field: "generateAudio" },
+  // Seedance 2.0 — multimodal; lip-syncs to a supplied reference-audio track.
+  "seedance-2": { mode: "audio_driven", field: "generateAudio" },
+  "seedance-2-fast": { mode: "audio_driven", field: "generateAudio" },
+}
+
+const VIDEO_AUDIO_NONE: VideoAudioCapability = { mode: "none" }
+
+/** Audio capability for a video model. Unlisted/undefined → silent (`none`). */
+export function getVideoAudioCapability(
+  model: string | undefined,
+): VideoAudioCapability {
+  return (model ? VIDEO_AUDIO_CAPABILITY[model] : undefined) ?? VIDEO_AUDIO_NONE
+}
+
+/**
+ * True when the model produces any audio track at all. Drives the config-panel
+ * audio toggle: `false` → disable the toggle + show a "this model has no audio"
+ * note (never restrict the model choice — just explain the limitation).
+ */
+export function videoModelSupportsAudio(model: string | undefined): boolean {
+  return getVideoAudioCapability(model).mode !== "none"
+}
+
+/**
+ * True when the model can produce lip-synced spoken DIALOGUE — either natively
+ * (VEO) or driven by a supplied audio track (Seedance 2.0). Drives the Story→Video
+ * dialogue auto-pick: in-model speech + character revoice (VEO) / character-voiced
+ * reference audio (Seedance 2.0) vs. the TTS + separate-lip-sync fallback.
+ * Ambient-only models (Kling, Seedance 1.x) return `false` — their audio is SFX,
+ * not speech.
+ */
+export function videoModelCanSpeakDialogue(model: string | undefined): boolean {
+  const mode = getVideoAudioCapability(model).mode
+  return mode === "native_speech" || mode === "audio_driven"
+}
+
+/**
  * Video models where a quality/mode parameter (e.g., videoSize "high") incurs higher cost.
  * When provider is in this set and mode is "high", ":high" is appended to the identifier.
  */

@@ -105,12 +105,14 @@ export async function runMusicTimeline(
   )
 
   // 3. Suno gen — wrapper handles credit reservation, job creation, polling.
+  //    Pipeline background score uses Suno (instrumental, no vocals).
   const gen = await pipelineGenerateMusic({
     supabase,
     pipelineId,
     userId,
     prompt,
     durationSec: generateDurationSec,
+    provider: "suno",
   })
 
   // 4. Trim + beat-grid extract. Failure here is degraded-gracefully —

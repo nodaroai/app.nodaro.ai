@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import {
   isSeedance2Provider,
+  getVideoAudioCapability,
   VIDEO_CRITIC_MAX_RETRIES,
   VIDEO_CRITIC_METADATA_KEYS,
   VIDEO_CRITIC_MIN_ADHERENCE_SCORE,
@@ -20,6 +21,7 @@ import {
 import { pipelineAnimateShot } from "./services/pipeline-animate-shot.js"
 import { pipelineGenerateSpeech } from "./services/pipeline-generate-speech.js"
 import { pipelineLipSync } from "./services/pipeline-lip-sync.js"
+import { pipelineVoiceChange } from "./services/pipeline-voice-change.js"
 import { pipelineCombineVideos } from "./services/pipeline-combine-videos.js"
 import { runImageCritic } from "./llms/image-critic.js"
 import { runVideoCritic } from "./llms/video-critic.js"
@@ -205,11 +207,65 @@ export async function runSceneInternalPipeline(
     }
   }
 
+  // ─── Voice + dialogue-mode resolution ─────────────────────────────────────
+  // Resolved BEFORE animate because the audio_driven path (Seedance 2.0) needs
+  // the character voice up front. Voice selection is a partial fix — full
+  // per-shot speaker resolution needs a ShotSpec.speaker_key field (separate
+  // PR). For now: single-cast → that voice; multi-cast → first cast member's
+  // voice; none → undefined (worker falls back to the ElevenLabs default).
+  const voiceByEntityKey = await loadCastVoiceMap(
+    ctx.supabase,
+    ctx.pipelineId,
+    sceneData.cast_keys ?? [],
+  )
+  const sceneDefaultVoice =
+    (sceneData.cast_keys ?? []).length > 0
+      ? voiceByEntityKey[(sceneData.cast_keys ?? [])[0]!]
+      : undefined
+
+  const sceneAudioMode = getVideoAudioCapability(sceneData.video_model).mode
+  // #63 native-speech (VEO 3.x): bake the line + audio during animate, revoice
+  // after. audio_driven (Seedance 2.0): synth the character voice FIRST and feed
+  // it as the model's reference audio so it lip-syncs the dialogue in-model.
+  const modelBakesSpeech = sceneAudioMode === "native_speech"
+  const modelLipSyncsToAudio = sceneAudioMode === "audio_driven"
+
+  // audio_driven pre-TTS — synth each talking shot's line in the character voice
+  // so the animate call can pass it as the model's reference audio. Needs a
+  // resolved voice; without one (or on TTS failure) the shot animates silent and
+  // the dialogue step falls back to TTS + lip-sync. NON-BLOCKING per shot.
+  // NEEDS LIVE VERIFICATION that Seedance-2 reference_audio actually drives
+  // lip-sync (untested from dev).
+  const shotReferenceAudio: Record<string, string> = {}
+  if (modelLipSyncsToAudio && sceneDefaultVoice) {
+    const ttsTasks = sceneData.shots
+      .filter((shot): shot is ShotSpec & { dialogue_line: string } => !!shot.dialogue_line)
+      .map((shot) => async (): Promise<void> => {
+        try {
+          const speech = await pipelineGenerateSpeech({
+            supabase: ctx.supabase,
+            pipelineId: ctx.pipelineId,
+            pipelineEntityId: sceneEntity.id,
+            userId: ctx.userId,
+            text: shot.dialogue_line,
+            voice: sceneDefaultVoice,
+          })
+          if (speech.assetUrl) shotReferenceAudio[shot.shot_id] = speech.assetUrl
+        } catch (err) {
+          console.warn(
+            `[scene-internal-pipeline] audio-driven pre-TTS failed for scene=${sceneEntity.id} shot=${shot.shot_id}:`,
+            err instanceof Error ? err.message : err,
+          )
+        }
+      })
+    await settledWithLimit(ttsTasks, 3, undefined, false)
+  }
+
   // ─── Step 3: animate ──────────────────────────────────────────────────────
   const shotResultsResult =
     options.mode === "sequential"
-      ? await animateSequential(ctx, sceneEntity, sceneData, options)
-      : await animateParallel(ctx, sceneEntity, sceneData)
+      ? await animateSequential(ctx, sceneEntity, sceneData, options, shotReferenceAudio)
+      : await animateParallel(ctx, sceneEntity, sceneData, shotReferenceAudio)
   if (!shotResultsResult.ok) {
     return {
       ok: false,
@@ -224,29 +280,11 @@ export async function runSceneInternalPipeline(
   const shotVideoUrls: Record<string, string> = shotResultsResult.shotVideoUrls
 
   // ─── Step 4 + 5: dialogue audio + lip-sync ────────────────────────────────
-  // Both are non-blocking on failure — a shot without audio keeps its silent
-  // animate clip. Lip-sync only fires when audio synth succeeded AND
-  // lipSyncEnabled is true.
-  //
-  // Voice selection (partial fix — full per-shot speaker resolution needs a
-  // ShotSpec.speaker_key field, which lands in a separate PR). For now:
-  //   - Single-cast scene: use that character's matched voice_id.
-  //   - Multi-cast scene: best-effort default to the first cast member's
-  //     voice. Mixed-dialogue scenes still all sound like the first speaker
-  //     until ShotSpec.speaker_key is wired through.
-  //   - No cast / no voice_match: omit the `voice` param so the worker falls
-  //     back to ElevenLabs default (Rachel).
-  // TODO: full per-shot speaker resolution requires ShotSpec.speaker_key
-  //       field — separate PR.
-  const voiceByEntityKey = await loadCastVoiceMap(
-    ctx.supabase,
-    ctx.pipelineId,
-    sceneData.cast_keys ?? [],
-  )
-  const sceneDefaultVoice =
-    (sceneData.cast_keys ?? []).length > 0
-      ? voiceByEntityKey[(sceneData.cast_keys ?? [])[0]!]
-      : undefined
+  // Non-blocking on failure — a shot without audio keeps its silent animate
+  // clip. The per-shot path is chosen by the scene model's audio capability
+  // (resolved above, before animate): audio_driven → already lip-synced
+  // in-model (skip); native_speech → revoice the baked clip; everything else →
+  // TTS + (optional) lip-sync.
 
   // Per-shot speech + lipsync are independent across shots — fan out via
   // `settledWithLimit(3)`. Failure of either step is still non-blocking per
@@ -261,6 +299,45 @@ export async function runSceneInternalPipeline(
   const dialogueTasks = sceneData.shots
     .filter((shot): shot is ShotSpec & { dialogue_line: string } => !!shot.dialogue_line)
     .map((shot) => async (): Promise<DialogueUpdate | null> => {
+      // #63 audio-driven path — Seedance 2.0 already lip-synced the character's
+      // voice in-model (pre-TTS fed as reference audio during animate). Nothing
+      // to add. Talking shots that didn't get pre-TTS (no resolved voice / TTS
+      // failed) fall through to the TTS + lip-sync path below.
+      if (modelLipSyncsToAudio && shotReferenceAudio[shot.shot_id]) {
+        return { shot_id: shot.shot_id, has_dialogue: true }
+      }
+      // #63 native-speech path — the model already spoke the line + synced the
+      // mouth during animate. Revoice the clip to the character's saved voice
+      // (media-aware voice-changer; removeBackgroundNoise:false keeps the
+      // music/SFX bed). No TTS, no lip-sync. The revoiced clip replaces the raw
+      // animate clip via the shared lipsync_asset_* fields (the apply loop below
+      // swaps shotVideoUrls/Assets off them). Without a resolved character voice
+      // we keep the model's baked voice as-is. Failure is non-blocking.
+      if (modelBakesSpeech) {
+        const update: DialogueUpdate = { shot_id: shot.shot_id, has_dialogue: true }
+        const animatedVideoUrl = shotVideoUrls[shot.shot_id]
+        if (!sceneDefaultVoice || !animatedVideoUrl) return update
+        try {
+          const revoice = await pipelineVoiceChange({
+            supabase: ctx.supabase,
+            pipelineId: ctx.pipelineId,
+            pipelineEntityId: sceneEntity.id,
+            userId: ctx.userId,
+            videoUrl: animatedVideoUrl,
+            voiceId: sceneDefaultVoice,
+            removeBackgroundNoise: false,
+          })
+          update.lipsync_asset_id = revoice.assetId ?? null
+          update.lipsync_asset_url = revoice.assetUrl
+        } catch (err) {
+          console.warn(
+            `[scene-internal-pipeline] revoice failed for scene=${sceneEntity.id} shot=${shot.shot_id}:`,
+            err instanceof Error ? err.message : err,
+          )
+        }
+        return update
+      }
+
       let audioUrl: string | undefined
       let audioDurationSec: number | null = null
       try {
@@ -478,9 +555,18 @@ async function animateSequential(
   sceneEntity: { id: string },
   sceneData: SceneNodeData,
   options: SceneInternalPipelineOptions,
+  /** #63 audio_driven — per-shot character-voiced TTS URL to feed the model as
+   *  reference audio (Seedance 2.0). Empty for every other scene model. */
+  referenceAudioByShot: Record<string, string>,
 ): Promise<AnimateBranchResult> {
   const shotResults: SceneInternalPipelineShotResult[] = []
   const shotVideoUrls: Record<string, string> = {}
+
+  // #63 — does this scene's video model bake spoken dialogue natively (VEO 3.x)?
+  // When so, a shot's `dialogue_line` is folded into the animate prompt + audio
+  // enabled so the model speaks + lip-moves; the dialogue step then revoices.
+  const modelBakesSpeech =
+    getVideoAudioCapability(sceneData.video_model).mode === "native_speech"
 
   // J2a — fetch pipeline_entities + assets ONCE for the whole scene.
   // Without this, allocateReferenceSlots pays 2 DB queries per shot:
@@ -637,6 +723,13 @@ async function animateSequential(
       priorLastFrameUrl: resolvedPriorLastFrameUrl,
       interpolationKeyframeUrls,
       pipelineMode: ctx.pipelineMode,
+      spokenDialogue:
+        modelBakesSpeech && shotOverride.dialogue_line
+          ? shotOverride.dialogue_line
+          : undefined,
+      referenceAudioUrls: referenceAudioByShot[shotOverride.shot_id]
+        ? [referenceAudioByShot[shotOverride.shot_id]!]
+        : undefined,
     })
 
     let animateResult: Awaited<ReturnType<typeof pipelineAnimateShot>>
@@ -803,9 +896,16 @@ async function animateParallel(
   ctx: SceneInternalPipelineContext,
   sceneEntity: { id: string },
   sceneData: SceneNodeData,
+  /** #63 audio_driven — per-shot character-voiced TTS URL fed to the model as
+   *  reference audio (Seedance 2.0). Empty for every other scene model. */
+  referenceAudioByShot: Record<string, string>,
 ): Promise<AnimateBranchResult> {
   // J2a — fetch pipeline_entities + assets ONCE for the whole scene.
   const sceneRefCtx = await prepareSceneRefContext(ctx.supabase, ctx.pipelineId, sceneData)
+
+  // #63 — see animateSequential: native-speech models bake the dialogue line.
+  const modelBakesSpeech =
+    getVideoAudioCapability(sceneData.video_model).mode === "native_speech"
 
   const tasks = sceneData.shots.map((shot, i) => async () => {
     const typedShot = shot as ShotSpec
@@ -840,6 +940,13 @@ async function animateParallel(
       referenceUrls,
       interpolationKeyframeUrls,
       pipelineMode: ctx.pipelineMode,
+      spokenDialogue:
+        modelBakesSpeech && shotOverride.dialogue_line
+          ? shotOverride.dialogue_line
+          : undefined,
+      referenceAudioUrls: referenceAudioByShot[shotOverride.shot_id]
+        ? [referenceAudioByShot[shotOverride.shot_id]!]
+        : undefined,
     })
     const animateResult = await pipelineAnimateShot(buildAnimateArgs(typedShot))
 
