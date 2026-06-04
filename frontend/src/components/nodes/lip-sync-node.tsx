@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
+import { VIDEO_NODE_MIN_WIDTH, VIDEO_NODE_DEFAULT_ASPECT } from "./video-node-defaults"
 import { CachedImage } from "@/components/ui/cached-image"
 import { NodeJobProgress } from "./node-job-progress"
 import { EditableNodeLabel } from "./editable-node-label"
@@ -344,9 +345,9 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
       credits={credits}
       selected={selected}
       isRunning={status === "running"}
-      minWidth={200}
+      minWidth={VIDEO_NODE_MIN_WIDTH}
       minHeight={mediaAspectRatio ? Math.round(200 / mediaAspectRatio) : 150}
-      imageAspectRatio={mediaAspectRatio}
+      imageAspectRatio={mediaAspectRatio ?? VIDEO_NODE_DEFAULT_ASPECT}
       hideHeader
       bottomToolbarContent={
         showThumbnails && results.length > 1 ? (

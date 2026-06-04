@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useState, useMemo, useEffect, useCallback } from "react"
+import { memo, useState, useMemo, useCallback } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { incomingSourcesFingerprint } from "@/lib/node-fingerprint"
 import { Volume2, Loader2, AlertCircle, X, Film, Mic, Music, AudioWaveform, LayoutGrid } from "lucide-react"
@@ -16,6 +16,8 @@ import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { VideoResultOverlay } from "./video-result-overlay"
+import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
+import { VIDEO_NODE_MIN_WIDTH, VIDEO_NODE_DEFAULT_ASPECT } from "./video-node-defaults"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { MergeVideoAudioData } from "@/types/nodes"
 
@@ -63,11 +65,12 @@ function MergeVideoAudioNodeComponent({ id, data, selected }: NodeProps) {
   // captured index which would point at the wrong result if the user
   // confirmed the dialog after a background poll completed.
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
-  const [videoDimensions, setVideoDimensions] = useState<{ width: number; height: number } | null>(null)
   const [showThumbnails, setShowThumbnails] = useState(false)
 
-  useEffect(() => { setVideoDimensions(null) }, [activeUrl])
-
+  // Result aspect drives node sizing — 16:9 until a result lands, then snaps to
+  // the real video aspect (raw dims fed in via the overlay's onRawDimensions).
+  const { aspectRatio: mediaAspectRatio, onLoadDimensions: handleLoadDimensions } =
+    useResultAspectRatio(id, results, activeIndex)
   const hasResult = status !== "running" && !!activeUrl
   const canBrowseAlternates = !!activeUrl && results.length > 1
 
@@ -113,11 +116,7 @@ function MergeVideoAudioNodeComponent({ id, data, selected }: NodeProps) {
   return (
     <div
       className="relative group/node"
-      style={{
-        width: hasResult ? (videoDimensions?.width ?? 220) : 220,
-        height: hasResult ? (videoDimensions?.height ?? 160) : undefined,
-        overflow: 'visible',
-      }}
+      style={{ width: '100%', height: '100%', overflow: 'visible' }}
     >
       <EditableNodeLabel label={nodeData.label} icon={<Volume2 className="w-3.5 h-3.5" />} onSave={(newLabel) => updateNodeData(id, { label: newLabel })} />
       <BaseNode
@@ -129,7 +128,8 @@ function MergeVideoAudioNodeComponent({ id, data, selected }: NodeProps) {
         selected={selected}
         isRunning={status === "running"}
         hideHeader
-        minWidth={220}
+        minWidth={VIDEO_NODE_MIN_WIDTH}
+        imageAspectRatio={mediaAspectRatio ?? VIDEO_NODE_DEFAULT_ASPECT}
         className={hasResult ? "!border-0 !shadow-none !bg-transparent" : undefined}
         topToolbarContent={(<RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />)}
         bottomToolbarContent={
@@ -231,7 +231,7 @@ function MergeVideoAudioNodeComponent({ id, data, selected }: NodeProps) {
           hasResults={results.length > 0}
           onExpand={() => setPreviewOpen(true)}
           onDelete={() => { if (activeJobId) setDeleteConfirm(activeJobId) }}
-          onDimensionsChange={setVideoDimensions}
+          onRawDimensions={handleLoadDimensions}
           onSettings={() => selectNode(isSettingsOpen ? null : id)}
           isSettingsOpen={isSettingsOpen}
         />

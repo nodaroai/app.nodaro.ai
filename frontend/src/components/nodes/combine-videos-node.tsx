@@ -15,6 +15,8 @@ import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useEstimatedCredits } from "@/hooks/use-estimated-credits"
 import { VideoResultOverlay } from "./video-result-overlay"
+import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
+import { VIDEO_NODE_MIN_WIDTH, VIDEO_NODE_DEFAULT_ASPECT } from "./video-node-defaults"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { CombineVideosData } from "@/types/nodes"
 
@@ -39,28 +41,16 @@ function CombineVideosNodeComponent({ id, data, selected }: NodeProps) {
   // confirmed the dialog after a background poll completed.
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [videoError, setVideoError] = useState(false)
-  const [videoDimensions, setVideoDimensions] = useState<{ width: number; height: number } | null>(null)
   const [showThumbnails, setShowThumbnails] = useState(false)
 
   useEffect(() => {
     setVideoError(false)
-    setVideoDimensions(null)
   }, [activeUrl])
 
-  // Update node dimensions in store when video dimensions change (for resized nodes)
-  useEffect(() => {
-    if (!videoDimensions) return
-    const state = useWorkflowStore.getState()
-    const node = state.nodes.find((n) => n.id === id)
-    if (typeof node?.width !== "number") return // auto-sized — outer wrapper handles it
-    useWorkflowStore.setState({
-      nodes: state.nodes.map((n) =>
-        n.id === id ? { ...n, width: videoDimensions.width, height: videoDimensions.height } : n
-      ),
-    })
-  }, [videoDimensions, id])
-
-  const mediaAspectRatio = videoDimensions ? videoDimensions.width / videoDimensions.height : undefined
+  // Result aspect drives node sizing — 16:9 until a result lands, then snaps to
+  // the real video aspect (raw dims fed in via the overlay's onRawDimensions).
+  const { aspectRatio: mediaAspectRatio, onLoadDimensions: handleLoadDimensions } =
+    useResultAspectRatio(id, results, activeIndex)
   const hasResult = status !== "running" && !!activeUrl && !videoError
   const canBrowseAlternates = !!activeUrl && results.length > 1
 
@@ -86,7 +76,7 @@ function CombineVideosNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <div className="relative group/node" style={{ width: hasResult ? (videoDimensions?.width ?? 220) : 220, height: hasResult ? (videoDimensions?.height ?? 160) : undefined, overflow: 'visible' }}>
+    <div className="relative group/node" style={{ width: '100%', height: '100%', overflow: 'visible' }}>
       <EditableNodeLabel label={nodeData.label} icon={<Merge className="w-3.5 h-3.5" />} onSave={(newLabel) => updateNodeData(id, { label: newLabel })} />
       <BaseNode
         id={id}
@@ -97,8 +87,8 @@ function CombineVideosNodeComponent({ id, data, selected }: NodeProps) {
         selected={selected}
         isRunning={status === "running"}
         hideHeader
-        minWidth={220}
-        imageAspectRatio={mediaAspectRatio}
+        minWidth={VIDEO_NODE_MIN_WIDTH}
+        imageAspectRatio={mediaAspectRatio ?? VIDEO_NODE_DEFAULT_ASPECT}
         className={hasResult ? "!border-0 !shadow-none !bg-transparent" : undefined}
         topToolbarContent={(<RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />)}
         bottomToolbarContent={
@@ -193,7 +183,7 @@ function CombineVideosNodeComponent({ id, data, selected }: NodeProps) {
           hasResults={results.length > 0}
           onExpand={() => setPreviewOpen(true)}
           onDelete={() => { if (activeJobId) setDeleteConfirm(activeJobId) }}
-          onDimensionsChange={setVideoDimensions}
+          onRawDimensions={handleLoadDimensions}
           onVideoError={() => setVideoError(true)}
           onVideoLoad={() => setVideoError(false)}
           onSettings={() => selectNode(isSettingsOpen ? null : id)}

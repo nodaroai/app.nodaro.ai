@@ -16,6 +16,8 @@ import { CachedImage } from "@/components/ui/cached-image"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { VideoResultOverlay } from "./video-result-overlay"
+import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
+import { VIDEO_NODE_MIN_WIDTH, VIDEO_NODE_DEFAULT_ASPECT } from "./video-node-defaults"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { ExtendVideoData } from "@/types/nodes"
 
@@ -40,13 +42,16 @@ function ExtendVideoNodeComponent({ id, data, selected }: NodeProps) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [videoError, setVideoError] = useState(false)
-  const [videoDimensions, setVideoDimensions] = useState<{ width: number; height: number } | null>(null)
   const extendProvider = nodeData.provider || "veo-extend"
   const credits = useModelCredits(extendProvider, extendProvider === "runway-extend" ? 32 : 40)
 
+  // Result aspect drives node sizing — 16:9 until a result lands, then snaps to
+  // the real video aspect (raw dims fed in via the overlay's onRawDimensions).
+  const { aspectRatio: mediaAspectRatio, onLoadDimensions: handleLoadDimensions } =
+    useResultAspectRatio(id, results, activeIndex)
+
   useEffect(() => {
     setVideoError(false)
-    setVideoDimensions(null)
   }, [activeUrl])
 
   const hasResult = status !== "running" && !!activeUrl && !videoError
@@ -56,7 +61,7 @@ function ExtendVideoNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <div className="relative group/node" style={{ width: hasResult ? (videoDimensions?.width ?? 220) : 220, height: hasResult ? (videoDimensions?.height ?? 160) : undefined, overflow: 'visible' }}>
+    <div className="relative group/node" style={{ width: '100%', height: '100%', overflow: 'visible' }}>
       <EditableNodeLabel
         label={nodeData.label}
         icon={<Film className="w-3.5 h-3.5" />}
@@ -70,6 +75,8 @@ function ExtendVideoNodeComponent({ id, data, selected }: NodeProps) {
         credits={credits}
         selected={selected}
         isRunning={status === "running"}
+        minWidth={VIDEO_NODE_MIN_WIDTH}
+        imageAspectRatio={mediaAspectRatio ?? VIDEO_NODE_DEFAULT_ASPECT}
         className={hasResult ? "!border-0 !shadow-none !bg-transparent" : undefined}
         hideHeader
         topToolbarContent={
@@ -194,7 +201,7 @@ function ExtendVideoNodeComponent({ id, data, selected }: NodeProps) {
           hasResults={results.length > 1}
           onExpand={() => setPreviewOpen(true)}
           onDelete={() => setDeleteConfirm(activeIndex)}
-          onDimensionsChange={setVideoDimensions}
+          onRawDimensions={handleLoadDimensions}
           onVideoError={() => setVideoError(true)}
           onVideoLoad={() => setVideoError(false)}
           onSettings={() => selectNode(isSettingsOpen ? null : id)}
