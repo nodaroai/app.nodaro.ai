@@ -1,7 +1,7 @@
 ---
 node_type: lip-sync
-generated_at: 2026-05-18T20:51:28.934Z
-generated_from: af4193bd
+generated_at: 2026-06-04T21:14:06.688Z
+generated_from: 1a7a17d9
 ---
 
 # Lip Sync
@@ -43,6 +43,12 @@ generated_from: af4193bd
 - `still?: boolean`
 - `poseStyle?: number`
 - `expressionScale?: number`
+- `enableDynamicDuration?: boolean`
+- `disableMusicTrack?: boolean`
+- `enableSpeechEnhancement?: boolean`
+- `syncMode?: "loop" | "bounce" | "cut_off" | "silence" | "remap"`
+- `temperature?: number`
+- `activeSpeaker?: boolean`
 - `referenceOrder?: readonly string[]`
 - `suppressedCanonicalCharacterIds?: readonly string[]`
 - `suppressedCanonicalLocationIds?: readonly string[]`
