@@ -39,7 +39,7 @@ import { AlignmentGuideLines } from "./alignment-guide-lines"
 import { useAlignmentGuides, type GuideLine, type DraggedNodeRect } from "@/hooks/use-alignment-guides"
 import { useCameraAutoPan } from "./workflow-editor/use-camera-auto-pan"
 import { useWorkflowRealtimeSync } from "./workflow-editor/use-workflow-realtime-sync"
-import { useElkLayout, getElk, ELK_LAYOUT_OPTIONS } from "@/hooks/use-elk-layout"
+import { useElkLayout, getElk, ELK_LAYOUT_OPTIONS, toElkLayoutNode } from "@/hooks/use-elk-layout"
 import { useAutoPanWhenIdle } from "@/hooks/use-auto-pan-when-idle"
 import { __resetSeenNodesForTests } from "./workflow-editor/use-node-insert-animation"
 import { __resetSeenEdgesForTests } from "./workflow-editor/use-edge-insert-animation"
@@ -666,7 +666,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         const layout = await elk.layout({
           id: "root",
           layoutOptions: { ...ELK_LAYOUT_OPTIONS },
-          children: rfNodes.map((n) => ({ id: n.id, width: n.measured?.width ?? 200, height: n.measured?.height ?? 120 })),
+          children: rfNodes.map(toElkLayoutNode),
           edges: rfEdges.map((e) => ({ id: e.id, sources: [e.source], targets: [e.target] })),
         })
         if (cancelled) return
@@ -1078,7 +1078,12 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const focusedNodeRef = useRef<string | null>(null)
 
   const handleNodeClick: NodeMouseHandler = useCallback(
-    (_event, node) => {
+    (event, node) => {
+      // A click that originates on a handle pip must not change node focus or
+      // open settings — handles are for connecting + their popover, mirroring
+      // how dragging from a handle never selects the node. HandleWithPopover
+      // stops the click itself; this also covers any plain React Flow handles.
+      if ((event.target as HTMLElement | null)?.closest?.(".react-flow__handle")) return
       if (wasDraggingRef.current) return
       const currentSelectedId = useWorkflowStore.getState().selectedNodeId
       if (focusedNodeRef.current === node.id && currentSelectedId !== node.id) {
@@ -1417,11 +1422,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     const elkGraph = {
       id: "root",
       layoutOptions: { ...ELK_LAYOUT_OPTIONS },
-      children: targetNodes.map((node) => ({
-        id: node.id,
-        width: node.measured?.width ?? 200,
-        height: node.measured?.height ?? 100,
-      })),
+      children: targetNodes.map(toElkLayoutNode),
       edges: edges
         .filter((e) => targetIds.has(e.source) && targetIds.has(e.target))
         .map((e) => ({
