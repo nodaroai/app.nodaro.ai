@@ -29,7 +29,7 @@ const BTN_CLASS = "w-7 h-7 flex items-center justify-center bg-black/40 backdrop
 /**
  * Build handles matching the standard node layout:
  *  - Outputs at the top-right, starting from 20px downward
- *  - Inputs at the bottom-left, starting from bottom (calc(100% - 20px)) upward
+ *  - Inputs at the bottom-left, starting from bottom (calc(100% - 24px)) upward
  */
 function buildHandles(
   inputs: ReadonlyArray<ComponentHandle>,
@@ -50,7 +50,7 @@ function buildHandles(
     }
   })
 
-  // --- Input handles: bottom-left, starting from calc(100% - 20px) upward ---
+  // --- Input handles: bottom-left, starting from calc(100% - 24px) upward ---
   const targets = inputs.map((h, i) => {
     const bottom = 20 + i * 28
     const top = `calc(100% - ${bottom}px)`
@@ -69,8 +69,8 @@ function buildHandles(
   // Fallback handles if no metadata
   if (targets.length === 0 && sources.length === 0) {
     return [
-      { id: "in", type: "target" as const, position: Position.Left, top: "calc(100% - 20px)", hideHandle: true, customStyle: { top: "calc(100% - 20px)", left: "-29px" }, handleType: "text" as const, handleName: "In" },
-      { id: "out", type: "source" as const, position: Position.Right, top: "20px", hideHandle: true, customStyle: { top: "20px", right: "-29px" }, handleType: "text" as const, handleName: "Out" },
+      { id: "in", type: "target" as const, position: Position.Left, top: "calc(100% - 24px)", hideHandle: true, customStyle: { top: "calc(100% - 24px)", left: "-29px" }, handleType: "text" as const, handleName: "In" },
+      { id: "out", type: "source" as const, position: Position.Right, top: "24px", hideHandle: true, customStyle: { top: "24px", right: "-29px" }, handleType: "text" as const, handleName: "Out" },
     ]
   }
 
@@ -287,12 +287,12 @@ function ComponentNodeComponent({ id, data, selected }: NodeProps) {
             icon={HANDLE_TYPE_ICON[h.handleType as ComponentHandle["type"]] ?? <FileText />}
             color="purple"
             side="left"
-            top={h.top ?? "calc(100% - 20px)"}
+            top={h.top ?? "calc(100% - 24px)"}
           />
           {h.handleName && (
             <span
               className="absolute text-[8px] font-medium text-muted-foreground/70 pointer-events-none select-none whitespace-nowrap"
-              style={{ top: h.top ?? "calc(100% - 20px)", left: "6px", transform: "translateY(-50%)" }}
+              style={{ top: h.top ?? "calc(100% - 24px)", left: "6px", transform: "translateY(-50%)" }}
             >
               {h.handleName}
             </span>

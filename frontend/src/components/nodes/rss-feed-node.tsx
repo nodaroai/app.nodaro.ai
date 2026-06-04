@@ -10,8 +10,8 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { RSSFeedData } from "@/types/nodes"
 
 const HANDLES = [
-  { id: "in", type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-  { id: "text", type: "source" as const, position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+  { id: "in", type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, hideHandle: true },
+  { id: "text", type: "source" as const, position: Position.Right, customStyle: { top: '24px', right: '-29px' }, hideHandle: true },
   { id: "image", type: "source" as const, position: Position.Right, customStyle: { top: '50px', right: '-29px' }, hideHandle: true },
 ] as const
 
@@ -43,8 +43,8 @@ function RSSFeedNodeComponent({ id, data, selected }: NodeProps) {
           </p>
         </div>
       </BaseNode>
-      <HandleIcon icon={<Rss />} color="cyan" side="left" top="calc(100% - 20px)" />
-      <HandleIcon icon={<Type />} top="20px" />
+      <HandleIcon icon={<Rss />} color="cyan" side="left" top="calc(100% - 24px)" />
+      <HandleIcon icon={<Type />} top="24px" />
       <HandleIcon icon={<ImageIcon />} top="50px" />
     </div>
   )

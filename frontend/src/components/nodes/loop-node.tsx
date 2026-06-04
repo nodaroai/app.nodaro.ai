@@ -150,8 +150,8 @@ function buildHandles(columns: ReadonlyArray<LoopColumn>) {
     id: LOOP_COL_ADD_HANDLE,
     type: "target" as const,
     position: Position.Left,
-    top: "calc(100% - 20px)",
-    customStyle: { top: "calc(100% - 20px)", left: "-29px" },
+    top: "calc(100% - 24px)",
+    customStyle: { top: "calc(100% - 24px)", left: "-29px" },
     hideHandle: true,
   }
 
@@ -1128,7 +1128,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
       {/* Quick-add target — drop-only handle that auto-creates a typed column
           (see use-workflow-store.ts col_add branch). Bottom-left, matched pip
           size, no popover (it manages no existing wire). */}
-      <HandleIcon icon={<Plus />} color="cyan" side="left" top="calc(100% - 20px)" />
+      <HandleIcon icon={<Plus />} color="cyan" side="left" top="calc(100% - 24px)" />
       {/* Per-column target pips (left side) — typed handle with popover. */}
       {targetHandles.map((h) => {
         const handleBase = loopColBaseHandle(h.id)

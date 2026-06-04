@@ -47,10 +47,10 @@ function SplitMediaNodeComponent({ id, data, selected }: NodeProps) {
           <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
         }
         handles={[
-          { id: "video", type: "target", position: Position.Left, customStyle: { top: "40%", left: "-29px" }, external: true },
-          { id: "audio", type: "target", position: Position.Left, customStyle: { top: "70%", left: "-29px" }, external: true },
-          { id: "video", type: "source", position: Position.Right, customStyle: { top: "30%", right: "-29px" }, external: true },
-          { id: "audio", type: "source", position: Position.Right, customStyle: { top: "70%", right: "-29px" }, external: true },
+          { id: "video", type: "target", position: Position.Left, customStyle: { top: "calc(100% - 24px)", left: "-29px" }, external: true },
+          { id: "audio", type: "target", position: Position.Left, customStyle: { top: "calc(100% - 56px)", left: "-29px" }, external: true },
+          { id: "video", type: "source", position: Position.Right, customStyle: { top: "24px", right: "-29px" }, external: true },
+          { id: "audio", type: "source", position: Position.Right, customStyle: { top: "56px", right: "-29px" }, external: true },
         ]}
       >
         <div className="flex flex-col gap-2 p-3" style={{ minHeight: 140 }}>
@@ -115,10 +115,10 @@ function SplitMediaNodeComponent({ id, data, selected }: NodeProps) {
           </span>
         </div>
       </BaseNode>
-      <HandleWithPopover nodeId={id} nodeType="split-media" handleId="video" type="target" position={Position.Left}  label="Video" color={HANDLE_COLORS.video} icon={<Video />}          side="left"  top="40%" accepts={ACCEPTS_VIDEO} />
-      <HandleWithPopover nodeId={id} nodeType="split-media" handleId="audio" type="target" position={Position.Left}  label="Audio" color={HANDLE_COLORS.audio} icon={<AudioWaveform />} side="left"  top="70%" accepts={ACCEPTS_AUDIO} />
-      <HandleWithPopover nodeId={id} nodeType="split-media" handleId="video" type="source" position={Position.Right} label="Video" color={HANDLE_COLORS.video} icon={<Video />}          side="right" top="30%" />
-      <HandleWithPopover nodeId={id} nodeType="split-media" handleId="audio" type="source" position={Position.Right} label="Audio" color={HANDLE_COLORS.audio} icon={<AudioWaveform />} side="right" top="70%" />
+      <HandleWithPopover nodeId={id} nodeType="split-media" handleId="video" type="target" position={Position.Left}  label="Video" color={HANDLE_COLORS.video} icon={<Video />}          side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_VIDEO} />
+      <HandleWithPopover nodeId={id} nodeType="split-media" handleId="audio" type="target" position={Position.Left}  label="Audio" color={HANDLE_COLORS.audio} icon={<AudioWaveform />} side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_AUDIO} />
+      <HandleWithPopover nodeId={id} nodeType="split-media" handleId="video" type="source" position={Position.Right} label="Video" color={HANDLE_COLORS.video} icon={<Video />}          side="right" top="24px" />
+      <HandleWithPopover nodeId={id} nodeType="split-media" handleId="audio" type="source" position={Position.Right} label="Audio" color={HANDLE_COLORS.audio} icon={<AudioWaveform />} side="right" top="56px" />
     </div>
   )
 }
