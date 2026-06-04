@@ -30,6 +30,7 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
+import { videoNodeSizing } from "./video-node-defaults"
 import { RetakeRangeSlider } from "@/components/editor/config-panels/retake-range-slider"
 import { isValidVideoRetakeConnection } from "@/lib/video-retake-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
@@ -235,12 +236,7 @@ function VideoRetakeNodeComponent({ id, data, selected }: NodeProps) {
         isRunning={status === "running"}
         className={activeUrl ? "!border-0 !shadow-none !bg-transparent" : undefined}
         hideHeader
-        minWidth={240}
-        // 3 input pips + 1 output. Top-most input (look) sits at
-        // top: calc(100% - 88px); reserve ~116px (28 + 88) of vertical
-        // room minimum so all pips stay within the body.
-        minHeight={mediaAspectRatio ? Math.max(160, Math.round(240 / mediaAspectRatio)) : 160}
-        imageAspectRatio={mediaAspectRatio ?? 16 / 9}
+        {...videoNodeSizing(mediaAspectRatio)}
         handles={handles}
         topToolbarContent={
           <VideoRetakeQuickToolbar

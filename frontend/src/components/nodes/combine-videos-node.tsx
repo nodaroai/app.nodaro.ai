@@ -16,7 +16,7 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 import { useEstimatedCredits } from "@/hooks/use-estimated-credits"
 import { VideoResultOverlay } from "./video-result-overlay"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
-import { VIDEO_NODE_MIN_WIDTH, VIDEO_NODE_DEFAULT_ASPECT } from "./video-node-defaults"
+import { videoNodeSizing } from "./video-node-defaults"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { CombineVideosData } from "@/types/nodes"
 
@@ -87,8 +87,7 @@ function CombineVideosNodeComponent({ id, data, selected }: NodeProps) {
         selected={selected}
         isRunning={status === "running"}
         hideHeader
-        minWidth={VIDEO_NODE_MIN_WIDTH}
-        imageAspectRatio={mediaAspectRatio ?? VIDEO_NODE_DEFAULT_ASPECT}
+        {...videoNodeSizing(mediaAspectRatio)}
         className={hasResult ? "!border-0 !shadow-none !bg-transparent" : undefined}
         topToolbarContent={(<RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />)}
         bottomToolbarContent={

@@ -14,6 +14,7 @@ import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
+import { videoNodeSizing } from "./video-node-defaults"
 import { CachedImage } from "@/components/ui/cached-image"
 import { NodeJobProgress } from "./node-job-progress"
 import { EditableNodeLabel } from "./editable-node-label"
@@ -202,9 +203,7 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
       credits={credits}
       selected={selected}
       isRunning={status === "running"}
-      minWidth={200}
-      minHeight={mediaAspectRatio ? Math.round(200 / mediaAspectRatio) : 150}
-      imageAspectRatio={mediaAspectRatio}
+      {...videoNodeSizing(mediaAspectRatio)}
       hideHeader
       bottomToolbarContent={
         showThumbnails && results.length > 1 ? (

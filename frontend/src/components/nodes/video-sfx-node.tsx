@@ -28,6 +28,7 @@ import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
+import { videoNodeSizing } from "./video-node-defaults"
 import { useUpstreamVideoDuration } from "@/hooks/use-upstream-video-duration"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { isValidVideoSfxConnection } from "@/lib/video-sfx-handles"
@@ -178,17 +179,7 @@ function VideoSfxNodeComponent({ id, data, selected }: NodeProps) {
         isRunning={status === "running"}
         className={activeUrl ? "!border-0 !shadow-none !bg-transparent" : undefined}
         hideHeader
-        minWidth={240}
-        // 3 input pips + 1 output. Bottom-most input ("Prompt") sits at
-        // top: calc(100% - 24px); top-most ("Video") at calc(100% - 92px).
-        // Need at least ~120px of vertical space; floor-clamp at 180 to
-        // match the visual weight of the i2v category and give the result
-        // viewport some room before media arrives.
-        minHeight={mediaAspectRatio ? Math.max(180, Math.round(240 / mediaAspectRatio)) : 180}
-        // Default the empty-box to 16:9 so a fresh node lands at the typical
-        // landscape video aspect — once a result arrives, `mediaAspectRatio`
-        // switches to the real ratio and the BaseNode auto-fit re-snaps.
-        imageAspectRatio={mediaAspectRatio ?? 16 / 9}
+        {...videoNodeSizing(mediaAspectRatio)}
         handles={handles}
         topToolbarContent={
           <VideoSfxQuickToolbar

@@ -15,6 +15,8 @@ import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useEstimatedCredits } from "@/hooks/use-estimated-credits"
 import { VideoResultOverlay } from "./video-result-overlay"
+import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
+import { videoNodeSizing } from "./video-node-defaults"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { LoopVideoData } from "@/types/nodes"
 
@@ -30,6 +32,10 @@ function LoopVideoNodeComponent({ id, data, selected }: NodeProps) {
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
+  // Result aspect drives node sizing — 16:9 until a result lands, then snaps to
+  // the real video aspect (raw dims fed in via the overlay's onRawDimensions).
+  const { aspectRatio: mediaAspectRatio, onLoadDimensions: handleLoadDimensions } =
+    useResultAspectRatio(id, results, activeIndex)
   const activeResult = results[activeIndex]
   const activeUrl = activeResult?.url ?? nodeData.generatedVideoUrl
   const [previewOpen, setPreviewOpen] = useState(false)
@@ -39,12 +45,10 @@ function LoopVideoNodeComponent({ id, data, selected }: NodeProps) {
   // confirmed the dialog after a background poll completed.
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [videoError, setVideoError] = useState(false)
-  const [videoDimensions, setVideoDimensions] = useState<{ width: number; height: number } | null>(null)
   const [showThumbnails, setShowThumbnails] = useState(false)
 
   useEffect(() => {
     setVideoError(false)
-    setVideoDimensions(null)
   }, [activeUrl])
 
   const modeLabel = nodeData.mode === "duration"
@@ -76,12 +80,12 @@ function LoopVideoNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <div className="relative group/node" style={{ width: hasResult ? (videoDimensions?.width ?? 220) : 220, height: hasResult ? (videoDimensions?.height ?? 160) : undefined, overflow: 'visible' }}>
+    <div className="relative group/node" style={{ width: '100%', height: '100%', overflow: 'visible' }}>
       <EditableNodeLabel label={nodeData.label} icon={<Repeat className="w-3.5 h-3.5" />} onSave={(newLabel) => updateNodeData(id, { label: newLabel })} />
     <BaseNode id={id} label={nodeData.label} icon={<Repeat className="h-4 w-4" />} category="processing" credits={credits} selected={selected} isRunning={status === "running"}
-      className={hasResult ? "!border-0 !shadow-none !bg-transparent" : undefined}
       hideHeader
-      minWidth={220}
+      {...videoNodeSizing(mediaAspectRatio)}
+      className={hasResult ? "!border-0 !shadow-none !bg-transparent" : undefined}
       topToolbarContent={(<RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />)}
       bottomToolbarContent={
         showThumbnails && canBrowseAlternates ? (
@@ -164,7 +168,7 @@ function LoopVideoNodeComponent({ id, data, selected }: NodeProps) {
         hasResults={results.length > 0}
         onExpand={() => setPreviewOpen(true)}
         onDelete={() => { if (activeJobId) setDeleteConfirm(activeJobId) }}
-        onDimensionsChange={setVideoDimensions}
+        onRawDimensions={handleLoadDimensions}
         onVideoError={() => setVideoError(true)}
         onVideoLoad={() => setVideoError(false)}
         onSettings={() => selectNode(isSettingsOpen ? null : id)}

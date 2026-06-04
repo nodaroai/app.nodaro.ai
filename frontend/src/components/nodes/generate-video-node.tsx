@@ -35,7 +35,7 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
-import { VIDEO_NODE_MIN_WIDTH, VIDEO_NODE_DEFAULT_ASPECT } from "./video-node-defaults"
+import { videoNodeSizing } from "./video-node-defaults"
 import { isValidGenerateVideoConnection } from "@/lib/generate-video-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import { getHandleConnectionLimit } from "@/lib/handle-limits"
@@ -214,18 +214,10 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
         isRunning={status === "running"}
         className={activeUrl ? "!border-0 !shadow-none !bg-transparent" : undefined}
         hideHeader
-        minWidth={VIDEO_NODE_MIN_WIDTH}
-        // 11 input pips + 1 output. Bottom-most input ("Prompt") sits at
-        // top: calc(100% - 24px); top-most ("Look") at calc(100% - 340px).
-        // We need at least ~368px of vertical space to keep all pips on the
-        // visible body (28px headroom above the top pip). Floor-clamp to 368
-        // OR derive from media aspect.
-        minHeight={mediaAspectRatio ? Math.max(368, Math.round(VIDEO_NODE_MIN_WIDTH / mediaAspectRatio)) : 368}
-        // Default the empty-box to 16:9 so a fresh node lands at the typical
-        // landscape result aspect (~655×368) — once a result arrives,
-        // `mediaAspectRatio` switches to the real ratio and the BaseNode
-        // auto-fit re-snaps the box.
-        imageAspectRatio={mediaAspectRatio ?? VIDEO_NODE_DEFAULT_ASPECT}
+        // Shared video-node sizing: 16:9 @ VIDEO_NODE_MIN_HEIGHT (≈654×368) when
+        // idle, snaps to the real result aspect once a result loads. (368 also
+        // satisfies this node's 11-pip handle stack.)
+        {...videoNodeSizing(mediaAspectRatio)}
         handles={handles}
         topToolbarContent={
           <GenerateVideoQuickToolbar

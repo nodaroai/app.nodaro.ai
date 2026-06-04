@@ -14,6 +14,7 @@ import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
+import { videoNodeSizing } from "./video-node-defaults"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { EditableNodeLabel } from "./editable-node-label"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
@@ -94,9 +95,7 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
       credits={credits}
       selected={selected}
       isRunning={status === "running"}
-      minWidth={200}
-      minHeight={mediaAspectRatio ? Math.round(200 / mediaAspectRatio) : 150}
-      imageAspectRatio={mediaAspectRatio}
+      {...videoNodeSizing(mediaAspectRatio)}
       listCount={listTotal}
       listProgress={isNodeRunning && listTotal ? `${listCompleted ?? 0}/${listTotal}` : undefined}
       listProgressPercent={isNodeRunning ? listProgressPercent : undefined}
