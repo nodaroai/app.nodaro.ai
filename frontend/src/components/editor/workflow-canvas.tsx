@@ -2333,7 +2333,20 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           defaultEdgeOptions={{ type: 'default' }}
-          connectionMode={ConnectionMode.Loose}
+          // Strict (React Flow's default): a connection's two ends MUST be a
+          // source (output) + a target (input). This stops the connection line
+          // from snapping/attaching to OUTPUT handles when the user drags
+          // toward an INPUT — the "edge jumps to the output handle" bug. Under
+          // the previous Loose mode every handle, including outputs, was a
+          // valid snap/drop target, so a drag aimed at an input could grab the
+          // node's output (most visible on nodes with hidden input handles).
+          // Bidirectional dragging (start the drag from an input OR an output)
+          // still works under Strict; only nonsensical source→source /
+          // target→target connects are disallowed — which the DAG never wants.
+          // Safe because every handle in the system declares the correct
+          // `type` (audited: inputs are Position.Left "target", outputs are
+          // Position.Right "source", with zero type/side contradictions).
+          connectionMode={ConnectionMode.Strict}
           // Match HandleWithPopover's click-vs-drag threshold (5px) so a small
           // pointer jitter on a typed pip doesn't simultaneously open the
           // popover AND trigger React Flow's connect-end (which would open

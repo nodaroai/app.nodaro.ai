@@ -13,7 +13,13 @@ interface VideoResultOverlayProps {
   hasResults: boolean
   onExpand: () => void
   onDelete: () => void
-  onDimensionsChange: (dims: { width: number; height: number }) => void
+  /** Clamped wrapper dims (280 × 120–360) for the legacy ad-hoc sizing path.
+   *  Optional: nodes on the aspect-ratio model use `onRawDimensions` instead. */
+  onDimensionsChange?: (dims: { width: number; height: number }) => void
+  /** Raw videoWidth/videoHeight (unclamped) — for nodes that drive their size
+   *  via the aspect-ratio model (`useResultAspectRatio`) instead of the legacy
+   *  clamped `onDimensionsChange` wrapper sizing. Fires alongside it. */
+  onRawDimensions?: (dims: { width: number; height: number }) => void
   onVideoError?: () => void
   onVideoLoad?: () => void
   onSettings?: () => void
@@ -29,6 +35,7 @@ function VideoResultOverlayComponent({
   onExpand,
   onDelete,
   onDimensionsChange,
+  onRawDimensions,
   onVideoError,
   onVideoLoad,
   onSettings,
@@ -59,10 +66,13 @@ function VideoResultOverlayComponent({
         onLoadedMetadata={(e) => {
           onVideoLoad?.()
           const video = e.currentTarget
+          if (video.videoWidth > 0) {
+            onRawDimensions?.({ width: video.videoWidth, height: video.videoHeight })
+          }
           const ratio = video.videoWidth / video.videoHeight
           const baseWidth = 280
           const baseHeight = Math.round(baseWidth / ratio)
-          onDimensionsChange({ width: baseWidth, height: Math.max(120, Math.min(360, baseHeight)) })
+          onDimensionsChange?.({ width: baseWidth, height: Math.max(120, Math.min(360, baseHeight)) })
           if (videoAutoplay) video.play().catch(() => {})
         }}
       />

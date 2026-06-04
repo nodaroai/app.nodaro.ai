@@ -16,6 +16,8 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { AudioResultOverlay } from "./audio-result-overlay"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
+import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
+import { VIDEO_NODE_MIN_WIDTH, VIDEO_NODE_DEFAULT_ASPECT } from "./video-node-defaults"
 import type { VoiceChangerData } from "@/types/nodes"
 
 const ACCEPTS_AUDIO = (t: string) => isValidVoiceChangerConnection("audio", t)
@@ -45,12 +47,19 @@ function VoiceChangerNodeComponent({ id, data, selected }: NodeProps) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const credits = useModelCredits("elevenlabs-voice-changer", 4)
 
+  // Voice Changer is dual-mode: audio by default, but video when a video input
+  // is wired (isVideoResult). In video mode it behaves like the other video
+  // nodes — 240 / 16:9-until-result / snap-to-result-aspect. Audio mode keeps
+  // its compact waveform layout (no aspect, default sizing) untouched.
+  const { aspectRatio: mediaAspectRatio, onLoadDimensions: handleLoadDimensions } =
+    useResultAspectRatio(id, results, activeIndex)
+
   function handleDeleteResult(indexToDelete: number) {
     updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, isVideoResult ? "generatedVideoUrl" : "generatedAudioUrl"))
   }
 
   return (
-    <div className="relative" style={{ maxWidth: '220px' }}>
+    <div className="relative" style={isVideoResult ? { width: '100%', height: '100%' } : { maxWidth: '220px' }}>
     {/* Floating label above node */}
     <EditableNodeLabel
       label={nodeData.label}
@@ -65,6 +74,8 @@ function VoiceChangerNodeComponent({ id, data, selected }: NodeProps) {
       credits={credits}
       selected={selected}
       isRunning={status === "running"}
+      minWidth={isVideoResult ? VIDEO_NODE_MIN_WIDTH : undefined}
+      imageAspectRatio={isVideoResult ? (mediaAspectRatio ?? VIDEO_NODE_DEFAULT_ASPECT) : undefined}
       hideHeader
       topToolbarContent={
                   <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />
@@ -100,7 +111,7 @@ function VoiceChangerNodeComponent({ id, data, selected }: NodeProps) {
         { id: "video", type: "source", position: Position.Right, customStyle: { top: '52px',              right: '-29px' }, external: true },
       ]}
     >
-      <div className="flex flex-col gap-2 p-3" style={{ minHeight: 180 }}>
+      <div className={`flex flex-col gap-2 ${isVideoResult ? "" : "p-3"}`} style={{ minHeight: isVideoResult ? undefined : 180 }}>
         {/* Video wins, audio ignored — surfaced graphically so the precedence
             rule is obvious on the canvas. */}
         {audioIgnored && (
@@ -129,10 +140,19 @@ function VoiceChangerNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         )}
         {activeUrl && isVideoResult && (
-          <div className="relative group px-3">
-            <video src={activeUrl} crossOrigin="anonymous" controls className="w-full rounded-md max-h-32 object-contain bg-black" />
+          <div className="relative group">
+            <video
+              src={activeUrl}
+              crossOrigin="anonymous"
+              controls
+              className="w-full rounded-md object-cover bg-black"
+              onLoadedMetadata={(e) => {
+                const v = e.currentTarget
+                if (v.videoWidth > 0) handleLoadDimensions({ width: v.videoWidth, height: v.videoHeight })
+              }}
+            />
             {results.length > 0 && (
-              <button type="button" aria-label="Remove" className="absolute top-1 right-4 w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}><X className="w-3 h-3" /></button>
+              <button type="button" aria-label="Remove" className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(activeIndex) }}><X className="w-3 h-3" /></button>
             )}
           </div>
         )}
