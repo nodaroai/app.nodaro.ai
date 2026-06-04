@@ -653,7 +653,7 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
         color={pickerMeta.color}
         icon={<Type />}
         side="left"
-        top="calc(100% - 20px)"
+        top="calc(100% - 24px)"
         accepts={ACCEPTS_IN}
       />
 
@@ -673,7 +673,7 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
         color={pickerMeta.color}
         icon={<Type />}
         side="right"
-        top="20px"
+        top="24px"
       />
 
       {/* Fullscreen prompt modal — mirrors the in-node DOM exactly so every

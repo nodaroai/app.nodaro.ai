@@ -34,7 +34,7 @@ interface ParameterNodeShellProps {
 }
 
 const DEFAULT_INPUT_HANDLES: ReadonlyArray<HandleConfig> = [
-  { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-6px' }, hideHandle: true },
+  { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 24px)', left: '-6px' }, hideHandle: true },
 ]
 
 const makeHandles = (handleId: string, sourceIsExternal: boolean, inputHandles?: ReadonlyArray<HandleConfig>): ReadonlyArray<HandleConfig> => [
@@ -46,7 +46,7 @@ const makeHandles = (handleId: string, sourceIsExternal: boolean, inputHandles?:
   // scene-count, motion) the visible "icon" is a pointer-events-none
   // <HandleIcon> decoration, so we KEEP external:false to let BaseNode
   // render a real (hidden) <Handle> — otherwise drag-to-connect breaks.
-  { id: handleId, type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true, external: sourceIsExternal },
+  { id: handleId, type: "source", position: Position.Right, customStyle: { top: '24px', right: '-29px' }, hideHandle: true, external: sourceIsExternal },
 ]
 
 export function ParameterNodeShell({ id, label, icon, handleId, selected, children, fluidWidth, inputHandles, extraHandleIcons }: ParameterNodeShellProps) {
@@ -333,16 +333,16 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
           color={pickerMeta.color}
           icon={icon}
           side="right"
-          top="20px"
+          top="24px"
         />
       ) : (
-        <HandleIcon icon={icon} color="indigo" top="20px" />
+        <HandleIcon icon={icon} color="indigo" top="24px" />
       )) : (
         // Hydration fallback: match the legacy always-on indigo decoration.
         // Safe because HandleIcon is pointer-events-none — BaseNode owns
         // the real <Handle> while sourceIsExternal=false (no
         // duplicate-id warning possible).
-        <HandleIcon icon={icon} color="indigo" top="20px" />
+        <HandleIcon icon={icon} color="indigo" top="24px" />
       )}
       {extraHandleIcons}
     </div>

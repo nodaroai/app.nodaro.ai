@@ -83,8 +83,8 @@ function SunoSeparateNodeComponent({ id, data, selected }: NodeProps) {
       }
       handles={[
         { id: "audio",        type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
-        { id: "vocals",       type: "source", position: Position.Right, customStyle: { top: '30%',               right: '-29px' }, external: true },
-        { id: "instrumental", type: "source", position: Position.Right, customStyle: { top: '70%',               right: '-29px' }, external: true },
+        { id: "vocals",       type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
+        { id: "instrumental", type: "source", position: Position.Right, customStyle: { top: '56px',              right: '-29px' }, external: true },
       ]}
     >
       <div className="flex flex-col gap-2 p-3" style={{ minHeight: 180 }}>
@@ -157,8 +157,8 @@ function SunoSeparateNodeComponent({ id, data, selected }: NodeProps) {
       </div>
     </BaseNode>
     <HandleWithPopover nodeId={id} nodeType="suno-separate" handleId="audio"        type="target" position={Position.Left}  label="Audio"        color={HANDLE_COLORS.audio} icon={<Scissors />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_AUDIO} />
-    <HandleWithPopover nodeId={id} nodeType="suno-separate" handleId="vocals"       type="source" position={Position.Right} label="Vocals"       color={HANDLE_COLORS.audio} icon={<Mic />}      side="right" top="30%" />
-    <HandleWithPopover nodeId={id} nodeType="suno-separate" handleId="instrumental" type="source" position={Position.Right} label="Instrumental" color={HANDLE_COLORS.audio} icon={<Music />}    side="right" top="70%" />
+    <HandleWithPopover nodeId={id} nodeType="suno-separate" handleId="vocals"       type="source" position={Position.Right} label="Vocals"       color={HANDLE_COLORS.audio} icon={<Mic />}      side="right" top="24px" />
+    <HandleWithPopover nodeId={id} nodeType="suno-separate" handleId="instrumental" type="source" position={Position.Right} label="Instrumental" color={HANDLE_COLORS.audio} icon={<Music />}    side="right" top="56px" />
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}
       onClose={() => setDeleteConfirm(null)}

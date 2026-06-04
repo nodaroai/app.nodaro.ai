@@ -54,8 +54,8 @@ function SocialNodeComponent({ id, data, selected }: NodeProps) {
                       <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
         }
         handles={[
-          { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-          { id: "out", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+          { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, hideHandle: true },
+          { id: "out", type: "source", position: Position.Right, customStyle: { top: '24px', right: '-29px' }, hideHandle: true },
         ]}
       >
         <div className="p-3 flex flex-col items-center justify-center gap-2" style={{ minHeight: '100px' }}>
@@ -114,8 +114,8 @@ function SocialNodeComponent({ id, data, selected }: NodeProps) {
           )}
         </div>
       </BaseNode>
-      <HandleIcon icon={icon} color="green" side="left" top="calc(100% - 20px)" />
-      <HandleIcon icon={icon} color="green" top="20px" />
+      <HandleIcon icon={icon} color="green" side="left" top="calc(100% - 24px)" />
+      <HandleIcon icon={icon} color="green" top="24px" />
     </div>
   )
 }

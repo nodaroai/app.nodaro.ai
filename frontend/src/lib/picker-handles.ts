@@ -31,67 +31,74 @@ export interface PickerOutputMeta {
   readonly label: string
 }
 
-const REGISTRY: Record<string, PickerOutputMeta> = {
+/** Registry entry — `color` is intentionally NOT stored here. It derives from
+ *  `family` via PICKER_FAMILY_COLORS (→ canonical HANDLE_COLORS) in
+ *  getPickerOutputMeta, so picker pip colors can never drift from the canonical
+ *  per-type colors. */
+type PickerOutputEntry = Omit<PickerOutputMeta, "color">
+
+const REGISTRY: Record<string, PickerOutputEntry> = {
   // ─── Look family ────────────────────────────────────────────────────
   // NOTE: "look" itself is a family name, NOT a picker node type. The
   // family groups lens/lighting/mood/etc. which all feed Generate Image's
   // `look` handle. There is no node with type-string "look".
-  "lens":                  { family: "look", color: "#818CF8", label: "Lens" },
-  "lighting":              { family: "look", color: "#818CF8", label: "Lighting" },
-  "mood":                  { family: "look", color: "#818CF8", label: "Mood" },
-  "atmosphere":            { family: "look", color: "#818CF8", label: "Atmosphere" },
-  "styling":               { family: "look", color: "#818CF8", label: "Styling" },
-  "pose":                  { family: "look", color: "#818CF8", label: "Pose" },
-  "framing":               { family: "look", color: "#818CF8", label: "Framing" },
-  "aesthetic":             { family: "look", color: "#818CF8", label: "Aesthetic" },
-  "era":                   { family: "look", color: "#818CF8", label: "Era" },
-  "photo-genre":           { family: "look", color: "#818CF8", label: "Photo genre" },
-  "backdrop":              { family: "look", color: "#818CF8", label: "Backdrop" },
-  "color-look":            { family: "look", color: "#818CF8", label: "Color look" },
-  "photographer":          { family: "look", color: "#818CF8", label: "Photographer" },
-  "render-quality":        { family: "look", color: "#818CF8", label: "Render quality" },
-  "composition-effects":   { family: "look", color: "#818CF8", label: "Composition FX" },
-  "post-process-effects":  { family: "look", color: "#818CF8", label: "Post-process FX" },
-  "exposure-settings":     { family: "look", color: "#818CF8", label: "Exposure" },
-  "temporal":              { family: "look", color: "#818CF8", label: "Temporal" },
-  "style":                 { family: "look", color: "#818CF8", label: "Style" },
-  "camera-format":         { family: "look", color: "#818CF8", label: "Camera format" },
+  "lens":                  { family: "look", label: "Lens" },
+  "lighting":              { family: "look", label: "Lighting" },
+  "mood":                  { family: "look", label: "Mood" },
+  "atmosphere":            { family: "look", label: "Atmosphere" },
+  "styling":               { family: "look", label: "Styling" },
+  "pose":                  { family: "look", label: "Pose" },
+  "framing":               { family: "look", label: "Framing" },
+  "aesthetic":             { family: "look", label: "Aesthetic" },
+  "era":                   { family: "look", label: "Era" },
+  "photo-genre":           { family: "look", label: "Photo genre" },
+  "backdrop":              { family: "look", label: "Backdrop" },
+  "color-look":            { family: "look", label: "Color look" },
+  "photographer":          { family: "look", label: "Photographer" },
+  "render-quality":        { family: "look", label: "Render quality" },
+  "composition-effects":   { family: "look", label: "Composition FX" },
+  "post-process-effects":  { family: "look", label: "Post-process FX" },
+  "exposure-settings":     { family: "look", label: "Exposure" },
+  "temporal":              { family: "look", label: "Temporal" },
+  "style":                 { family: "look", label: "Style" },
+  "camera-format":         { family: "look", label: "Camera format" },
 
   // ─── Elements family ────────────────────────────────────────────────
-  "setting":               { family: "elements", color: "#818CF8", label: "Setting" },
-  "action-fx":             { family: "elements", color: "#818CF8", label: "Action FX" },
-  "loop-subject":          { family: "elements", color: "#818CF8", label: "Loop subject" },
-  "person":                { family: "elements", color: "#818CF8", label: "Person" },
-  "animal":                { family: "elements", color: "#818CF8", label: "Animal" },
-  "vehicle":               { family: "elements", color: "#818CF8", label: "Vehicle" },
-  "weapon":                { family: "elements", color: "#818CF8", label: "Weapon" },
-  "furniture":             { family: "elements", color: "#818CF8", label: "Furniture" },
-  "held-prop":             { family: "elements", color: "#818CF8", label: "Held prop" },
-  "material":              { family: "elements", color: "#818CF8", label: "Material" },
-  "character-fx":          { family: "elements", color: "#818CF8", label: "Character FX" },
+  "setting":               { family: "elements", label: "Setting" },
+  "action-fx":             { family: "elements", label: "Action FX" },
+  "loop-subject":          { family: "elements", label: "Loop subject" },
+  "person":                { family: "elements", label: "Person" },
+  "animal":                { family: "elements", label: "Animal" },
+  "vehicle":               { family: "elements", label: "Vehicle" },
+  "weapon":                { family: "elements", label: "Weapon" },
+  "furniture":             { family: "elements", label: "Furniture" },
+  "held-prop":             { family: "elements", label: "Held prop" },
+  "material":              { family: "elements", label: "Material" },
+  "character-fx":          { family: "elements", label: "Character FX" },
 
   // ─── Motion family ──────────────────────────────────────────────────
-  "camera-motion":         { family: "motion", color: "#A78BFA", label: "Camera motion" },
-  "transition":            { family: "motion", color: "#A78BFA", label: "Transition" },
+  "camera-motion":         { family: "motion", label: "Camera motion" },
+  "transition":            { family: "motion", label: "Transition" },
 
   // ─── Audio family ───────────────────────────────────────────────────
-  "music-genre":           { family: "audio", color: "#F59E0B", label: "Music genre" },
-  "music-mood":            { family: "audio", color: "#F59E0B", label: "Music mood" },
-  "instrumentation":       { family: "audio", color: "#F59E0B", label: "Instrumentation" },
-  "voice-character":       { family: "audio", color: "#F59E0B", label: "Voice character" },
-  "voice-delivery":        { family: "audio", color: "#F59E0B", label: "Voice delivery" },
+  "music-genre":           { family: "audio", label: "Music genre" },
+  "music-mood":            { family: "audio", label: "Music mood" },
+  "instrumentation":       { family: "audio", label: "Instrumentation" },
+  "voice-character":       { family: "audio", label: "Voice character" },
+  "voice-delivery":        { family: "audio", label: "Voice delivery" },
 
   // ─── Text family ────────────────────────────────────────────────────
   // Non-tile-grid hint-producers — accepted by HINT_PRODUCER_TYPES so they
   // can feed camera-motion / transition state handles. The drift-catcher
   // test (`picker-handles.test.ts`) allowlists these because they aren't
   // tile-grid pickers (no entry in `parameter-picker-registry.tsx`).
-  "tone":                  { family: "text", color: PICKER_FAMILY_COLORS.text, label: "Tone" },
-  "text-prompt":           { family: "text", color: PICKER_FAMILY_COLORS.text, label: "Text prompt" },
+  "tone":                  { family: "text", label: "Tone" },
+  "text-prompt":           { family: "text", label: "Text prompt" },
 }
 
 export function getPickerOutputMeta(nodeType: string): PickerOutputMeta | null {
-  return REGISTRY[nodeType] ?? null
+  const entry = REGISTRY[nodeType]
+  return entry ? { ...entry, color: PICKER_FAMILY_COLORS[entry.family] } : null
 }
 
 export function isPickerNodeType(nodeType: string): boolean {

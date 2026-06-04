@@ -48,8 +48,8 @@ function MergeListsNodeComponent({ id, data, selected }: NodeProps) {
           <RunNodeButton nodeId={id} credits={0} isRunning={status === "running"} onRun={(nid) => runFromHere?.(nid)} runFromHere />
         }
         handles={[
-          { id: "in", type: "target", position: Position.Left, customStyle: { top: "calc(100% - 20px)", left: "-29px" }, external: true },
-          { id: "out", type: "source", position: Position.Right, customStyle: { top: "20px", right: "-29px" }, external: true },
+          { id: "in", type: "target", position: Position.Left, customStyle: { top: "calc(100% - 24px)", left: "-29px" }, external: true },
+          { id: "out", type: "source", position: Position.Right, customStyle: { top: "24px", right: "-29px" }, external: true },
         ]}
       >
         <div className="flex flex-col gap-1">
@@ -74,8 +74,8 @@ function MergeListsNodeComponent({ id, data, selected }: NodeProps) {
       </BaseNode>
       {/* `orderMatters` because concat semantics depend on edge order — the
           user wires List A then List B and expects A's items first. */}
-      <HandleWithPopover nodeId={id} nodeType="merge-lists" handleId="in"  type="target" position={Position.Left}  label="Lists"  color={DATA_HANDLE_COLORS.list} icon={<Braces />}   side="left"  top="calc(100% - 20px)" orderMatters accepts={ACCEPTS_IN} />
-      <HandleWithPopover nodeId={id} nodeType="merge-lists" handleId="out" type="source" position={Position.Right} label="Merged" color={DATA_HANDLE_COLORS.list} icon={<FileText />} side="right" top="20px" />
+      <HandleWithPopover nodeId={id} nodeType="merge-lists" handleId="in"  type="target" position={Position.Left}  label="Lists"  color={DATA_HANDLE_COLORS.list} icon={<Braces />}   side="left"  top="calc(100% - 24px)" orderMatters accepts={ACCEPTS_IN} />
+      <HandleWithPopover nodeId={id} nodeType="merge-lists" handleId="out" type="source" position={Position.Right} label="Merged" color={DATA_HANDLE_COLORS.list} icon={<FileText />} side="right" top="24px" />
     </div>
   )
 }

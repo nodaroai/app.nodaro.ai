@@ -16,8 +16,8 @@ import { isValidWebScrapeConnection, DATA_HANDLE_COLORS } from "@/lib/data-handl
 const ACCEPTS_IN = (t: string) => isValidWebScrapeConnection("in", t)
 
 const HANDLES = [
-  { id: "in", type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, external: true },
-  { id: "json", type: "source" as const, position: Position.Right, customStyle: { top: '20px', right: '-29px' }, external: true },
+  { id: "in", type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+  { id: "json", type: "source" as const, position: Position.Right, customStyle: { top: '24px', right: '-29px' }, external: true },
 ] as const
 
 function getActorSummary(nodeData: WebScrapeNodeData): string {
@@ -75,8 +75,8 @@ function WebScrapeNodeComponent({ id, data, selected }: NodeProps) {
           </p>
         </div>
       </BaseNode>
-      <HandleWithPopover nodeId={id} nodeType="web-scrape" handleId="in"   type="target" position={Position.Left}  label="URL / Query" color={DATA_HANDLE_COLORS.text} icon={<Globe />}  side="left"  top="calc(100% - 20px)" accepts={ACCEPTS_IN} />
-      <HandleWithPopover nodeId={id} nodeType="web-scrape" handleId="json" type="source" position={Position.Right} label="JSON"        color={DATA_HANDLE_COLORS.json} icon={<Braces />} side="right" top="20px" />
+      <HandleWithPopover nodeId={id} nodeType="web-scrape" handleId="in"   type="target" position={Position.Left}  label="URL / Query" color={DATA_HANDLE_COLORS.text} icon={<Globe />}  side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_IN} />
+      <HandleWithPopover nodeId={id} nodeType="web-scrape" handleId="json" type="source" position={Position.Right} label="JSON"        color={DATA_HANDLE_COLORS.json} icon={<Braces />} side="right" top="24px" />
     </div>
   )
 }

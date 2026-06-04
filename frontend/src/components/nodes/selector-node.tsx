@@ -57,12 +57,11 @@ function SelectorNodeComponent({ id, data, selected }: NodeProps) {
           <RunNodeButton nodeId={id} credits={0} isRunning={status === "running"} onRun={(nid) => runFromHere?.(nid)} runFromHere />
         }
         handles={[
-          { id: "in",                  type: "target", position: Position.Left,  customStyle: { top: "calc(100% - 20px)", left: "-29px" }, external: true },
-          // Variables stays at top:20px to match filter-list's geometry and
-          // preserve edge layout on pre-migration saved workflows.
-          { id: VARIABLES_HANDLE_ID,   type: "target", position: Position.Left,  customStyle: { top: "20px", left: "-29px" }, external: true },
-          { id: "picked",              type: "source", position: Position.Right, customStyle: { top: "30%", right: "-29px" }, external: true },
-          { id: "rest",                type: "source", position: Position.Right, customStyle: { top: "70%", right: "-29px" }, external: true },
+          { id: "in",                  type: "target", position: Position.Left,  customStyle: { top: "calc(100% - 24px)", left: "-29px" }, external: true },
+          // Inputs stack bottom-up: `in` at the bottom, `variables` above it.
+          { id: VARIABLES_HANDLE_ID,   type: "target", position: Position.Left,  customStyle: { top: "calc(100% - 56px)", left: "-29px" }, external: true },
+          { id: "picked",              type: "source", position: Position.Right, customStyle: { top: "24px", right: "-29px" }, external: true },
+          { id: "rest",                type: "source", position: Position.Right, customStyle: { top: "56px", right: "-29px" }, external: true },
         ]}
       >
         <div className="flex flex-col gap-1">
@@ -83,10 +82,10 @@ function SelectorNodeComponent({ id, data, selected }: NodeProps) {
           )}
         </div>
       </BaseNode>
-      <HandleWithPopover nodeId={id} nodeType="selector" handleId="in"                  type="target" position={Position.Left}  label="List"      color={DATA_HANDLE_COLORS.list}      icon={<Braces />}   side="left"  top="calc(100% - 20px)" accepts={ACCEPTS_IN} />
-      <HandleWithPopover nodeId={id} nodeType="selector" handleId={VARIABLES_HANDLE_ID} type="target" position={Position.Left}  label="Variables" color={DATA_HANDLE_COLORS.variables} icon={<Variable />} side="left"  top="20px"             accepts={ACCEPTS_VARIABLES} />
-      <HandleWithPopover nodeId={id} nodeType="selector" handleId="picked"              type="source" position={Position.Right} label="Picked"    color={DATA_HANDLE_COLORS.list}      icon={<FileText />} side="right" top="30%" />
-      <HandleWithPopover nodeId={id} nodeType="selector" handleId="rest"                type="source" position={Position.Right} label="Rest"      color={DATA_HANDLE_COLORS.list}      icon={<FileText />} side="right" top="70%" />
+      <HandleWithPopover nodeId={id} nodeType="selector" handleId="in"                  type="target" position={Position.Left}  label="List"      color={DATA_HANDLE_COLORS.list}      icon={<Braces />}   side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_IN} />
+      <HandleWithPopover nodeId={id} nodeType="selector" handleId={VARIABLES_HANDLE_ID} type="target" position={Position.Left}  label="Variables" color={DATA_HANDLE_COLORS.variables} icon={<Variable />} side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_VARIABLES} />
+      <HandleWithPopover nodeId={id} nodeType="selector" handleId="picked"              type="source" position={Position.Right} label="Picked"    color={DATA_HANDLE_COLORS.list}      icon={<FileText />} side="right" top="24px" />
+      <HandleWithPopover nodeId={id} nodeType="selector" handleId="rest"                type="source" position={Position.Right} label="Rest"      color={DATA_HANDLE_COLORS.list}      icon={<FileText />} side="right" top="56px" />
     </div>
   )
 }
