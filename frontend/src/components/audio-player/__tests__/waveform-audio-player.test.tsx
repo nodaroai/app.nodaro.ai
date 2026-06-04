@@ -8,13 +8,14 @@ import { render, screen, fireEvent, act } from "@testing-library/react"
 // ---------------------------------------------------------------------------
 const { fakeWs, mockState } = vi.hoisted(() => ({
   fakeWs: {
+    play: vi.fn(() => Promise.resolve()),
     playPause: vi.fn(),
     stop: vi.fn(),
     seekTo: vi.fn(),
-    exportPeaks: vi.fn(() => [[0, 1, 0]]),
     getDuration: vi.fn(() => 30),
   },
-  mockState: { lastProps: null as Record<string, (...a: unknown[]) => void> | null },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  mockState: { lastProps: null as any },
 }))
 
 vi.mock("@wavesurfer/react", async () => {
@@ -76,10 +77,25 @@ describe("WaveformAudioPlayer", () => {
     expect(screen.queryByText(/0:00/)).not.toBeInTheDocument()
   })
 
-  it("caches decoded peaks via exportPeaks on decode", async () => {
+  it("autoPlay starts playback on ready, NOT via the wavesurfer autoplay option", async () => {
+    // Regression: the autoplay option + @wavesurfer/react's recreate-on-option-change
+    // left a detached, playing media element (ghost audio) you couldn't stop. We must
+    // never hand wavesurfer `autoplay`; we call play() once the instance is ready.
+    await renderReady({ variant: "compact", autoPlay: true })
+    expect(mockState.lastProps?.autoplay).toBeFalsy()
+    expect(fakeWs.play).toHaveBeenCalledTimes(1)
+  })
+
+  it("does not auto-play when autoPlay is not set", async () => {
     await renderReady({ variant: "compact" })
-    act(() => { mockState.lastProps?.onDecode?.(fakeWs, 30) })
-    expect(fakeWs.exportPeaks).toHaveBeenCalled()
+    expect(fakeWs.play).not.toHaveBeenCalled()
+  })
+
+  it("never passes churning options (peaks/autoplay) that would rebuild the instance", async () => {
+    await renderReady({ variant: "compact" })
+    // peaks must not be fed reactively (undefined→array churn rebuilt the instance).
+    expect(mockState.lastProps?.peaks).toBeUndefined()
+    expect(mockState.lastProps?.autoplay).toBeFalsy()
   })
 
   it("falls back to a native <audio> element when wavesurfer errors", async () => {

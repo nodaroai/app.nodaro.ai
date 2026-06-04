@@ -9,17 +9,24 @@
 // a call site. To give a place a different look (split stereo, no waveform),
 // point it at a different variant.
 //
-// Robustness:
-//  • wavesurfer is dynamic-imported (kept out of the initial bundle) and
-//    lazy-mounted (decode only when scrolled into view).
-//  • If wavesurfer fails to load/decode (bad codec, network), we fall back to a
-//    native <audio controls> so audio is never unplayable.
+// Robustness — and why this is shaped the way it is:
+//  • @wavesurfer/react rebuilds the wavesurfer instance whenever ANY option VALUE
+//    it receives changes. So every option we pass MUST be stable across renders,
+//    otherwise the instance is torn down + rebuilt mid-playback. We therefore:
+//      - never pass `autoplay` (a torn-down autoplay leaves a detached, playing
+//        media element — "ghost audio" you can't stop). We call play() on `ready`.
+//      - never feed reactive `peaks` (undefined→array after decode = churn).
+//      - memoise event handlers and `splitChannels` so they keep a stable identity.
+//  • wavesurfer is dynamic-imported (out of the initial bundle) + lazy-mounted
+//    (decode only when scrolled into view).
+//  • On unmount we pause the instance (belt-and-suspenders over the wrapper's
+//    destroy) so navigating away always stops audio.
+//  • If wavesurfer fails to load/decode, we fall back to native <audio controls>.
 
-import { Suspense, lazy, useCallback, useEffect, useState } from "react"
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type WaveSurfer from "wavesurfer.js"
 import { cn } from "@/lib/utils"
 import { AUDIO_PLAYER_PRESETS, AUDIO_PLAYER_THEME } from "./presets"
-import { peakCache } from "./peak-cache"
 import { useLazyMount } from "./use-lazy-mount"
 import { AudioPlayerControls } from "./audio-player-controls"
 import { AudioPlayerPlaceholder } from "./audio-player-placeholder"
@@ -40,33 +47,58 @@ export function WaveformAudioPlayer({
 }: WaveformAudioPlayerProps) {
   const preset = AUDIO_PLAYER_PRESETS[variant]
   const { ref, mounted, mountNow } = useLazyMount()
-  const [wantsPlay, setWantsPlay] = useState(autoPlay)
   const [instance, setInstance] = useState<WaveSurfer | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [totalTime, setTotalTime] = useState(duration ?? 0)
   const [failed, setFailed] = useState(false)
 
+  // Whether playback should start as soon as the instance is ready. A ref (not
+  // state) so toggling it never re-renders and never churns wavesurfer options.
+  const wantsPlayRef = useRef(autoPlay)
+  // Latest instance, for unmount cleanup without making the effect depend on it.
+  const instanceRef = useRef<WaveSurfer | null>(null)
+
   const isMounted = autoPlay || mounted
   const showDownload = download ?? preset.controls.download
-  const cachedPeaks = peaks ?? peakCache.get(url)
+  // Stable identity: only present when a split look is active; undefined otherwise.
+  const splitChannels = useMemo(
+    () => (preset.channels === "split" ? [{}, {}] : undefined),
+    [preset.channels],
+  )
 
-  // Reset transport state whenever the source changes (e.g. switching result).
+  // Reset transport when the source changes (e.g. switching result / next item).
   useEffect(() => {
     setInstance(null)
+    instanceRef.current = null
     setIsPlaying(false)
     setCurrentTime(0)
     setTotalTime(duration ?? 0)
     setFailed(false)
-  }, [url, duration])
+    wantsPlayRef.current = autoPlay
+  }, [url, duration, autoPlay])
 
+  // Always stop audio when the player leaves the tree.
+  useEffect(() => () => { try { instanceRef.current?.pause() } catch { /* destroyed */ } }, [])
+
+  // --- Stable event handlers (memoised so the wrapper doesn't rebind each render).
+  const handleWsReady = useCallback((ws: WaveSurfer, dur: number) => {
+    instanceRef.current = ws
+    setInstance(ws)
+    setTotalTime(dur)
+    if (wantsPlayRef.current) ws.play().catch(() => { /* interrupted by unmount */ })
+  }, [])
+  const handleWsPlay = useCallback(() => setIsPlaying(true), [])
+  const handleWsPause = useCallback(() => setIsPlaying(false), [])
+  const handleWsFinish = useCallback(() => setIsPlaying(false), [])
+  const handleWsTimeupdate = useCallback((_ws: WaveSurfer, t: number) => setCurrentTime(t), [])
+  const handleWsError = useCallback(() => setFailed(true), [])
+
+  // --- Transport.
   const handlePlayPause = useCallback(() => {
-    if (instance) {
-      instance.playPause()
-      return
-    }
-    // Not decoded yet — mount now and start playing once ready.
-    setWantsPlay(true)
+    if (instance) { instance.playPause(); return }
+    // Not decoded yet — mount now and play once ready.
+    wantsPlayRef.current = true
     mountNow()
   }, [instance, mountNow])
 
@@ -127,17 +159,15 @@ export function WaveformAudioPlayer({
                 dragToSeek
                 interact
                 mediaControls={false}
-                autoplay={wantsPlay}
-                peaks={cachedPeaks}
+                peaks={peaks}
                 duration={duration}
-                {...(preset.channels === "split" ? { splitChannels: [{}, {}] } : {})}
-                onReady={(ws, dur) => { setInstance(ws); setTotalTime(dur) }}
-                onPlay={() => setIsPlaying(true)}
-                onPause={() => setIsPlaying(false)}
-                onFinish={() => setIsPlaying(false)}
-                onTimeupdate={(_ws, t) => setCurrentTime(t)}
-                onDecode={(ws) => { try { peakCache.set(url, ws.exportPeaks()) } catch { /* peaks unavailable */ } }}
-                onError={() => setFailed(true)}
+                splitChannels={splitChannels}
+                onReady={handleWsReady}
+                onPlay={handleWsPlay}
+                onPause={handleWsPause}
+                onFinish={handleWsFinish}
+                onTimeupdate={handleWsTimeupdate}
+                onError={handleWsError}
               />
             </Suspense>
           ) : (
