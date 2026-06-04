@@ -30,6 +30,7 @@ import { AUDIO_PLAYER_PRESETS, AUDIO_PLAYER_THEME } from "./presets"
 import { useLazyMount } from "./use-lazy-mount"
 import { AudioPlayerControls } from "./audio-player-controls"
 import { AudioPlayerPlaceholder } from "./audio-player-placeholder"
+import { setActivePlayer, releaseActivePlayer, type ActivePlayerHandle } from "./active-player"
 import type { WaveformAudioPlayerProps } from "./types"
 
 const WavesurferPlayer = lazy(() => import("@wavesurfer/react"))
@@ -58,6 +59,11 @@ export function WaveformAudioPlayer({
   const wantsPlayRef = useRef(autoPlay)
   // Latest instance, for unmount cleanup without making the effect depend on it.
   const instanceRef = useRef<WaveSurfer | null>(null)
+  // Stable handle registered with the app-wide "one player at a time" coordinator.
+  const playerHandleRef = useRef<ActivePlayerHandle | null>(null)
+  if (!playerHandleRef.current) {
+    playerHandleRef.current = { pause: () => { try { instanceRef.current?.pause() } catch { /* destroyed */ } } }
+  }
 
   const isMounted = autoPlay || mounted
   const showDownload = download ?? preset.controls.download
@@ -79,7 +85,10 @@ export function WaveformAudioPlayer({
   }, [url, duration, autoPlay])
 
   // Always stop audio when the player leaves the tree.
-  useEffect(() => () => { try { instanceRef.current?.pause() } catch { /* destroyed */ } }, [])
+  useEffect(() => () => {
+    if (playerHandleRef.current) releaseActivePlayer(playerHandleRef.current)
+    try { instanceRef.current?.pause() } catch { /* destroyed */ }
+  }, [])
 
   // --- Stable event handlers (memoised so the wrapper doesn't rebind each render).
   const handleWsReady = useCallback((ws: WaveSurfer, dur: number) => {
@@ -88,7 +97,10 @@ export function WaveformAudioPlayer({
     setTotalTime(dur)
     if (wantsPlayRef.current) ws.play().catch(() => { /* interrupted by unmount */ })
   }, [])
-  const handleWsPlay = useCallback(() => setIsPlaying(true), [])
+  const handleWsPlay = useCallback(() => {
+    setIsPlaying(true)
+    if (playerHandleRef.current) setActivePlayer(playerHandleRef.current)
+  }, [])
   const handleWsPause = useCallback(() => setIsPlaying(false), [])
   const handleWsFinish = useCallback(() => setIsPlaying(false), [])
   const handleWsTimeupdate = useCallback((_ws: WaveSurfer, t: number) => setCurrentTime(t), [])

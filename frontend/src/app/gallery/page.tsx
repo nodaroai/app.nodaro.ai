@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from "react"
 import { Link, useLocation } from "react-router-dom"
-import { ArrowLeft, ChevronLeft, ChevronRight, Download, Maximize2, Minimize2, X, Image as ImageIcon, Video, Music, Loader2, Play, Pause, Copy, Check, Flag, Trash2, Heart } from "lucide-react"
+import { ArrowLeft, ChevronLeft, ChevronRight, Download, Maximize2, Minimize2, X, Image as ImageIcon, Video, Music, Loader2, Play, Copy, Check, Flag, Trash2, Heart } from "lucide-react"
 import { NodaroLogo } from "@/components/nodaro-logo"
 import { cn } from "@/lib/utils"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -17,7 +17,6 @@ import {
 } from "@/components/ui/dialog"
 import { useGalleryInfinite, useGalleryFavorites, useToggleFavoriteMutation, useReportGalleryItemMutation, useDeleteGalleryItemMutation } from "@/hooks/queries/use-gallery-queries"
 import { useBackToClose } from "@/hooks/use-back-to-close"
-import { useImageAspect } from "@/hooks/use-image-aspect"
 import { useVirtualGrid, rowItems, GRID_BREAKPOINTS } from "@/hooks/use-virtual-grid"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
@@ -67,57 +66,18 @@ function TypeBadge({ type }: { readonly type: "image" | "video" | "audio" }) {
 }
 
 function AudioCard({ url }: { readonly url: string }) {
-  const [playing, setPlaying] = useState(false)
-  const [audio] = useState(() => {
-    if (typeof window === "undefined") return null
-    const a = new Audio(url)
-    a.addEventListener("ended", () => setPlaying(false))
-    return a
-  })
-
-  function toggle(e: React.MouseEvent) {
-    e.stopPropagation()
-    if (!audio) return
-    if (playing) {
-      audio.pause()
-      audio.currentTime = 0
-      setPlaying(false)
-    } else {
-      audio.play()
-      setPlaying(true)
-    }
-  }
-
-  useEffect(() => {
-    return () => { audio?.pause() }
-  }, [audio])
-
+  // The real waveform player in the grid cell. Clicks on the player itself
+  // play/seek (stopPropagation) without opening the preview; clicking the
+  // surrounding cell still opens it. Only one player plays at a time app-wide.
   return (
-    <div className="w-full h-full bg-zinc-100 dark:bg-zinc-900 flex flex-col items-center justify-center gap-3">
-      {/* Waveform bars */}
-      <div className="flex items-end gap-[3px] h-8">
-        {[0.4, 0.7, 1, 0.6, 0.85, 0.5, 0.9, 0.35, 0.75, 0.55].map((h, i) => (
-          <div
-            key={i}
-            className={cn(
-              "w-1 rounded-full bg-amber-500/60",
-              playing && "animate-pulse",
-            )}
-            style={{ height: `${h * 100}%` }}
-          />
-        ))}
-      </div>
-      <button
-        onClick={toggle}
-        className="rounded-full bg-amber-500/10 p-2 hover:bg-amber-500/20 transition-colors"
-        aria-label={playing ? "Pause audio" : "Play audio"}
+    <div className="w-full h-full bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center p-3">
+      <div
+        className="w-full"
+        onClick={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
       >
-        {playing ? (
-          <Pause className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-        ) : (
-          <Play className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-        )}
-      </button>
+        <WaveformAudioPlayer url={url} variant="mini" className="w-full" />
+      </div>
     </div>
   )
 }
@@ -416,13 +376,6 @@ export default function GalleryPage() {
   const totalCount = data?.pages[0]?.totalCount ?? items.length
 
   const selectedItem = selectedIndex !== null ? items[selectedIndex] ?? null : null
-  // Probe aspect ratio so fullscreen-mode image renders at its final display
-  // size from the first paint. Without this, the progressive placeholder
-  // (~320px) renders at its tiny natural size, then snaps when the 2048px
-  // hi-res arrives — jumpy.
-  const fullscreenImageAspect = useImageAspect(
-    selectedItem && selectedItem.type === "image" ? selectedItem.outputUrl : null,
-  )
 
   // Mobile back button closes modal instead of navigating away
   const closeModal = useCallback(() => setSelectedIndex(null), [])
@@ -736,18 +689,26 @@ export default function GalleryPage() {
         )}
       </section>
 
-      {/* Preview Dialog — full-screen on mobile, centered card on desktop */}
-      <Dialog open={selectedIndex !== null && !isFullscreen} onOpenChange={(open) => { if (!open) setSelectedIndex(null) }}>
+      {/* Preview Dialog — windowed card on desktop, or full-viewport when
+          isFullscreen. The Dialog stays mounted across the fullscreen toggle so
+          the SAME media element keeps playing (no restart) — only its size changes. */}
+      <Dialog open={selectedIndex !== null} onOpenChange={(open) => { if (!open) { setIsFullscreen(false); setSelectedIndex(null) } }}>
         <DialogContent
           showCloseButton={false}
-          className="p-0 overflow-hidden gap-0 top-0 left-0 translate-x-0 translate-y-0 max-w-full h-[100dvh] w-full rounded-none border-0 sm:top-[50%] sm:left-[50%] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:max-w-3xl sm:h-auto sm:rounded-lg sm:border"
+          className={cn(
+            "p-0 overflow-hidden gap-0 top-0 left-0 translate-x-0 translate-y-0 max-w-full h-[100dvh] w-full rounded-none border-0",
+            !isFullscreen && "sm:top-[50%] sm:left-[50%] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:max-w-3xl sm:h-auto sm:rounded-lg sm:border",
+          )}
         >
           <DialogTitle className="sr-only">Preview</DialogTitle>
           {selectedItem && selectedIndex !== null && (
             <div className="flex flex-col h-full sm:h-auto">
               {/* Media section with swipe support */}
               <div
-                className="relative bg-black flex items-center justify-center flex-1 min-h-0 sm:flex-none sm:min-h-[300px] sm:max-h-[70vh]"
+                className={cn(
+                  "relative bg-black flex items-center justify-center flex-1 min-h-0",
+                  !isFullscreen && "sm:flex-none sm:min-h-[300px] sm:max-h-[70vh]",
+                )}
                 onTouchStart={handleTouchStart}
                 onTouchEnd={handleTouchEnd}
               >
@@ -778,10 +739,10 @@ export default function GalleryPage() {
                   <button onClick={handleDownload} className="rounded-full bg-black/50 hover:bg-black/70 p-2 transition-colors" aria-label="Download">
                     <Download className="h-4 w-4 text-white" />
                   </button>
-                  <button onClick={() => setIsFullscreen(true)} className="rounded-full bg-black/50 hover:bg-black/70 p-2 transition-colors" aria-label="Fullscreen">
-                    <Maximize2 className="h-4 w-4 text-white" />
+                  <button onClick={() => setIsFullscreen((v) => !v)} className="rounded-full bg-black/50 hover:bg-black/70 p-2 transition-colors" aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}>
+                    {isFullscreen ? <Minimize2 className="h-4 w-4 text-white" /> : <Maximize2 className="h-4 w-4 text-white" />}
                   </button>
-                  <button onClick={() => setSelectedIndex(null)} className="rounded-full bg-black/50 hover:bg-black/70 p-2 transition-colors" aria-label="Close">
+                  <button onClick={() => { setIsFullscreen(false); setSelectedIndex(null) }} className="rounded-full bg-black/50 hover:bg-black/70 p-2 transition-colors" aria-label="Close">
                     <X className="h-4 w-4 text-white" />
                   </button>
                 </div>
@@ -792,7 +753,8 @@ export default function GalleryPage() {
                 </span>
               </div>
 
-              {/* Info section — scrollable on mobile, static on desktop */}
+              {/* Info section (hidden in fullscreen) — scrollable on mobile, static on desktop */}
+              {!isFullscreen && (
               <div className="flex-shrink-0 max-h-[40dvh] sm:max-h-none overflow-y-auto p-4 space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
@@ -857,69 +819,11 @@ export default function GalleryPage() {
                   </div>
                 )}
               </div>
+              )}
             </div>
           )}
         </DialogContent>
       </Dialog>
-
-      {/* Fullscreen overlay (completely separate from Dialog) */}
-      {isFullscreen && selectedItem && selectedIndex !== null && (
-        <div
-          className="fixed inset-0 z-[9999] bg-black flex items-center justify-center"
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEnd}
-        >
-          {selectedItem.type === "image" ? (
-            fullscreenImageAspect !== null ? (
-              <div
-                className="overflow-hidden"
-                style={{
-                  width: `min(100vw, calc(100vh * ${fullscreenImageAspect}))`,
-                  height: `min(100vh, calc(100vw / ${fullscreenImageAspect}))`,
-                }}
-              >
-                <CachedImage src={selectedItem.outputUrl} alt="" className="w-full h-full object-contain" />
-              </div>
-            ) : null
-          ) : selectedItem.type === "video" ? (
-            <video key={selectedItem.id} src={selectedItem.outputUrl} controls autoPlay playsInline className="max-w-full max-h-full" />
-          ) : (
-            <WaveformAudioPlayer key={selectedItem.id} url={selectedItem.outputUrl} variant="full" autoPlay className="w-full" />
-          )}
-
-          {/* Left arrow */}
-          {selectedIndex > 0 && (
-            <button onClick={goToPrev} className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-white/10 hover:bg-white/20 p-3 transition-colors" aria-label="Previous">
-              <ChevronLeft className="h-7 w-7 text-white" />
-            </button>
-          )}
-
-          {/* Right arrow */}
-          {selectedIndex < totalCount - 1 && (
-            <button onClick={goToNext} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-white/10 hover:bg-white/20 p-3 transition-colors" aria-label="Next">
-              <ChevronRight className="h-7 w-7 text-white" />
-            </button>
-          )}
-
-          {/* Top-right buttons: download, minimize (back to dialog), close (back to gallery) */}
-          <div className="absolute top-4 right-4 flex gap-2">
-            <button onClick={handleDownload} className="rounded-full bg-white/10 hover:bg-white/20 p-2.5 transition-colors" aria-label="Download">
-              <Download className="h-5 w-5 text-white" />
-            </button>
-            <button onClick={() => setIsFullscreen(false)} className="rounded-full bg-white/10 hover:bg-white/20 p-2.5 transition-colors" aria-label="Exit fullscreen">
-              <Minimize2 className="h-5 w-5 text-white" />
-            </button>
-            <button onClick={() => { setIsFullscreen(false); setSelectedIndex(null) }} className="rounded-full bg-white/10 hover:bg-white/20 p-2.5 transition-colors" aria-label="Close">
-              <X className="h-5 w-5 text-white" />
-            </button>
-          </div>
-
-          {/* Position indicator */}
-          <span className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-white/10 px-3 py-1 text-xs text-white/80 font-medium">
-            {selectedIndex + 1} / {totalCount}
-          </span>
-        </div>
-      )}
 
       {/* Report Dialog */}
       <Dialog open={reportItem !== null} onOpenChange={(open) => !open && setReportItem(null)}>
