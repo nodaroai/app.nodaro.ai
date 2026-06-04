@@ -1,8 +1,10 @@
 import { describe, it, expect } from "vitest"
 import {
   buildAppliedConfigPatch,
+  selectSettings,
   type ResultGenerationSettings,
 } from "@/hooks/use-result-generation-settings"
+import type { Job } from "@/lib/api"
 
 const FULL: ResultGenerationSettings = {
   provider: "nano-banana-pro",
@@ -61,5 +63,69 @@ describe("buildAppliedConfigPatch", () => {
     const patch = buildAppliedConfigPatch(noPrompt, { includePrompt: true })
     expect(patch.prompt).toBe("")
     expect(patch.negativePrompt).toBe("")
+  })
+
+  // --- Video-specific fields (additive; image jobs simply don't record them) ---
+
+  it("video: restores duration / videoSize / generateAudio when present", () => {
+    const v: ResultGenerationSettings = {
+      provider: "kling-3.0",
+      aspectRatio: "16:9",
+      resolution: "1080p",
+      duration: 5,
+      videoSize: "high",
+      generateAudio: true,
+    }
+    const patch = buildAppliedConfigPatch(v, { includePrompt: false })
+    expect(patch.duration).toBe(5)
+    expect(patch.videoSize).toBe("high")
+    expect(patch.generateAudio).toBe(true)
+  })
+
+  it("video: restores generateAudio === false (a meaningful value, not 'absent')", () => {
+    const v: ResultGenerationSettings = { provider: "veo3", generateAudio: false }
+    const patch = buildAppliedConfigPatch(v, { includePrompt: false })
+    expect("generateAudio" in patch).toBe(true)
+    expect(patch.generateAudio).toBe(false)
+  })
+
+  it("video: omits duration / videoSize / generateAudio the job didn't record", () => {
+    const v: ResultGenerationSettings = { provider: "kling", aspectRatio: "16:9" }
+    const patch = buildAppliedConfigPatch(v, { includePrompt: false })
+    expect("duration" in patch).toBe(false)
+    expect("videoSize" in patch).toBe(false)
+    expect("generateAudio" in patch).toBe(false)
+  })
+})
+
+describe("selectSettings — video fields", () => {
+  function jobWith(input: Record<string, unknown>): Job {
+    return { input_data: input } as unknown as Job
+  }
+
+  it("extracts duration (number), videoSize (string), generateAudio (boolean)", () => {
+    const s = selectSettings(
+      jobWith({
+        provider: "kling-3.0",
+        aspectRatio: "16:9",
+        resolution: "1080p",
+        duration: 5,
+        videoSize: "high",
+        generateAudio: true,
+      }),
+    )
+    expect(s.duration).toBe(5)
+    expect(s.videoSize).toBe("high")
+    expect(s.generateAudio).toBe(true)
+  })
+
+  it("preserves generateAudio === false (not coerced away)", () => {
+    const s = selectSettings(jobWith({ provider: "veo3", generateAudio: false }))
+    expect(s.generateAudio).toBe(false)
+  })
+
+  it("omits duration when it isn't a number", () => {
+    const s = selectSettings(jobWith({ provider: "kling", duration: "5" }))
+    expect(s.duration).toBeUndefined()
   })
 })

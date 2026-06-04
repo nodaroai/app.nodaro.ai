@@ -86,6 +86,14 @@ vi.mock("../node-job-progress", () => ({
   ),
 }))
 
+// Stub the result-info pill: it transitively imports config-panels/model-options
+// (which pulls real @nodaro/shared registries this file deliberately mocks),
+// and it's covered by its own test (generate-video-result-info.test.tsx). The
+// node test only cares that the node renders, not the pill internals.
+vi.mock("../generate-video-result-info", () => ({
+  GenerateVideoResultInfo: () => <div data-testid="result-info-pill" />,
+}))
+
 vi.mock("lucide-react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("lucide-react")>()
   return { ...actual }

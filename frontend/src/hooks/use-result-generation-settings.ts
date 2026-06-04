@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query"
 import { getJobStatus, type Job } from "@/lib/api"
 import { queryKeys } from "@/lib/query-keys"
+import { nonEmptyString } from "@/lib/utils"
 
 /**
  * The generation config that produced a single output, read back from the
@@ -19,6 +20,11 @@ export interface ResultGenerationSettings {
   readonly renderingSpeed?: string
   readonly styleType?: string
   readonly expandPrompt?: boolean
+  // Video-specific generation params. Image jobs never record these, so they
+  // stay undefined there and the shared patch-builder simply skips them.
+  readonly duration?: number
+  readonly videoSize?: string
+  readonly generateAudio?: boolean
   /** The user-typed prompt template (pre-resolution), mirrored to `userPrompt`
    *  by the backend. Falls back to the assembled `prompt` for older jobs. This
    *  is what gets restored to the node (it re-resolves on the next run). */
@@ -30,9 +36,9 @@ export interface ResultGenerationSettings {
   readonly negativePrompt?: string
 }
 
-function selectSettings(job: Job): ResultGenerationSettings {
+export function selectSettings(job: Job): ResultGenerationSettings {
   const d = (job.input_data ?? {}) as Record<string, unknown>
-  const str = (v: unknown) => (typeof v === "string" && v.length > 0 ? v : undefined)
+  const str = nonEmptyString
   return {
     provider: str(d.provider),
     aspectRatio: str(d.aspectRatio),
@@ -42,6 +48,10 @@ function selectSettings(job: Job): ResultGenerationSettings {
     renderingSpeed: str(d.renderingSpeed),
     styleType: str(d.styleType),
     expandPrompt: typeof d.expandPrompt === "boolean" ? d.expandPrompt : undefined,
+    duration: typeof d.duration === "number" ? d.duration : undefined,
+    videoSize: str(d.videoSize),
+    // boolean — `false` is a real value (audio explicitly off), so guard on type.
+    generateAudio: typeof d.generateAudio === "boolean" ? d.generateAudio : undefined,
     prompt: str(d.userPrompt) ?? str(d.prompt),
     finalPrompt: str(d.prompt) ?? str(d.userPrompt),
     negativePrompt: str(d.negativePrompt),
@@ -67,8 +77,11 @@ export function useResultGenerationSettings(jobId: string | undefined) {
 
 /**
  * Build the node-data patch that re-applies a result's generation settings to
- * its Generate Image node. Only generation *parameters* are restored — never
- * the reference/character wiring (that's graph-edge-derived, not node config).
+ * its Generate Image / Generate Video node. Only generation *parameters* are
+ * restored — never the reference/character wiring (that's graph-edge-derived,
+ * not node config). Image-only fields (renderingSpeed/styleType/expandPrompt)
+ * and video-only fields (duration/videoSize/generateAudio) coexist here: each
+ * is gated on `!== undefined`, so a job only restores what it actually recorded.
  *
  * `providers` is cleared so a stale multi-provider cohort can't override the
  * single restored `provider`. With `includePrompt`, the user-typed prompt and
@@ -87,6 +100,9 @@ export function buildAppliedConfigPatch(
   if (s.renderingSpeed !== undefined) patch.renderingSpeed = s.renderingSpeed
   if (s.styleType !== undefined) patch.styleType = s.styleType
   if (s.expandPrompt !== undefined) patch.expandPrompt = s.expandPrompt
+  if (s.duration !== undefined) patch.duration = s.duration
+  if (s.videoSize !== undefined) patch.videoSize = s.videoSize
+  if (s.generateAudio !== undefined) patch.generateAudio = s.generateAudio
   if (opts.includePrompt) {
     patch.prompt = s.prompt ?? ""
     patch.negativePrompt = s.negativePrompt ?? ""
