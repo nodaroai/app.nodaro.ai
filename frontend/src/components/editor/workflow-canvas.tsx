@@ -783,6 +783,19 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     onRemoteUpdatedAt: (updatedAt) => setRemoteUpdatedAt(updatedAt),
   })
 
+  // New / empty canvas → start at 100%. The viewport-restore effect above bails
+  // on an empty canvas, so without this a fresh workflow would inherit the
+  // previously-open workflow's zoom. Gated exactly like the empty-canvas hero
+  // (loaded, zero nodes) so it never fires while a workflow is still streaming
+  // its nodes in; keyed per workflow id so it runs once. A saved viewport wins.
+  const emptyCanvasZoomResetRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (isWorkflowLoading || nodes.length !== 0 || savedViewport) return
+    if (!realtimeWorkflowId || realtimeWorkflowId === emptyCanvasZoomResetRef.current) return
+    emptyCanvasZoomResetRef.current = realtimeWorkflowId
+    requestAnimationFrame(() => setViewport({ x: 0, y: 0, zoom: 1 }, { duration: 0 }))
+  }, [isWorkflowLoading, nodes.length, savedViewport, realtimeWorkflowId, setViewport])
+
   // ── Playwright dev-only test helper (D4b) ───────────────────────────────
   // Exposes a small object on `window.__nodaroTest` so the
   // `frontend/playwright/tests/film-director-canvas-build.spec.ts` regression
@@ -2167,6 +2180,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
 
       {/* Canvas Controls (zoom, fit, minimap toggle - bottom left) */}
       <CanvasControls
+        zoom={zoom}
         showMiniMap={showMiniMap}
         onToggleMiniMap={handleToggleMiniMap}
         snapEnabled={snapEnabled}

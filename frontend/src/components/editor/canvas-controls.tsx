@@ -10,7 +10,19 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 
+/**
+ * Format a React Flow zoom factor as a display percentage: ×100, rounded to a
+ * single decimal, with a trailing ".0" dropped. e.g. 1 → "100%", 0.882 →
+ * "88.2%", 0.75 → "75%", 1.8 → "180%".
+ */
+export function formatZoomPercent(zoom: number): string {
+  const pct = Math.round(zoom * 1000) / 10
+  return `${Number.isInteger(pct) ? String(pct) : pct.toFixed(1)}%`
+}
+
 interface CanvasControlsProps {
+  /** Live canvas zoom factor (React Flow transform[2]); 1 = 100%. */
+  readonly zoom: number
   readonly showMiniMap: boolean
   readonly onToggleMiniMap: () => void
   readonly snapEnabled: boolean
@@ -69,8 +81,50 @@ function ControlButton({ icon, label, onClick, active }: ControlButtonProps) {
   )
 }
 
-export function CanvasControls({ showMiniMap, onToggleMiniMap, snapEnabled, onToggleSnap, alignmentEnabled, onToggleAlignment, isMobile }: CanvasControlsProps) {
-  const { fitView, zoomIn, zoomOut } = useReactFlow()
+/** Live zoom read-out that doubles as a "reset to 100%" button. Text variant of
+ *  ControlButton — fixed min-width so the pill doesn't jitter as digits change. */
+function ZoomResetButton({ zoom, onReset }: { readonly zoom: number; readonly onReset: () => void }) {
+  const label = formatZoomPercent(zoom)
+  return (
+    <TooltipProvider delayDuration={200}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-label={`Zoom ${label}, click to reset to 100%`}
+            onClick={onReset}
+            className={cn(
+              "h-9 min-w-[3.5rem] px-2 flex items-center justify-center rounded-lg",
+              "text-sm font-medium tabular-nums transition-all duration-200",
+              // Light mode
+              "text-[#64748B]",
+              "hover:bg-[#F1F5F9] hover:text-[#0F172A]",
+              // Dark mode
+              "dark:text-[#94A3B8]",
+              "dark:hover:bg-[#2D2D2D] dark:hover:text-white",
+            )}
+          >
+            {label}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent
+          side="top"
+          sideOffset={8}
+          className={cn(
+            "rounded-lg px-3 py-2 shadow-sm",
+            "bg-white text-[#1E293B] border border-[#E2E8F0]",
+            "dark:bg-[#2D2D2D] dark:text-[#E2E8F0] dark:border-[#3D3D3D] dark:shadow-xl"
+          )}
+        >
+          <span className="text-sm">Reset to 100%</span>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  )
+}
+
+export function CanvasControls({ zoom, showMiniMap, onToggleMiniMap, snapEnabled, onToggleSnap, alignmentEnabled, onToggleAlignment, isMobile }: CanvasControlsProps) {
+  const { fitView, zoomIn, zoomOut, zoomTo } = useReactFlow()
 
   return (
     <div
@@ -90,15 +144,18 @@ export function CanvasControls({ showMiniMap, onToggleMiniMap, snapEnabled, onTo
         label="Fit to Screen"
         onClick={() => fitView({ padding: 0.2 })}
       />
-      <ControlButton
-        icon={<ZoomIn className="w-4 h-4" />}
-        label="Zoom In"
-        onClick={() => zoomIn()}
-      />
+      {/* Familiar  −  100%  +  cluster. The % reads the live zoom and resets to
+          100% on click. */}
       <ControlButton
         icon={<ZoomOut className="w-4 h-4" />}
         label="Zoom Out"
         onClick={() => zoomOut()}
+      />
+      <ZoomResetButton zoom={zoom} onReset={() => zoomTo(1, { duration: 200 })} />
+      <ControlButton
+        icon={<ZoomIn className="w-4 h-4" />}
+        label="Zoom In"
+        onClick={() => zoomIn()}
       />
       {!isMobile && (
         <>
