@@ -12,7 +12,6 @@ import {
   Volume2,
   Music,
   Download,
-  Settings,
   LayoutGrid,
   Expand,
   Link,
@@ -28,6 +27,7 @@ import { BaseNode } from "./base-node"
 import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { EditableNodeLabel } from "./editable-node-label"
 import { GenerateVideoQuickToolbar } from "./generate-video-quick-toolbar"
+import { GenerateVideoResultInfo } from "./generate-video-result-info"
 import { NodeJobProgress } from "./node-job-progress"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -85,9 +85,7 @@ const HANDLE_TOP = {
 function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as GenerateVideoNodeData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-  const selectNode = useWorkflowStore((s) => s.selectNode)
   const openFreeCut = useWorkflowStore((s) => s.openFreeCut)
-  const isSettingsOpen = useWorkflowStore((s) => s.selectedNodeId === id)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
 
   const [toolbarDropdownOpen, setToolbarDropdownOpen] = useState(false)
@@ -392,22 +390,18 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
                   <Scissors className="w-3.5 h-3.5" />
                 </button>
               </div>
-              {/* Bottom-right: settings */}
-              <div className="absolute bottom-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity">
-                <button
-                  type="button"
-                  aria-label="Settings"
-                  className={`w-7 h-7 flex items-center justify-center bg-black/50 hover:bg-black/70 border border-white/10 text-white rounded-full shadow-sm${
-                    isSettingsOpen ? " ring-1 ring-white/30" : ""
-                  }`}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    selectNode(isSettingsOpen ? null : id)
-                  }}
-                  title="Settings"
-                >
-                  <Settings className="w-3.5 h-3.5" />
-                </button>
+              {/* Bottom-right: result-info pill (model · aspect · resolution ·
+                  duration + audio), read from this result's job. Replaces the
+                  old Settings gear — open config by selecting the node, same as
+                  Generate Image. Hover-revealed by default; pinned while the
+                  versions panel is open so each result's settings stay visible
+                  as the user switches versions. */}
+              <div
+                className={`absolute bottom-2 right-2 transition-opacity ${
+                  showThumbnails ? "opacity-100" : "opacity-0 group-hover/video:opacity-100"
+                }`}
+              >
+                <GenerateVideoResultInfo nodeId={id} result={activeResult} data={nodeData} />
               </div>
             </>
           )}

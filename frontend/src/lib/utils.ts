@@ -6,6 +6,13 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+/** Narrow an unknown value to a non-empty string, else undefined. For reading
+ *  loosely-typed bag fields (job `input_data`, index-signature node data) as
+ *  display strings. */
+export function nonEmptyString(v: unknown): string | undefined {
+  return typeof v === "string" && v.length > 0 ? v : undefined
+}
+
 /** Copy text to clipboard with toast feedback. */
 export function copyToClipboard(text: string, toastMessage = "Copied") {
   navigator.clipboard.writeText(text).then(() => toast.success(toastMessage)).catch(() => {})
