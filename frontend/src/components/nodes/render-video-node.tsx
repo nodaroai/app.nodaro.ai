@@ -68,9 +68,7 @@ function RenderVideoNodeComponent({ id, data, selected }: NodeProps) {
         hideHeader
         {...videoNodeSizing(mediaAspectRatio)}
         topToolbarContent={
-          !isRunning ? (
-            <RunNodeButton nodeId={id} credits={credits} isRunning={false} onRun={(nid) => runSingleNode?.(nid)} />
-          ) : undefined
+          <RunNodeButton nodeId={id} credits={credits} isRunning={isRunning} onRun={(nid) => runSingleNode?.(nid)} />
         }
         handles={[
           { id: "composition", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },

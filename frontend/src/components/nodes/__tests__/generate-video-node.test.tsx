@@ -28,7 +28,7 @@ vi.mock("@xyflow/react", async (importOriginal) => {
 })
 
 vi.mock("../base-node", () => ({
-  BaseNode: ({ children, label, category, credits, id, isRunning, handles, topToolbarContent, bottomToolbarContent }: any) => (
+  BaseNode: ({ children, label, category, credits, id, isRunning, handles, topToolbarContent, rawToolbarContent, bottomToolbarContent }: any) => (
     <div
       data-testid="base-node"
       data-label={label}
@@ -48,6 +48,7 @@ vi.mock("../base-node", () => ({
         />
       ))}
       {topToolbarContent}
+      {rawToolbarContent}
       {bottomToolbarContent}
       {children}
     </div>

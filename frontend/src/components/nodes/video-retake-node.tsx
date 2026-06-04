@@ -238,7 +238,7 @@ function VideoRetakeNodeComponent({ id, data, selected }: NodeProps) {
         hideHeader
         {...videoNodeSizing(mediaAspectRatio)}
         handles={handles}
-        topToolbarContent={
+        rawToolbarContent={
           <VideoRetakeQuickToolbar
             nodeId={id}
             data={nodeData}

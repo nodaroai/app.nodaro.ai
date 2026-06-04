@@ -1,13 +1,11 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
-import { useStore } from "@xyflow/react"
 import { Settings2 } from "lucide-react"
 import { RunNodeButton } from "./run-node-button"
 import { PromptEditButton } from "./prompt-edit-button"
 import { QuickConfigSelect, getQuickConfigs } from "./node-quick-configs"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { NODE_VISUAL_SCALE_FLOOR } from "@/lib/zoom-floor"
 
 interface NodeQuickStripProps {
   readonly nodeId: string
@@ -33,8 +31,6 @@ export function NodeQuickStrip({ nodeId, credits, isRunning, children }: NodeQui
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const setConfigPanelFullscreen = useWorkflowStore((s) => s.setConfigPanelFullscreen)
   const node = useWorkflowStore((s) => s.nodes.find((n) => n.id === nodeId))
-  const zoom = useStore((s) => s.transform[2])
-  const scale = Math.max(NODE_VISUAL_SCALE_FLOOR, zoom)
 
   const data = (node?.data ?? {}) as Record<string, unknown>
   const configs = getQuickConfigs(node?.type)
@@ -65,12 +61,11 @@ export function NodeQuickStrip({ nodeId, credits, isRunning, children }: NodeQui
     }
   }, [])
 
+  // Render only the strip CONTENTS — BaseNode frames every node's run strip in
+  // the shared zoom-scaled pill ({@link NodeRunStripShell}), so the container,
+  // scaling, and click-isolation live there (single source of truth).
   return (
-    <div
-      className="flex items-center gap-0.5 px-1.5 py-1 backdrop-blur-sm rounded-xl border bg-white/85 border-black/10 text-neutral-900 node-menu-surface dark:border-white/10 dark:text-white"
-      style={{ transform: `scale(${scale})`, transformOrigin: "50% 0%" }}
-      onClick={(e) => e.stopPropagation()}
-    >
+    <>
       <PromptEditButton nodeId={nodeId} />
       {configs.map((control) => (
         <QuickConfigSelect
@@ -78,6 +73,7 @@ export function NodeQuickStrip({ nodeId, credits, isRunning, children }: NodeQui
           nodeId={nodeId}
           control={control}
           value={data[control.field] != null ? String(data[control.field]) : ""}
+          data={data}
           disabled={isRunning}
           onOpenChange={handleOpenChange}
         />
@@ -107,6 +103,6 @@ export function NodeQuickStrip({ nodeId, credits, isRunning, children }: NodeQui
         isRunning={isRunning}
         onRun={(nid) => runSingleNode?.(nid)}
       />
-    </div>
+    </>
   )
 }

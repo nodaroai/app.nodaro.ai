@@ -9,6 +9,9 @@ vi.mock("@xyflow/react", () => ({
   NodeResizeControl: ({ position }: any) => (
     <div data-testid="resize-control" data-position={position} />
   ),
+  // NodeRunStripShell (mounted only when a toolbar prop is passed) reads canvas
+  // zoom via useStore((s) => s.transform[2]).
+  useStore: (sel: any) => sel({ transform: [0, 0, 1] }),
   useUpdateNodeInternals: () => () => {},
 }))
 
@@ -70,5 +73,24 @@ describe("BaseNode zoom handle", () => {
     renderBase({ category: "parameter" })
     expect(screen.getByTestId("zoom-handle")).toBeInTheDocument()
     expect(screen.getAllByTestId("resize-control")).toHaveLength(1)
+  })
+})
+
+describe("BaseNode run strip", () => {
+  it("frames topToolbarContent in the shared zoom-scaled shell (every node looks the same)", () => {
+    renderBase({ topToolbarContent: <button>RUNME</button> })
+    const shell = screen.getByTestId("node-run-strip")
+    expect(shell).toContainElement(screen.getByText("RUNME"))
+  })
+
+  it("renders rawToolbarContent as-is, NOT wrapped in the shell (bespoke self-framing toolbars)", () => {
+    renderBase({ rawToolbarContent: <button>BESPOKE</button> })
+    expect(screen.queryByTestId("node-run-strip")).not.toBeInTheDocument()
+    expect(screen.getByText("BESPOKE")).toBeInTheDocument()
+  })
+
+  it("renders no bottom run strip when neither toolbar prop is set", () => {
+    renderBase()
+    expect(screen.queryByTestId("node-run-strip")).not.toBeInTheDocument()
   })
 })

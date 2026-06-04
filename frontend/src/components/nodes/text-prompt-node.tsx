@@ -5,6 +5,7 @@ import { Position, type NodeProps, NodeResizeControl, NodeToolbar, useUpdateNode
 import { isDataProducer } from "@/lib/data-handles"
 import { isVisualPickerType } from "@/lib/parameter-picker-types"
 import { CustomHandle } from "./custom-handle"
+import { NodeRunStripShell } from "./node-run-strip-shell"
 import { computeZoomFromDrag, computeVisualSize, applyMagnet } from "./zoom-math"
 import { Type, FastForward, Maximize2, AArrowUp, AArrowDown, MoreHorizontal } from "lucide-react"
 import { useTheme } from "next-themes"
@@ -509,20 +510,26 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
               hoverTimeoutRef.current = setTimeout(() => setIsHovered(false), 300)
             }}
           >
-            <button
-              type="button"
-              className={`flex items-center gap-1 h-6 px-2.5 text-[11px] font-medium rounded-md whitespace-nowrap ${RUN_BUTTON_CLASS}`}
-              onClick={(e) => {
-                e.stopPropagation()
-                runFromHere?.(id)
-              }}
-            >
-              <FastForward className="w-3 h-3" />
-              Run from here
-              {hasCredits() && downstreamCredits > 0 && (
-                <span className="ml-1 opacity-80">({downstreamCredits} CR)</span>
-              )}
-            </button>
+            {/* Framed in the shared run-strip shell so the pill + zoom-scaling
+                match every other node. The button stays bespoke because, unlike
+                the shared RunNodeButton, it surfaces the DOWNSTREAM chain cost
+                (what "Run from here" actually triggers), not this node's own. */}
+            <NodeRunStripShell>
+              <button
+                type="button"
+                className={`flex items-center gap-1 h-6 px-2.5 text-[11px] font-medium rounded-md whitespace-nowrap ${RUN_BUTTON_CLASS}`}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  runFromHere?.(id)
+                }}
+              >
+                <FastForward className="w-3 h-3" />
+                Run from here
+                {hasCredits() && downstreamCredits > 0 && (
+                  <span className="ml-1 opacity-80">({downstreamCredits} CR)</span>
+                )}
+              </button>
+            </NodeRunStripShell>
           </div>
         </NodeToolbar>
       )}
