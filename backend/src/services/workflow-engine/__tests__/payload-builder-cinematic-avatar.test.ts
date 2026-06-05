@@ -17,8 +17,11 @@ import type { SimpleNode, ResolvedInputs } from "../types.js"
 // Helpers
 // ---------------------------------------------------------------------------
 
+// A valid cinematic-avatar node carries a non-empty prompt (the payload
+// validator requires it on ALL paths). Tests that exercise prompt resolution
+// override `prompt` explicitly; the default keeps the other cases valid.
 function node(id: string, data: Record<string, unknown> = {}): SimpleNode {
-  return { id, type: "cinematic-avatar", data }
+  return { id, type: "cinematic-avatar", data: { prompt: "A cinematic test clip.", ...data } }
 }
 
 // ---------------------------------------------------------------------------
@@ -223,5 +226,71 @@ describe("buildPayload — cinematic-avatar", () => {
     expect(result.payload.references).toEqual([
       { type: "image", url: "https://r2.example.com/ok.png" },
     ])
+  })
+
+  // ── Structural validation gate (workflow/app/MCP bypass the route Zod) ──────
+
+  it("throws when prompt is empty/missing", () => {
+    const n: SimpleNode = {
+      id: "n1",
+      type: "cinematic-avatar",
+      data: { avatarLooks: ["look-abc"] }, // no prompt
+    }
+    expect(() => buildPayload(n, jobId, {}, usageLogId)).toThrow(/prompt is required/)
+  })
+
+  it("throws when avatarLooks is empty", () => {
+    const n = node("n1", { avatarLooks: [] })
+    expect(() => buildPayload(n, jobId, {}, usageLogId)).toThrow(/avatarLooks must contain/)
+  })
+
+  it("throws when avatarLooks has more than 3 entries", () => {
+    const n = node("n1", { avatarLooks: ["a", "b", "c", "d"] })
+    expect(() => buildPayload(n, jobId, {}, usageLogId)).toThrow(/avatarLooks must contain/)
+  })
+
+  it("throws when avatarLooks is missing entirely", () => {
+    const n: SimpleNode = {
+      id: "n1",
+      type: "cinematic-avatar",
+      data: { prompt: "A clip." }, // avatarLooks omitted
+    }
+    expect(() => buildPayload(n, jobId, {}, usageLogId)).toThrow(/avatarLooks/)
+  })
+
+  it("throws when more than 3 video references are assembled", () => {
+    const n = node("n1", {
+      avatarLooks: ["look-abc"],
+      references: [
+        { type: "video", url: "https://r2.example.com/v1.mp4" },
+        { type: "video", url: "https://r2.example.com/v2.mp4" },
+        { type: "video", url: "https://r2.example.com/v3.mp4" },
+        { type: "video", url: "https://r2.example.com/v4.mp4" },
+      ],
+    })
+    expect(() => buildPayload(n, jobId, {}, usageLogId)).toThrow(/at most 3 video references/)
+  })
+
+  it("throws when avatarLooks + image references exceed the 9-image budget", () => {
+    // 3 looks + 7 image refs = 10 images > 9.
+    const n = node("n1", {
+      avatarLooks: ["l1", "l2", "l3"],
+      references: Array.from({ length: 7 }, (_, i) => ({
+        type: "image" as const,
+        url: `https://r2.example.com/img${i}.png`,
+      })),
+    })
+    expect(() => buildPayload(n, jobId, {}, usageLogId)).toThrow(/at most 9 images/)
+  })
+
+  it("allows exactly 3 looks + 6 image refs (9-image boundary)", () => {
+    const n = node("n1", {
+      avatarLooks: ["l1", "l2", "l3"],
+      references: Array.from({ length: 6 }, (_, i) => ({
+        type: "image" as const,
+        url: `https://r2.example.com/img${i}.png`,
+      })),
+    })
+    expect(() => buildPayload(n, jobId, {}, usageLogId)).not.toThrow()
   })
 })

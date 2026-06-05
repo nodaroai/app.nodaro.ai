@@ -13,6 +13,8 @@ vi.mock("@/lib/config.js", () => ({
 // ---------------------------------------------------------------------------
 
 import { generateCinematicAvatar } from "../cinematic.js"
+import { HeygenError } from "../client.js"
+import { cinematicUsdCost } from "@nodaro/shared"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -133,5 +135,189 @@ describe("generateCinematicAvatar — references", () => {
     const body = postBody(fetchMock)
     expect(body.type).toBe("cinematic_avatar")
     expect(body.references).toEqual([{ type: "url", url: "https://r2.example.com/clip.mp4" }])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// autoDuration / duration body-shaping — the revenue-load-bearing behavior the
+// round-1 reserve fix depends on. The reserve assumes that when autoDuration is
+// on the provider sends `auto_duration:true` and DROPS `duration`; if a refactor
+// regressed to sending `duration` alongside (or kept a stale duration), the
+// 15s-ceiling reserve assumption would break and nothing would fail loudly.
+// ---------------------------------------------------------------------------
+
+describe("generateCinematicAvatar — duration body-shaping", () => {
+  let fetchMock: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it("sends auto_duration:true and OMITS duration when autoDuration is on (even with a stale duration opt)", async () => {
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(CREATE_RESPONSE))
+      .mockResolvedValueOnce(makeResponse(STATUS_COMPLETED))
+
+    await generateCinematicAvatar({
+      ...baseOpts,
+      autoDuration: true,
+      duration: 4, // stale value — MUST NOT be sent when auto_duration is on
+    })
+
+    const body = postBody(fetchMock)
+    expect(body.auto_duration).toBe(true)
+    expect(body).not.toHaveProperty("duration")
+  })
+
+  it("sends duration and NO auto_duration key when autoDuration is falsy", async () => {
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(CREATE_RESPONSE))
+      .mockResolvedValueOnce(makeResponse(STATUS_COMPLETED))
+
+    await generateCinematicAvatar({ ...baseOpts, autoDuration: false, duration: 12 })
+
+    const body = postBody(fetchMock)
+    expect(body.duration).toBe(12)
+    expect(body).not.toHaveProperty("auto_duration")
+  })
+
+  it("sends enhance_prompt:true when enhancePrompt is true, and omits it when undefined", async () => {
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(CREATE_RESPONSE))
+      .mockResolvedValueOnce(makeResponse(STATUS_COMPLETED))
+    await generateCinematicAvatar({ ...baseOpts, enhancePrompt: true })
+    expect(postBody(fetchMock).enhance_prompt).toBe(true)
+
+    fetchMock.mockClear()
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(CREATE_RESPONSE))
+      .mockResolvedValueOnce(makeResponse(STATUS_COMPLETED))
+    await generateCinematicAvatar(baseOpts) // enhancePrompt undefined
+    expect(postBody(fetchMock)).not.toHaveProperty("enhance_prompt")
+  })
+
+  it("defaults aspect_ratio to 16:9 and resolution to 720p when not provided", async () => {
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(CREATE_RESPONSE))
+      .mockResolvedValueOnce(makeResponse(STATUS_COMPLETED))
+
+    await generateCinematicAvatar({
+      prompt: "A clip.",
+      avatarLooks: ["look-1"],
+      pollIntervalMs: 0,
+    })
+
+    const body = postBody(fetchMock)
+    expect(body.aspect_ratio).toBe("16:9")
+    expect(body.resolution).toBe("720p")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Duration guard + cost + failure propagation. Mirrors video.test.ts for the
+// avatar provider — a missing/zero duration would compute cost=0 (a free clip
+// + full reservation refund), so the provider MUST throw instead.
+// ---------------------------------------------------------------------------
+
+describe("generateCinematicAvatar — duration guard, cost, failure", () => {
+  let fetchMock: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it("throws HeygenError when completed status is returned without a duration", async () => {
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(CREATE_RESPONSE))
+      .mockResolvedValueOnce(
+        makeResponse({
+          code: 0,
+          message: "success",
+          data: {
+            id: "cine-1",
+            status: "completed",
+            video_url: "https://cdn.heygen.com/cine-1.mp4",
+            // duration intentionally omitted — must not give cost=0 (free video)
+          },
+        }),
+      )
+
+    await expect(generateCinematicAvatar(baseOpts)).rejects.toSatisfy(
+      (err: unknown) =>
+        err instanceof HeygenError &&
+        err.message === "HeyGen returned completed without a duration",
+    )
+  })
+
+  it("throws HeygenError when completed status has duration=0", async () => {
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(CREATE_RESPONSE))
+      .mockResolvedValueOnce(
+        makeResponse({
+          code: 0,
+          message: "success",
+          data: {
+            id: "cine-1",
+            status: "completed",
+            video_url: "https://cdn.heygen.com/cine-1.mp4",
+            duration: 0,
+          },
+        }),
+      )
+
+    await expect(generateCinematicAvatar(baseOpts)).rejects.toSatisfy(
+      (err: unknown) =>
+        err instanceof HeygenError &&
+        err.message === "HeyGen returned completed without a duration",
+    )
+  })
+
+  it("returns metered cost === cinematicUsdCost(resolution, resultDuration)", async () => {
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(CREATE_RESPONSE))
+      .mockResolvedValueOnce(
+        makeResponse({
+          code: 0,
+          message: "success",
+          data: {
+            id: "cine-1",
+            status: "completed",
+            video_url: "https://cdn.heygen.com/cine-1.mp4",
+            duration: 10,
+          },
+        }),
+      )
+
+    const result = await generateCinematicAvatar(baseOpts)
+    expect(result.cost).toBe(cinematicUsdCost("720p", 10))
+    expect(result.meteredCost).toBe(true)
+    expect(result.durationSec).toBe(10)
+    expect(result.videoUrl).toBe("https://cdn.heygen.com/cine-1.mp4")
+  })
+
+  it("propagates a HeygenError on failed status", async () => {
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(CREATE_RESPONSE))
+      .mockResolvedValueOnce(
+        makeResponse({
+          code: 0,
+          message: "success",
+          data: { id: "cine-1", status: "failed", error: "content policy violation" },
+        }),
+      )
+
+    await expect(generateCinematicAvatar(baseOpts)).rejects.toSatisfy(
+      (err: unknown) => err instanceof HeygenError && err.message === "content policy violation",
+    )
   })
 })

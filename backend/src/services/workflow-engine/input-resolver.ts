@@ -1111,17 +1111,28 @@ function routeOutput(
   // and so payload-builder can assemble the typed references array. These MUST
   // be checked before source-type routing, which would otherwise land a video
   // producer in inputs.videoUrl, etc.
-  if (edge.targetHandle === "ref-video") {
-    inputs.refVideoUrl = output
-    return
-  }
-  if (edge.targetHandle === "ref-audio") {
-    inputs.refAudioUrl = output
-    return
-  }
-  if (edge.targetHandle === "ref-image") {
-    inputs.refImageUrl = output
-    return
+  //
+  // GATED on targetType === "cinematic-avatar": the `ref-*` handle names are NOT
+  // exclusive to cinematic-avatar. generate-music ships a live "ref-audio" handle
+  // whose value MUST land in inputs.audioUrl (it reads referenceAudioUrl ←
+  // resolvedInputs.audioUrl, never refAudioUrl). Without this guard a generic
+  // ref-audio interceptor would divert generate-music's reference URL into the
+  // cinematic-only refAudioUrl slot and silently break the Suno cover/reference
+  // feature. Only cinematic-avatar renders ref-video/ref-image, but we gate all
+  // three for symmetry + future-safety.
+  if (targetType === "cinematic-avatar") {
+    if (edge.targetHandle === "ref-video") {
+      inputs.refVideoUrl = output
+      return
+    }
+    if (edge.targetHandle === "ref-audio") {
+      inputs.refAudioUrl = output
+      return
+    }
+    if (edge.targetHandle === "ref-image") {
+      inputs.refImageUrl = output
+      return
+    }
   }
   // ai-avatar `script` handle: routes a wired text-prompt directly into the
   // `script` field (verbatim TTS input — never folded into `prompt`).

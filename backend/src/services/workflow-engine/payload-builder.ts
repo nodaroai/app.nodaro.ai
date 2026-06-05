@@ -14,6 +14,7 @@ import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotio
 import { buildLipSyncCreditId, isPerSecondLipSyncProvider } from "@nodaro/shared"
 import { resolveAiAvatarCreditId } from "@nodaro/shared"
 import { resolveCinematicCreditId } from "@nodaro/shared"
+import { validateAiAvatarPayload, validateCinematicAvatarPayload } from "@nodaro/shared"
 import { resolveNodeRefs } from "@nodaro/shared"
 import { composeCameraMotionHintFromConnections } from "@nodaro/shared"
 import {
@@ -2735,38 +2736,61 @@ export function buildPayload(
       //      IV-class), matching the route's reservation exactly.
       // The data shape here carries the same fields the route body does
       // (engine/resolution/speechMode/voiceSpeed/script/avatarSource).
-      const aiAvatarCreditId = resolveAiAvatarCreditId(data as Record<string, unknown>)
+      //
+      // CRITICAL: bucket the reserve on the SAME script that will be SENT, not
+      // on raw node data. In text mode the script can be WIRED from an upstream
+      // text producer (text-prompt/generate-script/ai-writer → `script` handle)
+      // while `data.script` is empty. resolveAiAvatarCreditId buckets by script
+      // LENGTH; if we passed raw `data` here the reserve would estimate from the
+      // empty data.script (→ 30s bucket, ~135cr) while the payload sends the long
+      // wired script (a multi-minute clip). The metered true-up at commit can
+      // ONLY refund a surplus — it never charges an overage — so that mismatch
+      // silently undercharges by the full overage (refund-only invariant
+      // violation). Note ai-avatar is NOT in NODE_MAPPABLE_FIELDS, so
+      // FieldMappings never backfills data.script — the merge below is the only
+      // place the wired script reaches the bucket. Single-node Run already
+      // resolves script-first before reserving, so this aligns both paths.
+      const aiAvatarResolvedScript =
+        resolvedInputs.script ?? (data.script as string | undefined)
+      const aiAvatarCreditBody = { ...(data as Record<string, unknown>), script: aiAvatarResolvedScript }
+      const aiAvatarCreditId = resolveAiAvatarCreditId(aiAvatarCreditBody)
+      const aiAvatarPayload: Record<string, unknown> = {
+        jobId,
+        avatarSource: (data.avatarSource as string | undefined) ?? "avatar",
+        engine: aiAvatarEngine,
+        avatarId: data.avatarId,
+        imageUrl: resolvedInputs.imageUrl || (data.imageUrl as string | undefined),
+        speechMode: data.speechMode ?? "text",
+        script: aiAvatarResolvedScript,
+        voiceId: data.voiceId,
+        voiceSpeed: data.voiceSpeed,
+        pitch: data.pitch,
+        volume: data.volume,
+        locale: data.locale,
+        ttsEngine: data.ttsEngine,
+        audioUrl: resolvedInputs.audioUrl || (data.audioUrl as string | undefined),
+        resolution: aiAvatarResolution,
+        aspectRatio: data.aspectRatio ?? "16:9",
+        fit: data.fit,
+        outputFormat: data.outputFormat,
+        caption: data.caption,
+        captionStyle: data.captionStyle,
+        background: data.background,
+        removeBackground: data.removeBackground,
+        motionPrompt: data.motionPrompt,
+        expressiveness: data.expressiveness,
+        usageLogId,
+      }
+      // Structural validation on the ASSEMBLED payload — the orchestrator/app/MCP
+      // paths bypass the route Zod (`aiAvatarBody`). Throws BEFORE reserve/enqueue
+      // (node-executor deletes the orphaned pending job on throw). Single source
+      // of truth shared with the route via @nodaro/shared.
+      validateAiAvatarPayload(aiAvatarPayload)
       return {
         jobName: "ai-avatar",
         queueName: "video-generation",
         modelIdentifier: aiAvatarCreditId,
-        payload: {
-          jobId,
-          avatarSource: (data.avatarSource as string | undefined) ?? "avatar",
-          engine: aiAvatarEngine,
-          avatarId: data.avatarId,
-          imageUrl: resolvedInputs.imageUrl || (data.imageUrl as string | undefined),
-          speechMode: data.speechMode ?? "text",
-          script: resolvedInputs.script ?? (data.script as string | undefined),
-          voiceId: data.voiceId,
-          voiceSpeed: data.voiceSpeed,
-          pitch: data.pitch,
-          volume: data.volume,
-          locale: data.locale,
-          ttsEngine: data.ttsEngine,
-          audioUrl: resolvedInputs.audioUrl || (data.audioUrl as string | undefined),
-          resolution: aiAvatarResolution,
-          aspectRatio: data.aspectRatio ?? "16:9",
-          fit: data.fit,
-          outputFormat: data.outputFormat,
-          caption: data.caption,
-          captionStyle: data.captionStyle,
-          background: data.background,
-          removeBackground: data.removeBackground,
-          motionPrompt: data.motionPrompt,
-          expressiveness: data.expressiveness,
-          usageLogId,
-        },
+        payload: aiAvatarPayload,
       }
     }
 
@@ -2783,22 +2807,31 @@ export function buildPayload(
       // (single-node Run path). Wired inputs take priority over a same-kind
       // data entry; duplicate urls are dropped. Empty → references omitted.
       const cinematicReferences = buildCinematicReferences(resolvedInputs, data)
+      const cinematicPayload: Record<string, unknown> = {
+        jobId,
+        prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap) || "",
+        avatarLooks: data.avatarLooks,
+        duration: data.duration,
+        autoDuration: data.autoDuration,
+        aspectRatio: data.aspectRatio ?? "16:9",
+        resolution: (data.resolution as string) ?? "720p",
+        enhancePrompt: data.enhancePrompt,
+        ...(cinematicReferences.length > 0 ? { references: cinematicReferences } : {}),
+        usageLogId,
+      }
+      // Structural validation on the ASSEMBLED payload — the orchestrator/app/MCP
+      // paths bypass the route Zod (`cinematicAvatarBody`). Enforces avatarLooks
+      // count (1–3), enum bounds, and the combined reference caps (≤3 videos;
+      // avatarLooks + image refs ≤ 9) that cinematic.ts forwards to HeyGen
+      // unvalidated. Throws BEFORE reserve/enqueue (node-executor deletes the
+      // orphaned pending job on throw). Single source of truth shared with the
+      // route via @nodaro/shared.
+      validateCinematicAvatarPayload(cinematicPayload)
       return {
         jobName: "cinematic-avatar",
         queueName: "video-generation",
         modelIdentifier: cinematicCreditId,
-        payload: {
-          jobId,
-          prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap) || "",
-          avatarLooks: data.avatarLooks,
-          duration: data.duration,
-          autoDuration: data.autoDuration,
-          aspectRatio: data.aspectRatio ?? "16:9",
-          resolution: (data.resolution as string) ?? "720p",
-          enhancePrompt: data.enhancePrompt,
-          ...(cinematicReferences.length > 0 ? { references: cinematicReferences } : {}),
-          usageLogId,
-        },
+        payload: cinematicPayload,
       }
     }
 
