@@ -1153,7 +1153,7 @@ export {
 
 // --- Node presets ---
 export { EXECUTION_DATA_KEYS } from "./node-runtime-keys.js"
-export { extractPresetData, PRESET_EXCLUDED_KEYS } from "./node-preset-extract.js"
+export { extractPresetData, PRESET_EXCLUDED_KEYS, presetDataMatches } from "./node-preset-extract.js"
 export type { FactoryPreset } from "./factory-presets.js"
 export { FACTORY_PRESETS, getFactoryPresets } from "./factory-presets.js"
 export type { ExportedPreset, NodePresetExport } from "./node-preset-export.js"

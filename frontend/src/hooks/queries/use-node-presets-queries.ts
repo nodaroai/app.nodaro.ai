@@ -3,8 +3,10 @@ import { queryKeys } from "@/lib/query-keys"
 import {
   listNodePresets,
   createNodePreset,
+  updateNodePreset,
   deleteNodePreset,
   importNodePresets,
+  type NodePreset,
 } from "@/lib/api"
 
 export function useNodePresets(nodeType: string | undefined, userId: string | undefined) {
@@ -29,6 +31,16 @@ export function useNodePresetMutations() {
     }) => createNodePreset(input),
     onSuccess: invalidate,
   })
+  const update = useMutation({
+    mutationFn: ({
+      id,
+      patch,
+    }: {
+      id: string
+      patch: { name?: string; description?: string; data?: Record<string, unknown> }
+    }) => updateNodePreset(id, patch),
+    onSuccess: invalidate,
+  })
   const remove = useMutation({
     mutationFn: (id: string) => deleteNodePreset(id),
     onSuccess: invalidate,
@@ -40,5 +52,7 @@ export function useNodePresetMutations() {
     onSuccess: invalidate,
   })
 
-  return { create, remove, importMany }
+  return { create, update, remove, importMany }
 }
+
+export type { NodePreset }

@@ -24,7 +24,7 @@ import {
   type PresentationDisplay,
 } from "@/types/nodes"
 import { PresentationDisplayConfig } from "./config-panels/presentation-display-config"
-import { NodePresetsMenu } from "./config-panels/node-presets-menu"
+import { PresetDropdown } from "./config-panels/node-preset-dropdown"
 // Phase 1B.2: SceneConfig now ships from `./config-panels/scene-configs`.
 // Legacy `./scene-config` + `./scene-editor-modal` are dead code pending cleanup.
 import { IterationResultsPanel } from "./iteration-results-panel"
@@ -913,50 +913,58 @@ export function ConfigPanel() {
   const isNodeRunning =
     nodeData.executionStatus === "running" || nodeData.executionStatus === "pending"
 
+  // Cross-cutting preset dropdown — one component, reads its node from the store by id. Self-hides
+  // for nodes with no portable config (and asset/structural nodes). Placed below the heading in the
+  // side panel; inline "on the side" of the header row in fullscreen.
+  const presetDropdown = <PresetDropdown nodeId={selectedNode.id} variant="panel" />
+
   // --- Shared content for both desktop and mobile ---
   const panelHeader = (
-    <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] shrink-0">
-      <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-700 dark:text-[#ff0073]">
-        {getNodeTypeDisplayName(nodeType)} Node Settings
-      </h3>
-      <div className="flex items-center gap-1">
-        {/* Cross-cutting preset menu — mounts here once for EVERY node type.
-            Self-hides when the node has no capturable config. */}
-        <NodePresetsMenu nodeType={nodeType} data={nodeData} onApply={update} />
-        {!isMobile && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-gray-400 dark:text-[#64748B] hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2D2D2D]"
-            onClick={() => {
-              // Read from the store imperatively so rapid double-clicks in
-              // the same React batch still toggle correctly — `isExpanded`
-              // from the selector is captured at render time, so two clicks
-              // before the next render would both write the same value and
-              // collapse to a single toggle. Mirrors the prior local-state
-              // `setIsExpanded(v => !v)` functional-updater behavior.
-              const current = useWorkflowStore.getState().configPanelFullscreen
-              setConfigPanelFullscreen(!current)
-            }}
-            title={isExpanded ? "Collapse to side panel" : "Expand to full screen"}
-            aria-label={isExpanded ? "Collapse panel" : "Expand panel"}
-          >
-            {isExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-          </Button>
-        )}
-        {isExpanded ? (
-          // Fullscreen: a prominent text "Close" button reads as the
-          // primary exit affordance — the small X icon was easy to miss
-          // against the wider modal chrome.
-          <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs" onClick={(e) => { e.stopPropagation(); closeFullscreenSettings() }}>
-            Close
-          </Button>
-        ) : (
-          <Button variant="ghost" size="icon" className="text-gray-400 dark:text-[#64748B] hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2D2D2D]" onClick={() => useWorkflowStore.setState({ selectedNodeId: null })} aria-label="Close panel">
-            <X className="h-4 w-4" />
-          </Button>
-        )}
+    <div className="flex flex-col border-b border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] shrink-0">
+      <div className="flex items-center justify-between px-4 py-3">
+        <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-700 dark:text-[#ff0073]">
+          {getNodeTypeDisplayName(nodeType)} Node Settings
+        </h3>
+        <div className="flex items-center gap-2">
+          {/* Fullscreen: preset dropdown on the side (inline in the header row). */}
+          {isExpanded && <div className="w-56">{presetDropdown}</div>}
+          {!isMobile && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-gray-400 dark:text-[#64748B] hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2D2D2D]"
+              onClick={() => {
+                // Read from the store imperatively so rapid double-clicks in
+                // the same React batch still toggle correctly — `isExpanded`
+                // from the selector is captured at render time, so two clicks
+                // before the next render would both write the same value and
+                // collapse to a single toggle. Mirrors the prior local-state
+                // `setIsExpanded(v => !v)` functional-updater behavior.
+                const current = useWorkflowStore.getState().configPanelFullscreen
+                setConfigPanelFullscreen(!current)
+              }}
+              title={isExpanded ? "Collapse to side panel" : "Expand to full screen"}
+              aria-label={isExpanded ? "Collapse panel" : "Expand panel"}
+            >
+              {isExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            </Button>
+          )}
+          {isExpanded ? (
+            // Fullscreen: a prominent text "Close" button reads as the
+            // primary exit affordance — the small X icon was easy to miss
+            // against the wider modal chrome.
+            <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs" onClick={(e) => { e.stopPropagation(); closeFullscreenSettings() }}>
+              Close
+            </Button>
+          ) : (
+            <Button variant="ghost" size="icon" className="text-gray-400 dark:text-[#64748B] hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2D2D2D]" onClick={() => useWorkflowStore.setState({ selectedNodeId: null })} aria-label="Close panel">
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
+      {/* Side panel: preset dropdown on its own row, just below the node-type heading. */}
+      {!isExpanded && <div className="px-4 pb-3">{presetDropdown}</div>}
     </div>
   )
 
