@@ -24,6 +24,7 @@ import {
   type HandlerFn,
 } from "../shared.js"
 import { finalizeJobWithMedia } from "../../lib/job-finalize.js"
+import { capAudioForAvatar } from "./heygen-avatar-audio-cap.js"
 
 export const handleAiAvatar: HandlerFn = async function handleAiAvatar(job, ctx) {
   const {
@@ -83,6 +84,19 @@ export const handleAiAvatar: HandlerFn = async function handleAiAvatar(job, ctx)
     `[worker] ai-avatar ${ctx.jobId} (source: ${avatarSource ?? "avatar"}, engine: ${engine}, speechMode: ${speechMode}, resolution: ${resolution})`,
   )
 
+  // AUDIO mode has no natural length cap on HeyGen's side, so a long audio is
+  // both expensive and bounded by a 600s credit reserve. Before generating, cap
+  // the driving audio to AI_AVATAR_MAX_AUDIO_SEC (600s): trim + re-host longer
+  // clips, and surface a non-fatal warning. Best-effort — capAudioForAvatar
+  // returns the ORIGINAL url (no warning) if probe/trim fails.
+  let effectiveAudioUrl = audioUrl
+  let audioCapWarning: string | undefined
+  if (speechMode === "audio" && typeof audioUrl === "string" && audioUrl.length > 0) {
+    const capped = await capAudioForAvatar(audioUrl, ctx.jobId, ctx.jobUserId)
+    effectiveAudioUrl = capped.audioUrl
+    audioCapWarning = capped.warning
+  }
+
   // generateAvatarVideo() blocks internally (polls HeyGen until completed/failed),
   // so we wrap it in a progress ramp to keep the widget bar moving. HeyGen
   // doesn't surface live progress percentages, so the ramp is the only signal.
@@ -103,7 +117,7 @@ export const handleAiAvatar: HandlerFn = async function handleAiAvatar(job, ctx)
       volume,
       locale,
       ttsEngine,
-      audioUrl,
+      audioUrl: effectiveAudioUrl,
       resolution,
       aspectRatio,
       fit,
@@ -145,6 +159,10 @@ export const handleAiAvatar: HandlerFn = async function handleAiAvatar(job, ctx)
     extraOutputData: {
       thumbnailUrl: thumbUrl,
       durationSec: result.durationSec,
+      // Non-fatal warning surfaced to the user (e.g. audio was trimmed to the
+      // 600s cap). Stored on output_data so the ai-avatar node can show it.
+      // Omitted entirely when there's nothing to warn about.
+      ...(audioCapWarning ? { warningMessage: audioCapWarning } : {}),
     },
   })
   if (!ok) return

@@ -396,6 +396,7 @@ export type { Flux2Model } from "./flux2-pricing.js"
 export {
   AI_AVATAR_RATE_USD_PER_SEC,
   AI_AVATAR_MAX_DURATION_SEC,
+  AI_AVATAR_MAX_AUDIO_SEC,
   AI_AVATAR_DURATION_BUCKETS,
   AI_AVATAR_RESERVE_IDS,
   aiAvatarUsdCost,

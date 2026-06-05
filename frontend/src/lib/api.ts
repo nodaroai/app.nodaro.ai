@@ -3263,6 +3263,10 @@ export interface Job {
     videoUrl?: string
     audioUrl?: string
     script?: unknown
+    // Non-fatal, user-facing notice on an otherwise-successful job (e.g. AI
+    // Avatar audio auto-trimmed to the 600s cap). Read by the executor's
+    // `extraOutputFields` extractor and surfaced as a banner on the node.
+    warningMessage?: string
     [key: string]: unknown
   }
   error_message?: string

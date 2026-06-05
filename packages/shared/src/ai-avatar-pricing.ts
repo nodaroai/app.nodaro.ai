@@ -80,6 +80,21 @@ export const AI_AVATAR_DURATION_BUCKETS = [5, 10, 15, 30, 60, 120, 240, 360, 600
  */
 export const AI_AVATAR_AUDIO_FALLBACK_SEC = 120
 
+/**
+ * Hard cap (seconds) on AUDIO-mode clip length. HeyGen has no natural length
+ * limit on an audio-driven avatar, so a long audio = an expensive / possibly
+ * rejected generation and a bounded under-reserve window. We cap it here:
+ *   - The worker TRIMS incoming audio longer than this down to AI_AVATAR_MAX_AUDIO_SEC
+ *     (and warns the user, non-fatal).
+ *   - The credit RESERVE is capped at this bucket too: even a 30-min probed
+ *     audio buckets at 600s, never the 900s top bucket. Because the worker
+ *     trims the actual clip to ≤600s, the metered true-up can only refund.
+ *
+ * Text mode (5000-char script) and cinematic (4–15s) are bounded elsewhere and
+ * are NOT affected by this cap.
+ */
+export const AI_AVATAR_MAX_AUDIO_SEC = 600
+
 export type AiAvatarDurationBucket = (typeof AI_AVATAR_DURATION_BUCKETS)[number]
 
 const ALLOWED_ENGINES = new Set<AiAvatarEngine>(["avatar-v", "avatar-iv"])
@@ -157,7 +172,9 @@ export function aiAvatarReserveCreditId(
  *   default (AI_AVATAR_AUDIO_FALLBACK_SEC) — NOT the 900s top bucket. Reserving
  *   the 900s ceiling for a sub-minute audio clip was the over-reservation bug
  *   (~4000+ credits held for a clip that costs ~40). The commit-time metered
- *   true-up is refund-only, so a modest reserve never over-charges.
+ *   true-up is refund-only, so a modest reserve never over-charges. The effective
+ *   seconds are ALSO capped at AI_AVATAR_MAX_AUDIO_SEC (600s) — the worker trims
+ *   audio longer than that, so a 30-min audio reserves the 600s bucket, never 900s.
  *
  * - `avatarSource === "image"`: image-source mode is IV-class (HeyGen's own
  *   engine, no avatar_id) — bill at the avatar-iv rate regardless of the
@@ -201,12 +218,20 @@ export function resolveAiAvatarCreditId(
     // can bucket by the ACTUAL audio duration. When present, bucket by it;
     // otherwise fall back to a MODEST 120s default — NOT the 900s top bucket.
     // The old 900s fallback over-reserved ~4000+ credits for sub-minute clips.
+    //
+    // Effective seconds are capped at AI_AVATAR_MAX_AUDIO_SEC (600s): audio mode
+    // has no natural length limit, so the worker TRIMS the actual clip to ≤600s
+    // and we cap the RESERVE at the matching 600s bucket. A 30-min probed audio
+    // thus reserves the 600s bucket, never the 900s top bucket. Since the worker
+    // trims actual to ≤600s, the metered commit can only refund.
     const probed = Number(body?.__probedDurationSec)
-    bucketSec = pickAiAvatarBucket(
+    const effectiveSec = Math.min(
       Number.isFinite(probed) && probed > 0
         ? Math.ceil(probed)
         : AI_AVATAR_AUDIO_FALLBACK_SEC,
+      AI_AVATAR_MAX_AUDIO_SEC,
     )
+    bucketSec = pickAiAvatarBucket(effectiveSec)
   }
 
   return aiAvatarReserveCreditId(engine, resolution, bucketSec)

@@ -2,7 +2,7 @@
 
 import { memo, useState, useRef, useEffect, useCallback } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { UserRound, Loader2, AlertCircle, Film, Volume2, Type, Image as ImageIcon, Expand, Download, Link, X, LayoutGrid, Scissors, Settings } from "lucide-react"
+import { UserRound, Loader2, AlertCircle, AlertTriangle, Film, Volume2, Type, Image as ImageIcon, Expand, Download, Link, X, LayoutGrid, Scissors, Settings } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { NodeQuickStrip } from "./node-quick-strip"
@@ -38,6 +38,10 @@ function AiAvatarNodeComponent({ id, data, selected }: NodeProps) {
   const activeResult = results[activeIndex]
   const activeUrl = activeResult?.url ?? nodeData.generatedVideoUrl
   const activeThumbnail = activeResult?.thumbnailUrl
+  // Non-fatal notice (e.g. audio auto-trimmed to the 600s cap). Prefer the
+  // active result's own warning (so switching versions shows the right one),
+  // falling back to the node-level warning from the most recent run.
+  const warningMessage = activeResult?.warningMessage ?? nodeData.warningMessage
   const speechMode = nodeData.speechMode ?? "text"
   const avatarSource = nodeData.avatarSource ?? "avatar"
 
@@ -167,6 +171,15 @@ function AiAvatarNodeComponent({ id, data, selected }: NodeProps) {
               loop={shouldPlay}
               playsInline
             />
+
+            {/* Non-fatal notice (e.g. audio trimmed to the 600s cap). Amber,
+                distinct from the red failed-state error — the clip is valid. */}
+            {warningMessage && (
+              <div className="absolute inset-x-2 top-2 z-10 flex items-start gap-1.5 px-2 py-1.5 bg-amber-500/90 backdrop-blur-sm text-amber-950 text-[10px] rounded-md shadow-sm">
+                <AlertTriangle className="w-3 h-3 shrink-0 mt-px" />
+                <span className="leading-snug line-clamp-3">{warningMessage}</span>
+              </div>
+            )}
 
             {/* Version badge */}
             {results.length > 1 && (

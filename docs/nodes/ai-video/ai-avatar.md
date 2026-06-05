@@ -20,7 +20,7 @@ Two speech modes:
 | Mode | What you provide | Voice |
 |------|-----------------|-------|
 | **Script + Voice** (`speechMode: text`) | A text script (up to 5,000 characters) and a voice ID picked from the in-node voice picker | HeyGen TTS, driven by the chosen voice and optional voice speed |
-| **Wired Audio** (`speechMode: audio`) | An audio file wired to the `audio` input handle | Exactly as recorded — no TTS |
+| **Wired Audio** (`speechMode: audio`) | An audio file wired to the `audio` input handle | Exactly as recorded — no TTS. Audio inputs are capped at 10 minutes (600s); longer audio is automatically trimmed to 600s (you'll see a notice on the result) |
 
 ## Selecting an Avatar and Voice
 
@@ -75,7 +75,7 @@ Examples (Avatar IV, 720p): a **30-second** clip ≈ **113 credits**; a **1-minu
 ### Reserve & refund
 
 - **Text mode** — the upfront hold is estimated from your script length and voice speed (slower speech reserves a bit more). You're charged for the actual generated length; the remainder is refunded.
-- **Audio mode** — the hold is sized from your uploaded clip's measured length, so a short voiceover reserves only a small amount (a few seconds' worth), not a large flat block. As always, you're charged only for the real generated length and any surplus is refunded.
+- **Audio mode** — the hold is sized from your uploaded clip's measured length, so a short voiceover reserves only a small amount (a few seconds' worth), not a large flat block. Audio is capped at 10 minutes (600s): a longer clip is automatically trimmed to 600s and the hold is sized at that 10-minute cap. As always, you're charged only for the real generated length and any surplus is refunded.
 
 ## Graceful Degradation
 

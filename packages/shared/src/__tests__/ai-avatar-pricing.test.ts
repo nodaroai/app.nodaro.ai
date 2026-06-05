@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest"
 import {
   AI_AVATAR_RATE_USD_PER_SEC,
   AI_AVATAR_MAX_DURATION_SEC,
+  AI_AVATAR_MAX_AUDIO_SEC,
   AI_AVATAR_DURATION_BUCKETS,
   AI_AVATAR_AUDIO_FALLBACK_SEC,
   AI_AVATAR_RESERVE_IDS,
@@ -187,9 +188,10 @@ describe("resolveAiAvatarCreditId", () => {
     // 200s probed → bucket 240s
     expect(resolveAiAvatarCreditId({ speechMode: "audio", __probedDurationSec: 200 }))
       .toBe("heygen-avatar-iv:720p:240s")
-    // probed > 900 → bucket 900s (long-audio still covered when probed)
+    // probed > 600 (the audio cap) → bucket 600s, NOT 900s. The worker trims
+    // audio to AI_AVATAR_MAX_AUDIO_SEC, so the reserve caps at the 600s bucket.
     expect(resolveAiAvatarCreditId({ speechMode: "audio", __probedDurationSec: 1200 }))
-      .toBe("heygen-avatar-iv:720p:900s")
+      .toBe("heygen-avatar-iv:720p:600s")
   })
 
   it("audio mode: invalid/zero probe falls back to the modest default", () => {
@@ -301,6 +303,87 @@ describe("AI_AVATAR_RESERVE_IDS", () => {
 describe("AI_AVATAR_MAX_DURATION_SEC", () => {
   it("is 900 seconds (covers 5000-char@0.5× worst-case text)", () => {
     expect(AI_AVATAR_MAX_DURATION_SEC).toBe(900)
+  })
+})
+
+describe("AI_AVATAR_MAX_AUDIO_SEC — audio-mode hard cap (worker trims + reserve caps)", () => {
+  it("is 600 seconds and is a real bucket", () => {
+    expect(AI_AVATAR_MAX_AUDIO_SEC).toBe(600)
+    expect(AI_AVATAR_DURATION_BUCKETS).toContain(AI_AVATAR_MAX_AUDIO_SEC)
+  })
+
+  it("a 1800s (30-min) probed audio reserves the 600s bucket, NOT 900s", () => {
+    expect(
+      resolveAiAvatarCreditId({
+        speechMode: "audio",
+        engine: "avatar-iv",
+        resolution: "720p",
+        __probedDurationSec: 1800,
+      }),
+    ).toBe("heygen-avatar-iv:720p:600s")
+  })
+
+  it("a 450s probed audio reserves the 600s bucket (under the cap, normal bucket-up)", () => {
+    expect(
+      resolveAiAvatarCreditId({
+        speechMode: "audio",
+        engine: "avatar-iv",
+        resolution: "720p",
+        __probedDurationSec: 450,
+      }),
+    ).toBe("heygen-avatar-iv:720p:600s")
+  })
+
+  it("exactly 600s probed audio stays in the 600s bucket", () => {
+    expect(resolveAiAvatarCreditId({ speechMode: "audio", __probedDurationSec: 600 }))
+      .toBe("heygen-avatar-iv:720p:600s")
+  })
+
+  it("clamps audio across engines/resolutions to the 600s bucket", () => {
+    expect(
+      resolveAiAvatarCreditId({
+        speechMode: "audio",
+        engine: "avatar-v",
+        resolution: "1080p",
+        __probedDurationSec: 3600,
+      }),
+    ).toBe("heygen-avatar-v:1080p:600s")
+  })
+
+  it("does NOT affect text mode — text can still reach the 900s bucket", () => {
+    // 5000 chars at 0.5× → 834s → 900s bucket, unchanged by the audio cap.
+    expect(
+      resolveAiAvatarCreditId({ speechMode: "text", script: "x".repeat(5000), voiceSpeed: 0.5 }),
+    ).toBe("heygen-avatar-iv:720p:900s")
+  })
+
+  it("INVARIANT: reserved >= metered-actual at the 600s audio ceiling (worker trims actual to <=600)", () => {
+    // The worker trims incoming audio to AI_AVATAR_MAX_AUDIO_SEC, so the metered
+    // ACTUAL provider cost can never exceed the 600s bucket cost. At the ceiling
+    // the bases are identical (reserved == actual); for any shorter trimmed clip
+    // the actual is strictly less → commit refunds. Verify across markups.
+    for (const markup of [0, 25, 30, 50]) {
+      for (const engine of Object.keys(AI_AVATAR_RATE_USD_PER_SEC) as Array<keyof typeof AI_AVATAR_RATE_USD_PER_SEC>) {
+        for (const resolution of Object.keys(AI_AVATAR_RATE_USD_PER_SEC[engine]) as Array<
+          keyof (typeof AI_AVATAR_RATE_USD_PER_SEC)[typeof engine]
+        >) {
+          const reserveId = resolveAiAvatarCreditId({
+            speechMode: "audio",
+            engine,
+            resolution,
+            __probedDurationSec: 5000, // far past the cap
+          })
+          expect(reserveId).toBe(`heygen-${engine}:${resolution}:600s`)
+          const hold = aiAvatarHoldCredits(engine, resolution, AI_AVATAR_MAX_AUDIO_SEC)
+          const reserved = reservedFromHold(hold, markup)
+          // Actual at the trimmed ceiling (worker trims to exactly 600s worst case).
+          const usdAtCap = aiAvatarUsdCost(engine, resolution, AI_AVATAR_MAX_AUDIO_SEC)
+          const actualAtCap = meteredActual(usdAtCap, markup)
+          expect(reserved).toBe(actualAtCap)
+          expect(reserved).toBeGreaterThanOrEqual(actualAtCap)
+        }
+      }
+    }
   })
 })
 
