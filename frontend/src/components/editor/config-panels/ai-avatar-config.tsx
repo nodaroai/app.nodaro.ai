@@ -230,6 +230,11 @@ export function AiAvatarConfig({
             <label htmlFor="sm-audio" className="text-xs cursor-pointer">Wired Audio</label>
           </div>
         </RadioGroup>
+        {speechMode === "audio" && (
+          <p className="text-[10px] text-muted-foreground/70 leading-snug">
+            Audio is capped at 10 minutes — longer clips are automatically trimmed to 600s.
+          </p>
+        )}
       </div>
 
       {/* ── Avatar Picker (avatar source only) ───────────────────────────── */}

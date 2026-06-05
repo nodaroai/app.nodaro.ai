@@ -10,6 +10,11 @@ const mocks = vi.hoisted(() => {
   const mockGenerateAndUploadThumbnail = vi.fn().mockResolvedValue("https://r2.example.com/thumbnails/ai-avatar-job-1.png")
   const mockFinalizeJobWithMedia = vi.fn().mockResolvedValue({ ok: true })
   const mockSetJobProgress = vi.fn(async () => {})
+  // Default: audio is untouched (under the cap, no warning). Tests that exercise
+  // the >600s path override this per-test.
+  const mockCapAudioForAvatar =
+    vi.fn<(audioUrl: string, jobId: string, jobUserId?: string) =>
+      Promise<{ audioUrl: string; warning?: string }>>(async (audioUrl: string) => ({ audioUrl }))
 
   return {
     mockGenerateAvatarVideo,
@@ -17,11 +22,16 @@ const mocks = vi.hoisted(() => {
     mockGenerateAndUploadThumbnail,
     mockFinalizeJobWithMedia,
     mockSetJobProgress,
+    mockCapAudioForAvatar,
   }
 })
 
 vi.mock("@/providers/heygen/video.js", () => ({
   generateAvatarVideo: mocks.mockGenerateAvatarVideo,
+}))
+
+vi.mock("../heygen-avatar-audio-cap.js", () => ({
+  capAudioForAvatar: mocks.mockCapAudioForAvatar,
 }))
 
 vi.mock("../../shared.js", async (importOriginal) => {
@@ -99,6 +109,7 @@ beforeEach(() => {
   mocks.mockUploadVideoMaybeWatermark.mockResolvedValue("https://r2.example.com/videos/ai-avatar-job-1.mp4")
   mocks.mockGenerateAndUploadThumbnail.mockResolvedValue("https://r2.example.com/thumbnails/ai-avatar-job-1.png")
   mocks.mockFinalizeJobWithMedia.mockResolvedValue({ ok: true })
+  mocks.mockCapAudioForAvatar.mockImplementation(async (audioUrl: string) => ({ audioUrl }))
 })
 
 // ---------------------------------------------------------------------------
@@ -205,6 +216,73 @@ describe("handleAiAvatar — audio mode", () => {
         audioUrl: "https://r2.example.com/audio/driving.mp3",
       }),
     )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Audio length cap (600s) — trim + warn
+// ---------------------------------------------------------------------------
+
+describe("handleAiAvatar — audio length cap", () => {
+  const SHORT_AUDIO = "https://r2.example.com/audio/short.mp3"
+  const LONG_AUDIO = "https://r2.example.com/audio/long.mp3"
+
+  function makeAudioJob(audioUrl: string) {
+    return makeJob({
+      speechMode: "audio",
+      audioUrl,
+      script: undefined,
+      voiceId: undefined,
+      voiceSpeed: undefined,
+    })
+  }
+
+  it("invokes capAudioForAvatar for audio mode with the source url + job context", async () => {
+    const job = makeAudioJob(SHORT_AUDIO)
+    await handleAiAvatar(job as never, makeCtx())
+
+    expect(mocks.mockCapAudioForAvatar).toHaveBeenCalledWith(SHORT_AUDIO, "job-1", "user-1")
+  })
+
+  it("a >600s audio is trimmed: the TRIMMED url drives the HeyGen call and a warning is set", async () => {
+    const TRIMMED = "https://r2.example.com/audios/ai-avatar-cap-job-1-trimmed.m4a"
+    const WARNING = "Audio was 12:30 — trimmed to the 10:00 max for AI Avatar."
+    mocks.mockCapAudioForAvatar.mockResolvedValueOnce({ audioUrl: TRIMMED, warning: WARNING })
+
+    const job = makeAudioJob(LONG_AUDIO)
+    await handleAiAvatar(job as never, makeCtx())
+
+    // HeyGen is called with the TRIMMED url, not the original long one.
+    expect(mocks.mockGenerateAvatarVideo).toHaveBeenCalledWith(
+      expect.objectContaining({ speechMode: "audio", audioUrl: TRIMMED }),
+    )
+    // The warning rides along on output_data via finalize's extraOutputData.
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(
+      expect.objectContaining({
+        extraOutputData: expect.objectContaining({ warningMessage: WARNING }),
+      }),
+    )
+  })
+
+  it("a <=600s audio is untouched: original url drives HeyGen and NO warning is set", async () => {
+    // Default mock returns { audioUrl } with no warning (cap no-op).
+    const job = makeAudioJob(SHORT_AUDIO)
+    await handleAiAvatar(job as never, makeCtx())
+
+    expect(mocks.mockGenerateAvatarVideo).toHaveBeenCalledWith(
+      expect.objectContaining({ speechMode: "audio", audioUrl: SHORT_AUDIO }),
+    )
+    const finalizeArg = mocks.mockFinalizeJobWithMedia.mock.calls[0]![0] as {
+      extraOutputData?: Record<string, unknown>
+    }
+    expect(finalizeArg.extraOutputData).not.toHaveProperty("warningMessage")
+  })
+
+  it("does NOT invoke the audio cap in text mode", async () => {
+    const job = makeJob() // text mode by default
+    await handleAiAvatar(job as never, makeCtx())
+
+    expect(mocks.mockCapAudioForAvatar).not.toHaveBeenCalled()
   })
 })
 

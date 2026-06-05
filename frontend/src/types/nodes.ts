@@ -62,6 +62,10 @@ export interface GeneratedResult {
   readonly width?: number
   readonly height?: number
   readonly duration?: number  // seconds, for video/audio
+  // Non-fatal, user-facing notice attached to a successful result (e.g. the AI
+  // Avatar audio was auto-trimmed to the 600s cap). Surfaced as a banner, NOT
+  // an error — the clip is valid and the user is charged for it.
+  readonly warningMessage?: string
 }
 
 export interface ManualReferenceImage {
@@ -1975,6 +1979,9 @@ export type AiAvatarData = {
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
+  // Non-fatal notice from the last completed run (e.g. audio trimmed to 600s).
+  // Distinct from errorMessage — the result is valid; this is just a heads-up.
+  warningMessage?: string
   generatedVideoUrl?: string
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number

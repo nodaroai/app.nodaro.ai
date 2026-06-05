@@ -1,7 +1,7 @@
 ---
 node_type: ai-avatar
-generated_at: 2026-06-05T06:38:52.187Z
-generated_from: eef974fe
+generated_at: 2026-06-05T12:17:21.812Z
+generated_from: e5d0c6a2
 ---
 
 # AI Avatar
@@ -67,6 +67,7 @@ generated_from: eef974fe
 - `captionStyle?: "default"`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
+- `warningMessage?: string`
 - `generatedVideoUrl?: string`
 - `generatedResults?: GeneratedResult[]`
 - `activeResultIndex?: number`

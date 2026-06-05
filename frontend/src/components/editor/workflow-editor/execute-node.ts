@@ -4317,6 +4317,12 @@ export function executeNode(
       "generatedVideoUrl",
       "AI Avatar",
       ctx,
+      // Surface the backend's non-fatal notice (e.g. audio auto-trimmed to the
+      // 600s cap) onto the result + node data so the node can show a banner.
+      (od) => {
+        const warningMessage = od.warningMessage as string | undefined;
+        return warningMessage ? { warningMessage } : {};
+      },
     );
   }
 
