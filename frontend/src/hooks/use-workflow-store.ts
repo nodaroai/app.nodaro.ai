@@ -12,7 +12,7 @@ import type { PresentationDisplay, InputMode } from "@/types/nodes"
 import { NODE_DEFINITIONS, NODE_DEF_MAP, TELEPORTER_CHANNEL_COLORS, LOOP_COL_ADD_HANDLE, loopColInputHandle, loopColBaseHandle } from "@/types/nodes"
 import type { WorkflowSnapshot } from "./use-undo-redo-store"
 import { setSkipUndoCapture } from "./undo-flags"
-import { filterCloneNodes } from "@nodaro/shared"
+import { filterCloneNodes, EXECUTION_DATA_KEYS } from "@nodaro/shared"
 import type { PresentationItem, PipelineStatus } from "@nodaro/shared"
 import { migrateToItems, validateNoNestedGroups, cleanOrphanedItems, isCollectInEdge } from "@nodaro/shared"
 import type { VariableDisplayMode } from "@/components/editor/config-panels/types"
@@ -64,68 +64,12 @@ export function migrateImageNodes(nodes: WorkflowNode[]): WorkflowNode[] {
  * When an `updateNodeData` call only touches these keys, the undo system
  * will NOT capture a snapshot — preventing job polling from polluting the
  * undo history and clearing the redo stack.
+ *
+ * Canonical source is `@nodaro/shared` (also consumed by the node-preset
+ * extractor + backend); imported above and re-exported here for the many
+ * modules that import it from the store.
  */
-export const EXECUTION_DATA_KEYS = new Set([
-  "executionStatus",
-  "currentJobId",
-  "currentJobProgress",
-  "errorMessage",
-  "isStreaming",
-  "generatedImageUrl",
-  "generatedVideoUrl",
-  "generatedAudioUrl",
-  "generatedText",
-  "generatedScript",
-  "generatedItems",
-  "generatedResults",
-  "activeResultIndex",
-  "sourceImageUrl",
-  "__listTotal",
-  "__listCompleted",
-  "__listResults",
-  // List fan-out window flag (abandon-guard exemption). Set/cleared by
-  // executeNodeForList — purely execution-related, never user-edited, so
-  // toggling it must not capture an undo snapshot or flip isDirty.
-  "__listRunning",
-  // Selector node dual-channel outputs (picked + rest). Without these the
-  // executeSelector store write diffs the config snapshot → useAutoExecute
-  // re-runs 300ms later, and in random mode (Math.random) every re-run
-  // produces a fresh pick → infinite loop. Same exemption rationale as
-  // __listResults: server-side execution output, not user-edited config.
-  "pickedResults",
-  "restResults",
-  "__pickedResults",
-  "__restResults",
-  "__pickedTotal",
-  "__restTotal",
-  "generatedJson",
-  "subWorkflowProgress",
-  "outputResults",
-  "shots",
-  "result",
-  "processedResult",
-  "activeRoutes",
-  "routeOutputs",
-  "_upstreamRefresh",
-  "zoom",
-  // Character LoRA training status fields — written every 8s while training
-  // by the polling tick in character-page-modal + on-mount backfill in
-  // character-node. Treating them as execution-only keeps the undo system
-  // and isDirty flag from firing on every poll.
-  "loraReplicateVersion",
-  "loraTriggerWord",
-  "loraTrainingStatus",
-  // Collect (fan-in) execution snapshot — `lastInputs` is a 50-item / 500-char
-  // bounded slice but can still be ~25KB; `lastMeta` is small but written on
-  // every Collect completion; `__upstreamCount` is set on the running edge of
-  // the same lifecycle. Without these here, every Collect run flipped
-  // isDirty, captured an undo snapshot, and broadcast a 25KB payload over
-  // Realtime + autosave. Mirrors the `__listResults` / `result` exemption
-  // above.
-  "lastInputs",
-  "lastMeta",
-  "__upstreamCount",
-])
+export { EXECUTION_DATA_KEYS }
 
 /** Detect loop column type from upstream node's output handle. */
 function detectLoopColumnType(

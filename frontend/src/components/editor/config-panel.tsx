@@ -24,6 +24,7 @@ import {
   type PresentationDisplay,
 } from "@/types/nodes"
 import { PresentationDisplayConfig } from "./config-panels/presentation-display-config"
+import { NodePresetsMenu } from "./config-panels/node-presets-menu"
 // Phase 1B.2: SceneConfig now ships from `./config-panels/scene-configs`.
 // Legacy `./scene-config` + `./scene-editor-modal` are dead code pending cleanup.
 import { IterationResultsPanel } from "./iteration-results-panel"
@@ -919,6 +920,9 @@ export function ConfigPanel() {
         {getNodeTypeDisplayName(nodeType)} Node Settings
       </h3>
       <div className="flex items-center gap-1">
+        {/* Cross-cutting preset menu — mounts here once for EVERY node type.
+            Self-hides when the node has no capturable config. */}
+        <NodePresetsMenu nodeType={nodeType} data={nodeData} onApply={update} />
         {!isMobile && (
           <Button
             variant="ghost"

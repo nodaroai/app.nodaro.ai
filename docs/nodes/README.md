@@ -2,6 +2,10 @@
 
 Complete reference for all nodes available in the Nodaro.ai visual workflow editor.
 
+> **Tip:** Every node supports [**Presets**](./presets.md) — save a node's configuration under a
+> name and reload it in one click, with built-in factory presets plus your own custom ones
+> (searchable, exportable/importable).
+
 ## Quick Reference
 
 - **Total Nodes:** 150+

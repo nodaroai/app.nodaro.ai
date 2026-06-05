@@ -1150,3 +1150,15 @@ export {
   AUDIO_PRODUCER_TYPES,
   DYNAMIC_PRODUCER_TYPES,
 } from "./producer-types.js"
+
+// --- Node presets ---
+export { EXECUTION_DATA_KEYS } from "./node-runtime-keys.js"
+export { extractPresetData, PRESET_EXCLUDED_KEYS } from "./node-preset-extract.js"
+export type { FactoryPreset } from "./factory-presets.js"
+export { FACTORY_PRESETS, getFactoryPresets } from "./factory-presets.js"
+export type { ExportedPreset, NodePresetExport } from "./node-preset-export.js"
+export {
+  NODE_PRESET_EXPORT_KIND,
+  buildNodePresetExport,
+  parseNodePresetExport,
+} from "./node-preset-export.js"

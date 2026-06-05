@@ -107,6 +107,13 @@ const ALLOWED_PATHS = [
   /^src\/routes\/extract-audio\.ts$/,
   /^src\/routes\/remove-audio\.ts$/,
 
+  // Node presets: per-user CRUD collection. Every handler derives
+  // `userId = req.userId` (401 if absent); LIST/DELETE scope by
+  // `.eq("user_id", userId)` and CREATE/IMPORT INSERT with `user_id: userId`.
+  // Service-role mirrors the other per-user collection routes (characters,
+  // locations) — node_presets RLS (`auth.uid() = user_id`) is the DB-level guard.
+  /^src\/routes\/node-presets\.ts$/,
+
   // Embeds / og-tags: fetch public-facing metadata by id, not user-scoped.
   /^src\/routes\/embed\.ts$/,
   /^src\/routes\/og-tags\.ts$/,
