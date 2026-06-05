@@ -2,7 +2,7 @@
 
 import { memo, useState, useRef, useEffect, useCallback } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Clapperboard, Loader2, AlertCircle, Film, Type, Expand, Download, Link, X, LayoutGrid, Scissors, Settings } from "lucide-react"
+import { Clapperboard, Loader2, AlertCircle, Film, Type, Expand, Download, Link, X, LayoutGrid, Scissors, Settings, Volume2, Image as ImageIcon } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { NodeQuickStrip } from "./node-quick-strip"
@@ -138,8 +138,11 @@ function CinematicAvatarNodeComponent({ id, data, selected }: NodeProps) {
           <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />
         }
         handles={[
-          { id: "prompt", type: "target", position: Position.Left,  customStyle: { top: "calc(100% - 24px)", left: "-29px" }, external: true },
-          { id: "video",  type: "source", position: Position.Right, customStyle: { top: "24px",              right: "-29px" }, external: true },
+          { id: "ref-video", type: "target", position: Position.Left,  customStyle: { top: "calc(100% - 120px)", left: "-29px" }, external: true },
+          { id: "ref-audio", type: "target", position: Position.Left,  customStyle: { top: "calc(100% - 88px)",  left: "-29px" }, external: true },
+          { id: "ref-image", type: "target", position: Position.Left,  customStyle: { top: "calc(100% - 56px)",  left: "-29px" }, external: true },
+          { id: "prompt",    type: "target", position: Position.Left,  customStyle: { top: "calc(100% - 24px)",  left: "-29px" }, external: true },
+          { id: "video",     type: "source", position: Position.Right, customStyle: { top: "24px",                right: "-29px" }, external: true },
         ]}
       >
         {/* Video result view */}
@@ -258,7 +261,46 @@ function CinematicAvatarNodeComponent({ id, data, selected }: NodeProps) {
         Handles are ALWAYS mounted (never unmount a handle — there is no
         edge-pruner and unmounting would orphan existing edges). The `prompt`
         handle is a generative-prompt text input; `video` is the clip output.
+        The three `ref-*` handles are OPTIONAL reference inputs (one upstream
+        producer each) — a guiding video / audio / image passed through to
+        HeyGen's `references` array at execute time.
       */}
+      <HandleWithPopover
+        nodeId={id}
+        nodeType="cinematic-avatar"
+        handleId="ref-video"
+        type="target"
+        position={Position.Left}
+        label="Video ref"
+        color={HANDLE_COLORS.video}
+        icon={<Film />}
+        side="left"
+        top="calc(100% - 120px)"
+      />
+      <HandleWithPopover
+        nodeId={id}
+        nodeType="cinematic-avatar"
+        handleId="ref-audio"
+        type="target"
+        position={Position.Left}
+        label="Audio ref"
+        color={HANDLE_COLORS.audio}
+        icon={<Volume2 />}
+        side="left"
+        top="calc(100% - 88px)"
+      />
+      <HandleWithPopover
+        nodeId={id}
+        nodeType="cinematic-avatar"
+        handleId="ref-image"
+        type="target"
+        position={Position.Left}
+        label="Image ref"
+        color={HANDLE_COLORS.image}
+        icon={<ImageIcon />}
+        side="left"
+        top="calc(100% - 56px)"
+      />
       <HandleWithPopover
         nodeId={id}
         nodeType="cinematic-avatar"

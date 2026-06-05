@@ -453,10 +453,15 @@ export const TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEnt
     { handleId: "script", label: VIDEO_PRODUCER_HANDLE_LABELS["ai-avatar"].script, accepts: (s) => isValidAiAvatarConnection("script", s, isVisualPickerType) },
     { handleId: "audio",  label: VIDEO_PRODUCER_HANDLE_LABELS["ai-avatar"].audio,  accepts: (s) => isValidAiAvatarConnection("audio",  s, isVisualPickerType) },
   ],
-  // Cinematic Avatar — single generative `prompt` input (text producers +
-  // pickers + dynamic producers), mirroring motion-transfer / speech-to-video.
+  // Cinematic Avatar — generative `prompt` input (text producers + pickers +
+  // dynamic producers, mirroring motion-transfer / speech-to-video) plus three
+  // OPTIONAL reference inputs (one upstream producer each): ref-video (video),
+  // ref-audio (audio), ref-image (image), resolved into HeyGen's `references`.
   "cinematic-avatar": [
-    { handleId: "prompt", label: VIDEO_PRODUCER_HANDLE_LABELS["cinematic-avatar"].prompt, accepts: (s) => isValidCinematicAvatarConnection("prompt", s, isVisualPickerType) },
+    { handleId: "prompt",    label: VIDEO_PRODUCER_HANDLE_LABELS["cinematic-avatar"].prompt,        accepts: (s) => isValidCinematicAvatarConnection("prompt",    s, isVisualPickerType) },
+    { handleId: "ref-video", label: VIDEO_PRODUCER_HANDLE_LABELS["cinematic-avatar"]["ref-video"], accepts: (s) => isValidCinematicAvatarConnection("ref-video", s, isVisualPickerType) },
+    { handleId: "ref-audio", label: VIDEO_PRODUCER_HANDLE_LABELS["cinematic-avatar"]["ref-audio"], accepts: (s) => isValidCinematicAvatarConnection("ref-audio", s, isVisualPickerType) },
+    { handleId: "ref-image", label: VIDEO_PRODUCER_HANDLE_LABELS["cinematic-avatar"]["ref-image"], accepts: (s) => isValidCinematicAvatarConnection("ref-image", s, isVisualPickerType) },
   ],
 
   // ─── Identity nodes (Phase 23 of typed-handles migration) ────────────

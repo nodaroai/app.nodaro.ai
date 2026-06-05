@@ -766,3 +766,74 @@ describe("selectListItems integration — List tab", () => {
     ).toEqual(["e", "d", "c", "b", "a"])
   })
 })
+
+// ---------------------------------------------------------------------------
+// cinematic-avatar reference handles — ref-video / ref-audio / ref-image
+// ---------------------------------------------------------------------------
+
+describe("resolveNodeInputs — cinematic-avatar reference handles", () => {
+  it("routes a video producer on the ref-video handle to refVideoUrl (not videoUrl)", () => {
+    const target = node("t", "cinematic-avatar")
+    const src = node("s", "image-to-video")
+    const allNodes = [src, target]
+    const edges = [edge("s", "t", "video", "ref-video")]
+    const states: Record<string, NodeExecutionState> = {
+      s: { status: "completed", output: { videoUrl: "https://r2/clip.mp4" } },
+    }
+
+    const result = resolveNodeInputs(target, edges, states, allNodes)
+    expect(result.refVideoUrl).toBe("https://r2/clip.mp4")
+    expect(result.videoUrl).toBeUndefined()
+  })
+
+  it("routes an audio producer on the ref-audio handle to refAudioUrl (not audioUrl)", () => {
+    const target = node("t", "cinematic-avatar")
+    const src = node("s", "text-to-speech")
+    const allNodes = [src, target]
+    const edges = [edge("s", "t", "audio", "ref-audio")]
+    const states: Record<string, NodeExecutionState> = {
+      s: { status: "completed", output: { audioUrl: "https://r2/voice.mp3" } },
+    }
+
+    const result = resolveNodeInputs(target, edges, states, allNodes)
+    expect(result.refAudioUrl).toBe("https://r2/voice.mp3")
+    expect(result.audioUrl).toBeUndefined()
+  })
+
+  it("routes an image producer on the ref-image handle to refImageUrl (not imageUrl)", () => {
+    const target = node("t", "cinematic-avatar")
+    const src = node("s", "generate-image")
+    const allNodes = [src, target]
+    const edges = [edge("s", "t", "image", "ref-image")]
+    const states: Record<string, NodeExecutionState> = {
+      s: { status: "completed", output: { imageUrl: "https://r2/ref.png" } },
+    }
+
+    const result = resolveNodeInputs(target, edges, states, allNodes)
+    expect(result.refImageUrl).toBe("https://r2/ref.png")
+    expect(result.imageUrl).toBeUndefined()
+  })
+
+  it("routes all three reference handles independently in one workflow", () => {
+    const target = node("t", "cinematic-avatar")
+    const vid = node("v", "image-to-video")
+    const aud = node("a", "text-to-speech")
+    const img = node("i", "generate-image")
+    const allNodes = [vid, aud, img, target]
+    const edges = [
+      edge("v", "t", "video", "ref-video"),
+      edge("a", "t", "audio", "ref-audio"),
+      edge("i", "t", "image", "ref-image"),
+    ]
+    const states: Record<string, NodeExecutionState> = {
+      v: { status: "completed", output: { videoUrl: "https://r2/clip.mp4" } },
+      a: { status: "completed", output: { audioUrl: "https://r2/voice.mp3" } },
+      i: { status: "completed", output: { imageUrl: "https://r2/ref.png" } },
+    }
+
+    const result = resolveNodeInputs(target, edges, states, allNodes)
+    expect(result.refVideoUrl).toBe("https://r2/clip.mp4")
+    expect(result.refAudioUrl).toBe("https://r2/voice.mp3")
+    expect(result.refImageUrl).toBe("https://r2/ref.png")
+  })
+})

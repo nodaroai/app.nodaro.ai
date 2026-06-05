@@ -154,6 +154,12 @@ export const TYPED_HANDLE_IDS: ReadonlySet<string> = new Set([
   // no cinematography). Distinct from `prompt` so spoken text never gets
   // parameter-picker prose appended.
   "script",
+  // cinematic-avatar optional reference handles — one upstream producer each,
+  // resolved into HeyGen's `references` array. `ref-audio` is already covered
+  // above (generate-music); `ref-video` / `ref-image` are typed video / image
+  // inputs that bypass the Parameter-category filter like the other media
+  // handles.
+  "ref-video", "ref-image",
 ])
 /** Subset that requires consumer-type dispatch — the dev-time warning in
  *  getCompatibleNodes triggers when one of these is passed without a

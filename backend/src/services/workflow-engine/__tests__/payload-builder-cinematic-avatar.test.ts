@@ -152,4 +152,76 @@ describe("buildPayload — cinematic-avatar", () => {
     const r2 = buildPayload(n2, jobId, {}, usageLogId)
     expect(CINEMATIC_RESERVE_IDS).toContain(r2.modelIdentifier)
   })
+
+  // ── references assembly ───────────────────────────────────────────────────
+
+  it("omits references from the payload when none are wired or configured", () => {
+    const n = node("n1", { avatarLooks: ["look-abc"] })
+    const result = buildPayload(n, jobId, {}, usageLogId)
+    expect(result.payload).not.toHaveProperty("references")
+  })
+
+  it("assembles references from resolved ref-handle inputs", () => {
+    const n = node("n1", { avatarLooks: ["look-abc"] })
+    const inputs: ResolvedInputs = {
+      refVideoUrl: "https://r2.example.com/clip.mp4",
+      refAudioUrl: "https://r2.example.com/voice.mp3",
+      refImageUrl: "https://r2.example.com/ref.png",
+    }
+    const result = buildPayload(n, jobId, inputs, usageLogId)
+    expect(result.payload.references).toEqual([
+      { type: "video", url: "https://r2.example.com/clip.mp4" },
+      { type: "audio", url: "https://r2.example.com/voice.mp3" },
+      { type: "image", url: "https://r2.example.com/ref.png" },
+    ])
+  })
+
+  it("includes data.references (single-node Run path) when no handles are wired", () => {
+    const n = node("n1", {
+      avatarLooks: ["look-abc"],
+      references: [
+        { type: "video", url: "https://r2.example.com/d-clip.mp4" },
+        { type: "image", url: "https://r2.example.com/d-ref.png" },
+      ],
+    })
+    const result = buildPayload(n, jobId, {}, usageLogId)
+    expect(result.payload.references).toEqual([
+      { type: "video", url: "https://r2.example.com/d-clip.mp4" },
+      { type: "image", url: "https://r2.example.com/d-ref.png" },
+    ])
+  })
+
+  it("merges wired ref inputs with data.references and dedupes by url", () => {
+    const n = node("n1", {
+      avatarLooks: ["look-abc"],
+      references: [
+        // Same url as the wired refVideoUrl — must be dropped (no double-send).
+        { type: "video", url: "https://r2.example.com/clip.mp4" },
+        // Distinct image — must be appended after the wired inputs.
+        { type: "image", url: "https://r2.example.com/extra.png" },
+      ],
+    })
+    const inputs: ResolvedInputs = { refVideoUrl: "https://r2.example.com/clip.mp4" }
+    const result = buildPayload(n, jobId, inputs, usageLogId)
+    expect(result.payload.references).toEqual([
+      { type: "video", url: "https://r2.example.com/clip.mp4" },
+      { type: "image", url: "https://r2.example.com/extra.png" },
+    ])
+  })
+
+  it("ignores malformed data.references entries", () => {
+    const n = node("n1", {
+      avatarLooks: ["look-abc"],
+      references: [
+        null,
+        { type: "bogus", url: "https://r2.example.com/x.mp4" },
+        { type: "video" }, // missing url
+        { type: "image", url: "https://r2.example.com/ok.png" },
+      ],
+    })
+    const result = buildPayload(n, jobId, {}, usageLogId)
+    expect(result.payload.references).toEqual([
+      { type: "image", url: "https://r2.example.com/ok.png" },
+    ])
+  })
 })

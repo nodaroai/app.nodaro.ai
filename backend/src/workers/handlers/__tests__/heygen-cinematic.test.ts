@@ -116,7 +116,22 @@ describe("handleCinematicAvatar — happy path", () => {
       aspectRatio: "16:9",
       resolution: "720p",
       enhancePrompt: false,
+      references: undefined,
     })
+  })
+
+  it("forwards the references array from job data to generateCinematicAvatar", async () => {
+    const references = [
+      { type: "video", url: "https://r2.example.com/clip.mp4" },
+      { type: "image", url: "https://r2.example.com/ref.png" },
+      { type: "audio", url: "https://r2.example.com/voice.mp3" },
+    ]
+    const job = makeJob({ references })
+    await handleCinematicAvatar(job as never, makeCtx())
+
+    expect(mocks.mockGenerateCinematicAvatar).toHaveBeenCalledWith(
+      expect.objectContaining({ references }),
+    )
   })
 
   it("re-hosts the expiring HeyGen URL to R2 via uploadVideoMaybeWatermark", async () => {

@@ -4353,6 +4353,21 @@ export function executeNode(
       return Promise.reject(new Error("Invalid avatar looks"));
     }
 
+    // Assemble the optional references array from the resolved reference handle
+    // inputs (ref-video/ref-audio/ref-image → refVideoUrl/refAudioUrl/refImageUrl,
+    // one upstream producer per handle). Duplicate urls are dropped. Empty →
+    // references omitted. Caps (≤3 videos, ≤9 images) are enforced backend-side.
+    const references: Array<{ type: "video" | "image" | "audio"; url: string }> = [];
+    const seenRefUrls = new Set<string>();
+    const pushRef = (type: "video" | "image" | "audio", url: string | undefined) => {
+      if (!url || seenRefUrls.has(url)) return;
+      seenRefUrls.add(url);
+      references.push({ type, url });
+    };
+    pushRef("video", inputs.refVideoUrl);
+    pushRef("audio", inputs.refAudioUrl);
+    pushRef("image", inputs.refImageUrl);
+
     setUserPromptTemplate(caData.prompt?.trim() || undefined);
     return runProcessingNode(
       node.id,
@@ -4365,6 +4380,7 @@ export function executeNode(
           aspectRatio: caData.aspectRatio ?? "16:9",
           resolution: caData.resolution ?? "720p",
           enhancePrompt: caData.enhancePrompt,
+          references: references.length > 0 ? references : undefined,
           userId: ctx.userId,
         }),
       "generatedVideoUrl",

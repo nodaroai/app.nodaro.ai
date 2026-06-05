@@ -33,6 +33,7 @@ export const handleCinematicAvatar: HandlerFn = async function handleCinematicAv
     aspectRatio,
     resolution,
     enhancePrompt,
+    references,
   } = job.data as {
     jobId: string
     prompt: string
@@ -42,6 +43,7 @@ export const handleCinematicAvatar: HandlerFn = async function handleCinematicAv
     aspectRatio?: "16:9" | "9:16" | "1:1"
     resolution?: CinematicResolution
     enhancePrompt?: boolean
+    references?: Array<{ type: "video" | "image" | "audio"; url: string }>
     usageLogId?: string | null
   }
 
@@ -66,6 +68,7 @@ export const handleCinematicAvatar: HandlerFn = async function handleCinematicAv
         aspectRatio,
         resolution,
         enhancePrompt,
+        references,
       }),
   )
   await setJobProgress(job, ctx.jobId, 50)
