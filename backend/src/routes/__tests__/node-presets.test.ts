@@ -123,6 +123,34 @@ describe("node-presets routes", () => {
     expect(res.statusCode).toBe(400)
   })
 
+  it("PATCH overrides data (runtime keys stripped) scoped to id + user_id", async () => {
+    const qb = makeQB({
+      single: { id: "p1", user_id: USER, node_type: "generate-image", name: "X", description: null, data: { prompt: "new" }, created_at: "", updated_at: "" },
+    })
+    fromMock.mockReturnValue(qb)
+    const app = buildApp()
+    await app.register(nodePresetRoutes)
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/v1/node-presets/p1",
+      payload: { data: { prompt: "new", generatedResults: [1] } },
+    })
+    expect(res.statusCode).toBe(200)
+    const updated = (qb.update as ReturnType<typeof vi.fn>).mock.calls[0][0] as Record<string, unknown>
+    expect(updated.data).toEqual({ prompt: "new" }) // runtime key stripped
+    expect(qb.eq).toHaveBeenCalledWith("id", "p1")
+    expect(qb.eq).toHaveBeenCalledWith("user_id", USER)
+  })
+
+  it("PATCH returns 404 when the preset is not owned/found", async () => {
+    const qb = makeQB({ error: { code: "PGRST116", message: "no rows" } })
+    fromMock.mockReturnValue(qb)
+    const app = buildApp()
+    await app.register(nodePresetRoutes)
+    const res = await app.inject({ method: "PATCH", url: "/v1/node-presets/p9", payload: { name: "Z" } })
+    expect(res.statusCode).toBe(404)
+  })
+
   it("DELETE scopes to id + user_id", async () => {
     const qb = makeQB({})
     fromMock.mockReturnValue(qb)

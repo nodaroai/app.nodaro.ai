@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { EXECUTION_DATA_KEYS } from "../node-runtime-keys.js"
-import { extractPresetData, PRESET_EXCLUDED_KEYS } from "../node-preset-extract.js"
+import { extractPresetData, PRESET_EXCLUDED_KEYS, presetDataMatches } from "../node-preset-extract.js"
 
 describe("EXECUTION_DATA_KEYS", () => {
   it("is non-empty and contains known result keys", () => {
@@ -55,9 +55,10 @@ describe("extractPresetData", () => {
     expect(input).toEqual({ prompt: "x", label: "y" })
   })
 
-  it("PRESET_EXCLUDED_KEYS contains label and fieldMappings", () => {
+  it("PRESET_EXCLUDED_KEYS contains label, fieldMappings, and __activePresetId", () => {
     expect(PRESET_EXCLUDED_KEYS.has("label")).toBe(true)
     expect(PRESET_EXCLUDED_KEYS.has("fieldMappings")).toBe(true)
+    expect(PRESET_EXCLUDED_KEYS.has("__activePresetId")).toBe(true)
   })
 
   it("drops graph-topology + DB-reference fields but keeps manual reference urls", () => {
@@ -97,5 +98,33 @@ describe("extractPresetData", () => {
       channelColor: "#f59e0b",
     })
     expect(out).toEqual({ mode: "radio" })
+  })
+})
+
+describe("presetDataMatches", () => {
+  it("true when every preset key matches the node value (extra node keys ignored)", () => {
+    expect(
+      presetDataMatches(
+        { prompt: "a", provider: "flux", seed: 5, __activePresetId: "x" },
+        { prompt: "a", provider: "flux" },
+      ),
+    ).toBe(true)
+  })
+
+  it("false when a preset-defined key differs", () => {
+    expect(presetDataMatches({ prompt: "b", provider: "flux" }, { prompt: "a", provider: "flux" })).toBe(false)
+  })
+
+  it("false when a preset key is missing on the node", () => {
+    expect(presetDataMatches({ prompt: "a" }, { prompt: "a", provider: "flux" })).toBe(false)
+  })
+
+  it("deep-compares nested arrays/objects", () => {
+    expect(presetDataMatches({ refs: [{ url: "u" }] }, { refs: [{ url: "u" }] })).toBe(true)
+    expect(presetDataMatches({ refs: [{ url: "u" }] }, { refs: [{ url: "v" }] })).toBe(false)
+  })
+
+  it("empty preset data matches anything", () => {
+    expect(presetDataMatches({ prompt: "a" }, {})).toBe(true)
   })
 })

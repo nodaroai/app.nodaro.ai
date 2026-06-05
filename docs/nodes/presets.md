@@ -15,16 +15,26 @@ Presets work for **every node type** in the editor, and any new node type gets t
 
 ## Using presets
 
-Open any node's config panel and click the **Presets** (bookmark) button in the panel header:
+Every configurable node has a **preset dropdown** in two places:
 
-- **Apply:** click a preset to load its settings onto the current node. (Undo with ⌘/Ctrl-Z.)
-- **Search:** type to filter presets by name or description.
-- **Save current as preset:** capture the node's current configuration under a new name.
-- **Delete:** remove one of your custom presets.
-- **Import / Export:** back up or share presets as a `.json` file.
+- In the node's **config panel** — just below the node-type heading (or on the side in fullscreen).
+- On the **node itself** — in the top-right hover toolbar, left of the ⋯ menu.
 
-The Presets button appears automatically on any node that has configurable settings. Nodes with no
-settings (such as sticky notes) don't show it.
+The dropdown starts empty. Open it to:
+
+- **Select a preset** — loads its settings onto the node. Selecting a preset that would overwrite
+  your current settings asks you to confirm first. (Undo with ⌘/Ctrl-Z.)
+- Once a preset is active, its **name shows in the dropdown**. If you then change any of its
+  settings, a **`*`** appears next to the name so you know you've diverged from the saved preset.
+- **Save as new** — capture the node's current settings as a new custom preset.
+- **Override “…”** — update the active *custom* preset with the node's current settings (asks you
+  to confirm). Factory presets can't be overridden.
+- **Search** — filter presets by name or description.
+- **Import / Export** — back up or share presets as a `.json` file.
+- **Delete** — remove one of your custom presets (hover a row).
+
+The dropdown appears automatically on any node that has configurable settings. Nodes with no
+settings (such as sticky notes) and asset nodes (Character/Location/Object) don't show it.
 
 ## What a preset captures
 

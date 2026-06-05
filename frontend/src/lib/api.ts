@@ -1117,6 +1117,23 @@ export async function createNodePreset(input: {
   return (await res.json()).data
 }
 
+export async function updateNodePreset(
+  id: string,
+  patch: { name?: string; description?: string; data?: Record<string, unknown> },
+): Promise<NodePreset> {
+  const res = await fetch(`${API_BASE_URL}/v1/node-presets/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...(await getAuthHeaders()) },
+    body: JSON.stringify(patch),
+  })
+  if (res.status === 409) throw new NodePresetNameTakenError()
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to update preset")
+  }
+  return (await res.json()).data
+}
+
 export async function deleteNodePreset(id: string): Promise<void> {
   const res = await fetch(`${API_BASE_URL}/v1/node-presets/${encodeURIComponent(id)}`, {
     method: "DELETE",

@@ -16,6 +16,12 @@ const createBody = z.object({
   data: presetDataSchema,
 })
 
+const patchBody = z.object({
+  name: z.string().min(1).max(120).optional(),
+  description: z.string().max(500).optional(),
+  data: presetDataSchema.optional(),
+})
+
 const importBody = z.object({
   presets: z
     .array(
@@ -96,6 +102,35 @@ export async function nodePresetRoutes(app: FastifyInstance) {
       return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
     }
     return reply.status(201).send({ data: toCamel(row as Row) })
+  })
+
+  // UPDATE (rename / override data) — powers the dropdown's "Override" action.
+  app.patch("/v1/node-presets/:id", async (req, reply) => {
+    const userId = req.userId
+    if (!userId) return unauthorized(reply)
+    const id = (req.params as { id: string }).id
+    const parsed = patchBody.safeParse(req.body)
+    if (!parsed.success) {
+      return reply.status(400).send({ error: { code: "validation_error", message: parsed.error.issues[0]?.message ?? "Invalid body" } })
+    }
+    const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
+    if (parsed.data.name !== undefined) updates.name = parsed.data.name
+    if (parsed.data.description !== undefined) updates.description = parsed.data.description
+    if (parsed.data.data !== undefined) updates.data = extractPresetData(parsed.data.data)
+    const { data: row, error } = await supabase
+      .from("node_presets")
+      .update(updates)
+      .eq("id", id)
+      .eq("user_id", userId)
+      .select("*")
+      .single()
+    if (error) {
+      if (error.code === "23505") {
+        return reply.status(409).send({ error: { code: "name_taken", message: "Name already exists." } })
+      }
+      return reply.status(404).send({ error: { code: "not_found", message: "Preset not found." } })
+    }
+    return reply.send({ data: toCamel(row as Row) })
   })
 
   // DELETE

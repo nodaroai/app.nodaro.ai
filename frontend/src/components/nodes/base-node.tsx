@@ -10,6 +10,7 @@ import { useAltKeyStore } from "@/hooks/use-alt-key"
 import { useMobileCanvas } from "@/components/editor/mobile-canvas-context"
 import { CustomHandle } from "./custom-handle"
 import { NodeRunStripShell } from "./node-run-strip-shell"
+import { PresetDropdown } from "@/components/editor/config-panels/node-preset-dropdown"
 import { computeZoomFromDrag, computeVisualSize, applyMagnet } from "./zoom-math"
 import { useNodeInsertAnimation } from "@/components/editor/workflow-editor/use-node-insert-animation"
 
@@ -158,6 +159,9 @@ function BaseNodeComponent({
   const effectiveMinHeight = Math.max(minHeight, handleMinHeight)
 
   const [isHovered, setIsHovered] = useState(false)
+  // Keep the hover toolbar visible while the preset dropdown's (portaled) menu is open, so it
+  // doesn't disappear mid-pick when the pointer leaves the node to reach the menu.
+  const [presetMenuOpen, setPresetMenuOpen] = useState(false)
   const leaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const outerRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -447,7 +451,7 @@ function BaseNodeComponent({
           transform: zoom !== 1 ? `scale(${zoom})` : undefined,
         }}
       >
-      <NodeToolbar align="end" isVisible={isHovered} position={Position.Top} offset={4}>
+      <NodeToolbar align="end" isVisible={isHovered || presetMenuOpen} position={Position.Top} offset={4}>
         <div
           className="flex items-center gap-1"
           onMouseEnter={() => {
@@ -458,6 +462,9 @@ function BaseNodeComponent({
             leaveTimerRef.current = setTimeout(() => setIsHovered(false), 300)
           }}
         >
+          {/* Preset dropdown — left of the 3-dots menu. Self-hides for nodes with no portable
+              config (and asset/structural nodes). */}
+          <PresetDropdown nodeId={id} variant="node" onOpenChange={setPresetMenuOpen} />
           <button
             className="node-more-menu-btn text-muted-foreground transition-colors"
             onClick={handleMoreMenu}
