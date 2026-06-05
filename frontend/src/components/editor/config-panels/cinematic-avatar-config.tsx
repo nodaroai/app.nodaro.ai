@@ -32,10 +32,12 @@ import type { ConfigProps } from "./types"
 import { MappableField } from "./mappable-field"
 import { TagTextarea } from "./tag-textarea"
 import { PromptHelperButton } from "./prompt-helper-button"
+import {
+  CINEMATIC_ASPECT_RATIO_OPTIONS,
+  CINEMATIC_RESOLUTION_OPTIONS,
+} from "./model-options"
 
 const MAX_LOOKS = 3
-const ASPECT_RATIO_OPTIONS: CinematicAvatarData["aspectRatio"][] = ["16:9", "9:16", "1:1"]
-const RESOLUTION_OPTIONS: CinematicAvatarData["resolution"][] = ["720p", "1080p"]
 
 export function CinematicAvatarConfig({
   data,
@@ -50,6 +52,22 @@ export function CinematicAvatarConfig({
   const looks = data.avatarLooks ?? []
   const lookNames = data.avatarLookNames ?? []
   const autoDuration = data.autoDuration ?? false
+
+  // ── Wired reference inputs (read-only) ───────────────────────────────────
+  // The three optional reference handles (ref-video / ref-audio / ref-image)
+  // are wired on the node, not configured here — surface which are connected
+  // so the panel reflects the canvas. Resolved into HeyGen's `references` at
+  // execute time.
+  const REFERENCE_HANDLES: ReadonlyArray<{ handle: string; label: string }> = [
+    { handle: "ref-video", label: "Video ref" },
+    { handle: "ref-audio", label: "Audio ref" },
+    { handle: "ref-image", label: "Image ref" },
+  ]
+  const wiredReferences = REFERENCE_HANDLES.map((ref) => ({
+    ...ref,
+    source: sources.find((s) => s.targetHandle === ref.handle),
+  }))
+  const hasWiredReferences = wiredReferences.some((r) => r.source)
 
   // ── Multi-select avatar-look toggle ──────────────────────────────────────
   // Keep `avatarLooks` (ids) and `avatarLookNames` (display) index-aligned.
@@ -199,8 +217,8 @@ export function CinematicAvatarConfig({
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
-            {ASPECT_RATIO_OPTIONS.map((ar) => (
-              <SelectItem key={ar} value={ar}>{ar}</SelectItem>
+            {CINEMATIC_ASPECT_RATIO_OPTIONS.map((ar) => (
+              <SelectItem key={ar.value} value={ar.value}>{ar.label}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -215,8 +233,8 @@ export function CinematicAvatarConfig({
         >
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
-            {RESOLUTION_OPTIONS.map((r) => (
-              <SelectItem key={r} value={r}>{r}</SelectItem>
+            {CINEMATIC_RESOLUTION_OPTIONS.map((r) => (
+              <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -232,6 +250,36 @@ export function CinematicAvatarConfig({
         <label htmlFor="cinematic-enhance-prompt" className="text-xs cursor-pointer">
           Enhance prompt
         </label>
+      </div>
+
+      {/* ── References (read-only — wired on the node) ──────────────────────── */}
+      <div className="flex flex-col gap-1.5">
+        <Label className="text-xs text-muted-foreground">
+          References
+          <span className="ml-1.5 text-muted-foreground/60 font-normal">(optional, wired on node)</span>
+        </Label>
+        {hasWiredReferences ? (
+          <div className="flex flex-col gap-1">
+            {wiredReferences
+              .filter((r) => r.source)
+              .map((r) => (
+                <div
+                  key={r.handle}
+                  className="flex items-center justify-between rounded-md border border-border/60 bg-muted/20 px-2 py-1 text-[11px]"
+                >
+                  <span className="text-muted-foreground">{r.label}</span>
+                  <span className="truncate text-foreground/80 max-w-[140px] text-right">
+                    {r.source?.label}
+                  </span>
+                </div>
+              ))}
+          </div>
+        ) : (
+          <p className="text-[10.5px] text-muted-foreground/60">
+            Wire a video / audio / image producer to the node&apos;s reference handles to guide
+            generation.
+          </p>
+        )}
       </div>
     </div>
   )

@@ -2,7 +2,7 @@
 
 import { useEffect } from "react"
 import type { LucideIcon } from "lucide-react"
-import { Sparkles, Languages } from "lucide-react"
+import { Sparkles, Languages, Image as ImageIcon } from "lucide-react"
 import {
   Select,
   SelectContent,
@@ -24,6 +24,9 @@ import {
   AI_AVATAR_ENGINE_OPTIONS,
   AI_AVATAR_RESOLUTION_OPTIONS,
   AI_AVATAR_SPEECH_MODES,
+  AI_AVATAR_SOURCE_OPTIONS,
+  CINEMATIC_ASPECT_RATIO_OPTIONS,
+  CINEMATIC_RESOLUTION_OPTIONS,
 } from "@/components/editor/config-panels/model-options"
 import { LLM_MODELS } from "@nodaro/shared"
 import { ALL_LANGUAGES } from "@/lib/audio-tags"
@@ -181,6 +184,20 @@ const v2vResolutionControl: QuickConfigControl = {
   field: "v2vResolution", ariaLabel: "Resolution", icon: Sparkles,
   options: (data) => (data.provider === "runway-aleph" ? [] : toOptions(V2V_RESOLUTION_OPTIONS)),
 }
+/** cinematic-avatar duration (numeric, 4–15s). Provider-aware: when
+ *  `data.autoDuration` is on, HeyGen picks the length, so there's no duration
+ *  lever — return [] and QuickConfigSelect hides the control. preserveOnHide so
+ *  the stored duration is kept and re-applied when auto-duration is turned off
+ *  (matches the config panel, which hides the slider but keeps `data.duration`). */
+const CINEMATIC_DURATION_OPTIONS: ReadonlyArray<QuickConfigOption> = Array.from(
+  { length: 12 },
+  (_, i) => ({ value: String(i + 4), label: `${i + 4}s` }),
+)
+const cinematicDurationControl: QuickConfigControl = {
+  field: "duration", ariaLabel: "Duration", numeric: true, preserveOnHide: true,
+  options: (data) => (data.autoDuration === true ? [] : CINEMATIC_DURATION_OPTIONS),
+}
+
 /** generate-mask segmentation threshold (numeric — Grounded SAM confidence). */
 const maskThresholdControl: QuickConfigControl = {
   field: "threshold", ariaLabel: "Threshold", icon: Sparkles, numeric: true,
@@ -243,6 +260,17 @@ export const NODE_QUICK_CONFIGS: Readonly<Record<string, ReadonlyArray<QuickConf
   // ── AI Avatar (HeyGen) ──
   "ai-avatar": [
     {
+      // On-node source toggle (catalog avatar vs. raw image). Surfaced here so
+      // users can flip to image mode without opening the config panel — the
+      // Image input pip's disabled-gate (disabled={avatarSource!=="image"})
+      // keys off this same field. Static list lifted to model-options.ts so the
+      // panel Source radio and this toggle can't drift.
+      field: "avatarSource",
+      ariaLabel: "Source",
+      icon: ImageIcon,
+      options: AI_AVATAR_SOURCE_OPTIONS,
+    },
+    {
       field: "engine",
       ariaLabel: "Engine",
       icon: Sparkles,
@@ -272,6 +300,24 @@ export const NODE_QUICK_CONFIGS: Readonly<Record<string, ReadonlyArray<QuickConf
       ariaLabel: "Mode",
       options: AI_AVATAR_SPEECH_MODES,
     },
+  ],
+  // ── Cinematic Avatar (HeyGen type:"cinematic_avatar") ──
+  // Prompt-driven generative clip referencing 1–3 avatar looks. No engine /
+  // speech / voice lever — just resolution, aspect ratio, and (optional)
+  // duration. Option lists are the SAME CINEMATIC_* lists the config panel
+  // renders, single-sourced from model-options.ts (mirrors the route Zod enums).
+  "cinematic-avatar": [
+    {
+      field: "resolution",
+      ariaLabel: "Resolution",
+      options: CINEMATIC_RESOLUTION_OPTIONS,
+    },
+    {
+      field: "aspectRatio",
+      ariaLabel: "Aspect Ratio",
+      options: CINEMATIC_ASPECT_RATIO_OPTIONS,
+    },
+    cinematicDurationControl,
   ],
 }
 

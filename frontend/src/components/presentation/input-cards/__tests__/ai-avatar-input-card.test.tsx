@@ -79,6 +79,17 @@ vi.mock("@/hooks/use-workflow-store", () => ({
   },
 }))
 
+// useFileUpload: image-source mode wires the upload control to this hook.
+const mockUpload = vi.fn(async () => ({ url: "https://example.com/uploaded.png" }))
+vi.mock("@/hooks/use-file-upload", () => ({
+  useFileUpload: () => ({ upload: mockUpload, isUploading: false }),
+}))
+
+// optimizedImageUrl: pass-through so we can assert the rendered <img src>.
+vi.mock("@/lib/image", () => ({
+  optimizedImageUrl: (url: string) => url,
+}))
+
 import { AiAvatarInputCard } from "../ai-avatar-input-card"
 
 // ---------------------------------------------------------------------------
@@ -256,5 +267,77 @@ describe("AiAvatarInputCard", () => {
       />,
     )
     expect(screen.getByText(/no editable fields/i)).toBeInTheDocument()
+  })
+
+  // -------------------------------------------------------------------------
+  // Image source mode (avatarSource === "image")
+  // -------------------------------------------------------------------------
+
+  it("renders the image upload + URL control (not the avatar picker) in image source mode", () => {
+    wrap(<AiAvatarInputCard {...makeProps(makeNode({ avatarSource: "image" }))} />)
+    expect(screen.queryByTestId("avatar-picker")).not.toBeInTheDocument()
+    expect(screen.getByText(/upload image/i)).toBeInTheDocument()
+    expect(screen.getByRole("textbox", { name: /source image url/i })).toBeInTheDocument()
+  })
+
+  it("still shows voice + script in image source + text mode", () => {
+    wrap(<AiAvatarInputCard {...makeProps(makeNode({ avatarSource: "image", speechMode: "text" }))} />)
+    expect(screen.getByTestId("voice-picker")).toBeInTheDocument()
+    expect(screen.getByRole("textbox", { name: /avatar script/i })).toBeInTheDocument()
+  })
+
+  it("typing an image URL calls onUpdateInput(nodeId, 'imageUrl', value)", () => {
+    const onUpdateInput = vi.fn()
+    wrap(
+      <AiAvatarInputCard
+        {...makeProps(makeNode({ avatarSource: "image" }), { onUpdateInput, isFullscreen: true })}
+      />,
+    )
+    const urlInput = screen.getByRole("textbox", { name: /source image url/i })
+    fireEvent.change(urlInput, { target: { value: "https://example.com/face.png" } })
+    expect(onUpdateInput).toHaveBeenCalledWith("node-1", "imageUrl", "https://example.com/face.png")
+  })
+
+  it("renders the existing image preview (from inputValues override) instead of the upload control", () => {
+    wrap(
+      <AiAvatarInputCard
+        {...makeProps(makeNode({ avatarSource: "image", imageUrl: "https://example.com/data.png" }), {
+          isFullscreen: true,
+          inputValues: { "node-1": { imageUrl: "https://example.com/override.png" } },
+        })}
+      />,
+    )
+    const img = screen.getByRole("img", { name: /source/i })
+    expect(img).toHaveAttribute("src", "https://example.com/override.png")
+    // Upload control is replaced by the preview.
+    expect(screen.queryByText(/upload image/i)).not.toBeInTheDocument()
+  })
+
+  it("clicking remove on the image preview clears imageUrl", () => {
+    const onUpdateInput = vi.fn()
+    wrap(
+      <AiAvatarInputCard
+        {...makeProps(makeNode({ avatarSource: "image", imageUrl: "https://example.com/data.png" }), {
+          onUpdateInput,
+          isFullscreen: true,
+        })}
+      />,
+    )
+    fireEvent.click(screen.getByRole("button", { name: /remove image/i }))
+    expect(onUpdateInput).toHaveBeenCalledWith("node-1", "imageUrl", "")
+  })
+
+  it("hides the image control when appInputFields.avatar is false (image source)", () => {
+    wrap(
+      <AiAvatarInputCard
+        {...makeProps(
+          makeNode({ avatarSource: "image", appInputFields: { avatar: false, voice: true, script: true } }),
+        )}
+      />,
+    )
+    expect(screen.queryByText(/upload image/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole("textbox", { name: /source image url/i })).not.toBeInTheDocument()
+    // Voice/script still shown.
+    expect(screen.getByTestId("voice-picker")).toBeInTheDocument()
   })
 })

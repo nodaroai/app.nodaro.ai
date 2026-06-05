@@ -233,6 +233,15 @@ export interface ResolvedInputs {
   uploadUrlList?: string[]
   startFrameUrl?: string
   endFrameUrl?: string
+  /** Cinematic-avatar reference inputs — one upstream producer per handle.
+   *  Wired via the `ref-video` / `ref-audio` / `ref-image` target handles.
+   *  payload-builder assembles these (plus any data.references) into the
+   *  cinematic-avatar `references` array. Distinct from videoUrl/audioUrl/
+   *  imageUrl so a cinematic node's reference wires never collide with a
+   *  generic media input slot. */
+  refVideoUrl?: string
+  refAudioUrl?: string
+  refImageUrl?: string
   maskUrl?: string
   kieTaskId?: string
   caption?: string

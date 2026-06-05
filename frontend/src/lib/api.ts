@@ -3113,6 +3113,11 @@ export async function runCinematicAvatar(input: {
   aspectRatio?: "16:9" | "9:16" | "1:1"
   resolution?: "720p" | "1080p"
   enhancePrompt?: boolean
+  /** Optional reference assets (images/videos/audio) guiding generation. The
+   *  `type` is the internal media kind — the backend maps it to HeyGen's
+   *  AssetUrl shape. Combined HeyGen caps (enforced backend-side): ≤3 videos,
+   *  ≤9 images across avatar looks + image references. */
+  references?: Array<{ type: "video" | "image" | "audio"; url: string }>
   userId?: string
 }): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = {
@@ -3124,6 +3129,7 @@ export async function runCinematicAvatar(input: {
   if (input.aspectRatio !== undefined) body.aspectRatio = input.aspectRatio
   if (input.resolution !== undefined) body.resolution = input.resolution
   if (input.enhancePrompt !== undefined) body.enhancePrompt = input.enhancePrompt
+  if (input.references !== undefined && input.references.length > 0) body.references = input.references
   if (input.userId !== undefined) body.userId = input.userId
   return apiJson("/v1/cinematic-avatar", {
     body,

@@ -234,9 +234,27 @@ function AiAvatarNodeComponent({ id, data, selected }: NodeProps) {
             {/* Placeholder body — avatar/voice pickers added in Phase 6 */}
             {status !== "running" && status !== "failed" && (
               <div className="flex flex-col items-center justify-center gap-2 py-4 text-muted-foreground/60">
-                <UserRound className="w-8 h-8" />
+                {avatarSource === "image" && nodeData.imageUrl ? (
+                  <CachedImage
+                    src={nodeData.imageUrl}
+                    alt="Source image"
+                    className="max-h-24 w-auto rounded-lg object-contain"
+                    thumbnail
+                    thumbnailWidth={256}
+                  />
+                ) : avatarSource === "image" ? (
+                  <ImageIcon className="w-8 h-8" />
+                ) : (
+                  <UserRound className="w-8 h-8" />
+                )}
                 <span className="text-[10px] text-center">
-                  {speechMode === "text" ? "Configure avatar + voice + script" : "Configure avatar + wire audio"}
+                  {avatarSource === "image"
+                    ? speechMode === "text"
+                      ? "Wire/upload an image + voice + script"
+                      : "Wire/upload an image + wire audio"
+                    : speechMode === "text"
+                      ? "Configure avatar + voice + script"
+                      : "Configure avatar + wire audio"}
                 </span>
               </div>
             )}

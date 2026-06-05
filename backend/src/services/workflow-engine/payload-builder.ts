@@ -978,6 +978,48 @@ function resolvePersona(
   return { personaId, personaModel: personaModel ?? "voice_persona" }
 }
 
+/**
+ * Assemble the cinematic-avatar `references` array from the resolved reference
+ * handle inputs (refVideoUrl/refAudioUrl/refImageUrl — one upstream producer
+ * per handle) plus any pre-seeded `data.references` (single-node Run path,
+ * where the orchestrator hasn't resolved handles). Wired inputs take priority
+ * over a same-kind data entry; duplicate urls are dropped so a node that both
+ * wires a handle and carries a stale data.references entry doesn't double-send.
+ * `type` here is the INTERNAL media kind — the provider maps it to HeyGen's
+ * AssetUrl shape. Caps are enforced at the route, not re-validated here.
+ */
+function buildCinematicReferences(
+  resolvedInputs: ResolvedInputs,
+  data: Record<string, unknown>,
+): Array<{ type: "video" | "image" | "audio"; url: string }> {
+  const refs: Array<{ type: "video" | "image" | "audio"; url: string }> = []
+  const seen = new Set<string>()
+
+  const push = (type: "video" | "image" | "audio", url: unknown) => {
+    if (typeof url !== "string" || !url || seen.has(url)) return
+    seen.add(url)
+    refs.push({ type, url })
+  }
+
+  // Wired handle inputs first (highest priority).
+  push("video", resolvedInputs.refVideoUrl)
+  push("audio", resolvedInputs.refAudioUrl)
+  push("image", resolvedInputs.refImageUrl)
+
+  // Then any references carried on node data (single-node Run / manual config).
+  const dataRefs = data.references
+  if (Array.isArray(dataRefs)) {
+    for (const r of dataRefs) {
+      if (!r || typeof r !== "object") continue
+      const type = (r as { type?: unknown }).type
+      const url = (r as { url?: unknown }).url
+      if (type === "video" || type === "image" || type === "audio") push(type, url)
+    }
+  }
+
+  return refs
+}
+
 // ---------------------------------------------------------------------------
 // List-like node helpers for buildNodeRefMap edge-aware output extraction
 // ---------------------------------------------------------------------------
@@ -2735,6 +2777,12 @@ export function buildPayload(
       //      unseeded id that would hard-fail with 503 price_not_configured, and
       //  (b) out-of-range durations are clamped to 4–15s exactly as the route does.
       const cinematicCreditId = resolveCinematicCreditId(data as Record<string, unknown>)
+      // Assemble the references array from the resolved reference handle inputs
+      // (the orchestrator routes ref-video/ref-audio/ref-image →
+      // refVideoUrl/refAudioUrl/refImageUrl) plus any pre-seeded data.references
+      // (single-node Run path). Wired inputs take priority over a same-kind
+      // data entry; duplicate urls are dropped. Empty → references omitted.
+      const cinematicReferences = buildCinematicReferences(resolvedInputs, data)
       return {
         jobName: "cinematic-avatar",
         queueName: "video-generation",
@@ -2748,6 +2796,7 @@ export function buildPayload(
           aspectRatio: data.aspectRatio ?? "16:9",
           resolution: (data.resolution as string) ?? "720p",
           enhancePrompt: data.enhancePrompt,
+          ...(cinematicReferences.length > 0 ? { references: cinematicReferences } : {}),
           usageLogId,
         },
       }

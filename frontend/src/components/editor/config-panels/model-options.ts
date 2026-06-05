@@ -592,11 +592,40 @@ export const AI_AVATAR_SPEECH_MODES: ReadonlyArray<{ value: string; label: strin
   { value: "audio", label: "Wired Audio"  },
 ]
 
+/** Avatar-source options — pick a catalog avatar or animate a raw image. Drives
+ *  the bottom-strip quick-config Source toggle. The config-panel Source radio
+ *  renders the same two `value`s with its own terse labels ("Avatar"/"Image"). */
+export const AI_AVATAR_SOURCE_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: "avatar", label: "Catalog avatar" },
+  { value: "image",  label: "From image"     },
+]
+
 /** Flat per-engine resolution value arrays (used by the fail-safe useEffect). */
 export function getAiAvatarResolutionValues(engine: string): string[] {
   return (AI_AVATAR_RESOLUTION_OPTIONS[engine] ?? AI_AVATAR_RESOLUTION_OPTIONS["avatar-v"]!)
     .map((o) => o.value)
 }
+
+// =============================================================================
+// CINEMATIC-AVATAR (HeyGen type:"cinematic_avatar") option constants — single
+// source of truth shared by the config panel (cinematic-avatar-config.tsx) and
+// the bottom-strip quick-config (node-quick-configs.tsx) so both lists can never
+// drift. These MUST mirror the route's Zod enums (backend/src/routes/
+// cinematic-avatar.ts).
+// =============================================================================
+
+/** Cinematic-avatar aspect-ratio options. Mirrors the route Zod enum. */
+export const CINEMATIC_ASPECT_RATIO_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: "16:9", label: "16:9" },
+  { value: "9:16", label: "9:16" },
+  { value: "1:1",  label: "1:1"  },
+]
+
+/** Cinematic-avatar resolution options. Mirrors the route Zod enum. */
+export const CINEMATIC_RESOLUTION_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: "720p",  label: "720p"  },
+  { value: "1080p", label: "1080p" },
+]
 
 /** Flat lookup of model ID to description, built from all model arrays */
 export const MODEL_DESCRIPTIONS: Record<string, string> = Object.fromEntries([

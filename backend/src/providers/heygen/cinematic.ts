@@ -15,9 +15,21 @@
  *     aspect_ratio?: "16:9" | "9:16" | "1:1" (default 16:9),
  *     resolution?: "720p" | "1080p" (default 720p),
  *     enhance_prompt?: bool (default false),
+ *     references?: AssetUrl[]  (optional images/videos/audio guiding generation)
  *   }
- * `references` (optional images/videos/audio) is intentionally DEFERRED to a
- * later version and not sent here.
+ *
+ * ─── references ─────────────────────────────────────────────────────────────
+ * HeyGen's `references` array is a discriminated union keyed by `type` on the
+ * SOURCE FORMAT — `"url" | "asset_id" | "base64"` — NOT on the media kind.
+ * HeyGen infers video/image/audio from the URL itself; there is NO media-kind
+ * field on the item (confirmed against create-video.md: `AssetUrl` is exactly
+ * `{ type: "url", url: string }` with additionalProperties:false). We always
+ * resolve references to a public R2 url, so every item maps to the AssetUrl
+ * shape `{ type: "url", url }`. Our caller-facing `references` carries an
+ * internal media-kind `type` (video/image/audio) used ONLY for the route's
+ * caps validation — it is mapped away here before hitting the API.
+ * Combined HeyGen limits: at most 3 videos and 9 images across avatar looks +
+ * references (enforced at the route).
  *
  * ─── Result URLs ────────────────────────────────────────────────────────────
  * HeyGen result URLs are signed and EXPIRING — the caller MUST re-host to R2
@@ -52,6 +64,14 @@ export interface GenerateCinematicAvatarOpts {
   resolution?: CinematicResolution
   /** Ask HeyGen to enhance the prompt before generation (default false). */
   enhancePrompt?: boolean
+  /**
+   * Optional reference assets (images/videos/audio) guiding the generation.
+   * `type` is the internal MEDIA KIND (used by the route for caps validation);
+   * each item is mapped to HeyGen's AssetUrl shape `{ type: "url", url }` here.
+   * Combined HeyGen limits (enforced at the route): ≤3 videos, ≤9 images across
+   * avatar looks + references.
+   */
+  references?: Array<{ type: "video" | "image" | "audio"; url: string }>
   /**
    * Poll interval in milliseconds (default 6000).
    * Pass 0 in tests to skip sleep delays.
@@ -108,6 +128,7 @@ export async function generateCinematicAvatar(
     aspectRatio = "16:9",
     resolution = "720p",
     enhancePrompt,
+    references,
     pollIntervalMs = 6000,
   } = opts
 
@@ -129,6 +150,17 @@ export async function generateCinematicAvatar(
 
   if (enhancePrompt !== undefined) {
     body.enhance_prompt = enhancePrompt
+  }
+
+  // ── references → HeyGen AssetUrl[] ───────────────────────────────────────
+  // Map our internal {type:"video"|"image"|"audio", url} to HeyGen's
+  // source-format discriminated union AssetUrl shape {type:"url", url}. The
+  // media kind is inferred by HeyGen from the URL — it is NOT a field on the
+  // item (sending it would be rejected: AssetUrl is additionalProperties:false
+  // with `type` const "url"). Empty arrays are omitted so we never send
+  // `references: []`.
+  if (references && references.length > 0) {
+    body.references = references.map((ref) => ({ type: "url", url: ref.url }))
   }
 
   // ── POST /v3/videos ──────────────────────────────────────────────────────

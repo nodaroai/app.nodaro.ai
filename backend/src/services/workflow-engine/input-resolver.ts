@@ -1105,6 +1105,24 @@ function routeOutput(
     routeAudioOutput(inputs, output, targetType, src.id)
     return
   }
+  // cinematic-avatar reference handles — one upstream producer per handle.
+  // Routed to dedicated ref* slots (NOT videoUrl/audioUrl/imageUrl) so a
+  // cinematic node's reference wires never collide with a generic media input
+  // and so payload-builder can assemble the typed references array. These MUST
+  // be checked before source-type routing, which would otherwise land a video
+  // producer in inputs.videoUrl, etc.
+  if (edge.targetHandle === "ref-video") {
+    inputs.refVideoUrl = output
+    return
+  }
+  if (edge.targetHandle === "ref-audio") {
+    inputs.refAudioUrl = output
+    return
+  }
+  if (edge.targetHandle === "ref-image") {
+    inputs.refImageUrl = output
+    return
+  }
   // ai-avatar `script` handle: routes a wired text-prompt directly into the
   // `script` field (verbatim TTS input — never folded into `prompt`).
   if (edge.targetHandle === "script") {

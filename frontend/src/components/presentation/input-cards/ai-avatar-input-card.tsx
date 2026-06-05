@@ -7,18 +7,21 @@
 // with optional per-field editability controlled by a `appInputFields` meta
 // stored in the node's data by the workflow author.
 //
-// Layout by speech mode:
-//   text  → avatar picker + voice picker + script textarea
-//   audio → avatar picker only (audio is wired upstream; voice irrelevant)
+// Layout by source + speech mode:
+//   avatar source → avatar picker (+ voice/script in text mode)
+//   image  source → image upload/URL control (+ voice/script in text mode)
+//   audio speech mode → no voice/script (audio is wired upstream)
 //
 // Value resolution follows the same fullscreen vs. canvas pattern used by
 // every other input card: in fullscreen (app-runner) mode, `inputValues`
 // overrides take precedence; in canvas mode the live node.data values are
 // read directly (and updated via the store).
 
-import { useCallback } from "react"
-import { User } from "lucide-react"
+import { useCallback, useRef } from "react"
+import { User, Upload, Loader2, X } from "lucide-react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useFileUpload } from "@/hooks/use-file-upload"
+import { optimizedImageUrl } from "@/lib/image"
 import { cn } from "@/lib/utils"
 import type { InputCardProps } from "../input-card"
 import { GlassCard } from "../output-cards/shared"
@@ -30,6 +33,8 @@ import { INPUT_CLS } from "./shared"
 // ---------------------------------------------------------------------------
 // AppInputFields — per-sub-control visibility flag stored by the app author
 // in node.data.appInputFields.  All three default to true when absent.
+// The `avatar` flag gates the source control (avatar picker OR image upload —
+// whichever the node's avatarSource selects), since both occupy the same slot.
 // ---------------------------------------------------------------------------
 interface AppInputFields {
   avatar?: boolean
@@ -56,9 +61,14 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 /**
  * Input card for the `ai-avatar` node in published apps and presentation mode.
  *
- * - `speechMode === "text"` (default): avatar picker + voice picker + script textarea
- * - `speechMode === "audio"`: avatar picker only (audio is wired from an
- *   upstream audio node; the voice picker has no meaning in that mode)
+ * Source slot (gated by `appInputFields.avatar`):
+ * - `avatarSource === "avatar"` (default): avatar picker
+ * - `avatarSource === "image"`: image upload + URL input (bound to `imageUrl`)
+ *
+ * Speech sections (text mode only):
+ * - `speechMode === "text"` (default): voice picker + script textarea
+ * - `speechMode === "audio"`: neither (audio is wired from an upstream audio
+ *   node; the voice picker has no meaning in that mode)
  *
  * Per-field editability: set `node.data.appInputFields.{avatar,voice,script} = false`
  * to hide/disable a sub-control.  The full card is still rendered; omitted
@@ -83,10 +93,12 @@ export function AiAvatarInputCard({
   const showVoice  = fields.voice  !== false
   const showScript = fields.script !== false
 
-  // Read speech mode from node.data (the app author sets this; it's not
-  // overridden at run time via inputValues).
+  // Read speech mode + source from node.data (the app author sets these; they
+  // are not overridden at run time via inputValues).
   const speechMode = (data.speechMode as string) ?? "text"
   const isTextMode = speechMode !== "audio"
+  const avatarSource = (data.avatarSource as string) ?? "avatar"
+  const isImageSource = avatarSource === "image"
 
   // ---- Resolve current values (fullscreen: inputValues first, else data) ----
   const nodeOverrides = isFullscreen ? (inputValues[node.id] ?? {}) : {}
@@ -94,6 +106,7 @@ export function AiAvatarInputCard({
   const avatarId  = String(nodeOverrides.avatarId  ?? data.avatarId  ?? "")
   const voiceId   = String(nodeOverrides.voiceId   ?? data.voiceId   ?? "")
   const script    = String(nodeOverrides.script     ?? data.script    ?? "")
+  const imageUrl  = String(nodeOverrides.imageUrl   ?? data.imageUrl   ?? "")
 
   // ---- Writers ---------------------------------------------------------------
   const write = useCallback(
@@ -106,6 +119,38 @@ export function AiAvatarInputCard({
     },
     [isFullscreen, node.id, onUpdateInput],
   )
+
+  // ---- Image-source upload (mirrors ai-avatar-config.tsx) --------------------
+  const { upload, isUploading } = useFileUpload()
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleImageUpload = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0]
+      e.target.value = "" // reset so re-selecting the same file fires onChange
+      if (readOnly || !file) return
+      try {
+        const result = await upload(file)
+        write("imageUrl", result.url)
+      } catch {
+        // useFileUpload surfaces the error state; nothing else to do here.
+      }
+    },
+    [readOnly, upload, write],
+  )
+
+  const handleImageUrlChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (readOnly) return
+      write("imageUrl", e.target.value)
+    },
+    [readOnly, write],
+  )
+
+  const handleImageRemove = useCallback(() => {
+    if (readOnly) return
+    write("imageUrl", "")
+  }, [readOnly, write])
 
   const handleAvatarSelect = useCallback(
     (avatar: HeygenAvatar) => {
@@ -156,8 +201,59 @@ export function AiAvatarInputCard({
     <GlassCard>
       <div className={cn("flex flex-col gap-4", readOnly && "opacity-70 pointer-events-none")}>
 
-        {/* ---- Avatar picker ---- */}
-        {showAvatar && (
+        {/* ---- Source: avatar picker OR image upload/URL ---- */}
+        {showAvatar && (isImageSource ? (
+          <div>
+            <SectionLabel>Image</SectionLabel>
+            {imageUrl ? (
+              <div className="relative w-full overflow-hidden rounded-lg border border-border">
+                <img
+                  src={optimizedImageUrl(imageUrl)}
+                  alt="Source"
+                  className="w-full max-h-40 object-contain bg-black/20"
+                />
+                {!readOnly && (
+                  <button
+                    type="button"
+                    aria-label="Remove image"
+                    className="absolute top-1.5 right-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70"
+                    onClick={handleImageRemove}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            ) : (
+              <label className="flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-dashed border-muted-foreground/30 py-3 text-xs text-muted-foreground hover:border-muted-foreground/60 hover:text-foreground transition-colors">
+                {isUploading ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Uploading…
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-3.5 w-3.5" /> Upload image
+                  </>
+                )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  disabled={isUploading || readOnly}
+                  onChange={handleImageUpload}
+                />
+              </label>
+            )}
+            <input
+              type="text"
+              value={imageUrl}
+              onChange={handleImageUrlChange}
+              placeholder="https://…"
+              className={cn(INPUT_CLS, "mt-2")}
+              aria-label="Source image URL"
+            />
+          </div>
+        ) : (
           <div>
             <SectionLabel>Avatar</SectionLabel>
             <AvatarPicker
@@ -165,7 +261,7 @@ export function AiAvatarInputCard({
               onSelect={handleAvatarSelect}
             />
           </div>
-        )}
+        ))}
 
         {/* ---- Voice picker (text mode only) ---- */}
         {isTextMode && showVoice && (

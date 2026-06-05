@@ -465,6 +465,14 @@ export interface FrontendResolvedInputs {
   /** Multi-media payload for social carousel posts — accumulated by
    *  resolveNodeInputs when target.data.action === "post-carousel". */
   mediaItems?: Array<{ type: "photo" | "video"; url: string }>;
+  /** Cinematic-avatar reference inputs — one upstream producer per handle,
+   *  wired via the `ref-video` / `ref-audio` / `ref-image` target handles.
+   *  Kept distinct from videoUrl/audioUrl/imageUrl so a cinematic node's
+   *  reference wires never collide with a generic media input slot. Matches
+   *  the backend FrontendResolvedInputs refVideoUrl/refAudioUrl/refImageUrl. */
+  refVideoUrl?: string;
+  refAudioUrl?: string;
+  refImageUrl?: string;
   /** Verbatim spoken script for the ai-avatar node — wired via the `script` handle. */
   script?: string;
   scriptData?: unknown;
@@ -1117,6 +1125,25 @@ export function resolveNodeInputs(
       if (!inputs.componentInputMap) inputs.componentInputMap = {}
       inputs.componentInputMap[handleId] = output
       continue
+    }
+
+    // cinematic-avatar reference handles — one upstream producer per handle,
+    // routed to dedicated ref* slots (NOT videoUrl/audioUrl/imageUrl) so a
+    // cinematic node's reference wires never collide with a generic media
+    // input. MUST come before source-type / generic-handle routing, which
+    // would otherwise land a video producer in inputs.videoUrl, etc. Matches
+    // backend input-resolver.ts (refVideoUrl/refAudioUrl/refImageUrl).
+    if (srcEdge.targetHandle === "ref-video") {
+      inputs.refVideoUrl = output;
+      continue;
+    }
+    if (srcEdge.targetHandle === "ref-audio") {
+      inputs.refAudioUrl = output;
+      continue;
+    }
+    if (srcEdge.targetHandle === "ref-image") {
+      inputs.refImageUrl = output;
+      continue;
     }
 
     // --- Handle-specific routing takes priority (matches backend) ---

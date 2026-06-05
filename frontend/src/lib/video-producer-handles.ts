@@ -176,11 +176,16 @@ export function isValidAiAvatarConnection(
 }
 
 // ─── cinematic-avatar ──────────────────────────────────────────────────
-// Input: prompt (a true GENERATIVE prompt, unlike ai-avatar's verbatim
-// `script`). Source: video. Because the prompt is generative — not spoken
-// verbatim — it accepts the same producers as any other prompt handle
-// (text producers, parameter pickers, cinematography hints), mirroring
-// motion-transfer / speech-to-video's `prompt` handle.
+// Inputs:
+//   prompt    — a true GENERATIVE prompt (unlike ai-avatar's verbatim
+//               `script`). Accepts the same producers as any other prompt
+//               handle (text producers, parameter pickers, cinematography
+//               hints), mirroring motion-transfer / speech-to-video.
+//   ref-video — OPTIONAL guiding video reference (video producers).
+//   ref-audio — OPTIONAL guiding audio reference (audio producers).
+//   ref-image — OPTIONAL guiding image reference (image producers).
+// The three ref handles are always mounted (one upstream producer each) and
+// resolved at execute time into HeyGen's `references` array. Source: video.
 export function isValidCinematicAvatarConnection(
   targetHandleId: string,
   sourceType: string,
@@ -189,6 +194,12 @@ export function isValidCinematicAvatarConnection(
   switch (targetHandleId) {
     case "prompt":
       return ACCEPTS_PROMPT(sourceType, isVisualPicker ?? (() => false))
+    case "ref-video":
+      return ACCEPTS_VIDEO_OR_DYN(sourceType)
+    case "ref-audio":
+      return ACCEPTS_AUDIO_OR_DYN(sourceType)
+    case "ref-image":
+      return ACCEPTS_IMAGE_OR_DYN(sourceType)
     default:
       return false
   }
@@ -234,5 +245,5 @@ export const VIDEO_PRODUCER_HANDLE_LABELS: Record<string, Record<string, string>
   "speech-to-video":  { image: "Portrait", audio: "Audio", prompt: "Prompt", cinematography: "Cinematography" },
   "motion-transfer":  { image: "Character", video: "Source video", prompt: "Prompt", negative: "Negative", assets: "Assets" },
   "ai-avatar":        { image: "Image", script: "Script", audio: "Audio", video: "Video" },
-  "cinematic-avatar": { prompt: "Prompt", video: "Video" },
+  "cinematic-avatar": { prompt: "Prompt", "ref-video": "Video ref", "ref-audio": "Audio ref", "ref-image": "Image ref", video: "Video" },
 }
