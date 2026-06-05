@@ -138,6 +138,10 @@ export function aiAvatarReserveCreditId(
  * - Any other speechMode (audio / missing): use the MAX bucket (900s) —
  *   audio duration is unknown at reserve time; metered true-up corrects the surplus.
  *
+ * - `avatarSource === "image"`: image-source mode is IV-class (HeyGen's own
+ *   engine, no avatar_id) — bill at the avatar-iv rate regardless of the
+ *   (ignored) `engine` field, reusing the existing heygen-avatar-iv:* ids.
+ *
  * Falls back to ("avatar-iv", "720p", max-bucket) when fields are missing
  * or invalid.
  */
@@ -147,11 +151,16 @@ export function resolveAiAvatarCreditId(
   const rawEngine = body?.engine as string | undefined
   const rawResolution = body?.resolution as string | undefined
   const speechMode = body?.speechMode as string | undefined
+  const avatarSource = body?.avatarSource as string | undefined
 
+  // Image-source mode is IV-class (its own engine, no IV/V lever) — pin the
+  // rate engine to avatar-iv and reuse the existing heygen-avatar-iv:* ids.
   const engine: AiAvatarEngine =
-    rawEngine !== undefined && ALLOWED_ENGINES.has(rawEngine as AiAvatarEngine)
-      ? (rawEngine as AiAvatarEngine)
-      : "avatar-iv"
+    avatarSource === "image"
+      ? "avatar-iv"
+      : rawEngine !== undefined && ALLOWED_ENGINES.has(rawEngine as AiAvatarEngine)
+        ? (rawEngine as AiAvatarEngine)
+        : "avatar-iv"
 
   const resolution: AiAvatarResolution =
     rawResolution !== undefined && ALLOWED_RESOLUTIONS.has(rawResolution as AiAvatarResolution)

@@ -14,6 +14,7 @@
  */
 
 import { generateAvatarVideo } from "../../providers/heygen/video.js"
+import type { TtsEngineSettings, AvatarBackground } from "../../providers/heygen/video.js"
 import type { AiAvatarEngine, AiAvatarResolution } from "@nodaro/shared"
 import {
   withProgressRamp,
@@ -26,34 +27,60 @@ import { finalizeJobWithMedia } from "../../lib/job-finalize.js"
 
 export const handleAiAvatar: HandlerFn = async function handleAiAvatar(job, ctx) {
   const {
+    avatarSource,
     engine,
     avatarId,
+    imageUrl,
     speechMode,
     script,
     voiceId,
     voiceSpeed,
+    pitch,
+    volume,
+    locale,
+    ttsEngine,
     audioUrl,
     resolution,
     aspectRatio,
+    fit,
+    outputFormat,
     caption,
+    captionStyle,
+    background,
+    removeBackground,
+    motionPrompt,
+    expressiveness,
     usageLogId,
   } = job.data as {
     jobId: string
+    avatarSource?: "avatar" | "image"
     engine: AiAvatarEngine
     avatarId: string
+    imageUrl?: string
     speechMode: "text" | "audio"
     script?: string
     voiceId?: string
     voiceSpeed?: number
+    pitch?: number
+    volume?: number
+    locale?: string
+    ttsEngine?: TtsEngineSettings
     audioUrl?: string
     resolution: AiAvatarResolution
     aspectRatio: "16:9" | "9:16"
+    fit?: "cover" | "contain"
+    outputFormat?: "mp4" | "webm"
     caption?: boolean
+    captionStyle?: "default"
+    background?: AvatarBackground
+    removeBackground?: boolean
+    motionPrompt?: string
+    expressiveness?: "high" | "medium" | "low"
     usageLogId?: string | null
   }
 
   console.log(
-    `[worker] ai-avatar ${ctx.jobId} (engine: ${engine}, speechMode: ${speechMode}, resolution: ${resolution})`,
+    `[worker] ai-avatar ${ctx.jobId} (source: ${avatarSource ?? "avatar"}, engine: ${engine}, speechMode: ${speechMode}, resolution: ${resolution})`,
   )
 
   // generateAvatarVideo() blocks internally (polls HeyGen until completed/failed),
@@ -64,16 +91,29 @@ export const handleAiAvatar: HandlerFn = async function handleAiAvatar(job, ctx)
     ctx.jobId,
     { start: 5, cap: 45 },
     () => generateAvatarVideo({
+      avatarSource,
       engine,
       avatarId,
+      imageUrl,
       speechMode,
       script,
       voiceId,
       voiceSpeed,
+      pitch,
+      volume,
+      locale,
+      ttsEngine,
       audioUrl,
       resolution,
       aspectRatio,
+      fit,
+      outputFormat,
       caption,
+      captionStyle,
+      background,
+      removeBackground,
+      motionPrompt,
+      expressiveness,
     }),
   )
   await setJobProgress(job, ctx.jobId, 50)

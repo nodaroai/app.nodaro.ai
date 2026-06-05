@@ -128,6 +128,7 @@ import { extendVideoRoutes } from "./routes/extend-video.js"
 import { videoRetakeRoutes } from "./routes/video-retake.js"
 import { speechToVideoRoutes } from "./routes/speech-to-video.js"
 import { aiAvatarRoutes } from "./routes/ai-avatar.js"
+import { cinematicAvatarRoutes } from "./routes/cinematic-avatar.js"
 import { socialMediaFormatRoutes } from "./routes/social-media-format.js"
 import { webhookOutputRoutes } from "./routes/webhook-output.js"
 import { presentationRoutes } from "./routes/presentation.js"
@@ -361,6 +362,7 @@ export async function buildApp() {
   await app.register(videoRetakeRoutes)
   await app.register(speechToVideoRoutes)
   await app.register(aiAvatarRoutes)
+  await app.register(cinematicAvatarRoutes)
   await app.register(socialMediaFormatRoutes)
   await app.register(webhookOutputRoutes)
   await app.register(presentationRoutes)

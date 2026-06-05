@@ -2,7 +2,7 @@
 
 import { memo, useState, useRef, useEffect, useCallback } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { UserRound, Loader2, AlertCircle, Film, Volume2, Type, Image as ImageIcon, Expand, Download, Link, X, LayoutGrid, Scissors, Settings } from "lucide-react"
+import { Clapperboard, Loader2, AlertCircle, Film, Type, Expand, Download, Link, X, LayoutGrid, Scissors, Settings } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { NodeQuickStrip } from "./node-quick-strip"
@@ -16,16 +16,11 @@ import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
 import { CachedImage } from "@/components/ui/cached-image"
-import type { AiAvatarData } from "@/types/nodes"
-import { isValidAiAvatarConnection } from "@/lib/video-producer-handles"
-import { isVisualPickerType } from "@/lib/parameter-picker-types"
+import { resolveCinematicCreditId } from "@nodaro/shared"
+import type { CinematicAvatarData } from "@/types/nodes"
 
-const ACCEPTS_SCRIPT = (t: string) => isValidAiAvatarConnection("script", t, isVisualPickerType)
-const ACCEPTS_AUDIO  = (t: string) => isValidAiAvatarConnection("audio",  t, isVisualPickerType)
-const ACCEPTS_IMAGE  = (t: string) => isValidAiAvatarConnection("image",  t, isVisualPickerType)
-
-function AiAvatarNodeComponent({ id, data, selected }: NodeProps) {
-  const nodeData = data as AiAvatarData
+function CinematicAvatarNodeComponent({ id, data, selected }: NodeProps) {
+  const nodeData = data as CinematicAvatarData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const openFreeCut = useWorkflowStore((s) => s.openFreeCut)
@@ -38,8 +33,6 @@ function AiAvatarNodeComponent({ id, data, selected }: NodeProps) {
   const activeResult = results[activeIndex]
   const activeUrl = activeResult?.url ?? nodeData.generatedVideoUrl
   const activeThumbnail = activeResult?.thumbnailUrl
-  const speechMode = nodeData.speechMode ?? "text"
-  const avatarSource = nodeData.avatarSource ?? "avatar"
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const playState = nodeData.videoPlayState ?? "loop"
@@ -52,8 +45,11 @@ function AiAvatarNodeComponent({ id, data, selected }: NodeProps) {
   const { aspectRatio: mediaAspectRatio, onLoadDimensions: handleLoadDimensions } =
     useResultAspectRatio(id, results, activeIndex)
 
-  // Credit model id based on engine + resolution (coarse ceiling; refined in Phase 3)
-  const creditModelId = `heygen-${nodeData.engine ?? "avatar-iv"}:${nodeData.resolution ?? "720p"}:max`
+  // EXACT-duration reserve id — same single source of truth the route's
+  // creditGuard uses (resolveCinematicCreditId). The seeded ids are
+  // `cinematic-avatar:<res>:<dur>s`; deriving the display id here keeps the
+  // shown estimate in lockstep with the actual reserve and can't drift.
+  const creditModelId = resolveCinematicCreditId(nodeData)
   const credits = useModelCredits(creditModelId, 9)
 
   useEffect(() => {
@@ -85,14 +81,14 @@ function AiAvatarNodeComponent({ id, data, selected }: NodeProps) {
     <div className="relative" style={{ width: "100%", height: "100%" }}>
       <EditableNodeLabel
         label={nodeData.label}
-        icon={<UserRound className="w-3.5 h-3.5" />}
+        icon={<Clapperboard className="w-3.5 h-3.5" />}
         onSave={(newLabel) => updateNodeData(id, { label: newLabel })}
       />
 
       <BaseNode
         id={id}
         label={nodeData.label}
-        icon={<UserRound className="h-4 w-4" />}
+        icon={<Clapperboard className="h-4 w-4" />}
         category="ai"
         credits={credits}
         selected={selected}
@@ -142,9 +138,7 @@ function AiAvatarNodeComponent({ id, data, selected }: NodeProps) {
           <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />
         }
         handles={[
-          { id: "image",  type: "target", position: Position.Left,  customStyle: { top: "calc(100% - 88px)", left: "-29px" }, external: true },
-          { id: "script", type: "target", position: Position.Left,  customStyle: { top: "calc(100% - 56px)", left: "-29px" }, external: true },
-          { id: "audio",  type: "target", position: Position.Left,  customStyle: { top: "calc(100% - 24px)", left: "-29px" }, external: true },
+          { id: "prompt", type: "target", position: Position.Left,  customStyle: { top: "calc(100% - 24px)", left: "-29px" }, external: true },
           { id: "video",  type: "source", position: Position.Right, customStyle: { top: "24px",              right: "-29px" }, external: true },
         ]}
       >
@@ -201,7 +195,7 @@ function AiAvatarNodeComponent({ id, data, selected }: NodeProps) {
               </button>
               <button type="button" aria-label="Download"
                 className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-                onClick={(e) => { e.stopPropagation(); const a = document.createElement("a"); a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`; a.download = `${nodeData.label || "avatar"}.mp4`; a.click() }}
+                onClick={(e) => { e.stopPropagation(); const a = document.createElement("a"); a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl!)}&download=1`; a.download = `${nodeData.label || "cinematic-avatar"}.mp4`; a.click() }}
                 title="Download">
                 <Download className="w-3.5 h-3.5" />
               </button>
@@ -231,12 +225,12 @@ function AiAvatarNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         ) : (
           <div className="flex flex-col gap-2 h-full">
-            {/* Placeholder body — avatar/voice pickers added in Phase 6 */}
+            {/* Placeholder body — prompt + avatar-look picker live in the config panel */}
             {status !== "running" && status !== "failed" && (
               <div className="flex flex-col items-center justify-center gap-2 py-4 text-muted-foreground/60">
-                <UserRound className="w-8 h-8" />
+                <Clapperboard className="w-8 h-8" />
                 <span className="text-[10px] text-center">
-                  {speechMode === "text" ? "Configure avatar + voice + script" : "Configure avatar + wire audio"}
+                  Describe the scene + pick 1–3 avatar looks
                 </span>
               </div>
             )}
@@ -261,56 +255,25 @@ function AiAvatarNodeComponent({ id, data, selected }: NodeProps) {
       </BaseNode>
 
       {/*
-        All input handles are ALWAYS mounted (voice-changer pattern — never unmount a
-        handle, as there is no edge-pruner and unmounting would orphan existing edges).
-        The `image` handle is disabled unless avatarSource="image"; the script/audio
-        handles are disabled when they don't match speechMode.
+        Handles are ALWAYS mounted (never unmount a handle — there is no
+        edge-pruner and unmounting would orphan existing edges). The `prompt`
+        handle is a generative-prompt text input; `video` is the clip output.
       */}
       <HandleWithPopover
         nodeId={id}
-        nodeType="ai-avatar"
-        handleId="image"
+        nodeType="cinematic-avatar"
+        handleId="prompt"
         type="target"
         position={Position.Left}
-        label="Image"
-        color={HANDLE_COLORS.image}
-        icon={<ImageIcon />}
-        side="left"
-        top="calc(100% - 88px)"
-        accepts={ACCEPTS_IMAGE}
-        disabled={avatarSource !== "image"}
-      />
-      <HandleWithPopover
-        nodeId={id}
-        nodeType="ai-avatar"
-        handleId="script"
-        type="target"
-        position={Position.Left}
-        label="Script"
+        label="Prompt"
         color={TEXT_HANDLE_COLOR}
         icon={<Type />}
         side="left"
-        top="calc(100% - 56px)"
-        accepts={ACCEPTS_SCRIPT}
-        disabled={speechMode !== "text"}
-      />
-      <HandleWithPopover
-        nodeId={id}
-        nodeType="ai-avatar"
-        handleId="audio"
-        type="target"
-        position={Position.Left}
-        label="Audio"
-        color={HANDLE_COLORS.audio}
-        icon={<Volume2 />}
-        side="left"
         top="calc(100% - 24px)"
-        accepts={ACCEPTS_AUDIO}
-        disabled={speechMode !== "audio"}
       />
       <HandleWithPopover
         nodeId={id}
-        nodeType="ai-avatar"
+        nodeType="cinematic-avatar"
         handleId="video"
         type="source"
         position={Position.Right}
@@ -346,4 +309,4 @@ function AiAvatarNodeComponent({ id, data, selected }: NodeProps) {
   )
 }
 
-export const AiAvatarNode = memo(AiAvatarNodeComponent)
+export const CinematicAvatarNode = memo(CinematicAvatarNodeComponent)

@@ -1,7 +1,7 @@
 ---
 node_type: ai-avatar
-generated_at: 2026-06-04T23:31:50.579Z
-generated_from: 12d6438a
+generated_at: 2026-06-05T06:38:52.187Z
+generated_from: eef974fe
 ---
 
 # AI Avatar
@@ -10,12 +10,13 @@ generated_from: 12d6438a
 **Type:** `ai-avatar`
 **Category:** ai
 **Credit cost:** 9
-**Inputs (target handles):** `script`, `audio`
+**Inputs (target handles):** `script`, `audio`, `image`
 **Outputs (source handles):** `video`
 
 **Required data fields:**
 - `label: string`
 - `provider: "heygen"`
+- `avatarSource: "avatar" | "image"`
 - `engine: "avatar-v" | "avatar-iv"`
 - `avatarId: string`
 - `speechMode: "text" | "audio"`
@@ -24,15 +25,46 @@ generated_from: 12d6438a
 - `fieldMappings: FieldMappings`
 
 **Optional data fields:**
+- `imageUrl?: string`
 - `avatarGroupId?: string`
 - `avatarName?: string`
 - `avatarPreviewUrl?: string`
+- `avatarSupportsV?: boolean`
 - `script?: string`
 - `voiceId?: string`
 - `voiceName?: string`
 - `voiceSpeed?: number`
+- `pitch?: number`
+- `volume?: number`
+- `locale?: string`
+- `ttsEngine?: | {
+        engine_type: "elevenlabs"
+        model?: "eleven_multilingual_v2" | "eleven_turbo_v2_5" | "eleven_flash_v2_5" | "eleven_v3"
+        stability?: number
+        similarityBoost?: number
+        style?: number
+        useSpeakerBoost?: boolean
+      }
+    | {
+        engine_type: "fish"
+        model?: "s1" | "s2-pro"
+        stability?: number
+        similarity?: number
+      }
+    | { engine_type: "starfish" }`
 - `audioUrl?: string`
+- `background?: {
+    type: "color" | "image"
+    value?: string                 // hex colour when type="color"
+    url?: string                   // image URL when type="image"
+  }`
+- `removeBackground?: boolean`
+- `motionPrompt?: string`
+- `expressiveness?: "high" | "medium" | "low"`
+- `fit?: "cover" | "contain"`
+- `outputFormat?: "mp4" | "webm"`
 - `caption?: boolean`
+- `captionStyle?: "default"`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
 - `generatedVideoUrl?: string`
@@ -48,6 +80,7 @@ generated_from: 12d6438a
 {
   "label": "AI Avatar",
   "provider": "heygen",
+  "avatarSource": "avatar",
   "engine": "avatar-iv",
   "avatarId": "",
   "speechMode": "text",
@@ -87,6 +120,7 @@ generated_from: 12d6438a
   "data": {
     "label": "AI Avatar",
     "provider": "heygen",
+    "avatarSource": "avatar",
     "engine": "avatar-iv",
     "avatarId": "",
     "speechMode": "text",

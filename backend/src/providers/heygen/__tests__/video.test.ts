@@ -333,4 +333,256 @@ describe("generateAvatarVideo", () => {
         err.message === "HeyGen returned completed without a duration",
     )
   })
+
+  // ── motion_prompt filtering ────────────────────────────────────────────
+
+  it("includes motion_prompt when engine is avatar-iv", async () => {
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(CREATE_RESPONSE))
+      .mockResolvedValueOnce(makeResponse(makeStatusResponse("completed")))
+
+    await generateAvatarVideo({ ...baseOpts, engine: "avatar-iv", motionPrompt: "nod slowly" })
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const body = JSON.parse(init.body as string) as Record<string, unknown>
+    expect(body.motion_prompt).toBe("nod slowly")
+  })
+
+  it("omits motion_prompt when engine is avatar-v to avoid API rejection", async () => {
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(CREATE_RESPONSE))
+      .mockResolvedValueOnce(makeResponse(makeStatusResponse("completed")))
+
+    await generateAvatarVideo({ ...baseOpts, engine: "avatar-v", motionPrompt: "nod slowly" })
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const body = JSON.parse(init.body as string) as Record<string, unknown>
+    expect(body.motion_prompt).toBeUndefined()
+  })
+
+  // ── expressiveness filtering (IV-class only, same gate as motion_prompt) ──
+
+  it("includes expressiveness when engine is avatar-iv", async () => {
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(CREATE_RESPONSE))
+      .mockResolvedValueOnce(makeResponse(makeStatusResponse("completed")))
+
+    await generateAvatarVideo({ ...baseOpts, engine: "avatar-iv", expressiveness: "high" })
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const body = JSON.parse(init.body as string) as Record<string, unknown>
+    expect(body.expressiveness).toBe("high")
+  })
+
+  it("omits expressiveness when engine is avatar-v (ignored/rejected for V)", async () => {
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(CREATE_RESPONSE))
+      .mockResolvedValueOnce(makeResponse(makeStatusResponse("completed")))
+
+    await generateAvatarVideo({ ...baseOpts, engine: "avatar-v", expressiveness: "high" })
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const body = JSON.parse(init.body as string) as Record<string, unknown>
+    expect(body.expressiveness).toBeUndefined()
+  })
+
+  it("includes expressiveness in image-source mode (image is IV-class) even with engine avatar-v", async () => {
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(CREATE_RESPONSE))
+      .mockResolvedValueOnce(makeResponse(makeStatusResponse("completed")))
+
+    await generateAvatarVideo({
+      ...baseOpts,
+      engine: "avatar-v",
+      avatarSource: "image",
+      imageUrl: "https://r2.example.com/portrait.png",
+      expressiveness: "medium",
+    })
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const body = JSON.parse(init.body as string) as Record<string, unknown>
+    expect(body.expressiveness).toBe("medium")
+  })
+
+  // ── voice_settings extra fields ───────────────────────────────────────
+
+  it("includes pitch, volume, and locale in voice_settings when provided", async () => {
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(CREATE_RESPONSE))
+      .mockResolvedValueOnce(makeResponse(makeStatusResponse("completed")))
+
+    await generateAvatarVideo({
+      ...baseOpts,
+      pitch: 5,
+      volume: 0.8,
+      locale: "en-US",
+    })
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const body = JSON.parse(init.body as string) as Record<string, unknown>
+    const vs = body.voice_settings as Record<string, unknown>
+    expect(vs.pitch).toBe(5)
+    expect(vs.volume).toBe(0.8)
+    expect(vs.locale).toBe("en-US")
+  })
+
+  it("does not include pitch/volume/locale in voice_settings when not provided", async () => {
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(CREATE_RESPONSE))
+      .mockResolvedValueOnce(makeResponse(makeStatusResponse("completed")))
+
+    await generateAvatarVideo(baseOpts)
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const body = JSON.parse(init.body as string) as Record<string, unknown>
+    const vs = body.voice_settings as Record<string, unknown>
+    expect(vs.pitch).toBeUndefined()
+    expect(vs.volume).toBeUndefined()
+    expect(vs.locale).toBeUndefined()
+  })
+
+  it("passes ttsEngine as engine_settings in voice_settings", async () => {
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(CREATE_RESPONSE))
+      .mockResolvedValueOnce(makeResponse(makeStatusResponse("completed")))
+
+    const ttsEngine = {
+      engine_type: "elevenlabs" as const,
+      model: "eleven_turbo_v2_5" as const,
+      stability: 0.6,
+    }
+    await generateAvatarVideo({ ...baseOpts, ttsEngine })
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const body = JSON.parse(init.body as string) as Record<string, unknown>
+    const vs = body.voice_settings as Record<string, unknown>
+    expect(vs.engine_settings).toEqual(ttsEngine)
+  })
+
+  it("maps camelCase ElevenLabs ttsEngine fields → snake_case (workflow-DAG path)", async () => {
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(CREATE_RESPONSE))
+      .mockResolvedValueOnce(makeResponse(makeStatusResponse("completed")))
+
+    // The orchestrator's payload-builder forwards raw node data, which uses
+    // camelCase (`similarityBoost` / `useSpeakerBoost`). The provider must
+    // normalize these to HeyGen's snake_case keys.
+    await generateAvatarVideo({
+      ...baseOpts,
+      ttsEngine: {
+        engine_type: "elevenlabs",
+        model: "eleven_v3",
+        stability: 0.4,
+        similarityBoost: 0.9,
+        style: 0.3,
+        useSpeakerBoost: true,
+      } as never,
+    })
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const body = JSON.parse(init.body as string) as Record<string, unknown>
+    const vs = body.voice_settings as Record<string, unknown>
+    expect(vs.engine_settings).toEqual({
+      engine_type: "elevenlabs",
+      model: "eleven_v3",
+      stability: 0.4,
+      similarity_boost: 0.9,
+      style: 0.3,
+      use_speaker_boost: true,
+    })
+    // The camelCase keys must NOT leak through to the HeyGen body.
+    const settings = vs.engine_settings as Record<string, unknown>
+    expect(settings.similarityBoost).toBeUndefined()
+    expect(settings.useSpeakerBoost).toBeUndefined()
+  })
+
+  // ── background passthrough ────────────────────────────────────────────
+
+  it("passes background with asset_id mapping when assetId is provided", async () => {
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(CREATE_RESPONSE))
+      .mockResolvedValueOnce(makeResponse(makeStatusResponse("completed")))
+
+    await generateAvatarVideo({
+      ...baseOpts,
+      background: { type: "image", assetId: "bg-asset-99" },
+    })
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const body = JSON.parse(init.body as string) as Record<string, unknown>
+    const bg = body.background as Record<string, unknown>
+    expect(bg.type).toBe("image")
+    expect(bg.asset_id).toBe("bg-asset-99")
+    expect(bg.assetId).toBeUndefined()
+  })
+
+  it("does not include background when not provided", async () => {
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(CREATE_RESPONSE))
+      .mockResolvedValueOnce(makeResponse(makeStatusResponse("completed")))
+
+    await generateAvatarVideo(baseOpts)
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const body = JSON.parse(init.body as string) as Record<string, unknown>
+    expect(body.background).toBeUndefined()
+  })
+
+  // ── image source mode (type:"image") ───────────────────────────────────
+
+  it("image source mode: POST sends type:image with image{type:url} and NO engine/avatar_id", async () => {
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(CREATE_RESPONSE))
+      .mockResolvedValueOnce(makeResponse(makeStatusResponse("completed")))
+
+    await generateAvatarVideo({
+      ...baseOpts,
+      avatarSource: "image",
+      imageUrl: "https://r2.example.com/portrait.png",
+    })
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const body = JSON.parse(init.body as string) as Record<string, unknown>
+    expect(body.type).toBe("image")
+    expect(body.image).toEqual({ type: "url", url: "https://r2.example.com/portrait.png" })
+    expect(body.avatar_id).toBeUndefined()
+    expect(body.engine).toBeUndefined()
+    // Speech + voice settings still apply in image mode.
+    expect(body.script).toBe("Hello world")
+    expect(body.voice_id).toBe("voice-abc")
+  })
+
+  it("image source mode: bills at avatar-iv rate regardless of the engine opt", async () => {
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(CREATE_RESPONSE))
+      .mockResolvedValueOnce(makeResponse(makeStatusResponse("completed")))
+
+    const result = await generateAvatarVideo({
+      ...baseOpts,
+      engine: "avatar-v", // ignored in image mode
+      avatarSource: "image",
+      imageUrl: "https://r2.example.com/portrait.png",
+    })
+
+    // Cost must use the avatar-iv rate (IV-class), NOT avatar-v.
+    expect(result.cost).toBe(aiAvatarUsdCost("avatar-iv", "720p", 5.5))
+  })
+
+  it("image source mode: includes motion_prompt (image is IV-class)", async () => {
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(CREATE_RESPONSE))
+      .mockResolvedValueOnce(makeResponse(makeStatusResponse("completed")))
+
+    await generateAvatarVideo({
+      ...baseOpts,
+      engine: "avatar-v",
+      avatarSource: "image",
+      imageUrl: "https://r2.example.com/portrait.png",
+      motionPrompt: "slow zoom in",
+    })
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const body = JSON.parse(init.body as string) as Record<string, unknown>
+    expect(body.motion_prompt).toBe("slow zoom in")
+  })
 })

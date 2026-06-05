@@ -29,6 +29,7 @@ import {
   lipSyncApi,
   speechToVideoApi,
   runAiAvatar,
+  runCinematicAvatar,
   motionTransferApi,
   videoUpscaleApi,
   extendVideo,
@@ -176,6 +177,7 @@ import type {
   SelectorNodeData,
   ReduceNodeData,
   AiAvatarData,
+  CinematicAvatarData,
 } from "@/types/nodes";
 import {
   WorkflowStaleError,
@@ -4236,6 +4238,14 @@ export function executeNode(
       aaData.audioUrl ||
       undefined;
 
+    // Resolve source image (image-source mode): wired upstream image takes
+    // priority, then node data.
+    const avatarSource = aaData.avatarSource ?? "avatar";
+    const imageUrl =
+      (inputs.imageUrl as string | undefined) ||
+      aaData.imageUrl ||
+      undefined;
+
     // Mode-conditional validation
     const speechMode = aaData.speechMode ?? "text";
     if (speechMode === "text") {
@@ -4254,7 +4264,14 @@ export function executeNode(
       }
     }
 
-    if (!aaData.avatarId) {
+    // Source-conditional validation: avatar mode needs an avatar; image mode
+    // needs a source image (wired or uploaded).
+    if (avatarSource === "image") {
+      if (!imageUrl) {
+        toast.error(`Node "${aaData.label}": no source image found. Wire an image node into the Image handle or upload one.`);
+        return Promise.reject(new Error("No image"));
+      }
+    } else if (!aaData.avatarId) {
       toast.error(`Node "${aaData.label}": an avatar must be selected`);
       return Promise.reject(new Error("No avatar"));
     }
@@ -4264,9 +4281,15 @@ export function executeNode(
       node.id,
       () =>
         runAiAvatar({
-          avatarId:    aaData.avatarId,
+          avatarSource,
+          // Only send avatarId in avatar mode. In image mode aaData.avatarId is
+          // typically "" (default when no avatar was ever picked); the route's
+          // Zod schema is `avatarId: z.string().min(1).optional()`, so "" fails
+          // validation. Gate it the same way imageUrl is gated below.
+          avatarId:    avatarSource === "image" ? undefined : aaData.avatarId,
+          imageUrl:    avatarSource === "image" ? imageUrl : undefined,
           speechMode,
-          engine:      aaData.engine ?? "avatar-v",
+          engine:      aaData.engine ?? "avatar-iv",
           resolution:  aaData.resolution ?? "720p",
           aspectRatio: aaData.aspectRatio ?? "16:9",
           caption:     aaData.caption ?? false,
@@ -4274,12 +4297,78 @@ export function executeNode(
           script:      speechMode === "text" ? script : undefined,
           voiceId:     speechMode === "text" ? aaData.voiceId : undefined,
           voiceSpeed:  speechMode === "text" ? (aaData.voiceSpeed ?? 1) : undefined,
+          // Text-mode voice tuning (only sent in text mode)
+          pitch:       speechMode === "text" ? aaData.pitch : undefined,
+          volume:      speechMode === "text" ? aaData.volume : undefined,
+          locale:      speechMode === "text" ? aaData.locale : undefined,
+          ttsEngine:   speechMode === "text" ? aaData.ttsEngine : undefined,
           // Audio mode
           audioUrl:    speechMode === "audio" ? audioUrl : undefined,
+          // Video tuning (both modes)
+          background:       aaData.background,
+          removeBackground: aaData.removeBackground,
+          motionPrompt:     aaData.motionPrompt,
+          expressiveness:   aaData.expressiveness,
+          fit:              aaData.fit,
+          outputFormat:     aaData.outputFormat,
+          captionStyle:     aaData.captionStyle,
           userId:      ctx.userId,
         }),
       "generatedVideoUrl",
       "AI Avatar",
+      ctx,
+    );
+  }
+
+  if (node.type === "cinematic-avatar") {
+    const caData = node.data as CinematicAvatarData;
+
+    // Generative prompt (unlike ai-avatar's verbatim script): manual wins, then
+    // {Label} ref resolution, then wired upstream prompt — mirrors speech-to-video.
+    let prompt =
+      overridePrompt || resolveTextRefs(caData.prompt?.trim(), refMap) || inputs.prompt || "";
+
+    // Fold in cinematography hints + identity-lock clause from connected pickers
+    // / refs, same as the other generative video nodes.
+    {
+      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
+      if (cinematographyHints.length > 0) {
+        const joined = cinematographyHints.join(", ");
+        prompt = prompt ? `${prompt}. ${joined}` : joined;
+      }
+    }
+    {
+      const identityClause = collectIdentityLockClause(node.id, nodes, edges);
+      if (identityClause) prompt = `${prompt} ${identityClause}`;
+    }
+
+    if (!prompt) {
+      toast.error(`Node "${caData.label}": no prompt provided`);
+      return Promise.reject(new Error("No prompt"));
+    }
+
+    const avatarLooks = caData.avatarLooks ?? [];
+    if (avatarLooks.length < 1 || avatarLooks.length > 3) {
+      toast.error(`Node "${caData.label}": select 1–3 avatar looks`);
+      return Promise.reject(new Error("Invalid avatar looks"));
+    }
+
+    setUserPromptTemplate(caData.prompt?.trim() || undefined);
+    return runProcessingNode(
+      node.id,
+      () =>
+        runCinematicAvatar({
+          prompt,
+          avatarLooks,
+          duration: caData.autoDuration ? undefined : caData.duration,
+          autoDuration: caData.autoDuration,
+          aspectRatio: caData.aspectRatio ?? "16:9",
+          resolution: caData.resolution ?? "720p",
+          enhancePrompt: caData.enhancePrompt,
+          userId: ctx.userId,
+        }),
+      "generatedVideoUrl",
+      "Cinematic Avatar",
       ctx,
     );
   }

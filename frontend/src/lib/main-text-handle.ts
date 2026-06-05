@@ -39,6 +39,8 @@ export const MAIN_TEXT_HANDLE: Readonly<Record<string, ReadonlyArray<MainTextHan
     { handle: "system-prompt", field: "systemPrompt" },
   ],
   "speech-to-video": [{ handle: "prompt", field: "prompt" }],
+  // Cinematic Avatar — generative prompt slot (handle id "prompt" → data.prompt).
+  "cinematic-avatar": [{ handle: "prompt", field: "prompt" }],
 }
 
 /** Node types whose `extractNodeOutput` produces text (including parameter

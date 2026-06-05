@@ -73,6 +73,7 @@ import {
 } from "../shared.js"
 import { finalizeJobWithMedia } from "../../lib/job-finalize.js"
 import { handleAiAvatar } from "./heygen-avatar.js"
+import { handleCinematicAvatar } from "./heygen-cinematic.js"
 import { makeOnTaskCreated } from "../../lib/reconcile/persistence.js"
 import {
   providerKindForVideoModel,
@@ -1115,4 +1116,5 @@ export const videoAIHandlers: Record<string, HandlerFn> = {
   "face-swap": handleFaceSwap,
   "generate-mask": handleGenerateMask,
   "ai-avatar": handleAiAvatar,
+  "cinematic-avatar": handleCinematicAvatar,
 }

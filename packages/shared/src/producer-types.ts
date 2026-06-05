@@ -60,6 +60,8 @@ export const VIDEO_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   "remove-audio",
   // AI Avatar (HeyGen): avatar + voice/audio → video.
   "ai-avatar",
+  // Cinematic Avatar (HeyGen cinematic_avatar): prompt + 1–3 avatar looks → video.
+  "cinematic-avatar",
 ])
 
 /**

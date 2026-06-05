@@ -32,6 +32,7 @@ import {
   isValidSpeechToVideoConnection,
   isValidMotionTransferConnection,
   isValidAiAvatarConnection,
+  isValidCinematicAvatarConnection,
 } from "./video-producer-handles"
 import {
   IDENTITY_HANDLE_LABELS,
@@ -448,8 +449,14 @@ export const TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEnt
     { handleId: "video", label: VIDEO_PRODUCER_HANDLE_LABELS["motion-transfer"].video, accepts: (s) => isValidMotionTransferConnection("video", s) },
   ],
   "ai-avatar": [
+    { handleId: "image",  label: VIDEO_PRODUCER_HANDLE_LABELS["ai-avatar"].image,  accepts: (s) => isValidAiAvatarConnection("image",  s, isVisualPickerType) },
     { handleId: "script", label: VIDEO_PRODUCER_HANDLE_LABELS["ai-avatar"].script, accepts: (s) => isValidAiAvatarConnection("script", s, isVisualPickerType) },
     { handleId: "audio",  label: VIDEO_PRODUCER_HANDLE_LABELS["ai-avatar"].audio,  accepts: (s) => isValidAiAvatarConnection("audio",  s, isVisualPickerType) },
+  ],
+  // Cinematic Avatar — single generative `prompt` input (text producers +
+  // pickers + dynamic producers), mirroring motion-transfer / speech-to-video.
+  "cinematic-avatar": [
+    { handleId: "prompt", label: VIDEO_PRODUCER_HANDLE_LABELS["cinematic-avatar"].prompt, accepts: (s) => isValidCinematicAvatarConnection("prompt", s, isVisualPickerType) },
   ],
 
   // ─── Identity nodes (Phase 23 of typed-handles migration) ────────────

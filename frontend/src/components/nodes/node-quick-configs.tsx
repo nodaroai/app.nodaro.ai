@@ -21,6 +21,9 @@ import {
   TTS_MODELS,
   SUNO_MODELS,
   MOTION_TRANSFER_MODELS,
+  AI_AVATAR_ENGINE_OPTIONS,
+  AI_AVATAR_RESOLUTION_OPTIONS,
+  AI_AVATAR_SPEECH_MODES,
 } from "@/components/editor/config-panels/model-options"
 import { LLM_MODELS } from "@nodaro/shared"
 import { ALL_LANGUAGES } from "@/lib/audio-tags"
@@ -53,6 +56,14 @@ export interface QuickConfigControl {
     | ((data: Record<string, unknown>) => ReadonlyArray<QuickConfigOption>)
   /** Write the chosen value as a number (option values are strings). */
   readonly numeric?: boolean
+  /** When `true`, returning `[]` from {@link options} HIDES the control WITHOUT
+   *  clearing the stored value. Use for fields whose value is preserved across
+   *  modes and re-applied when the lever returns (e.g. ai-avatar `engine`: hidden
+   *  in image-source mode but the data type still requires it, and billing pins
+   *  to a neutral rate regardless). Default behaviour (flag absent) clears the
+   *  field on hide — the provider-sync trap fix for enum fields like
+   *  v2v-resolution. */
+  readonly preserveOnHide?: boolean
 }
 
 /** Resolve a control's options against the node's current data. */
@@ -229,6 +240,39 @@ export const NODE_QUICK_CONFIGS: Readonly<Record<string, ReadonlyArray<QuickConf
   "face-swap": [faceSwapProviderControl],
   "remove-background": [removeBgMotionControl],
   "generate-mask": [maskThresholdControl],
+  // ── AI Avatar (HeyGen) ──
+  "ai-avatar": [
+    {
+      field: "engine",
+      ariaLabel: "Engine",
+      icon: Sparkles,
+      // Provider-aware: image-source mode has no IV/V engine lever (HeyGen's
+      // type:"image" uses its own engine), so return [] there — QuickConfigSelect
+      // then hides the control, matching the config panel which gates the engine
+      // selector behind avatarSource==="avatar". Returning [] does NOT clear the
+      // stored engine here because the engine value is preserved across modes
+      // (the data type requires `engine`; image-mode billing pins to avatar-iv via
+      // resolveAiAvatarCreditId regardless of the stored value).
+      options: (data) =>
+        data.avatarSource === "image" ? [] : AI_AVATAR_ENGINE_OPTIONS,
+      preserveOnHide: true,
+    },
+    {
+      // Resolution is per-engine but both engines share the same set today.
+      // Provider-aware: if a future engine has no resolution lever, return []
+      // and QuickConfigSelect hides + clears the stale value automatically.
+      field: "resolution",
+      ariaLabel: "Resolution",
+      options: (data) =>
+        (AI_AVATAR_RESOLUTION_OPTIONS[String(data.engine ?? "avatar-iv")] ??
+         AI_AVATAR_RESOLUTION_OPTIONS["avatar-iv"]!) as ReadonlyArray<QuickConfigOption>,
+    },
+    {
+      field: "speechMode",
+      ariaLabel: "Mode",
+      options: AI_AVATAR_SPEECH_MODES,
+    },
+  ],
 }
 
 /** Quick-config controls for a node type (empty array when none registered). */
@@ -272,7 +316,11 @@ export function QuickConfigSelect({
   useEffect(() => {
     if (value === "" || value == null) return
     if (options.length === 0) {
-      updateNodeData(nodeId, { [control.field]: undefined })
+      // Hide-only fields (preserveOnHide) keep their stored value across modes;
+      // others clear on hide to avoid an out-of-range value the route rejects.
+      if (!control.preserveOnHide) {
+        updateNodeData(nodeId, { [control.field]: undefined })
+      }
     } else if (!options.some((o) => o.value === value)) {
       const next = options[0].value
       updateNodeData(nodeId, { [control.field]: control.numeric ? Number(next) : next })

@@ -337,6 +337,36 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   "heygen-avatar-v:4k:120s": { provider: "HeyGen", providerCostUsd: 24.00, markupPct: 25 },
   "heygen-avatar-v:4k:240s": { provider: "HeyGen", providerCostUsd: 48.00, markupPct: 25 },
   "heygen-avatar-v:4k:330s": { provider: "HeyGen", providerCostUsd: 66.00, markupPct: 25 },
+  // ── Cinematic Avatar (HeyGen `type:"cinematic_avatar"`) — exact-duration reserves ──
+  // Format: `cinematic-avatar:<resolution>:<durationSec>s` (durations 4..15s).
+  // providerCostUsd = durationSec × $/sec (metered actual; surplus refunded at commit).
+  // Rate is an UNCONFIRMED ESTIMATE (generative Seedance pipeline) — confirm via a paid run.
+  // 720p ($0.15/s)
+  "cinematic-avatar:720p:4s":   { provider: "HeyGen", providerCostUsd: 0.60,  markupPct: 25 },
+  "cinematic-avatar:720p:5s":   { provider: "HeyGen", providerCostUsd: 0.75,  markupPct: 25 },
+  "cinematic-avatar:720p:6s":   { provider: "HeyGen", providerCostUsd: 0.90,  markupPct: 25 },
+  "cinematic-avatar:720p:7s":   { provider: "HeyGen", providerCostUsd: 1.05,  markupPct: 25 },
+  "cinematic-avatar:720p:8s":   { provider: "HeyGen", providerCostUsd: 1.20,  markupPct: 25 },
+  "cinematic-avatar:720p:9s":   { provider: "HeyGen", providerCostUsd: 1.35,  markupPct: 25 },
+  "cinematic-avatar:720p:10s":  { provider: "HeyGen", providerCostUsd: 1.50,  markupPct: 25 },
+  "cinematic-avatar:720p:11s":  { provider: "HeyGen", providerCostUsd: 1.65,  markupPct: 25 },
+  "cinematic-avatar:720p:12s":  { provider: "HeyGen", providerCostUsd: 1.80,  markupPct: 25 },
+  "cinematic-avatar:720p:13s":  { provider: "HeyGen", providerCostUsd: 1.95,  markupPct: 25 },
+  "cinematic-avatar:720p:14s":  { provider: "HeyGen", providerCostUsd: 2.10,  markupPct: 25 },
+  "cinematic-avatar:720p:15s":  { provider: "HeyGen", providerCostUsd: 2.25,  markupPct: 25 },
+  // 1080p ($0.22/s)
+  "cinematic-avatar:1080p:4s":  { provider: "HeyGen", providerCostUsd: 0.88,  markupPct: 25 },
+  "cinematic-avatar:1080p:5s":  { provider: "HeyGen", providerCostUsd: 1.10,  markupPct: 25 },
+  "cinematic-avatar:1080p:6s":  { provider: "HeyGen", providerCostUsd: 1.32,  markupPct: 25 },
+  "cinematic-avatar:1080p:7s":  { provider: "HeyGen", providerCostUsd: 1.54,  markupPct: 25 },
+  "cinematic-avatar:1080p:8s":  { provider: "HeyGen", providerCostUsd: 1.76,  markupPct: 25 },
+  "cinematic-avatar:1080p:9s":  { provider: "HeyGen", providerCostUsd: 1.98,  markupPct: 25 },
+  "cinematic-avatar:1080p:10s": { provider: "HeyGen", providerCostUsd: 2.20,  markupPct: 25 },
+  "cinematic-avatar:1080p:11s": { provider: "HeyGen", providerCostUsd: 2.42,  markupPct: 25 },
+  "cinematic-avatar:1080p:12s": { provider: "HeyGen", providerCostUsd: 2.64,  markupPct: 25 },
+  "cinematic-avatar:1080p:13s": { provider: "HeyGen", providerCostUsd: 2.86,  markupPct: 25 },
+  "cinematic-avatar:1080p:14s": { provider: "HeyGen", providerCostUsd: 3.08,  markupPct: 25 },
+  "cinematic-avatar:1080p:15s": { provider: "HeyGen", providerCostUsd: 3.30,  markupPct: 25 },
   // ── Processing ──
   "topaz":             { provider: "KIE.ai",    providerCostUsd: null,  markupPct: 25 },  // variable
   "speech-to-video":   { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 },  // 12 KIE cr (480p)

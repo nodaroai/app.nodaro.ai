@@ -153,6 +153,8 @@ export function extractUserPromptTemplate(node: SimpleNode): string | undefined 
     // ai-avatar uses the verbatim `script` field for TTS (not `prompt`).
     case "ai-avatar":
       return pick("script")
+    case "cinematic-avatar":
+      return pick("prompt")
 
     // --- Entity / scene ---
     case "character":

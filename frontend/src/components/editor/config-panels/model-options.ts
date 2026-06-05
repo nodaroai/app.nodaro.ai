@@ -558,6 +558,46 @@ export const MOTION_TRANSFER_MODELS: readonly { value: MotionTransferProviderTyp
   { value: "wan-animate-replace", label: "Wan Animate Replace", desc: "Replace subjects with motion" },
 ]
 
+// =============================================================================
+// AI-AVATAR (HeyGen) option constants — single source of truth shared by the
+// config panel (ai-avatar-config.tsx) and the bottom-strip quick-config
+// (node-quick-configs.tsx) so both lists can never drift.
+// =============================================================================
+
+/** HeyGen engine options — display labels + underlying values. */
+export const AI_AVATAR_ENGINE_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: "avatar-v",  label: "HeyGen Avatar V"  },
+  { value: "avatar-iv", label: "HeyGen Avatar IV" },
+]
+
+/** Per-engine resolution options for HeyGen. Both engines support the same set
+ *  today; the map exists so future engine-specific constraints don't require
+ *  a schema change. */
+export const AI_AVATAR_RESOLUTION_OPTIONS: Readonly<Record<string, ReadonlyArray<{ value: string; label: string }>>> = {
+  "avatar-v":  [
+    { value: "720p",  label: "720p"  },
+    { value: "1080p", label: "1080p" },
+    { value: "4k",    label: "4K"    },
+  ],
+  "avatar-iv": [
+    { value: "720p",  label: "720p"  },
+    { value: "1080p", label: "1080p" },
+    { value: "4k",    label: "4K"    },
+  ],
+}
+
+/** HeyGen speech-mode options for the bottom-strip quick-config. */
+export const AI_AVATAR_SPEECH_MODES: ReadonlyArray<{ value: string; label: string }> = [
+  { value: "text",  label: "Text (TTS)"   },
+  { value: "audio", label: "Wired Audio"  },
+]
+
+/** Flat per-engine resolution value arrays (used by the fail-safe useEffect). */
+export function getAiAvatarResolutionValues(engine: string): string[] {
+  return (AI_AVATAR_RESOLUTION_OPTIONS[engine] ?? AI_AVATAR_RESOLUTION_OPTIONS["avatar-v"]!)
+    .map((o) => o.value)
+}
+
 /** Flat lookup of model ID to description, built from all model arrays */
 export const MODEL_DESCRIPTIONS: Record<string, string> = Object.fromEntries([
   ...IMAGE_GEN_MODELS,

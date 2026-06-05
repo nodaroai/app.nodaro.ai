@@ -12,6 +12,8 @@ import { collectIdentityLockClause as sharedCollectIdentityLockClause } from "@n
 import { resolveTemplate, applyTemplate } from "@nodaro/shared"
 import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt, resolveVideoProviderForMode } from "@nodaro/shared"
 import { buildLipSyncCreditId, isPerSecondLipSyncProvider } from "@nodaro/shared"
+import { resolveAiAvatarCreditId } from "@nodaro/shared"
+import { resolveCinematicCreditId } from "@nodaro/shared"
 import { resolveNodeRefs } from "@nodaro/shared"
 import { composeCameraMotionHintFromConnections } from "@nodaro/shared"
 import {
@@ -2682,27 +2684,70 @@ export function buildPayload(
       // reads it aloud exactly as written.
       const aiAvatarEngine = (data.engine as string) ?? "avatar-iv"
       const aiAvatarResolution = (data.resolution as string) ?? "720p"
-      // Credit identifier is resolved by the route's creditGuard at reservation
-      // time (resolveAiAvatarCreditId), NOT here — payload-builder only needs
-      // the CREDIT_COSTS entry key for the fallback modelIdentifier path.
-      // We pass a representative identifier so the orchestrator can report it.
-      const aiAvatarCreditId = `heygen-${aiAvatarEngine}:${aiAvatarResolution}:330s`
+      // Credit identifier MUST come from resolveAiAvatarCreditId (the single
+      // source of truth shared with the route's creditGuard) so that:
+      //  (a) it is always one of the SEEDED duration-bucket ids (30/60/120/240/
+      //      360/600/900s) — never an unseeded bucket that would hard-fail with
+      //      503 price_not_configured at reserve time, and
+      //  (b) image-source mode pins the rate engine to avatar-iv (image is
+      //      IV-class), matching the route's reservation exactly.
+      // The data shape here carries the same fields the route body does
+      // (engine/resolution/speechMode/voiceSpeed/script/avatarSource).
+      const aiAvatarCreditId = resolveAiAvatarCreditId(data as Record<string, unknown>)
       return {
         jobName: "ai-avatar",
         queueName: "video-generation",
         modelIdentifier: aiAvatarCreditId,
         payload: {
           jobId,
+          avatarSource: (data.avatarSource as string | undefined) ?? "avatar",
           engine: aiAvatarEngine,
           avatarId: data.avatarId,
+          imageUrl: resolvedInputs.imageUrl || (data.imageUrl as string | undefined),
           speechMode: data.speechMode ?? "text",
           script: resolvedInputs.script ?? (data.script as string | undefined),
           voiceId: data.voiceId,
           voiceSpeed: data.voiceSpeed,
+          pitch: data.pitch,
+          volume: data.volume,
+          locale: data.locale,
+          ttsEngine: data.ttsEngine,
           audioUrl: resolvedInputs.audioUrl || (data.audioUrl as string | undefined),
           resolution: aiAvatarResolution,
           aspectRatio: data.aspectRatio ?? "16:9",
+          fit: data.fit,
+          outputFormat: data.outputFormat,
           caption: data.caption,
+          captionStyle: data.captionStyle,
+          background: data.background,
+          removeBackground: data.removeBackground,
+          motionPrompt: data.motionPrompt,
+          expressiveness: data.expressiveness,
+          usageLogId,
+        },
+      }
+    }
+
+    case "cinematic-avatar": {
+      // Credit identifier MUST come from resolveCinematicCreditId (the single
+      // source of truth shared with the route's creditGuard) so that:
+      //  (a) it is always one of the 24 SEEDED exact-duration ids — never an
+      //      unseeded id that would hard-fail with 503 price_not_configured, and
+      //  (b) out-of-range durations are clamped to 4–15s exactly as the route does.
+      const cinematicCreditId = resolveCinematicCreditId(data as Record<string, unknown>)
+      return {
+        jobName: "cinematic-avatar",
+        queueName: "video-generation",
+        modelIdentifier: cinematicCreditId,
+        payload: {
+          jobId,
+          prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap) || "",
+          avatarLooks: data.avatarLooks,
+          duration: data.duration,
+          autoDuration: data.autoDuration,
+          aspectRatio: data.aspectRatio ?? "16:9",
+          resolution: (data.resolution as string) ?? "720p",
+          enhancePrompt: data.enhancePrompt,
           usageLogId,
         },
       }

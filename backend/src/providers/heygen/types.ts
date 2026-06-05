@@ -18,6 +18,8 @@ export interface HeygenAvatar {
   previewImageUrl: string
   defaultVoiceId?: string
   preferredOrientation?: string
+  /** Which API engines this avatar supports, e.g. ["avatar_iv", "avatar_v"]. */
+  supportedEngines?: string[]
 }
 
 /** A single voice from /v2/voices. */
@@ -48,6 +50,8 @@ export interface RawHeygenAvatarLook {
   preferred_orientation?: string
   image_width?: number
   image_height?: number
+  /** Engine types this look supports, e.g. ["avatar_iv", "avatar_v"]. */
+  supported_api_engines?: string[]
 }
 
 /** GET /v3/avatars/looks response shape. */
@@ -55,6 +59,12 @@ export interface RawAvatarsLooksResponse {
   code: number
   message: string
   data: RawHeygenAvatarLook[]
+  /** Cursor for the next page (present when there are more results). */
+  token?: string
+  /** Alternative cursor field name used by some HeyGen endpoints. */
+  next_token?: string
+  /** Explicit pagination flag. When false or absent, no more pages. */
+  has_more?: boolean
 }
 
 /** Single voice from /v2/voices response `voices` array. */
@@ -78,6 +88,12 @@ export interface RawVoicesResponse {
   data: {
     voices: RawHeygenVoice[]
   }
+  /** Cursor for the next page (present when there are more results). */
+  token?: string
+  /** Alternative cursor field name used by some HeyGen endpoints. */
+  next_token?: string
+  /** Explicit pagination flag. When false or absent, no more pages. */
+  has_more?: boolean
 }
 
 /** POST /v3/videos response data when successful. */

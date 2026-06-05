@@ -18,12 +18,13 @@
 
 import { memo, useCallback, useMemo, useRef, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { Search, User, AlertCircle } from "lucide-react"
+import { Search, User, AlertCircle, Zap } from "lucide-react"
 import {
   getHeygenAvatars,
   type HeygenAvatar,
 } from "@/lib/api"
 import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
 import {
   Select,
   SelectContent,
@@ -57,14 +58,27 @@ interface AvatarTileProps {
   readonly avatar: HeygenAvatar
   readonly selected: boolean
   readonly onSelect: (a: HeygenAvatar) => void
+  /** Multi-select: render an aria-checkbox + disable when the cap is reached and
+   *  this tile isn't already selected. */
+  readonly multiple?: boolean
+  readonly disabled?: boolean
+}
+
+/** Returns true when the avatar's `supportedEngines` list includes "avatar_v"
+ *  (HeyGen's canonical engine ID — note underscore, not hyphen). */
+export function avatarSupportsV(avatar: HeygenAvatar): boolean {
+  return avatar.supportedEngines?.includes("avatar_v") ?? false
 }
 
 const AvatarTile = memo(function AvatarTile({
   avatar,
   selected,
   onSelect,
+  multiple = false,
+  disabled = false,
 }: AvatarTileProps) {
   const { ref, mounted } = useLazyMount("400px")
+  const isVCapable = avatarSupportsV(avatar)
 
   return (
     // The div wrapper acts as the IntersectionObserver root for lazy mount.
@@ -72,12 +86,17 @@ const AvatarTile = memo(function AvatarTile({
     <div ref={ref}>
     <button
       type="button"
-      role="radio"
+      role={multiple ? "checkbox" : "radio"}
       aria-checked={selected}
+      aria-disabled={disabled || undefined}
       aria-label={avatar.name}
-      onClick={() => onSelect(avatar)}
+      onClick={() => {
+        if (disabled) return
+        onSelect(avatar)
+      }}
       className={cn(
-        "relative group flex flex-col w-full overflow-hidden rounded-lg border text-left transition-colors cursor-pointer",
+        "relative group flex flex-col w-full overflow-hidden rounded-lg border text-left transition-colors",
+        disabled ? "cursor-not-allowed opacity-40" : "cursor-pointer",
         selected
           ? "border-[#ff0073] ring-1 ring-[#ff0073]/60 bg-[#ff0073]/5"
           : "border-gray-200 dark:border-[#2D2D2D] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
@@ -119,6 +138,22 @@ const AvatarTile = memo(function AvatarTile({
           className="absolute top-1.5 right-1.5 w-3 h-3 rounded-full bg-[#ff0073] border-2 border-white dark:border-[#1E1E1E] shadow-sm"
         />
       )}
+
+      {/* Avatar V eligibility badge — only shown when the catalog confirms V support */}
+      {isVCapable && (
+        <span
+          aria-label="Supports Avatar V"
+          title="Supports Avatar V"
+          className={cn(
+            "absolute top-1.5 left-1.5 flex items-center gap-0.5 px-1 py-0.5",
+            "rounded text-[8px] font-bold leading-none",
+            "bg-violet-600/90 text-white shadow-sm",
+          )}
+        >
+          <Zap className="size-2" aria-hidden />
+          Avatar V
+        </span>
+      )}
     </button>
     </div>
   )
@@ -142,12 +177,13 @@ export function hasGroupSegmentation(avatars: readonly HeygenAvatar[]): boolean 
   return avatars.some((a) => a.groupId != null && a.groupId !== "")
 }
 
-/** Filter the avatar list by the active search + gender + segment controls. */
+/** Filter the avatar list by the active search + gender + segment + Avatar-V controls. */
 export function filterAvatars(
   avatars: readonly HeygenAvatar[],
   query: string,
   gender: string,
   segment: "all" | "stock" | "custom",
+  onlyAvatarV = false,
 ): HeygenAvatar[] {
   const q = query.trim().toLowerCase()
   return avatars.filter((a) => {
@@ -155,6 +191,7 @@ export function filterAvatars(
     if (gender !== "all" && a.gender.toLowerCase() !== gender) return false
     if (segment === "stock" && a.groupId) return false
     if (segment === "custom" && !a.groupId) return false
+    if (onlyAvatarV && !avatarSupportsV(a)) return false
     return true
   })
 }
@@ -164,17 +201,31 @@ export function filterAvatars(
 // ---------------------------------------------------------------------------
 
 export interface AvatarPickerProps {
-  /** Currently selected avatarId. */
+  /** Single-select: currently selected avatarId. */
   readonly value?: string
-  /** Called with the full avatar object on selection. */
+  /** Called with the full avatar object on selection (single-select), or on
+   *  each toggle (multi-select). */
   readonly onSelect: (avatar: HeygenAvatar) => void
   readonly className?: string
+  /** Multi-select mode — render checkboxes, allow up to `max` looks. When set,
+   *  use `selected` + `onToggle` instead of `value` + `onSelect`. */
+  readonly multiple?: boolean
+  /** Multi-select: currently selected avatarIds. */
+  readonly selected?: readonly string[]
+  /** Multi-select: called with the toggled avatar (caller adds/removes it). */
+  readonly onToggle?: (avatar: HeygenAvatar) => void
+  /** Multi-select: max number of looks selectable. Default 3. */
+  readonly max?: number
 }
 
 export const AvatarPicker = memo(function AvatarPicker({
   value,
   onSelect,
   className,
+  multiple = false,
+  selected,
+  onToggle,
+  max = 3,
 }: AvatarPickerProps) {
   const { data: avatars = [], isLoading, isError } = useQuery({
     queryKey: ["heygen-avatars"],
@@ -185,13 +236,32 @@ export const AvatarPicker = memo(function AvatarPicker({
   const [query, setQuery] = useState("")
   const [gender, setGender] = useState("all")
   const [segment, setSegment] = useState<"all" | "stock" | "custom">("all")
+  const [onlyV, setOnlyV] = useState(false)
 
   const genders = useMemo(() => deriveGenders(avatars), [avatars])
   const showSegment = useMemo(() => hasGroupSegmentation(avatars), [avatars])
+  /** True when at least one avatar in the catalog supports Avatar V —
+   *  hides the toggle when the feature isn't available. */
+  const hasVCapableAvatars = useMemo(() => avatars.some(avatarSupportsV), [avatars])
 
   const filtered = useMemo(
-    () => filterAvatars(avatars, query, gender, segment),
-    [avatars, query, gender, segment],
+    () => filterAvatars(avatars, query, gender, segment, onlyV),
+    [avatars, query, gender, segment, onlyV],
+  )
+
+  // Multi-select bookkeeping. `selectedSet` gives O(1) tile lookups; `atCap` is
+  // true once the user has picked `max` looks (further unselected tiles get
+  // disabled so the cap can't be exceeded).
+  const selectedSet = useMemo(() => new Set(selected ?? []), [selected])
+  const atCap = multiple && selectedSet.size >= max
+
+  /** Unified per-tile click: routes to onToggle (multi) or onSelect (single). */
+  const handleTileSelect = useCallback(
+    (a: HeygenAvatar) => {
+      if (multiple) onToggle?.(a)
+      else onSelect(a)
+    },
+    [multiple, onToggle, onSelect],
   )
 
   // Scroll container for the virtualizer.
@@ -327,6 +397,24 @@ export const AvatarPicker = memo(function AvatarPicker({
         )}
       </div>
 
+      {/* Avatar V filter toggle — only shown when the catalog has V-capable avatars */}
+      {hasVCapableAvatars && (
+        <Button
+          type="button"
+          size="sm"
+          variant={onlyV ? "default" : "outline"}
+          aria-pressed={onlyV}
+          onClick={() => setOnlyV((prev) => !prev)}
+          className={cn(
+            "h-7 px-2.5 gap-1.5 text-[10.5px] font-medium w-full justify-start",
+            onlyV && "bg-violet-600 hover:bg-violet-700 text-white border-violet-600",
+          )}
+        >
+          <Zap className="size-3" aria-hidden />
+          Supports Avatar V
+        </Button>
+      )}
+
       {/* Virtualized grid */}
       <div
         ref={scrollRef}
@@ -341,7 +429,7 @@ export const AvatarPicker = memo(function AvatarPicker({
           </div>
         ) : (
           <div
-            role="radiogroup"
+            role={multiple ? "group" : "radiogroup"}
             aria-label="HeyGen avatars"
             ref={gridRef}
             style={{ height: totalSize, position: "relative" }}
@@ -357,23 +445,35 @@ export const AvatarPicker = memo(function AvatarPicker({
                   gap: GRID_GAP,
                 }}
               >
-                {rowItems(filtered, virtualRow.index, columns).map(({ item: avatar }) => (
-                  <AvatarTile
-                    key={avatar.avatarId}
-                    avatar={avatar}
-                    selected={value === avatar.avatarId}
-                    onSelect={onSelect}
-                  />
-                ))}
+                {rowItems(filtered, virtualRow.index, columns).map(({ item: avatar }) => {
+                  const isSelected = multiple
+                    ? selectedSet.has(avatar.avatarId)
+                    : value === avatar.avatarId
+                  return (
+                    <AvatarTile
+                      key={avatar.avatarId}
+                      avatar={avatar}
+                      selected={isSelected}
+                      onSelect={handleTileSelect}
+                      multiple={multiple}
+                      disabled={multiple && atCap && !isSelected}
+                    />
+                  )
+                })}
               </div>
             ))}
           </div>
         )}
       </div>
 
-      {/* Item count */}
+      {/* Item count + (multi) selection cap */}
       {filtered.length > 0 && (
         <p className="text-[10px] text-muted-foreground text-right px-0.5">
+          {multiple && (
+            <span className={cn("mr-1.5", atCap && "text-[#ff0073]")}>
+              {selectedSet.size}/{max} selected
+            </span>
+          )}
           {filtered.length} avatar{filtered.length !== 1 ? "s" : ""}
         </p>
       )}

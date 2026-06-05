@@ -1918,20 +1918,88 @@ export type AiAvatarData = {
   [key: string]: unknown
   label: string
   provider: "heygen"
+  // Visual source. "avatar" (default) animates a catalog avatar look via the
+  // IV/V engine; "image" animates a raw image (HeyGen `type:"image"` — its own
+  // engine, no avatar creation, no IV/V lever).
+  avatarSource: "avatar" | "image"
   engine: "avatar-v" | "avatar-iv"
   avatarId: string
+  imageUrl?: string                // source image for image-source mode (URL or upload)
   avatarGroupId?: string
   avatarName?: string
   avatarPreviewUrl?: string        // preview_image_url from /v3/avatars/looks (image only — no video URL on looks)
+  avatarSupportsV?: boolean        // whether the picked avatar supports Avatar V (drives the engine-mismatch warning); undefined when the catalog lacks engine metadata
   speechMode: "text" | "audio"
   script?: string                  // text mode — DISTINCT verbatim field, NOT `prompt`; ≤5000 chars
   voiceId?: string
   voiceName?: string
   voiceSpeed?: number              // 0.5–1.5, default 1.0
+  // ── Voice tuning (text mode only) ──────────────────────────────────────────
+  pitch?: number                   // -50..50 voice pitch adjustment
+  volume?: number                  // 0..1 voice volume
+  locale?: string                  // locale string for locale-aware voices
+  // TTS engine override. Stored with an `engine_type` discriminator + camelCase
+  // value fields; api.ts maps these to the backend's snake_case body shape.
+  ttsEngine?:
+    | {
+        engine_type: "elevenlabs"
+        model?: "eleven_multilingual_v2" | "eleven_turbo_v2_5" | "eleven_flash_v2_5" | "eleven_v3"
+        stability?: number
+        similarityBoost?: number
+        style?: number
+        useSpeakerBoost?: boolean
+      }
+    | {
+        engine_type: "fish"
+        model?: "s1" | "s2-pro"
+        stability?: number
+        similarity?: number
+      }
+    | { engine_type: "starfish" }
   audioUrl?: string                // audio mode (wired upstream audio)
   resolution: "720p" | "1080p" | "4k"
   aspectRatio: "16:9" | "9:16"
+  // ── Video tuning ───────────────────────────────────────────────────────────
+  background?: {
+    type: "color" | "image"
+    value?: string                 // hex colour when type="color"
+    url?: string                   // image URL when type="image"
+  }
+  removeBackground?: boolean
+  motionPrompt?: string            // engine=avatar-iv only
+  expressiveness?: "high" | "medium" | "low" // engine=avatar-iv only
+  fit?: "cover" | "contain"
+  outputFormat?: "mp4" | "webm"
   caption?: boolean
+  captionStyle?: "default"         // burn-in caption style (set when caption on)
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedVideoUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
+  currentJobId?: string
+  currentJobProgress?: number
+  videoPlayState?: "loop" | "paused" | "stopped"
+  pausedAtTime?: number
+}
+
+// Cinematic Avatar: HeyGen `type:"cinematic_avatar"` — a GENERATIVE clip driven by
+// a prompt + 1–3 avatar look ids (NO script/voice/audio/engine). Unlike ai-avatar's
+// verbatim `script`, `prompt` is a true generative prompt, so it MAY use the
+// prompt-wizard + FieldMappings.
+export type CinematicAvatarData = {
+  [key: string]: unknown
+  label: string
+  provider: "heygen"
+  prompt: string                   // generative prompt, 1–10000 chars
+  avatarLooks: string[]            // 1–3 avatar look ids (multi-select from the shared catalog picker)
+  avatarLookNames?: string[]       // display names aligned to avatarLooks
+  duration?: number                // 4–15 seconds
+  autoDuration?: boolean           // default false — let HeyGen pick the duration
+  aspectRatio: "16:9" | "9:16" | "1:1"
+  resolution: "720p" | "1080p"
+  enhancePrompt?: boolean
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -4343,6 +4411,7 @@ export type SceneNodeData =
   | LipSyncData
   | SpeechToVideoData
   | AiAvatarData
+  | CinematicAvatarData
   | MotionTransferData
   | VideoUpscaleData
   | ExtendVideoData
@@ -4511,6 +4580,7 @@ export type SceneNodeType =
   | "lip-sync"
   | "speech-to-video"
   | "ai-avatar"
+  | "cinematic-avatar"
   | "motion-transfer"
   | "video-upscale"
   | "extend-video"
@@ -6131,11 +6201,12 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "AI Avatar",
     category: "ai",
     creditCost: 9,
-    inputs: ["script", "audio"],
+    inputs: ["script", "audio", "image"],
     outputs: ["video"],
     defaultData: {
       label: "AI Avatar",
       provider: "heygen",
+      avatarSource: "avatar",
       engine: "avatar-iv",
       avatarId: "",
       speechMode: "text",
@@ -6152,8 +6223,8 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       {
         key: "engine", label: "Engine", type: "select" as const,
         options: [
-          { value: "avatar-iv", label: "Avatar IV" },
-          { value: "avatar-v", label: "Avatar V" },
+          { value: "avatar-iv", label: "HeyGen Avatar IV" },
+          { value: "avatar-v",  label: "HeyGen Avatar V"  },
         ],
       },
       {
@@ -6162,6 +6233,48 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
           { value: "720p", label: "720p" },
           { value: "1080p", label: "1080p" },
           { value: "4k", label: "4K" },
+        ],
+      },
+    ],
+  },
+  // Cinematic Avatar (HeyGen cinematic_avatar — generative, prompt-driven)
+  {
+    type: "cinematic-avatar",
+    label: "Cinematic Avatar",
+    category: "ai",
+    creditCost: 9,
+    inputs: ["prompt"],
+    outputs: ["video"],
+    defaultData: {
+      label: "Cinematic Avatar",
+      provider: "heygen",
+      prompt: "",
+      avatarLooks: [],
+      duration: 10,
+      autoDuration: false,
+      aspectRatio: "16:9",
+      resolution: "720p",
+      enhancePrompt: false,
+      fieldMappings: {},
+      executionStatus: "idle",
+      generatedResults: [],
+      activeResultIndex: 0,
+    } as CinematicAvatarData,
+    exposableOutputs: [{ key: "result", label: "Result", outputType: "video" as const }],
+    exposableFields: [
+      {
+        key: "aspectRatio", label: "Aspect Ratio", type: "select" as const,
+        options: [
+          { value: "16:9", label: "16:9" },
+          { value: "9:16", label: "9:16" },
+          { value: "1:1", label: "1:1" },
+        ],
+      },
+      {
+        key: "resolution", label: "Resolution", type: "select" as const,
+        options: [
+          { value: "720p", label: "720p" },
+          { value: "1080p", label: "1080p" },
         ],
       },
     ],
