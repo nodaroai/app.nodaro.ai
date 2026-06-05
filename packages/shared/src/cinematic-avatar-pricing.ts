@@ -143,23 +143,27 @@ export const CINEMATIC_RESERVE_IDS: string[] = (
 })
 
 /**
- * Credit hold (reserved amount) for a given (resolution, durationSec).
+ * Credit hold (the STORED 0%-base reserve) for a given (resolution, durationSec).
  *
- * Formula: ceil(cinematicUsdCost(resolution, durationSec) / 0.02 * 1.5)
+ * Formula: ceil(cinematicUsdCost(resolution, durationSec) / 0.02)
  *
- * The /0.02 converts USD → base credits (1 credit = $0.02, the CREDIT_BASE_USD
- * constant). The *1.5 safety factor ensures the hold is always ≥ the actual
- * metered charge: at configured pricing factor (the default) the actual is
- * ceil(ceil(usd/0.02) * 1.25); the 1.5× buffer comfortably exceeds 1.25×.
+ * This is the at-cost base-credit value (1 credit = $0.02, CREDIT_BASE_USD).
+ * It is deliberately MINIMAL — there is NO *1.5 safety factor — because the
+ * admin cost-markup (~25% default) is applied to this stored value AGAIN at
+ * RESERVE time by getModelCreditCostFromDB (reserved = ceil(hold * 1.25)).
+ * Baking a second buffer here was a redundant double-markup.
  *
- * The actual charge is recomputed at job completion by commitJobCredits /
- * computeActualCredits from the provider's real USD cost; commit_credits
- * refunds any surplus — so this hold is a conservative ceiling ONLY. (Because
- * duration is exact here, the hold and actual usually coincide modulo markup.)
+ * Refund-only invariant (verified by the pricing test): because duration is a
+ * user parameter known at submit time, the reserve id encodes the EXACT
+ * duration, so reserved = ceil(hold * markup) = ceil(ceil(usd/0.02) * markup)
+ * equals the metered actual computed at commit from the same USD cost. They
+ * coincide exactly (the provider returns the requested duration), so
+ * commit_credits refunds nothing in the common case and can only ever refund,
+ * never undercharge.
  */
 export function cinematicHoldCredits(
   resolution: CinematicResolution,
   durationSec: number,
 ): number {
-  return Math.ceil(cinematicUsdCost(resolution, durationSec) / 0.02 * 1.5)
+  return Math.ceil(cinematicUsdCost(resolution, durationSec) / 0.02)
 }

@@ -250,6 +250,32 @@ export async function probeVideoSource(srcUrlOrPath: string): Promise<{
 }
 
 /**
+ * Probe ONLY the container duration (seconds) of any media URL or path —
+ * audio OR video. Unlike probeVideoSource, this does not require a video
+ * stream, so it works on audio-only files (mp3/wav/m4a). Accepts a local path
+ * OR a remote http(s) URL; remote URLs go through the same SSRF guard
+ * (assertSafeProbeSource) before ffprobe touches the network.
+ *
+ * Used by the ai-avatar AUDIO-mode reserve preHandler to bucket the credit
+ * hold by the ACTUAL clip length instead of a coarse worst-case ceiling.
+ */
+export async function probeMediaDuration(srcUrlOrPath: string): Promise<number> {
+  await assertSafeProbeSource(srcUrlOrPath)
+  const output = await runFfprobe([
+    "-v", "error",
+    "-protocol_whitelist", "file,http,https,tcp,tls",
+    "-show_entries", "format=duration",
+    "-of", "csv=p=0",
+    srcUrlOrPath,
+  ])
+  const duration = parseFloat(output.trim())
+  if (Number.isNaN(duration) || duration <= 0) {
+    throw new Error(`probeMediaDuration failed to parse: "${output.trim()}"`)
+  }
+  return duration
+}
+
+/**
  * Probe the video codec and pixel format in a single ffprobe call.
  * Returns e.g. { codec: "h264", pixFmt: "yuv420p" }.
  */

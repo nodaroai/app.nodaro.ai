@@ -301,9 +301,12 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   // ── AI Avatar (HeyGen) — duration-bucketed reserve holds (metered, actual = durationSec × $/sec) ──
   // Format: `heygen-<engine>:<resolution>:<bucket>s`
   // providerCostUsd = ceiling for the bucket (actual charge is metered at commit, surplus refunded).
-  // Buckets: 30/60/120/240/360/600/900s (AI_AVATAR_DURATION_BUCKETS); 2 engines × 3 res × 7 = 42 ids.
+  // Buckets: 5/10/15/30/60/120/240/360/600/900s (AI_AVATAR_DURATION_BUCKETS); 2 engines × 3 res × 10 = 60 ids.
   // providerCostUsd = rate $/sec × bucketSec (AI_AVATAR_RATE_USD_PER_SEC).
   // avatar-iv 720p ($0.06/s) — anchored by live test
+  "heygen-avatar-iv:720p:5s":   { provider: "HeyGen", providerCostUsd: 0.30, markupPct: 25 },
+  "heygen-avatar-iv:720p:10s":  { provider: "HeyGen", providerCostUsd: 0.60, markupPct: 25 },
+  "heygen-avatar-iv:720p:15s":  { provider: "HeyGen", providerCostUsd: 0.90, markupPct: 25 },
   "heygen-avatar-iv:720p:30s":  { provider: "HeyGen", providerCostUsd: 1.80, markupPct: 25 },
   "heygen-avatar-iv:720p:60s":  { provider: "HeyGen", providerCostUsd: 3.60, markupPct: 25 },
   "heygen-avatar-iv:720p:120s": { provider: "HeyGen", providerCostUsd: 7.20, markupPct: 25 },
@@ -312,6 +315,9 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   "heygen-avatar-iv:720p:600s": { provider: "HeyGen", providerCostUsd: 36.00, markupPct: 25 },
   "heygen-avatar-iv:720p:900s": { provider: "HeyGen", providerCostUsd: 54.00, markupPct: 25 },
   // avatar-iv 1080p ($0.08/s — rounded from ~$4/min)
+  "heygen-avatar-iv:1080p:5s":   { provider: "HeyGen", providerCostUsd: 0.40, markupPct: 25 },
+  "heygen-avatar-iv:1080p:10s":  { provider: "HeyGen", providerCostUsd: 0.80, markupPct: 25 },
+  "heygen-avatar-iv:1080p:15s":  { provider: "HeyGen", providerCostUsd: 1.20, markupPct: 25 },
   "heygen-avatar-iv:1080p:30s":  { provider: "HeyGen", providerCostUsd: 2.40, markupPct: 25 },
   "heygen-avatar-iv:1080p:60s":  { provider: "HeyGen", providerCostUsd: 4.80, markupPct: 25 },
   "heygen-avatar-iv:1080p:120s": { provider: "HeyGen", providerCostUsd: 9.60, markupPct: 25 },
@@ -320,6 +326,9 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   "heygen-avatar-iv:1080p:600s": { provider: "HeyGen", providerCostUsd: 48.00, markupPct: 25 },
   "heygen-avatar-iv:1080p:900s": { provider: "HeyGen", providerCostUsd: 72.00, markupPct: 25 },
   // avatar-iv 4k ($0.16/s — estimate, ~2× 1080p)
+  "heygen-avatar-iv:4k:5s":   { provider: "HeyGen", providerCostUsd: 0.80, markupPct: 25 },
+  "heygen-avatar-iv:4k:10s":  { provider: "HeyGen", providerCostUsd: 1.60, markupPct: 25 },
+  "heygen-avatar-iv:4k:15s":  { provider: "HeyGen", providerCostUsd: 2.40, markupPct: 25 },
   "heygen-avatar-iv:4k:30s":  { provider: "HeyGen", providerCostUsd: 4.80, markupPct: 25 },
   "heygen-avatar-iv:4k:60s":  { provider: "HeyGen", providerCostUsd: 9.60, markupPct: 25 },
   "heygen-avatar-iv:4k:120s": { provider: "HeyGen", providerCostUsd: 19.20, markupPct: 25 },
@@ -328,6 +337,9 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   "heygen-avatar-iv:4k:600s": { provider: "HeyGen", providerCostUsd: 96.00, markupPct: 25 },
   "heygen-avatar-iv:4k:900s": { provider: "HeyGen", providerCostUsd: 144.00, markupPct: 25 },
   // avatar-v 720p ($0.08/s — UNPINNED ESTIMATE; confirmed before avatar-v ships)
+  "heygen-avatar-v:720p:5s":   { provider: "HeyGen", providerCostUsd: 0.40, markupPct: 25 },
+  "heygen-avatar-v:720p:10s":  { provider: "HeyGen", providerCostUsd: 0.80, markupPct: 25 },
+  "heygen-avatar-v:720p:15s":  { provider: "HeyGen", providerCostUsd: 1.20, markupPct: 25 },
   "heygen-avatar-v:720p:30s":  { provider: "HeyGen", providerCostUsd: 2.40, markupPct: 25 },
   "heygen-avatar-v:720p:60s":  { provider: "HeyGen", providerCostUsd: 4.80, markupPct: 25 },
   "heygen-avatar-v:720p:120s": { provider: "HeyGen", providerCostUsd: 9.60, markupPct: 25 },
@@ -336,6 +348,9 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   "heygen-avatar-v:720p:600s": { provider: "HeyGen", providerCostUsd: 48.00, markupPct: 25 },
   "heygen-avatar-v:720p:900s": { provider: "HeyGen", providerCostUsd: 72.00, markupPct: 25 },
   // avatar-v 1080p ($0.10/s — UNPINNED ESTIMATE)
+  "heygen-avatar-v:1080p:5s":   { provider: "HeyGen", providerCostUsd: 0.50, markupPct: 25 },
+  "heygen-avatar-v:1080p:10s":  { provider: "HeyGen", providerCostUsd: 1.00, markupPct: 25 },
+  "heygen-avatar-v:1080p:15s":  { provider: "HeyGen", providerCostUsd: 1.50, markupPct: 25 },
   "heygen-avatar-v:1080p:30s":  { provider: "HeyGen", providerCostUsd: 3.00, markupPct: 25 },
   "heygen-avatar-v:1080p:60s":  { provider: "HeyGen", providerCostUsd: 6.00, markupPct: 25 },
   "heygen-avatar-v:1080p:120s": { provider: "HeyGen", providerCostUsd: 12.00, markupPct: 25 },
@@ -344,6 +359,9 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   "heygen-avatar-v:1080p:600s": { provider: "HeyGen", providerCostUsd: 60.00, markupPct: 25 },
   "heygen-avatar-v:1080p:900s": { provider: "HeyGen", providerCostUsd: 90.00, markupPct: 25 },
   // avatar-v 4k ($0.20/s — UNPINNED ESTIMATE)
+  "heygen-avatar-v:4k:5s":   { provider: "HeyGen", providerCostUsd: 1.00, markupPct: 25 },
+  "heygen-avatar-v:4k:10s":  { provider: "HeyGen", providerCostUsd: 2.00, markupPct: 25 },
+  "heygen-avatar-v:4k:15s":  { provider: "HeyGen", providerCostUsd: 3.00, markupPct: 25 },
   "heygen-avatar-v:4k:30s":  { provider: "HeyGen", providerCostUsd: 6.00, markupPct: 25 },
   "heygen-avatar-v:4k:60s":  { provider: "HeyGen", providerCostUsd: 12.00, markupPct: 25 },
   "heygen-avatar-v:4k:120s": { provider: "HeyGen", providerCostUsd: 24.00, markupPct: 25 },

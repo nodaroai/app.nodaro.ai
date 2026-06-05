@@ -8,7 +8,10 @@
  *
  * Also asserts:
  * - CREDIT_COSTS["cinematic-avatar"] is defined (node-type resolver for workflow estimation).
- * - The hold is ≥ the metered actual at the default configured pricing factor (refund-only guarantee).
+ * - The RESERVED amount (markup applied to the stored hold at reserve) is >= the
+ *   metered actual (refund-only guarantee). The stored hold is the at-cost 0%-base
+ *   value; getModelCreditCostFromDB applies the admin markup to it at reserve time,
+ *   so the comparison must mark up BOTH sides.
  * - All 24 ids are present (2 resolutions × 12 durations 4..15s).
  */
 
@@ -24,6 +27,17 @@ import {
   resolveCinematicCreditId,
   type CinematicResolution,
 } from "@nodaro/shared"
+
+const CREDIT_BASE_USD = 0.02
+// Runtime reserve: getModelCreditCostFromDB applies the admin markup to the stored hold.
+function reservedFromHold(hold: number, markupPct: number): number {
+  return markupPct > 0 ? Math.ceil(hold * (1 + markupPct / 100)) : hold
+}
+// Runtime commit: computeActualCredits(usd) = ceil(ceil(usd/0.02) * markup).
+function meteredActual(usd: number, markupPct: number): number {
+  const base = Math.ceil(usd / CREDIT_BASE_USD)
+  return markupPct > 0 ? Math.ceil(base * (1 + markupPct / 100)) : base
+}
 
 describe("CINEMATIC_RESERVE_IDS parity with STATIC_CREDIT_COSTS", () => {
   it("all 24 reserve ids exist in STATIC_CREDIT_COSTS with a positive hold value", () => {
@@ -52,7 +66,7 @@ describe("CREDIT_COSTS[cinematic-avatar]", () => {
   })
 })
 
-describe("hold >= metered actual at default configured pricing factor (refund-only guarantee)", () => {
+describe("reserved >= metered actual at default configured pricing factor (refund-only guarantee)", () => {
   it.each(
     (Object.keys(CINEMATIC_RATE_USD_PER_SEC) as CinematicResolution[]).flatMap((resolution) =>
       Array.from(
@@ -60,17 +74,16 @@ describe("hold >= metered actual at default configured pricing factor (refund-on
         (_, i) => ({ resolution, durationSec: CINEMATIC_MIN_DURATION_SEC + i }),
       ),
     ),
-  )("$resolution:${durationSec}s — hold >= metered actual @25%", ({ resolution, durationSec }) => {
-    const hold = cinematicHoldCredits(resolution, durationSec)
+  )("$resolution:${durationSec}s — reserved >= metered actual @25%", ({ resolution, durationSec }) => {
+    const reserved = reservedFromHold(cinematicHoldCredits(resolution, durationSec), 25)
     const providerUsd = cinematicUsdCost(resolution, durationSec)
-    // Simulate commitJobCredits/computeActualCredits at default configured pricing factor:
-    // base = ceil(usd/0.02); actual = ceil(base * 1.25)
-    const baseCredits = Math.ceil(providerUsd / 0.02)
-    const actualAtDefaultMarkup = Math.ceil(baseCredits * 1.25)
+    const actual = meteredActual(providerUsd, 25)
     expect(
-      hold,
-      `hold ${hold} < actual ${actualAtDefaultMarkup} for ${resolution}:${durationSec}s — commit_credits can ONLY refund, never charge more`,
-    ).toBeGreaterThanOrEqual(actualAtDefaultMarkup)
+      reserved,
+      `reserved ${reserved} < actual ${actual} for ${resolution}:${durationSec}s — commit_credits can ONLY refund, never charge more`,
+    ).toBeGreaterThanOrEqual(actual)
+    // Exact-duration → reserved EQUALS actual (minimal-safe, no over-reserve).
+    expect(reserved).toBe(actual)
   })
 })
 
@@ -89,14 +102,15 @@ describe("autoDuration reserve preserves the refund-only guarantee", () => {
       const reservedHold = STATIC_CREDIT_COSTS[reserveId]
       expect(reservedHold).toBe(cinematicHoldCredits(resolution, CINEMATIC_MAX_DURATION_SEC))
 
-      // Worst-case actual = HeyGen returns the max 15s clip.
+      // Worst-case actual = HeyGen returns the max 15s clip. Mark up BOTH the
+      // stored hold (reserve-time) and the worst-case usd (commit-time).
+      const reserved = reservedFromHold(reservedHold, 25)
       const worstUsd = cinematicUsdCost(resolution, CINEMATIC_MAX_DURATION_SEC)
-      const baseCredits = Math.ceil(worstUsd / 0.02)
-      const actualAtDefaultMarkup = Math.ceil(baseCredits * 1.25)
+      const actual = meteredActual(worstUsd, 25)
       expect(
-        reservedHold,
-        `autoDuration hold ${reservedHold} < worst-case 15s actual ${actualAtDefaultMarkup} for ${resolution}`,
-      ).toBeGreaterThanOrEqual(actualAtDefaultMarkup)
+        reserved,
+        `autoDuration reserved ${reserved} < worst-case 15s actual ${actual} for ${resolution}`,
+      ).toBeGreaterThanOrEqual(actual)
     },
   )
 

@@ -132,27 +132,37 @@ describe("CINEMATIC_RESERVE_IDS", () => {
   })
 })
 
-describe("cinematicHoldCredits", () => {
-  it("uses [formula removed]", () => {
-    // 720p 10s → $1.50 → ceil(75 * 1.5) = 113
-    expect(cinematicHoldCredits("720p", 10)).toBe(113)
-    // 1080p 15s → $3.30 → ceil(165 * 1.5) = 248
-    expect(cinematicHoldCredits("1080p", 15)).toBe(248)
+describe("cinematicHoldCredits — minimal-safe at-cost formula (NO *1.5)", () => {
+  it("uses ceil(usd/0.02)", () => {
+    // 720p 10s → $1.50 → ceil(75) = 75
+    expect(cinematicHoldCredits("720p", 10)).toBe(75)
+    // 1080p 15s → $3.30 → ceil(165) = 165
+    expect(cinematicHoldCredits("1080p", 15)).toBe(165)
+    // 720p 5s → $0.75 → ceil(37.5) = 38
+    expect(cinematicHoldCredits("720p", 5)).toBe(38)
   })
 
-  it("hold >= metered actual at the default configured pricing factor (refund-only guarantee)", () => {
-    for (const resolution of Object.keys(CINEMATIC_RATE_USD_PER_SEC) as Array<
-      keyof typeof CINEMATIC_RATE_USD_PER_SEC
-    >) {
-      for (let d = CINEMATIC_MIN_DURATION_SEC; d <= CINEMATIC_MAX_DURATION_SEC; d++) {
-        const hold = cinematicHoldCredits(resolution, d)
-        const providerUsd = cinematicUsdCost(resolution, d)
-        const baseCredits = Math.ceil(providerUsd / 0.02)
-        const actualAtDefaultMarkup = Math.ceil(baseCredits * 1.25)
-        expect(
-          hold,
-          `hold ${hold} < actual ${actualAtDefaultMarkup} for ${resolution}:${d}s`,
-        ).toBeGreaterThanOrEqual(actualAtDefaultMarkup)
+  it("INVARIANT: reserved == metered-actual at every duration (exact-duration → refund-only)", () => {
+    // Duration is a user parameter, so the reserve id is EXACT. The runtime
+    // reserves ceil(hold * markup) and commits ceil(ceil(usd/0.02) * markup) —
+    // both derive from the same ceil(usd/0.02) base, so they are EQUAL. The
+    // commit can therefore only ever refund (when the provider returns shorter),
+    // never undercharge.
+    for (const markup of [0, 25, 30, 50]) {
+      for (const resolution of Object.keys(CINEMATIC_RATE_USD_PER_SEC) as Array<
+        keyof typeof CINEMATIC_RATE_USD_PER_SEC
+      >) {
+        for (let d = CINEMATIC_MIN_DURATION_SEC; d <= CINEMATIC_MAX_DURATION_SEC; d++) {
+          const hold = cinematicHoldCredits(resolution, d)
+          const reserved = markup > 0 ? Math.ceil(hold * (1 + markup / 100)) : hold
+          const providerUsd = cinematicUsdCost(resolution, d)
+          const baseCredits = Math.ceil(providerUsd / 0.02)
+          const actual = markup > 0 ? Math.ceil(baseCredits * (1 + markup / 100)) : baseCredits
+          expect(
+            reserved,
+            `reserved ${reserved} != actual ${actual} @${markup}% for ${resolution}:${d}s`,
+          ).toBe(actual)
+        }
       }
     }
   })

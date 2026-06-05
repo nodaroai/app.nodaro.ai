@@ -195,7 +195,7 @@ describe("buildPayload — ai-avatar", () => {
     expect(AI_AVATAR_RESERVE_IDS).toContain(result.modelIdentifier)
   })
 
-  it("emits a seeded reserve id for audio mode (top bucket)", () => {
+  it("emits a seeded reserve id for audio mode (modest 120s fallback, NOT 900s)", () => {
     const n = node("n1", {
       engine: "avatar-v",
       avatarId: "avatar-abc",
@@ -206,8 +206,10 @@ describe("buildPayload — ai-avatar", () => {
     const inputs: ResolvedInputs = { audioUrl: "https://r2.example.com/audio/clip.mp3" }
     const result = buildPayload(n, jobId, inputs, usageLogId)
     expect(AI_AVATAR_RESERVE_IDS).toContain(result.modelIdentifier)
-    // Audio mode reserves the 900s top bucket at the requested engine/resolution.
-    expect(result.modelIdentifier).toBe("heygen-avatar-v:1080p:900s")
+    // The orchestrator path has no ffprobe, so audio mode reserves the MODEST
+    // 120s fallback (not the old 900s top bucket that over-reserved thousands).
+    // The metered commit is refund-only, so this never over-charges.
+    expect(result.modelIdentifier).toBe("heygen-avatar-v:1080p:120s")
   })
 
   it("pins the credit engine to avatar-iv in image-source mode (regardless of stored engine)", () => {
