@@ -146,19 +146,23 @@ export function isValidSpeechToVideoConnection(
 }
 
 // ─── ai-avatar ─────────────────────────────────────────────────────────
-// Inputs: script (verbatim text, text mode), audio (audio-driven mode).
-// Source: video.
+// Inputs: image (image-source mode), script (verbatim text, text mode),
+// audio (audio-driven mode). Source: video.
 //
-// Both handles are ALWAYS mounted (voice-changer pattern). The `script`
+// All handles are ALWAYS mounted (voice-changer pattern). The `script`
 // handle is intentionally restricted to text producers — parameter-picker
 // prose or cinematography hints must NOT leak into the verbatim TTS field.
 // The `audio` handle mirrors lip-sync / speech-to-video (audio + dynamic).
+// The `image` handle accepts image producers (image-source mode) — mirrors
+// lip-sync's portrait handle.
 export function isValidAiAvatarConnection(
   targetHandleId: string,
   sourceType: string,
   isVisualPicker: (t: string) => boolean,
 ): boolean {
   switch (targetHandleId) {
+    case "image":
+      return ACCEPTS_IMAGE_OR_DYN(sourceType)
     case "script":
       // Text producers ONLY — no pickers, no dynamic producers.
       // Mirrors the text-to-speech `directText` precedent: verbatim spoken
@@ -166,6 +170,25 @@ export function isValidAiAvatarConnection(
       return ACCEPTS_TEXT_OR_DYN(sourceType) && !isVisualPicker(sourceType)
     case "audio":
       return ACCEPTS_AUDIO_OR_DYN(sourceType)
+    default:
+      return false
+  }
+}
+
+// ─── cinematic-avatar ──────────────────────────────────────────────────
+// Input: prompt (a true GENERATIVE prompt, unlike ai-avatar's verbatim
+// `script`). Source: video. Because the prompt is generative — not spoken
+// verbatim — it accepts the same producers as any other prompt handle
+// (text producers, parameter pickers, cinematography hints), mirroring
+// motion-transfer / speech-to-video's `prompt` handle.
+export function isValidCinematicAvatarConnection(
+  targetHandleId: string,
+  sourceType: string,
+  isVisualPicker?: (t: string) => boolean,
+): boolean {
+  switch (targetHandleId) {
+    case "prompt":
+      return ACCEPTS_PROMPT(sourceType, isVisualPicker ?? (() => false))
     default:
       return false
   }
@@ -210,5 +233,6 @@ export const VIDEO_PRODUCER_HANDLE_LABELS: Record<string, Record<string, string>
   "lip-sync":         { image: "Portrait", video: "Source video", audio: "Audio" },
   "speech-to-video":  { image: "Portrait", audio: "Audio", prompt: "Prompt", cinematography: "Cinematography" },
   "motion-transfer":  { image: "Character", video: "Source video", prompt: "Prompt", negative: "Negative", assets: "Assets" },
-  "ai-avatar":        { script: "Script", audio: "Audio", video: "Video" },
+  "ai-avatar":        { image: "Image", script: "Script", audio: "Audio", video: "Video" },
+  "cinematic-avatar": { prompt: "Prompt", video: "Video" },
 }

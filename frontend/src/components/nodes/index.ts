@@ -131,6 +131,7 @@ import { ManualEditNode } from "./manual-edit-node";
 import { LipSyncNode } from "./lip-sync-node";
 import { SpeechToVideoNode } from "./speech-to-video-node";
 import { AiAvatarNode } from "./ai-avatar-node";
+import { CinematicAvatarNode } from "./cinematic-avatar-node";
 import { MotionTransferNode } from "./motion-transfer-node";
 import { VideoUpscaleNode } from "./video-upscale-node";
 import { ExtendVideoNode } from "./extend-video-node";
@@ -263,6 +264,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "lip-sync": LipSyncNode,
   "speech-to-video": SpeechToVideoNode,
   "ai-avatar": AiAvatarNode,
+  "cinematic-avatar": CinematicAvatarNode,
   "motion-transfer": MotionTransferNode,
   transcribe: TranscribeNode,
   "image-to-text": ImageToTextNode,

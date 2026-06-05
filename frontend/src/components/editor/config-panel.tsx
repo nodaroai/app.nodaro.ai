@@ -199,10 +199,11 @@ import {
   SelectorConfig,
   ResultsGallery,
   AiAvatarConfig,
+  CinematicAvatarConfig,
 } from "./config-panels"
 import { TileCommitContext } from "./config-panels/dimension-tile-grid"
 
-const LIBRARY_VIDEO_TYPES = new Set(["image-to-video", "video-to-video", "text-to-video", "generate-video", "video-upscale", "extend-video", "motion-transfer", "lip-sync", "speech-to-video", "face-swap", "video-sfx", "ai-avatar"])
+const LIBRARY_VIDEO_TYPES = new Set(["image-to-video", "video-to-video", "text-to-video", "generate-video", "video-upscale", "extend-video", "motion-transfer", "lip-sync", "speech-to-video", "face-swap", "video-sfx", "ai-avatar", "cinematic-avatar"])
 const LIBRARY_AUDIO_TYPES = new Set(["text-to-speech", "generate-music", "text-to-audio", "audio-isolation", "text-to-dialogue", "voice-changer", "dubbing", "voice-remix", "voice-design", "suno-generate", "suno-cover", "suno-extend", "suno-separate", "suno-mashup", "suno-replace-section", "suno-add-instrumental", "suno-add-vocals", "suno-convert-wav", "suno-upload-extend"])
 
 const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
@@ -322,6 +323,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "video-sfx": "Video SFX",
   "speech-to-video": "Speech to Video",
   "ai-avatar": "AI Avatar",
+  "cinematic-avatar": "Cinematic Avatar",
   "video-upscale": "Upscale Video",
   "combine-text": "Combine Text",
   "split-text": "Split Text",
@@ -370,7 +372,7 @@ export const GENERATE_BUTTON_TYPES = new Set([
   "generate-script", "generate-image", "modify-image", "upscale-image", "remove-background", "generate-mask",
   "image-to-video", "video-to-video", "text-to-video", "generate-video", "text-to-speech",
   "text-to-audio", "audio-isolation", "text-to-dialogue", "voice-changer", "dubbing", "voice-remix", "voice-design", "forced-alignment", "generate-music", "motion-transfer", "lip-sync", "speech-to-video",
-  "video-upscale", "extend-video", "video-retake", "face-swap", "video-sfx", "ai-avatar", "suno-generate", "suno-cover", "suno-extend",
+  "video-upscale", "extend-video", "video-retake", "face-swap", "video-sfx", "ai-avatar", "cinematic-avatar", "suno-generate", "suno-cover", "suno-extend",
   "suno-lyrics", "suno-separate", "suno-music-video",
   "suno-mashup", "suno-replace-section", "suno-style-boost", "suno-add-instrumental", "suno-add-vocals", "suno-convert-wav", "suno-upload-extend",
   "llm-chat", "web-scrape",
@@ -558,6 +560,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "lip-sync": return <LipSyncConfig {...configProps} nodeId={selectedNodeId} />
     case "speech-to-video": return <SpeechToVideoConfig {...configProps} nodeId={selectedNodeId} />
     case "ai-avatar": return <AiAvatarConfig {...configProps} />
+    case "cinematic-avatar": return <CinematicAvatarConfig {...configProps} />
     case "motion-transfer": return <MotionTransferConfig {...configProps} nodeId={selectedNodeId} />
     case "transcribe": return <TranscribeConfig {...configProps} />
     case "image-to-text": return <ImageToTextConfig {...configProps} />

@@ -52,20 +52,41 @@ interface AvatarCache {
 let avatarCache: AvatarCache | null = null
 let avatarInflight: Promise<HeygenAvatar[]> | null = null
 
-async function fetchAvatars(): Promise<HeygenAvatar[]> {
-  const raw = await heygenFetch<RawAvatarsLooksResponse>("/v3/avatars/looks")
+/** Maximum number of pagination pages to fetch (safety cap). */
+const MAX_PAGES = 50
 
-  return raw.data
-    .filter((look) => look.avatar_type === "photo_avatar")
-    .map((look) => ({
-      avatarId: look.id,
-      groupId: look.group_id,
-      name: look.name,
-      gender: normalizeGender(look.gender),
-      previewImageUrl: look.preview_image_url,
-      defaultVoiceId: look.default_voice_id,
-      preferredOrientation: look.preferred_orientation,
-    }))
+async function fetchAvatars(): Promise<HeygenAvatar[]> {
+  const accumulated: HeygenAvatar[] = []
+  let cursor: string | undefined
+  let pageCount = 0
+
+  do {
+    const url = cursor ? `/v3/avatars/looks?token=${encodeURIComponent(cursor)}` : "/v3/avatars/looks"
+    const raw = await heygenFetch<RawAvatarsLooksResponse>(url)
+
+    const page = raw.data
+      .filter((look) => look.avatar_type === "photo_avatar")
+      .map((look) => ({
+        avatarId: look.id,
+        groupId: look.group_id,
+        name: look.name,
+        gender: normalizeGender(look.gender),
+        previewImageUrl: look.preview_image_url,
+        defaultVoiceId: look.default_voice_id,
+        preferredOrientation: look.preferred_orientation,
+        supportedEngines: look.supported_api_engines,
+      }))
+
+    accumulated.push(...page)
+    pageCount++
+
+    // Resolve next cursor: prefer next_token, fall back to token
+    const nextCursor = raw.next_token ?? raw.token
+    // Stop when: no cursor returned, has_more is explicitly false, or safety cap reached
+    cursor = (nextCursor && raw.has_more !== false) ? nextCursor : undefined
+  } while (cursor && pageCount < MAX_PAGES)
+
+  return accumulated
 }
 
 /**
@@ -115,18 +136,33 @@ let voiceCache: VoiceCache | null = null
 let voiceInflight: Promise<HeygenVoice[]> | null = null
 
 async function fetchVoices(): Promise<HeygenVoice[]> {
-  const raw = await heygenFetch<RawVoicesResponse>("/v2/voices")
+  const accumulated: HeygenVoice[] = []
+  let cursor: string | undefined
+  let pageCount = 0
 
-  return raw.data.voices.map((v) => ({
-    voiceId: v.voice_id,
-    name: v.name,
-    language: v.language,
-    gender: normalizeGender(v.gender),
-    previewAudio: v.preview_audio,
-    supportPause: v.support_pause ?? false,
-    emotionSupport: v.emotion_support ?? false,
-    supportLocale: v.support_locale ?? false,
-  }))
+  do {
+    const url = cursor ? `/v2/voices?token=${encodeURIComponent(cursor)}` : "/v2/voices"
+    const raw = await heygenFetch<RawVoicesResponse>(url)
+
+    const page = raw.data.voices.map((v) => ({
+      voiceId: v.voice_id,
+      name: v.name,
+      language: v.language,
+      gender: normalizeGender(v.gender),
+      previewAudio: v.preview_audio,
+      supportPause: v.support_pause ?? false,
+      emotionSupport: v.emotion_support ?? false,
+      supportLocale: v.support_locale ?? false,
+    }))
+
+    accumulated.push(...page)
+    pageCount++
+
+    const nextCursor = raw.next_token ?? raw.token
+    cursor = (nextCursor && raw.has_more !== false) ? nextCursor : undefined
+  } while (cursor && pageCount < MAX_PAGES)
+
+  return accumulated
 }
 
 /**

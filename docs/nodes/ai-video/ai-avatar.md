@@ -1,10 +1,19 @@
 # AI Avatar
 
-> Generate a talking-avatar video from a HeyGen avatar + voice + script, or wired audio.
+> Generate a talking-avatar video from a HeyGen avatar (or a raw image) + voice + script, or wired audio.
 
 ## Overview
 
-The AI Avatar node creates a talking-head video using a HeyGen avatar. You supply either a text script (HeyGen's built-in TTS delivers the voice) or a pre-recorded audio track. Both paths produce a video of the chosen avatar speaking the content.
+The AI Avatar node creates a talking-head video using HeyGen. You supply either a text script (HeyGen's built-in TTS delivers the voice) or a pre-recorded audio track. Both paths produce a video of the chosen source speaking the content.
+
+Two **source modes** control where the visual comes from:
+
+| Source | What you provide | Notes |
+|--------|-----------------|-------|
+| **Avatar** (`avatarSource: avatar`, default) | A HeyGen avatar look picked from the in-node avatar picker | Animated by the Avatar IV / Avatar V engine |
+| **Image** (`avatarSource: image`) | A raw image — wired into the node's Image input, pasted as a URL, or uploaded | Animates your own photo/character directly. No avatar creation or training needed, so it works without a higher HeyGen tier. The engine selector is hidden (image mode uses its own engine) |
+
+Both source modes support the same speech modes, voice tuning, background, captions, and motion controls. Image mode is billed identically to Avatar IV (it is IV-class).
 
 Two speech modes:
 
@@ -26,12 +35,14 @@ Both pickers return empty when HeyGen is not configured for the deployment; an "
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
+| Source | Select | `avatar` | `avatar` = HeyGen avatar look; `image` = animate a raw image |
 | Speech Mode | Select | `text` | `text` = script + voice; `audio` = wired audio input |
-| Avatar | Picker | — | HeyGen avatar ID (required) |
+| Avatar | Picker | — | HeyGen avatar ID (required in avatar source mode) |
+| Source Image | Image input / URL / Upload | — | Source image (required in image source mode) — wire an image node into the Image input, paste a URL, or upload |
 | Script | Textarea | — | Spoken text (required in text mode, max 5,000 chars) |
 | Voice | Picker | — | HeyGen voice ID (required in text mode) |
 | Voice Speed | Slider | 1.0 | Speaking rate, range 0.5–1.5 (text mode only) |
-| Engine | Select | `avatar-iv` | `avatar-iv` = Avatar IV; `avatar-v` = Avatar V (premium) |
+| Engine | Select | `avatar-iv` | `avatar-iv` = Avatar IV; `avatar-v` = Avatar V (premium). Avatar source mode only — hidden in image source mode |
 | Resolution | Select | `720p` | Output resolution: `720p`, `1080p`, `4k` |
 | Aspect Ratio | Select | `16:9` | `16:9` (landscape) or `9:16` (portrait / vertical) |
 | Captions | Toggle | off | Burn auto-generated captions into the video |
@@ -39,6 +50,8 @@ Both pickers return empty when HeyGen is not configured for the deployment; an "
 ## Inputs & Outputs
 
 **Inputs:**
+- Image (optional, required when `avatarSource = image`) — source image to animate (also settable via URL/upload in the config panel)
+- Script (optional) — verbatim spoken text wired from a text producer (text mode)
 - Audio (optional, required when `speechMode = audio`) — pre-recorded audio track
 
 **Outputs:**

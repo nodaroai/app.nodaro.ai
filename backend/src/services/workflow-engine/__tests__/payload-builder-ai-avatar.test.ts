@@ -10,6 +10,7 @@
  */
 import { describe, it, expect } from "vitest"
 import { buildPayload } from "../payload-builder.js"
+import { AI_AVATAR_RESERVE_IDS } from "@nodaro/shared"
 import type { SimpleNode, ResolvedInputs } from "../types.js"
 
 // ---------------------------------------------------------------------------
@@ -142,5 +143,53 @@ describe("buildPayload — ai-avatar", () => {
     })
     const result = buildPayload(n, jobId, {}, usageLogId)
     expect(result.payload.jobId).toBe(jobId)
+  })
+
+  // ── modelIdentifier must be a SEEDED reserve id (no 503 price_not_configured) ──
+
+  it("emits a SEEDED reserve credit id (member of AI_AVATAR_RESERVE_IDS)", () => {
+    // The orchestrator passes this modelIdentifier to reserveCredits →
+    // getModelCreditBaseCost, which hard-fails (503) for any unseeded id.
+    // Every id buildPayload can emit MUST be one of the 42 seeded bucket ids.
+    const n = node("n1", {
+      engine: "avatar-iv",
+      avatarId: "avatar-abc",
+      speechMode: "text",
+      script: "Say hello.",
+      voiceId: "voice-xyz",
+      resolution: "720p",
+    })
+    const result = buildPayload(n, jobId, {}, usageLogId)
+    expect(AI_AVATAR_RESERVE_IDS).toContain(result.modelIdentifier)
+  })
+
+  it("emits a seeded reserve id for audio mode (top bucket)", () => {
+    const n = node("n1", {
+      engine: "avatar-v",
+      avatarId: "avatar-abc",
+      speechMode: "audio",
+      resolution: "1080p",
+      aspectRatio: "16:9",
+    })
+    const result = buildPayload(n, jobId, {}, usageLogId)
+    expect(AI_AVATAR_RESERVE_IDS).toContain(result.modelIdentifier)
+    // Audio mode reserves the 900s top bucket at the requested engine/resolution.
+    expect(result.modelIdentifier).toBe("heygen-avatar-v:1080p:900s")
+  })
+
+  it("pins the credit engine to avatar-iv in image-source mode (regardless of stored engine)", () => {
+    // Image-source mode is IV-class — billing must NOT use avatar-v even if the
+    // stale stored engine says so. resolveAiAvatarCreditId enforces this.
+    const n = node("n1", {
+      avatarSource: "image",
+      engine: "avatar-v", // ignored for billing in image mode
+      speechMode: "text",
+      script: "Hi.",
+      voiceId: "voice-xyz",
+      resolution: "720p",
+    })
+    const result = buildPayload(n, jobId, {}, usageLogId)
+    expect(result.modelIdentifier).toMatch(/^heygen-avatar-iv:/)
+    expect(AI_AVATAR_RESERVE_IDS).toContain(result.modelIdentifier)
   })
 })

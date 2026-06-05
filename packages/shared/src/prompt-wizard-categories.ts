@@ -124,6 +124,9 @@ const NODE_TYPE_TO_CATEGORIES: Record<string, readonly WizardCategory[]> = {
   "motion-transfer": VIDEO_WIZARD_CATEGORIES,
   "extend-video": VIDEO_WIZARD_CATEGORIES,
   "speech-to-video": VIDEO_WIZARD_CATEGORIES,
+  // cinematic-avatar's `prompt` IS a generative prompt (unlike ai-avatar's
+  // verbatim `script`), so the wizard applies — see design spec Part B.
+  "cinematic-avatar": VIDEO_WIZARD_CATEGORIES,
   "generate-music": MUSIC_WIZARD_CATEGORIES,
   "suno-generate": MUSIC_WIZARD_CATEGORIES,
   "text-to-audio": AUDIO_WIZARD_CATEGORIES,
@@ -290,6 +293,9 @@ export const PROVIDER_CAPABILITIES: Record<string, Record<string, string>> = {
   },
   "ai-avatar": {
     "heygen": "HeyGen — industry-standard AI avatars; Avatar IV for established quality, Avatar V for premium fidelity",
+  },
+  "cinematic-avatar": {
+    "heygen": "HeyGen Cinematic Avatar — prompt-driven generative clip (Seedance pipeline) from 1-3 avatar looks",
   },
   "generate-music": {
     "minimax": "General music generation, multiple genres",

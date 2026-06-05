@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-06-04T23:31:49.744Z
-generated_from: 12d6438a
+generated_at: 2026-06-05T07:51:52.459Z
+generated_from: 39f8c86c
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -79,6 +79,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `camera-motion` — Camera Motion
 - `character` — Character
 - `character-fx` — Character FX
+- `cinematic-avatar` — Cinematic Avatar
 - `collect` — Collect
 - `color-look` — Color / Look
 - `combine-audio` — Combine Audio

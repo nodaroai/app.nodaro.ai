@@ -431,7 +431,11 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
     capabilities: ["text-to-speech", "audio-input", "captions"],
     inputSchema: {
       fields: [
-        { key: "avatarId", type: "text", required: true },
+        // avatarSource determines which of the two source paths is active.
+        // When avatarSource="image", avatarId is omitted and imageUrl is used.
+        { key: "avatarSource", type: "select", options: ["avatar", "image"] },
+        { key: "avatarId", type: "text", required: false },
+        { key: "imageUrl", type: "image-url" },
         { key: "speechMode", type: "select", required: true, options: ["text", "audio"] },
         { key: "script", type: "text" },
         { key: "voiceId", type: "text" },
@@ -439,6 +443,31 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
         { key: "engine", type: "select", options: ["avatar-iv", "avatar-v"] },
         { key: "resolution", type: "select", options: ["720p", "1080p", "4k"] },
         { key: "aspectRatio", type: "select", options: ["16:9", "9:16"] },
+      ],
+    },
+  },
+  {
+    type: "cinematic-avatar",
+    label: "Cinematic Avatar",
+    category: "ai-video",
+    description:
+      "Generate a cinematic, prompt-driven avatar clip from 1-3 HeyGen avatar looks (generative Seedance pipeline). No script/voice — the prompt IS the direction.",
+    outputType: "video",
+    // Duration × resolution tiered (cinematic-avatar:<resolution>:<durationSec>s in
+    // STATIC_CREDIT_COSTS). 2 resolutions × 12 durations (4-15s); range is the
+    // 720p:4s reserve ceiling → 1080p:15s reserve ceiling.
+    creditCost: "45-248",
+    providers: ["heygen"],
+    capabilities: ["prompt-driven", "multi-avatar-look"],
+    inputSchema: {
+      fields: [
+        { key: "prompt", type: "text", required: true },
+        // 1-3 catalog avatar look ids (string array; same /v3/avatars/looks picker).
+        { key: "avatarLooks", type: "text", required: true },
+        { key: "duration", type: "number" },
+        { key: "aspectRatio", type: "select", options: ["16:9", "9:16", "1:1"] },
+        { key: "resolution", type: "select", options: ["720p", "1080p"] },
+        { key: "enhancePrompt", type: "boolean" },
       ],
     },
   },

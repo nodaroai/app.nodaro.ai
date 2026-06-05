@@ -13,6 +13,15 @@ import {
   type AiAvatarEngine,
   type AiAvatarResolution,
 } from "@nodaro/shared"
+import {
+  CINEMATIC_RATE_USD_PER_SEC,
+  CINEMATIC_MIN_DURATION_SEC,
+  CINEMATIC_MAX_DURATION_SEC,
+  cinematicCreditId,
+  cinematicHoldCredits,
+  resolveCinematicCreditId,
+  type CinematicResolution,
+} from "@nodaro/shared"
 
 // ── Flux 2 per-MP×ref static costs (generated from flux2BaseCredits formula) ──
 // Identifier format: `<model>:<mp>MP:<n>ref` (e.g. `flux-2-max:2MP:1ref`)
@@ -40,6 +49,19 @@ for (const engine of Object.keys(AI_AVATAR_RATE_USD_PER_SEC) as AiAvatarEngine[]
       const id = `heygen-${engine}:${resolution}:${bucketSec}s`
       AI_AVATAR_STATIC[id] = aiAvatarHoldCredits(engine, resolution, bucketSec)
     }
+  }
+}
+
+// ── Cinematic Avatar (HeyGen `type:"cinematic_avatar"`) exact-duration holds ──
+// 24 ids: 2 resolutions × 12 durations (4..15s). Duration is a USER PARAMETER
+// (known at submit), so the reserve id encodes the EXACT requested duration —
+// no bucketing. Formula: [formula removed] — the 1.5× safety factor keeps the
+// hold ≥ the metered actual at default configured pricing factor. A missing id causes a hard
+// 503 `price_not_configured` at runtime.
+const CINEMATIC_STATIC: Record<string, number> = {}
+for (const resolution of Object.keys(CINEMATIC_RATE_USD_PER_SEC) as CinematicResolution[]) {
+  for (let d = CINEMATIC_MIN_DURATION_SEC; d <= CINEMATIC_MAX_DURATION_SEC; d++) {
+    CINEMATIC_STATIC[cinematicCreditId(resolution, d)] = cinematicHoldCredits(resolution, d)
   }
 }
 
@@ -179,6 +201,11 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // Format: `heygen-<engine>:<resolution>:<bucketSec>s`  e.g. `heygen-avatar-iv:720p:60s`.
   ***REDACTED-OSS-SCRUB***
   ...AI_AVATAR_STATIC,
+  // Cinematic Avatar (HeyGen) — 24 exact-duration reserve holds (2 resolutions × 12 durations 4..15s).
+  // Format: `cinematic-avatar:<resolution>:<durationSec>s`  e.g. `cinematic-avatar:720p:10s`.
+  ***REDACTED-OSS-SCRUB***
+  // Rate is an UNCONFIRMED estimate — confirm via a paid run per audit-credits ship-gate.
+  ...CINEMATIC_STATIC,
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
   // ── Image Editing ──
@@ -847,6 +874,10 @@ export const CREDIT_COSTS: Record<string, (data: Record<string, unknown>) => str
   // AI Avatar (HeyGen): delegates to resolveAiAvatarCreditId — same body-reading
   // logic the creditGuard preHandler uses directly at request time.
   "ai-avatar": (data) => resolveAiAvatarCreditId(data),
+
+  // Cinematic Avatar (HeyGen): delegates to resolveCinematicCreditId — exact
+  // (resolution, duration) id, same logic the creditGuard preHandler uses.
+  "cinematic-avatar": (data) => resolveCinematicCreditId(data),
 }
 
 // Tier order for restriction checks

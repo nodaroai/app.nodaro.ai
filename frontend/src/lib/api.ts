@@ -3012,37 +3012,123 @@ export async function speechToVideoApi(opts: {
   })
 }
 
+/** TTS engine override as stored on the node (camelCase value fields). */
+type AiAvatarTtsEngine =
+  | {
+      engine_type: "elevenlabs"
+      model?: "eleven_multilingual_v2" | "eleven_turbo_v2_5" | "eleven_flash_v2_5" | "eleven_v3"
+      stability?: number
+      similarityBoost?: number
+      style?: number
+      useSpeakerBoost?: boolean
+    }
+  | { engine_type: "fish"; model?: "s1" | "s2-pro"; stability?: number; similarity?: number }
+  | { engine_type: "starfish" }
+
 export async function runAiAvatar(input: {
+  avatarSource?: "avatar" | "image"
   engine?: "avatar-v" | "avatar-iv"
-  avatarId: string
+  avatarId?: string
+  imageUrl?: string
   speechMode: "text" | "audio"
   script?: string
   voiceId?: string
   voiceSpeed?: number
+  pitch?: number
+  volume?: number
+  locale?: string
+  ttsEngine?: AiAvatarTtsEngine
   audioUrl?: string
   resolution?: "720p" | "1080p" | "4k"
   aspectRatio?: "16:9" | "9:16"
+  background?: { type: "color" | "image"; value?: string; url?: string }
+  removeBackground?: boolean
+  motionPrompt?: string
+  expressiveness?: "high" | "medium" | "low"
+  fit?: "cover" | "contain"
+  outputFormat?: "mp4" | "webm"
   caption?: boolean
+  captionStyle?: "default"
   workflowId?: string
   userId?: string
 }): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = {
-    avatarId: input.avatarId,
     speechMode: input.speechMode,
   }
+  if (input.avatarSource !== undefined) body.avatarSource = input.avatarSource
+  if (input.avatarId !== undefined) body.avatarId = input.avatarId
+  if (input.imageUrl !== undefined) body.imageUrl = input.imageUrl
   if (input.engine !== undefined) body.engine = input.engine
   if (input.script !== undefined) body.script = input.script
   if (input.voiceId !== undefined) body.voiceId = input.voiceId
   if (input.voiceSpeed !== undefined) body.voiceSpeed = input.voiceSpeed
+  if (input.pitch !== undefined) body.pitch = input.pitch
+  if (input.volume !== undefined) body.volume = input.volume
+  if (input.locale !== undefined) body.locale = input.locale
+  if (input.ttsEngine !== undefined) {
+    // Map the node's camelCase value fields → the backend's snake_case body.
+    const e = input.ttsEngine
+    if (e.engine_type === "elevenlabs") {
+      const settings: Record<string, unknown> = { engine_type: "elevenlabs" }
+      if (e.model !== undefined) settings.model = e.model
+      if (e.stability !== undefined) settings.stability = e.stability
+      if (e.similarityBoost !== undefined) settings.similarity_boost = e.similarityBoost
+      if (e.style !== undefined) settings.style = e.style
+      if (e.useSpeakerBoost !== undefined) settings.use_speaker_boost = e.useSpeakerBoost
+      body.ttsEngine = settings
+    } else if (e.engine_type === "fish") {
+      const settings: Record<string, unknown> = { engine_type: "fish" }
+      if (e.model !== undefined) settings.model = e.model
+      if (e.stability !== undefined) settings.stability = e.stability
+      if (e.similarity !== undefined) settings.similarity = e.similarity
+      body.ttsEngine = settings
+    } else {
+      body.ttsEngine = { engine_type: "starfish" }
+    }
+  }
   if (input.audioUrl !== undefined) body.audioUrl = input.audioUrl
   if (input.resolution !== undefined) body.resolution = input.resolution
   if (input.aspectRatio !== undefined) body.aspectRatio = input.aspectRatio
+  if (input.background !== undefined) body.background = input.background
+  if (input.removeBackground !== undefined) body.removeBackground = input.removeBackground
+  if (input.motionPrompt !== undefined) body.motionPrompt = input.motionPrompt
+  if (input.expressiveness !== undefined) body.expressiveness = input.expressiveness
+  if (input.fit !== undefined) body.fit = input.fit
+  if (input.outputFormat !== undefined) body.outputFormat = input.outputFormat
   if (input.caption !== undefined) body.caption = input.caption
+  if (input.captionStyle !== undefined) body.captionStyle = input.captionStyle
   if (input.userId !== undefined) body.userId = input.userId
   return apiJson("/v1/ai-avatar", {
     body,
     workflowId: true,
     label: "Failed to start AI avatar generation",
+  })
+}
+
+export async function runCinematicAvatar(input: {
+  prompt: string
+  avatarLooks: string[]
+  duration?: number
+  autoDuration?: boolean
+  aspectRatio?: "16:9" | "9:16" | "1:1"
+  resolution?: "720p" | "1080p"
+  enhancePrompt?: boolean
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = {
+    prompt: input.prompt,
+    avatarLooks: input.avatarLooks,
+  }
+  if (input.duration !== undefined) body.duration = input.duration
+  if (input.autoDuration !== undefined) body.autoDuration = input.autoDuration
+  if (input.aspectRatio !== undefined) body.aspectRatio = input.aspectRatio
+  if (input.resolution !== undefined) body.resolution = input.resolution
+  if (input.enhancePrompt !== undefined) body.enhancePrompt = input.enhancePrompt
+  if (input.userId !== undefined) body.userId = input.userId
+  return apiJson("/v1/cinematic-avatar", {
+    body,
+    workflowId: true,
+    label: "Failed to start cinematic avatar generation",
   })
 }
 
@@ -4118,6 +4204,10 @@ export interface HeygenAvatar {
   previewImageUrl: string
   defaultVoiceId?: string
   preferredOrientation?: string
+  /** Engine IDs this avatar supports, e.g. ["avatar_v", "avatar_iv"].
+   *  Absent / empty means the backend didn't return engine metadata — treat as
+   *  IV-only for filtering purposes (stock avatars often lack the field). */
+  supportedEngines?: string[]
 }
 
 /** A single voice from /v2/voices. */

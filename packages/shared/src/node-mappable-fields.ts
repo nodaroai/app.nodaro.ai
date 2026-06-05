@@ -38,6 +38,7 @@ export const NODE_MAPPABLE_FIELDS: Readonly<Record<string, readonly string[]>> =
   "speech-to-video":     ["prompt", "negativePrompt"],
   "extend-video":        ["prompt"],
   "motion-transfer":     ["prompt"],
+  "cinematic-avatar":    ["prompt"],
   "image-to-text":       ["customPrompt"],
   "instagram-post":      ["caption", "title"],
   "tiktok-post":         ["caption", "title"],

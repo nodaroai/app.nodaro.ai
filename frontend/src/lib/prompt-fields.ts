@@ -49,6 +49,9 @@ export const NODE_PROMPT_FIELDS: Readonly<Record<string, PromptFieldSpec>> = {
   "extend-video": { prompt: "prompt", negative: "negativePrompt" },
   "speech-to-video": { prompt: "prompt", negative: "negativePrompt" },
   "motion-transfer": { prompt: "prompt", negative: "negativePrompt" },
+  // Cinematic Avatar (HeyGen) — generative prompt (NOT a verbatim script),
+  // so it participates in the quick-edit Prompt modal like other AI video nodes.
+  "cinematic-avatar": { prompt: "prompt" },
   "video-sfx": { prompt: "prompt", negative: "negativePrompt", promptLabel: "Sound prompt" },
   "video-retake": { prompt: "prompt", promptLabel: "Retake prompt" },
   // ── Audio / music ──

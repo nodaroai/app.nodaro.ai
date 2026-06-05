@@ -224,6 +224,75 @@ describe("POST /v1/ai-avatar", () => {
     )
   })
 
+  it("returns 400 when image source mode is missing imageUrl", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/ai-avatar",
+      payload: {
+        avatarSource: "image",
+        speechMode: "text",
+        script: "Hello world",
+        voiceId: "voice-abc",
+        // imageUrl intentionally omitted
+        userId: VALID_USER_ID,
+      },
+    })
+
+    expect(res.statusCode).toBe(400)
+    const body = res.json()
+    expect(body.error.code).toBe("validation_error")
+  })
+
+  it("returns 400 when avatar source mode is missing avatarId", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/ai-avatar",
+      payload: {
+        // avatarSource defaults to "avatar"; avatarId intentionally omitted
+        speechMode: "audio",
+        audioUrl: VALID_AUDIO_URL,
+        userId: VALID_USER_ID,
+      },
+    })
+
+    expect(res.statusCode).toBe(400)
+    const body = res.json()
+    expect(body.error.code).toBe("validation_error")
+  })
+
+  it("image source mode: creates a job and enqueues avatarSource + imageUrl (no avatarId)", async () => {
+    mockJobInsert({ data: { id: "job-img" }, error: null })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/ai-avatar",
+      payload: {
+        avatarSource: "image",
+        imageUrl: "https://example.com/portrait.png",
+        speechMode: "text",
+        script: "Hello from a photo",
+        voiceId: "voice-abc",
+        resolution: "720p",
+        aspectRatio: "16:9",
+        userId: VALID_USER_ID,
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().jobId).toBe("job-img")
+
+    expect(videoQueue.add).toHaveBeenCalledWith(
+      "ai-avatar",
+      expect.objectContaining({
+        jobId: "job-img",
+        avatarSource: "image",
+        imageUrl: "https://example.com/portrait.png",
+        speechMode: "text",
+        script: "Hello from a photo",
+      }),
+    )
+  })
+
   it("enqueued payload carries engine, avatarId, speechMode and other fields", async () => {
     mockJobInsert({ data: { id: "job-2" }, error: null })
 

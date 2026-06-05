@@ -5,14 +5,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 // ---------------------------------------------------------------------------
 
 const mocks = vi.hoisted(() => {
-  const mockGenerateAvatarVideo = vi.fn()
-  const mockUploadVideoMaybeWatermark = vi.fn().mockResolvedValue("https://r2.example.com/videos/ai-avatar-job-1.mp4")
-  const mockGenerateAndUploadThumbnail = vi.fn().mockResolvedValue("https://r2.example.com/thumbnails/ai-avatar-job-1.png")
+  const mockGenerateCinematicAvatar = vi.fn()
+  const mockUploadVideoMaybeWatermark = vi.fn().mockResolvedValue("https://r2.example.com/videos/cinematic-job-1.mp4")
+  const mockGenerateAndUploadThumbnail = vi.fn().mockResolvedValue("https://r2.example.com/thumbnails/cinematic-job-1.png")
   const mockFinalizeJobWithMedia = vi.fn().mockResolvedValue({ ok: true })
   const mockSetJobProgress = vi.fn(async () => {})
 
   return {
-    mockGenerateAvatarVideo,
+    mockGenerateCinematicAvatar,
     mockUploadVideoMaybeWatermark,
     mockGenerateAndUploadThumbnail,
     mockFinalizeJobWithMedia,
@@ -20,8 +20,8 @@ const mocks = vi.hoisted(() => {
   }
 })
 
-vi.mock("@/providers/heygen/video.js", () => ({
-  generateAvatarVideo: mocks.mockGenerateAvatarVideo,
+vi.mock("@/providers/heygen/cinematic.js", () => ({
+  generateCinematicAvatar: mocks.mockGenerateCinematicAvatar,
 }))
 
 vi.mock("../../shared.js", async (importOriginal) => {
@@ -44,33 +44,31 @@ vi.mock("../../../lib/job-finalize.js", () => ({
 // Import module under test
 // ---------------------------------------------------------------------------
 
-import { handleAiAvatar } from "../heygen-avatar.js"
+import { handleCinematicAvatar } from "../heygen-cinematic.js"
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-const AVATAR_RESULT = {
-  videoUrl: "https://files.heygen.ai/expiring/avatar.mp4",
-  durationSec: 5.25,
-  cost: 0.315,
+const CINEMATIC_RESULT = {
+  videoUrl: "https://files.heygen.ai/expiring/cinematic.mp4",
+  durationSec: 10,
+  cost: 1.5,
   meteredCost: true as const,
 }
 
 function makeJob(data: Record<string, unknown> = {}) {
   return {
-    name: "ai-avatar",
+    name: "cinematic-avatar",
     data: {
       jobId: "job-1",
-      engine: "avatar-iv",
-      avatarId: "avatar-abc123",
-      speechMode: "text",
-      script: "Hello, welcome to our product.",
-      voiceId: "voice-xyz",
-      voiceSpeed: 1.0,
-      resolution: "720p",
+      prompt: "A futuristic city at night, cinematic style.",
+      avatarLooks: ["look-abc123"],
+      duration: 10,
+      autoDuration: false,
       aspectRatio: "16:9",
-      caption: false,
+      resolution: "720p",
+      enhancePrompt: false,
       usageLogId: "usage-1",
       ...data,
     },
@@ -95,41 +93,38 @@ function makeCtx(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.mockGenerateAvatarVideo.mockResolvedValue(AVATAR_RESULT)
-  mocks.mockUploadVideoMaybeWatermark.mockResolvedValue("https://r2.example.com/videos/ai-avatar-job-1.mp4")
-  mocks.mockGenerateAndUploadThumbnail.mockResolvedValue("https://r2.example.com/thumbnails/ai-avatar-job-1.png")
+  mocks.mockGenerateCinematicAvatar.mockResolvedValue(CINEMATIC_RESULT)
+  mocks.mockUploadVideoMaybeWatermark.mockResolvedValue("https://r2.example.com/videos/cinematic-job-1.mp4")
+  mocks.mockGenerateAndUploadThumbnail.mockResolvedValue("https://r2.example.com/thumbnails/cinematic-job-1.png")
   mocks.mockFinalizeJobWithMedia.mockResolvedValue({ ok: true })
 })
 
 // ---------------------------------------------------------------------------
-// Happy path — text mode
+// Happy path
 // ---------------------------------------------------------------------------
 
-describe("handleAiAvatar — text mode", () => {
-  it("calls generateAvatarVideo with all text-mode fields", async () => {
+describe("handleCinematicAvatar — happy path", () => {
+  it("calls generateCinematicAvatar with all job data fields", async () => {
     const job = makeJob()
-    await handleAiAvatar(job as never, makeCtx())
+    await handleCinematicAvatar(job as never, makeCtx())
 
-    expect(mocks.mockGenerateAvatarVideo).toHaveBeenCalledWith({
-      engine: "avatar-iv",
-      avatarId: "avatar-abc123",
-      speechMode: "text",
-      script: "Hello, welcome to our product.",
-      voiceId: "voice-xyz",
-      voiceSpeed: 1.0,
-      audioUrl: undefined,
-      resolution: "720p",
+    expect(mocks.mockGenerateCinematicAvatar).toHaveBeenCalledWith({
+      prompt: "A futuristic city at night, cinematic style.",
+      avatarLooks: ["look-abc123"],
+      duration: 10,
+      autoDuration: false,
       aspectRatio: "16:9",
-      caption: false,
+      resolution: "720p",
+      enhancePrompt: false,
     })
   })
 
   it("re-hosts the expiring HeyGen URL to R2 via uploadVideoMaybeWatermark", async () => {
     const job = makeJob()
-    await handleAiAvatar(job as never, makeCtx())
+    await handleCinematicAvatar(job as never, makeCtx())
 
     expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalledWith(
-      AVATAR_RESULT.videoUrl,
+      CINEMATIC_RESULT.videoUrl,
       "job-1",
       "user-1",
       false,
@@ -138,34 +133,33 @@ describe("handleAiAvatar — text mode", () => {
 
   it("generates a thumbnail from the R2 URL (not the expiring HeyGen URL)", async () => {
     const job = makeJob()
-    await handleAiAvatar(job as never, makeCtx())
+    await handleCinematicAvatar(job as never, makeCtx())
 
-    // The thumbnail should be generated from the R2 URL, not the expiring HeyGen URL.
     expect(mocks.mockGenerateAndUploadThumbnail).toHaveBeenCalledWith(
-      "https://r2.example.com/videos/ai-avatar-job-1.mp4",
+      "https://r2.example.com/videos/cinematic-job-1.mp4",
       "job-1",
       "user-1",
     )
   })
 
-  it("finalizes with the R2 url, meteredCost:true, provider cost, and heygen providerUsed", async () => {
+  it("finalizes with meteredCost:true, provider cost, heygen providerUsed, and durationSec", async () => {
     const job = makeJob()
-    await handleAiAvatar(job as never, makeCtx())
+    await handleCinematicAvatar(job as never, makeCtx())
 
     expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(
       expect.objectContaining({
         jobId: "job-1",
-        jobType: "ai-avatar",
+        jobType: "cinematic-avatar",
         result: expect.objectContaining({
-          url: AVATAR_RESULT.videoUrl,
-          cost: AVATAR_RESULT.cost,
+          url: CINEMATIC_RESULT.videoUrl,
+          cost: CINEMATIC_RESULT.cost,
           meteredCost: true,
           providerUsed: "heygen",
         }),
-        mediaUrl: "https://r2.example.com/videos/ai-avatar-job-1.mp4",
+        mediaUrl: "https://r2.example.com/videos/cinematic-job-1.mp4",
         extraOutputData: expect.objectContaining({
-          thumbnailUrl: "https://r2.example.com/thumbnails/ai-avatar-job-1.png",
-          durationSec: AVATAR_RESULT.durationSec,
+          thumbnailUrl: "https://r2.example.com/thumbnails/cinematic-job-1.png",
+          durationSec: CINEMATIC_RESULT.durationSec,
         }),
       }),
     )
@@ -173,59 +167,41 @@ describe("handleAiAvatar — text mode", () => {
 
   it("respects the shouldWatermark flag on ctx", async () => {
     const job = makeJob()
-    await handleAiAvatar(job as never, makeCtx({ shouldWatermark: true }))
+    await handleCinematicAvatar(job as never, makeCtx({ shouldWatermark: true }))
 
     expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalledWith(
       expect.any(String),
       "job-1",
       "user-1",
-      true, // shouldWatermark forwarded
+      true,
     )
   })
-})
 
-// ---------------------------------------------------------------------------
-// Audio mode
-// ---------------------------------------------------------------------------
-
-describe("handleAiAvatar — audio mode", () => {
-  it("calls generateAvatarVideo with audio-mode fields", async () => {
+  it("supports multiple avatarLooks (up to 3)", async () => {
     const job = makeJob({
-      speechMode: "audio",
-      audioUrl: "https://r2.example.com/audio/driving.mp3",
-      script: undefined,
-      voiceId: undefined,
-      voiceSpeed: undefined,
+      avatarLooks: ["look-1", "look-2", "look-3"],
     })
-    await handleAiAvatar(job as never, makeCtx())
+    await handleCinematicAvatar(job as never, makeCtx())
 
-    expect(mocks.mockGenerateAvatarVideo).toHaveBeenCalledWith(
+    expect(mocks.mockGenerateCinematicAvatar).toHaveBeenCalledWith(
       expect.objectContaining({
-        speechMode: "audio",
-        audioUrl: "https://r2.example.com/audio/driving.mp3",
+        avatarLooks: ["look-1", "look-2", "look-3"],
       }),
     )
   })
 })
 
 // ---------------------------------------------------------------------------
-// Image source mode
+// autoDuration mode
 // ---------------------------------------------------------------------------
 
-describe("handleAiAvatar — image source mode", () => {
-  it("forwards avatarSource:image + imageUrl to generateAvatarVideo", async () => {
-    const job = makeJob({
-      avatarSource: "image",
-      imageUrl: "https://r2.example.com/portrait.png",
-      avatarId: undefined,
-    })
-    await handleAiAvatar(job as never, makeCtx())
+describe("handleCinematicAvatar — autoDuration mode", () => {
+  it("forwards autoDuration:true to generateCinematicAvatar", async () => {
+    const job = makeJob({ autoDuration: true, duration: undefined })
+    await handleCinematicAvatar(job as never, makeCtx())
 
-    expect(mocks.mockGenerateAvatarVideo).toHaveBeenCalledWith(
-      expect.objectContaining({
-        avatarSource: "image",
-        imageUrl: "https://r2.example.com/portrait.png",
-      }),
+    expect(mocks.mockGenerateCinematicAvatar).toHaveBeenCalledWith(
+      expect.objectContaining({ autoDuration: true }),
     )
   })
 })
@@ -234,24 +210,24 @@ describe("handleAiAvatar — image source mode", () => {
 // Error propagation — no double-refund
 // ---------------------------------------------------------------------------
 
-describe("handleAiAvatar — provider error propagation", () => {
-  it("propagates a thrown generateAvatarVideo error without calling finalize", async () => {
-    mocks.mockGenerateAvatarVideo.mockRejectedValueOnce(new Error("HeyGen 500"))
+describe("handleCinematicAvatar — provider error propagation", () => {
+  it("propagates a thrown generateCinematicAvatar error without calling finalize", async () => {
+    mocks.mockGenerateCinematicAvatar.mockRejectedValueOnce(new Error("HeyGen 500"))
     const job = makeJob()
 
-    await expect(handleAiAvatar(job as never, makeCtx())).rejects.toThrow("HeyGen 500")
+    await expect(handleCinematicAvatar(job as never, makeCtx())).rejects.toThrow("HeyGen 500")
     // finalizeJobWithMedia must NOT be called on error — the shared credit-guard
     // refund path in the worker's catch block handles the credit refund
     // (keyed on isFinalJobAttempt); calling finalize here would double-refund.
     expect(mocks.mockFinalizeJobWithMedia).not.toHaveBeenCalled()
   })
 
-  it("does not call finalizeJobWithMedia when finalize returns ok:false (cancel race)", async () => {
+  it("does not throw when finalize returns ok:false (cancel race)", async () => {
     mocks.mockFinalizeJobWithMedia.mockResolvedValueOnce({ ok: false })
     const job = makeJob()
 
     // Should not throw — just return early.
-    await expect(handleAiAvatar(job as never, makeCtx())).resolves.toBeUndefined()
+    await expect(handleCinematicAvatar(job as never, makeCtx())).resolves.toBeUndefined()
     // finalize was called once but returned ok:false (cancel won the CAS)
     expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledTimes(1)
   })

@@ -35,6 +35,7 @@ export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleCo
   "after-effects": { composition: "control" },
   "audio-isolation": { audio: "audio" },
   "character": { characterRef: "identity" },
+  "cinematic-avatar": { video: "video" },
   "combine-audio": { "audio-out": "audio" },
   "combine-text": { text: "text" },
   "combine-videos": { video: "video" },

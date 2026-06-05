@@ -772,6 +772,7 @@ const VIDEO_RESULT_TYPES = new Set([
   "face-swap",
   "video-retake",
   "ai-avatar",
+  "cinematic-avatar",
   "suno-music-video",
   "render-video",
   "combine-videos",

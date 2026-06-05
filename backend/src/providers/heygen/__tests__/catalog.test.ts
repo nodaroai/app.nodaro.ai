@@ -39,6 +39,7 @@ const avatarApiResponse = {
       preview_image_url: "https://cdn.example.com/alice.jpg",
       default_voice_id: "voice-abc",
       preferred_orientation: "portrait",
+      supported_api_engines: ["avatar_iv", "avatar_v"],
     },
     {
       id: "avatar-2",
@@ -55,6 +56,7 @@ const avatarApiResponse = {
       name: "Carol",
       gender: "unknown",
       preview_image_url: "https://cdn.example.com/carol.jpg",
+      // no supported_api_engines — should map to undefined
     },
   ],
 }
@@ -132,10 +134,94 @@ describe("listAvatars", () => {
     expect(alice?.defaultVoiceId).toBe("voice-abc")
     expect(alice?.preferredOrientation).toBe("portrait")
     expect(alice?.groupId).toBe("group-a")
+    // supported_api_engines maps to supportedEngines
+    expect(alice?.supportedEngines).toEqual(["avatar_iv", "avatar_v"])
 
     const carol = avatars.find((a) => a.avatarId === "avatar-3")
     expect(carol).toBeDefined()
     expect(carol?.gender).toBe("unknown")
+    // avatar with no supported_api_engines maps to undefined
+    expect(carol?.supportedEngines).toBeUndefined()
+  })
+
+  it("paginates across multiple pages, accumulating all photo_avatar results", async () => {
+    const page1 = {
+      code: 0,
+      message: "success",
+      data: [
+        {
+          id: "avatar-p1",
+          avatar_type: "photo_avatar",
+          name: "Page1",
+          gender: "Male",
+          preview_image_url: "https://cdn.example.com/p1.jpg",
+          supported_api_engines: ["avatar_iv"],
+        },
+      ],
+      next_token: "cursor-abc",
+      has_more: true,
+    }
+    const page2 = {
+      code: 0,
+      message: "success",
+      data: [
+        {
+          id: "avatar-p2",
+          avatar_type: "photo_avatar",
+          name: "Page2",
+          gender: "Female",
+          preview_image_url: "https://cdn.example.com/p2.jpg",
+        },
+      ],
+      // no next_token → last page
+    }
+
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(page1))
+      .mockResolvedValueOnce(makeResponse(page2))
+
+    const { listAvatars } = await import("../catalog.js")
+    const avatars = await listAvatars()
+
+    expect(avatars).toHaveLength(2)
+    expect(avatars.find((a) => a.avatarId === "avatar-p1")?.supportedEngines).toEqual(["avatar_iv"])
+    expect(avatars.find((a) => a.avatarId === "avatar-p2")).toBeDefined()
+
+    // First call: no token param; second call: token=cursor-abc
+    const avatarCalls = fetchMock.mock.calls.filter((args) =>
+      (args[0] as string).includes("/v3/avatars/looks"),
+    )
+    expect(avatarCalls).toHaveLength(2)
+    expect(avatarCalls[1][0] as string).toContain("token=cursor-abc")
+  })
+
+  it("stops paginating when has_more is false even if a cursor is present", async () => {
+    const singlePage = {
+      code: 0,
+      message: "success",
+      data: [
+        {
+          id: "avatar-only",
+          avatar_type: "photo_avatar",
+          name: "Only",
+          gender: "unknown",
+          preview_image_url: "https://cdn.example.com/only.jpg",
+        },
+      ],
+      token: "some-cursor",
+      has_more: false,  // explicit false — stop despite having a cursor
+    }
+
+    fetchMock.mockResolvedValueOnce(makeResponse(singlePage))
+
+    const { listAvatars } = await import("../catalog.js")
+    const avatars = await listAvatars()
+
+    expect(avatars).toHaveLength(1)
+    const avatarCalls = fetchMock.mock.calls.filter((args) =>
+      (args[0] as string).includes("/v3/avatars/looks"),
+    )
+    expect(avatarCalls).toHaveLength(1)
   })
 
   it("second call within TTL reuses cache without re-fetching", async () => {

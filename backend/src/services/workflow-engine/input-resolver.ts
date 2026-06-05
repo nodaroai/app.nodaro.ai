@@ -971,6 +971,7 @@ const VIDEO_OUTPUT_NODE_TYPES = new Set([
   "manual-edit",
   "video-sfx",
   "ai-avatar",
+  "cinematic-avatar",
 ])
 
 const AUDIO_OUTPUT_NODE_TYPES = new Set([
@@ -1382,9 +1383,9 @@ function routeOutput(
     return
   }
 
-  // --- Entity nodes → reference images (or imageUrl for lip-sync / motion-transfer) ---
+  // --- Entity nodes → reference images (or imageUrl for lip-sync / motion-transfer / ai-avatar image mode) ---
   if (ENTITY_NODE_TYPES.has(srcType)) {
-    if (targetType === "lip-sync" || targetType === "speech-to-video" || targetType === "motion-transfer") {
+    if (targetType === "lip-sync" || targetType === "speech-to-video" || targetType === "motion-transfer" || targetType === "ai-avatar") {
       inputs.imageUrl = output
     } else {
       inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]

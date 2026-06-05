@@ -190,6 +190,31 @@ describe("resolveAiAvatarCreditId", () => {
     expect(resolveAiAvatarCreditId({ engine: "bogus", resolution: "360p", speechMode: "audio" }))
       .toBe("heygen-avatar-iv:720p:900s")
   })
+
+  it("image source mode: bills at avatar-iv rate even when engine is avatar-v", () => {
+    // avatarSource:"image" is IV-class — it ignores the engine field and pins
+    // the rate to avatar-iv, reusing the existing heygen-avatar-iv:* ids.
+    expect(
+      resolveAiAvatarCreditId({
+        avatarSource: "image",
+        engine: "avatar-v",
+        resolution: "1080p",
+        speechMode: "audio",
+      }),
+    ).toBe("heygen-avatar-iv:1080p:900s")
+  })
+
+  it("image source mode: text-mode buckets by script length at the avatar-iv rate", () => {
+    // ceil(360/12) = 30 → bucket 30; engine forced to avatar-iv.
+    expect(
+      resolveAiAvatarCreditId({
+        avatarSource: "image",
+        engine: "avatar-v",
+        speechMode: "text",
+        script: "x".repeat(360),
+      }),
+    ).toBe("heygen-avatar-iv:720p:30s")
+  })
 })
 
 describe("AI_AVATAR_RESERVE_IDS", () => {

@@ -698,6 +698,14 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     keywords: ["heygen", "talking avatar", "avatar", "talking head", "voice", "tts"],
   },
   {
+    type: "cinematic-avatar",
+    label: "Cinematic Avatar",
+    icon: <Clapperboard className="h-4 w-4" />,
+    category: "AI",
+    group: "Video",
+    keywords: ["heygen", "cinematic", "avatar", "generative", "prompt", "looks", "seedance"],
+  },
+  {
     type: "lip-sync",
     label: "Lip Sync",
     icon: <Users className="h-4 w-4" />,

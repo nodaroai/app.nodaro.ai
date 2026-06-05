@@ -7,6 +7,7 @@ import {
   deriveGenders,
   filterAvatars,
   hasGroupSegmentation,
+  avatarSupportsV,
 } from "../avatar-picker"
 
 // ---------------------------------------------------------------------------
@@ -81,6 +82,22 @@ const CUSTOM_AVATAR: HeygenAvatar = {
   gender: "male",
   previewImageUrl: "https://example.com/custom.jpg",
   groupId: "custom-group-1",
+}
+
+const AVATAR_V_CAPABLE: HeygenAvatar = {
+  avatarId: "av-4",
+  name: "Vera V",
+  gender: "female",
+  previewImageUrl: "https://example.com/vera.jpg",
+  supportedEngines: ["avatar_v", "avatar_iv"],
+}
+
+const AVATAR_IV_ONLY: HeygenAvatar = {
+  avatarId: "av-5",
+  name: "Irene IV",
+  gender: "female",
+  previewImageUrl: "https://example.com/irene.jpg",
+  supportedEngines: ["avatar_iv"],
 }
 
 const AVATARS: HeygenAvatar[] = [MALE_AVATAR, FEMALE_AVATAR, CUSTOM_AVATAR]
@@ -165,6 +182,49 @@ describe("filterAvatars()", () => {
     const input = [...AVATARS]
     filterAvatars(input, "x", "male", "stock")
     expect(input).toHaveLength(3) // unchanged
+  })
+})
+
+// ===========================================================================
+// avatarSupportsV helper
+// ===========================================================================
+describe("avatarSupportsV()", () => {
+  it("returns true when supportedEngines includes 'avatar_v'", () => {
+    expect(avatarSupportsV(AVATAR_V_CAPABLE)).toBe(true)
+  })
+
+  it("returns false when supportedEngines only contains 'avatar_iv'", () => {
+    expect(avatarSupportsV(AVATAR_IV_ONLY)).toBe(false)
+  })
+
+  it("returns false when supportedEngines is undefined (no metadata from API)", () => {
+    expect(avatarSupportsV(MALE_AVATAR)).toBe(false)
+  })
+})
+
+// ===========================================================================
+// filterAvatars — Avatar V filter
+// ===========================================================================
+describe("filterAvatars() with onlyAvatarV", () => {
+  const catalog = [MALE_AVATAR, AVATAR_V_CAPABLE, AVATAR_IV_ONLY]
+
+  it("returns all avatars when onlyAvatarV is false (default)", () => {
+    expect(filterAvatars(catalog, "", "all", "all", false)).toHaveLength(3)
+  })
+
+  it("filters to only V-capable avatars when onlyAvatarV is true", () => {
+    const result = filterAvatars(catalog, "", "all", "all", true)
+    expect(result).toHaveLength(1)
+    expect(result[0].avatarId).toBe("av-4")
+  })
+
+  it("combines onlyAvatarV with gender filter", () => {
+    // Both V-capable and gender=male → 0 results (Vera is female)
+    expect(filterAvatars(catalog, "", "male", "all", true)).toHaveLength(0)
+  })
+
+  it("backwards-compatible: omitting onlyAvatarV defaults to false", () => {
+    expect(filterAvatars(catalog, "", "all", "all")).toHaveLength(3)
   })
 })
 
@@ -263,5 +323,147 @@ describe("AvatarPicker component", () => {
     await waitFor(() => {
       expect(screen.getByText(/Failed to load avatars/i)).toBeInTheDocument()
     })
+  })
+
+  it("shows 'Avatar V' badge on V-capable avatars", async () => {
+    mockGetHeygenAvatars.mockResolvedValue([AVATAR_V_CAPABLE, AVATAR_IV_ONLY])
+    renderWithQuery(<AvatarPicker value={undefined} onSelect={() => {}} />)
+
+    await waitFor(() => screen.getByRole("radio", { name: /Vera V/i }))
+
+    // V-capable tile should have the badge accessible by label
+    expect(screen.getByLabelText("Supports Avatar V")).toBeInTheDocument()
+  })
+
+  it("does NOT show Avatar V badge on IV-only avatars", async () => {
+    mockGetHeygenAvatars.mockResolvedValue([AVATAR_IV_ONLY])
+    renderWithQuery(<AvatarPicker value={undefined} onSelect={() => {}} />)
+
+    await waitFor(() => screen.getByRole("radio", { name: /Irene IV/i }))
+
+    expect(screen.queryByLabelText("Supports Avatar V")).not.toBeInTheDocument()
+  })
+
+  it("shows the 'Supports Avatar V' filter toggle when V avatars are present", async () => {
+    mockGetHeygenAvatars.mockResolvedValue([AVATAR_V_CAPABLE, AVATAR_IV_ONLY])
+    renderWithQuery(<AvatarPicker value={undefined} onSelect={() => {}} />)
+
+    await waitFor(() => screen.getByRole("radio", { name: /Vera V/i }))
+
+    expect(screen.getByRole("button", { name: /Supports Avatar V/i })).toBeInTheDocument()
+  })
+
+  it("does NOT show the 'Supports Avatar V' toggle when no V avatars exist", async () => {
+    mockGetHeygenAvatars.mockResolvedValue([AVATAR_IV_ONLY, MALE_AVATAR])
+    renderWithQuery(<AvatarPicker value={undefined} onSelect={() => {}} />)
+
+    await waitFor(() => screen.getByRole("radio", { name: /Irene IV/i }))
+
+    expect(screen.queryByRole("button", { name: /Supports Avatar V/i })).not.toBeInTheDocument()
+  })
+
+  it("clicking the Avatar V toggle narrows the list to V-capable avatars", async () => {
+    mockGetHeygenAvatars.mockResolvedValue([AVATAR_V_CAPABLE, AVATAR_IV_ONLY])
+    renderWithQuery(<AvatarPicker value={undefined} onSelect={() => {}} />)
+
+    await waitFor(() => screen.getByRole("radio", { name: /Vera V/i }))
+
+    // Both tiles present before toggle
+    expect(screen.getByRole("radio", { name: /Irene IV/i })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole("button", { name: /Supports Avatar V/i }))
+
+    await waitFor(() => {
+      expect(screen.queryByRole("radio", { name: /Irene IV/i })).not.toBeInTheDocument()
+    })
+    expect(screen.getByRole("radio", { name: /Vera V/i })).toBeInTheDocument()
+  })
+})
+
+// ===========================================================================
+// Multi-select mode — single-select usage (above) must stay unchanged
+// ===========================================================================
+describe("AvatarPicker multi-select mode", () => {
+  it("renders tiles as checkboxes (role=checkbox) instead of radios", async () => {
+    mockGetHeygenAvatars.mockResolvedValue(AVATARS)
+    renderWithQuery(
+      <AvatarPicker multiple selected={[]} onToggle={() => {}} onSelect={() => {}} />,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByRole("checkbox", { name: /Alex Studio/i })).toBeInTheDocument()
+    })
+    // No radios in multi mode
+    expect(screen.queryByRole("radio", { name: /Alex Studio/i })).not.toBeInTheDocument()
+  })
+
+  it("clicking a tile calls onToggle with the avatar (not onSelect's single path)", async () => {
+    mockGetHeygenAvatars.mockResolvedValue(AVATARS)
+    const onToggle = vi.fn()
+    renderWithQuery(
+      <AvatarPicker multiple selected={[]} onToggle={onToggle} onSelect={() => {}} />,
+    )
+
+    await waitFor(() => screen.getByRole("checkbox", { name: /Alex Studio/i }))
+    fireEvent.click(screen.getByRole("checkbox", { name: /Alex Studio/i }))
+
+    expect(onToggle).toHaveBeenCalledTimes(1)
+    expect(onToggle).toHaveBeenCalledWith(MALE_AVATAR)
+  })
+
+  it("reflects selected ids as aria-checked=true on the matching tiles", async () => {
+    mockGetHeygenAvatars.mockResolvedValue(AVATARS)
+    renderWithQuery(
+      <AvatarPicker multiple selected={["av-1", "av-3"]} onToggle={() => {}} onSelect={() => {}} />,
+    )
+
+    await waitFor(() => screen.getByRole("checkbox", { name: /Alex Studio/i }))
+    expect(screen.getByRole("checkbox", { name: /Alex Studio/i })).toHaveAttribute("aria-checked", "true")
+    expect(screen.getByRole("checkbox", { name: /My Custom/i })).toHaveAttribute("aria-checked", "true")
+    expect(screen.getByRole("checkbox", { name: /Diana Pro/i })).toHaveAttribute("aria-checked", "false")
+  })
+
+  it("disables unselected tiles once the cap (max) is reached", async () => {
+    mockGetHeygenAvatars.mockResolvedValue(AVATARS)
+    const onToggle = vi.fn()
+    // max=2, already 2 selected → the third (unselected) tile is disabled.
+    renderWithQuery(
+      <AvatarPicker
+        multiple
+        max={2}
+        selected={["av-1", "av-2"]}
+        onToggle={onToggle}
+        onSelect={() => {}}
+      />,
+    )
+
+    await waitFor(() => screen.getByRole("checkbox", { name: /My Custom/i }))
+    const capped = screen.getByRole("checkbox", { name: /My Custom/i })
+    expect(capped).toHaveAttribute("aria-disabled", "true")
+
+    // Clicking a disabled tile must NOT toggle.
+    fireEvent.click(capped)
+    expect(onToggle).not.toHaveBeenCalled()
+  })
+
+  it("still allows deselecting an already-selected tile at the cap", async () => {
+    mockGetHeygenAvatars.mockResolvedValue(AVATARS)
+    const onToggle = vi.fn()
+    renderWithQuery(
+      <AvatarPicker
+        multiple
+        max={2}
+        selected={["av-1", "av-2"]}
+        onToggle={onToggle}
+        onSelect={() => {}}
+      />,
+    )
+
+    await waitFor(() => screen.getByRole("checkbox", { name: /Alex Studio/i }))
+    const selectedTile = screen.getByRole("checkbox", { name: /Alex Studio/i })
+    // Selected tiles are never disabled even at the cap.
+    expect(selectedTile).not.toHaveAttribute("aria-disabled", "true")
+    fireEvent.click(selectedTile)
+    expect(onToggle).toHaveBeenCalledWith(MALE_AVATAR)
   })
 })
