@@ -63,6 +63,7 @@ import {
   isValidLipSyncConnection,
   isValidSpeechToVideoConnection,
   isValidMotionTransferConnection,
+  isValidAiAvatarConnection,
 } from "./video-producer-handles"
 import {
   isValidCharacterConnection,
@@ -424,6 +425,7 @@ const VIDEO_PRODUCER_VALIDATORS: Record<string, AudioTextValidator> = {
   "lip-sync":         (h, s) => isValidLipSyncConnection(h, s),
   "speech-to-video":  isValidSpeechToVideoConnection,
   "motion-transfer":  (h, s) => isValidMotionTransferConnection(h, s),
+  "ai-avatar":        isValidAiAvatarConnection,
 }
 
 const IDENTITY_VALIDATORS: Record<string, AudioTextValidator> = {

@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-06-03T16:56:57.826Z
-generated_from: 98514458
+generated_at: 2026-06-04T23:31:49.744Z
+generated_from: 12d6438a
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -69,6 +69,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `adjust-volume` — Adjust Volume
 - `aesthetic` — Aesthetic / Microtrend
 - `after-effects` — After Effects
+- `ai-avatar` — AI Avatar
 - `animal` — Animal
 - `aspect-ratio` — Aspect Ratio
 - `atmosphere` — Atmosphere

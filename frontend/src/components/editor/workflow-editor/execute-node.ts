@@ -28,6 +28,7 @@ import {
   downloadYouTubeAudio,
   lipSyncApi,
   speechToVideoApi,
+  runAiAvatar,
   motionTransferApi,
   videoUpscaleApi,
   extendVideo,
@@ -174,6 +175,7 @@ import type {
   SortListNodeData,
   SelectorNodeData,
   ReduceNodeData,
+  AiAvatarData,
 } from "@/types/nodes";
 import {
   WorkflowStaleError,
@@ -4213,6 +4215,71 @@ export function executeNode(
         }),
       "generatedVideoUrl",
       "Speech to Video",
+      ctx,
+    );
+  }
+
+  if (node.type === "ai-avatar") {
+    const aaData = node.data as AiAvatarData;
+
+    // Resolve script: wired upstream text takes priority, then node data.
+    // Do NOT fold any cinematography/identity hints here — the script is
+    // verbatim TTS input and must never contain cinematography prose.
+    const script =
+      (inputs.script as string | undefined)?.trim() ||
+      aaData.script?.trim() ||
+      undefined;
+
+    // Resolve audio: wired upstream audio (audio mode).
+    const audioUrl =
+      (inputs.audioUrl as string | undefined) ||
+      aaData.audioUrl ||
+      undefined;
+
+    // Mode-conditional validation
+    const speechMode = aaData.speechMode ?? "text";
+    if (speechMode === "text") {
+      if (!script) {
+        toast.error(`Node "${aaData.label}": script is required in Text mode`);
+        return Promise.reject(new Error("No script"));
+      }
+      if (!aaData.voiceId) {
+        toast.error(`Node "${aaData.label}": a voice must be selected in Text mode`);
+        return Promise.reject(new Error("No voice"));
+      }
+    } else {
+      if (!audioUrl) {
+        toast.error(`Node "${aaData.label}": no audio found. Wire an audio node into the Audio handle.`);
+        return Promise.reject(new Error("No audio"));
+      }
+    }
+
+    if (!aaData.avatarId) {
+      toast.error(`Node "${aaData.label}": an avatar must be selected`);
+      return Promise.reject(new Error("No avatar"));
+    }
+
+    setUserPromptTemplate(undefined);
+    return runProcessingNode(
+      node.id,
+      () =>
+        runAiAvatar({
+          avatarId:    aaData.avatarId,
+          speechMode,
+          engine:      aaData.engine ?? "avatar-v",
+          resolution:  aaData.resolution ?? "720p",
+          aspectRatio: aaData.aspectRatio ?? "16:9",
+          caption:     aaData.caption ?? false,
+          // Text mode
+          script:      speechMode === "text" ? script : undefined,
+          voiceId:     speechMode === "text" ? aaData.voiceId : undefined,
+          voiceSpeed:  speechMode === "text" ? (aaData.voiceSpeed ?? 1) : undefined,
+          // Audio mode
+          audioUrl:    speechMode === "audio" ? audioUrl : undefined,
+          userId:      ctx.userId,
+        }),
+      "generatedVideoUrl",
+      "AI Avatar",
       ctx,
     );
   }

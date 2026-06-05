@@ -215,6 +215,10 @@ export interface ResolvedInputs {
   /** Media items for multi-media social posts (Instagram carousel, etc.).
    *  Accumulated by routeOutput when the target node's action expects N items. */
   mediaItems?: MediaItem[]
+  /** Verbatim TTS script for the ai-avatar node, wired via the "script"
+   *  target handle. Distinct from `prompt` — must never be folded with
+   *  cinematography or identity hints. */
+  script?: string
   scriptData?: unknown
   dialogueLines?: Array<{ speaker: string; text: string; emotion?: string }>
   scriptCharacters?: Array<{ name: string; description: string; mood?: string; action?: string; position?: string }>

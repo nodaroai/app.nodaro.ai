@@ -29,6 +29,7 @@ import type { HandleColorType } from "./handle-colors"
 
 export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleColorType>>> = {
   "3d-title": { composition: "control" },
+  "ai-avatar": { video: "video" },
   "add-captions": { "video-out": "video" },
   "adjust-volume": { "video-out": "video", "audio-out": "audio" },
   "after-effects": { composition: "control" },

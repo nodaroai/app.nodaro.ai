@@ -429,6 +429,8 @@ const VIDEO_OUTPUT_NODE_TYPES = new Set([
   "video-sfx",
   // Remove Audio → silent video out.
   "remove-audio",
+  // AI Avatar (HeyGen): video out.
+  "ai-avatar",
 ]);
 
 /** Resolved inputs from upstream node outputs — shared return type for resolveNodeInputs */
@@ -463,6 +465,8 @@ export interface FrontendResolvedInputs {
   /** Multi-media payload for social carousel posts — accumulated by
    *  resolveNodeInputs when target.data.action === "post-carousel". */
   mediaItems?: Array<{ type: "photo" | "video"; url: string }>;
+  /** Verbatim spoken script for the ai-avatar node — wired via the `script` handle. */
+  script?: string;
   scriptData?: unknown;
   dialogueLines?: Array<{ speaker: string; text: string; emotion?: string }>;
   scriptCharacters?: Array<{ name: string; description: string; mood?: string; action?: string; position?: string }>;
@@ -1160,6 +1164,13 @@ export function resolveNodeInputs(
     }
     if (srcEdge.targetHandle === "system-prompt") {
       inputs.systemPrompt = output;
+      continue;
+    }
+    // ai-avatar `script` handle: verbatim spoken text — route to inputs.script,
+    // NOT inputs.prompt, so cinematography/identity hints in the generic prompt
+    // chain never contaminate the TTS field.
+    if (srcEdge.targetHandle === "script" && node.type === "ai-avatar") {
+      inputs.script = output;
       continue;
     }
     if (srcEdge.targetHandle === "audio") {

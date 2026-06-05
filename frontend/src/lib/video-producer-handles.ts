@@ -145,6 +145,32 @@ export function isValidSpeechToVideoConnection(
   }
 }
 
+// ─── ai-avatar ─────────────────────────────────────────────────────────
+// Inputs: script (verbatim text, text mode), audio (audio-driven mode).
+// Source: video.
+//
+// Both handles are ALWAYS mounted (voice-changer pattern). The `script`
+// handle is intentionally restricted to text producers — parameter-picker
+// prose or cinematography hints must NOT leak into the verbatim TTS field.
+// The `audio` handle mirrors lip-sync / speech-to-video (audio + dynamic).
+export function isValidAiAvatarConnection(
+  targetHandleId: string,
+  sourceType: string,
+  isVisualPicker: (t: string) => boolean,
+): boolean {
+  switch (targetHandleId) {
+    case "script":
+      // Text producers ONLY — no pickers, no dynamic producers.
+      // Mirrors the text-to-speech `directText` precedent: verbatim spoken
+      // script must not get parameter-picker prose or cinematography hints.
+      return ACCEPTS_TEXT_OR_DYN(sourceType) && !isVisualPicker(sourceType)
+    case "audio":
+      return ACCEPTS_AUDIO_OR_DYN(sourceType)
+    default:
+      return false
+  }
+}
+
 // ─── motion-transfer ───────────────────────────────────────────────────
 // Inputs (bottom-up clusters mirroring generate-video):
 //   Text:    prompt → negative
@@ -184,4 +210,5 @@ export const VIDEO_PRODUCER_HANDLE_LABELS: Record<string, Record<string, string>
   "lip-sync":         { image: "Portrait", video: "Source video", audio: "Audio" },
   "speech-to-video":  { image: "Portrait", audio: "Audio", prompt: "Prompt", cinematography: "Cinematography" },
   "motion-transfer":  { image: "Character", video: "Source video", prompt: "Prompt", negative: "Negative", assets: "Assets" },
+  "ai-avatar":        { script: "Script", audio: "Audio", video: "Video" },
 }

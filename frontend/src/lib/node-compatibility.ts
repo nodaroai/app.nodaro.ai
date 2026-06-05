@@ -150,6 +150,10 @@ export const TYPED_HANDLE_IDS: ReadonlySet<string> = new Set([
   // Identity-node handles (Phase 23). `in` already covered above; `type`
   // is object-node-specific (accepts identity-type pickers).
   "type",
+  // ai-avatar verbatim spoken-script handle — text producers only (no pickers,
+  // no cinematography). Distinct from `prompt` so spoken text never gets
+  // parameter-picker prose appended.
+  "script",
 ])
 /** Subset that requires consumer-type dispatch — the dev-time warning in
  *  getCompatibleNodes triggers when one of these is passed without a

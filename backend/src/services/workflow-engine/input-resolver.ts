@@ -364,6 +364,12 @@ const SELECTED_NODE_FALLBACKS: Record<string, Array<{ dataField: string; inputFi
     { dataField: "selectedImageNodeId", inputField: "imageUrl" },
     { dataField: "selectedAudioNodeId", inputField: "audioUrl" },
   ],
+  // ai-avatar: audio-mode can be driven by a selected upstream audio node.
+  // No selectedImageNodeId — the avatar identity comes from the avatarId
+  // catalog picker, not from a wired image.
+  "ai-avatar": [
+    { dataField: "selectedAudioNodeId", inputField: "audioUrl" },
+  ],
 }
 
 /**
@@ -964,6 +970,7 @@ const VIDEO_OUTPUT_NODE_TYPES = new Set([
   "transcode-video",
   "manual-edit",
   "video-sfx",
+  "ai-avatar",
 ])
 
 const AUDIO_OUTPUT_NODE_TYPES = new Set([
@@ -1095,6 +1102,12 @@ function routeOutput(
   }
   if (edge.targetHandle === "audio") {
     routeAudioOutput(inputs, output, targetType, src.id)
+    return
+  }
+  // ai-avatar `script` handle: routes a wired text-prompt directly into the
+  // `script` field (verbatim TTS input — never folded into `prompt`).
+  if (edge.targetHandle === "script") {
+    inputs.script = output
     return
   }
   if (edge.targetHandle === "mask") {

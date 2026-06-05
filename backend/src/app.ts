@@ -112,6 +112,7 @@ import { audioIsolationRoutes } from "./routes/audio-isolation.js"
 import { textToDialogueRoutes } from "./routes/text-to-dialogue.js"
 import { imageToTextRoutes } from "./routes/image-to-text.js"
 import { voicesRoutes } from "./routes/voices.js"
+import { heygenCatalogRoutes } from "./routes/heygen-catalog.js"
 import { voiceCloneRoutes } from "./routes/voice-clones.js"
 import { voiceChangerRoutes } from "./routes/voice-changer.js"
 import { dubbingRoutes } from "./routes/dubbing.js"
@@ -126,6 +127,7 @@ import { sceneHelpersRoutes } from "./routes/scene-helpers.js"
 import { extendVideoRoutes } from "./routes/extend-video.js"
 import { videoRetakeRoutes } from "./routes/video-retake.js"
 import { speechToVideoRoutes } from "./routes/speech-to-video.js"
+import { aiAvatarRoutes } from "./routes/ai-avatar.js"
 import { socialMediaFormatRoutes } from "./routes/social-media-format.js"
 import { webhookOutputRoutes } from "./routes/webhook-output.js"
 import { presentationRoutes } from "./routes/presentation.js"
@@ -343,6 +345,7 @@ export async function buildApp() {
   await app.register(textToDialogueRoutes)
   await app.register(imageToTextRoutes)
   await app.register(voicesRoutes)
+  await app.register(heygenCatalogRoutes)
   await app.register(voiceCloneRoutes)
   await app.register(voiceChangerRoutes)
   await app.register(dubbingRoutes)
@@ -357,6 +360,7 @@ export async function buildApp() {
   await app.register(extendVideoRoutes)
   await app.register(videoRetakeRoutes)
   await app.register(speechToVideoRoutes)
+  await app.register(aiAvatarRoutes)
   await app.register(socialMediaFormatRoutes)
   await app.register(webhookOutputRoutes)
   await app.register(presentationRoutes)

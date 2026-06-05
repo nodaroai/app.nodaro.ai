@@ -690,6 +690,14 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     keywords: ["story", "pipeline", "trailer", "short film", "music video", "reel", "commercial", "cinematic"],
   },
   {
+    type: "ai-avatar",
+    label: "AI Avatar",
+    icon: <UserRound className="h-4 w-4" />,
+    category: "AI",
+    group: "Video",
+    keywords: ["heygen", "talking avatar", "avatar", "talking head", "voice", "tts"],
+  },
+  {
     type: "lip-sync",
     label: "Lip Sync",
     icon: <Users className="h-4 w-4" />,

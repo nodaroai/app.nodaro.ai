@@ -58,6 +58,8 @@ export const VIDEO_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   "manual-edit",
   // Remove Audio: strips the audio track, emits a silent video.
   "remove-audio",
+  // AI Avatar (HeyGen): avatar + voice/audio → video.
+  "ai-avatar",
 ])
 
 /**

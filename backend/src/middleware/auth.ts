@@ -112,6 +112,10 @@ const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean }[] = [
   { path: "/v1/download-video/progress", prefix: true },
   { method: "GET", path: "/v1/voices" },
   { method: "GET", path: "/v1/voices/library" },
+  // HeyGen catalog: read-only avatar/voice data; published apps render pickers
+  // for anonymous viewers, so these MUST be public (auth would 401 them).
+  { method: "GET", path: "/v1/heygen/avatars" },
+  { method: "GET", path: "/v1/heygen/voices" },
   { path: "/v1/webhooks", prefix: true },
   { method: "POST", path: "/v1/telegram/webhook/", prefix: true },
   { method: "GET", path: "/v1/social/callback", prefix: true },

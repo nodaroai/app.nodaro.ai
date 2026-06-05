@@ -187,6 +187,7 @@ Generate video from images, text, or other video using state-of-the-art models.
 | [Image to Video](./ai-video/image-to-video.md) (legacy) | Redirects to Generate Video; legacy `image-to-video` workflows auto-migrate on load | New workflows: use Generate Video instead |
 | [Text to Video](./ai-video/text-to-video.md) (legacy) | Redirects to Generate Video; legacy `text-to-video` workflows auto-migrate on load | New workflows: use Generate Video instead |
 | [Video to Video](./ai-video/video-to-video.md) | Transform video with text prompt | Style transfer or content modification on existing video |
+| [AI Avatar](./ai-video/ai-avatar.md) | Talking-avatar video from a HeyGen avatar + script or wired audio | Generate presenter or spokesperson videos; two speech modes (script+voice / wired audio) |
 | [Lip Sync](./ai-video/lip-sync.md) | Sync audio to character face | Create talking head videos from portrait + audio |
 | [Video SFX](./ai-video/video-sfx.md) | Generate synced sound effects, foley, or ambience for a video (replaces existing audio) | Add SFX or atmosphere to silent or AI-generated clips via Replicate's mmaudio |
 | [Face Swap](./ai-video/face-swap.md) | Replace face in video with reference image | Character replacement and creative remixing |

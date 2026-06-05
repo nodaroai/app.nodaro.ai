@@ -120,6 +120,7 @@ const ALLOWLIST = new Set([
   "frontend/src/components/editor/workflow-editor/run-handlers.ts",
   "frontend/src/components/editor/workflow-editor/workflow-editor-main.tsx",
   "frontend/src/components/layout/app-sidebar.tsx",
+  "frontend/src/components/nodes/ai-avatar-node.tsx",
   "frontend/src/components/nodes/add-captions-node.tsx",
   "frontend/src/components/nodes/adjust-volume-node.tsx",
   "frontend/src/components/nodes/after-effects-node.tsx",
