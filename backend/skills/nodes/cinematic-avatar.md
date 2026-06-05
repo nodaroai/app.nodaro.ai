@@ -1,7 +1,7 @@
 ---
 node_type: cinematic-avatar
-generated_at: 2026-06-05T07:51:53.282Z
-generated_from: 39f8c86c
+generated_at: 2026-06-05T10:16:15.038Z
+generated_from: 9f6254d9
 ---
 
 # Cinematic Avatar
@@ -10,7 +10,7 @@ generated_from: 39f8c86c
 **Type:** `cinematic-avatar`
 **Category:** ai
 **Credit cost:** 9
-**Inputs (target handles):** `prompt`
+**Inputs (target handles):** `prompt`, `ref-video`, `ref-audio`, `ref-image`
 **Outputs (source handles):** `video`
 
 **Required data fields:**

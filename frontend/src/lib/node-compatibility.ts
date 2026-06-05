@@ -58,8 +58,8 @@ const MOTION_ONLY_PICKER_TYPES: ReadonlySet<string> = new Set([
  */
 export const HANDLE_COMPATIBILITY: Record<string, readonly string[]> = {
   // Media outputs → typed media inputs
-  image: ["image", "startFrame", "endFrame", "background", "media", "face"],
-  video: ["video", "video1", "video2", "video3", "video4", "media", "background", "in"],
+  image: ["image", "startFrame", "endFrame", "background", "media", "face", "ref-image"],
+  video: ["video", "video1", "video2", "video3", "video4", "media", "background", "ref-video", "in"],
   audio: ["audio", "audio1", "audio2", "audio3", "audio4", "audio5", "ref-audio", "media"],
   "silent-video": ["video", "video1", "video2", "video3", "video4", "media"],
 

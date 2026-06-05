@@ -6243,7 +6243,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Cinematic Avatar",
     category: "ai",
     creditCost: 9,
-    inputs: ["prompt"],
+    inputs: ["prompt", "ref-video", "ref-audio", "ref-image"],
     outputs: ["video"],
     defaultData: {
       label: "Cinematic Avatar",
