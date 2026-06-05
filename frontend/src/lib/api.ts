@@ -1069,6 +1069,76 @@ export async function getCharacterById(characterId: string): Promise<DbCharacter
   return res.json()
 }
 
+// ---- Node presets ----
+
+export interface NodePreset {
+  id: string
+  nodeType: string
+  name: string
+  description?: string
+  data: Record<string, unknown>
+  createdAt: string
+  updatedAt: string
+}
+
+/** Thrown on 409 from create/update so the UI can show a friendly "name taken" message. */
+export class NodePresetNameTakenError extends Error {
+  constructor() {
+    super("name_taken")
+    this.name = "NodePresetNameTakenError"
+  }
+}
+
+export async function listNodePresets(nodeType?: string): Promise<NodePreset[]> {
+  const qs = nodeType ? `?nodeType=${encodeURIComponent(nodeType)}` : ""
+  const res = await apiJson<{ data: NodePreset[] }>(`/v1/node-presets${qs}`, {
+    method: "GET",
+    label: "Failed to load presets",
+  })
+  return res.data
+}
+
+export async function createNodePreset(input: {
+  nodeType: string
+  name: string
+  description?: string
+  data: Record<string, unknown>
+}): Promise<NodePreset> {
+  const res = await fetch(`${API_BASE_URL}/v1/node-presets`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(await getAuthHeaders()) },
+    body: JSON.stringify(input),
+  })
+  if (res.status === 409) throw new NodePresetNameTakenError()
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to save preset")
+  }
+  return (await res.json()).data
+}
+
+export async function deleteNodePreset(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/v1/node-presets/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    headers: await getAuthHeaders(),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to delete preset")
+  }
+}
+
+export async function importNodePresets(
+  presets: { nodeType: string; name: string; description?: string; data: Record<string, unknown> }[],
+): Promise<number> {
+  const res = await apiJson<{ data: { imported: number } }>("/v1/node-presets/import", {
+    method: "POST",
+    body: { presets },
+    label: "Failed to import presets",
+  })
+  return res.data.imported
+}
+
 // Object API functions
 export async function generateObject(data: {
   name: string

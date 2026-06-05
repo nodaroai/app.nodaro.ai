@@ -27,6 +27,12 @@ export const queryKeys = {
     detail: (userId: string) => ["user-settings", userId] as const,
   },
 
+  // Node presets
+  nodePresets: {
+    all: ["nodePresets"] as const,
+    list: (nodeType?: string) => ["nodePresets", "list", nodeType ?? ""] as const,
+  },
+
   // App settings (admin)
   appSettings: {
     all: ["app-settings"] as const,
