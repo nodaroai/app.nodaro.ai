@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify"
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
@@ -7,6 +7,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { probeMediaDuration } from "../providers/video/ffmpeg-utils.js"
 import { resolveAiAvatarCreditId } from "@nodaro/shared"
 
 const ttsEngineSchema = z
@@ -118,13 +119,58 @@ const aiAvatarBody = z
     }
   })
 
+/**
+ * Fastify preHandler: in AUDIO mode, ffprobes the input audio to measure its
+ * real duration and stashes ceil(duration) on the raw request body as
+ * `__probedDurationSec`. This MUST run BEFORE the creditGuard preHandler so
+ * `resolveAiAvatarCreditId` (which reads the raw body) buckets the credit
+ * reserve by the ACTUAL clip length instead of the modest 120s default.
+ *
+ * Without a probe, audio-mode reserve falls back to 120s (resolveAiAvatarCreditId)
+ * — a bounded ceiling, never the 900s top bucket that caused the user-reported
+ * over-reservation (~4020 credits held for a ~$0.75 clip).
+ *
+ * The probe is best-effort: on ANY failure (probe error, missing audioUrl, not
+ * audio mode) it leaves `__probedDurationSec` unset and resolveAiAvatarCreditId
+ * uses its 120s fallback. It never rejects the request — a bad audioUrl is
+ * surfaced later by Zod / the worker, not here. probeMediaDuration runs the
+ * same SSRF guard as probeVideoSource.
+ *
+ * Mirrors `probeDurationPreHandler` in routes/video-sfx.ts.
+ */
+export async function probeAudioDurationPreHandler(
+  req: FastifyRequest,
+  _reply: FastifyReply,
+): Promise<void> {
+  const body = (req.body ?? {}) as Record<string, unknown>
+  if (body.speechMode !== "audio") return
+  const audioUrl = body.audioUrl
+  if (typeof audioUrl !== "string" || audioUrl.length === 0) return
+  try {
+    const duration = await probeMediaDuration(audioUrl)
+    if (Number.isFinite(duration) && duration > 0) {
+      body.__probedDurationSec = Math.ceil(duration)
+    }
+  } catch (err) {
+    // Non-fatal: leave __probedDurationSec unset so resolveAiAvatarCreditId
+    // falls back to the modest 120s default (bounded, never 900s).
+    req.log.warn({ err }, "ai-avatar: audio ffprobe failed; falling back to 120s reserve")
+  }
+}
+
 export async function aiAvatarRoutes(app: FastifyInstance) {
   app.post(
     "/v1/ai-avatar",
     {
-      preHandler: creditGuard((req) =>
-        resolveAiAvatarCreditId(req.body as Record<string, unknown> | undefined),
-      ),
+      // Order matters: probe stashes __probedDurationSec on the raw body so the
+      // creditGuard's resolveAiAvatarCreditId can bucket the reserve by the
+      // ACTUAL audio duration. The probe MUST run first.
+      preHandler: [
+        probeAudioDurationPreHandler,
+        creditGuard((req) =>
+          resolveAiAvatarCreditId(req.body as Record<string, unknown> | undefined),
+        ),
+      ],
     },
     async (req, reply) => {
       const parsed = aiAvatarBody.safeParse(req.body)
@@ -186,7 +232,12 @@ export async function aiAvatarRoutes(app: FastifyInstance) {
         })
       }
 
-      const modelId = resolveAiAvatarCreditId(parsed.data as unknown as Record<string, unknown>)
+      // Resolve from the RAW body (not parsed.data) so the reserve matches the
+      // creditGuard check: Zod strips the preHandler-stashed __probedDurationSec,
+      // so resolving from parsed.data would lose the audio-probe bucket and fall
+      // back to 120s — a mismatch with the preHandler's affordance check. The
+      // raw body retains __probedDurationSec.
+      const modelId = resolveAiAvatarCreditId(req.body as Record<string, unknown> | undefined)
 
       const reservation = await reserveCreditsForJob(req, reply, job.id, modelId)
       if (reply.sent) return

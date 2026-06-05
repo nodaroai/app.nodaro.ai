@@ -46,22 +46,39 @@ export const AI_AVATAR_MAX_DURATION_SEC = 900
 
 /**
  * Duration buckets (seconds) used to pick a reserve ceiling at creditGuard
- * time, when the actual clip length is unknown (text-mode scripts) or hard
- * to measure cheaply (audio mode).
+ * time, when the actual clip length is unknown (text-mode scripts) or only
+ * known via a server-side ffprobe (audio mode).
+ *
+ * The low end is FINE-GRAINED (5/10/15/30/60s) so short clips — the common
+ * case — don't over-reserve. A 15s clip lands in the 15s bucket, not the old
+ * coarse 30s floor (which doubled the hold). The high end stays coarse because
+ * long-form scripts are rare and the bucket-up is a one-time refundable surplus.
  *
  * Bucket selection:
- *   - Text mode:  bucket = ceil(scriptChars / 12 / voiceSpeed), capped at 900.
- *   - Audio mode: always uses the 900s top bucket (audio duration unknown at
- *     reserve time — ffprobe pre-handler is a tracked fast-follow).
+ *   - Text mode:  bucket = pickAiAvatarBucket(ceil(scriptChars / 12 / voiceSpeed)).
+ *   - Audio mode: bucket = pickAiAvatarBucket(ceil(probedDurationSec)) when the
+ *     ffprobe preHandler stashed `__probedDurationSec` on the body; otherwise a
+ *     MODEST 120s default (NOT the 900s top bucket — that was the bug: it
+ *     reserved ~4000+ credits for a sub-minute clip).
  *
  * Worst-case derivation: 5000 chars at voiceSpeed=0.5 → ceil(5000/12/0.5) = 834s
- * → fits in 900s bucket. The 900s top bucket covers all legal inputs.
+ * → fits in 900s bucket. The 900s top bucket covers all legal text inputs.
  *
- * Note: audio >900s would undercharge. The proper fix is server-side ffprobe in
- * a preHandler (video-sfx pattern) — tracked as a fast-follow. For now the 900s
- * cap is the safe conservative fallback for audio mode.
+ * Note: audio >900s (no probe) would undercharge against the 120s default, but
+ * the commit-time metered true-up CANNOT charge more than reserved — so a long
+ * un-probed audio clip is a (small) revenue leak, not an over-charge. The probe
+ * closes it for the normal path. The 900s bucket remains available for the
+ * probed long-audio case.
  */
-export const AI_AVATAR_DURATION_BUCKETS = [30, 60, 120, 240, 360, 600, 900] as const
+export const AI_AVATAR_DURATION_BUCKETS = [5, 10, 15, 30, 60, 120, 240, 360, 600, 900] as const
+
+/**
+ * Modest fallback bucket (seconds) for AUDIO mode when the ffprobe preHandler
+ * did NOT stash a probed duration. Replaces the old 900s top-bucket fallback
+ * that over-reserved ~4000+ credits for short clips. The commit-time metered
+ * true-up is refund-only, so this is a reserve ceiling, not a charge.
+ */
+export const AI_AVATAR_AUDIO_FALLBACK_SEC = 120
 
 export type AiAvatarDurationBucket = (typeof AI_AVATAR_DURATION_BUCKETS)[number]
 
@@ -135,15 +152,18 @@ export function aiAvatarReserveCreditId(
  *
  * - `speechMode === "text"`: bucket by estimated script duration, accounting for
  *   voiceSpeed (slower → longer clip → larger bucket). Surplus is refunded at commit.
- * - Any other speechMode (audio / missing): use the MAX bucket (900s) —
- *   audio duration is unknown at reserve time; metered true-up corrects the surplus.
+ * - Any other speechMode (audio / missing): bucket by `__probedDurationSec` when
+ *   the ffprobe preHandler stashed it on the raw body; otherwise a MODEST 120s
+ *   default (AI_AVATAR_AUDIO_FALLBACK_SEC) — NOT the 900s top bucket. Reserving
+ *   the 900s ceiling for a sub-minute audio clip was the over-reservation bug
+ *   (~4000+ credits held for a clip that costs ~40). The commit-time metered
+ *   true-up is refund-only, so a modest reserve never over-charges.
  *
  * - `avatarSource === "image"`: image-source mode is IV-class (HeyGen's own
  *   engine, no avatar_id) — bill at the avatar-iv rate regardless of the
  *   (ignored) `engine` field, reusing the existing heygen-avatar-iv:* ids.
  *
- * Falls back to ("avatar-iv", "720p", max-bucket) when fields are missing
- * or invalid.
+ * Falls back to ("avatar-iv", "720p", 120s) when fields are missing or invalid.
  */
 export function resolveAiAvatarCreditId(
   body: Record<string, unknown> | undefined,
@@ -176,20 +196,25 @@ export function resolveAiAvatarCreditId(
       estimateScriptDurationSec(body?.script as string | undefined, voiceSpeed),
     )
   } else {
-    // Audio/unknown mode: reserve the top bucket (900s).
-    // Audio duration is unknown at reserve time — ffprobe in a preHandler
-    // (video-sfx pattern) would allow bucketing by actual length, but that's
-    // a tracked fast-follow. Audio clips >900s would undercharge; for now the
-    // 900s top bucket is the safe conservative ceiling.
-    bucketSec = 900
+    // Audio/unknown mode. The ffprobe preHandler (video-sfx pattern) stashes
+    // the measured clip length on the raw body as `__probedDurationSec` so we
+    // can bucket by the ACTUAL audio duration. When present, bucket by it;
+    // otherwise fall back to a MODEST 120s default — NOT the 900s top bucket.
+    // The old 900s fallback over-reserved ~4000+ credits for sub-minute clips.
+    const probed = Number(body?.__probedDurationSec)
+    bucketSec = pickAiAvatarBucket(
+      Number.isFinite(probed) && probed > 0
+        ? Math.ceil(probed)
+        : AI_AVATAR_AUDIO_FALLBACK_SEC,
+    )
   }
 
   return aiAvatarReserveCreditId(engine, resolution, bucketSec)
 }
 
 /**
- * All 42 reserve credit IDs — every (engine × resolution × bucket) combination.
- * 2 engines × 3 resolutions × 7 buckets (30/60/120/240/360/600/900s) = 42.
+ * All 60 reserve credit IDs — every (engine × resolution × bucket) combination.
+ * 2 engines × 3 resolutions × 10 buckets (5/10/15/30/60/120/240/360/600/900s) = 60.
  * Seeded in STATIC_CREDIT_COSTS and the model_pricing migration so
  * getModelCreditBaseCost never hard-fails (503 price_not_configured) for any
  * legal creditGuard input.
@@ -206,25 +231,33 @@ export const AI_AVATAR_RESERVE_IDS: string[] = (
 )
 
 /**
- * Credit hold (reserved amount) for a given (engine, resolution, bucket).
+ * Credit hold (the STORED 0%-base reserve) for a given (engine, resolution, bucket).
  *
- * Formula: ceil(aiAvatarUsdCost(engine, resolution, bucketSec) / 0.02 * 1.5)
+ * Formula: ceil(aiAvatarUsdCost(engine, resolution, bucketSec) / 0.02)
  *
- * The /0.02 converts USD → base credits (1 credit = $0.02, the CREDIT_BASE_USD
- * constant). The *1.5 safety factor ensures the hold is always ≥ the actual
- * metered charge: at configured pricing factor (the default) the actual is
- * ceil(ceil(usd/0.02) * 1.25); the 1.5× buffer comfortably exceeds 1.25×.
+ * This is the at-cost base-credit value (1 credit = $0.02, CREDIT_BASE_USD).
+ * It is deliberately MINIMAL — there is NO *1.5 safety factor — because:
  *
- * The actual charge is recomputed at job completion by commitJobCredits /
- * computeActualCredits from the provider's real USD cost, and commit_credits
- * refunds any surplus — so this hold is a conservative ceiling ONLY.
+ *   1. The admin cost-markup (~25% default) is applied to this stored value
+ *      AGAIN at RESERVE time by getModelCreditCostFromDB
+ *      (reserved = ceil(hold * 1.25)). Baking a second buffer here was a
+ *      redundant double-markup — the user-reported over-reservation bug.
+ *   2. The reserve buckets UP (true clip duration ≤ bucket ceiling), so the
+ *      bucket-up alone guarantees reserved ≥ metered-actual.
+ *
+ * Refund-only invariant (verified by the pricing test): for every bucket at its
+ * CEILING duration, reserved = ceil(hold * markup) EQUALS the metered actual
+ * = ceil(ceil(usd/0.02) * markup) — they share the exact same base. For any
+ * shorter clip the metered actual is strictly less. So commit_credits
+ * (computeActualCredits at job completion) can only ever REFUND surplus, never
+ * undercharge. No epsilon is needed — the bases are identical at the boundary.
  */
 export function aiAvatarHoldCredits(
   engine: AiAvatarEngine,
   resolution: AiAvatarResolution,
   bucketSec: number,
 ): number {
-  return Math.ceil(aiAvatarUsdCost(engine, resolution, bucketSec) / 0.02 * 1.5)
+  return Math.ceil(aiAvatarUsdCost(engine, resolution, bucketSec) / 0.02)
 }
 
 /**

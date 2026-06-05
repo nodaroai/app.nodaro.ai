@@ -75,7 +75,7 @@ Examples (Avatar IV, 720p): a **30-second** clip ≈ **113 credits**; a **1-minu
 ### Reserve & refund
 
 - **Text mode** — the upfront hold is estimated from your script length and voice speed (slower speech reserves a bit more). You're charged for the actual generated length; the remainder is refunded.
-- **Audio mode** — because the clip length isn't known until generation, a larger hold is reserved up front; again, only the real length is charged.
+- **Audio mode** — the hold is sized from your uploaded clip's measured length, so a short voiceover reserves only a small amount (a few seconds' worth), not a large flat block. As always, you're charged only for the real generated length and any surplus is refunded.
 
 ## Graceful Degradation
 

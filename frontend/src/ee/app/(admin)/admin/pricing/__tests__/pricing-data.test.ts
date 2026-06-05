@@ -237,7 +237,7 @@ describe("MODEL_REFERENCE", () => {
   // shared bucket lists change. See @nodaro/shared ai-avatar-pricing.ts /
   // cinematic-avatar-pricing.ts.
   it("covers every AI_AVATAR_RESERVE_IDS id (no phantom/missing buckets)", () => {
-    expect(AI_AVATAR_RESERVE_IDS.length).toBe(42)
+    expect(AI_AVATAR_RESERVE_IDS.length).toBe(60)
     for (const id of AI_AVATAR_RESERVE_IDS) {
       expect(MODEL_REFERENCE[id], `missing MODEL_REFERENCE entry for ${id}`).toBeDefined()
     }

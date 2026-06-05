@@ -2729,9 +2729,9 @@ export function buildPayload(
       const aiAvatarResolution = (data.resolution as string) ?? "720p"
       // Credit identifier MUST come from resolveAiAvatarCreditId (the single
       // source of truth shared with the route's creditGuard) so that:
-      //  (a) it is always one of the SEEDED duration-bucket ids (30/60/120/240/
-      //      360/600/900s) — never an unseeded bucket that would hard-fail with
-      //      503 price_not_configured at reserve time, and
+      //  (a) it is always one of the SEEDED duration-bucket ids (5/10/15/30/60/
+      //      120/240/360/600/900s) — never an unseeded bucket that would hard-fail
+      //      with 503 price_not_configured at reserve time, and
       //  (b) image-source mode pins the rate engine to avatar-iv (image is
       //      IV-class), matching the route's reservation exactly.
       // The data shape here carries the same fields the route body does

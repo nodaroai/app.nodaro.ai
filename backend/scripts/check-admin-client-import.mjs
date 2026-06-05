@@ -208,6 +208,19 @@ const ALLOWED_PATHS = [
   // req.userId at insert time.
   /^src\/routes\/video-retake\.ts$/,
 
+  // AI Avatar (HeyGen): creates a jobs row tagged with `user_id: req.userId`,
+  // then reserveCreditsForJob + the audio-duration probe preHandler run under
+  // the same service-role client; the BullMQ worker reads the job by `job.id`
+  // out-of-band. Mirrors generate-video / extend-video (baselined). No
+  // cross-user reads or writes — all queries scope by req.userId at insert time.
+  /^src\/routes\/ai-avatar\.ts$/,
+
+  // Cinematic Avatar (HeyGen): same shape as ai-avatar — a jobs row tagged with
+  // `user_id: req.userId`, reserveCreditsForJob under the service-role client,
+  // worker reads by job.id out-of-band. Mirrors generate-video / extend-video
+  // (baselined). No cross-user reads or writes.
+  /^src\/routes\/cinematic-avatar\.ts$/,
+
   // Video SFX (Replicate mmaudio): creates a jobs row tagged with
   // `user_id: req.userId` (line 196). Service-role required for the same
   // reasons as video-retake — reserveCreditsForJob runs under the same

@@ -8,8 +8,11 @@
  *
  * Also asserts:
  * - CREDIT_COSTS["ai-avatar"] is defined (node-type resolver for workflow estimation).
- * - The hold is ≥ the metered actual at the default configured pricing factor (refund-only guarantee).
- * - All 30 ids are present (2 engines × 3 resolutions × 5 buckets).
+ * - The RESERVED amount (markup applied to the stored hold at reserve) is >= the
+ *   metered actual at the bucket ceiling (refund-only guarantee). The stored hold
+ *   is the at-cost 0%-base value; getModelCreditCostFromDB applies the admin
+ *   markup to it at reserve time, so the comparison must mark up BOTH sides.
+ * - All 60 ids are present (2 engines × 3 resolutions × 10 buckets).
  */
 
 import { describe, it, expect } from "vitest"
@@ -24,9 +27,22 @@ import {
   type AiAvatarResolution,
 } from "@nodaro/shared"
 
+const CREDIT_BASE_USD = 0.02
+
+// Runtime reserve: getModelCreditCostFromDB applies the admin markup to the
+// STORED hold value (which is the at-cost 0%-base aiAvatarHoldCredits).
+function reservedFromHold(hold: number, markupPct: number): number {
+  return markupPct > 0 ? Math.ceil(hold * (1 + markupPct / 100)) : hold
+}
+// Runtime commit: computeActualCredits(usd) = ceil(ceil(usd/0.02) * markup).
+function meteredActual(usd: number, markupPct: number): number {
+  const base = Math.ceil(usd / CREDIT_BASE_USD)
+  return markupPct > 0 ? Math.ceil(base * (1 + markupPct / 100)) : base
+}
+
 describe("AI_AVATAR_RESERVE_IDS parity with STATIC_CREDIT_COSTS", () => {
-  it("all 42 reserve ids exist in STATIC_CREDIT_COSTS with a positive hold value", () => {
-    expect(AI_AVATAR_RESERVE_IDS).toHaveLength(42)
+  it("all 60 reserve ids exist in STATIC_CREDIT_COSTS with a positive hold value", () => {
+    expect(AI_AVATAR_RESERVE_IDS).toHaveLength(60)
 
     const missing: string[] = []
     const wrongValue: string[] = []
@@ -51,7 +67,7 @@ describe("CREDIT_COSTS[ai-avatar]", () => {
   })
 })
 
-describe("hold >= metered actual at default configured pricing factor (refund-only guarantee)", () => {
+describe("reserved >= metered actual at the bucket ceiling (refund-only guarantee)", () => {
   it.each(
     (Object.keys(AI_AVATAR_RATE_USD_PER_SEC) as AiAvatarEngine[]).flatMap((engine) =>
       (Object.keys(AI_AVATAR_RATE_USD_PER_SEC[engine]) as AiAvatarResolution[]).flatMap(
@@ -59,17 +75,17 @@ describe("hold >= metered actual at default configured pricing factor (refund-on
           AI_AVATAR_DURATION_BUCKETS.map((bucketSec) => ({ engine, resolution, bucketSec })),
       ),
     ),
-  )("$engine:$resolution:${bucketSec}s — hold >= metered actual @25%", ({ engine, resolution, bucketSec }) => {
+  )("$engine:$resolution:${bucketSec}s — reserved >= metered actual @25%", ({ engine, resolution, bucketSec }) => {
     const hold = aiAvatarHoldCredits(engine, resolution, bucketSec)
-    const providerUsd = aiAvatarUsdCost(engine, resolution, bucketSec)
-    // Simulate commitJobCredits/computeActualCredits at default configured pricing factor:
-    // base = ceil(usd/0.02); actual = ceil(base * 1.25)
-    const baseCredits = Math.ceil(providerUsd / 0.02)
-    const actualAtDefaultMarkup = Math.ceil(baseCredits * 1.25)
+    const reserved = reservedFromHold(hold, 25)
+    const usdAtCeiling = aiAvatarUsdCost(engine, resolution, bucketSec)
+    const actual = meteredActual(usdAtCeiling, 25)
     expect(
-      hold,
-      `hold ${hold} < actual ${actualAtDefaultMarkup} for ${engine}:${resolution}:${bucketSec}s — commit_credits can ONLY refund, never charge more`,
-    ).toBeGreaterThanOrEqual(actualAtDefaultMarkup)
+      reserved,
+      `reserved ${reserved} < actual ${actual} for ${engine}:${resolution}:${bucketSec}s — commit_credits can ONLY refund, never charge more`,
+    ).toBeGreaterThanOrEqual(actual)
+    // At the ceiling the bases coincide, so reserved must EQUAL actual (minimal-safe, no over-reserve).
+    expect(reserved).toBe(actual)
   })
 })
 

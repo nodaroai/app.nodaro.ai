@@ -36,9 +36,13 @@ for (const m of ["flux-2-klein", "flux-2-pro", "flux-2-max"] as Flux2Model[]) {
 }
 
 // ── AI Avatar (HeyGen) duration-bucketed reserve holds ──
-// 42 ids: 2 engines × 3 resolutions × 7 buckets (30/60/120/240/360/600/900s).
-// Formula: [formula removed]  — the 1.5× safety factor guarantees the hold
-// is always ≥ the metered actual at default configured pricing factor (1.25×). The actual
+// 60 ids: 2 engines × 3 resolutions × 10 buckets (5/10/15/30/60/120/240/360/600/900s).
+***REDACTED-OSS-SCRUB***
+***REDACTED-OSS-SCRUB***
+// at RESERVE time, and the reserve buckets UP (true clip ≤ bucket ceiling), so
+// reserved ≥ metered-actual already (they're EQUAL at the bucket ceiling, where
+***REDACTED-OSS-SCRUB***
+// on top of the runtime markup — the user-reported over-reservation. The actual
 // charge is recomputed at job completion by commitJobCredits/computeActualCredits
 // from the provider's real USD cost; commit_credits refunds any surplus.
 // A missing id causes a hard 503 `price_not_configured` at runtime.
@@ -55,9 +59,10 @@ for (const engine of Object.keys(AI_AVATAR_RATE_USD_PER_SEC) as AiAvatarEngine[]
 // ── Cinematic Avatar (HeyGen `type:"cinematic_avatar"`) exact-duration holds ──
 // 24 ids: 2 resolutions × 12 durations (4..15s). Duration is a USER PARAMETER
 // (known at submit), so the reserve id encodes the EXACT requested duration —
-// no bucketing. Formula: [formula removed] — the 1.5× safety factor keeps the
-// hold ≥ the metered actual at default configured pricing factor. A missing id causes a hard
-// 503 `price_not_configured` at runtime.
+***REDACTED-OSS-SCRUB***
+// the admin markup is applied to this stored value at RESERVE time, so the
+// reserved tier equals the metered actual (same exact duration, same base).
+// A missing id causes a hard 503 `price_not_configured` at runtime.
 const CINEMATIC_STATIC: Record<string, number> = {}
 for (const resolution of Object.keys(CINEMATIC_RATE_USD_PER_SEC) as CinematicResolution[]) {
   for (let d = CINEMATIC_MIN_DURATION_SEC; d <= CINEMATIC_MAX_DURATION_SEC; d++) {
