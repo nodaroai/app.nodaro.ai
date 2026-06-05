@@ -14,8 +14,12 @@
  *    resolve an id → prompt fragment without importing the heavy frontend
  *    registry.
  *  - "multi": several value fields (e.g. Framing.shotSize + .angle + …).
- *    Structured / multi-dimensional, so we expose only the dimension `fields`
- *    (no flattened `options` — there is no single catalog to flatten).
+ *    Structured / multi-dimensional. There is no single catalog to flatten,
+ *    so instead of top-level `options` each multi entry carries a
+ *    `dimensions` array — one self-describing entry per field
+ *    ({ field, label, options }) in `fields` order — so a consumer can render
+ *    a per-field picker or resolve any field's id → prompt fragment without
+ *    importing the heavy frontend registry.
  *
  * A drift-guard test (`frontend/src/lib/__tests__/picker-catalogs-sync.test.ts`)
  * asserts parity between this registry and the frontend one so the two cannot
@@ -56,6 +60,17 @@ import { VEHICLES, VEHICLE_SUBCATEGORY_LABELS, VEHICLE_SUBCATEGORY_ORDER } from 
 import { WEAPONS, WEAPON_SUBCATEGORY_LABELS, WEAPON_SUBCATEGORY_ORDER } from "./weapons.js"
 import { FURNITURE, FURNITURE_SUBCATEGORY_LABELS, FURNITURE_SUBCATEGORY_ORDER } from "./furniture.js"
 import { HELD_PROPS, HELD_PROP_CATEGORY_LABELS, HELD_PROP_CATEGORY_ORDER } from "./held-prop.js"
+import { FRAMINGS, FRAMING_FIELD_BY_CATEGORY, FRAMING_CATEGORY_LABELS } from "./framing.js"
+import { LIGHTINGS, LIGHTING_FIELD_BY_CATEGORY, LIGHTING_CATEGORY_LABELS } from "./lighting.js"
+import { TEMPORALS, TEMPORAL_FIELD_BY_CATEGORY, TEMPORAL_CATEGORY_LABELS } from "./temporal.js"
+import { EXPOSURE_SETTINGS, EXPOSURE_FIELD_BY_CATEGORY, EXPOSURE_CATEGORY_LABELS } from "./exposure-settings.js"
+import { PEOPLE, PERSON_FIELD_BY_DIMENSION, PERSON_DIMENSION_LABELS } from "./person.js"
+import { STYLINGS, STYLING_FIELD_BY_DIMENSION, STYLING_DIMENSION_LABELS } from "./styling.js"
+import { MUSIC_GENRES, MUSIC_ERAS } from "./music-genre.js"
+import { MUSIC_ENERGIES, MUSIC_EMOTIONS, MUSIC_VIBES } from "./music-mood.js"
+import { INSTRUMENTS, PRODUCTION_STYLES, VOCAL_PRESENCE, SINGING_STYLES } from "./instrumentation.js"
+import { VOICE_AGES, VOICE_GENDERS, VOICE_LANGUAGES, VOICE_ACCENTS, VOICE_TIMBRES } from "./voice-character.js"
+import { VOICE_PACES, VOICE_EMOTIONS, VOICE_ARCHETYPES } from "./voice-delivery.js"
 
 export interface PickerOption {
   readonly id: string
@@ -66,6 +81,22 @@ export interface PickerOption {
   readonly promptHint: string
   /** Only present if the source catalog entry already carries a data icon/emoji/thumbnail field. */
   readonly icon?: string
+}
+
+/**
+ * A self-describing dimension of a multi-dim picker: one value field plus the
+ * full option list valid for that field. `dimensions[i].field` mirrors the
+ * frontend picker's `fields[i]` exactly (same order), so a consumer can render
+ * a per-field picker or resolve an id → prompt fragment for any dimension
+ * without importing the heavy frontend registry.
+ */
+export interface PickerDimension {
+  /** The node-data field this dimension writes to (e.g. "shotSize"). */
+  readonly field: string
+  /** Human-readable label for the dimension (e.g. "Shot Size"). */
+  readonly label: string
+  /** Flattened options valid for this field. */
+  readonly options: readonly PickerOption[]
 }
 
 export interface PickerCatalog {
@@ -84,6 +115,8 @@ export interface PickerCatalog {
   readonly options?: readonly PickerOption[]
   /** multi-dim: the dimension keys (no single catalog to flatten). */
   readonly fields?: readonly string[]
+  /** multi-dim: one self-describing entry per dimension field, in `fields` order. */
+  readonly dimensions?: readonly PickerDimension[]
 }
 
 /** Minimal shape every single-dim catalog entry satisfies. */
@@ -143,6 +176,120 @@ function objectOptions(
     category: e.subcategory,
     promptHint: phrase(e.label.toLowerCase(), e.description),
   }))
+}
+
+// ---------------------------------------------------------------------------
+// Multi-dim `dimensions` builders
+//
+// Each builder is driven by the picker's `fields` array (the canonical order
+// mirrored from `MULTI_PICKERS` in the frontend registry), so a dimension is
+// emitted for exactly those fields, in that order. Catalog dimensions that
+// have no corresponding picker field (e.g. lighting's lighting-ratio /
+// color-temperature, person's regional-aesthetic, styling's outfit/top/…) are
+// intentionally omitted — they aren't exposed by the multi-dim picker UI.
+// ---------------------------------------------------------------------------
+
+/** "shotSize" → "Shot Size", "vocalPresence" → "Vocal Presence". */
+function humanize(field: string): string {
+  return field
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/^./, (c) => c.toUpperCase())
+}
+
+/**
+ * Pattern A — category-discriminated. ONE catalog whose entries each carry a
+ * `category`; a `fieldByCategory` map translates category → consumer field.
+ * For each picker `field`, options = catalog entries whose mapped field equals
+ * it; the dimension label comes from `categoryLabels[category]`.
+ */
+function categoryDiscriminatedDims<C extends string, T extends BaseCatalogEntry & { category: C }>(
+  fields: ReadonlyArray<string>,
+  arr: ReadonlyArray<T>,
+  fieldByCategory: Readonly<Record<C, string>>,
+  categoryLabels: Readonly<Record<C, string>>,
+): ReadonlyArray<PickerDimension> {
+  // Resolve, per field, the category whose mapped field equals it.
+  const categoryByField = new Map<string, C>()
+  for (const cat of Object.keys(fieldByCategory) as C[]) {
+    categoryByField.set(fieldByCategory[cat], cat)
+  }
+  return fields.map((field) => {
+    const category = categoryByField.get(field)
+    if (!category) {
+      throw new Error(`picker-catalogs: no category maps to field "${field}"`)
+    }
+    const options = toOptions(arr.filter((e) => e.category === category))
+    return { field, label: categoryLabels[category], options }
+  })
+}
+
+/**
+ * Pattern A' — dimension-discriminated. ONE catalog whose entries each carry a
+ * `dimension` (kebab-case); a `fieldByDimension` map translates dimension →
+ * consumer field (camelCase). For each picker `field`, options = catalog
+ * entries whose mapped field equals it; the dimension label comes from
+ * `dimensionLabels[dimension]`.
+ */
+function dimensionDiscriminatedDims<D extends string, T extends BaseCatalogEntry & { dimension: D }>(
+  fields: ReadonlyArray<string>,
+  arr: ReadonlyArray<T>,
+  fieldByDimension: Readonly<Record<D, string>>,
+  dimensionLabels: Readonly<Record<D, string>>,
+): ReadonlyArray<PickerDimension> {
+  const dimensionByField = new Map<string, D>()
+  for (const dim of Object.keys(fieldByDimension) as D[]) {
+    dimensionByField.set(fieldByDimension[dim], dim)
+  }
+  return fields.map((field) => {
+    const dimension = dimensionByField.get(field)
+    if (!dimension) {
+      throw new Error(`picker-catalogs: no dimension maps to field "${field}"`)
+    }
+    const options = toOptions(arr.filter((e) => e.dimension === dimension))
+    return { field, label: dimensionLabels[dimension], options }
+  })
+}
+
+/**
+ * Pattern B — one independent catalog array per field, in `fields` order.
+ * The dimension label is humanized from the field name.
+ */
+function perFieldDims(
+  fieldArrays: ReadonlyArray<readonly [field: string, arr: ReadonlyArray<BaseCatalogEntry>]>,
+): ReadonlyArray<PickerDimension> {
+  return fieldArrays.map(([field, arr]) => ({
+    field,
+    label: humanize(field),
+    options: toOptions(arr),
+  }))
+}
+
+/**
+ * Pattern C — hierarchical music-genre. Three fields:
+ *  - genre    → MUSIC_GENRES (top-level)
+ *  - subgenre → every MUSIC_GENRES[].subgenres flattened
+ *  - era      → MUSIC_ERAS
+ *
+ * Genre / subgenre / era entries each carry their own `promptHint` (the exact
+ * fragment `buildMusicGenreHints` injects for the genre and era cases). We
+ * pass those through directly rather than re-deriving via
+ * `getParameterPromptHint`, because that helper resolves a subgenre only in
+ * the context of its parent genre — a lone `{ subgenre }` yields an empty
+ * string. Pass-through keeps every option's hint non-empty and faithful.
+ */
+function musicGenreDims(fields: ReadonlyArray<string>): ReadonlyArray<PickerDimension> {
+  const optionsByField: Record<string, ReadonlyArray<PickerOption>> = {
+    genre: MUSIC_GENRES.map((g) => ({ id: g.id, label: g.label, description: g.description, category: g.category, promptHint: g.promptHint })),
+    subgenre: MUSIC_GENRES.flatMap((g) =>
+      g.subgenres.map((s) => ({ id: s.id, label: s.label, promptHint: s.promptHint })),
+    ),
+    era: MUSIC_ERAS.map((e) => ({ id: e.id, label: e.label, description: e.description, promptHint: e.promptHint })),
+  }
+  return fields.map((field) => {
+    const options = optionsByField[field]
+    if (!options) throw new Error(`picker-catalogs: music-genre has no options for field "${field}"`)
+    return { field, label: humanize(field), options }
+  })
 }
 
 const SINGLE_CATALOGS: readonly PickerCatalog[] = [
@@ -437,56 +584,77 @@ const SINGLE_CATALOGS: readonly PickerCatalog[] = [
   },
 ]
 
+// Canonical per-picker `fields` order (mirrors `MULTI_PICKERS` in
+// `frontend/src/lib/parameter-picker-registry.tsx`). Declared once and reused
+// for both `fields` and the `dimensions` builder so the two can never drift.
+const FRAMING_FIELDS = ["shotSize", "angle", "coverage", "composition", "vantage"] as const
+const LIGHTING_FIELDS = ["timeOfDay", "lightingStyle", "lightingDirection"] as const
+const PERSON_FIELDS = [
+  "type", "age", "ethnicity", "build", "bodyProportions",
+  "faceShape", "jawline", "eyeShape", "nose", "lips", "lipState",
+  "hairColor", "hairBase", "eyebrows", "skinTone", "skinTexture",
+  "eyeColor", "eyeState", "facialHair", "distinctiveFeature",
+] as const
+const STYLING_FIELDS = [
+  "makeup", "eyewear", "headwear", "hairCut", "hairTreatment",
+  "jewelry", "nails", "facePaint", "fabric",
+] as const
+const TEMPORAL_FIELDS = ["temporalSpeed", "temporalFreeze", "temporalDirection", "temporalShutter"] as const
+const EXPOSURE_FIELDS = ["aperture", "shutterSpeed", "isoValue"] as const
+const MUSIC_GENRE_FIELDS = ["genre", "subgenre", "era"] as const
+const MUSIC_MOOD_FIELDS = ["energy", "emotion", "vibe"] as const
+const INSTRUMENTATION_FIELDS = ["instruments", "production", "vocalPresence", "singingStyle"] as const
+const VOICE_CHARACTER_FIELDS = ["age", "gender", "language", "accent", "timbre"] as const
+const VOICE_DELIVERY_FIELDS = ["pace", "emotion", "archetype"] as const
+
 const MULTI_CATALOGS: readonly PickerCatalog[] = [
   {
     nodeType: "framing",
     label: "Framing",
     catalogId: "framing",
     kind: "multi",
-    fields: ["shotSize", "angle", "coverage", "composition", "vantage"],
+    fields: FRAMING_FIELDS,
+    dimensions: categoryDiscriminatedDims(FRAMING_FIELDS, FRAMINGS, FRAMING_FIELD_BY_CATEGORY, FRAMING_CATEGORY_LABELS),
   },
   {
     nodeType: "lighting",
     label: "Lighting",
     catalogId: "lighting",
     kind: "multi",
-    fields: ["timeOfDay", "lightingStyle", "lightingDirection"],
+    fields: LIGHTING_FIELDS,
+    dimensions: categoryDiscriminatedDims(LIGHTING_FIELDS, LIGHTINGS, LIGHTING_FIELD_BY_CATEGORY, LIGHTING_CATEGORY_LABELS),
   },
   {
     nodeType: "person",
     label: "Person",
     catalogId: "person",
     kind: "multi",
-    fields: [
-      "type", "age", "ethnicity", "build", "bodyProportions",
-      "faceShape", "jawline", "eyeShape", "nose", "lips", "lipState",
-      "hairColor", "hairBase", "eyebrows", "skinTone", "skinTexture",
-      "eyeColor", "eyeState", "facialHair", "distinctiveFeature",
-    ],
+    fields: PERSON_FIELDS,
+    dimensions: dimensionDiscriminatedDims(PERSON_FIELDS, PEOPLE, PERSON_FIELD_BY_DIMENSION, PERSON_DIMENSION_LABELS),
   },
   {
     nodeType: "styling",
     label: "Styling",
     catalogId: "styling",
     kind: "multi",
-    fields: [
-      "makeup", "eyewear", "headwear", "hairCut", "hairTreatment",
-      "jewelry", "nails", "facePaint", "fabric",
-    ],
+    fields: STYLING_FIELDS,
+    dimensions: dimensionDiscriminatedDims(STYLING_FIELDS, STYLINGS, STYLING_FIELD_BY_DIMENSION, STYLING_DIMENSION_LABELS),
   },
   {
     nodeType: "temporal",
     label: "Temporal",
     catalogId: "temporal",
     kind: "multi",
-    fields: ["temporalSpeed", "temporalFreeze", "temporalDirection", "temporalShutter"],
+    fields: TEMPORAL_FIELDS,
+    dimensions: categoryDiscriminatedDims(TEMPORAL_FIELDS, TEMPORALS, TEMPORAL_FIELD_BY_CATEGORY, TEMPORAL_CATEGORY_LABELS),
   },
   {
     nodeType: "exposure-settings",
     label: "Exposure Settings",
     catalogId: "exposure-settings",
     kind: "multi",
-    fields: ["aperture", "shutterSpeed", "isoValue"],
+    fields: EXPOSURE_FIELDS,
+    dimensions: categoryDiscriminatedDims(EXPOSURE_FIELDS, EXPOSURE_SETTINGS, EXPOSURE_FIELD_BY_CATEGORY, EXPOSURE_CATEGORY_LABELS),
   },
   // -------- "Sound" family --------
   {
@@ -494,35 +662,59 @@ const MULTI_CATALOGS: readonly PickerCatalog[] = [
     label: "Music Genre",
     catalogId: "music-genre",
     kind: "multi",
-    fields: ["genre", "subgenre", "era"],
+    fields: MUSIC_GENRE_FIELDS,
+    dimensions: musicGenreDims(MUSIC_GENRE_FIELDS),
   },
   {
     nodeType: "music-mood",
     label: "Music Mood",
     catalogId: "music-mood",
     kind: "multi",
-    fields: ["energy", "emotion", "vibe"],
+    fields: MUSIC_MOOD_FIELDS,
+    dimensions: perFieldDims([
+      ["energy", MUSIC_ENERGIES],
+      ["emotion", MUSIC_EMOTIONS],
+      ["vibe", MUSIC_VIBES],
+    ]),
   },
   {
     nodeType: "instrumentation",
     label: "Instrumentation",
     catalogId: "instrumentation",
     kind: "multi",
-    fields: ["instruments", "production", "vocalPresence", "singingStyle"],
+    fields: INSTRUMENTATION_FIELDS,
+    dimensions: perFieldDims([
+      ["instruments", INSTRUMENTS],
+      ["production", PRODUCTION_STYLES],
+      ["vocalPresence", VOCAL_PRESENCE],
+      ["singingStyle", SINGING_STYLES],
+    ]),
   },
   {
     nodeType: "voice-character",
     label: "Voice Character",
     catalogId: "voice-character",
     kind: "multi",
-    fields: ["age", "gender", "language", "accent", "timbre"],
+    fields: VOICE_CHARACTER_FIELDS,
+    dimensions: perFieldDims([
+      ["age", VOICE_AGES],
+      ["gender", VOICE_GENDERS],
+      ["language", VOICE_LANGUAGES],
+      ["accent", VOICE_ACCENTS],
+      ["timbre", VOICE_TIMBRES],
+    ]),
   },
   {
     nodeType: "voice-delivery",
     label: "Voice Delivery",
     catalogId: "voice-delivery",
     kind: "multi",
-    fields: ["pace", "emotion", "archetype"],
+    fields: VOICE_DELIVERY_FIELDS,
+    dimensions: perFieldDims([
+      ["pace", VOICE_PACES],
+      ["emotion", VOICE_EMOTIONS],
+      ["archetype", VOICE_ARCHETYPES],
+    ]),
   },
 ]
 

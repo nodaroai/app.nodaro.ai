@@ -81,6 +81,21 @@ describe("PICKER_CATALOGS ↔ frontend picker registry parity", () => {
       it("does not expose flattened single-dim options", () => {
         expect(shared?.options).toBeUndefined()
       })
+
+      it("exposes a `dimensions` array mirroring the frontend `fields` (same order)", () => {
+        expect(shared?.dimensions).toBeDefined()
+        expect((shared?.dimensions ?? []).map((d) => d.field)).toEqual([...fe.fields])
+      })
+
+      it("every dimension has at least one option, all with a defined promptHint string", () => {
+        for (const dim of shared?.dimensions ?? []) {
+          expect(dim.options.length).toBeGreaterThan(0)
+          for (const opt of dim.options) {
+            // "" is valid for no-op options; just never undefined.
+            expect(typeof opt.promptHint).toBe("string")
+          }
+        }
+      })
     },
   )
 
