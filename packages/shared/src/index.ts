@@ -423,6 +423,16 @@ export {
 } from "./cinematic-avatar-pricing.js"
 export type { CinematicResolution } from "./cinematic-avatar-pricing.js"
 
+export {
+  AvatarPayloadError,
+  validateAiAvatarPayload,
+  validateCinematicAvatarPayload,
+  CINEMATIC_MAX_REFERENCE_VIDEOS,
+  CINEMATIC_MAX_REFERENCE_IMAGES,
+  CINEMATIC_MIN_LOOKS,
+  CINEMATIC_MAX_LOOKS,
+} from "./avatar-payload-validators.js"
+
 export { splitByLoopDelimiter, spliceDelimitedRows, NO_SPLIT_DELIMITER } from "./loop-delimiter.js"
 
 export { splitGeneratedItems, GENERATE_TEXT_DELIMITER } from "./generate-text-items.js"

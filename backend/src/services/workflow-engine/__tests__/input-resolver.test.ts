@@ -836,4 +836,24 @@ describe("resolveNodeInputs — cinematic-avatar reference handles", () => {
     expect(result.refAudioUrl).toBe("https://r2/voice.mp3")
     expect(result.refImageUrl).toBe("https://r2/ref.png")
   })
+
+  // ── REGRESSION: the ref-audio interceptor must be gated on cinematic-avatar.
+  // generate-music ships its OWN live "ref-audio" handle whose value MUST land
+  // in inputs.audioUrl (payload-builder reads referenceAudioUrl ←
+  // resolvedInputs.audioUrl, NEVER refAudioUrl). An unconditional ref-audio
+  // interceptor (PR #3120) silently diverted it into the cinematic-only
+  // refAudioUrl slot and broke the Suno cover/reference-from-wired-audio feature.
+  it("routes an audio producer on generate-music's ref-audio handle to audioUrl (NOT refAudioUrl)", () => {
+    const target = node("t", "generate-music")
+    const src = node("s", "text-to-speech")
+    const allNodes = [src, target]
+    const edges = [edge("s", "t", "audio", "ref-audio")]
+    const states: Record<string, NodeExecutionState> = {
+      s: { status: "completed", output: { audioUrl: "https://r2/reference.mp3" } },
+    }
+
+    const result = resolveNodeInputs(target, edges, states, allNodes)
+    expect(result.audioUrl).toBe("https://r2/reference.mp3")
+    expect(result.refAudioUrl).toBeUndefined()
+  })
 })

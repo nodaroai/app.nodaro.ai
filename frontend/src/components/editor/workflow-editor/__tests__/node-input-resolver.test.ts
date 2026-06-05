@@ -193,6 +193,38 @@ describe("resolveNodeInputs", () => {
     expect(inputs.audioUrls).toHaveLength(2)
   })
 
+  // ── REGRESSION: ref-audio interceptor must be gated on cinematic-avatar ──
+  // generate-music ships its OWN live "ref-audio" handle whose value MUST land
+  // in inputs.audioUrl (execute-node reads `inputs.audioUrl || d.referenceAudioUrl`,
+  // never refAudioUrl). The unconditional ref-audio interceptor (PR #3120)
+  // diverted it into the cinematic-only refAudioUrl slot and silently broke the
+  // Suno cover/reference-from-wired-audio feature.
+  it("routes an audio producer on generate-music's ref-audio handle to audioUrl (NOT refAudioUrl)", () => {
+    const tts = makeNode("a1", "text-to-speech", {
+      generatedResults: [{ url: "http://reference.mp3", timestamp: "t1", jobId: "j1" }],
+      activeResultIndex: 0,
+    })
+    const target = makeNode("t1", "generate-music")
+    const edges = [{ id: "a1->t1", source: "a1", target: "t1", sourceHandle: "audio", targetHandle: "ref-audio" }]
+
+    const inputs = resolveNodeInputs(target, [tts, target], edges)
+    expect(inputs.audioUrl).toBe("http://reference.mp3")
+    expect(inputs.refAudioUrl).toBeUndefined()
+  })
+
+  it("still routes an audio producer on cinematic-avatar's ref-audio handle to refAudioUrl", () => {
+    const tts = makeNode("a1", "text-to-speech", {
+      generatedResults: [{ url: "http://voice.mp3", timestamp: "t1", jobId: "j1" }],
+      activeResultIndex: 0,
+    })
+    const target = makeNode("t1", "cinematic-avatar")
+    const edges = [{ id: "a1->t1", source: "a1", target: "t1", sourceHandle: "audio", targetHandle: "ref-audio" }]
+
+    const inputs = resolveNodeInputs(target, [tts, target], edges)
+    expect(inputs.refAudioUrl).toBe("http://voice.mp3")
+    expect(inputs.audioUrl).toBeUndefined()
+  })
+
   it("resolves generate-image as imageUrl for image-to-video target", () => {
     const genImage = makeNode("g1", "generate-image", {
       generatedResults: [

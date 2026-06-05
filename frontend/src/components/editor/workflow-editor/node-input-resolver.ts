@@ -1133,17 +1133,28 @@ export function resolveNodeInputs(
     // input. MUST come before source-type / generic-handle routing, which
     // would otherwise land a video producer in inputs.videoUrl, etc. Matches
     // backend input-resolver.ts (refVideoUrl/refAudioUrl/refImageUrl).
-    if (srcEdge.targetHandle === "ref-video") {
-      inputs.refVideoUrl = output;
-      continue;
-    }
-    if (srcEdge.targetHandle === "ref-audio") {
-      inputs.refAudioUrl = output;
-      continue;
-    }
-    if (srcEdge.targetHandle === "ref-image") {
-      inputs.refImageUrl = output;
-      continue;
+    //
+    // GATED on node.type === "cinematic-avatar": the `ref-*` handle names are
+    // NOT exclusive to cinematic-avatar. generate-music ships a live "ref-audio"
+    // handle whose value MUST land in inputs.audioUrl (execute-node reads
+    // `inputs.audioUrl || d.referenceAudioUrl`, never refAudioUrl). Without this
+    // guard a generic ref-audio interceptor diverts generate-music's reference
+    // URL into the cinematic-only refAudioUrl slot and silently breaks the Suno
+    // cover/reference feature. Only cinematic-avatar renders ref-video/ref-image,
+    // but we gate all three for symmetry + future-safety.
+    if (node.type === "cinematic-avatar") {
+      if (srcEdge.targetHandle === "ref-video") {
+        inputs.refVideoUrl = output;
+        continue;
+      }
+      if (srcEdge.targetHandle === "ref-audio") {
+        inputs.refAudioUrl = output;
+        continue;
+      }
+      if (srcEdge.targetHandle === "ref-image") {
+        inputs.refImageUrl = output;
+        continue;
+      }
     }
 
     // --- Handle-specific routing takes priority (matches backend) ---

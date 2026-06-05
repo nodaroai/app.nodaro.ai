@@ -844,19 +844,34 @@ async function executeWorkerNode(
   ctx.onJobCreated?.(node.id, jobId)
 
   // 2. Build payload (needs jobId)
+  // buildPayload may THROW for a structurally-invalid node (e.g. the
+  // ai-avatar / cinematic-avatar payload validators reject a workflow/app/MCP
+  // input that bypassed the route Zod). The pending jobs row was already
+  // inserted above, so delete it on throw before propagating — mirrors the
+  // reservation catch below so a validation failure never leaves an orphan
+  // pending row for the reconciler to sweep.
   const settings = ctx.workflowSettings as WorkflowSettings | undefined
-  const { jobName, queueName, payload, modelIdentifier } = buildPayload(
-    node,
-    jobId,
-    resolvedInputs,
-    undefined,
-    {
-      settings,
-      nodes: allNodes,
-      edges,
-      nodeStates,
-    },
-  )
+  let buildResult: ReturnType<typeof buildPayload>
+  try {
+    buildResult = buildPayload(
+      node,
+      jobId,
+      resolvedInputs,
+      undefined,
+      {
+        settings,
+        nodes: allNodes,
+        edges,
+        nodeStates,
+      },
+    )
+  } catch (err) {
+    await supabase.from("jobs").delete().eq("id", jobId)
+    throw err instanceof Error
+      ? err
+      : new Error(`Failed to build payload for ${node.type}: ${String(err)}`)
+  }
+  const { jobName, queueName, payload, modelIdentifier } = buildResult
 
   // 2b. Update job with full input_data from the built payload
   // Store all payload fields so the execution detail modal can show complete inputs.

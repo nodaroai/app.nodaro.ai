@@ -76,6 +76,7 @@ describe("buildPayload — ai-avatar", () => {
       avatarId: "avatar-abc",
       speechMode: "text",
       script: "Data script — should be overridden.",
+      voiceId: "voice-xyz",
       resolution: "720p",
     })
     const inputs: ResolvedInputs = { script: "Upstream wired script." }
@@ -94,6 +95,31 @@ describe("buildPayload — ai-avatar", () => {
     const inputs: ResolvedInputs = { audioUrl: "https://r2.example.com/audio/drive.mp3" }
     const result = buildPayload(n, jobId, inputs, usageLogId)
     expect(result.payload.audioUrl).toBe("https://r2.example.com/audio/drive.mp3")
+  })
+
+  // ── CRITICAL: wired-script reserve must bucket on the SENT script ──────────
+  // In a workflow/published-app run, the `script` can be wired from an upstream
+  // text producer while `data.script` is empty. The reserve bucket MUST be
+  // estimated from the RESOLVED (wired) script — not the empty data.script —
+  // otherwise the metered true-up (refund-only) silently undercharges the
+  // overage. (Finding R2 #1.)
+  it("buckets the reserve on the WIRED script when data.script is empty", () => {
+    const longScript = "x".repeat(4000) // ≈ 333s at speed 1 → far above the 30s bucket
+    const n = node("n1", {
+      engine: "avatar-iv",
+      avatarId: "avatar-abc",
+      speechMode: "text",
+      // data.script intentionally empty — script arrives wired.
+      voiceId: "voice-xyz",
+      resolution: "720p",
+    })
+    const inputs: ResolvedInputs = { script: longScript }
+    const result = buildPayload(n, jobId, inputs, usageLogId)
+    // The wired script is what gets sent.
+    expect(result.payload.script).toBe(longScript)
+    // estimateScriptDurationSec(4000) ≈ ceil(4000/12) = 334s → 360s bucket.
+    // The reserve id must reflect that bucket, NOT the 30s data.script=empty bucket.
+    expect(result.modelIdentifier).toBe("heygen-avatar-iv:720p:360s")
   })
 
   it("does NOT fold cinematography or identity hints into the script field", () => {
@@ -120,6 +146,8 @@ describe("buildPayload — ai-avatar", () => {
       engine: "avatar-iv",
       avatarId: "avatar-abc",
       speechMode: "text",
+      script: "Say hello.",
+      voiceId: "voice-xyz",
     })
     const result = buildPayload(n, jobId, {}, usageLogId)
     expect(result.payload.resolution).toBe("720p")
@@ -130,6 +158,8 @@ describe("buildPayload — ai-avatar", () => {
     const n = node("n1", {
       engine: "avatar-iv",
       avatarId: "avatar-abc",
+      script: "Say hello.",
+      voiceId: "voice-xyz",
     })
     const result = buildPayload(n, jobId, {}, usageLogId)
     expect(result.payload.speechMode).toBe("text")
@@ -140,6 +170,8 @@ describe("buildPayload — ai-avatar", () => {
       engine: "avatar-iv",
       avatarId: "avatar-abc",
       speechMode: "text",
+      script: "Say hello.",
+      voiceId: "voice-xyz",
     })
     const result = buildPayload(n, jobId, {}, usageLogId)
     expect(result.payload.jobId).toBe(jobId)
@@ -171,7 +203,8 @@ describe("buildPayload — ai-avatar", () => {
       resolution: "1080p",
       aspectRatio: "16:9",
     })
-    const result = buildPayload(n, jobId, {}, usageLogId)
+    const inputs: ResolvedInputs = { audioUrl: "https://r2.example.com/audio/clip.mp3" }
+    const result = buildPayload(n, jobId, inputs, usageLogId)
     expect(AI_AVATAR_RESERVE_IDS).toContain(result.modelIdentifier)
     // Audio mode reserves the 900s top bucket at the requested engine/resolution.
     expect(result.modelIdentifier).toBe("heygen-avatar-v:1080p:900s")
@@ -183,6 +216,7 @@ describe("buildPayload — ai-avatar", () => {
     const n = node("n1", {
       avatarSource: "image",
       engine: "avatar-v", // ignored for billing in image mode
+      imageUrl: "https://r2.example.com/portrait.png",
       speechMode: "text",
       script: "Hi.",
       voiceId: "voice-xyz",
@@ -191,5 +225,48 @@ describe("buildPayload — ai-avatar", () => {
     const result = buildPayload(n, jobId, {}, usageLogId)
     expect(result.modelIdentifier).toMatch(/^heygen-avatar-iv:/)
     expect(AI_AVATAR_RESERVE_IDS).toContain(result.modelIdentifier)
+  })
+
+  // ── Structural validation gate (workflow/app/MCP bypass the route Zod) ──────
+  it("throws when avatar-mode payload is missing avatarId", () => {
+    const n = node("n1", {
+      avatarSource: "avatar",
+      engine: "avatar-iv",
+      speechMode: "text",
+      script: "Hi.",
+      voiceId: "voice-xyz",
+    })
+    expect(() => buildPayload(n, jobId, {}, usageLogId)).toThrow(/avatarId is required/)
+  })
+
+  it("throws when text-mode payload is missing the script", () => {
+    const n = node("n1", {
+      engine: "avatar-iv",
+      avatarId: "avatar-abc",
+      speechMode: "text",
+      voiceId: "voice-xyz",
+    })
+    expect(() => buildPayload(n, jobId, {}, usageLogId)).toThrow(/script is required/)
+  })
+
+  it("throws when audio-mode payload is missing the audioUrl", () => {
+    const n = node("n1", {
+      engine: "avatar-iv",
+      avatarId: "avatar-abc",
+      speechMode: "audio",
+    })
+    expect(() => buildPayload(n, jobId, {}, usageLogId)).toThrow(/audioUrl is required/)
+  })
+
+  it("throws when voiceSpeed is out of the 0.5–1.5 range", () => {
+    const n = node("n1", {
+      engine: "avatar-iv",
+      avatarId: "avatar-abc",
+      speechMode: "text",
+      script: "Hi.",
+      voiceId: "voice-xyz",
+      voiceSpeed: 3,
+    })
+    expect(() => buildPayload(n, jobId, {}, usageLogId)).toThrow(/voiceSpeed/)
   })
 })
