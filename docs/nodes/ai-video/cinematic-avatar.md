@@ -47,11 +47,11 @@ Credit cost depends on the selected **resolution** and the **duration** of the g
 
 - Per-second rate at 720p ≈ 9.375 credits/sec
 - 720p × 10s ≈ **94 credits** charged for the finished clip
-- The upfront reserve hold for that combination is **113 credits**; the surplus is refunded on completion
+- For an exact-duration clip the reserve hold equals the **~94-credit** charge for the 10-second duration, so there is no surplus to refund
 
-A 4-second 720p draft is the cheapest combination (reserve hold ≈ 45 credits); a 15-second 1080p clip is the most expensive (reserve hold ≈ 248 credits).
+A 4-second 720p draft is the cheapest combination (reserve hold ≈ 38 credits); a 15-second 1080p clip is the most expensive (reserve hold ≈ 207 credits).
 
-**Auto Duration:** when **Auto Duration** is on, HeyGen chooses the clip length, so the final duration is unknown until the job completes. To make sure your balance always covers the result, the upfront hold is reserved at the **maximum 15-second** rate for the selected resolution (≈ 142 credits at 720p, ≈ 248 at 1080p). The final charge still reflects the real generated length, and the surplus is refunded automatically on completion.
+**Auto Duration:** when **Auto Duration** is on, HeyGen chooses the clip length, so the final duration is unknown until the job completes. To make sure your balance always covers the result, the upfront hold is reserved at the **maximum 15-second** rate for the selected resolution (≈ 142 credits at 720p, ≈ 207 at 1080p). The final charge still reflects the real generated length, and the surplus is refunded automatically on completion.
 
 > **Estimate notice:** The Cinematic Avatar rate is an **estimate** for the generative Seedance pipeline and has not yet been calibrated against a paid run. The credit cost shown in the editor before you run is authoritative, and the final charge always reflects the real clip length. Pricing may be adjusted after the first paid generations.
 
