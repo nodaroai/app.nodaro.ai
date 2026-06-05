@@ -197,7 +197,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // Full per-MP×ref grid for Flux 2 family (108 entries, see flux2BaseCredits formula).
   // Identifier format: `<model>:<mp>MP:<n>ref` (mp ∈ {0.5,1,2,4}, n ∈ 0..8).
   ...FLUX2_STATIC,
-  // AI Avatar (HeyGen) — 30 duration-bucketed reserve holds (2 engines × 3 resolutions × 5 buckets).
+  // AI Avatar (HeyGen) — 42 duration-bucketed reserve holds (2 engines × 3 resolutions × 7 buckets (30/60/120/240/360/600/900s)).
   // Format: `heygen-<engine>:<resolution>:<bucketSec>s`  e.g. `heygen-avatar-iv:720p:60s`.
   ***REDACTED-OSS-SCRUB***
   ...AI_AVATAR_STATIC,

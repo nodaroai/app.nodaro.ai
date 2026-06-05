@@ -30,6 +30,13 @@ const AiAvatarInputCard = lazy(() =>
   import("./input-cards/ai-avatar-input-card").then((m) => ({ default: m.AiAvatarInputCard })),
 )
 
+// Lazy-load the cinematic-avatar card for the same reason as ai-avatar: it
+// pulls in the HeyGen avatar picker (virtualized catalog fetcher). Keep it out
+// of the main app-runner chunk for apps that don't use cinematic-avatar nodes.
+const CinematicAvatarInputCard = lazy(() =>
+  import("./input-cards/cinematic-avatar-input-card").then((m) => ({ default: m.CinematicAvatarInputCard })),
+)
+
 /** System-wide ceiling for fan-out items. Will be fetched from app_settings in future. */
 export const DEFAULT_SYSTEM_MAX_FANOUT = 20
 
@@ -192,6 +199,19 @@ function InputCardInner({
       return (
         <Suspense fallback={null}>
           <AiAvatarInputCard
+            node={node}
+            isFullscreen={isFullscreen}
+            inputValues={inputValues}
+            onUpdateInput={onUpdateInput}
+            readOnly={readOnly}
+          />
+        </Suspense>
+      )
+
+    case "cinematic-avatar":
+      return (
+        <Suspense fallback={null}>
+          <CinematicAvatarInputCard
             node={node}
             isFullscreen={isFullscreen}
             inputValues={inputValues}

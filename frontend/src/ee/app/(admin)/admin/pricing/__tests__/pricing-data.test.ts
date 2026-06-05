@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest"
+import { AI_AVATAR_RESERVE_IDS, CINEMATIC_RESERVE_IDS } from "@nodaro/shared"
 import {
   SUBSCRIPTION_TIERS,
   TOPUP_PACKAGES,
@@ -228,6 +229,41 @@ describe("MODEL_REFERENCE", () => {
   it("has suno-upload-extend entry", () => {
     expect(MODEL_REFERENCE["suno-upload-extend"]).toBeDefined()
     expect(MODEL_REFERENCE["suno-upload-extend"].provider).toBeTruthy()
+  })
+
+  // Parity guard: the admin MODEL_REFERENCE must cover EVERY reserve id derived
+  // from the shared single-source-of-truth registries. This prevents the admin
+  // pricing table from drifting (phantom or missing duration buckets) when the
+  // shared bucket lists change. See @nodaro/shared ai-avatar-pricing.ts /
+  // cinematic-avatar-pricing.ts.
+  it("covers every AI_AVATAR_RESERVE_IDS id (no phantom/missing buckets)", () => {
+    expect(AI_AVATAR_RESERVE_IDS.length).toBe(42)
+    for (const id of AI_AVATAR_RESERVE_IDS) {
+      expect(MODEL_REFERENCE[id], `missing MODEL_REFERENCE entry for ${id}`).toBeDefined()
+    }
+  })
+
+  it("has no stale heygen-avatar entries beyond AI_AVATAR_RESERVE_IDS", () => {
+    const reserveSet = new Set(AI_AVATAR_RESERVE_IDS)
+    const phantom = Object.keys(MODEL_REFERENCE).filter(
+      (id) => id.startsWith("heygen-avatar-") && !reserveSet.has(id),
+    )
+    expect(phantom, `phantom heygen-avatar ids: ${phantom.join(", ")}`).toEqual([])
+  })
+
+  it("covers every CINEMATIC_RESERVE_IDS id", () => {
+    expect(CINEMATIC_RESERVE_IDS.length).toBe(24)
+    for (const id of CINEMATIC_RESERVE_IDS) {
+      expect(MODEL_REFERENCE[id], `missing MODEL_REFERENCE entry for ${id}`).toBeDefined()
+    }
+  })
+
+  it("has no stale cinematic-avatar entries beyond CINEMATIC_RESERVE_IDS", () => {
+    const reserveSet = new Set(CINEMATIC_RESERVE_IDS)
+    const phantom = Object.keys(MODEL_REFERENCE).filter(
+      (id) => id.startsWith("cinematic-avatar:") && !reserveSet.has(id),
+    )
+    expect(phantom, `phantom cinematic-avatar ids: ${phantom.join(", ")}`).toEqual([])
   })
 })
 
