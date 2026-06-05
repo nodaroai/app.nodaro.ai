@@ -18,7 +18,7 @@ import { PICKER_CATALOGS, getPickerCatalog, listPickerCatalogs } from "@nodaro/s
 
 | Export | Description |
 |--------|-------------|
-| `PICKER_CATALOGS` | `readonly PickerCatalog[]` — every picker (28 single + 11 multi). |
+| `PICKER_CATALOGS` | `readonly PickerCatalog[]` — every picker (27 single + 11 multi). |
 | `getPickerCatalog(nodeTypeOrCatalogId)` | One catalog by `nodeType` (e.g. `"mood"`) or `catalogId`. |
 | `listPickerCatalogs()` | All of them. |
 
