@@ -146,7 +146,7 @@ function flatCat<T extends { id: string; label: string }>(
   return arr.map((e) => ({ id: e.id, label: e.label }))
 }
 
-const SINGLE_PICKERS: ReadonlyArray<SingleDimParameterPickerMeta> = [
+export const SINGLE_PICKERS: ReadonlyArray<SingleDimParameterPickerMeta> = [
   // -------- "Look" family --------
   {
     kind: "single",
@@ -463,7 +463,7 @@ const erase = <T,>(C: ComponentType<{ value: T; onChange: (patch: Partial<T>) =>
     className?: string
   }>
 
-const MULTI_PICKERS: ReadonlyArray<MultiDimParameterPickerMeta> = [
+export const MULTI_PICKERS: ReadonlyArray<MultiDimParameterPickerMeta> = [
   {
     kind: "multi",
     nodeType: "framing",
