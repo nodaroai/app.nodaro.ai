@@ -2,7 +2,6 @@
 
 import { memo, useState, useEffect, useRef, useCallback, type ReactNode, type MouseEvent, type PointerEvent as ReactPointerEvent } from "react"
 import { Handle, Position, NodeToolbar, useUpdateNodeInternals, NodeResizeControl } from "@xyflow/react"
-import { MoreHorizontal } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useShallow } from "zustand/react/shallow"
@@ -10,7 +9,7 @@ import { useAltKeyStore } from "@/hooks/use-alt-key"
 import { useMobileCanvas } from "@/components/editor/mobile-canvas-context"
 import { CustomHandle } from "./custom-handle"
 import { NodeRunStripShell } from "./node-run-strip-shell"
-import { PresetDropdown } from "@/components/editor/config-panels/node-preset-dropdown"
+import { NodeTopToolbar } from "./node-top-toolbar"
 import { computeZoomFromDrag, computeVisualSize, applyMagnet } from "./zoom-math"
 import { useNodeInsertAnimation } from "@/components/editor/workflow-editor/use-node-insert-animation"
 
@@ -452,29 +451,22 @@ function BaseNodeComponent({
         }}
       >
       <NodeToolbar align="end" isVisible={isHovered || presetMenuOpen} position={Position.Top} offset={4}>
-        <div
-          className="flex items-center gap-1"
-          onMouseEnter={() => {
+        {/* Toolbar content (preset dropdown + 3-dots) scales by canvasZoom × nodeZoom so it tracks
+            the node title — see NodeTopToolbar. Only mounts while the toolbar is visible. */}
+        <NodeTopToolbar
+          nodeId={id}
+          nodeZoom={zoom}
+          onMoreMenu={handleMoreMenu}
+          toolbarActions={toolbarActions}
+          onEnter={() => {
             if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current)
             setIsHovered(true)
           }}
-          onMouseLeave={() => {
+          onLeave={() => {
             leaveTimerRef.current = setTimeout(() => setIsHovered(false), 300)
           }}
-        >
-          {/* Preset dropdown — left of the 3-dots menu. Self-hides for nodes with no portable
-              config (and asset/structural nodes). `zoom` keeps its text/icons sized to the node
-              title (which scales with zoom), matching the 3-dots glyph. */}
-          <PresetDropdown nodeId={id} variant="node" zoom={zoom} onOpenChange={setPresetMenuOpen} />
-          <button
-            className="node-more-menu-btn text-muted-foreground transition-colors"
-            onClick={handleMoreMenu}
-            aria-label="More options"
-          >
-            <MoreHorizontal size={Math.round(zoom * 13)} />
-          </button>
-          {toolbarActions}
-        </div>
+          onPresetOpenChange={setPresetMenuOpen}
+        />
       </NodeToolbar>
       {/* Content above card (e.g. thumbnail gallery) — floats 4px higher than
           the card's top edge gap (-translate-y-6 = 24px vs the prior 20px) so

@@ -265,11 +265,24 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     needs: [frontend-tests, backend-tests, typecheck, tenant-scope-lint, check-locale-completeness, check-ee-imports, i18n-completeness]
+    env:
+      # Disable CLI telemetry. The CLI flushes anonymous PostHog analytics on
+      # exit; on a runner that flush can time out and surface as a spurious
+      # exit 1 *after* the command already succeeded ("Finished supabase link."
+      # → "Timeout while shutting down PostHog. Some events may not have been
+      # sent." → exit 1). A failed link step silently skips `db push`, so prod
+      # never gets the migrations. No telemetry client = nothing to flush =
+      # no timeout. Gated by canSend() in supabase/cli telemetry/service.go.
+      # Set at job level so the push step is covered too.
+      SUPABASE_TELEMETRY_DISABLED: "1"
     steps:
       - uses: actions/checkout@v5
       - uses: supabase/setup-cli@ab058987d8d6c725971f6cf9d0b5c98467e30bd1 # v1
         with:
-          version: latest
+          # Pin the CLI — `latest` is non-deterministic across runs (a build
+          # that propagates the telemetry-shutdown error to the exit code can
+          # break prod migrations on one merge while the next merge passes).
+          version: 2.105.0
       - name: Link Supabase project
         run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
         env:
