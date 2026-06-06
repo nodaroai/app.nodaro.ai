@@ -41,6 +41,40 @@ example `{character description}` or `{brand}`) before you run.
 > Photo*, *Anime Person · Real Background*, *Real Person · Cartoon World*, and *Claymation · Real
 > Set*.
 
+### Generate Video factory catalog
+
+**Generate Video** ships a cinematography-driven catalog. Camera moves are written as composable
+prompt fragments (you can stack them), and each preset pre-selects a fitting provider + aspect ratio
++ a provider-valid duration (social presets default to 9:16):
+
+| Folder | Examples |
+|--------|----------|
+| **Camera Moves** | Slow Push-In, Dolly Out, 360° Orbit, Arc, Crane Up, Tracking Follow, Slow Pan, Tilt-Up Reveal, Whip Pan, Dolly Zoom (Vertigo) |
+| **Shot Types & Angles** | Establishing Wide, Medium, Close-Up, Macro, Low-Angle Hero, Overhead Top-Down, FPV Drone |
+| **Cinematic & Specialty** | Handheld Doc, Slow Motion, Timelapse, Hyperlapse, Bullet Time, Rack Focus |
+| **Social & Reels** (9:16) | Vertical Hero, Talking Head, Product Reveal, Trend Quick-Cut, POV Walk |
+| **Product & Ads** | Product Hero, 360 Spin, Liquid Splash, Unboxing, Lifestyle Ad |
+| **Motion Graphics & Logo** | Logo Sting, Title Reveal, Particle Background, Loop Background |
+| **B-Roll & Nature** | Clouds Timelapse, Water Slow-Mo, Forest Drift, Aerial Landscape, Ocean Loop |
+| **Animation & Style** | Anime Motion, 3D Cartoon, Claymation, Living Watercolor |
+| **Looping & Backgrounds** | Subtle Motion, Living Wallpaper |
+
+### Music factory catalogs
+
+Both music nodes ship presets organized along the three axes professional libraries use — **Use-Case**,
+**Mood / Score**, and **Genre**:
+
+- **Generate Music** (structured): each preset sets `genre` + `mood` + `instrumental` + a descriptive
+  prompt (duration capped at 30s). Folders: *By Use-Case* (Lo-fi Study, Podcast Intro, Cinematic
+  Trailer, Corporate, Vlog, Ambient Loop, EDM Drop, Game Loop), *By Mood / Score* (Uplifting,
+  Emotional, Tense, Epic, Happy, Dark, Romantic), *By Genre* (Lo-fi, EDM, Rock, Jazz, Orchestral,
+  Synthwave, Funk, Ambient Cinematic).
+- **Suno Generate** (style-prompt): each preset fills Suno's free-text **style** box using Suno's own
+  formula — *genre + mood + instrumentation + named tempo/BPM + instrumental/vocals + structure*.
+  Setting a style auto-enables Suno custom mode. *By Use-Case* and *By Genre* presets are instrumental
+  and run as-is; the **Vocals & Songs** folder (Pop, Rap, Ballad, Rock, Acoustic) sets the style +
+  song structure and invites you to add your own lyrics.
+
 ## Using presets
 
 Every configurable node has a **preset dropdown** in two places:
