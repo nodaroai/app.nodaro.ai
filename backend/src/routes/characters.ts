@@ -104,6 +104,16 @@ export const upsertCharacterBody = z.object({
     .refine((obj) => !obj || Object.keys(obj).length <= 20, {
       message: "real_life_refs_by_variant: max 20 keys",
     }),
+  // User-uploaded reference VIDEO clips, keyed by a caller-owned label (e.g.
+  // emotion takes). Mirrors `realLifeRefsByVariant` (images) — same per-variant
+  // shape + caps (20 keys, 5 URLs each). Read back off the row to feed
+  // generate-video's `referenceVideoUrls`.
+  referenceVideosByVariant: z
+    .record(z.array(safeUrlSchema).max(5))
+    .optional()
+    .refine((obj) => !obj || Object.keys(obj).length <= 20, {
+      message: "reference_videos_by_variant: max 20 keys",
+    }),
 })
 
 const deleteCharacterParams = z.object({
@@ -122,7 +132,7 @@ const listCharactersQuery = z.object({
 })
 
 const SELECT_COLUMNS =
-  "id, user_id, node_id, project_id, name, description, gender, style, base_outfit, source_image_url, expressions, poses, lighting_variations, angles, body_angles, motions, voice, personality, canonical_description, lora_training_status, lora_replicate_version, lora_trigger_word, lora_trained_at, deleted_at, created_at, updated_at"
+  "id, user_id, node_id, project_id, name, description, gender, style, base_outfit, source_image_url, expressions, poses, lighting_variations, angles, body_angles, motions, reference_videos_by_variant, voice, personality, canonical_description, lora_training_status, lora_replicate_version, lora_trigger_word, lora_trained_at, deleted_at, created_at, updated_at"
 
 type CharacterRow = {
   id: string
@@ -141,6 +151,7 @@ type CharacterRow = {
   angles: { name: string; url: string }[] | null
   body_angles: { name: string; url: string }[] | null
   motions: { name: string; url: string }[] | null
+  reference_videos_by_variant: Record<string, string[]> | null
   voice: { voiceId: string; voiceName: string; traits: string; voiceType?: "premade" | "library" | "custom" } | null
   personality: { mood: string; speechStyle: string; movementStyle: string; behavioralNotes: string } | null
   canonical_description: string | null
@@ -171,6 +182,7 @@ function toCamel(c: CharacterRow) {
     angles: c.angles,
     bodyAngles: c.body_angles,
     motions: c.motions,
+    referenceVideosByVariant: c.reference_videos_by_variant ?? {},
     voice: c.voice,
     personality: c.personality,
     canonicalDescription: c.canonical_description,
@@ -182,6 +194,21 @@ function toCamel(c: CharacterRow) {
     createdAt: c.created_at,
     updatedAt: c.updated_at,
   }
+}
+
+/**
+ * Normalize a per-variant ref map's keys to a lowercased+trimmed slug so the UI
+ * can look refs up by the canonical preset id regardless of how the caller
+ * spells/spaces the key. Shared by `real_life_refs_by_variant` (images) and
+ * `reference_videos_by_variant` (video clips) so both write the same shape.
+ */
+function normalizeVariantKeys(
+  map: Record<string, string[]> | undefined,
+): Record<string, string[]> | undefined {
+  if (!map) return undefined
+  return Object.fromEntries(
+    Object.entries(map).map(([k, v]) => [k.toLowerCase().trim(), v]),
+  )
 }
 
 /**
@@ -462,22 +489,18 @@ export async function characterRoutes(app: FastifyInstance) {
       })
     }
 
-    const { id, nodeId, workflowId, projectId, name, description, gender, style, baseOutfit, sourceImageUrl, expressions, poses, lightingVariations, angles, bodyAngles, motions, voice, personality, seedPrompt, canonicalDescription, referencePhotos, realLifeRefsByVariant } = parsed.data
+    const { id, nodeId, workflowId, projectId, name, description, gender, style, baseOutfit, sourceImageUrl, expressions, poses, lightingVariations, angles, bodyAngles, motions, voice, personality, seedPrompt, canonicalDescription, referencePhotos, realLifeRefsByVariant, referenceVideosByVariant } = parsed.data
     const userId = req.userId
 
     if (!userId) {
       return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
     }
 
-    // Normalize per-variant keys before persisting. The column is keyed by a
-    // lowercased+trimmed slug (e.g. "smile") so the UI can look refs up by the
-    // canonical preset id regardless of how the caller spells/spaces the key.
-    // Done once here so both INSERT and UPDATE write the same shape.
-    const normalizedVariantRefs = realLifeRefsByVariant
-      ? Object.fromEntries(
-          Object.entries(realLifeRefsByVariant).map(([k, v]) => [k.toLowerCase().trim(), v]),
-        )
-      : undefined
+    // Normalize the per-variant map keys (lowercased+trimmed slug) before
+    // persisting so the UI can look refs up by the canonical preset id
+    // regardless of casing/spacing. Done once here so INSERT + UPDATE agree.
+    const normalizedVariantRefs = normalizeVariantKeys(realLifeRefsByVariant)
+    const normalizedVideoRefs = normalizeVariantKeys(referenceVideosByVariant)
 
     if (id) {
       // UPDATE: only touch columns the caller explicitly sent. `name` itself
@@ -506,6 +529,7 @@ export async function characterRoutes(app: FastifyInstance) {
       if (canonicalDescription !== undefined) patch.canonical_description = canonicalDescription ?? null
       if (referencePhotos !== undefined) patch.reference_photos = referencePhotos
       if (normalizedVariantRefs !== undefined) patch.real_life_refs_by_variant = normalizedVariantRefs
+      if (normalizedVideoRefs !== undefined) patch.reference_videos_by_variant = normalizedVideoRefs
 
       const { data: updated, error } = await supabase
         .from("characters")
@@ -556,6 +580,7 @@ export async function characterRoutes(app: FastifyInstance) {
       canonical_description: canonicalDescription ?? null,
       reference_photos: referencePhotos ?? [],
       real_life_refs_by_variant: normalizedVariantRefs ?? {},
+      reference_videos_by_variant: normalizedVideoRefs ?? {},
       updated_at: new Date().toISOString(),
     }
 

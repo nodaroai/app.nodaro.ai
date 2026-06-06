@@ -90,6 +90,7 @@ const CAMEL_CHARACTER = {
   expressions: [],
   poses: [],
   lightingVariations: [],
+  referenceVideosByVariant: {},
   createdAt: "2026-01-01T00:00:00Z",
   updatedAt: "2026-01-01T00:00:00Z",
 }
@@ -409,6 +410,34 @@ describe("GET /v1/characters/:id", () => {
       "eq",
       TEST_CHARACTER_ID,
     )
+  })
+
+  it("returns reference_videos_by_variant on the row (read round-trip)", async () => {
+    const rowWithVideos = {
+      ...DB_CHARACTER,
+      reference_videos_by_variant: {
+        angry: ["https://example.com/angry.mp4"],
+        happy: ["https://example.com/happy-1.mp4", "https://example.com/happy-2.mp4"],
+      },
+    }
+    const charsByIdChain = getByIdChain({ data: rowWithVideos, error: null })
+    const jobs = mockGetByIdJobs()
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "jobs") return jobs.next() as never
+      return { select: charsByIdChain.mockSelect } as never
+    })
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/characters/${TEST_CHARACTER_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().referenceVideosByVariant).toEqual({
+      angry: ["https://example.com/angry.mp4"],
+      happy: ["https://example.com/happy-1.mp4", "https://example.com/happy-2.mp4"],
+    })
   })
 
   it("maps in-flight jobs to assetType buckets for spinner rehydration", async () => {
@@ -1107,6 +1136,105 @@ describe("POST /v1/characters", () => {
             "https://example.com/4.png",
             "https://example.com/5.png",
             "https://example.com/6.png",
+          ],
+        },
+      },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+  })
+
+  it("normalizes reference_videos_by_variant keys to lowercased+trimmed (insert)", async () => {
+    const { mockInsert, captured } = mockInsertCapture()
+    vi.mocked(supabase.from).mockReturnValue({ insert: mockInsert } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: {
+        name: "Hero",
+        nodeId: "node-1",
+        userId: TEST_USER_ID,
+        referenceVideosByVariant: {
+          "  Angry ": ["https://example.com/a1.mp4"],
+          HAPPY: ["https://example.com/h1.mp4", "https://example.com/h2.mp4"],
+        },
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(captured.row).not.toBeNull()
+    expect(captured.row?.reference_videos_by_variant).toEqual({
+      angry: ["https://example.com/a1.mp4"],
+      happy: ["https://example.com/h1.mp4", "https://example.com/h2.mp4"],
+    })
+  })
+
+  it("persists reference_videos_by_variant on update with normalized keys", async () => {
+    // Inline update-chain capture: .update(patch).eq().eq().select().single()
+    const captured: { patch: Record<string, unknown> | null } = { patch: null }
+    const mockSingle = vi.fn().mockResolvedValue({ data: { id: TEST_CHARACTER_ID }, error: null })
+    const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
+    const eq2 = vi.fn().mockReturnValue({ select: mockSelect })
+    const eq1 = vi.fn().mockReturnValue({ eq: eq2 })
+    const mockUpdate = vi.fn((patch: Record<string, unknown>) => {
+      captured.patch = patch
+      return { eq: eq1 }
+    })
+    vi.mocked(supabase.from).mockReturnValue({ update: mockUpdate } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: {
+        id: TEST_CHARACTER_ID,
+        nodeId: "node-1",
+        userId: TEST_USER_ID,
+        referenceVideosByVariant: { " Tired ": ["https://example.com/t.mp4"] },
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(captured.patch?.reference_videos_by_variant).toEqual({
+      tired: ["https://example.com/t.mp4"],
+    })
+  })
+
+  it("rejects reference_videos_by_variant with > 20 keys (400)", async () => {
+    const variants: Record<string, string[]> = {}
+    for (let i = 0; i < 21; i++) {
+      variants[`take${i}`] = ["https://example.com/x.mp4"]
+    }
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: {
+        name: "Hero",
+        nodeId: "node-1",
+        userId: TEST_USER_ID,
+        referenceVideosByVariant: variants,
+      },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+  })
+
+  it("rejects reference_videos_by_variant with > 5 urls per key (400)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: {
+        name: "Hero",
+        nodeId: "node-1",
+        userId: TEST_USER_ID,
+        referenceVideosByVariant: {
+          angry: [
+            "https://example.com/1.mp4",
+            "https://example.com/2.mp4",
+            "https://example.com/3.mp4",
+            "https://example.com/4.mp4",
+            "https://example.com/5.mp4",
+            "https://example.com/6.mp4",
           ],
         },
       },
