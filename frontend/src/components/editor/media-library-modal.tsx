@@ -5,6 +5,7 @@ import { createPortal } from "react-dom"
 import { X, Image as ImageIcon } from "lucide-react"
 import type { LibraryAsset } from "@/lib/api"
 import { LibraryMediaBrowser } from "./library-media-browser"
+import { SHORTCUTS, formatBinding, isMacPlatform } from "@/lib/shortcuts"
 
 interface MediaLibraryModalProps {
   open: boolean
@@ -18,6 +19,7 @@ interface MediaLibraryModalProps {
  * search/filter/grid and is also embedded in the My Library "All Files" tab.
  */
 export function MediaLibraryModal({ open, onClose, onAddToCanvas }: MediaLibraryModalProps) {
+  const isMac = isMacPlatform()
   // Escape to close
   useEffect(() => {
     if (!open) return
@@ -60,7 +62,7 @@ export function MediaLibraryModal({ open, onClose, onAddToCanvas }: MediaLibrary
           onAddToCanvas={onAddToCanvas}
           autoFocusSearch
           owned
-          footerHint={<p className="text-xs text-muted-foreground/40">Ctrl+M to toggle</p>}
+          footerHint={<p className="text-xs text-muted-foreground/40">{formatBinding(SHORTCUTS.mediaLibrary.bindings[0], isMac)} to toggle</p>}
         />
       </div>
     </div>,

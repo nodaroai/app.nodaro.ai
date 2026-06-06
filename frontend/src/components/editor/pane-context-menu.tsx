@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react"
 import { StickyNote } from "lucide-react"
+import { SHORTCUTS, formatBinding, isMacPlatform } from "@/lib/shortcuts"
 
 interface PaneContextMenuProps {
   readonly x: number
@@ -12,6 +13,7 @@ interface PaneContextMenuProps {
 
 export function PaneContextMenu({ x, y, onClose, onAddStickyNote }: PaneContextMenuProps) {
   const ref = useRef<HTMLDivElement>(null)
+  const isMac = isMacPlatform()
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -40,7 +42,7 @@ export function PaneContextMenu({ x, y, onClose, onAddStickyNote }: PaneContextM
       >
         <StickyNote className="h-3.5 w-3.5" />
         Add Sticky Note
-        <span className="ml-auto text-xs text-muted-foreground">Shift+S</span>
+        <span className="ml-auto text-xs text-muted-foreground">{formatBinding(SHORTCUTS.stickyNote.bindings[0], isMac)}</span>
       </button>
     </div>
   )
