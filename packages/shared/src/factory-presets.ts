@@ -51,6 +51,82 @@ export function groupFactoryPresets<
 }
 
 /**
+ * Selective-stylization presets shared by `modify-image` (transform an input photo) and
+ * `generate-image` (use a connected reference image). `modify-image` is slated for deprecation in
+ * favor of `generate-image`, so the catalog lives in ONE place to prevent the two from drifting —
+ * when `modify-image` is removed, just drop its key from `FACTORY_PRESETS` below. `nano-banana-pro`
+ * is a valid provider for both nodes' enums (IMAGE_GEN_PROVIDERS and MODIFY_IMAGE_PROVIDERS).
+ */
+const STYLIZED_SUBJECT: ReadonlyArray<{
+  readonly slug: string
+  readonly name: string
+  readonly description: string
+  readonly data: Readonly<Record<string, unknown>>
+}> = [
+  {
+    slug: "cartoon-person-real-world",
+    name: "Cartoon Person, Real World",
+    description: "Subject → 3D cartoon, rest stays photoreal.",
+    data: {
+      provider: "nano-banana-pro",
+      prompt:
+        "Turn the person into a stylized 3D cartoon character (Pixar/Disney look). Important: only the person becomes a cartoon — keep the background, clothing textures, lighting, and everything else photorealistic and unchanged.",
+    },
+  },
+  {
+    slug: "caricature-real-photo",
+    name: "Caricature, Real Photo",
+    description: "Exaggerated cartoon head on a real scene.",
+    data: {
+      provider: "nano-banana-pro",
+      prompt:
+        "Exaggerate the person into a caricature with an oversized head and amplified features, in a fun illustrated style. Keep the body, background, and overall scene photorealistic and unchanged.",
+    },
+  },
+  {
+    slug: "anime-person-real-bg",
+    name: "Anime Person, Real Background",
+    description: "Subject → 2D anime, real environment.",
+    data: {
+      provider: "nano-banana-pro",
+      prompt:
+        "Restyle only the person as a 2D anime character with cel shading. Keep the real-world background, lighting, and environment photorealistic and untouched.",
+    },
+  },
+  {
+    slug: "real-person-cartoon-world",
+    name: "Real Person, Cartoon World",
+    description: "Inverse — real subject, stylized world.",
+    data: {
+      provider: "nano-banana-pro",
+      prompt:
+        "Keep the person photorealistic and unchanged. Transform only the background and environment into a colorful stylized cartoon world.",
+    },
+  },
+  {
+    slug: "claymation-figure-real-set",
+    name: "Claymation Figure, Real Set",
+    description: "Subject → clay figure, real surroundings.",
+    data: {
+      provider: "nano-banana-pro",
+      prompt:
+        "Turn the person into a tactile stop-motion claymation figure with visible fingerprints and plasticine texture. Keep the surrounding set and background photorealistic.",
+    },
+  },
+]
+
+/** Build the Stylized Subject presets for a node type (id = `<nodeType>/<slug>`). */
+function stylizedSubjectFor(nodeType: string): FactoryPreset[] {
+  return STYLIZED_SUBJECT.map((p) => ({
+    id: `${nodeType}/${p.slug}`,
+    name: p.name,
+    description: p.description,
+    group: "Stylized Subject",
+    data: p.data,
+  }))
+}
+
+/**
  * System/factory presets shipped with the app. Code-defined (like the picker catalogs) so they are
  * typed, testable, versioned with the app, and available in every edition without a DB seed.
  *
@@ -1017,70 +1093,18 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
         negativePrompt: "smooth, antialiased, blur, watermark",
       },
     },
+
+    // ── Stylized Subject (shared with the deprecating modify-image node) ──────
+    // Selective stylization is a TRANSFORM pattern; here it works when a reference
+    // image is connected (nano-banana-pro edits it while preserving untouched
+    // regions). The "only the X" instruction lives in the prompt, not `style`.
+    ...stylizedSubjectFor("generate-image"),
   ],
 
-  // Selective / hybrid stylization — a TRANSFORM pattern (existing photo in →
-  // partially restyled out), so it lives on the modify-image node, not
-  // text-to-image. The "only the X" instruction lives in the prompt because the
-  // `style` field would restyle the whole frame. Editors that preserve untouched
-  // regions (nano-banana-pro / gpt-image-2-i2i / Flux Kontext) work best.
-  "modify-image": [
-    {
-      id: "modify-image/cartoon-person-real-world",
-      name: "Cartoon Person, Real World",
-      description: "Subject → 3D cartoon, rest stays photoreal.",
-      group: "Stylized Subject",
-      data: {
-        provider: "nano-banana-pro",
-        prompt:
-          "Turn the person into a stylized 3D cartoon character (Pixar/Disney look). Important: only the person becomes a cartoon — keep the background, clothing textures, lighting, and everything else photorealistic and unchanged.",
-      },
-    },
-    {
-      id: "modify-image/caricature-real-photo",
-      name: "Caricature, Real Photo",
-      description: "Exaggerated cartoon head on a real scene.",
-      group: "Stylized Subject",
-      data: {
-        provider: "nano-banana-pro",
-        prompt:
-          "Exaggerate the person into a caricature with an oversized head and amplified features, in a fun illustrated style. Keep the body, background, and overall scene photorealistic and unchanged.",
-      },
-    },
-    {
-      id: "modify-image/anime-person-real-bg",
-      name: "Anime Person, Real Background",
-      description: "Subject → 2D anime, real environment.",
-      group: "Stylized Subject",
-      data: {
-        provider: "nano-banana-pro",
-        prompt:
-          "Restyle only the person as a 2D anime character with cel shading. Keep the real-world background, lighting, and environment photorealistic and untouched.",
-      },
-    },
-    {
-      id: "modify-image/real-person-cartoon-world",
-      name: "Real Person, Cartoon World",
-      description: "Inverse — real subject, stylized world.",
-      group: "Stylized Subject",
-      data: {
-        provider: "nano-banana-pro",
-        prompt:
-          "Keep the person photorealistic and unchanged. Transform only the background and environment into a colorful stylized cartoon world.",
-      },
-    },
-    {
-      id: "modify-image/claymation-figure-real-set",
-      name: "Claymation Figure, Real Set",
-      description: "Subject → clay figure, real surroundings.",
-      group: "Stylized Subject",
-      data: {
-        provider: "nano-banana-pro",
-        prompt:
-          "Turn the person into a tactile stop-motion claymation figure with visible fingerprints and plasticine texture. Keep the surrounding set and background photorealistic.",
-      },
-    },
-  ],
+  // modify-image shares the Stylized Subject catalog with generate-image (single
+  // source of truth in STYLIZED_SUBJECT). modify-image is slated for deprecation
+  // in favor of generate-image — when it's removed, drop this key.
+  "modify-image": stylizedSubjectFor("modify-image"),
   "generate-video": [
     // ── Camera Moves (composable cinematography fragments) ───────────────────
     {

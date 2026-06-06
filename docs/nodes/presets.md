@@ -35,11 +35,12 @@ Each preset pre-selects the **best provider and aspect ratio** for its job (e.g.
 for logos and thumbnails) and includes **`{placeholder}` slots** in the prompt — fill them in (for
 example `{character description}` or `{brand}`) before you run.
 
-> **Selective stylization** lives on the **Modify Image** node, not Generate Image — because effects
-> like *"make the person a cartoon but keep the background photoreal"* transform an existing photo.
-> The **Stylized Subject** folder there ships *Cartoon Person · Real World*, *Caricature · Real
-> Photo*, *Anime Person · Real Background*, *Real Person · Cartoon World*, and *Claymation · Real
-> Set*.
+> **Selective stylization** ("make the person a cartoon but keep the background photoreal") is a
+> transform effect. The **Stylized Subject** folder ships *Cartoon Person · Real World*, *Caricature
+> · Real Photo*, *Anime Person · Real Background*, *Real Person · Cartoon World*, and *Claymation ·
+> Real Set*. It appears on **both Generate Image** (connect a reference image so the model edits it)
+> **and Modify Image** — the two share one catalog while Modify Image is being phased out in favor of
+> Generate Image.
 
 ### Generate Video factory catalog
 
