@@ -41,6 +41,7 @@ function makeQB(opts: { rows?: unknown; single?: unknown; error?: { code?: strin
   qb.update = vi.fn(() => qb)
   qb.delete = vi.fn(() => qb)
   qb.eq = vi.fn(() => qb)
+  qb.in = vi.fn(() => qb)
   qb.order = vi.fn(() => qb)
   qb.single = vi.fn(() => Promise.resolve(singleResult))
   qb.then = (resolve: (v: unknown) => unknown) => resolve(result)
@@ -160,6 +161,57 @@ describe("node-presets routes", () => {
     expect(res.statusCode).toBe(200)
     expect(qb.eq).toHaveBeenCalledWith("id", "abc")
     expect(qb.eq).toHaveBeenCalledWith("user_id", USER)
+  })
+
+  const GROUP1 = "00000000-0000-4000-8000-000000000111"
+  const PRESET1 = "00000000-0000-4000-8000-000000000222"
+
+  it("POST persists groupId, tags and sortOrder", async () => {
+    const qb = makeQB({
+      rows: [{ id: GROUP1 }], // ownership check: GROUP1 is owned by the user
+      single: { id: "p3", user_id: USER, node_type: "generate-image", name: "Z", description: null, data: { prompt: "x" }, group_id: GROUP1, tags: ["hero"], sort_order: 2, created_at: "", updated_at: "" },
+    })
+    fromMock.mockReturnValue(qb)
+    const app = buildApp()
+    await app.register(nodePresetRoutes)
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/node-presets",
+      payload: { nodeType: "generate-image", name: "Z", data: { prompt: "x" }, groupId: GROUP1, tags: ["hero"], sortOrder: 2 },
+    })
+    expect(res.statusCode).toBe(201)
+    const inserted = (qb.insert as ReturnType<typeof vi.fn>).mock.calls[0][0] as Record<string, unknown>
+    expect(inserted).toMatchObject({ group_id: GROUP1, tags: ["hero"], sort_order: 2 })
+    expect(res.json().data).toMatchObject({ groupId: GROUP1, tags: ["hero"], sortOrder: 2 })
+  })
+
+  it("POST /reorder updates groups + presets scoped to the user", async () => {
+    const qb = makeQB({ rows: [{ id: GROUP1 }] }) // ownership check sees GROUP1 as owned
+    fromMock.mockReturnValue(qb)
+    const app = buildApp()
+    await app.register(nodePresetRoutes)
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/node-presets/reorder",
+      payload: { groups: [{ id: GROUP1, sortOrder: 0 }], presets: [{ id: PRESET1, groupId: GROUP1, sortOrder: 1 }] },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toEqual({ ok: true })
+    expect(qb.eq).toHaveBeenCalledWith("user_id", USER)
+  })
+
+  it("POST /reorder rejects moving a preset into a group the user does not own", async () => {
+    const qb = makeQB({ rows: [] }) // ownership check finds no owned group → unowned
+    fromMock.mockReturnValue(qb)
+    const app = buildApp()
+    await app.register(nodePresetRoutes)
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/node-presets/reorder",
+      payload: { presets: [{ id: PRESET1, groupId: GROUP1, sortOrder: 0 }] },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("invalid_group")
   })
 
   it("rejects unauthenticated requests with 401", async () => {

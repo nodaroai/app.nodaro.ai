@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, type ChangeEvent } from "react"
-import { Check, ChevronDown, Download, Layers, Plus, Trash2, Upload } from "lucide-react"
+import { Check, ChevronDown, ChevronRight, Download, Folder, FolderOpen, Layers, Plus, Settings2, Trash2, Upload } from "lucide-react"
 import {
   buildNodePresetExport,
   extractPresetData,
@@ -23,8 +23,10 @@ import {
 } from "@/components/ui/alert-dialog"
 import { useAuth } from "@/hooks/use-auth"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { useNodePresets, useNodePresetMutations } from "@/hooks/queries/use-node-presets-queries"
-import { NodePresetNameTakenError, type NodePreset } from "@/lib/api"
+import { useNodePresets, useNodePresetGroups, useNodePresetMutations } from "@/hooks/queries/use-node-presets-queries"
+import { NodePresetNameTakenError, type NodePreset, type NodePresetGroup } from "@/lib/api"
+import { buildPresetTree, presetMatchesQuery } from "@/lib/preset-tree"
+import { NodePresetManageDialog } from "./node-preset-manage-dialog"
 import { NODE_DEF_MAP } from "@/types/nodes"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
@@ -40,6 +42,14 @@ type MergedPreset = {
   description?: string
   data: Record<string, unknown>
 }
+
+const toMerged = (p: NodePreset): MergedPreset => ({
+  source: "user",
+  id: p.id,
+  name: p.name,
+  description: p.description,
+  data: p.data,
+})
 
 interface PresetDropdownProps {
   readonly nodeId: string
@@ -95,10 +105,13 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
   const [search, setSearch] = useState("")
   const [saving, setSaving] = useState(false)
   const [newName, setNewName] = useState("")
+  const [manageOpen, setManageOpen] = useState(false)
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set())
   const [confirm, setConfirm] = useState<{ kind: "select"; preset: MergedPreset } | { kind: "override" } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const { data: userPresets = [] } = useNodePresets(nodeType, user?.id)
+  const { data: groups = [] } = useNodePresetGroups(nodeType, user?.id)
   const { create, update, remove, importMany } = useNodePresetMutations()
 
   const factory = useMemo<MergedPreset[]>(
@@ -130,12 +143,22 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
   const dirty = activePreset ? !presetDataMatches(data, activePreset.data) : false
   const isRunning = data.executionStatus === "running" || data.executionStatus === "pending"
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    const m = (p: MergedPreset) =>
-      !q || p.name.toLowerCase().includes(q) || (p.description ?? "").toLowerCase().includes(q)
-    return { factory: factory.filter(m), user: userMerged.filter(m) }
-  }, [factory, userMerged, search])
+  const q = search.trim().toLowerCase()
+  const searching = q.length > 0
+  const factoryMatches = useMemo(
+    () => factory.filter((p) => !q || p.name.toLowerCase().includes(q) || (p.description ?? "").toLowerCase().includes(q)),
+    [factory, q],
+  )
+  // When searching, present a flat list of matching user presets (ignore folder collapse). When
+  // not searching, present the organized tree.
+  const userMatches = useMemo(
+    () => (userPresets as NodePreset[]).filter((p) => presetMatchesQuery(p, search)).map(toMerged),
+    [userPresets, search],
+  )
+  const tree = useMemo(
+    () => buildPresetTree(userPresets as NodePreset[], groups as NodePresetGroup[]),
+    [userPresets, groups],
+  )
 
   const setOpenState = (o: boolean) => {
     setOpen(o)
@@ -145,6 +168,15 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
       setSearch("")
       setNewName("")
     }
+  }
+
+  const toggleCollapsed = (id: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
   }
 
   const applyPreset = (p: MergedPreset) => {
@@ -272,25 +304,82 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
             />
           </div>
           <div className="max-h-64 overflow-y-auto p-1">
-            {filtered.factory.length > 0 && <GroupLabel>Factory</GroupLabel>}
-            {filtered.factory.map((p) => (
+            {factoryMatches.length > 0 && <GroupLabel>Factory</GroupLabel>}
+            {factoryMatches.map((p) => (
               <PresetRow key={p.id} preset={p} active={p.id === activeId} onSelect={() => onSelect(p)} />
             ))}
-            {filtered.user.length > 0 && <GroupLabel>My Presets</GroupLabel>}
-            {filtered.user.map((p) => (
-              <PresetRow
-                key={p.id}
-                preset={p}
-                active={p.id === activeId}
-                onSelect={() => onSelect(p)}
-                onDelete={() => doDelete(p)}
-              />
-            ))}
-            {filtered.factory.length === 0 && filtered.user.length === 0 && (
-              <div className="px-3 py-6 text-center text-xs text-muted-foreground">
-                No presets yet. Configure this node, then “Save as new”.
-              </div>
+
+            {searching ? (
+              <>
+                {userMatches.length > 0 && <GroupLabel>My Presets</GroupLabel>}
+                {userMatches.map((p) => (
+                  <PresetRow
+                    key={p.id}
+                    preset={p}
+                    active={p.id === activeId}
+                    onSelect={() => onSelect(p)}
+                    onDelete={() => doDelete(p)}
+                  />
+                ))}
+              </>
+            ) : (
+              tree.map((node) => {
+                if (node.kind === "preset") {
+                  const mp = toMerged(node.preset)
+                  return (
+                    <PresetRow
+                      key={mp.id}
+                      preset={mp}
+                      active={mp.id === activeId}
+                      onSelect={() => onSelect(mp)}
+                      onDelete={() => doDelete(mp)}
+                    />
+                  )
+                }
+                const g = node.group
+                const isFolder = g.kind === "folder"
+                const isCollapsed = isFolder && collapsed.has(g.id)
+                const rows = node.presets.map((p) => {
+                  const mp = toMerged(p)
+                  return (
+                    <PresetRow
+                      key={mp.id}
+                      preset={mp}
+                      active={mp.id === activeId}
+                      indented
+                      onSelect={() => onSelect(mp)}
+                      onDelete={() => doDelete(mp)}
+                    />
+                  )
+                })
+                return (
+                  <div key={g.id}>
+                    {isFolder ? (
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left hover:bg-accent"
+                        onClick={() => toggleCollapsed(g.id)}
+                      >
+                        {isCollapsed ? <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-70" /> : <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70" />}
+                        {isCollapsed ? <Folder className="h-3.5 w-3.5 shrink-0 opacity-70" /> : <FolderOpen className="h-3.5 w-3.5 shrink-0 opacity-70" />}
+                        <span className="truncate text-sm font-medium">{g.name}</span>
+                        <span className="ml-auto text-[11px] text-muted-foreground">{node.presets.length}</span>
+                      </button>
+                    ) : (
+                      <GroupLabel>{g.name}</GroupLabel>
+                    )}
+                    {!isCollapsed && rows}
+                  </div>
+                )
+              })
             )}
+
+            {factoryMatches.length === 0 &&
+              (searching ? userMatches.length === 0 : tree.length === 0) && (
+                <div className="px-3 py-6 text-center text-xs text-muted-foreground">
+                  {searching ? "No presets match your search." : "No presets yet. Configure this node, then “Save as new”."}
+                </div>
+              )}
           </div>
           <div className="space-y-2 border-t border-gray-200 p-2 dark:border-[#2D2D2D]">
             {saving ? (
@@ -342,10 +431,28 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
                 <Download className="h-3.5 w-3.5" /> Export
               </Button>
             </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-full justify-start gap-2"
+              onClick={() => {
+                setManageOpen(true)
+                setOpenState(false)
+              }}
+            >
+              <Settings2 className="h-3.5 w-3.5" /> Manage presets…
+            </Button>
             <input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={onFile} />
           </div>
         </PopoverContent>
       </Popover>
+
+      <NodePresetManageDialog
+        nodeType={nodeType}
+        open={manageOpen}
+        onOpenChange={setManageOpen}
+        activeId={activeId}
+      />
 
       <AlertDialog open={confirm !== null} onOpenChange={(o) => { if (!o) setConfirm(null) }}>
         <AlertDialogContent>
@@ -408,16 +515,24 @@ function GroupLabel({ children }: { children: React.ReactNode }) {
 function PresetRow({
   preset,
   active,
+  indented,
   onSelect,
   onDelete,
 }: {
   preset: MergedPreset
   active: boolean
+  indented?: boolean
   onSelect: () => void
   onDelete?: () => void
 }) {
   return (
-    <div className={cn("group flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent", active && "bg-accent/60")}>
+    <div
+      className={cn(
+        "group flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent",
+        indented && "ml-3",
+        active && "bg-accent/60",
+      )}
+    >
       <button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={onSelect}>
         <Check className={cn("h-3.5 w-3.5 shrink-0", active ? "opacity-100 text-[#ff0073]" : "opacity-0")} />
         <span className="min-w-0">

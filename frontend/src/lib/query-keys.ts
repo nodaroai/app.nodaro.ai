@@ -33,6 +33,12 @@ export const queryKeys = {
     list: (nodeType?: string) => ["nodePresets", "list", nodeType ?? ""] as const,
   },
 
+  // Node preset groups (folders / sections)
+  nodePresetGroups: {
+    all: ["nodePresetGroups"] as const,
+    list: (nodeType?: string) => ["nodePresetGroups", "list", nodeType ?? ""] as const,
+  },
+
   // App settings (admin)
   appSettings: {
     all: ["app-settings"] as const,

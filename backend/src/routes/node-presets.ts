@@ -9,17 +9,34 @@ const presetDataSchema = z
   .record(z.string(), z.unknown())
   .refine((d) => JSON.stringify(d).length <= MAX_DATA_BYTES, { message: "preset data too large" })
 
+const tagsSchema = z.array(z.string().min(1).max(40)).max(32)
+const groupIdSchema = z.string().uuid().nullable()
+
 const createBody = z.object({
   nodeType: z.string().min(1).max(120),
   name: z.string().min(1).max(120),
   description: z.string().max(500).optional(),
   data: presetDataSchema,
+  groupId: groupIdSchema.optional(),
+  tags: tagsSchema.optional(),
+  sortOrder: z.number().int().optional(),
 })
 
 const patchBody = z.object({
   name: z.string().min(1).max(120).optional(),
   description: z.string().max(500).optional(),
   data: presetDataSchema.optional(),
+  groupId: groupIdSchema.optional(),
+  tags: tagsSchema.optional(),
+  sortOrder: z.number().int().optional(),
+})
+
+const reorderBody = z.object({
+  groups: z.array(z.object({ id: z.string().uuid(), sortOrder: z.number().int() })).max(500).optional(),
+  presets: z
+    .array(z.object({ id: z.string().uuid(), groupId: groupIdSchema.optional(), sortOrder: z.number().int() }))
+    .max(2000)
+    .optional(),
 })
 
 const importBody = z.object({
@@ -42,6 +59,9 @@ type Row = {
   name: string
   description: string | null
   data: Record<string, unknown>
+  group_id: string | null
+  tags: string[] | null
+  sort_order: number | null
   created_at: string
   updated_at: string
 }
@@ -53,6 +73,9 @@ function toCamel(r: Row) {
     name: r.name,
     description: r.description ?? undefined,
     data: r.data ?? {},
+    groupId: r.group_id ?? undefined,
+    tags: r.tags ?? [],
+    sortOrder: r.sort_order ?? 0,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   }
@@ -60,6 +83,20 @@ function toCamel(r: Row) {
 
 function unauthorized(reply: FastifyReply) {
   return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
+}
+
+/** Returns the subset of `ids` that are NOT groups owned by `userId` (so a preset can never be
+ *  assigned to another user's group — keeps group_id references correct-by-construction). */
+async function unownedGroupIds(userId: string, ids: string[]): Promise<string[]> {
+  const distinct = [...new Set(ids)]
+  if (distinct.length === 0) return []
+  const { data } = await supabase
+    .from("node_preset_groups")
+    .select("id")
+    .eq("user_id", userId)
+    .in("id", distinct)
+  const owned = new Set(((data ?? []) as { id: string }[]).map((r) => r.id))
+  return distinct.filter((id) => !owned.has(id))
 }
 
 export async function nodePresetRoutes(app: FastifyInstance) {
@@ -83,7 +120,10 @@ export async function nodePresetRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       return reply.status(400).send({ error: { code: "validation_error", message: parsed.error.issues[0]?.message ?? "Invalid body" } })
     }
-    const { nodeType, name, description, data } = parsed.data
+    const { nodeType, name, description, data, groupId, tags, sortOrder } = parsed.data
+    if (groupId && (await unownedGroupIds(userId, [groupId])).length > 0) {
+      return reply.status(400).send({ error: { code: "invalid_group", message: "Group not found." } })
+    }
     const { data: row, error } = await supabase
       .from("node_presets")
       .insert({
@@ -92,6 +132,9 @@ export async function nodePresetRoutes(app: FastifyInstance) {
         name,
         description: description ?? null,
         data: extractPresetData(data), // defensive strip
+        ...(groupId !== undefined ? { group_id: groupId } : {}),
+        ...(tags !== undefined ? { tags } : {}),
+        ...(sortOrder !== undefined ? { sort_order: sortOrder } : {}),
       })
       .select("*")
       .single()
@@ -113,10 +156,16 @@ export async function nodePresetRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       return reply.status(400).send({ error: { code: "validation_error", message: parsed.error.issues[0]?.message ?? "Invalid body" } })
     }
+    if (parsed.data.groupId && (await unownedGroupIds(userId, [parsed.data.groupId])).length > 0) {
+      return reply.status(400).send({ error: { code: "invalid_group", message: "Group not found." } })
+    }
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
     if (parsed.data.name !== undefined) updates.name = parsed.data.name
     if (parsed.data.description !== undefined) updates.description = parsed.data.description
     if (parsed.data.data !== undefined) updates.data = extractPresetData(parsed.data.data)
+    if (parsed.data.groupId !== undefined) updates.group_id = parsed.data.groupId
+    if (parsed.data.tags !== undefined) updates.tags = parsed.data.tags
+    if (parsed.data.sortOrder !== undefined) updates.sort_order = parsed.data.sortOrder
     const { data: row, error } = await supabase
       .from("node_presets")
       .update(updates)
@@ -180,5 +229,56 @@ export async function nodePresetRoutes(app: FastifyInstance) {
     const { error } = await supabase.from("node_presets").insert(rows)
     if (error) return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
     return reply.send({ data: { imported: rows.length } })
+  })
+
+  // REORDER — bulk-apply positions (and preset group membership) after a drag in the Manage dialog.
+  // Every update is scoped by user_id, so foreign ids silently no-op.
+  app.post("/v1/node-presets/reorder", async (req, reply) => {
+    const userId = req.userId
+    if (!userId) return unauthorized(reply)
+    const parsed = reorderBody.safeParse(req.body)
+    if (!parsed.success) {
+      return reply.status(400).send({ error: { code: "validation_error", message: parsed.error.issues[0]?.message ?? "Invalid body" } })
+    }
+    // A preset may only be moved into one of the caller's own groups.
+    const targetGroupIds = (parsed.data.presets ?? [])
+      .map((p) => p.groupId)
+      .filter((g): g is string => typeof g === "string")
+    if ((await unownedGroupIds(userId, targetGroupIds)).length > 0) {
+      return reply.status(400).send({ error: { code: "invalid_group", message: "Group not found." } })
+    }
+    const now = new Date().toISOString()
+    const ops: Promise<{ error: unknown }>[] = []
+    for (const g of parsed.data.groups ?? []) {
+      ops.push(
+        (async () => {
+          const { error } = await supabase
+            .from("node_preset_groups")
+            .update({ sort_order: g.sortOrder, updated_at: now })
+            .eq("id", g.id)
+            .eq("user_id", userId)
+          return { error }
+        })(),
+      )
+    }
+    for (const p of parsed.data.presets ?? []) {
+      const upd: Record<string, unknown> = { sort_order: p.sortOrder, updated_at: now }
+      if (p.groupId !== undefined) upd.group_id = p.groupId
+      ops.push(
+        (async () => {
+          const { error } = await supabase
+            .from("node_presets")
+            .update(upd)
+            .eq("id", p.id)
+            .eq("user_id", userId)
+          return { error }
+        })(),
+      )
+    }
+    const results = await Promise.all(ops)
+    if (results.some((r) => r.error)) {
+      return reply.status(500).send({ error: { code: "internal_error", message: "Reorder failed" } })
+    }
+    return reply.send({ data: { ok: true } })
   })
 }

@@ -1077,8 +1077,19 @@ export interface NodePreset {
   name: string
   description?: string
   data: Record<string, unknown>
+  groupId?: string
+  tags: string[]
+  sortOrder: number
   createdAt: string
   updatedAt: string
+}
+
+export interface NodePresetGroup {
+  id: string
+  nodeType: string
+  name: string
+  kind: "folder" | "section"
+  sortOrder: number
 }
 
 /** Thrown on 409 from create/update so the UI can show a friendly "name taken" message. */
@@ -1103,6 +1114,9 @@ export async function createNodePreset(input: {
   name: string
   description?: string
   data: Record<string, unknown>
+  groupId?: string | null
+  tags?: string[]
+  sortOrder?: number
 }): Promise<NodePreset> {
   const res = await fetch(`${API_BASE_URL}/v1/node-presets`, {
     method: "POST",
@@ -1119,7 +1133,14 @@ export async function createNodePreset(input: {
 
 export async function updateNodePreset(
   id: string,
-  patch: { name?: string; description?: string; data?: Record<string, unknown> },
+  patch: {
+    name?: string
+    description?: string
+    data?: Record<string, unknown>
+    groupId?: string | null
+    tags?: string[]
+    sortOrder?: number
+  },
 ): Promise<NodePreset> {
   const res = await fetch(`${API_BASE_URL}/v1/node-presets/${encodeURIComponent(id)}`, {
     method: "PATCH",
@@ -1154,6 +1175,62 @@ export async function importNodePresets(
     label: "Failed to import presets",
   })
   return res.data.imported
+}
+
+/** Bulk-apply positions (and preset group membership) after a drag in the Manage dialog. */
+export async function reorderNodePresets(input: {
+  groups?: { id: string; sortOrder: number }[]
+  presets?: { id: string; groupId?: string | null; sortOrder: number }[]
+}): Promise<void> {
+  await apiJson<{ data: { ok: boolean } }>("/v1/node-presets/reorder", {
+    method: "POST",
+    body: input,
+    label: "Failed to reorder presets",
+  })
+}
+
+// ---- Node preset groups (folders / sections) ----
+
+export async function listNodePresetGroups(nodeType?: string): Promise<NodePresetGroup[]> {
+  const qs = nodeType ? `?nodeType=${encodeURIComponent(nodeType)}` : ""
+  const res = await apiJson<{ data: NodePresetGroup[] }>(`/v1/node-preset-groups${qs}`, {
+    method: "GET",
+    label: "Failed to load preset folders",
+  })
+  return res.data
+}
+
+export async function createNodePresetGroup(input: {
+  nodeType: string
+  name: string
+  kind: "folder" | "section"
+  sortOrder?: number
+}): Promise<NodePresetGroup> {
+  const res = await apiJson<{ data: NodePresetGroup }>("/v1/node-preset-groups", {
+    method: "POST",
+    body: input,
+    label: "Failed to create folder",
+  })
+  return res.data
+}
+
+export async function updateNodePresetGroup(
+  id: string,
+  patch: { name?: string; sortOrder?: number },
+): Promise<NodePresetGroup> {
+  const res = await apiJson<{ data: NodePresetGroup }>(`/v1/node-preset-groups/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: patch,
+    label: "Failed to update folder",
+  })
+  return res.data
+}
+
+export async function deleteNodePresetGroup(id: string): Promise<void> {
+  await apiJson<{ data: { success: boolean } }>(`/v1/node-preset-groups/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    label: "Failed to delete folder",
+  })
 }
 
 // Object API functions
