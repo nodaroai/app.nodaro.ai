@@ -33,6 +33,10 @@ export { CHARACTER_ASPECT_OPTIONS, CHARACTER_ASPECT_DEFAULTS } from "@nodaro/sha
  *     provider supports multi-image conditioning.
  *   - `realLifeRefsByVariant` — per-variant reference URLs (cap 20 keys,
  *     5 URLs per key). Keys are lowercased+trimmed.
+ *   - `referenceVideosByVariant` — per-label user-uploaded reference VIDEO
+ *     URLs (cap 20 keys, 5 URLs per key, lowercased+trimmed keys). Mirrors
+ *     `realLifeRefsByVariant` for video clips (e.g. emotion takes). Read the
+ *     chosen URLs off the row to drive generate-video's `referenceVideoUrls`.
  *   - `seedPrompt` — short prompt fragment that scaffolds portrait gen.
  *   - `canonicalDescription` — ~80–120-word LLM-authored visual caption,
  *     populated by `approvePortrait()` / `recaption()`.
@@ -54,6 +58,11 @@ export interface Character {
   angles: Array<{ name: string; url: string }> | null
   bodyAngles: Array<{ name: string; url: string }> | null
   motions: Array<{ name: string; url: string }> | null
+  /** Per-label user-uploaded reference VIDEO URLs (R2), keyed by a
+   *  caller-owned label (lowercased+trimmed server-side). Mirrors
+   *  `realLifeRefsByVariant` for video clips; read the chosen URLs off the row
+   *  to feed generate-video's `referenceVideoUrls`. Defaults to `{}`. */
+  referenceVideosByVariant?: Record<string, string[]> | null
   /** `voiceType` records the selected voice's KIND (premade voices are
    *  addressed by name; library/custom voices by id at text-to-speech time).
    *  Optional — a character may have no voice, or a legacy voice predating the
@@ -157,6 +166,11 @@ export interface UpsertCharacterInput {
   referencePhotos?: ReferencePhoto[]
   /** Per-variant real-life reference URLs. Keys are lowercased+trimmed server-side. */
   realLifeRefsByVariant?: Record<string, string[]>
+  /** Per-label user-uploaded reference VIDEO URLs (e.g. emotion takes). Keys
+   *  are lowercased+trimmed server-side; max 20 keys, 5 URLs each. Stored R2
+   *  URLs are read back off the row to drive generate-video's
+   *  `referenceVideoUrls`. */
+  referenceVideosByVariant?: Record<string, string[]>
 }
 
 export interface UpsertCharacterResult {

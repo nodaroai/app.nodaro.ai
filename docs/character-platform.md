@@ -39,6 +39,7 @@ The `characters` table stores one row per character. Highlights:
 | `expressions` / `poses` / `motions` / `angles` / `body_angles` / `lighting_variations` | jsonb[] | Six asset buckets — each entry is `{ name, url }`. |
 | `reference_photos` | jsonb[] | Real-life reference photos, one per kind (`frontFace`, `sideLeft`, …). |
 | `real_life_refs_by_variant` | jsonb | Per-variant reference URL arrays (e.g. `{ smile: [url1, url2] }`). |
+| `reference_videos_by_variant` | jsonb | Per-label user-uploaded reference VIDEO URL arrays (e.g. `{ angry: [url1] }`). Mirrors `real_life_refs_by_variant` for clips; read off the row to drive generate-video's `referenceVideoUrls`. Max 20 keys, 5 URLs each. |
 | `voice` / `personality` | jsonb | Optional voice + personality blocks for audio nodes. |
 | `deleted_at` | timestamptz | Non-null = soft-deleted (archived). |
 | `created_at` / `updated_at` | timestamptz | Timestamps. |
@@ -408,6 +409,11 @@ identity across many generations:
 - **`realLifeRefsByVariant`** — per-variant reference URL arrays (see
   [shape above](#reallifereferbyvariant-shape)). Lets you pin specific
   variants to specific real photos.
+- **`referenceVideosByVariant`** — per-label user-uploaded reference VIDEO URL
+  arrays (e.g. emotion takes: `{ angry: [url], happy: [url1, url2] }`). Same
+  per-label map + caps (20 keys, 5 URLs each) and key-normalization as
+  `realLifeRefsByVariant`. Persistence only — read the chosen URLs off the row
+  and pass them to a Generate Video node's `referenceVideoUrls` input.
 
 For everyday use, you can leave these empty and let the LLM caption do the
 work via `canonicalDescription`. For production-grade character consistency,

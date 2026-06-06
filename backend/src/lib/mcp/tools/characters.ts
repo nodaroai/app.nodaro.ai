@@ -86,6 +86,7 @@ interface CharacterRow {
   lighting_variations: AssetEntry[] | null
   reference_photos: ReferencePhoto[] | null
   real_life_refs_by_variant: Record<string, string[]> | null
+  reference_videos_by_variant: Record<string, string[]> | null
   updated_at: string
   created_at: string
 }
@@ -123,7 +124,7 @@ const SUMMARY_COLUMNS =
   "expressions, poses, motions, angles, body_angles, lighting_variations, updated_at"
 
 const FULL_COLUMNS =
-  "id, name, description, canonical_description, source_image_url, seed_prompt, gender, style, base_outfit, expressions, poses, motions, angles, body_angles, lighting_variations, reference_photos, real_life_refs_by_variant, created_at, updated_at"
+  "id, name, description, canonical_description, source_image_url, seed_prompt, gender, style, base_outfit, expressions, poses, motions, angles, body_angles, lighting_variations, reference_photos, real_life_refs_by_variant, reference_videos_by_variant, created_at, updated_at"
 
 // Single source of truth lives in `@nodaro/shared/entity-prompts` —
 // reused here so the MCP tool surface, the SDK, the CLI, and the route's
@@ -188,6 +189,7 @@ function detail(row: CharacterRow) {
     lightingVariations: row.lighting_variations ?? [],
     referencePhotos: row.reference_photos ?? [],
     realLifeRefsByVariant: row.real_life_refs_by_variant ?? {},
+    referenceVideosByVariant: row.reference_videos_by_variant ?? {},
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -389,6 +391,7 @@ function registerWriteTools(opts: RegisterCharacterToolsOpts): void {
         motions: [],
         reference_photos: [],
         real_life_refs_by_variant: {},
+        reference_videos_by_variant: {},
         updated_at: new Date().toISOString(),
       }
       const { data, error } = await supabase
