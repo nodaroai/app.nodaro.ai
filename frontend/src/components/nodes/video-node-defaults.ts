@@ -76,3 +76,35 @@ export function imageNodeSizing(
 ): { minWidth: number; minHeight: number; imageAspectRatio: number } {
   return videoNodeSizing(resultAspect ?? upstreamAspect)
 }
+
+/**
+ * Fit a node's box to a result `aspectRatio` (= width/height), **preserving the node's current
+ * AREA** when the aspect changes. This keeps a node roughly the same size as its result rotates
+ * between landscape and portrait: a user-resized 1600×900 (16:9) box becomes ~900×1600 for a 9:16
+ * result — NOT 1600×2844 (which keeping the width would produce, making portrait nodes huge).
+ *
+ * - When the node already has a box (both `width` and `height`), re-fit at constant area:
+ *   `w = √(area·aspect)`, `h = w/aspect`. Re-running once fitted is a no-op (stable).
+ * - First fit (no prior height) starts from the node's `width` (or `minWidth`) — the snug default.
+ * - Both dimensions are floored: width to the proportional minimum (`max(minWidth, minHeight·aspect)`,
+ *   the narrowest box that keeps both `minHeight` and the aspect), height to `minHeight`.
+ */
+export function computeFittedNodeBox(opts: {
+  aspectRatio: number
+  width: number | undefined
+  height: number | undefined
+  minWidth: number
+  minHeight: number
+}): { width: number; height: number } {
+  const { aspectRatio, width, height, minWidth, minHeight } = opts
+  const proportionalMinWidth = Math.max(minWidth, minHeight * aspectRatio)
+  const baseW =
+    typeof width === "number" && typeof height === "number"
+      ? Math.sqrt(width * height * aspectRatio) // preserve current area, re-fit to the new aspect
+      : typeof width === "number"
+        ? width
+        : minWidth
+  const w = Math.max(baseW, proportionalMinWidth)
+  const h = Math.max(minHeight, w / aspectRatio)
+  return { width: w, height: h }
+}

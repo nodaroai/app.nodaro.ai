@@ -10,6 +10,7 @@ import { useMobileCanvas } from "@/components/editor/mobile-canvas-context"
 import { CustomHandle } from "./custom-handle"
 import { NodeRunStripShell } from "./node-run-strip-shell"
 import { NodeTopToolbar } from "./node-top-toolbar"
+import { computeFittedNodeBox } from "./video-node-defaults"
 import { computeZoomFromDrag, computeVisualSize, applyMagnet } from "./zoom-math"
 import { useNodeInsertAnimation } from "@/components/editor/workflow-editor/use-node-insert-animation"
 
@@ -233,22 +234,19 @@ function BaseNodeComponent({
     const node = state.nodes.find((n) => n.id === id)
     if (!node) return
     const hasExplicitResize = typeof node.className === "string" && node.className.includes("rf-resized")
-    const hasExplicitWidth = typeof node.width === "number"
 
     if (imageAspectRatio) {
-      // Proportional minimum width — the narrowest a box can be while keeping
-      // both `effectiveMinHeight` AND the requested aspect. Anything narrower
-      // would either clip handles (height < minHeight) or letterbox the
-      // result (height stays at minHeight, width too small for aspect).
-      const proportionalMinWidth = Math.max(minWidth, effectiveMinHeight * imageAspectRatio)
-      const baseW = hasExplicitWidth ? node.width! : minWidth
-      // Always floor-clamp width to the proportional minimum. Existing nodes
-      // that were persisted at the OLD minWidth (e.g., legacy 240px) get
-      // bumped here even though they have a stored width — without this, a
-      // 240×368 box on a 16:9 result stays 240 wide and the result area
-      // letterboxes with vertical dead space.
-      const w = Math.max(baseW, proportionalMinWidth)
-      const correctH = Math.max(effectiveMinHeight, w / imageAspectRatio)
+      // Fit to the result aspect, PRESERVING the node's current area across aspect changes (so a
+      // user-resized 1600×900 16:9 box becomes ~900×1600 for a 9:16 result, not 1600×2844). First
+      // fit (no prior height) starts snug from the stored width / minWidth. Floors keep handles
+      // visible. See computeFittedNodeBox.
+      const { width: w, height: correctH } = computeFittedNodeBox({
+        aspectRatio: imageAspectRatio,
+        width: node.width,
+        height: typeof node.height === "number" ? node.height : undefined,
+        minWidth,
+        minHeight: effectiveMinHeight,
+      })
       if (
         typeof node.width === "number" &&
         typeof node.height === "number" &&
