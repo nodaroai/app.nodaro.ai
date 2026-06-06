@@ -7,6 +7,8 @@ import {
   VIDEO_GEN_PROVIDERS,
   MUSIC_PROVIDERS,
   SUNO_MODELS,
+  TTS_PROVIDERS,
+  TEXT_TO_AUDIO_PROVIDERS,
   STYLE_IDS,
   aspectRatioOptionsByKind,
   durationsByMode,
@@ -291,6 +293,114 @@ describe("generate-music factory preset data validity", () => {
     for (const p of presets) {
       expect(((p.data.prompt as string) ?? "").length, `${p.id}: prompt too long`).toBeLessThanOrEqual(2000)
       expect(((p.data.lyrics as string) ?? "").length, `${p.id}: lyrics too long`).toBeLessThanOrEqual(2000)
+    }
+  })
+
+  it("groups every preset under a folder", () => {
+    for (const p of presets) expect(p.group, `${p.id}: missing group`).toBeTruthy()
+  })
+})
+
+describe("text-to-speech factory preset data validity", () => {
+  const presets = getFactoryPresets("text-to-speech")
+  const unit = (k: string, v: unknown, id: string) => {
+    if (v === undefined) return
+    expect(v, `${id}: ${k} must be a number`).toBeTypeOf("number")
+    expect(v as number, `${id}: ${k} out of 0-1`).toBeGreaterThanOrEqual(0)
+    expect(v as number, `${id}: ${k} out of 0-1`).toBeLessThanOrEqual(1)
+  }
+
+  it("uses a known TTS provider when set", () => {
+    for (const p of presets) {
+      if (p.data.provider === undefined) continue
+      expect(TTS_PROVIDERS, `${p.id}: unknown provider`).toContain(p.data.provider as never)
+    }
+  })
+
+  it("keeps stability / similarityBoost / style in 0-1 and speed in 0.7-1.2", () => {
+    for (const p of presets) {
+      unit("stability", p.data.stability, p.id)
+      unit("similarityBoost", p.data.similarityBoost, p.id)
+      unit("style", p.data.style, p.id)
+      const speed = p.data.speed as number | undefined
+      if (speed !== undefined) {
+        expect(speed, `${p.id}: speed below 0.7`).toBeGreaterThanOrEqual(0.7)
+        expect(speed, `${p.id}: speed above 1.2`).toBeLessThanOrEqual(1.2)
+      }
+    }
+  })
+
+  it("does not pin a user-specific voiceId", () => {
+    for (const p of presets) {
+      expect(p.data.voiceId, `${p.id}: presets must not hardcode a voiceId`).toBeUndefined()
+    }
+  })
+
+  it("groups every preset under a folder", () => {
+    for (const p of presets) expect(p.group, `${p.id}: missing group`).toBeTruthy()
+  })
+})
+
+describe("text-to-audio factory preset data validity", () => {
+  const presets = getFactoryPresets("text-to-audio")
+
+  it("uses a known text-to-audio provider when set", () => {
+    for (const p of presets) {
+      if (p.data.provider === undefined) continue
+      expect(TEXT_TO_AUDIO_PROVIDERS, `${p.id}: unknown provider`).toContain(p.data.provider as never)
+    }
+  })
+
+  it("keeps duration in 0.5-30 and promptInfluence in 0-1, loop boolean", () => {
+    for (const p of presets) {
+      const dur = p.data.duration as number | undefined
+      if (dur !== undefined) {
+        expect(dur, `${p.id}: duration below 0.5`).toBeGreaterThanOrEqual(0.5)
+        expect(dur, `${p.id}: duration above 30`).toBeLessThanOrEqual(30)
+      }
+      const pi = p.data.promptInfluence as number | undefined
+      if (pi !== undefined) {
+        expect(pi, `${p.id}: promptInfluence out of 0-1`).toBeGreaterThanOrEqual(0)
+        expect(pi, `${p.id}: promptInfluence out of 0-1`).toBeLessThanOrEqual(1)
+      }
+      if (p.data.loop !== undefined) {
+        expect(typeof p.data.loop, `${p.id}: loop must be boolean`).toBe("boolean")
+      }
+    }
+  })
+
+  it("respects the prompt 2000-char cap", () => {
+    for (const p of presets) {
+      expect(((p.data.prompt as string) ?? "").length, `${p.id}: prompt too long`).toBeLessThanOrEqual(2000)
+    }
+  })
+
+  it("groups every preset under a folder", () => {
+    for (const p of presets) expect(p.group, `${p.id}: missing group`).toBeTruthy()
+  })
+})
+
+describe("llm-chat factory preset data validity", () => {
+  const presets = getFactoryPresets("llm-chat")
+
+  it("keeps temperature in 0-2 and maxTokens in 1-16384", () => {
+    for (const p of presets) {
+      const t = p.data.temperature as number | undefined
+      if (t !== undefined) {
+        expect(t, `${p.id}: temperature below 0`).toBeGreaterThanOrEqual(0)
+        expect(t, `${p.id}: temperature above 2`).toBeLessThanOrEqual(2)
+      }
+      const mt = p.data.maxTokens as number | undefined
+      if (mt !== undefined) {
+        expect(mt, `${p.id}: maxTokens below 1`).toBeGreaterThanOrEqual(1)
+        expect(mt, `${p.id}: maxTokens above 16384`).toBeLessThanOrEqual(16384)
+      }
+    }
+  })
+
+  it("respects the systemPrompt 10000-char cap", () => {
+    for (const p of presets) {
+      expect(((p.data.systemPrompt as string) ?? "").length, `${p.id}: systemPrompt too long`).toBeLessThanOrEqual(10000)
     }
   })
 

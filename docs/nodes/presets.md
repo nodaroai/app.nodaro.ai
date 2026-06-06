@@ -73,8 +73,29 @@ Both music nodes ship presets organized along the three axes professional librar
 - **Suno Generate** (style-prompt): each preset fills Suno's free-text **style** box using Suno's own
   formula — *genre + mood + instrumentation + named tempo/BPM + instrumental/vocals + structure*.
   Setting a style auto-enables Suno custom mode. *By Use-Case* and *By Genre* presets are instrumental
-  and run as-is; the **Vocals & Songs** folder (Pop, Rap, Ballad, Rock, Acoustic) sets the style +
-  song structure and invites you to add your own lyrics.
+  and run as-is; the **Vocals & Songs** folder (Pop, Rap, Ballad, Rock, Acoustic, R&B, K-Pop) sets the
+  style + song structure and invites you to add your own lyrics.
+
+### Voice, sound & text catalogs
+
+- **Text to Speech** — voice-*delivery* profiles that set the ElevenLabs knobs (stability,
+  similarity, style, speed) **without** pinning a voice, so they layer on top of whichever voice you
+  pick. Folders: *Narration* (Audiobook, Documentary, News Anchor, Explainer, Calm Narrator),
+  *Advertising & Hype* (Commercial Read, Hype), *Conversational & Calm* (Podcast Host, Character,
+  Meditation / ASMR).
+- **Text to Audio** (sound effects) — ready prompts for *Transitions & Impacts* (Whoosh, Impact,
+  Riser), *Ambiences (loopable)* (Rain, Forest, Fire, Sci-Fi Drone — `loop: true`), and *UI & Stingers*
+  (Click, Notification, Applause).
+- **Generate Text** (LLM) — system-prompt roles in *Assistants*, *Writing & Marketing* (Copywriter,
+  Social Caption, SEO, Rewrite, Script Writer), *Utility* (Prompt Enhancer, Translator, Summarizer,
+  Q&A, Brainstorm) and *Structured Output* (JSON Extractor, Classifier).
+
+### Image edits (shared with Modify Image)
+
+Beyond Stylized Subject, the transform catalog adds an **Edits** folder — *Remove/Replace Background,
+Colorize, Restore Old Photo, Relight, Restyle* — available on both **Generate Image** (with a
+connected reference image) and **Modify Image**. Generate Image also gained a **Diagrams &
+Infographics** folder (Blueprint, Infographic, UI / App Mockup, X-Ray).
 
 ## Using presets
 
