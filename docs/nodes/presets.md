@@ -8,10 +8,38 @@ Presets work for **every node type** in the editor, and any new node type gets t
 
 ## Factory vs. custom presets
 
-- **Factory presets** ship with Nodaro for the most-used nodes (for example, *Cinematic Portrait*
-  for image generation). They're read-only starting points.
+- **Factory presets** ship with Nodaro for the most-used nodes. They're read-only starting points,
+  grouped into folders so related ideas live together.
 - **Custom presets** are the ones you create. They're private to your account and sync across your
   devices.
+
+### Generate Image factory catalog
+
+**Generate Image** ships a large curated catalog organized into folders, with multiple **variants of
+the same idea**:
+
+| Folder | Examples |
+|--------|----------|
+| **Photography & Cinematic** | Cinematic Still / Widescreen (21:9), Studio & Golden-Hour Portrait, B&W, Macro, Food, Aerial, Landscape |
+| **Characters** | **Character Sheet** family — Turnaround (3-view), Action Poses ×4, Expressions ×6 / ×16, Outfit Variations, With Text Labels, Chibi — plus Portrait, Full-Body Hero, Creature, Avatar |
+| **Product & Commerce** | Product on White, Lifestyle, Flat-Lay, Packaging / Device Mockup, Beauty Hero |
+| **Branding & Logos** | Wordmark / Emblem / Mascot logo, App Icon, Monogram |
+| **Marketing & Social** | YouTube Thumbnail, Instagram Post, Story/Reel, Ad Creative, Quote Card, Web Banner |
+| **Print & Posters** | Movie Poster, Event Poster, Book Cover, T-Shirt/POD, Die-Cut Sticker, Album Cover |
+| **Illustration & Art Styles** | Anime, Comic, Manga, Watercolor, Oil, Flat Vector, Isometric, Pixel Art, Pixar-3D, Coloring Page, Tattoo Flash, Concept Art |
+| **Film & Storyboard** | Storyboard Frame, Cinematic Keyframe, Matte Painting, Mood Board Tile, Establishing Shot |
+| **Architecture & Interiors** | Exterior, Interior, Real Estate Hero, Skyscraper |
+| **Icons, Game Assets & Textures** | Game Icon, Seamless Texture / Pattern, Emoji Set, Pixel Sprite |
+
+Each preset pre-selects the **best provider and aspect ratio** for its job (e.g. text-strong models
+for logos and thumbnails) and includes **`{placeholder}` slots** in the prompt — fill them in (for
+example `{character description}` or `{brand}`) before you run.
+
+> **Selective stylization** lives on the **Modify Image** node, not Generate Image — because effects
+> like *"make the person a cartoon but keep the background photoreal"* transform an existing photo.
+> The **Stylized Subject** folder there ships *Cartoon Person · Real World*, *Caricature · Real
+> Photo*, *Anime Person · Real Background*, *Real Person · Cartoon World*, and *Claymation · Real
+> Set*.
 
 ## Using presets
 
@@ -53,7 +81,9 @@ Click **Manage presets…** in the dropdown to open the management dialog, where
   to the top level (presets are never lost).
 
 In the dropdown, folders show as collapsible rows and sections as inline headers, in the order you
-set. Factory presets always appear first in a fixed, read-only group.
+set. Factory presets always appear first, in their own read-only folders (collapsed by default so
+you can scan the categories at a glance); your custom folders and presets follow. Searching flattens
+everything into a single filtered list.
 
 ## What a preset captures
 

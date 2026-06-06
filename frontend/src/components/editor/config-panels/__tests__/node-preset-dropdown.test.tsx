@@ -133,6 +133,16 @@ describe("PresetDropdown", () => {
     expect(screen.getByText(/Cinematic Portrait/i)).toBeInTheDocument()
   })
 
+  it("renders factory presets as folders, collapsed by default, expanding on click", async () => {
+    wrap(<PresetDropdown nodeId="n1" variant="panel" />)
+    fireEvent.click(screen.getByRole("button", { name: /presets/i }))
+    // Folder header is visible; its presets are hidden until expanded.
+    const folder = await screen.findByText("Photography & Cinematic")
+    expect(screen.queryByText("Cinematic Portrait")).toBeNull()
+    fireEvent.click(folder)
+    expect(await screen.findByText("Cinematic Portrait")).toBeInTheDocument()
+  })
+
   it("offers Override only when the active preset is a custom one", async () => {
     h.data = { prompt: "EDITED", __activePresetId: "u1" } // active custom + dirty
     wrap(<PresetDropdown nodeId="n1" variant="panel" />)

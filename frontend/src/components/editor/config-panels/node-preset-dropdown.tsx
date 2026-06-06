@@ -4,6 +4,7 @@ import {
   buildNodePresetExport,
   extractPresetData,
   getFactoryPresets,
+  groupFactoryPresets,
   parseNodePresetExport,
   presetDataMatches,
   type FactoryPreset,
@@ -40,6 +41,9 @@ type MergedPreset = {
   id: string
   name: string
   description?: string
+  /** Factory-only: folder/section label for grouping in the picker. */
+  group?: string
+  groupKind?: "folder" | "section"
   data: Record<string, unknown>
 }
 
@@ -109,7 +113,15 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
   const [saving, setSaving] = useState(false)
   const [newName, setNewName] = useState("")
   const [manageOpen, setManageOpen] = useState(false)
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set())
+  // Factory folders start collapsed (there can be ~10 of them) so the menu opens
+  // as a scannable list of category headers; user folders default expanded.
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => {
+    const init = new Set<string>()
+    for (const g of groupFactoryPresets(getFactoryPresets(nodeType))) {
+      if (g.group !== null && g.groupKind === "folder") init.add(`factory:${g.key}`)
+    }
+    return init
+  })
   const [confirm, setConfirm] = useState<{ kind: "select"; preset: MergedPreset } | { kind: "override" } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -124,10 +136,14 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
         id: p.id,
         name: p.name,
         description: p.description,
+        group: p.group,
+        groupKind: p.groupKind,
         data: p.data as Record<string, unknown>,
       })),
     [nodeType],
   )
+  // Factory presets bucketed into folders/sections for the browse (non-search) view.
+  const factoryGroups = useMemo(() => groupFactoryPresets(factory), [factory])
   const userMerged = useMemo<MergedPreset[]>(
     () =>
       (userPresets as NodePreset[]).map((p) => ({
@@ -321,10 +337,52 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
             />
           </div>
           <div className="max-h-64 overflow-y-auto p-1">
-            {factoryMatches.length > 0 && <GroupLabel>Factory</GroupLabel>}
-            {factoryMatches.map((p) => (
-              <PresetRow key={p.id} preset={p} active={p.id === activeId} onSelect={() => onSelect(p)} />
-            ))}
+            {/* Factory presets: flat list when searching, collapsible folders when browsing. */}
+            {searching
+              ? factoryMatches.length > 0 && (
+                  <>
+                    <GroupLabel>Factory</GroupLabel>
+                    {factoryMatches.map((p) => (
+                      <PresetRow key={p.id} preset={p} active={p.id === activeId} onSelect={() => onSelect(p)} />
+                    ))}
+                  </>
+                )
+              : factoryGroups.map((g) => {
+                  const isRoot = g.group === null
+                  const folderKey = `factory:${g.key}`
+                  const isFolder = !isRoot && g.groupKind === "folder"
+                  const isCollapsed = isFolder && collapsed.has(folderKey)
+                  return (
+                    <div key={folderKey}>
+                      {isRoot ? (
+                        <GroupLabel>Factory</GroupLabel>
+                      ) : isFolder ? (
+                        <button
+                          type="button"
+                          className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left hover:bg-accent"
+                          onClick={() => toggleCollapsed(folderKey)}
+                        >
+                          {isCollapsed ? <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-70" /> : <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70" />}
+                          {isCollapsed ? <Folder className="h-3.5 w-3.5 shrink-0 opacity-70" /> : <FolderOpen className="h-3.5 w-3.5 shrink-0 opacity-70" />}
+                          <span className="truncate text-sm font-medium">{g.group}</span>
+                          <span className="ml-auto text-[11px] text-muted-foreground">{g.presets.length}</span>
+                        </button>
+                      ) : (
+                        <GroupLabel>{g.group}</GroupLabel>
+                      )}
+                      {!isCollapsed &&
+                        g.presets.map((p) => (
+                          <PresetRow
+                            key={p.id}
+                            preset={p}
+                            active={p.id === activeId}
+                            indented={!isRoot}
+                            onSelect={() => onSelect(p)}
+                          />
+                        ))}
+                    </div>
+                  )
+                })}
 
             {searching ? (
               <>
