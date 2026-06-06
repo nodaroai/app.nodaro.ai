@@ -149,4 +149,17 @@ describe("PresetDropdown", () => {
     fireEvent.click(screen.getByRole("button", { name: /presets/i }))
     expect(await screen.findByRole("button", { name: /override/i })).toBeInTheDocument()
   })
+
+  it("Reset to default clears the active preset (after confirm)", async () => {
+    h.data = { prompt: "edited", provider: "flux", __activePresetId: "u1" }
+    wrap(<PresetDropdown nodeId="n1" variant="panel" />)
+    fireEvent.click(screen.getByRole("button", { name: /presets/i }))
+    fireEvent.click(await screen.findByRole("button", { name: /reset to default/i }))
+    fireEvent.click(await screen.findByRole("button", { name: /^reset$/i }))
+    await waitFor(() => {
+      const call = h.updateNodeData.mock.calls.find((c) => "__activePresetId" in ((c[1] as Record<string, unknown>) ?? {}))
+      expect(call).toBeTruthy()
+      expect((call![1] as Record<string, unknown>).__activePresetId).toBeUndefined()
+    })
+  })
 })

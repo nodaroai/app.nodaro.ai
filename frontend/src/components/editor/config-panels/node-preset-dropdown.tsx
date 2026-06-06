@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, type ChangeEvent } from "react"
-import { Check, ChevronDown, ChevronRight, Download, Folder, FolderOpen, Layers, Plus, Settings2, Trash2, Upload } from "lucide-react"
+import { Check, ChevronDown, ChevronRight, Download, Folder, FolderOpen, Layers, Plus, RotateCcw, Settings2, Trash2, Upload } from "lucide-react"
 import {
   buildNodePresetExport,
   extractPresetData,
@@ -26,7 +26,7 @@ import { useAuth } from "@/hooks/use-auth"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useNodePresets, useNodePresetGroups, useNodePresetMutations } from "@/hooks/queries/use-node-presets-queries"
 import { NodePresetNameTakenError, type NodePreset, type NodePresetGroup } from "@/lib/api"
-import { buildPresetTree, presetMatchesQuery } from "@/lib/preset-tree"
+import { buildPresetTree, presetMatchesQuery, buildResetToDefaultData } from "@/lib/preset-tree"
 import { NodePresetManageDialog } from "./node-preset-manage-dialog"
 import { NODE_DEF_MAP } from "@/types/nodes"
 import { cn } from "@/lib/utils"
@@ -122,7 +122,9 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
     }
     return init
   })
-  const [confirm, setConfirm] = useState<{ kind: "select"; preset: MergedPreset } | { kind: "override" } | null>(null)
+  const [confirm, setConfirm] = useState<
+    { kind: "select"; preset: MergedPreset } | { kind: "override" } | { kind: "reset" } | null
+  >(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const { data: userPresets = [] } = useNodePresets(nodeType, user?.id)
@@ -244,6 +246,17 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
     } catch {
       toast.error("Failed to update preset.")
     }
+  }
+
+  // Clear the active preset and restore the node's default config ("go back to no preset").
+  const doReset = () => {
+    if (isRunning) {
+      toast.error("Can't reset while the node is running.")
+      return
+    }
+    const defaultData = NODE_DEF_MAP.get(nodeType)?.defaultData as Record<string, unknown> | undefined
+    updateNodeData(nodeId, buildResetToDefaultData(data, defaultData))
+    toast.success("Reset to default")
   }
 
   const doDelete = async (p: MergedPreset) => {
@@ -511,6 +524,17 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
               size="sm"
               className="h-8 w-full justify-start gap-2"
               onClick={() => {
+                setConfirm({ kind: "reset" })
+                setOpenState(false)
+              }}
+            >
+              <RotateCcw className="h-3.5 w-3.5" /> Reset to default
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-full justify-start gap-2"
+              onClick={() => {
                 setManageOpen(true)
                 setOpenState(false)
               }}
@@ -569,6 +593,26 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
                   }}
                 >
                   Overwrite
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          ) : confirm?.kind === "reset" ? (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Reset to default?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This clears the selected preset and restores this node’s default settings.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => {
+                    setConfirm(null)
+                    doReset()
+                  }}
+                >
+                  Reset
                 </AlertDialogAction>
               </AlertDialogFooter>
             </>

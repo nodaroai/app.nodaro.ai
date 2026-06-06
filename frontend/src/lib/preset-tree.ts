@@ -1,3 +1,4 @@
+import { extractPresetData } from "@nodaro/shared"
 import type { NodePreset, NodePresetGroup } from "@/lib/api"
 
 /** A root-level node in the organized preset tree: a group (folder/section) with its presets, or a
@@ -55,4 +56,30 @@ export function presetMatchesQuery(preset: NodePreset, query: string): boolean {
   if (preset.name.toLowerCase().includes(q)) return true
   if ((preset.description ?? "").toLowerCase().includes(q)) return true
   return preset.tags.some((t) => t.toLowerCase().includes(q))
+}
+
+/**
+ * Build the `updateNodeData` payload that resets a node to its DEFAULT config and clears the active
+ * preset ("go back to no preset"). It:
+ *  - sets every config field the node default defines back to that default value,
+ *  - clears (→ `undefined`) any extra config field the node currently has but the default doesn't,
+ *  - clears `__activePresetId`.
+ *
+ * It does NOT touch identity/wiring/results (`label`, `fieldMappings`, generated outputs) — those
+ * keys are absent from the payload, so the store's merge preserves them. `defaultData` is the node
+ * type's `NODE_DEFINITIONS.defaultData`.
+ */
+export function buildResetToDefaultData(
+  currentData: Readonly<Record<string, unknown>>,
+  defaultData: Readonly<Record<string, unknown>> | undefined,
+): Record<string, unknown> {
+  const defConfig = defaultData ? extractPresetData(defaultData) : {}
+  const payload: Record<string, unknown> = {}
+  // Clear every config field the node currently carries (so extras not in the default reset too).
+  for (const key of Object.keys(extractPresetData(currentData))) payload[key] = undefined
+  // Apply the default config values.
+  Object.assign(payload, defConfig)
+  // Back to "no preset".
+  payload.__activePresetId = undefined
+  return payload
 }

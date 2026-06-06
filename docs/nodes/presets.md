@@ -95,6 +95,8 @@ The dropdown starts empty. Open it to:
 - **Search** — filter presets by name or description.
 - **Import / Export** — back up or share presets as a `.json` file.
 - **Delete** — remove one of your custom presets (hover a row).
+- **Reset to default** — clear the selected preset and restore the node's default settings
+  ("go back to no preset"). Asks you to confirm, since it overwrites the node's current settings.
 - **Manage presets…** — opens the management dialog (see below).
 
 The dropdown appears automatically on any node that has configurable settings. Nodes with no
