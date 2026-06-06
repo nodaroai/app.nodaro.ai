@@ -6,6 +6,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { getPromptFields, nodeHasPromptField } from "@/lib/prompt-fields"
 import { AiAvatarScriptModal } from "@/components/nodes/ai-avatar-script-modal"
 import type { AiAvatarData } from "@/types/nodes"
+import { SHORTCUTS, formatBinding, isMacPlatform } from "@/lib/shortcuts"
 
 /**
  * Map a node's string icon kind (from the pure-data `prompt-fields` registry)
@@ -44,6 +45,8 @@ export function PromptEditButton({ nodeId, compact }: PromptEditButtonProps) {
   const setConfigPanelFullscreen = useWorkflowStore((s) => s.setConfigPanelFullscreen)
   const hasPrompt = nodeHasPromptField(nodeType)
   const Icon = getPromptIcon(nodeType)
+  const isMac = isMacPlatform()
+  const sc = formatBinding(SHORTCUTS.promptEditor.bindings[0], isMac)
 
   // FIX 3 — focused script modal for ai-avatar (text mode only).
   const [scriptModalOpen, setScriptModalOpen] = useState(false)
@@ -65,7 +68,7 @@ export function PromptEditButton({ nodeId, compact }: PromptEditButtonProps) {
     <>
       <button
         type="button"
-        title={isAiAvatarText ? "Edit script (⌘E)" : hasPrompt ? "Edit prompt (⌘E)" : "Edit settings"}
+        title={isAiAvatarText ? `Edit script (${sc})` : hasPrompt ? `Edit prompt (${sc})` : "Edit settings"}
         aria-label={isAiAvatarText ? "Edit script" : "Edit prompt"}
         onClick={handleClick}
         className="flex items-center gap-1 h-6 px-1.5 rounded-md text-[10px] font-medium whitespace-nowrap text-primary hover:bg-primary/10"

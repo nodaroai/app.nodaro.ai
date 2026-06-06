@@ -3,11 +3,13 @@
 import { useEffect, useRef } from "react"
 import { Plus, StickyNote, Wand2, MousePointer2, XCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { SHORTCUTS, formatBindingCaps, isMacPlatform } from "@/lib/shortcuts"
+import { Kbd } from "@/components/ui/kbd"
 
 interface MenuItemProps {
   readonly icon: React.ReactNode
   readonly label: string
-  readonly shortcut?: string
+  readonly shortcut?: readonly string[]
   readonly onClick: () => void
   readonly disabled?: boolean
 }
@@ -28,14 +30,9 @@ function MenuItem({ icon, label, shortcut, onClick, disabled }: MenuItemProps) {
       <span className="text-[#64748B] dark:text-[#94A3B8]">{icon}</span>
       <span className="flex-1 text-sm text-[#1E293B] dark:text-white">{label}</span>
       {shortcut && (
-        <span className="flex items-center gap-1 text-[10px] text-[#94A3B8]">
-          {shortcut.split("+").map((key, i) => (
-            <kbd
-              key={i}
-              className="px-1.5 py-0.5 bg-[#F8FAFC] dark:bg-[#252525] rounded border border-[#E2E8F0] dark:border-[#3D3D3D] font-mono"
-            >
-              {key}
-            </kbd>
+        <span className="flex items-center gap-1">
+          {shortcut.map((cap, i) => (
+            <Kbd key={i}>{cap}</Kbd>
           ))}
         </span>
       )}
@@ -71,6 +68,7 @@ export function CanvasContextMenu({
   hasSelection,
 }: CanvasContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
+  const isMac = isMacPlatform()
 
   // Handle click outside
   useEffect(() => {
@@ -139,7 +137,7 @@ export function CanvasContextMenu({
       <MenuItem
         icon={<Plus className="w-4 h-4" />}
         label="Add node"
-        shortcut="Tab"
+        shortcut={formatBindingCaps(SHORTCUTS.addNode.bindings[0], isMac)}
         onClick={() => {
           onAddNode()
           onClose()
@@ -148,7 +146,7 @@ export function CanvasContextMenu({
       <MenuItem
         icon={<StickyNote className="w-4 h-4" />}
         label="Add sticky note"
-        shortcut="Shift+S"
+        shortcut={formatBindingCaps(SHORTCUTS.stickyNote.bindings[0], isMac)}
         onClick={() => {
           onAddStickyNote()
           onClose()
@@ -160,7 +158,7 @@ export function CanvasContextMenu({
       <MenuItem
         icon={<Wand2 className="w-4 h-4" />}
         label="Tidy up workflow"
-        shortcut="Alt+T"
+        shortcut={formatBindingCaps(SHORTCUTS.tidyUp.bindings[0], isMac)}
         onClick={() => {
           onTidyUp()
           onClose()
@@ -172,7 +170,7 @@ export function CanvasContextMenu({
       <MenuItem
         icon={<MousePointer2 className="w-4 h-4" />}
         label="Select all"
-        shortcut="Ctrl+A"
+        shortcut={formatBindingCaps(SHORTCUTS.selectAll.bindings[0], isMac)}
         onClick={() => {
           onSelectAll()
           onClose()

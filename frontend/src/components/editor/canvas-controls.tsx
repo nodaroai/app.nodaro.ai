@@ -13,6 +13,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { formatZoomPercent, snapZoom, scrubZoom, parseZoomInput } from "@/lib/zoom"
+import { SHORTCUTS, formatBinding, isMacPlatform } from "@/lib/shortcuts"
 
 interface CanvasControlsProps {
   /** Live canvas zoom factor (React Flow transform[2]); 1 = 100%. */
@@ -260,6 +261,7 @@ export function CanvasControls({ zoom, showMiniMap, onToggleMiniMap, snapEnabled
   const { fitView, zoomTo, getNodes, setCenter } = useReactFlow()
   const storeApi = useStoreApi()
   const selectNode = useWorkflowStore((s) => s.selectNode)
+  const isMac = isMacPlatform()
 
   // Center the canvas on the node nearest the current screen center (keeping the
   // current zoom) and select it so it highlights. Pane size + transform are read
@@ -330,13 +332,13 @@ export function CanvasControls({ zoom, showMiniMap, onToggleMiniMap, snapEnabled
           />
           <ControlButton
             icon={<Magnet className="w-4 h-4" />}
-            label="Snap to Grid (Ctrl+Shift+G)"
+            label={`Snap to Grid (${formatBinding(SHORTCUTS.gridSnap.bindings[0], isMac)})`}
             onClick={onToggleSnap}
             active={snapEnabled}
           />
           <ControlButton
             icon={<Ruler className="w-4 h-4" />}
-            label="Alignment Guides (Ctrl+Shift+A)"
+            label={`Alignment Guides (${formatBinding(SHORTCUTS.alignmentGuides.bindings[0], isMac)})`}
             onClick={onToggleAlignment}
             active={alignmentEnabled}
           />

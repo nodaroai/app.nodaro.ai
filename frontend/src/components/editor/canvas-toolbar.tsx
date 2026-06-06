@@ -1,8 +1,9 @@
 "use client"
 
-import { Plus, Search, ScanSearch, Package, Film, StickyNote, Wand2, PanelLeft, Undo2, Redo2, ChevronLeft, Puzzle } from "lucide-react"
+import { Plus, Search, ScanSearch, Package, Film, StickyNote, Wand2, PanelLeft, Undo2, Redo2, ChevronLeft, Puzzle, Keyboard } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import { cn } from "@/lib/utils"
+import { SHORTCUTS, formatBinding, isMacPlatform } from "@/lib/shortcuts"
 import { useIsMobile } from "@/hooks/use-is-mobile"
 import {
   Tooltip,
@@ -28,6 +29,7 @@ interface CanvasToolbarProps {
   readonly onRedo: () => void
   readonly canUndo: boolean
   readonly canRedo: boolean
+  readonly onShowShortcuts: () => void
 }
 
 interface ToolbarButtonProps {
@@ -116,7 +118,7 @@ function ToolbarDivider() {
   return <div className="w-6 h-px bg-[#E2E8F0] dark:bg-[#2D2D2D] mx-auto my-1" />
 }
 
-const isMac = typeof navigator !== "undefined" && /Mac|iPod|iPhone|iPad/.test(navigator.platform)
+const isMac = isMacPlatform()
 
 export function CanvasToolbar({
   onAddNode,
@@ -133,6 +135,7 @@ export function CanvasToolbar({
   onRedo,
   canUndo,
   canRedo,
+  onShowShortcuts,
 }: CanvasToolbarProps) {
   const { sidebarWidth } = useSidebar()
   const isMobile = useIsMobile()
@@ -227,7 +230,7 @@ export function CanvasToolbar({
         <ToolbarButton
           icon={<Plus className="w-5 h-5" />}
           label="Add Node"
-          shortcut="Tab"
+          shortcut={formatBinding(SHORTCUTS.addNode.bindings[0], isMac)}
           onClick={(e) => {
             const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
             onAddNode({ x: rect.right + 8, y: rect.top }, true)
@@ -244,28 +247,28 @@ export function CanvasToolbar({
         <ToolbarButton
           icon={<Search className="w-5 h-5" />}
           label="Search workflows"
-          shortcut="Ctrl+K"
+          shortcut={formatBinding(SHORTCUTS.search.bindings[0], isMac)}
           onClick={onSearch}
         />
 
         <ToolbarButton
           icon={<ScanSearch className="w-5 h-5" />}
           label="Find in workflow"
-          shortcut="Ctrl+F"
+          shortcut={formatBinding(SHORTCUTS.findNode.bindings[0], isMac)}
           onClick={onFindInWorkflow}
         />
 
         <ToolbarButton
           icon={<Package className="w-5 h-5" />}
           label="My Library"
-          shortcut="Ctrl+L"
+          shortcut={formatBinding(SHORTCUTS.myLibrary.bindings[0], isMac)}
           onClick={onAssetLibrary}
         />
 
         <ToolbarButton
           icon={<Film className="w-5 h-5" />}
           label="Media Library"
-          shortcut="Ctrl+M"
+          shortcut={formatBinding(SHORTCUTS.mediaLibrary.bindings[0], isMac)}
           onClick={onMediaLibrary}
         />
 
@@ -275,14 +278,14 @@ export function CanvasToolbar({
         <ToolbarButton
           icon={<StickyNote className="w-5 h-5" />}
           label="Add Sticky Note"
-          shortcut="Shift+S"
+          shortcut={formatBinding(SHORTCUTS.stickyNote.bindings[0], isMac)}
           onClick={onAddStickyNote}
         />
 
         <ToolbarButton
           icon={<Wand2 className="w-5 h-5" />}
           label="Tidy Up"
-          shortcut="Alt+T"
+          shortcut={formatBinding(SHORTCUTS.tidyUp.bindings[0], isMac)}
           onClick={onTidyUp}
         />
 
@@ -292,7 +295,7 @@ export function CanvasToolbar({
         <ToolbarButton
           icon={<Undo2 className="w-5 h-5" />}
           label="Undo"
-          shortcut={isMac ? "\u2318Z" : "Ctrl+Z"}
+          shortcut={formatBinding(SHORTCUTS.undo.bindings[0], isMac)}
           onClick={onUndo}
           disabled={!canUndo}
         />
@@ -300,7 +303,7 @@ export function CanvasToolbar({
         <ToolbarButton
           icon={<Redo2 className="w-5 h-5" />}
           label="Redo"
-          shortcut={isMac ? "\u2318\u21e7Z" : "Ctrl+Y"}
+          shortcut={formatBinding(SHORTCUTS.redo.bindings[0], isMac)}
           onClick={onRedo}
           disabled={!canRedo}
         />
@@ -311,9 +314,19 @@ export function CanvasToolbar({
         <ToolbarButton
           icon={<PanelLeft className="w-5 h-5" />}
           label="Toggle Sidebar"
-          shortcut="Ctrl+B"
+          shortcut={formatBinding(SHORTCUTS.sidebar.bindings[0], isMac)}
           onClick={onToggleSidebar}
           active={sidebarVisible}
+        />
+
+        <ToolbarDivider />
+
+        {/* Help */}
+        <ToolbarButton
+          icon={<Keyboard className="w-5 h-5" />}
+          label="Keyboard shortcuts"
+          shortcut={formatBinding(SHORTCUTS.help.bindings[0], isMac)}
+          onClick={onShowShortcuts}
         />
       </div>
     </>

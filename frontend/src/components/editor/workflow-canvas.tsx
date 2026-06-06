@@ -22,6 +22,8 @@ import { nodeHasPromptField } from "@/lib/prompt-fields"
 import "@xyflow/react/dist/style.css"
 
 import { nodeTypes } from "@/components/nodes"
+import { matchShortcut, SHORTCUTS } from "@/lib/shortcuts"
+import { ShortcutsHelpModal } from "@/components/editor/shortcuts-help-modal"
 import { NodeContextMenu } from "./node-context-menu"
 import { CanvasContextMenu } from "./canvas-context-menu"
 import { CanvasToolbar } from "./canvas-toolbar"
@@ -498,6 +500,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const [connectionContext, setConnectionContext] = useState<ConnectionContext | null>(null)
   const [searchModalOpen, setSearchModalOpen] = useState(false)
   const [nodeSearchModalOpen, setNodeSearchModalOpen] = useState(false)
+  const [shortcutsHelpOpen, setShortcutsHelpOpen] = useState(false)
   // Esc-to-close for the lazy-loaded search modals — registers
   // immediately when the modal opens (the modal's OWN Esc handler is
   // only available after the lazy chunk finishes loading, which is why
@@ -1522,7 +1525,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       }
 
       // Cmd/Ctrl+I — toggle fullscreen settings (must run BEFORE overlayOpen guard)
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "i") {
+      if (matchShortcut(e, SHORTCUTS.fullscreenSettings)) {
         const state = useWorkflowStore.getState()
         if (state.configPanelFullscreen) {
           e.preventDefault()
@@ -1572,10 +1575,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       // dialog). Alt+E is the escape hatch: the "Claude in Chrome" extension binds
       // ⌘E to its side panel, swallowing it before the page sees it. Alt+E matches
       // on e.code ("KeyE") since macOS Option+E is a dead key (composes "´").
-      const isPromptToggle =
-        ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "e") ||
-        (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.code === "KeyE")
-      if (isPromptToggle) {
+      if (matchShortcut(e, SHORTCUTS.promptEditor)) {
         const state = useWorkflowStore.getState()
         if (state.promptEditNodeId) {
           e.preventDefault()
@@ -1596,7 +1596,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       // (e.key is unreliable). Runs BEFORE the overlay guard so a second press
       // closes it. No-op (but still consumes the combo) when the focused node has
       // no previewable image/video/audio result.
-      if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.code === "KeyF") {
+      if (matchShortcut(e, SHORTCUTS.resultPreview)) {
         e.preventDefault()
         setFullscreenNodeId((cur) => {
           if (cur) return null // already open → toggle off
@@ -1732,36 +1732,44 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         !!document.querySelector('[role="dialog"][aria-modal="true"]')
       if (overlayOpen) return
 
+      // "?" — show the keyboard shortcuts help (layout-independent: matches the "?"
+      // char or Shift+physical-Slash). Gated by the editable + overlay guards above.
+      if (matchShortcut(e, SHORTCUTS.help)) {
+        e.preventDefault()
+        setShortcutsHelpOpen(true)
+        return
+      }
+
       // Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y — Redo
-      if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.shiftKey && e.key.toLowerCase() === "z"))) {
+      if (matchShortcut(e, SHORTCUTS.redo)) {
         e.preventDefault()
         redo()
         return
       }
 
       // Ctrl/Cmd+Z — Undo
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+      if (matchShortcut(e, SHORTCUTS.undo)) {
         e.preventDefault()
         undo()
         return
       }
 
       // Ctrl/Cmd+Shift+G — Toggle grid snap
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "g") {
+      if (matchShortcut(e, SHORTCUTS.gridSnap)) {
         e.preventDefault()
         handleToggleSnap()
         return
       }
 
       // Ctrl/Cmd+Shift+A — Toggle alignment guides
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "a") {
+      if (matchShortcut(e, SHORTCUTS.alignmentGuides)) {
         e.preventDefault()
         handleToggleAlignment()
         return
       }
 
       // Tab - Open Add Node popup at mouse position
-      if (e.key === "Tab" && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+      if (matchShortcut(e, SHORTCUTS.addNode)) {
         e.preventDefault()
         const pos = lastMousePositionRef.current
         handleOpenAddNodePopup(pos.x !== 0 || pos.y !== 0 ? pos : undefined)
@@ -1769,7 +1777,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       }
 
       // Ctrl+K - Search projects and workflows
-      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+      if (matchShortcut(e, SHORTCUTS.search)) {
         e.preventDefault()
         setSearchModalOpen(true)
         return
@@ -1780,49 +1788,49 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       // text content the browser can search anyway). Skipped when an
       // input/textarea has focus — the editable check at the top of
       // this handler returns early before we reach here.
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f" && !e.shiftKey && !e.altKey) {
+      if (matchShortcut(e, SHORTCUTS.findNode)) {
         e.preventDefault()
         setNodeSearchModalOpen(true)
         return
       }
 
       // Ctrl+L - My Library
-      if ((e.ctrlKey || e.metaKey) && e.key === "l") {
+      if (matchShortcut(e, SHORTCUTS.myLibrary)) {
         e.preventDefault()
         setAssetLibraryOpen(true)
         return
       }
 
       // Ctrl+M - Media Library
-      if ((e.ctrlKey || e.metaKey) && e.key === "m") {
+      if (matchShortcut(e, SHORTCUTS.mediaLibrary)) {
         e.preventDefault()
         setMediaLibraryOpen((prev) => !prev)
         return
       }
 
       // Shift+S - Add sticky note
-      if (e.shiftKey && e.key.toLowerCase() === "s") {
+      if (matchShortcut(e, SHORTCUTS.stickyNote)) {
         e.preventDefault()
         handleAddStickyNote()
         return
       }
 
       // Alt+T - Tidy up
-      if (e.altKey && e.key.toLowerCase() === "t") {
+      if (matchShortcut(e, SHORTCUTS.tidyUp)) {
         e.preventDefault()
         handleTidyUp()
         return
       }
 
       // Ctrl+B - Toggle sidebar
-      if ((e.ctrlKey || e.metaKey) && e.key === "b") {
+      if (matchShortcut(e, SHORTCUTS.sidebar)) {
         e.preventDefault()
         onToggleSidebar()
         return
       }
 
       // Ctrl+A - Select all
-      if ((e.ctrlKey || e.metaKey) && e.key === "a") {
+      if (matchShortcut(e, SHORTCUTS.selectAll)) {
         e.preventDefault()
         handleSelectAll()
         return
@@ -1859,7 +1867,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       }
 
       // Ctrl+D - Duplicate selected node(s), preserving edges between them
-      if ((e.ctrlKey || e.metaKey) && e.key === "d") {
+      if (matchShortcut(e, SHORTCUTS.duplicate)) {
         const ids = shortcutTargetIds(true)
         if (ids.length === 0) return
         e.preventDefault()
@@ -1868,7 +1876,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       }
 
       // Ctrl+C / Ctrl+X — Copy or Cut selected nodes
-      if ((e.ctrlKey || e.metaKey) && (e.key === "c" || e.key === "x")) {
+      if (matchShortcut(e, SHORTCUTS.copy) || matchShortcut(e, SHORTCUTS.cut)) {
         // If there's an active text selection anywhere on the page, let the
         // browser copy/cut the text instead of the node.
         const sel = typeof window !== "undefined" ? window.getSelection() : null
@@ -1881,7 +1889,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         const connectedEdges = state.edges.filter((edge) => selectedIds.has(edge.source) && selectedIds.has(edge.target))
         const payload = JSON.stringify({ __nodaro_clipboard: true, name: state.workflowName, nodes: selected, edges: connectedEdges })
         navigator.clipboard.writeText(payload).then(() => {
-          if (e.key === "x") {
+          if (matchShortcut(e, SHORTCUTS.cut)) {
             // Cut mutates the canvas — block in read-only (copy still works above).
             if (useWorkflowStore.getState().isReadOnly) return
             useWorkflowStore.setState({
@@ -1896,7 +1904,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       }
 
       // Ctrl+V - Paste nodes from clipboard
-      if ((e.ctrlKey || e.metaKey) && e.key === "v") {
+      if (matchShortcut(e, SHORTCUTS.paste)) {
         // Paste mutates the canvas — block entirely in read-only.
         if (useWorkflowStore.getState().isReadOnly) return
         e.preventDefault()
@@ -2248,6 +2256,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         onRedo={redo}
         canUndo={canUndo}
         canRedo={canRedo}
+        onShowShortcuts={() => setShortcutsHelpOpen(true)}
       />
 
       {/* Canvas Controls (zoom, fit, minimap toggle - bottom left) */}
@@ -2306,6 +2315,9 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           />
         </Suspense>
       )}
+
+      {/* Keyboard shortcuts help — opened via "?" or the toolbar button. */}
+      <ShortcutsHelpModal open={shortcutsHelpOpen} onOpenChange={setShortcutsHelpOpen} />
 
       {/* Alt/Option+F — focused node's result in the fullscreen lightbox. Derived
           from the live node each render so streaming results stay fresh; closes

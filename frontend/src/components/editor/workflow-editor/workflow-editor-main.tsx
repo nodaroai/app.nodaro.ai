@@ -63,6 +63,7 @@ import { useNodeDefaults } from "@/hooks/use-node-defaults";
 import { createClient } from "@/lib/supabase";
 import { StorageExceededError, uploadFile, setCurrentWorkflowId, cancelJob, discardWorkflowExecution } from "@/lib/api";
 import { probeMediaMetadata } from "@/lib/probe-media-metadata";
+import { matchShortcut, SHORTCUTS } from "@/lib/shortcuts";
 import { queryClient } from "@/lib/query-client";
 import { hasCredits } from "@/lib/edition";
 import { getCachedCredits, prefetchModelCredits } from "@/ee/hooks/use-model-credits";
@@ -992,7 +993,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+      if (matchShortcut(e, SHORTCUTS.save)) {
         e.preventDefault();
         handleSave();
       }

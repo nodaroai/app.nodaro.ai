@@ -10,6 +10,7 @@ import { duplicateCharacter } from "@/lib/api"
 import { useQueryClient } from "@tanstack/react-query"
 import { queryKeys } from "@/lib/query-keys"
 import { useAuth } from "@/hooks/use-auth"
+import { SHORTCUTS, formatBinding, isMacPlatform } from "@/lib/shortcuts"
 
 interface NodeContextMenuProps {
   readonly nodeId: string
@@ -36,6 +37,7 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
   const { user } = useAuth()
   const ref = useRef<HTMLDivElement>(null)
   const [forking, setForking] = useState(false)
+  const isMac = isMacPlatform()
 
   const hasDownstream = useMemo(() => {
     return edges.some((e) => e.source === nodeId)
@@ -310,7 +312,7 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
       >
         <Copy className="h-3.5 w-3.5" />
         Duplicate
-        <span className="ml-auto text-xs text-muted-foreground">Ctrl+D</span>
+        <span className="ml-auto text-xs text-muted-foreground">{formatBinding(SHORTCUTS.duplicate.bindings[0], isMac)}</span>
       </button>
       {characterDbId && (
         <button
@@ -329,7 +331,7 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
       >
         <Trash2 className="h-3.5 w-3.5" />
         Delete
-        <span className="ml-auto text-xs text-muted-foreground">Del</span>
+        <span className="ml-auto text-xs text-muted-foreground">{formatBinding(SHORTCUTS.delete.bindings[0], isMac)}</span>
       </button>
     </div>
   )
