@@ -55,6 +55,8 @@ interface PresetDropdownProps {
   readonly nodeId: string
   /** "panel" = full config-panel trigger, "node" = compact trigger in the node hover toolbar. */
   readonly variant: "panel" | "node"
+  /** Node canvas zoom (node variant only) — sizes the trigger to the zoom-scaled node title. */
+  readonly zoom?: number
   readonly className?: string
   /** Notifies the parent when the menu opens/closes (BaseNode pins its hover toolbar while open). */
   readonly onOpenChange?: (open: boolean) => void
@@ -68,7 +70,7 @@ interface PresetDropdownProps {
  * config, or asset/structural nodes) never mount the data hooks (no preset query is fired, no
  * QueryClient/auth needed). The inner component (with React Query + auth) renders only when eligible.
  */
-export function PresetDropdown({ nodeId, variant, className, onOpenChange }: PresetDropdownProps) {
+export function PresetDropdown({ nodeId, variant, zoom, className, onOpenChange }: PresetDropdownProps) {
   const node = useWorkflowStore((s) => s.nodes.find((n) => n.id === nodeId))
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
 
@@ -85,6 +87,7 @@ export function PresetDropdown({ nodeId, variant, className, onOpenChange }: Pre
       data={data}
       updateNodeData={updateNodeData}
       variant={variant}
+      zoom={zoom}
       className={className}
       onOpenChange={onOpenChange}
     />
@@ -97,7 +100,7 @@ interface InnerProps extends PresetDropdownProps {
   readonly updateNodeData: (nodeId: string, data: Record<string, unknown>) => void
 }
 
-function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, className, onOpenChange }: InnerProps) {
+function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, zoom = 1, className, onOpenChange }: InnerProps) {
   const { user } = useAuth()
   const captured = useMemo(() => extractPresetData(data), [data])
 
@@ -267,6 +270,21 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
   const triggerLabel = activePreset ? activePreset.name : "Preset"
   const canOverride = !!activePreset && activePreset.source === "user"
 
+  // Node-variant sizing scales with `zoom` so the trigger tracks the node title (text-[11px], which
+  // lives inside the node's `scale(zoom)` wrapper). 13px icon matches the 3-dots glyph (zoom*13).
+  const isNode = variant === "node"
+  const np = isNode
+    ? {
+        font: 11 * zoom,
+        icon: Math.round(13 * zoom),
+        h: Math.round(18 * zoom),
+        px: Math.round(6 * zoom),
+        gap: Math.round(3 * zoom),
+        radius: Math.round(5 * zoom),
+        maxName: Math.round(96 * zoom),
+      }
+    : null
+
   return (
     <>
       <Popover open={open} onOpenChange={setOpenState}>
@@ -276,22 +294,21 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
             onClick={(e) => e.stopPropagation()}
             title="Presets"
             aria-label="Presets"
+            style={np ? { fontSize: np.font, height: np.h, paddingLeft: np.px, paddingRight: np.px, gap: np.gap, borderRadius: np.radius } : undefined}
             className={cn(
-              "inline-flex items-center rounded-md border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-[#2D2D2D] transition-colors",
-              variant === "panel" ? "h-8 gap-1.5 px-2.5" : "h-6 gap-1 px-1.5",
+              "inline-flex items-center border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-[#2D2D2D] transition-colors",
+              isNode ? "" : "h-8 gap-1.5 rounded-md px-2.5 text-sm",
               className,
             )}
           >
-            <Layers className={cn("shrink-0 opacity-70", variant === "panel" ? "h-3.5 w-3.5" : "h-3 w-3")} />
+            <Layers className={cn("shrink-0 opacity-70", !isNode && "h-3.5 w-3.5")} size={np?.icon} />
             {(variant === "panel" || activePreset) && (
-              <span className={cn("truncate", variant === "panel" ? "text-sm" : "max-w-[88px] text-[11px]")}>
+              <span className={cn("truncate", !isNode && "text-sm")} style={np ? { maxWidth: np.maxName } : undefined}>
                 {triggerLabel}
               </span>
             )}
-            {dirty && (
-              <span className={cn("font-bold text-[#ff0073]", variant === "panel" ? "text-sm" : "text-[11px]")}>*</span>
-            )}
-            <ChevronDown className={cn("shrink-0 opacity-60", variant === "panel" ? "ml-auto h-3.5 w-3.5" : "h-3 w-3")} />
+            {dirty && <span className={cn("font-bold text-[#ff0073]", !isNode && "text-sm")}>*</span>}
+            <ChevronDown className={cn("shrink-0 opacity-60", !isNode && "ml-auto h-3.5 w-3.5")} size={np?.icon} />
           </button>
         </PopoverTrigger>
         <PopoverContent align="start" className="w-72 p-0" onClick={(e) => e.stopPropagation()}>

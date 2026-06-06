@@ -463,8 +463,9 @@ function BaseNodeComponent({
           }}
         >
           {/* Preset dropdown — left of the 3-dots menu. Self-hides for nodes with no portable
-              config (and asset/structural nodes). */}
-          <PresetDropdown nodeId={id} variant="node" onOpenChange={setPresetMenuOpen} />
+              config (and asset/structural nodes). `zoom` keeps its text/icons sized to the node
+              title (which scales with zoom), matching the 3-dots glyph. */}
+          <PresetDropdown nodeId={id} variant="node" zoom={zoom} onOpenChange={setPresetMenuOpen} />
           <button
             className="node-more-menu-btn text-muted-foreground transition-colors"
             onClick={handleMoreMenu}

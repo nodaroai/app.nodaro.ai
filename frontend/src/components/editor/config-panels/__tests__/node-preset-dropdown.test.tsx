@@ -76,6 +76,13 @@ describe("PresetDropdown", () => {
     expect(screen.getByRole("button", { name: /presets/i })).toHaveTextContent(/Preset/)
   })
 
+  it("node variant sizes the trigger to the zoomed node title (11px × zoom)", () => {
+    wrap(<PresetDropdown nodeId="n1" variant="node" zoom={2} />)
+    const trigger = screen.getByRole("button", { name: /presets/i })
+    expect(trigger.style.fontSize).toBe("22px") // 11 * 2 — matches the node title (text-[11px] scaled by zoom)
+    expect(trigger.style.height).toBe("36px") // 18 * 2
+  })
+
   it("shows the active preset name and no dirty star when data matches", () => {
     h.data = { prompt: "z", __activePresetId: "u1" }
     wrap(<PresetDropdown nodeId="n1" variant="panel" />)
