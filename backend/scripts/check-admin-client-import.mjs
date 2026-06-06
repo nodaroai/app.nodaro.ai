@@ -113,6 +113,7 @@ const ALLOWED_PATHS = [
   // Service-role mirrors the other per-user collection routes (characters,
   // locations) — node_presets RLS (`auth.uid() = user_id`) is the DB-level guard.
   /^src\/routes\/node-presets\.ts$/,
+  /^src\/routes\/node-preset-groups\.ts$/,
 
   // Embeds / og-tags: fetch public-facing metadata by id, not user-scoped.
   /^src\/routes\/embed\.ts$/,

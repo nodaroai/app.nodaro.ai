@@ -32,9 +32,28 @@ The dropdown starts empty. Open it to:
 - **Search** — filter presets by name or description.
 - **Import / Export** — back up or share presets as a `.json` file.
 - **Delete** — remove one of your custom presets (hover a row).
+- **Manage presets…** — opens the management dialog (see below).
 
 The dropdown appears automatically on any node that has configurable settings. Nodes with no
 settings (such as sticky notes) and asset nodes (Character/Location/Object) don't show it.
+
+## Organizing presets
+
+Click **Manage presets…** in the dropdown to open the management dialog, where you can organize your
+**custom** presets:
+
+- **Folders** — collapsible containers. Create one with **New folder**, then move presets into it.
+- **Sections** — always-open group headers for light grouping at the top level. Create one with
+  **New section**.
+- **Move** — change a preset's folder/section with the **Top level ▾** picker on its row.
+- **Reorder** — use the ▲/▼ controls to order folders, sections, and presets within a level.
+- **Description** — give a preset a short description (shown under its name and searchable).
+- **Tags** — add tags to a preset; the dropdown's search matches names, descriptions, **and** tags.
+- **Rename / Delete** — rename folders and presets inline; deleting a folder moves its presets back
+  to the top level (presets are never lost).
+
+In the dropdown, folders show as collapsible rows and sections as inline headers, in the order you
+set. Factory presets always appear first in a fixed, read-only group.
 
 ## What a preset captures
 

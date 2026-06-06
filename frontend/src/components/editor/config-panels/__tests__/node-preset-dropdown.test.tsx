@@ -22,16 +22,22 @@ vi.mock("@/hooks/use-workflow-store", () => ({
 
 const createMut = vi.fn().mockResolvedValue({ id: "u-new" })
 const updateMut = vi.fn().mockResolvedValue({ id: "u1" })
+const noop = { mutateAsync: vi.fn(), isPending: false }
 vi.mock("@/hooks/queries/use-node-presets-queries", () => ({
   useNodePresets: () => ({
-    data: [{ id: "u1", nodeType: "generate-image", name: "My Look", data: { prompt: "z" }, createdAt: "", updatedAt: "" }],
+    data: [{ id: "u1", nodeType: "generate-image", name: "My Look", data: { prompt: "z" }, tags: [], sortOrder: 0, createdAt: "", updatedAt: "" }],
     isLoading: false,
   }),
+  useNodePresetGroups: () => ({ data: [], isLoading: false }),
   useNodePresetMutations: () => ({
     create: { mutateAsync: createMut, isPending: false },
     update: { mutateAsync: updateMut, isPending: false },
-    remove: { mutateAsync: vi.fn(), isPending: false },
-    importMany: { mutateAsync: vi.fn(), isPending: false },
+    remove: noop,
+    importMany: noop,
+    reorder: noop,
+    createGroup: noop,
+    updateGroup: noop,
+    removeGroup: noop,
   }),
 }))
 vi.mock("@/hooks/use-auth", () => ({ useAuth: () => ({ user: { id: "user-1" } }) }))

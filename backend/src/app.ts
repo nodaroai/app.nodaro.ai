@@ -61,6 +61,7 @@ import { generateObjectRoutes } from "./routes/generate-object.js"
 import { generateObjectMotionRoutes } from "./routes/generate-object-motion.js"
 import { locationRoutes } from "./routes/locations.js"
 import { nodePresetRoutes } from "./routes/node-presets.js"
+import { nodePresetGroupRoutes } from "./routes/node-preset-groups.js"
 import { locationRestoreRoutes } from "./routes/location-restore.js"
 import { locationMainImageApprovalRoutes } from "./routes/location-main-image-approval.js"
 import { locationLlmCaptionRoutes } from "./routes/location-llm-caption.js"
@@ -295,6 +296,7 @@ export async function buildApp() {
   await app.register(generateObjectMotionRoutes)
   await app.register(locationRoutes)
   await app.register(nodePresetRoutes)
+  await app.register(nodePresetGroupRoutes)
   await app.register(locationRestoreRoutes)
   await app.register(locationMainImageApprovalRoutes)
   await app.register(locationLlmCaptionRoutes)
