@@ -1130,24 +1130,65 @@ export function buildImagePrompt(config: BuildImagePromptConfig): BuildImageProm
       (r) => r.source !== "wired-character" && r.isExtraRef !== true,
     )
 
-    // Identities = (used in prompt) ∪ (default label for refs with no mentions).
-    // Indexing here is against the non-character ref list so {image:N} tokens
-    // line up with `nonCharacterRefs[N-1]` for legacy positional mentions.
-    const identities = collectIdentities(prompt, nonCharacterRefs, identityMeta)
+    // -----------------------------------------------------------------------
+    // Single source of truth for positional numbering.
+    //
+    // Phase 0 already numbered the character / extra directives against the
+    // order [referenceImageUrls, mentions, canonical-fallback, extras] and
+    // wrote both the bullets and the URLs into `referenceImageUrls`. We APPEND
+    // the non-character URLs after that list (never prepend) so those Phase-0
+    // numbers stay valid, then derive EVERY non-character directive's `Image N`
+    // from this one final ordered list via a `url → index` map.
+    //
+    // The old code prepended `nonCharacterUrls` ahead of the Phase-0 list,
+    // which shifted every character/extra `Image N` by `nonCharacterUrls.length`
+    // while their directive text was already baked — the root cause of the
+    // off-by-(non-char-count) desync. Appending is byte-identical to the old
+    // prepend whenever a non-char URL already lives in `referenceImageUrls`
+    // (dedup keeps its existing slot); it only differs for the genuinely-new
+    // location/object URLs that the prepend mis-slotted.
+    // -----------------------------------------------------------------------
+    const nonCharacterUrls = nonCharacterRefs
+      .map((r) => r.url)
+      .filter((u): u is string => Boolean(u))
+    const assembledUrls = [...referenceImageUrls, ...nonCharacterUrls]
+      .filter((u, i, a) => a.indexOf(u) === i)
+    const finalIndexByUrl = new Map<string, number>()
+    assembledUrls.forEach((u, i) => {
+      if (!finalIndexByUrl.has(u)) finalIndexByUrl.set(u, i + 1)
+    })
 
-    const directives = identities
-      .map((id) => buildIdentityDirective(id, suppressedCanonicalLocationIds))
-      .filter((s) => s.length > 0)
-      .join("\n")
+    // Non-character directives — `{image:N}` identities (renumbered to their
+    // final slot) + the location/object canonical fallback — all numbered
+    // against the unified `finalIndexByUrl`.
+    const directives = buildNonCharacterDirectives(
+      prompt,
+      nonCharacterRefs,
+      identityMeta,
+      finalIndexByUrl,
+      suppressedCanonicalLocationIds,
+    )
     if (directives) {
-      // "Use these references…" header + bulleted directives + the
-      // "Compose them naturally…" prefix proved most reliable in user
-      // testing. Numeric indices ("Image 1") match the user-typed
-      // `@character:N` slug format so the literal prompt and the final
-      // identity directive are visually linked.
-      prompt = prompt
-        ? `Use these references for the output image:\n${directives}\n\nCompose them naturally into a single image: ${prompt}`
-        : `Use these references for the output image:\n${directives}`
+      if (prompt.startsWith("Use these characters:\n")) {
+        // Consolidate into the existing Phase-0 directive block (the same splice
+        // pattern Phase 0 uses for fallback / extras) instead of wrapping it in
+        // a second "Use these references…/Compose them naturally" layer.
+        const splitIdx = prompt.indexOf("\n\n")
+        if (splitIdx !== -1) {
+          prompt = prompt.slice(0, splitIdx) + "\n" + directives + prompt.slice(splitIdx)
+        } else {
+          prompt = `${prompt}\n${directives}`
+        }
+      } else {
+        // "Use these references…" header + bulleted directives + the
+        // "Compose them naturally…" prefix proved most reliable in user
+        // testing. Numeric indices ("Image 1") match the user-typed
+        // `@character:N` slug format so the literal prompt and the final
+        // identity directive are visually linked.
+        prompt = prompt
+          ? `Use these references for the output image:\n${directives}\n\nCompose them naturally into a single image: ${prompt}`
+          : `Use these references for the output image:\n${directives}`
+      }
     }
 
     const styleText = style?.trim()
@@ -1170,20 +1211,10 @@ export function buildImagePrompt(config: BuildImagePromptConfig): BuildImageProm
       prompt = prompt.slice(0, 1997) + "..."
     }
 
-    // Resolve `{image:N:label}` → "the <label> from image N".
-    // Bare `{image:N}` (no label) → "[reference image N]" (legacy fallback).
-    prompt = expandImageRefTokens(prompt, nonCharacterRefs.length)
-
-    // URLs: non-character refs auto-attach in their original order.
-    // Character URLs (if any) come from Phase 0's `referenceImageUrls`
-    // (only the mentioned variants).
-    const nonCharacterUrls = nonCharacterRefs
-      .map((r) => r.url)
-      .filter((u): u is string => Boolean(u))
-    const characterUrlsFromPhase0 = referenceImageUrls.filter(
-      (u) => !nonCharacterUrls.includes(u),
-    )
-    const orderedUrls = [...nonCharacterUrls, ...characterUrlsFromPhase0]
+    // Resolve `{image:N:label}` → "Image <finalSlot> (label)". The token's N
+    // indexes `nonCharacterRefs`; we rewrite it to the ref's FINAL slot so the
+    // body text agrees with the directive numbering above.
+    prompt = expandImageRefTokensForRefs(prompt, nonCharacterRefs, finalIndexByUrl)
 
     const supportsRefs = MODELS_WITH_REFERENCE_IMAGE_SUPPORT.has(provider)
 
@@ -1191,11 +1222,11 @@ export function buildImagePrompt(config: BuildImagePromptConfig): BuildImageProm
     // matching renumber of every `Image N` token in the prompt. Skipped when
     // the model doesn't support refs (refs will be dropped anyway) or when no
     // order was supplied (no-op contract).
-    let finalUrls = orderedUrls
+    let finalUrls = assembledUrls
     let finalPrompt = prompt
-    if (supportsRefs && referenceOrder.length > 0 && orderedUrls.length > 1) {
+    if (supportsRefs && referenceOrder.length > 0 && assembledUrls.length > 1) {
       const reordered = applyReferenceOrder(
-        orderedUrls,
+        assembledUrls,
         prompt,
         connectedReferences,
         referenceOrder,
@@ -1474,6 +1505,75 @@ function buildIdentityDirective(
 }
 
 /**
+ * Build the non-character directive block for `buildImagePrompt`'s
+ * connectedReferences path:
+ *   1. `{image:N:label}` identity directives (legacy positional mentions), in
+ *      prompt-mention order, renumbered from their `nonCharacterRefs` index to
+ *      the ref's FINAL slot.
+ *   2. Canonical-style fallback directives for `wired-location` / `wired-object`
+ *      refs that are present but neither `{image:N}`-referenced nor @-mentioned
+ *      (@-mentioned locations were already filtered out of connectedReferences
+ *      in Phase 0). Mirrors the character canonical fallback so a wired setting
+ *      / object gets a directive with zero typing required. Scoped to those two
+ *      sources — opaque `manual` / `wired-image` uploads carry no metadata to
+ *      describe and keep their (intentional) directive-free behavior.
+ *
+ * Every directive's `Image N` is numbered against `finalIndexByUrl` (the single
+ * source of truth for the assembled URL order), so the index always matches the
+ * URL slot. `coveredUrls` prevents a URL emitted via a token from being
+ * re-emitted by the fallback AND dedupes a location/object wired twice.
+ */
+function buildNonCharacterDirectives(
+  prompt: string,
+  nonCharacterRefs: readonly ConnectedReference[],
+  identityMeta: readonly IdentityMeta[],
+  finalIndexByUrl: ReadonlyMap<string, number>,
+  suppressedCanonicalLocationIds: readonly string[],
+): string {
+  const lines: string[] = []
+  const coveredUrls = new Set<string>()
+
+  for (const id of collectIdentities(prompt, nonCharacterRefs, identityMeta)) {
+    const ref = nonCharacterRefs[id.imageIndex - 1]
+    const finalIdx = ref?.url ? finalIndexByUrl.get(ref.url) : undefined
+    const line = buildIdentityDirective(
+      finalIdx ? { ...id, imageIndex: finalIdx } : id,
+      suppressedCanonicalLocationIds,
+    )
+    if (line.length > 0) lines.push(line)
+    if (ref?.url) coveredUrls.add(ref.url)
+  }
+
+  for (const ref of nonCharacterRefs) {
+    if (ref.source !== "wired-location" && ref.source !== "wired-object") continue
+    if (!ref.url || coveredUrls.has(ref.url)) continue
+    const finalIdx = finalIndexByUrl.get(ref.url)
+    if (!finalIdx) continue
+    coveredUrls.add(ref.url)
+    const line = buildIdentityDirective(
+      {
+        imageIndex: finalIdx,
+        // A background label routes wired-location through the
+        // "use as the background/setting" verb (and folds
+        // locationCanonicalDescription); wired-object falls through to the
+        // strict "match exactly" verb.
+        label: ref.source === "wired-location" ? "location" : "object",
+        fidelity: defaultFidelityForSource(ref.source),
+        description: ref.description?.trim() || undefined,
+        source: ref.source,
+        locationCanonicalDescription: ref.locationCanonicalDescription,
+        locationSlug: ref.locationSlug,
+        locationReferencePhotoKind: ref.locationReferencePhotoKind,
+      },
+      suppressedCanonicalLocationIds,
+    )
+    if (line.length > 0) lines.push(line)
+  }
+
+  return lines.join("\n")
+}
+
+/**
  * Replace `{image:N:label}` and `{image:N}` tokens with natural-language
  * phrases bound to a numbered image (Image 1 / 2 / 3 …).
  *
@@ -1491,6 +1591,32 @@ export function expandImageRefTokens(prompt: string, imageCount: number): string
     const n = parseInt(num, 10)
     if (n < 1 || n > imageCount) return match
     return label ? `Image ${n} (${label})` : `Image ${n}`
+  })
+}
+
+/**
+ * Like `expandImageRefTokens`, but remaps each `{image:N}` token from its index
+ * in `refs` (the non-character ref list the token was authored against) to the
+ * ref's FINAL 1-based slot in the assembled URL list. Used by
+ * `buildImagePrompt`'s connectedReferences path so body-text `Image N` markers
+ * agree with the directive numbering after non-character URLs are appended.
+ *
+ * When the final slot equals the token index (no Phase-0 prefix shifting the
+ * positions), the output is byte-identical to `expandImageRefTokens`.
+ * Out-of-range tokens (or refs without a URL) are left untouched, matching the
+ * "visible so the author can fix it" contract.
+ */
+function expandImageRefTokensForRefs(
+  prompt: string,
+  refs: readonly ConnectedReference[],
+  finalIndexByUrl: ReadonlyMap<string, number>,
+): string {
+  return prompt.replace(IMAGE_TOKEN_PATTERN, (match, num, label) => {
+    const n = parseInt(num, 10)
+    const ref = refs[n - 1]
+    const finalIdx = ref?.url ? finalIndexByUrl.get(ref.url) : undefined
+    if (!finalIdx) return match
+    return label ? `Image ${finalIdx} (${label})` : `Image ${finalIdx}`
   })
 }
 
