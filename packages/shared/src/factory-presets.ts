@@ -51,6 +51,82 @@ export function groupFactoryPresets<
 }
 
 /**
+ * Selective-stylization presets shared by `modify-image` (transform an input photo) and
+ * `generate-image` (use a connected reference image). `modify-image` is slated for deprecation in
+ * favor of `generate-image`, so the catalog lives in ONE place to prevent the two from drifting —
+ * when `modify-image` is removed, just drop its key from `FACTORY_PRESETS` below. `nano-banana-pro`
+ * is a valid provider for both nodes' enums (IMAGE_GEN_PROVIDERS and MODIFY_IMAGE_PROVIDERS).
+ */
+const STYLIZED_SUBJECT: ReadonlyArray<{
+  readonly slug: string
+  readonly name: string
+  readonly description: string
+  readonly data: Readonly<Record<string, unknown>>
+}> = [
+  {
+    slug: "cartoon-person-real-world",
+    name: "Cartoon Person, Real World",
+    description: "Subject → 3D cartoon, rest stays photoreal.",
+    data: {
+      provider: "nano-banana-pro",
+      prompt:
+        "Turn the person into a stylized 3D cartoon character (Pixar/Disney look). Important: only the person becomes a cartoon — keep the background, clothing textures, lighting, and everything else photorealistic and unchanged.",
+    },
+  },
+  {
+    slug: "caricature-real-photo",
+    name: "Caricature, Real Photo",
+    description: "Exaggerated cartoon head on a real scene.",
+    data: {
+      provider: "nano-banana-pro",
+      prompt:
+        "Exaggerate the person into a caricature with an oversized head and amplified features, in a fun illustrated style. Keep the body, background, and overall scene photorealistic and unchanged.",
+    },
+  },
+  {
+    slug: "anime-person-real-bg",
+    name: "Anime Person, Real Background",
+    description: "Subject → 2D anime, real environment.",
+    data: {
+      provider: "nano-banana-pro",
+      prompt:
+        "Restyle only the person as a 2D anime character with cel shading. Keep the real-world background, lighting, and environment photorealistic and untouched.",
+    },
+  },
+  {
+    slug: "real-person-cartoon-world",
+    name: "Real Person, Cartoon World",
+    description: "Inverse — real subject, stylized world.",
+    data: {
+      provider: "nano-banana-pro",
+      prompt:
+        "Keep the person photorealistic and unchanged. Transform only the background and environment into a colorful stylized cartoon world.",
+    },
+  },
+  {
+    slug: "claymation-figure-real-set",
+    name: "Claymation Figure, Real Set",
+    description: "Subject → clay figure, real surroundings.",
+    data: {
+      provider: "nano-banana-pro",
+      prompt:
+        "Turn the person into a tactile stop-motion claymation figure with visible fingerprints and plasticine texture. Keep the surrounding set and background photorealistic.",
+    },
+  },
+]
+
+/** Build the Stylized Subject presets for a node type (id = `<nodeType>/<slug>`). */
+function stylizedSubjectFor(nodeType: string): FactoryPreset[] {
+  return STYLIZED_SUBJECT.map((p) => ({
+    id: `${nodeType}/${p.slug}`,
+    name: p.name,
+    description: p.description,
+    group: "Stylized Subject",
+    data: p.data,
+  }))
+}
+
+/**
  * System/factory presets shipped with the app. Code-defined (like the picker catalogs) so they are
  * typed, testable, versioned with the app, and available in every edition without a DB seed.
  *
@@ -1017,78 +1093,608 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
         negativePrompt: "smooth, antialiased, blur, watermark",
       },
     },
+
+    // ── Stylized Subject (shared with the deprecating modify-image node) ──────
+    // Selective stylization is a TRANSFORM pattern; here it works when a reference
+    // image is connected (nano-banana-pro edits it while preserving untouched
+    // regions). The "only the X" instruction lives in the prompt, not `style`.
+    ...stylizedSubjectFor("generate-image"),
   ],
 
-  // Selective / hybrid stylization — a TRANSFORM pattern (existing photo in →
-  // partially restyled out), so it lives on the modify-image node, not
-  // text-to-image. The "only the X" instruction lives in the prompt because the
-  // `style` field would restyle the whole frame. Editors that preserve untouched
-  // regions (nano-banana-pro / gpt-image-2-i2i / Flux Kontext) work best.
-  "modify-image": [
-    {
-      id: "modify-image/cartoon-person-real-world",
-      name: "Cartoon Person, Real World",
-      description: "Subject → 3D cartoon, rest stays photoreal.",
-      group: "Stylized Subject",
-      data: {
-        provider: "nano-banana-pro",
-        prompt:
-          "Turn the person into a stylized 3D cartoon character (Pixar/Disney look). Important: only the person becomes a cartoon — keep the background, clothing textures, lighting, and everything else photorealistic and unchanged.",
-      },
-    },
-    {
-      id: "modify-image/caricature-real-photo",
-      name: "Caricature, Real Photo",
-      description: "Exaggerated cartoon head on a real scene.",
-      group: "Stylized Subject",
-      data: {
-        provider: "nano-banana-pro",
-        prompt:
-          "Exaggerate the person into a caricature with an oversized head and amplified features, in a fun illustrated style. Keep the body, background, and overall scene photorealistic and unchanged.",
-      },
-    },
-    {
-      id: "modify-image/anime-person-real-bg",
-      name: "Anime Person, Real Background",
-      description: "Subject → 2D anime, real environment.",
-      group: "Stylized Subject",
-      data: {
-        provider: "nano-banana-pro",
-        prompt:
-          "Restyle only the person as a 2D anime character with cel shading. Keep the real-world background, lighting, and environment photorealistic and untouched.",
-      },
-    },
-    {
-      id: "modify-image/real-person-cartoon-world",
-      name: "Real Person, Cartoon World",
-      description: "Inverse — real subject, stylized world.",
-      group: "Stylized Subject",
-      data: {
-        provider: "nano-banana-pro",
-        prompt:
-          "Keep the person photorealistic and unchanged. Transform only the background and environment into a colorful stylized cartoon world.",
-      },
-    },
-    {
-      id: "modify-image/claymation-figure-real-set",
-      name: "Claymation Figure, Real Set",
-      description: "Subject → clay figure, real surroundings.",
-      group: "Stylized Subject",
-      data: {
-        provider: "nano-banana-pro",
-        prompt:
-          "Turn the person into a tactile stop-motion claymation figure with visible fingerprints and plasticine texture. Keep the surrounding set and background photorealistic.",
-      },
-    },
-  ],
+  // modify-image shares the Stylized Subject catalog with generate-image (single
+  // source of truth in STYLIZED_SUBJECT). modify-image is slated for deprecation
+  // in favor of generate-image — when it's removed, drop this key.
+  "modify-image": stylizedSubjectFor("modify-image"),
   "generate-video": [
+    // ── Camera Moves (composable cinematography fragments) ───────────────────
+    {
+      id: "generate-video/slow-push-in",
+      name: "Slow Push-In",
+      description: "Gradual dolly toward the subject.",
+      group: "Camera Moves",
+      data: {
+        provider: "veo3.1",
+        aspectRatio: "16:9",
+        duration: 8,
+        prompt: "slow cinematic push-in toward {subject}, gradual forward dolly, shallow depth of field, smooth steady motion",
+      },
+    },
+    {
+      id: "generate-video/dolly-out",
+      name: "Dolly Out (reveal)",
+      description: "Pull back to reveal the scene.",
+      group: "Camera Moves",
+      data: {
+        provider: "veo3.1",
+        aspectRatio: "16:9",
+        duration: 8,
+        prompt: "smooth dolly-out pulling back from {subject}, revealing the surrounding {environment}, cinematic reveal",
+      },
+    },
+    {
+      id: "generate-video/orbit-360",
+      name: "360° Orbit",
+      description: "Camera circles the subject.",
+      group: "Camera Moves",
+      data: {
+        provider: "kling-3.0",
+        aspectRatio: "16:9",
+        duration: 5,
+        prompt: "camera orbits 360 degrees around {subject}, smooth circular tracking shot, dynamic parallax reveal, cinematic",
+      },
+    },
+    {
+      id: "generate-video/arc-shot",
+      name: "Arc Shot",
+      description: "Sweeping lateral arc.",
+      group: "Camera Moves",
+      data: {
+        provider: "kling-3.0",
+        aspectRatio: "16:9",
+        duration: 5,
+        prompt: "sweeping arc shot moving laterally around {subject}, smooth parallax, cinematic",
+      },
+    },
+    {
+      id: "generate-video/crane-up",
+      name: "Crane Up",
+      description: "Rise up and over to reveal scale.",
+      group: "Camera Moves",
+      data: {
+        provider: "veo3.1",
+        aspectRatio: "16:9",
+        duration: 8,
+        prompt: "cinematic crane shot rising up and over {subject}, revealing the wider {scene}, smooth vertical motion",
+      },
+    },
+    {
+      id: "generate-video/tracking-follow",
+      name: "Tracking Follow",
+      description: "Follow the subject from behind.",
+      group: "Camera Moves",
+      data: {
+        provider: "kling-3.0",
+        aspectRatio: "16:9",
+        duration: 5,
+        prompt: "tracking shot following {subject} from behind, steady gimbal motion, immersive",
+      },
+    },
+    {
+      id: "generate-video/pan-reveal",
+      name: "Slow Pan",
+      description: "Horizontal sweep across the scene.",
+      group: "Camera Moves",
+      data: {
+        provider: "veo3.1",
+        aspectRatio: "16:9",
+        duration: 8,
+        prompt: "slow cinematic pan across {scene}, smooth horizontal sweep, gradually revealing detail",
+      },
+    },
+    {
+      id: "generate-video/tilt-reveal",
+      name: "Tilt-Up Reveal",
+      description: "Vertical reveal from base to top.",
+      group: "Camera Moves",
+      data: {
+        provider: "veo3.1",
+        aspectRatio: "16:9",
+        duration: 8,
+        prompt: "vertical tilt-up reveal of {subject}, from base to top, dramatic sense of scale, cinematic",
+      },
+    },
+    {
+      id: "generate-video/whip-pan",
+      name: "Whip Pan",
+      description: "Fast energetic transition.",
+      group: "Camera Moves",
+      data: {
+        provider: "kling-3.0",
+        aspectRatio: "16:9",
+        duration: 5,
+        prompt: "fast whip pan revealing {subject}, heavy motion blur, energetic transition",
+      },
+    },
+    {
+      id: "generate-video/dolly-zoom",
+      name: "Dolly Zoom (Vertigo)",
+      description: "Background warps, subject fixed.",
+      group: "Camera Moves",
+      data: {
+        provider: "kling-3.0",
+        aspectRatio: "16:9",
+        duration: 5,
+        prompt: "dolly zoom Vertigo effect on {subject}, background warps while the subject stays fixed, unsettling cinematic tension",
+      },
+    },
+
+    // ── Shot Types & Angles ──────────────────────────────────────────────────
+    {
+      id: "generate-video/establishing-wide",
+      name: "Establishing Wide",
+      description: "Vast opening shot with scale.",
+      group: "Shot Types & Angles",
+      data: {
+        provider: "veo3.1",
+        aspectRatio: "16:9",
+        duration: 8,
+        prompt: "establishing wide shot of {location}, vast sense of scale, slow gentle camera drift, cinematic",
+      },
+    },
+    {
+      id: "generate-video/medium-shot",
+      name: "Medium Shot",
+      description: "Balanced waist-up framing.",
+      group: "Shot Types & Angles",
+      data: {
+        provider: "veo3.1",
+        aspectRatio: "16:9",
+        duration: 8,
+        prompt: "medium shot of {subject}, balanced framing, natural subtle movement, cinematic",
+      },
+    },
+    {
+      id: "generate-video/close-up",
+      name: "Close-Up",
+      description: "Intimate, shallow focus.",
+      group: "Shot Types & Angles",
+      data: {
+        provider: "veo3.1",
+        aspectRatio: "16:9",
+        duration: 8,
+        prompt: "intimate close-up of {subject}, shallow depth of field, subtle motion, emotional",
+      },
+    },
+    {
+      id: "generate-video/macro-detail",
+      name: "Macro Detail",
+      description: "Extreme close-up reveal.",
+      group: "Shot Types & Angles",
+      data: {
+        provider: "kling-3.0",
+        aspectRatio: "16:9",
+        duration: 5,
+        prompt: "extreme macro shot of {subject}, ultra-close detail, slow reveal, shallow focus",
+      },
+    },
+    {
+      id: "generate-video/low-angle-hero",
+      name: "Low-Angle Hero",
+      description: "Looking up — powerful, imposing.",
+      group: "Shot Types & Angles",
+      data: {
+        provider: "veo3.1",
+        aspectRatio: "16:9",
+        duration: 8,
+        prompt: "dramatic low-angle hero shot of {subject}, camera looking up, powerful and imposing, cinematic",
+      },
+    },
+    {
+      id: "generate-video/overhead-topdown",
+      name: "Overhead Top-Down",
+      description: "Bird's-eye with slow rotation.",
+      group: "Shot Types & Angles",
+      data: {
+        provider: "kling-3.0",
+        aspectRatio: "16:9",
+        duration: 5,
+        prompt: "overhead top-down shot of {scene}, bird's-eye perspective, slow rotation",
+      },
+    },
+    {
+      id: "generate-video/fpv-drone",
+      name: "FPV Drone Flythrough",
+      description: "Immersive first-person flight.",
+      group: "Shot Types & Angles",
+      data: {
+        provider: "kling-3.0",
+        aspectRatio: "16:9",
+        duration: 5,
+        prompt: "fast FPV drone flythrough of {location}, immersive first-person flight, dynamic and smooth",
+      },
+    },
+
+    // ── Cinematic & Specialty ────────────────────────────────────────────────
+    {
+      id: "generate-video/handheld-doc",
+      name: "Handheld Documentary",
+      description: "Raw, realistic camera shake.",
+      group: "Cinematic & Specialty",
+      data: {
+        provider: "wan-2.7-t2v",
+        aspectRatio: "16:9",
+        duration: 5,
+        prompt: "handheld documentary shot of {subject}, natural camera shake, realistic and raw, available light",
+      },
+    },
+    {
+      id: "generate-video/slow-motion",
+      name: "Slow Motion",
+      description: "High-frame-rate dramatic movement.",
+      group: "Cinematic & Specialty",
+      data: {
+        provider: "kling-3.0",
+        aspectRatio: "16:9",
+        duration: 5,
+        prompt: "epic slow-motion shot of {subject}, high frame rate, fluid dramatic movement",
+      },
+    },
+    {
+      id: "generate-video/timelapse",
+      name: "Timelapse",
+      description: "Fast passage of time.",
+      group: "Cinematic & Specialty",
+      data: {
+        provider: "kling-3.0",
+        aspectRatio: "16:9",
+        duration: 5,
+        prompt: "timelapse of {scene}, fast-moving clouds and shifting light, dynamic passage of time",
+      },
+    },
+    {
+      id: "generate-video/hyperlapse",
+      name: "Hyperlapse",
+      description: "Moving timelapse through space.",
+      group: "Cinematic & Specialty",
+      data: {
+        provider: "kling-3.0",
+        aspectRatio: "16:9",
+        duration: 5,
+        prompt: "hyperlapse moving through {location}, fast smooth motion, dynamic perspective shift",
+      },
+    },
+    {
+      id: "generate-video/bullet-time",
+      name: "Bullet Time",
+      description: "Frozen moment, camera rotates.",
+      group: "Cinematic & Specialty",
+      data: {
+        provider: "kling-3.0",
+        aspectRatio: "16:9",
+        duration: 5,
+        prompt: "bullet-time effect, frozen moment around {subject} while the camera rotates, action suspended in mid-air",
+      },
+    },
+    {
+      id: "generate-video/rack-focus",
+      name: "Rack Focus",
+      description: "Shift focus between planes.",
+      group: "Cinematic & Specialty",
+      data: {
+        provider: "veo3.1",
+        aspectRatio: "16:9",
+        duration: 8,
+        prompt: "rack focus shifting from a foreground {subject} to the background {target}, cinematic depth, shallow focus",
+      },
+    },
+
+    // ── Social & Reels (9:16) ────────────────────────────────────────────────
+    {
+      id: "generate-video/vertical-hero",
+      name: "Vertical Hero",
+      description: "Punchy 9:16 hero clip.",
+      group: "Social & Reels",
+      data: {
+        provider: "veo3.1",
+        aspectRatio: "9:16",
+        duration: 8,
+        prompt: "vertical cinematic hero shot of {subject}, dynamic motion, punchy and eye-catching, optimized for social reels",
+      },
+    },
+    {
+      id: "generate-video/talking-head",
+      name: "Talking Head",
+      description: "Vertical creator-to-camera.",
+      group: "Social & Reels",
+      data: {
+        provider: "veo3.1",
+        aspectRatio: "9:16",
+        duration: 8,
+        prompt: "vertical talking-head shot of {subject} speaking to the camera, clean background, natural movement and expression",
+      },
+    },
+    {
+      id: "generate-video/product-reveal-vertical",
+      name: "Product Reveal (vertical)",
+      description: "9:16 product show-off.",
+      group: "Social & Reels",
+      data: {
+        provider: "seedance-2-fast",
+        aspectRatio: "9:16",
+        duration: 5,
+        prompt: "vertical product reveal of {product}, dynamic rotation and pop, eye-catching, social-ready",
+      },
+    },
+    {
+      id: "generate-video/trend-quickcut",
+      name: "Trend Quick-Cut",
+      description: "Energetic vertical clip.",
+      group: "Social & Reels",
+      data: {
+        provider: "seedance-2-fast",
+        aspectRatio: "9:16",
+        duration: 5,
+        prompt: "energetic vertical clip of {subject}, fast dynamic motion, trendy and high-energy social video",
+      },
+    },
+    {
+      id: "generate-video/pov-vertical",
+      name: "POV Walk (vertical)",
+      description: "Immersive first-person reel.",
+      group: "Social & Reels",
+      data: {
+        provider: "kling-3.0",
+        aspectRatio: "9:16",
+        duration: 5,
+        prompt: "vertical POV shot walking through {location}, immersive first-person, handheld feel",
+      },
+    },
+
+    // ── Product & Ads ────────────────────────────────────────────────────────
+    {
+      id: "generate-video/product-hero",
+      name: "Product Hero",
+      description: "Filmic handheld ad close-up.",
+      group: "Product & Ads",
+      data: {
+        provider: "veo3.1",
+        aspectRatio: "16:9",
+        duration: 8,
+        prompt: "slow handheld close-up of {product} on {surface}, soft window light, shallow depth of field, soft filmic grade, subtle motion — product hero shot for an ad",
+      },
+    },
+    {
+      id: "generate-video/product-spin",
+      name: "Product 360 Spin",
+      description: "Clean rotating studio loop.",
+      group: "Product & Ads",
+      data: {
+        provider: "seedance-2-fast",
+        aspectRatio: "1:1",
+        duration: 5,
+        prompt: "{product} slowly rotating 360 degrees on a clean studio surface, even lighting, seamless spin",
+      },
+    },
+    {
+      id: "generate-video/liquid-splash",
+      name: "Liquid Splash",
+      description: "Slow-mo commercial splash.",
+      group: "Product & Ads",
+      data: {
+        provider: "kling-3.0",
+        aspectRatio: "16:9",
+        duration: 5,
+        prompt: "dramatic slow-motion liquid splash around {product}, dynamic droplets frozen in motion, premium commercial look",
+      },
+    },
+    {
+      id: "generate-video/unboxing",
+      name: "Unboxing",
+      description: "Cinematic reveal of the package.",
+      group: "Product & Ads",
+      data: {
+        provider: "veo3.1",
+        aspectRatio: "16:9",
+        duration: 8,
+        prompt: "cinematic unboxing of {product}, hands opening the package, soft light, sense of anticipation",
+      },
+    },
+    {
+      id: "generate-video/lifestyle-ad",
+      name: "Lifestyle Ad",
+      description: "Aspirational product-in-use.",
+      group: "Product & Ads",
+      data: {
+        provider: "veo3.1",
+        aspectRatio: "9:16",
+        duration: 8,
+        prompt: "lifestyle ad clip: {subject} using {product} in {setting}, natural light, aspirational and warm, social-ready",
+      },
+    },
+
+    // ── Motion Graphics & Logo ───────────────────────────────────────────────
+    {
+      id: "generate-video/logo-sting",
+      name: "Logo Sting",
+      description: "Short punchy brand reveal.",
+      group: "Motion Graphics & Logo",
+      data: {
+        provider: "kling-3.0",
+        aspectRatio: "16:9",
+        duration: 5,
+        prompt: "animated logo sting: {brand} logo assembles with light streaks and a clean reveal, short and punchy, on a solid background",
+      },
+    },
+    {
+      id: "generate-video/title-reveal",
+      name: "Title Reveal",
+      description: "Cinematic text reveal.",
+      group: "Motion Graphics & Logo",
+      data: {
+        provider: "veo3.1",
+        aspectRatio: "16:9",
+        duration: 8,
+        prompt: "cinematic title reveal: the text '{TITLE}' emerges with dramatic lighting, particles and depth",
+      },
+    },
+    {
+      id: "generate-video/particle-bg",
+      name: "Particle Background",
+      description: "Abstract drifting overlay.",
+      group: "Motion Graphics & Logo",
+      data: {
+        provider: "runway-kie",
+        aspectRatio: "16:9",
+        duration: 5,
+        prompt: "abstract flowing particle background, {color} gradient, gentle drifting motion, seamless, for overlays",
+      },
+    },
+    {
+      id: "generate-video/loop-background",
+      name: "Loop Background",
+      description: "Seamless looping motion bg.",
+      group: "Motion Graphics & Logo",
+      data: {
+        provider: "runway-kie",
+        aspectRatio: "16:9",
+        duration: 5,
+        prompt: "seamless looping abstract background, {color} gradient waves, slow hypnotic motion that returns to the start",
+      },
+    },
+
+    // ── B-Roll & Nature ──────────────────────────────────────────────────────
+    {
+      id: "generate-video/clouds-timelapse",
+      name: "Clouds Timelapse",
+      description: "Dramatic rolling sky.",
+      group: "B-Roll & Nature",
+      data: {
+        provider: "runway-kie",
+        aspectRatio: "16:9",
+        duration: 5,
+        prompt: "timelapse of dramatic clouds rolling over {landscape}, golden light, dynamic sky",
+      },
+    },
+    {
+      id: "generate-video/water-slowmo",
+      name: "Water Slow-Mo",
+      description: "Glistening water in slow motion.",
+      group: "B-Roll & Nature",
+      data: {
+        provider: "kling-3.0",
+        aspectRatio: "16:9",
+        duration: 5,
+        prompt: "slow-motion close-up of {water}, glistening droplets, serene and mesmerizing",
+      },
+    },
+    {
+      id: "generate-video/forest-drift",
+      name: "Forest Drift",
+      description: "Peaceful sunlit drift.",
+      group: "B-Roll & Nature",
+      data: {
+        provider: "runway-kie",
+        aspectRatio: "16:9",
+        duration: 5,
+        prompt: "gentle drift through a sunlit forest, light rays streaming through the trees, peaceful b-roll",
+      },
+    },
+    {
+      id: "generate-video/aerial-landscape",
+      name: "Aerial Landscape",
+      description: "Sweeping drone vista.",
+      group: "B-Roll & Nature",
+      data: {
+        provider: "veo3.1",
+        aspectRatio: "16:9",
+        duration: 8,
+        prompt: "sweeping aerial shot over {landscape}, vast cinematic vista, smooth drone motion",
+      },
+    },
+    {
+      id: "generate-video/ocean-loop",
+      name: "Ocean Loop",
+      description: "Calm seamless waves.",
+      group: "B-Roll & Nature",
+      data: {
+        provider: "runway-kie",
+        aspectRatio: "16:9",
+        duration: 5,
+        prompt: "calm ocean waves rolling gently toward shore, seamless loop, serene ambient b-roll",
+      },
+    },
+
+    // ── Animation & Style ────────────────────────────────────────────────────
+    {
+      id: "generate-video/anime-motion",
+      name: "Anime Motion",
+      description: "Cel-shaded animated scene.",
+      group: "Animation & Style",
+      data: {
+        provider: "kling-3.0",
+        aspectRatio: "16:9",
+        duration: 5,
+        prompt: "anime-style animated scene of {subject}, cel-shaded, dynamic motion, vibrant colors",
+      },
+    },
+    {
+      id: "generate-video/cartoon-3d",
+      name: "3D Cartoon",
+      description: "Playful Pixar-like motion.",
+      group: "Animation & Style",
+      data: {
+        provider: "kling-3.0",
+        aspectRatio: "16:9",
+        duration: 5,
+        prompt: "3D animated cartoon scene of {subject}, polished Pixar-like rendering, playful motion",
+      },
+    },
+    {
+      id: "generate-video/claymation-move",
+      name: "Claymation",
+      description: "Tactile stop-motion feel.",
+      group: "Animation & Style",
+      data: {
+        provider: "kling-3.0",
+        aspectRatio: "16:9",
+        duration: 5,
+        prompt: "claymation stop-motion style animation of {subject}, tactile clay texture, charming handcrafted motion",
+      },
+    },
+    {
+      id: "generate-video/watercolor-motion",
+      name: "Living Watercolor",
+      description: "Flowing painterly motion.",
+      group: "Animation & Style",
+      data: {
+        provider: "kling-3.0",
+        aspectRatio: "16:9",
+        duration: 5,
+        prompt: "living watercolor painting of {scene}, flowing painterly motion, soft bleeding colors",
+      },
+    },
+
+    // ── Looping & Backgrounds ────────────────────────────────────────────────
     {
       id: "generate-video/subtle-motion",
       name: "Subtle Motion",
-      description: "Gentle, natural movement.",
+      description: "Gentle, natural movement (great for animating a still).",
+      group: "Looping & Backgrounds",
       data: {
         aspectRatio: "16:9",
         prompt: "subtle natural motion, gentle camera drift, cinematic",
+      },
+    },
+    {
+      id: "generate-video/living-wallpaper",
+      name: "Living Wallpaper",
+      description: "Ambient looping scene.",
+      group: "Looping & Backgrounds",
+      data: {
+        provider: "runway-kie",
+        aspectRatio: "16:9",
+        duration: 5,
+        prompt: "living wallpaper: {scene} with subtle ambient motion, calm and hypnotic, seamless loop",
       },
     },
   ],
@@ -1101,11 +1707,553 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
     },
   ],
   "generate-music": [
+    // ── By Use-Case ──────────────────────────────────────────────────────────
+    {
+      id: "generate-music/lofi-study",
+      name: "Lo-fi Study Beat",
+      description: "Mellow focus beat.",
+      group: "By Use-Case",
+      data: {
+        genre: "lofi",
+        mood: "chill, relaxed, nostalgic",
+        instrumental: true,
+        duration: 30,
+        prompt: "lo-fi hip-hop study beat, mellow Rhodes piano, vinyl crackle, soft boom-bap drums, around 75 BPM",
+      },
+    },
+    {
+      id: "generate-music/podcast-intro",
+      name: "Podcast Intro",
+      description: "Short energetic opener.",
+      group: "By Use-Case",
+      data: {
+        genre: "electronic",
+        mood: "upbeat, confident",
+        instrumental: true,
+        duration: 15,
+        prompt: "short energetic podcast intro, modern and catchy synth hook, clean punchy beat",
+      },
+    },
+    {
+      id: "generate-music/cinematic-trailer",
+      name: "Cinematic Trailer",
+      description: "Epic orchestral build.",
+      group: "By Use-Case",
+      data: {
+        genre: "cinematic",
+        mood: "epic, dramatic, intense",
+        instrumental: true,
+        duration: 30,
+        prompt: "epic cinematic trailer cue, full orchestra, taiko drums, brass swells, rising tension into a powerful hit",
+      },
+    },
+    {
+      id: "generate-music/corporate-upbeat",
+      name: "Corporate Upbeat",
+      description: "Bright, motivational bed.",
+      group: "By Use-Case",
+      data: {
+        genre: "pop",
+        mood: "uplifting, optimistic, motivational",
+        instrumental: true,
+        duration: 30,
+        prompt: "upbeat corporate background music, bright piano, claps, positive and clean, around 120 BPM",
+      },
+    },
+    {
+      id: "generate-music/vlog-background",
+      name: "Vlog Background",
+      description: "Feel-good, unobtrusive.",
+      group: "By Use-Case",
+      data: {
+        genre: "pop",
+        mood: "happy, light, breezy",
+        instrumental: true,
+        duration: 30,
+        prompt: "light feel-good vlog background, acoustic guitar, claps, warm and unobtrusive",
+      },
+    },
+    {
+      id: "generate-music/ambient-loop",
+      name: "Ambient Loop",
+      description: "Calm evolving soundscape.",
+      group: "By Use-Case",
+      data: {
+        genre: "ambient-genre",
+        mood: "calm, peaceful, serene",
+        instrumental: true,
+        duration: 30,
+        prompt: "ambient soundscape, soft evolving synth pads, gentle textures, meditative and seamless",
+      },
+    },
+    {
+      id: "generate-music/edm-drop",
+      name: "EDM Drop",
+      description: "Festival build and drop.",
+      group: "By Use-Case",
+      data: {
+        genre: "electronic",
+        mood: "euphoric, energetic",
+        instrumental: true,
+        duration: 30,
+        prompt: "festival EDM, big synth leads, sidechain bass, build-up and a powerful drop, around 128 BPM",
+      },
+    },
+    {
+      id: "generate-music/game-loop",
+      name: "Game Loop",
+      description: "Catchy adventurous loop.",
+      group: "By Use-Case",
+      data: {
+        genre: "video-game",
+        mood: "playful, adventurous",
+        instrumental: true,
+        duration: 30,
+        prompt: "looping video game background music, chiptune-inspired, catchy melody, energetic",
+      },
+    },
+
+    // ── By Mood / Score (instrumental scoring beds) ──────────────────────────
+    {
+      id: "generate-music/score-uplifting",
+      name: "Uplifting",
+      description: "Hopeful, building score.",
+      group: "By Mood / Score",
+      data: {
+        genre: "cinematic",
+        mood: "uplifting, hopeful, inspiring",
+        instrumental: true,
+        duration: 30,
+        prompt: "uplifting inspirational orchestral score, building piano and strings, hopeful crescendo",
+      },
+    },
+    {
+      id: "generate-music/score-emotional",
+      name: "Emotional",
+      description: "Tender, moving piano.",
+      group: "By Mood / Score",
+      data: {
+        genre: "cinematic",
+        mood: "emotional, melancholic, tender",
+        instrumental: true,
+        duration: 30,
+        prompt: "emotional piano score, soft strings, intimate and moving, slow tempo",
+      },
+    },
+    {
+      id: "generate-music/score-tense",
+      name: "Tense / Suspense",
+      description: "Pulsing underscore.",
+      group: "By Mood / Score",
+      data: {
+        genre: "cinematic",
+        mood: "tense, suspenseful, dark",
+        instrumental: true,
+        duration: 30,
+        prompt: "suspenseful underscore, pulsing low strings, ticking tension, ominous and building",
+      },
+    },
+    {
+      id: "generate-music/score-epic",
+      name: "Epic / Heroic",
+      description: "Triumphant, powerful.",
+      group: "By Mood / Score",
+      data: {
+        genre: "cinematic",
+        mood: "epic, heroic, powerful",
+        instrumental: true,
+        duration: 30,
+        prompt: "epic heroic orchestral score, soaring brass, pounding drums, triumphant",
+      },
+    },
+    {
+      id: "generate-music/score-happy",
+      name: "Happy / Playful",
+      description: "Cheerful and light.",
+      group: "By Mood / Score",
+      data: {
+        genre: "pop",
+        mood: "happy, playful, quirky",
+        instrumental: true,
+        duration: 30,
+        prompt: "happy playful tune, ukulele, whistling, claps, cheerful and bouncy",
+      },
+    },
+    {
+      id: "generate-music/score-dark",
+      name: "Dark / Brooding",
+      description: "Ominous atmosphere.",
+      group: "By Mood / Score",
+      data: {
+        genre: "electronic",
+        mood: "dark, brooding, ominous",
+        instrumental: true,
+        duration: 30,
+        prompt: "dark brooding atmosphere, deep drones, distant percussion, cinematic dread",
+      },
+    },
+    {
+      id: "generate-music/score-romantic",
+      name: "Romantic",
+      description: "Warm, heartfelt.",
+      group: "By Mood / Score",
+      data: {
+        genre: "classical",
+        mood: "romantic, warm, tender",
+        instrumental: true,
+        duration: 30,
+        prompt: "romantic score, warm strings and piano, gentle and heartfelt",
+      },
+    },
+
+    // ── By Genre (starting points) ───────────────────────────────────────────
     {
       id: "generate-music/ambient-cinematic",
       name: "Ambient Cinematic",
       description: "Atmospheric instrumental bed.",
-      data: { genre: "cinematic", mood: "atmospheric", instrumental: true },
+      group: "By Genre",
+      data: {
+        genre: "cinematic",
+        mood: "atmospheric",
+        instrumental: true,
+        duration: 30,
+        prompt: "atmospheric cinematic ambient bed, evolving pads, subtle swells",
+      },
+    },
+    {
+      id: "generate-music/genre-lofi",
+      name: "Lo-fi Hip-Hop",
+      description: "Laid-back jazzy beat.",
+      group: "By Genre",
+      data: {
+        genre: "lofi",
+        mood: "chill, mellow",
+        instrumental: true,
+        duration: 30,
+        prompt: "lo-fi hip-hop, jazzy chords, vinyl warmth, laid-back groove",
+      },
+    },
+    {
+      id: "generate-music/genre-edm",
+      name: "EDM / House",
+      description: "Club-energy four-on-the-floor.",
+      group: "By Genre",
+      data: {
+        genre: "electronic",
+        mood: "energetic, euphoric",
+        instrumental: true,
+        duration: 30,
+        prompt: "house / EDM, four-on-the-floor beat, catchy plucky synths, club energy",
+      },
+    },
+    {
+      id: "generate-music/genre-rock",
+      name: "Rock",
+      description: "Driving electric guitars.",
+      group: "By Genre",
+      data: {
+        genre: "rock",
+        mood: "energetic, driving",
+        instrumental: true,
+        duration: 30,
+        prompt: "energetic rock instrumental, distorted electric guitars, driving drums, powerful",
+      },
+    },
+    {
+      id: "generate-music/genre-jazz",
+      name: "Smooth Jazz",
+      description: "Late-night sax and brushes.",
+      group: "By Genre",
+      data: {
+        genre: "jazz",
+        mood: "smooth, relaxed, sophisticated",
+        instrumental: true,
+        duration: 30,
+        prompt: "smooth jazz, warm saxophone, brushed drums, walking bass, late-night mood",
+      },
+    },
+    {
+      id: "generate-music/genre-orchestral",
+      name: "Orchestral",
+      description: "Grand cinematic ensemble.",
+      group: "By Genre",
+      data: {
+        genre: "classical",
+        mood: "grand, cinematic",
+        instrumental: true,
+        duration: 30,
+        prompt: "full orchestral piece, sweeping strings, brass and woodwinds, dramatic and rich",
+      },
+    },
+    {
+      id: "generate-music/genre-synthwave",
+      name: "Synthwave / Retro",
+      description: "80s neon nostalgia.",
+      group: "By Genre",
+      data: {
+        genre: "electronic",
+        mood: "nostalgic, retro, cool",
+        instrumental: true,
+        duration: 30,
+        prompt: "80s synthwave, retro analog synths, pulsing bass, neon nostalgia, around 110 BPM",
+      },
+    },
+    {
+      id: "generate-music/genre-funk",
+      name: "Funk",
+      description: "Groovy, danceable.",
+      group: "By Genre",
+      data: {
+        genre: "funk",
+        mood: "groovy, fun",
+        instrumental: true,
+        duration: 30,
+        prompt: "funky groove, slap bass, wah guitar, tight horns, danceable",
+      },
+    },
+  ],
+
+  // Suno style-prompt presets — the advanced Suno node uses a free-text `style`
+  // box (genre + mood + instrumentation + tempo/BPM + structure, per Suno's
+  // glossary). Setting `style` auto-enables Suno custom mode
+  // (getEffectiveSunoCustomMode), so instrumental beds run as-is; "Vocals &
+  // Songs" presets set instrumental:false and invite the user to add lyrics.
+  "suno-generate": [
+    // ── By Use-Case ──────────────────────────────────────────────────────────
+    {
+      id: "suno-generate/lofi-study",
+      name: "Lo-fi Study",
+      description: "Mellow focus beat.",
+      group: "By Use-Case",
+      data: {
+        model: "V5_5",
+        instrumental: true,
+        style: "lo-fi hip-hop, chill and mellow, jazzy Rhodes chords, vinyl crackle, soft boom-bap drums, Andante 80 BPM, instrumental",
+      },
+    },
+    {
+      id: "suno-generate/podcast-intro",
+      name: "Podcast Intro",
+      description: "Short confident opener.",
+      group: "By Use-Case",
+      data: {
+        model: "V5_5",
+        instrumental: true,
+        style: "modern podcast intro, upbeat and confident, catchy synth hook, punchy beat, Allegro, instrumental",
+      },
+    },
+    {
+      id: "suno-generate/cinematic-trailer",
+      name: "Cinematic Trailer",
+      description: "Epic orchestral build.",
+      group: "By Use-Case",
+      data: {
+        model: "V5_5",
+        instrumental: true,
+        style: "epic cinematic trailer, dramatic and intense, full orchestra, taiko drums, brass swells, crescendo into a powerful hit, instrumental",
+      },
+    },
+    {
+      id: "suno-generate/corporate-upbeat",
+      name: "Corporate Upbeat",
+      description: "Bright, motivational.",
+      group: "By Use-Case",
+      data: {
+        model: "V5_5",
+        instrumental: true,
+        style: "upbeat corporate, optimistic and motivational, bright piano, claps, clean electronic beat, Allegro 120 BPM, instrumental",
+      },
+    },
+    {
+      id: "suno-generate/vlog-background",
+      name: "Vlog Background",
+      description: "Feel-good acoustic bed.",
+      group: "By Use-Case",
+      data: {
+        model: "V5_5",
+        instrumental: true,
+        style: "feel-good vlog background, light and breezy, acoustic guitar, claps, warm and unobtrusive, Andante, instrumental",
+      },
+    },
+    {
+      id: "suno-generate/ambient-loop",
+      name: "Ambient Loop",
+      description: "Calm meditative pads.",
+      group: "By Use-Case",
+      data: {
+        model: "V5_5",
+        instrumental: true,
+        style: "ambient soundscape, calm and meditative, soft evolving synth pads, gentle textures, reverb-heavy, Adagio, instrumental",
+      },
+    },
+    {
+      id: "suno-generate/edm-drop",
+      name: "EDM Drop",
+      description: "Festival build and drop.",
+      group: "By Use-Case",
+      data: {
+        model: "V5_5",
+        instrumental: true,
+        style: "festival EDM, euphoric and energetic, big supersaw leads, sidechain bass, build-up and powerful drop, Allegro 128 BPM, instrumental",
+      },
+    },
+    {
+      id: "suno-generate/game-chiptune",
+      name: "Game Chiptune",
+      description: "Playful 8-bit loop.",
+      group: "By Use-Case",
+      data: {
+        model: "V5_5",
+        instrumental: true,
+        style: "video game chiptune, playful and adventurous, 8-bit synths, catchy melody, energetic, instrumental",
+      },
+    },
+
+    // ── By Genre ─────────────────────────────────────────────────────────────
+    {
+      id: "suno-generate/genre-lofi",
+      name: "Lo-fi Hip-Hop",
+      description: "Dusty laid-back groove.",
+      group: "By Genre",
+      data: {
+        model: "V5_5",
+        instrumental: true,
+        style: "lo-fi hip-hop, jazzy and mellow, dusty Rhodes chords, vinyl warmth, laid-back boom-bap groove, instrumental",
+      },
+    },
+    {
+      id: "suno-generate/genre-house",
+      name: "House / EDM",
+      description: "Club-energy four-on-the-floor.",
+      group: "By Genre",
+      data: {
+        model: "V5_5",
+        instrumental: true,
+        style: "house EDM, energetic and euphoric, four-on-the-floor beat, catchy plucky synths, club energy, Allegro 124 BPM, instrumental",
+      },
+    },
+    {
+      id: "suno-generate/genre-rock",
+      name: "Rock Anthem",
+      description: "Driving anthemic guitars.",
+      group: "By Genre",
+      data: {
+        model: "V5_5",
+        instrumental: true,
+        style: "rock anthem, energetic and driving, distorted electric guitars, pounding drums, anthemic, instrumental",
+      },
+    },
+    {
+      id: "suno-generate/genre-jazz",
+      name: "Smooth Jazz",
+      description: "Late-night sophistication.",
+      group: "By Genre",
+      data: {
+        model: "V5_5",
+        instrumental: true,
+        style: "smooth jazz, relaxed and sophisticated, warm saxophone, brushed drums, walking bass, late-night, instrumental",
+      },
+    },
+    {
+      id: "suno-generate/genre-ambient",
+      name: "Ambient",
+      description: "Spacious and serene.",
+      group: "By Genre",
+      data: {
+        model: "V5_5",
+        instrumental: true,
+        style: "ambient, serene and spacious, lush synth pads, field-recording textures, slow and meditative, instrumental",
+      },
+    },
+    {
+      id: "suno-generate/genre-orchestral",
+      name: "Orchestral",
+      description: "Grand cinematic ensemble.",
+      group: "By Genre",
+      data: {
+        model: "V5_5",
+        instrumental: true,
+        style: "epic orchestral, grand and cinematic, sweeping strings, brass, woodwinds, timpani, dramatic, instrumental",
+      },
+    },
+    {
+      id: "suno-generate/genre-synthwave",
+      name: "Synthwave / Retro",
+      description: "80s neon nostalgia.",
+      group: "By Genre",
+      data: {
+        model: "V5_5",
+        instrumental: true,
+        style: "80s synthwave, nostalgic and cool, retro analog synths, pulsing bass, gated drums, neon, Andante 110 BPM, instrumental",
+      },
+    },
+    {
+      id: "suno-generate/genre-funk",
+      name: "Funk / Soul",
+      description: "Groovy and danceable.",
+      group: "By Genre",
+      data: {
+        model: "V5_5",
+        instrumental: true,
+        style: "funk and soul, groovy and fun, slap bass, wah guitar, tight horn section, danceable, instrumental",
+      },
+    },
+
+    // ── Vocals & Songs (add your lyrics) ─────────────────────────────────────
+    {
+      id: "suno-generate/song-pop",
+      name: "Pop Song",
+      description: "Catchy vocal pop — add lyrics.",
+      group: "Vocals & Songs",
+      data: {
+        model: "V5_5",
+        instrumental: false,
+        style: "upbeat pop, catchy and bright, shimmering synths, four-on-the-floor, female vocals, Allegro 120 BPM, verse-chorus-verse with bridge",
+      },
+    },
+    {
+      id: "suno-generate/song-rap",
+      name: "Rap / Hip-Hop",
+      description: "Hard-hitting verses — add bars.",
+      group: "Vocals & Songs",
+      data: {
+        model: "V5_5",
+        instrumental: false,
+        style: "modern hip-hop, confident, hard-hitting 808s, trap hi-hats, male rap vocals, verse-hook-verse",
+      },
+    },
+    {
+      id: "suno-generate/song-ballad",
+      name: "Emotional Ballad",
+      description: "Heartfelt vocals — add lyrics.",
+      group: "Vocals & Songs",
+      data: {
+        model: "V5_5",
+        instrumental: false,
+        style: "emotional ballad, tender and heartfelt, piano and strings, soulful vocals, Adagio, verse-chorus with a big bridge",
+      },
+    },
+    {
+      id: "suno-generate/song-rock",
+      name: "Rock Anthem (vocal)",
+      description: "Soaring chorus — add lyrics.",
+      group: "Vocals & Songs",
+      data: {
+        model: "V5_5",
+        instrumental: false,
+        style: "anthemic rock, powerful, driving guitars, big drums, male vocals, soaring chorus, verse-pre-chorus-chorus",
+      },
+    },
+    {
+      id: "suno-generate/song-acoustic",
+      name: "Acoustic Singer-Songwriter",
+      description: "Warm and intimate — add lyrics.",
+      group: "Vocals & Songs",
+      data: {
+        model: "V5_5",
+        instrumental: false,
+        style: "acoustic singer-songwriter, warm and intimate, fingerpicked guitar, soft vocals, Andante, verse-chorus",
+      },
     },
   ],
   "llm-chat": [

@@ -1,7 +1,16 @@
 import { describe, it, expect } from "vitest"
 import { FACTORY_PRESETS, getFactoryPresets, groupFactoryPresets } from "../factory-presets.js"
 import { extractPresetData } from "../node-preset-extract.js"
-import { IMAGE_GEN_PROVIDERS, MODIFY_IMAGE_PROVIDERS, STYLE_IDS, aspectRatioOptionsByKind } from "../index.js"
+import {
+  IMAGE_GEN_PROVIDERS,
+  MODIFY_IMAGE_PROVIDERS,
+  VIDEO_GEN_PROVIDERS,
+  MUSIC_PROVIDERS,
+  SUNO_MODELS,
+  STYLE_IDS,
+  aspectRatioOptionsByKind,
+  durationsByMode,
+} from "../index.js"
 
 describe("FACTORY_PRESETS", () => {
   it("has presets for generate-image", () => {
@@ -150,5 +159,142 @@ describe("modify-image factory preset data validity", () => {
       const prompt = (p.data.prompt as string | undefined) ?? ""
       expect(prompt.length, `${p.id}: prompt exceeds 2000 chars`).toBeLessThanOrEqual(2000)
     }
+  })
+})
+
+describe("generate-video factory preset data validity", () => {
+  const presets = getFactoryPresets("generate-video")
+  const vidAR = aspectRatioOptionsByKind("video")
+  // Mirrors the frontend's getAspectRatiosForVideoModel fallback (model-options.ts).
+  const VIDEO_AR_FALLBACK = ["16:9", "9:16", "1:1"]
+  const validDurations = (provider: string) =>
+    new Set<number>([
+      ...(durationsByMode("t2v")[provider] ?? []),
+      ...(durationsByMode("i2v")[provider] ?? []),
+    ])
+
+  it("uses a known video provider when set", () => {
+    for (const p of presets) {
+      if (p.data.provider === undefined) continue
+      expect(VIDEO_GEN_PROVIDERS, `${p.id}: unknown provider`).toContain(p.data.provider as never)
+    }
+  })
+
+  it("pairs every aspectRatio with a provider that supports it", () => {
+    for (const p of presets) {
+      const provider = p.data.provider as string | undefined
+      const ar = p.data.aspectRatio as string | undefined
+      if (!provider || !ar) continue
+      const valid = vidAR[provider]?.map((o) => o.value) ?? VIDEO_AR_FALLBACK
+      expect(
+        valid,
+        `${p.id}: aspectRatio "${ar}" not supported by "${provider}" (valid: ${valid.join(", ")})`,
+      ).toContain(ar)
+    }
+  })
+
+  it("pairs every duration with a provider that supports it", () => {
+    for (const p of presets) {
+      const provider = p.data.provider as string | undefined
+      const dur = p.data.duration as number | undefined
+      if (!provider || dur === undefined) continue
+      const valid = validDurations(provider)
+      if (valid.size === 0) continue // provider derives duration from input — no lever
+      expect(
+        [...valid],
+        `${p.id}: duration ${dur}s not supported by "${provider}" (valid: ${[...valid].join(", ")})`,
+      ).toContain(dur)
+    }
+  })
+
+  it("respects prompt/negativePrompt length caps (2500)", () => {
+    for (const p of presets) {
+      expect(((p.data.prompt as string) ?? "").length, `${p.id}: prompt too long`).toBeLessThanOrEqual(2500)
+      expect(((p.data.negativePrompt as string) ?? "").length, `${p.id}: negativePrompt too long`).toBeLessThanOrEqual(2500)
+    }
+  })
+
+  it("groups every preset under a folder", () => {
+    for (const p of presets) expect(p.group, `${p.id}: missing group`).toBeTruthy()
+  })
+})
+
+describe("suno-generate factory preset data validity", () => {
+  const presets = getFactoryPresets("suno-generate")
+
+  it("uses a known Suno model when set", () => {
+    for (const p of presets) {
+      if (p.data.model === undefined) continue
+      expect(SUNO_MODELS, `${p.id}: unknown model`).toContain(p.data.model as never)
+    }
+  })
+
+  it("respects Suno field caps (style/negativeStyle 500, title 200, lyrics/prompt 3000)", () => {
+    for (const p of presets) {
+      expect(((p.data.style as string) ?? "").length, `${p.id}: style > 500`).toBeLessThanOrEqual(500)
+      expect(((p.data.negativeStyle as string) ?? "").length, `${p.id}: negativeStyle > 500`).toBeLessThanOrEqual(500)
+      expect(((p.data.title as string) ?? "").length, `${p.id}: title > 200`).toBeLessThanOrEqual(200)
+      expect(((p.data.lyrics as string) ?? "").length, `${p.id}: lyrics > 3000`).toBeLessThanOrEqual(3000)
+      expect(((p.data.prompt as string) ?? "").length, `${p.id}: prompt > 3000`).toBeLessThanOrEqual(3000)
+    }
+  })
+
+  it("keeps weights within 0-1 and vocalGender valid", () => {
+    for (const p of presets) {
+      for (const k of ["styleWeight", "weirdnessConstraint", "audioWeight"] as const) {
+        const v = p.data[k] as number | undefined
+        if (v === undefined) continue
+        expect(v, `${p.id}: ${k} out of 0-1`).toBeGreaterThanOrEqual(0)
+        expect(v, `${p.id}: ${k} out of 0-1`).toBeLessThanOrEqual(1)
+      }
+      if (p.data.vocalGender !== undefined) {
+        expect(["male", "female"], `${p.id}: bad vocalGender`).toContain(p.data.vocalGender as never)
+      }
+      if (p.data.instrumental !== undefined) {
+        expect(typeof p.data.instrumental, `${p.id}: instrumental must be boolean`).toBe("boolean")
+      }
+    }
+  })
+
+  it("groups every preset under a folder", () => {
+    for (const p of presets) expect(p.group, `${p.id}: missing group`).toBeTruthy()
+  })
+})
+
+describe("generate-music factory preset data validity", () => {
+  const presets = getFactoryPresets("generate-music")
+
+  it("uses a known music provider when set", () => {
+    for (const p of presets) {
+      if (p.data.provider === undefined) continue
+      expect(MUSIC_PROVIDERS, `${p.id}: unknown provider`).toContain(p.data.provider as never)
+    }
+  })
+
+  it("keeps duration within the route's 1-30s range", () => {
+    for (const p of presets) {
+      const dur = p.data.duration as number | undefined
+      if (dur === undefined) continue
+      expect(dur, `${p.id}: duration ${dur} below 1`).toBeGreaterThanOrEqual(1)
+      expect(dur, `${p.id}: duration ${dur} above 30`).toBeLessThanOrEqual(30)
+    }
+  })
+
+  it("uses a boolean instrumental flag when set", () => {
+    for (const p of presets) {
+      if (p.data.instrumental === undefined) continue
+      expect(typeof p.data.instrumental, `${p.id}: instrumental must be boolean`).toBe("boolean")
+    }
+  })
+
+  it("respects prompt (2000) and lyrics (2000) caps", () => {
+    for (const p of presets) {
+      expect(((p.data.prompt as string) ?? "").length, `${p.id}: prompt too long`).toBeLessThanOrEqual(2000)
+      expect(((p.data.lyrics as string) ?? "").length, `${p.id}: lyrics too long`).toBeLessThanOrEqual(2000)
+    }
+  })
+
+  it("groups every preset under a folder", () => {
+    for (const p of presets) expect(p.group, `${p.id}: missing group`).toBeTruthy()
   })
 })
