@@ -19,6 +19,7 @@ import { registerSkillLoaders } from "./tools/skill-loaders.js"
 import { registerPipelineTools } from "./tools/pipelines.js"
 import { registerReduce } from "./tools/reduce.js"
 import { registerPromptHelper } from "./tools/prompt-helper.js"
+import { registerPresets } from "./tools/node-presets.js"
 // v3.0: dynamic per-user app_<slug> / component_<slug> tools dropped in
 // favor of the pure-discovery model (list_* / get_*_inputs / run_*).
 // They didn't scale past ~15 saved apps and the prefer-verbs nudge in
@@ -123,6 +124,7 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
   registerPipelineTools({ server, session })
   registerReduce({ server, session, fastify: opts.fastify })
   registerPromptHelper({ server, session, fastify: opts.fastify })
+  registerPresets({ server, session, fastify: opts.fastify })
 
   // v3.0: dynamic per-user tools dropped — see import comment above.
 

@@ -26,6 +26,7 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
   - [`client.voices`](#clientvoices)
   - [`client.credits`](#clientcredits)
   - [`client.uploads`](#clientuploads)
+  - [`client.presets`](#clientpresets)
 - [Type re-exports](#type-re-exports)
 
 ---
@@ -2211,6 +2212,50 @@ Returns the persisted asset's public URL and storage metadata. Throws
 const result = await client.uploads.upload(file)
 console.log(result.url)        // use as sourceImageUrl / audioUrl / videoUrl
 console.log(result.assetId)    // reference back to the storage row
+```
+
+### `client.presets`
+
+Read your saved node presets and the built-in factory catalog. Read-only over
+the SDK today. A preset's `data` is captured node config — merge it into a
+node's data when you build a workflow to "apply" the preset. Requires the
+`presets:read` scope for OAuth app tokens (no-op for user/API-key auth).
+
+#### `list(nodeType?)`
+
+```ts
+list(nodeType?: string): Promise<NodePreset[]>
+```
+
+`GET /v1/node-presets` → your custom presets, newest first. Pass a `nodeType`
+(e.g. `"generate-image"`) to filter.
+
+```ts
+const presets = await client.presets.list("generate-image")
+const cinematic = presets.find((p) => p.name === "Cinematic Portrait")
+// apply: spread cinematic.data into the node's config when creating a workflow
+```
+
+#### `listGroups(nodeType?)`
+
+```ts
+listGroups(nodeType?: string): Promise<NodePresetGroup[]>
+```
+
+`GET /v1/node-preset-groups` → your preset folders/sections.
+
+#### `listFactory(nodeType)`
+
+```ts
+listFactory(nodeType: string): Promise<FactoryPresetsResult>
+```
+
+`GET /v1/node-presets/factory` → the built-in catalog for `nodeType` plus
+`popularIds` (ids of the most-used quick-picks, in popularity order).
+
+```ts
+const { data, popularIds } = await client.presets.listFactory("generate-video")
+const popular = data.filter((p) => popularIds.includes(p.id))
 ```
 
 ---
