@@ -1428,6 +1428,19 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
         negativePrompt: "different people, inconsistent identity, aging, deformed, watermark, text",
       },
     },
+    {
+      id: "generate-image/sports-jersey-portrait",
+      name: "Sports Jersey Portrait",
+      description: "You in an oversized team jersey, studio editorial. Needs a reference photo.",
+      group: "Portrait Transformations",
+      data: {
+        provider: "nano-banana-pro",
+        aspectRatio: "4:5",
+        prompt:
+          "Premium studio portrait of the person in the reference image wearing an oversized modern football jersey in the colors of {team}. Strictly preserve identity — exact face, bone structure, skin tone, and all unique features. Soft directional stadium-spotlight lighting with natural shadow depth; a monochrome or gradient backdrop in the team colors with a subtle geometric pattern and faint pitch markings; gentle atmospheric haze and light film grain. Confident, relaxed pose, sharp focus on the subject against a softly blurred background. High-end sports-fashion editorial, 8K, cinematic framing.",
+        negativePrompt: "different face, inconsistent identity, deformed, distorted logo, watermark, text artifacts",
+      },
+    },
     // ── Stylized Subject + Edits (shared with the deprecating modify-image) ──
     // Transform patterns — work here when a reference image is connected
     // (nano-banana-pro edits it while preserving untouched regions). The
@@ -2104,6 +2117,43 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
       description: "Rain / snow / fog rolling in.",
       group: "B-Roll & Nature",
       data: { provider: "runway-kie", aspectRatio: "16:9", duration: 5, prompt: "atmospheric weather rolling into {scene}: {weather}, moody and cinematic" },
+    },
+
+    // ── Viral & Effects (transformation / POV effects — best with an input image) ──
+    {
+      id: "generate-video/frozen-in-ice",
+      name: "Frozen in Ice",
+      description: "Subject freezes into solid ice.",
+      group: "Viral & Effects",
+      data: { provider: "veo3.1", aspectRatio: "9:16", duration: 8, prompt: "{subject} slowly freezes into solid ice — frost spreads across the skin, crystals form, then a final shimmer as the figure becomes a glassy ice sculpture; cold blue light, drifting frost, cinematic" },
+    },
+    {
+      id: "generate-video/superhero-transformation",
+      name: "Superhero Transformation",
+      description: "Ordinary subject → superhero reveal.",
+      group: "Viral & Effects",
+      data: { provider: "kling-3.0", aspectRatio: "9:16", duration: 5, prompt: "{subject} transforms into a superhero — a swirl of energy spirals around them, a cape and suit form, then a confident heroic reveal; dynamic light streaks, dramatic, cinematic" },
+    },
+    {
+      id: "generate-video/elevator-doors-reveal",
+      name: "Elevator Doors Reveal",
+      description: "Doors open, objects cascade out.",
+      group: "Viral & Effects",
+      data: { provider: "kling-3.0", aspectRatio: "9:16", duration: 5, prompt: "locked static camera: {subject} stands perfectly still inside a luxury mirrored elevator; the doors slowly slide open and {objects, e.g. roses, balloons, butterflies} cascade out and fill the space, soft cinematic light, the subject stays completely frozen, editorial" },
+    },
+    {
+      id: "generate-video/pov-skydive",
+      name: "POV Skydive",
+      description: "First-person freefall over a place.",
+      group: "Viral & Effects",
+      data: { provider: "kling-3.0", aspectRatio: "9:16", duration: 5, prompt: "first-person POV skydiving freefall over {location}, the ground far below rushing closer, clouds and wind streaking past, wide action-cam lens, exhilarating" },
+    },
+    {
+      id: "generate-video/underwater-pov",
+      name: "Underwater POV",
+      description: "First-person dive, sunbeams + bubbles.",
+      group: "Viral & Effects",
+      data: { provider: "veo3.1", aspectRatio: "9:16", duration: 8, prompt: "first-person POV diving underwater toward {subject}, shafts of sunlight piercing the deep blue, drifting bubbles and gentle currents, serene and immersive" },
     },
   ],
   // Voice-delivery profiles — knob-only (stability / similarityBoost / style in
@@ -3252,6 +3302,20 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
       description: "Snappy countdown.",
       group: "By Format",
       data: { tone: "engaging, energetic", sceneCount: 6, targetLength: 60, structure: "freeform" },
+    },
+    {
+      id: "generate-script/ugc-ad",
+      name: "UGC Ad (Hook–Show–Proof–Opinion)",
+      description: "Selfie-style product testimonial.",
+      group: "By Format",
+      data: {
+        tone: "casual, authentic, conversational",
+        sceneCount: 4,
+        targetLength: 30,
+        structure: "freeform",
+        styleGuide:
+          "Selfie-style UGC testimonial for {product}. Structure: Hook (stop the scroll) → Show (the product in real use) → Proof (a concrete result or detail) → Opinion (a genuine personal take). A real person sharing a real opinion — first-person, natural, unpolished. Short spoken sentences for clean lip-sync; no salesy voiceover.",
+      },
     },
 
     // ── Long-Form & Narrative ────────────────────────────────────────────────

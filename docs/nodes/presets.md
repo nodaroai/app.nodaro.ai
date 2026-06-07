@@ -30,7 +30,7 @@ the same idea**:
 | **Film & Storyboard** | Storyboard Frame, Cinematic Keyframe, Matte Painting, Mood Board Tile, Establishing Shot |
 | **Architecture & Interiors** | Exterior, Interior, Real Estate Hero, Skyscraper |
 | **Icons, Game Assets & Textures** | Game Icon, Seamless Texture / Pattern, Emoji Set, Pixel Sprite |
-| **Portrait Transformations** *(needs a reference photo)* | **Timeless Soul** age progression (Five Ages, Three-Age Triptych, B&W), Decade Timeline ('80s–2020s), Four Seasons, Times of Day |
+| **Portrait Transformations** *(needs a reference photo)* | **Timeless Soul** age progression (Five Ages, Three-Age Triptych, B&W), Decade Timeline ('80s–2020s), Four Seasons, Times of Day, Sports Jersey Portrait |
 
 Each preset pre-selects the **best provider and aspect ratio** for its job (e.g. text-strong models
 for logos and thumbnails) and includes **`{placeholder}` slots** in the prompt — fill them in (for
@@ -69,6 +69,7 @@ prompt fragments (you can stack them), and each preset pre-selects a fitting pro
 | **B-Roll & Nature** | Clouds Timelapse, Water Slow-Mo, Forest Drift, Aerial Landscape, Ocean Loop |
 | **Animation & Style** | Anime Motion, 3D Cartoon, Claymation, Living Watercolor |
 | **Looping & Backgrounds** | Subtle Motion, Living Wallpaper |
+| **Viral & Effects** *(best with an input image)* | Frozen in Ice, Superhero Transformation, Elevator Doors Reveal, POV Skydive, Underwater POV |
 
 ### Music factory catalogs
 
@@ -104,8 +105,9 @@ Both music nodes ship presets organized along the three axes professional librar
 ### Script, vision & voice catalogs
 
 - **Generate Script** — format presets that set tone + scene count + target length: *By Format*
-  (YouTube Short, Explainer, Ad Spot, Product Demo, Listicle) and *Long-Form & Narrative* (Podcast
-  Outline, Trailer Narration, Story Beats). Type your topic in the prompt.
+  (YouTube Short, Explainer, Ad Spot, Product Demo, Listicle, UGC Ad — selfie-style
+  Hook→Show→Proof→Opinion) and *Long-Form & Narrative* (Podcast Outline, Trailer Narration, Story
+  Beats). Type your topic in the prompt.
 - **Image to Text** — analysis presets: *Accessibility & SEO* (Alt Text, SEO Caption, Social Caption),
   *Extraction* (OCR, Tags, Product Description) and *Creative* (Detailed Description, Reverse Prompt).
 - **Voice Design** — describe-a-voice presets: *Narration & Character* (Movie-Trailer Narrator, Warm
