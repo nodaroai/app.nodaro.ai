@@ -691,6 +691,8 @@ export { resolveFieldMappings, resolveLocationFields } from "./resolve-field-map
 
 export { resolveNodeRefs, NODE_REF_PATTERN, RESERVED_TEMPLATE_VARS } from "./node-refs.js"
 
+export { resolvePrompt, NODE_PROMPT_CANDIDATE_FIELDS, computeNodePrompt, computeLlmChatFields } from "./resolve-prompt.js"
+
 export { resolveSourceThroughConnectedList } from "./list-source-resolver.js"
 
 export { zipMergeLists } from "./list-merge.js"

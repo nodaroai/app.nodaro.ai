@@ -1027,6 +1027,12 @@ describe("image-to-video", () => {
       "n1",
       "http://frame.png",
       expect.anything(),
+      undefined, // endFrameUrl
+      undefined, // audioUrl
+      undefined, // provider
+      undefined, // generateAudio
+      undefined, // duration
+      "", // prompt — computeNodePrompt returns "" (not undefined) when nothing is set
       undefined,
       undefined,
       undefined,
@@ -1042,18 +1048,12 @@ describe("image-to-video", () => {
       undefined,
       undefined,
       undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      {
+      expect.objectContaining({
         referenceVideoUrls: undefined,
         referenceAudioUrls: undefined,
         webSearch: undefined,
         nsfwChecker: undefined,
-      },
+      }),
       // idempotencyKey (trailing arg).
       undefined,
     )
@@ -1234,7 +1234,7 @@ describe("video-to-video", () => {
       "n1",
       "http://vid.mp4",
       expect.anything(),
-      undefined,
+      "",
       undefined,
       expect.objectContaining({
         aspectRatio: undefined,

@@ -15,13 +15,13 @@ import { renderQueue } from "../../lib/render-queue.js"
 import { hasCredits, config } from "../../lib/config.js"
 import { CreditsService } from "../../ee/billing/credits.js"
 import { refundJobCredits } from "../../workers/shared.js"
-import { buildPayload, type WorkflowSettings } from "./payload-builder.js"
+import { buildPayload, buildNodeRefMap, type WorkflowSettings } from "./payload-builder.js"
 import { buildNodeOutputFromJobData } from "./output-extractor.js"
 import { resolveFieldMappings, NODE_MAPPABLE_FIELDS } from "./resolve-field-mappings.js"
 
 import { executeCombineText, executeSplitText, executeComposite, executeWebhookOutput, executePreview, executeTeleporterPassthrough, executeRouter, executeExtractField, executeJsonProcess, executeFilterList, executeDeduplicateList, executeMergeLists, executeSortList, executeSelector } from "./inline-executor.js"
 import { executeSubWorkflow } from "./sub-workflow-handler.js"
-import { mergeExposedSettings, applyHandleInputOverride, isHandleInputWired } from "@nodaro/shared"
+import { mergeExposedSettings, applyHandleInputOverride, isHandleInputWired, computeLlmChatFields, computeNodePrompt, SOCIAL_POST_NODE_TYPES } from "@nodaro/shared"
 import type { ComponentMetadata } from "@nodaro/shared"
 import type {
   SimpleNode,
@@ -369,7 +369,7 @@ export async function executeNode(
 
   // Sync HTTP nodes
   if (SYNC_HTTP_NODES.has(node.type)) {
-    return executeSyncHttpNode(node, resolvedInputs, ctx, userPromptTemplate)
+    return executeSyncHttpNode(node, resolvedInputs, ctx, userPromptTemplate, edges, allNodes, nodeStates)
   }
 
   // Worker-queued nodes (default)
@@ -450,6 +450,9 @@ async function executeSyncHttpNode(
   resolvedInputs: ResolvedInputs,
   ctx: OrchestratorContext,
   userPromptTemplate?: string,
+  edges?: SimpleEdge[],
+  allNodes?: SimpleNode[],
+  nodeStates?: Record<string, NodeExecutionState>,
 ): Promise<ExecuteNodeResult> {
   const route = SYNC_HTTP_ROUTES[node.type]
   if (!route) {
@@ -460,8 +463,20 @@ async function executeSyncHttpNode(
   const port = process.env.BACKEND_PORT || process.env.PORT || "8000"
   const url = `http://localhost:${port}${route}`
 
+  // {Node Label} ref map for typed-primary prompt resolution. Only llm-chat
+  // and social-post nodes consume it in buildSyncHttpBody (via
+  // computeLlmChatFields / computeNodePrompt), so build it lazily for those
+  // types only — every other sync-HTTP node passes the empty-map default
+  // (buildSyncHttpBody defaults `refMap = new Map()`). Empty when the graph
+  // context isn't threaded (direct unit-test entry) — resolvePrompt then skips
+  // ref substitution.
+  const needsRefMap = node.type === "llm-chat" || SOCIAL_POST_NODE_TYPES.has(node.type)
+  const refMap = needsRefMap
+    ? buildNodeRefMap(node.id, { nodes: allNodes, edges, nodeStates })
+    : new Map<string, string>()
+
   // Build request body from node data + resolved inputs
-  const body = buildSyncHttpBody(node, resolvedInputs, ctx, userPromptTemplate)
+  const body = buildSyncHttpBody(node, resolvedInputs, ctx, userPromptTemplate, refMap)
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -545,6 +560,7 @@ export function buildSyncHttpBody(
   resolvedInputs: ResolvedInputs,
   ctx: OrchestratorContext,
   userPromptTemplate?: string,
+  refMap: ReadonlyMap<string, string> = new Map(),
 ): Record<string, unknown> {
   const data = node.data
   // UNRESOLVED user-typed prompt template — passed through to the internal
@@ -567,10 +583,19 @@ export function buildSyncHttpBody(
         maxTokens: data.maxTokens ?? 4096,
       })
 
-    case "llm-chat":
+    case "llm-chat": {
+      // Typed-primary precedence via the shared helper (same as payload-builder
+      // + the frontend executor). override applies to userInput only; each field
+      // resolves independently: data.{userInput,systemPrompt} > wired > "".
+      const { userInput, systemPrompt } = computeLlmChatFields(data as Record<string, unknown>, {
+        override: resolvedInputs.overridePrompt,
+        wiredUserInput: resolvedInputs.prompt,
+        wiredSystemPrompt: resolvedInputs.systemPrompt,
+        refMap,
+      })
       return withUserPrompt({
-        systemPrompt: resolvedInputs.systemPrompt || data.systemPrompt,
-        userInput: resolvedInputs.prompt || data.userInput,
+        systemPrompt,
+        userInput,
         referenceImageUrls: resolvedInputs.referenceImageUrls,
         referenceVideoUrls: resolvedInputs.referenceVideoUrls,
         referenceAudioUrls: resolvedInputs.referenceAudioUrls,
@@ -579,6 +604,7 @@ export function buildSyncHttpBody(
         maxTokens: data.maxTokens ?? 2048,
         userId: ctx.userId,
       })
+    }
 
     case "video-composer": {
       // Build assets array from resolved inputs (matches frontend collectMediaAssets)
@@ -746,11 +772,22 @@ export function buildSyncHttpBody(
       } else if (action === "post-carousel" && resolvedInputs.mediaItems?.length) {
         mediaItems = resolvedInputs.mediaItems
       }
+      // Typed-primary caption resolution via the shared helper
+      // (NODE_PROMPT_CANDIDATE_FIELDS maps each per-platform type → ["caption"]).
+      // The wired caption arrives as
+      // resolvedInputs.caption (input-resolver routes a text upstream into
+      // `caption` for social nodes, not `prompt`); fall back to `prompt`
+      // defensively. override carries the list fan-out per-item value.
+      const caption = computeNodePrompt(node.type, data as Record<string, unknown>, {
+        wired: resolvedInputs.caption ?? resolvedInputs.prompt,
+        override: resolvedInputs.overridePrompt,
+        refMap,
+      })
       return withUserPrompt({
         platform: SOCIAL_NODE_TO_PLATFORM[node.type],
         action,
         connectionId: data.connectionId,
-        caption: resolvedInputs.prompt || (resolvedInputs.caption as string | undefined) || data.caption || data.text,
+        caption,
         mediaUrl,
         mediaItems,
         title: data.title,

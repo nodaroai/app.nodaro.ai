@@ -182,6 +182,11 @@ export interface SimpleEdge {
 
 export interface ResolvedInputs {
   prompt?: string
+  /** Highest-precedence prompt for list fan-out — set per-item by
+   *  overrideInputWithListItem; consumed as computeNodePrompt's `override` so a
+   *  typed data.prompt cannot swallow the per-item value after the typed-primary
+   *  flip. Set ONLY for text items, never URL items. */
+  overridePrompt?: string
   /** Negative prompt wired through the `negative` typed handle on
    *  generate-video. Distinct from `prompt` so the orchestrator can override
    *  the config-panel `data.negativePrompt` without clobbering positive
