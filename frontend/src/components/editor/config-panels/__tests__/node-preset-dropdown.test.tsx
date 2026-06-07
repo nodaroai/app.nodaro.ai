@@ -124,6 +124,22 @@ describe("PresetDropdown", () => {
     expect(h.updateNodeData).toHaveBeenCalledWith("n1", { prompt: "z", __activePresetId: "u1" })
   })
 
+  // Regression: on the node-variant (hover-toolbar) dropdown, selecting a DIFFERING preset
+  // closed the popover and reported onOpenChange(false) while the confirm dialog was still
+  // pending — so BaseNode unpinned the hover toolbar (isVisible={isHovered || presetMenuOpen}),
+  // unmounting the dropdown + its confirm dialog before "Apply" could run. The preset never
+  // changed. The dropdown must keep reporting active (true) until the confirm resolves.
+  it("node variant stays active (onOpenChange true) while a select-confirm is pending, then applies", async () => {
+    const onOpenChange = vi.fn()
+    wrap(<PresetDropdown nodeId="n1" variant="node" onOpenChange={onOpenChange} />)
+    fireEvent.click(screen.getByRole("button", { name: /presets/i }))
+    fireEvent.click(await screen.findByText(/My Look/i)) // differs → popover closes, confirm pending
+    expect(onOpenChange).toHaveBeenLastCalledWith(true) // still active → toolbar (and dialog) stay mounted
+    fireEvent.click(await screen.findByRole("button", { name: /^apply$/i }))
+    expect(h.updateNodeData).toHaveBeenCalledWith("n1", { prompt: "z", __activePresetId: "u1" })
+    await waitFor(() => expect(onOpenChange).toHaveBeenLastCalledWith(false)) // confirm resolved → inactive
+  })
+
   it("search filters the list", async () => {
     wrap(<PresetDropdown nodeId="n1" variant="panel" />)
     fireEvent.click(screen.getByRole("button", { name: /presets/i }))

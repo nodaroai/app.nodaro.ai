@@ -12,7 +12,7 @@ import type {
 import { loopColInputHandle } from "@/types/nodes";
 import { extractNodeOutput, IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE, computeGroupBuckets, computeCollectBuckets } from "./execution-graph";
 import { FAN_IN_NODE_TYPES } from "./types";
-import { PARAMETER_NODE_TYPES, OBJECT_PICKER_NODE_TYPES, getParameterPromptHint, parseGroupHandle } from "@nodaro/shared";
+import { PARAMETER_NODE_TYPES, OBJECT_PICKER_NODE_TYPES, getParameterPromptHint, parseGroupHandle, VIDEO_PRODUCER_TYPES } from "@nodaro/shared";
 import { resolveIndex, selectListItems, type SelectorFields } from "@nodaro/shared";
 import { splitByLoopDelimiter } from "@nodaro/shared";
 import { FAN_OUT_EACH_TYPES } from "@nodaro/shared";
@@ -399,42 +399,17 @@ const REFERENCE_HANDLE_MAP: Record<string, "referenceImageUrls" | "referenceVide
   "audioReferences": "referenceAudioUrls",
 };
 
-/** VIDEO_OUTPUT_NODE_TYPES — used for kieTaskId passthrough */
-const VIDEO_OUTPUT_NODE_TYPES = new Set([
-  "image-to-video",
-  "video-to-video",
-  "text-to-video",
-  // Generate Video — unified video node (Task 6.1). Mirrors the backend
-  // VIDEO_OUTPUT_NODE_TYPES so kieTaskId passthrough resolves identically
-  // when an upstream generate-video feeds e.g. a sora-watermark-remove or
-  // upscale node.
-  "generate-video",
-  "lip-sync",
-  "speech-to-video",
-  "motion-transfer",
-  "video-upscale",
-  "extend-video",
-  "video-retake",
-  "face-swap",
-  "suno-music-video",
-  "combine-videos",
-  "merge-video-audio",
-  "add-captions",
-  "resize-video",
-  "social-media-format",
-  "trim-video",
-  "render-video",
-  "speed-ramp",
-  "loop-video",
-  "fade-video",
-  "transcode-video",
-  "manual-edit",
-  "video-sfx",
-  // Remove Audio → silent video out.
-  "remove-audio",
-  // AI Avatar (HeyGen): video out.
-  "ai-avatar",
-]);
+/** VIDEO_OUTPUT_NODE_TYPES — used for kieTaskId passthrough.
+ *
+ * Derived from the shared VIDEO_PRODUCER_TYPES single source of truth (mirrors
+ * the backend input-resolver) so a new video producer can never silently drift
+ * out of the frontend resolver again. upload-video / youtube-video are handled
+ * by their own dedicated source branch above, so they're excluded here. */
+export const VIDEO_OUTPUT_NODE_TYPES = new Set(
+  [...VIDEO_PRODUCER_TYPES].filter(
+    (t) => t !== "upload-video" && t !== "youtube-video",
+  ),
+);
 
 /** Resolved inputs from upstream node outputs — shared return type for resolveNodeInputs */
 export interface FrontendResolvedInputs {

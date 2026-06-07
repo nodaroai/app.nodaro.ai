@@ -1,4 +1,5 @@
 import Fastify from "fastify"
+import { createHash } from "node:crypto"
 import cors from "@fastify/cors"
 import { isOriginAllowedDynamic } from "./lib/dynamic-origins.js"
 import { hasAdmin, hasCredits } from "./lib/config.js"
@@ -168,6 +169,34 @@ import { registerMcpHostFilter } from "./middleware/mcp-host-filter.js"
 import rateLimit from "@fastify/rate-limit"
 import formbody from "@fastify/formbody"
 
+/**
+ * Rate-limit key derivation.
+ *
+ * SECURITY: authenticated requests are keyed by a hash of the credential
+ * (Bearer JWT / `ndr_app_` OAuth token / `ndr_` API token), NOT by the
+ * client-supplied `X-Forwarded-For`. The previous XFF-only keyer let any caller
+ * escape a per-route limit (e.g. suno `/voice/generate` 5/min, 20 cr each) just
+ * by rotating the header — a stolen JWT could drain a balance at full speed.
+ * Keying by the credential is unspoofable (the attacker would need the token)
+ * and gives a stable per-identity bucket regardless of source IP. We only fall
+ * back to IP/XFF for UNauthenticated routes (e.g. OAuth dynamic-client
+ * registration), where there is no credential to key on.
+ *
+ * Exported for unit testing.
+ */
+export function rateLimitKeyGenerator(req: {
+  headers: Record<string, string | string[] | undefined>
+  ip?: string
+}): string {
+  const auth = req.headers["authorization"]
+  if (typeof auth === "string" && auth.length > 0) {
+    return "cred:" + createHash("sha256").update(auth).digest("hex")
+  }
+  const xff = req.headers["x-forwarded-for"]
+  if (typeof xff === "string" && xff.length > 0) return xff.split(",")[0]!.trim()
+  return req.ip || "unknown"
+}
+
 export async function buildApp() {
   const app = Fastify({
     logger: true,
@@ -221,11 +250,7 @@ export async function buildApp() {
   // In-memory store; switch to Redis when we add multi-replica scale.
   await app.register(rateLimit, {
     global: false,
-    keyGenerator: (req) => {
-      const xff = req.headers["x-forwarded-for"]
-      if (typeof xff === "string" && xff.length > 0) return xff.split(",")[0]!.trim()
-      return req.ip || "unknown"
-    },
+    keyGenerator: rateLimitKeyGenerator,
     errorResponseBuilder: (_req, context) => ({
       statusCode: 429,
       error: {

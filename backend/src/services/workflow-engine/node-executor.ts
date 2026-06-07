@@ -324,16 +324,22 @@ export async function executeNode(
     node = { ...node, data: resolvedData }
   }
 
-  // Component nodes (published apps executed as sub-executions)
+  // Component nodes (published apps executed as sub-executions).
+  // creditsUsed = the inner (separate) execution's total_credits_used, surfaced
+  // via the wrapper job's credits_actual — without it the orchestrator's
+  // `totalCredits += result.creditsUsed ?? 0` ignored all component spend
+  // (under-reported total + under-paid monetized creators).
   if (node.type === "component") {
     const result = await executeComponentNode(node, resolvedInputs, ctx)
-    return { output: result.output, jobId: result.jobId }
+    return { output: result.output, jobId: result.jobId, creditsUsed: result.creditsUsed }
   }
 
-  // Sub-workflow nodes
+  // Sub-workflow nodes. creditsUsed = sum of inner nodes' committed credits
+  // (rolled up recursively for nested sub-workflows) so it contributes to the
+  // parent execution's total + monetization base.
   if (node.type === "sub-workflow") {
-    const output = await executeSubWorkflow(node, resolvedInputs, ctx)
-    return { output }
+    const result = await executeSubWorkflow(node, resolvedInputs, ctx)
+    return { output: result.output, creditsUsed: result.creditsUsed }
   }
 
   // Generative Pipeline — runs via the dedicated pipeline-orchestration queue
@@ -1198,7 +1204,7 @@ async function executeComponentNode(
   node: SimpleNode,
   resolvedInputs: ResolvedInputs,
   ctx: OrchestratorContext,
-): Promise<{ output: NodeOutput; jobId: string }> {
+): Promise<{ output: NodeOutput; jobId: string; creditsUsed: number }> {
   const data = node.data as Record<string, unknown>
   const appSlug = data.appSlug as string
   const componentMetadata = data.componentMetadata as ComponentMetadata
@@ -1290,7 +1296,17 @@ async function executeComponentNode(
 
     if (job.status === "completed") {
       const outputData = (job.output_data ?? {}) as Record<string, string>
-      return { output: { _outputResults: outputData }, jobId }
+      // credits_actual on the wrapper job = the inner execution's
+      // total_credits_used (set by component-execute.ts on completion). This is
+      // a SEPARATE workflow_executions row, so surfacing it here is the ONLY
+      // path that folds component spend into the parent execution total — no
+      // double-count (the inner total is never otherwise added to the parent).
+      const creditsActual = job.credits_actual
+      return {
+        output: { _outputResults: outputData },
+        jobId,
+        creditsUsed: typeof creditsActual === "number" ? creditsActual : 0,
+      }
     }
 
     if (job.status === "failed") {

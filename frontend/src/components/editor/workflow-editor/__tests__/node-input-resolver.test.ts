@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest"
-import { selectListItems } from "@nodaro/shared"
+import { selectListItems, VIDEO_PRODUCER_TYPES } from "@nodaro/shared"
 
 vi.mock("@/hooks/use-workflow-store", () => ({
   useWorkflowStore: {
@@ -12,7 +12,7 @@ vi.mock("@/lib/prompt-builder", () => ({
   buildScenePrompt: vi.fn(() => "mock scene prompt"),
 }))
 
-import { resolveNodeInputs, resolveEdgeValuesForTableColumn, extractNodeOutputAsList, getListInputForNode, resolveLoopColumnValues } from "../node-input-resolver"
+import { resolveNodeInputs, resolveEdgeValuesForTableColumn, extractNodeOutputAsList, getListInputForNode, resolveLoopColumnValues, VIDEO_OUTPUT_NODE_TYPES } from "../node-input-resolver"
 import type { WorkflowNode } from "@/types/nodes"
 
 // ---------------------------------------------------------------------------
@@ -497,6 +497,44 @@ describe("resolveNodeInputs", () => {
     expect(inputs.videoUrls).toContain("http://gv1.mp4")
     expect(inputs.videoUrls).toContain("http://gv2.mp4")
     expect(inputs.videoUrls).toHaveLength(2)
+  })
+
+  // Regression: cinematic-avatar is a video producer in the shared
+  // VIDEO_PRODUCER_TYPES single source of truth, but the frontend resolver's
+  // VIDEO_OUTPUT_NODE_TYPES set had drifted and omitted it — so its video URL
+  // was silently dropped when feeding a downstream video consumer on
+  // single-node Run / Run-from-here (which use this frontend resolver).
+  it("resolves cinematic-avatar source into videoUrls for combine-videos", () => {
+    const avatar = makeNode("ca1", "cinematic-avatar", {
+      generatedResults: [
+        { url: "http://avatar.mp4", timestamp: "t1", jobId: "j1" },
+      ],
+      activeResultIndex: 0,
+    })
+    const other = makeNode("gv1", "generate-video", {
+      generatedResults: [
+        { url: "http://gv1.mp4", timestamp: "t1", jobId: "j2" },
+      ],
+      activeResultIndex: 0,
+    })
+    const target = makeNode("t1", "combine-videos")
+    const edges = [makeEdge("ca1", "t1"), makeEdge("gv1", "t1")]
+
+    const inputs = resolveNodeInputs(target, [avatar, other, target], edges)
+    expect(inputs.videoUrls).toContain("http://avatar.mp4")
+    expect(inputs.videoUrls).toContain("http://gv1.mp4")
+    expect(inputs.videoUrls).toHaveLength(2)
+  })
+
+  // Drift guard: the resolver's video-output set must never lose a producer
+  // from the shared VIDEO_PRODUCER_TYPES single source of truth again.
+  // upload-video / youtube-video are intentionally excluded — they're handled
+  // by their own dedicated source branch in the resolver.
+  it("VIDEO_OUTPUT_NODE_TYPES covers every shared video producer (minus the dedicated upload-video/youtube-video branch)", () => {
+    for (const t of VIDEO_PRODUCER_TYPES) {
+      if (t === "upload-video" || t === "youtube-video") continue
+      expect(VIDEO_OUTPUT_NODE_TYPES.has(t)).toBe(true)
+    }
   })
 
   it("resolves list node output as prompt", () => {

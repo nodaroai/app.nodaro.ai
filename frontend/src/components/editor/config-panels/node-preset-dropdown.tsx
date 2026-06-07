@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ChangeEvent } from "react"
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react"
 import { Check, ChevronDown, ChevronRight, Download, Folder, FolderOpen, Layers, Plus, RotateCcw, Settings2, Star, Trash2, Upload } from "lucide-react"
 import {
   buildNodePresetExport,
@@ -190,13 +190,23 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
 
   const setOpenState = (o: boolean) => {
     setOpen(o)
-    onOpenChange?.(o)
     if (!o) {
       setSaving(false)
       setSearch("")
       setNewName("")
     }
   }
+
+  // Report "active" to the parent for the WHOLE interaction — the popover being open OR a
+  // confirm/Manage dialog being pending — not just while the popover is open. The node-variant
+  // dropdown lives in a hover toolbar gated by this signal (BaseNode: isVisible={isHovered ||
+  // presetMenuOpen}). Reporting inactive the instant the popover closed (while a confirm was still
+  // pending) unmounted the dropdown + its dialog before the user could click Apply, so the preset
+  // never applied. Driving it from the derived state keeps the toolbar mounted through select-,
+  // override-, reset-confirms and the Manage dialog.
+  useEffect(() => {
+    onOpenChange?.(open || confirm !== null || manageOpen)
+  }, [open, confirm, manageOpen, onOpenChange])
 
   const toggleCollapsed = (id: string) => {
     setCollapsed((prev) => {

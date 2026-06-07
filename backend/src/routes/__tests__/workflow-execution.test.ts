@@ -368,6 +368,137 @@ describe("POST /v1/workflows/:id/run", () => {
     )
   })
 
+  // -------------------------------------------------------------------------
+  // inputOverrides normalization (MCP run_workflow flat shape)
+  //
+  // The MCP `run_workflow` tool advertises `inputs: Record<nodeId, unknown>`
+  // and forwards it verbatim as `inputOverrides`, so a natural call sends a
+  // SCALAR or ARRAY per node id ({ "node-1": "blue car" }). The route's old
+  // strict nested schema rejected that and dropped the ENTIRE map. These
+  // tests pin the per-entry normalization to the nested
+  // `{ nodeId: { field: value } }` shape the orchestrator consumes.
+  // -------------------------------------------------------------------------
+
+  /**
+   * Build the supabase.from() mock for a successful run, with the workflow
+   * lookup returning the given `nodes` graph (so the route can resolve each
+   * node's primary input field).
+   */
+  function mockRunWithGraph(nodes: Array<{ id: string; type: string; data?: Record<string, unknown> }>) {
+    const mockFrom = vi.mocked(supabase.from)
+    let callNum = 0
+    mockFrom.mockImplementation(() => {
+      callNum++
+      if (callNum === 1) {
+        // Workflow lookup — now also selects `nodes`.
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: { id: TEST_WORKFLOW_ID, user_id: TEST_USER_ID, nodes },
+                  error: null,
+                }),
+              }),
+            }),
+          }),
+        } as never
+      }
+      if (callNum === 2) {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              in: vi.fn().mockReturnValue({
+                limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+              }),
+            }),
+          }),
+        } as never
+      }
+      return {
+        insert: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({ data: { id: TEST_EXEC_ID }, error: null }),
+          }),
+        }),
+        upsert: vi.fn().mockReturnValue({
+          select: vi.fn().mockResolvedValue({ data: [{ id: TEST_EXEC_ID }], error: null }),
+        }),
+      } as never
+    })
+  }
+
+  function enqueuedJob(): Record<string, unknown> {
+    return mockOrchestrationQueueAdd.mock.calls[0]?.[1] as Record<string, unknown>
+  }
+
+  it("normalizes a FLAT scalar override into the node's primary field (MCP shape)", async () => {
+    mockRunWithGraph([{ id: "text-1", type: "text-prompt", data: {} }])
+
+    const res = await authedPost(`/v1/workflows/${TEST_WORKFLOW_ID}/run`, {
+      inputOverrides: { "text-1": "blue car" },
+    })
+    expect(res.statusCode).toBe(202)
+
+    // text-prompt's primary input field is `text` (INPUT_FIELD_MAP).
+    expect(enqueuedJob().inputOverrides).toEqual({ "text-1": { text: "blue car" } })
+  })
+
+  it("normalizes a FLAT scalar override for an upload-image node into `url`", async () => {
+    mockRunWithGraph([{ id: "img-1", type: "upload-image", data: {} }])
+
+    const res = await authedPost(`/v1/workflows/${TEST_WORKFLOW_ID}/run`, {
+      inputOverrides: { "img-1": "https://cdn/blue-car.png" },
+    })
+    expect(res.statusCode).toBe(202)
+
+    expect(enqueuedJob().inputOverrides).toEqual({
+      "img-1": { url: "https://cdn/blue-car.png" },
+    })
+  })
+
+  it("wraps a FLAT array override into a single-column list node's `items` field", async () => {
+    mockRunWithGraph([{ id: "list-1", type: "list", data: {} }])
+
+    const res = await authedPost(`/v1/workflows/${TEST_WORKFLOW_ID}/run`, {
+      inputOverrides: { "list-1": ["a", "b", "c"] },
+    })
+    expect(res.statusCode).toBe(202)
+
+    // single-column list → `items` (resolveListInfo).
+    expect(enqueuedJob().inputOverrides).toEqual({
+      "list-1": { items: ["a", "b", "c"] },
+    })
+  })
+
+  it("preserves an already-NESTED override verbatim (editor/SDK shape)", async () => {
+    mockRunWithGraph([{ id: "node-1", type: "generate-image", data: {} }])
+
+    const overrides = { "node-1": { prompt: "x" } }
+    const res = await authedPost(`/v1/workflows/${TEST_WORKFLOW_ID}/run`, {
+      inputOverrides: overrides,
+    })
+    expect(res.statusCode).toBe(202)
+
+    expect(enqueuedJob().inputOverrides).toEqual(overrides)
+  })
+
+  it("keeps valid overrides when one entry is BAD — a single bad entry never drops the whole map", async () => {
+    mockRunWithGraph([{ id: "text-1", type: "text-prompt", data: {} }])
+
+    const res = await authedPost(`/v1/workflows/${TEST_WORKFLOW_ID}/run`, {
+      inputOverrides: {
+        "text-1": "blue car", // valid scalar → resolves to { text }
+        "ghost-1": "dropped", // unknown node id → no graph node → dropped
+      },
+    })
+    expect(res.statusCode).toBe(202)
+
+    // The valid entry survives; the unknown-node entry is dropped (not thrown,
+    // not nuking the whole map — the old strict schema dropped EVERYTHING).
+    expect(enqueuedJob().inputOverrides).toEqual({ "text-1": { text: "blue car" } })
+  })
+
   it("returns 500 when execution insert fails", async () => {
     const mockFrom = vi.mocked(supabase.from)
     let callNum = 0

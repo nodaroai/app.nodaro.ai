@@ -448,7 +448,9 @@ export function registerWorkflows({
           inputs: z
             .record(z.string(), z.unknown())
             .optional()
-            .describe("Optional per-node input overrides (keyed by node id)"),
+            .describe(
+              "Optional per-node input overrides, keyed by node id. The value may be a bare scalar/array (e.g. \"blue car\" or [\"a\",\"b\"]) — it's written to that node's main input field — OR an object mapping specific fields to values (e.g. { \"prompt\": \"...\" }).",
+            ),
         },
         outputSchema: {
           executionId: z.string(),

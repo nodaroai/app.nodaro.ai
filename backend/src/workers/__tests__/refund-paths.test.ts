@@ -50,6 +50,7 @@ vi.mock("../../ee/services/credits.js", () => ({
 }))
 
 import { refundJobCredits, refundLoopTrimAddon, isFinalJobAttempt } from "../shared.js"
+import { PostProcessingError, isPostProcessingError, runPostProcessing } from "../../lib/post-processing-error.js"
 
 // Minimal BullMQ Job shape for isFinalJobAttempt.
 function fakeJob(attemptsMade: number, attempts?: number) {
@@ -70,60 +71,157 @@ beforeEach(() => {
 describe("refundJobCredits", () => {
   it("no-ops when hasCredits() is false (self-hosted edition)", async () => {
     hasCreditsState.enabled = false
-    await refundJobCredits("usage-1", "job-1", "any error")
+    await refundJobCredits("usage-1", "job-1", new Error("any error"))
     expect(refundCreditsSpy).not.toHaveBeenCalled()
   })
 
   it("no-ops when usageLogId is null (no reservation existed)", async () => {
-    await refundJobCredits(null, "job-1", "any error")
+    await refundJobCredits(null, "job-1", new Error("any error"))
     expect(refundCreditsSpy).not.toHaveBeenCalled()
   })
 
   it("no-ops when usageLogId is undefined", async () => {
-    await refundJobCredits(undefined, "job-1", "any error")
+    await refundJobCredits(undefined, "job-1", new Error("any error"))
     expect(refundCreditsSpy).not.toHaveBeenCalled()
   })
 
-  it("calls CreditsService.refundCredits for a generic failure", async () => {
+  it("calls CreditsService.refundCredits for a generic (plain Error) failure", async () => {
     refundCreditsSpy.mockResolvedValueOnce(undefined)
-    await refundJobCredits("usage-1", "job-1", "Some generic provider error")
+    await refundJobCredits("usage-1", "job-1", new Error("Some generic provider error"))
     expect(refundCreditsSpy).toHaveBeenCalledTimes(1)
     expect(refundCreditsSpy).toHaveBeenCalledWith("usage-1")
   })
 
-  // Post-processing failure patterns: the provider already charged us, so
-  // keep the user's credits to cover the upstream cost.
+  // ── SAFE DIRECTION: every PRE-provider failure must REFUND. These are the
+  // ACTUAL strings thrown by real code paths BEFORE/at the provider call. The
+  // old substring guard wrongly skipped some of these ("Failed to download
+  // image" is thrown by KIE input download — pre-provider) which would CHARGE
+  // a user for a job the provider never did. With the typed-signal guard, a
+  // plain Error always refunds regardless of message.
   it.each([
-    "failed to upload to R2 bucket",
-    "upload to R2 timed out",
-    "R2 upload returned 500",
-    "Failed to download image from R2",
-    "Failed to download video from upstream",
-    "Watermark failed during compositing",
-    "Transcode failed at frame 100",
-    "ffmpeg failed after producing output",
-  ])('skips refund for post-processing failure: "%s"', async (errorMessage) => {
-    await refundJobCredits("usage-1", "job-1", errorMessage)
+    // input download (kie/image.ts:61 — downloads the INPUT image before the call)
+    "Failed to download image: 404",
+    // input download (kie/video.ts — input image before i2v)
+    "Failed to download image: HTTP 500",
+    // createTask / provider rejection
+    "KIE createTask failed: invalid params",
+    // content moderation / NSFW
+    "Content flagged as NSFW by provider",
+    // validation
+    "edit-image requires imageUrl",
+    // timeout before result
+    "Provider timed out after 600000ms",
+    // generic unreachable
+    "provider unreachable",
+    // even a message that looks like an upload error but is a PLAIN error
+    // (e.g. uploading the INPUT cover-src for suno-cover, pre-provider) refunds
+    "Failed to download: https://example.com/input.mp4 (403)",
+  ])('REFUNDS for pre-provider plain Error: "%s"', async (errorMessage) => {
+    refundCreditsSpy.mockResolvedValueOnce(undefined)
+    await refundJobCredits("usage-1", "job-1", new Error(errorMessage))
+    expect(refundCreditsSpy).toHaveBeenCalledTimes(1)
+    expect(refundCreditsSpy).toHaveBeenCalledWith("usage-1")
+  })
+
+  // ── REVENUE: a PostProcessingError means the provider already delivered (we
+  // were billed), so SKIP the refund. The message is irrelevant — the TYPE is
+  // the signal. These wrap the REAL post-provider thrown strings.
+  it.each([
+    new PostProcessingError("ffmpeg failed: Conversion failed!"), // watermark/transcode/strip/loop-cut
+    new PostProcessingError("FFmpeg merge failed"),               // mergeVideoAudio
+    new PostProcessingError("Failed to download: https://r2/result.mp4 (500)"), // result re-download
+    new PostProcessingError("Access Denied"),                     // raw AWS SDK R2 upload error
+    new PostProcessingError("socket hang up"),                    // raw AWS SDK R2 upload error
+  ])("SKIPS refund for PostProcessingError: %s", async (err) => {
+    await refundJobCredits("usage-1", "job-1", err)
     expect(refundCreditsSpy).not.toHaveBeenCalled()
   })
 
-  it("error message matching is case-insensitive", async () => {
-    await refundJobCredits("usage-1", "job-1", "FAILED TO UPLOAD to r2 bucket")
+  it("SKIPS refund when the error carries the postProcessing marker but lost its prototype", async () => {
+    // Simulate a re-thrown/wrapped error that kept own-props but not its class.
+    const wrapped = Object.assign(new Error("ffmpeg failed: x"), { postProcessing: true })
+    await refundJobCredits("usage-1", "job-1", wrapped)
     expect(refundCreditsSpy).not.toHaveBeenCalled()
   })
 
   it("swallows errors from CreditsService — refund failure must not throw", async () => {
     refundCreditsSpy.mockRejectedValueOnce(new Error("supabase down"))
     await expect(
-      refundJobCredits("usage-1", "job-1", "provider unreachable"),
+      refundJobCredits("usage-1", "job-1", new Error("provider unreachable")),
     ).resolves.not.toThrow()
   })
 
-  it("handles undefined errorMessage without crashing on .toLowerCase()", async () => {
+  it("REFUNDS when passed undefined (no signal → safe default)", async () => {
     refundCreditsSpy.mockResolvedValueOnce(undefined)
-    await refundJobCredits("usage-1", "job-1", undefined as unknown as string)
-    // Undefined doesn't match post-processing patterns → refund fires.
+    await refundJobCredits("usage-1", "job-1", undefined)
     expect(refundCreditsSpy).toHaveBeenCalledTimes(1)
+  })
+
+  // Backward-compat: legacy string call sites (render-worker "cancelled",
+  // node-executor cancel reason) pass a string — must still REFUND (these are
+  // all pre-delivery / cancellation paths).
+  it.each(["cancelled", "node timed out", "execution aborted"])(
+    'REFUNDS for legacy string reason: "%s"',
+    async (reason) => {
+      refundCreditsSpy.mockResolvedValueOnce(undefined)
+      await refundJobCredits("usage-1", "job-1", reason)
+      expect(refundCreditsSpy).toHaveBeenCalledTimes(1)
+    },
+  )
+})
+
+// ---------------------------------------------------------------------------
+// PostProcessingError signal — unit coverage for the classifier + wrapper.
+// ---------------------------------------------------------------------------
+
+describe("isPostProcessingError", () => {
+  it("true for a PostProcessingError instance", () => {
+    expect(isPostProcessingError(new PostProcessingError("x"))).toBe(true)
+  })
+  it("true for an error carrying postProcessing=true (prototype lost)", () => {
+    expect(isPostProcessingError(Object.assign(new Error("x"), { postProcessing: true }))).toBe(true)
+  })
+  it("false for a plain Error (pre-provider → refund)", () => {
+    expect(isPostProcessingError(new Error("Failed to download image: 404"))).toBe(false)
+  })
+  it("false for a string", () => {
+    expect(isPostProcessingError("ffmpeg failed: x")).toBe(false)
+  })
+  it("false for undefined/null", () => {
+    expect(isPostProcessingError(undefined)).toBe(false)
+    expect(isPostProcessingError(null)).toBe(false)
+  })
+})
+
+describe("runPostProcessing", () => {
+  it("passes through the resolved value on success", async () => {
+    await expect(runPostProcessing(async () => "ok")).resolves.toBe("ok")
+  })
+
+  it("re-tags a plain Error (real ffmpeg string) as PostProcessingError, preserving message + cause", async () => {
+    const original = new Error("ffmpeg failed: Conversion failed!")
+    const caught = await runPostProcessing(async () => {
+      throw original
+    }).catch((e) => e)
+    expect(caught).toBeInstanceOf(PostProcessingError)
+    expect(isPostProcessingError(caught)).toBe(true)
+    expect((caught as Error).message).toBe("ffmpeg failed: Conversion failed!")
+    expect((caught as Error & { cause?: unknown }).cause).toBe(original)
+  })
+
+  it("re-tags a raw AWS SDK-style error string", async () => {
+    const caught = await runPostProcessing(async () => {
+      throw new Error("Access Denied")
+    }).catch((e) => e)
+    expect(isPostProcessingError(caught)).toBe(true)
+  })
+
+  it("does NOT double-wrap an already-PostProcessingError", async () => {
+    const inner = new PostProcessingError("FFmpeg merge failed")
+    const caught = await runPostProcessing(async () => {
+      throw inner
+    }).catch((e) => e)
+    expect(caught).toBe(inner) // same instance, no nesting
   })
 })
 

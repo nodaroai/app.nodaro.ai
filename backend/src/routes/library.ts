@@ -292,21 +292,69 @@ export async function libraryRoutes(app: FastifyInstance) {
 
       try {
         if (asset.r2_key) {
-          // Content-addressed safety: another asset row may reference the SAME
-          // r2_key (e.g. another user saved this output from the public gallery
-          // via save-generated, which dedups per-user, not per-object). Only
-          // delete the R2 object when NO other row still points at it — otherwise
-          // that row becomes a permanent broken link (R2 objects are gone for good).
-          const { count: otherRefs } = await supabase
+          // Content-addressed safety: another row may reference the SAME R2
+          // object, so deleting it would turn that row into a permanent broken
+          // link (R2 objects are unrecoverable). We must check BOTH tables:
+          //
+          //   1. assets — another user may have saved this output from the public
+          //      gallery via save-generated, which dedups per-user, not per-object.
+          //   2. jobs — every completed generation auto-creates an asset whose
+          //      r2_key is derived from the same R2 object that jobs.output_data
+          //      independently points at (see workers/shared.ts). The gallery /
+          //      job-history reads from jobs.output_data, so destroying the object
+          //      breaks that entry even when this is the only assets row.
+          //
+          // Only delete the R2 object when NO other referrer exists in EITHER
+          // table. Any query error is treated as "a referrer may exist" so we
+          // fail safe toward keeping data.
+          const { count: otherAssetRefs } = await supabase
             .from("assets")
             .select("id", { count: "exact", head: true })
             .eq("r2_key", asset.r2_key)
             .neq("id", id)
-          if (!otherRefs || otherRefs === 0) {
+
+          const assetRefsExist = !!otherAssetRefs && otherAssetRefs > 0
+
+          // Reconstruct the public URL exactly as stored in jobs.output_data
+          // (mirror of workers/shared.ts: r2Key = url.replace(R2_PUBLIC_URL + "/", "")).
+          const publicUrl = config.R2_PUBLIC_URL
+            ? `${config.R2_PUBLIC_URL}/${asset.r2_key}`
+            : asset.r2_key
+          // Check the media-URL keys the gallery/job-history extractors read,
+          // one .eq() per key — NOT a hand-built .or() string. PostgREST does
+          // NOT quote values inside an .or() filter, and a public URL contains
+          // reserved chars (`:` `.` `,`) that corrupt the filter; passing the
+          // value as an .eq() argument lets supabase-js encode it safely (same
+          // pattern as suno.ts `.eq("metadata->>kie_task_id", …)`). Skipped
+          // entirely when an asset referrer already keeps the object alive.
+          let otherJobRefs = 0
+          let jobRefError: { message: string } | null = null
+          if (!assetRefsExist) {
+            for (const key of ["imageUrl", "videoUrl", "audioUrl"] as const) {
+              const { count, error } = await supabase
+                .from("jobs")
+                .select("id", { count: "exact", head: true })
+                .eq("user_id", userId)
+                .eq(`output_data->>${key}`, publicUrl)
+              if (error) {
+                jobRefError = error
+                break
+              }
+              otherJobRefs += count ?? 0
+              if (otherJobRefs > 0) break
+            }
+          }
+          // Fail safe: a query error means we can't prove there are no
+          // referrers, so treat it as if one exists and skip the R2 delete.
+          const jobRefsExist = !!jobRefError || otherJobRefs > 0
+
+          if (!assetRefsExist && !jobRefsExist) {
             await deleteFromR2(asset.r2_key)
           } else {
             console.log(
-              `[library] Skipping R2 delete for ${asset.r2_key}: ${otherRefs} other asset(s) reference it`,
+              `[library] Skipping R2 delete for ${asset.r2_key}: ` +
+                `${otherAssetRefs ?? 0} other asset(s) and ${otherJobRefs ?? 0} job(s) reference it` +
+                (jobRefError ? ` (jobs check errored: ${jobRefError.message})` : ""),
             )
           }
         }

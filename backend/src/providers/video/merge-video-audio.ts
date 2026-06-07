@@ -1,5 +1,6 @@
 import { join } from "node:path"
 import { downloadFile, runFfmpeg, runFfprobe, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
+import { runPostProcessing } from "../../lib/post-processing-error.js"
 
 interface AudioTrack {
   readonly url: string
@@ -56,6 +57,15 @@ function buildAudioFilter(
 }
 
 export async function mergeVideoAudio(options: MergeVideoAudioOptions): Promise<string> {
+  // POST-PROVIDER by construction: this merges already-delivered media (the
+  // i2v/t2v result video + audio-node output). Any failure — input download of
+  // those results, ffprobe, or the ffmpeg merge ("FFmpeg merge failed") — is
+  // post-delivery, so the credit-refund guard must SKIP. Tag it as a
+  // PostProcessingError. See lib/post-processing-error.ts.
+  return runPostProcessing(() => mergeVideoAudioImpl(options))
+}
+
+async function mergeVideoAudioImpl(options: MergeVideoAudioOptions): Promise<string> {
   const { videoUrl, audioUrl, audioTracks, voiceoverVolume = 100, backgroundVolume = 100, keepOriginalAudio = false } = options
   const workDir = await createWorkDir("merge-video-audio")
 

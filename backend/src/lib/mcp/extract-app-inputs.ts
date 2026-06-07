@@ -132,6 +132,31 @@ function resolveListInfo(
   return { fieldKey: "items", type: "list" }
 }
 
+/**
+ * Resolve a node's PRIMARY input field key from its type (+ data, for the
+ * data-shape-aware `list` node). Single source of truth shared with the
+ * app-input schema builder above — same precedence:
+ *   `list` → resolveListInfo (single-col `items` / multi-col `rows`)
+ *   known source/upload type → NODE_TYPE_INFO
+ *   parameter-picker / classic-parameter type → sharedFieldInfo (INPUT_FIELD_MAP)
+ *
+ * Returns `undefined` when the type has no resolvable input field (truly
+ * unknown type). Callers that need to wrap a flat scalar/array override into
+ * the nested `{ field: value }` shape use this to pick the field — e.g. the
+ * MCP `run_workflow` route, where `inputs` is keyed by node id with a bare
+ * value. Keeping this co-located with the schema builder means the field map
+ * can never drift between "what get_app_inputs surfaces" and "what a flat
+ * run_workflow override lands on".
+ */
+export function resolvePrimaryInputField(
+  nodeType: string | undefined,
+  data: Record<string, unknown> | undefined,
+): string | undefined {
+  if (!nodeType) return undefined
+  if (nodeType === "list") return resolveListInfo(data).fieldKey
+  return (NODE_TYPE_INFO[nodeType] ?? sharedFieldInfo(nodeType))?.fieldKey
+}
+
 type InputPresentationItem = Extract<PresentationItem, { type: "node" | "field" }>
 
 /** Walk presentationItems, flattening groups + dropping non-input items. */

@@ -587,8 +587,27 @@ export async function expireSubscriptions(): Promise<ExpiryResult> {
       .select("id, tier")
       .in("id", userIds)
 
+    // SAFETY (billing-data guard): the subscriptions table permits multiple rows
+    // per user (the partial unique index only forbids two status='active' rows —
+    // migration 024), so a stale 'canceled' row and a live 'active' row coexist
+    // after a cancel→re-subscribe. The candidate rows above are matched purely on
+    // the STALE canceled row's expired period; re-verify against LIVE subscription
+    // status and never downgrade a user who currently has an active/trialing/
+    // past_due subscription. Mirrors the live-sub re-check in
+    // cleanupCanceledUserMedia. Without this, a paying re-subscriber is silently
+    // reset to free tier / 150 credits / 1GB on the next hourly run.
+    const { data: activeSubs } = await supabase
+      .from("subscriptions")
+      .select("user_id")
+      .in("user_id", userIds)
+      .in("status", ["active", "trialing", "past_due"])
+    const activeUserIds = new Set((activeSubs ?? []).map(s => (s as { user_id: string }).user_id))
+
     // Find users still on paid tiers (webhook may have already downgraded some)
-    const toDowngrade = (profiles ?? []).filter(p => p.tier !== "free").map(p => p.id)
+    // AND who do NOT currently hold a live subscription (re-subscribers).
+    const toDowngrade = (profiles ?? [])
+      .filter(p => p.tier !== "free" && !activeUserIds.has(p.id))
+      .map(p => p.id)
     if (toDowngrade.length > 0) {
       await supabase
         .from("profiles")

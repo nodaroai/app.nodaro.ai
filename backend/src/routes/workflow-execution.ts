@@ -23,6 +23,8 @@ import { openApiRegistry } from "../lib/openapi-registry.js"
 import { requireScope } from "../lib/scopes.js"
 import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
 import { MIN_IDEMPOTENCY_KEY_LENGTH } from "../lib/dedup-fingerprint.js"
+import { resolvePrimaryInputField } from "../lib/mcp/extract-app-inputs.js"
+import { migrateLegacyNodeType } from "../services/workflow-engine/normalize-node-types.js"
 
 openApiRegistry.registerPath({
   method: "post",
@@ -113,6 +115,80 @@ async function refundReservedCreditsForJobs(jobIds: string[]): Promise<void> {
   )
 }
 
+/** True for a plain object (not null, not an array). */
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v)
+}
+
+/**
+ * Normalize raw per-node input overrides into the nested
+ * `{ nodeId: { fieldKey: value } }` shape the orchestrator consumes
+ * (orchestrator-worker.ts merges `inputOverrides[node.id]` into node.data).
+ *
+ * Accepts two caller shapes, per-entry, building the result entry-by-entry so
+ * ONE bad entry can never discard the rest:
+ *  - Already-nested `{ nodeId: { field: value } }` (editor / SDK / app-runner)
+ *    → kept as-is (a plain, non-array object value is treated as the field map).
+ *  - Flat scalar/array `{ nodeId: value }` (MCP `run_workflow.inputs`, which
+ *    advertises `Record<nodeId, unknown>` and forwards it verbatim) → the node
+ *    is looked up in the graph, its PRIMARY input field resolved via the shared
+ *    `resolvePrimaryInputField`, and the value wrapped as `{ [field]: value }`.
+ *
+ * An entry is DROPPED (logged, not thrown) when its node id isn't in the graph,
+ * or a flat value can't resolve a primary field for the node's type. Returns
+ * `undefined` when nothing usable remains, so the caller can omit the key.
+ *
+ * Why here: the run route already loads the workflow, and this is the single
+ * choke point every run path (MCP / editor / SDK) flows through. The old strict
+ * Zod schema `record(string, record(string, unknown))` rejected the flat MCP
+ * shape outright and — worse — dropped the ENTIRE map on any single mismatch.
+ */
+function normalizeInputOverrides(
+  raw: unknown,
+  nodes: ReadonlyArray<{ id: string; type?: string; data?: Record<string, unknown> }>,
+): Record<string, Record<string, unknown>> | undefined {
+  if (!isPlainObject(raw)) return undefined
+
+  // Index nodes by id, normalizing legacy types first so field resolution
+  // matches what the orchestrator reads (loop→list, image-to-image→modify, …).
+  const nodeById = new Map<string, { type?: string; data?: Record<string, unknown> }>()
+  for (const n of nodes) {
+    if (!n || typeof n.id !== "string") continue
+    const migrated = migrateLegacyNodeType(n)
+    nodeById.set(n.id, { type: migrated.type, data: migrated.data })
+  }
+
+  const result: Record<string, Record<string, unknown>> = {}
+  for (const [nodeId, value] of Object.entries(raw)) {
+    if (value === undefined || value === null) continue
+
+    // Already-nested: a plain object is the field→value map. Keep verbatim.
+    if (isPlainObject(value)) {
+      if (Object.keys(value).length > 0) result[nodeId] = value
+      continue
+    }
+
+    // Flat scalar/array (MCP shape): wrap into the node's primary input field.
+    const node = nodeById.get(nodeId)
+    if (!node) {
+      console.warn(
+        `[workflow-run] inputOverrides: node "${nodeId}" not in workflow graph — dropping override`,
+      )
+      continue
+    }
+    const field = resolvePrimaryInputField(node.type, node.data)
+    if (!field) {
+      console.warn(
+        `[workflow-run] inputOverrides: no primary input field for node "${nodeId}" (type "${node.type ?? "unknown"}") — dropping override`,
+      )
+      continue
+    }
+    result[nodeId] = { [field]: value }
+  }
+
+  return Object.keys(result).length > 0 ? result : undefined
+}
+
 const workflowIdParams = z.object({
   id: z.string().uuid(),
 })
@@ -168,21 +244,12 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       ? (body.nodeIds as string[]).filter((id) => typeof id === "string")
       : undefined
 
-    // Per-node input overrides (MCP run_workflow `inputs`, editor re-runs, SDK).
-    // Same shape app-runner + the orchestrator use; merged into source-node data
-    // at execution time. The MCP run_workflow tool advertises + sends this, but
-    // the route never read it — so overrides were silently dropped and the run
-    // used the workflow's saved node data.
-    const inputOverridesParsed = z
-      .record(z.string(), z.record(z.string(), z.unknown()))
-      .optional()
-      .safeParse(body.inputOverrides)
-    const inputOverrides = inputOverridesParsed.success ? inputOverridesParsed.data : undefined
-
-    // Verify workflow exists and belongs to user
+    // Verify workflow exists and belongs to user. We also load `nodes` so we
+    // can resolve flat per-node overrides (MCP shape) to their primary field
+    // (see normalizeInputOverrides below).
     const { data: workflow, error: wfError } = await supabase
       .from("workflows")
-      .select("id, user_id")
+      .select("id, user_id, nodes")
       .eq("id", workflowId)
       .eq("user_id", req.userId)
       .single()
@@ -192,6 +259,19 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
         error: { code: "not_found", message: "Workflow not found" },
       })
     }
+
+    // Per-node input overrides (MCP run_workflow `inputs`, editor re-runs, SDK).
+    // Merged into source-node data at execution time by the orchestrator. The
+    // MCP run_workflow tool advertises + sends `inputs: Record<nodeId, unknown>`
+    // (a bare scalar/array per node id); the editor/SDK send the already-nested
+    // `{ nodeId: { field: value } }`. We normalize BOTH to the nested shape,
+    // entry-by-entry, so the flat MCP shape works and one bad entry never
+    // discards the rest. The old strict Zod schema rejected the flat shape and
+    // dropped the ENTIRE map on any single mismatch.
+    const inputOverrides = normalizeInputOverrides(
+      body.inputOverrides,
+      (workflow.nodes as ReadonlyArray<{ id: string; type?: string; data?: Record<string, unknown> }>) ?? [],
+    )
 
     // Check for already-running execution (best-effort fast path; the DB
     // UNIQUE constraint on (user_id, idempotency_key) is the race-proof

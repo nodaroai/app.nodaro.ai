@@ -273,13 +273,20 @@ describe("DELETE /v1/library/:id", () => {
     vi.mocked(supabase.from).mockImplementation(() => {
       const chain: Record<string, unknown> = {}
       chain.select = vi.fn().mockReturnValue(chain)
-      chain.eq = vi.fn().mockReturnValue(chain)
+      // Jobs referrer-count queries end in .eq("output_data->>…", url) → resolve a
+      // count; every other .eq() (id, user_id, r2_key) chains. (Not reached here:
+      // an asset referrer short-circuits the jobs check.)
+      chain.eq = vi.fn().mockImplementation((col: string) =>
+        typeof col === "string" && col.startsWith("output_data->>")
+          ? Promise.resolve({ count: 0, error: null })
+          : chain,
+      )
       chain.delete = vi.fn().mockReturnValue(chain)
       chain.single = vi.fn().mockResolvedValue({
         data: { id: assetId, user_id: TEST_USER_ID, r2_key: "images/shared.png", size_bytes: 100 },
         error: null,
       })
-      // The referrer-count query ends in .neq(...) and is awaited → resolve a count.
+      // The assets referrer-count query ends in .neq(...) and is awaited → resolve a count.
       chain.neq = vi.fn().mockResolvedValue({ count: 1, error: null })
       ;(chain as Record<string, unknown>).error = null
       return chain as never
@@ -296,7 +303,92 @@ describe("DELETE /v1/library/:id", () => {
     expect(vi.mocked(deleteFromR2)).not.toHaveBeenCalled()
   })
 
-  it("permanent delete DOES delete the R2 object when no other asset references it", async () => {
+  it("permanent delete SKIPS the R2 delete when a jobs.output_data row references the same r2_key", async () => {
+    // Data-loss regression: a normal generation = 1 job + 1 asset sharing one
+    // r2_key. There is NO other *asset* row, so the assets-only check passes —
+    // but jobs.output_data (what the gallery/job-history reads) still points at
+    // the same R2 object. Deleting it would orphan the gallery entry forever.
+    const assetId = "00000000-0000-4000-8000-000000000012"
+    const r2Key = "images/gen-output.png"
+    const publicUrl = `https://pub-test.r2.dev/${r2Key}`
+    const { deleteFromR2 } = await import("@/lib/storage.js")
+    vi.mocked(deleteFromR2).mockClear()
+
+    const deleteSpy = vi.fn().mockReturnValue(undefined)
+
+    vi.mocked(supabase.from).mockImplementation(() => {
+      const chain: Record<string, unknown> = {}
+      chain.select = vi.fn().mockReturnValue(chain)
+      // A jobs row owned by this user references the object via output_data; the
+      // per-key jobs query ends in .eq("output_data->>…", publicUrl) (value passed
+      // as an arg so supabase-js encodes the URL safely — no .or() string parsing).
+      chain.eq = vi.fn().mockImplementation((col: string, val?: unknown) => {
+        if (typeof col === "string" && col.startsWith("output_data->>")) {
+          expect(val).toBe(publicUrl)
+          return Promise.resolve({ count: 1, error: null })
+        }
+        return chain
+      })
+      chain.delete = vi.fn().mockImplementation(() => {
+        deleteSpy()
+        return chain
+      })
+      chain.single = vi.fn().mockResolvedValue({
+        data: { id: assetId, user_id: TEST_USER_ID, r2_key: r2Key, size_bytes: 100 },
+        error: null,
+      })
+      // No OTHER asset row references the object → assets check is clear.
+      chain.neq = vi.fn().mockResolvedValue({ count: 0, error: null })
+      ;(chain as Record<string, unknown>).error = null
+      return chain as never
+    })
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/v1/library/${assetId}?userId=${TEST_USER_ID}&permanent=true`,
+    })
+
+    expect(res.statusCode).toBe(200)
+    // The R2 object MUST be preserved (the job/gallery entry still needs it)...
+    expect(vi.mocked(deleteFromR2)).not.toHaveBeenCalled()
+    // ...but the asset DB row IS still deleted (only the R2 delete is gated).
+    expect(deleteSpy).toHaveBeenCalled()
+  })
+
+  it("permanent delete SKIPS the R2 delete when the jobs referrer query errors (fail safe)", async () => {
+    const assetId = "00000000-0000-4000-8000-000000000013"
+    const { deleteFromR2 } = await import("@/lib/storage.js")
+    vi.mocked(deleteFromR2).mockClear()
+
+    vi.mocked(supabase.from).mockImplementation(() => {
+      const chain: Record<string, unknown> = {}
+      chain.select = vi.fn().mockReturnValue(chain)
+      // Jobs check errors → we can't prove there's no referrer → fail safe.
+      chain.eq = vi.fn().mockImplementation((col: string) =>
+        typeof col === "string" && col.startsWith("output_data->>")
+          ? Promise.resolve({ count: null, error: { message: "db down" } })
+          : chain,
+      )
+      chain.delete = vi.fn().mockReturnValue(chain)
+      chain.single = vi.fn().mockResolvedValue({
+        data: { id: assetId, user_id: TEST_USER_ID, r2_key: "images/maybe-shared.png", size_bytes: 100 },
+        error: null,
+      })
+      chain.neq = vi.fn().mockResolvedValue({ count: 0, error: null })
+      ;(chain as Record<string, unknown>).error = null
+      return chain as never
+    })
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/v1/library/${assetId}?userId=${TEST_USER_ID}&permanent=true`,
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(vi.mocked(deleteFromR2)).not.toHaveBeenCalled()
+  })
+
+  it("permanent delete DOES delete the R2 object when no other asset or job references it", async () => {
     const assetId = "00000000-0000-4000-8000-000000000011"
     const { deleteFromR2 } = await import("@/lib/storage.js")
     vi.mocked(deleteFromR2).mockClear()
@@ -304,7 +396,12 @@ describe("DELETE /v1/library/:id", () => {
     vi.mocked(supabase.from).mockImplementation(() => {
       const chain: Record<string, unknown> = {}
       chain.select = vi.fn().mockReturnValue(chain)
-      chain.eq = vi.fn().mockReturnValue(chain)
+      // No job references it either → per-key output_data .eq() returns 0.
+      chain.eq = vi.fn().mockImplementation((col: string) =>
+        typeof col === "string" && col.startsWith("output_data->>")
+          ? Promise.resolve({ count: 0, error: null })
+          : chain,
+      )
       chain.delete = vi.fn().mockReturnValue(chain)
       chain.single = vi.fn().mockResolvedValue({
         data: { id: assetId, user_id: TEST_USER_ID, r2_key: "images/sole.png", size_bytes: 100 },

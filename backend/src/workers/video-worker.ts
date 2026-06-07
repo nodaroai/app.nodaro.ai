@@ -223,7 +223,11 @@ export function createVideoWorker() {
             })
             .eq("id", jobId)
 
-          await refundJobCredits(usageLogId, jobId, message)
+          // Pass the ERROR OBJECT (not just the string) so refundJobCredits
+          // can read the PostProcessingError type signal. A post-provider
+          // failure (R2 upload, watermark, transcode, merge) skips the refund
+          // because the provider already billed us; everything else refunds.
+          await refundJobCredits(usageLogId, jobId, err)
         }
         throw err
       }

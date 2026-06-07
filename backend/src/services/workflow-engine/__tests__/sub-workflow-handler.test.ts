@@ -186,7 +186,7 @@ describe("executeSubWorkflow", () => {
     // text-prompt -> sub-workflow-output
     expect(result).toBeDefined()
     // text-prompt is a source node so its output comes from extractSourceNodeOutput
-    expect(result.text).toBe("hello from sub")
+    expect(result.output.text).toBe("hello from sub")
   })
 
   it("pre-completes parameter-picker nodes instead of executing them (Unknown-node-type regression)", async () => {
@@ -237,7 +237,7 @@ describe("executeSubWorkflow", () => {
     // sub-workflow-input through getPrimaryOutput -> text fallback.
     // The imageUrl is stored on the nodeState output but not surfaced
     // through the output collection (which only uses resolveNodeInputs).
-    expect(result.text).toBe("upstream text")
+    expect(result.output.text).toBe("upstream text")
   })
 
   it("emits _outputResults keyed by portId for per-port downstream routing", async () => {
@@ -270,10 +270,10 @@ describe("executeSubWorkflow", () => {
     })
 
     const result = await executeSubWorkflow(n, {}, ctx())
-    expect(result._outputResults).toBeDefined()
-    expect(result._outputResults?.portA).toBe("value-A")
-    expect(result._outputResults?.portB).toBe("value-B")
-    expect(result._visibleOutputPortId).toBe("portA")
+    expect(result.output._outputResults).toBeDefined()
+    expect(result.output._outputResults?.portA).toBe("value-A")
+    expect(result.output._outputResults?.portB).toBe("value-B")
+    expect(result.output._visibleOutputPortId).toBe("portA")
   })
 
   it("throws when execution is cancelled", async () => {
@@ -328,7 +328,7 @@ describe("executeSubWorkflow", () => {
     const result = await executeSubWorkflow(n, {}, ctx())
     expect(result).toBeDefined()
     // 'other' should not have been executed — only the routed path
-    expect(result.text).toBe("routed")
+    expect(result.output.text).toBe("routed")
   })
 
   it("collects output from terminal nodes as fallback", async () => {
@@ -348,7 +348,7 @@ describe("executeSubWorkflow", () => {
     const result = await executeSubWorkflow(n, {}, ctx())
     expect(result).toBeDefined()
     // Terminal fallback should pick up text from text-prompt source output
-    expect(result.text).toBe("terminal text")
+    expect(result.output.text).toBe("terminal text")
   })
 
   it("uses default routeId when none specified", async () => {
@@ -360,6 +360,102 @@ describe("executeSubWorkflow", () => {
     const existingKeys = new Set(["ref-wf:other-route"])
     const result = await executeSubWorkflow(n, {}, ctx(), 0, existingKeys)
     expect(result).toBeDefined()
+  })
+
+  // -------------------------------------------------------------------------
+  // Inner credit roll-up (monetization / total-credits accounting)
+  // -------------------------------------------------------------------------
+  //
+  // Regression: executeSubWorkflow used to return only `output`, dropping the
+  // creditsUsed reported by each inner node. The parent orchestrator's
+  // `totalCredits += result.creditsUsed ?? 0` therefore saw 0 for the whole
+  // sub-workflow, under-reporting workflow_executions.total_credits_used and
+  // (for monetized app runs) under-paying the app creator.
+
+  it("sums inner nodes' creditsUsed and returns it on the result", async () => {
+    const n = node("sw", "sub-workflow", { workflowId: "ref-wf" })
+
+    // Two executable nodes wired into the output node so both run via executeNode.
+    const subNodes: SimpleNode[] = [
+      node("genA", "generate-image", { prompt: "a" }),
+      node("genB", "generate-image", { prompt: "b" }),
+      node("out", "sub-workflow-output"),
+    ]
+    const subEdges: SimpleEdge[] = [edge("genA", "out"), edge("genB", "out")]
+    mockSingle.mockResolvedValue({ data: { nodes: subNodes, edges: subEdges }, error: null })
+
+    // Each inner node commits real credits.
+    vi.mocked(executeNode)
+      .mockResolvedValueOnce({ output: { imageUrl: "https://a.png" }, creditsUsed: 2 })
+      .mockResolvedValueOnce({ output: { imageUrl: "https://b.png" }, creditsUsed: 6 })
+
+    const result = await executeSubWorkflow(n, {}, ctx())
+    expect(result.creditsUsed).toBe(8)
+  })
+
+  it("treats an inner node's undefined creditsUsed as 0 (no NaN)", async () => {
+    const n = node("sw", "sub-workflow", { workflowId: "ref-wf" })
+    const subNodes: SimpleNode[] = [
+      node("genA", "generate-image", { prompt: "a" }),
+      node("genB", "generate-image", { prompt: "b" }),
+      node("out", "sub-workflow-output"),
+    ]
+    const subEdges: SimpleEdge[] = [edge("genA", "out"), edge("genB", "out")]
+    mockSingle.mockResolvedValue({ data: { nodes: subNodes, edges: subEdges }, error: null })
+
+    vi.mocked(executeNode)
+      .mockResolvedValueOnce({ output: { imageUrl: "https://a.png" }, creditsUsed: 5 })
+      .mockResolvedValueOnce({ output: { imageUrl: "https://b.png" } }) // no creditsUsed
+
+    const result = await executeSubWorkflow(n, {}, ctx())
+    expect(result.creditsUsed).toBe(5)
+  })
+
+  it("rolls up creditsUsed from a NESTED sub-workflow recursively", async () => {
+    // Outer sub-workflow contains an inner sub-workflow node + one generate node.
+    // The inner sub-workflow's own summed creditsUsed must roll into the outer total.
+    const outer = node("sw-outer", "sub-workflow", { workflowId: "outer-wf" })
+
+    const outerNodes: SimpleNode[] = [
+      node("genOuter", "generate-image", { prompt: "outer" }),
+      node("sw-inner", "sub-workflow", { workflowId: "inner-wf" }),
+      node("out", "sub-workflow-output"),
+    ]
+    const outerEdges: SimpleEdge[] = [edge("genOuter", "out"), edge("sw-inner", "out")]
+
+    const innerNodes: SimpleNode[] = [
+      node("genInner", "generate-image", { prompt: "inner" }),
+      node("outInner", "sub-workflow-output"),
+    ]
+    const innerEdges: SimpleEdge[] = [edge("genInner", "outInner")]
+
+    // First DB lookup = outer workflow, second = inner workflow (recursive call).
+    mockSingle
+      .mockResolvedValueOnce({ data: { nodes: outerNodes, edges: outerEdges }, error: null })
+      .mockResolvedValueOnce({ data: { nodes: innerNodes, edges: innerEdges }, error: null })
+
+    // genOuter = 3 credits, genInner = 4 credits → outer total must be 7.
+    vi.mocked(executeNode).mockImplementation(async (subNode: SimpleNode) => {
+      if (subNode.id === "genOuter") return { output: { imageUrl: "https://outer.png" }, creditsUsed: 3 }
+      if (subNode.id === "genInner") return { output: { imageUrl: "https://inner.png" }, creditsUsed: 4 }
+      return { output: {} }
+    })
+
+    const result = await executeSubWorkflow(outer, {}, ctx())
+    expect(result.creditsUsed).toBe(7)
+  })
+
+  it("returns creditsUsed 0 for a source-only sub-workflow (no executed nodes)", async () => {
+    const n = node("sw", "sub-workflow", { workflowId: "ref-wf" })
+    const subNodes: SimpleNode[] = [
+      node("prompt", "text-prompt", { text: "hello" }),
+      node("out", "sub-workflow-output"),
+    ]
+    const subEdges: SimpleEdge[] = [edge("prompt", "out")]
+    mockSingle.mockResolvedValue({ data: { nodes: subNodes, edges: subEdges }, error: null })
+
+    const result = await executeSubWorkflow(n, {}, ctx())
+    expect(result.creditsUsed).toBe(0)
   })
 })
 
