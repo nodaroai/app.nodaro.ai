@@ -1211,7 +1211,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
    *  user wants an upstream node; left for source handles — user wants a
    *  downstream node). */
   const openAddNodePopupForHandle = useCallback(
-    ({ nodeId, handleId, direction, nodeType }: { nodeId: string; handleId: string; direction: "source" | "target"; nodeType: string }) => {
+    ({ nodeId, handleId, direction, nodeType, prefillName }: { nodeId: string; handleId: string; direction: "source" | "target"; nodeType: string; prefillName?: string }) => {
       const node = getNode(nodeId)
       if (!node) return
       const w = (node.measured?.width ?? 220) as number
@@ -1241,6 +1241,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         direction,
         dropPosition: { x: flowX, y: flowY },
         nodeType,
+        prefillName,
         color: readHandlePipColor(nodeId, handleId),
       })
       setAddNodePopupOpen(true)

@@ -7,7 +7,7 @@
 export const NODE_REF_PATTERN = /\{([^}]+)\}/g
 
 /** Reserved template variable names that should NOT be resolved as node refs */
-const RESERVED_TEMPLATE_VARS = new Set([
+export const RESERVED_TEMPLATE_VARS = new Set([
   "name",
   "description",
   "userPrompt",
