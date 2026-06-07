@@ -41,6 +41,40 @@ describe("extractAppInputSchema", () => {
     })
   })
 
+  it("maps parameter-picker nodes to their real override field, not the inert 'value'", () => {
+    // Regression: pickers were absent from NODE_TYPE_INFO and fell back to
+    // fieldKey "value" — but getParameterValue reads data.tone / data.shotSize /
+    // data.actionFx, so the curated input was SILENTLY DROPPED on every app /
+    // MCP / SDK run. Now derived from the shared INPUT_FIELD_MAP source of truth.
+    const schema = extractAppInputSchema({
+      snapshotSettings: {
+        presentationSettings: {
+          inputItems: [
+            { type: "node", nodeId: "t1" },
+            { type: "node", nodeId: "f1" },
+            { type: "node", nodeId: "a1" },
+          ],
+        },
+      },
+      snapshotNodes: [
+        { id: "t1", type: "tone", data: { label: "Tone" } },
+        { id: "f1", type: "framing", data: { label: "Framing" } },
+        { id: "a1", type: "action-fx", data: { label: "Action FX" } },
+      ],
+    })
+    const fields = schema.fields
+    expect(schema.keyMap[fields[0]!.key]).toEqual({ nodeId: "t1", fieldKey: "tone" })
+    expect(schema.keyMap[fields[1]!.key]).toEqual({ nodeId: "f1", fieldKey: "shotSize" })
+    expect(schema.keyMap[fields[2]!.key]).toEqual({ nodeId: "a1", fieldKey: "actionFx" })
+    for (const k of Object.keys(schema.keyMap)) {
+      expect(schema.keyMap[k]!.fieldKey).not.toBe("value")
+    }
+    // End-to-end: this is exactly what /v1/app/:slug/run now does for flat inputs.
+    expect(flatInputsToOverrides({ [fields[0]!.key]: "energetic" }, schema.keyMap)).toEqual({
+      t1: { tone: "energetic" },
+    })
+  })
+
   it("flattens group items so the LLM sees a flat field list", () => {
     const schema = extractAppInputSchema({
       snapshotSettings: {

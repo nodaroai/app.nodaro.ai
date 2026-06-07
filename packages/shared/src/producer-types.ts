@@ -44,6 +44,10 @@ export const VIDEO_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   // would happily route at runtime.
   "face-swap",
   "video-retake",
+  // video-sfx: adds an SFX track to a video → emits a video URL. Belongs here so
+  // canvas handle validation accepts video-sfx → video-consumer edges and the
+  // backend routes its output as video (it was previously relying on a fallback).
+  "video-sfx",
   "suno-music-video",
   "merge-video-audio",
   "add-captions",
@@ -141,4 +145,31 @@ export const AUDIO_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   "voice-design",
   // Extract Audio: demuxes a video's audio track to a standalone MP3.
   "extract-audio",
+])
+
+/**
+ * Source node types whose primary output is a LIST that, by default, fans out
+ * one downstream execution per element when an edge leaves them WITHOUT an
+ * explicit `outputMode` (all other edges default to "last"). `selector` is
+ * included because its picked/rest channels are lists too.
+ *
+ * Single source of truth for the fan-out "each" default, consumed by:
+ *   - backend/src/services/workflow-engine/input-resolver.ts (DEFAULT_EACH_TYPES)
+ *   - frontend/src/components/editor/workflow-editor/types.ts (FAN_OUT_EACH_TYPES)
+ *   - frontend/src/components/editor/workflow-editor/node-input-resolver.ts
+ *
+ * These three previously kept independent copies; the backend copy drifted
+ * (missing the four list-transform types), so server-side workflow runs
+ * silently dropped all-but-the-first item for filter-list / deduplicate /
+ * merge-lists / sort-list sources while the canvas fanned out N ways. Lifting
+ * the set here makes that drift impossible.
+ */
+export const FAN_OUT_EACH_TYPES: ReadonlySet<string> = new Set([
+  "list",
+  "split-text",
+  "filter-list",
+  "deduplicate",
+  "merge-lists",
+  "sort-list",
+  "selector",
 ])

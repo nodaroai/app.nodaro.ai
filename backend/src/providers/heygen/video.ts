@@ -189,6 +189,13 @@ export interface GenerateAvatarVideoOpts {
    */
   expressiveness?: "high" | "medium" | "low"
   /**
+   * Called with the HeyGen video_id as soon as the create call returns, BEFORE
+   * the long poll — lets the worker persist provider_task_id so a BullMQ
+   * stall-retry recognizes the call already happened and doesn't re-submit
+   * (which would double-bill the provider for the most expensive op).
+   */
+  onTaskCreated?: (taskId: string) => void | Promise<void>
+  /**
    * Poll interval in milliseconds (default 6000).
    * Pass 0 in tests to skip sleep delays.
    */
@@ -260,6 +267,7 @@ export async function generateAvatarVideo(
     removeBackground,
     motionPrompt,
     expressiveness,
+    onTaskCreated,
     pollIntervalMs = 6000,
   } = opts
 
@@ -373,6 +381,11 @@ export async function generateAvatarVideo(
       throw err
     }
   }
+
+  // Persist the HeyGen video_id NOW (before the long poll) so a BullMQ
+  // stall-retry sees provider_task_id and skips re-submitting — otherwise the
+  // most expensive op gets billed twice when the worker dies mid-poll.
+  await onTaskCreated?.(videoId)
 
   // ── Poll /v1/video_status.get until completed or failed ──────────────────
   const deadline = Date.now() + MAX_POLL_DURATION_MS

@@ -1,11 +1,13 @@
 import type { PublishRequest, PublishResult, PlatformPublisher } from "./index.js"
+import { safeFetch } from "../../../lib/safe-fetch.js"
 
 export const youtubePublisher: PlatformPublisher = {
   async publish(accessToken: string, request: PublishRequest): Promise<PublishResult> {
     const { action, caption, mediaUrl, title, description, tags, privacy } = request
 
-    // Download the video first to get its content
-    const videoRes = await fetch(mediaUrl!)
+    // Download the video first to get its content. safeFetch: mediaUrl is
+    // user-supplied — block SSRF to internal/metadata hosts (DNS-rebind safe).
+    const videoRes = await safeFetch(mediaUrl!)
     if (!videoRes.ok) throw new Error("Failed to download video for YouTube upload")
     const videoBlob = await videoRes.blob()
 

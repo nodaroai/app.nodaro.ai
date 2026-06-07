@@ -1,4 +1,5 @@
 import type { PublishRequest, PublishResult, PlatformPublisher } from "./index.js"
+import { safeFetch } from "../../../lib/safe-fetch.js"
 
 export const xPublisher: PlatformPublisher = {
   async publish(accessToken: string, request: PublishRequest): Promise<PublishResult> {
@@ -8,8 +9,9 @@ export const xPublisher: PlatformPublisher = {
 
     // Upload media if present
     if (mediaUrl) {
-      // Download media
-      const mediaRes = await fetch(mediaUrl)
+      // Download media. safeFetch: mediaUrl is user-supplied — block SSRF to
+      // internal/metadata hosts (validated again at connect time for DNS-rebind).
+      const mediaRes = await safeFetch(mediaUrl)
       if (!mediaRes.ok) throw new Error("Failed to download media for X")
       const mediaBuffer = Buffer.from(await mediaRes.arrayBuffer())
       const contentType = mediaRes.headers.get("content-type") || "image/jpeg"

@@ -15,6 +15,7 @@ import { FAN_IN_NODE_TYPES } from "./types";
 import { PARAMETER_NODE_TYPES, OBJECT_PICKER_NODE_TYPES, getParameterPromptHint, parseGroupHandle } from "@nodaro/shared";
 import { resolveIndex, selectListItems, type SelectorFields } from "@nodaro/shared";
 import { splitByLoopDelimiter } from "@nodaro/shared";
+import { FAN_OUT_EACH_TYPES } from "@nodaro/shared";
 import { extractAllGeneratedResults, extractGeneratedJsonAsList } from "@nodaro/shared";
 import { splitGeneratedItems } from "@nodaro/shared";
 import { SOCIAL_POST_NODE_TYPES } from "@nodaro/shared";
@@ -377,8 +378,10 @@ export function resolveLoopColumnValues(
   return [];
 }
 
-/** Node types whose edges default to "each" output mode (fan-out) */
-const DEFAULT_EACH_TYPES = new Set(["list", "split-text", "filter-list", "deduplicate", "merge-lists", "sort-list", "selector"]);
+/** Node types whose edges default to "each" output mode (fan-out).
+ *  Aliased from the shared FAN_OUT_EACH_TYPES single source of truth (was a
+ *  hand-maintained duplicate that the backend copy had drifted from). */
+const DEFAULT_EACH_TYPES = FAN_OUT_EACH_TYPES;
 
 /** Node types that accept multiple audio inputs (accumulate to audioUrls array) */
 const MULTI_AUDIO_INPUT_TYPES = new Set(["mix-audio", "combine-audio"]);

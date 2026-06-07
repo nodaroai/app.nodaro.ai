@@ -29,6 +29,8 @@ import { getPrimaryOutput, extractSourceNodeOutput } from "./output-extractor.js
 import { getNodeOutput } from "./input-resolver.js"
 import { isSourceNode, IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES, AUDIO_SOURCE_TYPES } from "./execution-graph.js"
 import { supabase } from "../../lib/supabase.js"
+import { safeFetch } from "../../lib/safe-fetch.js"
+import { safeUrlSchema } from "../../lib/url-validator.js"
 
 /**
  * Collect text outputs from all upstream nodes connected to a target node.
@@ -870,6 +872,14 @@ export async function executeWebhookOutput(
   if (!url) {
     throw new Error("No webhook URL configured")
   }
+  // SSRF gate: workflow node data is persisted unvalidated (`nodes: z.record(z.unknown())`),
+  // so this URL is attacker-controllable. safeUrlSchema rejects literal localhost/private
+  // hosts at this boundary; safeFetch (below) re-validates the resolved IP at connect time
+  // (and each redirect hop), defeating DNS-rebinding. This mirrors the hardened single-node
+  // route (routes/webhook-output.ts), whose protection the orchestrator twin previously lacked.
+  if (!safeUrlSchema.safeParse(url).success) {
+    throw new Error("Webhook URL is invalid or resolves to a blocked address")
+  }
 
   const params = (node.data.params as Array<{ id: string; name: string; type: string }>) ?? []
   const nodeById = new Map(allNodes.map((n) => [n.id, n] as const))
@@ -935,11 +945,11 @@ export async function executeWebhookOutput(
   let errorMessage: string | undefined
 
   try {
-    const response = await fetch(url, {
+    const response = await safeFetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(30_000),
+      timeoutMs: 30_000,
     })
     statusCode = response.status
     responseBody = (await response.text().catch(() => "")).slice(0, 2000)

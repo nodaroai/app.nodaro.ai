@@ -1149,6 +1149,7 @@ export {
   VIDEO_PRODUCER_TYPES,
   AUDIO_PRODUCER_TYPES,
   DYNAMIC_PRODUCER_TYPES,
+  FAN_OUT_EACH_TYPES,
 } from "./producer-types.js"
 
 // --- Node presets ---

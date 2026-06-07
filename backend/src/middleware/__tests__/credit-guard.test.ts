@@ -100,6 +100,14 @@ async function buildApp(modelResolver?: (req: unknown) => string): Promise<Fasti
     if (req.headers["x-app-run"] === "true") {
       req.isAppRun = true
     }
+    const appScopes = req.headers["x-app-scopes"]
+    if (typeof appScopes === "string") {
+      ;(req as { appAuthorization?: unknown }).appAuthorization = {
+        appId: "app-1",
+        authorizationId: "auth-1",
+        scopes: appScopes.split(",").filter(Boolean),
+      }
+    }
   })
 
   const resolver = modelResolver ?? ((req: unknown) => {
@@ -134,6 +142,39 @@ describe("creditGuard", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockHasCreditsRef.value = true
+  })
+
+  it("blocks an OAuth app token with only read scopes from spending credits (403 insufficient_scope)", async () => {
+    app = await buildApp()
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/test-route",
+      headers: { "x-app-scopes": "jobs:read,workflows:read" },
+      payload: { userId: "owner-1", provider: "flux" },
+    })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe("insufficient_scope")
+  })
+
+  it("allows an OAuth app token with a :write/:execute scope past the credit gate", async () => {
+    app = await buildApp()
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/test-route",
+      headers: { "x-app-scopes": "jobs:read,assets:write" },
+      payload: { userId: "owner-1", provider: "flux" },
+    })
+    expect(res.statusCode).not.toBe(403) // passed the scope gate
+  })
+
+  it("does not gate plain user requests (no appAuthorization)", async () => {
+    app = await buildApp()
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/test-route",
+      payload: { userId: "owner-1", provider: "flux" },
+    })
+    expect(res.statusCode).not.toBe(403)
   })
 
   it("skips when hasCredits() returns false (request passes through)", async () => {

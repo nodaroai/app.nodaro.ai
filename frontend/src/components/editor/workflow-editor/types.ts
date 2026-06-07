@@ -5,6 +5,7 @@ import { buildMotionCreditModelIdentifier } from "@nodaro/shared";
 import { isDefaultSelectorConfig, selectListItems, type SelectorFields } from "@nodaro/shared";
 import { getEffectiveRepeatCount } from "@nodaro/shared";
 import { buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS } from "@nodaro/shared";
+import { FAN_OUT_EACH_TYPES } from "@nodaro/shared";
 
 /** Sentinel error thrown when a polling callback detects that the active
  *  workflow has changed. Callers should catch this silently (no error toast). */
@@ -285,7 +286,9 @@ export function isExecutableNode(node: WorkflowNode): boolean {
   return EXECUTABLE_TYPES.has(node.type ?? "");
 }
 
-export const FAN_OUT_EACH_TYPES = new Set(["list", "split-text", "filter-list", "deduplicate", "merge-lists", "sort-list", "selector"]);
+// Re-exported from @nodaro/shared (single source of truth) so this set and the
+// backend's DEFAULT_EACH_TYPES can never drift apart.
+export { FAN_OUT_EACH_TYPES };
 
 /**
  * Estimate the fan-out multiplier for a node based on upstream list/loop nodes.

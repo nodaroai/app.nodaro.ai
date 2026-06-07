@@ -1,0 +1,26 @@
+-- 194_refund_credits_search_path_convergence.sql
+--
+-- Re-pin refund_credits' search_path — the last piece of the mig-176 convergence
+-- that was missed.
+--
+-- Background:
+--   refund_credits is SECURITY DEFINER. It was pinned `SET search_path = public`
+--   once, in migration 033. Postgres `CREATE OR REPLACE FUNCTION` resets ALL
+--   function-level config (including search_path) unless it is re-declared, and
+--   refund_credits was recreated three times afterward — migrations 060, 169,
+--   and 171 — none of which re-pinned it. So the 033 ALTER no longer applies and
+--   the deployed function runs SECURITY DEFINER with a mutable search_path.
+--
+--   Migration 176 fixed exactly this class for its siblings (re-pinned
+--   commit_credits + reserve_credits on their current signatures) but omitted
+--   refund_credits, even though refund_credits has the identical recreation
+--   history. This is the convergence migration that closes that gap.
+--
+--   refund_credits is REVOKEd from authenticated/anon (mig 171), so only
+--   service_role/superuser invoke it — but a mutable search_path on a
+--   SECURITY DEFINER credit RPC is the privilege-escalation class the Supabase
+--   linter flags and the codebase treats as fix-worthy.
+--
+-- Idempotent: ALTER FUNCTION is safe to re-run.
+
+ALTER FUNCTION refund_credits(UUID) SET search_path = public;

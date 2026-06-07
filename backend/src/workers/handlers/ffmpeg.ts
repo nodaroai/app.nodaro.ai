@@ -4,6 +4,7 @@ import type { Job } from "bullmq"
 import type { Caption } from "@remotion/captions"
 import { uploadFileToR2 } from "../../lib/storage.js"
 import { renderQueue } from "../../lib/render-queue.js"
+import { supabase } from "../../lib/supabase.js"
 import { cleanupWorkDir, createWorkDir, downloadFile, runFfmpeg, BROWSER_SAFE_VIDEO_ARGS, probeVideoSource } from "../../providers/video/ffmpeg-utils.js"
 import { combineVideos } from "../../providers/video/combine-videos.js"
 import { socialMediaFormat } from "../../providers/video/social-media-format.js"
@@ -419,25 +420,49 @@ async function dispatchKineticCaptions(
   const targetDurationSeconds = Math.max(captionsDurationSeconds, videoDurationSeconds)
   const durationInFrames = Math.max(30, Math.ceil(targetDurationSeconds * fps))
 
-  await renderQueue.add("render", {
-    jobId: ctx.jobId,
-    planType: "burn-captions",
-    plan: {
+  // Clear the video-worker's `pre-task` reconcile sentinel before handing this
+  // job to the render queue. The reconcile cron treats a `pre-task` row whose
+  // provider_call_started_at is older than 30 min as a crashed sync job and
+  // marks it failed + refunds — but a Remotion render legitimately runs far
+  // longer than 30 min behind a render backlog. Nulling both fields leaves the
+  // row at status="processing" with no provider_call_started_at, so it escapes
+  // BOTH reconcile paths (the main scan requires the timestamp non-null;
+  // sweepNeverStartedJobs requires status="pending"). render-worker + BullMQ
+  // stall-recovery now solely own the job's lifecycle. Without this the cron
+  // could refund a still-rendering job (free render) or spuriously fail it
+  // mid-render, after which markJobCompleted (CAS excludes only "cancelled")
+  // would flip failed→completed.
+  await supabase
+    .from("jobs")
+    .update({ provider_kind: null, provider_call_started_at: null })
+    .eq("id", ctx.jobId)
+
+  // Deterministic BullMQ job id so a video-worker stall-retry (which would
+  // re-run this handler) coalesces onto the SAME render job instead of
+  // enqueuing a duplicate Remotion render.
+  await renderQueue.add(
+    "render",
+    {
+      jobId: ctx.jobId,
       planType: "burn-captions",
-      sourceVideo: data.videoUrl,
-      captions,
-      style: data.style,
-      position: data.position ?? "bottom",
-      fontSize: data.fontSize ?? 32,
-      color: data.color ?? "#ffffff",
-      backgroundColor: data.backgroundColor,
-      fps,
-      width,
-      height,
-      durationInFrames,
+      plan: {
+        planType: "burn-captions",
+        sourceVideo: data.videoUrl,
+        captions,
+        style: data.style,
+        position: data.position ?? "bottom",
+        fontSize: data.fontSize ?? 32,
+        color: data.color ?? "#ffffff",
+        backgroundColor: data.backgroundColor,
+        fps,
+        width,
+        height,
+        durationInFrames,
+      },
+      usageLogId: ctx.usageLogId,
     },
-    usageLogId: ctx.usageLogId,
-  })
+    { jobId: `render-${ctx.jobId}` },
+  )
   // Ownership: render-worker now owns this jobs.id — don't call commit/refund here.
 }
 

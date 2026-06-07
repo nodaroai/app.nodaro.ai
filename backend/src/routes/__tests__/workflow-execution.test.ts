@@ -311,6 +311,63 @@ describe("POST /v1/workflows/:id/run", () => {
     )
   })
 
+  it("forwards inputOverrides into the enqueued job (was silently dropped)", async () => {
+    const mockFrom = vi.mocked(supabase.from)
+    let callNum = 0
+    mockFrom.mockImplementation(() => {
+      callNum++
+      if (callNum === 1) {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: { id: TEST_WORKFLOW_ID, user_id: TEST_USER_ID },
+                  error: null,
+                }),
+              }),
+            }),
+          }),
+        } as never
+      }
+      if (callNum === 2) {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              in: vi.fn().mockReturnValue({
+                limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+              }),
+            }),
+          }),
+        } as never
+      }
+      return {
+        insert: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({ data: { id: TEST_EXEC_ID }, error: null }),
+          }),
+        }),
+        upsert: vi.fn().mockReturnValue({
+          select: vi.fn().mockResolvedValue({ data: [{ id: TEST_EXEC_ID }], error: null }),
+        }),
+      } as never
+    })
+
+    const overrides = { "node-1": { prompt: "overridden at run time" } }
+    const res = await authedPost(`/v1/workflows/${TEST_WORKFLOW_ID}/run`, {
+      inputOverrides: overrides,
+    })
+    expect(res.statusCode).toBe(202)
+
+    // Regression: MCP run_workflow (and the editor/SDK) send per-node overrides;
+    // the route used to drop them, so the run used the workflow's saved data.
+    expect(mockOrchestrationQueueAdd).toHaveBeenCalledWith(
+      "workflow-execution",
+      expect.objectContaining({ inputOverrides: overrides }),
+      expect.objectContaining({ jobId: TEST_EXEC_ID }),
+    )
+  })
+
   it("returns 500 when execution insert fails", async () => {
     const mockFrom = vi.mocked(supabase.from)
     let callNum = 0

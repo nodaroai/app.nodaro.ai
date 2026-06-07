@@ -1,7 +1,7 @@
 "use client"
 
 import { memo, useState, useMemo, useEffect, useRef, useCallback } from "react"
-import { Position, type NodeProps } from "@xyflow/react"
+import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { incomingSourcesFingerprint } from "@/lib/node-fingerprint"
 import { Users, Loader2, AlertCircle, X, Image as ImageIcon, Volume2, Clapperboard, Film, LayoutGrid, Expand, Download, Link, Settings, Scissors } from "lucide-react"
 import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
@@ -317,6 +317,14 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
   const needsVideoInput = VIDEO_INPUT_LIP_SYNC_PROVIDERS.has(lipSyncProvider as never)
   const needsImageInput = !needsVideoInput && !FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS.has(lipSyncProvider as never)
   const needsBothInputs = FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS.has(lipSyncProvider as never)
+  // Switching provider mounts/unmounts the `video` / `image` input handles. The
+  // BaseNode height-keyed remeasure never fires here (lip-sync's handles[] array
+  // is fully static), so without an explicit remeasure a fresh edge can attach to
+  // stale handle bounds until an unrelated interaction forces a recompute.
+  const updateNodeInternals = useUpdateNodeInternals()
+  useEffect(() => {
+    updateNodeInternals(id)
+  }, [id, needsVideoInput, needsImageInput, needsBothInputs, updateNodeInternals])
   const hasVideoConnection = videoNodes.length > 0
 
   const hasConnections = connectedNodes.length > 0

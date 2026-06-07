@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { requireScope } from "../lib/scopes.js"
 
 const costSummaryBody = z.object({
   jobIds: z.array(z.string().min(1)).min(1).max(500),
@@ -29,6 +30,20 @@ interface BreakdownEntry {
 
 export async function workflowCostRoutes(app: FastifyInstance) {
   app.post("/v1/jobs/cost-summary", async (req, reply) => {
+    // Auth + owner-scoping (mirrors POST /v1/jobs/batch-status). Without this, the
+    // service-role query below (bypasses RLS) was an IDOR: any authed user could
+    // POST arbitrary job ids and read another user's provider_cost/display_cost/
+    // credits/input_data (prompt, provider) — data hidden from non-admins.
+    if (!req.userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+    if (req.appAuthorization) {
+      const err = requireScope(req.appAuthorization.scopes, "jobs:read")
+      if (err) return reply.status(err.statusCode).send(err.body)
+    }
+
     const parsed = costSummaryBody.safeParse(req.body ?? {})
     if (!parsed.success) {
       return reply.status(400).send({
@@ -37,11 +52,16 @@ export async function workflowCostRoutes(app: FastifyInstance) {
     }
 
     const { jobIds } = parsed.data
+    const isAdmin = req.userRole === "admin" || req.userRole === "super_admin"
 
-    const { data: jobs, error } = await supabase
+    let query = supabase
       .from("jobs")
       .select("id, status, input_data, provider_cost, display_cost, credits")
       .in("id", jobIds)
+    if (!isAdmin) {
+      query = query.eq("user_id", req.userId)
+    }
+    const { data: jobs, error } = await query
 
     if (error) {
       return reply.status(500).send({

@@ -6,10 +6,19 @@
  *   - transcribe worker: normalises social video URLs via extractYouTubeAudio
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import { describe, it, expect, vi, beforeEach } from "vitest"
 import { buildPayload } from "../payload-builder.js"
 import { executeWebhookOutput } from "../inline-executor.js"
 import type { SimpleNode, SimpleEdge, NodeExecutionState, OrchestratorContext } from "../types.js"
+
+// executeWebhookOutput now routes through safeFetch (SSRF gate), not global fetch.
+// Mock only safeFetch; keep the real isPrivateOrReservedIP so url-validator's
+// safeUrlSchema (imported by inline-executor) still functions for the SSRF test.
+const { safeFetchMock } = vi.hoisted(() => ({ safeFetchMock: vi.fn() }))
+vi.mock("../../../lib/safe-fetch.js", async (importActual) => {
+  const actual = await importActual<typeof import("../../../lib/safe-fetch.js")>()
+  return { ...actual, safeFetch: safeFetchMock }
+})
 
 function node(id: string, type: string, data: Record<string, unknown> = {}): SimpleNode {
   return { id, type, data }
@@ -55,21 +64,16 @@ describe("resize-video — default method matches Zod enum", () => {
 // ---------------------------------------------------------------------------
 
 describe("webhook-output — emits audit fields on node output", () => {
-  let originalFetch: typeof fetch
-
   beforeEach(() => {
-    originalFetch = global.fetch
-  })
-  afterEach(() => {
-    global.fetch = originalFetch
+    safeFetchMock.mockReset()
   })
 
   it("returns webhookSuccess + statusCode + responseBody on 2xx", async () => {
-    global.fetch = vi.fn().mockResolvedValue({
+    safeFetchMock.mockResolvedValue({
       ok: true,
       status: 200,
       text: () => Promise.resolve('{"received":true}'),
-    }) as unknown as typeof fetch
+    })
 
     const wh = node("w1", "webhook-output", { url: "https://example.com/hook" })
     const src = node("s1", "text-prompt", { text: "hello" })
@@ -85,14 +89,19 @@ describe("webhook-output — emits audit fields on node output", () => {
     expect(out.webhookStatusCode).toBe(200)
     expect(out.webhookResponseBody).toBe('{"received":true}')
     expect(out.text).toBe("sent")
+    // SSRF gate: routed through safeFetch (not global fetch).
+    expect(safeFetchMock).toHaveBeenCalledWith(
+      "https://example.com/hook",
+      expect.objectContaining({ method: "POST" }),
+    )
   })
 
   it("throws with statusCode + truncated body on non-2xx", async () => {
-    global.fetch = vi.fn().mockResolvedValue({
+    safeFetchMock.mockResolvedValue({
       ok: false,
       status: 502,
       text: () => Promise.resolve("x".repeat(3000)),
-    }) as unknown as typeof fetch
+    })
 
     const wh = node("w1", "webhook-output", { url: "https://example.com/hook" })
 
@@ -102,15 +111,23 @@ describe("webhook-output — emits audit fields on node output", () => {
   })
 
   it("truncates response body to 2000 chars", async () => {
-    global.fetch = vi.fn().mockResolvedValue({
+    safeFetchMock.mockResolvedValue({
       ok: true,
       status: 200,
       text: () => Promise.resolve("a".repeat(5000)),
-    }) as unknown as typeof fetch
+    })
 
     const wh = node("w1", "webhook-output", { url: "https://example.com/hook" })
     const out = await executeWebhookOutput(wh, [], [wh], {}, undefined)
     expect((out.webhookResponseBody as string).length).toBe(2000)
+  })
+
+  it("rejects an SSRF URL (cloud-metadata IP) before fetching", async () => {
+    const wh = node("w1", "webhook-output", { url: "http://169.254.169.254/latest/meta-data/" })
+    await expect(
+      executeWebhookOutput(wh, [], [wh], {}, undefined),
+    ).rejects.toThrow(/blocked address/)
+    expect(safeFetchMock).not.toHaveBeenCalled()
   })
 })
 

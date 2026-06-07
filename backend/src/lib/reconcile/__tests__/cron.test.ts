@@ -7,6 +7,9 @@ const mocks = vi.hoisted(() => ({
   // Defaults empty so pre-existing tests (which only seed `rows`) are unaffected.
   neverStartedRows: [] as any[],
   neverStartedChain: { data: null as any[] | null, error: null as { message: string } | null },
+  // Rows returned by the stuck-render sweep (the one using `.filter("input_data->>type", ...)`).
+  renderRows: [] as any[],
+  renderChain: { data: null as any[] | null, error: null as { message: string } | null },
 }))
 
 vi.mock("../../supabase.js", () => ({
@@ -16,21 +19,39 @@ vi.mock("../../supabase.js", () => ({
       // `.is("provider_call_started_at", null)`. Track which one this builder is
       // so `.limit()` returns the right fixture set.
       let isNeverStarted = false
+      // The component-wrapper sweep filters `.eq("provider","component")`; return
+      // an empty set so it's a no-op in these tests (covered by its own suite).
+      let isComponentWrapper = false
+      // The stuck-render sweep filters `.filter("input_data->>type","eq","render-video")`.
+      // It ALSO calls `.is(...)`, so isRender must take precedence in `.limit()`.
+      let isRender = false
       const chain: any = {
         select: vi.fn(() => chain),
         in: vi.fn(() => chain),
         not: vi.fn(() => chain),
-        eq: vi.fn(() => chain),
+        eq: vi.fn((col?: string, val?: unknown) => {
+          if (col === "provider" && val === "component") isComponentWrapper = true
+          return chain
+        }),
         is: vi.fn(() => {
           isNeverStarted = true
           return chain
         }),
+        filter: vi.fn((col?: string) => {
+          if (col === "input_data->>type") isRender = true
+          return chain
+        }),
         lt: vi.fn(() => chain),
+        maybeSingle: vi.fn(() => Promise.resolve({ data: null, error: null })),
         limit: vi.fn(() =>
           Promise.resolve(
-            isNeverStarted
-              ? { data: mocks.neverStartedChain.data ?? mocks.neverStartedRows, error: mocks.neverStartedChain.error }
-              : { data: mocks.selectChain.data ?? mocks.rows, error: mocks.selectChain.error },
+            isRender
+              ? { data: mocks.renderChain.data ?? mocks.renderRows, error: mocks.renderChain.error }
+              : isComponentWrapper
+                ? { data: [], error: null }
+                : isNeverStarted
+                  ? { data: mocks.neverStartedChain.data ?? mocks.neverStartedRows, error: mocks.neverStartedChain.error }
+                  : { data: mocks.selectChain.data ?? mocks.rows, error: mocks.selectChain.error },
           ),
         ),
       }
@@ -69,6 +90,9 @@ describe("reconcileInflightJobs", () => {
     mocks.neverStartedRows.length = 0
     mocks.neverStartedChain.data = null
     mocks.neverStartedChain.error = null
+    mocks.renderRows.length = 0
+    mocks.renderChain.data = null
+    mocks.renderChain.error = null
     ;(sweepStaleSyncJob as ReturnType<typeof vi.fn>).mockClear()
     ;(reconcileKieJob as ReturnType<typeof vi.fn>).mockClear()
     ;(reconcileReplicateJob as ReturnType<typeof vi.fn>).mockClear()
@@ -262,5 +286,20 @@ describe("reconcileInflightJobs", () => {
     const result = await reconcileInflightJobs()
     expect(result.swept).toBe(1)
     expect(sweepStaleSyncJob).toHaveBeenCalledTimes(1)
+  })
+
+  it("sweeps stuck render jobs (processing, no provider_call_started_at) invisible to every other path", async () => {
+    // Render jobs leak when a render stalls past BullMQ's stall cap: the row stays
+    // 'processing' with no provider_call_started_at and provider != 'component', so
+    // the main scan, sweepNeverStartedJobs (pending-only), and the component sweep
+    // all miss them. The render sweep must mark them failed + refund.
+    mocks.renderRows.push(
+      { id: "j-render-1", provider_kind: null, reconcile_attempts: 0 },
+      { id: "j-render-2", provider_kind: null, reconcile_attempts: 1 },
+    )
+    const result = await reconcileInflightJobs()
+    expect(sweepStaleSyncJob).toHaveBeenCalledWith(expect.objectContaining({ id: "j-render-1" }))
+    expect(sweepStaleSyncJob).toHaveBeenCalledWith(expect.objectContaining({ id: "j-render-2" }))
+    expect(result.swept).toBe(2)
   })
 })

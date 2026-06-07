@@ -23,6 +23,7 @@ import {
   type HandlerFn,
 } from "../shared.js"
 import { finalizeJobWithMedia } from "../../lib/job-finalize.js"
+import { makeOnTaskCreated } from "../../lib/reconcile/persistence.js"
 
 export const handleCinematicAvatar: HandlerFn = async function handleCinematicAvatar(job, ctx) {
   const {
@@ -69,6 +70,7 @@ export const handleCinematicAvatar: HandlerFn = async function handleCinematicAv
         resolution,
         enhancePrompt,
         references,
+        onTaskCreated: makeOnTaskCreated(ctx.jobId, "heygen"),
       }),
   )
   await setJobProgress(job, ctx.jobId, 50)

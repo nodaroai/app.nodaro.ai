@@ -29,6 +29,10 @@ const mocks = vi.hoisted(() => {
   const mockRunFfmpeg = vi.fn().mockResolvedValue(undefined)
   const mockCleanupWorkDir = vi.fn().mockResolvedValue(undefined)
   const BROWSER_SAFE_VIDEO_ARGS = ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "fast", "-crf", "23", "-movflags", "+faststart"]
+  const mockProbeVideoSource = vi.fn().mockResolvedValue({ width: 1080, height: 1920, durationSeconds: 5 })
+
+  // render queue (kinetic captions hand the job off here)
+  const mockRenderQueueAdd = vi.fn().mockResolvedValue(undefined)
 
   // Shared helpers
   const mockCommitJobCredits = vi.fn().mockResolvedValue(undefined)
@@ -65,6 +69,8 @@ const mocks = vi.hoisted(() => {
     mockRunFfmpeg,
     mockCleanupWorkDir,
     BROWSER_SAFE_VIDEO_ARGS,
+    mockProbeVideoSource,
+    mockRenderQueueAdd,
     mockCommitJobCredits,
     mockShouldSaveJobResult,
     mockMarkJobCompleted,
@@ -95,7 +101,12 @@ vi.mock("@/providers/video/ffmpeg-utils.js", () => ({
   downloadFile: mocks.mockDownloadFile,
   runFfmpeg: mocks.mockRunFfmpeg,
   cleanupWorkDir: mocks.mockCleanupWorkDir,
+  probeVideoSource: mocks.mockProbeVideoSource,
   BROWSER_SAFE_VIDEO_ARGS: mocks.BROWSER_SAFE_VIDEO_ARGS,
+}))
+
+vi.mock("@/lib/render-queue.js", () => ({
+  renderQueue: { add: mocks.mockRenderQueueAdd },
 }))
 
 vi.mock("@/providers/video/combine-videos.js", () => ({
@@ -199,6 +210,45 @@ beforeEach(() => {
   mocks.mockGenerateAndUploadThumbnail.mockResolvedValue("https://r2.example.com/thumbnails/job-1.png")
   mocks.mockTrimAudio.mockResolvedValue({ audioPath: "/tmp/extract-work/audio.mp3" })
   mocks.mockAdjustVolume.mockResolvedValue({ outputPath: "/tmp/volume-work/output.mp4", inputType: "video" as const })
+})
+
+// ---------------------------------------------------------------------------
+// add-captions — kinetic render handoff (reconcile sentinel)
+// ---------------------------------------------------------------------------
+
+describe("add-captions handler — kinetic render handoff", () => {
+  const handler = ffmpegHandlers["add-captions"]
+
+  it("clears the pre-task reconcile sentinel BEFORE handing off to the render queue", async () => {
+    const job = makeJob("add-captions", {
+      videoUrl: "https://v.mp4",
+      style: "karaoke", // kinetic style → dispatchKineticCaptions
+      captions: [{ text: "hi", startMs: 0, endMs: 1000 }], // provided → no transcribe
+    })
+    await handler(job as never, makeCtx())
+
+    // The video-worker stamped provider_kind="pre-task" + provider_call_started_at
+    // before this handler ran. The kinetic path hands the job to the render queue
+    // (no onTaskCreated), so the sentinel MUST be cleared here — otherwise the
+    // reconcile cron fails+refunds the still-rendering job at the 30-min threshold.
+    expect(mocks.mockUpdate).toHaveBeenCalledWith({
+      provider_kind: null,
+      provider_call_started_at: null,
+    })
+
+    // Hands off to the render queue with a deterministic jobId so a worker
+    // stall-retry coalesces onto the same render instead of duplicating it.
+    expect(mocks.mockRenderQueueAdd).toHaveBeenCalledTimes(1)
+    const [name, , opts] = mocks.mockRenderQueueAdd.mock.calls[0]
+    expect(name).toBe("render")
+    expect(opts).toEqual({ jobId: "render-job-1" })
+
+    // Ordering matters — the render job could be picked up immediately, so the
+    // sentinel-clear must land before the handoff.
+    expect(mocks.mockUpdate.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.mockRenderQueueAdd.mock.invocationCallOrder[0],
+    )
+  })
 })
 
 // ---------------------------------------------------------------------------

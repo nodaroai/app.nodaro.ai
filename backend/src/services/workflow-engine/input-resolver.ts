@@ -21,6 +21,7 @@ import { resolveIndex, selectListItems, type SelectorFields } from "@nodaro/shar
 import { splitByLoopDelimiter } from "@nodaro/shared"
 import { SOCIAL_POST_NODE_TYPES } from "@nodaro/shared"
 import { PARAMETER_NODE_TYPES } from "@nodaro/shared"
+import { FAN_OUT_EACH_TYPES, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES } from "@nodaro/shared"
 
 /**
  * Resolve a node's primary output from execution state or source node data.
@@ -413,7 +414,12 @@ function getSavedNodeOutput(node: SimpleNode): string | undefined {
 // ---------------------------------------------------------------------------
 
 /** Node types whose edges default to "each" output mode (fan-out). */
-const DEFAULT_EACH_TYPES = new Set(["list", "split-text", "selector"])
+// Fan-out "each" default set: node types whose list output fans out one
+// downstream run per element on a default (no explicit outputMode) edge.
+// Single source of truth in @nodaro/shared so the backend can't drift from the
+// frontend — it HAD drifted (the four list-transform types were missing here),
+// silently dropping all-but-the-first item on server-side runs.
+const DEFAULT_EACH_TYPES = FAN_OUT_EACH_TYPES
 
 /**
  * Resolve the Generate Text (llm-chat) `items` handle into its fan-out list —
@@ -945,59 +951,26 @@ const REFERENCE_HANDLE_MAP: Record<string, "referenceImageUrls" | "referenceVide
 
 const ENTITY_NODE_TYPES = new Set(["character", "face", "object", "location"])
 
-const VIDEO_OUTPUT_NODE_TYPES = new Set([
-  "image-to-video",
-  "video-to-video",
-  "text-to-video",
-  "generate-video",
-  "lip-sync",
-  "speech-to-video",
-  "motion-transfer",
-  "video-upscale",
-  "extend-video",
-  "video-retake",
-  "suno-music-video",
-  "combine-videos",
-  "merge-video-audio",
-  "add-captions",
-  "resize-video",
-  "social-media-format",
-  "trim-video",
-  "render-video",
-  "speed-ramp",
-  "loop-video",
-  "fade-video",
-  "transcode-video",
-  "manual-edit",
-  "video-sfx",
-  "ai-avatar",
-  "cinematic-avatar",
-])
+// Derived from the shared VIDEO_PRODUCER_TYPES single source of truth, minus the
+// two pure-source types (upload-video / youtube-video) which routeOutput handles
+// via isVideoSourceType + dedicated source branches. Deriving — rather than a
+// hand-maintained copy — keeps this in lock-step with the producer set; the
+// prior copy had drifted, dropping face-swap / remove-audio video output into
+// the `prompt` fallback on server-side DAG runs.
+const VIDEO_OUTPUT_NODE_TYPES = new Set(
+  [...VIDEO_PRODUCER_TYPES].filter((t) => t !== "upload-video" && t !== "youtube-video"),
+)
 
-const AUDIO_OUTPUT_NODE_TYPES = new Set([
-  "text-to-speech",
-  "generate-music",
-  "text-to-audio",
-  "audio-isolation",
-  "text-to-dialogue",
-  "suno-generate",
-  "suno-cover",
-  "suno-extend",
-  "suno-separate",
-  "suno-mashup",
-  "suno-replace-section",
-  "suno-add-instrumental",
-  "suno-add-vocals",
-  "suno-convert-wav",
-  "suno-upload-extend",
-  "trim-audio",
-  "mix-audio",
-  "combine-audio",
-  "voice-changer",
-  "dubbing",
-  "voice-remix",
-  "voice-design",
-])
+// Derived from the shared AUDIO_PRODUCER_TYPES single source of truth, minus the
+// pure-source types (upload-audio / reference-audio) and adjust-volume (a
+// dynamic passthrough routed by its runtime lastInputType in its own branch).
+// Deriving keeps it lock-step with the producer set; the prior hand-maintained
+// copy had drifted, dropping extract-audio output into the `prompt` fallback.
+const AUDIO_OUTPUT_NODE_TYPES = new Set(
+  [...AUDIO_PRODUCER_TYPES].filter(
+    (t) => t !== "upload-audio" && t !== "reference-audio" && t !== "adjust-volume",
+  ),
+)
 
 const IMAGE_SOURCE_NODE_TYPES = new Set([
   "generate-image", "edit-image", "image-to-image", "modify-image",
@@ -1528,7 +1501,11 @@ function routeOutput(
   if (srcType === "adjust-volume") {
     const lastInputType = (src.data.lastInputType as string | undefined) ?? "audio"
     if (lastInputType === "video") {
-      inputs.videoUrl = output
+      // Route through routeVideoOutput (like every other video source) so a
+      // combine-videos / merge-video-audio consumer accumulates this clip into
+      // its videoUrls[] array. A bare `inputs.videoUrl = output` is last-wins and
+      // silently dropped the clip from combine-videos (only the final input survived).
+      routeVideoOutput(inputs, output, targetType, src.id)
     } else {
       routeAudioOutput(inputs, output, targetType, src.id)
     }

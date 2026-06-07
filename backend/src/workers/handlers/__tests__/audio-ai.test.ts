@@ -241,7 +241,7 @@ describe("transcribe handler", () => {
     const job = makeJob("transcribe", { audioUrl: "https://example.com/audio.mp3" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockTranscribe).toHaveBeenCalledWith("https://example.com/audio.mp3", undefined, undefined, { diarize: undefined, tagAudioEvents: undefined })
+    expect(mocks.mockTranscribe).toHaveBeenCalledWith("https://example.com/audio.mp3", undefined, undefined, { diarize: undefined, tagAudioEvents: undefined, onTaskCreated: expect.any(Function) })
     // transcribe outputs text/segments — keeps direct markJobCompleted (not via finalize)
     expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
       output_data: { text: "Hello world", language: "en", segments: [] },
@@ -251,7 +251,7 @@ describe("transcribe handler", () => {
   it("passes language parameter", async () => {
     const job = makeJob("transcribe", { audioUrl: "https://example.com/audio.mp3", language: "fr" })
     await handler(job as never, makeCtx())
-    expect(mocks.mockTranscribe).toHaveBeenCalledWith("https://example.com/audio.mp3", undefined, "fr", { diarize: undefined, tagAudioEvents: undefined })
+    expect(mocks.mockTranscribe).toHaveBeenCalledWith("https://example.com/audio.mp3", undefined, "fr", { diarize: undefined, tagAudioEvents: undefined, onTaskCreated: expect.any(Function) })
   })
 })
 

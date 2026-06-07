@@ -189,7 +189,16 @@ const handleTranscribe: HandlerFn = async function handleTranscribe(job, ctx) {
     job,
     ctx.jobId,
     { start: 25, cap: 90 },
-    () => transcribe(audioUrl, provider, language, { diarize, tagAudioEvents, wordTimestamps }),
+    () =>
+      transcribe(audioUrl, provider, language, {
+        diarize,
+        tagAudioEvents,
+        wordTimestamps,
+        // Persist the Replicate prediction id (whisper paths) so a BullMQ
+        // stall-retry recovers via the replicate reconcile handler instead of
+        // re-billing the transcribe call.
+        onTaskCreated: makeOnTaskCreated(ctx.jobId, "replicate-prediction"),
+      }),
   )
   await setJobProgress(job, ctx.jobId, 100)
   if (!await shouldSaveJobResult(ctx.jobId)) return

@@ -11,7 +11,7 @@ interface JobRow {
 interface ExecutionRow {
   id: string
   started_at: string | null
-  node_states: Record<string, { status: string; jobId?: string }>
+  node_states: Record<string, { status: string; jobId?: string; iterationTotal?: number }>
 }
 
 const mocks = vi.hoisted(() => ({
@@ -138,6 +138,33 @@ describe("reconcileWorkflowExecutionsTick", () => {
       n1: { status: "completed" },
       n2: { status: "completed" },
     })
+  })
+
+  it("does NOT complete a crashed-mid-fan-out node (iterationTotal>1) from partial iterations", async () => {
+    // Regression for the fan-out partial-resume DATA-LOSS: a fan-out node that
+    // crashed mid-flight is "running" with iterationTotal=3 but only 1 iteration
+    // job is terminal. Reconcile must NOT mark it (and thus the whole execution)
+    // "completed" — its assembled output was never persisted, so the remaining
+    // items would be silently dropped. It must be left for the orchestrator re-run.
+    mocks.executions.push({
+      id: "exec-fanout",
+      started_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      node_states: {
+        fan: { status: "running", iterationTotal: 3 },
+        done: { status: "completed", jobId: "jd" },
+      },
+    })
+    mocks.jobs.push(
+      { id: "fan-0", status: "completed", error_message: null, workflow_execution_id: "exec-fanout", input_data: { node_id: "fan" } },
+      { id: "jd", status: "completed", error_message: null },
+    )
+    // Live orchestrator job → execution is not abandonable; it must simply wait.
+    mocks.orchJob.set("exec-fanout", { state: "active" })
+
+    await reconcileWorkflowExecutionsTick()
+
+    // The execution must NOT be flipped to "completed" (that would drop iterations 1 & 2).
+    expect(mocks.updates.find((u) => u.updates.status === "completed")).toBeUndefined()
   })
 
   it("skips an execution when child jobs are still pending/processing in DB AND BullMQ orchestrator job is active", async () => {

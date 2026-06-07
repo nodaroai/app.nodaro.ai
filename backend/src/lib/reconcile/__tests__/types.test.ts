@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest"
 import { PROVIDER_KIND_VALUES, STALE_THRESHOLD_MS, isAsyncKind, isSyncKind } from "../types.js"
 
 describe("ProviderKind registry", () => {
-  it("exposes spec-listed kinds at runtime (14 base + 2 suno-voice in P5.2 + 3 reconcile blind-spot fixes)", () => {
+  it("exposes spec-listed kinds at runtime (14 base + 2 suno-voice in P5.2 + 3 reconcile blind-spot fixes + heygen stall-retry guard)", () => {
     expect(PROVIDER_KIND_VALUES).toEqual([
       "kie-standard", "kie-veo", "kie-veo-1080p", "kie-suno",
       "kie-suno-voice-create", "kie-suno-voice-validate",
@@ -10,6 +10,7 @@ describe("ProviderKind registry", () => {
       "kie-kling3", "kie-runway", "kie-aleph", "kie-lip-sync", "kie-llm",
       "replicate-prediction", "replicate-training",
       "elevenlabs-async", "elevenlabs-sync", "anthropic-sync",
+      "heygen",
       "pre-task",
     ])
   })
@@ -27,6 +28,7 @@ describe("ProviderKind registry", () => {
     expect(isSyncKind("kie-suno-voice-create")).toBe(true)
     expect(isSyncKind("kie-suno-voice-validate")).toBe(true)
     expect(isSyncKind("pre-task")).toBe(true)
+    expect(isSyncKind("heygen")).toBe(true)
     expect(isSyncKind("kie-standard")).toBe(false)
     expect(isSyncKind("kie-aleph")).toBe(false)
     expect(isSyncKind("kie-veo-1080p")).toBe(false)

@@ -758,3 +758,68 @@ describe("extractAllGeneratedResults", () => {
     expect(result).toEqual(["https://cdn/img1.png"])
   })
 })
+
+// ---------------------------------------------------------------------------
+// generate-mask dual output (regression — backend DAG previously dropped the
+// mask, sending the passthrough source image to the "mask" handle so inpaint
+// masked the whole frame). Covers all three extractor paths.
+// ---------------------------------------------------------------------------
+
+describe("generate-mask dual output (mask vs image handle)", () => {
+  it("getPrimaryOutput routes the 'mask' handle to maskUrl, default/'image' to imageUrl", () => {
+    const out: NodeOutput = { imageUrl: "https://cdn/src.png", maskUrl: "https://cdn/mask.png" }
+    expect(getPrimaryOutput(out, "generate-mask", "mask")).toBe("https://cdn/mask.png")
+    expect(getPrimaryOutput(out, "generate-mask", "image")).toBe("https://cdn/src.png")
+    expect(getPrimaryOutput(out, "generate-mask")).toBe("https://cdn/src.png")
+  })
+
+  it("buildNodeOutputFromJobData copies maskUrl (DIRECT_OUTPUT_KEYS) for the live DAG path", () => {
+    const out = buildNodeOutputFromJobData(
+      { imageUrl: "https://cdn/src.png", maskUrl: "https://cdn/mask.png" },
+      "generate-mask",
+    )
+    expect(out.imageUrl).toBe("https://cdn/src.png")
+    expect(out.maskUrl).toBe("https://cdn/mask.png")
+  })
+
+  it("extractSavedNodeOutput hydrates both imageUrl and maskUrl on resume/skip", () => {
+    const saved = extractSavedNodeOutput(
+      node("m1", "generate-mask", {
+        generatedResults: [{ imageUrl: "https://cdn/src.png", maskUrl: "https://cdn/mask.png" }],
+        activeResultIndex: 0,
+      }),
+    )
+    expect(saved).toEqual({ imageUrl: "https://cdn/src.png", maskUrl: "https://cdn/mask.png" })
+  })
+
+  it("extractSavedNodeOutput falls back to generatedImageUrl/generatedMaskUrl", () => {
+    const saved = extractSavedNodeOutput(
+      node("m2", "generate-mask", {
+        generatedImageUrl: "https://cdn/src.png",
+        generatedMaskUrl: "https://cdn/mask.png",
+      }),
+    )
+    expect(saved).toEqual({ imageUrl: "https://cdn/src.png", maskUrl: "https://cdn/mask.png" })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Resume-path producers that were dropped by extractSavedNodeOutput (M5):
+// video-sfx (missing from VIDEO_RESULT_TYPES) and reduce (no saved case).
+// ---------------------------------------------------------------------------
+
+describe("extractSavedNodeOutput — video-sfx + reduce resume hydration", () => {
+  it("video-sfx hydrates videoUrl from generatedVideoUrl on resume/skip", () => {
+    const saved = extractSavedNodeOutput(
+      node("s1", "video-sfx", { generatedVideoUrl: "https://cdn/sfx.mp4" }),
+    )
+    expect(saved).toEqual({ videoUrl: "https://cdn/sfx.mp4" })
+  })
+
+  it("reduce hydrates result from data.result on resume/skip", () => {
+    const saved = extractSavedNodeOutput(
+      node("r1", "reduce", { result: "aggregated text" }),
+    )
+    expect(saved).toEqual({ result: "aggregated text" })
+  })
+})

@@ -79,10 +79,21 @@ export async function stripeWebhookRoutes(app: FastifyInstance) {
 
     try {
       switch (event.type) {
-        case "checkout.session.completed": {
+        case "checkout.session.completed":
+        case "checkout.session.async_payment_succeeded": {
           const session = event.data.object as Stripe.Checkout.Session
-          if (session.mode === "payment") {
-            // One-time payment (top-up)
+          // One-time payment (top-up). Only grant once funds have SETTLED: card
+          // pays "paid" on `completed`; async methods (bank debit / some wallets)
+          // fire `completed` with payment_status "unpaid"/"processing" and settle
+          // later via `async_payment_succeeded`. Granting on an unsettled
+          // `completed` would hand out credits a later payment failure can't claw
+          // back. "no_payment_required" (100%-off promo) is treated as settled to
+          // preserve the prior coupon behavior. The idempotency mutex
+          // (transactionId = payment_intent) makes the two events grant exactly once.
+          const settled =
+            session.payment_status === "paid" ||
+            session.payment_status === "no_payment_required"
+          if (session.mode === "payment" && settled) {
             await handleTransactionCompleted({
               transactionId: (session.payment_intent as string) ?? session.id,
               stripeCustomerId: session.customer as string | null,

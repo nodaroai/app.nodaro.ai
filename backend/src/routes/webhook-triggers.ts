@@ -154,7 +154,13 @@ export async function webhookTriggerRoutes(app: FastifyInstance) {
       last_triggered_at: previousLastTriggeredAt,
     }
 
-    // Create execution
+    // Create execution. The idempotency_key makes the "already-running" guard
+    // above race-proof: two webhook fires that BOTH passed the activeExec SELECT
+    // (the TOCTOU window) share the same (triggerId, previousLastTriggeredAt) —
+    // the first hasn't updated last_triggered_at yet — so the second INSERT
+    // collides on workflow_executions_idempotency_uniq (user_id, idempotency_key)
+    // and is rejected atomically instead of double-executing (double-charging).
+    const idempotencyKey = `webhook:${trigger.id}:${previousLastTriggeredAt ?? "initial"}`
     const { data: execution, error: execError } = await supabase
       .from("workflow_executions")
       .insert({
@@ -163,10 +169,21 @@ export async function webhookTriggerRoutes(app: FastifyInstance) {
         status: "pending",
         trigger_type: "webhook",
         trigger_data: triggerData,
+        idempotency_key: idempotencyKey,
       })
       .select("id")
       .single()
 
+    if (execError?.code === "23505") {
+      // Concurrent duplicate fire — another request already created this trigger
+      // event's execution. Treat as already-running (no second charge).
+      return reply.status(409).send({
+        error: {
+          code: "already_running",
+          message: "This workflow already has an active execution for this trigger event",
+        },
+      })
+    }
     if (execError || !execution) {
       return reply.status(500).send({
         error: { code: "internal_error", message: "Failed to create execution" },

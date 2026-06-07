@@ -4,6 +4,7 @@ import { finalizeJobWithMedia, type FinalizeJobType } from "../job-finalize.js"
 import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
 import { deleteCharacterLora } from "../../providers/replicate/training.js"
 import { bumpAttemptsOrExhaust } from "./bump-attempts.js"
+import { refundLoopTrimAddonOnReconcile } from "./loop-trim-refund.js"
 
 export interface ReplicateJobRow {
   id: string
@@ -11,6 +12,7 @@ export interface ReplicateJobRow {
   provider_task_id: string | null
   reconcile_attempts: number
   job_type: string | null
+  input_data?: Record<string, unknown> | null
 }
 
 interface ReplicatePrediction {
@@ -172,7 +174,10 @@ async function markFailed(jobId: string, reason: string): Promise<void> {
       reconcile_last_error: "upstream_failed",
     })
     .eq("id", jobId)
-    .neq("status", "cancelled")
+    // CAS on the live (non-terminal) states only — a bare .neq("status","cancelled")
+    // would still trample a job the worker concurrently flipped to "completed".
+    // Matches kie.ts / sync-sweep.ts (the M6 fix); these two files were missed.
+    .in("status", ["pending", "processing"])
 }
 
 /**
@@ -243,6 +248,11 @@ export async function reconcileReplicateJob(row: ReplicateJobRow): Promise<void>
   const providerMs = pred.metrics?.predict_time
     ? Math.round(pred.metrics.predict_time * 1000)
     : undefined
+  // i2v + loopTrim.enabled: reconcile uploads the RAW (un-trimmed) clip and
+  // commits the reserved tier, so refund the loop-trim add-on BEFORE finalize
+  // (commit is CAS-once → this commit wins). No-op otherwise.
+  await refundLoopTrimAddonOnReconcile(row.job_type, row.id, row.input_data ?? null)
+
   await finalizeJobWithMedia({
     jobId: row.id,
     jobType: (row.job_type ?? "generate-image") as FinalizeJobType,

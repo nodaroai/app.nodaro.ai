@@ -90,15 +90,22 @@ function extractR2UrlsFromOutput(outputData: Record<string, unknown>): string[] 
  * URLs that don't match the configured R2 public URL (e.g. external CDNs the
  * user pasted in) are filtered out — `r2KeyFromUrl` returns null for those.
  */
-async function collectLocationR2Keys(userId: string): Promise<string[]> {
-  const { data } = await supabase
+async function collectLocationR2Keys(userId: string, cutoff?: string): Promise<string[]> {
+  let query = supabase
     .from("locations")
     .select(
       "source_image_url, time_of_day, weather, seasons, angles, lighting, atmosphere_motions, reference_photos",
     )
     .eq("user_id", userId)
     .is("deleted_at", null)
-    .limit(1000)
+  // The free-user reaper passes the 60-day retention cutoff so ONLY media past the
+  // grace is collected. Without it, an active free user's brand-new Location Studio
+  // media was deleted on the very next nightly run (the assets/jobs phases already
+  // apply this cutoff — the location phase was the lone outlier, deleting in-use
+  // media with zero grace). The canceled-user reaper omits the cutoff (full wipe —
+  // its 60-day post-cancellation grace has already expired).
+  if (cutoff) query = query.lt("created_at", cutoff)
+  const { data } = await query.limit(1000)
 
   const keys: string[] = []
   const JSONB_COLUMNS = [
@@ -170,6 +177,13 @@ export async function cleanupFreeUserMedia(): Promise<CleanupResult> {
     .from("profiles")
     .select("id")
     .or("tier.eq.free,tier.is.null")
+    // Exclude users canceled within the last MEDIA_RETENTION_DAYS. handleSubscriptionCanceled
+    // downgrades to tier='free' IMMEDIATELY, so without this a just-canceled long-term
+    // subscriber's >60-day-old media would be reaped on the very next nightly run —
+    // overriding the intended 60-day post-cancellation grace (which cleanupCanceledUserMedia
+    // cannot grant: its `tier != 'free'` filter never matches the now-free canceled user).
+    // Once the grace expires (subscription_ended_at < cutoff) the user re-enters this reaper.
+    .or(`subscription_ended_at.is.null,subscription_ended_at.lt.${cutoff}`)
     .limit(1000)
 
   if (usersError || !freeUsers || freeUsers.length === 0) {
@@ -329,8 +343,10 @@ export async function cleanupFreeUserMedia(): Promise<CleanupResult> {
   // Without this pass, every location asset uploaded by a free-tier user
   // would orphan its R2 object forever. Soft-deleted rows are skipped by
   // collectLocationR2Keys so /restore still works after cleanup runs.
+  // Pass `cutoff` so ONLY locations past the 60-day retention grace are reaped —
+  // matching Phase A1/A2 and protecting active free users' in-use media.
   for (const userId of freeUserIds) {
-    const locationKeys = await collectLocationR2Keys(userId)
+    const locationKeys = await collectLocationR2Keys(userId, cutoff)
     if (locationKeys.length === 0) continue
     const batchResult = await batchDeleteFromR2(locationKeys)
     filesDeleted += batchResult.deleted

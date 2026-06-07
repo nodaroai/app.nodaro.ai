@@ -1,4 +1,5 @@
 import type { PublishRequest, PublishResult, PlatformPublisher } from "./index.js"
+import { safeFetch } from "../../../lib/safe-fetch.js"
 
 /**
  * Convert text to Telegram-compatible HTML.
@@ -69,7 +70,10 @@ export const telegramPublisher: PlatformPublisher = {
     if (action === "send-video") {
       if (!mediaUrl) throw new Error("mediaUrl is required for send-video")
 
-      const mediaRes = await fetch(mediaUrl)
+      // safeFetch: mediaUrl is user-supplied — block SSRF/DNS-rebinding to
+      // internal IPs (safeUrlSchema at the route is syntactic only). Mirrors
+      // x.ts / youtube.ts / linkedin.ts (round-1 M4); send-video was missed.
+      const mediaRes = await safeFetch(mediaUrl)
       if (!mediaRes.ok) throw new Error(`Failed to download video: ${mediaRes.statusText}`)
 
       const contentLength = mediaRes.headers.get("content-length")

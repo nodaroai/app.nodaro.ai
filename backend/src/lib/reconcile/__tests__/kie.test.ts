@@ -30,26 +30,27 @@ const mocks = vi.hoisted(() => {
   const jobsSelectEqMock = vi.fn(() => ({ single: jobsSingleMock }))
   const jobsSelectMock = vi.fn(() => ({ eq: jobsSelectEqMock }))
 
-  const jobsUpdateNeqMock = vi.fn().mockResolvedValue({ data: null, error: null })
+  const jobsUpdateInMock = vi.fn().mockResolvedValue({ data: null, error: null })
   const jobsUpdateEqMock = vi.fn(() => ({
-    neq: jobsUpdateNeqMock,
-    // For bumpAttempts, the chain ends at .eq() — no .neq()
+    in: jobsUpdateInMock,
+    // For bumpAttempts, the chain ends at .eq() — no .in()
     then: undefined,
   }))
-  // Mock the chain for bumpAttempts (.update().eq()) and markFailed (.update().eq().neq())
-  // by returning a thenable that resolves directly when awaited.
+  // Mock the chain for bumpAttempts (.update().eq()) and markFailed
+  // (.update().eq().in(["pending","processing"])) by returning a thenable that
+  // resolves directly when awaited.
   const jobsUpdateMock = vi.fn((arg: Record<string, unknown>) => {
     void arg
     return {
       eq: vi.fn((col: string, val: string) => {
         if (col === "id") {
-          // Return an object that has both .neq() (for markFailed) and is awaitable (for bumpAttempts)
+          // Return an object that has both .in() (for markFailed) and is awaitable (for bumpAttempts)
           return Object.assign(
-            Promise.resolve({ data: null, error: null }) as Promise<{ data: null; error: null }> & { neq: typeof jobsUpdateNeqMock },
-            { neq: jobsUpdateNeqMock },
+            Promise.resolve({ data: null, error: null }) as Promise<{ data: null; error: null }> & { in: typeof jobsUpdateInMock },
+            { in: jobsUpdateInMock },
           )
         }
-        return { neq: jobsUpdateNeqMock }
+        return { in: jobsUpdateInMock }
       }),
     }
   })
@@ -72,7 +73,7 @@ const mocks = vi.hoisted(() => {
     refundMock,
     FakeKieError,
     jobsUpdateMock,
-    jobsUpdateNeqMock,
+    jobsUpdateInMock,
     fromMock,
     jobsSingleMock,
   }
