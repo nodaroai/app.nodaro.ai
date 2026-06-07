@@ -34,6 +34,7 @@ The `characters` table stores one row per character. Highlights:
 | `description` | text | Freeform identity notes (height, hair, vibe). |
 | `gender` / `style` / `base_outfit` | text | Identity scaffolding for prompts. |
 | `source_image_url` | text | The **anchor portrait** — set by `approve-portrait`. |
+| `image_provider` | text | MODEL_CATALOG image-model id the main image was generated with (nullable). Set on create (the provider you generated with) + editable via `upsert`; validated server-side — unknown / non-image → `null`. |
 | `seed_prompt` | text | Short prompt fragment that scaffolds portrait gen. |
 | `canonical_description` | text | LLM-authored ~80–120-word visual description set when the portrait is approved. |
 | `expressions` / `poses` / `motions` / `angles` / `body_angles` / `lighting_variations` | jsonb[] | Six asset buckets — each entry is `{ name, url }`. |

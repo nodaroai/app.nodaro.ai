@@ -39,6 +39,7 @@ The `objects` table stores one row per object. Highlights:
 | `category` | text | One of `furniture`, `vehicle`, `weapon`, `food`, `clothing`, `electronics`, `nature`, `tool`, `animal`, `other`. |
 | `style` | text | Visual style — one of `realistic`, `anime`, `3d-pixar`, `illustration`. |
 | `source_image_url` | text | The **anchor main image** — set by `approve-main-image`. |
+| `image_provider` | text | MODEL_CATALOG image-model id the main image was generated with (nullable). Set on create + editable via the update route; validated server-side — unknown / non-image → `null`. |
 | `canonical_description` | text | LLM-authored ~80–120-word visual description set when the main image is approved. Coerced from DB null to `""` on the wire. |
 | `style_lock` | boolean | When `true`, every variant gen passes the main image as i2i source for layout consistency. Defaults to `true` on new rows. |
 | `angles` / `materials` / `variations` | jsonb[] | Three image asset buckets — each entry is `{ name, url }`. |

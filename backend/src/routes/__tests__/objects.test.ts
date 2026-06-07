@@ -359,6 +359,36 @@ describe("POST /v1/objects", () => {
     )
   })
 
+  it("persists a valid image_provider on insert", async () => {
+    const mockSingle = vi.fn().mockResolvedValue({ data: { id: TEST_OBJECT_ID }, error: null })
+    const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
+    const mockInsert = vi.fn().mockReturnValue({ select: mockSelect })
+    vi.mocked(supabase.from).mockReturnValue({ insert: mockInsert } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/objects",
+      payload: { name: "Sword", nodeId: "node-3", userId: TEST_USER_ID, imageProvider: "nano-banana" },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(mockInsert).toHaveBeenCalledWith(expect.objectContaining({ image_provider: "nano-banana" }))
+  })
+
+  it("nulls an unknown image_provider on insert", async () => {
+    const mockSingle = vi.fn().mockResolvedValue({ data: { id: TEST_OBJECT_ID }, error: null })
+    const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
+    const mockInsert = vi.fn().mockReturnValue({ select: mockSelect })
+    vi.mocked(supabase.from).mockReturnValue({ insert: mockInsert } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/objects",
+      payload: { name: "Sword", nodeId: "node-3", userId: TEST_USER_ID, imageProvider: "not-a-model" },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(mockInsert).toHaveBeenCalledWith(expect.objectContaining({ image_provider: null }))
+  })
+
   it("INSERT path accepts ALL fields incl. worker-owned (motionClips, angles, materials, variations)", async () => {
     const mockSingle = vi.fn().mockResolvedValue({ data: { id: TEST_OBJECT_ID }, error: null })
     const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })

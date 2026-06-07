@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { PLACEHOLDER_CHARACTER_NAME } from "@nodaro/shared"
 import { safeUrlSchema } from "../lib/url-validator.js"
+import { normalizeImageProvider } from "../lib/image-provider.js"
 import { supabase } from "../lib/supabase.js"
 import { requireAppScope } from "../lib/scope-prehandler.js"
 import { formatZodError } from "../lib/zod-error.js"
@@ -63,6 +64,10 @@ export const upsertCharacterBody = z.object({
   style: z.string().max(50).optional(),
   baseOutfit: z.string().max(1000).optional(),
   sourceImageUrl: safeUrlSchema.optional(),
+  // Persistent image-model id (MODEL_CATALOG). Validated server-side via
+  // normalizeImageProvider (unknown / non-image -> null); accept any string|null
+  // here so the route — not Zod — owns the catalog check.
+  imageProvider: z.string().nullable().optional(),
   expressions: z.array(z.object({ name: z.string(), url: safeUrlSchema })).optional(),
   poses: z.array(z.object({ name: z.string(), url: safeUrlSchema })).optional(),
   lightingVariations: z.array(z.object({ name: z.string(), url: safeUrlSchema })).optional(),
@@ -133,7 +138,7 @@ const listCharactersQuery = z.object({
 })
 
 const SELECT_COLUMNS =
-  "id, user_id, node_id, project_id, name, description, gender, style, base_outfit, source_image_url, expressions, poses, lighting_variations, angles, body_angles, motions, reference_videos_by_variant, voice, personality, canonical_description, lora_training_status, lora_replicate_version, lora_trigger_word, lora_trained_at, deleted_at, created_at, updated_at"
+  "id, user_id, node_id, project_id, name, description, gender, style, base_outfit, source_image_url, image_provider, expressions, poses, lighting_variations, angles, body_angles, motions, reference_videos_by_variant, voice, personality, canonical_description, lora_training_status, lora_replicate_version, lora_trigger_word, lora_trained_at, deleted_at, created_at, updated_at"
 
 type CharacterRow = {
   id: string
@@ -146,6 +151,7 @@ type CharacterRow = {
   style: string | null
   base_outfit: string | null
   source_image_url: string | null
+  image_provider: string | null
   expressions: { name: string; url: string }[] | null
   poses: { name: string; url: string }[] | null
   lighting_variations: { name: string; url: string }[] | null
@@ -177,6 +183,7 @@ function toCamel(c: CharacterRow) {
     style: c.style,
     baseOutfit: c.base_outfit,
     sourceImageUrl: c.source_image_url,
+    imageProvider: c.image_provider,
     expressions: c.expressions,
     poses: c.poses,
     lightingVariations: c.lighting_variations,
@@ -490,7 +497,7 @@ export async function characterRoutes(app: FastifyInstance) {
       })
     }
 
-    const { id, nodeId, workflowId, projectId, name, description, gender, style, baseOutfit, sourceImageUrl, expressions, poses, lightingVariations, angles, bodyAngles, motions, voice, personality, seedPrompt, canonicalDescription, referencePhotos, realLifeRefsByVariant, referenceVideosByVariant } = parsed.data
+    const { id, nodeId, workflowId, projectId, name, description, gender, style, baseOutfit, sourceImageUrl, expressions, poses, lightingVariations, angles, bodyAngles, motions, voice, personality, seedPrompt, canonicalDescription, referencePhotos, realLifeRefsByVariant, referenceVideosByVariant, imageProvider } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -518,6 +525,7 @@ export async function characterRoutes(app: FastifyInstance) {
       if (style !== undefined) patch.style = style ?? null
       if (baseOutfit !== undefined) patch.base_outfit = baseOutfit ?? null
       if (sourceImageUrl !== undefined) patch.source_image_url = sourceImageUrl ?? null
+      if (imageProvider !== undefined) patch.image_provider = normalizeImageProvider(imageProvider)
       if (expressions !== undefined) patch.expressions = expressions
       if (poses !== undefined) patch.poses = poses
       if (lightingVariations !== undefined) patch.lighting_variations = lightingVariations
@@ -569,6 +577,7 @@ export async function characterRoutes(app: FastifyInstance) {
       style: style ?? null,
       base_outfit: baseOutfit ?? null,
       source_image_url: sourceImageUrl ?? null,
+      image_provider: normalizeImageProvider(imageProvider),
       expressions: expressions ?? [],
       poses: poses ?? [],
       lighting_variations: lightingVariations ?? [],
@@ -658,6 +667,7 @@ export async function characterRoutes(app: FastifyInstance) {
       style: (source as CharacterRow).style,
       base_outfit: (source as CharacterRow).base_outfit,
       source_image_url: (source as CharacterRow).source_image_url,
+      image_provider: (source as CharacterRow).image_provider,
       expressions: (source as CharacterRow).expressions ?? [],
       poses: (source as CharacterRow).poses ?? [],
       lighting_variations: (source as CharacterRow).lighting_variations ?? [],

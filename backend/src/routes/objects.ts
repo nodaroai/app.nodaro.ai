@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { OBJECT_ATTACH_COLUMNS } from "@nodaro/shared"
 import { safeUrlSchema } from "../lib/url-validator.js"
+import { normalizeImageProvider } from "../lib/image-provider.js"
 import { supabase } from "../lib/supabase.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { requireAppScope } from "../lib/scope-prehandler.js"
@@ -27,6 +28,9 @@ const upsertObjectBody = z.object({
   category: z.string().max(50).optional(),
   style: z.string().max(50).optional(),
   sourceImageUrl: safeUrlSchema.optional(),
+  // Persistent image-model id (MODEL_CATALOG). Validated server-side via
+  // normalizeImageProvider (unknown / non-image -> null).
+  imageProvider: z.string().nullable().optional(),
   // Asset buckets — worker-owned on UPDATE, free-to-set on INSERT. The UPDATE
   // branch deliberately drops these so the worker's atomic
   // `append_object_asset()` RPC cannot be clobbered by a Studio auto-save
@@ -112,7 +116,7 @@ const listObjectsQuery = z.object({
 
 // Single source of truth for the GET column list — keeps single + list in lock-step.
 const SELECT_COLUMNS =
-  "id, user_id, node_id, project_id, name, description, category, style, source_image_url, angles, materials, variations, motion_clips, reference_photos, canonical_description, style_lock, deleted_at, created_at, updated_at"
+  "id, user_id, node_id, project_id, name, description, category, style, source_image_url, image_provider, angles, materials, variations, motion_clips, reference_photos, canonical_description, style_lock, deleted_at, created_at, updated_at"
 
 type ObjectRow = {
   id: string
@@ -124,6 +128,7 @@ type ObjectRow = {
   category: string | null
   style: string | null
   source_image_url: string | null
+  image_provider: string | null
   angles: { name: string; url: string }[] | null
   materials: { name: string; url: string }[] | null
   variations: { name: string; url: string }[] | null
@@ -149,6 +154,7 @@ function toCamel(obj: ObjectRow) {
     category: obj.category,
     style: obj.style,
     sourceImageUrl: obj.source_image_url,
+    imageProvider: obj.image_provider,
     angles: obj.angles ?? [],
     materials: obj.materials ?? [],
     variations: obj.variations ?? [],
@@ -277,6 +283,7 @@ export async function objectRoutes(app: FastifyInstance) {
       category,
       style,
       sourceImageUrl,
+      imageProvider,
       angles,
       materials,
       variations,
@@ -313,6 +320,7 @@ export async function objectRoutes(app: FastifyInstance) {
       if (description !== undefined) updateRow.description = description ?? null
       if (category !== undefined) updateRow.category = category ?? null
       if (style !== undefined) updateRow.style = style ?? null
+      if (imageProvider !== undefined) updateRow.image_provider = normalizeImageProvider(imageProvider)
       if (referencePhotos !== undefined) updateRow.reference_photos = referencePhotos
       if (styleLock !== undefined) updateRow.style_lock = styleLock
 
@@ -368,6 +376,7 @@ export async function objectRoutes(app: FastifyInstance) {
       category: category ?? null,
       style: style ?? null,
       source_image_url: sourceImageUrl ?? null,
+      image_provider: normalizeImageProvider(imageProvider),
       angles: angles ?? [],
       materials: materials ?? [],
       variations: variations ?? [],
