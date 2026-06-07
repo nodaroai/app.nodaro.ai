@@ -1,8 +1,9 @@
 import { useMemo, useRef, useState, type ChangeEvent } from "react"
-import { Check, ChevronDown, ChevronRight, Download, Folder, FolderOpen, Layers, Plus, RotateCcw, Settings2, Trash2, Upload } from "lucide-react"
+import { Check, ChevronDown, ChevronRight, Download, Folder, FolderOpen, Layers, Plus, RotateCcw, Settings2, Star, Trash2, Upload } from "lucide-react"
 import {
   buildNodePresetExport,
   extractPresetData,
+  FACTORY_POPULAR_IDS,
   getFactoryPresets,
   groupFactoryPresets,
   parseNodePresetExport,
@@ -146,6 +147,12 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
   )
   // Factory presets bucketed into folders/sections for the browse (non-search) view.
   const factoryGroups = useMemo(() => groupFactoryPresets(factory), [factory])
+  // Curated "most used" quick-picks, surfaced at the top of the Factory section (browse view).
+  const popular = useMemo<MergedPreset[]>(() => {
+    const ids = FACTORY_POPULAR_IDS[nodeType] ?? []
+    const byId = new Map(factory.map((p) => [p.id, p]))
+    return ids.map((id) => byId.get(id)).filter((p): p is MergedPreset => p !== undefined)
+  }, [factory, nodeType])
   const userMerged = useMemo<MergedPreset[]>(
     () =>
       (userPresets as NodePreset[]).map((p) => ({
@@ -296,7 +303,7 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
     }
   }
 
-  const triggerLabel = activePreset ? activePreset.name : "Preset"
+  const triggerLabel = activePreset ? activePreset.name : "PRESET"
   const canOverride = !!activePreset && activePreset.source === "user"
 
   // Node-variant sizing scales with `zoom` so the trigger tracks the node title (text-[11px], which
@@ -331,16 +338,22 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
             )}
           >
             <Layers className={cn("shrink-0 opacity-70", !isNode && "h-3.5 w-3.5")} size={np?.icon} />
-            {(variant === "panel" || activePreset) && (
-              <span className={cn("truncate", !isNode && "text-sm")} style={np ? { maxWidth: np.maxName } : undefined}>
-                {triggerLabel}
-              </span>
-            )}
+            {/* Always show a label — the node's chosen preset, or a muted "PRESET" hint when none. */}
+            <span
+              className={cn(
+                "truncate",
+                !isNode && "text-sm",
+                !activePreset && "tracking-wide text-muted-foreground",
+              )}
+              style={np ? { maxWidth: np.maxName } : undefined}
+            >
+              {triggerLabel}
+            </span>
             {dirty && <span className={cn("font-bold text-[#ff0073]", !isNode && "text-sm")}>*</span>}
             <ChevronDown className={cn("shrink-0 opacity-60", !isNode && "ml-auto h-3.5 w-3.5")} size={np?.icon} />
           </button>
         </PopoverTrigger>
-        <PopoverContent align="start" className="w-72 p-0" onClick={(e) => e.stopPropagation()}>
+        <PopoverContent align="start" className="w-80 p-0" onClick={(e) => e.stopPropagation()}>
           <div className="border-b border-gray-200 p-2 dark:border-[#2D2D2D]">
             <Input
               placeholder="Search presets…"
@@ -349,125 +362,138 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
               className="h-8"
             />
           </div>
-          <div className="max-h-64 overflow-y-auto p-1">
-            {/* Factory presets: flat list when searching, collapsible folders when browsing. */}
-            {searching
-              ? factoryMatches.length > 0 && (
-                  <>
-                    <GroupLabel>Factory</GroupLabel>
-                    {factoryMatches.map((p) => (
-                      <PresetRow key={p.id} preset={p} active={p.id === activeId} onSelect={() => onSelect(p)} />
-                    ))}
-                  </>
-                )
-              : factoryGroups.map((g) => {
-                  const isRoot = g.group === null
-                  const folderKey = `factory:${g.key}`
-                  const isFolder = !isRoot && g.groupKind === "folder"
-                  const isCollapsed = isFolder && collapsed.has(folderKey)
-                  return (
-                    <div key={folderKey}>
-                      {isRoot ? (
-                        <GroupLabel>Factory</GroupLabel>
-                      ) : isFolder ? (
-                        <button
-                          type="button"
-                          className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left hover:bg-accent"
-                          onClick={() => toggleCollapsed(folderKey)}
-                        >
-                          {isCollapsed ? <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-70" /> : <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70" />}
-                          {isCollapsed ? <Folder className="h-3.5 w-3.5 shrink-0 opacity-70" /> : <FolderOpen className="h-3.5 w-3.5 shrink-0 opacity-70" />}
-                          <span className="truncate text-sm font-medium">{g.group}</span>
-                          <span className="ml-auto text-[11px] text-muted-foreground">{g.presets.length}</span>
-                        </button>
-                      ) : (
-                        <GroupLabel>{g.group}</GroupLabel>
-                      )}
-                      {!isCollapsed &&
-                        g.presets.map((p) => (
-                          <PresetRow
-                            key={p.id}
-                            preset={p}
-                            active={p.id === activeId}
-                            indented={!isRoot}
-                            onSelect={() => onSelect(p)}
-                          />
-                        ))}
-                    </div>
-                  )
-                })}
-
-            {searching ? (
+          <div className="max-h-72 overflow-y-auto p-1">
+            {/* USER (custom) presets first — flat when searching, organized tree when browsing. */}
+            {(searching ? userMatches.length > 0 : tree.length > 0) && (
               <>
-                {userMatches.length > 0 && <GroupLabel>My Presets</GroupLabel>}
-                {userMatches.map((p) => (
-                  <PresetRow
-                    key={p.id}
-                    preset={p}
-                    active={p.id === activeId}
-                    onSelect={() => onSelect(p)}
-                    onDelete={() => doDelete(p)}
-                  />
-                ))}
+                <GroupLabel>My Presets</GroupLabel>
+                {searching
+                  ? userMatches.map((p) => (
+                      <PresetRow
+                        key={p.id}
+                        preset={p}
+                        active={p.id === activeId}
+                        onSelect={() => onSelect(p)}
+                        onDelete={() => doDelete(p)}
+                      />
+                    ))
+                  : tree.map((node) => {
+                      if (node.kind === "preset") {
+                        const mp = toMerged(node.preset)
+                        return (
+                          <PresetRow
+                            key={mp.id}
+                            preset={mp}
+                            active={mp.id === activeId}
+                            onSelect={() => onSelect(mp)}
+                            onDelete={() => doDelete(mp)}
+                          />
+                        )
+                      }
+                      const g = node.group
+                      const isFolder = g.kind === "folder"
+                      const isCollapsed = isFolder && collapsed.has(g.id)
+                      const rows = node.presets.map((p) => {
+                        const mp = toMerged(p)
+                        return (
+                          <PresetRow
+                            key={mp.id}
+                            preset={mp}
+                            active={mp.id === activeId}
+                            indented
+                            onSelect={() => onSelect(mp)}
+                            onDelete={() => doDelete(mp)}
+                          />
+                        )
+                      })
+                      return (
+                        <div key={g.id}>
+                          {isFolder ? (
+                            <button
+                              type="button"
+                              className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left hover:bg-accent"
+                              onClick={() => toggleCollapsed(g.id)}
+                            >
+                              {isCollapsed ? <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-70" /> : <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70" />}
+                              {isCollapsed ? <Folder className="h-3.5 w-3.5 shrink-0 opacity-70" /> : <FolderOpen className="h-3.5 w-3.5 shrink-0 opacity-70" />}
+                              <span className="truncate text-sm font-medium">{g.name}</span>
+                              <span className="ml-auto text-[11px] text-muted-foreground">{node.presets.length}</span>
+                            </button>
+                          ) : (
+                            <GroupLabel>{g.name}</GroupLabel>
+                          )}
+                          {!isCollapsed && rows}
+                        </div>
+                      )
+                    })}
               </>
-            ) : (
-              tree.map((node) => {
-                if (node.kind === "preset") {
-                  const mp = toMerged(node.preset)
-                  return (
-                    <PresetRow
-                      key={mp.id}
-                      preset={mp}
-                      active={mp.id === activeId}
-                      onSelect={() => onSelect(mp)}
-                      onDelete={() => doDelete(mp)}
-                    />
-                  )
-                }
-                const g = node.group
-                const isFolder = g.kind === "folder"
-                const isCollapsed = isFolder && collapsed.has(g.id)
-                const rows = node.presets.map((p) => {
-                  const mp = toMerged(p)
-                  return (
-                    <PresetRow
-                      key={mp.id}
-                      preset={mp}
-                      active={mp.id === activeId}
-                      indented
-                      onSelect={() => onSelect(mp)}
-                      onDelete={() => doDelete(mp)}
-                    />
-                  )
-                })
-                return (
-                  <div key={g.id}>
-                    {isFolder ? (
-                      <button
-                        type="button"
-                        className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left hover:bg-accent"
-                        onClick={() => toggleCollapsed(g.id)}
-                      >
-                        {isCollapsed ? <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-70" /> : <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70" />}
-                        {isCollapsed ? <Folder className="h-3.5 w-3.5 shrink-0 opacity-70" /> : <FolderOpen className="h-3.5 w-3.5 shrink-0 opacity-70" />}
-                        <span className="truncate text-sm font-medium">{g.name}</span>
-                        <span className="ml-auto text-[11px] text-muted-foreground">{node.presets.length}</span>
-                      </button>
-                    ) : (
-                      <GroupLabel>{g.name}</GroupLabel>
-                    )}
-                    {!isCollapsed && rows}
-                  </div>
-                )
-              })
             )}
 
-            {factoryMatches.length === 0 &&
-              (searching ? userMatches.length === 0 : tree.length === 0) && (
-                <div className="px-3 py-6 text-center text-xs text-muted-foreground">
-                  {searching ? "No presets match your search." : "No presets yet. Configure this node, then “Save as new”."}
-                </div>
-              )}
+            {/* FACTORY presets second — "Popular" quick-picks band, then the full folders. */}
+            {(searching ? factoryMatches.length > 0 : factory.length > 0) && (
+              <>
+                <GroupLabel>Factory</GroupLabel>
+                {searching ? (
+                  factoryMatches.map((p) => (
+                    <PresetRow key={p.id} preset={p} active={p.id === activeId} onSelect={() => onSelect(p)} />
+                  ))
+                ) : (
+                  <>
+                    {popular.length > 0 && (
+                      <>
+                        <div className="flex items-center gap-1.5 px-2 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          <Star className="h-3 w-3 shrink-0" /> Popular
+                        </div>
+                        {popular.map((p) => (
+                          <PresetRow key={`pop:${p.id}`} preset={p} active={p.id === activeId} indented onSelect={() => onSelect(p)} />
+                        ))}
+                      </>
+                    )}
+                    {factoryGroups.map((g) => {
+                      const isRoot = g.group === null
+                      const folderKey = `factory:${g.key}`
+                      const isFolder = !isRoot && g.groupKind === "folder"
+                      const isCollapsed = isFolder && collapsed.has(folderKey)
+                      return (
+                        <div key={folderKey}>
+                          {/* Root (ungrouped) presets render directly under the Factory header. */}
+                          {isRoot ? null : isFolder ? (
+                            <button
+                              type="button"
+                              className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left hover:bg-accent"
+                              onClick={() => toggleCollapsed(folderKey)}
+                            >
+                              {isCollapsed ? <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-70" /> : <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70" />}
+                              {isCollapsed ? <Folder className="h-3.5 w-3.5 shrink-0 opacity-70" /> : <FolderOpen className="h-3.5 w-3.5 shrink-0 opacity-70" />}
+                              <span className="truncate text-sm font-medium">{g.group}</span>
+                              <span className="ml-auto text-[11px] text-muted-foreground">{g.presets.length}</span>
+                            </button>
+                          ) : (
+                            <GroupLabel>{g.group}</GroupLabel>
+                          )}
+                          {!isCollapsed &&
+                            g.presets.map((p) => (
+                              <PresetRow
+                                key={p.id}
+                                preset={p}
+                                active={p.id === activeId}
+                                indented={!isRoot}
+                                onSelect={() => onSelect(p)}
+                              />
+                            ))}
+                        </div>
+                      )
+                    })}
+                  </>
+                )}
+              </>
+            )}
+
+            {(searching ? userMatches.length === 0 && factoryMatches.length === 0 : tree.length === 0 && factory.length === 0) && (
+              <div className="px-3 py-6 text-center text-xs text-muted-foreground">
+                {searching ? "No presets match your search." : "No presets yet. Configure this node, then “Save as new”."}
+              </div>
+            )}
           </div>
           <div className="space-y-2 border-t border-gray-200 p-2 dark:border-[#2D2D2D]">
             {saving ? (

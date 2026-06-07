@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { FACTORY_PRESETS, getFactoryPresets, groupFactoryPresets } from "../factory-presets.js"
+import { FACTORY_PRESETS, getFactoryPresets, groupFactoryPresets, FACTORY_POPULAR_IDS, getPopularFactoryPresets } from "../factory-presets.js"
 import { extractPresetData } from "../node-preset-extract.js"
 import {
   IMAGE_GEN_PROVIDERS,
@@ -582,5 +582,33 @@ describe("combine-videos factory preset data validity", () => {
 
   it("groups every preset under a folder", () => {
     for (const p of presets) expect(p.group, `${p.id}: missing group`).toBeTruthy()
+  })
+})
+
+describe("FACTORY_POPULAR_IDS", () => {
+  it("every popular id exists in that node's factory catalog", () => {
+    for (const [nodeType, ids] of Object.entries(FACTORY_POPULAR_IDS)) {
+      const valid = new Set(getFactoryPresets(nodeType).map((p) => p.id))
+      for (const id of ids) {
+        expect(valid.has(id), `${nodeType}: popular id "${id}" not in factory catalog`).toBe(true)
+      }
+    }
+  })
+
+  it("popular ids are unique within each node", () => {
+    for (const [nodeType, ids] of Object.entries(FACTORY_POPULAR_IDS)) {
+      expect(new Set(ids).size, `${nodeType}: duplicate popular ids`).toBe(ids.length)
+    }
+  })
+
+  it("getPopularFactoryPresets returns the curated presets in order", () => {
+    for (const [nodeType, ids] of Object.entries(FACTORY_POPULAR_IDS)) {
+      const got = getPopularFactoryPresets(nodeType).map((p) => p.id)
+      expect(got, `${nodeType}: popular order mismatch`).toEqual([...ids])
+    }
+  })
+
+  it("returns [] for a node with no popular list", () => {
+    expect(getPopularFactoryPresets("does-not-exist")).toEqual([])
   })
 })
