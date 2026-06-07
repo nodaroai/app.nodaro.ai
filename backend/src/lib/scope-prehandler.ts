@@ -15,12 +15,15 @@ import { requireScope, type Scope } from "./scopes.js"
  * returned userId at the gate.
  */
 export function requireAppScope(scope: Scope) {
-  return async (req: FastifyRequest, reply: FastifyReply): Promise<void> => {
-    if (req.appAuthorization) {
-      const err = requireScope(req.appAuthorization.scopes, scope)
-      if (err) {
-        await reply.status(err.statusCode).send(err.body)
-      }
+  // MUST `return reply...` (not just `await reply.send()`): in a Fastify async
+  // hook, returning the reply is what halts the lifecycle. Bare `await
+  // reply.send()` lets the route handler still execute its side effects (the
+  // unauthorized write runs even though the client gets 403) — an auth fail-open.
+  return async (req: FastifyRequest, reply: FastifyReply): Promise<FastifyReply | void> => {
+    if (!req.appAuthorization) return
+    const err = requireScope(req.appAuthorization.scopes, scope)
+    if (err) {
+      return reply.status(err.statusCode).send(err.body)
     }
   }
 }
