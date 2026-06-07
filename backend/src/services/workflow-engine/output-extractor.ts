@@ -137,6 +137,10 @@ const PLAN_NODE_TYPES = new Set(Object.keys(COMPOSER_PLAN_MAP))
 // All NodeOutput keys that map 1:1 from job output_data
 const DIRECT_OUTPUT_KEYS: Array<keyof NodeOutput> = [
   "imageUrl",
+  // generate-mask emits { imageUrl, maskUrl }. Without maskUrl here the live DAG
+  // path drops it, so the "mask" source handle resolves to the passthrough image
+  // and downstream inpaint/edit masks the whole frame.
+  "maskUrl",
   "videoUrl",
   "audioUrl",
   "imageUrls",
@@ -679,6 +683,15 @@ export function getPrimaryOutput(
     return output.text
   }
 
+  // Generate-mask: dual output. "mask" handle → the generated mask PNG;
+  // default/"image" handle → the passthrough source image. Must precede the
+  // IMAGE_SOURCE_TYPES / final fallback (which return output.imageUrl for every
+  // handle). Mirrors frontend execution-graph.ts extractNodeOutput.
+  if (sourceType === "generate-mask") {
+    if (sourceHandle === "mask") return output.maskUrl
+    return output.imageUrl
+  }
+
   if (IMAGE_SOURCE_TYPES.has(sourceType)) return output.imageUrl
   if (VIDEO_SOURCE_TYPES.has(sourceType)) return output.videoUrl
   if (AUDIO_SOURCE_TYPES.has(sourceType)) return output.audioUrl
@@ -771,6 +784,11 @@ const VIDEO_RESULT_TYPES = new Set([
   // downstream consumer from a previously-executed face-swap without re-running.
   "face-swap",
   "video-retake",
+  // video-sfx (adds an SFX track to a video) writes generatedVideoUrl + per-result
+  // `url` like other video producers. Without this entry, "Run from here" / skip
+  // resume can't hydrate a downstream consumer from a previously-executed
+  // video-sfx (the live full-run path survived only via getPrimaryOutput's fallback).
+  "video-sfx",
   "ai-avatar",
   "cinematic-avatar",
   "suno-music-video",
@@ -833,6 +851,31 @@ const ENTITY_RESULT_TYPES = new Set([
 export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined {
   const data = node.data
   const type = node.type
+
+  // Generate-mask → { imageUrl, maskUrl } from the bespoke per-result shape
+  // (generatedResults[i] = { imageUrl, maskUrl }, NOT GeneratedResult.url).
+  // Must precede IMAGE_RESULT_TYPES so a skipped / "Run from here" generate-mask
+  // still hydrates the mask handle instead of returning only the image.
+  if (type === "generate-mask") {
+    const results = (data.generatedResults as Array<{ imageUrl?: string; maskUrl?: string }> | undefined) ?? []
+    const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
+    const active = results[activeIndex]
+    const imageUrl = active?.imageUrl ?? (data.generatedImageUrl as string | undefined)
+    const maskUrl = active?.maskUrl ?? (data.generatedMaskUrl as string | undefined)
+    const out: NodeOutput = {}
+    if (imageUrl) out.imageUrl = imageUrl
+    if (maskUrl) out.maskUrl = maskUrl
+    return out.imageUrl || out.maskUrl ? out : undefined
+  }
+
+  // Reduce (fan-in) → the aggregated string persisted on data.result. Without
+  // this, a skipped / out-of-subset reduce can't hydrate downstream text
+  // consumers (getPrimaryOutput("reduce") reads NodeOutput.result). Mirrors
+  // frontend execution-graph.ts extractNodeOutput case "reduce".
+  if (type === "reduce") {
+    const result = (data.result as string | undefined)?.trim()
+    return result ? { result } : undefined
+  }
 
   // Image-generating nodes → imageUrl from generatedResults or generatedImageUrl.
   // upload-image: prefer data.url (user input) over stale generatedResults,

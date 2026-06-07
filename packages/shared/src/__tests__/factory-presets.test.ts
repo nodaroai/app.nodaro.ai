@@ -5,9 +5,15 @@ import {
   IMAGE_GEN_PROVIDERS,
   MODIFY_IMAGE_PROVIDERS,
   VIDEO_GEN_PROVIDERS,
+  VIDEO_TO_VIDEO_PROVIDERS,
   MUSIC_PROVIDERS,
   SUNO_MODELS,
+  TTS_PROVIDERS,
+  TEXT_TO_AUDIO_PROVIDERS,
   STYLE_IDS,
+  ALL_CAPTION_STYLES,
+  COMBINE_TRANSITION_IDS,
+  AUDIO_CROSSFADE_CURVE_IDS,
   aspectRatioOptionsByKind,
   durationsByMode,
 } from "../index.js"
@@ -291,6 +297,286 @@ describe("generate-music factory preset data validity", () => {
     for (const p of presets) {
       expect(((p.data.prompt as string) ?? "").length, `${p.id}: prompt too long`).toBeLessThanOrEqual(2000)
       expect(((p.data.lyrics as string) ?? "").length, `${p.id}: lyrics too long`).toBeLessThanOrEqual(2000)
+    }
+  })
+
+  it("groups every preset under a folder", () => {
+    for (const p of presets) expect(p.group, `${p.id}: missing group`).toBeTruthy()
+  })
+})
+
+describe("text-to-speech factory preset data validity", () => {
+  const presets = getFactoryPresets("text-to-speech")
+  const unit = (k: string, v: unknown, id: string) => {
+    if (v === undefined) return
+    expect(v, `${id}: ${k} must be a number`).toBeTypeOf("number")
+    expect(v as number, `${id}: ${k} out of 0-1`).toBeGreaterThanOrEqual(0)
+    expect(v as number, `${id}: ${k} out of 0-1`).toBeLessThanOrEqual(1)
+  }
+
+  it("uses a known TTS provider when set", () => {
+    for (const p of presets) {
+      if (p.data.provider === undefined) continue
+      expect(TTS_PROVIDERS, `${p.id}: unknown provider`).toContain(p.data.provider as never)
+    }
+  })
+
+  it("keeps stability / similarityBoost / style in 0-1 and speed in 0.7-1.2", () => {
+    for (const p of presets) {
+      unit("stability", p.data.stability, p.id)
+      unit("similarityBoost", p.data.similarityBoost, p.id)
+      unit("style", p.data.style, p.id)
+      const speed = p.data.speed as number | undefined
+      if (speed !== undefined) {
+        expect(speed, `${p.id}: speed below 0.7`).toBeGreaterThanOrEqual(0.7)
+        expect(speed, `${p.id}: speed above 1.2`).toBeLessThanOrEqual(1.2)
+      }
+    }
+  })
+
+  it("does not pin a user-specific voiceId", () => {
+    for (const p of presets) {
+      expect(p.data.voiceId, `${p.id}: presets must not hardcode a voiceId`).toBeUndefined()
+    }
+  })
+
+  it("groups every preset under a folder", () => {
+    for (const p of presets) expect(p.group, `${p.id}: missing group`).toBeTruthy()
+  })
+})
+
+describe("text-to-audio factory preset data validity", () => {
+  const presets = getFactoryPresets("text-to-audio")
+
+  it("uses a known text-to-audio provider when set", () => {
+    for (const p of presets) {
+      if (p.data.provider === undefined) continue
+      expect(TEXT_TO_AUDIO_PROVIDERS, `${p.id}: unknown provider`).toContain(p.data.provider as never)
+    }
+  })
+
+  it("keeps duration in 0.5-30 and promptInfluence in 0-1, loop boolean", () => {
+    for (const p of presets) {
+      const dur = p.data.duration as number | undefined
+      if (dur !== undefined) {
+        expect(dur, `${p.id}: duration below 0.5`).toBeGreaterThanOrEqual(0.5)
+        expect(dur, `${p.id}: duration above 30`).toBeLessThanOrEqual(30)
+      }
+      const pi = p.data.promptInfluence as number | undefined
+      if (pi !== undefined) {
+        expect(pi, `${p.id}: promptInfluence out of 0-1`).toBeGreaterThanOrEqual(0)
+        expect(pi, `${p.id}: promptInfluence out of 0-1`).toBeLessThanOrEqual(1)
+      }
+      if (p.data.loop !== undefined) {
+        expect(typeof p.data.loop, `${p.id}: loop must be boolean`).toBe("boolean")
+      }
+    }
+  })
+
+  it("respects the prompt 2000-char cap", () => {
+    for (const p of presets) {
+      expect(((p.data.prompt as string) ?? "").length, `${p.id}: prompt too long`).toBeLessThanOrEqual(2000)
+    }
+  })
+
+  it("groups every preset under a folder", () => {
+    for (const p of presets) expect(p.group, `${p.id}: missing group`).toBeTruthy()
+  })
+})
+
+describe("llm-chat factory preset data validity", () => {
+  const presets = getFactoryPresets("llm-chat")
+
+  it("keeps temperature in 0-2 and maxTokens in 1-16384", () => {
+    for (const p of presets) {
+      const t = p.data.temperature as number | undefined
+      if (t !== undefined) {
+        expect(t, `${p.id}: temperature below 0`).toBeGreaterThanOrEqual(0)
+        expect(t, `${p.id}: temperature above 2`).toBeLessThanOrEqual(2)
+      }
+      const mt = p.data.maxTokens as number | undefined
+      if (mt !== undefined) {
+        expect(mt, `${p.id}: maxTokens below 1`).toBeGreaterThanOrEqual(1)
+        expect(mt, `${p.id}: maxTokens above 16384`).toBeLessThanOrEqual(16384)
+      }
+    }
+  })
+
+  it("respects the systemPrompt 10000-char cap", () => {
+    for (const p of presets) {
+      expect(((p.data.systemPrompt as string) ?? "").length, `${p.id}: systemPrompt too long`).toBeLessThanOrEqual(10000)
+    }
+  })
+
+  it("groups every preset under a folder", () => {
+    for (const p of presets) expect(p.group, `${p.id}: missing group`).toBeTruthy()
+  })
+})
+
+describe("generate-script factory preset data validity", () => {
+  const presets = getFactoryPresets("generate-script")
+
+  it("keeps sceneCount in 1-20 and targetLength in 5-600", () => {
+    for (const p of presets) {
+      const sc = p.data.sceneCount as number | undefined
+      if (sc !== undefined) {
+        expect(sc, `${p.id}: sceneCount below 1`).toBeGreaterThanOrEqual(1)
+        expect(sc, `${p.id}: sceneCount above 20`).toBeLessThanOrEqual(20)
+      }
+      const tl = p.data.targetLength as number | undefined
+      if (tl !== undefined) {
+        expect(tl, `${p.id}: targetLength below 5`).toBeGreaterThanOrEqual(5)
+        expect(tl, `${p.id}: targetLength above 600`).toBeLessThanOrEqual(600)
+      }
+    }
+  })
+
+  it("uses a valid structure and a tone within 200 chars", () => {
+    for (const p of presets) {
+      if (p.data.structure !== undefined) {
+        expect(["freeform", "8-step", "custom"], `${p.id}: bad structure`).toContain(p.data.structure as never)
+      }
+      expect(((p.data.tone as string) ?? "").length, `${p.id}: tone too long`).toBeLessThanOrEqual(200)
+    }
+  })
+
+  it("groups every preset under a folder", () => {
+    for (const p of presets) expect(p.group, `${p.id}: missing group`).toBeTruthy()
+  })
+})
+
+describe("image-to-text factory preset data validity", () => {
+  const presets = getFactoryPresets("image-to-text")
+
+  it("uses a valid detailLevel and customPrompt within 2000 chars", () => {
+    for (const p of presets) {
+      if (p.data.detailLevel !== undefined) {
+        expect(["brief", "detailed", "structured"], `${p.id}: bad detailLevel`).toContain(p.data.detailLevel as never)
+      }
+      expect(((p.data.customPrompt as string) ?? "").length, `${p.id}: customPrompt too long`).toBeLessThanOrEqual(2000)
+    }
+  })
+
+  it("groups every preset under a folder", () => {
+    for (const p of presets) expect(p.group, `${p.id}: missing group`).toBeTruthy()
+  })
+})
+
+describe("voice-design factory preset data validity", () => {
+  const presets = getFactoryPresets("voice-design")
+
+  it("keeps voiceDescription within 1000 chars", () => {
+    for (const p of presets) {
+      const vd = (p.data.voiceDescription as string) ?? ""
+      expect(vd.length, `${p.id}: voiceDescription too long`).toBeLessThanOrEqual(1000)
+      expect(vd.length, `${p.id}: voiceDescription empty`).toBeGreaterThan(0)
+    }
+  })
+
+  it("groups every preset under a folder", () => {
+    for (const p of presets) expect(p.group, `${p.id}: missing group`).toBeTruthy()
+  })
+})
+
+describe("voice-changer factory preset data validity", () => {
+  const presets = getFactoryPresets("voice-changer")
+
+  it("keeps stability/similarityBoost/style within 0-1 and removeBackgroundNoise boolean", () => {
+    for (const p of presets) {
+      for (const k of ["stability", "similarityBoost", "style"] as const) {
+        const v = p.data[k] as number | undefined
+        if (v === undefined) continue
+        expect(v, `${p.id}: ${k} out of 0-1`).toBeGreaterThanOrEqual(0)
+        expect(v, `${p.id}: ${k} out of 0-1`).toBeLessThanOrEqual(1)
+      }
+      if (p.data.removeBackgroundNoise !== undefined) {
+        expect(typeof p.data.removeBackgroundNoise, `${p.id}: removeBackgroundNoise must be boolean`).toBe("boolean")
+      }
+    }
+  })
+
+  it("groups every preset under a folder", () => {
+    for (const p of presets) expect(p.group, `${p.id}: missing group`).toBeTruthy()
+  })
+})
+
+describe("add-captions factory preset data validity", () => {
+  const presets = getFactoryPresets("add-captions")
+
+  it("uses a known caption style and position, fontSize within 12-200", () => {
+    for (const p of presets) {
+      if (p.data.style !== undefined) {
+        expect(ALL_CAPTION_STYLES, `${p.id}: unknown style`).toContain(p.data.style as never)
+      }
+      if (p.data.position !== undefined) {
+        expect(["bottom", "top", "center"], `${p.id}: bad position`).toContain(p.data.position as never)
+      }
+      const fs = p.data.fontSize as number | undefined
+      if (fs !== undefined) {
+        expect(fs, `${p.id}: fontSize ${fs} out of 12-200`).toBeGreaterThanOrEqual(12)
+        expect(fs, `${p.id}: fontSize ${fs} out of 12-200`).toBeLessThanOrEqual(200)
+      }
+    }
+  })
+
+  it("groups every preset under a folder", () => {
+    for (const p of presets) expect(p.group, `${p.id}: missing group`).toBeTruthy()
+  })
+})
+
+describe("video-to-video factory preset data validity", () => {
+  const presets = getFactoryPresets("video-to-video")
+
+  it("uses a known video-to-video provider when set", () => {
+    for (const p of presets) {
+      if (p.data.provider === undefined) continue
+      expect(VIDEO_TO_VIDEO_PROVIDERS, `${p.id}: unknown provider`).toContain(p.data.provider as never)
+    }
+  })
+
+  it("respects prompt (5000) and negativePrompt (500) caps", () => {
+    for (const p of presets) {
+      expect(((p.data.prompt as string) ?? "").length, `${p.id}: prompt > 5000`).toBeLessThanOrEqual(5000)
+      expect(((p.data.negativePrompt as string) ?? "").length, `${p.id}: negativePrompt > 500`).toBeLessThanOrEqual(500)
+    }
+  })
+
+  it("groups every preset under a folder", () => {
+    for (const p of presets) expect(p.group, `${p.id}: missing group`).toBeTruthy()
+  })
+})
+
+describe("combine-videos factory preset data validity", () => {
+  const presets = getFactoryPresets("combine-videos")
+
+  it("uses a known transition, audioMode, and audio crossfade curve when set", () => {
+    for (const p of presets) {
+      if (p.data.transition !== undefined) {
+        expect(COMBINE_TRANSITION_IDS, `${p.id}: unknown transition`).toContain(p.data.transition as never)
+      }
+      if (p.data.audioCrossfadeCurve !== undefined) {
+        expect(AUDIO_CROSSFADE_CURVE_IDS, `${p.id}: unknown audioCrossfadeCurve`).toContain(p.data.audioCrossfadeCurve as never)
+      }
+      if (p.data.audioMode !== undefined) {
+        expect(["keep", "crossfade", "remove"], `${p.id}: bad audioMode`).toContain(p.data.audioMode as never)
+      }
+    }
+  })
+
+  it("keeps trim frames int 0-120 and transitionDuration 0-5", () => {
+    for (const p of presets) {
+      for (const k of ["trimStartFrames", "trimEndFrames"] as const) {
+        const v = p.data[k] as number | undefined
+        if (v === undefined) continue
+        expect(Number.isInteger(v), `${p.id}: ${k} not int`).toBe(true)
+        expect(v, `${p.id}: ${k} out of 0-120`).toBeGreaterThanOrEqual(0)
+        expect(v, `${p.id}: ${k} out of 0-120`).toBeLessThanOrEqual(120)
+      }
+      const td = p.data.transitionDuration as number | undefined
+      if (td !== undefined) {
+        expect(td, `${p.id}: transitionDuration out of 0-5`).toBeGreaterThanOrEqual(0)
+        expect(td, `${p.id}: transitionDuration out of 0-5`).toBeLessThanOrEqual(5)
+      }
     }
   })
 

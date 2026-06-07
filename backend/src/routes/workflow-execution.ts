@@ -168,6 +168,17 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       ? (body.nodeIds as string[]).filter((id) => typeof id === "string")
       : undefined
 
+    // Per-node input overrides (MCP run_workflow `inputs`, editor re-runs, SDK).
+    // Same shape app-runner + the orchestrator use; merged into source-node data
+    // at execution time. The MCP run_workflow tool advertises + sends this, but
+    // the route never read it — so overrides were silently dropped and the run
+    // used the workflow's saved node data.
+    const inputOverridesParsed = z
+      .record(z.string(), z.record(z.string(), z.unknown()))
+      .optional()
+      .safeParse(body.inputOverrides)
+    const inputOverrides = inputOverridesParsed.success ? inputOverridesParsed.data : undefined
+
     // Verify workflow exists and belongs to user
     const { data: workflow, error: wfError } = await supabase
       .from("workflows")
@@ -270,6 +281,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       userId: req.userId,
       triggerType: "manual",
       nodeIds,
+      ...(inputOverrides ? { inputOverrides } : {}),
     }
 
     await orchestrationQueue.add("workflow-execution", jobData, {
@@ -590,6 +602,11 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
             .from("jobs")
             .update({ status: "cancelled" })
             .in("id", jobIds)
+            // CAS: only cancel jobs still live. A worker can complete (and commit)
+            // a job in the window between the SELECT above and this UPDATE; without
+            // this guard the UPDATE would flip that completed+committed row to
+            // "cancelled" (user charged, output detached from its terminal status).
+            .in("status", ["pending", "queued", "processing"])
           await refundReservedCreditsForJobs(jobIds)
           invalidateBalanceCache(userId)
         }

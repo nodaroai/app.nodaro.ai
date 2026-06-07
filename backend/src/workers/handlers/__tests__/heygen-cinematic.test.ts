@@ -117,6 +117,7 @@ describe("handleCinematicAvatar — happy path", () => {
       resolution: "720p",
       enhancePrompt: false,
       references: undefined,
+      onTaskCreated: expect.any(Function),
     })
   })
 

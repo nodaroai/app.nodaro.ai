@@ -5,8 +5,9 @@ import { TIER_STORAGE_LIMITS } from "../stripe-config.js"
 // Mocks — must use vi.hoisted() for variables referenced inside vi.mock()
 // ---------------------------------------------------------------------------
 
-const { mockFrom, mockRpc, tableResponses, setLastMatchedResponse, mockBatchDeleteFromR2, mockDeleteFromR2, mockUpdateStorageUsage } = vi.hoisted(() => {
+const { mockFrom, mockRpc, tableResponses, ltCalls, setLastMatchedResponse, mockBatchDeleteFromR2, mockDeleteFromR2, mockUpdateStorageUsage } = vi.hoisted(() => {
   const tableResponses = new Map<string, Array<{ data: unknown; error: unknown }>>()
+  const ltCalls: Array<{ table: string; col: unknown; val: unknown }> = []
   let lastMatchedResponse: { data: unknown; error: unknown } | null = null
 
   function shiftResponse(table: string): { data: unknown; error: unknown } {
@@ -30,7 +31,10 @@ const { mockFrom, mockRpc, tableResponses, setLastMatchedResponse, mockBatchDele
     chain.or = vi.fn(self)
     chain.not = vi.fn(self)
     chain.is = vi.fn(self)
-    chain.lt = vi.fn(self)
+    chain.lt = vi.fn((col?: unknown, val?: unknown) => {
+      ltCalls.push({ table, col, val })
+      return chain
+    })
     chain.gt = vi.fn(self)
 
     // .in() may be a terminal for read queries (select -> in) or a filter for writes
@@ -68,6 +72,7 @@ const { mockFrom, mockRpc, tableResponses, setLastMatchedResponse, mockBatchDele
     mockFrom,
     mockRpc,
     tableResponses,
+    ltCalls,
     setLastMatchedResponse: (v: { data: unknown; error: unknown } | null) => { lastMatchedResponse = v },
     mockBatchDeleteFromR2,
     mockDeleteFromR2,
@@ -142,6 +147,7 @@ function mockTableQueue(table: string, responses: Array<{ data: unknown; error: 
 
 function resetMocks(): void {
   tableResponses.clear()
+  ltCalls.length = 0
   setLastMatchedResponse(null)
   mockFrom.mockClear()
   mockRpc.mockClear()
@@ -870,6 +876,23 @@ describe("cleanup-service", () => {
         ]),
       )
       expect(allKeysSeen.length).toBe(6)
+    })
+
+    it("free-user location reaper filters by the 60-day created_at cutoff (protects active media)", async () => {
+      mockTableQueue("profiles", [{ data: [{ id: "free-user-1" }], error: null }])
+      mockTableQueue("assets", [{ data: [], error: null }])
+      mockTableQueue("jobs", [{ data: [], error: null }])
+      mockTableQueue("locations", [{ data: [], error: null }])
+
+      await cleanupFreeUserMedia()
+
+      // Regression (CRITICAL): the location sweep MUST apply the created_at cutoff
+      // like the assets/jobs phases. Without it, an active free user's brand-new
+      // Location Studio media was deleted on the very next nightly run.
+      const locationCutoff = ltCalls.find(
+        (c) => c.table === "locations" && c.col === "created_at",
+      )
+      expect(locationCutoff).toBeDefined()
     })
   })
 })

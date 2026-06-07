@@ -198,6 +198,17 @@ export async function characterTrainingRoutes(app: FastifyInstance): Promise<voi
           .update({
             status: "processing",
             provider: "replicate",
+            // Reconcile wiring (CRITICAL): without these three fields the reconcile
+            // cron can NEVER select this row — its main scan requires
+            // provider_call_started_at IS NOT NULL and sweepNeverStartedJobs requires
+            // status='pending' (this is 'processing'). The ONLY completion path would
+            // then be the Replicate webhook, so a permanent webhook failure strands the
+            // 150 reserved credits forever. With them set, reconcileReplicateJob (kind
+            // "replicate-training") polls /v1/trainings/:id after the 30-min threshold
+            // and completes — or fails + refunds — via applyTrainingTerminalStatus.
+            provider_kind: "replicate-training",
+            provider_task_id: trainingId,
+            provider_call_started_at: new Date().toISOString(),
             started_at: new Date().toISOString(),
             metadata: {
               credit_identifier: TRAINING_CREDIT_ID,
@@ -227,7 +238,7 @@ export async function characterTrainingRoutes(app: FastifyInstance): Promise<voi
         if (jobId) {
           await supabase
             .from("jobs")
-            .update({ status: "failed", error: message })
+            .update({ status: "failed", error_message: message })
             .eq("id", jobId)
             .eq("user_id", req.userId)
             .then(() => {}, () => {})

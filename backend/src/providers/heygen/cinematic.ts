@@ -73,6 +73,12 @@ export interface GenerateCinematicAvatarOpts {
    */
   references?: Array<{ type: "video" | "image" | "audio"; url: string }>
   /**
+   * Called with the HeyGen video_id as soon as the create call returns, BEFORE
+   * the long poll — lets the worker persist provider_task_id so a BullMQ
+   * stall-retry doesn't re-submit (double-bill the provider).
+   */
+  onTaskCreated?: (taskId: string) => void | Promise<void>
+  /**
    * Poll interval in milliseconds (default 6000).
    * Pass 0 in tests to skip sleep delays.
    */
@@ -129,6 +135,7 @@ export async function generateCinematicAvatar(
     resolution = "720p",
     enhancePrompt,
     references,
+    onTaskCreated,
     pollIntervalMs = 6000,
   } = opts
 
@@ -169,6 +176,10 @@ export async function generateCinematicAvatar(
     body: JSON.stringify(body),
   })
   const videoId = resp.data.video_id
+
+  // Persist the video_id before the long poll so a BullMQ stall-retry skips
+  // re-submitting (double-bill). See providers/heygen/video.ts for the rationale.
+  await onTaskCreated?.(videoId)
 
   // ── Poll /v1/video_status.get until completed or failed ──────────────────
   const deadline = Date.now() + MAX_POLL_DURATION_MS

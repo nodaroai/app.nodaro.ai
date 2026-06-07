@@ -268,32 +268,70 @@ export interface InputFieldSchema {
   options?: string[]
 }
 
+// Override field per input-node type. The `key` for a parameter-picker MUST be
+// the field that `getParameterValue()` (parameter-node-value.ts) actually reads
+// — for multi-dimension pickers, its FIRST per-dimension field (the
+// "representative key"). A mismatch silently drops the curated app/MCP/SDK input
+// (the override lands on a field nothing reads). This map is the single source
+// of truth for app-input override fields (consumed by extract-app-inputs.ts,
+// api-tokens.ts, and the app-runner). Its parity with getParameterValue is
+// guarded by input-field-map-parity.test.ts so the two can't drift.
 export const INPUT_FIELD_MAP: Record<string, InputFieldSchema> = {
+  // --- Source / upload nodes (not parameter pickers) ---
   "text-prompt": { key: "text", type: "text" },
   "upload-image": { key: "url", type: "image-url" },
   "upload-video": { key: "url", type: "video-url" },
   "upload-audio": { key: "url", type: "audio-url" },
-  "tone": { key: "tone", type: "select" },
-  "style-guide": { key: "styleGuide", type: "text" },
+  "reference-audio": { key: "extractedAudioUrl", type: "audio-url" },
+  // --- Classic parameters ---
   "provider": { key: "provider", type: "select" },
-  "aspect-ratio": { key: "aspectRatio", type: "select" },
-  "duration": { key: "duration", type: "number" },
+  "style-guide": { key: "text", type: "text" }, // reads data.text (was wrongly "styleGuide")
   "scene-count": { key: "count", type: "number" },
+  "duration": { key: "seconds", type: "number" }, // reads data.seconds (was wrongly "duration")
+  "aspect-ratio": { key: "ratio", type: "select" }, // reads data.ratio (was wrongly "aspectRatio")
+  // --- Single-field parameter pickers ---
+  "tone": { key: "tone", type: "select" },
   "motion": { key: "motion", type: "select" },
   "camera-motion": { key: "cameraMotion", type: "select" },
-  // Multi-category framing/lighting nodes don't have a single value field.
-  // For presentation-mode override purposes we pick the first per-category
-  // field as a representative key (shotSize for framing, timeOfDay for
-  // lighting). Future: add per-category override schema entries.
-  "framing": { key: "shotSize", type: "select" },
   "lens": { key: "lens", type: "select" },
   "camera-format": { key: "cameraFormat", type: "select" },
-  "lighting": { key: "timeOfDay", type: "select" },
   "color-look": { key: "colorLook", type: "select" },
   "atmosphere": { key: "atmosphere", type: "select" },
+  "style": { key: "style", type: "select" },
+  "setting": { key: "setting", type: "select" },
+  "mood": { key: "mood", type: "select" },
+  "photographer": { key: "photographer", type: "select" },
+  "aesthetic": { key: "aesthetic", type: "select" },
+  "era": { key: "era", type: "select" },
+  "material": { key: "material", type: "select" },
+  "animal": { key: "animal", type: "select" },
+  "vehicle": { key: "vehicle", type: "select" },
+  "weapon": { key: "weapon", type: "select" },
+  "furniture": { key: "furniture", type: "select" },
+  "photo-genre": { key: "photoGenre", type: "select" },
+  "backdrop": { key: "backdrop", type: "select" },
+  "held-prop": { key: "heldProp", type: "select" },
+  "render-quality": { key: "renderQuality", type: "select" },
+  "composition-effects": { key: "compositionEffect", type: "select" },
+  "post-process-effects": { key: "postProcess", type: "select" },
   "action-fx": { key: "actionFx", type: "select" },
+  "character-fx": { key: "characterFx", type: "select" },
+  "transition": { key: "transition", type: "select" },
+  "loop-subject": { key: "loopSubject", type: "select" },
+  // --- Multi-dimension pickers: representative (first) field. Overriding only
+  // sets that dimension; full hint composition runs in the executors. ---
+  "framing": { key: "shotSize", type: "select" },
+  "lighting": { key: "timeOfDay", type: "select" },
   "temporal": { key: "temporalSpeed", type: "select" },
-  "reference-audio": { key: "extractedAudioUrl", type: "audio-url" },
+  "person": { key: "type", type: "select" },
+  "pose": { key: "pose", type: "select" },
+  "styling": { key: "makeup", type: "select" },
+  "exposure-settings": { key: "aperture", type: "select" },
+  "music-genre": { key: "subgenre", type: "select" },
+  "music-mood": { key: "emotion", type: "select" },
+  "instrumentation": { key: "production", type: "select" },
+  "voice-character": { key: "timbre", type: "select" },
+  "voice-delivery": { key: "archetype", type: "select" },
 }
 
 /** Get the overridable field schema for an input node type. */

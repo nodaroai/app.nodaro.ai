@@ -109,6 +109,16 @@ describe("POST /v1/jobs/cost-summary", () => {
     expect(body.error.code).toBe("validation_error")
   })
 
+  it("returns 401 when unauthenticated (IDOR fix — never queries jobs without an owner)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/jobs/cost-summary",
+      payload: { jobIds: ["job-1"] }, // no userId → preHandler leaves req.userId unset
+    })
+    expect(res.statusCode).toBe(401)
+    expect(supabase.from).not.toHaveBeenCalled()
+  })
+
   it("returns aggregated breakdown for completed jobs", async () => {
     const mockJobs = [
       {
@@ -129,7 +139,9 @@ describe("POST /v1/jobs/cost-summary", () => {
       },
     ]
 
-    const mockIn = vi.fn().mockResolvedValue({ data: mockJobs, error: null })
+    // Non-admin path appends .eq("user_id", ...) after .in (owner-scoping / IDOR fix).
+    const mockEq = vi.fn().mockResolvedValue({ data: mockJobs, error: null })
+    const mockIn = vi.fn().mockReturnValue({ eq: mockEq })
     const mockSelect = vi.fn().mockReturnValue({ in: mockIn })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
 
@@ -171,7 +183,9 @@ describe("POST /v1/jobs/cost-summary", () => {
       },
     ]
 
-    const mockIn = vi.fn().mockResolvedValue({ data: mockJobs, error: null })
+    // Non-admin path appends .eq("user_id", ...) after .in (owner-scoping / IDOR fix).
+    const mockEq = vi.fn().mockResolvedValue({ data: mockJobs, error: null })
+    const mockIn = vi.fn().mockReturnValue({ eq: mockEq })
     const mockSelect = vi.fn().mockReturnValue({ in: mockIn })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
 
@@ -189,10 +203,11 @@ describe("POST /v1/jobs/cost-summary", () => {
   })
 
   it("returns 500 on DB error", async () => {
-    const mockIn = vi.fn().mockResolvedValue({
+    const mockEq = vi.fn().mockResolvedValue({
       data: null,
       error: { message: "DB connection failed" },
     })
+    const mockIn = vi.fn().mockReturnValue({ eq: mockEq })
     const mockSelect = vi.fn().mockReturnValue({ in: mockIn })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
 

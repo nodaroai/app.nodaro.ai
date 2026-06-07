@@ -42,6 +42,7 @@ const WEBHOOK_FILE = join(
  */
 const STRIPE_HANDLED_EVENTS: readonly string[] = [
   "checkout.session.completed",
+  "checkout.session.async_payment_succeeded",
   "customer.subscription.created",
   "customer.subscription.updated",
   "customer.subscription.deleted",
@@ -71,6 +72,26 @@ const STRIPE_EVENT_SHAPES: Record<string, z.ZodType> = {
           id: z.string(),
           customer: z.string().nullable().optional(),
           amount_total: z.number().nullable().optional(),
+          payment_status: z.string().optional(),
+          metadata: z.record(z.string(), z.string()).nullable().optional(),
+        }).passthrough(),
+      }),
+    })
+    .passthrough(),
+
+  // case "checkout.session.async_payment_succeeded": same Checkout.Session shape
+  //   as completed; the handler additionally gates the grant on
+  //   session.payment_status === "paid" (async methods settle on this event).
+  "checkout.session.async_payment_succeeded": z
+    .object({
+      data: z.object({
+        object: z.object({
+          mode: z.enum(["payment", "subscription", "setup"]),
+          payment_intent: z.string().nullable().optional(),
+          id: z.string(),
+          customer: z.string().nullable().optional(),
+          amount_total: z.number().nullable().optional(),
+          payment_status: z.string().optional(),
           metadata: z.record(z.string(), z.string()).nullable().optional(),
         }).passthrough(),
       }),
@@ -204,6 +225,21 @@ const STRIPE_FIXTURES: Record<string, unknown> = {
         id: "cs_test_def",
         customer: "cus_test_xyz",
         amount_total: 5000,
+        payment_status: "paid",
+        metadata: { userId: "user-uuid", topupCredits: "750" },
+      },
+    },
+  },
+  "checkout.session.async_payment_succeeded": {
+    type: "checkout.session.async_payment_succeeded",
+    data: {
+      object: {
+        mode: "payment",
+        payment_intent: "pi_test_async",
+        id: "cs_test_async",
+        customer: "cus_test_xyz",
+        amount_total: 5000,
+        payment_status: "paid",
         metadata: { userId: "user-uuid", topupCredits: "750" },
       },
     },

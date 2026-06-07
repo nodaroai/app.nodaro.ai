@@ -26,14 +26,23 @@ const batchBodySchema = z.object({
 
 export async function executionStatsRoutes(app: FastifyInstance) {
   app.get("/v1/execution-stats/estimate", async (req, reply) => {
-    const query = estimateQuerySchema.parse(req.query)
+    // safeParse (not throwing .parse): a raw ZodError would hit Fastify's default
+    // handler as a 500 whose body leaks the full validation-issue schema.
+    const parsed = estimateQuerySchema.safeParse(req.query)
+    if (!parsed.success) {
+      return reply.status(400).send({ error: parsed.error.flatten().fieldErrors })
+    }
+    const query = parsed.data
     const result = await getEstimate(query.model, query.aspectRatio, query.quality, query.duration)
     return reply.send(result)
   })
 
   app.post("/v1/execution-stats/batch-estimate", async (req, reply) => {
-    const { nodes } = batchBodySchema.parse(req.body)
-    const results = await batchEstimate(nodes)
+    const parsed = batchBodySchema.safeParse(req.body)
+    if (!parsed.success) {
+      return reply.status(400).send({ error: parsed.error.flatten().fieldErrors })
+    }
+    const results = await batchEstimate(parsed.data.nodes)
     return reply.send({ estimates: results })
   })
 }

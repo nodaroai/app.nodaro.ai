@@ -144,6 +144,18 @@ export async function reconcileNodeStatesFromJobs(
   for (const [nodeId, a] of agg) {
     const nodeSt = next[nodeId]
     if (!nodeSt) continue
+    // Fan-out node (iterationTotal > 1) still running/pending = crashed
+    // mid-fan-out. Its assembled `listResults` output is set ONLY after all
+    // iterations settle, so it was never persisted on a crash. Marking it
+    // "completed" from PARTIAL iteration jobs would drop the remaining items AND
+    // let the workflow-executions cron flip the whole execution to "completed"
+    // (silent data-loss). Leave it untouched so the orchestrator's BullMQ re-pick
+    // re-runs + reassembles the fan-out. A genuinely-completed fan-out is status
+    // "completed" → already excluded by the running/pending filter above. (The
+    // remaining cost — re-charging iterations that committed before the crash,
+    // whose credits can't be reclaimed — is a bounded residual, strictly better
+    // than losing the user's output.)
+    if ((nodeSt.iterationTotal ?? 0) > 1) continue
     if (a.failed) {
       if (nodeSt.status !== "failed") {
         nodeSt.status = "failed"

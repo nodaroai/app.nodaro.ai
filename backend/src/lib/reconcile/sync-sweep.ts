@@ -12,9 +12,13 @@ export interface StuckJobRow {
  * Used for: sync providers whose route handler crashed mid-call, and any job
  * past threshold with `provider_task_id IS NULL` (no upstream task to recover).
  *
- * CAS-guarded on `.neq("status", "cancelled")` so a user cancellation that
- * landed in the same window is preserved. If 0 rows are updated, skip the
- * refund (`refundReservedCreditsForJob` is idempotent via its own CAS on
+ * CAS-guarded on `.in("status", ["pending", "processing"])` so ANY terminal
+ * state set by a concurrent writer in the SELECT→UPDATE window is preserved —
+ * not just `cancelled`. A bare `.neq("status","cancelled")` would still trample
+ * a job that the worker just flipped to `completed` (committing its credits) to
+ * `failed`, orphaning its output_data. Mirrors `forceFailExhausted`
+ * (bump-attempts.ts). If 0 rows are updated, skip the refund
+ * (`refundReservedCreditsForJob` is idempotent via its own CAS on
  * `usage_logs.status='reserved'`, but the early skip avoids a needless DB
  * roundtrip).
  */
@@ -29,7 +33,7 @@ export async function sweepStaleSyncJob(job: StuckJobRow): Promise<void> {
       reconcile_last_error: "reconcile_no_recovery",
     })
     .eq("id", job.id)
-    .neq("status", "cancelled")
+    .in("status", ["pending", "processing"])
     .select("id")
 
   if (error) {

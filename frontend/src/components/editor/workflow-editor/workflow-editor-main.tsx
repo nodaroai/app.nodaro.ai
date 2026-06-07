@@ -628,8 +628,16 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         nodes: structuredClone(orderNodesParentFirst(state.nodes)),
         edges: structuredClone(state.edges),
         settings: {
+          // MUST mirror the normal save in use-workflow-persistence.ts (~L534):
+          // PostgREST PATCH REPLACES the whole `settings` JSONB column, so any
+          // subfield omitted here is DESTROYED on unload. Omitting
+          // presentationSettings + viewport silently wiped all published-app I/O
+          // curation (inputItems/outputItems/cardMeta/view modes/share settings)
+          // and the saved viewport whenever a tab was closed mid-edit.
           characterDefinitions: structuredClone(state.characterDefinitions),
           flowPromptTemplates: structuredClone(state.flowPromptTemplates),
+          presentationSettings: structuredClone(state.presentationSettings),
+          viewport: state.savedViewport,
         },
       };
 

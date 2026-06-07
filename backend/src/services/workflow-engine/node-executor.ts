@@ -289,6 +289,11 @@ export async function executeNode(
   allNodes: SimpleNode[],
   nodeStates: Record<string, NodeExecutionState>,
   ctx: OrchestratorContext,
+  // Fan-out iteration index — stamped onto the worker job's input_data so a
+  // crashed fan-out can REUSE this iteration's output on re-pick instead of
+  // re-running + re-charging it (loadCompletedFanOutIterations). Undefined for
+  // single (non-fan-out) executions.
+  iterationIndex?: number,
 ): Promise<ExecuteNodeResult> {
   // Source nodes — should already have output set
   if (isSourceNode(node.type)) {
@@ -362,7 +367,7 @@ export async function executeNode(
   }
 
   // Worker-queued nodes (default)
-  return executeWorkerNode(node, resolvedInputs, ctx, edges, allNodes, nodeStates, userPromptTemplate)
+  return executeWorkerNode(node, resolvedInputs, ctx, edges, allNodes, nodeStates, userPromptTemplate, iterationIndex)
 }
 
 // ---------------------------------------------------------------------------
@@ -813,6 +818,7 @@ async function executeWorkerNode(
   allNodes?: SimpleNode[],
   nodeStates?: Record<string, NodeExecutionState>,
   userPromptTemplate?: string,
+  iterationIndex?: number,
 ): Promise<ExecuteNodeResult> {
   // 1. Create placeholder job record (we need the jobId for payload building).
   // `node_id` is recorded in `input_data` so the reconcile cron can map a
@@ -828,7 +834,7 @@ async function executeWorkerNode(
       workflow_execution_id: ctx.executionId,
       user_id: ctx.userId,
       status: "pending",
-      input_data: { type: node.type, node_id: node.id },
+      input_data: { type: node.type, node_id: node.id, ...(iterationIndex !== undefined ? { iterationIndex } : {}) },
       ...(isUploadDescendant && { force_private: true }),
     })
     .select("id")
@@ -882,7 +888,7 @@ async function executeWorkerNode(
   // either key can't silently override them — the reconciler's Path-2 relies
   // on `node_id` matching `node.id` exactly to map orphan-recovered rows
   // back to their owning node.
-  const inputData: Record<string, unknown> = { ...payload, type: node.type, node_id: node.id }
+  const inputData: Record<string, unknown> = { ...payload, type: node.type, node_id: node.id, ...(iterationIndex !== undefined ? { iterationIndex } : {}) }
   // Backfill resolved inputs that payload may not carry (e.g. upstream media URLs)
   if (!inputData.imageUrl && resolvedInputs.imageUrl) inputData.imageUrl = resolvedInputs.imageUrl
   if (!inputData.videoUrl && resolvedInputs.videoUrl) inputData.videoUrl = resolvedInputs.videoUrl
@@ -984,6 +990,61 @@ function completedJobResult(
   const effectiveCreditsUsed = creditsUsed
     ?? (typeof jobRecord.credits_actual === "number" ? jobRecord.credits_actual : undefined)
   return { output, jobId, usageLogId, creditsUsed: effectiveCreditsUsed }
+}
+
+/**
+ * Per-iteration resume for fan-out nodes. On an orchestrator crash + BullMQ
+ * re-pick, the fan-out node re-runs (reconcile leaves it "running" — its
+ * assembled output was never persisted). Without this, every iteration that had
+ * ALREADY completed (and committed credits) on the prior attempt would re-run →
+ * double-charge + duplicate provider spend.
+ *
+ * This loads the prior attempt's COMPLETED iteration jobs (matched by
+ * executionId + node_id + the `iterationIndex` stamped on input_data) so the
+ * re-run REUSES their output instead of re-executing them. Pending/processing
+ * iterations were already cancelled+refunded by cancelInFlightChildJobs, so they
+ * re-run fresh and charge once. Net: no data-loss, no double-charge, no
+ * duplicate provider spend.
+ *
+ * Safe by construction: the items list is derived from the carried-forward
+ * (immutable, already-completed) upstream, so index i maps to the same item
+ * across the original run and the re-run. On a FIRST run no prior completed
+ * iteration jobs exist yet, so this returns an empty map (no behaviour change).
+ */
+export async function loadCompletedFanOutIterations(
+  executionId: string,
+  nodeId: string,
+  nodeType: string,
+): Promise<Map<number, ExecuteNodeResult>> {
+  const byIndex = new Map<number, ExecuteNodeResult>()
+  const { data: jobs, error } = await supabase
+    .from("jobs")
+    .select("id, output_data, credits_actual, input_data")
+    .eq("workflow_execution_id", executionId)
+    .eq("status", "completed")
+  if (error || !jobs) return byIndex
+  for (const j of jobs) {
+    const inp = (j.input_data as Record<string, unknown> | null) ?? {}
+    if (inp.node_id !== nodeId) continue
+    const idx = typeof inp.iterationIndex === "number" ? inp.iterationIndex : undefined
+    if (idx === undefined || byIndex.has(idx)) continue
+    try {
+      byIndex.set(
+        idx,
+        completedJobResult(
+          { output_data: j.output_data, credits_actual: j.credits_actual },
+          nodeType,
+          j.id as string,
+          undefined, // usageLogId — already committed on the prior attempt; not needed for reuse
+          undefined,
+        ),
+      )
+    } catch {
+      // Completed-but-no-output (shouldn't happen for a committed job) → skip so
+      // the iteration re-runs rather than reusing an empty result.
+    }
+  }
+  return byIndex
 }
 
 /**

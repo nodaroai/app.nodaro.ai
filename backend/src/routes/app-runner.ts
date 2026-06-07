@@ -16,6 +16,7 @@ import { CreditsService } from "../ee/billing/credits.js"
 import { flattenItems } from "@nodaro/shared"
 import type { PresentationItem } from "@nodaro/shared"
 import { executeAppRun } from "../services/app-execution.js"
+import { extractAppInputSchema, flatInputsToOverrides } from "../lib/mcp/extract-app-inputs.js"
 
 // In-memory cache for published app data (30min TTL — explicit invalidation on publish)
 const APP_CACHE_TTL_MS = 30 * 60_000
@@ -37,6 +38,11 @@ const slugRunParams = z.object({
 
 const runBody = z.object({
   inputOverrides: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
+  // Flat input map ({ key: value }) used by the SDK/CLI (`client.apps.run(slug, { inputs })`)
+  // and the documented public API. Translated to nested `inputOverrides` at run time
+  // (same as the MCP run_app tool). Without this the flat map was stripped by Zod and the
+  // app ran with all default values — every SDK/CLI input silently ignored.
+  inputs: z.record(z.string(), z.unknown()).optional(),
   runId: z.string().uuid().optional(),
   version: z.coerce.number().int().min(1).optional(),
   headless: z.boolean().optional(),
@@ -255,7 +261,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     }
 
     const { slug } = paramsParsed.data
-    const { inputOverrides, runId, version, headless } = bodyParsed.data
+    const { inputOverrides: nestedOverrides, inputs: flatInputs, runId, version, headless } = bodyParsed.data
 
     const workflowId = await resolveSlug(slug)
     if (!workflowId) {
@@ -268,6 +274,24 @@ export async function appRunnerRoutes(app: FastifyInstance) {
         error: { code: "not_found", message: version ? `Version ${version} not found` : "App not found" },
       })
     }
+
+    // Resolve the inputs the run will use. Explicit nested `inputOverrides` (editor /
+    // presentation UI) take precedence; otherwise translate the flat SDK/CLI `inputs`
+    // map → nested overrides via the app's snapshot schema (same path the MCP run_app
+    // tool uses). Before this, flat `inputs` were dropped → app ran with defaults.
+    const inputOverrides =
+      nestedOverrides ??
+      (flatInputs
+        ? flatInputsToOverrides(
+            flatInputs,
+            extractAppInputSchema({
+              snapshotSettings: appRow.snapshot_settings as Record<string, unknown> | null,
+              snapshotNodes: appRow.snapshot_nodes as
+                | Array<{ id: string; type?: string; data?: Record<string, unknown> }>
+                | null,
+            }).keyMap,
+          )
+        : undefined)
 
     // Validate restricted field values against allowedValues
     const restrictedError = validateRestrictedFields(
@@ -283,10 +307,21 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       ? (async () => {
           const todayStart = new Date()
           todayStart.setUTCHours(0, 0, 0, 0)
+          // Count runs across ALL versions of this app (every published_apps row
+          // for the workflow), not just the requested version. Counting by the
+          // single version-row id let a runner reset the daily cap by cycling
+          // ?version= over older (deactivated-but-runnable) versions → K×limit runs.
+          const { data: versionRows } = await supabase
+            .from("published_apps")
+            .select("id")
+            .eq("workflow_id", workflowId)
+            .is("deleted_at", null)
+          const versionIds = (versionRows ?? []).map((r) => r.id as string)
+          if (versionIds.length === 0) versionIds.push(appRow.id as string)
           const { count, error: rlError } = await supabase
             .from("app_runs")
             .select("id", { count: "exact", head: true })
-            .eq("app_id", appRow.id)
+            .in("app_id", versionIds)
             .eq("runner_id", req.userId)
             .gte("created_at", todayStart.toISOString())
           if (rlError) return { blocked: true as const, status: 500, code: "internal_error", message: "Failed to check rate limit" }

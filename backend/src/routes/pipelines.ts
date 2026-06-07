@@ -764,7 +764,7 @@ export async function pipelinesRoutes(app: FastifyInstance) {
         const message = err instanceof Error ? err.message : String(err)
         await supabase
           .from("jobs")
-          .update({ status: "failed", error: message })
+          .update({ status: "failed", error_message: message })
           .eq("id", job.id)
           .eq("user_id", userId)
         if (usageLogId) await CreditsService.refundCredits(usageLogId)
@@ -774,7 +774,7 @@ export async function pipelinesRoutes(app: FastifyInstance) {
       if (!refinerResult.ok) {
         await supabase
           .from("jobs")
-          .update({ status: "failed", error: refinerResult.reason })
+          .update({ status: "failed", error_message: refinerResult.reason })
           .eq("id", job.id)
           .eq("user_id", userId)
         if (usageLogId) await CreditsService.refundCredits(usageLogId)
@@ -818,7 +818,7 @@ export async function pipelinesRoutes(app: FastifyInstance) {
       if (updateErr) {
         await supabase
           .from("jobs")
-          .update({ status: "failed", error: "db_update_failed" })
+          .update({ status: "failed", error_message: "db_update_failed" })
           .eq("id", job.id)
           .eq("user_id", userId)
         if (usageLogId) await CreditsService.refundCredits(usageLogId)
@@ -829,7 +829,7 @@ export async function pipelinesRoutes(app: FastifyInstance) {
       if (!updatedRows || updatedRows.length === 0) {
         await supabase
           .from("jobs")
-          .update({ status: "failed", error: "stage_not_awaiting" })
+          .update({ status: "failed", error_message: "stage_not_awaiting" })
           .eq("id", job.id)
           .eq("user_id", userId)
         if (usageLogId) await CreditsService.refundCredits(usageLogId)
@@ -3049,6 +3049,9 @@ export async function pipelinesRoutes(app: FastifyInstance) {
             pipeline_not_completed: 400,
             forbidden: 403,
             invalid_stage: 400,
+            model_pin_forbidden: 403,
+            insufficient_credits: 402,
+            reservation_failed: 500,
           }
           const httpStatus = statusMap[err.code] ?? 500
           return reply.status(httpStatus).send({ error: { code: err.code } })

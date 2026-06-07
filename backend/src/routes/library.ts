@@ -292,7 +292,23 @@ export async function libraryRoutes(app: FastifyInstance) {
 
       try {
         if (asset.r2_key) {
-          await deleteFromR2(asset.r2_key)
+          // Content-addressed safety: another asset row may reference the SAME
+          // r2_key (e.g. another user saved this output from the public gallery
+          // via save-generated, which dedups per-user, not per-object). Only
+          // delete the R2 object when NO other row still points at it — otherwise
+          // that row becomes a permanent broken link (R2 objects are gone for good).
+          const { count: otherRefs } = await supabase
+            .from("assets")
+            .select("id", { count: "exact", head: true })
+            .eq("r2_key", asset.r2_key)
+            .neq("id", id)
+          if (!otherRefs || otherRefs === 0) {
+            await deleteFromR2(asset.r2_key)
+          } else {
+            console.log(
+              `[library] Skipping R2 delete for ${asset.r2_key}: ${otherRefs} other asset(s) reference it`,
+            )
+          }
         }
       } catch (err) {
         console.error("[library] R2 delete failed (continuing):", err)

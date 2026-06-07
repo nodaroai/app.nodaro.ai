@@ -88,7 +88,12 @@ async function checkScheduledTriggers(): Promise<void> {
       // "fetch items newer than the previous run").
       const previousLastTriggeredAt = trigger.last_triggered_at as string | null
 
-      // Create execution
+      // Create execution. idempotency_key closes the same SELECT-then-INSERT race
+      // as the webhook path: if >1 backend instance runs this cron, both can pass
+      // the activeExec check for the same tick (identical previousLastTriggeredAt),
+      // so the unique (user_id, idempotency_key) index rejects the duplicate INSERT
+      // (execError → `continue`) instead of double-executing (double-charging).
+      const idempotencyKey = `schedule:${trigger.id}:${previousLastTriggeredAt ?? "initial"}`
       const { data: execution, error: execError } = await supabase
         .from("workflow_executions")
         .insert({
@@ -101,6 +106,7 @@ async function checkScheduledTriggers(): Promise<void> {
             cron: config.cron,
             last_triggered_at: previousLastTriggeredAt,
           },
+          idempotency_key: idempotencyKey,
         })
         .select("id")
         .single()

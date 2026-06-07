@@ -69,7 +69,10 @@ async function markFailed(jobId: string, reason: string): Promise<void> {
       reconcile_last_error: "upstream_failed",
     })
     .eq("id", jobId)
-    .neq("status", "cancelled")
+    // CAS on the live (non-terminal) states only — a bare .neq("status","cancelled")
+    // would still trample a job the worker concurrently flipped to "completed".
+    // Matches kie.ts / sync-sweep.ts (the M6 fix); these two files were missed.
+    .in("status", ["pending", "processing"])
 }
 
 /**

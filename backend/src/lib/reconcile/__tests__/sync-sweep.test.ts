@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
 // Mock supabase chain
-const { selectMock, neqMock, eqMock, updateMock, fromMock } = vi.hoisted(() => {
+const { selectMock, inMock, eqMock, updateMock, fromMock } = vi.hoisted(() => {
   const selectMock = vi.fn<(...args: unknown[]) => unknown>().mockResolvedValue({ data: [{ id: "j1" }], error: null })
-  const neqMock = vi.fn<(...args: unknown[]) => unknown>(() => ({ select: selectMock }))
-  const eqMock = vi.fn<(...args: unknown[]) => unknown>(() => ({ neq: neqMock }))
+  const inMock = vi.fn<(...args: unknown[]) => unknown>(() => ({ select: selectMock }))
+  const eqMock = vi.fn<(...args: unknown[]) => unknown>(() => ({ in: inMock }))
   const updateMock = vi.fn<(arg: Record<string, unknown>) => unknown>(() => ({ eq: eqMock }))
   const fromMock = vi.fn<(...args: unknown[]) => unknown>(() => ({ update: updateMock }))
-  return { selectMock, neqMock, eqMock, updateMock, fromMock }
+  return { selectMock, inMock, eqMock, updateMock, fromMock }
 })
 
 vi.mock("../../supabase.js", () => ({
@@ -39,10 +39,10 @@ describe("sweepStaleSyncJob", () => {
     expect(updateArg.reconcile_last_error).toBe("reconcile_no_recovery")
   })
 
-  it("uses CAS guard: .eq(\"id\", jobId).neq(\"status\", \"cancelled\")", async () => {
+  it("uses CAS guard: .eq(\"id\", jobId).in(\"status\", [\"pending\", \"processing\"]) — preserves ANY terminal state, not just cancelled", async () => {
     await sweepStaleSyncJob({ id: "j-cas", provider_kind: "kie-llm", reconcile_attempts: 2 })
     expect(eqMock).toHaveBeenCalledWith("id", "j-cas")
-    expect(neqMock).toHaveBeenCalledWith("status", "cancelled")
+    expect(inMock).toHaveBeenCalledWith("status", ["pending", "processing"])
   })
 
   it("calls refundReservedCreditsForJob with the job id when CAS UPDATE found the row", async () => {

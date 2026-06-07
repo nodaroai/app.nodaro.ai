@@ -12,6 +12,7 @@ import { TIER_PARALLELISM } from "../ee/billing/stripe-config.js"
 import { executionEvents, type ExecutionEvent } from "../lib/execution-events.js"
 import { supabase } from "../lib/supabase.js"
 import { reconcileNodeStatesFromJobs } from "../lib/reconcile/node-states.js"
+import { cancelInFlightChildJobs } from "../lib/reconcile/cancel-inflight-jobs.js"
 import { updateExecutionWithRetry } from "../lib/execution-writes.js"
 import {
   buildExecutionLevels,
@@ -25,7 +26,7 @@ import { resolveNodeInputs, getListInputForNode } from "../services/workflow-eng
 import { normalizeLegacyNodeTypes } from "../services/workflow-engine/normalize-node-types.js"
 import { migrateGenerateImageHandles } from "../lib/generate-image-handle-migration.js"
 import { extractSourceNodeOutput, extractSavedNodeOutput, coerceListItemsOverrideToRows } from "../services/workflow-engine/output-extractor.js"
-import { executeNode, type ExecuteNodeResult } from "../services/workflow-engine/node-executor.js"
+import { executeNode, loadCompletedFanOutIterations, type ExecuteNodeResult } from "../services/workflow-engine/node-executor.js"
 import type {
   WorkflowExecutionJob,
   SimpleNode,
@@ -490,29 +491,39 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
     let resumedNodeCount = 0
     {
       const persisted = (execRow?.node_states ?? {}) as Record<string, NodeExecutionState>
-      const hasPriorProgress = Object.values(persisted).some(
-        (s) => s?.status === "completed" || s?.status === "skipped",
-      )
-      if (hasPriorProgress) {
-        // Reconcile "running"/"pending" entries against the jobs table (flips
-        // jobs that completed post-crash to completed), then carry forward only
-        // TERMINAL-DONE states. Nodes still genuinely in-flight (job pending at
-        // re-pick time) are intentionally NOT carried — they re-execute. A
-        // failed node is also not carried, so it re-attempts on resume.
-        const { next } = await reconcileNodeStatesFromJobs(persisted, executionId)
-        for (const [id, st] of Object.entries(next)) {
-          if (st?.status === "completed" || st?.status === "skipped") {
-            nodeStates[id] = st
-            resumedNodeCount++
-          }
-        }
-        if (resumedNodeCount > 0) {
-          console.log(
-            `[orchestrator] Resuming execution ${executionId}: ${resumedNodeCount} node(s) already done — skipped (no re-charge)`,
-          )
+      // ALWAYS reconcile "running"/"pending" entries against the jobs table —
+      // NOT only when some node already reached completed/skipped. The crash
+      // window that double-charges is: a node's job completes+commits AFTER the
+      // level-start persist wrote it as "running", but BEFORE the orchestrator's
+      // fire-and-forget node_states flush lands, then the process dies. On
+      // re-pick that node sits as "running" (no completed/skipped anywhere), so
+      // a `hasPriorProgress` gate keyed on completed/skipped would SKIP recovery
+      // and re-execute the node → second reservation + second provider call +
+      // second commit. reconcileNodeStatesFromJobs is a ZERO-query no-op when no
+      // node is running/pending (fresh first pick), so always calling it is free
+      // on the common path. Carry forward only TERMINAL-DONE states; genuinely
+      // in-flight or failed nodes are not carried and re-attempt on resume.
+      const { next } = await reconcileNodeStatesFromJobs(persisted, executionId)
+      for (const [id, st] of Object.entries(next)) {
+        if (st?.status === "completed" || st?.status === "skipped") {
+          nodeStates[id] = st
+          resumedNodeCount++
         }
       }
+      if (resumedNodeCount > 0) {
+        console.log(
+          `[orchestrator] Resuming execution ${executionId}: ${resumedNodeCount} node(s) already done — skipped (no re-charge)`,
+        )
+      }
     }
+    // Neutralize any in-flight child jobs left by a prior (dead) attempt BEFORE
+    // re-deriving + re-executing non-carried nodes. Without this, the prior
+    // attempt's pending/processing job is later recovered by the reconcile cron
+    // and committed — double-charging the user and double-spending at the provider.
+    // MUST run after the carry-forward above (cancelling earlier would make
+    // reconcile map these to "skipped" and carry their nodes forward as done).
+    // No-op on a first pick. See cancelInFlightChildJobs for the residual-race note.
+    await cancelInFlightChildJobs(executionId)
     // Jobs → owning node. Fan-out creates one job per iteration, so the
     // scalar nodeStates[node].jobId field would only remember the last one
     // and onJobProgress couldn't find earlier iterations.
@@ -857,6 +868,13 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
               triggerData,
               onIterationProgress,
               concurrencyLimit,
+              (toleratedFailures: number) => {
+                // Tolerated fan-out failures: node is completed, so count toward
+                // completed_nodes (NOT failed_nodes — that trips the fail-fast).
+                // Lets the progress bar reach 100% on partial fan-out success.
+                completedCount += toleratedFailures
+                updateExecution(executionId, { completed_nodes: completedCount }).catch(() => {})
+              },
             )
           } else {
             // Normal single execution
@@ -912,9 +930,15 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
             }
           } catch { /* non-critical */ }
 
-          // For fan-out nodes, per-iteration progress was already emitted via callback;
-          // for normal nodes, increment by 1 here.
-          if (!result.jobIds || result.jobIds.length <= 1) {
+          // Fan-out nodes already counted their iterations via the
+          // onIterationProgress (successes) + onToleratedFailures (tolerated)
+          // callbacks; normal single-execution nodes increment by 1 here. Gate on
+          // `expanded` (the true fan-out discriminator). The old
+          // `jobIds.length <= 1` heuristic was wrong both ways: it double-counted a
+          // 1-success fan-out (jobIds.length === 1) AND under-counted a
+          // multi-candidate normal node (numImages > 1 → jobIds.length > 1 → never
+          // counted, though totalExecutions counts it as 1).
+          if (!expanded) {
             completedCount++
             // Persist progress + node states immediately so polling sees
             // both the counter AND the per-node status update.
@@ -1113,6 +1137,7 @@ async function executeNodeForList(
   triggerData?: Record<string, unknown>,
   onIterationComplete?: (iterationIndex: number) => void,
   maxConcurrency?: number,
+  onToleratedFailures?: (count: number) => void,
 ): Promise<ExecuteNodeResult> {
   // Set iteration total so frontend can show "0/N" progress
   nodeStates[node.id] = {
@@ -1120,6 +1145,20 @@ async function executeNodeForList(
     iterationTotal: items.length,
     iterationCompleted: 0,
   }
+  // Durably persist iterationTotal BEFORE any iteration job is created. The
+  // reconcile gate (reconcile/node-states.ts) keys on iterationTotal > 1 to
+  // recognize a crashed-mid-fan-out node and leave it running for re-run, instead
+  // of marking it "completed" from partial iteration jobs (which drops items).
+  // Without this, a crash before the level-end node_states write would hide the
+  // fan-out shape from reconcile. Best-effort: a write hiccup just falls back to
+  // the old timing for this one node.
+  await updateExecutionWithRetry(executionId, { node_states: nodeStates }).catch(() => {})
+
+  // Per-iteration resume: on a crash + BullMQ re-pick this fan-out node re-runs
+  // (reconcile leaves it "running"). Reuse the iterations that ALREADY completed
+  // (+ committed) on the prior attempt instead of re-running them, so the re-run
+  // doesn't double-charge or double-spend at the provider. Empty on a first run.
+  const priorIterations = await loadCompletedFanOutIterations(executionId, node.id, node.type ?? "")
 
   let iterationCompleted = 0
   const cancelRef = { cancelled: false }
@@ -1127,30 +1166,36 @@ async function executeNodeForList(
   const tasks = items.map((item, i) => async () => {
     if (ctx.cancelled || cancelRef.cancelled) throw new Error("Cancelled")
 
-    const inputs = resolveNodeInputs(
-      node,
-      edges,
-      nodeStates,
-      allNodes,
-      triggerData,
-      i,
-    )
-    overrideInputWithListItem(inputs, item)
+    // Reuse a prior-attempt completed iteration (crash resume) — no re-charge,
+    // no duplicate provider call. Otherwise execute this iteration fresh.
+    let result = priorIterations.get(i)
+    if (!result) {
+      const inputs = resolveNodeInputs(
+        node,
+        edges,
+        nodeStates,
+        allNodes,
+        triggerData,
+        i,
+      )
+      overrideInputWithListItem(inputs, item)
 
-    // For provider-fanout iterations, swap data.provider for this run only.
-    const providerOverride = decodeProviderItem(item)
-    const iterationNode: SimpleNode = providerOverride
-      ? { ...node, data: { ...(node.data ?? {}), provider: providerOverride } }
-      : node
+      // For provider-fanout iterations, swap data.provider for this run only.
+      const providerOverride = decodeProviderItem(item)
+      const iterationNode: SimpleNode = providerOverride
+        ? { ...node, data: { ...(node.data ?? {}), provider: providerOverride } }
+        : node
 
-    const result = await executeNode(
-      iterationNode,
-      inputs,
-      edges,
-      allNodes,
-      nodeStates,
-      ctx,
-    )
+      result = await executeNode(
+        iterationNode,
+        inputs,
+        edges,
+        allNodes,
+        nodeStates,
+        ctx,
+        i,
+      )
+    }
 
     const output = result.output
     const resultValue =
@@ -1181,6 +1226,13 @@ async function executeNodeForList(
   // this node failed and the run fail-fasts) instead of the old behavior of
   // always returning success with empty/partial output. See assembleFanOutResult.
   const assembly = assembleFanOutResult(settled, items.length)
+  // Report tolerated (non-fatal) iteration failures. assembleFanOutResult throws
+  // when NOTHING succeeded, so reaching here means succeededCount >= 1 and the
+  // fan-out NODE is marked completed. These failures count toward completed_nodes
+  // (done), NOT failed_nodes — incrementing failedCount would trip the level
+  // fail-fast at the call site and turn a partial success into a hard failure.
+  const toleratedFailures = items.length - assembly.succeededCount
+  if (toleratedFailures > 0) onToleratedFailures?.(toleratedFailures)
   if (assembly.genuineFailure !== undefined) {
     console.warn(
       `[orchestrator] Fan-out node ${node.id} (${node.type}): ` +

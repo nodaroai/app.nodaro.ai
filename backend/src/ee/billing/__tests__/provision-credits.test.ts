@@ -14,6 +14,7 @@ const {
   mockRpc,
   selectResponses,
   writeErrors,
+  deleteCalls,
   resetMockState,
   mockLogTransaction,
   mockInvalidateBalanceCache,
@@ -23,6 +24,8 @@ const {
   // update, upsert) default to success unless `writeErrors` overrides them.
   const selectResponses = new Map<string, Array<{ data: unknown; error: unknown }>>()
   const writeErrors = new Map<string, Array<{ code?: string; message?: string } | null>>()
+  // Records every from(table).delete() so tests can assert rollbacks.
+  const deleteCalls: Array<{ table: string }> = []
 
   function shiftResponse(table: string): { data: unknown; error: unknown } {
     const queue = selectResponses.get(table)
@@ -56,6 +59,10 @@ const {
     chain.insert = vi.fn(self)
     chain.update = vi.fn(self)
     chain.upsert = vi.fn(self)
+    chain.delete = vi.fn(() => {
+      deleteCalls.push({ table })
+      return chain
+    })
     chain.single = vi.fn(() => Promise.resolve(shiftResponse(table)))
 
     // Make the chain "thenable" so `await supabase.from("x").update({}).eq()`
@@ -76,6 +83,7 @@ const {
   function resetMockState() {
     selectResponses.clear()
     writeErrors.clear()
+    deleteCalls.length = 0
     mockFrom.mockClear()
     mockRpc.mockClear()
     mockLogTransaction.mockClear()
@@ -87,6 +95,7 @@ const {
     mockRpc,
     selectResponses,
     writeErrors,
+    deleteCalls,
     resetMockState,
     mockLogTransaction,
     mockInvalidateBalanceCache,
@@ -468,21 +477,19 @@ describe("provision-credits", () => {
       metadata: null as Record<string, string> | null,
     }
 
-    it("grants topup credits for valid topup transaction", async () => {
-      // resolveUserId: stripe_customers found
+    it("grants topup credits via the atomic idempotent RPC", async () => {
       mockSelect("stripe_customers", { user_id: "user-001" })
-      // Atomic claim INSERT into transactions succeeds (no writeError queued)
+      mockRpc.mockResolvedValueOnce({ data: true, error: null }) // RPC granted
 
       await handleTransactionCompleted(baseTransactionData)
 
-      expect(mockRpc).toHaveBeenCalledWith("add_topup_credits", {
+      // Claim + grant happen atomically inside the RPC (no separate JS insert).
+      expect(mockRpc).toHaveBeenCalledWith("grant_topup_credits_idempotent", {
         p_user_id: "user-001",
         p_credits: 450,
+        p_stripe_transaction_id: "txn_001",
+        p_amount_usd: 25, // 2500 cents / 100
       })
-
-      const calledTables = mockFrom.mock.calls.map((c: unknown[]) => c[0])
-      expect(calledTables).toContain("transactions")
-
       expect(mockInvalidateBalanceCache).toHaveBeenCalledWith("user-001")
     })
 
@@ -498,32 +505,31 @@ describe("provision-credits", () => {
       expect(mockInvalidateBalanceCache).not.toHaveBeenCalled()
     })
 
-    it("skips duplicate transactions when INSERT raises unique_violation (race-safe)", async () => {
-      // resolveUserId still runs (it's needed to build the INSERT row)
+    it("does not re-grant when the idempotent RPC reports already-processed (duplicate)", async () => {
       mockSelect("stripe_customers", { user_id: "user-001" })
-      // Stripe redelivers the same event; the unique constraint on
-      // stripe_transaction_id rejects the duplicate insert with code 23505.
-      mockWriteError("transactions", { code: "23505", message: "duplicate key" })
+      // Redelivery/replay: the claim already exists, so the RPC returns false
+      // without re-granting (no double-credit).
+      mockRpc.mockResolvedValueOnce({ data: false, error: null })
 
       await handleTransactionCompleted(baseTransactionData)
 
-      // CRITICAL: no credit RPC may fire when the insert lost the race —
-      // otherwise the user would be double-credited.
-      expect(mockRpc).not.toHaveBeenCalledWith("add_topup_credits", expect.anything())
       expect(mockInvalidateBalanceCache).not.toHaveBeenCalled()
     })
 
-    it("does not grant credits when INSERT fails for a non-conflict reason", async () => {
+    it("does not invalidate or compensate when the grant RPC errors (atomic → nothing committed)", async () => {
       mockSelect("stripe_customers", { user_id: "user-001" })
-      mockWriteError("transactions", { code: "42501", message: "permission denied" })
+      mockRpc.mockResolvedValueOnce({ data: null, error: { message: "transient db error" } })
 
       await handleTransactionCompleted(baseTransactionData)
 
-      expect(mockRpc).not.toHaveBeenCalledWith("add_topup_credits", expect.anything())
       expect(mockInvalidateBalanceCache).not.toHaveBeenCalled()
+      // Regression guard: NO compensating delete — claim+grant are atomic in the
+      // RPC, so a failure leaves nothing committed (deleting a claim was the old,
+      // double-grant-prone fix).
+      expect(deleteCalls).not.toContainEqual({ table: "transactions" })
     })
 
-    it("returns early if no topup credits found for price (no insert, no RPC)", async () => {
+    it("returns early if no topup credits found for price (no RPC)", async () => {
       const unknownPriceData = {
         ...baseTransactionData,
         lineItems: [{ priceId: "pri_unknown_price" }],
@@ -533,9 +539,6 @@ describe("provision-credits", () => {
 
       expect(mockRpc).not.toHaveBeenCalled()
       expect(mockInvalidateBalanceCache).not.toHaveBeenCalled()
-      // Should NOT have touched transactions table either
-      const calledTables = mockFrom.mock.calls.map((c: unknown[]) => c[0])
-      expect(calledTables).not.toContain("transactions")
     })
   })
 })

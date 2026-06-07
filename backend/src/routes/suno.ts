@@ -1310,7 +1310,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         const message = (err as Error).message
         await supabase
           .from("jobs")
-          .update({ status: "failed", error: message })
+          .update({ status: "failed", error_message: message })
           .eq("id", job.id)
           .eq("user_id", userId)
           .then(() => {}, () => {})

@@ -79,6 +79,29 @@ export function creditGuard(
   const dedupEnabled = opts?.dedup !== false
 
   return async (req: FastifyRequest, reply: FastifyReply): Promise<void> => {
+    // OAuth app-token scope gate (cloud only). An app token authenticates AS the
+    // resource owner and spends THEIR credits. Per-route requireScope() is opt-in
+    // and only a handful of routes use it, so every credit-spending generation
+    // route was reachable by an app granted ONLY read scopes (e.g. jobs:read) on
+    // the consent screen — draining the owner's balance against the contract the
+    // user approved. Require at least one :write/:execute scope to spend credits.
+    // (User JWTs / API tokens have no appAuthorization → unaffected; self-hosted
+    // editions return a no-op preHandler before this via hasCredits().)
+    if (hasCredits() && req.appAuthorization) {
+      const canSpend = req.appAuthorization.scopes.some(
+        (s) => s.endsWith(":execute") || s.endsWith(":write"),
+      )
+      if (!canSpend) {
+        return reply.code(403).send({
+          error: {
+            code: "insufficient_scope",
+            message:
+              "This app's granted scopes do not permit credit-spending generation; a :write or :execute scope is required.",
+          },
+        })
+      }
+    }
+
     // Dedup is INTENT-DRIVEN, not body-driven. AI generation legitimately
     // produces different outputs from the same body (seeds, stochastic
     // sampling), so two clicks on Generate with identical params should

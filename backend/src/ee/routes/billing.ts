@@ -144,7 +144,10 @@ export async function billingRoutes(app: FastifyInstance) {
         customer: stripeCustomerId ?? undefined,
         mode: checkoutMode,
         line_items: [{ price: priceId, quantity: 1 }],
-        metadata: { userId },
+        // Seed the top-up priceId so the webhook can resolve credits from event
+        // metadata if the secondary listLineItems API call fails (it swallows
+        // errors → [] → 0 credits granted on a paid top-up, with no retry).
+        metadata: checkoutMode === "payment" ? { userId, topupPriceId: priceId } : { userId },
         subscription_data: checkoutMode === "subscription" ? { metadata: { userId } } : undefined,
         allow_promotion_codes: true,
         success_url: successUrl,
@@ -245,6 +248,8 @@ export async function billingRoutes(app: FastifyInstance) {
       const newTier = getTierFromPriceId(newPriceId)
       const newCredits = TIER_CREDITS[newTier] ?? 0
       const newStorageLimit = TIER_STORAGE_LIMITS[newTier] ?? TIER_STORAGE_LIMITS.free
+      const oldTier = getTierFromPriceId(sub.stripe_price_id)
+      const isUpgrade = newCredits > (TIER_CREDITS[oldTier] ?? 0)
 
       // Immediate local DB update so users see changes right away
       // (webhook will reconcile later as a backup)
@@ -260,19 +265,26 @@ export async function billingRoutes(app: FastifyInstance) {
         console.error("[billing] change-plan: subscriptions update failed:", subUpdateError.message)
       }
 
+      // Tier flips immediately for both directions. But ONLY raise credits +
+      // storage on an UPGRADE — on a downgrade, keep the current (higher) credits
+      // and storage until next renewal, matching handleSubscriptionUpdated's
+      // downgrade policy in stripe-webhook. Reducing them here charged the user
+      // back the credits they already paid for this period and could shove them
+      // over the new (smaller) storage quota mid-cycle.
+      const profileUpdate: Record<string, unknown> = { tier: newTier }
+      if (isUpgrade) {
+        profileUpdate.subscription_credits = newCredits
+        profileUpdate.storage_limit_bytes = newStorageLimit
+      }
       const { error: profileUpdateError } = await supabase
         .from("profiles")
-        .update({
-          tier: newTier,
-          subscription_credits: newCredits,
-          storage_limit_bytes: newStorageLimit,
-        })
+        .update(profileUpdate)
         .eq("id", userId)
 
       if (profileUpdateError) {
         console.error("[billing] change-plan: profiles update failed:", profileUpdateError.message)
       }
-      console.log(`[billing] change-plan: profile updated for user=${userId}, tier=${newTier}, credits=${newCredits}`)
+      console.log(`[billing] change-plan: profile updated for user=${userId}, tier=${newTier}, isUpgrade=${isUpgrade}${isUpgrade ? `, credits=${newCredits}` : " (credits kept until renewal)"}`)
 
       return reply.send({
         data: { subscriptionId: updated.id, tier: newTier },

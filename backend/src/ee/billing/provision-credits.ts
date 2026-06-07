@@ -456,6 +456,14 @@ export async function handleTransactionCompleted(
     }
   }
 
+  // Fallback to the priceId seeded in checkout metadata. getSessionLineItems
+  // swallows API errors (returns []), so a transient Stripe failure otherwise
+  // granted the paying user ZERO credits with no retry (the webhook acks 200).
+  // The idempotency claim below still prevents any double-grant.
+  if (totalCredits === 0 && data.metadata?.topupPriceId) {
+    totalCredits = getTopupCredits(data.metadata.topupPriceId) ?? 0
+  }
+
   if (totalCredits === 0) {
     console.log("[stripe] transaction.completed: no top-up items found", data.transactionId)
     return
@@ -471,46 +479,37 @@ export async function handleTransactionCompleted(
     return
   }
 
-  // Atomic idempotency claim. Stripe delivers webhooks at-least-once and may
-  // retry on transient non-2xx responses, so two deliveries of the same event
-  // can race here. Inserting the transactions row FIRST (before the additive
-  // add_topup_credits RPC) makes the UNIQUE(stripe_transaction_id) constraint
-  // the mutex: the winning delivery inserts and grants credits; any duplicate
-  // gets a unique_violation (23505) and short-circuits without re-granting.
-  const { error: insertError } = await supabase
-    .from("transactions")
-    .insert({
-      user_id: userId,
-      stripe_transaction_id: data.transactionId,
-      type: "topup",
-      amount_usd: data.totalAmount / 100, // Stripe amounts in cents
-      credits_granted: totalCredits,
-    })
+  // Atomic idempotency + grant in ONE DB transaction (grant_topup_credits_idempotent,
+  // migration 199). The transactions row (UNIQUE stripe_transaction_id) is the claim
+  // AND add_topup_credits runs inside the same transaction, so:
+  //   - a Stripe redelivery / manual replay can NEVER double-grant (ON CONFLICT
+  //     short-circuits and the RPC returns false), and
+  //   - a failure can NEVER leave a committed claim without the grant (both roll
+  //     back together) — no permanent zero-credit, no compensating delete needed.
+  // Returns true if it granted, false if the claim already existed (duplicate).
+  const { data: granted, error: rpcError } = await supabase.rpc("grant_topup_credits_idempotent", {
+    p_user_id: userId,
+    p_credits: totalCredits,
+    p_stripe_transaction_id: data.transactionId,
+    p_amount_usd: data.totalAmount / 100, // Stripe amounts in cents
+  })
 
-  if (insertError) {
-    if (insertError.code === "23505") {
-      console.log(
-        "[stripe] transaction.completed: already processed (unique_violation), skipping",
-        data.transactionId,
-      )
-      return
-    }
+  if (rpcError) {
+    // Nothing committed (claim + grant are atomic) — safe to leave for a Stripe
+    // redelivery/replay, which will grant exactly once.
     console.error(
-      "[stripe] transaction.completed: insert failed:",
+      "[stripe] transaction.completed: grant_topup_credits_idempotent failed:",
       data.transactionId,
-      insertError.message,
+      rpcError.message,
     )
     return
   }
 
-  // Insert succeeded — we are the sole processor; safe to grant credits.
-  const { error: rpcError } = await supabase.rpc("add_topup_credits", {
-    p_user_id: userId,
-    p_credits: totalCredits,
-  })
-
-  if (rpcError) {
-    console.error("[stripe] transaction.completed: add_topup_credits failed:", rpcError.message)
+  if (granted === false) {
+    console.log(
+      "[stripe] transaction.completed: already processed (idempotent), skipping",
+      data.transactionId,
+    )
     return
   }
 

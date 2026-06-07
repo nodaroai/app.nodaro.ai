@@ -30,6 +30,15 @@ vi.mock("@/lib/config.js", () => ({
   hasAdmin: () => true,
 }))
 
+// fetchAudioFromUrl now routes user URLs through safeFetch (SSRF gate), not global
+// fetch. Mock safeFetch and delegate to the same fetchMock the tests configure, so
+// every existing fetchMock setup/assertion keeps working unchanged.
+const { safeFetchMock } = vi.hoisted(() => ({ safeFetchMock: vi.fn() }))
+vi.mock("@/lib/safe-fetch.js", async (orig) => {
+  const actual = await orig<typeof import("@/lib/safe-fetch.js")>()
+  return { ...actual, safeFetch: safeFetchMock }
+})
+
 import {
   ELEVENLABS_BASE_URL,
   getElevenLabsApiKey,
@@ -52,6 +61,10 @@ let fetchMock: ReturnType<typeof vi.fn>
 beforeEach(() => {
   fetchMock = vi.fn()
   vi.stubGlobal("fetch", fetchMock)
+  // safeFetch (used by fetchAudioFromUrl) delegates to the same mock — spread the
+  // exact args so a single-arg safeFetch(url) call records a single-arg fetch call.
+  const callFetch = fetchMock as unknown as (...a: unknown[]) => unknown
+  safeFetchMock.mockImplementation((...args: unknown[]) => callFetch(...args))
 })
 
 afterEach(() => {

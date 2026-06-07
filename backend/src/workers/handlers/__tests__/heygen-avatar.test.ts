@@ -132,6 +132,7 @@ describe("handleAiAvatar — text mode", () => {
       resolution: "720p",
       aspectRatio: "16:9",
       caption: false,
+      onTaskCreated: expect.any(Function),
     })
   })
 

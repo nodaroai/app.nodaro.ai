@@ -62,6 +62,8 @@ interface Fixture {
   pipelinesInserted: Array<Record<string, unknown>>
   stagesInserted: Array<Record<string, unknown>>
   entitiesInserted: Array<Record<string, unknown>>
+  pipelinesUpdated: Array<Record<string, unknown>>
+  rpcCalls: Array<{ fn: string; args: Record<string, unknown> }>
 }
 
 function makeSupabaseMock(
@@ -73,6 +75,8 @@ function makeSupabaseMock(
     pipelinesInserted: [],
     stagesInserted: [],
     entitiesInserted: [],
+    pipelinesUpdated: [],
+    rpcCalls: [],
   }
 
   let newPipelineId = "new-pipeline-id"
@@ -87,6 +91,11 @@ function makeSupabaseMock(
                 data: pipeline,
                 error: pipeline ? null : { message: "not found", code: "PGRST116" },
               }),
+              // refundPipelineCredits looks up the new pipeline's reservation link.
+              maybeSingle: async () => ({
+                data: { reservation_usage_log_id: "reservation-usage-log-id" },
+                error: null,
+              }),
             }),
           }),
           insert: (row: Record<string, unknown>) => {
@@ -100,6 +109,12 @@ function makeSupabaseMock(
               }),
             }
           },
+          // reservePipelineCredits persists reservation_usage_log_id; rollback path deletes.
+          update: (row: Record<string, unknown>) => {
+            fixture.pipelinesUpdated.push(row)
+            return { eq: async () => ({ error: null }) }
+          },
+          delete: () => ({ eq: async () => ({ error: null }) }),
         }
       }
       if (table === "pipeline_stages") {
@@ -137,6 +152,15 @@ function makeSupabaseMock(
         }
       }
       throw new Error(`Unmocked table: ${table}`)
+    },
+    // reservePipelineCredits calls rpc("reserve_credits") → usageLogId;
+    // refundPipelineCredits calls rpc("refund_credits", { p_usage_log_id }).
+    rpc: async (fn: string, args: Record<string, unknown>) => {
+      fixture.rpcCalls.push({ fn, args })
+      return {
+        data: fn === "reserve_credits" ? "reservation-usage-log-id" : null,
+        error: null,
+      }
     },
   }
 
@@ -307,6 +331,23 @@ describe("branchPipeline", () => {
     })
   })
 
+  it("reserves upfront credits on the branched pipeline (was a free re-run before)", async () => {
+    const { client, fixture } = makeSupabaseMock(makePipeline(), makeStagesUpTo(5))
+
+    await branchPipeline({
+      supabase: client as never,
+      originalPipelineId: "orig-pipeline-id",
+      fromStage: "scene_images",
+      userId: "user-1",
+    })
+
+    const inserted = fixture.pipelinesInserted[0]
+    expect(inserted).toBeDefined()
+    // Regression: reserved_credits was previously 0/unset → free repeatable re-run.
+    expect((inserted!.reserved_credits as number) > 0).toBe(true)
+    expect(inserted!.reserved_credits).toBe(inserted!.upfront_credit_estimate)
+  })
+
   it("rejects when pipeline is not completed", async () => {
     const { client } = makeSupabaseMock(makePipeline({ status: "running" }))
 
@@ -383,5 +424,30 @@ describe("branchPipeline", () => {
 
     // Queue is still enqueued
     expect(enqueuePipelineRun).toHaveBeenCalledOnce()
+  })
+
+  it("refunds the reservation + fails the pipeline when post-reservation setup throws", async () => {
+    const { client, fixture } = makeSupabaseMock(makePipeline(), makeStagesUpTo(5))
+    // Step 9 (enqueue) throws — e.g. Redis down — AFTER credits were reserved.
+    vi.mocked(enqueuePipelineRun).mockRejectedValueOnce(new Error("redis down"))
+
+    await expect(
+      branchPipeline({
+        supabase: client as never,
+        originalPipelineId: "orig-pipeline-id",
+        fromStage: "scene_images",
+        userId: "user-1",
+      }),
+    ).rejects.toThrow("redis down")
+
+    // Regression: previously the reservation leaked until the 6h reconcile abandon.
+    // The reservation must be refunded on the post-reservation failure path.
+    const refundCall = fixture.rpcCalls.find((c) => c.fn === "refund_credits")
+    expect(refundCall).toBeDefined()
+    expect(refundCall!.args.p_usage_log_id).toBe("reservation-usage-log-id")
+    // And the orphan pipeline is marked failed so the resume cron doesn't churn.
+    const failedUpdate = fixture.pipelinesUpdated.find((u) => u.status === "failed")
+    expect(failedUpdate).toBeDefined()
+    expect(failedUpdate!.failure_reason).toBe("branch_setup_failed")
   })
 })

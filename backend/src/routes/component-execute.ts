@@ -67,6 +67,12 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
 
     // Create wrapper job
     const mcpClient = extractMcpClient(req.body)
+    const wrapperInput: Record<string, unknown> = {
+      type: "component",
+      componentName: appRow.name,
+      appSlug,
+      inputs: inputOverrides ?? {},
+    }
     const { data: wrapperJob, error: jobError } = await supabase
       .from("jobs")
       .insert({
@@ -74,12 +80,7 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
         provider: "component",
         status: "processing",
         started_at: new Date().toISOString(),
-        input_data: {
-          type: "component",
-          componentName: appRow.name,
-          appSlug,
-          inputs: inputOverrides ?? {},
-        },
+        input_data: wrapperInput,
         ...(workflowId ? { workflow_id: workflowId } : {}),
         ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
@@ -108,6 +109,17 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
           componentDepth,
           executingComponentIds,
         })
+
+        // Stamp the nested execution id on the wrapper IMMEDIATELY (it was
+        // otherwise only written on terminal completion below). If this server
+        // process dies mid-poll, the wrapper is left "processing" forever — the
+        // reconcile sweep (sweepStuckComponentWrappers) needs `_executionId` to
+        // find the nested execution and propagate its terminal status, instead of
+        // stranding the parent.
+        await supabase
+          .from("jobs")
+          .update({ input_data: { ...wrapperInput, _executionId: result.executionId } })
+          .eq("id", wrapperJob.id)
 
         const startTime = Date.now()
         while (Date.now() - startTime < POLL_ABSOLUTE_TIMEOUT_MS) {

@@ -21,6 +21,7 @@ export const PROVIDER_KIND_VALUES = [
   "elevenlabs-async",
   "elevenlabs-sync",
   "anthropic-sync",
+  "heygen",
   "pre-task",
 ] as const
 
@@ -63,6 +64,12 @@ export const STALE_THRESHOLD_MS: Record<ProviderKind, number> = {
   "elevenlabs-async":         15 * MIN,
   "elevenlabs-sync":           5 * MIN,
   "anthropic-sync":            5 * MIN,
+  // HeyGen avatar/cinematic: generateAvatarVideo persists the video_id via
+  // onTaskCreated so a BullMQ stall-retry does NOT re-submit (double-bill the
+  // provider). No recover handler yet, so it's swept like pre-task (fail+refund)
+  // — HeyGen's own MAX_POLL_DURATION bounds a run well under 30 min, so this
+  // never fails a still-rendering job (same effective threshold pre-task gave it).
+  "heygen":                   30 * MIN,
   // Sentinel kind written when the worker transitions to `processing` BEFORE
   // any upstream provider call. If the handler crashes before firing
   // `onTaskCreated` (or `markProviderCallStart` for sync ops), the row would
@@ -97,6 +104,9 @@ const SYNC_KINDS: ReadonlySet<ProviderKind> = new Set([
   // marks failed + refunds the reservation. Same behavior path as a sync
   // route handler that crashed mid-call.
   "pre-task",
+  // `heygen` persists a video_id (so stall-retry skips the re-call), but there's
+  // no recover handler — treat a stalled HeyGen job like pre-task: fail + refund.
+  "heygen",
 ])
 
 export function isSyncKind(kind: ProviderKind): boolean {

@@ -720,8 +720,11 @@ describe("getInputFieldSchema", () => {
   })
 
   it("returns schema for duration (number type)", () => {
+    // key is "seconds" — the field the duration picker stores and
+    // getParameterValue() reads (DurationNodeData.seconds). The old "duration"
+    // key never matched the reader, so the override was silently dropped.
     expect(getInputFieldSchema("duration")).toEqual({
-      key: "duration",
+      key: "seconds",
       type: "number",
     })
   })

@@ -132,7 +132,11 @@ export async function adminSubscriptionHealthRoutes(app: FastifyInstance) {
   const syncBody = z.object({ userId: z.string().uuid() })
 
   app.post("/v1/admin/subscription-health/sync", { preHandler: requireAdmin }, async (req, reply) => {
-    const { userId } = syncBody.parse(req.body)
+    const parsedBody = syncBody.safeParse(req.body)
+    if (!parsedBody.success) {
+      return reply.status(400).send({ error: parsedBody.error.flatten().fieldErrors })
+    }
+    const { userId } = parsedBody.data
 
     // Look up Stripe customer
     const { data: custRow } = await supabase

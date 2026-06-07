@@ -124,6 +124,7 @@ export async function reconcileInflightJobs(): Promise<ReconcileResult> {
           provider_task_id: row.provider_task_id,
           reconcile_attempts: row.reconcile_attempts,
           job_type: row.job_type,
+          input_data: row.input_data,
         })
         result.recovered++
       } else if (REPLICATE_KINDS.has(kind)) {
@@ -134,6 +135,7 @@ export async function reconcileInflightJobs(): Promise<ReconcileResult> {
           provider_task_id: row.provider_task_id,
           reconcile_attempts: row.reconcile_attempts,
           job_type: row.job_type,
+          input_data: row.input_data,
         })
         result.recovered++
       } else if (ELEVENLABS_KINDS.has(kind)) {
@@ -165,6 +167,8 @@ export async function reconcileInflightJobs(): Promise<ReconcileResult> {
   }
 
   await sweepNeverStartedJobs(result)
+  await sweepStuckComponentWrappers(result)
+  await sweepStuckRenderJobs(result)
 
   return result
 }
@@ -213,6 +217,130 @@ async function sweepNeverStartedJobs(result: ReconcileResult): Promise<void> {
         `[reconcile/cron] never-started sweep failed for job ${row.id}:`,
         err,
       )
+      result.errors++
+    }
+  }
+}
+
+/** Render jobs (the "video-render" BullMQ queue) set status='processing' +
+ *  started_at at pickup but NO provider_kind / provider_call_started_at — so they
+ *  are invisible to the main scan (requires provider_call_started_at NOT NULL),
+ *  to sweepNeverStartedJobs (status='pending'), and to the component sweep
+ *  (provider='component'). If a render stalls past BullMQ's maxStalledCount
+ *  (default 1) — e.g. the container OOM-kills mid-render while holding the lock —
+ *  BullMQ abandons the job WITHOUT running the handler's catch, so the row stays
+ *  'processing' forever and its reserved credits (render-video = 15cr) never
+ *  refund. Mark each one failed + refund via the shared sync-sweep path.
+ *
+ *  The threshold is well past the longest legitimate render AND the orchestrator's
+ *  30-min node timeout (which already cancels+refunds workflow-embedded renders),
+ *  so a still-running render is never failed. Render jobs are identified by
+ *  input_data.type (set by buildJobInputData) since the jobs row carries no
+ *  job_type/provider for renders. */
+const RENDER_STALE_MS = 90 * 60 * 1000
+
+async function sweepStuckRenderJobs(result: ReconcileResult): Promise<void> {
+  const cutoff = new Date(Date.now() - RENDER_STALE_MS).toISOString()
+  const { data, error } = await supabase
+    .from("jobs")
+    .select("id, provider_kind, reconcile_attempts")
+    .eq("status", "processing")
+    .is("provider_call_started_at", null)
+    .filter("input_data->>type", "eq", "render-video")
+    .lt("started_at", cutoff)
+    .limit(BATCH_LIMIT)
+
+  if (error) {
+    console.error(`[reconcile/cron] stuck-render query failed:`, error.message)
+    result.errors++
+    return
+  }
+
+  for (const row of data ?? []) {
+    result.scanned++
+    try {
+      await sweepStaleSyncJob({
+        id: row.id as string,
+        provider_kind: (row.provider_kind as string | null) ?? null,
+        reconcile_attempts: (row.reconcile_attempts as number | null) ?? 0,
+      })
+      result.swept++
+    } catch (err) {
+      console.error(
+        `[reconcile/cron] stuck-render sweep failed for job ${row.id}:`,
+        err,
+      )
+      result.errors++
+    }
+  }
+}
+
+/** Component wrapper jobs (provider="component") run their inner workflow in a
+ *  server-side background loop and poll it to completion. They carry NO
+ *  provider_call_started_at (skipped by the main scan) and are status="processing"
+ *  (skipped by sweepNeverStartedJobs) — so if THAT server process dies mid-poll
+ *  the wrapper is invisible to reconcile and strands. The common case self-heals
+ *  (the orchestrator's 30-min poll timeout / BullMQ re-pick re-runs the component
+ *  node), but an orphaned wrapper otherwise sits "processing" forever.
+ *
+ *  This backstop only acts once the wrapper is well past EVERY timeout (90 min)
+ *  AND its nested execution is itself terminal/gone — so it never fails a
+ *  legitimately long-running (deeply nested) component. It relies on the
+ *  `_executionId` stamped on the wrapper at nested-execution-create time
+ *  (routes/component-execute.ts). */
+const COMPONENT_WRAPPER_STALE_MS = 90 * 60 * 1000
+
+async function sweepStuckComponentWrappers(result: ReconcileResult): Promise<void> {
+  const cutoff = new Date(Date.now() - COMPONENT_WRAPPER_STALE_MS).toISOString()
+  const { data, error } = await supabase
+    .from("jobs")
+    .select("id, input_data")
+    .eq("provider", "component")
+    .eq("status", "processing")
+    .lt("started_at", cutoff)
+    .limit(BATCH_LIMIT)
+
+  if (error) {
+    console.error(`[reconcile/cron] component-wrapper query failed:`, error.message)
+    result.errors++
+    return
+  }
+
+  for (const row of data ?? []) {
+    result.scanned++
+    try {
+      const nestedId = (row.input_data as Record<string, unknown> | null)?._executionId
+      let nestedStatus: string | null = null
+      if (typeof nestedId === "string") {
+        const { data: nested } = await supabase
+          .from("workflow_executions")
+          .select("status")
+          .eq("id", nestedId)
+          .maybeSingle()
+        nestedStatus = (nested?.status as string | undefined) ?? null
+      }
+      // Only act once the nested execution is itself TERMINAL (or gone). Never
+      // fail a wrapper whose inner workflow is still legitimately running.
+      const nestedTerminal =
+        nestedStatus === null ||
+        ["completed", "failed", "cancelled", "abandoned"].includes(nestedStatus)
+      if (!nestedTerminal) continue
+
+      await supabase
+        .from("jobs")
+        .update({
+          status: "failed",
+          error_message:
+            nestedStatus === "completed"
+              ? "Component wrapper orphaned (server crash mid-poll); inner run finished — re-run to collect output"
+              : `Component inner execution ${nestedStatus ?? "missing"}`,
+          completed_at: new Date().toISOString(),
+        })
+        .eq("id", row.id as string)
+        .eq("status", "processing") // CAS — don't trample a wrapper that just finished
+      result.swept++
+    } catch (err) {
+      console.error(`[reconcile/cron] component-wrapper sweep failed for job ${row.id}:`, err)
       result.errors++
     }
   }

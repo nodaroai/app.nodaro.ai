@@ -25,6 +25,7 @@ import {
 } from "../shared.js"
 import { finalizeJobWithMedia } from "../../lib/job-finalize.js"
 import { capAudioForAvatar } from "./heygen-avatar-audio-cap.js"
+import { makeOnTaskCreated } from "../../lib/reconcile/persistence.js"
 
 export const handleAiAvatar: HandlerFn = async function handleAiAvatar(job, ctx) {
   const {
@@ -128,6 +129,7 @@ export const handleAiAvatar: HandlerFn = async function handleAiAvatar(job, ctx)
       removeBackground,
       motionPrompt,
       expressiveness,
+      onTaskCreated: makeOnTaskCreated(ctx.jobId, "heygen"),
     }),
   )
   await setJobProgress(job, ctx.jobId, 50)

@@ -127,6 +127,90 @@ function stylizedSubjectFor(nodeType: string): FactoryPreset[] {
 }
 
 /**
+ * Image-edit presets shared by `modify-image` and `generate-image` (with a connected reference
+ * image) — common photo-edit operations where the instruction lives in the prompt. Same
+ * single-source rationale as STYLIZED_SUBJECT; when modify-image is removed, generate-image keeps them.
+ */
+const IMAGE_EDITS: ReadonlyArray<{
+  readonly slug: string
+  readonly name: string
+  readonly description: string
+  readonly data: Readonly<Record<string, unknown>>
+}> = [
+  {
+    slug: "background-remove",
+    name: "Remove Background",
+    description: "Cut out the subject on white.",
+    data: {
+      provider: "nano-banana-pro",
+      prompt:
+        "Remove the background completely and place the subject on a clean solid white background. Keep the subject sharp, complete and unchanged.",
+    },
+  },
+  {
+    slug: "background-replace",
+    name: "Replace Background",
+    description: "Swap in a new scene.",
+    data: {
+      provider: "nano-banana-pro",
+      prompt:
+        "Replace the background with {scene}. Keep the subject unchanged and blend the lighting and shadows naturally.",
+    },
+  },
+  {
+    slug: "colorize",
+    name: "Colorize B&W Photo",
+    description: "Natural color from grayscale.",
+    data: {
+      provider: "nano-banana-pro",
+      prompt:
+        "Colorize this black-and-white photo with natural, realistic colors. Preserve all original detail and composition.",
+    },
+  },
+  {
+    slug: "restore-photo",
+    name: "Restore Old Photo",
+    description: "Repair scratches, denoise, sharpen.",
+    data: {
+      provider: "nano-banana-pro",
+      prompt:
+        "Restore and enhance this old photo: remove scratches, dust and noise, repair damage, and sharpen detail while keeping it authentic.",
+    },
+  },
+  {
+    slug: "relight",
+    name: "Relight Scene",
+    description: "New lighting, same subject.",
+    data: {
+      provider: "nano-banana-pro",
+      prompt:
+        "Relight the scene with {lighting style}. Keep the subject, pose and composition unchanged.",
+    },
+  },
+  {
+    slug: "restyle-whole",
+    name: "Restyle (whole image)",
+    description: "Apply an art style to everything.",
+    data: {
+      provider: "nano-banana-pro",
+      prompt:
+        "Restyle the entire image in a {art style} look while keeping the composition and subject recognizable.",
+    },
+  },
+]
+
+/** Build the Edits presets for a node type (id = `<nodeType>/<slug>`). */
+function editsFor(nodeType: string): FactoryPreset[] {
+  return IMAGE_EDITS.map((p) => ({
+    id: `${nodeType}/${p.slug}`,
+    name: p.name,
+    description: p.description,
+    group: "Edits",
+    data: p.data,
+  }))
+}
+
+/**
  * System/factory presets shipped with the app. Code-defined (like the picker catalogs) so they are
  * typed, testable, versioned with the app, and available in every edition without a DB seed.
  *
@@ -436,7 +520,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
         provider: "nano-banana-pro",
         aspectRatio: "1:1",
         prompt:
-          "stylized avatar profile picture of {subject}, centered head-and-shoulders, clean solid-color background, bold and friendly",
+          "stylized avatar profile picture of {character or subject}, centered head-and-shoulders, clean solid-color background, bold and friendly",
         negativePrompt: "lowres, deformed, watermark, text, busy background",
       },
     },
@@ -490,7 +574,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
         provider: "nano-banana-pro",
         aspectRatio: "1:1",
         prompt:
-          "product packaging mockup of {product}, {box or bottle or pouch}, photorealistic printed label, studio lighting, clean background",
+          "product packaging mockup of {product}, {format}, photorealistic printed label, studio lighting, clean background",
         negativePrompt: "lowres, distorted label, watermark, clutter",
       },
     },
@@ -503,7 +587,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
         provider: "gpt-image-2",
         aspectRatio: "16:9",
         prompt:
-          "{smartphone or laptop or tablet} mockup displaying {screen content}, clean studio setting, slight angle, soft reflections, crisp screen",
+          "{device} mockup displaying {screen content}, clean studio setting, slight angle, soft reflections, crisp screen",
         negativePrompt: "lowres, distorted screen, watermark, clutter",
       },
     },
@@ -531,7 +615,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
         provider: "ideogram-v3",
         aspectRatio: "1:1",
         prompt:
-          "minimalist wordmark logo for '{brand}', clean modern typography, flat vector style, centered, solid background, professional",
+          "minimalist wordmark logo for '{BRAND}', clean modern typography, flat vector style, centered, solid background, professional",
         negativePrompt: "photorealistic, cluttered, gradient mesh, watermark",
       },
     },
@@ -544,7 +628,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
         provider: "ideogram-v3",
         aspectRatio: "1:1",
         prompt:
-          "emblem badge logo for '{brand}', {concept}, circular composition, flat vector, limited color palette, crisp edges, white background",
+          "emblem badge logo for '{BRAND}', {concept}, circular composition, flat vector, limited color palette, crisp edges, white background",
         negativePrompt: "photorealistic, cluttered, watermark",
       },
     },
@@ -557,7 +641,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
         provider: "ideogram-v3",
         aspectRatio: "1:1",
         prompt:
-          "mascot logo for '{brand}', friendly {character} mascot, bold flat colors, clean vector style, white background",
+          "mascot logo for '{BRAND}', friendly {character} mascot, bold flat colors, clean vector style, white background",
         negativePrompt: "photorealistic, cluttered, watermark",
       },
     },
@@ -570,7 +654,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
         provider: "gpt-image-2",
         aspectRatio: "1:1",
         prompt:
-          "modern app icon for '{app}', rounded square, simple bold glyph of {concept}, subtle gradient, centered, flat design",
+          "modern app icon for '{APP}', rounded square, simple bold glyph of {concept}, subtle gradient, centered, flat design",
         negativePrompt: "cluttered, photorealistic, watermark, text",
       },
     },
@@ -583,7 +667,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
         provider: "ideogram-v3",
         aspectRatio: "1:1",
         prompt:
-          "elegant monogram logo combining the letters '{initials}', refined geometric design, single color, white background",
+          "elegant monogram logo combining the letters '{INITIALS}', refined geometric design, single color, white background",
         negativePrompt: "cluttered, photorealistic, watermark",
       },
     },
@@ -650,7 +734,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
         provider: "ideogram-v3",
         aspectRatio: "1:1",
         prompt:
-          "inspirational quote card with the text '{quote}', elegant typography, {background style}, balanced composition",
+          "inspirational quote card with the text '{QUOTE}', elegant typography, {background style}, balanced composition",
         negativePrompt: "lowres, cluttered, misspelled text, watermark",
       },
     },
@@ -678,7 +762,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
         provider: "nano-banana-pro",
         aspectRatio: "2:3",
         prompt:
-          "movie poster for '{title}', cinematic key art, dramatic hero composition, atmospheric lighting, title treatment at the bottom, tagline",
+          "movie poster for '{TITLE}', cinematic key art, dramatic hero composition, atmospheric lighting, title treatment at the bottom, tagline",
         negativePrompt: "lowres, cluttered, misspelled text, watermark",
       },
     },
@@ -691,7 +775,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
         provider: "ideogram-v3",
         aspectRatio: "3:4",
         prompt:
-          "event poster for '{event}', {date and venue}, bold graphic design, striking typography, eye-catching",
+          "event poster for '{EVENT}', {date and venue}, bold graphic design, striking typography, eye-catching",
         negativePrompt: "lowres, cluttered, misspelled text, watermark",
       },
     },
@@ -704,7 +788,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
         provider: "nano-banana-pro",
         aspectRatio: "2:3",
         prompt:
-          "book cover for '{title}' by {author}, {genre} mood and imagery, title and author typography, professional cover design",
+          "book cover for '{TITLE}' by {AUTHOR}, {genre} mood and imagery, title and author typography, professional cover design",
         negativePrompt: "lowres, cluttered, misspelled text, watermark",
       },
     },
@@ -743,7 +827,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
         provider: "seedream",
         aspectRatio: "1:1",
         prompt:
-          "album cover art for '{title}', {genre} aesthetic, striking central image, mood-setting color palette",
+          "album cover art for '{TITLE}', {genre} aesthetic, striking central image, mood-setting color palette",
         negativePrompt: "lowres, cluttered, watermark",
       },
     },
@@ -842,7 +926,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
     },
     {
       id: "generate-image/pixel-art",
-      name: "Pixel Art",
+      name: "Pixel Art Scene",
       description: "Retro low-res pixel grid.",
       group: "Illustration & Art Styles",
       data: {
@@ -888,7 +972,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
         provider: "nano-banana-pro",
         aspectRatio: "2:3",
         prompt:
-          "tattoo flash design of {subject}, {traditional or fine-line or blackwork} style, bold clean linework, isolated on white",
+          "tattoo flash design of {subject}, {tattoo style} style, bold clean linework, isolated on white",
         negativePrompt: "photo background, lowres, watermark",
       },
     },
@@ -916,7 +1000,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
         provider: "nano-banana",
         aspectRatio: "16:9",
         prompt:
-          "storyboard frame: {shot description}, {wide or medium or close-up} shot, rough black-and-white sketch, clear composition, {camera angle}, arrows indicating motion",
+          "storyboard frame: {shot description}, {shot size} shot, rough black-and-white sketch, clear composition, {camera angle}, arrows indicating motion",
         negativePrompt: "color, photorealistic, lowres, watermark",
       },
     },
@@ -1094,17 +1178,268 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
       },
     },
 
-    // ── Stylized Subject (shared with the deprecating modify-image node) ──────
-    // Selective stylization is a TRANSFORM pattern; here it works when a reference
-    // image is connected (nano-banana-pro edits it while preserving untouched
-    // regions). The "only the X" instruction lives in the prompt, not `style`.
+    // ── More Photography & Cinematic ─────────────────────────────────────────
+    {
+      id: "generate-image/silhouette",
+      name: "Silhouette",
+      description: "Backlit subject, dramatic sky.",
+      group: "Photography & Cinematic",
+      data: { provider: "nano-banana-pro", aspectRatio: "16:9", prompt: "dramatic silhouette of {subject} backlit against a vivid sunset sky, high contrast, minimal detail, glowing rim light", negativePrompt: "flat lighting, lowres, watermark" },
+    },
+    {
+      id: "generate-image/long-exposure",
+      name: "Long Exposure",
+      description: "Silky motion, light trails.",
+      group: "Photography & Cinematic",
+      data: { provider: "seedream", aspectRatio: "16:9", prompt: "long-exposure photograph of {scene}, silky smooth motion blur, light trails, glassy water, tripod-steady, blue hour", negativePrompt: "noise, lowres, watermark" },
+    },
+    {
+      id: "generate-image/tilt-shift",
+      name: "Tilt-Shift Miniature",
+      description: "Fake-miniature selective blur.",
+      group: "Photography & Cinematic",
+      data: { provider: "nano-banana-pro", aspectRatio: "16:9", prompt: "tilt-shift miniature photograph of {scene}, selective focus, toy-like miniature effect, high saturation, elevated angle", negativePrompt: "lowres, watermark" },
+    },
+
+    // ── More Product & Commerce ──────────────────────────────────────────────
+    {
+      id: "generate-image/knolling",
+      name: "Knolling Flat-Lay",
+      description: "Objects arranged at 90°.",
+      group: "Product & Commerce",
+      data: { provider: "nano-banana-pro", aspectRatio: "1:1", prompt: "knolling flat-lay of {items}, objects neatly arranged at 90-degree angles, evenly spaced, top-down, clean background, soft shadows", negativePrompt: "cluttered, messy, watermark" },
+    },
+    {
+      id: "generate-image/ghost-mannequin",
+      name: "Ghost-Mannequin Apparel",
+      description: "Invisible-mannequin clothing shot.",
+      group: "Product & Commerce",
+      data: { provider: "nano-banana-pro", aspectRatio: "4:5", prompt: "ghost mannequin product photo of {garment}, invisible-mannequin hollow 3D effect, clean white background, even studio lighting, e-commerce", negativePrompt: "visible mannequin, person, wrinkles, watermark" },
+    },
+
+    // ── More Illustration & Art Styles ───────────────────────────────────────
+    {
+      id: "generate-image/double-exposure",
+      name: "Double Exposure",
+      description: "Silhouette filled with a 2nd scene.",
+      group: "Illustration & Art Styles",
+      data: { provider: "seedream", aspectRatio: "2:3", prompt: "double exposure of {subject} silhouette blended with {secondary scene}, artistic overlay, high contrast", negativePrompt: "muddy, lowres, watermark" },
+    },
+    {
+      id: "generate-image/vaporwave",
+      name: "Vaporwave",
+      description: "80s neon pastel aesthetic.",
+      group: "Illustration & Art Styles",
+      data: { provider: "nano-banana-pro", aspectRatio: "16:9", style: "vaporwave", prompt: "{subject}", negativePrompt: "lowres, watermark" },
+    },
+    {
+      id: "generate-image/cyberpunk-scene",
+      name: "Cyberpunk Scene",
+      description: "Neon-lit dystopian night.",
+      group: "Illustration & Art Styles",
+      data: { provider: "nano-banana-pro", aspectRatio: "16:9", style: "cyberpunk", prompt: "{scene}, neon-lit rainy night", negativePrompt: "lowres, watermark" },
+    },
+    {
+      id: "generate-image/pop-art",
+      name: "Pop Art",
+      description: "Bold Warhol/Lichtenstein graphic.",
+      group: "Illustration & Art Styles",
+      data: { provider: "ideogram-v3", aspectRatio: "1:1", style: "pop-art", prompt: "{subject}", negativePrompt: "muted colors, lowres, watermark" },
+    },
+    {
+      id: "generate-image/low-poly",
+      name: "Low Poly",
+      description: "Faceted geometric 3D.",
+      group: "Illustration & Art Styles",
+      data: { provider: "nano-banana-pro", aspectRatio: "1:1", style: "low-poly", prompt: "{subject}", negativePrompt: "smooth, lowres, watermark" },
+    },
+    {
+      id: "generate-image/paper-cut",
+      name: "Paper Cut",
+      description: "Layered cut-paper craft.",
+      group: "Illustration & Art Styles",
+      data: { provider: "nano-banana-pro", aspectRatio: "1:1", style: "paper-cutout", prompt: "{subject}", negativePrompt: "flat, lowres, watermark" },
+    },
+    {
+      id: "generate-image/stained-glass",
+      name: "Stained Glass",
+      description: "Leaded colored-glass mosaic.",
+      group: "Illustration & Art Styles",
+      data: { provider: "nano-banana-pro", aspectRatio: "2:3", style: "stained-glass", prompt: "{subject}", negativePrompt: "lowres, watermark" },
+    },
+
+    // ── Diagrams & Infographics ──────────────────────────────────────────────
+    {
+      id: "generate-image/blueprint",
+      name: "Blueprint Schematic",
+      description: "White-on-blue technical drawing.",
+      group: "Diagrams & Infographics",
+      data: { provider: "ideogram-v3", aspectRatio: "4:3", style: "blueprint", prompt: "technical blueprint schematic of {subject}, white line work on blue paper, dimension lines and callout labels", negativePrompt: "photorealistic, lowres, watermark" },
+    },
+    {
+      id: "generate-image/infographic",
+      name: "Infographic",
+      description: "Icons + labels data layout.",
+      group: "Diagrams & Infographics",
+      data: { provider: "ideogram-v3", aspectRatio: "4:3", prompt: "clean modern infographic about {topic}, simple icons, short labels, data-visualization layout, flat design, clear hierarchy", negativePrompt: "cluttered, misspelled text, lowres, watermark" },
+    },
+    {
+      id: "generate-image/ui-mockup",
+      name: "UI / App Mockup",
+      description: "Clean app/website screen design.",
+      group: "Diagrams & Infographics",
+      data: { provider: "gpt-image-2", aspectRatio: "16:9", prompt: "modern UI design mockup of {app or website screen}, clean interface, cards and buttons, realistic legible text, polished product design", negativePrompt: "cluttered, gibberish text, lowres, watermark" },
+    },
+    {
+      id: "generate-image/flowchart",
+      name: "Flowchart / Diagram",
+      description: "Boxes, arrows, labels.",
+      group: "Diagrams & Infographics",
+      data: { provider: "ideogram-v3", aspectRatio: "16:9", prompt: "clean flowchart diagram of {process}, labeled boxes connected by arrows, clear hierarchy, flat modern design", negativePrompt: "cluttered, misspelled text, lowres, watermark" },
+    },
+    {
+      id: "generate-image/chart-graph",
+      name: "Chart / Graph",
+      description: "Bar / line / pie data viz.",
+      group: "Diagrams & Infographics",
+      data: { provider: "ideogram-v3", aspectRatio: "4:3", prompt: "clean data-visualization chart of {data}, {bar, line or pie} graph, labeled axes and legend, flat modern design", negativePrompt: "cluttered, misspelled text, lowres, watermark" },
+    },
+    {
+      id: "generate-image/timeline",
+      name: "Timeline",
+      description: "Milestones along an axis.",
+      group: "Diagrams & Infographics",
+      data: { provider: "ideogram-v3", aspectRatio: "16:9", prompt: "horizontal timeline infographic of {topic}, milestones along a line with dates, icons and short labels, flat modern design", negativePrompt: "cluttered, misspelled text, lowres, watermark" },
+    },
+    {
+      id: "generate-image/x-ray",
+      name: "X-Ray / See-Through",
+      description: "Internal-structure radiograph look.",
+      group: "Illustration & Art Styles",
+      data: { provider: "nano-banana-pro", aspectRatio: "4:3", prompt: "x-ray style see-through render of {subject}, internal structure visible, glowing white-on-dark radiograph aesthetic", negativePrompt: "opaque, lowres, watermark" },
+    },
+
+    // ── More Icons, Game Assets & Textures ───────────────────────────────────
+    {
+      id: "generate-image/3d-icon",
+      name: "3D Icon",
+      description: "Glossy single 3D-rendered icon.",
+      group: "Icons, Game Assets & Textures",
+      data: { provider: "nano-banana-pro", aspectRatio: "1:1", prompt: "single glossy 3D rendered icon of {subject}, soft studio lighting, rounded clay-like form, vibrant, isolated on a plain background", negativePrompt: "flat, 2d, cluttered, watermark" },
+    },
+
+    // ── More Architecture & Interiors ────────────────────────────────────────
+    {
+      id: "generate-image/floor-plan",
+      name: "Floor Plan",
+      description: "Top-down labeled layout.",
+      group: "Architecture & Interiors",
+      data: { provider: "ideogram-v3", aspectRatio: "1:1", prompt: "top-down architectural floor plan of {space}, clean line work, room labels, furniture layout, scale bar, blueprint style", negativePrompt: "perspective, photorealistic, lowres, watermark" },
+    },
+    {
+      id: "generate-image/aerial-site",
+      name: "Aerial Site View",
+      description: "Drone view of building + context.",
+      group: "Architecture & Interiors",
+      data: { provider: "seedream", aspectRatio: "16:9", prompt: "aerial architectural site view of {building}, drone perspective showing surrounding context and landscaping, photorealistic, golden hour", negativePrompt: "distorted geometry, lowres, watermark" },
+    },
+
+    // ── Portrait Transformations (identity-locked, from a connected reference photo) ──
+    // Like Stylized Subject, these are TRANSFORM presets: connect a clean front-facing
+    // reference portrait and nano-banana-pro rebuilds it. The "Timeless Soul" age
+    // progression renders ONE person at several ages in a single studio composite — the
+    // whole effect rides on the identity-lock clause (same eyes/brow/nose/ears/bone
+    // structure), so it stays one person aging rather than several different people.
+    {
+      id: "generate-image/age-progression-5",
+      name: "Five Ages (Timeless Soul)",
+      description: "One person at 5 ages, studio line-up. Needs a reference photo.",
+      group: "Portrait Transformations",
+      data: {
+        provider: "nano-banana-pro",
+        aspectRatio: "3:4",
+        prompt:
+          "Generate a single photorealistic 3:4 vertical studio composite of the person in the reference image at five stages of life, lined up shoulder-to-shoulder from left to right in a smooth age progression: a child around 7, a teenager around 15, a young adult around 27, a mature adult around 45, and an elder around 70. Frame each figure from the chest up, all facing the camera with the same calm expression. Strictly preserve identity across all five figures — identical eye shape, eye color, brow line, nose, ear shape, and facial bone structure from the reference — aged ONLY via skin texture, fine lines and wrinkles, hairline, hair color (darker in youth, gradually greying with age), and slight changes in facial fullness. Dress each figure for its age: striped tee for the child, hoodie or denim jacket for the teen, casual shirt for the young adult, blazer or button-up for the mature adult, soft cardigan for the elder. Even soft cinematic studio key light hitting all five consistently, gentle rim separation from the background, clean dark-grey gradient seamless backdrop (slightly darker at the edges, softly lit toward the center). High-end editorial portrait photography, sharp facial detail, natural skin tones; the five figures fill the frame.",
+        negativePrompt: "five different people, inconsistent identity, deformed, extra fingers, watermark, text",
+      },
+    },
+    {
+      id: "generate-image/age-progression-3",
+      name: "Three-Age Triptych",
+      description: "Same person at 3 ages (~10 / 40 / 75). Needs a reference photo.",
+      group: "Portrait Transformations",
+      data: {
+        provider: "nano-banana-pro",
+        aspectRatio: "3:4",
+        prompt:
+          "Generate a single photorealistic 3:4 vertical studio composite of the person in the reference image at three stages of life, shoulder-to-shoulder from left to right: around age 10, around age 40, and around age 75. Frame each figure from the chest up, facing the camera with the same calm expression. Strictly preserve identity across all three — identical eye shape, eye color, brow line, nose, ear shape, and facial bone structure from the reference — aged ONLY via skin texture, fine lines, hairline, hair color (darker in youth, greying with age), and slight facial fullness. Age-appropriate clothing for each stage. Even soft cinematic studio key light, clean dark-grey gradient seamless backdrop, high-end editorial portrait photography, sharp facial detail, natural skin tones; the three figures fill the frame.",
+        negativePrompt: "three different people, inconsistent identity, deformed, watermark, text",
+      },
+    },
+    {
+      id: "generate-image/age-progression-bw",
+      name: "Five Ages — B&W",
+      description: "Monochrome age line-up. Needs a reference photo.",
+      group: "Portrait Transformations",
+      data: {
+        provider: "nano-banana-pro",
+        aspectRatio: "3:4",
+        prompt:
+          "Generate a single black-and-white photorealistic 3:4 vertical studio composite of the person in the reference image at five stages of life, shoulder-to-shoulder from left to right in a smooth age progression: around 7, 15, 27, 45, and 70. Chest-up framing, all facing the camera with the same calm expression. Strictly preserve identity across all five figures — identical eye shape, eye color, brow line, nose, ear shape, and facial bone structure from the reference — aged ONLY via skin texture, fine lines, hairline, greying hair, and slight facial fullness. Age-appropriate clothing per stage. Even soft studio key light, clean dark-grey gradient backdrop. Monochrome high-end black-and-white studio portrait, deep tonal range, fine film grain, sharp facial detail; the five figures fill the frame.",
+        negativePrompt: "color, five different people, inconsistent identity, deformed, watermark, text",
+      },
+    },
+    {
+      id: "generate-image/decade-timeline",
+      name: "Decade Timeline",
+      description: "Same person across the '80s–2020s. Needs a reference photo.",
+      group: "Portrait Transformations",
+      data: {
+        provider: "nano-banana-pro",
+        aspectRatio: "3:4",
+        prompt:
+          "Generate a single photorealistic 3:4 vertical studio composite of the person in the reference image across five decades, shoulder-to-shoulder from left to right with a smooth age progression and period-accurate styling: a 1980s child, a 1990s teenager, a 2000s young adult, a 2010s adult, and a 2020s mature adult. Chest-up framing, all facing the camera with the same calm expression. Strictly preserve identity across all five figures — identical eye shape, eye color, brow line, nose, ear shape, and facial bone structure from the reference — aged ONLY via skin texture, fine lines, hairline, hair color, and slight facial fullness. Style each figure to its decade in hair and wardrobe: 1980s bright bold colors and big hair, 1990s casual grunge, 2000s frosted-tips and low-rise era, 2010s clean modern, 2020s contemporary. Subtle period-accurate photo treatment per decade. Even soft studio key light, clean dark-grey gradient seamless backdrop. High-end editorial portrait photography, sharp facial detail, natural skin tones; the five figures fill the frame.",
+        negativePrompt: "different people, inconsistent identity, deformed, watermark, text",
+      },
+    },
+    {
+      id: "generate-image/four-seasons",
+      name: "Four Seasons",
+      description: "Same person in spring / summer / autumn / winter. Needs a reference photo.",
+      group: "Portrait Transformations",
+      data: {
+        provider: "nano-banana-pro",
+        aspectRatio: "3:4",
+        prompt:
+          "Generate a single photorealistic 3:4 vertical studio composite of the person in the reference image in four seasonal looks, shoulder-to-shoulder from left to right: spring, summer, autumn, and winter. Chest-up framing, all facing the camera with the same calm expression, all at the SAME age as the reference (this is seasons, not aging). Strictly preserve identity across all four figures — identical face, eye shape, eye color, brow, nose, ear shape, and bone structure from the reference; only wardrobe, hair styling, and a subtle seasonal color grade change. Spring: light pastel layers, fresh airy tone. Summer: light tee, warm sunny tone. Autumn: knit sweater, golden amber tone. Winter: coat and scarf, cool crisp tone. Even soft studio key light with a gentle seasonal color cast per figure, clean dark-grey gradient seamless backdrop. High-end editorial portrait photography, sharp facial detail, natural skin tones; the four figures fill the frame.",
+        negativePrompt: "different people, inconsistent identity, aging, deformed, watermark, text",
+      },
+    },
+    {
+      id: "generate-image/times-of-day",
+      name: "Times of Day",
+      description: "Same person at dawn / midday / golden hour / night. Needs a reference photo.",
+      group: "Portrait Transformations",
+      data: {
+        provider: "nano-banana-pro",
+        aspectRatio: "3:4",
+        prompt:
+          "Generate a single photorealistic 3:4 vertical composite of the person in the reference image across four times of day, shoulder-to-shoulder from left to right: dawn, midday, golden hour, and night. Chest-up framing, all facing the camera with the same calm expression, all at the SAME age as the reference. Strictly preserve identity across all four figures — identical face, eye shape, eye color, brow, nose, ear shape, and bone structure from the reference; only the lighting and color temperature change between figures. Dawn: soft cool blue light. Midday: bright neutral daylight. Golden hour: warm amber backlight with a gentle glow. Night: moody low light with a cool rim. Consistent chest-up framing and a clean dark-grey gradient seamless backdrop. High-end editorial portrait photography, sharp facial detail, natural skin tones; the four figures fill the frame.",
+        negativePrompt: "different people, inconsistent identity, aging, deformed, watermark, text",
+      },
+    },
+    // ── Stylized Subject + Edits (shared with the deprecating modify-image) ──
+    // Transform patterns — work here when a reference image is connected
+    // (nano-banana-pro edits it while preserving untouched regions). The
+    // instruction lives in the prompt, not `style`.
     ...stylizedSubjectFor("generate-image"),
+    ...editsFor("generate-image"),
   ],
 
-  // modify-image shares the Stylized Subject catalog with generate-image (single
-  // source of truth in STYLIZED_SUBJECT). modify-image is slated for deprecation
-  // in favor of generate-image — when it's removed, drop this key.
-  "modify-image": stylizedSubjectFor("modify-image"),
+  // modify-image shares the Stylized Subject + Edits catalogs with generate-image
+  // (single source of truth in STYLIZED_SUBJECT / IMAGE_EDITS). modify-image is
+  // slated for deprecation in favor of generate-image — when removed, drop this key.
+  "modify-image": [...stylizedSubjectFor("modify-image"), ...editsFor("modify-image")],
   "generate-video": [
     // ── Camera Moves (composable cinematography fragments) ───────────────────
     {
@@ -1180,7 +1515,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
       },
     },
     {
-      id: "generate-video/pan-reveal",
+      id: "generate-video/slow-pan",
       name: "Slow Pan",
       description: "Horizontal sweep across the scene.",
       group: "Camera Moves",
@@ -1522,7 +1857,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
         provider: "kling-3.0",
         aspectRatio: "16:9",
         duration: 5,
-        prompt: "animated logo sting: {brand} logo assembles with light streaks and a clean reveal, short and punchy, on a solid background",
+        prompt: "animated logo sting: {BRAND} logo assembles with light streaks and a clean reveal, short and punchy, on a solid background",
       },
     },
     {
@@ -1681,7 +2016,9 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
       description: "Gentle, natural movement (great for animating a still).",
       group: "Looping & Backgrounds",
       data: {
+        provider: "seedance-2-fast",
         aspectRatio: "16:9",
+        duration: 5,
         prompt: "subtle natural motion, gentle camera drift, cinematic",
       },
     },
@@ -1697,13 +2034,295 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
         prompt: "living wallpaper: {scene} with subtle ambient motion, calm and hypnotic, seamless loop",
       },
     },
+    {
+      id: "generate-video/parallax",
+      name: "Parallax (2.5D)",
+      description: "Depth move over a still.",
+      group: "Looping & Backgrounds",
+      data: { provider: "kling-3.0", aspectRatio: "16:9", duration: 5, prompt: "2.5D parallax camera move over {scene}, layered depth, subtle motion bringing a still image to life" },
+    },
+    {
+      id: "generate-video/cinemagraph",
+      name: "Cinemagraph",
+      description: "Mostly still, one moving element.",
+      group: "Looping & Backgrounds",
+      data: { provider: "kling-3.0", aspectRatio: "16:9", duration: 5, prompt: "cinemagraph of {scene}, mostly frozen with one element in subtle motion ({moving element}), seamless loop" },
+    },
+    {
+      id: "generate-video/fire-smoke-loop",
+      name: "Fire & Smoke FX",
+      description: "Looping embers and smoke.",
+      group: "Looping & Backgrounds",
+      data: { provider: "kling-3.0", aspectRatio: "16:9", duration: 5, prompt: "looping fire and smoke FX over a dark background, drifting embers, slow rolling smoke, seamless" },
+    },
+    // additional Camera Moves / Cinematic / Social / Product / Motion-graphics / B-roll
+    {
+      id: "generate-video/crash-zoom",
+      name: "Crash Zoom",
+      description: "Sudden energetic punch-in.",
+      group: "Camera Moves",
+      data: { provider: "kling-3.0", aspectRatio: "16:9", duration: 5, prompt: "rapid crash zoom punching in toward {subject}, sudden energetic push-in, motion blur" },
+    },
+    {
+      id: "generate-video/slowmo-reveal",
+      name: "Slow-Mo Reveal",
+      description: "Speed-ramped hero slowdown.",
+      group: "Cinematic & Specialty",
+      data: { provider: "kling-3.0", aspectRatio: "16:9", duration: 5, prompt: "dramatic slow-motion hero reveal of {subject}, speed ramp into smooth slow motion, cinematic" },
+    },
+    {
+      id: "generate-video/match-cut",
+      name: "Match Cut / Morph",
+      description: "Object A morphs into B.",
+      group: "Cinematic & Specialty",
+      data: { provider: "kling-3.0", aspectRatio: "16:9", duration: 5, prompt: "seamless match cut morphing {subject A} into {subject B}, smooth transformation transition" },
+    },
+    {
+      id: "generate-video/before-after",
+      name: "Before / After Reveal",
+      description: "Wipe between two states.",
+      group: "Product & Ads",
+      data: { provider: "kling-3.0", aspectRatio: "16:9", duration: 5, prompt: "before and after reveal of {subject}, smooth wipe transition from the 'before' state to the 'after' state" },
+    },
+    {
+      id: "generate-video/kinetic-typography",
+      name: "Kinetic Typography",
+      description: "Words animate in with rhythm.",
+      group: "Motion Graphics & Logo",
+      data: { provider: "veo3.1", aspectRatio: "16:9", duration: 8, prompt: "kinetic typography animation: the words '{TEXT}' animate in dynamically with motion, rhythm and depth on a clean background" },
+    },
+    {
+      id: "generate-video/fashion-walk",
+      name: "Fashion Walk",
+      description: "Runway stride, fabric in motion.",
+      group: "Social & Reels",
+      data: { provider: "kling-3.0", aspectRatio: "9:16", duration: 5, prompt: "fashion runway walk, {model} striding confidently toward camera, fabric flowing in motion, editorial lighting" },
+    },
+    {
+      id: "generate-video/weather-atmosphere",
+      name: "Weather Atmosphere",
+      description: "Rain / snow / fog rolling in.",
+      group: "B-Roll & Nature",
+      data: { provider: "runway-kie", aspectRatio: "16:9", duration: 5, prompt: "atmospheric weather rolling into {scene}: {weather}, moody and cinematic" },
+    },
   ],
+  // Voice-delivery profiles — knob-only (stability / similarityBoost / style in
+  // 0-1, speed in 0.7-1.2). They deliberately do NOT pin a voiceId so they layer
+  // on top of whatever voice the user picked. ElevenLabs semantics: lower
+  // stability = more expressive/variable, higher style = more stylized.
   "text-to-speech": [
+    // ── Narration ────────────────────────────────────────────────────────────
     {
       id: "text-to-speech/narrator-calm",
-      name: "Narrator (calm)",
+      name: "Calm Narrator",
       description: "Even, measured narration.",
+      group: "Narration",
       data: { speed: 1, stability: 0.6, similarityBoost: 0.75, style: 0 },
+    },
+    {
+      id: "text-to-speech/audiobook",
+      name: "Audiobook",
+      description: "Warm, steady, slightly slower.",
+      group: "Narration",
+      data: { speed: 0.95, stability: 0.75, similarityBoost: 0.8, style: 0.1 },
+    },
+    {
+      id: "text-to-speech/documentary",
+      name: "Documentary",
+      description: "Measured delivery with gravitas.",
+      group: "Narration",
+      data: { speed: 0.95, stability: 0.78, similarityBoost: 0.85, style: 0.25 },
+    },
+    {
+      id: "text-to-speech/news-anchor",
+      name: "News Anchor",
+      description: "Neutral, authoritative, even pace.",
+      group: "Narration",
+      data: { speed: 1, stability: 0.7, similarityBoost: 0.8, style: 0.2 },
+    },
+    {
+      id: "text-to-speech/explainer",
+      name: "Explainer / Tutorial",
+      description: "Clear, friendly, mid-pace.",
+      group: "Narration",
+      data: { speed: 1, stability: 0.55, similarityBoost: 0.75, style: 0.3 },
+    },
+
+    // ── Advertising & Hype ───────────────────────────────────────────────────
+    {
+      id: "text-to-speech/commercial",
+      name: "Commercial Read",
+      description: "Energetic, persuasive, punchy.",
+      group: "Advertising & Hype",
+      data: { speed: 1.05, stability: 0.48, similarityBoost: 0.75, style: 0.6 },
+    },
+    {
+      id: "text-to-speech/hype",
+      name: "Hype / High-Energy",
+      description: "Fast, excited, dynamic.",
+      group: "Advertising & Hype",
+      data: { speed: 1.15, stability: 0.25, similarityBoost: 0.7, style: 0.8 },
+    },
+
+    // ── Conversational & Calm ────────────────────────────────────────────────
+    {
+      id: "text-to-speech/podcast-host",
+      name: "Podcast Host",
+      description: "Natural, casual, conversational.",
+      group: "Conversational & Calm",
+      data: { speed: 1.05, stability: 0.45, similarityBoost: 0.75, style: 0.4 },
+    },
+    {
+      id: "text-to-speech/character",
+      name: "Character / Storyteller",
+      description: "Expressive, dramatic range.",
+      group: "Conversational & Calm",
+      data: { speed: 1, stability: 0.3, similarityBoost: 0.7, style: 0.7 },
+    },
+    {
+      id: "text-to-speech/meditation",
+      name: "Meditation / ASMR",
+      description: "Very slow, soft, soothing.",
+      group: "Conversational & Calm",
+      data: { speed: 0.8, stability: 0.85, similarityBoost: 0.75, style: 0 },
+    },
+  ],
+
+  // Sound-effect / ambience prompts — provider elevenlabs-sfx. Loopable ambiences
+  // set loop:true; short one-shots leave it off. duration in 0.5-30, promptInfluence
+  // in 0-1 (higher = follow the prompt more literally).
+  "text-to-audio": [
+    // ── Transitions & Impacts ────────────────────────────────────────────────
+    {
+      id: "text-to-audio/whoosh",
+      name: "Whoosh Transition",
+      description: "Fast clean swoosh.",
+      group: "Transitions & Impacts",
+      data: { provider: "elevenlabs-sfx", duration: 1, promptInfluence: 0.7, prompt: "fast clean whoosh transition swoosh, smooth air movement" },
+    },
+    {
+      id: "text-to-audio/impact-boom",
+      name: "Impact / Boom",
+      description: "Deep cinematic hit.",
+      group: "Transitions & Impacts",
+      data: { provider: "elevenlabs-sfx", duration: 2, promptInfluence: 0.7, prompt: "deep cinematic impact boom, powerful sub hit with tail" },
+    },
+    {
+      id: "text-to-audio/riser",
+      name: "Riser / Build-Up",
+      description: "Rising tension sweep.",
+      group: "Transitions & Impacts",
+      data: { provider: "elevenlabs-sfx", duration: 4, promptInfluence: 0.6, prompt: "tension riser build-up sweep rising to a peak" },
+    },
+
+    // ── Ambiences (loopable) ─────────────────────────────────────────────────
+    {
+      id: "text-to-audio/rain-ambience",
+      name: "Rain Ambience",
+      description: "Steady gentle rain.",
+      group: "Ambiences (loopable)",
+      data: { provider: "elevenlabs-sfx", duration: 22, loop: true, promptInfluence: 0.4, prompt: "steady gentle rain ambience with distant soft thunder" },
+    },
+    {
+      id: "text-to-audio/forest-ambience",
+      name: "Forest Ambience",
+      description: "Birds and rustling leaves.",
+      group: "Ambiences (loopable)",
+      data: { provider: "elevenlabs-sfx", duration: 22, loop: true, promptInfluence: 0.4, prompt: "calm forest ambience, birdsong, gentle wind through leaves" },
+    },
+    {
+      id: "text-to-audio/fire-crackle",
+      name: "Fire Crackle",
+      description: "Cozy fireplace loop.",
+      group: "Ambiences (loopable)",
+      data: { provider: "elevenlabs-sfx", duration: 22, loop: true, promptInfluence: 0.4, prompt: "cozy fireplace crackling, warm popping embers" },
+    },
+    {
+      id: "text-to-audio/scifi-drone",
+      name: "Sci-Fi Drone",
+      description: "Ominous ambient hum.",
+      group: "Ambiences (loopable)",
+      data: { provider: "elevenlabs-sfx", duration: 22, loop: true, promptInfluence: 0.5, prompt: "low sci-fi ambient drone, ominous spaceship hum" },
+    },
+
+    // ── UI & Stingers ────────────────────────────────────────────────────────
+    {
+      id: "text-to-audio/ui-click",
+      name: "UI Click / Pop",
+      description: "Crisp interface tap.",
+      group: "UI & Stingers",
+      data: { provider: "elevenlabs-sfx", duration: 1, promptInfluence: 0.8, prompt: "crisp UI click pop, clean modern interface tap" },
+    },
+    {
+      id: "text-to-audio/notification",
+      name: "Notification Chime",
+      description: "Bright pleasant alert.",
+      group: "UI & Stingers",
+      data: { provider: "elevenlabs-sfx", duration: 2, promptInfluence: 0.8, prompt: "pleasant bright notification chime, short and clean" },
+    },
+    {
+      id: "text-to-audio/applause",
+      name: "Applause / Crowd",
+      description: "Enthusiastic cheering.",
+      group: "UI & Stingers",
+      data: { provider: "elevenlabs-sfx", duration: 5, promptInfluence: 0.6, prompt: "enthusiastic crowd applause and cheering" },
+    },
+    // ── Foley & Action ───────────────────────────────────────────────────────
+    {
+      id: "text-to-audio/footsteps",
+      name: "Footsteps",
+      description: "Walking on a hard floor.",
+      group: "Foley & Action",
+      data: { provider: "elevenlabs-sfx", duration: 4, promptInfluence: 0.6, prompt: "footsteps walking on a hard wooden floor, steady pace" },
+    },
+    {
+      id: "text-to-audio/door",
+      name: "Door Open / Close",
+      description: "Creak then shut.",
+      group: "Foley & Action",
+      data: { provider: "elevenlabs-sfx", duration: 3, promptInfluence: 0.7, prompt: "wooden door slowly creaking open then closing with a soft latch" },
+    },
+    {
+      id: "text-to-audio/glass-break",
+      name: "Glass Break",
+      description: "Sharp shatter.",
+      group: "Foley & Action",
+      data: { provider: "elevenlabs-sfx", duration: 2, promptInfluence: 0.8, prompt: "glass shattering, sharp break with falling shards" },
+    },
+    {
+      id: "text-to-audio/keyboard-typing",
+      name: "Keyboard Typing",
+      description: "Mechanical key clicks.",
+      group: "Foley & Action",
+      data: { provider: "elevenlabs-sfx", duration: 5, promptInfluence: 0.6, prompt: "fast mechanical keyboard typing, crisp key clicks" },
+    },
+    {
+      id: "text-to-audio/explosion",
+      name: "Explosion",
+      description: "Deep boom + debris.",
+      group: "Foley & Action",
+      data: { provider: "elevenlabs-sfx", duration: 3, promptInfluence: 0.7, prompt: "large explosion, deep boom with rumbling debris and tail" },
+    },
+    {
+      id: "text-to-audio/magic-sparkle",
+      name: "Magic Sparkle",
+      description: "Shimmering chime FX.",
+      group: "Foley & Action",
+      data: { provider: "elevenlabs-sfx", duration: 2, promptInfluence: 0.7, prompt: "magical sparkle shimmer, twinkling fairy-dust chimes" },
+    },
+    {
+      id: "text-to-audio/camera-shutter",
+      name: "Camera Shutter",
+      description: "DSLR click.",
+      group: "Foley & Action",
+      data: { provider: "elevenlabs-sfx", duration: 1, promptInfluence: 0.8, prompt: "DSLR camera shutter click, single crisp photo snap" },
+    },
+    {
+      id: "text-to-audio/error-buzzer",
+      name: "Error Buzzer",
+      description: "Wrong / fail tone.",
+      group: "Foley & Action",
+      data: { provider: "elevenlabs-sfx", duration: 1, promptInfluence: 0.8, prompt: "short error buzzer, negative fail tone" },
     },
   ],
   "generate-music": [
@@ -2000,7 +2619,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
     },
     {
       id: "generate-music/genre-funk",
-      name: "Funk",
+      name: "Funk / Soul",
       description: "Groovy, danceable.",
       group: "By Genre",
       data: {
@@ -2010,6 +2629,92 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
         duration: 30,
         prompt: "funky groove, slap bass, wah guitar, tight horns, danceable",
       },
+    },
+    // ── More By Use-Case ─────────────────────────────────────────────────────
+    {
+      id: "generate-music/trailer-riser",
+      name: "Trailer Riser / Braam",
+      description: "Pure rising tension hit.",
+      group: "By Use-Case",
+      data: { genre: "cinematic", mood: "tense, building", instrumental: true, duration: 15, prompt: "cinematic trailer riser and braam hit, rising tension whoosh into a deep impact, no melody" },
+    },
+    {
+      id: "generate-music/calm-corporate",
+      name: "Calm Corporate / Tech",
+      description: "Soft, professional bed.",
+      group: "By Use-Case",
+      data: { genre: "electronic", mood: "calm, professional", instrumental: true, duration: 30, prompt: "calm corporate tech bed, soft synth pads, gentle pulse, steady and unobtrusive" },
+    },
+    {
+      id: "generate-music/holiday",
+      name: "Holiday / Festive",
+      description: "Warm seasonal cheer.",
+      group: "By Use-Case",
+      data: { genre: "holiday", mood: "festive, warm, cheerful", instrumental: true, duration: 30, prompt: "festive holiday music, sleigh bells, warm orchestration, cheerful and cozy" },
+    },
+    {
+      id: "generate-music/kids",
+      name: "Kids / Children's",
+      description: "Playful and simple.",
+      group: "By Use-Case",
+      data: { genre: "children", mood: "playful, happy", instrumental: true, duration: 30, prompt: "playful children's music, simple cheerful melody, xylophone and ukulele, bouncy and friendly" },
+    },
+    {
+      id: "generate-music/meditation-spa",
+      name: "Meditation / Spa",
+      description: "Healing singing bowls.",
+      group: "By Use-Case",
+      data: { genre: "ambient-genre", mood: "serene, healing", instrumental: true, duration: 30, prompt: "meditation and spa music, singing bowls, soft drones, gentle and calming, very slow" },
+    },
+    {
+      id: "generate-music/workout",
+      name: "Workout / Gym",
+      description: "High-energy motivation.",
+      group: "By Use-Case",
+      data: { genre: "electronic", mood: "energetic, motivational", instrumental: true, duration: 30, prompt: "high-energy workout music, driving beat, motivational synths, around 140 BPM" },
+    },
+    // ── More By Genre ────────────────────────────────────────────────────────
+    {
+      id: "generate-music/trap",
+      name: "Trap Beat",
+      description: "Booming 808s, dark.",
+      group: "By Genre",
+      data: { genre: "hip-hop", mood: "dark, hard", instrumental: true, duration: 30, prompt: "trap beat, booming 808s, crisp rapid hi-hats, dark and moody" },
+    },
+    {
+      id: "generate-music/dnb",
+      name: "Drum & Bass",
+      description: "Fast breakbeats, deep bass.",
+      group: "By Genre",
+      data: { genre: "electronic", mood: "fast, energetic", instrumental: true, duration: 30, prompt: "drum and bass, fast breakbeats, deep rolling bassline, energetic, around 174 BPM" },
+    },
+    {
+      id: "generate-music/afrobeats",
+      name: "Afrobeats",
+      description: "Warm syncopated groove.",
+      group: "By Genre",
+      data: { genre: "afrobeats", mood: "groovy, warm", instrumental: true, duration: 30, prompt: "afrobeats, syncopated percussion, warm bass groove, bright melodies, danceable" },
+    },
+    {
+      id: "generate-music/country",
+      name: "Country / Americana",
+      description: "Acoustic, heartfelt.",
+      group: "By Genre",
+      data: { genre: "country", mood: "warm, heartfelt", instrumental: true, duration: 30, prompt: "country americana, acoustic and slide guitar, warm storytelling feel" },
+    },
+    {
+      id: "generate-music/phonk",
+      name: "Phonk",
+      description: "Dark drift-phonk for reels.",
+      group: "By Genre",
+      data: { genre: "hip-hop", mood: "dark, aggressive", instrumental: true, duration: 30, prompt: "drift phonk, distorted 808 cowbell, dark menacing beat, lo-fi grit" },
+    },
+    {
+      id: "generate-music/reggae",
+      name: "Reggae / Dub",
+      description: "Laid-back island groove.",
+      group: "By Genre",
+      data: { genre: "reggae", mood: "laid-back, sunny", instrumental: true, duration: 30, prompt: "reggae dub, off-beat skank guitar, deep dub bassline, relaxed island groove" },
     },
   ],
 
@@ -2123,7 +2828,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
     },
     {
       id: "suno-generate/genre-house",
-      name: "House / EDM",
+      name: "EDM / House",
       description: "Club-energy four-on-the-floor.",
       group: "By Genre",
       data: {
@@ -2134,7 +2839,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
     },
     {
       id: "suno-generate/genre-rock",
-      name: "Rock Anthem",
+      name: "Rock",
       description: "Driving anthemic guitars.",
       group: "By Genre",
       data: {
@@ -2255,26 +2960,622 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
         style: "acoustic singer-songwriter, warm and intimate, fingerpicked guitar, soft vocals, Andante, verse-chorus",
       },
     },
+    // ── More By Use-Case ─────────────────────────────────────────────────────
+    {
+      id: "suno-generate/trailer-riser",
+      name: "Trailer Riser / Braam",
+      description: "Pure rising tension hit.",
+      group: "By Use-Case",
+      data: { model: "V5_5", instrumental: true, style: "cinematic trailer riser and braam, tense and building, rising whoosh into a deep brass impact, no melody, instrumental" },
+    },
+    {
+      id: "suno-generate/calm-corporate",
+      name: "Calm Corporate / Tech",
+      description: "Soft, professional bed.",
+      group: "By Use-Case",
+      data: { model: "V5_5", instrumental: true, style: "calm corporate tech, professional and clean, soft synth pads, gentle pulse, Andante, instrumental" },
+    },
+    {
+      id: "suno-generate/holiday",
+      name: "Holiday / Festive",
+      description: "Warm seasonal cheer.",
+      group: "By Use-Case",
+      data: { model: "V5_5", instrumental: true, style: "festive holiday music, warm and cheerful, sleigh bells, warm orchestration, cozy, instrumental" },
+    },
+    {
+      id: "suno-generate/kids",
+      name: "Kids / Children's",
+      description: "Playful and simple.",
+      group: "By Use-Case",
+      data: { model: "V5_5", instrumental: true, style: "children's music, playful and happy, simple cheerful melody, xylophone and ukulele, bouncy, instrumental" },
+    },
+    {
+      id: "suno-generate/meditation-spa",
+      name: "Meditation / Spa",
+      description: "Healing singing bowls.",
+      group: "By Use-Case",
+      data: { model: "V5_5", instrumental: true, style: "meditation and spa, serene and healing, singing bowls, soft drones, Adagio, reverb-heavy, instrumental" },
+    },
+    {
+      id: "suno-generate/workout",
+      name: "Workout / Gym",
+      description: "High-energy motivation.",
+      group: "By Use-Case",
+      data: { model: "V5_5", instrumental: true, style: "high-energy workout, motivational and driving, pumping electronic beat, big synths, Allegro 140 BPM, instrumental" },
+    },
+    // ── More By Genre ────────────────────────────────────────────────────────
+    {
+      id: "suno-generate/trap",
+      name: "Trap Beat",
+      description: "Booming 808s, dark.",
+      group: "By Genre",
+      data: { model: "V5_5", instrumental: true, style: "trap beat, dark and hard, booming 808s, crisp rapid hi-hats, moody, instrumental" },
+    },
+    {
+      id: "suno-generate/dnb",
+      name: "Drum & Bass",
+      description: "Fast breakbeats, deep bass.",
+      group: "By Genre",
+      data: { model: "V5_5", instrumental: true, style: "drum and bass, fast and energetic, breakbeats, deep rolling bassline, Presto 174 BPM, instrumental" },
+    },
+    {
+      id: "suno-generate/afrobeats",
+      name: "Afrobeats",
+      description: "Warm syncopated groove.",
+      group: "By Genre",
+      data: { model: "V5_5", instrumental: true, style: "afrobeats, groovy and warm, syncopated percussion, warm bass, bright melodies, danceable, instrumental" },
+    },
+    {
+      id: "suno-generate/country",
+      name: "Country / Americana",
+      description: "Acoustic, heartfelt.",
+      group: "By Genre",
+      data: { model: "V5_5", instrumental: true, style: "country americana, warm and heartfelt, acoustic and slide guitar, storytelling feel, instrumental" },
+    },
+    {
+      id: "suno-generate/phonk",
+      name: "Phonk",
+      description: "Dark drift-phonk for reels.",
+      group: "By Genre",
+      data: { model: "V5_5", instrumental: true, style: "drift phonk, dark and aggressive, distorted 808 cowbell, menacing beat, lo-fi grit, instrumental" },
+    },
+    {
+      id: "suno-generate/reggae",
+      name: "Reggae / Dub",
+      description: "Laid-back island groove.",
+      group: "By Genre",
+      data: { model: "V5_5", instrumental: true, style: "reggae dub, laid-back and sunny, off-beat skank guitar, deep dub bassline, relaxed island groove, instrumental" },
+    },
+    // ── More Vocals & Songs ──────────────────────────────────────────────────
+    {
+      id: "suno-generate/song-rnb",
+      name: "R&B / Soul (vocal)",
+      description: "Smooth soulful vocals — add lyrics.",
+      group: "Vocals & Songs",
+      data: { model: "V5_5", instrumental: false, style: "smooth R&B soul, sensual and warm, lush chords, soft drums, soulful vocals, Andante, verse-chorus with ad-libs" },
+    },
+    {
+      id: "suno-generate/song-kpop",
+      name: "K-Pop (vocal)",
+      description: "Polished hook — add lyrics.",
+      group: "Vocals & Songs",
+      data: { model: "V5_5", instrumental: false, style: "K-pop, polished and energetic, bright synths, punchy drums, layered vocals, Allegro 120 BPM, verse-pre-chorus-chorus" },
+    },
   ],
   "llm-chat": [
+    // ── Assistants ───────────────────────────────────────────────────────────
     {
       id: "llm-chat/concise-assistant",
       name: "Concise Assistant",
       description: "Short, direct answers.",
+      group: "Assistants",
       data: {
         systemPrompt: "You are a concise assistant. Answer in 1-3 sentences. No preamble.",
         temperature: 0.3,
       },
     },
     {
+      id: "llm-chat/brainstorm",
+      name: "Brainstorm / Ideas",
+      description: "10 diverse ideas, high variety.",
+      group: "Assistants",
+      data: {
+        systemPrompt:
+          "You are a creative brainstorming partner. Given a topic, return a numbered list of 10 diverse, original ideas. No preamble, no explanations.",
+        temperature: 1,
+      },
+    },
+
+    // ── Writing & Marketing ──────────────────────────────────────────────────
+    {
+      id: "llm-chat/copywriter",
+      name: "Copywriter / Headlines",
+      description: "Punchy marketing copy.",
+      group: "Writing & Marketing",
+      data: {
+        systemPrompt:
+          "You are an expert direct-response copywriter. Write punchy, persuasive, benefit-led copy. When asked for headlines, return 5 distinct options as a list.",
+        temperature: 0.8,
+      },
+    },
+    {
+      id: "llm-chat/social-caption",
+      name: "Social Caption + Hashtags",
+      description: "Caption then hashtags.",
+      group: "Writing & Marketing",
+      data: {
+        systemPrompt:
+          "Write one engaging social-media caption for the user's topic, then on a new line add 8-12 relevant hashtags. Match a modern, friendly tone.",
+        temperature: 0.8,
+      },
+    },
+    {
+      id: "llm-chat/seo-metadata",
+      name: "SEO Metadata",
+      description: "Title, meta, keywords.",
+      group: "Writing & Marketing",
+      data: {
+        systemPrompt:
+          "Generate SEO metadata for the user's topic: a title (<=60 chars), a meta description (<=155 chars), and 8 keywords. Label each section.",
+        temperature: 0.4,
+      },
+    },
+    {
+      id: "llm-chat/rewrite-tone",
+      name: "Rewrite / Tone Shifter",
+      description: "Restyle text, keep meaning.",
+      group: "Writing & Marketing",
+      data: {
+        systemPrompt:
+          "Rewrite the user's text in the requested tone (e.g. formal, casual, friendly, confident). Preserve the meaning. Return only the rewrite.",
+        temperature: 0.5,
+      },
+    },
+    {
+      id: "llm-chat/script-writer",
+      name: "Script / Storyboard Writer",
+      description: "Shot-by-shot video script.",
+      group: "Writing & Marketing",
+      data: {
+        systemPrompt:
+          "You are a short-form video scriptwriter. Turn the user's idea into a shot-by-shot script. For each shot give: Scene, Visual, Voiceover. Keep it tight and production-ready.",
+        temperature: 0.7,
+      },
+    },
+
+    // ── Utility ──────────────────────────────────────────────────────────────
+    {
+      id: "llm-chat/prompt-enhancer",
+      name: "Prompt Enhancer",
+      description: "Idea → rich image prompt.",
+      group: "Utility",
+      data: {
+        systemPrompt:
+          "Expand the user's short idea into a single rich, vivid image-generation prompt covering subject, setting, lighting, composition, lens and style. Return only the prompt, no preamble.",
+        temperature: 0.8,
+      },
+    },
+    {
+      id: "llm-chat/translator",
+      name: "Translator",
+      description: "Translate, preserve tone.",
+      group: "Utility",
+      data: {
+        systemPrompt:
+          "Translate the user's text into the requested target language, preserving tone and meaning. Return only the translation.",
+        temperature: 0.2,
+      },
+    },
+    {
+      id: "llm-chat/summarizer",
+      name: "Summarizer (TL;DR)",
+      description: "3-5 bullet summary.",
+      group: "Utility",
+      data: {
+        systemPrompt: "Summarize the user's text into 3-5 concise bullet points capturing the key takeaways. No preamble.",
+        temperature: 0.2,
+      },
+    },
+    {
+      id: "llm-chat/qa-context",
+      name: "Q&A over Context",
+      description: "Grounded answers only.",
+      group: "Utility",
+      data: {
+        systemPrompt:
+          "Answer the user's question using ONLY the provided context. If the answer is not in the context, say you don't know rather than guessing.",
+        temperature: 0.1,
+      },
+    },
+
+    // ── Structured Output ────────────────────────────────────────────────────
+    {
       id: "llm-chat/json-extractor",
       name: "JSON Extractor",
       description: "Returns strict JSON only.",
+      group: "Structured Output",
       data: {
         systemPrompt:
           "Extract the requested fields and return ONLY valid minified JSON. No prose, no code fences.",
         temperature: 0,
       },
+    },
+    {
+      id: "llm-chat/classifier",
+      name: "Classifier / Sentiment",
+      description: "Returns one label.",
+      group: "Structured Output",
+      data: {
+        systemPrompt:
+          "Classify the user's input. Return ONLY a single label from the allowed set (default: positive / neutral / negative). No explanation.",
+        temperature: 0,
+      },
+    },
+  ],
+
+  // Generate Script — set the format config (tone / sceneCount / targetLength /
+  // structure); the topic is the user's prompt. tone <=200, sceneCount 1-20,
+  // structure ∈ freeform|8-step|custom.
+  "generate-script": [
+    // ── By Format ────────────────────────────────────────────────────────────
+    {
+      id: "generate-script/yt-short",
+      name: "YouTube Short / Hook",
+      description: "Punchy, hook-first, ~30s.",
+      group: "By Format",
+      data: { tone: "energetic, punchy, hook-first", sceneCount: 5, targetLength: 30, structure: "freeform" },
+    },
+    {
+      id: "generate-script/explainer",
+      name: "Explainer (how-to)",
+      description: "Clear 8-step walkthrough.",
+      group: "By Format",
+      data: { tone: "clear, friendly, educational", sceneCount: 8, targetLength: 90, structure: "8-step" },
+    },
+    {
+      id: "generate-script/ad-spot",
+      name: "Ad / Commercial Spot",
+      description: "Persuasive 30s spot.",
+      group: "By Format",
+      data: { tone: "persuasive, upbeat, benefit-led", sceneCount: 4, targetLength: 30, structure: "freeform" },
+    },
+    {
+      id: "generate-script/product-demo",
+      name: "Product Demo VO",
+      description: "Confident feature walkthrough.",
+      group: "By Format",
+      data: { tone: "confident, informative", sceneCount: 6, targetLength: 60, structure: "freeform" },
+    },
+    {
+      id: "generate-script/listicle",
+      name: "Listicle (Top 5)",
+      description: "Snappy countdown.",
+      group: "By Format",
+      data: { tone: "engaging, energetic", sceneCount: 6, targetLength: 60, structure: "freeform" },
+    },
+
+    // ── Long-Form & Narrative ────────────────────────────────────────────────
+    {
+      id: "generate-script/podcast-outline",
+      name: "Podcast Outline",
+      description: "Conversational episode beats.",
+      group: "Long-Form & Narrative",
+      data: { tone: "conversational, curious", sceneCount: 10, targetLength: 600, structure: "freeform" },
+    },
+    {
+      id: "generate-script/trailer-narration",
+      name: "Trailer Narration",
+      description: "Dramatic voiceover beats.",
+      group: "Long-Form & Narrative",
+      data: { tone: "dramatic, epic", sceneCount: 6, targetLength: 60, structure: "freeform" },
+    },
+    {
+      id: "generate-script/story-beats",
+      name: "Story Beats",
+      description: "Emotional narrative arc.",
+      group: "Long-Form & Narrative",
+      data: { tone: "narrative, emotional", sceneCount: 8, targetLength: 120, structure: "8-step" },
+    },
+  ],
+
+  // Image to Text — set detailLevel + a customPrompt instruction (<=2000).
+  "image-to-text": [
+    // ── Accessibility & SEO ──────────────────────────────────────────────────
+    {
+      id: "image-to-text/alt-text",
+      name: "Alt Text",
+      description: "Accessible, ≤125 chars.",
+      group: "Accessibility & SEO",
+      data: { detailLevel: "brief", customPrompt: "Write concise alt text for this image for accessibility, under 125 characters. Describe only what is essential." },
+    },
+    {
+      id: "image-to-text/seo-caption",
+      name: "SEO Caption",
+      description: "Caption + keywords.",
+      group: "Accessibility & SEO",
+      data: { detailLevel: "detailed", customPrompt: "Write an SEO-friendly caption for this image, then list 8 relevant keywords." },
+    },
+    {
+      id: "image-to-text/social-caption",
+      name: "Social Caption",
+      description: "Caption + hashtags.",
+      group: "Accessibility & SEO",
+      data: { detailLevel: "detailed", customPrompt: "Write an engaging social-media caption for this image, then 8-12 relevant hashtags." },
+    },
+
+    // ── Extraction ───────────────────────────────────────────────────────────
+    {
+      id: "image-to-text/ocr",
+      name: "Extract Text (OCR)",
+      description: "Return only visible text.",
+      group: "Extraction",
+      data: { detailLevel: "structured", customPrompt: "Extract and return ONLY the text visible in this image, preserving line breaks. No commentary." },
+    },
+    {
+      id: "image-to-text/tags",
+      name: "Tags / Keywords",
+      description: "Comma-separated tags.",
+      group: "Extraction",
+      data: { detailLevel: "brief", customPrompt: "List 10-15 descriptive tags for this image, comma-separated. No sentences." },
+    },
+    {
+      id: "image-to-text/product-desc",
+      name: "Product Description",
+      description: "E-commerce copy from a photo.",
+      group: "Extraction",
+      data: { detailLevel: "detailed", customPrompt: "Write a compelling e-commerce product description based on this product image." },
+    },
+
+    // ── Creative ─────────────────────────────────────────────────────────────
+    {
+      id: "image-to-text/scene-description",
+      name: "Detailed Description",
+      description: "Vivid prose description.",
+      group: "Creative",
+      data: { detailLevel: "detailed", customPrompt: "Provide a vivid, comprehensive description of this image: subjects, setting, lighting, mood and composition, in flowing prose." },
+    },
+    {
+      id: "image-to-text/reverse-prompt",
+      name: "Reverse Prompt",
+      description: "Image → text-to-image prompt.",
+      group: "Creative",
+      data: { detailLevel: "detailed", customPrompt: "Describe this image as a detailed text-to-image generation prompt: subject, style, lighting, composition and lens. Return only the prompt." },
+    },
+  ],
+
+  // Voice Design — describe the voice to create (voiceDescription <=1000). The
+  // sample `text` is left for the user.
+  "voice-design": [
+    // ── Narration & Character ────────────────────────────────────────────────
+    {
+      id: "voice-design/trailer-narrator",
+      name: "Movie-Trailer Narrator",
+      description: "Deep, dramatic, commanding.",
+      group: "Narration & Character",
+      data: { voiceDescription: "A deep, powerful male movie-trailer narrator with dramatic gravitas and a slow, commanding delivery." },
+    },
+    {
+      id: "voice-design/audiobook-female",
+      name: "Warm Female Audiobook",
+      description: "Soothing, clear, intimate.",
+      group: "Narration & Character",
+      data: { voiceDescription: "A warm, soothing female audiobook narrator with clear articulation and a gentle, intimate tone." },
+    },
+    {
+      id: "voice-design/old-wizard",
+      name: "Old Wizard",
+      description: "Gravelly, wise, theatrical.",
+      group: "Narration & Character",
+      data: { voiceDescription: "A gravelly, wise old wizard with a deep raspy voice and a slow, theatrical cadence." },
+    },
+    {
+      id: "voice-design/noir-detective",
+      name: "Noir Detective",
+      description: "Raspy, smoky, brooding.",
+      group: "Narration & Character",
+      data: { voiceDescription: "A raspy, world-weary noir detective with a low, smoky, brooding voice." },
+    },
+    {
+      id: "voice-design/meditation-guide",
+      name: "Meditation Guide",
+      description: "Calm, soft, breathy.",
+      group: "Narration & Character",
+      data: { voiceDescription: "A calm, soft-spoken meditation guide with a slow, breathy, reassuring delivery." },
+    },
+
+    // ── Professional & Assistant ─────────────────────────────────────────────
+    {
+      id: "voice-design/hype-announcer",
+      name: "Energetic Hype",
+      description: "Fast, excited, punchy.",
+      group: "Professional & Assistant",
+      data: { voiceDescription: "An energetic young hype announcer: fast-paced, excited and punchy." },
+    },
+    {
+      id: "voice-design/friendly-assistant",
+      name: "Friendly Assistant",
+      description: "Bright, clear, approachable.",
+      group: "Professional & Assistant",
+      data: { voiceDescription: "A bright, friendly, professional virtual-assistant voice, clear and approachable." },
+    },
+    {
+      id: "voice-design/corporate-ivr",
+      name: "Corporate IVR",
+      description: "Neutral, articulate, pro.",
+      group: "Professional & Assistant",
+      data: { voiceDescription: "A neutral, clear corporate phone-system voice, articulate and professional." },
+    },
+  ],
+  // video-to-video RESTYLE looks. provider "wan" is the general video restyle; the
+  // prompt carries the target style + an instruction to preserve the original motion.
+  "video-to-video": [
+    {
+      id: "video-to-video/anime",
+      name: "Anime Restyle",
+      description: "2D cel-shaded anime look.",
+      group: "Restyle Looks",
+      data: { provider: "wan", prompt: "Restyle this video as a 2D cel-shaded anime: vibrant colors, clean linework, expressive cel shading. Preserve the original motion, composition, and timing.", negativePrompt: "photorealistic, blurry, distorted, flickering" },
+    },
+    {
+      id: "video-to-video/claymation",
+      name: "Claymation",
+      description: "Tactile stop-motion clay.",
+      group: "Restyle Looks",
+      data: { provider: "wan", prompt: "Restyle as tactile stop-motion claymation with plasticine textures and subtle fingerprints. Keep the original motion and framing.", negativePrompt: "photorealistic, smooth, flickering" },
+    },
+    {
+      id: "video-to-video/cyberpunk-neon",
+      name: "Cyberpunk Neon",
+      description: "Rain-slicked neon city look.",
+      group: "Restyle Looks",
+      data: { provider: "wan", prompt: "Restyle with a neon cyberpunk aesthetic: rain-slicked surfaces, glowing magenta and cyan lighting, moody atmosphere. Preserve the original motion.", negativePrompt: "daylight, flat lighting, blurry, distorted" },
+    },
+    {
+      id: "video-to-video/oil-painting",
+      name: "Oil Painting",
+      description: "Moving painterly brushwork.",
+      group: "Restyle Looks",
+      data: { provider: "wan", prompt: "Restyle as a moving oil painting with visible brushstrokes, rich impasto texture, and painterly color. Keep the original motion and composition.", negativePrompt: "photorealistic, flat, blurry, flickering" },
+    },
+    {
+      id: "video-to-video/pixar-3d",
+      name: "3D Animated",
+      description: "Polished CG film look.",
+      group: "Restyle Looks",
+      data: { provider: "wan", prompt: "Restyle as a polished 3D animated film: soft global illumination, expressive characters, clean stylized surfaces. Preserve the original motion and timing.", negativePrompt: "photorealistic, lowres, distorted, flickering" },
+    },
+    {
+      id: "video-to-video/watercolor",
+      name: "Watercolor",
+      description: "Flowing washes on paper.",
+      group: "Restyle Looks",
+      data: { provider: "wan", prompt: "Restyle as a flowing watercolor animation with soft washes, bleeding edges, and visible paper texture. Keep the original motion and composition.", negativePrompt: "photorealistic, harsh edges, blurry, flickering" },
+    },
+  ],
+  // voice-changer DELIVERY presets — reshape the revoice without touching the target
+  // voice the user picked. stability/similarityBoost/style 0-1; removeBackgroundNoise cleans the source.
+  "voice-changer": [
+    {
+      id: "voice-changer/faithful",
+      name: "Faithful (Natural)",
+      description: "Preserves original delivery.",
+      group: "Revoice Styles",
+      data: { stability: 0.4, similarityBoost: 0.85, style: 0, removeBackgroundNoise: false },
+    },
+    {
+      id: "voice-changer/clean-stable",
+      name: "Clean & Stable",
+      description: "Smooth, consistent, denoised.",
+      group: "Revoice Styles",
+      data: { stability: 0.8, similarityBoost: 0.8, style: 0, removeBackgroundNoise: true },
+    },
+    {
+      id: "voice-changer/expressive",
+      name: "Expressive",
+      description: "Amplifies the delivery.",
+      group: "Revoice Styles",
+      data: { stability: 0.3, similarityBoost: 0.7, style: 0.45, removeBackgroundNoise: false },
+    },
+    {
+      id: "voice-changer/studio-clean",
+      name: "Studio Clean",
+      description: "Broadcast-ready, denoised.",
+      group: "Revoice Styles",
+      data: { stability: 0.65, similarityBoost: 0.85, style: 0, removeBackgroundNoise: true },
+    },
+  ],
+  // add-captions STYLE presets. style in ALL_CAPTION_STYLES (subtitle is static FFmpeg;
+  // the rest are kinetic Remotion overlays); position bottom|top|center; fontSize 12-200.
+  "add-captions": [
+    {
+      id: "add-captions/clean-subtitles",
+      name: "Clean Subtitles",
+      description: "Classic bottom subtitles.",
+      group: "Caption Styles",
+      data: { style: "subtitle", position: "bottom", fontSize: 32, color: "#FFFFFF", autoTranscribe: true },
+    },
+    {
+      id: "add-captions/tiktok-bold",
+      name: "TikTok Bold",
+      description: "Big centered word-by-word.",
+      group: "Caption Styles",
+      data: { style: "tiktok-words", position: "center", fontSize: 72, color: "#FFFFFF", autoTranscribe: true },
+    },
+    {
+      id: "add-captions/karaoke",
+      name: "Karaoke Highlight",
+      description: "Words fill as spoken.",
+      group: "Caption Styles",
+      data: { style: "karaoke", position: "bottom", fontSize: 56, color: "#FFFFFF", autoTranscribe: true },
+    },
+    {
+      id: "add-captions/word-pop",
+      name: "Word Pop",
+      description: "Each word pops in.",
+      group: "Caption Styles",
+      data: { style: "word-pop", position: "center", fontSize: 64, color: "#FFE600", autoTranscribe: true },
+    },
+    {
+      id: "add-captions/bouncy",
+      name: "Bouncy Captions",
+      description: "Energetic bouncing words.",
+      group: "Caption Styles",
+      data: { style: "bouncy", position: "bottom", fontSize: 64, color: "#FFFFFF", autoTranscribe: true },
+    },
+    {
+      id: "add-captions/word-highlight",
+      name: "Word Highlight",
+      description: "Active word highlighted.",
+      group: "Caption Styles",
+      data: { style: "word-highlight", position: "bottom", fontSize: 48, color: "#00E5FF", autoTranscribe: true },
+    },
+    {
+      id: "add-captions/top-banner",
+      name: "Top Banner",
+      description: "Subtitles along the top.",
+      group: "Caption Styles",
+      data: { style: "subtitle", position: "top", fontSize: 36, color: "#FFFFFF", autoTranscribe: true },
+    },
+  ],
+  // combine-videos JOIN/TRANSITION presets. "Seamless Join" is the proven recipe for
+  // jump-free joins of CONTINUOUS shots (start/end-frame storyboards, Seedance-2 scene
+  // extension): keep a hard CUT so the shot stays one continuous take, trim the artifact
+  // boundary frames (end 4, start 3), and equal-power crossfade ONLY the audio.
+  "combine-videos": [
+    {
+      id: "combine-videos/seamless-join",
+      name: "Seamless Join (One-Shot)",
+      description: "Jump-free join for scene-extension / start-end-frame clips.",
+      group: "Joins & Transitions",
+      data: { transition: "cut", transitionDuration: 0.5, audioMode: "crossfade", audioCrossfadeCurve: "equal-power", trimEndFrames: 4, trimStartFrames: 3 },
+    },
+    {
+      id: "combine-videos/hard-cut",
+      name: "Hard Cut",
+      description: "Instant switch, no blend. Fastest.",
+      group: "Joins & Transitions",
+      data: { transition: "cut", audioMode: "keep", trimStartFrames: 0, trimEndFrames: 0 },
+    },
+    {
+      id: "combine-videos/crossfade",
+      name: "Crossfade",
+      description: "Smooth alpha cross-fade between clips.",
+      group: "Joins & Transitions",
+      data: { transition: "fade", transitionDuration: 0.7, audioMode: "crossfade", audioCrossfadeCurve: "equal-power" },
+    },
+    {
+      id: "combine-videos/dissolve",
+      name: "Dissolve",
+      description: "Grainy organic blend for memory beats.",
+      group: "Joins & Transitions",
+      data: { transition: "dissolve", transitionDuration: 1, audioMode: "crossfade", audioCrossfadeCurve: "equal-power" },
+    },
+    {
+      id: "combine-videos/fade-through-black",
+      name: "Fade Through Black",
+      description: "Dip to black between scenes.",
+      group: "Joins & Transitions",
+      data: { transition: "dip-to-black", transitionDuration: 1, audioMode: "crossfade", audioCrossfadeCurve: "equal-power" },
     },
   ],
 }

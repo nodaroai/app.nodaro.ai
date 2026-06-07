@@ -264,4 +264,63 @@ describe("DELETE /v1/library/:id", () => {
     expect(body.error.code).toBe("forbidden")
     expect(body.error.message).toContain("own")
   })
+
+  it("permanent delete SKIPS the R2 delete when another asset references the same r2_key", async () => {
+    const assetId = "00000000-0000-4000-8000-000000000010"
+    const { deleteFromR2 } = await import("@/lib/storage.js")
+    vi.mocked(deleteFromR2).mockClear()
+
+    vi.mocked(supabase.from).mockImplementation(() => {
+      const chain: Record<string, unknown> = {}
+      chain.select = vi.fn().mockReturnValue(chain)
+      chain.eq = vi.fn().mockReturnValue(chain)
+      chain.delete = vi.fn().mockReturnValue(chain)
+      chain.single = vi.fn().mockResolvedValue({
+        data: { id: assetId, user_id: TEST_USER_ID, r2_key: "images/shared.png", size_bytes: 100 },
+        error: null,
+      })
+      // The referrer-count query ends in .neq(...) and is awaited → resolve a count.
+      chain.neq = vi.fn().mockResolvedValue({ count: 1, error: null })
+      ;(chain as Record<string, unknown>).error = null
+      return chain as never
+    })
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/v1/library/${assetId}?userId=${TEST_USER_ID}&permanent=true`,
+    })
+
+    expect(res.statusCode).toBe(200)
+    // Regression: another row references the same content-addressed object, so
+    // deleting it would break that row. The R2 object MUST be preserved.
+    expect(vi.mocked(deleteFromR2)).not.toHaveBeenCalled()
+  })
+
+  it("permanent delete DOES delete the R2 object when no other asset references it", async () => {
+    const assetId = "00000000-0000-4000-8000-000000000011"
+    const { deleteFromR2 } = await import("@/lib/storage.js")
+    vi.mocked(deleteFromR2).mockClear()
+
+    vi.mocked(supabase.from).mockImplementation(() => {
+      const chain: Record<string, unknown> = {}
+      chain.select = vi.fn().mockReturnValue(chain)
+      chain.eq = vi.fn().mockReturnValue(chain)
+      chain.delete = vi.fn().mockReturnValue(chain)
+      chain.single = vi.fn().mockResolvedValue({
+        data: { id: assetId, user_id: TEST_USER_ID, r2_key: "images/sole.png", size_bytes: 100 },
+        error: null,
+      })
+      chain.neq = vi.fn().mockResolvedValue({ count: 0, error: null })
+      ;(chain as Record<string, unknown>).error = null
+      return chain as never
+    })
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/v1/library/${assetId}?userId=${TEST_USER_ID}&permanent=true`,
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(vi.mocked(deleteFromR2)).toHaveBeenCalledWith("images/sole.png")
+  })
 })

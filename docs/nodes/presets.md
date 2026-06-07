@@ -30,6 +30,7 @@ the same idea**:
 | **Film & Storyboard** | Storyboard Frame, Cinematic Keyframe, Matte Painting, Mood Board Tile, Establishing Shot |
 | **Architecture & Interiors** | Exterior, Interior, Real Estate Hero, Skyscraper |
 | **Icons, Game Assets & Textures** | Game Icon, Seamless Texture / Pattern, Emoji Set, Pixel Sprite |
+| **Portrait Transformations** *(needs a reference photo)* | **Timeless Soul** age progression (Five Ages, Three-Age Triptych, B&W), Decade Timeline ('80s–2020s), Four Seasons, Times of Day |
 
 Each preset pre-selects the **best provider and aspect ratio** for its job (e.g. text-strong models
 for logos and thumbnails) and includes **`{placeholder}` slots** in the prompt — fill them in (for
@@ -41,6 +42,15 @@ example `{character description}` or `{brand}`) before you run.
 > Real Set*. It appears on **both Generate Image** (connect a reference image so the model edits it)
 > **and Modify Image** — the two share one catalog while Modify Image is being phased out in favor of
 > Generate Image.
+
+> **Portrait Transformations** are also reference-photo transforms. The **Timeless Soul** age
+> progression rebuilds the person in a connected reference into a single studio composite showing
+> them at several ages (5, or 3 for the triptych), lined up shoulder-to-shoulder. The look rides on
+> an *identity-lock* clause — same eyes, brow, nose, ears, and bone structure across every figure, so
+> it reads as one person aging rather than several different people. Feed it a clean, front-facing,
+> evenly-lit portrait for the tightest identity. The same identity-lock drives the sibling presets:
+> **Decade Timeline** (aging + period-accurate styling across the '80s–2020s) ages the subject, while
+> **Four Seasons** and **Times of Day** hold the subject at one age and vary only wardrobe/lighting.
 
 ### Generate Video factory catalog
 
@@ -73,8 +83,70 @@ Both music nodes ship presets organized along the three axes professional librar
 - **Suno Generate** (style-prompt): each preset fills Suno's free-text **style** box using Suno's own
   formula — *genre + mood + instrumentation + named tempo/BPM + instrumental/vocals + structure*.
   Setting a style auto-enables Suno custom mode. *By Use-Case* and *By Genre* presets are instrumental
-  and run as-is; the **Vocals & Songs** folder (Pop, Rap, Ballad, Rock, Acoustic) sets the style +
-  song structure and invites you to add your own lyrics.
+  and run as-is; the **Vocals & Songs** folder (Pop, Rap, Ballad, Rock, Acoustic, R&B, K-Pop) sets the
+  style + song structure and invites you to add your own lyrics.
+
+### Voice, sound & text catalogs
+
+- **Text to Speech** — voice-*delivery* profiles that set the ElevenLabs knobs (stability,
+  similarity, style, speed) **without** pinning a voice, so they layer on top of whichever voice you
+  pick. Folders: *Narration* (Audiobook, Documentary, News Anchor, Explainer, Calm Narrator),
+  *Advertising & Hype* (Commercial Read, Hype), *Conversational & Calm* (Podcast Host, Character,
+  Meditation / ASMR).
+- **Text to Audio** (sound effects) — ready prompts for *Transitions & Impacts* (Whoosh, Impact,
+  Riser), *Ambiences (loopable)* (Rain, Forest, Fire, Sci-Fi Drone — `loop: true`), *UI & Stingers*
+  (Click, Notification, Applause), and *Foley & Action* (Footsteps, Door, Glass Break, Typing,
+  Explosion, Magic Sparkle, Camera Shutter, Error Buzzer).
+- **Generate Text** (LLM) — system-prompt roles in *Assistants*, *Writing & Marketing* (Copywriter,
+  Social Caption, SEO, Rewrite, Script Writer), *Utility* (Prompt Enhancer, Translator, Summarizer,
+  Q&A, Brainstorm) and *Structured Output* (JSON Extractor, Classifier).
+
+### Script, vision & voice catalogs
+
+- **Generate Script** — format presets that set tone + scene count + target length: *By Format*
+  (YouTube Short, Explainer, Ad Spot, Product Demo, Listicle) and *Long-Form & Narrative* (Podcast
+  Outline, Trailer Narration, Story Beats). Type your topic in the prompt.
+- **Image to Text** — analysis presets: *Accessibility & SEO* (Alt Text, SEO Caption, Social Caption),
+  *Extraction* (OCR, Tags, Product Description) and *Creative* (Detailed Description, Reverse Prompt).
+- **Voice Design** — describe-a-voice presets: *Narration & Character* (Movie-Trailer Narrator, Warm
+  Female Audiobook, Old Wizard, Noir Detective, Meditation Guide) and *Professional & Assistant*
+  (Energetic Hype, Friendly Assistant, Corporate IVR).
+
+### Image edits (shared with Modify Image)
+
+Beyond Stylized Subject, the transform catalog adds an **Edits** folder — *Remove/Replace Background,
+Colorize, Restore Old Photo, Relight, Restyle* — available on both **Generate Image** (with a
+connected reference image) and **Modify Image**. Generate Image also gained a **Diagrams &
+Infographics** folder (Blueprint, Infographic, UI / App Mockup, Flowchart, Chart, Timeline).
+
+### Voice Changer factory catalog
+
+**Voice Changer** ships *Revoice Styles* — Faithful (Natural), Clean & Stable, Expressive, Studio
+Clean — tuning stability / similarity / style and background-noise removal for the target voice.
+
+### Captions factory catalog
+
+**Add Captions** ships *Caption Styles* — Clean Subtitles, TikTok Bold, Karaoke Highlight, Word Pop,
+Bouncy Captions, Word Highlight, Top Banner — each pre-selecting the caption style, position, font
+size, and color.
+
+### Video restyle factory catalog
+
+**Video to Video** ships *Restyle Looks* — Anime, Claymation, Cyberpunk Neon, Oil Painting, 3D
+Animated, Watercolor — each a restyle prompt (the original motion is preserved) on a video-restyle
+provider.
+
+### Combine Videos factory catalog
+
+**Combine Videos** ships *Joins & Transitions*: Hard Cut, Crossfade, Dissolve, Fade Through Black,
+and — the headliner — **Seamless Join (One-Shot)**.
+
+> **Seamless Join (One-Shot)** fixes the frame *jump* you get when you stitch **continuous** shots —
+> start/end-frame storyboards, or a clip extended with Seedance-2 "extend the scene". Those clips
+> share a near-duplicate boundary frame that reads as a hitch. The preset keeps a hard **cut** (so the
+> result still looks like one continuous take, not a dissolve), **trims 4 frames off each clip's end
+> and 3 off each start** to drop the artifact frames, and applies an **equal-power audio crossfade** to
+> hide the audio seam. Connect your clips in order and run.
 
 ## Using presets
 

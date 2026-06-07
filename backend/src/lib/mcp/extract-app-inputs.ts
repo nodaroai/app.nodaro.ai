@@ -20,8 +20,8 @@
  * Both produce the same NormalizedInputSchema so the run_* tools can use
  * one translation function.
  */
-import type { ComponentMetadata, PresentationItem } from "@nodaro/shared"
-import { migrateToItems } from "@nodaro/shared"
+import type { ComponentMetadata, PresentationItem, InputFieldSchema } from "@nodaro/shared"
+import { migrateToItems, getInputFieldSchema } from "@nodaro/shared"
 import { sanitizeSlug } from "./slug-sanitizer.js"
 import { normalizeLegacyNodeTypes } from "../../services/workflow-engine/normalize-node-types.js"
 
@@ -69,6 +69,33 @@ const NODE_TYPE_INFO: Record<
   // Typed as text because the valid variants depend on the publisher's
   // assets — not enumerable at schema time.
   location: { fieldKey: "selectedVariant", type: "text" },
+}
+
+// Parameter-picker / classic-parameter nodes (tone, framing, lighting, action-fx,
+// …) are NOT in NODE_TYPE_INFO. Their override field lives in the shared
+// INPUT_FIELD_MAP single source of truth (getInputFieldSchema). Without consulting
+// it, these nodes fell back to fieldKey "value" — but the pickers read
+// data.<tone|shotSize|actionFx|…>, never data.value, so the curated input was
+// SILENTLY DROPPED on every app/MCP/SDK run. (INPUT_FIELD_MAP is itself still
+// incomplete vs getParameterValue — completing it auto-extends this fallback.)
+const SHARED_FIELD_TYPE_TO_NORMALIZED: Record<
+  InputFieldSchema["type"],
+  NormalizedInputField["type"]
+> = {
+  text: "text",
+  "image-url": "image",
+  "video-url": "video",
+  "audio-url": "audio",
+  select: "select",
+  number: "number",
+}
+
+function sharedFieldInfo(
+  nodeType: string,
+): { fieldKey: string; type: NormalizedInputField["type"] } | undefined {
+  const s = getInputFieldSchema(nodeType)
+  if (!s) return undefined
+  return { fieldKey: s.key, type: SHARED_FIELD_TYPE_TO_NORMALIZED[s.type] }
 }
 
 /**
@@ -210,9 +237,9 @@ export function extractAppInputSchema({
         node?.type === "list"
           ? resolveListInfo(node.data)
           : node?.type
-            ? NODE_TYPE_INFO[node.type]
+            ? (NODE_TYPE_INFO[node.type] ?? sharedFieldInfo(node.type))
             : undefined
-      // Unknown node types fall back to free-form text on a "value" field.
+      // Truly-unknown node types fall back to free-form text on a "value" field.
       const fieldKey = info?.fieldKey ?? "value"
       const type = info?.type ?? "text"
       const description = (info as { description?: string } | undefined)?.description

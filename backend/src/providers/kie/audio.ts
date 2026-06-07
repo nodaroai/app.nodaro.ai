@@ -17,7 +17,7 @@ import {
   runKieTask,
   MAX_POLL_ATTEMPTS_VIDEO,
 } from "./client.js"
-import { KIE_MUSIC_MODELS, KIE_TTS_MODELS, KIE_SOUND_EFFECT_MODELS, KIE_AUDIO_ISOLATION_MODELS, KIE_STT_MODELS, KIE_DIALOGUE_MODELS, KIE_CREDIT_USD } from "./models.js"
+import { KIE_MUSIC_MODELS, KIE_TTS_MODELS, KIE_SOUND_EFFECT_MODELS, KIE_AUDIO_ISOLATION_MODELS, KIE_STT_MODELS, KIE_DIALOGUE_MODELS } from "./models.js"
 import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
 
 // ---------------------------------------------------------------------------
@@ -291,10 +291,13 @@ export class KieAudioProvider
       )
     }
 
-    // Use actual KIE cost if available (costTime = KIE credits consumed)
-    const actualCost = costTime ? costTime * KIE_CREDIT_USD : modelConfig.cost
+    // `costTime` is provider generation time in SECONDS (see client.ts), NOT KIE
+    // credits — the previous `costTime * KIE_CREDIT_USD` ~5x-inflated provider_cost
+    // (corrupting the credit-audit baseline). Use the catalog cost; user billing is
+    // unaffected (meteredCost is undefined here, so the reserved tier is committed).
+    const actualCost = modelConfig.cost
     console.log(
-      `[KIE.ai] Audio isolation completed: ${resultUrl} (cost: $${actualCost.toFixed(4)}, KIE cr: ${costTime ?? "N/A"})`
+      `[KIE.ai] Audio isolation completed: ${resultUrl} (cost: $${actualCost.toFixed(4)}, gen time: ${costTime ?? "N/A"}s)`
     )
 
     return { url: resultUrl, cost: actualCost }
@@ -334,10 +337,13 @@ export class KieAudioProvider
     const text = (raw.text as string) ?? (raw.transcription as string) ?? ""
     const language = (raw.language_code as string) ?? (raw.detected_language as string) ?? "unknown"
 
-    // Use actual KIE cost if available (costTime = KIE credits consumed)
-    const actualCost = costTime ? costTime * KIE_CREDIT_USD : modelConfig.cost
+    // `costTime` is provider generation time in SECONDS (see client.ts), NOT KIE
+    // credits — the previous `costTime * KIE_CREDIT_USD` ~5x-inflated provider_cost
+    // (corrupting the credit-audit baseline). Use the catalog cost; user billing is
+    // unaffected (meteredCost is undefined here, so the reserved tier is committed).
+    const actualCost = modelConfig.cost
     console.log(
-      `[KIE.ai] STT completed: ${text.length} chars (cost: $${actualCost.toFixed(4)}, KIE cr: ${costTime ?? "N/A"})`
+      `[KIE.ai] STT completed: ${text.length} chars (cost: $${actualCost.toFixed(4)}, gen time: ${costTime ?? "N/A"}s)`
     )
 
     return { text, language, cost: actualCost }

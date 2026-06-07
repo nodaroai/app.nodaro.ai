@@ -14,12 +14,14 @@ const mocks = vi.hoisted(() => {
   const jobsUpdateMock = vi.fn((_arg: Record<string, unknown>) => ({
     eq: vi.fn((col: string, _val: string) => {
       if (col === "id") {
+        // markFailed now CAS-guards with .in("status",[...]) (M6-consistent),
+        // older sites used .neq("status","cancelled") — support both terminals.
         return Object.assign(
           Promise.resolve({ data: null, error: null }),
-          { neq: jobsUpdateNeqMock },
+          { neq: jobsUpdateNeqMock, in: jobsUpdateNeqMock },
         )
       }
-      return { neq: jobsUpdateNeqMock }
+      return { neq: jobsUpdateNeqMock, in: jobsUpdateNeqMock }
     }),
   }))
   const fromMock = vi.fn((_table: string) => ({

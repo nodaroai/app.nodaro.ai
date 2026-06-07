@@ -7,6 +7,7 @@ import { refreshAccessToken, type SocialPlatform } from "../services/social/oaut
 import { platformPublishers, type PublishRequest } from "../services/social/platforms/index.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { safeUrlSchema } from "../lib/url-validator.js"
 import { CreditsService } from "../ee/billing/credits.js"
 import {
   INSTAGRAM_CAROUSEL_MIN_ITEMS,
@@ -31,8 +32,11 @@ const publishSchema = z.object({
   action: z.enum(VALID_ACTIONS),
   connectionId: z.string().uuid().optional(),
   caption: z.string().optional(),
-  mediaUrl: z.string().url().optional(),
-  mediaItems: z.array(z.object({ type: z.enum(["photo", "video"]), url: z.string().url() })).optional(),
+  // SSRF gate: x/youtube/linkedin fetch these URLs server-side (see platforms/*.ts),
+  // so they must use safeUrlSchema, not a bare url(). safeFetch in those clients
+  // re-validates the resolved IP at connect time (DNS-rebinding defense).
+  mediaUrl: safeUrlSchema.optional(),
+  mediaItems: z.array(z.object({ type: z.enum(["photo", "video"]), url: safeUrlSchema })).optional(),
   title: z.string().optional(),
   description: z.string().optional(),
   tags: z.array(z.string()).optional(),

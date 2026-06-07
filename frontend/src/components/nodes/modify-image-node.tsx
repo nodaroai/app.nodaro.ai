@@ -1,7 +1,7 @@
 "use client"
 
-import { memo, useState } from "react"
-import { Position, type NodeProps } from "@xyflow/react"
+import { memo, useState, useEffect } from "react"
+import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { Layers, Loader2, AlertCircle, X, Settings, LayoutGrid, Expand, Download, ImageIcon, Link, Pencil, Aperture } from "lucide-react"
 import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { isValidModifyImageConnection } from "@/lib/image-producer-handles"
@@ -37,6 +37,14 @@ function ModifyImageNodeComponent({ id, data, selected }: NodeProps) {
   const isSettingsOpen = useWorkflowStore((s) => s.selectedNodeId === id)
   const openImageEdit = useWorkflowStore((s) => s.openImageEdit)
   const supportsMask = !!nodeData.provider && nodeData.provider !== "nano-banana-edit" && I2I_MASK_SUPPORT.has(nodeData.provider)
+  // supportsMask flips the `mask` handle on/off AND shifts the `cinematography`
+  // handle's top by 32px. React Flow caches handle bounds, so without an explicit
+  // remeasure an edge on the moved/added handle renders detached until an
+  // unrelated interaction (resize/zoom/drag) forces a recompute.
+  const updateNodeInternals = useUpdateNodeInternals()
+  useEffect(() => {
+    updateNodeInternals(id)
+  }, [id, supportsMask, updateNodeInternals])
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0

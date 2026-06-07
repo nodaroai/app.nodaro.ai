@@ -53,7 +53,14 @@ export async function transcribe(
   audioUrl: string,
   provider?: TranscribeProvider,
   language?: string,
-  options?: { diarize?: boolean; tagAudioEvents?: boolean; wordTimestamps?: boolean },
+  options?: {
+    diarize?: boolean
+    tagAudioEvents?: boolean
+    wordTimestamps?: boolean
+    /** Persist the Replicate prediction id so a stall-retry reconciles instead
+     *  of re-billing the transcribe call. Only fired on the Replicate paths. */
+    onTaskCreated?: (taskId: string) => void | Promise<void>
+  },
 ): Promise<TranscribeResult> {
   const resolvedProvider = provider ?? "whisper"
   console.log(`[transcribe] Provider: ${resolvedProvider}`)
@@ -94,6 +101,7 @@ export async function transcribe(
       version: extractVersion(model),
       input,
     })
+    await options?.onTaskCreated?.(prediction.id)
     const completed = await replicate.wait(prediction)
     const cost = extractCost(completed.metrics as Record<string, unknown> | undefined, "incredibly-fast-whisper")
     const output = completed.output as FastWhisperOutput
@@ -133,6 +141,7 @@ export async function transcribe(
     version: extractVersion(model),
     input,
   })
+  await options?.onTaskCreated?.(prediction.id)
   const completed = await replicate.wait(prediction)
   const cost = extractCost(completed.metrics as Record<string, unknown> | undefined, "whisper")
   const output = completed.output as WhisperOutput

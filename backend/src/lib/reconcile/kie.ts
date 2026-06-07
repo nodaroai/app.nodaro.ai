@@ -13,6 +13,7 @@ import { pollLumaTask } from "../../providers/kie/luma-client.js"
 import { pollRunwayTask, pollAlephTask } from "../../providers/kie/runway-client.js"
 import { pollSunoTask, type SunoTaskResult } from "../../providers/kie/suno-client.js"
 import { finalizeJobWithMedia, type FinalizeJobType } from "../job-finalize.js"
+import { refundLoopTrimAddonOnReconcile } from "./loop-trim-refund.js"
 import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
 import { bumpAttemptsOrExhaust } from "./bump-attempts.js"
 
@@ -22,6 +23,7 @@ export interface KieJobRow {
   provider_task_id: string | null
   reconcile_attempts: number
   job_type: string | null
+  input_data?: Record<string, unknown> | null
 }
 
 /** Suno music job_types whose poll shape matches `SunoTaskResult` (multi-track
@@ -195,6 +197,9 @@ async function reconcileKieSunoJob(row: KieJobRow): Promise<void> {
 }
 
 async function markFailed(jobId: string, reason: string): Promise<void> {
+  // CAS on the non-terminal precondition (not just `.neq("cancelled")`) so a job
+  // the worker concurrently flipped to `completed` (or `cancelled`/`failed`) is
+  // never trampled to `failed`. Matches sweepStaleSyncJob / forceFailExhausted.
   await supabase
     .from("jobs")
     .update({
@@ -204,7 +209,7 @@ async function markFailed(jobId: string, reason: string): Promise<void> {
       reconcile_last_error: "upstream_failed",
     })
     .eq("id", jobId)
-    .neq("status", "cancelled")
+    .in("status", ["pending", "processing"])
 }
 
 /**
@@ -242,6 +247,11 @@ export async function reconcileKieJob(row: KieJobRow): Promise<void> {
     }
     return
   }
+
+  // i2v + loopTrim.enabled: reconcile uploads the RAW (un-trimmed) clip and
+  // commits the reserved tier, so refund the loop-trim add-on BEFORE finalize
+  // (commit is CAS-once → this commit wins). No-op otherwise.
+  await refundLoopTrimAddonOnReconcile(row.job_type, row.id, row.input_data ?? null)
 
   await finalizeJobWithMedia({
     jobId: row.id,

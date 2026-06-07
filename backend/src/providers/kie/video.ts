@@ -582,10 +582,13 @@ export class KieVideoProvider
     let effectiveImageUrl = imageUrl
     let effectiveEndFrameUrl = endFrameUrl
     const usesRawImageUrls = isVeoProvider(provider) || provider === "runway-kie"
+    // Hoisted so the reference-image merge below can reuse the SAME constraints —
+    // a raw, oversize/RGBA reference image otherwise bypasses normalization and
+    // triggers an upstream 400/500 on multi-reference i2v (grok-i2v, happyhorse-ref2v).
+    const i2vConstraints: ImageConstraints = { context: "Video generation", maxDimension: 2048 }
+    if (provider === "wan-i2v") i2vConstraints.minDimension = 256
+    if (modelConfig.model.startsWith("hailuo/")) i2vConstraints.forceJpeg = true
     if (!usesRawImageUrls) {
-      const i2vConstraints: ImageConstraints = { context: "Video generation", maxDimension: 2048 }
-      if (provider === "wan-i2v") i2vConstraints.minDimension = 256
-      if (modelConfig.model.startsWith("hailuo/")) i2vConstraints.forceJpeg = true
       const [normImage, normEnd] = await Promise.all([
         imageUrl ? ensureImageForProvider(imageUrl, provider, i2vConstraints) : imageUrl,
         endFrameUrl ? ensureImageForProvider(endFrameUrl, provider, i2vConstraints) : endFrameUrl,
@@ -727,11 +730,20 @@ export class KieVideoProvider
       }
     }
 
-    // Merge reference images for models that support multi-image input
+    // Merge reference images for models that support multi-image input. Normalize
+    // each ref through the SAME i2v constraints as the primary frame (2048px cap,
+    // JPEG re-encode for the hailuo family) — otherwise a raw oversize/RGBA ref
+    // reaches KIE unprocessed and 400/500s on a common multi-reference path. VEO/
+    // runway-kie reference raw URLs via their own endpoints (mirrors the start frame).
     if (modelConfig.maxRefImages && options?.referenceImageUrls?.length) {
+      const refs = usesRawImageUrls
+        ? options.referenceImageUrls
+        : await Promise.all(
+            options.referenceImageUrls.map((u) => ensureImageForProvider(u, provider, i2vConstraints)),
+          )
       const merged = effectiveImageUrl
-        ? [effectiveImageUrl, ...options.referenceImageUrls]
-        : [...options.referenceImageUrls]
+        ? [effectiveImageUrl, ...refs]
+        : [...refs]
       input[imageParamName] = merged.slice(0, modelConfig.maxRefImages)
     }
 

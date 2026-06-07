@@ -1695,7 +1695,11 @@ export function executeNode(
     );
     if (maskEdge) {
       const maskNode = nodes.find((n) => n.id === maskEdge.source);
-      if (maskNode) maskUrl = extractNodeOutput(maskNode);
+      // Pass the edge's sourceHandle: generate-mask exposes both an "image"
+      // (passthrough) and a "mask" handle, and the mask wire leaves the "mask"
+      // handle. Without it, extractNodeOutput returns the passthrough source
+      // image, so inpaint/edit masked the whole frame.
+      if (maskNode) maskUrl = extractNodeOutput(maskNode, maskEdge.sourceHandle ?? undefined);
     }
     if (!maskUrl) maskUrl = editData.maskUrl;
 
@@ -1827,7 +1831,11 @@ export function executeNode(
     );
     if (maskEdge) {
       const maskNode = nodes.find((n) => n.id === maskEdge.source);
-      if (maskNode) maskUrl = extractNodeOutput(maskNode);
+      // Pass the edge's sourceHandle: generate-mask exposes both an "image"
+      // (passthrough) and a "mask" handle, and the mask wire leaves the "mask"
+      // handle. Without it, extractNodeOutput returns the passthrough source
+      // image, so inpaint/edit masked the whole frame.
+      if (maskNode) maskUrl = extractNodeOutput(maskNode, maskEdge.sourceHandle ?? undefined);
     }
     if (!maskUrl) maskUrl = i2iData.maskUrl;
 
@@ -1972,7 +1980,11 @@ export function executeNode(
     );
     if (maskEdge) {
       const maskNode = nodes.find((n) => n.id === maskEdge.source);
-      if (maskNode) maskUrl = extractNodeOutput(maskNode);
+      // Pass the edge's sourceHandle: generate-mask exposes both an "image"
+      // (passthrough) and a "mask" handle, and the mask wire leaves the "mask"
+      // handle. Without it, extractNodeOutput returns the passthrough source
+      // image, so inpaint/edit masked the whole frame.
+      if (maskNode) maskUrl = extractNodeOutput(maskNode, maskEdge.sourceHandle ?? undefined);
     }
     if (!maskUrl) maskUrl = modData.maskUrl;
 

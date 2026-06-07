@@ -343,6 +343,15 @@ async function pollAlephRecordInfo(
       return videoUrl
     }
 
+    // successFlag 2/3 = failed (the VEO convention this client mirrors). Fail fast
+    // rather than fall through to "continue polling" and burn the full ~20-min
+    // timeout when KIE reports failure WITHOUT also setting errorCode. Matches the
+    // VEO (client.ts) and Kontext failure handling.
+    if (successFlag === 2 || successFlag === 3) {
+      const errorMsg = detailData.data?.errorMessage ?? "task failed"
+      throw createSanitizedError(`Aleph failed: ${errorMsg}`, "Video generation")
+    }
+
     if (detailData.data?.errorCode && detailData.data.errorCode !== 0) {
       const errorMsg = detailData.data?.errorMessage ?? "Unknown error"
       throw createSanitizedError(`Aleph failed: [${detailData.data.errorCode}] ${errorMsg}`, "Video generation")

@@ -11,6 +11,9 @@ import type { Caption } from "@remotion/captions"
 
 export interface NodeOutput {
   imageUrl?: string
+  /** generate-mask second output — the generated mask PNG. Routed to the "mask"
+   *  source handle by getPrimaryOutput (the "image" handle returns imageUrl). */
+  maskUrl?: string
   videoUrl?: string
   audioUrl?: string
   /** Multi-variant URLs from a single job. Primary at index 0. Singular

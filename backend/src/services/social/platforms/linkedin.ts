@@ -1,4 +1,5 @@
 import type { PublishRequest, PublishResult, PlatformPublisher } from "./index.js"
+import { safeFetch } from "../../../lib/safe-fetch.js"
 
 export const linkedinPublisher: PlatformPublisher = {
   async publish(accessToken: string, request: PublishRequest, metadata: Record<string, unknown>): Promise<PublishResult> {
@@ -73,8 +74,9 @@ export const linkedinPublisher: PlatformPublisher = {
       const uploadUrl = registerData.value.uploadMechanism["com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest"].uploadUrl
       const asset = registerData.value.asset
 
-      // Step 2: Upload media
-      const mediaResponse = await fetch(mediaUrl!)
+      // Step 2: Upload media. safeFetch: mediaUrl is user-supplied — block SSRF
+      // to internal/metadata hosts (re-validated at connect time for DNS-rebind).
+      const mediaResponse = await safeFetch(mediaUrl!)
       if (!mediaResponse.ok) throw new Error("Failed to download media for LinkedIn")
       const mediaBlob = await mediaResponse.blob()
 
