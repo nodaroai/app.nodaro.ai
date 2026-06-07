@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react"
+import { Suspense, lazy, useEffect, useState } from "react"
+import { Upload } from "lucide-react"
 import { useLocationStudio } from "./use-location-studio"
 import { AppearanceTab } from "./appearance-tab"
 import { TimeOfDayTab } from "./time-of-day-tab"
@@ -7,6 +8,20 @@ import { SeasonsTab } from "./seasons-tab"
 import { AnglesTab } from "./angles-tab"
 import { LightingTab } from "./lighting-tab"
 import { MotionTab } from "./motion-tab"
+import { Button } from "@/components/ui/button"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import { useAuth } from "@/hooks/use-auth"
+import { isMultiUser } from "@/lib/edition"
+
+// Lazy dynamic import keeps this core file off the ee/ static-import graph
+// (check-ee-imports.mjs only flags top-level `import ... from "@/ee/..."`,
+// not `import()` call expressions — same pattern as character-studio-modal.tsx).
+const PublishDialog = lazy(() => import("@/ee/components/community/publish-dialog"))
 
 /**
  * Location Studio — fullscreen modal shell.
@@ -71,7 +86,9 @@ interface LocationStudioModalProps {
 
 export function LocationStudioModal({ nodeId, onClose }: LocationStudioModalProps) {
   const studio = useLocationStudio(nodeId)
+  const { isAdmin } = useAuth()
   const [activeTab, setActiveTab] = useState<TabId>("appearance")
+  const [showPublish, setShowPublish] = useState(false)
 
   // Escape closes the modal — with a dirty-check prompt so unsaved edits
   // aren't silently discarded. In-flight saves block close entirely (the
@@ -167,6 +184,32 @@ export function LocationStudioModal({ nodeId, onClose }: LocationStudioModalProp
           >
             {studio.isSaving ? "Saving…" : "Save"}
           </button>
+          {isAdmin && isMultiUser() && (
+            <TooltipProvider delayDuration={0}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  {/* span wrapper so the tooltip still fires while the button is disabled */}
+                  <span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 gap-1.5 text-[11px] text-slate-300 hover:text-white hover:bg-[#1e293b]"
+                      disabled={!data.locationDbId}
+                      onClick={() => setShowPublish(true)}
+                    >
+                      <Upload className="h-3.5 w-3.5" />
+                      Share to community
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {!data.locationDbId && (
+                  <TooltipContent side="bottom">
+                    Generate an appearance to save the location first
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            </TooltipProvider>
+          )}
           <button
             type="button"
             onClick={() => {
@@ -182,6 +225,18 @@ export function LocationStudioModal({ nodeId, onClose }: LocationStudioModalProp
           </button>
         </div>
       </div>
+
+      {isAdmin && isMultiUser() && data.locationDbId && (
+        <Suspense fallback={null}>
+          <PublishDialog
+            entityType="location"
+            entityId={data.locationDbId}
+            defaultTitle={data.locationName}
+            open={showPublish}
+            onOpenChange={setShowPublish}
+          />
+        </Suspense>
+      )}
 
       {/* body */}
       <div className="flex flex-1 overflow-hidden">

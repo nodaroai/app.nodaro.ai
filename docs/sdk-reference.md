@@ -27,6 +27,7 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
   - [`client.credits`](#clientcredits)
   - [`client.uploads`](#clientuploads)
   - [`client.presets`](#clientpresets)
+  - [`client.community`](#clientcommunity)
 - [Type re-exports](#type-re-exports)
 
 ---
@@ -54,10 +55,10 @@ const client = createClient({
 | `fetch` | `typeof fetch` | no | Custom fetch implementation. Default: `globalThis.fetch`. |
 | `timeoutMs` | `number` | no | Per-request timeout. Default: `60_000`. |
 
-The instance exposes 17 resource objects: `workflows`, `projects`, `jobs`,
+The instance exposes 19 resource objects: `workflows`, `projects`, `jobs`,
 `executions`, `nodes`, `characters`, `locations`, `objects`, `pipelines`,
 `reduce`, `promptHelper`, `apps`, `developerApps`, `oauth`, `voices`,
-`credits`, `uploads`. It also exposes a low-level
+`credits`, `uploads`, `presets`, `community`. It also exposes a low-level
 `request<T>(method, path, options)` method for endpoints not yet wrapped by a
 resource.
 
@@ -248,7 +249,7 @@ but rarely need to be imported directly:
 `NodesResource`, `CharactersResource`, `LocationsResource`, `ObjectsResource`,
 `PipelinesResource`, `ReduceResource`, `PromptHelperResource`, `AppsResource`,
 `DeveloperAppsResource`, `OAuthResource`, `VoicesResource`, `CreditsResource`,
-`UploadsResource`.
+`UploadsResource`, `PresetsResource`, `CommunityResource`.
 
 All "data" responses follow the envelope `{ data: T }` — the SDK returns the
 envelope as-is. Mutation responses (`delete`, `cancel`) return `{ success: true }`.
@@ -2260,6 +2261,125 @@ const popular = data.filter((p) => popularIds.includes(p.id))
 
 ---
 
+### `client.community`
+
+Browse, favorite, clone, and report the **admin-curated** community library of
+shared characters, locations, and objects. See
+[Community Library](./community-library.md) for the feature overview and the
+likeness/consent safety rules.
+
+> **Multi-user editions only.** These routes exist on **Business** and **Cloud**
+> instances; on a **Community** (single-user) instance they return `404`
+> (surfaced as `NotFoundError`).
+
+**Publishing is intentionally NOT in the SDK.** It is an admin/editor-only
+action, and the publish route rejects the personal/OAuth tokens the SDK uses.
+
+A `CommunityEntityType` is `"character" | "location" | "object"`. A listing is
+returned as a `CommunityCard` (snake_case fields mirroring the wire shape).
+
+#### `browse(params?)`
+
+```ts
+browse(params?: BrowseCommunityParams): Promise<BrowseCommunityResult>
+```
+
+`GET /v1/community/browse` → a page of public listings plus a `nextCursor`. Pass
+the returned `nextCursor` back as `cursor` to fetch the next page (`null` when
+there are no more results).
+
+**`BrowseCommunityParams`:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `entityType` | `CommunityEntityType` | Filter to a single asset kind. |
+| `q` | `string` | Full-text search across title / description / tags. |
+| `category` | `string` | Filter to a single category. |
+| `sort` | `"newest" \| "popular"` | Order results. Defaults to `"newest"`. |
+| `cursor` | `string` | Cursor token from a previous page. |
+| `limit` | `number` | Page size; the backend caps at 50 (default 20). |
+
+```ts
+const { data, nextCursor } = await client.community.browse({
+  entityType: "character",
+  sort: "popular",
+  limit: 20,
+})
+```
+
+#### `get(slug)`
+
+```ts
+get(slug: string): Promise<{ data: CommunityCard }>
+```
+
+`GET /v1/community/detail/:slug` → a single listing by its slug. Throws
+`NotFoundError` when the listing is missing or inactive.
+
+```ts
+const { data: listing } = await client.community.get("detective-mara")
+```
+
+#### `favorites()`
+
+```ts
+favorites(): Promise<{ data: CommunityCard[] }>
+```
+
+`GET /v1/community/favorites` → the listings you've favorited.
+
+```ts
+const { data: faves } = await client.community.favorites()
+```
+
+#### `clone(id, entityType)`
+
+```ts
+clone(id: string, entityType: CommunityEntityType): Promise<CloneListingResult>
+```
+
+`POST /v1/community/listings/:id/clone` → copy a listing into your library as an
+**independent snapshot** (its assets are copied into your own storage, so the
+clone survives the original being changed or taken down). Returns
+`{ entityType, id }` — the new asset's kind and id. Requires the `assets:write`
+scope when called with an OAuth app token. Throws `StorageExceededError` (413)
+when your account is over its storage limit.
+
+```ts
+const { id } = await client.community.clone(listingId, "character")
+// `id` is the new character in your own library
+```
+
+#### `favorite(id)`
+
+```ts
+favorite(id: string): Promise<FavoriteListingResult>
+```
+
+`POST /v1/community/listings/:id/favorite` → toggle a favorite. Returns
+`{ favorited }` — `true` after adding, `false` after removing.
+
+```ts
+const { favorited } = await client.community.favorite(listingId)
+```
+
+#### `report(id, reason)`
+
+```ts
+report(id: string, reason: CommunityReportReason): Promise<ReportListingResult>
+```
+
+`POST /v1/community/listings/:id/report` → flag a listing for moderation.
+`reason` is one of `"real_person_no_consent"` (depicts a real person without
+consent), `"inappropriate"`, `"ip_violation"`, or `"other"`. Returns
+`{ ok: true }`.
+
+```ts
+await client.community.report(listingId, "real_person_no_consent")
+```
+
+---
+
 ## Type re-exports
 
 Every type used in a public method signature is re-exported from
@@ -2434,6 +2554,18 @@ Every type used in a public method signature is re-exported from
 - `AppRun` — a single app-run record
 - `ListAppRunsParams` — query params for `listRuns()`
 - `DeleteAppRunResult` — `{ success }`-style delete response
+
+### Community
+
+- `CommunityCard` — a public community listing (shared character/location/object)
+- `CommunityEntityType` — `"character" | "location" | "object"`
+- `CommunitySort` — `"newest" | "popular"`
+- `CommunityReportReason` — accepted `report()` reasons
+- `BrowseCommunityParams` — query params for `browse()`
+- `BrowseCommunityResult` — paginated `browse()` response
+- `CloneListingResult` — `{ entityType, id }` from `clone()`
+- `FavoriteListingResult` — `{ favorited }` from `favorite()`
+- `ReportListingResult` — `{ ok }` from `report()`
 
 ### Generic node/edge
 

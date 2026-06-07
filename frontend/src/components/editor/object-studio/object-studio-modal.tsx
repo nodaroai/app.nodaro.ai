@@ -1,10 +1,25 @@
-import { useEffect, useState } from "react"
+import { Suspense, lazy, useEffect, useState } from "react"
+import { Upload } from "lucide-react"
 import { useObjectStudio } from "./use-object-studio"
 import { AppearanceTab } from "./appearance-tab"
 import { AnglesTab } from "./angles-tab"
 import { MaterialsTab } from "./materials-tab"
 import { VariationsTab } from "./variations-tab"
 import { MotionTab } from "./motion-tab"
+import { Button } from "@/components/ui/button"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import { useAuth } from "@/hooks/use-auth"
+import { isMultiUser } from "@/lib/edition"
+
+// Lazy dynamic import keeps this core file off the ee/ static-import graph
+// (check-ee-imports.mjs only flags top-level `import ... from "@/ee/..."`,
+// not `import()` call expressions — same pattern as character-studio-modal.tsx).
+const PublishDialog = lazy(() => import("@/ee/components/community/publish-dialog"))
 
 /**
  * Object Studio — fullscreen modal shell.
@@ -71,7 +86,9 @@ interface ObjectStudioModalProps {
 
 export function ObjectStudioModal({ nodeId, onClose }: ObjectStudioModalProps) {
   const studio = useObjectStudio(nodeId)
+  const { isAdmin } = useAuth()
   const [activeTab, setActiveTab] = useState<TabId>("appearance")
+  const [showPublish, setShowPublish] = useState(false)
 
   // Escape closes the modal — with a dirty-check prompt so unsaved edits
   // aren't silently discarded. In-flight saves block close entirely (the
@@ -165,6 +182,32 @@ export function ObjectStudioModal({ nodeId, onClose }: ObjectStudioModalProps) {
           >
             {studio.isSaving ? "Saving…" : "Save"}
           </button>
+          {isAdmin && isMultiUser() && (
+            <TooltipProvider delayDuration={0}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  {/* span wrapper so the tooltip still fires while the button is disabled */}
+                  <span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 gap-1.5 text-[11px] text-slate-300 hover:text-white hover:bg-[#1e293b]"
+                      disabled={!data.objectDbId}
+                      onClick={() => setShowPublish(true)}
+                    >
+                      <Upload className="h-3.5 w-3.5" />
+                      Share to community
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {!data.objectDbId && (
+                  <TooltipContent side="bottom">
+                    Generate an appearance to save the object first
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            </TooltipProvider>
+          )}
           <button
             type="button"
             onClick={() => {
@@ -180,6 +223,18 @@ export function ObjectStudioModal({ nodeId, onClose }: ObjectStudioModalProps) {
           </button>
         </div>
       </div>
+
+      {isAdmin && isMultiUser() && data.objectDbId && (
+        <Suspense fallback={null}>
+          <PublishDialog
+            entityType="object"
+            entityId={data.objectDbId}
+            defaultTitle={data.objectName}
+            open={showPublish}
+            onOpenChange={setShowPublish}
+          />
+        </Suspense>
+      )}
 
       {/* body */}
       <div className="flex flex-1 overflow-hidden">

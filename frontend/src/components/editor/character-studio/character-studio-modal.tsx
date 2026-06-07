@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react"
+import { Upload } from "lucide-react"
 import { useCharacterStudio, type SaveStatus } from "./use-character-studio"
 import { useCharacterStudioJobs, type StudioAssetType } from "./use-character-studio-jobs"
 import { AppearanceTab } from "./appearance-tab"
@@ -7,7 +8,21 @@ import { PosesTab } from "./poses-tab"
 import { MotionsTab } from "./motions-tab"
 import { VoiceTab } from "./voice-tab"
 import { PersonalityTab } from "./personality-tab"
+import { Button } from "@/components/ui/button"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import { useAuth } from "@/hooks/use-auth"
+import { isMultiUser } from "@/lib/edition"
 import type { CharacterNodeData } from "@/types/nodes"
+
+// Lazy dynamic import keeps this core file off the ee/ static-import graph
+// (check-ee-imports.mjs only flags top-level `import ... from "@/ee/..."`,
+// not `import()` call expressions — same pattern as router.tsx).
+const PublishDialog = lazy(() => import("@/ee/components/community/publish-dialog"))
 
 type TabKey = "appearance" | "expressions" | "poses" | "motions" | "voice" | "personality"
 
@@ -22,8 +37,10 @@ const ASSET_FIELD: Record<StudioAssetType, keyof CharacterNodeData> = {
 
 export function CharacterStudioModal({ nodeId, onClose }: { nodeId: string; onClose: () => void }) {
   const studio = useCharacterStudio(nodeId)
+  const { isAdmin } = useAuth()
   const [tab, setTab] = useState<TabKey>("appearance")
   const [errored, setErrored] = useState<Set<string>>(new Set())
+  const [showPublish, setShowPublish] = useState(false)
 
   const onResolved = useCallback(
     (a: { assetType: StudioAssetType; name: string; url: string }) => {
@@ -117,11 +134,48 @@ export function CharacterStudioModal({ nodeId, onClose }: { nodeId: string; onCl
         </div>
         <div className="flex gap-3 items-center">
           <SaveIndicator status={studio.saveStatus} />
+          {isAdmin && isMultiUser() && (
+            <TooltipProvider delayDuration={0}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  {/* span wrapper so the tooltip still fires while the button is disabled */}
+                  <span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 gap-1.5 text-[11px] text-slate-300 hover:text-white hover:bg-[#1e293b]"
+                      disabled={!studio.staged.characterDbId}
+                      onClick={() => setShowPublish(true)}
+                    >
+                      <Upload className="h-3.5 w-3.5" />
+                      Share to community
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {!studio.staged.characterDbId && (
+                  <TooltipContent side="bottom">
+                    Generate an appearance to save the character first
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            </TooltipProvider>
+          )}
           <button onClick={onClose} className="text-[10px] bg-[#1e293b] rounded px-3 py-1.5 text-slate-400">
             ✕ Close
           </button>
         </div>
       </div>
+      {isAdmin && isMultiUser() && studio.staged.characterDbId && (
+        <Suspense fallback={null}>
+          <PublishDialog
+            entityType="character"
+            entityId={studio.staged.characterDbId}
+            defaultTitle={studio.staged.characterName}
+            open={showPublish}
+            onOpenChange={setShowPublish}
+          />
+        </Suspense>
+      )}
       {/* body */}
       <div className="flex flex-1 overflow-hidden">
         <div className="w-[140px] bg-[#090c12] border-r border-[#1e293b] flex flex-col py-3 shrink-0">
