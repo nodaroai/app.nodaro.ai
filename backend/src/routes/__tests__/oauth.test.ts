@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
-import Fastify, { type FastifyInstance } from "fastify"
+import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify"
 
 // ---------------------------------------------------------------------------
 // Mocks — must be defined before importing the route module
@@ -69,6 +69,23 @@ describe("oauth routes", () => {
     })
     expect(res.statusCode).toBe(401)
     expect(res.json().error.code).toBe("unauthorized")
+  })
+
+  it("POST /v1/oauth/authorize returns 403 for an OAuth app token (consent cannot be self-granted → no scope-escalation)", async () => {
+    const a = Fastify({ logger: false })
+    a.addHook("preHandler", async (req: FastifyRequest) => {
+      req.userId = "victim-1"
+      req.appAuthorization = { appId: "evil", authorizationId: "z", scopes: ["jobs:read"] }
+    })
+    await a.register(oauthRoutes)
+    await a.ready()
+    const res = await a.inject({
+      method: "POST",
+      url: "/v1/oauth/authorize",
+      payload: { clientId: "app_evil", redirectUri: "https://e.com/cb", scopes: ["workflows:execute", "assets:write"] },
+    })
+    expect(res.statusCode).toBe(403)
+    await a.close()
   })
 
   it("POST /v1/oauth/authorize returns 400 on invalid body", async () => {

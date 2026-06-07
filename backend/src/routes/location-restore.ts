@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
+import { requireAppScope } from "../lib/scope-prehandler.js"
 
 const paramsSchema = z.object({ id: z.string().uuid() })
 
@@ -21,7 +22,7 @@ const paramsSchema = z.object({ id: z.string().uuid() })
  * collision check is a single existence probe — no retry loop on 23505.
  */
 export async function locationRestoreRoutes(app: FastifyInstance) {
-  app.post("/v1/locations/:id/restore", async (req, reply) => {
+  app.post("/v1/locations/:id/restore", { preHandler: requireAppScope("assets:write") }, async (req, reply) => {
     const userId = req.userId
     if (!userId) {
       return reply.status(401).send({

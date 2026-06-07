@@ -117,15 +117,32 @@ describe("buildSyncHttpBody — field shape matches route Zod schemas", () => {
       })
     })
 
-    it("forwards resolved systemPrompt + prompt and falls back to node data", () => {
-      const fromUpstream = buildSyncHttpBody(
+    it("is typed-primary: node-data systemPrompt + userInput win over wired (computeLlmChatFields)", () => {
+      // Pre-unification this was wire-primary (`resolvedInputs.X || data.X`),
+      // which diverged from the frontend executor + payload-builder. Both engines
+      // are now typed-primary via the shared helper: a non-empty typed field wins
+      // over the wired value.
+      const typedWins = buildSyncHttpBody(
         node("llm-chat", { systemPrompt: "data-sys", userInput: "data-user" }),
         { systemPrompt: "wired-sys", prompt: "wired-user" },
         CTX,
       )
-      expect(fromUpstream.systemPrompt).toBe("wired-sys")
-      expect(fromUpstream.userInput).toBe("wired-user")
+      expect(typedWins.systemPrompt).toBe("data-sys")
+      expect(typedWins.userInput).toBe("data-user")
+    })
 
+    it("falls back to the wired value per-field when the typed field is empty", () => {
+      // Each field resolves independently: empty typed → wired.
+      const fromWired = buildSyncHttpBody(
+        node("llm-chat", { systemPrompt: "", userInput: "" }),
+        { systemPrompt: "wired-sys", prompt: "wired-user" },
+        CTX,
+      )
+      expect(fromWired.systemPrompt).toBe("wired-sys")
+      expect(fromWired.userInput).toBe("wired-user")
+    })
+
+    it("falls back to node data when nothing is wired", () => {
       const fromData = buildSyncHttpBody(
         node("llm-chat", { systemPrompt: "data-sys", userInput: "data-user" }),
         {},
@@ -133,6 +150,52 @@ describe("buildSyncHttpBody — field shape matches route Zod schemas", () => {
       )
       expect(fromData.systemPrompt).toBe("data-sys")
       expect(fromData.userInput).toBe("data-user")
+    })
+
+    it("override (list fan-out) wins for userInput only, never systemPrompt", () => {
+      const body = buildSyncHttpBody(
+        node("llm-chat", { systemPrompt: "data-sys", userInput: "data-user" }),
+        { overridePrompt: "item-3", systemPrompt: "wired-sys", prompt: "wired-user" },
+        CTX,
+      )
+      expect(body.userInput).toBe("item-3")
+      // override does NOT apply to systemPrompt → typed-primary still wins there.
+      expect(body.systemPrompt).toBe("data-sys")
+    })
+  })
+
+  describe("social posts (caption precedence)", () => {
+    it("is typed-primary: node-data caption wins over the wired caption", () => {
+      // Old expr was wire-primary (`resolvedInputs.prompt || resolvedInputs.caption
+      // || data.caption || data.text`). Now typed-primary via computeNodePrompt
+      // (NODE_PROMPT_CANDIDATE_FIELDS[<platform>] === ["caption"]).
+      const body = buildSyncHttpBody(
+        node("instagram-post", { caption: "data-cap", connectionId: "c1" }),
+        { caption: "wired-cap" },
+        CTX,
+      )
+      expect(body.caption).toBe("data-cap")
+      expect(body.platform).toBe("instagram")
+    })
+
+    it("falls back to the wired caption (resolvedInputs.caption) when data.caption is empty", () => {
+      // input-resolver routes a text upstream into resolvedInputs.caption for
+      // social nodes (not resolvedInputs.prompt).
+      const body = buildSyncHttpBody(
+        node("telegram-post", { caption: "", chatId: "123" }),
+        { caption: "wired-cap" },
+        CTX,
+      )
+      expect(body.caption).toBe("wired-cap")
+    })
+
+    it("override (list fan-out) wins over both typed + wired caption", () => {
+      const body = buildSyncHttpBody(
+        node("x-post", { caption: "data-cap" }),
+        { overridePrompt: "item-2", caption: "wired-cap" },
+        CTX,
+      )
+      expect(body.caption).toBe("item-2")
     })
   })
 

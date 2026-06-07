@@ -3,6 +3,7 @@
 import { memo, useState, useEffect, useRef, useCallback, type ReactNode, type MouseEvent, type PointerEvent as ReactPointerEvent } from "react"
 import { Handle, Position, NodeToolbar, useUpdateNodeInternals, NodeResizeControl } from "@xyflow/react"
 import { cn } from "@/lib/utils"
+import { NODE_TITLE_TYPOGRAPHY } from "@/lib/node-title-style"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useShallow } from "zustand/react/shallow"
 import { useAltKeyStore } from "@/hooks/use-alt-key"
@@ -184,7 +185,7 @@ function BaseNodeComponent({
   // applyNodeChanges / onNodesChange). Subscribing to it lets the floor-clamp
   // effect re-fire once RF completes the first measurement of a new node,
   // instead of prematurely pinning the node before measurement arrives.
-  const { zoom, visualW, visualH, measuredH, isSkipped, isPending, quickStripPinned } = useWorkflowStore(
+  const { zoom, visualW, visualH, measuredH, isSkipped, isPending, quickStripPinned, hasActivePreset } = useWorkflowStore(
     useShallow((s) => {
       const node = s.nodes.find((n) => n.id === id)
       const data = node?.data as Record<string, unknown> | undefined
@@ -197,6 +198,10 @@ function BaseNodeComponent({
         isSkipped: !!data?.skipped,
         isPending: data?.executionStatus === "pending",
         quickStripPinned: s.quickStripPinnedNodeId === id,
+        // A node with a preset applied keeps its preset pill visible (not just on hover)
+        // so you can see which preset is active at a glance. (`__activePresetId` is a non-empty
+        // string or absent, so a truthy check is enough — empty string is falsy.)
+        hasActivePreset: !!data?.__activePresetId,
       }
     }),
   )
@@ -448,12 +453,18 @@ function BaseNodeComponent({
           transform: zoom !== 1 ? `scale(${zoom})` : undefined,
         }}
       >
-      <NodeToolbar align="end" isVisible={isHovered || presetMenuOpen} position={Position.Top} offset={4}>
+      {/* Visible on hover, while the preset menu is open, OR whenever a preset is applied (so the
+          preset pill stays on the node). offset scales with the node zoom so the gap above the
+          card tracks the floating title (EditableNodeLabel, `-top-6`) instead of a constant 4px. */}
+      <NodeToolbar align="end" isVisible={isHovered || presetMenuOpen || hasActivePreset} position={Position.Top} offset={Math.round(8 * zoom)}>
         {/* Toolbar content (preset dropdown + 3-dots) scales by canvasZoom × nodeZoom so it tracks
-            the node title — see NodeTopToolbar. Only mounts while the toolbar is visible. */}
+            the node title — see NodeTopToolbar. Only mounts while the toolbar is visible. The ⋯ menu
+            and per-node actions show only on hover / while the menu is open; the preset pill always
+            shows when a preset is active. */}
         <NodeTopToolbar
           nodeId={id}
           nodeZoom={zoom}
+          showActions={isHovered || presetMenuOpen}
           onMoreMenu={handleMoreMenu}
           toolbarActions={toolbarActions}
           onEnter={() => {
@@ -505,7 +516,8 @@ function BaseNodeComponent({
       {(!hideHeader || isSkipped) && (
         <div
           className={cn(
-            "flex items-center gap-2 px-3 py-1.5 rounded-t-md font-sans text-[11px] font-semibold uppercase tracking-[0.05em]",
+            "flex items-center gap-2 px-3 py-1.5 rounded-t-md font-sans text-[11px]",
+            NODE_TITLE_TYPOGRAPHY,
             CATEGORY_HEADER[category],
           )}
         >

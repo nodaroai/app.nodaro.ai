@@ -952,7 +952,11 @@ export function createRenderWorker() {
         // retry deliver the render for free (commit_credits no-ops against an
         // already-refunded usage_log).
         if (isTerminal || isFinalJobAttempt(bullJob)) {
-          await supabase
+          // CAS on status so a concurrently-completed/cancelled job (inflight
+          // reconcile cron, stall re-pick) is NOT trampled "completed" → "failed"
+          // (orphaning its committed credits + delivered render). Mirrors
+          // sync-sweep.ts / reconcile markFailed.
+          const { data: failedRows } = await supabase
             .from("jobs")
             .update({
               status: "failed",
@@ -960,8 +964,13 @@ export function createRenderWorker() {
               completed_at: new Date().toISOString(),
             })
             .eq("id", jobId)
+            .in("status", ["pending", "processing"])
+            .select("id")
 
-          await refundJobCredits(effectiveUsageLogId, jobId, errMsg)
+          // Only refund if WE flipped the row (refundJobCredits is idempotent anyway).
+          if (failedRows && failedRows.length > 0) {
+            await refundJobCredits(effectiveUsageLogId, jobId, errMsg)
+          }
         }
 
         if (isTerminal) {

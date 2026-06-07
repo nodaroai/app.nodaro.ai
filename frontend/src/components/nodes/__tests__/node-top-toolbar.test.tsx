@@ -16,6 +16,7 @@ describe("NodeTopToolbar", () => {
       <NodeTopToolbar
         nodeId="n1"
         nodeZoom={2}
+        showActions
         onMoreMenu={() => {}}
         onEnter={() => {}}
         onLeave={() => {}}
@@ -26,5 +27,21 @@ describe("NodeTopToolbar", () => {
     expect(screen.getByTestId("preset").getAttribute("data-zoom")).toBe("4")
     // 3-dots glyph = round(4 × 13) = 52
     expect(screen.getByTestId("more").getAttribute("size")).toBe("52")
+  })
+
+  it("shows only the preset pill (no ⋯ menu) when showActions is false", () => {
+    render(
+      <NodeTopToolbar
+        nodeId="n1"
+        nodeZoom={1}
+        showActions={false}
+        onMoreMenu={() => {}}
+        onEnter={() => {}}
+        onLeave={() => {}}
+        onPresetOpenChange={() => {}}
+      />,
+    )
+    expect(screen.getByTestId("preset")).toBeInTheDocument()
+    expect(screen.queryByTestId("more")).toBeNull()
   })
 })

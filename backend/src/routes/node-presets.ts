@@ -3,8 +3,13 @@ import { z } from "zod"
 import { extractPresetData, getFactoryPresets, getPopularFactoryPresets } from "@nodaro/shared"
 import { supabase } from "../lib/supabase.js"
 import { requireScope } from "../lib/scopes.js"
+import { rejectProgrammaticAuth } from "../lib/api-auth-mode.js"
 
 const MAX_DATA_BYTES = 64 * 1024
+
+// Node presets are read-only over the API (SDK/CLI/MCP expose reads only);
+// writes are editor-only (first-party JWT). Block programmatic tokens.
+const PRESETS_READ_ONLY_MSG = "Node presets are read-only over the API. Create and edit presets in the editor."
 
 const presetDataSchema = z
   .record(z.string(), z.unknown())
@@ -147,6 +152,7 @@ export async function nodePresetRoutes(app: FastifyInstance) {
   app.post("/v1/node-presets", async (req, reply) => {
     const userId = req.userId
     if (!userId) return unauthorized(reply)
+    if (rejectProgrammaticAuth(req, reply, PRESETS_READ_ONLY_MSG)) return
     const parsed = createBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({ error: { code: "validation_error", message: parsed.error.issues[0]?.message ?? "Invalid body" } })
@@ -182,6 +188,7 @@ export async function nodePresetRoutes(app: FastifyInstance) {
   app.patch("/v1/node-presets/:id", async (req, reply) => {
     const userId = req.userId
     if (!userId) return unauthorized(reply)
+    if (rejectProgrammaticAuth(req, reply, PRESETS_READ_ONLY_MSG)) return
     const id = (req.params as { id: string }).id
     const parsed = patchBody.safeParse(req.body)
     if (!parsed.success) {
@@ -217,6 +224,7 @@ export async function nodePresetRoutes(app: FastifyInstance) {
   app.delete("/v1/node-presets/:id", async (req, reply) => {
     const userId = req.userId
     if (!userId) return unauthorized(reply)
+    if (rejectProgrammaticAuth(req, reply, PRESETS_READ_ONLY_MSG)) return
     const id = (req.params as { id: string }).id
     const { error } = await supabase.from("node_presets").delete().eq("id", id).eq("user_id", userId)
     if (error) return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
@@ -227,6 +235,7 @@ export async function nodePresetRoutes(app: FastifyInstance) {
   app.post("/v1/node-presets/import", async (req, reply) => {
     const userId = req.userId
     if (!userId) return unauthorized(reply)
+    if (rejectProgrammaticAuth(req, reply, PRESETS_READ_ONLY_MSG)) return
     const parsed = importBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({ error: { code: "validation_error", message: parsed.error.issues[0]?.message ?? "Invalid body" } })
@@ -267,6 +276,7 @@ export async function nodePresetRoutes(app: FastifyInstance) {
   app.post("/v1/node-presets/reorder", async (req, reply) => {
     const userId = req.userId
     if (!userId) return unauthorized(reply)
+    if (rejectProgrammaticAuth(req, reply, PRESETS_READ_ONLY_MSG)) return
     const parsed = reorderBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({ error: { code: "validation_error", message: parsed.error.issues[0]?.message ?? "Invalid body" } })

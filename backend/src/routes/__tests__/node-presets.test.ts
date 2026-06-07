@@ -267,4 +267,55 @@ describe("node-presets routes", () => {
     const r2 = await withScope.inject({ method: "GET", url: "/v1/node-presets" })
     expect(r2.statusCode).toBe(200)
   })
+
+  // Presets are READ-ONLY over the API (SDK/CLI expose reads only). Write routes
+  // must reject programmatic tokens — an OAuth app the user approved with only
+  // `presets:read` (the sole preset scope) must not be able to mutate/delete the
+  // owner's presets, and personal API tokens are read-only here too.
+  const WRITE_ROUTES: Array<{ method: "POST" | "PATCH" | "DELETE"; url: string; payload?: Record<string, unknown> }> = [
+    { method: "POST", url: "/v1/node-presets", payload: { nodeType: "t", name: "n", data: { prompt: "x" } } },
+    { method: "PATCH", url: "/v1/node-presets/00000000-0000-4000-8000-000000000aaa", payload: { name: "n" } },
+    { method: "DELETE", url: "/v1/node-presets/00000000-0000-4000-8000-000000000aaa" },
+    { method: "POST", url: "/v1/node-presets/import", payload: { presets: [{ nodeType: "t", name: "n", data: { prompt: "x" } }] } },
+    { method: "POST", url: "/v1/node-presets/reorder", payload: { presets: [] } },
+  ]
+
+  it("write routes reject OAuth app tokens (presets:read cannot write)", async () => {
+    type AuthReq = { userId?: string; appAuthorization?: { appId: string; authorizationId: string; scopes: string[] } }
+    fromMock.mockReturnValue(makeQB({ single: { id: "p", user_id: USER, node_type: "t", name: "n", description: null, data: {}, created_at: "", updated_at: "" } }))
+    const app = Fastify()
+    app.addHook("preHandler", async (req) => {
+      const r = req as AuthReq
+      r.userId = USER
+      r.appAuthorization = { appId: "a", authorizationId: "z", scopes: ["presets:read"] }
+    })
+    await app.register(nodePresetRoutes)
+    for (const route of WRITE_ROUTES) {
+      const res = await app.inject({ method: route.method, url: route.url, payload: route.payload })
+      expect(res.statusCode, `${route.method} ${route.url}`).toBe(403)
+    }
+  })
+
+  it("write routes reject personal API tokens (read-only over the API)", async () => {
+    type AuthReq = { userId?: string; apiToken?: { userId: string } }
+    fromMock.mockReturnValue(makeQB({ single: { id: "p", user_id: USER, node_type: "t", name: "n", description: null, data: {}, created_at: "", updated_at: "" } }))
+    const app = Fastify()
+    app.addHook("preHandler", async (req) => {
+      const r = req as AuthReq
+      r.userId = USER
+      r.apiToken = { userId: USER }
+    })
+    await app.register(nodePresetRoutes)
+    const res = await app.inject({ method: "POST", url: "/v1/node-presets", payload: { nodeType: "t", name: "n", data: { prompt: "x" } } })
+    expect(res.statusCode).toBe(403)
+  })
+
+  it("write routes still work for first-party JWT sessions (no appAuthorization / apiToken)", async () => {
+    // Guard must NOT block the editor (Supabase JWT → neither field set).
+    fromMock.mockReturnValue(makeQB({ single: { id: "p", user_id: USER, node_type: "t", name: "n", description: null, data: { prompt: "x" }, created_at: "", updated_at: "" } }))
+    const app = buildApp()
+    await app.register(nodePresetRoutes)
+    const res = await app.inject({ method: "POST", url: "/v1/node-presets", payload: { nodeType: "t", name: "n", data: { prompt: "x" } } })
+    expect(res.statusCode).toBe(201)
+  })
 })

@@ -46,8 +46,15 @@ describe("buildPayload", () => {
       expect(result.payload.usageLogId).toBe(usageLogId)
     })
 
-    it("uses resolved prompt over node data", () => {
-      const n = node("n1", "generate-image", { prompt: "old" })
+    it("prefers the typed node prompt over a wired input (typed-primary)", () => {
+      const n = node("n1", "generate-image", { prompt: "typed wins" })
+      const inputs: ResolvedInputs = { prompt: "new from upstream" }
+      const result = buildPayload(n, jobId, inputs)
+      expect(result.payload.prompt).toBe("typed wins")
+    })
+
+    it("falls back to the wired input when the typed prompt is empty", () => {
+      const n = node("n1", "generate-image", { prompt: "" })
       const inputs: ResolvedInputs = { prompt: "new from upstream" }
       const result = buildPayload(n, jobId, inputs)
       expect(result.payload.prompt).toBe("new from upstream")
@@ -381,7 +388,9 @@ describe("buildPayload", () => {
   // --- Audio ---
   describe("text-to-speech", () => {
     it("builds payload with default provider", () => {
-      const n = node("n1", "text-to-speech", { text: "Hello world", voice: "adam" })
+      // directText (gated by textSource) is the real TTS text field; `data.text`
+      // is a phantom that the unified prompt helper intentionally ignores.
+      const n = node("n1", "text-to-speech", { textSource: "direct", directText: "Hello world", voice: "adam" })
       const result = buildPayload(n, jobId, {})
       expect(result.jobName).toBe("text-to-speech")
       expect(result.payload.text).toBe("Hello world")

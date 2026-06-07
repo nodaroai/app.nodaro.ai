@@ -4,6 +4,13 @@ import { config } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
 import { llmComplete } from "../lib/llm-client.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { creditGuard } from "../middleware/credit-guard.js"
+import { meterSyncLlm } from "../lib/meter-sync-llm.js"
+
+// Bill the paid Sonnet vision caption at the shared prompt-helper rate (same as
+// llm-suggest-description) — the dedicated /llm-caption retry route is otherwise
+// a loopable free Claude proxy.
+const CAPTION_CREDIT_IDENTIFIER = "prompt-helper"
 
 /**
  * Character portrait approval + canonical-description LLM caption.
@@ -197,6 +204,9 @@ export async function characterPortraitApprovalRoutes(app: FastifyInstance) {
   app.post(
     "/v1/characters/:id/llm-caption",
     {
+      // dedup:false — this route returns { canonicalDescription }, not the
+      // { jobId, deduped:true } shape the idempotency short-circuit would send.
+      preHandler: creditGuard(() => CAPTION_CREDIT_IDENTIFIER, { dedup: false }),
       // 10 req/min/IP — gates the paid LLM caption. Mirrors location-llm-caption.
       config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
     },
@@ -218,6 +228,10 @@ export async function characterPortraitApprovalRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: { code: "no_portrait", message: "Character has no approved portrait yet" } })
     }
 
+    // Reserve credits (sync route — refund on every failure, no worker net).
+    const meter = await meterSyncLlm(req, reply, "character-llm-caption", CAPTION_CREDIT_IDENTIFIER)
+    if (!meter) return
+
     let canonicalDescription: string | null
     try {
       canonicalDescription = await captionPortrait(portraitUrl)
@@ -226,9 +240,11 @@ export async function characterPortraitApprovalRoutes(app: FastifyInstance) {
         { err, characterId, portraitUrl },
         "[character-portrait-approval] LLM caption failed (llm-caption)",
       )
+      await meter.refund()
       return reply.status(502).send({ error: { code: "llm_failure", message: "LLM caption failed" } })
     }
     if (canonicalDescription === null) {
+      await meter.refund()
       return reply.status(502).send({ error: { code: "llm_failure", message: "LLM caption failed" } })
     }
 
@@ -238,8 +254,10 @@ export async function characterPortraitApprovalRoutes(app: FastifyInstance) {
       .eq("id", characterId)
       .eq("user_id", req.userId)
     if (updateErr) {
+      await meter.refund()
       return reply.status(500).send({ error: { code: "internal_error", message: updateErr.message } })
     }
+    await meter.commit()
     return { canonicalDescription }
   })
 }

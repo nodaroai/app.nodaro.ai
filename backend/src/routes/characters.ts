@@ -3,6 +3,7 @@ import { z } from "zod"
 import { PLACEHOLDER_CHARACTER_NAME } from "@nodaro/shared"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
+import { requireAppScope } from "../lib/scope-prehandler.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { hasCredits } from "../lib/config.js"
 import { cancelCharacterTraining, deleteCharacterLora } from "../providers/replicate/training.js"
@@ -481,7 +482,7 @@ export async function characterRoutes(app: FastifyInstance) {
   //   • INSERT/UPDATE with a user-typed name returns 409 on conflict so the
   //     studio can surface a "name already taken" toast.
   // -----------------------------------------------------------------------
-  app.post("/v1/characters", async (req, reply) => {
+  app.post("/v1/characters", { preHandler: requireAppScope("assets:write") }, async (req, reply) => {
     const parsed = upsertCharacterBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -616,7 +617,7 @@ export async function characterRoutes(app: FastifyInstance) {
   // regenerating. Caller picks the source `nodeId` so the new row can be
   // re-bound to the spawning canvas node.
   // -----------------------------------------------------------------------
-  app.post("/v1/characters/:id/duplicate", async (req, reply) => {
+  app.post("/v1/characters/:id/duplicate", { preHandler: requireAppScope("assets:write") }, async (req, reply) => {
     const userId = req.userId
     if (!userId) {
       return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
@@ -679,7 +680,7 @@ export async function characterRoutes(app: FastifyInstance) {
   // row created since the archive; we auto-suffix "(restored)" to keep the
   // restored row visible without forcing the user to rename mid-restore.
   // -----------------------------------------------------------------------
-  app.post("/v1/characters/:id/restore", async (req, reply) => {
+  app.post("/v1/characters/:id/restore", { preHandler: requireAppScope("assets:write") }, async (req, reply) => {
     const userId = req.userId
     if (!userId) {
       return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
@@ -743,7 +744,7 @@ export async function characterRoutes(app: FastifyInstance) {
   // via GET /v1/characters/:id. The library list hides archived; the picker
   // list also hides them. Restore via POST /v1/characters/:id/restore.
   // -----------------------------------------------------------------------
-  app.delete("/v1/characters/:id", async (req, reply) => {
+  app.delete("/v1/characters/:id", { preHandler: requireAppScope("assets:write") }, async (req, reply) => {
     const userId = req.userId
     if (!userId) {
       return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })

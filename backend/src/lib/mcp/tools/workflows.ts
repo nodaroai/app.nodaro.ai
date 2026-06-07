@@ -323,24 +323,6 @@ export function registerWorkflows({
       },
       async (args) => {
         const mcpProjectId = await ensureMcpProject(session)
-        const { data: existing, error: lookupError } = await supabase
-          .from("workflows")
-          .select("id, project_id, updated_at")
-          .eq("id", args.workflow_id)
-          .eq("user_id", session.userId)
-          .eq("project_id", mcpProjectId)
-          .maybeSingle()
-        if (lookupError) return err(`Error: ${lookupError.message}`)
-        if (!existing) return err("Workflow not found in mcp project")
-        const existingRow = existing as Record<string, unknown>
-        if (
-          args.expected_updated_at !== undefined &&
-          existingRow.updated_at !== args.expected_updated_at
-        ) {
-          return err(
-            "Workflow was modified since you last read it. Fetch the latest JSON with get_workflow_json and retry.",
-          )
-        }
         const migratedEdges = migrateGenerateImageHandles(
           args.nodes as Array<{ id: string; type?: string }>,
           args.edges as Array<{ id: string; source: string; target: string; sourceHandle: string | null; targetHandle: string | null }>,
@@ -351,17 +333,45 @@ export function registerWorkflows({
           updated_at: new Date().toISOString(),
         }
         if (args.settings !== undefined) updates.settings = args.settings
-        const { data, error } = await supabase
+        // Atomic optimistic concurrency: fold the version check INTO the UPDATE
+        // (no read-then-write race). When expected_updated_at is provided it is
+        // part of the match, so a concurrent writer that bumped updated_at between
+        // the caller's read and this write makes the UPDATE match 0 rows instead
+        // of silently clobbering their edit. Mirrors update_character / update_location
+        // and the REST PATCH /v1/workflows/:id.
+        let query = supabase
           .from("workflows")
           .update(updates)
           .eq("id", args.workflow_id)
           .eq("user_id", session.userId)
-          .select("id, name, updated_at")
-          .single()
-        if (error || !data) return err(`Error: ${error?.message ?? "Failed to update workflow"}`)
+          .eq("project_id", mcpProjectId)
+        if (args.expected_updated_at !== undefined) {
+          query = query.eq("updated_at", args.expected_updated_at)
+        }
+        const { data, error } = await query.select("id, name, updated_at").maybeSingle()
+        if (error) return err(`Error: ${error.message}`)
+        if (!data) {
+          // 0 rows matched. Distinguish a stale-version conflict from a genuine
+          // not-found (only does the extra read on this rare path).
+          if (args.expected_updated_at !== undefined) {
+            const { data: stillExists } = await supabase
+              .from("workflows")
+              .select("id")
+              .eq("id", args.workflow_id)
+              .eq("user_id", session.userId)
+              .eq("project_id", mcpProjectId)
+              .maybeSingle()
+            if (stillExists) {
+              return err(
+                "Workflow was modified since you last read it. Fetch the latest JSON with get_workflow_json and retry.",
+              )
+            }
+          }
+          return err("Workflow not found in mcp project")
+        }
         const updated = data as Record<string, unknown>
         return ok(
-          `Updated workflow ${args.workflow_id} (${(updated.nodes as unknown[] | undefined)?.length ?? args.nodes.length} nodes).`,
+          `Updated workflow ${args.workflow_id} (${args.nodes.length} nodes).`,
           { id: updated.id, name: updated.name, updated_at: updated.updated_at },
         )
       },

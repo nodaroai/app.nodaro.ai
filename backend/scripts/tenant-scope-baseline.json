@@ -219,18 +219,6 @@
       "line": 305
     },
     {
-      "file": "src/routes/voice-clones.ts",
-      "table": "jobs",
-      "hash": "fe3efcfbde16",
-      "line": 197
-    },
-    {
-      "file": "src/routes/voice-clones.ts",
-      "table": "jobs",
-      "hash": "fe3efcfbde16",
-      "line": 330
-    },
-    {
       "file": "src/routes/web-scrape.ts",
       "table": "jobs",
       "hash": "f66588aaeefb",

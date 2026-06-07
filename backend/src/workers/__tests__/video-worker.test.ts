@@ -20,7 +20,12 @@ const mocks = vi.hoisted(() => {
 
   // Supabase mock
   const mockSingle = vi.fn().mockResolvedValue({ data: null, error: null })
-  const mockEq = vi.fn().mockReturnValue({ single: mockSingle })
+  // Failure-path status CAS chain: update().eq("id").in("status",[...]).select("id").
+  // Default: 1 row flipped (we won the race → refund proceeds). Per-test override
+  // to [] simulates a concurrent completer/cancel having already moved the row.
+  const mockCasSelect = vi.fn().mockResolvedValue({ data: [{ id: "job-1" }], error: null })
+  const mockIn = vi.fn().mockReturnValue({ select: mockCasSelect })
+  const mockEq = vi.fn().mockReturnValue({ single: mockSingle, in: mockIn })
   const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
   const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq })
   const mockFrom = vi.fn().mockReturnValue({
@@ -43,6 +48,8 @@ const mocks = vi.hoisted(() => {
     mockFrom,
     mockSingle,
     mockEq,
+    mockIn,
+    mockCasSelect,
     mockSelect,
     mockUpdate,
     getCapturedProcessor: () => capturedProcessor,
@@ -387,6 +394,25 @@ describe("video worker processor", () => {
     // refundJobCredits can distinguish a post-provider PostProcessingError
     // (skip) from a pre-provider plain error (refund).
     expect(mocks.mockRefundJobCredits).toHaveBeenCalledWith("usage-1", "job-1", crash)
+  })
+
+  it("does NOT trample or refund a concurrently-completed job (failure CAS flips 0 rows)", async () => {
+    // Race: a concurrent writer (inflight-reconcile cron / stall re-pick) already
+    // moved the row to a terminal state (completed → credits committed + asset
+    // delivered, or cancelled → already refunded). The final-attempt failure
+    // UPDATE's status CAS (.in("status",["pending","processing"])) then matches 0
+    // rows. We must NOT refund (would orphan a delivered+billed result) and the
+    // completed status must survive.
+    mocks.mockCasSelect.mockResolvedValueOnce({ data: [], error: null })
+    mocks.mockHandler.mockRejectedValueOnce(new Error("post-provider upload 500"))
+
+    const job = makeBullJob("generate-image")
+    await expect(processor(job)).rejects.toThrow("post-provider upload 500")
+
+    // The CAS guard was applied (only flips pending/processing rows)...
+    expect(mocks.mockIn).toHaveBeenCalledWith("status", ["pending", "processing"])
+    // ...and because 0 rows were flipped, no refund fired.
+    expect(mocks.mockRefundJobCredits).not.toHaveBeenCalled()
   })
 
   it("does NOT refund or mark failed on a non-final attempt — BullMQ will retry", async () => {

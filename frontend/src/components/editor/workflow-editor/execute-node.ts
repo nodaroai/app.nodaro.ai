@@ -241,6 +241,7 @@ import { collectCinematographyHints, hasConnectedStyleNode, STILL_IMAGE_EXCLUDE_
 import { collectAudioStyleHints, truncateForField, appendField } from "@/lib/audio-style-hints";
 import { probeAudioDuration } from "@/lib/audio-duration";
 import { getEffectiveSunoCustomMode } from "@nodaro/shared";
+import { computeNodePrompt, computeLlmChatFields } from "@nodaro/shared";
 import { applyMediaOrder } from "../config-panels/connected-media-list";
 import {
   getUpstreamDuration,
@@ -1202,6 +1203,17 @@ export function executeNode(
     overridePrompt = resolveTextRefs(overridePrompt, refMap) ?? overridePrompt;
   }
 
+  // Typed-primary prompt resolution for single-prompt nodes (precedence:
+  // override > typed candidate fields > wired). Shared with the backend
+  // orchestrator via @nodaro/shared so field-selection + precedence are
+  // structurally identical. Each single-prompt case below calls promptOf(type).
+  const promptOf = (nodeType: string) =>
+    computeNodePrompt(nodeType, node.data as Record<string, unknown>, {
+      wired: typeof inputs.prompt === "string" ? inputs.prompt : undefined,
+      override: overridePrompt,
+      refMap,
+    });
+
   // --- Field mapping resolution + {} injection (centralized) ---
   const mappableFields = NODE_MAPPABLE_FIELDS[node.type ?? ""]
   if (mappableFields?.length) {
@@ -1516,8 +1528,7 @@ export function executeNode(
     // fallback when the user hasn't typed anything. fieldMappings resolution
     // (upstream dropdown pick) already ran earlier, so if the user selected
     // a source, `imgData.prompt` holds that source's output.
-    const manualImgPrompt = resolveTextRefs(imgData.prompt?.trim(), refMap);
-    let prompt = overridePrompt || manualImgPrompt || inputs.prompt;
+    let prompt: string | undefined = promptOf("generate-image");
     // Fold cinematography hints — a Person / Framing / Style node wired to
     // the `cinematography` handle is a perfectly valid prompt source on its
     // own. Requiring a manual prompt in that case would force users to type
@@ -2078,12 +2089,18 @@ export function executeNode(
     // providers. Shared with the backend orchestrator (payload-builder.ts).
     const rawProvider = (node.data as { provider?: string } | undefined)?.provider;
     const resolvedProvider = rawProvider ? resolveVideoProviderForMode(rawProvider, mode) : rawProvider;
+    // Re-type to i2v/t2v for dispatch. Both i2v and t2v candidate-field lists
+    // include `motionPrompt` (NODE_PROMPT_CANDIDATE_FIELDS), so a generate-video
+    // node routed to either mode keeps a prompt stored in `data.motionPrompt`
+    // (the inline picker's legacy field) without any origin-type stamp. Mirrors
+    // the backend's dedicated `case "generate-video"` in payload-builder.ts.
     const syntheticNode = {
       ...node,
       type: mode as SceneNodeType,
-      data: resolvedProvider && resolvedProvider !== rawProvider
-        ? { ...node.data, provider: resolvedProvider }
-        : node.data,
+      data:
+        resolvedProvider && resolvedProvider !== rawProvider
+          ? { ...node.data, provider: resolvedProvider }
+          : node.data,
     } as WorkflowNode;
     return executeNode(syntheticNode, ctx, overridePrompt, overrideMediaUrl, listIterationIndex, runId);
   }
@@ -2175,15 +2192,11 @@ export function executeNode(
 
     if (audioUrl && !audioUrl.startsWith("http")) audioUrl = undefined;
 
-    // Manual wins — see gen-image note above.
-    let prompt = (resolveTextRefs(i2vData.prompt?.trim() || undefined, refMap) ?? inputs.prompt) as string | undefined;
-    // Kling 3 Studio stores the main prompt in data.motionPrompt (not data.prompt)
-    if (!prompt) {
-      const klingMotionPrompt = (i2vData as Record<string, unknown>).motionPrompt as string | undefined;
-      if (klingMotionPrompt?.trim()) {
-        prompt = resolveTextRefs(klingMotionPrompt.trim(), refMap) ?? klingMotionPrompt.trim();
-      }
-    }
+    // Manual wins — see gen-image note above. i2v's candidate-field list
+    // (`["prompt","motionPrompt"]`) also covers Kling 3 Studio, which stores
+    // the main prompt in data.motionPrompt (not data.prompt), AND a
+    // generate-video node re-typed to image-to-video (same field list).
+    let prompt: string | undefined = promptOf("image-to-video");
     prompt = stripVideoImageTokens(prompt)
     // Inject motion + cinematography hints into prompt
     const motionHints: string[] = [];
@@ -2333,14 +2346,8 @@ export function executeNode(
       return Promise.reject(new Error("No source video"));
     }
     const v2vData = node.data as VideoToVideoData;
-    const inputPrompt =
-      typeof inputs.prompt === "string" ? inputs.prompt : undefined;
-    const dataPrompt = resolveTextRefs(
-      typeof v2vData.prompt === "string" ? v2vData.prompt.trim() : undefined,
-      refMap,
-    );
     // Manual wins — see gen-image note above.
-    let prompt = stripVideoImageTokens(dataPrompt || inputPrompt)
+    let prompt = stripVideoImageTokens(promptOf("video-to-video"))
     {
       const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
       if (cinematographyHints.length > 0) {
@@ -2406,11 +2413,10 @@ export function executeNode(
     // until AFTER mention resolution + identity-lock so an empty user prompt
     // with a wired Character / @-mention / style still runs (canonical
     // fallback fills the assembled prompt).
-    let prompt = stripVideoImageTokens(
-      overridePrompt ??
-      resolveTextRefs(t2vData.prompt?.trim(), refMap) ??
-      (typeof inputs.prompt === "string" ? inputs.prompt : undefined)
-    );
+    // t2v's candidate-field list includes `motionPrompt`
+    // (NODE_PROMPT_CANDIDATE_FIELDS), so a generate-video node re-typed to
+    // text-to-video keeps a prompt stored in data.motionPrompt.
+    let prompt = stripVideoImageTokens(promptOf("text-to-video"));
     {
       const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
       if (cinematographyHints.length > 0) {
@@ -2574,13 +2580,7 @@ export function executeNode(
 
   if (node.type === "text-to-speech") {
     const ttsData = node.data as TextToSpeechData;
-    const text =
-      overridePrompt ??
-      (ttsData.textSource === "direct" && ttsData.directText?.trim()
-        ? resolveTextRefs(ttsData.directText.trim(), refMap) ?? ttsData.directText.trim()
-        : typeof inputs.prompt === "string"
-          ? inputs.prompt
-          : "");
+    const text = promptOf("text-to-speech");
     if (!text) {
       toast.error(`Node "${ttsData.label}": no text found`);
       return Promise.reject(new Error("No text"));
@@ -2609,10 +2609,7 @@ export function executeNode(
 
   if (node.type === "generate-music") {
     // Manual wins — see gen-image note above.
-    const typedPrompt =
-      overridePrompt ??
-      resolveTextRefs((node.data as GenerateMusicData).prompt?.trim(), refMap) ??
-      inputs.prompt;
+    const typedPrompt = promptOf("generate-music");
     const d = node.data as GenerateMusicData;
     const refUrl = inputs.audioUrl || d.referenceAudioUrl || undefined;
     // Fold connected Sound nodes (music-genre / music-mood / instrumentation
@@ -2662,10 +2659,7 @@ export function executeNode(
 
   if (node.type === "text-to-audio") {
     // Manual wins — see gen-image note above.
-    const typedPrompt =
-      overridePrompt ??
-      resolveTextRefs((node.data as TextToAudioData).prompt?.trim(), refMap) ??
-      inputs.prompt;
+    const typedPrompt = promptOf("text-to-audio");
     const d = node.data as TextToAudioData;
     const sfxOptions =
       d.provider === "elevenlabs-sfx"
@@ -3451,7 +3445,7 @@ export function executeNode(
           audioId: ids.audioId,
           infillStartS: d.infillStartS ?? 0,
           infillEndS: d.infillEndS ?? 30,
-          prompt: d.prompt?.trim() || "",
+          prompt: promptOf("suno-replace-section"),
           tags: d.tags?.trim() || "",
           title: d.title?.trim() || undefined,
           userId: ctx.userId,
@@ -3895,20 +3889,23 @@ export function executeNode(
       }
     }
 
-    // Manual wins over upstream on both fields — matches the dropdown's "Manual"
-    // default: unless the user explicitly maps a source (fieldMappings), their
-    // typed text is the source of truth. resolveTextRefs handles inline
-    // `{Label}` refs so `{Framing}` in the textarea becomes the framing hint.
-    const rawSystemPrompt = chatData.systemPrompt?.trim()
-      ? chatData.systemPrompt
-      : (typeof inputs.systemPrompt === "string" && inputs.systemPrompt.trim() ? inputs.systemPrompt : "");
-    const systemPrompt = resolveTextRefs(rawSystemPrompt, refMap) ?? rawSystemPrompt;
-
+    // Typed-primary resolution of BOTH fields via the shared helper — identical
+    // precedence + {Label} ref-resolution to the backend node-executor:
+    //   userInput:    override (list fan-out) > typed data.userInput > wired prompt
+    //   systemPrompt: typed data.systemPrompt > wired systemPrompt
+    // NOTE: this intentionally makes overridePrompt (list fan-out per-item value)
+    // beat a typed data.userInput — the old FE code let typed win. This matches
+    // the backend + every other node type (override always wins).
+    const { userInput, systemPrompt } = computeLlmChatFields(node.data as Record<string, unknown>, {
+      override: overridePrompt,
+      wiredUserInput: typeof inputs.prompt === "string" ? inputs.prompt : undefined,
+      wiredSystemPrompt: typeof inputs.systemPrompt === "string" ? inputs.systemPrompt : undefined,
+      refMap,
+    });
+    // Result-record metadata: the fan-out / wired value for this iteration
+    // (independent of typed userInput) — preserved verbatim from before the
+    // helper migration so the per-result `listValue` keeps its meaning.
     const listValue = overridePrompt || (typeof inputs.prompt === "string" && inputs.prompt.trim() ? inputs.prompt : undefined);
-    const rawUserInput = chatData.userInput?.trim()
-      ? chatData.userInput
-      : (listValue ?? "");
-    const userInput = resolveTextRefs(rawUserInput, refMap) ?? rawUserInput;
 
     if (!userInput?.trim()) {
       toast.error(`Node "${chatData.label}": no user prompt provided`);
@@ -4182,8 +4179,7 @@ export function executeNode(
     }
 
     // Manual wins — see gen-image note above.
-    let prompt =
-      overridePrompt || resolveTextRefs(s2vData.prompt?.trim(), refMap) || inputs.prompt || "";
+    let prompt: string = promptOf("speech-to-video");
 
     if (!imageUrl) {
       toast.error(`Node "${s2vData.label}": no image input found`);
@@ -4343,8 +4339,7 @@ export function executeNode(
 
     // Generative prompt (unlike ai-avatar's verbatim script): manual wins, then
     // {Label} ref resolution, then wired upstream prompt — mirrors speech-to-video.
-    let prompt =
-      overridePrompt || resolveTextRefs(caData.prompt?.trim(), refMap) || inputs.prompt || "";
+    let prompt: string = promptOf("cinematic-avatar");
 
     // Fold in cinematography hints + identity-lock clause from connected pickers
     // / refs, same as the other generative video nodes.
@@ -4521,7 +4516,7 @@ export function executeNode(
 
     // ─── KIE-based path (veo-extend, runway-extend) ───────────────────
     // Manual wins — see gen-image note above.
-    let prompt = overridePrompt ?? resolveTextRefs(evData.prompt, refMap) ?? inputs.prompt;
+    let prompt: string | undefined = promptOf("extend-video");
 
     const kieTaskId = resolveUpstreamKieTaskId(node.id, evData as unknown as Record<string, unknown>);
 
@@ -4571,7 +4566,7 @@ export function executeNode(
     }
     // Manual prompt wins (mirror extend-video); fall back to text-ref resolution
     // then to the inputs.prompt wired from upstream text/picker sources.
-    let prompt = overridePrompt ?? resolveTextRefs(vrData.prompt, refMap) ?? inputs.prompt;
+    let prompt: string | undefined = promptOf("video-retake");
     // Look/camera-motion pickers wired to the `look` target handle are
     // parameter nodes (PARAMETER_NODE_TYPES) — the resolver intentionally
     // skips them so they don't overwrite the user's manual prompt. The
@@ -6801,8 +6796,18 @@ export function executeNode(
     const d = node.data as SocialPostData;
     const mediaUrl = overrideMediaUrl ?? inputs.videoUrl ?? inputs.imageUrl ?? inputs.audioUrl;
 
-    // Resolve {Node Label} refs in caption
-    const resolvedCaption = resolveTextRefs(d.caption?.trim(), refMap) || inputs.prompt || undefined;
+    // Typed-primary caption resolution via the shared helper — identical to the
+    // backend node-executor (NODE_PROMPT_CANDIDATE_FIELDS maps each per-platform
+    // type → ["caption"], so node.type keys correctly). override carries list
+    // fan-out. The FE resolver routes social text upstreams into `inputs.prompt`
+    // (never `inputs.caption`), so that's the wired source. `|| undefined`
+    // preserves the prior "no caption" semantics (helper returns "" when unset).
+    const resolvedCaption =
+      computeNodePrompt(node.type, node.data as Record<string, unknown>, {
+        wired: typeof inputs.prompt === "string" ? inputs.prompt : undefined,
+        override: overridePrompt,
+        refMap,
+      }) || undefined;
 
     // Auto-detect Telegram action and collect all connected media
     let action = d.action;

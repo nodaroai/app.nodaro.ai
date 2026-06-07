@@ -104,6 +104,10 @@ beforeEach(async () => {
       req.userId = header
       req.userRole = undefined
     }
+    // Simulate the internal-orchestrator-secret auth mode (auth.ts sets this).
+    if (req.headers["x-test-internal"] === "true") {
+      req.isInternalCall = true
+    }
   })
 
   await app.register(async (instance) => {
@@ -136,6 +140,17 @@ function authedPost(url: string, payload: Record<string, unknown>) {
     method: "POST",
     url,
     headers: { "x-test-user-id": TEST_USER_ID },
+    payload: payload as Record<string, unknown>,
+  })
+}
+
+/** POST as the internal orchestrator (passes the isInternalCall gate on the
+ *  reserve/commit/refund routes). */
+function internalPost(url: string, payload: Record<string, unknown>) {
+  return app.inject({
+    method: "POST",
+    url,
+    headers: { "x-test-user-id": TEST_USER_ID, "x-test-internal": "true" },
     payload: payload as Record<string, unknown>,
   })
 }
@@ -332,8 +347,18 @@ describe("POST /v1/credits/model-costs", () => {
 })
 
 describe("POST /v1/credits/reserve", () => {
-  it("returns 400 on missing required fields", async () => {
+  it("returns 403 for a non-internal caller (user JWT / API token cannot drive credit mutations)", async () => {
     const res = await authedPost("/v1/credits/reserve", {
+      jobId: "job-1",
+      modelIdentifier: "nano-banana",
+    })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe("forbidden")
+    expect(mockReserveCredits).not.toHaveBeenCalled()
+  })
+
+  it("returns 400 on missing required fields", async () => {
+    const res = await internalPost("/v1/credits/reserve", {
       jobId: "job-1",
       // modelIdentifier missing
     })
@@ -343,7 +368,7 @@ describe("POST /v1/credits/reserve", () => {
     expect(body.error.code).toBe("validation_error")
   })
 
-  it("returns reservation result on success", async () => {
+  it("returns reservation result on success (internal caller)", async () => {
     const reserveResult = {
       usageLogId: "usage-log-1",
       creditsReserved: 4,
@@ -351,7 +376,7 @@ describe("POST /v1/credits/reserve", () => {
     }
     mockReserveCredits.mockResolvedValue(reserveResult)
 
-    const res = await authedPost("/v1/credits/reserve", {
+    const res = await internalPost("/v1/credits/reserve", {
       jobId: "job-1",
       modelIdentifier: "nano-banana",
       providerCostUsd: 0.02,
@@ -372,7 +397,14 @@ describe("POST /v1/credits/reserve", () => {
 })
 
 describe("POST /v1/credits/commit", () => {
-  it("returns success on valid commit", async () => {
+  it("returns 403 for a non-internal caller", async () => {
+    const res = await authedPost("/v1/credits/commit", { usageLogId: "usage-log-1", actualCredits: 0 })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe("forbidden")
+    expect(mockCommitCredits).not.toHaveBeenCalled()
+  })
+
+  it("returns success on valid commit (internal caller)", async () => {
     const mockFrom = vi.mocked(supabase.from)
     mockFrom.mockReturnValue({
       select: vi.fn().mockReturnValue({
@@ -387,7 +419,7 @@ describe("POST /v1/credits/commit", () => {
 
     mockCommitCredits.mockResolvedValue(undefined)
 
-    const res = await authedPost("/v1/credits/commit", {
+    const res = await internalPost("/v1/credits/commit", {
       usageLogId: "usage-log-1",
       actualCredits: 3,
     })
@@ -400,7 +432,14 @@ describe("POST /v1/credits/commit", () => {
 })
 
 describe("POST /v1/credits/refund", () => {
-  it("returns success on valid refund", async () => {
+  it("returns 403 for a non-internal caller (closes the self-refund free-generation exploit)", async () => {
+    const res = await authedPost("/v1/credits/refund", { usageLogId: "usage-log-1" })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe("forbidden")
+    expect(mockRefundCredits).not.toHaveBeenCalled()
+  })
+
+  it("returns success on valid refund (internal caller)", async () => {
     const mockFrom = vi.mocked(supabase.from)
     mockFrom.mockReturnValue({
       select: vi.fn().mockReturnValue({
@@ -415,7 +454,7 @@ describe("POST /v1/credits/refund", () => {
 
     mockRefundCredits.mockResolvedValue(undefined)
 
-    const res = await authedPost("/v1/credits/refund", {
+    const res = await internalPost("/v1/credits/refund", {
       usageLogId: "usage-log-1",
     })
 

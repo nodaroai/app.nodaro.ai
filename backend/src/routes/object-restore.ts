@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
+import { requireAppScope } from "../lib/scope-prehandler.js"
 
 const paramsSchema = z.object({ id: z.string().uuid() })
 
@@ -36,7 +37,7 @@ const paramsSchema = z.object({ id: z.string().uuid() })
  * convention).
  */
 export async function objectRestoreRoutes(app: FastifyInstance) {
-  app.post("/v1/objects/:id/restore", async (req, reply) => {
+  app.post("/v1/objects/:id/restore", { preHandler: requireAppScope("assets:write") }, async (req, reply) => {
     const userId = req.userId
     if (!userId) {
       return reply.status(401).send({

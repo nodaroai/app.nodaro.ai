@@ -44,6 +44,7 @@ import { REPEAT_PLACEHOLDER, getEffectiveRepeatCount, REPEATABLE_NODE_TYPES, exp
 import { buildStatsKey, upsertExecutionStats } from "../services/execution-stats.js"
 import { settledWithLimit } from "../lib/settled-with-limit.js"
 import { assembleFanOutResult } from "./fan-out-result.js"
+import { overrideInputWithListItem as applyListItem } from "./list-item-override.js"
 import { calculateMonetizationMarkup } from "@nodaro/shared"
 
 /** Env-var ceiling — tier limits are capped by this. */
@@ -1262,24 +1263,10 @@ function overrideInputWithListItem(
   // Provider-fanout sentinel — provider swap happens at the executeNode call site;
   // here we just avoid touching prompt/media inputs.
   if (decodeProviderItem(item) !== undefined) return
-
-  const isUrl =
-    item.startsWith("http") ||
-    /\.(png|jpg|jpeg|webp|gif|mp4|mov|webm|mp3|wav|ogg)(\?|$)/i.test(item)
-
-  if (isUrl) {
-    // Determine media type from extension
-    if (/\.(mp4|mov|webm)(\?|$)/i.test(item)) {
-      inputs.videoUrl = item
-    } else if (/\.(mp3|wav|ogg)(\?|$)/i.test(item)) {
-      inputs.audioUrl = item
-    } else {
-      // Default to image for URLs (including generic http URLs)
-      inputs.imageUrl = item
-    }
-  } else {
-    inputs.prompt = item
-  }
+  // URL/text routing (incl. overridePrompt for text items) lives in the
+  // testable pure module; the two guards above stay here since they depend on
+  // worker-local helpers.
+  applyListItem(inputs, item)
 }
 
 // ---------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import Fastify, { type FastifyInstance } from "fastify"
+import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify"
 
 // ---------------------------------------------------------------------------
 // Mocks -- hoisted before any route import
@@ -445,5 +445,34 @@ describe("POST /v1/billing/change-plan", () => {
         proration_behavior: "create_prorations",
       },
     )
+  })
+})
+
+// Billing is a first-party UI action — an OAuth app token must never change the
+// owner's Stripe subscription (real money) regardless of granted scope.
+describe("billing routes reject OAuth app tokens", () => {
+  async function appWithOAuth(): Promise<FastifyInstance> {
+    const a = Fastify({ logger: false })
+    a.addHook("preHandler", async (req: FastifyRequest) => {
+      req.userId = "victim-1"
+      req.appAuthorization = { appId: "evil", authorizationId: "z", scopes: ["workflows:execute"] }
+    })
+    await a.register(async (i) => { await billingRoutes(i) })
+    await a.ready()
+    return a
+  }
+
+  it("POST /v1/billing/change-plan returns 403 for an OAuth app token", async () => {
+    const a = await appWithOAuth()
+    const res = await a.inject({ method: "POST", url: "/v1/billing/change-plan", payload: { newPriceId: "pri_pro" } })
+    expect(res.statusCode).toBe(403)
+    await a.close()
+  })
+
+  it("POST /v1/billing/manage-subscription + create-checkout-session return 403 for OAuth app tokens", async () => {
+    const a = await appWithOAuth()
+    expect((await a.inject({ method: "POST", url: "/v1/billing/manage-subscription", payload: {} })).statusCode).toBe(403)
+    expect((await a.inject({ method: "POST", url: "/v1/billing/create-checkout-session", payload: { priceId: "pri_pro" } })).statusCode).toBe(403)
+    await a.close()
   })
 })

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import Fastify, { type FastifyInstance } from "fastify"
+import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify"
 
 // ---------------------------------------------------------------------------
 // Mocks — hoisted before any route import
@@ -205,6 +205,47 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await app.close()
+})
+
+// An OAuth app the user authorized for a narrow scope must not create/delete the
+// owner's characters without assets:write (the requireAppScope preHandler). JWT /
+// personal-token callers (no appAuthorization) are unaffected.
+describe("characters write routes enforce assets:write for OAuth app tokens", () => {
+  async function appWithScopes(scopes: string[]): Promise<FastifyInstance> {
+    const a = Fastify({ logger: false })
+    a.addHook("preHandler", async (req: FastifyRequest) => {
+      req.userId = TEST_USER_ID
+      req.appAuthorization = { appId: "x", authorizationId: "z", scopes }
+    })
+    await a.register(async (i) => { await characterRoutes(i) })
+    await a.ready()
+    return a
+  }
+
+  it("POST /v1/characters → 403 insufficient_scope when the app lacks assets:write", async () => {
+    const a = await appWithScopes(["assets:read"])
+    const res = await a.inject({ method: "POST", url: "/v1/characters", payload: { name: "X" } })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe("insufficient_scope")
+    await a.close()
+  })
+
+  it("DELETE /v1/characters/:id → 403 when the app lacks assets:write", async () => {
+    const a = await appWithScopes(["assets:read"])
+    const res = await a.inject({ method: "DELETE", url: `/v1/characters/${TEST_CHARACTER_ID}` })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe("insufficient_scope")
+    await a.close()
+  })
+
+  it("POST /v1/characters does NOT 403 when the app HAS assets:write (scope gate passes)", async () => {
+    const a = await appWithScopes(["assets:write"])
+    const res = await a.inject({ method: "POST", url: "/v1/characters", payload: {} })
+    // Passes the scope gate → reaches the handler (which 400s on the empty body),
+    // i.e. NOT an insufficient_scope rejection.
+    expect(res.statusCode).not.toBe(403)
+    await a.close()
+  })
 })
 
 // ---------------------------------------------------------------------------

@@ -3,6 +3,7 @@ import { z } from "zod"
 import { LOCATION_REFERENCE_PHOTO_KINDS, LOCATION_ATTACH_COLUMNS } from "@nodaro/shared"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
+import { requireAppScope } from "../lib/scope-prehandler.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { batchDeleteFromR2 } from "../lib/storage.js"
 import { config } from "../lib/config.js"
@@ -310,7 +311,7 @@ export async function locationRoutes(app: FastifyInstance) {
   // ---------------------------------------------------------------------------
   // Upsert location (create or update)
   // ---------------------------------------------------------------------------
-  app.post("/v1/locations", async (req, reply) => {
+  app.post("/v1/locations", { preHandler: requireAppScope("assets:write") }, async (req, reply) => {
     const parsed = upsertLocationBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -470,7 +471,7 @@ export async function locationRoutes(app: FastifyInstance) {
   // Permanent-delete is intentionally NOT mirrored on the SDK (`@nodaro/client`)
   // — programmatic callers can only soft-delete.
   // ---------------------------------------------------------------------------
-  app.delete("/v1/locations/:id", async (req, reply) => {
+  app.delete("/v1/locations/:id", { preHandler: requireAppScope("assets:write") }, async (req, reply) => {
     const userId = req.userId
     if (!userId) {
       return reply.status(401).send({

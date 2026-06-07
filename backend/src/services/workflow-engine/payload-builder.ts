@@ -16,7 +16,6 @@ import { resolveAiAvatarCreditId } from "@nodaro/shared"
 import { resolveCinematicCreditId } from "@nodaro/shared"
 import { validateAiAvatarPayload, validateCinematicAvatarPayload } from "@nodaro/shared"
 import { resolveNodeRefs } from "@nodaro/shared"
-import { composeCameraMotionHintFromConnections } from "@nodaro/shared"
 import {
   composeSoundHintFromConnections,
   truncateForField,
@@ -27,6 +26,7 @@ import {
 } from "@nodaro/shared"
 import { getParameterPromptHint } from "@nodaro/shared"
 import { PARAMETER_NODE_TYPES } from "@nodaro/shared"
+import { computeNodePrompt } from "@nodaro/shared"
 import type { CharacterDef, ConnectedReference, SceneData, ExtraRefInput, ExtraRefCharacterContext } from "@nodaro/shared"
 import { characterMentionSlug, findCharacterMentionTokens, resolveCharacterMentions, usageModeDirective, DEFAULT_USAGE_MODE } from "@nodaro/shared"
 import { expandExtraRefsToConnectedReferences } from "@nodaro/shared"
@@ -1220,34 +1220,6 @@ function getNodePromptHint(node: SimpleNode | undefined): string {
 }
 
 /**
- * Compose a camera-motion hint for a camera-motion SOURCE node: read its
- * `cameraMotion` id, walk its startState/endState incoming edges to collect
- * prompt hints from connected parameter nodes, and delegate to the shared
- * composer. Returns the empty string when the motion id is missing.
- */
-function composeCameraMotionHintForNode(
-  motionId: string | undefined,
-  sourceNodeId: string,
-  ctx: PayloadBuildContext | undefined,
-): string {
-  if (!motionId) return ""
-  const nodes = ctx?.nodes ?? []
-  const edges = ctx?.edges ?? []
-  const startHints: string[] = []
-  const endHints: string[] = []
-  for (const edge of edges) {
-    if (edge.target !== sourceNodeId) continue
-    const srcNode = nodes.find((n) => n.id === edge.source)
-    if (!srcNode) continue
-    const hint = getNodePromptHint(srcNode)
-    if (!hint) continue
-    if (edge.targetHandle === "startState") startHints.push(hint)
-    else if (edge.targetHandle === "endState") endHints.push(hint)
-  }
-  return composeCameraMotionHintFromConnections(motionId, startHints, endHints)
-}
-
-/**
  * True when the consumer node has a connected Style parameter node on its
  * `cinematography` handle. Mirror of the frontend `hasConnectedStyleNode`.
  * Used to bypass the inline `style` field on image payloads — when a Style
@@ -1313,8 +1285,12 @@ function collectCinematographyHints(
     if (exclude?.has(srcNode.type ?? "")) continue
 
     if (srcNode.type === "camera-motion") {
-      const motionId = (srcNode.data as Record<string, unknown>).cameraMotion as string | undefined
-      const composed = composeCameraMotionHintForNode(motionId, srcNode.id, ctx)
+      // Use the shared getParameterPromptHint WITH graph context so the
+      // startState/endState walk runs AND the node's preText/postText is applied
+      // (withCustomText). The old composeCameraMotionHintForNode bypassed custom
+      // text (and dropped everything when no motion was set), so it was lost at
+      // execution while the injection preview promised it.
+      const composed = getParameterPromptHint(srcNode, { nodes, edges })
       if (composed) hints.push(composed)
       continue
     }
@@ -1415,6 +1391,17 @@ export function buildPayload(
     resolvedInputs.prompt = resolveRefs(resolvedInputs.prompt, refMap)
   }
 
+  // Typed-primary prompt resolution for single-prompt nodes (precedence:
+  // override > typed candidate fields > wired). Shared with the frontend
+  // executor via @nodaro/shared so field-selection + precedence are
+  // structurally identical. Each single-prompt case below calls promptFor(type).
+  const promptFor = (nodeType: string) =>
+    computeNodePrompt(nodeType, data, {
+      wired: resolvedInputs.prompt,
+      override: resolvedInputs.overridePrompt,
+      refMap,
+    })
+
   switch (type) {
     // --- Image generation ---
     case "generate-image": {
@@ -1488,9 +1475,7 @@ export function buildPayload(
         ? collectAncestorRefs(node.id, buildCtx.nodes, buildCtx.edges, buildCtx.nodeStates)
         : []
 
-      let rawPrompt = resolveRefs(resolvedInputs.prompt as string | undefined, refMap)
-        || resolveRefs(data.prompt as string | undefined, refMap)
-        || ""
+      let rawPrompt = promptFor("generate-image")
       {
         const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES })
         if (cinematographyHints.length > 0) {
@@ -2100,7 +2085,7 @@ export function buildPayload(
       // it before the worker sees the final string. The mention pass swaps
       // `@kira-smile` for "Kira" + prepends a "Use these characters:" block
       // + returns variant/canonical URLs to slot into the worker payload.
-      const i2vRawPrompt = resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap) || resolveRefs(data.motionPrompt as string | undefined, refMap)
+      const i2vRawPrompt = promptFor("image-to-video")
       let i2vPrompt = composeVideoPrompt({
         rawPrompt: i2vRawPrompt,
         nodeId: node.id,
@@ -2217,7 +2202,7 @@ export function buildPayload(
       // Resolve @-mentions in the t2v prompt (see i2v case for the rationale).
       // t2v has no `imageUrl` slot — all resolved URLs become entries in
       // `referenceImageUrls`, merged with whatever upstream already provided.
-      const t2vRawPrompt = resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap)
+      const t2vRawPrompt = promptFor("text-to-video")
       let t2vPrompt = composeVideoPrompt({ rawPrompt: t2vRawPrompt, nodeId: node.id, buildCtx })
       const t2vMention = resolveVideoPromptMentions(t2vPrompt, node.id, buildCtx, readExtraRefs(data), {
         referenceOrder: readStringArray(data.referenceOrder),
@@ -2338,7 +2323,7 @@ export function buildPayload(
             jobId,
             provider,
             task,
-            prompt: (resolvedInputs.prompt as string | undefined) ?? (data.prompt as string | undefined) ?? "",
+            prompt: promptFor("generate-video"),
             ...(task === "image_to_video" && {
               image: resolvedInputs.startFrameUrl,
               ...(hasEnd && { last_frame_image: resolvedInputs.endFrameUrl }),
@@ -2385,12 +2370,11 @@ export function buildPayload(
       // (execute-node.ts) — shared source of truth in @nodaro/shared.
       const resolvedProvider = resolveVideoProviderForMode(provider, effectiveMode)
 
-      // Prompt composition: prefer upstream → data.prompt → data.motionPrompt
-      // (legacy field still emitted by the inline picker). composeVideoPrompt
-      // appends cinematography hints + optional motion-hint + identity-lock.
-      const rawPrompt = resolvedInputs.prompt
-        || resolveRefs(data.prompt as string | undefined, refMap)
-        || resolveRefs(data.motionPrompt as string | undefined, refMap)
+      // Prompt composition (typed-primary, via the shared helper): list-override
+      // → data.prompt → data.motionPrompt (legacy field still emitted by the
+      // inline picker) → upstream wire. composeVideoPrompt appends cinematography
+      // hints + optional motion-hint + identity-lock.
+      const rawPrompt = promptFor("generate-video")
       const motionHint = data.motionEnabled && typeof data.motion === "string" && data.motion
         ? `${data.motion} motion`
         : undefined
@@ -2549,7 +2533,7 @@ export function buildPayload(
       // there's no payload key to plumb them into. Prompt token replacement
       // still happens so the LLM sees the character names regardless.
       let v2vPrompt: string | undefined = (() => {
-        let p = resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap)
+        let p: string | undefined = promptFor("video-to-video")
         {
           const cinematographyHints = collectCinematographyHints(node.id, buildCtx)
           if (cinematographyHints.length > 0) {
@@ -2696,7 +2680,7 @@ export function buildPayload(
           imageUrl: resolvedInputs.imageUrl || data.imageUrl,
           audioUrl: resolvedInputs.audioUrl || data.audioUrl,
           prompt: (() => {
-            let p = (resolvedInputs.prompt || data.prompt) as string | undefined
+            let p: string | undefined = promptFor("speech-to-video")
             {
               const cinematographyHints = collectCinematographyHints(node.id, buildCtx)
               if (cinematographyHints.length > 0) {
@@ -2809,7 +2793,7 @@ export function buildPayload(
       const cinematicReferences = buildCinematicReferences(resolvedInputs, data)
       const cinematicPayload: Record<string, unknown> = {
         jobId,
-        prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap) || "",
+        prompt: promptFor("cinematic-avatar"),
         avatarLooks: data.avatarLooks,
         duration: data.duration,
         autoDuration: data.autoDuration,
@@ -2916,7 +2900,7 @@ export function buildPayload(
           jobId,
           kieTaskId: resolvedInputs.kieTaskId || data.kieTaskId,
           prompt: (() => {
-            let p = resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap)
+            let p: string | undefined = promptFor("extend-video")
             {
               const cinematographyHints = collectCinematographyHints(node.id, buildCtx)
               if (cinematographyHints.length > 0) {
@@ -2977,9 +2961,7 @@ export function buildPayload(
           jobId,
           provider: "ltx-2.3-pro",
           video: resolvedInputs.videoUrl || (data.videoUrl as string | undefined),
-          prompt: resolvedInputs.prompt
-            ?? resolveRefs(data.prompt as string | undefined, refMap)
-            ?? "",
+          prompt: promptFor("video-retake"),
           retake_start_time: data.retakeStartTime as number | undefined,
           retake_duration: data.retakeDuration as number | undefined,
           retake_mode: data.retakeMode as string | undefined,
@@ -2997,9 +2979,7 @@ export function buildPayload(
     case "text-to-speech": {
       const provider = (data.provider as string) ?? "elevenlabs-v3"
       // Frontend reads text from directText field when textSource is "direct"
-      const ttsText = resolvedInputs.prompt
-        || (data.textSource === "direct" ? resolveRefs(data.directText as string | undefined, refMap) : undefined)
-        || resolveRefs(data.text as string | undefined, refMap)
+      const ttsText = promptFor("text-to-speech")
       return {
         jobName: "text-to-speech",
         queueName: "video-generation",
@@ -3023,7 +3003,7 @@ export function buildPayload(
     case "generate-music": {
       const provider = (data.provider as string) ?? "musicgen"
       const audioStyle = collectAudioStyleHints(node, "generate-music", buildCtx)
-      const userPrompt = resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap) || ""
+      const userPrompt = promptFor("generate-music")
       const composed = truncateForField(audioStyle.text, userPrompt, 2000)
       const finalPrompt = appendField(userPrompt, composed)
       // composeSoundHintFromConnections already gates fields.{genre,mood,instrumental}
@@ -3055,10 +3035,7 @@ export function buildPayload(
     case "text-to-audio": {
       const t2aProvider = (data.provider as string) ?? "elevenlabs-sfx"
       const audioStyle = collectAudioStyleHints(node, "text-to-audio", buildCtx)
-      const userPrompt = resolvedInputs.prompt
-        || resolveRefs(data.prompt as string | undefined, refMap)
-        || resolveRefs(data.text as string | undefined, refMap)
-        || ""
+      const userPrompt = promptFor("text-to-audio")
       const composed = truncateForField(audioStyle.text, userPrompt, 2000)
       const finalPrompt = appendField(userPrompt, composed)
       return simpleResult("text-to-audio", "elevenlabs-sfx", {
@@ -3289,7 +3266,7 @@ export function buildPayload(
         audioId: resolvedInputs.sunoTrackId || data.sunoTrackId || data.audioId,
         infillStartS: data.infillStartS ?? 0,
         infillEndS: data.infillEndS ?? 30,
-        prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap),
+        prompt: promptFor("suno-replace-section"),
         tags: data.tags,
         title: data.title,
         usageLogId,

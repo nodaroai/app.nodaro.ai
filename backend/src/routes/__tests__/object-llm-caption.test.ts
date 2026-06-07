@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from "fastify"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { supabase } from "../../lib/supabase.js"
 import { captionObject } from "../../lib/object-caption.js"
+import { meterSyncLlm } from "../../lib/meter-sync-llm.js"
 import { objectLlmCaptionRoutes } from "../object-llm-caption.js"
 
 // captionObject is mocked at the helper boundary — the route only sees the
@@ -18,6 +19,14 @@ vi.mock("../../lib/object-caption.js", async () => {
 })
 vi.mock("../../lib/llm-client.js", () => ({ llmComplete: vi.fn() }))
 vi.mock("../../lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
+// Credit machinery is exercised in credit-guard / meter-sync-llm tests; here we
+// no-op the guard and stub the meter so the route's caption logic + commit/refund
+// wiring is what's under test.
+vi.mock("../../middleware/credit-guard.js", () => ({
+  creditGuard: () => async () => {},
+  reserveCreditsForJob: vi.fn().mockResolvedValue(undefined),
+}))
+vi.mock("../../lib/meter-sync-llm.js", () => ({ meterSyncLlm: vi.fn() }))
 // CI has no .env so config.ANTHROPIC_API_KEY / KIE_API_KEY would be empty,
 // tripping the 503 provider_unavailable preflight. Mock as truthy.
 vi.mock("../../lib/config.js", () => ({
@@ -32,10 +41,13 @@ const SAMPLE_CAPTION =
   "A bevelled glass cover overlies a paper rose with delicate ink hatching."
 
 let app: FastifyInstance
+let meter: { jobId: string; usageLogId?: string; commit: ReturnType<typeof vi.fn>; refund: ReturnType<typeof vi.fn> }
 
 beforeEach(async () => {
   vi.clearAllMocks()
   vi.mocked(captionObject).mockResolvedValue(SAMPLE_CAPTION)
+  meter = { jobId: "job-1", usageLogId: "ul-1", commit: vi.fn().mockResolvedValue(undefined), refund: vi.fn().mockResolvedValue(undefined) }
+  vi.mocked(meterSyncLlm).mockResolvedValue(meter as never)
   app = Fastify({ logger: false })
   // Simulate auth middleware: set req.userId from X-User-Id header.
   app.addHook("preHandler", async (req) => {
@@ -174,6 +186,9 @@ describe("POST /v1/objects/:id/llm-caption", () => {
     expect(res.json().error.code).toBe("caption_failed")
     // Critical contract: NO UPDATE was issued on caption failure.
     expect(objectUpdate.update).not.toHaveBeenCalled()
+    // Reserved credits are refunded on the failure path (no charge-without-deliver).
+    expect(meter.refund).toHaveBeenCalled()
+    expect(meter.commit).not.toHaveBeenCalled()
   })
 
   it("returns 200 with { canonicalDescription } on success — touches only canonical_description + updated_at", async () => {
@@ -203,6 +218,9 @@ describe("POST /v1/objects/:id/llm-caption", () => {
     expect(updateCallArg).toHaveProperty("updated_at")
     // Verify caption helper was invoked with the object's source image url.
     expect(vi.mocked(captionObject)).toHaveBeenCalledWith(SOURCE_IMAGE_URL)
+    // Credits committed on success, never refunded.
+    expect(meter.commit).toHaveBeenCalled()
+    expect(meter.refund).not.toHaveBeenCalled()
   })
 
   it("returns 500 'update_failed' when persist UPDATE fails", async () => {
@@ -220,5 +238,8 @@ describe("POST /v1/objects/:id/llm-caption", () => {
     })
     expect(res.statusCode).toBe(500)
     expect(res.json().error.code).toBe("update_failed")
+    // Persist failure after a successful caption still refunds the reservation.
+    expect(meter.refund).toHaveBeenCalled()
+    expect(meter.commit).not.toHaveBeenCalled()
   })
 })

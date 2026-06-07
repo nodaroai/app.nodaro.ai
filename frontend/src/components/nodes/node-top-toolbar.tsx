@@ -18,6 +18,7 @@ import { PresetDropdown } from "@/components/editor/config-panels/node-preset-dr
 export function NodeTopToolbar({
   nodeId,
   nodeZoom,
+  showActions,
   onMoreMenu,
   toolbarActions,
   onEnter,
@@ -27,6 +28,9 @@ export function NodeTopToolbar({
   readonly nodeId: string
   /** Per-node zoom (`data.zoom`, default 1). */
   readonly nodeZoom: number
+  /** Show the ⋯ menu + per-node actions. False when the toolbar is visible only because a preset
+   *  is applied (node not hovered) — then we show just the preset pill, not the whole action row. */
+  readonly showActions: boolean
   readonly onMoreMenu: (e: ReactMouseEvent) => void
   readonly toolbarActions?: ReactNode
   readonly onEnter: () => void
@@ -38,14 +42,18 @@ export function NodeTopToolbar({
   return (
     <div className="flex items-center gap-1" onMouseEnter={onEnter} onMouseLeave={onLeave}>
       <PresetDropdown nodeId={nodeId} variant="node" zoom={scale} onOpenChange={onPresetOpenChange} />
-      <button
-        className="node-more-menu-btn text-muted-foreground transition-colors"
-        onClick={onMoreMenu}
-        aria-label="More options"
-      >
-        <MoreHorizontal size={Math.round(scale * 13)} />
-      </button>
-      {toolbarActions}
+      {showActions && (
+        <>
+          <button
+            className="node-more-menu-btn text-muted-foreground transition-colors"
+            onClick={onMoreMenu}
+            aria-label="More options"
+          >
+            <MoreHorizontal size={Math.round(scale * 13)} />
+          </button>
+          {toolbarActions}
+        </>
+      )}
     </div>
   )
 }

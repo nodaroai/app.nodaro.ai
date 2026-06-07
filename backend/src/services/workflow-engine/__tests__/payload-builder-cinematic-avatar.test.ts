@@ -5,7 +5,8 @@
  * 1. buildPayload does NOT throw "Unknown node type: cinematic-avatar"
  * 2. Returns queueName:"video-generation", jobName:"cinematic-avatar"
  * 3. All node data fields (prompt, avatarLooks, duration, etc.) are included
- * 4. Resolved prompt from upstream inputs takes priority over node data
+ * 4. Typed node prompt takes priority over a wired input (typed-primary);
+ *    the wired input is used only as a fallback when the typed prompt is empty
  * 5. modelIdentifier is always a member of CINEMATIC_RESERVE_IDS (no 503 trap)
  */
 import { describe, it, expect } from "vitest"
@@ -67,9 +68,20 @@ describe("buildPayload — cinematic-avatar", () => {
     expect(result.payload.usageLogId).toBe(usageLogId)
   })
 
-  it("uses resolved prompt from inputs over node data", () => {
+  it("prefers the typed node prompt over a wired input (typed-primary)", () => {
     const n = node("n1", {
-      prompt: "Node data prompt — should be overridden.",
+      prompt: "Node data prompt — wins under typed-primary.",
+      avatarLooks: ["look-abc"],
+      resolution: "720p",
+    })
+    const inputs: ResolvedInputs = { prompt: "Upstream wired prompt." }
+    const result = buildPayload(n, jobId, inputs, usageLogId)
+    expect(result.payload.prompt).toBe("Node data prompt — wins under typed-primary.")
+  })
+
+  it("falls back to the wired input when the typed prompt is empty", () => {
+    const n = node("n1", {
+      prompt: "",
       avatarLooks: ["look-abc"],
       resolution: "720p",
     })
