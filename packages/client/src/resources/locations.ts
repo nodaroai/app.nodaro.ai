@@ -66,6 +66,9 @@ export interface Location {
   category: string | null
   style: string | null
   sourceImageUrl: string | null
+  /** MODEL_CATALOG image-model id the main image was generated with (or `null`).
+   *  Set on create + editable via the update route. */
+  imageProvider: string | null
   timeOfDay: Array<{ name: string; url: string }>
   weather: Array<{ name: string; url: string }>
   angles: Array<{ name: string; url: string }>
@@ -110,6 +113,9 @@ export interface CreateLocationInput {
   workflowId?: string
   projectId?: string
   sourceImageUrl?: string
+  /** Persistent image-model id (a MODEL_CATALOG image model). Validated
+   *  server-side — unknown / non-image / "" is stored as `null`. */
+  imageProvider?: string | null
   referencePhotos?: LocationReferencePhoto[]
   canonicalDescription?: string
   styleLock?: boolean
@@ -134,6 +140,9 @@ export interface UpdateLocationInput {
   category?: string
   style?: string
   sourceImageUrl?: string
+  /** Persistent image-model id (a MODEL_CATALOG image model). Validated
+   *  server-side — unknown / non-image / "" is stored as `null`. */
+  imageProvider?: string | null
   referencePhotos?: LocationReferencePhoto[]
   canonicalDescription?: string
   styleLock?: boolean

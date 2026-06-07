@@ -3,6 +3,7 @@ import { z } from "zod"
 import { LOCATION_REFERENCE_PHOTO_KINDS, LOCATION_ATTACH_COLUMNS } from "@nodaro/shared"
 import type { ReferenceSheet } from "@nodaro/shared"
 import { safeUrlSchema } from "../lib/url-validator.js"
+import { normalizeImageProvider } from "../lib/image-provider.js"
 import { supabase } from "../lib/supabase.js"
 import { requireAppScope } from "../lib/scope-prehandler.js"
 import { formatZodError } from "../lib/zod-error.js"
@@ -27,6 +28,9 @@ const upsertLocationBody = z.object({
   category: z.string().max(50).optional(),
   style: z.string().max(50).optional(),
   sourceImageUrl: safeUrlSchema.optional(),
+  // Persistent image-model id (MODEL_CATALOG). Validated server-side via
+  // normalizeImageProvider (unknown / non-image -> null).
+  imageProvider: z.string().nullable().optional(),
   // Asset buckets — worker-owned on UPDATE, free-to-set on INSERT. The UPDATE
   // branch deliberately drops these so the worker's atomic
   // `append_location_asset()` RPC cannot be clobbered by a Studio auto-save
@@ -121,7 +125,7 @@ const listLocationsQuery = z.object({
 
 // Single source of truth for the GET column list — keeps single + list in lock-step.
 const SELECT_COLUMNS =
-  "id, user_id, node_id, project_id, name, description, category, style, source_image_url, time_of_day, weather, angles, lighting, seasons, atmosphere_motions, reference_photos, canonical_description, style_lock, pii_consent_at, sheets, detail_closeups, deleted_at, created_at, updated_at"
+  "id, user_id, node_id, project_id, name, description, category, style, source_image_url, image_provider, time_of_day, weather, angles, lighting, seasons, atmosphere_motions, reference_photos, canonical_description, style_lock, pii_consent_at, sheets, detail_closeups, deleted_at, created_at, updated_at"
 
 type LocationRow = {
   id: string
@@ -133,6 +137,7 @@ type LocationRow = {
   category: string | null
   style: string | null
   source_image_url: string | null
+  image_provider: string | null
   time_of_day: { name: string; url: string }[] | null
   weather: { name: string; url: string }[] | null
   angles: { name: string; url: string }[] | null
@@ -164,6 +169,7 @@ function toCamel(loc: LocationRow) {
     category: loc.category,
     style: loc.style,
     sourceImageUrl: loc.source_image_url,
+    imageProvider: loc.image_provider,
     timeOfDay: loc.time_of_day ?? [],
     weather: loc.weather ?? [],
     angles: loc.angles ?? [],
@@ -335,6 +341,7 @@ export async function locationRoutes(app: FastifyInstance) {
       category,
       style,
       sourceImageUrl,
+      imageProvider,
       timeOfDay,
       weather,
       angles,
@@ -374,6 +381,7 @@ export async function locationRoutes(app: FastifyInstance) {
       if (category !== undefined) updateRow.category = category ?? null
       if (style !== undefined) updateRow.style = style ?? null
       if (sourceImageUrl !== undefined) updateRow.source_image_url = sourceImageUrl ?? null
+      if (imageProvider !== undefined) updateRow.image_provider = normalizeImageProvider(imageProvider)
       if (referencePhotos !== undefined) updateRow.reference_photos = referencePhotos
       if (canonicalDescription !== undefined) updateRow.canonical_description = canonicalDescription
       if (styleLock !== undefined) updateRow.style_lock = styleLock
@@ -430,6 +438,7 @@ export async function locationRoutes(app: FastifyInstance) {
       category: category ?? null,
       style: style ?? null,
       source_image_url: sourceImageUrl ?? null,
+      image_provider: normalizeImageProvider(imageProvider),
       time_of_day: timeOfDay ?? [],
       weather: weather ?? [],
       angles: angles ?? [],

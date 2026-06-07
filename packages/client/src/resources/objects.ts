@@ -76,6 +76,9 @@ export interface Object {
   category: string | null
   style: string | null
   sourceImageUrl: string | null
+  /** MODEL_CATALOG image-model id the main image was generated with (or `null`).
+   *  Set on create + editable via the update route. */
+  imageProvider: string | null
   angles: Array<{ name: string; url: string }>
   materials: Array<{ name: string; url: string }>
   variations: Array<{ name: string; url: string }>
@@ -118,6 +121,9 @@ export interface CreateObjectInput {
   workflowId?: string
   projectId?: string
   sourceImageUrl?: string
+  /** Persistent image-model id (a MODEL_CATALOG image model). Validated
+   *  server-side — unknown / non-image / "" is stored as `null`. */
+  imageProvider?: string | null
   referencePhotos?: ObjectReferencePhoto[]
   canonicalDescription?: string
   styleLock?: boolean
@@ -159,6 +165,9 @@ export interface UpdateObjectInput {
   category?: ObjectCategory
   style?: string
   sourceImageUrl?: string
+  /** Persistent image-model id (a MODEL_CATALOG image model). Validated
+   *  server-side — unknown / non-image / "" is stored as `null`. */
+  imageProvider?: string | null
   referencePhotos?: ObjectReferencePhoto[]
   canonicalDescription?: string
   styleLock?: boolean

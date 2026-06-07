@@ -52,6 +52,9 @@ export interface Character {
   style: string | null
   baseOutfit: string | null
   sourceImageUrl: string | null
+  /** MODEL_CATALOG image-model id the main image was generated with (or `null`).
+   *  Set on create (the provider you generated with) + editable via `upsert`. */
+  imageProvider: string | null
   expressions: Array<{ name: string; url: string }> | null
   poses: Array<{ name: string; url: string }> | null
   lightingVariations: Array<{ name: string; url: string }> | null
@@ -146,6 +149,9 @@ export interface UpsertCharacterInput {
   style?: string
   baseOutfit?: string
   sourceImageUrl?: string
+  /** Persistent image-model id (a MODEL_CATALOG image model). Validated
+   *  server-side — unknown / non-image / "" is stored as `null`. */
+  imageProvider?: string | null
   expressions?: Array<{ name: string; url: string }>
   poses?: Array<{ name: string; url: string }>
   lightingVariations?: Array<{ name: string; url: string }>

@@ -91,6 +91,9 @@ const CAMEL_CHARACTER = {
   poses: [],
   lightingVariations: [],
   referenceVideosByVariant: {},
+  sheets: [],
+  detailCloseups: [],
+  outfitVariations: [],
   createdAt: "2026-01-01T00:00:00Z",
   updatedAt: "2026-01-01T00:00:00Z",
 }
@@ -479,6 +482,25 @@ describe("GET /v1/characters/:id", () => {
       angry: ["https://example.com/angry.mp4"],
       happy: ["https://example.com/happy-1.mp4", "https://example.com/happy-2.mp4"],
     })
+  })
+
+  it("returns image_provider on the row (read round-trip)", async () => {
+    const rowWithProvider = { ...DB_CHARACTER, image_provider: "flux" }
+    const charsByIdChain = getByIdChain({ data: rowWithProvider, error: null })
+    const jobs = mockGetByIdJobs()
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "jobs") return jobs.next() as never
+      return { select: charsByIdChain.mockSelect } as never
+    })
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/characters/${TEST_CHARACTER_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().imageProvider).toBe("flux")
   })
 
   it("maps in-flight jobs to assetType buckets for spinner rehydration", async () => {
@@ -1183,6 +1205,30 @@ describe("POST /v1/characters", () => {
     })
     expect(res.statusCode).toBe(400)
     expect(res.json().error.code).toBe("validation_error")
+  })
+
+  it("persists a valid image_provider on insert and nulls an unknown one", async () => {
+    // Valid image model -> kept.
+    const valid = mockInsertCapture()
+    vi.mocked(supabase.from).mockReturnValue({ insert: valid.mockInsert } as never)
+    const okRes = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: { name: "Hero", nodeId: "node-1", userId: TEST_USER_ID, imageProvider: "nano-banana" },
+    })
+    expect(okRes.statusCode).toBe(200)
+    expect(valid.captured.row?.image_provider).toBe("nano-banana")
+
+    // Unknown id -> null.
+    const unknown = mockInsertCapture()
+    vi.mocked(supabase.from).mockReturnValue({ insert: unknown.mockInsert } as never)
+    const badRes = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: { name: "Hero", nodeId: "node-1", userId: TEST_USER_ID, imageProvider: "not-a-model" },
+    })
+    expect(badRes.statusCode).toBe(200)
+    expect(unknown.captured.row?.image_provider).toBeNull()
   })
 
   it("normalizes reference_videos_by_variant keys to lowercased+trimmed (insert)", async () => {
