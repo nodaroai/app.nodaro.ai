@@ -597,7 +597,36 @@ The same endpoint is wrapped by the SDK (`client.promptHelper.{analyze,
 generate,enhance}`), the MCP tools (`analyze_prompt` / `generate_prompt` /
 `enhance_prompt`), and the CLI (`nodaro prompt wizard/analyze/generate/enhance`).
 
-## 16. SDK alternative (TypeScript)
+## 16. Presets
+
+Read your saved node presets and the built-in factory catalog. **Read-only over
+the API** — creating/editing presets stays in the editor. A preset's `data` is
+captured node config; merge it into a node's data when you build a workflow to
+"apply" it.
+
+| Method | Path | Query | Purpose |
+|---|---|---|---|
+| `GET` | `/v1/node-presets` | `nodeType` (optional) | Your custom presets (newest first). |
+| `GET` | `/v1/node-preset-groups` | `nodeType` (optional) | Your preset folders/sections. |
+| `GET` | `/v1/node-presets/factory` | `nodeType` (**required**) | The built-in catalog for a node type, plus `popularIds` (most-used quick-picks, in order). |
+
+A custom preset has `{ id, nodeType, name, description?, data, groupId?, tags, sortOrder, createdAt, updatedAt }`. The factory response is `{ data: FactoryPreset[], popularIds: string[] }`, where each entry has `{ id, name, description?, group?, groupKind?, data }`.
+
+**Auth/scope:** same bearer-token auth as every other endpoint
+(`ndr_…` / `ndr_app_…` / Supabase JWT). OAuth app tokens additionally need the
+`presets:read` scope (no-op for user / API-key auth — you own the resources).
+
+```bash
+# Your custom generate-image presets
+curl -s https://app.nodaro.ai/v1/node-presets?nodeType=generate-image \
+  -H "Authorization: Bearer $NODARO_TOKEN" | jq '.data[].name'
+
+# Built-in catalog + which ones are "popular"
+curl -s "https://app.nodaro.ai/v1/node-presets/factory?nodeType=generate-image" \
+  -H "Authorization: Bearer $NODARO_TOKEN" | jq '{count: (.data|length), popular: .popularIds}'
+```
+
+## 17. SDK alternative (TypeScript)
 
 The same backend is fronted by a typed TypeScript client:
 

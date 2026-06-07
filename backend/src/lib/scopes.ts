@@ -10,6 +10,7 @@ export const ALL_SCOPES = [
   "pipelines:read",
   "pipelines:execute",
   "pipelines:approve",
+  "presets:read",
 ] as const
 
 export type Scope = typeof ALL_SCOPES[number]

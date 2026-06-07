@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
+import { requireScope } from "../lib/scopes.js"
 
 const createBody = z.object({
   nodeType: z.string().min(1).max(120),
@@ -46,6 +47,10 @@ export async function nodePresetGroupRoutes(app: FastifyInstance) {
   app.get("/v1/node-preset-groups", async (req, reply) => {
     const userId = req.userId
     if (!userId) return unauthorized(reply)
+    if (req.appAuthorization) {
+      const err = requireScope(req.appAuthorization.scopes, "presets:read")
+      if (err) return reply.status(err.statusCode).send(err.body)
+    }
     const nodeType = (req.query as { nodeType?: string }).nodeType
     let q = supabase.from("node_preset_groups").select("*").eq("user_id", userId)
     if (nodeType) q = q.eq("node_type", nodeType)

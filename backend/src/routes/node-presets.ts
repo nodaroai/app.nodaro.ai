@@ -1,7 +1,8 @@
 import type { FastifyInstance, FastifyReply } from "fastify"
 import { z } from "zod"
-import { extractPresetData } from "@nodaro/shared"
+import { extractPresetData, getFactoryPresets, getPopularFactoryPresets } from "@nodaro/shared"
 import { supabase } from "../lib/supabase.js"
+import { requireScope } from "../lib/scopes.js"
 
 const MAX_DATA_BYTES = 64 * 1024
 
@@ -100,16 +101,46 @@ async function unownedGroupIds(userId: string, ids: string[]): Promise<string[]>
 }
 
 export async function nodePresetRoutes(app: FastifyInstance) {
-  // LIST
+  // LIST (user's custom presets)
   app.get("/v1/node-presets", async (req, reply) => {
     const userId = req.userId
     if (!userId) return unauthorized(reply)
+    if (req.appAuthorization) {
+      const err = requireScope(req.appAuthorization.scopes, "presets:read")
+      if (err) return reply.status(err.statusCode).send(err.body)
+    }
     const nodeType = (req.query as { nodeType?: string }).nodeType
     let q = supabase.from("node_presets").select("*").eq("user_id", userId)
     if (nodeType) q = q.eq("node_type", nodeType)
     const { data, error } = await q.order("created_at", { ascending: false })
     if (error) return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
     return reply.send({ data: ((data ?? []) as Row[]).map(toCamel) })
+  })
+
+  // FACTORY (built-in) presets — read-only catalog from @nodaro/shared. Lets SDK/CLI/MCP
+  // clients list and USE the shipped presets (their `data` merges into a node's config).
+  // Static path "/factory" is matched ahead of any `:id` route (there is no GET /:id here).
+  app.get("/v1/node-presets/factory", async (req, reply) => {
+    const userId = req.userId
+    if (!userId) return unauthorized(reply)
+    if (req.appAuthorization) {
+      const err = requireScope(req.appAuthorization.scopes, "presets:read")
+      if (err) return reply.status(err.statusCode).send(err.body)
+    }
+    const nodeType = (req.query as { nodeType?: string }).nodeType
+    if (!nodeType) {
+      return reply.status(400).send({ error: { code: "validation_error", message: "nodeType query param is required" } })
+    }
+    const data = getFactoryPresets(nodeType).map((p) => ({
+      id: p.id,
+      name: p.name,
+      description: p.description,
+      group: p.group,
+      groupKind: p.groupKind,
+      data: p.data,
+    }))
+    const popularIds = getPopularFactoryPresets(nodeType).map((p) => p.id)
+    return reply.send({ data, popularIds })
   })
 
   // CREATE

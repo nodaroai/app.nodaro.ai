@@ -220,4 +220,51 @@ describe("node-presets routes", () => {
     const res = await app.inject({ method: "GET", url: "/v1/node-presets" })
     expect(res.statusCode).toBe(401)
   })
+
+  it("GET /v1/node-presets/factory returns the built-in catalog + popularIds (subset)", async () => {
+    const app = buildApp()
+    await app.register(nodePresetRoutes)
+    const res = await app.inject({ method: "GET", url: "/v1/node-presets/factory?nodeType=generate-image" })
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(Array.isArray(body.data)).toBe(true)
+    expect(body.data.length).toBeGreaterThan(0)
+    expect(Array.isArray(body.popularIds)).toBe(true)
+    expect(body.popularIds.length).toBeGreaterThan(0)
+    const ids = new Set((body.data as { id: string }[]).map((p) => p.id))
+    for (const pid of body.popularIds as string[]) expect(ids.has(pid)).toBe(true)
+  })
+
+  it("GET /v1/node-presets/factory requires a nodeType", async () => {
+    const app = buildApp()
+    await app.register(nodePresetRoutes)
+    const res = await app.inject({ method: "GET", url: "/v1/node-presets/factory" })
+    expect(res.statusCode).toBe(400)
+  })
+
+  it("LIST enforces presets:read for OAuth app tokens (403 without, 200 with)", async () => {
+    type AuthReq = { userId?: string; appAuthorization?: { appId: string; authorizationId: string; scopes: string[] } }
+    fromMock.mockReturnValue(makeQB({ rows: [] }))
+
+    const noScope = Fastify()
+    noScope.addHook("preHandler", async (req) => {
+      const r = req as AuthReq
+      r.userId = USER
+      r.appAuthorization = { appId: "a", authorizationId: "z", scopes: [] }
+    })
+    await noScope.register(nodePresetRoutes)
+    const r1 = await noScope.inject({ method: "GET", url: "/v1/node-presets" })
+    expect(r1.statusCode).toBe(403)
+    expect(r1.json().error.code).toBe("insufficient_scope")
+
+    const withScope = Fastify()
+    withScope.addHook("preHandler", async (req) => {
+      const r = req as AuthReq
+      r.userId = USER
+      r.appAuthorization = { appId: "a", authorizationId: "z", scopes: ["presets:read"] }
+    })
+    await withScope.register(nodePresetRoutes)
+    const r2 = await withScope.inject({ method: "GET", url: "/v1/node-presets" })
+    expect(r2.statusCode).toBe(200)
+  })
 })

@@ -235,3 +235,19 @@ Exported files are versioned JSON:
 
 On import, any preset whose name already exists for that node type is kept by appending
 "(imported)" to its name, so importing never overwrites your existing presets.
+
+## Programmatic access (API / SDK / CLI)
+
+Presets are also **readable programmatically** (creating/editing stays in the editor for now):
+
+- **REST** — `GET /v1/node-presets` (your custom presets), `GET /v1/node-preset-groups`, and
+  `GET /v1/node-presets/factory?nodeType=…` (the built-in catalog + `popularIds`). OAuth tokens need
+  the `presets:read` scope. See [API Integration §16](../api-integration.md).
+- **SDK** — `client.presets.list()`, `.listGroups()`, `.listFactory(nodeType)`. See the
+  [SDK reference](../sdk-reference.md#clientpresets).
+- **CLI** — `nodaro presets list [--factory] [--node-type …]`, `nodaro presets groups`,
+  `nodaro presets export`.
+- **MCP** — the `list_node_presets` tool (custom / factory / all) for agents.
+
+A preset's `data` is captured node config — apply it by merging `data` into a node when you build a
+workflow.

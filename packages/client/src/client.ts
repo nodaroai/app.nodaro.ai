@@ -17,6 +17,7 @@ import { PromptHelperResource } from "./resources/prompt-helper.js"
 import { VoicesResource } from "./resources/voices.js"
 import { CreditsResource } from "./resources/credits.js"
 import { UploadsResource } from "./resources/uploads.js"
+import { PresetsResource } from "./resources/node-presets.js"
 
 export interface ClientOptions {
   /** Backend base URL, e.g. "https://nodaro.example.com" or empty string for same-origin. */
@@ -87,6 +88,7 @@ export class NodaroClient {
   readonly voices: VoicesResource
   readonly credits: CreditsResource
   readonly uploads: UploadsResource
+  readonly presets: PresetsResource
 
   constructor(opts: ClientOptions) {
     this.baseUrl = opts.baseUrl.replace(/\/$/, "")  // strip trailing slash
@@ -111,6 +113,7 @@ export class NodaroClient {
     this.voices = new VoicesResource(this)
     this.credits = new CreditsResource(this)
     this.uploads = new UploadsResource(this)
+    this.presets = new PresetsResource(this)
   }
 
   async request<T>(method: string, path: string, options: RequestOptions = {}): Promise<T> {

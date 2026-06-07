@@ -9,6 +9,7 @@ import { nodesCommand } from "./commands/nodes.js"
 import { charactersCommand } from "./commands/characters.js"
 import { promptCommand } from "./commands/prompt.js"
 import { voiceCommand } from "./commands/voice.js"
+import { presetsCommand } from "./commands/presets.js"
 import { registerLocationsCommands } from "./commands/locations.js"
 import { registerObjectsCommands } from "./commands/objects.js"
 
@@ -38,6 +39,7 @@ program.addCommand(executionsCommand())
 program.addCommand(charactersCommand())
 program.addCommand(promptCommand())
 program.addCommand(voiceCommand())
+program.addCommand(presetsCommand())
 registerLocationsCommands(program)
 registerObjectsCommands(program)
 
