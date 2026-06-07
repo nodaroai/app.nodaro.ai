@@ -408,3 +408,68 @@ describe("llm-chat factory preset data validity", () => {
     for (const p of presets) expect(p.group, `${p.id}: missing group`).toBeTruthy()
   })
 })
+
+describe("generate-script factory preset data validity", () => {
+  const presets = getFactoryPresets("generate-script")
+
+  it("keeps sceneCount in 1-20 and targetLength in 5-600", () => {
+    for (const p of presets) {
+      const sc = p.data.sceneCount as number | undefined
+      if (sc !== undefined) {
+        expect(sc, `${p.id}: sceneCount below 1`).toBeGreaterThanOrEqual(1)
+        expect(sc, `${p.id}: sceneCount above 20`).toBeLessThanOrEqual(20)
+      }
+      const tl = p.data.targetLength as number | undefined
+      if (tl !== undefined) {
+        expect(tl, `${p.id}: targetLength below 5`).toBeGreaterThanOrEqual(5)
+        expect(tl, `${p.id}: targetLength above 600`).toBeLessThanOrEqual(600)
+      }
+    }
+  })
+
+  it("uses a valid structure and a tone within 200 chars", () => {
+    for (const p of presets) {
+      if (p.data.structure !== undefined) {
+        expect(["freeform", "8-step", "custom"], `${p.id}: bad structure`).toContain(p.data.structure as never)
+      }
+      expect(((p.data.tone as string) ?? "").length, `${p.id}: tone too long`).toBeLessThanOrEqual(200)
+    }
+  })
+
+  it("groups every preset under a folder", () => {
+    for (const p of presets) expect(p.group, `${p.id}: missing group`).toBeTruthy()
+  })
+})
+
+describe("image-to-text factory preset data validity", () => {
+  const presets = getFactoryPresets("image-to-text")
+
+  it("uses a valid detailLevel and customPrompt within 2000 chars", () => {
+    for (const p of presets) {
+      if (p.data.detailLevel !== undefined) {
+        expect(["brief", "detailed", "structured"], `${p.id}: bad detailLevel`).toContain(p.data.detailLevel as never)
+      }
+      expect(((p.data.customPrompt as string) ?? "").length, `${p.id}: customPrompt too long`).toBeLessThanOrEqual(2000)
+    }
+  })
+
+  it("groups every preset under a folder", () => {
+    for (const p of presets) expect(p.group, `${p.id}: missing group`).toBeTruthy()
+  })
+})
+
+describe("voice-design factory preset data validity", () => {
+  const presets = getFactoryPresets("voice-design")
+
+  it("keeps voiceDescription within 1000 chars", () => {
+    for (const p of presets) {
+      const vd = (p.data.voiceDescription as string) ?? ""
+      expect(vd.length, `${p.id}: voiceDescription too long`).toBeLessThanOrEqual(1000)
+      expect(vd.length, `${p.id}: voiceDescription empty`).toBeGreaterThan(0)
+    }
+  })
+
+  it("groups every preset under a folder", () => {
+    for (const p of presets) expect(p.group, `${p.id}: missing group`).toBeTruthy()
+  })
+})

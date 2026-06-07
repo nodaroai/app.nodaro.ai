@@ -184,7 +184,7 @@ const IMAGE_EDITS: ReadonlyArray<{
     data: {
       provider: "nano-banana-pro",
       prompt:
-        "Relight the scene with {golden hour / studio softbox / dramatic} lighting. Keep the subject, pose and composition unchanged.",
+        "Relight the scene with {lighting style}. Keep the subject, pose and composition unchanged.",
     },
   },
   {
@@ -194,7 +194,7 @@ const IMAGE_EDITS: ReadonlyArray<{
     data: {
       provider: "nano-banana-pro",
       prompt:
-        "Restyle the entire image in a {art style} look (for example anime, watercolor, 3D render) while keeping the composition and subject recognizable.",
+        "Restyle the entire image in a {art style} look while keeping the composition and subject recognizable.",
     },
   },
 ]
@@ -1291,10 +1291,31 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
       data: { provider: "gpt-image-2", aspectRatio: "16:9", prompt: "modern UI design mockup of {app or website screen}, clean interface, cards and buttons, realistic legible text, polished product design", negativePrompt: "cluttered, gibberish text, lowres, watermark" },
     },
     {
+      id: "generate-image/flowchart",
+      name: "Flowchart / Diagram",
+      description: "Boxes, arrows, labels.",
+      group: "Diagrams & Infographics",
+      data: { provider: "ideogram-v3", aspectRatio: "16:9", prompt: "clean flowchart diagram of {process}, labeled boxes connected by arrows, clear hierarchy, flat modern design", negativePrompt: "cluttered, misspelled text, lowres, watermark" },
+    },
+    {
+      id: "generate-image/chart-graph",
+      name: "Chart / Graph",
+      description: "Bar / line / pie data viz.",
+      group: "Diagrams & Infographics",
+      data: { provider: "ideogram-v3", aspectRatio: "4:3", prompt: "clean data-visualization chart of {data}, {bar, line or pie} graph, labeled axes and legend, flat modern design", negativePrompt: "cluttered, misspelled text, lowres, watermark" },
+    },
+    {
+      id: "generate-image/timeline",
+      name: "Timeline",
+      description: "Milestones along an axis.",
+      group: "Diagrams & Infographics",
+      data: { provider: "ideogram-v3", aspectRatio: "16:9", prompt: "horizontal timeline infographic of {topic}, milestones along a line with dates, icons and short labels, flat modern design", negativePrompt: "cluttered, misspelled text, lowres, watermark" },
+    },
+    {
       id: "generate-image/x-ray",
       name: "X-Ray / See-Through",
       description: "Internal-structure radiograph look.",
-      group: "Diagrams & Infographics",
+      group: "Illustration & Art Styles",
       data: { provider: "nano-banana-pro", aspectRatio: "4:3", prompt: "x-ray style see-through render of {subject}, internal structure visible, glowing white-on-dark radiograph aesthetic", negativePrompt: "opaque, lowres, watermark" },
     },
 
@@ -1911,7 +1932,9 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
       description: "Gentle, natural movement (great for animating a still).",
       group: "Looping & Backgrounds",
       data: {
+        provider: "seedance-2-fast",
         aspectRatio: "16:9",
+        duration: 5,
         prompt: "subtle natural motion, gentle camera drift, cinematic",
       },
     },
@@ -1996,7 +2019,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
       name: "Weather Atmosphere",
       description: "Rain / snow / fog rolling in.",
       group: "B-Roll & Nature",
-      data: { provider: "runway-kie", aspectRatio: "16:9", duration: 5, prompt: "atmospheric weather rolling into {scene}: {rain / snow / fog}, moody and cinematic" },
+      data: { provider: "runway-kie", aspectRatio: "16:9", duration: 5, prompt: "atmospheric weather rolling into {scene}: {weather}, moody and cinematic" },
     },
   ],
   // Voice-delivery profiles — knob-only (stability / similarityBoost / style in
@@ -2024,7 +2047,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
       name: "Documentary",
       description: "Measured delivery with gravitas.",
       group: "Narration",
-      data: { speed: 0.95, stability: 0.7, similarityBoost: 0.85, style: 0.25 },
+      data: { speed: 0.95, stability: 0.78, similarityBoost: 0.85, style: 0.25 },
     },
     {
       id: "text-to-speech/news-anchor",
@@ -2047,7 +2070,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
       name: "Commercial Read",
       description: "Energetic, persuasive, punchy.",
       group: "Advertising & Hype",
-      data: { speed: 1.05, stability: 0.35, similarityBoost: 0.75, style: 0.6 },
+      data: { speed: 1.05, stability: 0.48, similarityBoost: 0.75, style: 0.6 },
     },
     {
       id: "text-to-speech/hype",
@@ -2159,6 +2182,63 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
       description: "Enthusiastic cheering.",
       group: "UI & Stingers",
       data: { provider: "elevenlabs-sfx", duration: 5, promptInfluence: 0.6, prompt: "enthusiastic crowd applause and cheering" },
+    },
+    // ── Foley & Action ───────────────────────────────────────────────────────
+    {
+      id: "text-to-audio/footsteps",
+      name: "Footsteps",
+      description: "Walking on a hard floor.",
+      group: "Foley & Action",
+      data: { provider: "elevenlabs-sfx", duration: 4, promptInfluence: 0.6, prompt: "footsteps walking on a hard wooden floor, steady pace" },
+    },
+    {
+      id: "text-to-audio/door",
+      name: "Door Open / Close",
+      description: "Creak then shut.",
+      group: "Foley & Action",
+      data: { provider: "elevenlabs-sfx", duration: 3, promptInfluence: 0.7, prompt: "wooden door slowly creaking open then closing with a soft latch" },
+    },
+    {
+      id: "text-to-audio/glass-break",
+      name: "Glass Break",
+      description: "Sharp shatter.",
+      group: "Foley & Action",
+      data: { provider: "elevenlabs-sfx", duration: 2, promptInfluence: 0.8, prompt: "glass shattering, sharp break with falling shards" },
+    },
+    {
+      id: "text-to-audio/keyboard-typing",
+      name: "Keyboard Typing",
+      description: "Mechanical key clicks.",
+      group: "Foley & Action",
+      data: { provider: "elevenlabs-sfx", duration: 5, promptInfluence: 0.6, prompt: "fast mechanical keyboard typing, crisp key clicks" },
+    },
+    {
+      id: "text-to-audio/explosion",
+      name: "Explosion",
+      description: "Deep boom + debris.",
+      group: "Foley & Action",
+      data: { provider: "elevenlabs-sfx", duration: 3, promptInfluence: 0.7, prompt: "large explosion, deep boom with rumbling debris and tail" },
+    },
+    {
+      id: "text-to-audio/magic-sparkle",
+      name: "Magic Sparkle",
+      description: "Shimmering chime FX.",
+      group: "Foley & Action",
+      data: { provider: "elevenlabs-sfx", duration: 2, promptInfluence: 0.7, prompt: "magical sparkle shimmer, twinkling fairy-dust chimes" },
+    },
+    {
+      id: "text-to-audio/camera-shutter",
+      name: "Camera Shutter",
+      description: "DSLR click.",
+      group: "Foley & Action",
+      data: { provider: "elevenlabs-sfx", duration: 1, promptInfluence: 0.8, prompt: "DSLR camera shutter click, single crisp photo snap" },
+    },
+    {
+      id: "text-to-audio/error-buzzer",
+      name: "Error Buzzer",
+      description: "Wrong / fail tone.",
+      group: "Foley & Action",
+      data: { provider: "elevenlabs-sfx", duration: 1, promptInfluence: 0.8, prompt: "short error buzzer, negative fail tone" },
     },
   ],
   "generate-music": [
@@ -2529,7 +2609,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
       name: "Afrobeats",
       description: "Warm syncopated groove.",
       group: "By Genre",
-      data: { genre: "world", mood: "groovy, warm", instrumental: true, duration: 30, prompt: "afrobeats, syncopated percussion, warm bass groove, bright melodies, danceable" },
+      data: { genre: "afrobeats", mood: "groovy, warm", instrumental: true, duration: 30, prompt: "afrobeats, syncopated percussion, warm bass groove, bright melodies, danceable" },
     },
     {
       id: "generate-music/country",
@@ -2537,6 +2617,20 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
       description: "Acoustic, heartfelt.",
       group: "By Genre",
       data: { genre: "country", mood: "warm, heartfelt", instrumental: true, duration: 30, prompt: "country americana, acoustic and slide guitar, warm storytelling feel" },
+    },
+    {
+      id: "generate-music/phonk",
+      name: "Phonk",
+      description: "Dark drift-phonk for reels.",
+      group: "By Genre",
+      data: { genre: "hip-hop", mood: "dark, aggressive", instrumental: true, duration: 30, prompt: "drift phonk, distorted 808 cowbell, dark menacing beat, lo-fi grit" },
+    },
+    {
+      id: "generate-music/reggae",
+      name: "Reggae / Dub",
+      description: "Laid-back island groove.",
+      group: "By Genre",
+      data: { genre: "reggae", mood: "laid-back, sunny", instrumental: true, duration: 30, prompt: "reggae dub, off-beat skank guitar, deep dub bassline, relaxed island groove" },
     },
   ],
 
@@ -2661,7 +2755,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
     },
     {
       id: "suno-generate/genre-rock",
-      name: "Rock Anthem",
+      name: "Rock",
       description: "Driving anthemic guitars.",
       group: "By Genre",
       data: {
@@ -2854,6 +2948,20 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
       group: "By Genre",
       data: { model: "V5_5", instrumental: true, style: "country americana, warm and heartfelt, acoustic and slide guitar, storytelling feel, instrumental" },
     },
+    {
+      id: "suno-generate/phonk",
+      name: "Phonk",
+      description: "Dark drift-phonk for reels.",
+      group: "By Genre",
+      data: { model: "V5_5", instrumental: true, style: "drift phonk, dark and aggressive, distorted 808 cowbell, menacing beat, lo-fi grit, instrumental" },
+    },
+    {
+      id: "suno-generate/reggae",
+      name: "Reggae / Dub",
+      description: "Laid-back island groove.",
+      group: "By Genre",
+      data: { model: "V5_5", instrumental: true, style: "reggae dub, laid-back and sunny, off-beat skank guitar, deep dub bassline, relaxed island groove, instrumental" },
+    },
     // ── More Vocals & Songs ──────────────────────────────────────────────────
     {
       id: "suno-generate/song-rnb",
@@ -3018,6 +3126,200 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
           "Classify the user's input. Return ONLY a single label from the allowed set (default: positive / neutral / negative). No explanation.",
         temperature: 0,
       },
+    },
+  ],
+
+  // Generate Script — set the format config (tone / sceneCount / targetLength /
+  // structure); the topic is the user's prompt. tone <=200, sceneCount 1-20,
+  // structure ∈ freeform|8-step|custom.
+  "generate-script": [
+    // ── By Format ────────────────────────────────────────────────────────────
+    {
+      id: "generate-script/yt-short",
+      name: "YouTube Short / Hook",
+      description: "Punchy, hook-first, ~30s.",
+      group: "By Format",
+      data: { tone: "energetic, punchy, hook-first", sceneCount: 5, targetLength: 30, structure: "freeform" },
+    },
+    {
+      id: "generate-script/explainer",
+      name: "Explainer (how-to)",
+      description: "Clear 8-step walkthrough.",
+      group: "By Format",
+      data: { tone: "clear, friendly, educational", sceneCount: 8, targetLength: 90, structure: "8-step" },
+    },
+    {
+      id: "generate-script/ad-spot",
+      name: "Ad / Commercial Spot",
+      description: "Persuasive 30s spot.",
+      group: "By Format",
+      data: { tone: "persuasive, upbeat, benefit-led", sceneCount: 4, targetLength: 30, structure: "freeform" },
+    },
+    {
+      id: "generate-script/product-demo",
+      name: "Product Demo VO",
+      description: "Confident feature walkthrough.",
+      group: "By Format",
+      data: { tone: "confident, informative", sceneCount: 6, targetLength: 60, structure: "freeform" },
+    },
+    {
+      id: "generate-script/listicle",
+      name: "Listicle (Top 5)",
+      description: "Snappy countdown.",
+      group: "By Format",
+      data: { tone: "engaging, energetic", sceneCount: 6, targetLength: 60, structure: "freeform" },
+    },
+
+    // ── Long-Form & Narrative ────────────────────────────────────────────────
+    {
+      id: "generate-script/podcast-outline",
+      name: "Podcast Outline",
+      description: "Conversational episode beats.",
+      group: "Long-Form & Narrative",
+      data: { tone: "conversational, curious", sceneCount: 10, targetLength: 600, structure: "freeform" },
+    },
+    {
+      id: "generate-script/trailer-narration",
+      name: "Trailer Narration",
+      description: "Dramatic voiceover beats.",
+      group: "Long-Form & Narrative",
+      data: { tone: "dramatic, epic", sceneCount: 6, targetLength: 60, structure: "freeform" },
+    },
+    {
+      id: "generate-script/story-beats",
+      name: "Story Beats",
+      description: "Emotional narrative arc.",
+      group: "Long-Form & Narrative",
+      data: { tone: "narrative, emotional", sceneCount: 8, targetLength: 120, structure: "8-step" },
+    },
+  ],
+
+  // Image to Text — set detailLevel + a customPrompt instruction (<=2000).
+  "image-to-text": [
+    // ── Accessibility & SEO ──────────────────────────────────────────────────
+    {
+      id: "image-to-text/alt-text",
+      name: "Alt Text",
+      description: "Accessible, ≤125 chars.",
+      group: "Accessibility & SEO",
+      data: { detailLevel: "brief", customPrompt: "Write concise alt text for this image for accessibility, under 125 characters. Describe only what is essential." },
+    },
+    {
+      id: "image-to-text/seo-caption",
+      name: "SEO Caption",
+      description: "Caption + keywords.",
+      group: "Accessibility & SEO",
+      data: { detailLevel: "detailed", customPrompt: "Write an SEO-friendly caption for this image, then list 8 relevant keywords." },
+    },
+    {
+      id: "image-to-text/social-caption",
+      name: "Social Caption",
+      description: "Caption + hashtags.",
+      group: "Accessibility & SEO",
+      data: { detailLevel: "detailed", customPrompt: "Write an engaging social-media caption for this image, then 8-12 relevant hashtags." },
+    },
+
+    // ── Extraction ───────────────────────────────────────────────────────────
+    {
+      id: "image-to-text/ocr",
+      name: "Extract Text (OCR)",
+      description: "Return only visible text.",
+      group: "Extraction",
+      data: { detailLevel: "structured", customPrompt: "Extract and return ONLY the text visible in this image, preserving line breaks. No commentary." },
+    },
+    {
+      id: "image-to-text/tags",
+      name: "Tags / Keywords",
+      description: "Comma-separated tags.",
+      group: "Extraction",
+      data: { detailLevel: "brief", customPrompt: "List 10-15 descriptive tags for this image, comma-separated. No sentences." },
+    },
+    {
+      id: "image-to-text/product-desc",
+      name: "Product Description",
+      description: "E-commerce copy from a photo.",
+      group: "Extraction",
+      data: { detailLevel: "detailed", customPrompt: "Write a compelling e-commerce product description based on this product image." },
+    },
+
+    // ── Creative ─────────────────────────────────────────────────────────────
+    {
+      id: "image-to-text/scene-description",
+      name: "Detailed Description",
+      description: "Vivid prose description.",
+      group: "Creative",
+      data: { detailLevel: "detailed", customPrompt: "Provide a vivid, comprehensive description of this image: subjects, setting, lighting, mood and composition, in flowing prose." },
+    },
+    {
+      id: "image-to-text/reverse-prompt",
+      name: "Reverse Prompt",
+      description: "Image → text-to-image prompt.",
+      group: "Creative",
+      data: { detailLevel: "detailed", customPrompt: "Describe this image as a detailed text-to-image generation prompt: subject, style, lighting, composition and lens. Return only the prompt." },
+    },
+  ],
+
+  // Voice Design — describe the voice to create (voiceDescription <=1000). The
+  // sample `text` is left for the user.
+  "voice-design": [
+    // ── Narration & Character ────────────────────────────────────────────────
+    {
+      id: "voice-design/trailer-narrator",
+      name: "Movie-Trailer Narrator",
+      description: "Deep, dramatic, commanding.",
+      group: "Narration & Character",
+      data: { voiceDescription: "A deep, powerful male movie-trailer narrator with dramatic gravitas and a slow, commanding delivery." },
+    },
+    {
+      id: "voice-design/audiobook-female",
+      name: "Warm Female Audiobook",
+      description: "Soothing, clear, intimate.",
+      group: "Narration & Character",
+      data: { voiceDescription: "A warm, soothing female audiobook narrator with clear articulation and a gentle, intimate tone." },
+    },
+    {
+      id: "voice-design/old-wizard",
+      name: "Old Wizard",
+      description: "Gravelly, wise, theatrical.",
+      group: "Narration & Character",
+      data: { voiceDescription: "A gravelly, wise old wizard with a deep raspy voice and a slow, theatrical cadence." },
+    },
+    {
+      id: "voice-design/noir-detective",
+      name: "Noir Detective",
+      description: "Raspy, smoky, brooding.",
+      group: "Narration & Character",
+      data: { voiceDescription: "A raspy, world-weary noir detective with a low, smoky, brooding voice." },
+    },
+    {
+      id: "voice-design/meditation-guide",
+      name: "Meditation Guide",
+      description: "Calm, soft, breathy.",
+      group: "Narration & Character",
+      data: { voiceDescription: "A calm, soft-spoken meditation guide with a slow, breathy, reassuring delivery." },
+    },
+
+    // ── Professional & Assistant ─────────────────────────────────────────────
+    {
+      id: "voice-design/hype-announcer",
+      name: "Energetic Hype",
+      description: "Fast, excited, punchy.",
+      group: "Professional & Assistant",
+      data: { voiceDescription: "An energetic young hype announcer: fast-paced, excited and punchy." },
+    },
+    {
+      id: "voice-design/friendly-assistant",
+      name: "Friendly Assistant",
+      description: "Bright, clear, approachable.",
+      group: "Professional & Assistant",
+      data: { voiceDescription: "A bright, friendly, professional virtual-assistant voice, clear and approachable." },
+    },
+    {
+      id: "voice-design/corporate-ivr",
+      name: "Corporate IVR",
+      description: "Neutral, articulate, pro.",
+      group: "Professional & Assistant",
+      data: { voiceDescription: "A neutral, clear corporate phone-system voice, articulate and professional." },
     },
   ],
 }

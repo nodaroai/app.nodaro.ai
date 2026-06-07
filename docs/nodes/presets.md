@@ -84,18 +84,30 @@ Both music nodes ship presets organized along the three axes professional librar
   *Advertising & Hype* (Commercial Read, Hype), *Conversational & Calm* (Podcast Host, Character,
   Meditation / ASMR).
 - **Text to Audio** (sound effects) — ready prompts for *Transitions & Impacts* (Whoosh, Impact,
-  Riser), *Ambiences (loopable)* (Rain, Forest, Fire, Sci-Fi Drone — `loop: true`), and *UI & Stingers*
-  (Click, Notification, Applause).
+  Riser), *Ambiences (loopable)* (Rain, Forest, Fire, Sci-Fi Drone — `loop: true`), *UI & Stingers*
+  (Click, Notification, Applause), and *Foley & Action* (Footsteps, Door, Glass Break, Typing,
+  Explosion, Magic Sparkle, Camera Shutter, Error Buzzer).
 - **Generate Text** (LLM) — system-prompt roles in *Assistants*, *Writing & Marketing* (Copywriter,
   Social Caption, SEO, Rewrite, Script Writer), *Utility* (Prompt Enhancer, Translator, Summarizer,
   Q&A, Brainstorm) and *Structured Output* (JSON Extractor, Classifier).
+
+### Script, vision & voice catalogs
+
+- **Generate Script** — format presets that set tone + scene count + target length: *By Format*
+  (YouTube Short, Explainer, Ad Spot, Product Demo, Listicle) and *Long-Form & Narrative* (Podcast
+  Outline, Trailer Narration, Story Beats). Type your topic in the prompt.
+- **Image to Text** — analysis presets: *Accessibility & SEO* (Alt Text, SEO Caption, Social Caption),
+  *Extraction* (OCR, Tags, Product Description) and *Creative* (Detailed Description, Reverse Prompt).
+- **Voice Design** — describe-a-voice presets: *Narration & Character* (Movie-Trailer Narrator, Warm
+  Female Audiobook, Old Wizard, Noir Detective, Meditation Guide) and *Professional & Assistant*
+  (Energetic Hype, Friendly Assistant, Corporate IVR).
 
 ### Image edits (shared with Modify Image)
 
 Beyond Stylized Subject, the transform catalog adds an **Edits** folder — *Remove/Replace Background,
 Colorize, Restore Old Photo, Relight, Restyle* — available on both **Generate Image** (with a
 connected reference image) and **Modify Image**. Generate Image also gained a **Diagrams &
-Infographics** folder (Blueprint, Infographic, UI / App Mockup, X-Ray).
+Infographics** folder (Blueprint, Infographic, UI / App Mockup, Flowchart, Chart, Timeline).
 
 ## Using presets
 
