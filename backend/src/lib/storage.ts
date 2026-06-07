@@ -1,5 +1,6 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand, DeleteObjectsCommand, CopyObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3"
+import { S3Client, PutObjectCommand, DeleteObjectCommand, DeleteObjectsCommand, CopyObjectCommand, HeadObjectCommand, ListObjectsV2Command } from "@aws-sdk/client-s3"
 import { Upload } from "@aws-sdk/lib-storage"
+import { randomUUID } from "node:crypto"
 import { createReadStream } from "node:fs"
 import { stat } from "node:fs/promises"
 import { Readable, Transform } from "node:stream"
@@ -282,7 +283,7 @@ const PREVIEW_EXT_TO_MIME: Record<string, string> = {
  * avoid the substring-prefix pitfall (R2_PUBLIC_URL=https://assets.nodaro.ai
  * would otherwise prefix-match https://assets.nodaro.ai.attacker.com/...).
  */
-function r2KeyFromOurUrl(url: string): string | null {
+export function r2KeyFromOurUrl(url: string): string | null {
   if (!config.R2_PUBLIC_URL) return null
   const prefix = config.R2_PUBLIC_URL.endsWith("/")
     ? config.R2_PUBLIC_URL
@@ -379,6 +380,108 @@ export async function copyToTemplatePreview(
   await streamToR2(destKey, counter, contentType)
   trackStorage(creatorUserId, counter.bytesRead)
   return r2Url(destKey)
+}
+
+// ---------------------------------------------------------------------------
+// Community sharing — prefix listing + arbitrary-prefix copy
+// ---------------------------------------------------------------------------
+
+/**
+ * Map a file extension to the size-limit category used for the foreign-URL
+ * fallback in copyR2ObjectToPrefix. Unknown extensions default to "video" —
+ * the most permissive cap — so a legitimate clone of an unexpected asset type
+ * is never spuriously rejected (the copy is of already-trusted content).
+ */
+function categoryFromExt(ext: string): FileCategory {
+  if (["png", "jpg", "jpeg", "webp", "gif", "avif", "heic", "heif"].includes(ext)) return "image"
+  if (["mp3", "wav", "m4a", "aac", "ogg", "weba"].includes(ext)) return "audio"
+  return "video"
+}
+
+/**
+ * List every R2 object key under `prefix`, following NextContinuationToken
+ * until the result set is exhausted. ListObjectsV2 returns at most 1000 keys
+ * per page, so the continuation loop is mandatory — a single call silently
+ * truncates large prefixes (the community reaper/clone walk whole entity
+ * folders and must see every asset).
+ */
+export async function listObjectsByPrefix(prefix: string): Promise<string[]> {
+  const keys: string[] = []
+  let ContinuationToken: string | undefined
+  do {
+    const res = await s3.send(
+      new ListObjectsV2Command({
+        Bucket: config.R2_BUCKET_NAME,
+        Prefix: prefix,
+        ContinuationToken,
+      }),
+    )
+    for (const o of res.Contents ?? []) {
+      if (o.Key) keys.push(o.Key)
+    }
+    ContinuationToken = res.IsTruncated ? res.NextContinuationToken : undefined
+  } while (ContinuationToken)
+  return keys
+}
+
+/**
+ * Copy `sourceUrl` into a fresh object under `destPrefix`, named
+ * `<destPrefix><uuid>.<ext>` (extension carried from the source so the CDN
+ * serves the right Content-Type by URL). Returns the public URL and the byte
+ * size of the written object.
+ *
+ * Mirrors copyToTemplatePreview: our own R2 URLs go through CopyObjectCommand
+ * (no egress, no re-upload); foreign URLs fall back to a bounded safeFetch +
+ * SizeLimitedStream + streamToR2. The dest is then HEAD-ed for an
+ * authoritative ContentLength — unlike copyToTemplatePreview the HEAD is NOT
+ * best-effort here, because the caller (clone) needs the byte count to charge
+ * the cloner's storage quota.
+ */
+export async function copyR2ObjectToPrefix(
+  sourceUrl: string,
+  destPrefix: string,
+): Promise<{ url: string; bytes: number }> {
+  const ext = extractExtensionFromUrl(sourceUrl) ?? "bin"
+  const destKey = `${destPrefix}${randomUUID()}.${ext}`
+  const contentType = PREVIEW_EXT_TO_MIME[ext] ?? "application/octet-stream"
+
+  const sourceKey = r2KeyFromOurUrl(sourceUrl)
+  if (sourceKey) {
+    await s3.send(
+      new CopyObjectCommand({
+        Bucket: config.R2_BUCKET_NAME,
+        Key: destKey,
+        CopySource: `/${config.R2_BUCKET_NAME}/${sourceKey}`,
+        ContentType: contentType,
+        CacheControl: R2_CACHE_CONTROL,
+        MetadataDirective: "REPLACE",
+      }),
+    )
+  } else {
+    // Foreign URL — download and upload, bounded by the size cap. Same
+    // teardown propagation as copyToTemplatePreview so an over-cap stream
+    // closes the upstream socket and aborts the upload.
+    const response = await safeFetch(sourceUrl, { timeoutMs: 120_000 })
+    if (!response.ok) {
+      throw new Error(`copyR2ObjectToPrefix: source fetch failed (${response.status})`)
+    }
+    const cap = getSizeLimit(categoryFromExt(ext))
+    const source = Readable.fromWeb(response.body as import("stream/web").ReadableStream)
+    const counter = new SizeLimitedStream(cap)
+    counter.once("error", (err) => {
+      if (!source.destroyed) source.destroy(err)
+    })
+    source.once("error", (err) => {
+      if (!counter.destroyed) counter.destroy(err)
+    })
+    source.pipe(counter)
+    await streamToR2(destKey, counter, contentType)
+  }
+
+  const head = await s3.send(
+    new HeadObjectCommand({ Bucket: config.R2_BUCKET_NAME, Key: destKey }),
+  )
+  return { url: r2Url(destKey), bytes: Number(head.ContentLength ?? 0) }
 }
 
 export async function deleteFromR2(key: string): Promise<void> {
