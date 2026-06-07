@@ -71,9 +71,9 @@ describe("PresetDropdown", () => {
     expect(container.firstChild).toBeNull()
   })
 
-  it("renders an empty-state trigger labeled 'Preset' when no preset is active", () => {
+  it("renders an empty-state trigger labeled 'PRESET' when no preset is active", () => {
     wrap(<PresetDropdown nodeId="n1" variant="panel" />)
-    expect(screen.getByRole("button", { name: /presets/i })).toHaveTextContent(/Preset/)
+    expect(screen.getByRole("button", { name: /presets/i })).toHaveTextContent(/PRESET/)
   })
 
   it("node variant sizes the trigger to the zoomed node title (11px × zoom)", () => {
@@ -136,11 +136,24 @@ describe("PresetDropdown", () => {
   it("renders factory presets as folders, collapsed by default, expanding on click", async () => {
     wrap(<PresetDropdown nodeId="n1" variant="panel" />)
     fireEvent.click(screen.getByRole("button", { name: /presets/i }))
-    // Folder header is visible; its presets are hidden until expanded.
+    // Folder header is visible; its presets are hidden until expanded. (Use a NON-popular
+    // preset — popular ones like "Cinematic Portrait" surface in the Popular band already.)
     const folder = await screen.findByText("Photography & Cinematic")
-    expect(screen.queryByText("Cinematic Portrait")).toBeNull()
+    expect(screen.queryByText("Cinematic Still")).toBeNull()
     fireEvent.click(folder)
-    expect(await screen.findByText("Cinematic Portrait")).toBeInTheDocument()
+    expect(await screen.findByText("Cinematic Still")).toBeInTheDocument()
+  })
+
+  it("lists custom presets above factory, with a Popular quick-pick band", async () => {
+    wrap(<PresetDropdown nodeId="n1" variant="panel" />)
+    fireEvent.click(screen.getByRole("button", { name: /presets/i }))
+    const my = await screen.findByText("My Presets")
+    const factory = screen.getByText("Factory")
+    // User section precedes the factory section in the menu.
+    expect(my.compareDocumentPosition(factory) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    // The Popular band surfaces a top preset without expanding any folder.
+    expect(screen.getByText("Popular")).toBeInTheDocument()
+    expect(screen.getByText("Cinematic Portrait")).toBeInTheDocument()
   })
 
   it("offers Override only when the active preset is a custom one", async () => {

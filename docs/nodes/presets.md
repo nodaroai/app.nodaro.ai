@@ -155,7 +155,9 @@ Every configurable node has a **preset dropdown** in two places:
 - In the node's **config panel** — just below the node-type heading (or on the side in fullscreen).
 - On the **node itself** — in the top-right hover toolbar, left of the ⋯ menu.
 
-The dropdown starts empty. Open it to:
+Until you pick one, the trigger shows a muted **PRESET** hint. The menu puts **your own presets
+("My Presets") at the top**, then the read-only **Factory** catalog below — whose **most-used presets
+surface in a "Popular" band** so you can reach them without opening folders. Open the dropdown to:
 
 - **Select a preset** — loads its settings onto the node. Selecting a preset that would overwrite
   your current settings asks you to confirm first. (Undo with ⌘/Ctrl-Z.)
@@ -189,10 +191,11 @@ Click **Manage presets…** in the dropdown to open the management dialog, where
 - **Rename / Delete** — rename folders and presets inline; deleting a folder moves its presets back
   to the top level (presets are never lost).
 
-In the dropdown, folders show as collapsible rows and sections as inline headers, in the order you
-set. Factory presets always appear first, in their own read-only folders (collapsed by default so
-you can scan the categories at a glance); your custom folders and presets follow. Searching flattens
-everything into a single filtered list.
+In the dropdown, your custom folders show as collapsible rows and sections as inline headers, in the
+order you set. **Your presets appear first** (the **My Presets** section); then the read-only
+**Factory** section — a **Popular** band of the most-used presets, followed by the category folders
+(collapsed by default so you can scan them at a glance). Searching flattens everything into a single
+filtered list.
 
 ## What a preset captures
 
