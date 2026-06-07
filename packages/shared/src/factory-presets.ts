@@ -1344,6 +1344,90 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
       data: { provider: "seedream", aspectRatio: "16:9", prompt: "aerial architectural site view of {building}, drone perspective showing surrounding context and landscaping, photorealistic, golden hour", negativePrompt: "distorted geometry, lowres, watermark" },
     },
 
+    // ── Portrait Transformations (identity-locked, from a connected reference photo) ──
+    // Like Stylized Subject, these are TRANSFORM presets: connect a clean front-facing
+    // reference portrait and nano-banana-pro rebuilds it. The "Timeless Soul" age
+    // progression renders ONE person at several ages in a single studio composite — the
+    // whole effect rides on the identity-lock clause (same eyes/brow/nose/ears/bone
+    // structure), so it stays one person aging rather than several different people.
+    {
+      id: "generate-image/age-progression-5",
+      name: "Five Ages (Timeless Soul)",
+      description: "One person at 5 ages, studio line-up. Needs a reference photo.",
+      group: "Portrait Transformations",
+      data: {
+        provider: "nano-banana-pro",
+        aspectRatio: "3:4",
+        prompt:
+          "Generate a single photorealistic 3:4 vertical studio composite of the person in the reference image at five stages of life, lined up shoulder-to-shoulder from left to right in a smooth age progression: a child around 7, a teenager around 15, a young adult around 27, a mature adult around 45, and an elder around 70. Frame each figure from the chest up, all facing the camera with the same calm expression. Strictly preserve identity across all five figures — identical eye shape, eye color, brow line, nose, ear shape, and facial bone structure from the reference — aged ONLY via skin texture, fine lines and wrinkles, hairline, hair color (darker in youth, gradually greying with age), and slight changes in facial fullness. Dress each figure for its age: striped tee for the child, hoodie or denim jacket for the teen, casual shirt for the young adult, blazer or button-up for the mature adult, soft cardigan for the elder. Even soft cinematic studio key light hitting all five consistently, gentle rim separation from the background, clean dark-grey gradient seamless backdrop (slightly darker at the edges, softly lit toward the center). High-end editorial portrait photography, sharp facial detail, natural skin tones; the five figures fill the frame.",
+        negativePrompt: "five different people, inconsistent identity, deformed, extra fingers, watermark, text",
+      },
+    },
+    {
+      id: "generate-image/age-progression-3",
+      name: "Three-Age Triptych",
+      description: "Same person at 3 ages (~10 / 40 / 75). Needs a reference photo.",
+      group: "Portrait Transformations",
+      data: {
+        provider: "nano-banana-pro",
+        aspectRatio: "3:4",
+        prompt:
+          "Generate a single photorealistic 3:4 vertical studio composite of the person in the reference image at three stages of life, shoulder-to-shoulder from left to right: around age 10, around age 40, and around age 75. Frame each figure from the chest up, facing the camera with the same calm expression. Strictly preserve identity across all three — identical eye shape, eye color, brow line, nose, ear shape, and facial bone structure from the reference — aged ONLY via skin texture, fine lines, hairline, hair color (darker in youth, greying with age), and slight facial fullness. Age-appropriate clothing for each stage. Even soft cinematic studio key light, clean dark-grey gradient seamless backdrop, high-end editorial portrait photography, sharp facial detail, natural skin tones; the three figures fill the frame.",
+        negativePrompt: "three different people, inconsistent identity, deformed, watermark, text",
+      },
+    },
+    {
+      id: "generate-image/age-progression-bw",
+      name: "Five Ages — B&W",
+      description: "Monochrome age line-up. Needs a reference photo.",
+      group: "Portrait Transformations",
+      data: {
+        provider: "nano-banana-pro",
+        aspectRatio: "3:4",
+        prompt:
+          "Generate a single black-and-white photorealistic 3:4 vertical studio composite of the person in the reference image at five stages of life, shoulder-to-shoulder from left to right in a smooth age progression: around 7, 15, 27, 45, and 70. Chest-up framing, all facing the camera with the same calm expression. Strictly preserve identity across all five figures — identical eye shape, eye color, brow line, nose, ear shape, and facial bone structure from the reference — aged ONLY via skin texture, fine lines, hairline, greying hair, and slight facial fullness. Age-appropriate clothing per stage. Even soft studio key light, clean dark-grey gradient backdrop. Monochrome high-end black-and-white studio portrait, deep tonal range, fine film grain, sharp facial detail; the five figures fill the frame.",
+        negativePrompt: "color, five different people, inconsistent identity, deformed, watermark, text",
+      },
+    },
+    {
+      id: "generate-image/decade-timeline",
+      name: "Decade Timeline",
+      description: "Same person across the '80s–2020s. Needs a reference photo.",
+      group: "Portrait Transformations",
+      data: {
+        provider: "nano-banana-pro",
+        aspectRatio: "3:4",
+        prompt:
+          "Generate a single photorealistic 3:4 vertical studio composite of the person in the reference image across five decades, shoulder-to-shoulder from left to right with a smooth age progression and period-accurate styling: a 1980s child, a 1990s teenager, a 2000s young adult, a 2010s adult, and a 2020s mature adult. Chest-up framing, all facing the camera with the same calm expression. Strictly preserve identity across all five figures — identical eye shape, eye color, brow line, nose, ear shape, and facial bone structure from the reference — aged ONLY via skin texture, fine lines, hairline, hair color, and slight facial fullness. Style each figure to its decade in hair and wardrobe: 1980s bright bold colors and big hair, 1990s casual grunge, 2000s frosted-tips and low-rise era, 2010s clean modern, 2020s contemporary. Subtle period-accurate photo treatment per decade. Even soft studio key light, clean dark-grey gradient seamless backdrop. High-end editorial portrait photography, sharp facial detail, natural skin tones; the five figures fill the frame.",
+        negativePrompt: "different people, inconsistent identity, deformed, watermark, text",
+      },
+    },
+    {
+      id: "generate-image/four-seasons",
+      name: "Four Seasons",
+      description: "Same person in spring / summer / autumn / winter. Needs a reference photo.",
+      group: "Portrait Transformations",
+      data: {
+        provider: "nano-banana-pro",
+        aspectRatio: "3:4",
+        prompt:
+          "Generate a single photorealistic 3:4 vertical studio composite of the person in the reference image in four seasonal looks, shoulder-to-shoulder from left to right: spring, summer, autumn, and winter. Chest-up framing, all facing the camera with the same calm expression, all at the SAME age as the reference (this is seasons, not aging). Strictly preserve identity across all four figures — identical face, eye shape, eye color, brow, nose, ear shape, and bone structure from the reference; only wardrobe, hair styling, and a subtle seasonal color grade change. Spring: light pastel layers, fresh airy tone. Summer: light tee, warm sunny tone. Autumn: knit sweater, golden amber tone. Winter: coat and scarf, cool crisp tone. Even soft studio key light with a gentle seasonal color cast per figure, clean dark-grey gradient seamless backdrop. High-end editorial portrait photography, sharp facial detail, natural skin tones; the four figures fill the frame.",
+        negativePrompt: "different people, inconsistent identity, aging, deformed, watermark, text",
+      },
+    },
+    {
+      id: "generate-image/times-of-day",
+      name: "Times of Day",
+      description: "Same person at dawn / midday / golden hour / night. Needs a reference photo.",
+      group: "Portrait Transformations",
+      data: {
+        provider: "nano-banana-pro",
+        aspectRatio: "3:4",
+        prompt:
+          "Generate a single photorealistic 3:4 vertical composite of the person in the reference image across four times of day, shoulder-to-shoulder from left to right: dawn, midday, golden hour, and night. Chest-up framing, all facing the camera with the same calm expression, all at the SAME age as the reference. Strictly preserve identity across all four figures — identical face, eye shape, eye color, brow, nose, ear shape, and bone structure from the reference; only the lighting and color temperature change between figures. Dawn: soft cool blue light. Midday: bright neutral daylight. Golden hour: warm amber backlight with a gentle glow. Night: moody low light with a cool rim. Consistent chest-up framing and a clean dark-grey gradient seamless backdrop. High-end editorial portrait photography, sharp facial detail, natural skin tones; the four figures fill the frame.",
+        negativePrompt: "different people, inconsistent identity, aging, deformed, watermark, text",
+      },
+    },
     // ── Stylized Subject + Edits (shared with the deprecating modify-image) ──
     // Transform patterns — work here when a reference image is connected
     // (nano-banana-pro edits it while preserving untouched regions). The
@@ -3320,6 +3404,178 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
       description: "Neutral, articulate, pro.",
       group: "Professional & Assistant",
       data: { voiceDescription: "A neutral, clear corporate phone-system voice, articulate and professional." },
+    },
+  ],
+  // video-to-video RESTYLE looks. provider "wan" is the general video restyle; the
+  // prompt carries the target style + an instruction to preserve the original motion.
+  "video-to-video": [
+    {
+      id: "video-to-video/anime",
+      name: "Anime Restyle",
+      description: "2D cel-shaded anime look.",
+      group: "Restyle Looks",
+      data: { provider: "wan", prompt: "Restyle this video as a 2D cel-shaded anime: vibrant colors, clean linework, expressive cel shading. Preserve the original motion, composition, and timing.", negativePrompt: "photorealistic, blurry, distorted, flickering" },
+    },
+    {
+      id: "video-to-video/claymation",
+      name: "Claymation",
+      description: "Tactile stop-motion clay.",
+      group: "Restyle Looks",
+      data: { provider: "wan", prompt: "Restyle as tactile stop-motion claymation with plasticine textures and subtle fingerprints. Keep the original motion and framing.", negativePrompt: "photorealistic, smooth, flickering" },
+    },
+    {
+      id: "video-to-video/cyberpunk-neon",
+      name: "Cyberpunk Neon",
+      description: "Rain-slicked neon city look.",
+      group: "Restyle Looks",
+      data: { provider: "wan", prompt: "Restyle with a neon cyberpunk aesthetic: rain-slicked surfaces, glowing magenta and cyan lighting, moody atmosphere. Preserve the original motion.", negativePrompt: "daylight, flat lighting, blurry, distorted" },
+    },
+    {
+      id: "video-to-video/oil-painting",
+      name: "Oil Painting",
+      description: "Moving painterly brushwork.",
+      group: "Restyle Looks",
+      data: { provider: "wan", prompt: "Restyle as a moving oil painting with visible brushstrokes, rich impasto texture, and painterly color. Keep the original motion and composition.", negativePrompt: "photorealistic, flat, blurry, flickering" },
+    },
+    {
+      id: "video-to-video/pixar-3d",
+      name: "3D Animated",
+      description: "Polished CG film look.",
+      group: "Restyle Looks",
+      data: { provider: "wan", prompt: "Restyle as a polished 3D animated film: soft global illumination, expressive characters, clean stylized surfaces. Preserve the original motion and timing.", negativePrompt: "photorealistic, lowres, distorted, flickering" },
+    },
+    {
+      id: "video-to-video/watercolor",
+      name: "Watercolor",
+      description: "Flowing washes on paper.",
+      group: "Restyle Looks",
+      data: { provider: "wan", prompt: "Restyle as a flowing watercolor animation with soft washes, bleeding edges, and visible paper texture. Keep the original motion and composition.", negativePrompt: "photorealistic, harsh edges, blurry, flickering" },
+    },
+  ],
+  // voice-changer DELIVERY presets — reshape the revoice without touching the target
+  // voice the user picked. stability/similarityBoost/style 0-1; removeBackgroundNoise cleans the source.
+  "voice-changer": [
+    {
+      id: "voice-changer/faithful",
+      name: "Faithful (Natural)",
+      description: "Preserves original delivery.",
+      group: "Revoice Styles",
+      data: { stability: 0.4, similarityBoost: 0.85, style: 0, removeBackgroundNoise: false },
+    },
+    {
+      id: "voice-changer/clean-stable",
+      name: "Clean & Stable",
+      description: "Smooth, consistent, denoised.",
+      group: "Revoice Styles",
+      data: { stability: 0.8, similarityBoost: 0.8, style: 0, removeBackgroundNoise: true },
+    },
+    {
+      id: "voice-changer/expressive",
+      name: "Expressive",
+      description: "Amplifies the delivery.",
+      group: "Revoice Styles",
+      data: { stability: 0.3, similarityBoost: 0.7, style: 0.45, removeBackgroundNoise: false },
+    },
+    {
+      id: "voice-changer/studio-clean",
+      name: "Studio Clean",
+      description: "Broadcast-ready, denoised.",
+      group: "Revoice Styles",
+      data: { stability: 0.65, similarityBoost: 0.85, style: 0, removeBackgroundNoise: true },
+    },
+  ],
+  // add-captions STYLE presets. style in ALL_CAPTION_STYLES (subtitle is static FFmpeg;
+  // the rest are kinetic Remotion overlays); position bottom|top|center; fontSize 12-200.
+  "add-captions": [
+    {
+      id: "add-captions/clean-subtitles",
+      name: "Clean Subtitles",
+      description: "Classic bottom subtitles.",
+      group: "Caption Styles",
+      data: { style: "subtitle", position: "bottom", fontSize: 32, color: "#FFFFFF", autoTranscribe: true },
+    },
+    {
+      id: "add-captions/tiktok-bold",
+      name: "TikTok Bold",
+      description: "Big centered word-by-word.",
+      group: "Caption Styles",
+      data: { style: "tiktok-words", position: "center", fontSize: 72, color: "#FFFFFF", autoTranscribe: true },
+    },
+    {
+      id: "add-captions/karaoke",
+      name: "Karaoke Highlight",
+      description: "Words fill as spoken.",
+      group: "Caption Styles",
+      data: { style: "karaoke", position: "bottom", fontSize: 56, color: "#FFFFFF", autoTranscribe: true },
+    },
+    {
+      id: "add-captions/word-pop",
+      name: "Word Pop",
+      description: "Each word pops in.",
+      group: "Caption Styles",
+      data: { style: "word-pop", position: "center", fontSize: 64, color: "#FFE600", autoTranscribe: true },
+    },
+    {
+      id: "add-captions/bouncy",
+      name: "Bouncy Captions",
+      description: "Energetic bouncing words.",
+      group: "Caption Styles",
+      data: { style: "bouncy", position: "bottom", fontSize: 64, color: "#FFFFFF", autoTranscribe: true },
+    },
+    {
+      id: "add-captions/word-highlight",
+      name: "Word Highlight",
+      description: "Active word highlighted.",
+      group: "Caption Styles",
+      data: { style: "word-highlight", position: "bottom", fontSize: 48, color: "#00E5FF", autoTranscribe: true },
+    },
+    {
+      id: "add-captions/top-banner",
+      name: "Top Banner",
+      description: "Subtitles along the top.",
+      group: "Caption Styles",
+      data: { style: "subtitle", position: "top", fontSize: 36, color: "#FFFFFF", autoTranscribe: true },
+    },
+  ],
+  // combine-videos JOIN/TRANSITION presets. "Seamless Join" is the proven recipe for
+  // jump-free joins of CONTINUOUS shots (start/end-frame storyboards, Seedance-2 scene
+  // extension): keep a hard CUT so the shot stays one continuous take, trim the artifact
+  // boundary frames (end 4, start 3), and equal-power crossfade ONLY the audio.
+  "combine-videos": [
+    {
+      id: "combine-videos/seamless-join",
+      name: "Seamless Join (One-Shot)",
+      description: "Jump-free join for scene-extension / start-end-frame clips.",
+      group: "Joins & Transitions",
+      data: { transition: "cut", transitionDuration: 0.5, audioMode: "crossfade", audioCrossfadeCurve: "equal-power", trimEndFrames: 4, trimStartFrames: 3 },
+    },
+    {
+      id: "combine-videos/hard-cut",
+      name: "Hard Cut",
+      description: "Instant switch, no blend. Fastest.",
+      group: "Joins & Transitions",
+      data: { transition: "cut", audioMode: "keep", trimStartFrames: 0, trimEndFrames: 0 },
+    },
+    {
+      id: "combine-videos/crossfade",
+      name: "Crossfade",
+      description: "Smooth alpha cross-fade between clips.",
+      group: "Joins & Transitions",
+      data: { transition: "fade", transitionDuration: 0.7, audioMode: "crossfade", audioCrossfadeCurve: "equal-power" },
+    },
+    {
+      id: "combine-videos/dissolve",
+      name: "Dissolve",
+      description: "Grainy organic blend for memory beats.",
+      group: "Joins & Transitions",
+      data: { transition: "dissolve", transitionDuration: 1, audioMode: "crossfade", audioCrossfadeCurve: "equal-power" },
+    },
+    {
+      id: "combine-videos/fade-through-black",
+      name: "Fade Through Black",
+      description: "Dip to black between scenes.",
+      group: "Joins & Transitions",
+      data: { transition: "dip-to-black", transitionDuration: 1, audioMode: "crossfade", audioCrossfadeCurve: "equal-power" },
     },
   ],
 }
