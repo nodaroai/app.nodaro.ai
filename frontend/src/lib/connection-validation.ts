@@ -73,7 +73,7 @@ import {
   isValidLocationConnection,
 } from "./identity-handles"
 import { isVisualPickerType } from "./parameter-picker-types"
-import { ACCEPTS_CHARACTER_REF, ACCEPTS_PARAMETER_PICKER } from "./target-handle-registry"
+import { ACCEPTS_CHARACTER_REF, ACCEPTS_ENTITY_REF, ACCEPTS_PARAMETER_PICKER } from "./target-handle-registry"
 
 const MEDIA_ONLY_HANDLES: ReadonlySet<string> = new Set([
   "image",
@@ -223,6 +223,14 @@ export function isValidWorkflowConnection(
   if (targetType === "character-fx" && connection.targetHandle) {
     if (connection.targetHandle !== "target") return true
     return ACCEPTS_CHARACTER_REF(typeOf(connection.source) ?? "")
+  }
+
+  // Reference Sheet — `in` accepts ONLY composable entity refs (character /
+  // object / location; NOT face). The executor resolves the upstream entity's
+  // (kind, DB id) and composes a sheet from its existing panels.
+  if (targetType === "reference-sheet" && connection.targetHandle) {
+    if (connection.targetHandle !== "in") return true
+    return ACCEPTS_ENTITY_REF(typeOf(connection.source) ?? "")
   }
 
   // Generate Video — enforce typed-handle compatibility.

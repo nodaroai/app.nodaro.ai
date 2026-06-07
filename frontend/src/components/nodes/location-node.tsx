@@ -57,7 +57,10 @@ function LocationNodeComponent({ id, data, selected }: NodeProps) {
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
   const activeResult = results[activeIndex]
-  const activeUrl = activeResult?.url ?? nodeData.sourceImageUrl
+  // Per-canvas-node thumbnail override (mirrors character-node.tsx). A
+  // Studio-selected default asset or a generated reference sheet wins over the
+  // active result, falling back to `sourceImageUrl`.
+  const activeUrl = nodeData.defaultAssetUrl || activeResult?.url || nodeData.sourceImageUrl
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
 

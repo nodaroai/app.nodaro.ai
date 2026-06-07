@@ -104,6 +104,7 @@ const FilerobotEditorModal = lazy(() => import("../filerobot-editor-modal").then
 const PresentationViewLazy = lazy(() => import("../../presentation/presentation-view").then(m => ({ default: m.PresentationView })));
 const CharacterStudioModal = lazy(() => import("../character-studio"));
 const LocationStudioModal = lazy(() => import("../location-studio/location-studio-modal"));
+const ObjectStudioModal = lazy(() => import("../object-studio/object-studio-modal"));
 
 interface WorkflowEditorProps {
   readonly projectId?: string;
@@ -274,6 +275,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   const setCharacterStudioNodeId = useWorkflowStore((s) => s.setCharacterStudioNodeId);
   const locationStudioNodeId = useWorkflowStore((s) => s.locationStudioNodeId);
   const setLocationStudioNodeId = useWorkflowStore((s) => s.setLocationStudioNodeId);
+  const objectStudioNodeId = useWorkflowStore((s) => s.objectStudioNodeId);
+  const setObjectStudioNodeId = useWorkflowStore((s) => s.setObjectStudioNodeId);
 
   const imageEditUrl = imageEdit?.imageUrl ?? "";
   const imageEditDesignStateUrl = imageEdit?.designStateUrl;
@@ -1456,6 +1459,15 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
           <LocationStudioModal
             nodeId={locationStudioNodeId}
             onClose={() => setLocationStudioNodeId(null)}
+          />
+        </Suspense>
+      )}
+
+      {objectStudioNodeId && (
+        <Suspense fallback={null}>
+          <ObjectStudioModal
+            nodeId={objectStudioNodeId}
+            onClose={() => setObjectStudioNodeId(null)}
           />
         </Suspense>
       )}

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react"
+import { Upload } from "lucide-react"
 import { useCharacterStudio, type SaveStatus } from "./use-character-studio"
 import { useCharacterStudioJobs, type StudioAssetType } from "./use-character-studio-jobs"
 import { AppearanceTab } from "./appearance-tab"
@@ -7,9 +8,25 @@ import { PosesTab } from "./poses-tab"
 import { MotionsTab } from "./motions-tab"
 import { VoiceTab } from "./voice-tab"
 import { PersonalityTab } from "./personality-tab"
+import { ReferenceSheetTab } from "../reference-sheet/reference-sheet-tab"
+import { SHEET_TAB_ADAPTERS } from "../reference-sheet/sheet-tab-adapter"
+import { Button } from "@/components/ui/button"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import { useAuth } from "@/hooks/use-auth"
+import { isMultiUser } from "@/lib/edition"
 import type { CharacterNodeData } from "@/types/nodes"
 
-type TabKey = "appearance" | "expressions" | "poses" | "motions" | "voice" | "personality"
+// Lazy dynamic import keeps this core file off the ee/ static-import graph
+// (check-ee-imports.mjs only flags top-level `import ... from "@/ee/..."`,
+// not `import()` call expressions — same pattern as router.tsx).
+const PublishDialog = lazy(() => import("@/ee/components/community/publish-dialog"))
+
+type TabKey = "appearance" | "expressions" | "poses" | "motions" | "sheet" | "voice" | "personality"
 
 const ASSET_FIELD: Record<StudioAssetType, keyof CharacterNodeData> = {
   expressions: "expressions",
@@ -22,8 +39,10 @@ const ASSET_FIELD: Record<StudioAssetType, keyof CharacterNodeData> = {
 
 export function CharacterStudioModal({ nodeId, onClose }: { nodeId: string; onClose: () => void }) {
   const studio = useCharacterStudio(nodeId)
+  const { isAdmin } = useAuth()
   const [tab, setTab] = useState<TabKey>("appearance")
   const [errored, setErrored] = useState<Set<string>>(new Set())
+  const [showPublish, setShowPublish] = useState(false)
 
   const onResolved = useCallback(
     (a: { assetType: StudioAssetType; name: string; url: string }) => {
@@ -66,6 +85,7 @@ export function CharacterStudioModal({ nodeId, onClose }: { nodeId: string; onCl
     expr: studio.staged.expressions.length,
     poses: studio.staged.poses.length,
     motions: studio.staged.motions.length,
+    sheets: studio.staged.sheets?.length ?? 0,
   }
   const switchToAppearance = () => setTab("appearance")
   const tabBody = {
@@ -73,6 +93,11 @@ export function CharacterStudioModal({ nodeId, onClose }: { nodeId: string; onCl
     expressions: <ExpressionsTab state={studio} jobs={jobs} onSwitchToAppearance={switchToAppearance} />,
     poses: <PosesTab state={studio} jobs={jobs} onSwitchToAppearance={switchToAppearance} />,
     motions: <MotionsTab state={studio} jobs={jobs} onSwitchToAppearance={switchToAppearance} />,
+    sheet: (
+      <div className="flex-1 overflow-y-auto p-4">
+        <ReferenceSheetTab adapter={SHEET_TAB_ADAPTERS.character} studio={studio} jobs={jobs} accent="#3b82f6" />
+      </div>
+    ),
     voice: <VoiceTab state={studio} />,
     personality: <PersonalityTab state={studio} />,
   }[tab]
@@ -117,11 +142,48 @@ export function CharacterStudioModal({ nodeId, onClose }: { nodeId: string; onCl
         </div>
         <div className="flex gap-3 items-center">
           <SaveIndicator status={studio.saveStatus} />
+          {isAdmin && isMultiUser() && (
+            <TooltipProvider delayDuration={0}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  {/* span wrapper so the tooltip still fires while the button is disabled */}
+                  <span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 gap-1.5 text-[11px] text-slate-300 hover:text-white hover:bg-[#1e293b]"
+                      disabled={!studio.staged.characterDbId}
+                      onClick={() => setShowPublish(true)}
+                    >
+                      <Upload className="h-3.5 w-3.5" />
+                      Share to community
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {!studio.staged.characterDbId && (
+                  <TooltipContent side="bottom">
+                    Generate an appearance to save the character first
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            </TooltipProvider>
+          )}
           <button onClick={onClose} className="text-[10px] bg-[#1e293b] rounded px-3 py-1.5 text-slate-400">
             ✕ Close
           </button>
         </div>
       </div>
+      {isAdmin && isMultiUser() && studio.staged.characterDbId && (
+        <Suspense fallback={null}>
+          <PublishDialog
+            entityType="character"
+            entityId={studio.staged.characterDbId}
+            defaultTitle={studio.staged.characterName}
+            open={showPublish}
+            onOpenChange={setShowPublish}
+          />
+        </Suspense>
+      )}
       {/* body */}
       <div className="flex flex-1 overflow-hidden">
         <div className="w-[140px] bg-[#090c12] border-r border-[#1e293b] flex flex-col py-3 shrink-0">
@@ -135,6 +197,7 @@ export function CharacterStudioModal({ nodeId, onClose }: { nodeId: string; onCl
           <SideBtn k="expressions" icon="😄" label="Expressions" badge={counts.expr} />
           <SideBtn k="poses" icon="🧍" label="Poses" badge={counts.poses} />
           <SideBtn k="motions" icon="🏃" label="Motions" badge={counts.motions} />
+          <SideBtn k="sheet" icon="📋" label="Sheet" badge={counts.sheets || undefined} />
           <div className="px-3.5 pb-1.5 pt-2.5 text-[9px] uppercase tracking-widest text-slate-700 font-semibold">
             Character
           </div>

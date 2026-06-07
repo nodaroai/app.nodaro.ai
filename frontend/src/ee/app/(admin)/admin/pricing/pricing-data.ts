@@ -407,4 +407,5 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   "video-composer":    { provider: "Anthropic", providerCostUsd: 0.010, markupPct: 25 },
   "add-captions":         { provider: "FFmpeg",   providerCostUsd: 0,     markupPct: 0  },
   "add-captions:kinetic": { provider: "Remotion", providerCostUsd: 0.08,  markupPct: 25 },
+  "reference-sheet:assembly": { provider: "Nodaro", providerCostUsd: null, markupPct: 0 },  // flat 4-cr sheet-assembly fee (see model_pricing / STATIC_CREDIT_COSTS)
 }

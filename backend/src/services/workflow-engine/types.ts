@@ -95,6 +95,11 @@ export interface NodeOutput {
    *  `getPrimaryOutput` and routed to `personaId` on music nodes by the input
    *  resolver. */
   voiceId?: string
+  /** Reference Sheet — clean panel URLs emitted on the `panels` output handle.
+   *  `imageUrl` carries the composited sheet (the `sheet` handle); `panelUrls`
+   *  is the multi-image reference set spread into a downstream node's
+   *  `referenceImageUrls`. */
+  panelUrls?: readonly string[]
 }
 
 export type NodeExecutionStatus =
@@ -263,6 +268,13 @@ export interface ResolvedInputs {
    *  Carries the full upstream list (or `[singleOutput]` when upstream wasn't
    *  fanned out) so the reduce strategy can fold it into a single value. */
   inputs?: string[]
+  /** Reference Sheet — the connected upstream entity's kind + DB id. Mirror of
+   *  the frontend FrontendResolvedInputs.entityKind / entityDbId. The orchestrator
+   *  resolves these directly from the graph in payload-builder (the sheet job
+   *  composes from the entity's stored panels, not a wired image URL), so these
+   *  are kept for parity / future routing rather than consumed by routeOutput. */
+  entityKind?: "character" | "object" | "location"
+  entityDbId?: string
 }
 
 // ---------------------------------------------------------------------------

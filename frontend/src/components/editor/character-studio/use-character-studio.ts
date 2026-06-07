@@ -220,6 +220,14 @@ export function useCharacterStudio(nodeId: string): CharacterStudioState | null 
             angles: fresh.angles ?? prev.angles,
             bodyAngles: fresh.bodyAngles ?? prev.bodyAngles,
             motions: fresh.motions ?? prev.motions,
+            // Reference-sheet buckets — hydrate so the Sheet tab's "Existing
+            // sheets" grid + sidebar badges populate, and so detail/wardrobe
+            // panels are reused by the planner instead of regenerated.
+            sheets: fresh.sheets ?? prev.sheets ?? [],
+            detailCloseups:
+              (fresh.detailCloseups as CharacterNodeData["detailCloseups"]) ?? prev.detailCloseups,
+            outfitVariations:
+              (fresh.outfitVariations as CharacterNodeData["outfitVariations"]) ?? prev.outfitVariations,
             voice: fresh.voice ?? prev.voice,
             personality: fresh.personality ?? prev.personality,
             referencePhotos: fresh.referencePhotos ?? prev.referencePhotos,

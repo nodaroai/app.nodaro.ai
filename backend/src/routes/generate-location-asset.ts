@@ -23,6 +23,27 @@ const VARIANTS: Record<string, readonly string[]> = {
   lighting: ["soft natural", "harsh sunlight", "golden", "blue hour", "neon", "candlelit", "cinematic", "dramatic chiaroscuro"],
 }
 
+/**
+ * Approved-source-image gate for the Location Studio path — parity with
+ * `generate-character-asset` (portrait_required) and `generate-object-asset`
+ * (main image). When `attachToLocationId` is set, every generated asset is an
+ * image-to-image off the location's approved establishing shot
+ * (`locations.source_image_url`); without that anchor the worker has nothing to
+ * condition from, so a missing source would silently drop the location's
+ * identity. Rejecting here costs nothing (no credits reserved, no DB writes).
+ *
+ * Exported for unit testing the gate independent of the HTTP layer.
+ */
+export function locationAssetGate(
+  attachToLocationId: string | undefined,
+  row: { source_image_url: string | null } | null,
+): { ok: true } | { ok: false; code: "location_not_found" | "main_image_required" } {
+  if (!attachToLocationId) return { ok: true } // not attaching → no anchor needed
+  if (!row) return { ok: false, code: "location_not_found" }
+  if (!row.source_image_url) return { ok: false, code: "main_image_required" }
+  return { ok: true }
+}
+
 const generateLocationAssetBody = z.object({
   assetType: assetTypeEnum,
   variant: z.string().min(1).max(100),
@@ -168,6 +189,30 @@ export async function generateLocationAssetRoutes(app: FastifyInstance) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "userId is required" },
       })
+    }
+
+    // Approved-source-image gate (Location Studio path). Mirrors the
+    // character/object routes: when attaching to a location, require an
+    // approved establishing shot to i2i from. Runs BEFORE credit reservation
+    // and the DB insert so a missing anchor costs nothing.
+    if (attachToLocationId) {
+      const { data: locRow } = await supabase
+        .from("locations")
+        .select("source_image_url")
+        .eq("id", attachToLocationId)
+        .eq("user_id", userId)
+        .is("deleted_at", null)
+        .single()
+      const gate = locationAssetGate(attachToLocationId, locRow ?? null)
+      if (!gate.ok) {
+        return gate.code === "location_not_found"
+          ? reply.status(404).send({
+              error: { code: "not_found", message: "Location not found" },
+            })
+          : reply.status(400).send({
+              error: { code: "main_image_required", message: "Generate a main image first" },
+            })
+      }
     }
 
     const modelIdentifier = parsed.data.provider

@@ -64,6 +64,16 @@ vi.mock("../motion-tab", () => ({
   MotionTab: () => <div data-testid="motion-tab-mounted">motion-tab</div>,
 }))
 
+// The modal calls useAuth() (which internally calls useNavigate). These tests
+// render the modal without a Router, so mock the auth hook to avoid the
+// useNavigate throw. A non-admin result hides the "Share to community" button,
+// leaving the header/tab assertions below unaffected. getCachedUserId is also
+// exported here because the same module supplies it to the studio hooks.
+vi.mock("@/hooks/use-auth", () => ({
+  useAuth: () => ({ isAdmin: false }),
+  getCachedUserId: () => "user-1",
+}))
+
 import { ObjectStudioModal } from "../object-studio-modal"
 
 const defaultStagedData = () =>

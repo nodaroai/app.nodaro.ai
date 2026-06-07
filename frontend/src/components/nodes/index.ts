@@ -162,6 +162,7 @@ import { GenerativePipelineNode } from "./generative-pipeline-node";
 import { GroupNode } from "./group-node";
 import { CollectNode } from "./collect-node";
 import { SelectorNode } from "./selector-node";
+import { ReferenceSheetNode } from "./reference-sheet-node";
 import type { SceneNodeType } from "@/types/nodes";
 
 export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
@@ -329,6 +330,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "merge-lists": MergeListsNode,
   "sort-list": SortListNode,
   "selector": SelectorNode,
+  "reference-sheet": ReferenceSheetNode,
   "preview": PreviewNode,
   "sticky-note": StickyNoteNode,
   "router": RouterNode,

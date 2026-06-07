@@ -1,9 +1,11 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { PLACEHOLDER_CHARACTER_NAME } from "@nodaro/shared"
+import type { ReferenceSheet } from "@nodaro/shared"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { normalizeImageProvider } from "../lib/image-provider.js"
 import { supabase } from "../lib/supabase.js"
+import { deriveAvailableName } from "../lib/entity-naming.js"
 import { requireAppScope } from "../lib/scope-prehandler.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { hasCredits } from "../lib/config.js"
@@ -138,7 +140,7 @@ const listCharactersQuery = z.object({
 })
 
 const SELECT_COLUMNS =
-  "id, user_id, node_id, project_id, name, description, gender, style, base_outfit, source_image_url, image_provider, expressions, poses, lighting_variations, angles, body_angles, motions, reference_videos_by_variant, voice, personality, canonical_description, lora_training_status, lora_replicate_version, lora_trigger_word, lora_trained_at, deleted_at, created_at, updated_at"
+  "id, user_id, node_id, project_id, name, description, gender, style, base_outfit, source_image_url, image_provider, expressions, poses, lighting_variations, angles, body_angles, motions, reference_videos_by_variant, voice, personality, canonical_description, lora_training_status, lora_replicate_version, lora_trigger_word, lora_trained_at, sheets, detail_closeups, outfit_variations, deleted_at, created_at, updated_at"
 
 type CharacterRow = {
   id: string
@@ -166,6 +168,10 @@ type CharacterRow = {
   lora_replicate_version: string | null
   lora_trigger_word: string | null
   lora_trained_at: string | null
+  // Reference-sheet buckets (migration 200).
+  sheets: ReferenceSheet[] | null
+  detail_closeups: unknown[] | null
+  outfit_variations: unknown[] | null
   deleted_at: string | null
   created_at: string
   updated_at: string
@@ -190,6 +196,9 @@ function toCamel(c: CharacterRow) {
     angles: c.angles,
     bodyAngles: c.body_angles,
     motions: c.motions,
+    sheets: c.sheets ?? [],
+    detailCloseups: c.detail_closeups ?? [],
+    outfitVariations: c.outfit_variations ?? [],
     referenceVideosByVariant: c.reference_videos_by_variant ?? {},
     voice: c.voice,
     personality: c.personality,
@@ -220,32 +229,6 @@ function normalizeVariantKeys(
 }
 
 /**
- * Find the next available name for this user matching `baseName` (or `baseName N`).
- * Used for placeholder auto-numbering ("Untitled character 2"), duplicate
- * suffixes ("Kira (copy)", "Kira (copy 2)"), and restore-on-conflict ("Kira (restored)").
- * Case-insensitive comparison since the unique index is `LOWER(name)`.
- *
- * Pure computation off a live snapshot — a concurrent insert can still race
- * past us, so callers should retry on 23505 (see `insertWithUniqueName`).
- */
-async function deriveAvailableName(userId: string, baseName: string): Promise<string> {
-  const { data } = await supabase
-    .from("characters")
-    .select("name")
-    .eq("user_id", userId)
-    .is("deleted_at", null)
-    .ilike("name", `${baseName}%`)
-  const existing = new Set<string>((data ?? []).map((r) => r.name.toLowerCase()))
-  if (!existing.has(baseName.toLowerCase())) return baseName
-  for (let n = 2; n < 1000; n++) {
-    const candidate = `${baseName} ${n}`
-    if (!existing.has(candidate.toLowerCase())) return candidate
-  }
-  // 1000 collisions is implausible — but bail gracefully rather than spin.
-  throw new Error(`No available name based on '${baseName}'`)
-}
-
-/**
  * Insert a character row whose `name` is auto-derived from `baseName`.
  * Retries up to 5 times on 23505 (unique violation) to absorb concurrent races.
  */
@@ -255,7 +238,7 @@ async function insertWithUniqueName(
   baseName: string,
 ): Promise<{ id: string; name: string } | { error: { code: string; message: string } }> {
   for (let attempt = 0; attempt < 5; attempt++) {
-    const name = await deriveAvailableName(userId, baseName)
+    const name = await deriveAvailableName("characters", userId, baseName)
     const { data, error } = await supabase
       .from("characters")
       .insert({ ...payload, name })
@@ -727,7 +710,7 @@ export async function characterRoutes(app: FastifyInstance) {
     const taken = (conflicts ?? []).length > 0
     let restoredName = archived.name
     if (taken) {
-      restoredName = await deriveAvailableName(userId, `${archived.name} (restored)`)
+      restoredName = await deriveAvailableName("characters", userId, `${archived.name} (restored)`)
     }
 
     // Retry up to 3× on 23505 to absorb a concurrent restorer.
@@ -744,7 +727,7 @@ export async function characterRoutes(app: FastifyInstance) {
         return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
       }
       // Conflict — recompute and try again.
-      restoredName = await deriveAvailableName(userId, `${archived.name} (restored)`)
+      restoredName = await deriveAvailableName("characters", userId, `${archived.name} (restored)`)
     }
     return reply.status(409).send({ error: { code: "name_taken", message: "Couldn't find a free name to restore under." } })
   })

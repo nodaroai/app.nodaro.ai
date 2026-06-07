@@ -647,6 +647,14 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
       : (selectorData.__pickedResults ?? selectorData.pickedResults);
     return results && results.length > 0 ? results[0] : undefined;
   }
+  if (type === "reference-sheet") {
+    // Dual-output: `panels` → first clean panel URL (the full set is spread into
+    // referenceImageUrls by the input resolver); `sheet`/default → the
+    // composited sheet image (active result). Mirrors backend getPrimaryOutput.
+    if (sourceHandle === "panels") return (data.panelUrls as string[] | undefined)?.[0];
+    const results = (data.generatedResults as GeneratedResult[] | undefined) ?? [];
+    return results[(data.activeResultIndex as number | undefined) ?? 0]?.url;
+  }
   if (type === "filter-list" || type === "deduplicate" || type === "merge-lists" || type === "sort-list") {
     const listResults =
       ((data as { __listResults?: string[] }).__listResults) ??

@@ -1,4 +1,4 @@
-import type { CharacterAspectRatio, EntityStyle } from "@nodaro/shared"
+import type { CharacterAspectRatio, CharacterAttachColumn, EntityStyle } from "@nodaro/shared"
 import type { NodaroClient } from "../client.js"
 
 /**
@@ -280,12 +280,8 @@ export interface GenerateAssetInput {
   provider?: string
   /** Auto-attach to character row + asset bucket on completion. */
   attachToCharacterId?: string
-  attachToColumn?:
-    | "expressions"
-    | "poses"
-    | "angles"
-    | "body_angles"
-    | "lighting_variations"
+  /** Shared type — auto-includes new buckets (sheets/detail_closeups/outfit_variations); mirrors objects.ts/locations.ts. */
+  attachToColumn?: CharacterAttachColumn
   attachName?: string
   /**
    * Explicit aspect ratio. Highest precedence — overrides both the character

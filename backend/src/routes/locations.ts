@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { LOCATION_REFERENCE_PHOTO_KINDS, LOCATION_ATTACH_COLUMNS } from "@nodaro/shared"
+import type { ReferenceSheet } from "@nodaro/shared"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { normalizeImageProvider } from "../lib/image-provider.js"
 import { supabase } from "../lib/supabase.js"
@@ -124,7 +125,7 @@ const listLocationsQuery = z.object({
 
 // Single source of truth for the GET column list — keeps single + list in lock-step.
 const SELECT_COLUMNS =
-  "id, user_id, node_id, project_id, name, description, category, style, source_image_url, image_provider, time_of_day, weather, angles, lighting, seasons, atmosphere_motions, reference_photos, canonical_description, style_lock, pii_consent_at, deleted_at, created_at, updated_at"
+  "id, user_id, node_id, project_id, name, description, category, style, source_image_url, image_provider, time_of_day, weather, angles, lighting, seasons, atmosphere_motions, reference_photos, canonical_description, style_lock, pii_consent_at, sheets, detail_closeups, deleted_at, created_at, updated_at"
 
 type LocationRow = {
   id: string
@@ -147,6 +148,9 @@ type LocationRow = {
   canonical_description: string | null
   style_lock: boolean | null
   pii_consent_at: string | null
+  // Reference-sheet buckets (migration 200).
+  sheets: ReferenceSheet[] | null
+  detail_closeups: unknown[] | null
   deleted_at: string | null
   created_at: string
   updated_at: string
@@ -176,6 +180,8 @@ function toCamel(loc: LocationRow) {
     canonicalDescription: loc.canonical_description ?? "",
     styleLock: loc.style_lock ?? true,
     piiConsentAt: loc.pii_consent_at,
+    sheets: loc.sheets ?? [],
+    detailCloseups: loc.detail_closeups ?? [],
     deletedAt: loc.deleted_at,
     createdAt: loc.created_at,
     updatedAt: loc.updated_at,

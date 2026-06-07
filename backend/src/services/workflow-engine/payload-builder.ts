@@ -14,6 +14,7 @@ import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotio
 import { buildLipSyncCreditId, isPerSecondLipSyncProvider } from "@nodaro/shared"
 import { resolveAiAvatarCreditId } from "@nodaro/shared"
 import { resolveCinematicCreditId } from "@nodaro/shared"
+import { referenceSheetCreditId } from "@nodaro/shared"
 import { validateAiAvatarPayload, validateCinematicAvatarPayload } from "@nodaro/shared"
 import { resolveNodeRefs } from "@nodaro/shared"
 import {
@@ -226,6 +227,38 @@ function buildConnectedRefsFromUrls(
     })
   }
   return out
+}
+
+/**
+ * Walk the incoming edges of a reference-sheet node to the upstream composable
+ * entity and read its (kind, DB id). Mirrors the `expandWiredCharacterRefs`
+ * upstream-walk but returns just the first character/object/location's identity
+ * — a sheet composes from ONE entity. Extracted as a pure helper so the
+ * upstream-walk is directly unit-testable without standing up the whole
+ * payload-builder (`buildPayload` builds a ref-map + resolves @mentions first).
+ *
+ * `face` is intentionally NOT a candidate — it has no panel buckets and the
+ * input-handle predicate already rejects it; this keeps the BE in lockstep.
+ */
+export function resolveSheetEntity(
+  consumerNodeId: string,
+  buildCtx: PayloadBuildContext | undefined,
+): { entityKind?: "character" | "object" | "location"; entityDbId?: string } {
+  if (!buildCtx?.nodes || !buildCtx.edges) return {}
+  const nodeById = new Map(buildCtx.nodes.map((n) => [n.id, n] as const))
+  const incoming = buildCtx.edges.filter((e) => e.target === consumerNodeId)
+  for (const e of incoming) {
+    const up = nodeById.get(e.source)
+    if (!up) continue
+    if (up.type === "character" || up.type === "object" || up.type === "location") {
+      const d = up.data as Record<string, unknown>
+      const idField =
+        up.type === "character" ? "characterDbId" : up.type === "object" ? "objectDbId" : "locationDbId"
+      const entityDbId = d[idField] as string | undefined
+      return { entityKind: up.type, entityDbId: typeof entityDbId === "string" && entityDbId.length > 0 ? entityDbId : undefined }
+    }
+  }
+  return {}
 }
 
 /** Expand wired upstream Character nodes into canonical + per-variant refs. */
@@ -2518,6 +2551,35 @@ export function buildPayload(
           numSteps: (data.numSteps as number | undefined) ?? 25,
           seed: data.seed as number | undefined,
           versions: (data.versions as number | undefined) ?? 1,
+          usageLogId,
+        },
+      }
+    }
+
+    case "reference-sheet": {
+      // Compose-only: resolve the connected entity's (kind, DB id) by walking the
+      // incoming edge. The worker (`workers/handlers/reference-sheet.ts`) reads
+      // job.data.{type, skin, flavour, entityKind, entityDbId} — `type` is the
+      // SHEET type (data.type), NOT the queue discriminator (`jobName`). Keys here
+      // MUST match the route's `videoQueue.add("reference-sheet", { ...body })`
+      // shape so workflow-run + single-node Run hit the same handler.
+      const { entityKind, entityDbId } = resolveSheetEntity(node.id, buildCtx)
+      return {
+        jobName: "reference-sheet",
+        queueName: "video-generation",
+        // Flavour-aware so a motion sheet reserves the same id the route's
+        // single-node path uses (`sheetCreditId` in routes/reference-sheet.ts):
+        // motion → 6cr assembly, still → 4cr. Resolving different ids at the two
+        // sites would under-bill workflow runs (was hardcoded to the still id).
+        // Shared single source of truth (mirrors the route + node display).
+        modelIdentifier: referenceSheetCreditId(data.flavour as { outputFormat?: string } | undefined),
+        payload: {
+          jobId,
+          type: data.type,
+          skin: data.skin,
+          flavour: data.flavour,
+          entityKind,
+          entityDbId,
           usageLogId,
         },
       }

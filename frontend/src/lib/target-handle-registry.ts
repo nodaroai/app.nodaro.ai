@@ -156,6 +156,17 @@ export const ACCEPTS_PARAMETER_PICKER = (sourceType: string): boolean => HINT_PR
  */
 export const ACCEPTS_CHARACTER_REF = (sourceType: string): boolean => IDENTITY_TYPES.has(sourceType)
 
+/**
+ * Reference Sheet's `in` handle accepts ONLY the three composable entity kinds —
+ * character / object / location. Deliberately NARROWER than ACCEPTS_CHARACTER_REF
+ * (which also admits `face`): the reference-sheet route + worker only know how to
+ * load panels from `characters` / `objects` / `locations` rows (see
+ * `routes/reference-sheet.ts` TABLE map + `EntityKind` in @nodaro/shared). A face
+ * has no panel buckets, so it must not light up the pip or pass drop validation.
+ */
+export const ACCEPTS_ENTITY_REF = (sourceType: string): boolean =>
+  sourceType === "character" || sourceType === "object" || sourceType === "location"
+
 /** Friendly labels for Generate Image's six input handles, used by the
  *  candidate-row chip in source-direction popovers. */
 const GENERATE_IMAGE_HANDLE_LABELS: Record<string, string> = {
@@ -204,6 +215,13 @@ export const TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEnt
   // nothing.
   "character-fx": [
     { handleId: "target", label: "Target subject", accepts: ACCEPTS_CHARACTER_REF },
+  ],
+
+  // Reference Sheet takes ONE entity ref on its `in` handle (character / object /
+  // location). The executor walks this edge to the upstream entity's (kind, DB id)
+  // and composes a sheet from the panels that entity already has.
+  "reference-sheet": [
+    { handleId: "in", label: "Subject", accepts: ACCEPTS_ENTITY_REF },
   ],
 
   // FFmpeg / pure-processing nodes — every entry's accepts predicate

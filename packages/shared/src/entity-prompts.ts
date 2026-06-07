@@ -54,6 +54,13 @@ export const CHARACTER_ATTACH_COLUMNS = [
   "angles",
   "body_angles",
   "lighting_variations",
+  // Reference-sheet buckets (migration 200). `sheets` holds composited
+  // reference sheets; `detail_closeups` holds macro close-up panels;
+  // `outfit_variations` holds wardrobe panels (character-only — objects and
+  // locations don't have an outfit dimension).
+  "sheets",
+  "detail_closeups",
+  "outfit_variations",
 ] as const
 export type CharacterAttachColumn = (typeof CHARACTER_ATTACH_COLUMNS)[number]
 
@@ -129,8 +136,25 @@ export const LOCATION_ATTACH_COLUMNS = [
   "angles",
   "lighting",
   "atmosphere_motions",
+  // Reference-sheet buckets (migration 200). Locations get `sheets` +
+  // `detail_closeups` (no `outfit_variations` — that's character-only).
+  "sheets",
+  "detail_closeups",
 ] as const
 export type LocationAttachColumn = (typeof LOCATION_ATTACH_COLUMNS)[number]
+
+/**
+ * Canonical variant presets per LOCATION asset type — hoisted from
+ * `backend/src/routes/generate-location-asset.ts` (single source of truth shared
+ * with the reference-sheet catalog; Plan 04 switches the route to import this).
+ */
+export const LOCATION_ASSET_VARIANTS = {
+  timeOfDay: ["dawn", "morning", "noon", "afternoon", "golden hour", "dusk", "blue hour", "night", "midnight"],
+  weather: ["clear", "cloudy", "light rain", "heavy rain", "storm", "snow", "blizzard", "fog", "mist"],
+  seasons: ["spring", "summer", "autumn", "winter"],
+  angles: ["wide", "medium", "closeup", "aerial", "low-angle", "eye-level", "bird's-eye", "dutch tilt"],
+  lighting: ["soft natural", "harsh sunlight", "golden", "blue hour", "neon", "candlelit", "cinematic", "dramatic chiaroscuro"],
+} as const satisfies Partial<Record<LocationAssetType, readonly string[]>>
 
 /**
  * Reference-photo kind discriminator — the mood-board roles a user can attach
@@ -337,8 +361,24 @@ export const OBJECT_ATTACH_COLUMNS = [
   "materials",
   "variations",
   "motion_clips",
+  // Reference-sheet buckets (migration 200). Objects get `sheets` +
+  // `detail_closeups` (no `outfit_variations` — that's character-only).
+  "sheets",
+  "detail_closeups",
 ] as const
 export type ObjectAttachColumn = (typeof OBJECT_ATTACH_COLUMNS)[number]
+
+/**
+ * Canonical variant presets per OBJECT asset type — hoisted from
+ * `backend/src/routes/generate-object-asset.ts` so the route, the reference-sheet
+ * catalog, and any client share one list and can't drift. (Plan 04 switches the
+ * route to import this.) `custom`/`motion` have no preset list.
+ */
+export const OBJECT_ASSET_VARIANTS = {
+  angles: ["front", "side", "top", "back", "three-quarter"],
+  materials: ["wood", "metal", "glass", "plastic", "fabric", "stone"],
+  variations: ["clean", "weathered", "damaged", "ornate", "minimal"],
+} as const satisfies Partial<Record<ObjectAssetType, readonly string[]>>
 
 /**
  * Input shape for buildObjectMotionPrompt.

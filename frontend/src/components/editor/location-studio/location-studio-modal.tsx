@@ -1,5 +1,7 @@
-import { useEffect, useState } from "react"
+import { Suspense, lazy, useEffect, useState } from "react"
+import { Upload } from "lucide-react"
 import { useLocationStudio } from "./use-location-studio"
+import { useLocationStudioJobs } from "./use-location-studio-jobs"
 import { AppearanceTab } from "./appearance-tab"
 import { TimeOfDayTab } from "./time-of-day-tab"
 import { WeatherTab } from "./weather-tab"
@@ -7,6 +9,22 @@ import { SeasonsTab } from "./seasons-tab"
 import { AnglesTab } from "./angles-tab"
 import { LightingTab } from "./lighting-tab"
 import { MotionTab } from "./motion-tab"
+import { ReferenceSheetTab } from "../reference-sheet/reference-sheet-tab"
+import { SHEET_TAB_ADAPTERS } from "../reference-sheet/sheet-tab-adapter"
+import { Button } from "@/components/ui/button"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import { useAuth } from "@/hooks/use-auth"
+import { isMultiUser } from "@/lib/edition"
+
+// Lazy dynamic import keeps this core file off the ee/ static-import graph
+// (check-ee-imports.mjs only flags top-level `import ... from "@/ee/..."`,
+// not `import()` call expressions — same pattern as character-studio-modal.tsx).
+const PublishDialog = lazy(() => import("@/ee/components/community/publish-dialog"))
 
 /**
  * Location Studio — fullscreen modal shell.
@@ -31,6 +49,7 @@ type TabId =
   | "angles"
   | "lighting"
   | "motion"
+  | "sheet"
 
 interface TabButtonProps {
   readonly id: TabId
@@ -71,7 +90,12 @@ interface LocationStudioModalProps {
 
 export function LocationStudioModal({ nodeId, onClose }: LocationStudioModalProps) {
   const studio = useLocationStudio(nodeId)
+  // Modal-level jobs hook for the Sheet tab's Stage-A panel tracking. The
+  // environmental-asset tabs each create their own; the sheet tab consumes this.
+  const sheetJobs = useLocationStudioJobs([])
+  const { isAdmin } = useAuth()
   const [activeTab, setActiveTab] = useState<TabId>("appearance")
+  const [showPublish, setShowPublish] = useState(false)
 
   // Escape closes the modal — with a dirty-check prompt so unsaved edits
   // aren't silently discarded. In-flight saves block close entirely (the
@@ -113,6 +137,7 @@ export function LocationStudioModal({ nodeId, onClose }: LocationStudioModalProp
     angles: data.angles?.length ?? 0,
     lighting: data.lighting?.length ?? 0,
     motion: data.atmosphereMotions?.length ?? 0,
+    sheets: data.sheets?.length ?? 0,
   }
 
   return (
@@ -167,6 +192,32 @@ export function LocationStudioModal({ nodeId, onClose }: LocationStudioModalProp
           >
             {studio.isSaving ? "Saving…" : "Save"}
           </button>
+          {isAdmin && isMultiUser() && (
+            <TooltipProvider delayDuration={0}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  {/* span wrapper so the tooltip still fires while the button is disabled */}
+                  <span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 gap-1.5 text-[11px] text-slate-300 hover:text-white hover:bg-[#1e293b]"
+                      disabled={!data.locationDbId}
+                      onClick={() => setShowPublish(true)}
+                    >
+                      <Upload className="h-3.5 w-3.5" />
+                      Share to community
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {!data.locationDbId && (
+                  <TooltipContent side="bottom">
+                    Generate an appearance to save the location first
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            </TooltipProvider>
+          )}
           <button
             type="button"
             onClick={() => {
@@ -182,6 +233,18 @@ export function LocationStudioModal({ nodeId, onClose }: LocationStudioModalProp
           </button>
         </div>
       </div>
+
+      {isAdmin && isMultiUser() && data.locationDbId && (
+        <Suspense fallback={null}>
+          <PublishDialog
+            entityType="location"
+            entityId={data.locationDbId}
+            defaultTitle={data.locationName}
+            open={showPublish}
+            onOpenChange={setShowPublish}
+          />
+        </Suspense>
+      )}
 
       {/* body */}
       <div className="flex flex-1 overflow-hidden">
@@ -257,6 +320,18 @@ export function LocationStudioModal({ nodeId, onClose }: LocationStudioModalProp
             active={activeTab === "motion"}
             onClick={() => setActiveTab("motion")}
           />
+
+          <div className="px-3.5 pb-1.5 pt-4 text-[9px] uppercase tracking-widest text-slate-700 font-semibold">
+            Sheet
+          </div>
+          <TabButton
+            id="sheet"
+            icon="📋"
+            label="Sheet"
+            count={counts.sheets}
+            active={activeTab === "sheet"}
+            onClick={() => setActiveTab("sheet")}
+          />
         </aside>
 
         <main className="flex-1 overflow-y-auto p-4">
@@ -267,6 +342,9 @@ export function LocationStudioModal({ nodeId, onClose }: LocationStudioModalProp
           {activeTab === "angles" && <AnglesTab studio={studio} />}
           {activeTab === "lighting" && <LightingTab studio={studio} />}
           {activeTab === "motion" && <MotionTab studio={studio} />}
+          {activeTab === "sheet" && (
+            <ReferenceSheetTab adapter={SHEET_TAB_ADAPTERS.location} studio={studio} jobs={sheetJobs} accent="#22d3ee" />
+          )}
         </main>
       </div>
     </div>

@@ -14,6 +14,7 @@ import { ffmpegHandlers } from "./handlers/ffmpeg.js"
 import { audioAIHandlers } from "./handlers/audio-ai.js"
 import { sunoHandlers } from "./handlers/suno.js"
 import { entityHandlers } from "./handlers/entity.js"
+import { referenceSheetHandlers } from "./handlers/reference-sheet.js"
 import { buildStatsKey, upsertExecutionStats } from "../services/execution-stats.js"
 import { tryInlineReconcile } from "./inline-reconcile.js"
 
@@ -25,6 +26,7 @@ const allHandlers: Record<string, HandlerFn> = {
   ...audioAIHandlers,
   ...sunoHandlers,
   ...entityHandlers,
+  ...referenceSheetHandlers,
 }
 
 export function createVideoWorker() {

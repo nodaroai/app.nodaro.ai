@@ -113,6 +113,8 @@ const CAMEL_LOCATION = {
   referencePhotos: [],
   canonicalDescription: "", // coerced from null
   styleLock: true,
+  sheets: [],
+  detailCloseups: [],
   deletedAt: null,
   createdAt: "2026-01-01T00:00:00Z",
   updatedAt: "2026-01-01T00:00:00Z",

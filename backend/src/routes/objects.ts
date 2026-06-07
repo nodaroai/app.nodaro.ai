@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { OBJECT_ATTACH_COLUMNS } from "@nodaro/shared"
+import type { ReferenceSheet } from "@nodaro/shared"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { normalizeImageProvider } from "../lib/image-provider.js"
 import { supabase } from "../lib/supabase.js"
@@ -116,7 +117,7 @@ const listObjectsQuery = z.object({
 
 // Single source of truth for the GET column list — keeps single + list in lock-step.
 const SELECT_COLUMNS =
-  "id, user_id, node_id, project_id, name, description, category, style, source_image_url, image_provider, angles, materials, variations, motion_clips, reference_photos, canonical_description, style_lock, deleted_at, created_at, updated_at"
+  "id, user_id, node_id, project_id, name, description, category, style, source_image_url, image_provider, angles, materials, variations, motion_clips, reference_photos, canonical_description, style_lock, sheets, detail_closeups, deleted_at, created_at, updated_at"
 
 type ObjectRow = {
   id: string
@@ -136,6 +137,9 @@ type ObjectRow = {
   reference_photos: { kind: string; url: string }[] | null
   canonical_description: string | null
   style_lock: boolean | null
+  // Reference-sheet buckets (migration 200).
+  sheets: ReferenceSheet[] | null
+  detail_closeups: unknown[] | null
   deleted_at: string | null
   created_at: string
   updated_at: string
@@ -162,6 +166,8 @@ function toCamel(obj: ObjectRow) {
     referencePhotos: obj.reference_photos ?? [],
     canonicalDescription: obj.canonical_description ?? "",
     styleLock: obj.style_lock ?? true,
+    sheets: obj.sheets ?? [],
+    detailCloseups: obj.detail_closeups ?? [],
     deletedAt: obj.deleted_at,
     createdAt: obj.created_at,
     updatedAt: obj.updated_at,
