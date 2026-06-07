@@ -21,6 +21,7 @@ import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { hasAdmin } from "../lib/config.js"
 import { hashApiToken, resolveApiToken } from "../lib/api-token-resolver.js"
+import { rejectProgrammaticAuth } from "../lib/api-auth-mode.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
 import { estimateWorkflowCredits } from "../ee/billing/credits.js"
 import type { WorkflowExecutionJob, NodeExecutionState } from "../services/workflow-engine/types.js"
@@ -177,6 +178,10 @@ export async function apiTokenRoutes(app: FastifyInstance) {
       })
     }
 
+    // JWT-only: an OAuth app token (any scope) or personal API token must NOT be
+    // able to mint a new — unscoped — personal token (privilege escalation).
+    if (rejectProgrammaticAuth(req, reply, "API token management is only available from a logged-in session.")) return
+
     if (!hasAdmin()) {
       return reply.status(403).send({
         error: { code: "edition_required", required_edition: "business", message: "API tokens require Business or Cloud edition" },
@@ -254,6 +259,8 @@ export async function apiTokenRoutes(app: FastifyInstance) {
       })
     }
 
+    if (rejectProgrammaticAuth(req, reply, "API token management is only available from a logged-in session.")) return
+
     if (!hasAdmin()) {
       return reply.status(403).send({
         error: { code: "edition_required", required_edition: "business", message: "API tokens require Business or Cloud edition" },
@@ -282,6 +289,8 @@ export async function apiTokenRoutes(app: FastifyInstance) {
         error: { code: "unauthorized", message: "Authentication required" },
       })
     }
+
+    if (rejectProgrammaticAuth(req, reply, "API token management is only available from a logged-in session.")) return
 
     const paramsParsed = tokenIdParams.safeParse(req.params)
     if (!paramsParsed.success) {
@@ -341,6 +350,8 @@ export async function apiTokenRoutes(app: FastifyInstance) {
         error: { code: "unauthorized", message: "Authentication required" },
       })
     }
+
+    if (rejectProgrammaticAuth(req, reply, "API token management is only available from a logged-in session.")) return
 
     const parsed = tokenIdParams.safeParse(req.params)
     if (!parsed.success) {

@@ -14,6 +14,7 @@ import { supabase } from "../../lib/supabase.js"
 import { getStripe } from "../billing/stripe-client.js"
 import { PRICE_TO_PLAN, getTierFromPriceId, TIER_CREDITS, TIER_STORAGE_LIMITS, TOP_UPS } from "../billing/stripe-config.js"
 import { ensureStripeCustomer } from "../billing/provision-credits.js"
+import { rejectProgrammaticAuth } from "../../lib/api-auth-mode.js"
 
 /** Extract origin from request headers for redirect URLs. */
 function getOrigin(req: { headers: Record<string, string | string[] | undefined> }): string {
@@ -90,6 +91,9 @@ export async function billingRoutes(app: FastifyInstance) {
     if (!userId) {
       return reply.status(401).send({ error: "Authentication required" })
     }
+    // Billing is a first-party UI action — block OAuth apps + personal tokens
+    // (no scope authorizes changing the owner's Stripe subscription / charges).
+    if (rejectProgrammaticAuth(req, reply, "Billing management is only available from a logged-in session.")) return
 
     const parsed = checkoutSessionSchema.safeParse(req.body)
     if (!parsed.success) {
@@ -167,6 +171,7 @@ export async function billingRoutes(app: FastifyInstance) {
     if (!userId) {
       return reply.status(401).send({ error: "Authentication required" })
     }
+    if (rejectProgrammaticAuth(req, reply, "Billing management is only available from a logged-in session.")) return
 
     // Look up Stripe customer ID
     const { data: customer } = await supabase
@@ -198,6 +203,7 @@ export async function billingRoutes(app: FastifyInstance) {
     if (!userId) {
       return reply.status(400).send({ error: "Authentication and newPriceId are required" })
     }
+    if (rejectProgrammaticAuth(req, reply, "Billing management is only available from a logged-in session.")) return
 
     const parsed = changePlanSchema.safeParse(req.body)
     if (!parsed.success) {

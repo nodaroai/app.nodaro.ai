@@ -92,4 +92,31 @@ describe("node-preset-groups routes", () => {
     const res = await app.inject({ method: "GET", url: "/v1/node-preset-groups" })
     expect(res.statusCode).toBe(401)
   })
+
+  it("write routes reject programmatic tokens (OAuth + personal API token) — groups are read-only over the API", async () => {
+    type AuthReq = {
+      userId?: string
+      appAuthorization?: { appId: string; authorizationId: string; scopes: string[] }
+      apiToken?: { userId: string }
+    }
+    const writes: Array<{ method: "POST" | "PATCH" | "DELETE"; url: string; payload?: Record<string, unknown> }> = [
+      { method: "POST", url: "/v1/node-preset-groups", payload: { nodeType: "generate-image", name: "Looks", kind: "folder" } },
+      { method: "PATCH", url: "/v1/node-preset-groups/00000000-0000-4000-8000-000000000bbb", payload: { name: "n" } },
+      { method: "DELETE", url: "/v1/node-preset-groups/00000000-0000-4000-8000-000000000bbb" },
+    ]
+
+    for (const auth of [
+      (r: AuthReq) => { r.appAuthorization = { appId: "a", authorizationId: "z", scopes: ["presets:read"] } },
+      (r: AuthReq) => { r.apiToken = { userId: USER } },
+    ]) {
+      fromMock.mockReturnValue(makeQB({ single: { id: "g", user_id: USER, node_type: "t", name: "n", kind: "folder", sort_order: 0, created_at: "", updated_at: "" } }))
+      const app = Fastify()
+      app.addHook("preHandler", async (req) => { const r = req as AuthReq; r.userId = USER; auth(r) })
+      await app.register(nodePresetGroupRoutes)
+      for (const w of writes) {
+        const res = await app.inject({ method: w.method, url: w.url, payload: w.payload })
+        expect(res.statusCode, `${w.method} ${w.url}`).toBe(403)
+      }
+    }
+  })
 })

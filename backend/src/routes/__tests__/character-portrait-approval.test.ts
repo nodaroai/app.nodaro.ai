@@ -2,12 +2,21 @@ import Fastify, { type FastifyInstance } from "fastify"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { supabase } from "../../lib/supabase.js"
 import { llmComplete } from "../../lib/llm-client.js"
+import { meterSyncLlm } from "../../lib/meter-sync-llm.js"
 import { characterPortraitApprovalRoutes } from "../character-portrait-approval.js"
 
 vi.mock("../../lib/llm-client.js", () => ({
   llmComplete: vi.fn(),
 }))
 vi.mock("../../lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
+// The /llm-caption route now meters credits; no-op the guard + stub the meter
+// (credit machinery is tested in its own suites). approve-portrait is unmetered
+// and unaffected.
+vi.mock("../../middleware/credit-guard.js", () => ({
+  creditGuard: () => async () => {},
+  reserveCreditsForJob: vi.fn().mockResolvedValue(undefined),
+}))
+vi.mock("../../lib/meter-sync-llm.js", () => ({ meterSyncLlm: vi.fn() }))
 // CI has no .env so config.KIE_API_KEY / ANTHROPIC_API_KEY are empty strings,
 // which trips the route's 503 provider_unavailable preflight before any test
 // logic runs. Mock the keys as truthy so the preflight passes.
@@ -20,6 +29,7 @@ const TEST_CHARACTER_ID = "00000000-0000-0000-0000-000000000002"
 const TEST_JOB_ID = "00000000-0000-0000-0000-000000000003"
 
 let app: FastifyInstance
+let meter: { jobId: string; usageLogId?: string; commit: ReturnType<typeof vi.fn>; refund: ReturnType<typeof vi.fn> }
 
 beforeEach(async () => {
   vi.clearAllMocks()
@@ -27,6 +37,8 @@ beforeEach(async () => {
     text: "Kira: late 20s, dark hair, designer glasses, warm presence",
     model: "claude-sonnet-4.6",
   } as Awaited<ReturnType<typeof llmComplete>>)
+  meter = { jobId: "job-1", usageLogId: "ul-1", commit: vi.fn().mockResolvedValue(undefined), refund: vi.fn().mockResolvedValue(undefined) }
+  vi.mocked(meterSyncLlm).mockResolvedValue(meter as never)
   app = Fastify({ logger: false })
   app.addHook("preHandler", async (req) => {
     const header = req.headers["x-user-id"]
@@ -283,6 +295,8 @@ describe("POST /v1/characters/:id/llm-caption", () => {
     })
     expect(res.statusCode).toBe(200)
     expect(res.json().canonicalDescription).toMatch(/Kira/)
+    expect(meter.commit).toHaveBeenCalled()
+    expect(meter.refund).not.toHaveBeenCalled()
   })
 
   it("returns 400 no_portrait when source_image_url is null", async () => {
@@ -311,5 +325,7 @@ describe("POST /v1/characters/:id/llm-caption", () => {
       payload: {},
     })
     expect(res.statusCode).toBe(502)
+    expect(meter.refund).toHaveBeenCalled()
+    expect(meter.commit).not.toHaveBeenCalled()
   })
 })

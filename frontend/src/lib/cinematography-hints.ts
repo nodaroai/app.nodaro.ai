@@ -132,8 +132,11 @@ export function collectCinematographyHints(
     if (exclude?.has(srcNode.type ?? "")) continue
 
     if (srcNode.type === "camera-motion") {
-      const motionId = (srcNode.data as Record<string, unknown>).cameraMotion as string | undefined
-      const composed = composeCameraMotionHintForNode(motionId, srcNode.id, nodes, edges)
+      // Build via the shared getParameterPromptHint WITH graph context so the
+      // startState/endState walk runs AND the node's preText/postText is applied
+      // (withCustomText). composeCameraMotionHintForNode bypassed custom text, so
+      // it was dropped at execution while the injection preview promised it.
+      const composed = getParameterPromptHint(srcNode, { nodes, edges })
       if (composed) hints.push(composed)
       continue
     }

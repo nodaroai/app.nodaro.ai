@@ -16,7 +16,6 @@ import { resolveAiAvatarCreditId } from "@nodaro/shared"
 import { resolveCinematicCreditId } from "@nodaro/shared"
 import { validateAiAvatarPayload, validateCinematicAvatarPayload } from "@nodaro/shared"
 import { resolveNodeRefs } from "@nodaro/shared"
-import { composeCameraMotionHintFromConnections } from "@nodaro/shared"
 import {
   composeSoundHintFromConnections,
   truncateForField,
@@ -1220,34 +1219,6 @@ function getNodePromptHint(node: SimpleNode | undefined): string {
 }
 
 /**
- * Compose a camera-motion hint for a camera-motion SOURCE node: read its
- * `cameraMotion` id, walk its startState/endState incoming edges to collect
- * prompt hints from connected parameter nodes, and delegate to the shared
- * composer. Returns the empty string when the motion id is missing.
- */
-function composeCameraMotionHintForNode(
-  motionId: string | undefined,
-  sourceNodeId: string,
-  ctx: PayloadBuildContext | undefined,
-): string {
-  if (!motionId) return ""
-  const nodes = ctx?.nodes ?? []
-  const edges = ctx?.edges ?? []
-  const startHints: string[] = []
-  const endHints: string[] = []
-  for (const edge of edges) {
-    if (edge.target !== sourceNodeId) continue
-    const srcNode = nodes.find((n) => n.id === edge.source)
-    if (!srcNode) continue
-    const hint = getNodePromptHint(srcNode)
-    if (!hint) continue
-    if (edge.targetHandle === "startState") startHints.push(hint)
-    else if (edge.targetHandle === "endState") endHints.push(hint)
-  }
-  return composeCameraMotionHintFromConnections(motionId, startHints, endHints)
-}
-
-/**
  * True when the consumer node has a connected Style parameter node on its
  * `cinematography` handle. Mirror of the frontend `hasConnectedStyleNode`.
  * Used to bypass the inline `style` field on image payloads — when a Style
@@ -1313,8 +1284,12 @@ function collectCinematographyHints(
     if (exclude?.has(srcNode.type ?? "")) continue
 
     if (srcNode.type === "camera-motion") {
-      const motionId = (srcNode.data as Record<string, unknown>).cameraMotion as string | undefined
-      const composed = composeCameraMotionHintForNode(motionId, srcNode.id, ctx)
+      // Use the shared getParameterPromptHint WITH graph context so the
+      // startState/endState walk runs AND the node's preText/postText is applied
+      // (withCustomText). The old composeCameraMotionHintForNode bypassed custom
+      // text (and dropped everything when no motion was set), so it was lost at
+      // execution while the injection preview promised it.
+      const composed = getParameterPromptHint(srcNode, { nodes, edges })
       if (composed) hints.push(composed)
       continue
     }

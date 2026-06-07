@@ -233,6 +233,15 @@ export async function creditsRoutes(app: FastifyInstance) {
       })
     }
 
+    // Internal-only. These three routes mutate credit balances directly with NO
+    // job-status check (they trust the worker lifecycle to drive them). Reachable
+    // only via the internal-orchestrator secret — a user JWT / API token must NOT
+    // reach them, else a user could refund/zero-out their own reservation mid-job
+    // (worker's later commit then CAS-no-ops) → unlimited free generations.
+    if (!req.isInternalCall) {
+      return reply.status(403).send({ error: { code: "forbidden", message: "Internal endpoint" } })
+    }
+
     const parsed = reserveBody.safeParse(req.body ?? {})
     if (!parsed.success) {
       return reply.status(400).send({
@@ -270,6 +279,11 @@ export async function creditsRoutes(app: FastifyInstance) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
       })
+    }
+
+    // Internal-only (see /reserve) — block direct user/API access.
+    if (!req.isInternalCall) {
+      return reply.status(403).send({ error: { code: "forbidden", message: "Internal endpoint" } })
     }
 
     const parsed = commitBody.safeParse(req.body ?? {})
@@ -314,6 +328,11 @@ export async function creditsRoutes(app: FastifyInstance) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
       })
+    }
+
+    // Internal-only (see /reserve) — block direct user/API access.
+    if (!req.isInternalCall) {
+      return reply.status(403).send({ error: { code: "forbidden", message: "Internal endpoint" } })
     }
 
     const parsed = refundBody.safeParse(req.body ?? {})

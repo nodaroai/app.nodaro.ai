@@ -213,8 +213,13 @@ export function createVideoWorker() {
         // usage_log). On non-final attempts we just rethrow so BullMQ retries
         // with the reservation intact.
         if (isFinalJobAttempt(job)) {
-          // Save only the sanitized message to DB (internal details already logged above)
-          await supabase
+          // Save only the sanitized message to DB (internal details already logged above).
+          // CAS on status so a job a concurrent writer already moved to a terminal
+          // state (inflight-reconcile cron completing it, or a stall re-pick) is NOT
+          // trampled from "completed"/"cancelled" → "failed" (which would orphan its
+          // committed credits + delivered asset and fail the workflow despite delivery).
+          // Mirrors sync-sweep.ts / reconcile markFailed / forceFailExhausted.
+          const { data: failedRows } = await supabase
             .from("jobs")
             .update({
               status: "failed",
@@ -222,12 +227,20 @@ export function createVideoWorker() {
               completed_at: new Date().toISOString(),
             })
             .eq("id", jobId)
+            .in("status", ["pending", "processing"])
+            .select("id")
 
-          // Pass the ERROR OBJECT (not just the string) so refundJobCredits
-          // can read the PostProcessingError type signal. A post-provider
-          // failure (R2 upload, watermark, transcode, merge) skips the refund
-          // because the provider already billed us; everything else refunds.
-          await refundJobCredits(usageLogId, jobId, err)
+          // Only refund if WE flipped the row. If a concurrent writer already
+          // completed it, skip (the asset was delivered + credits committed); if
+          // it was cancelled, the cancel route already refunded. refundJobCredits
+          // is idempotent regardless, but this avoids a needless roundtrip.
+          if (failedRows && failedRows.length > 0) {
+            // Pass the ERROR OBJECT (not just the string) so refundJobCredits
+            // can read the PostProcessingError type signal. A post-provider
+            // failure (R2 upload, watermark, transcode, merge) skips the refund
+            // because the provider already billed us; everything else refunds.
+            await refundJobCredits(usageLogId, jobId, err)
+          }
         }
         throw err
       }

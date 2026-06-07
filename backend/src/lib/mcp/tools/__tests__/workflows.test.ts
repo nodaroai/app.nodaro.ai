@@ -258,14 +258,11 @@ describe("delete_workflow tool", () => {
 // ── update_workflow_json ────────────────────────────────────────────────────
 
 describe("update_workflow_json tool", () => {
-  it("updates the graph when expected_updated_at matches", async () => {
-    fromMock
-      .mockReturnValueOnce(
-        chain({ data: { id: WORKFLOW_ID, project_id: MCP_PROJECT_ID, updated_at: "2026-04-02T00:00:00Z" }, error: null }),
-      )
-      .mockReturnValueOnce(
-        chain({ data: { id: WORKFLOW_ID, name: "Flow", updated_at: "2026-04-03T00:00:00Z" }, error: null }),
-      )
+  it("updates the graph when expected_updated_at matches (single atomic UPDATE)", async () => {
+    // No separate lookup — the UPDATE itself carries the version guard and returns the row.
+    fromMock.mockReturnValueOnce(
+      chain({ data: { id: WORKFLOW_ID, name: "Flow", updated_at: "2026-04-03T00:00:00Z" }, error: null }),
+    )
     const server = buildServer()
     registerWorkflows({ server, session: mcpSession(["workflows:write"]), fastify: Fastify() })
     const result = await callTool(server, "update_workflow_json", {
@@ -278,10 +275,25 @@ describe("update_workflow_json tool", () => {
     expect(result.structuredContent?.updated_at).toBe("2026-04-03T00:00:00Z")
   })
 
-  it("returns a conflict error when expected_updated_at is stale", async () => {
-    fromMock.mockReturnValueOnce(
-      chain({ data: { id: WORKFLOW_ID, project_id: MCP_PROJECT_ID, updated_at: "2026-04-05T00:00:00Z" }, error: null }),
-    )
+  it("folds expected_updated_at into the UPDATE (atomic — no read-then-write race)", async () => {
+    const updateChain = chain({ data: { id: WORKFLOW_ID, name: "Flow", updated_at: "t2" }, error: null })
+    fromMock.mockReturnValueOnce(updateChain)
+    const server = buildServer()
+    registerWorkflows({ server, session: mcpSession(["workflows:write"]), fastify: Fastify() })
+    await callTool(server, "update_workflow_json", {
+      workflow_id: WORKFLOW_ID, nodes: [], edges: [], expected_updated_at: "t1",
+    })
+    // The version check must be part of the UPDATE filter, not a prior JS compare.
+    expect(updateChain.update).toHaveBeenCalled()
+    expect(updateChain.eq).toHaveBeenCalledWith("updated_at", "t1")
+  })
+
+  it("returns a conflict error when a concurrent write bumped updated_at (UPDATE matches 0 rows)", async () => {
+    fromMock
+      // UPDATE with the stale updated_at guard matches nothing...
+      .mockReturnValueOnce(chain({ data: null, error: null }))
+      // ...and the row still exists → it's a version conflict, not a not-found.
+      .mockReturnValueOnce(chain({ data: { id: WORKFLOW_ID }, error: null }))
     const server = buildServer()
     registerWorkflows({ server, session: mcpSession(["workflows:write"]), fastify: Fastify() })
     const result = await callTool(server, "update_workflow_json", {
@@ -292,18 +304,12 @@ describe("update_workflow_json tool", () => {
     })
     expect(result.isError).toBe(true)
     expect(result.content[0]?.text).toContain("modified since")
-    // No UPDATE issued — just the lookup.
-    expect(fromMock).toHaveBeenCalledTimes(1)
   })
 
   it("updates without a concurrency check when expected_updated_at is omitted", async () => {
-    fromMock
-      .mockReturnValueOnce(
-        chain({ data: { id: WORKFLOW_ID, project_id: MCP_PROJECT_ID, updated_at: "whatever" }, error: null }),
-      )
-      .mockReturnValueOnce(
-        chain({ data: { id: WORKFLOW_ID, name: "Flow", updated_at: "2026-04-09T00:00:00Z" }, error: null }),
-      )
+    fromMock.mockReturnValueOnce(
+      chain({ data: { id: WORKFLOW_ID, name: "Flow", updated_at: "2026-04-09T00:00:00Z" }, error: null }),
+    )
     const server = buildServer()
     registerWorkflows({ server, session: mcpSession(["workflows:write"]), fastify: Fastify() })
     const result = await callTool(server, "update_workflow_json", {

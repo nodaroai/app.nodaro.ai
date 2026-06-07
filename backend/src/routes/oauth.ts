@@ -6,6 +6,7 @@ import { config } from "../lib/config.js"
 import { findAppByClientId, verifyClientSecret } from "./developer-apps.js"
 import { issueCode, redeemCode } from "../lib/oauth-codes.js"
 import { ALL_SCOPES, formatScopeString } from "../lib/scopes.js"
+import { rejectProgrammaticAuth } from "../lib/api-auth-mode.js"
 import { formatZodError } from "../lib/zod-error.js"
 
 const ACCESS_TOKEN_TTL_DAYS = 90
@@ -90,6 +91,11 @@ export async function oauthRoutes(app: FastifyInstance) {
     if (!req.userId) {
       return reply.status(401).send({ error: { code: "unauthorized", message: "User must be authenticated" } })
     }
+    // Consent MUST come from a first-party logged-in session (the browser consent
+    // screen). Block programmatic tokens — otherwise an OAuth app token could call
+    // this to self-grant a code for ARBITRARY scopes, bypassing the consent screen
+    // entirely (privilege escalation that defeats all per-route scope checks).
+    if (rejectProgrammaticAuth(req, reply, "OAuth authorization must be granted from a logged-in session.")) return
 
     const parsed = authorizeBody.safeParse(req.body)
     if (!parsed.success) {

@@ -489,6 +489,19 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
 
+  // ⚠️ UNDERCHARGE (deferred — needs owner cost data): the wan-2.7-i2v/t2v and
+  // happyhorse/-i2v/-ref2v entries below are FLAT prices for "5s 720p", but the
+  // nodes expose 2–15s (wan-2.7) / 3–15s (happyhorse) durations and 720p/1080p
+  // (KIE default 1080p). These providers are NOT in DURATION_PRICED_PROVIDERS /
+  // VIDEO_DURATION_TIERS / the resolution-tier sets (model-constants.ts), so
+  // buildVideoCreditModelIdentifier returns the bare key and any duration/res is
+  // charged the 5s-720p flat rate — an undercharge vs KIE (the sibling wan-i2v
+  // correctly tiers 5/10/15s). FIX requires KIE's actual per-duration/per-1080p
+  // rates for wan-2.7 + happyhorse (NOT published in the OpenAPI docs / dashboard
+  // only); do NOT guess linear — if KIE bills flat-per-generation, linear tiers
+  // would OVERCHARGE users on long clips. Wire tiers + composite keys (mirror
+  // wan-i2v / seedance-2) once rates are confirmed, then run `audit-credits`.
+
   // Wan 2.7 I2V (estimated)
   ***REDACTED-OSS-SCRUB***
 

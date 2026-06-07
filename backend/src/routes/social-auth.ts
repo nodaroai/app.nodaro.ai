@@ -3,6 +3,7 @@ import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { generateAuthUrl, validateState, exchangeCodeForTokens, type SocialPlatform } from "../services/social/oauth.js"
 import { encryptToken, decryptToken } from "../services/social/encryption.js"
+import { rejectProgrammaticAuth } from "../lib/api-auth-mode.js"
 
 const PLATFORMS = ["instagram", "tiktok", "youtube", "linkedin", "x", "facebook", "telegram"] as const
 
@@ -103,6 +104,8 @@ export async function socialAuthRoutes(app: FastifyInstance) {
   app.delete("/v1/social/connections/:id", async (req, reply) => {
     const userId = req.userId
     if (!userId) return reply.status(401).send({ error: { code: "unauthorized" } })
+    // No social scope exists — block OAuth apps from severing the owner's social links.
+    if (rejectProgrammaticAuth(req, reply, "Social account management is not available to OAuth apps.", { allowPersonalToken: true })) return
 
     const { id } = req.params as { id: string }
 
@@ -120,6 +123,8 @@ export async function socialAuthRoutes(app: FastifyInstance) {
   app.post("/v1/social/telegram/connect", async (req, reply) => {
     const userId = req.userId
     if (!userId) return reply.status(401).send({ error: { code: "unauthorized" } })
+    // No social scope exists — block OAuth apps from injecting a bot credential.
+    if (rejectProgrammaticAuth(req, reply, "Social account management is not available to OAuth apps.", { allowPersonalToken: true })) return
 
     const schema = z.object({ botToken: z.string().min(10) })
     const parsed = schema.safeParse(req.body)

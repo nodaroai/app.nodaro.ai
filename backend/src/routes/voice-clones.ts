@@ -208,6 +208,15 @@ export async function voiceCloneRoutes(app: FastifyInstance) {
         })
         .eq("id", job.id)
 
+      // This is a SYNCHRONOUS route (ElevenLabs called inline, not via BullMQ), so
+      // the worker failure-path refund never runs, and the reconcile cron skips
+      // status='failed' rows. Refund the reservation here or every failed clone
+      // permanently leaks the reserved credits (charge-without-delivery).
+      if (reservation?.usageLogId) {
+        const { refundJobCredits } = await import("../workers/shared.js")
+        await refundJobCredits(reservation.usageLogId, job.id, err)
+      }
+
       return reply.status(500).send({
         error: { code: "clone_failed", message: err instanceof Error ? err.message : "Voice cloning failed" },
       })
@@ -357,6 +366,15 @@ export async function voiceCloneRoutes(app: FastifyInstance) {
           error_message: err instanceof Error ? err.message : "Unknown error",
         })
         .eq("id", job.id)
+
+      // This is a SYNCHRONOUS route (ElevenLabs called inline, not via BullMQ), so
+      // the worker failure-path refund never runs, and the reconcile cron skips
+      // status='failed' rows. Refund the reservation here or every failed clone
+      // permanently leaks the reserved credits (charge-without-delivery).
+      if (reservation?.usageLogId) {
+        const { refundJobCredits } = await import("../workers/shared.js")
+        await refundJobCredits(reservation.usageLogId, job.id, err)
+      }
 
       return reply.status(500).send({
         error: { code: "clone_failed", message: err instanceof Error ? err.message : "Voice cloning failed" },

@@ -15,6 +15,11 @@ declare module "fastify" {
     userId?: string
     userRole?: string
     isAppRun?: boolean
+    /** True only when the request authenticated via the internal-orchestrator
+     *  shared secret (X-Internal-Orchestrator-Secret). Server-internal-only
+     *  routes (e.g. the credit reserve/commit/refund primitives) gate on this so
+     *  a user JWT / API token can't drive them directly. */
+    isInternalCall?: boolean
     creditReservation?: import("./credit-guard.js").CreditReservation
     storageSnapshot?: import("./credit-guard.js").StorageSnapshot
     /** SHA-256 fingerprint of (req.url + stable-stringified body), set by
@@ -218,6 +223,7 @@ export function registerAuthHook(app: FastifyInstance): void {
         })
         return
       }
+      req.isInternalCall = true
       const body = req.body as Record<string, unknown> | undefined
       if (body?.userId && typeof body.userId === "string") {
         req.userId = body.userId

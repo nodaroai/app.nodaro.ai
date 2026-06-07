@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from "fastify"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { supabase } from "../../lib/supabase.js"
 import { captionLocation } from "../../lib/location-caption.js"
+import { meterSyncLlm } from "../../lib/meter-sync-llm.js"
 import { locationLlmCaptionRoutes } from "../location-llm-caption.js"
 
 // captionLocation is mocked at the helper boundary — the route only sees the
@@ -17,6 +18,12 @@ vi.mock("../../lib/location-caption.js", async () => {
 })
 vi.mock("../../lib/llm-client.js", () => ({ llmComplete: vi.fn() }))
 vi.mock("../../lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
+// Credit machinery tested elsewhere; no-op the guard + stub the meter here.
+vi.mock("../../middleware/credit-guard.js", () => ({
+  creditGuard: () => async () => {},
+  reserveCreditsForJob: vi.fn().mockResolvedValue(undefined),
+}))
+vi.mock("../../lib/meter-sync-llm.js", () => ({ meterSyncLlm: vi.fn() }))
 // CI has no .env so config.ANTHROPIC_API_KEY / KIE_API_KEY would be empty,
 // tripping the 503 provider_unavailable preflight. Mock as truthy.
 vi.mock("../../lib/config.js", () => ({
@@ -31,10 +38,13 @@ const SAMPLE_CAPTION =
   "Wide stone steps lead to a central altar carved with vine motifs. Soft amber light from the rising sun bathes the eastern face."
 
 let app: FastifyInstance
+let meter: { jobId: string; usageLogId?: string; commit: ReturnType<typeof vi.fn>; refund: ReturnType<typeof vi.fn> }
 
 beforeEach(async () => {
   vi.clearAllMocks()
   vi.mocked(captionLocation).mockResolvedValue(SAMPLE_CAPTION)
+  meter = { jobId: "job-1", usageLogId: "ul-1", commit: vi.fn().mockResolvedValue(undefined), refund: vi.fn().mockResolvedValue(undefined) }
+  vi.mocked(meterSyncLlm).mockResolvedValue(meter as never)
   app = Fastify({ logger: false })
   // Simulate auth middleware: set req.userId from X-User-Id header (matches
   // location-restore.test.ts pattern).
@@ -172,6 +182,8 @@ describe("POST /v1/locations/:id/llm-caption", () => {
     expect(res.json().error.code).toBe("caption_failed")
     // Critical contract: NO UPDATE was issued on caption failure.
     expect(locationUpdate.update).not.toHaveBeenCalled()
+    expect(meter.refund).toHaveBeenCalled()
+    expect(meter.commit).not.toHaveBeenCalled()
   })
 
   it("returns 200 with { canonicalDescription } on success", async () => {
@@ -200,6 +212,8 @@ describe("POST /v1/locations/:id/llm-caption", () => {
     expect(updateCallArg).toHaveProperty("updated_at")
     // Verify caption helper was invoked with the location's source image url.
     expect(vi.mocked(captionLocation)).toHaveBeenCalledWith(SOURCE_IMAGE_URL)
+    expect(meter.commit).toHaveBeenCalled()
+    expect(meter.refund).not.toHaveBeenCalled()
   })
 
   it("returns 500 when persist UPDATE fails", async () => {
@@ -217,5 +231,7 @@ describe("POST /v1/locations/:id/llm-caption", () => {
     })
     expect(res.statusCode).toBe(500)
     expect(res.json().error.code).toBe("update_failed")
+    expect(meter.refund).toHaveBeenCalled()
+    expect(meter.commit).not.toHaveBeenCalled()
   })
 })

@@ -223,3 +223,48 @@ describe("getParameterPromptHint — furniture", () => {
     expect(hint).toBe("")
   })
 })
+
+// Regression: the graph-aware nodes (camera-motion / transition / character-fx)
+// branch before the main switch and must STILL honor the user's preText/postText
+// (the config-panel preview promises they're injected). They previously returned
+// the bare compose* result and dropped custom text at execution.
+describe("getParameterPromptHint — preText/postText for graph-aware nodes", () => {
+  it("camera-motion wraps preText/postText around the motion clause", () => {
+    const out = getParameterPromptHint({
+      id: "n1",
+      type: "camera-motion",
+      data: { cameraMotion: "dolly-in", preText: "BEFORE", postText: "AFTER" },
+    })
+    expect(out.startsWith("BEFORE")).toBe(true)
+    expect(out.endsWith("AFTER")).toBe(true)
+  })
+
+  it("camera-motion still injects custom text when no motion is set (empty base)", () => {
+    const out = getParameterPromptHint({
+      id: "n1",
+      type: "camera-motion",
+      data: { preText: "ONLY PRE" },
+    })
+    expect(out).toContain("ONLY PRE")
+  })
+
+  it("transition includes preText and postText", () => {
+    const out = getParameterPromptHint({
+      id: "n1",
+      type: "transition",
+      data: { transition: "crossfade", preText: "PRE_T", postText: "POST_T" },
+    })
+    expect(out).toContain("PRE_T")
+    expect(out).toContain("POST_T")
+  })
+
+  it("character-fx includes preText and postText", () => {
+    const out = getParameterPromptHint({
+      id: "n1",
+      type: "character-fx",
+      data: { characterFx: "glow", preText: "PRE_FX", postText: "POST_FX" },
+    })
+    expect(out).toContain("PRE_FX")
+    expect(out).toContain("POST_FX")
+  })
+})

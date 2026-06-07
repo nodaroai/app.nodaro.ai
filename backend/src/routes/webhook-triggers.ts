@@ -15,6 +15,7 @@ import { supabase } from "../lib/supabase.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
 import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { requireAppScope } from "../lib/scope-prehandler.js"
 
 // ---------------------------------------------------------------------------
 // Rate limiter for webhook endpoint (in-memory, per-token)
@@ -216,7 +217,7 @@ export async function webhookTriggerRoutes(app: FastifyInstance) {
   })
 
   // --- Create trigger ---
-  app.post("/v1/workflow-triggers", async (req, reply) => {
+  app.post("/v1/workflow-triggers", { preHandler: requireAppScope("workflows:write") }, async (req, reply) => {
     if (!req.userId) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
@@ -311,7 +312,7 @@ export async function webhookTriggerRoutes(app: FastifyInstance) {
   })
 
   // --- Update trigger ---
-  app.patch("/v1/workflow-triggers/:id", async (req, reply) => {
+  app.patch("/v1/workflow-triggers/:id", { preHandler: requireAppScope("workflows:write") }, async (req, reply) => {
     if (!req.userId) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
@@ -365,7 +366,7 @@ export async function webhookTriggerRoutes(app: FastifyInstance) {
   })
 
   // --- Delete trigger ---
-  app.delete("/v1/workflow-triggers/:id", async (req, reply) => {
+  app.delete("/v1/workflow-triggers/:id", { preHandler: requireAppScope("workflows:write") }, async (req, reply) => {
     if (!req.userId) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },

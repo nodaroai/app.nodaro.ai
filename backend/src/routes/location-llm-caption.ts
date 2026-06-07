@@ -4,6 +4,8 @@ import { config } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
 import { captionLocation } from "../lib/location-caption.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { creditGuard } from "../middleware/credit-guard.js"
+import { meterSyncLlm } from "../lib/meter-sync-llm.js"
 
 /**
  * Location canonical-description LLM retry route.
@@ -35,10 +37,17 @@ import { formatZodError } from "../lib/zod-error.js"
 
 const paramsSchema = z.object({ id: z.string().uuid() })
 
+// Bill the paid Sonnet vision caption at the shared prompt-helper rate (same as
+// llm-suggest-description) — without this the route was a free Claude proxy.
+const CREDIT_IDENTIFIER = "prompt-helper"
+
 export async function locationLlmCaptionRoutes(app: FastifyInstance) {
   app.post(
     "/v1/locations/:id/llm-caption",
     {
+      // dedup:false — this route returns { canonicalDescription }, not the
+      // { jobId, deduped:true } shape the idempotency short-circuit would send.
+      preHandler: creditGuard(() => CREDIT_IDENTIFIER, { dedup: false }),
       config: {
         // 10 req/min/IP — `@fastify/rate-limit` must be registered globally.
         rateLimit: { max: 10, timeWindow: "1 minute" },
@@ -98,12 +107,16 @@ export async function locationLlmCaptionRoutes(app: FastifyInstance) {
           })
       }
 
-      // ----- LLM caption (FATAL — null is a 502) -----
+      // ----- Reserve credits, then LLM caption (FATAL — null is a 502) -----
       // Unlike approve-main-image, this route has no side-effect to preserve
-      // when the LLM fails. Surface as 502 so the frontend can retry.
-      // TODO Phase 2: deduct 1 CR per LLM call.
+      // when the LLM fails. Surface as 502 so the frontend can retry. Refund the
+      // reservation on every failure (sync route — no worker refund net).
+      const meter = await meterSyncLlm(req, reply, "location-llm-caption", CREDIT_IDENTIFIER)
+      if (!meter) return
+
       const caption = await captionLocation(row.source_image_url)
       if (caption === null) {
+        await meter.refund()
         return reply
           .status(502)
           .send({ error: { code: "caption_failed", message: "Failed to caption location image" } })
@@ -122,11 +135,13 @@ export async function locationLlmCaptionRoutes(app: FastifyInstance) {
         .eq("user_id", req.userId)
 
       if (updateErr) {
+        await meter.refund()
         return reply
           .status(500)
           .send({ error: { code: "update_failed", message: updateErr.message ?? "Update failed" } })
       }
 
+      await meter.commit()
       return reply.send({ canonicalDescription: caption })
     },
   )

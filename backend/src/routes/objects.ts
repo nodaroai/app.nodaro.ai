@@ -4,6 +4,7 @@ import { OBJECT_ATTACH_COLUMNS } from "@nodaro/shared"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { requireAppScope } from "../lib/scope-prehandler.js"
 import { batchDeleteFromR2 } from "../lib/storage.js"
 import { config } from "../lib/config.js"
 
@@ -258,7 +259,7 @@ export async function objectRoutes(app: FastifyInstance) {
   // ---------------------------------------------------------------------------
   // Upsert object (create or update)
   // ---------------------------------------------------------------------------
-  app.post("/v1/objects", async (req, reply) => {
+  app.post("/v1/objects", { preHandler: requireAppScope("assets:write") }, async (req, reply) => {
     const parsed = upsertObjectBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -411,7 +412,7 @@ export async function objectRoutes(app: FastifyInstance) {
   // Permanent-delete is intentionally NOT mirrored on the SDK (`@nodaro/client`)
   // — programmatic callers can only soft-delete.
   // ---------------------------------------------------------------------------
-  app.delete("/v1/objects/:id", async (req, reply) => {
+  app.delete("/v1/objects/:id", { preHandler: requireAppScope("assets:write") }, async (req, reply) => {
     const userId = req.userId
     if (!userId) {
       return reply.status(401).send({

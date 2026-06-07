@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import Fastify, { type FastifyInstance } from "fastify"
+import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify"
 
 // ---------------------------------------------------------------------------
 // Mocks — hoisted before any route import
@@ -525,5 +525,54 @@ describe("Zod validation edge cases", () => {
     )
     const res = await authedPost("/v1/api-tokens", { name: "Test", workflowIds: ids })
     expect(res.statusCode).toBe(400)
+  })
+})
+
+// ==========================================================================
+// Privilege-escalation guard: API-token management is JWT-only.
+// An OAuth app token (any scope) must NOT be able to mint a personal API token
+// (which is unscoped → every requireScope becomes a no-op → account takeover).
+// ==========================================================================
+
+describe("api-token management rejects programmatic tokens", () => {
+  async function appWithAuth(mut: (req: FastifyRequest) => void): Promise<FastifyInstance> {
+    const a = Fastify({ logger: false })
+    a.addHook("preHandler", async (req) => { mut(req) })
+    await a.register(async (i) => { await apiTokenRoutes(i) })
+    await a.ready()
+    return a
+  }
+
+  const ID = "00000000-0000-4000-8000-000000000099"
+
+  it("POST /v1/api-tokens returns 403 for an OAuth app token (cannot mint a personal token)", async () => {
+    const app2 = await appWithAuth((req) => {
+      req.userId = TEST_USER_ID
+      req.appAuthorization = { appId: "a", authorizationId: "z", scopes: ["jobs:read"] }
+    })
+    const res = await app2.inject({ method: "POST", url: "/v1/api-tokens", payload: { name: "evil" } })
+    expect(res.statusCode).toBe(403)
+    await app2.close()
+  })
+
+  it("POST /v1/api-tokens returns 403 for a personal API token", async () => {
+    const app2 = await appWithAuth((req) => {
+      req.userId = TEST_USER_ID
+      req.apiToken = { userId: TEST_USER_ID } as unknown as FastifyRequest["apiToken"]
+    })
+    const res = await app2.inject({ method: "POST", url: "/v1/api-tokens", payload: { name: "x" } })
+    expect(res.statusCode).toBe(403)
+    await app2.close()
+  })
+
+  it("GET / PATCH / DELETE /v1/api-tokens also reject OAuth app tokens", async () => {
+    const app2 = await appWithAuth((req) => {
+      req.userId = TEST_USER_ID
+      req.appAuthorization = { appId: "a", authorizationId: "z", scopes: ["jobs:read"] }
+    })
+    expect((await app2.inject({ method: "GET", url: "/v1/api-tokens" })).statusCode).toBe(403)
+    expect((await app2.inject({ method: "PATCH", url: `/v1/api-tokens/${ID}`, payload: { name: "n" } })).statusCode).toBe(403)
+    expect((await app2.inject({ method: "DELETE", url: `/v1/api-tokens/${ID}` })).statusCode).toBe(403)
+    await app2.close()
   })
 })

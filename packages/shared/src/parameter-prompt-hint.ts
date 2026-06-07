@@ -129,7 +129,7 @@ export function getParameterPromptHint(
 
   if (node.type === "camera-motion") {
     const motionId = asStr(data.cameraMotion) || undefined
-    if (!ctx) return composeCameraMotionHintFromConnections(motionId, [], [])
+    if (!ctx) return withCustomText(data, composeCameraMotionHintFromConnections(motionId, [], []))
     const startHints: string[] = []
     const endHints: string[] = []
     for (const edge of ctx.edges) {
@@ -144,7 +144,7 @@ export function getParameterPromptHint(
       if (edge.targetHandle === "startState") startHints.push(hint)
       else if (edge.targetHandle === "endState") endHints.push(hint)
     }
-    return composeCameraMotionHintFromConnections(motionId, startHints, endHints)
+    return withCustomText(data, composeCameraMotionHintFromConnections(motionId, startHints, endHints))
   }
 
   if (node.type === "transition") {
@@ -159,7 +159,7 @@ export function getParameterPromptHint(
       intensity: asStr(data.intensity) as TransitionIntensity | undefined,
     }
     if (!ctx) {
-      return composeTransitionHintFromConnections(transitionId, [], [], timing)
+      return withCustomText(data, composeTransitionHintFromConnections(transitionId, [], [], timing))
     }
     const startHints: string[] = []
     const endHints: string[] = []
@@ -172,7 +172,7 @@ export function getParameterPromptHint(
       if      (edge.targetHandle === "startState") startHints.push(hint)
       else if (edge.targetHandle === "endState")   endHints.push(hint)
     }
-    return composeTransitionHintFromConnections(transitionId, startHints, endHints, timing)
+    return withCustomText(data, composeTransitionHintFromConnections(transitionId, startHints, endHints, timing))
   }
 
   if (node.type === "character-fx") {
@@ -187,7 +187,7 @@ export function getParameterPromptHint(
       intensity: asStr(data.intensity) as CharacterFxIntensity | undefined,
     }
     if (!ctx) {
-      return composeCharacterFxHintFromConnections(effectId, [], timing)
+      return withCustomText(data, composeCharacterFxHintFromConnections(effectId, [], timing))
     }
     const targetNames: string[] = []
     for (const edge of ctx.edges) {
@@ -198,7 +198,7 @@ export function getParameterPromptHint(
       const name = extractCharacterRefName(src)
       if (name) targetNames.push(name)
     }
-    return composeCharacterFxHintFromConnections(effectId, targetNames, timing)
+    return withCustomText(data, composeCharacterFxHintFromConnections(effectId, targetNames, timing))
   }
 
   switch (node.type) {

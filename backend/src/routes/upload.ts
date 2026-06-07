@@ -9,7 +9,8 @@ import { s3 } from "../lib/storage.js"
 import {
   validateFile,
   checkStorageQuota,
-  updateStorageUsage,
+  reserveStorageIfWithinLimit,
+  refundStorage,
   getExtensionFromMime,
   type FileCategory,
 } from "../utils/file-validation.js"
@@ -151,10 +152,16 @@ export async function uploadRoutes(app: FastifyInstance) {
       }
     }
 
-    // Step 2: Check storage quota (cloud edition)
+    // Step 2: Atomically reserve storage quota (cloud edition). The atomic
+    // reserve-if-within-limit RPC (FOR UPDATE check+increment in one statement)
+    // closes the concurrent-upload oversubscription race that the previous
+    // check-then-increment left open — N parallel uploads can no longer each pass
+    // a stale snapshot and then all increment past the limit.
     if (userId) {
-      const quota = await checkStorageQuota(userId, buffer.length)
-      if (!quota.allowed) {
+      const reserved = await reserveStorageIfWithinLimit(userId, buffer.length)
+      if (!reserved) {
+        // Over quota — fetch usage details only to build an informative error.
+        const quota = await checkStorageQuota(userId, buffer.length)
         return reply.status(413).send({
           error: {
             code: "storage_limit_exceeded",
@@ -168,11 +175,18 @@ export async function uploadRoutes(app: FastifyInstance) {
       }
     }
 
-    // Step 3: Upload original file to R2
+    // Step 3: Upload original file to R2. If this throws after we reserved quota
+    // in Step 2, release the reservation so a failed upload doesn't leak quota.
     const ext = getExtensionFromMime(mimeTypeFinal)
     const fileId = randomUUID()
     const r2Key = `uploads/${category}s/${fileId}.${ext}`
-    const publicUrl = await uploadBufferToS3(buffer, r2Key, mimeTypeFinal)
+    let publicUrl: string
+    try {
+      publicUrl = await uploadBufferToS3(buffer, r2Key, mimeTypeFinal)
+    } catch (err) {
+      if (userId) await refundStorage(userId, buffer.length)
+      throw err
+    }
 
     // Step 4: Generate thumbnail & extract metadata
     let thumbnailUrl: string | null = null
@@ -230,8 +244,8 @@ export async function uploadRoutes(app: FastifyInstance) {
         assetId = asset.id
       }
 
-      // Step 6: Update user storage usage
-      await updateStorageUsage(userId, buffer.length)
+      // Storage usage was already reserved atomically in Step 2 — no post-hoc
+      // increment (that was the oversubscription race).
     }
 
     return {

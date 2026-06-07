@@ -2,6 +2,10 @@ import type { FastifyInstance, FastifyReply } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { requireScope } from "../lib/scopes.js"
+import { rejectProgrammaticAuth } from "../lib/api-auth-mode.js"
+
+// Preset groups are read-only over the API; writes are editor-only (first-party JWT).
+const PRESETS_READ_ONLY_MSG = "Node presets are read-only over the API. Create and edit presets in the editor."
 
 const createBody = z.object({
   nodeType: z.string().min(1).max(120),
@@ -63,6 +67,7 @@ export async function nodePresetGroupRoutes(app: FastifyInstance) {
   app.post("/v1/node-preset-groups", async (req, reply) => {
     const userId = req.userId
     if (!userId) return unauthorized(reply)
+    if (rejectProgrammaticAuth(req, reply, PRESETS_READ_ONLY_MSG)) return
     const parsed = createBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({ error: { code: "validation_error", message: parsed.error.issues[0]?.message ?? "Invalid body" } })
@@ -87,6 +92,7 @@ export async function nodePresetGroupRoutes(app: FastifyInstance) {
   app.patch("/v1/node-preset-groups/:id", async (req, reply) => {
     const userId = req.userId
     if (!userId) return unauthorized(reply)
+    if (rejectProgrammaticAuth(req, reply, PRESETS_READ_ONLY_MSG)) return
     const id = (req.params as { id: string }).id
     const parsed = patchBody.safeParse(req.body)
     if (!parsed.success) {
@@ -110,6 +116,7 @@ export async function nodePresetGroupRoutes(app: FastifyInstance) {
   app.delete("/v1/node-preset-groups/:id", async (req, reply) => {
     const userId = req.userId
     if (!userId) return unauthorized(reply)
+    if (rejectProgrammaticAuth(req, reply, PRESETS_READ_ONLY_MSG)) return
     const id = (req.params as { id: string }).id
     const { error } = await supabase.from("node_preset_groups").delete().eq("id", id).eq("user_id", userId)
     if (error) return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
