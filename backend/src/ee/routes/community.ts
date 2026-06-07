@@ -65,6 +65,9 @@ export async function communityRoutes(app: FastifyInstance) {
         const res = await cloneListing({ listingId: req.params.id, entityType: body.data.entityType as EntityType, userId })
         return reply.send(res)
       } catch (e) {
+        if ((e as { code?: string }).code === "listing_unavailable") {
+          return reply.status(404).send({ error: { code: "not_found", message: "Listing not available" } })
+        }
         if ((e as { code?: string }).code === "storage_limit_exceeded") {
           return reply.status(413).send({ error: { code: "storage_limit_exceeded", message: "Storage limit exceeded" } })
         }

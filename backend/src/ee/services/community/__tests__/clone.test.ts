@@ -21,6 +21,10 @@ beforeEach(() => vi.clearAllMocks())
 
 function mockSnapshotAndInsert(snapshot: unknown, insertOk: boolean) {
   from.mockImplementation((table: string) => {
+    if (table === "community_listings") {
+      const single = vi.fn().mockResolvedValue({ data: { is_active: true } })
+      return { select: () => ({ eq: () => ({ single }) }) }
+    }
     if (table === "community_listing_snapshots") {
       const single = vi.fn().mockResolvedValue({ data: { snapshot } })
       return { select: () => ({ eq: () => ({ single }) }) }
@@ -43,5 +47,19 @@ describe("cloneListing", () => {
     mockSnapshotAndInsert({ name: "Hero", source_image_url: "u" }, false)
     await expect(cloneListing({ listingId: "L1", entityType: "character", userId: "u1" })).rejects.toThrow()
     expect(refundStorage).toHaveBeenCalled()
+  })
+  it("rejects with listing_unavailable when the listing is inactive (no clone recorded)", async () => {
+    from.mockImplementation((table: string) => {
+      if (table === "community_listings") {
+        const single = vi.fn().mockResolvedValue({ data: { is_active: false } })
+        return { select: () => ({ eq: () => ({ single }) }) }
+      }
+      throw new Error(`unexpected table access: ${table}`)
+    })
+    await expect(
+      cloneListing({ listingId: "L1", entityType: "character", userId: "u1" }),
+    ).rejects.toMatchObject({ code: "listing_unavailable" })
+    expect(reserveStorageIfWithinLimit).not.toHaveBeenCalled()
+    expect(rpc).not.toHaveBeenCalled()
   })
 })

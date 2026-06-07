@@ -9,8 +9,10 @@ vi.mock("../asset-lifecycle.js", () => ({
 vi.mock("../../../../lib/marketplace-helpers.js", () => ({
   generateSlug: () => "hero-abc123", getCreatorDisplayName: vi.fn().mockResolvedValue("Admin"),
 }))
+vi.mock("../../../../utils/file-validation.js", () => ({ accountStorage: vi.fn() }))
 import { publishListing } from "../publish.js"
 import { copyEntityAssetsToPrefix, purgeCommunityListingBlobs } from "../asset-lifecycle.js"
+import { accountStorage } from "../../../../utils/file-validation.js"
 
 beforeEach(() => { vi.clearAllMocks() })
 
@@ -37,6 +39,7 @@ describe("publishListing (character)", () => {
     expect(rpc).toHaveBeenCalledWith("publish_community_listing", expect.objectContaining({
       p_entity_type: "character", p_creator_id: "admin1", p_published_bytes: 50,
     }))
+    expect(accountStorage).toHaveBeenCalledWith("admin1", 50)
   })
   it("re-publish reuses id and purges old blobs first", async () => {
     mockLookup({ id: "L-old" })

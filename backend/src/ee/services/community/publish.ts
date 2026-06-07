@@ -3,6 +3,7 @@ import { supabase } from "../../../lib/supabase.js"
 import { generateSlug, getCreatorDisplayName } from "../../../lib/marketplace-helpers.js"
 import { buildSnapshot, type EntityType } from "../../lib/community-entity-adapters.js"
 import { copyEntityAssetsToPrefix, purgeCommunityListingBlobs } from "./asset-lifecycle.js"
+import { accountStorage } from "../../../utils/file-validation.js"
 
 const PREVIEW_BUDGET: Record<EntityType, number> = { character: 8, location: 4, object: 4 }
 
@@ -57,5 +58,10 @@ export async function publishListing(input: PublishInput): Promise<{ slug: strin
   if (error) throw new Error(`publish failed: ${error.message}`)
   const rows = (data ?? []) as Array<{ id: string; slug: string }>
   if (rows.length === 0) throw new Error("publish failed: not owner or no row returned")
+  // Account the community copy against the publisher (design §11: publisher owns
+  // the copy). purgeCommunityListingBlobs refunds these bytes on
+  // unpublish/takedown/re-publish, keeping storage accounting symmetric. On
+  // re-publish the pre-publish purge above already refunded the old bytes.
+  await accountStorage(creatorId, bytes)
   return { id: rows[0]!.id, slug: rows[0]!.slug }
 }

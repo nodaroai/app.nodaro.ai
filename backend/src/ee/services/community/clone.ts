@@ -21,6 +21,19 @@ export async function cloneListing(input: {
   const { listingId, entityType, userId } = input
   const adapter = COMMUNITY_ENTITY_ADAPTERS[entityType]
 
+  // Reject clones of taken-down/inactive listings (a stale listingId could
+  // otherwise be cloned during the reaper grace window before blobs are purged).
+  const { data: listing } = await supabase
+    .from("community_listings")
+    .select("is_active")
+    .eq("id", listingId)
+    .single()
+  if (!listing?.is_active) {
+    const e = new Error("listing_unavailable") as Error & { code?: string }
+    e.code = "listing_unavailable"
+    throw e
+  }
+
   const { data: snapRow } = await supabase
     .from("community_listing_snapshots")
     .select("snapshot")

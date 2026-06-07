@@ -6105,7 +6105,7 @@ export interface CommunityCard {
 }
 
 export async function browseCommunity(params: {
-  entityType?: string; q?: string; category?: string; style?: string
+  entityType?: string; q?: string; category?: string
   sort?: "popular" | "newest"; cursor?: string; limit?: number
 }): Promise<{ data: CommunityCard[]; nextCursor: string | null }> {
   const qs = new URLSearchParams()

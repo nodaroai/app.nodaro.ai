@@ -35,8 +35,8 @@ export interface CommunityCard {
   tags: string[]
   /** Primary preview (a video for animated assets, else the main image). */
   preview_media_url: string | null
-  /** Additional preview image URLs shown in the detail/clone gallery. */
-  preview_images: string[]
+  /** Additional preview images shown in the detail/clone gallery. */
+  preview_images: { url: string }[]
   /** Number of times this listing has been cloned. */
   clone_count: number
   /** Number of users who have favorited this listing. */
