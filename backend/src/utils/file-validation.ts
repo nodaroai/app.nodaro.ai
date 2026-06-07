@@ -304,3 +304,27 @@ export async function refundStorage(
     console.error("[refundStorage] decrement_storage RPC failed:", error.message)
   }
 }
+
+/**
+ * Account previously un-reserved storage bytes against a user. The increment
+ * counterpart to {@link refundStorage} — used when bytes are committed to a
+ * user's quota outside the reserve/refund path (e.g. a community listing copy
+ * the publisher owns). Non-positive inputs and self-hosted deployments are
+ * no-ops, matching refundStorage semantics.
+ */
+export async function accountStorage(
+  userId: string,
+  bytes: number,
+): Promise<void> {
+  if (!hasCredits()) return
+  if (bytes <= 0) return
+
+  const { error } = await supabase.rpc("increment_storage", {
+    p_user_id: userId,
+    p_bytes: bytes,
+  })
+
+  if (error) {
+    console.error("[accountStorage] increment_storage RPC failed:", error.message)
+  }
+}

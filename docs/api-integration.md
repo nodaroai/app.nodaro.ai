@@ -626,7 +626,124 @@ curl -s "https://app.nodaro.ai/v1/node-presets/factory?nodeType=generate-image" 
   -H "Authorization: Bearer $NODARO_TOKEN" | jq '{count: (.data|length), popular: .popularIds}'
 ```
 
-## 17. SDK alternative (TypeScript)
+## 17. Community
+
+The Community Library is an **admin-curated** catalog of shared characters,
+locations, and objects. Admins publish; any logged-in user browses and **clones**
+listings into their own library as independent copies. See
+[Community Library](./community-library.md) for the feature overview, the
+cloning model, and the likeness/consent safety rules.
+
+> **Multi-user editions only.** These routes are registered on **Business** and
+> **Cloud** instances. On a **Community** (single-user) instance they are not
+> registered and return `404`.
+
+`entity_type` is one of `character` / `location` / `object`. Listing records
+returned by the read routes are sanitized to public columns: `id`,
+`entity_type`, `creator_display_name`, `slug`, `title`, `description`,
+`category`, `style`, `tags`, `preview_media_url`, `preview_images`,
+`clone_count`, `favorite_count`, `created_at`.
+
+### User routes (session auth)
+
+All user routes require an authenticated bearer token (`ndr_…` / `ndr_app_…` /
+Supabase JWT) and are scoped to the calling user.
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET`  | `/v1/community/browse` | List public listings. Returns `{ data: Listing[], nextCursor }`. |
+| `GET`  | `/v1/community/detail/:slug` | Fetch a single listing by `slug`. Returns `{ data: Listing }`; 404 `not_found` if missing/inactive. |
+| `GET`  | `/v1/community/favorites` | The listings you've favorited. Returns `{ data: Listing[] }`. |
+| `POST` | `/v1/community/listings/:id/clone` | Copy a listing into your library. Body `{ entityType }`. Returns `{ entityType, id }`. |
+| `POST` | `/v1/community/listings/:id/favorite` | Toggle favorite. Returns `{ favorited }` (`true` after adding, `false` after removing). |
+| `POST` | `/v1/community/listings/:id/report` | Flag a listing for moderation. Body `{ reason }`. Returns `{ ok: true }`. |
+
+**`GET /v1/community/browse` query params:**
+
+| Param | Type | Notes |
+|---|---|---|
+| `entityType` | `character \| location \| object` | Filter to one asset kind. |
+| `q` | `string` | Full-text search across title / description / tags. |
+| `category` | `string` | Filter to a single category. |
+| `sort` | `popular \| newest` | Order by most-cloned or newest. Defaults to `newest`. |
+| `cursor` | `string` | Opaque cursor from a previous page's `nextCursor`. |
+| `limit` | `number` | Page size, capped at 50 (default 20). |
+
+`nextCursor` is an opaque token; pass it back as `?cursor=` to page forward.
+It is `null` when there are no more results.
+
+**`POST /v1/community/listings/:id/clone`** copies the listing's assets into
+**your own storage** — the clone is an independent snapshot that survives the
+original being changed or taken down. Body is `{ entityType }` (must match the
+listing's kind). When called with an **OAuth app token** it requires the
+`assets:write` scope (no-op for user / API-key auth — you own the resources).
+If your account is over its storage limit the route returns
+`413 storage_limit_exceeded`.
+
+**`POST /v1/community/listings/:id/report`** accepts a `reason` of
+`real_person_no_consent` (depicts a real person without consent),
+`inappropriate`, `ip_violation`, or `other`.
+
+```bash
+# Browse the newest shared characters
+curl -s "https://app.nodaro.ai/v1/community/browse?entityType=character&sort=newest" \
+  -H "Authorization: Bearer $NODARO_TOKEN" | jq '.data[] | {slug, title}'
+
+# Clone one into your library
+curl -s -X POST "https://app.nodaro.ai/v1/community/listings/$LISTING_ID/clone" \
+  -H "Authorization: Bearer $NODARO_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"entityType": "character"}' | jq .
+# → { "entityType": "character", "id": "<new-asset-id>" }
+```
+
+### Admin routes (admin auth)
+
+Publishing and moderation are **admin-only** — these routes require an admin
+token. `entityType` in the path is one of `character` / `location` / `object`.
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST`   | `/v1/admin/community/:entityType/:id/publish` | Publish one of your own assets to the catalog. Returns `{ slug, id }`. |
+| `DELETE` | `/v1/admin/community/listings/:id` | Unlist + deactivate a listing and purge its preview blobs. Returns `{ ok: true }`. |
+| `GET`    | `/v1/admin/community/reports` | List open (unresolved) reports. Returns `{ data: Report[] }`. |
+| `POST`   | `/v1/admin/community/listings/:id/takedown` | Take a reported listing down: deactivate it, resolve its open reports, purge preview blobs. Returns `{ ok: true }`. |
+
+**`POST /v1/admin/community/:entityType/:id/publish` body:**
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `title` | `string` | yes | 1–120 chars. |
+| `description` | `string` | no | Up to 2000 chars. |
+| `category` | `string` | no | Up to 60 chars. |
+| `style` | `string` | no | Up to 60 chars. |
+| `tags` | `string[]` | no | Up to 20 tags, 40 chars each. |
+| `attestation` | `true` | yes | Must be literally `true` — the admin attests they have rights to share the asset. |
+| `likenessAttestation` | `boolean` | conditional | **Required (`true`) for `entityType === "character"`** — confirms any real person depicted consented and is 18+. Optional for locations/objects. |
+
+The source asset (`:id`) must be one the admin owns; otherwise the route returns
+`404 not_found`. A character publish without `likenessAttestation: true` is
+rejected with `400 validation_error`. See
+[Community Library → Safety](./community-library.md#safety-likeness-and-consent)
+for why the likeness attestation is mandatory for characters.
+
+```bash
+# Publish a character (likeness attestation required)
+curl -s -X POST "https://app.nodaro.ai/v1/admin/community/character/$CHARACTER_ID/publish" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "title": "Detective Mara",
+        "description": "Noir-styled investigator",
+        "category": "people",
+        "tags": ["noir", "detective"],
+        "attestation": true,
+        "likenessAttestation": true
+      }' | jq .
+# → { "slug": "detective-mara", "id": "<listing-id>" }
+```
+
+## 18. SDK alternative (TypeScript)
 
 The same backend is fronted by a typed TypeScript client:
 

@@ -1,7 +1,7 @@
 import { createBrowserRouter, Navigate, type RouteObject } from "react-router-dom"
 import { Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
-import { hasAdmin } from "@/lib/edition"
+import { hasAdmin, isMultiUser } from "@/lib/edition"
 
 // Error handling
 import RouteErrorBoundary from "@/components/route-error-boundary"
@@ -39,6 +39,7 @@ const AppsPage = lazy(() => import("@/app/(dashboard)/apps/page"))
 const AppAnalyticsPage = lazy(() => import("@/app/(dashboard)/apps/analytics-page"))
 const DeletedAppsPage = lazy(() => import("@/app/(dashboard)/apps/deleted/page"))
 const TemplatesPage = lazy(() => import("@/app/(dashboard)/templates/page"))
+const ExplorePage = lazy(() => import("@/ee/app/explore/page"))
 
 // Auth pages (lazy — rarely revisited)
 const LoginPage = lazy(() => import("@/app/(auth)/login/page"))
@@ -62,6 +63,7 @@ const AdminUsage = lazy(() => import("@/ee/app/(admin)/admin/usage/page"))
 const AdminAlerts = lazy(() => import("@/ee/app/(admin)/admin/alerts/page"))
 const AdminModels = lazy(() => import("@/ee/app/(admin)/admin/models/page"))
 const AdminReports = lazy(() => import("@/ee/app/(admin)/admin/reports/page"))
+const AdminCommunityReports = lazy(() => import("@/ee/app/(admin)/admin/community-reports/page"))
 const AdminPricingPage = lazy(() => import("@/ee/app/(admin)/admin/pricing/page"))
 const AdminSettings = lazy(() => import("@/ee/app/(admin)/admin/settings/page"))
 const AdminApps = lazy(() => import("@/ee/app/(admin)/admin/apps/page"))
@@ -101,6 +103,7 @@ const adminRoutes: RouteObject[] = hasAdmin() ? [
       { path: "alerts", element: <SuspenseWrapper><AdminAlerts /></SuspenseWrapper> },
       { path: "models", element: <SuspenseWrapper><AdminModels /></SuspenseWrapper> },
       { path: "reports", element: <SuspenseWrapper><AdminReports /></SuspenseWrapper> },
+      { path: "community-reports", element: <SuspenseWrapper><AdminCommunityReports /></SuspenseWrapper> },
       { path: "pricing", element: <SuspenseWrapper><AdminPricingPage /></SuspenseWrapper> },
       { path: "settings", element: <SuspenseWrapper><AdminSettings /></SuspenseWrapper> },
       { path: "apps", element: <SuspenseWrapper><AdminApps /></SuspenseWrapper> },
@@ -116,6 +119,13 @@ const adminRoutes: RouteObject[] = hasAdmin() ? [
     ],
   },
 ] : []
+
+// Community route block — only included when EDITION is multi-user (business or
+// cloud). In community (single-user) builds the spread is empty and the
+// ExplorePage chunk is never loaded.
+const communityRoutes: RouteObject[] = isMultiUser()
+  ? [{ path: "/explore", element: <SuspenseWrapper><ExplorePage /></SuspenseWrapper> }]
+  : []
 
 export const router = createBrowserRouter([
   {
@@ -257,6 +267,7 @@ export const router = createBrowserRouter([
         path: "/templates",
         element: <SuspenseWrapper><TemplatesPage /></SuspenseWrapper>,
       },
+      ...communityRoutes,
       {
         path: "/_gallery",
         element: <SuspenseWrapper><GalleryPage /></SuspenseWrapper>,
