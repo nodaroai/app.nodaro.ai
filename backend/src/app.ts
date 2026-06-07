@@ -2,7 +2,7 @@ import Fastify from "fastify"
 import { createHash } from "node:crypto"
 import cors from "@fastify/cors"
 import { isOriginAllowedDynamic } from "./lib/dynamic-origins.js"
-import { hasAdmin, hasCredits } from "./lib/config.js"
+import { hasAdmin, hasCredits, isMultiUser } from "./lib/config.js"
 import { healthRoutes } from "./routes/health.js"
 import { projectRoutes } from "./routes/projects.js"
 import { workflowRoutes } from "./routes/workflows.js"
@@ -96,6 +96,8 @@ import { adminCreditAnomalyRoutes } from "./ee/routes/admin-credit-anomalies.js"
 import { adminKieCreditsRoutes } from "./ee/routes/admin-kie-credits.js"
 import { adminStuckPipelinesRoutes } from "./ee/routes/admin-stuck-pipelines.js"
 import { adminSubscriptionHealthRoutes } from "./ee/routes/admin-subscription-health.js"
+import { communityRoutes } from "./ee/routes/community.js"
+import { adminCommunityRoutes } from "./ee/routes/admin-community.js"
 import { aiWriterRoutes } from "./routes/ai-writer.js"
 import { llmChatRoutes } from "./routes/llm-chat.js"
 import { llmSuggestDescriptionRoutes } from "./routes/llm-suggest-description.js"
@@ -356,6 +358,8 @@ export async function buildApp() {
   if (hasAdmin()) await app.register(adminKieCreditsRoutes)
   if (hasAdmin()) await app.register(adminStuckPipelinesRoutes)
   if (hasCredits()) await app.register(adminSubscriptionHealthRoutes)  // getStripe + TIER_CREDITS
+  if (isMultiUser()) await app.register(communityRoutes)
+  if (isMultiUser()) await app.register(adminCommunityRoutes)
   await app.register(aiWriterRoutes)
   await app.register(llmChatRoutes)
   await app.register(llmSuggestDescriptionRoutes)

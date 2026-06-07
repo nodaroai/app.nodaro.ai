@@ -1,5 +1,6 @@
-import { config, hasCredits } from "./lib/config.js"
+import { config, hasCredits, isMultiUser } from "./lib/config.js"
 import { buildApp } from "./app.js"
+import { startCommunityReaperCron } from "./ee/services/community/reaper.js"
 import { startCleanupCron } from "./ee/billing/cleanup-cron.js"
 import { startScheduleCron, stopScheduleCron } from "./lib/schedule-cron.js"
 import {
@@ -41,6 +42,9 @@ async function main() {
 
   // Start schedule cron for workflow triggers
   startScheduleCron()
+
+  // Backstop reaper for orphaned community-listing blobs (multi-user editions)
+  if (isMultiUser()) startCommunityReaperCron()
 
   // Periodic reconciler for stuck workflow_executions — catches executions
   // that the orchestrator failed to advance (lost wake-ups, DB write
