@@ -99,8 +99,22 @@ beforeEach(async () => {
   const jobSingle = vi.fn().mockResolvedValue({ data: { id: "job-1" }, error: null })
   const jobSelect = vi.fn().mockReturnValue({ single: jobSingle })
   const jobInsert = vi.fn().mockReturnValue({ select: jobSelect })
+
+  // Location ownership/source-image lookup for the approved-source-image gate
+  // (parity with character/object). The attach-param test below sets
+  // attachToLocationId, so the gate now fetches the row — return one with an
+  // approved source_image_url so the gate passes and the job still enqueues.
+  const locSingle = vi
+    .fn()
+    .mockResolvedValue({ data: { source_image_url: "https://r2.example/anchor.png" }, error: null })
+  const locIs = vi.fn().mockReturnValue({ single: locSingle })
+  const locEqUser = vi.fn().mockReturnValue({ is: locIs })
+  const locEqId = vi.fn().mockReturnValue({ eq: locEqUser })
+  const locSelect = vi.fn().mockReturnValue({ eq: locEqId })
+
   vi.mocked(supabase.from).mockImplementation((table: string) => {
     if (table === "jobs") return { insert: jobInsert } as never
+    if (table === "locations") return { select: locSelect } as never
     return {} as never
   })
 
@@ -218,6 +232,74 @@ describe("POST /v1/generate-location-asset — extended asset types (Task 9)", (
         attachName: "neon",
       }),
     )
+  })
+
+  it("404s and does not enqueue when attachToLocationId resolves to no owned row", async () => {
+    // Approved-source-image gate parity: a forged/cross-user/deleted location
+    // id yields no row → 404, before any credit reservation or enqueue.
+    const locSingle = vi.fn().mockResolvedValue({ data: null, error: null })
+    const locIs = vi.fn().mockReturnValue({ single: locSingle })
+    const locEqUser = vi.fn().mockReturnValue({ is: locIs })
+    const locEqId = vi.fn().mockReturnValue({ eq: locEqUser })
+    const locSelect = vi.fn().mockReturnValue({ eq: locEqId })
+    const jobSingle = vi.fn().mockResolvedValue({ data: { id: "job-1" }, error: null })
+    const jobInsert = vi.fn().mockReturnValue({ select: vi.fn().mockReturnValue({ single: jobSingle }) })
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "jobs") return { insert: jobInsert } as never
+      if (table === "locations") return { select: locSelect } as never
+      return {} as never
+    })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-location-asset",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        assetType: "lighting",
+        variant: "neon",
+        name: "Alley",
+        attachToLocationId: TEST_LOCATION_ID,
+        attachToColumn: "lighting",
+        attachName: "neon",
+      },
+    })
+
+    expect(res.statusCode).toBe(404)
+    expect(res.json().error.code).toBe("not_found")
+    expect(videoQueue.add).not.toHaveBeenCalled()
+  })
+
+  it("400s main_image_required and does not enqueue when the location has no approved source image", async () => {
+    const locSingle = vi.fn().mockResolvedValue({ data: { source_image_url: null }, error: null })
+    const locIs = vi.fn().mockReturnValue({ single: locSingle })
+    const locEqUser = vi.fn().mockReturnValue({ is: locIs })
+    const locEqId = vi.fn().mockReturnValue({ eq: locEqUser })
+    const locSelect = vi.fn().mockReturnValue({ eq: locEqId })
+    const jobSingle = vi.fn().mockResolvedValue({ data: { id: "job-1" }, error: null })
+    const jobInsert = vi.fn().mockReturnValue({ select: vi.fn().mockReturnValue({ single: jobSingle }) })
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "jobs") return { insert: jobInsert } as never
+      if (table === "locations") return { select: locSelect } as never
+      return {} as never
+    })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-location-asset",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        assetType: "lighting",
+        variant: "neon",
+        name: "Alley",
+        attachToLocationId: TEST_LOCATION_ID,
+        attachToColumn: "lighting",
+        attachName: "neon",
+      },
+    })
+
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("main_image_required")
+    expect(videoQueue.add).not.toHaveBeenCalled()
   })
 
   it("rejects invalid variant for seasons with validation_error", async () => {

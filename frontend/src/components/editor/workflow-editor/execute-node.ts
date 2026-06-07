@@ -37,6 +37,7 @@ import {
   faceSwapApi,
   videoSfx,
   generateMask,
+  generateReferenceSheet,
   generateSceneGraph,
   renderVideoWithSceneGraph,
   renderVideoWithPlan,
@@ -120,6 +121,7 @@ import type {
   FaceSwapData,
   VideoSfxNodeData,
   GenerateMaskData,
+  ReferenceSheetData,
   VideoComposerData,
   AfterEffectsData,
   LottieOverlayData,
@@ -4601,6 +4603,48 @@ export function executeNode(
       "generatedVideoUrl",
       "Retake Video",
       ctx,
+    );
+  }
+
+  if (node.type === "reference-sheet") {
+    const sheetData = node.data as unknown as ReferenceSheetData;
+    // Compose-only: the sheet is composited from the panels the connected
+    // entity already has. The (kind, DB id) are resolved by the input resolver
+    // from the upstream character/object/location node (NOT a wired image URL).
+    const entityKind = inputs.entityKind;
+    const entityDbId = inputs.entityDbId;
+    if (!entityKind || !entityDbId) {
+      const errMsg = "Connect a character, object, or location with a main image first";
+      useWorkflowStore.getState().updateNodeData(node.id, {
+        executionStatus: "failed",
+        errorMessage: errMsg,
+        currentJobId: undefined,
+        currentJobProgress: undefined,
+      });
+      toast.error(`Node "${sheetData.label}": ${errMsg}`);
+      return Promise.reject(new Error(errMsg));
+    }
+    setUserPromptTemplate(undefined);
+    // Standard GeneratedResult[] shape → use the shared poll helper. `outputKey`
+    // writes the composited sheet into generatedResults/generatedImageUrl; the
+    // `extraOutputFields` callback lifts the clean `panelUrls` from output_data
+    // onto node data so the `panels` output handle can spread them downstream.
+    return pollJobWithNodeUpdate(
+      node.id,
+      () => generateReferenceSheet({
+        type: sheetData.type,
+        skin: sheetData.skin,
+        flavour: sheetData.flavour,
+        entityKind,
+        entityDbId,
+      }),
+      "generatedImageUrl",
+      "Reference Sheet",
+      ctx,
+      (od) => {
+        const panels = od.panelUrls;
+        return Array.isArray(panels) ? { panelUrls: panels } : {};
+      },
     );
   }
 

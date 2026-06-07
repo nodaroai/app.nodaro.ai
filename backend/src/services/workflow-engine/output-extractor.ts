@@ -166,6 +166,10 @@ const DIRECT_OUTPUT_KEYS: Array<keyof NodeOutput> = [
   "score",
   "feedback",
   "details",
+  // reference-sheet emits { imageUrl, panelUrls }. imageUrl flows on the `sheet`
+  // handle; panelUrls (this key) is spread into downstream referenceImageUrls by
+  // routeOutput when wired via the `panels` handle.
+  "panelUrls",
 ]
 
 // Job output_data keys that all map to NodeOutput.plan — derived from COMPOSER_PLAN_MAP + generic "plan"
@@ -577,6 +581,16 @@ export function getPrimaryOutput(
   // pulls data.voiceId from extractNodeOutput in execution-graph.ts).
   if (sourceType === "suno-voice") {
     return output.voiceId
+  }
+
+  // Reference Sheet: dual-output. `panels` → first clean panel URL (the full set
+  // is spread into referenceImageUrls by routeOutput); `sheet`/default → the
+  // composited sheet. Motion sheets carry both videoUrl + imageUrl (same MP4
+  // URL); still sheets carry only imageUrl — so prefer videoUrl so a downstream
+  // video consumer gets a video URL. Mirrors the frontend execution-graph.ts branch.
+  if (sourceType === "reference-sheet") {
+    if (sourceHandle === "panels") return output.panelUrls?.[0]
+    return output.videoUrl ?? output.imageUrl
   }
 
   // Web-scrape: single `json` output handle. Stringify here so non-Extract-Field

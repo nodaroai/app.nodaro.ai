@@ -178,6 +178,7 @@ Generate, edit, and transform images using 20+ AI providers.
 | [Generate Mask](./ai-image/generate-mask.md) | Text-prompted segmentation mask (Grounded SAM) | Create a mask for inpainting from a description; passes image through for chaining |
 | [Image Critic](./ai-image/image-critic.md) | Score an image on realism / character consistency / prompt adherence / anatomy / aesthetic / style-match via VLM | QC pipeline gates, automated regeneration loops with modify-image, batch quality scoring |
 | [Describe Image](./ai-image/image-to-text.md) | Extract text description from image | Auto-caption images, extract prompts from art, accessibility |
+| [Reference Sheet](./ai-image/reference-sheet.md) | Composite a turnaround / expression / full reference sheet from a character, object, or location | Build a model sheet for consistency; export, or feed the clean panels into generators as a multi-image reference |
 
 ---
 

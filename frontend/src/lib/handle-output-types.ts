@@ -78,6 +78,7 @@ export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleCo
   "qa-check": { approved: "approve", rejected: "negative" },
   "reduce": { out: "control" },
   "reference-audio": { audio: "audio" },
+  "reference-sheet": { sheet: "image", panels: "reference" },
   "remove-audio": { "video-out": "video" },
   "remove-background": { image: "image" },
   "render-video": { video: "video" },

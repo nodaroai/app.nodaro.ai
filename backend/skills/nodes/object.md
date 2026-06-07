@@ -1,7 +1,7 @@
 ---
 node_type: object
-generated_at: 2026-06-04T12:41:29.031Z
-generated_from: 9bf1388db
+generated_at: 2026-06-07T18:49:01.962Z
+generated_from: db2337ab
 ---
 
 # Object
@@ -48,6 +48,10 @@ generated_from: 9bf1388db
 - `weaponId?: string`
 - `currentJobProgress?: number`
 - `errorMessage?: string`
+- `sheets?: ReferenceSheet[]`
+- `detailCloseups?: ObjectAssetItem[]`
+- `defaultAssetUrl?: string`
+- `defaultAssetName?: string`
 - `updatedAt?: string`
 - `legacyPickerSelection?: {
     kind: "animal" | "vehicle" | "furniture" | "weapon"

@@ -138,6 +138,12 @@ export function useLocationStudio(nodeId: string): LocationStudioState {
         atmosphereMotions: fresh.atmosphereMotions ?? current.atmosphereMotions,
         referencePhotos:
           (fresh.referencePhotos as LocationNodeData["referencePhotos"]) ?? current.referencePhotos,
+        // Reference-sheet buckets — hydrate so the Sheet tab's "Existing sheets"
+        // grid + badges populate, and so detail panels are reused by the planner
+        // instead of regenerated.
+        sheets: fresh.sheets ?? current.sheets ?? [],
+        detailCloseups:
+          (fresh.detailCloseups as LocationNodeData["detailCloseups"]) ?? current.detailCloseups,
         canonicalDescription: fresh.canonicalDescription ?? "",
         styleLock: fresh.styleLock ?? current.styleLock,
         piiConsentAt: fresh.piiConsentAt ?? current.piiConsentAt,

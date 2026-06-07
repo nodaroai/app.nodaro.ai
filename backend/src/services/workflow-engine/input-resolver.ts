@@ -1062,6 +1062,41 @@ function routeOutput(
     return
   }
 
+  // --- Reference Sheet dual-output (MUST precede targetHandle routing, which
+  // would otherwise push only the single `output` into referenceImageUrls when
+  // the consumer handle is `references`/`image`). ---
+  //   • `panels` → spread the FULL clean panel set into referenceImageUrls
+  //     (multi-image consistency reference). Prefer the live job output over the
+  //     saved snapshot. Mirrors the generate-script `images` block + the frontend
+  //     node-input-resolver.ts reference-sheet branch.
+  //   • `sheet` → single composited image; route like an image source
+  //     (image-targets → referenceImageUrls, everything else → imageUrl).
+  if (srcType === "reference-sheet") {
+    if (edge.sourceHandle === "panels") {
+      const liveUrls = nodeStates[src.id]?.output?.panelUrls
+      const dataUrls = src.data.panelUrls as string[] | undefined
+      const urls = (liveUrls && liveUrls.length > 0 ? liveUrls : dataUrls) ?? []
+      const clean = urls.filter((u): u is string => typeof u === "string" && u.length > 0)
+      if (clean.length > 0) {
+        inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), ...clean]
+      }
+      return
+    }
+    // `sheet` (or any non-panels handle) — the composited sheet image.
+    if (
+      targetType === "generate-image" ||
+      targetType === "edit-image" ||
+      targetType === "image-to-image" ||
+      targetType === "modify-image" ||
+      targetType === "video-to-video"
+    ) {
+      inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
+    } else {
+      inputs.imageUrl = output
+    }
+    return
+  }
+
   // --- Handle-specific routing takes priority for named input slots ---
   // These MUST be checked before source-type routing, otherwise source-type
   // handlers (e.g., generate-image → imageUrl) return early and these are

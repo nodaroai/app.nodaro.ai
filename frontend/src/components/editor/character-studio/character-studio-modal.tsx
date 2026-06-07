@@ -8,6 +8,8 @@ import { PosesTab } from "./poses-tab"
 import { MotionsTab } from "./motions-tab"
 import { VoiceTab } from "./voice-tab"
 import { PersonalityTab } from "./personality-tab"
+import { ReferenceSheetTab } from "../reference-sheet/reference-sheet-tab"
+import { SHEET_TAB_ADAPTERS } from "../reference-sheet/sheet-tab-adapter"
 import { Button } from "@/components/ui/button"
 import {
   Tooltip,
@@ -24,7 +26,7 @@ import type { CharacterNodeData } from "@/types/nodes"
 // not `import()` call expressions — same pattern as router.tsx).
 const PublishDialog = lazy(() => import("@/ee/components/community/publish-dialog"))
 
-type TabKey = "appearance" | "expressions" | "poses" | "motions" | "voice" | "personality"
+type TabKey = "appearance" | "expressions" | "poses" | "motions" | "sheet" | "voice" | "personality"
 
 const ASSET_FIELD: Record<StudioAssetType, keyof CharacterNodeData> = {
   expressions: "expressions",
@@ -83,6 +85,7 @@ export function CharacterStudioModal({ nodeId, onClose }: { nodeId: string; onCl
     expr: studio.staged.expressions.length,
     poses: studio.staged.poses.length,
     motions: studio.staged.motions.length,
+    sheets: studio.staged.sheets?.length ?? 0,
   }
   const switchToAppearance = () => setTab("appearance")
   const tabBody = {
@@ -90,6 +93,11 @@ export function CharacterStudioModal({ nodeId, onClose }: { nodeId: string; onCl
     expressions: <ExpressionsTab state={studio} jobs={jobs} onSwitchToAppearance={switchToAppearance} />,
     poses: <PosesTab state={studio} jobs={jobs} onSwitchToAppearance={switchToAppearance} />,
     motions: <MotionsTab state={studio} jobs={jobs} onSwitchToAppearance={switchToAppearance} />,
+    sheet: (
+      <div className="flex-1 overflow-y-auto p-4">
+        <ReferenceSheetTab adapter={SHEET_TAB_ADAPTERS.character} studio={studio} jobs={jobs} accent="#3b82f6" />
+      </div>
+    ),
     voice: <VoiceTab state={studio} />,
     personality: <PersonalityTab state={studio} />,
   }[tab]
@@ -189,6 +197,7 @@ export function CharacterStudioModal({ nodeId, onClose }: { nodeId: string; onCl
           <SideBtn k="expressions" icon="😄" label="Expressions" badge={counts.expr} />
           <SideBtn k="poses" icon="🧍" label="Poses" badge={counts.poses} />
           <SideBtn k="motions" icon="🏃" label="Motions" badge={counts.motions} />
+          <SideBtn k="sheet" icon="📋" label="Sheet" badge={counts.sheets || undefined} />
           <div className="px-3.5 pb-1.5 pt-2.5 text-[9px] uppercase tracking-widest text-slate-700 font-semibold">
             Character
           </div>

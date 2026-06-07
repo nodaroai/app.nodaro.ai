@@ -1,7 +1,7 @@
 ---
 node_type: location
-generated_at: 2026-06-04T12:41:29.043Z
-generated_from: 9bf1388db
+generated_at: 2026-06-07T18:49:01.975Z
+generated_from: db2337ab
 ---
 
 # Location
@@ -50,6 +50,10 @@ generated_from: 9bf1388db
 - `currentJobProgress?: number`
 - `errorMessage?: string`
 - `scriptLocationIndex?: number`
+- `sheets?: ReferenceSheet[]`
+- `detailCloseups?: LocationAssetItem[]`
+- `defaultAssetUrl?: string`
+- `defaultAssetName?: string`
 - `piiConsentAt?: string`
 - `selectedVariant?: string`
 - `pipeline_id?: string`

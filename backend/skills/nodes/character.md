@@ -1,7 +1,7 @@
 ---
 node_type: character
-generated_at: 2026-06-04T12:41:29.006Z
-generated_from: 9bf1388db
+generated_at: 2026-06-07T18:49:01.935Z
+generated_from: db2337ab
 ---
 
 # Character
@@ -56,6 +56,9 @@ generated_from: 9bf1388db
 - `currentJobProgress?: number`
 - `errorMessage?: string`
 - `scriptCharacterIndex?: number`
+- `sheets?: ReferenceSheet[]`
+- `detailCloseups?: CharacterAssetItem[]`
+- `outfitVariations?: CharacterAssetItem[]`
 - `referencePhotos?: ReadonlyArray<{ url: string; kind: ReferencePhotoKind }>`
 - `seedPrompt?: string`
 - `canonicalDescription?: string`

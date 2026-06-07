@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { PLACEHOLDER_CHARACTER_NAME } from "@nodaro/shared"
+import type { ReferenceSheet } from "@nodaro/shared"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { deriveAvailableName } from "../lib/entity-naming.js"
@@ -134,7 +135,7 @@ const listCharactersQuery = z.object({
 })
 
 const SELECT_COLUMNS =
-  "id, user_id, node_id, project_id, name, description, gender, style, base_outfit, source_image_url, expressions, poses, lighting_variations, angles, body_angles, motions, reference_videos_by_variant, voice, personality, canonical_description, lora_training_status, lora_replicate_version, lora_trigger_word, lora_trained_at, deleted_at, created_at, updated_at"
+  "id, user_id, node_id, project_id, name, description, gender, style, base_outfit, source_image_url, expressions, poses, lighting_variations, angles, body_angles, motions, reference_videos_by_variant, voice, personality, canonical_description, lora_training_status, lora_replicate_version, lora_trigger_word, lora_trained_at, sheets, detail_closeups, outfit_variations, deleted_at, created_at, updated_at"
 
 type CharacterRow = {
   id: string
@@ -161,6 +162,10 @@ type CharacterRow = {
   lora_replicate_version: string | null
   lora_trigger_word: string | null
   lora_trained_at: string | null
+  // Reference-sheet buckets (migration 200).
+  sheets: ReferenceSheet[] | null
+  detail_closeups: unknown[] | null
+  outfit_variations: unknown[] | null
   deleted_at: string | null
   created_at: string
   updated_at: string
@@ -184,6 +189,9 @@ function toCamel(c: CharacterRow) {
     angles: c.angles,
     bodyAngles: c.body_angles,
     motions: c.motions,
+    sheets: c.sheets ?? [],
+    detailCloseups: c.detail_closeups ?? [],
+    outfitVariations: c.outfit_variations ?? [],
     referenceVideosByVariant: c.reference_videos_by_variant ?? {},
     voice: c.voice,
     personality: c.personality,
