@@ -31,6 +31,7 @@ import { buildPresetTree, presetMatchesQuery, buildResetToDefaultData } from "@/
 import { NodePresetManageDialog } from "./node-preset-manage-dialog"
 import { NODE_DEF_MAP } from "@/types/nodes"
 import { cn } from "@/lib/utils"
+import { NODE_TITLE_TYPOGRAPHY } from "@/lib/node-title-style"
 import { toast } from "sonner"
 
 /** Asset/entity nodes are DB-backed (own galleries) — no config preset applies. Gated by category
@@ -352,8 +353,11 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
             <span
               className={cn(
                 "truncate",
-                !isNode && "text-sm",
-                !activePreset && "tracking-wide text-muted-foreground",
+                // Node variant: match the node's floating title (EditableNodeLabel) — 11px (via the
+                // inline np.font) + the shared NODE_TITLE_TYPOGRAPHY (semibold/uppercase/tracking).
+                isNode ? NODE_TITLE_TYPOGRAPHY : "text-sm",
+                !activePreset && "text-muted-foreground",
+                !activePreset && !isNode && "tracking-wide",
               )}
               style={np ? { maxWidth: np.maxName } : undefined}
             >

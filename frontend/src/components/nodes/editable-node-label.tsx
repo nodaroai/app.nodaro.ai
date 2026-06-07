@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from "react"
 import type { ReactNode } from "react"
 import { useStore, useNodeId } from "@xyflow/react"
 import { NODE_VISUAL_SCALE_FLOOR } from "@/lib/zoom-floor"
+import { NODE_TITLE_TYPOGRAPHY } from "@/lib/node-title-style"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 
 interface EditableNodeLabelProps {
@@ -48,7 +49,7 @@ export function EditableNodeLabel({ label, icon, onSave, onIconClick }: Editable
 
   return (
     <div
-      className={`absolute -top-6 left-1 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-foreground/70 dark:text-white/70 ${editing ? "nopan nodrag nowheel" : "select-none"}`}
+      className={`absolute -top-6 left-1 flex items-center gap-2 text-[11px] ${NODE_TITLE_TYPOGRAPHY} text-foreground/70 dark:text-white/70 ${editing ? "nopan nodrag nowheel" : "select-none"}`}
       style={{ transform: `scale(${compensateScale})`, transformOrigin: "0 100%" }}
     >
       <button
