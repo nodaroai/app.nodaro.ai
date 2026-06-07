@@ -3,6 +3,7 @@ import { z } from "zod"
 import { PLACEHOLDER_CHARACTER_NAME } from "@nodaro/shared"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
+import { deriveAvailableName } from "../lib/entity-naming.js"
 import { requireAppScope } from "../lib/scope-prehandler.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { hasCredits } from "../lib/config.js"
@@ -213,32 +214,6 @@ function normalizeVariantKeys(
 }
 
 /**
- * Find the next available name for this user matching `baseName` (or `baseName N`).
- * Used for placeholder auto-numbering ("Untitled character 2"), duplicate
- * suffixes ("Kira (copy)", "Kira (copy 2)"), and restore-on-conflict ("Kira (restored)").
- * Case-insensitive comparison since the unique index is `LOWER(name)`.
- *
- * Pure computation off a live snapshot — a concurrent insert can still race
- * past us, so callers should retry on 23505 (see `insertWithUniqueName`).
- */
-async function deriveAvailableName(userId: string, baseName: string): Promise<string> {
-  const { data } = await supabase
-    .from("characters")
-    .select("name")
-    .eq("user_id", userId)
-    .is("deleted_at", null)
-    .ilike("name", `${baseName}%`)
-  const existing = new Set<string>((data ?? []).map((r) => r.name.toLowerCase()))
-  if (!existing.has(baseName.toLowerCase())) return baseName
-  for (let n = 2; n < 1000; n++) {
-    const candidate = `${baseName} ${n}`
-    if (!existing.has(candidate.toLowerCase())) return candidate
-  }
-  // 1000 collisions is implausible — but bail gracefully rather than spin.
-  throw new Error(`No available name based on '${baseName}'`)
-}
-
-/**
  * Insert a character row whose `name` is auto-derived from `baseName`.
  * Retries up to 5 times on 23505 (unique violation) to absorb concurrent races.
  */
@@ -248,7 +223,7 @@ async function insertWithUniqueName(
   baseName: string,
 ): Promise<{ id: string; name: string } | { error: { code: string; message: string } }> {
   for (let attempt = 0; attempt < 5; attempt++) {
-    const name = await deriveAvailableName(userId, baseName)
+    const name = await deriveAvailableName("characters", userId, baseName)
     const { data, error } = await supabase
       .from("characters")
       .insert({ ...payload, name })
@@ -717,7 +692,7 @@ export async function characterRoutes(app: FastifyInstance) {
     const taken = (conflicts ?? []).length > 0
     let restoredName = archived.name
     if (taken) {
-      restoredName = await deriveAvailableName(userId, `${archived.name} (restored)`)
+      restoredName = await deriveAvailableName("characters", userId, `${archived.name} (restored)`)
     }
 
     // Retry up to 3× on 23505 to absorb a concurrent restorer.
@@ -734,7 +709,7 @@ export async function characterRoutes(app: FastifyInstance) {
         return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
       }
       // Conflict — recompute and try again.
-      restoredName = await deriveAvailableName(userId, `${archived.name} (restored)`)
+      restoredName = await deriveAvailableName("characters", userId, `${archived.name} (restored)`)
     }
     return reply.status(409).send({ error: { code: "name_taken", message: "Couldn't find a free name to restore under." } })
   })
