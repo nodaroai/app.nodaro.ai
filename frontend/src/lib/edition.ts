@@ -32,6 +32,11 @@ export function hasUserManagement(): boolean {
   return EDITION === 'business' || EDITION === 'cloud'
 }
 
+/** business + cloud are multi-user (community is single-user → sharing is inert) */
+export function isMultiUser(): boolean {
+  return EDITION === 'business' || EDITION === 'cloud'
+}
+
 export const features = {
   adminPanel: hasAdmin(),
   usersManagement: hasUserManagement(),
