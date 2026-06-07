@@ -6,11 +6,11 @@ import { CHARACTER_ATTACH_COLUMNS, OBJECT_ATTACH_COLUMNS, LOCATION_ATTACH_COLUMN
 
 const here = dirname(fileURLToPath(import.meta.url))
 const migration = readFileSync(
-  resolve(here, "../../../supabase/migrations/200_reference_sheet_columns_and_pricing.sql"),
+  resolve(here, "../../../supabase/migrations/202_reference_sheet_columns_and_pricing.sql"),
   "utf8",
 )
 
-describe("reference-sheet attach columns are whitelisted in the append RPCs (migration 200)", () => {
+describe("reference-sheet attach columns are whitelisted in the append RPCs (migration 202)", () => {
   it("every new character attach column appears in the migration", () => {
     for (const c of ["sheets", "detail_closeups", "outfit_variations"]) {
       expect(CHARACTER_ATTACH_COLUMNS).toContain(c)
