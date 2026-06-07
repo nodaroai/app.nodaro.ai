@@ -1,7 +1,7 @@
 import { createBrowserRouter, Navigate, type RouteObject } from "react-router-dom"
 import { Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
-import { hasAdmin } from "@/lib/edition"
+import { hasAdmin, isMultiUser } from "@/lib/edition"
 
 // Error handling
 import RouteErrorBoundary from "@/components/route-error-boundary"
@@ -39,6 +39,7 @@ const AppsPage = lazy(() => import("@/app/(dashboard)/apps/page"))
 const AppAnalyticsPage = lazy(() => import("@/app/(dashboard)/apps/analytics-page"))
 const DeletedAppsPage = lazy(() => import("@/app/(dashboard)/apps/deleted/page"))
 const TemplatesPage = lazy(() => import("@/app/(dashboard)/templates/page"))
+const ExplorePage = lazy(() => import("@/ee/app/explore/page"))
 
 // Auth pages (lazy — rarely revisited)
 const LoginPage = lazy(() => import("@/app/(auth)/login/page"))
@@ -116,6 +117,13 @@ const adminRoutes: RouteObject[] = hasAdmin() ? [
     ],
   },
 ] : []
+
+// Community route block — only included when EDITION is multi-user (business or
+// cloud). In community (single-user) builds the spread is empty and the
+// ExplorePage chunk is never loaded.
+const communityRoutes: RouteObject[] = isMultiUser()
+  ? [{ path: "/explore", element: <SuspenseWrapper><ExplorePage /></SuspenseWrapper> }]
+  : []
 
 export const router = createBrowserRouter([
   {
@@ -257,6 +265,7 @@ export const router = createBrowserRouter([
         path: "/templates",
         element: <SuspenseWrapper><TemplatesPage /></SuspenseWrapper>,
       },
+      ...communityRoutes,
       {
         path: "/_gallery",
         element: <SuspenseWrapper><GalleryPage /></SuspenseWrapper>,

@@ -19,6 +19,7 @@ import {
   LayoutTemplate,
   Coins,
   Sparkles,
+  Compass,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -30,7 +31,7 @@ import {
 } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
-import { isFeatureEnabled, hasCredits } from "@/lib/edition"
+import { isFeatureEnabled, hasCredits, isMultiUser } from "@/lib/edition"
 import { useUserCredits } from "@/ee/hooks/queries/use-credits-queries"
 import { PRICING_TIERS } from "@/lib/pricing-data"
 import { APP_VERSION } from "@/lib/version"
@@ -45,6 +46,7 @@ interface NavItem {
   readonly icon: React.ComponentType<{ className?: string; strokeWidth?: number }>
   readonly adminOnly?: boolean
   readonly billingOnly?: boolean
+  readonly multiUserOnly?: boolean
 }
 
 interface NavSection {
@@ -59,6 +61,7 @@ const NAV_SECTIONS: readonly NavSection[] = [
       { href: "/projects", label: "Projects", icon: FolderOpen },
       { href: "/apps", label: "Apps", icon: Rocket },
       { href: "/templates", label: "Templates", icon: LayoutTemplate },
+      { href: "/explore", label: "Explore", icon: Compass, multiUserOnly: true },
     ]
   },
   {
@@ -302,6 +305,7 @@ export function AppSidebar({
             NAV_ITEMS.map((item) => {
               if (item.adminOnly && (!isFeatureEnabled("adminPanel") || !isAdmin)) return null
               if (item.billingOnly && !isFeatureEnabled("billing")) return null
+              if (item.multiUserOnly && !isMultiUser()) return null
 
               const isActive = item.href === "/admin"
                 ? pathname.startsWith("/admin")
@@ -343,6 +347,7 @@ export function AppSidebar({
               const visibleItems = section.items.filter((item) => {
                 if (item.adminOnly && (!isFeatureEnabled("adminPanel") || !isAdmin)) return false
                 if (item.billingOnly && !isFeatureEnabled("billing")) return false
+                if (item.multiUserOnly && !isMultiUser()) return false
                 return true
               })
 
