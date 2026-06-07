@@ -159,6 +159,14 @@ const ALLOWED_PATHS = [
   // `.eq("user_id", userId)` in-handler (verified ~lines 80-95).
   /^src\/routes\/generate-location-motion\.ts$/,
 
+  // Reference sheet: job-creation route. Derives userId = req.userId (401 if
+  // absent), IDOR-scopes the entity ownership fetch
+  // (.eq("id", entityDbId).eq("user_id", userId).is("deleted_at", null)) BEFORE
+  // reserving credits, and INSERTs the job with `user_id: userId`. The worker
+  // re-verifies ownership. Service-role mirrors the other media-generation
+  // routes (generate-*-asset / generate-*-motion).
+  /^src\/routes\/reference-sheet\.ts$/,
+
   // Object LLM caption: service-role for objects lookup + UPDATE. Every
   // query is scoped by `.eq("user_id", userId)` in-handler. Mirrors
   // location-llm-caption.ts (Phase C1b).
