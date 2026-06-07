@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react"
+import { useSearchParams } from "react-router-dom"
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query"
 import { Compass, Search, X, SlidersHorizontal, Heart } from "lucide-react"
 import { Input } from "@/components/ui/input"
@@ -13,6 +14,7 @@ import { cn } from "@/lib/utils"
 import {
   browseCommunity,
   getCommunityFavorites,
+  getCommunityListing,
   type CommunityCard as CommunityCardData,
 } from "@/lib/api"
 import {
@@ -41,6 +43,7 @@ export default function ExplorePage() {
 
   const [selected, setSelected] = useState<CommunityCardData | null>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [searchParams, setSearchParams] = useSearchParams()
 
   // Debounce search (mirror templates page)
   useEffect(() => {
@@ -111,6 +114,45 @@ export default function ExplorePage() {
   const openPreview = (item: CommunityCardData) => {
     setSelected(item)
     setPreviewOpen(true)
+  }
+
+  // Deep-link support: `/explore?listing=<slug>` (used by the admin reports
+  // queue) fetches that listing and opens the preview modal directly.
+  const deepLinkSlug = searchParams.get("listing")
+  useEffect(() => {
+    if (!deepLinkSlug || selected?.slug === deepLinkSlug) return
+    let cancelled = false
+    getCommunityListing(deepLinkSlug)
+      .then((res) => {
+        if (cancelled) return
+        setSelected(res.data)
+        setPreviewOpen(true)
+      })
+      .catch(() => {
+        // Listing gone (taken down/deleted) — drop the param silently.
+        if (!cancelled) {
+          setSearchParams((prev) => {
+            const next = new URLSearchParams(prev)
+            next.delete("listing")
+            return next
+          }, { replace: true })
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [deepLinkSlug, selected?.slug, setSearchParams])
+
+  const handlePreviewOpenChange = (open: boolean) => {
+    setPreviewOpen(open)
+    // Clear the deep-link param when the modal is dismissed so re-opening works.
+    if (!open && deepLinkSlug) {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev)
+        next.delete("listing")
+        return next
+      }, { replace: true })
+    }
   }
 
   return (
@@ -253,7 +295,7 @@ export default function ExplorePage() {
       <CommunityPreviewModal
         item={selected}
         open={previewOpen}
-        onOpenChange={setPreviewOpen}
+        onOpenChange={handlePreviewOpenChange}
       />
     </div>
   )

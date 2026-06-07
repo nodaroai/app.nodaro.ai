@@ -20,6 +20,7 @@ import {
   Coins,
   Sparkles,
   Compass,
+  Flag,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -80,6 +81,7 @@ const NAV_SECTIONS: readonly NavSection[] = [
       { href: "/billing", label: "Billing", icon: CreditCard, billingOnly: true },
       { href: "/settings", label: "Settings", icon: Settings },
       { href: "/admin", label: "Admin", icon: Shield, adminOnly: true },
+      { href: "/admin/community-reports", label: "Community Reports", icon: Flag, adminOnly: true },
     ]
   },
 ]
@@ -117,6 +119,20 @@ export function AppSidebar({
 }: AppSidebarProps) {
   const pathname = useLocation().pathname
   const navigate = useNavigate()
+
+  // The top-level Admin item points at /admin and would greedily match every
+  // /admin/* subpath; treat it as active only when no more-specific nav item
+  // (e.g. /admin/community-reports) owns the current path.
+  const isNavItemActive = (href: string): boolean => {
+    if (href === "/admin") {
+      if (pathname === "/admin") return true
+      const hasSpecificMatch = NAV_ITEMS.some(
+        (i) => i.href !== "/admin" && i.href.startsWith("/admin/") && pathname.startsWith(i.href),
+      )
+      return pathname.startsWith("/admin/") && !hasSpecificMatch
+    }
+    return pathname === href || pathname.startsWith(href + "/")
+  }
   const { user, isAdmin, signOut } = useAuth()
   const { isCollapsed, setCollapsed } = useSidebar()
   const { data: creditBalance } = useUserCredits(user?.id)
@@ -307,11 +323,9 @@ export function AppSidebar({
               if (item.billingOnly && !isFeatureEnabled("billing")) return null
               if (item.multiUserOnly && !isMultiUser()) return null
 
-              const isActive = item.href === "/admin"
-                ? pathname.startsWith("/admin")
-                : pathname === item.href || pathname.startsWith(item.href + "/")
+              const isActive = isNavItemActive(item.href)
 
-              const showBadge = item.adminOnly && pendingReportsCount > 0
+              const showBadge = item.href === "/admin" && pendingReportsCount > 0
 
               return (
                 <Tooltip key={item.href}>
@@ -359,11 +373,9 @@ export function AppSidebar({
                     {section.label}
                   </p>
                   {visibleItems.map((item) => {
-                    const isActive = item.href === "/admin"
-                      ? pathname.startsWith("/admin")
-                      : pathname === item.href || pathname.startsWith(item.href + "/")
+                    const isActive = isNavItemActive(item.href)
 
-                    const showBadge = item.adminOnly && pendingReportsCount > 0
+                    const showBadge = item.href === "/admin" && pendingReportsCount > 0
 
                     return (
                       <Link
