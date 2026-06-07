@@ -107,6 +107,11 @@ export function hasCredits(): boolean {
   return config.EDITION === "cloud"
 }
 
+/** business + cloud are multi-user (community is single-user → sharing is inert) */
+export function isMultiUser(): boolean {
+  return config.EDITION === "business" || config.EDITION === "cloud"
+}
+
 function loadConfig() {
   const result = envSchema.safeParse(process.env)
   if (!result.success) {
