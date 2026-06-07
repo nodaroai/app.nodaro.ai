@@ -131,6 +131,7 @@ import {
   startProgressRamp,
   _resetJobProgressMap,
 } from "../shared.js"
+import { PostProcessingError } from "../../lib/post-processing-error.js"
 
 // ---------------------------------------------------------------------------
 // Reset
@@ -356,34 +357,48 @@ describe("refundJobCredits", () => {
     expect(mocks.mockRefundCredits).toHaveBeenCalledWith("usage-log-1")
   })
 
+  // The refund decision is TYPE-based, not message-based (the old substring
+  // guard never fired on the REAL thrown strings, and worse it wrongly skipped
+  // a PRE-provider "Failed to download image" input failure). A post-provider
+  // step signals delivery by throwing a PostProcessingError → SKIP refund.
+  // These are the REAL strings the post-provider steps actually throw.
   it.each([
-    "Failed to upload to R2",
-    "Upload to R2 failed for video",
-    "R2 upload error: connection refused",
-    "Failed to download image: 404",
-    "Failed to download video: 500",
-    "Watermark failed: ffmpeg exited with code 1",
-    "Transcode failed: invalid codec",
-    "ffmpeg failed after watermark step",
-  ])("does NOT refund for post-processing failure: %s", async (msg) => {
-    await refundJobCredits("usage-log-1", "job-1", msg)
+    "Access Denied",                                  // raw AWS SDK R2 upload error
+    "socket hang up",                                 // raw AWS SDK R2 upload error
+    "ffmpeg failed: Conversion failed!",              // watermark / transcode / strip / loop-cut
+    "FFmpeg merge failed",                            // mergeVideoAudio
+    "Failed to download: https://r2/result.mp4 (500)",// result re-download
+  ])("does NOT refund for a PostProcessingError: %s", async (msg) => {
+    await refundJobCredits("usage-log-1", "job-1", new PostProcessingError(msg))
     expect(mocks.mockRefundCredits).not.toHaveBeenCalled()
   })
 
+  // SAFE DIRECTION: the SAME messages, when raised as a PLAIN error (i.e.
+  // pre-provider — e.g. KIE downloading the INPUT image), MUST refund. A plain
+  // error carries no delivery signal, so the safe default (refund) applies.
+  it.each([
+    "Failed to download image: 404", // kie/image.ts INPUT download (pre-provider)
+    "Failed to download video: 500", // thumbnail/input download — refund unless typed
+    "Access Denied",                 // ambiguous string — refund unless typed
+  ])("REFUNDS for the same message as a PLAIN error (pre-provider): %s", async (msg) => {
+    await refundJobCredits("usage-log-1", "job-1", new Error(msg))
+    expect(mocks.mockRefundCredits).toHaveBeenCalledWith("usage-log-1")
+  })
+
   it("skips when no usageLogId", async () => {
-    await refundJobCredits(null, "job-1", "crash")
+    await refundJobCredits(null, "job-1", new Error("crash"))
     expect(mocks.mockRefundCredits).not.toHaveBeenCalled()
   })
 
   it("skips when not cloud edition", async () => {
     mocks.mockHasCredits.value = false
-    await refundJobCredits("usage-log-1", "job-1", "crash")
+    await refundJobCredits("usage-log-1", "job-1", new Error("crash"))
     expect(mocks.mockRefundCredits).not.toHaveBeenCalled()
   })
 
   it("swallows errors", async () => {
     mocks.mockRefundCredits.mockRejectedValueOnce(new Error("DB down"))
-    await expect(refundJobCredits("usage-log-1", "job-1", "crash")).resolves.toBeUndefined()
+    await expect(refundJobCredits("usage-log-1", "job-1", new Error("crash"))).resolves.toBeUndefined()
   })
 })
 

@@ -32,6 +32,20 @@ import type {
 import { MAX_SUB_WORKFLOW_DEPTH } from "./types.js"
 
 /**
+ * Result of executing a sub-workflow node.
+ *
+ * `creditsUsed` is the SUM of the committed credits reported by every inner
+ * node (and, recursively, every nested sub-workflow). The parent orchestrator
+ * threads this into its `totalCredits` accumulator so
+ * `workflow_executions.total_credits_used` reflects sub-workflow spend and
+ * monetized app-run creator earnings are computed on the correct base.
+ */
+export interface SubWorkflowResult {
+  output: NodeOutput
+  creditsUsed: number
+}
+
+/**
  * Prepare a referenced workflow's raw nodes for sub-workflow execution.
  *
  * Runs the shared legacy-type migration (`normalizeLegacyNodeTypes` — the single
@@ -63,7 +77,7 @@ export async function executeSubWorkflow(
   ctx: OrchestratorContext,
   depth: number = 0,
   executingRouteKeys: Set<string> = new Set(),
-): Promise<NodeOutput> {
+): Promise<SubWorkflowResult> {
   // Check depth limit
   if (depth >= MAX_SUB_WORKFLOW_DEPTH) {
     throw new Error(`Sub-workflow depth limit exceeded (max ${MAX_SUB_WORKFLOW_DEPTH})`)
@@ -134,6 +148,12 @@ export async function executeSubWorkflow(
 
   // Initialize node states for the sub-workflow
   const nodeStates: Record<string, NodeExecutionState> = {}
+
+  // Accumulate the committed credits reported by inner nodes so the parent
+  // orchestrator's `totalCredits` (and thus total_credits_used + monetization
+  // base) includes sub-workflow spend. Nested sub-workflows roll up naturally:
+  // the recursive call returns its own summed creditsUsed.
+  let creditsUsed = 0
 
   // Inject inputs from the parent into the sub-workflow input node
   for (const subNode of subNodes) {
@@ -206,17 +226,18 @@ export async function executeSubWorkflow(
 
         const inputs = resolveNodeInputs(subNode, subEdges, nodeStates, subNodes)
 
-        let result
+        let result: { output: NodeOutput; creditsUsed?: number }
         if (subNode.type === "sub-workflow") {
-          // Recursive sub-workflow execution
-          const output = await executeSubWorkflow(
+          // Recursive sub-workflow execution. The recursive call already sums
+          // its own inner spend, so forwarding result.creditsUsed rolls the
+          // nested total up into this level's accumulation below.
+          result = await executeSubWorkflow(
             subNode,
             inputs,
             ctx,
             depth + 1,
             newRouteKeys,
           )
-          result = { output }
         } else {
           result = await executeNode(
             subNode,
@@ -240,7 +261,7 @@ export async function executeSubWorkflow(
     const levelAborted = { cancelled: ctx.cancelled }
     const results = await settledWithLimit(tasks, config.MAX_CONCURRENT_NODES_PER_EXECUTION, levelAborted)
 
-    // Check for failures
+    // Check for failures + accumulate committed inner credits.
     for (let i = 0; i < results.length; i++) {
       const result = results[i]
       if (result.status === "rejected") {
@@ -249,6 +270,7 @@ export async function executeSubWorkflow(
           : String(result.reason)
         throw new Error(`Sub-workflow node ${executableNodes[i].id} failed: ${error}`)
       }
+      creditsUsed += result.value.creditsUsed ?? 0
     }
   }
 
@@ -319,7 +341,7 @@ export async function executeSubWorkflow(
     }
   }
 
-  return output
+  return { output, creditsUsed }
 }
 
 // ---------------------------------------------------------------------------

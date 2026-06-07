@@ -173,7 +173,9 @@ describe("cleanup-service", () => {
 
   describe("expireSubscriptions", () => {
     it("downgrades users past end date", async () => {
-      // First query: canceled subscriptions past period end
+      // First query: canceled subscriptions past period end.
+      // Second `subscriptions` read = the live-subscription re-check (returns
+      // empty: neither user re-subscribed, so both are genuinely expired).
       mockTableQueue("subscriptions", [
         {
           data: [
@@ -182,6 +184,7 @@ describe("cleanup-service", () => {
           ],
           error: null,
         },
+        { data: [], error: null }, // live-sub re-check: none active
       ])
 
       // Second query: profiles for those users (still on paid tiers)
@@ -198,6 +201,51 @@ describe("cleanup-service", () => {
       const result = await expireSubscriptions()
 
       expect(result.usersDowngraded).toBe(2)
+      expect(result.errors).toBe(0)
+    })
+
+    it("does NOT downgrade a re-subscriber who has a stale canceled row AND a live active row", async () => {
+      // BILLING-DATA-LOSS guard: the subscriptions table allows multiple rows per
+      // user (the partial unique index forbids only two status='active' rows —
+      // migration 024). After a cancel→re-subscribe, a stale 'canceled' row whose
+      // period end is now in the past coexists with a fresh 'active' row, and the
+      // profile is on the paid tier the re-subscribe restored. The candidate query
+      // matches the STALE canceled row, so without the live-sub re-check this cron
+      // would silently reset the paying customer to free / 150 credits / 1GB.
+      //
+      // First `subscriptions` read  -> the stale canceled candidate row.
+      // Second `subscriptions` read -> the live-sub re-check finds the active row.
+      mockTableQueue("subscriptions", [
+        { data: [{ id: "sub-stale", user_id: "user-resub", stripe_subscription_id: "ps-old" }], error: null },
+        { data: [{ user_id: "user-resub" }], error: null }, // live active row exists
+      ])
+      // Profile is still on the paid tier the re-subscribe restored.
+      mockTableQueue("profiles", [
+        { data: [{ id: "user-resub", tier: "pro" }], error: null },
+      ])
+
+      const result = await expireSubscriptions()
+
+      // The re-subscriber must NOT be downgraded.
+      expect(result.usersDowngraded).toBe(0)
+      expect(result.errors).toBe(0)
+    })
+
+    it("downgrades a genuinely-expired user (only a stale canceled row, no live sub)", async () => {
+      // Counterpart to the re-subscribe guard: a user with ONLY a stale canceled
+      // row and NO live subscription IS the legitimate safety-net case and must
+      // still be downgraded.
+      mockTableQueue("subscriptions", [
+        { data: [{ id: "sub-dead", user_id: "user-gone", stripe_subscription_id: "ps-dead" }], error: null },
+        { data: [], error: null }, // live-sub re-check: none active
+      ])
+      mockTableQueue("profiles", [
+        { data: [{ id: "user-gone", tier: "pro" }], error: null },
+      ])
+
+      const result = await expireSubscriptions()
+
+      expect(result.usersDowngraded).toBe(1)
       expect(result.errors).toBe(0)
     })
 
@@ -706,6 +754,7 @@ describe("cleanup-service", () => {
           ],
           error: null,
         },
+        { data: [], error: null }, // live-sub re-check: none active
       ])
       // Profile already on free tier — webhook already handled
       mockTableQueue("profiles", [

@@ -14,6 +14,7 @@ import { isAllowedSocialVideoUrl } from "../lib/url-validator.js"
 import { applyImageWatermark, applyVideoWatermark } from "../utils/watermark.js"
 import { generateThumbnailFromUrl } from "../utils/thumbnail.js"
 import { createWorkDir, cleanupWorkDir, downloadFile, transcodeToBrowserSafe } from "../providers/video/ffmpeg-utils.js"
+import { isPostProcessingError, runPostProcessing } from "../lib/post-processing-error.js"
 
 export interface JobContext {
   jobId: string
@@ -315,40 +316,48 @@ export async function commitJobCredits(
 
 /**
  * Refund credits after job failure (cloud edition only).
- * Defaults to refunding (safe for the user). Only skips refund when there
- * is evidence the provider actually completed processing and charged us
- * (e.g., we received the result but failed during post-processing like
- * R2 upload, watermark, or transcode).
  *
- * Pre-processing failures (createTask errors, content moderation, NSFW
- * rejections, validation errors, timeouts) are always refunded because
- * the provider never processed the job.
+ * Defaults to refunding (safe for the user). The ONLY case we skip the refund
+ * is an EXPLICIT "the provider already delivered" signal — a
+ * `PostProcessingError` (or an error carrying `postProcessing === true`) raised
+ * by a step that runs strictly AFTER a successful provider call (R2 upload,
+ * watermark, transcode, audio-merge, strip-audio, smart-loop-cut). In that
+ * case the provider already billed us, so refunding would be a giveaway.
+ *
+ * Why a typed signal and NOT substring-matching the message (the old approach):
+ * the strings the post-provider steps actually throw ("ffmpeg failed: ...",
+ * "Failed to download: <url>", raw AWS SDK errors) never matched the old
+ * patterns, so the guard never fired in prod (revenue leak). Worse, some
+ * patterns ("failed to download image") ALSO match a PRE-provider INPUT
+ * download failure, which would have wrongly SKIPPED the refund and CHARGED a
+ * user for a job the provider never did. The typed signal is unambiguous and
+ * only ever raised post-delivery — see `lib/post-processing-error.ts`.
+ *
+ * Pre-provider failures (createTask errors, content moderation, NSFW
+ * rejections, validation errors, timeouts, input-download failures) are plain
+ * errors → always refunded.
+ *
+ * `errorOrMessage` accepts the thrown value directly (preferred — pass `err`
+ * from the catch so the TYPE is preserved) or a legacy string (always refunds;
+ * a string carries no post-delivery signal, which is the safe default).
  */
-export async function refundJobCredits(usageLogId: string | null | undefined, jobId: string, errorMessage: string): Promise<void> {
+export async function refundJobCredits(
+  usageLogId: string | null | undefined,
+  jobId: string,
+  errorOrMessage: unknown,
+): Promise<void> {
   if (!hasCredits() || !usageLogId) return
 
   try {
-    // Only skip refund when post-processing failed AFTER the provider
-    // successfully completed its work (meaning we were charged by the provider).
-    // These patterns indicate we received a result but failed on our side.
-    const lower = errorMessage?.toLowerCase() ?? ""
-    const isPostProcessingFailure =
-      lower.includes("failed to upload") ||
-      lower.includes("upload to r2") ||
-      lower.includes("r2 upload") ||
-      lower.includes("failed to download image") ||
-      lower.includes("failed to download video") ||
-      lower.includes("watermark failed") ||
-      lower.includes("transcode failed") ||
-      lower.includes("ffmpeg failed after")
-
-    if (isPostProcessingFailure) {
-      console.log(`[worker] Post-processing failure after provider completed - not refunding credits for job ${jobId}: ${errorMessage}`)
-    } else {
-      const { CreditsService } = await import("../ee/services/credits.js")
-      await CreditsService.refundCredits(usageLogId)
-      console.log(`[worker] Credits refunded for job ${jobId}`)
+    if (isPostProcessingError(errorOrMessage)) {
+      const msg = errorOrMessage instanceof Error ? errorOrMessage.message : String(errorOrMessage)
+      console.log(`[worker] Post-processing failure after provider delivered — not refunding credits for job ${jobId}: ${msg}`)
+      return
     }
+
+    const { CreditsService } = await import("../ee/services/credits.js")
+    await CreditsService.refundCredits(usageLogId)
+    console.log(`[worker] Credits refunded for job ${jobId}`)
   } catch (error) {
     console.error(`[worker] Failed to refund credits for job ${jobId}:`, error)
     // Don't fail the job if credit refund fails
@@ -366,17 +375,23 @@ export async function uploadImageMaybeWatermark(
   jobUserId: string | undefined,
   watermark: boolean,
 ): Promise<string> {
-  if (!watermark) {
-    return uploadToR2(sourceUrl, jobId, "image", jobUserId)
-  }
-  // safeFetch: watermarking path fetches sourceUrl and re-uploads the body
-  // (with watermark overlay) to R2. An unvalidated fetch here would be an
-  // SSRF read-oracle identical to uploadToR2's raw fetch path.
-  const response = await safeFetch(sourceUrl, { timeoutMs: 60_000 })
-  if (!response.ok) throw new Error(`Failed to download image: ${response.status}`)
-  const buffer = Buffer.from(await response.arrayBuffer())
-  const watermarked = await applyImageWatermark(buffer)
-  return uploadBufferToR2(watermarked, `images/${jobId}.png`, "image/png", jobUserId)
+  // POST-PROVIDER by construction: `sourceUrl` is the provider's delivered
+  // image. Any failure here (R2 upload, watermark composite, result download)
+  // means we already paid the provider → tag as PostProcessingError so the
+  // refund guard skips the refund. See lib/post-processing-error.ts.
+  return runPostProcessing(async () => {
+    if (!watermark) {
+      return uploadToR2(sourceUrl, jobId, "image", jobUserId)
+    }
+    // safeFetch: watermarking path fetches sourceUrl and re-uploads the body
+    // (with watermark overlay) to R2. An unvalidated fetch here would be an
+    // SSRF read-oracle identical to uploadToR2's raw fetch path.
+    const response = await safeFetch(sourceUrl, { timeoutMs: 60_000 })
+    if (!response.ok) throw new Error(`Failed to download image: ${response.status}`)
+    const buffer = Buffer.from(await response.arrayBuffer())
+    const watermarked = await applyImageWatermark(buffer)
+    return uploadBufferToR2(watermarked, `images/${jobId}.png`, "image/png", jobUserId)
+  })
 }
 
 /**
@@ -412,23 +427,28 @@ export async function uploadVideoMaybeWatermark(
   jobUserId: string | undefined,
   watermark: boolean,
 ): Promise<string> {
-  const workDir = await createWorkDir("wm")
-  try {
-    const inputPath = join(workDir, "input.mp4")
-    await downloadFile(sourceUrl, inputPath)
+  // POST-PROVIDER by construction: `sourceUrl` is the provider's delivered
+  // video. Download-of-result / watermark / transcode / R2-upload failures all
+  // happen after we were billed → PostProcessingError (refund guard skips).
+  return runPostProcessing(async () => {
+    const workDir = await createWorkDir("wm")
+    try {
+      const inputPath = join(workDir, "input.mp4")
+      await downloadFile(sourceUrl, inputPath)
 
-    if (watermark) {
-      const outputPath = join(workDir, "output.mp4")
-      await applyVideoWatermark(inputPath, outputPath)
-      return await uploadFileToR2(outputPath, jobId, "video", jobUserId)
+      if (watermark) {
+        const outputPath = join(workDir, "output.mp4")
+        await applyVideoWatermark(inputPath, outputPath)
+        return await uploadFileToR2(outputPath, jobId, "video", jobUserId)
+      }
+
+      // Even without watermark, transcode if the codec isn't browser-safe
+      const uploadPath = await transcodeToBrowserSafe(inputPath, join(workDir, "output.mp4"))
+      return await uploadFileToR2(uploadPath, jobId, "video", jobUserId)
+    } finally {
+      await cleanupWorkDir(workDir)
     }
-
-    // Even without watermark, transcode if the codec isn't browser-safe
-    const uploadPath = await transcodeToBrowserSafe(inputPath, join(workDir, "output.mp4"))
-    return await uploadFileToR2(uploadPath, jobId, "video", jobUserId)
-  } finally {
-    await cleanupWorkDir(workDir)
-  }
+  })
 }
 
 /**
@@ -441,15 +461,19 @@ export async function watermarkLocalVideoAndUpload(
   jobUserId: string | undefined,
   watermark: boolean,
 ): Promise<string> {
-  if (watermark) {
-    const wmPath = `${localPath}-wm.mp4`
-    await applyVideoWatermark(localPath, wmPath)
-    return uploadFileToR2(wmPath, jobId, "video", jobUserId)
-  }
+  // POST-PROVIDER: `localPath` is a post-delivery artifact (e.g. the merged
+  // provider video). Watermark / transcode / upload failures → skip refund.
+  return runPostProcessing(async () => {
+    if (watermark) {
+      const wmPath = `${localPath}-wm.mp4`
+      await applyVideoWatermark(localPath, wmPath)
+      return uploadFileToR2(wmPath, jobId, "video", jobUserId)
+    }
 
-  // Transcode if the codec isn't browser-safe
-  const uploadPath = await transcodeToBrowserSafe(localPath, `${localPath}-norm.mp4`)
-  return uploadFileToR2(uploadPath, jobId, "video", jobUserId)
+    // Transcode if the codec isn't browser-safe
+    const uploadPath = await transcodeToBrowserSafe(localPath, `${localPath}-norm.mp4`)
+    return uploadFileToR2(uploadPath, jobId, "video", jobUserId)
+  })
 }
 
 /**

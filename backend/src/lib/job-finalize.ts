@@ -1,5 +1,6 @@
 import { supabase } from "./supabase.js"
 import { uploadToR2 } from "./storage.js"
+import { runPostProcessing } from "./post-processing-error.js"
 import {
   uploadImageVariantsMaybeWatermark,
   uploadVideoMaybeWatermark,
@@ -257,9 +258,11 @@ export async function finalizeJobWithMedia(
   } else if (AUDIO_TYPES.has(jobType)) {
     // Audio is never watermarked. Callers with a pre-uploaded R2 URL pass it
     // through `input.mediaUrl`; otherwise finalize uploads via `uploadToR2`.
+    // POST-PROVIDER: `result.url` is the provider's delivered audio — an R2
+    // upload failure here is post-delivery, so tag it (refund guard skips).
     const r2Url = input.mediaUrl !== undefined
       ? input.mediaUrl
-      : await uploadToR2(result.url, jobId, "audio", job.user_id ?? undefined)
+      : await runPostProcessing(() => uploadToR2(result.url, jobId, "audio", job.user_id ?? undefined))
     outputData = { audioUrl: r2Url }
   } else {
     throw new Error(`[job-finalize] unknown jobType: ${jobType}`)

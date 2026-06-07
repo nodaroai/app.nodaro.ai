@@ -376,13 +376,17 @@ describe("video worker processor", () => {
     )
   })
 
-  it("refunds credits on error", async () => {
-    mocks.mockHandler.mockRejectedValueOnce(new Error("crash"))
+  it("refunds credits on error — passes the ERROR OBJECT so the PostProcessingError type signal survives", async () => {
+    const crash = new Error("crash")
+    mocks.mockHandler.mockRejectedValueOnce(crash)
 
     const job = makeBullJob("generate-image")
     await expect(processor(job)).rejects.toThrow()
 
-    expect(mocks.mockRefundJobCredits).toHaveBeenCalledWith("usage-1", "job-1", "crash")
+    // The worker MUST forward the thrown value (not just its message) so
+    // refundJobCredits can distinguish a post-provider PostProcessingError
+    // (skip) from a pre-provider plain error (refund).
+    expect(mocks.mockRefundJobCredits).toHaveBeenCalledWith("usage-1", "job-1", crash)
   })
 
   it("does NOT refund or mark failed on a non-final attempt — BullMQ will retry", async () => {

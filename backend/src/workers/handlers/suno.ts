@@ -1,6 +1,7 @@
 import { variantJobId } from "@nodaro/shared"
 import type { Job } from "bullmq"
 import { uploadToR2 } from "../../lib/storage.js"
+import { runPostProcessing } from "../../lib/post-processing-error.js"
 import {
   sunoGenerate, sunoCover, sunoExtend, sunoLyrics, sunoSeparate, sunoMusicVideo,
   sunoMashup, sunoReplaceSection, sunoAddInstrumental, sunoAddVocals, sunoConvertWav, sunoUploadExtend,
@@ -37,9 +38,13 @@ async function uploadAllSunoTracks(
 ): Promise<Record<string, unknown> | null> {
   const validTracks = result.tracks.filter((t) => t.audioUrl)
   if (validTracks.length === 0) return null
-  const r2Urls = await Promise.all(
-    validTracks.map((t, i) =>
-      uploadToR2(t.audioUrl, variantJobId(jobId, i), "audio", jobUserId),
+  // POST-PROVIDER: Suno already delivered these tracks (we were billed) — an R2
+  // upload failure here is post-delivery, so skip the refund.
+  const r2Urls = await runPostProcessing(() =>
+    Promise.all(
+      validTracks.map((t, i) =>
+        uploadToR2(t.audioUrl, variantJobId(jobId, i), "audio", jobUserId),
+      ),
     ),
   )
   const primary = validTracks[0]!
@@ -188,7 +193,8 @@ const handleSunoSeparate: HandlerFn = async function handleSunoSeparate(job, ctx
     "brassUrl", "woodwindsUrl",
   ] as const
 
-  // Upload stems in parallel
+  // Upload stems in parallel. POST-PROVIDER: stems are the delivered Suno
+  // separation result (billed) — an R2 upload failure here skips the refund.
   const uploadPromises = stemFields
     .filter(field => result[field])
     .map(async (field) => {
@@ -197,7 +203,7 @@ const handleSunoSeparate: HandlerFn = async function handleSunoSeparate(job, ctx
       const r2Url = await uploadToR2(url, `${ctx.jobId}-${stemName}`, "audio", ctx.jobUserId)
       return { field, r2Url }
     })
-  const uploaded = await Promise.all(uploadPromises)
+  const uploaded = await runPostProcessing(() => Promise.all(uploadPromises))
   for (const { field, r2Url } of uploaded) {
     outputData[field] = r2Url
   }
@@ -225,7 +231,8 @@ const handleSunoMusicVideo: HandlerFn = async function handleSunoMusicVideo(job,
     () => sunoMusicVideo({ taskId: sunoTaskId, audioId }, { onTaskCreated }),
   )
   await setJobProgress(job, ctx.jobId, 50)
-  const r2Url = await uploadToR2(result.videoUrl, ctx.jobId, "video", ctx.jobUserId)
+  // POST-PROVIDER: Suno delivered the music video (billed) → skip refund on R2 fail.
+  const r2Url = await runPostProcessing(() => uploadToR2(result.videoUrl, ctx.jobId, "video", ctx.jobUserId))
   await setJobProgress(job, ctx.jobId, 100)
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
   if (!await shouldSaveJobResult(ctx.jobId)) return
@@ -309,7 +316,8 @@ const handleSunoConvertWav: HandlerFn = async function handleSunoConvertWav(job,
     () => sunoConvertWav({ taskId: sunoTaskId, audioId }, { onTaskCreated }),
   )
   await setJobProgress(job, ctx.jobId, 50)
-  const r2Url = await uploadToR2(result.audioUrl, ctx.jobId, "audio", ctx.jobUserId)
+  // POST-PROVIDER: Suno delivered the WAV (billed) → skip refund on R2 fail.
+  const r2Url = await runPostProcessing(() => uploadToR2(result.audioUrl, ctx.jobId, "audio", ctx.jobUserId))
   await setJobProgress(job, ctx.jobId, 100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
   const ok = await markJobCompleted(ctx.jobId, {

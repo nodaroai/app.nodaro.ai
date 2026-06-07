@@ -35,6 +35,7 @@ import { applySmartLoopCutToR2Url } from "../../providers/video/apply-smart-loop
 import { join } from "node:path"
 import { readFile } from "node:fs/promises"
 import { uploadBufferToR2 } from "../../lib/storage.js"
+import { runPostProcessing } from "../../lib/post-processing-error.js"
 
 /**
  * VEO3 / VEO3.1 always produce a video with background audio per KIE's
@@ -43,19 +44,23 @@ import { uploadBufferToR2 } from "../../lib/storage.js"
  * track, then re-uploading. Cheap (no re-encode).
  */
 async function stripAudioFromR2Url(videoUrl: string, jobId: string): Promise<string> {
-  let workDir: string | undefined
-  try {
-    workDir = await createWorkDir("veo3-strip-audio")
-    const inputPath = join(workDir, "in.mp4")
-    const outputPath = join(workDir, "out.mp4")
-    await downloadFile(videoUrl, inputPath)
-    await stripAudio(inputPath, outputPath)
-    const buffer = await readFile(outputPath)
-    const key = `videos/${jobId}-silent.mp4`
-    return await uploadBufferToR2(buffer, key, "video/mp4")
-  } finally {
-    if (workDir) await cleanupWorkDir(workDir)
-  }
+  // POST-PROVIDER: `videoUrl` is the delivered VEO result; download/strip/
+  // upload failures are post-delivery → PostProcessingError (refund skipped).
+  return runPostProcessing(async () => {
+    let workDir: string | undefined
+    try {
+      workDir = await createWorkDir("veo3-strip-audio")
+      const inputPath = join(workDir, "in.mp4")
+      const outputPath = join(workDir, "out.mp4")
+      await downloadFile(videoUrl, inputPath)
+      await stripAudio(inputPath, outputPath)
+      const buffer = await readFile(outputPath)
+      const key = `videos/${jobId}-silent.mp4`
+      return await uploadBufferToR2(buffer, key, "video/mp4")
+    } finally {
+      if (workDir) await cleanupWorkDir(workDir)
+    }
+  })
 }
 
 import {
@@ -325,8 +330,11 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
 
   // Upload the generated video to R2
   // If audio merge follows, upload without watermark (watermark applied to final)
+  // POST-PROVIDER: `providerOutputUrl` is the delivered i2v result; the bare
+  // uploadToR2 here (audio-merge branch) is wrapped so an R2 failure skips the
+  // refund (uploadVideoMaybeWatermark already wraps itself).
   let finalVideoUrl = audioUrl
-    ? await uploadToR2(providerOutputUrl, ctx.jobId, "video", ctx.jobUserId)
+    ? await runPostProcessing(() => uploadToR2(providerOutputUrl, ctx.jobId, "video", ctx.jobUserId))
     : await uploadVideoMaybeWatermark(providerOutputUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
   await setJobProgress(job, ctx.jobId, 90)
 
@@ -1086,7 +1094,9 @@ const handleGenerateMask: HandlerFn = async function handleGenerateMask(job, ctx
   // Upload the mask PNG to R2. Masks are intermediate artifacts (consumed by a
   // downstream inpainting node), not gallery content — never watermark them or
   // a watermark overlay would corrupt the binary mask.
-  const maskUrl = await uploadToR2(maskOutputUrl, ctx.jobId, "image", ctx.jobUserId)
+  // POST-PROVIDER: `maskOutputUrl` is the delivered grounded-sam result — an R2
+  // upload failure here is post-delivery, so skip the refund.
+  const maskUrl = await runPostProcessing(() => uploadToR2(maskOutputUrl, ctx.jobId, "image", ctx.jobUserId))
   await setJobProgress(job, ctx.jobId, 100)
 
   // generate-mask outputs a {imageUrl, maskUrl} pair, not the standard single
