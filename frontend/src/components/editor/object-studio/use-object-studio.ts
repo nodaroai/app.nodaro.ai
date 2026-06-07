@@ -146,6 +146,12 @@ export function useObjectStudio(nodeId: string): ObjectStudioState {
         motionClips: fresh.motionClips ?? current.motionClips,
         referencePhotos:
           (fresh.referencePhotos as ObjectNodeData["referencePhotos"]) ?? current.referencePhotos,
+        // Reference-sheet buckets — hydrate so the Sheet tab's "Existing sheets"
+        // grid + badges populate, and so detail panels are reused by the planner
+        // instead of regenerated.
+        sheets: fresh.sheets ?? current.sheets ?? [],
+        detailCloseups:
+          (fresh.detailCloseups as ObjectNodeData["detailCloseups"]) ?? current.detailCloseups,
         canonicalDescription: fresh.canonicalDescription ?? "",
         styleLock: fresh.styleLock ?? current.styleLock,
       }

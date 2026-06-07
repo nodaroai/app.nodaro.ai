@@ -13,9 +13,11 @@ describe("location entity-prompts constants", () => {
       "timeOfDay", "weather", "seasons", "angles", "lighting", "custom"
     ])
   })
-  it("LOCATION_ATTACH_COLUMNS has 6 snake_case DB column names", () => {
+  it("LOCATION_ATTACH_COLUMNS has the snake_case DB column names (incl. reference-sheet buckets)", () => {
     expect(LOCATION_ATTACH_COLUMNS).toEqual([
-      "time_of_day", "weather", "seasons", "angles", "lighting", "atmosphere_motions"
+      "time_of_day", "weather", "seasons", "angles", "lighting", "atmosphere_motions",
+      // Reference-sheet buckets (migration 200) — locations get sheets + detail_closeups.
+      "sheets", "detail_closeups",
     ])
   })
   it("LocationAssetType union derives from constant", () => {

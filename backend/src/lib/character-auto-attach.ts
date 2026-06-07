@@ -1,24 +1,22 @@
+import { CHARACTER_ATTACH_COLUMNS, type CharacterAttachColumn } from "@nodaro/shared"
 import { supabase } from "./supabase.js"
 
 /**
  * Columns on `characters` that hold JSONB arrays of `{name, url}` items.
- * Kept in sync with the `append_character_asset` RPC whitelist (migration 111,
- * extended in 118 to include `body_angles`).
+ * Derived from the canonical `CHARACTER_ATTACH_COLUMNS` (single source of
+ * truth, shared with the route's Zod enum) PLUS `"motions"` — the video-clip
+ * column, which lives outside the image-asset attach array but is still a
+ * valid `append_character_asset` target (`handleGenerateCharacterMotion`
+ * passes it as a literal). Deriving from the shared array means new attach
+ * buckets (reference-sheet `sheets`/`detail_closeups`/`outfit_variations`,
+ * migration 200) are accepted here automatically without a second edit.
+ * Stays in sync with the `append_character_asset` RPC whitelist (migration
+ * 111 → 118 `body_angles` → 200 sheet buckets).
  */
-export type CharacterAssetColumn =
-  | "expressions"
-  | "poses"
-  | "lighting_variations"
-  | "angles"
-  | "body_angles"
-  | "motions"
+export type CharacterAssetColumn = CharacterAttachColumn | "motions"
 
-const VALID_ASSET_COLUMNS: ReadonlySet<CharacterAssetColumn> = new Set([
-  "expressions",
-  "poses",
-  "lighting_variations",
-  "angles",
-  "body_angles",
+const VALID_ASSET_COLUMNS: ReadonlySet<CharacterAssetColumn> = new Set<CharacterAssetColumn>([
+  ...CHARACTER_ATTACH_COLUMNS,
   "motions",
 ])
 

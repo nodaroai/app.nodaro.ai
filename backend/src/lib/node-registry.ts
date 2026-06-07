@@ -208,6 +208,17 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
     },
   },
   {
+    type: "reference-sheet",
+    label: "Reference Sheet",
+    category: "ai-image",
+    description:
+      "Composite a reference sheet (turnaround / expression board / variation board / detail) from a connected character, object, or location. Compose-only — uses panels the entity already has; emits the sheet image plus a clean panel set for downstream multi-image consistency.",
+    outputType: "image",
+    creditCost: 4,
+    capabilities: ["reference-sheet"],
+    inputSchema: { fields: [{ key: "entityRef", type: "image-url", required: true }] },
+  },
+  {
     type: "text-to-speech",
     label: "Text to Speech",
     category: "ai-audio",

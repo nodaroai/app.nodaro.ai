@@ -1,6 +1,7 @@
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
-import { NODE_REF_PATTERN, RESERVED_TEMPLATE_VARS, NODE_MAPPABLE_FIELDS } from "@nodaro/shared"
+import { NODE_REF_PATTERN, NODE_MAPPABLE_FIELDS } from "@nodaro/shared"
 import { getUpstreamNodes } from "@/lib/node-refs"
+import { isExcludedToken } from "@/lib/prompt-ref-scan"
 
 /**
  * A prompt reference that has no providing node — it would be left unresolved at
@@ -11,17 +12,6 @@ export interface MissingRef {
   readonly kind: "text"
   /** The token name exactly as written inside `{ }`, trimmed (e.g. "Hero"). */
   readonly name: string
-}
-
-/**
- * Tokens never flagged regardless of wiring: reserved template vars (resolved
- * specially by resolveNodeRefs) and image-ref tokens `{image:N:label}` (a
- * separate system). Empty `{}` can't reach here — NODE_REF_PATTERN needs 1+ char.
- */
-function isExcludedToken(raw: string): boolean {
-  if (raw === "") return true
-  if (raw.startsWith("image:")) return true
-  return RESERVED_TEMPLATE_VARS.has(raw)
 }
 
 /**

@@ -19,6 +19,7 @@ import {
 import { useSearchParams, useNavigate } from "react-router-dom"
 import { cn } from "@/lib/utils"
 import { nodeHasPromptField } from "@/lib/prompt-fields"
+import { computeUnusedPromptEdges } from "@/lib/unused-prompt-edges"
 import "@xyflow/react/dist/style.css"
 
 import { nodeTypes } from "@/components/nodes"
@@ -970,6 +971,10 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     // Build a map of nodeId → node for quick lookup
     const nodeMap = new Map(nodes.map((n) => [n.id, n]))
 
+    // Edge IDs wired into a `prompt` handle the consumer's prompt doesn't use —
+    // rendered inert (grayed) by AnimatedFlowEdge. Computed once per memo run.
+    const unusedPromptEdgeIds = computeUnusedPromptEdges(nodes, edges)
+
     const cache = animatedEdgeCacheRef.current
     const nextCache = new Map<string, { fields: string; rawEdge: WorkflowEdge; result: WorkflowEdge }>()
 
@@ -1015,6 +1020,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         ? getHandleConnectionLimit(targetNode, edge.targetHandle)
         : null
       const disabledByProvider = targetHandleLimit?.limit === 0
+      const unusedPromptRef = unusedPromptEdgeIds.has(edge.id)
 
       const outputMode = resolveEffectiveOutputMode(edge, sourceNode, targetNode)
 
@@ -1042,6 +1048,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         sourceNode?.type,
         targetNode?.type,
         disabledByProvider,
+        unusedPromptRef,
         shouldHighlight,
         edgeColor,
         edgeTypeColor,
@@ -1064,7 +1071,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         ...edge,
         type: 'default', // Explicitly set type to use our AnimatedFlowEdge
         animated: hasAnimation, // Only animate for execution, not for dragging
-        data: { ...edge.data, isRunning, isInputRunning, edgeLabel, edgeLabelColor, edgeModeLabel, edgeRangeLabel, outputMode, sourceNodeType: sourceNode?.type, targetNodeType: targetNode?.type, disabledByProvider },
+        data: { ...edge.data, isRunning, isInputRunning, edgeLabel, edgeLabelColor, edgeModeLabel, edgeRangeLabel, outputMode, sourceNodeType: sourceNode?.type, targetNodeType: targetNode?.type, disabledByProvider, unusedPromptRef },
         style: styleOverride ? { ...edge.style, ...styleOverride } : edge.style,
       }
       nextCache.set(edge.id, { fields, rawEdge: edge, result: computed })

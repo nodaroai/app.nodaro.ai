@@ -340,11 +340,13 @@ export {
   CHARACTER_ASSET_VARIANTS,
   LOCATION_ASSET_TYPES,
   LOCATION_ATTACH_COLUMNS,
+  LOCATION_ASSET_VARIANTS,
   LOCATION_REFERENCE_PHOTO_KINDS,
   LOCATION_REFERENCE_PHOTO_KIND_LABELS,
   locationReferencePhotoKindLabel,
   OBJECT_ASSET_TYPES,
   OBJECT_ATTACH_COLUMNS,
+  OBJECT_ASSET_VARIANTS,
   type LocationAssetType,
   type LocationAttachColumn,
   type LocationReferencePhotoKind,
@@ -1165,3 +1167,6 @@ export {
   buildNodePresetExport,
   parseNodePresetExport,
 } from "./node-preset-export.js"
+
+// --- Reference Sheet (catalog, types, planner) ---
+export * from "./reference-sheet/index.js"

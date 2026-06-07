@@ -228,6 +228,11 @@ describe("directly-emitted credit identifiers (not via buildCreditModelIdentifie
   const DIRECTLY_EMITTED_IDS = [
     "flux-lora-character",
     "character-lora-training",
+    // Reference-sheet assembly fees are written directly by routes/reference-sheet.ts
+    // (`sheetCreditId`) + payload-builder.ts's `reference-sheet` case — not via any
+    // composite builder, so the walker above doesn't enumerate them.
+    "reference-sheet:assembly",
+    "reference-sheet:assembly-motion",
   ] as const
 
   it.each(DIRECTLY_EMITTED_IDS)(

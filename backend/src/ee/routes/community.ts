@@ -4,6 +4,7 @@ import { supabase } from "../../lib/supabase.js"
 import { cloneListing } from "../services/community/clone.js"
 import { requireAppScope } from "../../lib/scope-prehandler.js"
 import type { EntityType } from "../lib/community-entity-adapters.js"
+import { decodeCommunityCursor, encodeCommunityCursor } from "./community-cursor.js"
 
 const PUBLIC_COLS = "id, entity_type, creator_display_name, slug, title, description, category, style, tags, preview_media_url, preview_images, clone_count, favorite_count, created_at"
 
@@ -22,17 +23,17 @@ export async function communityRoutes(app: FastifyInstance) {
     if (q.category) query = query.eq("category", q.category)
     if (q.q) query = query.textSearch("search_vector", q.q, { type: "websearch" })
     const sort = q.sort === "popular" ? "popular" : "newest"
-    // Decode the base64 {count,createdAt,id} cursor and apply a keyset filter.
-    let cursor: { count?: number; createdAt?: string; id?: string } | null = null
-    if (q.cursor) { try { cursor = JSON.parse(Buffer.from(q.cursor, "base64").toString("utf8")) } catch { cursor = null } }
+    // Decode + strict-validate the base64 {count,createdAt,id} cursor (rejects
+    // filter-injection in the .or() interpolation below), then apply a keyset filter.
+    const cursor = decodeCommunityCursor(q.cursor)
     if (sort === "popular") {
       query = query.order("clone_count", { ascending: false }).order("created_at", { ascending: false }).order("id", { ascending: false })
-      if (cursor?.id != null && cursor.createdAt != null && cursor.count != null) {
+      if (cursor) {
         query = query.or(`clone_count.lt.${cursor.count},and(clone_count.eq.${cursor.count},created_at.lt.${cursor.createdAt}),and(clone_count.eq.${cursor.count},created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`)
       }
     } else {
       query = query.order("created_at", { ascending: false }).order("id", { ascending: false })
-      if (cursor?.id != null && cursor.createdAt != null) {
+      if (cursor) {
         query = query.or(`created_at.lt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`)
       }
     }
@@ -42,7 +43,7 @@ export async function communityRoutes(app: FastifyInstance) {
     const page = hasMore ? rows.slice(0, limit) : rows
     const last = page[page.length - 1]
     const nextCursor = hasMore && last
-      ? Buffer.from(JSON.stringify({ count: last.clone_count, createdAt: last.created_at, id: last.id })).toString("base64")
+      ? encodeCommunityCursor({ count: last.clone_count as number, createdAt: last.created_at as string, id: last.id as string })
       : null
     return reply.send({ data: page, nextCursor })
   })

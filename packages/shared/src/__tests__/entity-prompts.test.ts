@@ -183,9 +183,11 @@ describe("OBJECT_ASSET_TYPES", () => {
 })
 
 describe("OBJECT_ATTACH_COLUMNS", () => {
-  it("aligns with the append_object_asset RPC whitelist (migration 147)", () => {
+  it("aligns with the append_object_asset RPC whitelist (migration 147 + 200 sheet buckets)", () => {
     expect([...OBJECT_ATTACH_COLUMNS].sort()).toEqual([
-      "angles", "materials", "motion_clips", "variations",
+      // migration 147 originals + migration 200 reference-sheet buckets
+      // (sheets, detail_closeups) — objects do NOT get outfit_variations.
+      "angles", "detail_closeups", "materials", "motion_clips", "sheets", "variations",
     ])
   })
 })

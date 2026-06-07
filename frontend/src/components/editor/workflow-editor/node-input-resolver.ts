@@ -21,6 +21,7 @@ import { splitGeneratedItems } from "@nodaro/shared";
 import { SOCIAL_POST_NODE_TYPES } from "@nodaro/shared";
 import { resolveSourceThroughConnectedList } from "@nodaro/shared";
 import { VARIABLES_HANDLE_ID } from "@nodaro/shared";
+import type { EntityKind } from "@nodaro/shared";
 export { resolveSourceThroughConnectedList };
 
 /** Empty picker-type set — reused for location/character branches until they
@@ -479,6 +480,14 @@ export interface FrontendResolvedInputs {
    *  image-to-video targets. */
   injectCharacterContext?: boolean;
   attachToCharacterId?: string;
+  /** Reference Sheet node — carries the connected upstream entity's kind + DB id
+   *  so the executor can call POST /v1/reference-sheet in entity mode. NOT a
+   *  standard graph output (a sheet composes from the entity's stored panels,
+   *  not from a single wired image URL). Generalizes the attachToCharacterId
+   *  precedent across all three composable entity kinds. Mirror of backend
+   *  ResolvedInputs.entityKind / entityDbId. */
+  entityKind?: EntityKind;
+  entityDbId?: string;
   /** Fan-in input list — populated by the resolver for reduce-style targets.
    *  Carries the full upstream list (or `[singleOutput]` when upstream wasn't
    *  fanned out) so the reduce strategy can fold it into a single value.
@@ -1095,6 +1104,41 @@ export function resolveNodeInputs(
     }
     if (!output) continue;
 
+    // Reference Sheet dual-output (MUST precede targetHandle routing, which
+    // would otherwise push only the single `output` into referenceImageUrls when
+    // the consumer handle is `references`/`image`).
+    //   • `panels` → spread the FULL clean panel set into referenceImageUrls
+    //     (multi-image consistency reference). Reads the live store node so a
+    //     just-completed sheet's panels are visible before the snapshot persists.
+    //   • `sheet` → single composited image; route like an image source
+    //     (image-targets → referenceImageUrls, everything else → imageUrl).
+    // Mirrors the backend input-resolver.ts reference-sheet block.
+    if (src.type === "reference-sheet") {
+      if (resolvedSourceHandle === "panels") {
+        const liveNode = useWorkflowStore.getState().nodes.find((n) => n.id === src!.id);
+        const srcData = (liveNode?.data ?? src.data) as Record<string, unknown>;
+        const urls = (srcData.panelUrls as string[] | undefined) ?? [];
+        const clean = urls.filter((u): u is string => typeof u === "string" && u.length > 0);
+        if (clean.length > 0) {
+          inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), ...clean];
+        }
+        continue;
+      }
+      // `sheet` (or any non-panels handle) — the composited sheet image.
+      if (
+        node.type === "generate-image" ||
+        (node.type as string) === "edit-image" ||
+        (node.type as string) === "image-to-image" ||
+        node.type === "modify-image" ||
+        node.type === "video-to-video"
+      ) {
+        inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output];
+      } else {
+        inputs.imageUrl = output;
+      }
+      continue;
+    }
+
     // Component-specific target routing — route by handle ID, not media type.
     // This MUST come before generic handle routing so each component input
     // gets its own distinct value even when multiple inputs share the same type.
@@ -1433,6 +1477,18 @@ export function resolveNodeInputs(
           output,
         ];
       }
+      // Reference Sheet — carry the connected entity's (kind, DB id). A sheet
+      // composes from the entity's stored panels, so the executor needs the id,
+      // not (only) the wired image URL. `face` has no panel buckets and is
+      // excluded by the input-handle predicate, so guard it here too.
+      if (node.type === "reference-sheet" && (src.type === "character" || src.type === "object")) {
+        const d = src.data as Record<string, unknown>;
+        const dbId = (d.characterDbId ?? d.objectDbId) as string | undefined;
+        if (typeof dbId === "string" && dbId.length > 0) {
+          inputs.entityKind = src.type;
+          inputs.entityDbId = dbId;
+        }
+      }
       // Identity injection — when the upstream is a Character with its
       // injectIdentityInPrompts toggle on AND it has a characterDbId,
       // forward the flag + id so the downstream image / video route
@@ -1461,6 +1517,17 @@ export function resolveNodeInputs(
       } else {
         const consumerFieldMappings = (node.data as Record<string, unknown> | undefined)?.fieldMappings as Readonly<Record<string, unknown>> | undefined;
         injectLocationContext(inputs, src, consumerFieldMappings, "locationRef");
+      }
+      // Reference Sheet — carry the connected location's (kind, DB id), parallel
+      // to the character/object branch above. The sheet composes from the
+      // location's stored panel buckets.
+      if (node.type === "reference-sheet") {
+        const d = src.data as Record<string, unknown>;
+        const dbId = d.locationDbId as string | undefined;
+        if (typeof dbId === "string" && dbId.length > 0) {
+          inputs.entityKind = "location";
+          inputs.entityDbId = dbId;
+        }
       }
     } else if (src.type === "upload-video" || src.type === "youtube-video") {
       if (node.type === "suno-cover" && src.type === "youtube-video") {

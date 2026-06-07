@@ -1,11 +1,14 @@
 import { Suspense, lazy, useEffect, useState } from "react"
 import { Upload } from "lucide-react"
 import { useObjectStudio } from "./use-object-studio"
+import { useObjectStudioJobs } from "./use-object-studio-jobs"
 import { AppearanceTab } from "./appearance-tab"
 import { AnglesTab } from "./angles-tab"
 import { MaterialsTab } from "./materials-tab"
 import { VariationsTab } from "./variations-tab"
 import { MotionTab } from "./motion-tab"
+import { ReferenceSheetTab } from "../reference-sheet/reference-sheet-tab"
+import { SHEET_TAB_ADAPTERS } from "../reference-sheet/sheet-tab-adapter"
 import { Button } from "@/components/ui/button"
 import {
   Tooltip,
@@ -46,6 +49,7 @@ type TabId =
   | "materials"
   | "variations"
   | "motion"
+  | "sheet"
 
 interface TabButtonProps {
   readonly id: TabId
@@ -86,6 +90,9 @@ interface ObjectStudioModalProps {
 
 export function ObjectStudioModal({ nodeId, onClose }: ObjectStudioModalProps) {
   const studio = useObjectStudio(nodeId)
+  // Modal-level jobs hook for the Sheet tab's Stage-A panel tracking. The
+  // image-asset tabs each create their own; the sheet tab consumes this one.
+  const sheetJobs = useObjectStudioJobs([])
   const { isAdmin } = useAuth()
   const [activeTab, setActiveTab] = useState<TabId>("appearance")
   const [showPublish, setShowPublish] = useState(false)
@@ -128,6 +135,7 @@ export function ObjectStudioModal({ nodeId, onClose }: ObjectStudioModalProps) {
     materials: data.materials?.length ?? 0,
     variations: data.variations?.length ?? 0,
     motion: data.motionClips?.length ?? 0,
+    sheets: data.sheets?.length ?? 0,
   }
 
   return (
@@ -294,6 +302,18 @@ export function ObjectStudioModal({ nodeId, onClose }: ObjectStudioModalProps) {
             active={activeTab === "motion"}
             onClick={() => setActiveTab("motion")}
           />
+
+          <div className="px-3.5 pb-1.5 pt-4 text-[9px] uppercase tracking-widest text-slate-700 font-semibold">
+            Sheet
+          </div>
+          <TabButton
+            id="sheet"
+            icon="📋"
+            label="Sheet"
+            count={counts.sheets}
+            active={activeTab === "sheet"}
+            onClick={() => setActiveTab("sheet")}
+          />
         </aside>
 
         <main className="flex-1 overflow-y-auto p-4">
@@ -302,6 +322,9 @@ export function ObjectStudioModal({ nodeId, onClose }: ObjectStudioModalProps) {
           {activeTab === "materials" && <MaterialsTab studio={studio} />}
           {activeTab === "variations" && <VariationsTab studio={studio} />}
           {activeTab === "motion" && <MotionTab studio={studio} />}
+          {activeTab === "sheet" && (
+            <ReferenceSheetTab adapter={SHEET_TAB_ADAPTERS.object} studio={studio} jobs={sheetJobs} accent="#22d3ee" />
+          )}
         </main>
       </div>
     </div>

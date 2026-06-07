@@ -2,7 +2,9 @@ import { createClient } from "@/lib/supabase"
 import { nodaroClient } from "@/lib/nodaro-client"
 import type { SubWorkflowRouteSnapshot, SocialConnection } from "@/types/nodes"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
-import type { ReduceMeta, ImageCriticMode, WorkflowExport } from "@nodaro/shared"
+import type { ReduceMeta, ImageCriticMode, WorkflowExport, ReferenceSheet } from "@nodaro/shared"
+import type { SheetType, SheetSkin, SheetFlavour, EntityKind } from "@nodaro/shared"
+import type { CharacterAttachColumn, ObjectAttachColumn, LocationAttachColumn } from "@nodaro/shared"
 import { FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared"
 import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
 import { withIdempotencyHeader } from "@/lib/idempotency-key"
@@ -611,7 +613,10 @@ export async function generateCharacterAsset(data: {
   /** Character Studio auto-attach: when all three are set, the worker appends
    *  {name: attachName, url: <result>} to this column on the user's character row. */
   attachToCharacterId?: string
-  attachToColumn?: "expressions" | "poses" | "angles" | "body_angles" | "lighting_variations"
+  // Shared single-source-of-truth union (includes the reference-sheet buckets
+  // sheets/detail_closeups/outfit_variations) — kept in lockstep with the
+  // backend route + RPC via CHARACTER_ATTACH_COLUMNS in @nodaro/shared.
+  attachToColumn?: CharacterAttachColumn
   attachName?: string
   /** Per-asset extras (Identity Foundation v2). When `description` is omitted
    *  the backend asks Claude Sonnet for a draft scoped to the character's
@@ -629,6 +634,30 @@ export async function generateCharacterAsset(data: {
     body: data,
     workflowId: true,
     label: "Failed to start character asset generation",
+  })
+}
+
+/**
+ * Kicks off a reference-sheet generation (composited turnaround / variation /
+ * detail / full-reference board). Backend route: `POST /v1/reference-sheet`
+ * (Zod schema in `backend/src/routes/reference-sheet.ts`). When `entityKind`
+ * + `entityDbId` are set the worker attaches the finished sheet to the entity
+ * row's `sheets` JSONB column; pass `imageUrl` for an ad-hoc (node) source
+ * instead. Returns `{ jobId }` for polling.
+ */
+export async function generateReferenceSheet(data: {
+  type: SheetType
+  skin: SheetSkin
+  flavour: SheetFlavour
+  entityKind?: EntityKind
+  entityDbId?: string
+  imageUrl?: string
+  userId?: string
+}): Promise<{ jobId: string }> {
+  return apiJson("/v1/reference-sheet", {
+    body: data,
+    workflowId: true,
+    label: "Failed to start reference sheet generation",
   })
 }
 
@@ -722,6 +751,12 @@ export async function getCharacter(id: string): Promise<{
   angles: { name: string; url: string }[] | null
   bodyAngles: { name: string; url: string }[] | null
   motions: { name: string; url: string }[] | null
+  // Reference-sheet buckets (migration 200) — emitted by the GET routes via
+  // `toCamel`. `sheets` holds composited reference sheets; `detailCloseups`
+  // holds macro close-up panels; `outfitVariations` holds wardrobe panels.
+  sheets?: ReferenceSheet[]
+  detailCloseups?: unknown[]
+  outfitVariations?: unknown[]
   voice: { voiceId: string; voiceName: string; traits: string } | null
   personality: { mood: string; speechStyle: string; movementStyle: string; behavioralNotes: string } | null
   referencePhotos?: ReadonlyArray<{ url: string; kind: ReferencePhotoKind }>
@@ -1280,7 +1315,10 @@ export async function generateObjectAsset(data: {
   // generated `{name, url}` to the matching JSONB column on the object
   // row via `append_object_asset` RPC.
   attachToObjectId?: string
-  attachToColumn?: "angles" | "materials" | "variations" | "motion_clips"
+  // Shared single-source-of-truth union (includes the reference-sheet buckets
+  // sheets/detail_closeups) — kept in lockstep with the backend route + RPC via
+  // OBJECT_ATTACH_COLUMNS in @nodaro/shared.
+  attachToColumn?: ObjectAttachColumn
   attachName?: string
   seedPromptHint?: string
 }): Promise<{ jobId: string }> {
@@ -1493,6 +1531,12 @@ export interface DbObject {
   referencePhotos: { kind: string; url: string }[]
   canonicalDescription: string
   styleLock: boolean
+  // Reference-sheet buckets (migration 200) — emitted by both the list and
+  // GET-by-id routes via `toCamel`. `sheets` holds composited reference sheets;
+  // `detailCloseups` holds macro close-up panels. Objects have no
+  // `outfitVariations` (character-only dimension).
+  sheets?: ReferenceSheet[]
+  detailCloseups?: unknown[]
   deletedAt?: string | null
   createdAt: string
   updatedAt: string
@@ -1588,7 +1632,10 @@ export async function generateLocationAsset(data: {
   // on the user's location row after generation. `attachToColumn` is required
   // when `assetType === "custom"` (the worker can't infer the bucket).
   attachToLocationId?: string
-  attachToColumn?: "time_of_day" | "weather" | "seasons" | "angles" | "lighting" | "atmosphere_motions"
+  // Shared single-source-of-truth union (includes the reference-sheet buckets
+  // sheets/detail_closeups) — kept in lockstep with the backend route + RPC via
+  // LOCATION_ATTACH_COLUMNS in @nodaro/shared.
+  attachToColumn?: LocationAttachColumn
   attachName?: string
 }): Promise<{ jobId: string }> {
   return apiJson("/v1/generate-location-asset", {
@@ -1810,6 +1857,12 @@ export interface DbLocation {
   referencePhotos: { kind: string; url: string }[]
   canonicalDescription: string
   styleLock: boolean
+  // Reference-sheet buckets (migration 200) — emitted by both the list and
+  // GET-by-id routes via `toCamel`. `sheets` holds composited reference sheets;
+  // `detailCloseups` holds macro close-up panels. Locations have no
+  // `outfitVariations` (character-only dimension).
+  sheets?: ReferenceSheet[]
+  detailCloseups?: unknown[]
   /** Phase 2 #7 — timestamp the user consented that reference photos don't
    *  include PII without rights. NULL = no consent recorded yet (UI shows
    *  the consent checkbox); non-NULL = consent given (UI hides checkbox). */

@@ -31,6 +31,13 @@ type AnimatedFlowEdgeData = {
    *  dashed/grayed stroke styling. Set by `workflow-canvas.tsx`'s edge
    *  enricher; the source of truth is `getHandleConnectionLimit`. */
   disabledByProvider?: boolean
+  /** True when this edge feeds a `prompt` handle but the consumer's prompt
+   *  text contains no `{Label}` reference to the source — i.e. the connection
+   *  is wired but has no effect at execution. Renders the same inert
+   *  (gray + dashed + dimmed) style as `disabledByProvider`, plus a hover
+   *  tooltip. Stamped onto edge `data` by `workflow-canvas.tsx` from
+   *  `computeUnusedPromptEdges`. */
+  unusedPromptRef?: boolean
 }
 
 type AnimatedFlowEdgeProps = EdgeProps<Edge<AnimatedFlowEdgeData>>
@@ -253,10 +260,14 @@ function AnimatedFlowEdgeComponent({
   // disabled edge can't actually be running, so a stray running highlight
   // would be misleading.
   const disabledByProvider = edgeData?.disabledByProvider ?? false
+  const unusedPromptRef = edgeData?.unusedPromptRef ?? false
+  // Both render "wired but inert" (gray + dashed + dimmed). Selection still wins
+  // (handled below), so the user can find + delete the edge.
+  const inert = disabledByProvider || unusedPromptRef
   const disabledStroke = "var(--muted-foreground)"
-  const effectiveStrokeBase = disabledByProvider ? disabledStroke : baseStroke
-  const effectiveDashArray = disabledByProvider ? "6 4" : undefined
-  const effectiveOpacity = disabledByProvider ? 0.5 : 1
+  const effectiveStrokeBase = inert ? disabledStroke : baseStroke
+  const effectiveDashArray = inert ? "6 4" : undefined
+  const effectiveOpacity = inert ? 0.5 : 1
 
   return (
     <>
@@ -276,6 +287,22 @@ function AnimatedFlowEdgeComponent({
         } as CSSProperties}
         markerEnd={markerEnd as string | undefined}
       />
+
+      {/* Hover target for unused-prompt edges. Inert edges have no label, so
+          the label-gated Radix tooltip never mounts — this wide transparent
+          path gives the gray edge a native-title hover affordance explaining
+          why it reads as disabled. */}
+      {unusedPromptRef && (
+        <path
+          d={edgePath}
+          fill="none"
+          stroke="transparent"
+          strokeWidth={12}
+          style={{ pointerEvents: "stroke" }}
+        >
+          <title>Not referenced in the prompt</title>
+        </path>
+      )}
 
       {/* SVG filters for glow effects */}
       <defs>

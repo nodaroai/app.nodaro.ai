@@ -178,6 +178,8 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
+  "reference-sheet:assembly": 4, // Flat sheet-assembly fee; per-panel gen priced separately (bare provider key)
+  "reference-sheet:assembly-motion": 6, // Flat FFmpeg-assembly fee for motion sheets; motion clips priced separately by the motion routes
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
