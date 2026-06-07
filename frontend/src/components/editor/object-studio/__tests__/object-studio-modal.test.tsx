@@ -74,6 +74,19 @@ vi.mock("@/hooks/use-auth", () => ({
   getCachedUserId: () => "user-1",
 }))
 
+// The modal mounts a studio-jobs hook whose realtime path calls
+// createClient() → channel().on().subscribe(). With getCachedUserId() stubbed
+// truthy above, that effect fires on mount; the real client construction reads
+// VITE_SUPABASE_URL (unset in tests) and throws "supabaseUrl is required". Stub
+// an inert client — this modal-shell test doesn't exercise realtime, which is
+// covered in location-studio/use-jobs-realtime-sync.test.tsx.
+vi.mock("@/lib/supabase", () => {
+  const channel = { on: () => channel, subscribe: () => channel }
+  return {
+    createClient: () => ({ channel: () => channel, removeChannel: () => {} }),
+  }
+})
+
 import { ObjectStudioModal } from "../object-studio-modal"
 
 const defaultStagedData = () =>
