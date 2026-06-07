@@ -201,6 +201,7 @@ export async function voiceCloneRoutes(app: FastifyInstance) {
       }
     } catch (err) {
       await supabase
+        // tenant-scope-ignore: marks the job THIS route created for the caller as failed; job.id is route-owned (not user-supplied), so there's no cross-tenant exposure.
         .from("jobs")
         .update({
           status: "failed",
@@ -360,6 +361,7 @@ export async function voiceCloneRoutes(app: FastifyInstance) {
       }
     } catch (err) {
       await supabase
+        // tenant-scope-ignore: marks the job THIS route created for the caller as failed; job.id is route-owned (not user-supplied), so there's no cross-tenant exposure.
         .from("jobs")
         .update({
           status: "failed",
