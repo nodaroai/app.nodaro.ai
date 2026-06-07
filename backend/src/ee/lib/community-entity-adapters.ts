@@ -26,9 +26,18 @@ export const COMMUNITY_ENTITY_ADAPTERS: Record<EntityType, CommunityEntityAdapte
       "lora_training_image_count",
     ],
   },
-  // location + object filled in Phase 6 (stubs keep the type complete + compiling).
-  location: { table: "locations", publicTextFields: [], assetFields: [], stripFields: [] },
-  object: { table: "objects", publicTextFields: [], assetFields: [], stripFields: [] },
+  location: {
+    table: "locations",
+    publicTextFields: ["name", "description", "category", "style", "canonical_description", "style_lock"],
+    assetFields: ["main_image_url", "source_image_url", "time_of_day", "weather", "angles", "lighting", "seasons", "atmosphere_motions"],
+    stripFields: ["reference_photos", "custom_variations", "pii_consent_at"],
+  },
+  object: {
+    table: "objects",
+    publicTextFields: ["name", "description", "category", "style", "canonical_description", "style_lock"],
+    assetFields: ["main_image_url", "source_image_url", "angles", "materials", "variations", "motion_clips"],
+    stripFields: ["reference_photos", "custom_variations"],
+  },
 }
 
 /**

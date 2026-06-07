@@ -12,10 +12,22 @@ const COLUMNS: Record<string, string[]> = {
     "lora_training_status","lora_training_replicate_id","lora_training_error","lora_trained_at",
     "lora_training_image_count","reference_videos_by_variant","created_at","updated_at","deleted_at",
   ],
+  locations: [
+    "id","project_id","workflow_id","node_id","name","description","category","style","main_image_url",
+    "time_of_day","weather","angles","custom_variations","created_at","updated_at","source_image_url",
+    "user_id","lighting","seasons","atmosphere_motions","reference_photos","canonical_description",
+    "style_lock","deleted_at","pii_consent_at","r2_assets_purged_at",
+  ],
+  objects: [
+    "id","project_id","workflow_id","node_id","name","description","category","style","main_image_url",
+    "angles","materials","variations","custom_variations","created_at","updated_at","source_image_url",
+    "user_id","motion_clips","reference_photos","canonical_description","style_lock","deleted_at",
+  ],
 }
 
 const ALWAYS_IGNORED = new Set([
   "id","project_id","workflow_id","node_id","user_id","created_at","updated_at","deleted_at",
+  "r2_assets_purged_at",
 ])
 
 describe("character adapter classifies every column", () => {
@@ -23,6 +35,24 @@ describe("character adapter classifies every column", () => {
     const a = COMMUNITY_ENTITY_ADAPTERS.character
     const classified = new Set([...a.publicTextFields, ...a.assetFields, ...a.stripFields, ...ALWAYS_IGNORED])
     const unclassified = COLUMNS.characters.filter((c) => !classified.has(c))
+    expect(unclassified).toEqual([])
+  })
+})
+
+describe("location adapter classifies every column", () => {
+  it("every locations column is public-text | asset | strip | ignored", () => {
+    const a = COMMUNITY_ENTITY_ADAPTERS.location
+    const classified = new Set([...a.publicTextFields, ...a.assetFields, ...a.stripFields, ...ALWAYS_IGNORED])
+    const unclassified = COLUMNS.locations.filter((c) => !classified.has(c))
+    expect(unclassified).toEqual([])
+  })
+})
+
+describe("object adapter classifies every column", () => {
+  it("every objects column is public-text | asset | strip | ignored", () => {
+    const a = COMMUNITY_ENTITY_ADAPTERS.object
+    const classified = new Set([...a.publicTextFields, ...a.assetFields, ...a.stripFields, ...ALWAYS_IGNORED])
+    const unclassified = COLUMNS.objects.filter((c) => !classified.has(c))
     expect(unclassified).toEqual([])
   })
 })
