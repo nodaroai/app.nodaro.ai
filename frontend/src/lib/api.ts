@@ -6085,6 +6085,70 @@ export async function getTemplateFavorites(): Promise<string[]> {
   return res.data
 }
 
+// --- Community Sharing ---
+
+export interface CommunityCard {
+  id: string
+  entity_type: "character" | "location" | "object"
+  creator_display_name: string | null
+  slug: string
+  title: string
+  description: string | null
+  category: string | null
+  style: string | null
+  tags: string[]
+  preview_media_url: string | null
+  preview_images: { url: string }[]
+  clone_count: number
+  favorite_count: number
+  created_at: string
+}
+
+export async function browseCommunity(params: {
+  entityType?: string; q?: string; category?: string; style?: string
+  sort?: "popular" | "newest"; cursor?: string; limit?: number
+}): Promise<{ data: CommunityCard[]; nextCursor: string | null }> {
+  const qs = new URLSearchParams()
+  for (const [k, v] of Object.entries(params)) if (v != null && v !== "") qs.set(k, String(v))
+  const query = qs.toString()
+  return apiRequest(`/v1/community/browse${query ? `?${query}` : ""}`, "Failed to browse community")
+}
+
+export async function getCommunityListing(slug: string): Promise<{ data: CommunityCard }> {
+  return apiRequest(`/v1/community/detail/${encodeURIComponent(slug)}`, "Failed to load listing")
+}
+
+export async function cloneCommunityListing(id: string, entityType: string): Promise<{ entityType: string; id: string }> {
+  return apiRequest(`/v1/community/listings/${encodeURIComponent(id)}/clone`, "Failed to clone", { method: "POST", body: { entityType } })
+}
+
+export async function toggleCommunityFavorite(id: string): Promise<{ favorited: boolean }> {
+  return apiRequest(`/v1/community/listings/${encodeURIComponent(id)}/favorite`, "Failed to favorite", { method: "POST", body: {} })
+}
+
+export async function getCommunityFavorites(): Promise<{ data: CommunityCard[] }> {
+  return apiRequest(`/v1/community/favorites`, "Failed to load favorites")
+}
+
+export async function reportCommunityListing(id: string, reason: string): Promise<{ ok: boolean }> {
+  return apiRequest(`/v1/community/listings/${encodeURIComponent(id)}/report`, "Failed to report", { method: "POST", body: { reason } })
+}
+
+export async function publishToCommunity(entityType: string, id: string, body: {
+  title: string; description?: string; category?: string; style?: string; tags?: string[]
+  attestation: true; likenessAttestation?: boolean
+}): Promise<{ slug: string; id: string }> {
+  return apiRequest(`/v1/admin/community/${encodeURIComponent(entityType)}/${encodeURIComponent(id)}/publish`, "Failed to publish", { method: "POST", body })
+}
+
+export async function getCommunityReports(): Promise<{ data: Array<Record<string, unknown>> }> {
+  return apiRequest(`/v1/admin/community/reports`, "Failed to load reports")
+}
+
+export async function takedownCommunityListing(id: string): Promise<{ ok: boolean }> {
+  return apiRequest(`/v1/admin/community/listings/${encodeURIComponent(id)}/takedown`, "Failed to take down", { method: "POST", body: {} })
+}
+
 // --- Tutorials ---
 // After migration 114 the system supports two tutorial flavors sharing one
 // taxonomy: video tutorials (table `tutorials`) and flow tutorials
