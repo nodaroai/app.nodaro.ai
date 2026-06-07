@@ -51,6 +51,7 @@ export { VoicesResource } from "./resources/voices.js"
 export { CreditsResource } from "./resources/credits.js"
 export { UploadsResource } from "./resources/uploads.js"
 export { PresetsResource } from "./resources/node-presets.js"
+export { CommunityResource } from "./resources/community.js"
 
 // --- Resource type definitions ---
 export type {
@@ -249,3 +250,15 @@ export type {
   NodePresetGroup,
   FactoryPresetsResult,
 } from "./resources/node-presets.js"
+
+export type {
+  CommunityCard,
+  CommunityEntityType,
+  CommunitySort,
+  CommunityReportReason,
+  BrowseCommunityParams,
+  BrowseCommunityResult,
+  CloneListingResult,
+  FavoriteListingResult,
+  ReportListingResult,
+} from "./resources/community.js"

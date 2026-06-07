@@ -18,6 +18,7 @@ import { VoicesResource } from "./resources/voices.js"
 import { CreditsResource } from "./resources/credits.js"
 import { UploadsResource } from "./resources/uploads.js"
 import { PresetsResource } from "./resources/node-presets.js"
+import { CommunityResource } from "./resources/community.js"
 
 export interface ClientOptions {
   /** Backend base URL, e.g. "https://nodaro.example.com" or empty string for same-origin. */
@@ -89,6 +90,7 @@ export class NodaroClient {
   readonly credits: CreditsResource
   readonly uploads: UploadsResource
   readonly presets: PresetsResource
+  readonly community: CommunityResource
 
   constructor(opts: ClientOptions) {
     this.baseUrl = opts.baseUrl.replace(/\/$/, "")  // strip trailing slash
@@ -114,6 +116,7 @@ export class NodaroClient {
     this.credits = new CreditsResource(this)
     this.uploads = new UploadsResource(this)
     this.presets = new PresetsResource(this)
+    this.community = new CommunityResource(this)
   }
 
   async request<T>(method: string, path: string, options: RequestOptions = {}): Promise<T> {
