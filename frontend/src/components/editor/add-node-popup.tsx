@@ -119,6 +119,7 @@ import { categoryRank } from "@/lib/node-category-order";
 import type { SceneNodeType } from "@/types/nodes";
 import type { ConnectionContext, NodeOption } from "@/lib/node-compatibility";
 import { getCompatibleNodes, resolveTargetHandle, PARAMETER_ACCEPTING_HANDLE_IDS } from "@/lib/node-compatibility";
+import { buildPrefillInitialData } from "@/lib/node-name-field";
 import { useAuth } from "@/hooks/use-auth";
 import { useUserSettings } from "@/hooks/queries/use-user-settings-queries";
 import { useNodeSelectionHistoryStore, type HistoryEntry } from "@/hooks/use-node-selection-history-store";
@@ -1598,7 +1599,11 @@ export function AddNodePopup({
         // to compose preview hints; if the panel opens before the edge
         // lands, the first render is missing the upstream context and the
         // user sees a one-frame flash of an incomplete preview.
-        const newNodeId = storeAddNode(type, connectionContext.dropPosition);
+        const newNodeId = storeAddNode(
+          type,
+          connectionContext.dropPosition,
+          buildPrefillInitialData(type, connectionContext.prefillName),
+        );
         if (!newNodeId) {
           onClose();
           return;

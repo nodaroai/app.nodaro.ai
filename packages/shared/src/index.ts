@@ -689,7 +689,7 @@ export type { PickerOption, PickerCatalog, PickerDimension } from "./picker-cata
 
 export { resolveFieldMappings, resolveLocationFields } from "./resolve-field-mappings.js"
 
-export { resolveNodeRefs } from "./node-refs.js"
+export { resolveNodeRefs, NODE_REF_PATTERN, RESERVED_TEMPLATE_VARS } from "./node-refs.js"
 
 export { resolveSourceThroughConnectedList } from "./list-source-resolver.js"
 

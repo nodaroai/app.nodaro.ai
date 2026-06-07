@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useMemo, useRef, useState, type ReactNode } from "react"
 import { Handle, Position, useConnection, useStore } from "@xyflow/react"
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover"
+import { MissingRefsChip } from "@/components/nodes/missing-refs-chip"
 import { useHandleConnections } from "@/hooks/use-handle-connections"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { lazyWithRetry } from "@/lib/lazy-with-retry"
@@ -279,162 +280,167 @@ export function HandleWithPopover({
   }, [])
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverAnchor asChild>
-        <Handle
-          id={handleId}
-          type={type}
-          position={position}
-          isConnectable
-          onPointerDownCapture={onPointerDown}
-          onPointerUpCapture={onPointerUp}
-          onPointerCancel={cancelDown}
-          onPointerLeave={cancelDown}
-          onClick={stopClick}
-          onKeyDown={onKeyDown}
-          // A11y: pips are tab-stoppable AND announce as buttons that open
-          // a dialog (the popover). The trade-off: a node with 6-7 typed
-          // pips adds that many tab stops, but the alternative — tabIndex
-          // -1 + role="img" — left keyboard-only users with no way to
-          // discover or operate the popover at all. The popover's
-          // Connect/Disconnect/Focus buttons remain reachable from
-          // inside Radix as before; this just gives the pip itself a way
-          // in via Tab → Enter/Space.
-          tabIndex={0}
-          role="button"
-          aria-haspopup="dialog"
-          aria-label={`${label}${isConnected ? ` (${connections.length} connected)` : ""}${disabled ? " (not used by current model)" : ""}`}
-          title={disabled ? "Not used by the current model — any wired edge will be ignored at runtime." : undefined}
-          // `touch-manipulation` disables double-tap zoom delay on iOS so
-          // the click→popover-open feels instant on touch devices.
-          // `nokey` opts out of React Flow's global keyboard shortcuts
-          // (Backspace/Delete delete the node, Cmd+A select all, etc.)
-          // when the pip is focused — @xyflow/system's `isInputDOMNode`
-          // returns true for any element matched by `.closest('.nokey')`,
-          // and React Flow's useKeyPress short-circuits in that case.
-          // `clickconnecting` is added while the popover is open so CSS
-          // can light the pip in brand color (mirrors React Flow's
-          // built-in `.connectingfrom` state during drags).
-          className={`handle-typed-pip nokey !w-7 !h-7 !rounded-full !border-2 flex items-center justify-center cursor-pointer touch-manipulation ${isConnected ? "shadow-lg" : ""} ${showValidCandidateVisual ? "valid-candidate" : ""} ${open ? "clickconnecting" : ""}`}
-          style={{
-            top,
-            [side]: "-29px",
-            transform: "translateY(-50%)",
-            zIndex: 1002,
-            opacity: disabled ? 0.45 : 1,
-            // `--pip-color` is read by CSS rules in globals.css to light up
-            // the ring in brand color during a drag-to-connect (the
-            // `.handle-typed-pip.connectingfrom` block + variants). When
-            // disabled, the color is replaced by the muted border var so a
-            // valid-candidate flash during a drag still pulses *muted* —
-            // visually signaling "you can drop here but it won't be used."
-            ["--pip-color" as unknown as string]: disabled ? UNCONNECTED_COLOR : color,
-            borderColor: disabled ? UNCONNECTED_COLOR : isConnected ? color : UNCONNECTED_COLOR,
-            background: disabled ? "var(--background)" : isConnected ? color : "var(--background)",
-            borderStyle: "solid",
-          }}
-        >
-          <span
-            // Connected → white icon over the solid color fill.
-            // Idle → brand-color icon dimmed to 35%; CSS bumps it to 100%
-            //   during a drag-to-connect so valid candidates light up.
-            // Disabled → muted-foreground icon at 50%, regardless of
-            //   connected state — overrides brand color so the inactive
-            //   signal is unmistakable.
-            className="pointer-events-none [&>svg]:w-3.5 [&>svg]:h-3.5 flex items-center justify-center handle-typed-pip-icon"
+    <>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverAnchor asChild>
+          <Handle
+            id={handleId}
+            type={type}
+            position={position}
+            isConnectable
+            onPointerDownCapture={onPointerDown}
+            onPointerUpCapture={onPointerUp}
+            onPointerCancel={cancelDown}
+            onPointerLeave={cancelDown}
+            onClick={stopClick}
+            onKeyDown={onKeyDown}
+            // A11y: pips are tab-stoppable AND announce as buttons that open
+            // a dialog (the popover). The trade-off: a node with 6-7 typed
+            // pips adds that many tab stops, but the alternative — tabIndex
+            // -1 + role="img" — left keyboard-only users with no way to
+            // discover or operate the popover at all. The popover's
+            // Connect/Disconnect/Focus buttons remain reachable from
+            // inside Radix as before; this just gives the pip itself a way
+            // in via Tab → Enter/Space.
+            tabIndex={0}
+            role="button"
+            aria-haspopup="dialog"
+            aria-label={`${label}${isConnected ? ` (${connections.length} connected)` : ""}${disabled ? " (not used by current model)" : ""}`}
+            title={disabled ? "Not used by the current model — any wired edge will be ignored at runtime." : undefined}
+            // `touch-manipulation` disables double-tap zoom delay on iOS so
+            // the click→popover-open feels instant on touch devices.
+            // `nokey` opts out of React Flow's global keyboard shortcuts
+            // (Backspace/Delete delete the node, Cmd+A select all, etc.)
+            // when the pip is focused — @xyflow/system's `isInputDOMNode`
+            // returns true for any element matched by `.closest('.nokey')`,
+            // and React Flow's useKeyPress short-circuits in that case.
+            // `clickconnecting` is added while the popover is open so CSS
+            // can light the pip in brand color (mirrors React Flow's
+            // built-in `.connectingfrom` state during drags).
+            className={`handle-typed-pip nokey !w-7 !h-7 !rounded-full !border-2 flex items-center justify-center cursor-pointer touch-manipulation ${isConnected ? "shadow-lg" : ""} ${showValidCandidateVisual ? "valid-candidate" : ""} ${open ? "clickconnecting" : ""}`}
             style={{
-              color: disabled ? "var(--muted-foreground)" : isConnected ? "white" : color,
-              opacity: disabled ? 0.5 : isConnected ? 1 : 0.35,
+              top,
+              [side]: "-29px",
+              transform: "translateY(-50%)",
+              zIndex: 1002,
+              opacity: disabled ? 0.45 : 1,
+              // `--pip-color` is read by CSS rules in globals.css to light up
+              // the ring in brand color during a drag-to-connect (the
+              // `.handle-typed-pip.connectingfrom` block + variants). When
+              // disabled, the color is replaced by the muted border var so a
+              // valid-candidate flash during a drag still pulses *muted* —
+              // visually signaling "you can drop here but it won't be used."
+              ["--pip-color" as unknown as string]: disabled ? UNCONNECTED_COLOR : color,
+              borderColor: disabled ? UNCONNECTED_COLOR : isConnected ? color : UNCONNECTED_COLOR,
+              background: disabled ? "var(--background)" : isConnected ? color : "var(--background)",
+              borderStyle: "solid",
             }}
           >
-            {icon}
-          </span>
-          {connections.length > 1 && (
             <span
-              // Badge sits at the pip's outer edge with ~1/4 of itself
-              // overlapping the pip (offset -10 from the pip's outer edge).
-              // Hidden by default; revealed on node hover or when the node
-              // is selected via the `.handle-typed-pip-badge` CSS rules.
-              className="handle-typed-pip-badge absolute text-[9px] font-bold leading-none tabular-nums rounded-full flex items-center justify-center pointer-events-none bg-white text-neutral-900 border border-background shadow-sm"
+              // Connected → white icon over the solid color fill.
+              // Idle → brand-color icon dimmed to 35%; CSS bumps it to 100%
+              //   during a drag-to-connect so valid candidates light up.
+              // Disabled → muted-foreground icon at 50%, regardless of
+              //   connected state — overrides brand color so the inactive
+              //   signal is unmistakable.
+              className="pointer-events-none [&>svg]:w-3.5 [&>svg]:h-3.5 flex items-center justify-center handle-typed-pip-icon"
               style={{
-                width: 14,
-                height: 14,
-                top: "50%",
-                [side]: -10,
-                transform: "translateY(-50%)",
+                color: disabled ? "var(--muted-foreground)" : isConnected ? "white" : color,
+                opacity: disabled ? 0.5 : isConnected ? 1 : 0.35,
               }}
             >
-              {connections.length}
+              {icon}
             </span>
-          )}
-          <span
-            // Type label rendered outside the pip. Offset 14px keeps the
-            // label close to the node while still sitting just past the
-            // counter badge's outermost point (~10px out), so the label
-            // position is consistent whether the badge is visible or not.
-            // Hidden by default — see `.handle-typed-pip-label` CSS rules.
-            // `--always` modifier keeps the label visible at rest (used for
-            // ambiguous input pips like camera-motion's startState/endState
-            // which look identical without their labels).
-            className={`handle-typed-pip-label absolute text-[12px] font-medium whitespace-nowrap pointer-events-none text-muted-foreground${alwaysShowLabel ? " handle-typed-pip-label--always" : ""}${compact ? " is-compact" : ""}${isConnected ? " is-connected" : ""}`}
-            style={{
-              top: "50%",
-              [side === "left" ? "right" : "left"]: "calc(100% + 14px)",
-              transform: `translateY(-50%) scale(${labelCompensateScale})`,
-              transformOrigin: side === "left" ? "100% 50%" : "0% 50%",
-              // Disabled pip's label dims further so the row reads as
-              // inactive at a glance — the icon's muted-foreground color
-              // already carries the signal but the label is the lingering
-              // wordy bit on hover.
-              opacity: disabled ? 0.5 : 1,
-            }}
-          >
-            {label}
-          </span>
-        </Handle>
-      </PopoverAnchor>
-      <PopoverContent
-        side={side === "left" ? "left" : "right"}
-        align="start"
-        sideOffset={12}
-        className="w-auto p-2 node-menu-surface"
-        onOpenAutoFocus={(e) => e.preventDefault()}
-      >
-        {/* Skeleton fallback gives Radix Floating UI a stable WIDTH anchor
-         *  on first cold open so the popover doesn't paint at ~0×0 and
-         *  collision-pad against the viewport. Vertical size is left to
-         *  the spinner (`py-4` = ~48px) so the skeleton tracks the typical
-         *  sparse popover (~60-80px content) without OVERSHOOTING — a
-         *  fixed `min-h` taller than the typical content would cause a
-         *  post-paint SHRINK that Radix may respond to with a side-flip,
-         *  which is the exact jump we're trying to prevent.
-         *
-         *  Accessibility: `role="status"` implies `aria-live="polite"`,
-         *  so we don't repeat it. The visible "Loading…" text drives the
-         *  accessible name (no `aria-label` shadowing). */}
-        <Suspense
-          fallback={
-            <div
-              role="status"
-              className="min-w-[280px] flex items-center justify-center py-4"
+            {connections.length > 1 && (
+              <span
+                // Badge sits at the pip's outer edge with ~1/4 of itself
+                // overlapping the pip (offset -10 from the pip's outer edge).
+                // Hidden by default; revealed on node hover or when the node
+                // is selected via the `.handle-typed-pip-badge` CSS rules.
+                className="handle-typed-pip-badge absolute text-[9px] font-bold leading-none tabular-nums rounded-full flex items-center justify-center pointer-events-none bg-white text-neutral-900 border border-background shadow-sm"
+                style={{
+                  width: 14,
+                  height: 14,
+                  top: "50%",
+                  [side]: -10,
+                  transform: "translateY(-50%)",
+                }}
+              >
+                {connections.length}
+              </span>
+            )}
+            <span
+              // Type label rendered outside the pip. Offset 14px keeps the
+              // label close to the node while still sitting just past the
+              // counter badge's outermost point (~10px out), so the label
+              // position is consistent whether the badge is visible or not.
+              // Hidden by default — see `.handle-typed-pip-label` CSS rules.
+              // `--always` modifier keeps the label visible at rest (used for
+              // ambiguous input pips like camera-motion's startState/endState
+              // which look identical without their labels).
+              className={`handle-typed-pip-label absolute text-[12px] font-medium whitespace-nowrap pointer-events-none text-muted-foreground${alwaysShowLabel ? " handle-typed-pip-label--always" : ""}${compact ? " is-compact" : ""}${isConnected ? " is-connected" : ""}`}
+              style={{
+                top: "50%",
+                [side === "left" ? "right" : "left"]: "calc(100% + 14px)",
+                transform: `translateY(-50%) scale(${labelCompensateScale})`,
+                transformOrigin: side === "left" ? "100% 50%" : "0% 50%",
+                // Disabled pip's label dims further so the row reads as
+                // inactive at a glance — the icon's muted-foreground color
+                // already carries the signal but the label is the lingering
+                // wordy bit on hover.
+                opacity: disabled ? 0.5 : 1,
+              }}
             >
-              <span className="text-[10px] text-muted-foreground/60">Loading…</span>
-            </div>
-          }
+              {label}
+            </span>
+          </Handle>
+        </PopoverAnchor>
+        <PopoverContent
+          side={side === "left" ? "left" : "right"}
+          align="start"
+          sideOffset={12}
+          className="w-auto p-2 node-menu-surface"
+          onOpenAutoFocus={(e) => e.preventDefault()}
         >
-          <HandlePopover
-            nodeId={nodeId}
-            handleId={handleId}
-            direction={type === "target" ? "target" : "source"}
-            label={label}
-            orderMatters={orderMatters}
-            accepts={accepts}
-            onAddNew={openPopup ? handleAddNew : undefined}
-            onClose={onClose}
-            color={disabled ? undefined : color}
-          />
-        </Suspense>
-      </PopoverContent>
-    </Popover>
+          {/* Skeleton fallback gives Radix Floating UI a stable WIDTH anchor
+           *  on first cold open so the popover doesn't paint at ~0×0 and
+           *  collision-pad against the viewport. Vertical size is left to
+           *  the spinner (`py-4` = ~48px) so the skeleton tracks the typical
+           *  sparse popover (~60-80px content) without OVERSHOOTING — a
+           *  fixed `min-h` taller than the typical content would cause a
+           *  post-paint SHRINK that Radix may respond to with a side-flip,
+           *  which is the exact jump we're trying to prevent.
+           *
+           *  Accessibility: `role="status"` implies `aria-live="polite"`,
+           *  so we don't repeat it. The visible "Loading…" text drives the
+           *  accessible name (no `aria-label` shadowing). */}
+          <Suspense
+            fallback={
+              <div
+                role="status"
+                className="min-w-[280px] flex items-center justify-center py-4"
+              >
+                <span className="text-[10px] text-muted-foreground/60">Loading…</span>
+              </div>
+            }
+          >
+            <HandlePopover
+              nodeId={nodeId}
+              handleId={handleId}
+              direction={type === "target" ? "target" : "source"}
+              label={label}
+              orderMatters={orderMatters}
+              accepts={accepts}
+              onAddNew={openPopup ? handleAddNew : undefined}
+              onClose={onClose}
+              color={disabled ? undefined : color}
+            />
+          </Suspense>
+        </PopoverContent>
+      </Popover>
+      {handleId === "prompt" && type === "target" && (
+        <MissingRefsChip nodeId={nodeId} nodeType={nodeType} handleId={handleId} />
+      )}
+    </>
   )
 }

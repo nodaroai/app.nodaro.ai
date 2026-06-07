@@ -11,6 +11,10 @@ export const NODE_MAPPABLE_FIELDS: Readonly<Record<string, readonly string[]>> =
   "modify-image":        ["prompt", "style", "negativePrompt"],
   "text-to-video":       ["prompt", "negativePrompt"],
   "image-to-video":      ["prompt"],
+  // Unified t2v/i2v node — replaced the two deprecated keys above (kept only
+  // for back-compat with un-migrated workflow JSON). Mirrors text-to-video so
+  // fieldMappings/{} injection AND missing-ref detection work on the live node.
+  "generate-video":      ["prompt", "negativePrompt"],
   "video-to-video":      ["prompt"],
   "text-to-speech":      ["directText"],
   "lip-sync":            ["prompt"],

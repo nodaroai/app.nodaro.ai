@@ -612,3 +612,27 @@ describe("FACTORY_POPULAR_IDS", () => {
     expect(getPopularFactoryPresets("does-not-exist")).toEqual([])
   })
 })
+
+describe("presets don't bake config-field values (framing) into the prompt", () => {
+  // The aspectRatio field is the single source of truth for framing. If a prompt also NAMES a
+  // ratio, the model follows the prompt — so changing the aspect-ratio dropdown silently fails
+  // (e.g. a prompt that says "3:4" ignores a switch to 16:9). No prompt may name an aspect ratio.
+  const RATIO_TOKENS = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "4:5", "5:4", "21:9", "2.39:1", "2.35:1", "1.85:1"]
+  const ratioRe = new RegExp(`(^|[^0-9.])(${RATIO_TOKENS.map((t) => t.replace(/\./g, "\\.")).join("|")})([^0-9]|$)`)
+
+  it("no factory preset prompt names an aspect ratio", () => {
+    const offenders: string[] = []
+    for (const [, presets] of Object.entries(FACTORY_PRESETS)) {
+      for (const p of presets) {
+        const prompt = (p.data as Record<string, unknown>).prompt
+        if (typeof prompt !== "string") continue
+        const m = prompt.match(ratioRe)
+        if (m) offenders.push(`${p.id} → "${m[2]}"`)
+      }
+    }
+    expect(
+      offenders,
+      `prompts must not name an aspect ratio (the aspectRatio field controls framing):\n${offenders.join("\n")}`,
+    ).toEqual([])
+  })
+})

@@ -535,10 +535,10 @@ interface WorkflowState {
    *  by `workflow-canvas.tsx` at mount; consumed by HandleWithPopover's
    *  "Add new" affordance. Null when the canvas isn't mounted. */
   readonly openAddNodePopupForHandle:
-    | ((args: { nodeId: string; handleId: string; direction: "source" | "target"; nodeType: string }) => void)
+    | ((args: { nodeId: string; handleId: string; direction: "source" | "target"; nodeType: string; prefillName?: string }) => void)
     | null
   readonly setOpenAddNodePopupForHandle: (
-    fn: ((args: { nodeId: string; handleId: string; direction: "source" | "target"; nodeType: string }) => void) | null,
+    fn: ((args: { nodeId: string; handleId: string; direction: "source" | "target"; nodeType: string; prefillName?: string }) => void) | null,
   ) => void
   /** Edge id currently being hovered in a HandlePopover row — drives the
    *  edge highlight visual via `AnimatedFlowEdge`. Null when no row is

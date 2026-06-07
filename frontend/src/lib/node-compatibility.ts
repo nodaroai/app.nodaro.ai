@@ -38,6 +38,10 @@ export interface ConnectionContext {
    *  Used to tint the add-node menu's "Connect to" title in the handle's own
    *  type color. Optional — falls back to the default accent when absent. */
   readonly color?: string
+  /** When set, the node created from this menu is pre-named to this value
+   *  (written to the type's name field via buildPrefillInitialData) so a
+   *  dangling prompt reference like `{Hero}` resolves once it's wired. */
+  readonly prefillName?: string
 }
 
 /** Still-image consumer node types — their `cinematography` handle excludes

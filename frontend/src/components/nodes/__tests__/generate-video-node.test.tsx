@@ -71,6 +71,14 @@ vi.mock("../handle-with-popover", async (importOriginal) => ({
   ),
 }))
 
+// The real handle-with-popover (loaded via importOriginal above to keep
+// HANDLE_COLORS/TEXT_HANDLE_COLOR real) statically imports MissingRefsChip,
+// which transitively pulls config-panels/model-options (real @nodaro/shared
+// registries this file deliberately mocks). Stub it — the chip is covered by
+// its own test (missing-refs-chip.test.tsx) and this file stubs the
+// HandleWithPopover component itself anyway, so the chip never renders here.
+vi.mock("../missing-refs-chip", () => ({ MissingRefsChip: () => null }))
+
 vi.mock("../editable-node-label", () => ({
   EditableNodeLabel: ({ label }: any) => <div data-testid="editable-label">{label}</div>,
 }))

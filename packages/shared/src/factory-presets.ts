@@ -258,7 +258,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
         provider: "seedream",
         aspectRatio: "21:9",
         prompt:
-          "epic cinematic widescreen still of {subject}, anamorphic 2.39:1 framing, atmospheric haze, dramatic lighting, color graded, film grain",
+          "epic cinematic still of {subject}, anamorphic framing, atmospheric haze, dramatic lighting, color graded, film grain",
         negativePrompt: "lowres, deformed, watermark, text",
       },
     },
@@ -708,7 +708,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
         provider: "ideogram-v3",
         aspectRatio: "9:16",
         prompt:
-          "vertical social story graphic about {topic}, full-bleed background, bold headline text '{TEXT}', modern design",
+          "social story graphic about {topic}, full-bleed background, bold headline text '{TEXT}', modern design",
         negativePrompt: "lowres, cluttered, tiny text, watermark",
       },
     },
@@ -747,7 +747,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
         provider: "ideogram-v3",
         aspectRatio: "16:9",
         prompt:
-          "web banner for {brand or topic}, wide horizontal layout, clean modern design, headline text '{TEXT}', space for a logo",
+          "web banner for {brand or topic}, clean modern design, headline text '{TEXT}', space for a logo",
         negativePrompt: "lowres, cluttered, tiny text, watermark",
       },
     },
@@ -1309,7 +1309,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
       name: "Timeline",
       description: "Milestones along an axis.",
       group: "Diagrams & Infographics",
-      data: { provider: "ideogram-v3", aspectRatio: "16:9", prompt: "horizontal timeline infographic of {topic}, milestones along a line with dates, icons and short labels, flat modern design", negativePrompt: "cluttered, misspelled text, lowres, watermark" },
+      data: { provider: "ideogram-v3", aspectRatio: "16:9", prompt: "timeline infographic of {topic}, milestones along a line with dates, icons and short labels, flat modern design", negativePrompt: "cluttered, misspelled text, lowres, watermark" },
     },
     {
       id: "generate-image/x-ray",
@@ -1359,7 +1359,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
         provider: "nano-banana-pro",
         aspectRatio: "3:4",
         prompt:
-          "Generate a single photorealistic 3:4 vertical studio composite of the person in the reference image at five stages of life, lined up shoulder-to-shoulder from left to right in a smooth age progression: a child around 7, a teenager around 15, a young adult around 27, a mature adult around 45, and an elder around 70. Frame each figure from the chest up, all facing the camera with the same calm expression. Strictly preserve identity across all five figures — identical eye shape, eye color, brow line, nose, ear shape, and facial bone structure from the reference — aged ONLY via skin texture, fine lines and wrinkles, hairline, hair color (darker in youth, gradually greying with age), and slight changes in facial fullness. Dress each figure for its age: striped tee for the child, hoodie or denim jacket for the teen, casual shirt for the young adult, blazer or button-up for the mature adult, soft cardigan for the elder. Even soft cinematic studio key light hitting all five consistently, gentle rim separation from the background, clean dark-grey gradient seamless backdrop (slightly darker at the edges, softly lit toward the center). High-end editorial portrait photography, sharp facial detail, natural skin tones; the five figures fill the frame.",
+          "Generate a single photorealistic studio composite of the person in the reference image at five stages of life, lined up shoulder-to-shoulder from left to right in a smooth age progression: a child around 7, a teenager around 15, a young adult around 27, a mature adult around 45, and an elder around 70. Frame each figure from the chest up, all facing the camera with the same calm expression. Strictly preserve identity across all five figures — identical eye shape, eye color, brow line, nose, ear shape, and facial bone structure from the reference — aged ONLY via skin texture, fine lines and wrinkles, hairline, hair color (darker in youth, gradually greying with age), and slight changes in facial fullness. Dress each figure for its age: striped tee for the child, hoodie or denim jacket for the teen, casual shirt for the young adult, blazer or button-up for the mature adult, soft cardigan for the elder. Even soft cinematic studio key light hitting all five consistently, gentle rim separation from the background, clean dark-grey gradient seamless backdrop (slightly darker at the edges, softly lit toward the center). High-end editorial portrait photography, sharp facial detail, natural skin tones; the five figures fill the frame.",
         negativePrompt: "five different people, inconsistent identity, deformed, extra fingers, watermark, text",
       },
     },
@@ -1372,7 +1372,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
         provider: "nano-banana-pro",
         aspectRatio: "3:4",
         prompt:
-          "Generate a single photorealistic 3:4 vertical studio composite of the person in the reference image at three stages of life, shoulder-to-shoulder from left to right: around age 10, around age 40, and around age 75. Frame each figure from the chest up, facing the camera with the same calm expression. Strictly preserve identity across all three — identical eye shape, eye color, brow line, nose, ear shape, and facial bone structure from the reference — aged ONLY via skin texture, fine lines, hairline, hair color (darker in youth, greying with age), and slight facial fullness. Age-appropriate clothing for each stage. Even soft cinematic studio key light, clean dark-grey gradient seamless backdrop, high-end editorial portrait photography, sharp facial detail, natural skin tones; the three figures fill the frame.",
+          "Generate a single photorealistic studio composite of the person in the reference image at three stages of life, shoulder-to-shoulder from left to right: around age 10, around age 40, and around age 75. Frame each figure from the chest up, facing the camera with the same calm expression. Strictly preserve identity across all three — identical eye shape, eye color, brow line, nose, ear shape, and facial bone structure from the reference — aged ONLY via skin texture, fine lines, hairline, hair color (darker in youth, greying with age), and slight facial fullness. Age-appropriate clothing for each stage. Even soft cinematic studio key light, clean dark-grey gradient seamless backdrop, high-end editorial portrait photography, sharp facial detail, natural skin tones; the three figures fill the frame.",
         negativePrompt: "three different people, inconsistent identity, deformed, watermark, text",
       },
     },
@@ -1385,7 +1385,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
         provider: "nano-banana-pro",
         aspectRatio: "3:4",
         prompt:
-          "Generate a single black-and-white photorealistic 3:4 vertical studio composite of the person in the reference image at five stages of life, shoulder-to-shoulder from left to right in a smooth age progression: around 7, 15, 27, 45, and 70. Chest-up framing, all facing the camera with the same calm expression. Strictly preserve identity across all five figures — identical eye shape, eye color, brow line, nose, ear shape, and facial bone structure from the reference — aged ONLY via skin texture, fine lines, hairline, greying hair, and slight facial fullness. Age-appropriate clothing per stage. Even soft studio key light, clean dark-grey gradient backdrop. Monochrome high-end black-and-white studio portrait, deep tonal range, fine film grain, sharp facial detail; the five figures fill the frame.",
+          "Generate a single black-and-white photorealistic studio composite of the person in the reference image at five stages of life, shoulder-to-shoulder from left to right in a smooth age progression: around 7, 15, 27, 45, and 70. Chest-up framing, all facing the camera with the same calm expression. Strictly preserve identity across all five figures — identical eye shape, eye color, brow line, nose, ear shape, and facial bone structure from the reference — aged ONLY via skin texture, fine lines, hairline, greying hair, and slight facial fullness. Age-appropriate clothing per stage. Even soft studio key light, clean dark-grey gradient backdrop. Monochrome high-end black-and-white studio portrait, deep tonal range, fine film grain, sharp facial detail; the five figures fill the frame.",
         negativePrompt: "color, five different people, inconsistent identity, deformed, watermark, text",
       },
     },
@@ -1398,7 +1398,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
         provider: "nano-banana-pro",
         aspectRatio: "3:4",
         prompt:
-          "Generate a single photorealistic 3:4 vertical studio composite of the person in the reference image across five decades, shoulder-to-shoulder from left to right with a smooth age progression and period-accurate styling: a 1980s child, a 1990s teenager, a 2000s young adult, a 2010s adult, and a 2020s mature adult. Chest-up framing, all facing the camera with the same calm expression. Strictly preserve identity across all five figures — identical eye shape, eye color, brow line, nose, ear shape, and facial bone structure from the reference — aged ONLY via skin texture, fine lines, hairline, hair color, and slight facial fullness. Style each figure to its decade in hair and wardrobe: 1980s bright bold colors and big hair, 1990s casual grunge, 2000s frosted-tips and low-rise era, 2010s clean modern, 2020s contemporary. Subtle period-accurate photo treatment per decade. Even soft studio key light, clean dark-grey gradient seamless backdrop. High-end editorial portrait photography, sharp facial detail, natural skin tones; the five figures fill the frame.",
+          "Generate a single photorealistic studio composite of the person in the reference image across five decades, shoulder-to-shoulder from left to right with a smooth age progression and period-accurate styling: a 1980s child, a 1990s teenager, a 2000s young adult, a 2010s adult, and a 2020s mature adult. Chest-up framing, all facing the camera with the same calm expression. Strictly preserve identity across all five figures — identical eye shape, eye color, brow line, nose, ear shape, and facial bone structure from the reference — aged ONLY via skin texture, fine lines, hairline, hair color, and slight facial fullness. Style each figure to its decade in hair and wardrobe: 1980s bright bold colors and big hair, 1990s casual grunge, 2000s frosted-tips and low-rise era, 2010s clean modern, 2020s contemporary. Subtle period-accurate photo treatment per decade. Even soft studio key light, clean dark-grey gradient seamless backdrop. High-end editorial portrait photography, sharp facial detail, natural skin tones; the five figures fill the frame.",
         negativePrompt: "different people, inconsistent identity, deformed, watermark, text",
       },
     },
@@ -1411,7 +1411,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
         provider: "nano-banana-pro",
         aspectRatio: "3:4",
         prompt:
-          "Generate a single photorealistic 3:4 vertical studio composite of the person in the reference image in four seasonal looks, shoulder-to-shoulder from left to right: spring, summer, autumn, and winter. Chest-up framing, all facing the camera with the same calm expression, all at the SAME age as the reference (this is seasons, not aging). Strictly preserve identity across all four figures — identical face, eye shape, eye color, brow, nose, ear shape, and bone structure from the reference; only wardrobe, hair styling, and a subtle seasonal color grade change. Spring: light pastel layers, fresh airy tone. Summer: light tee, warm sunny tone. Autumn: knit sweater, golden amber tone. Winter: coat and scarf, cool crisp tone. Even soft studio key light with a gentle seasonal color cast per figure, clean dark-grey gradient seamless backdrop. High-end editorial portrait photography, sharp facial detail, natural skin tones; the four figures fill the frame.",
+          "Generate a single photorealistic studio composite of the person in the reference image in four seasonal looks, shoulder-to-shoulder from left to right: spring, summer, autumn, and winter. Chest-up framing, all facing the camera with the same calm expression, all at the SAME age as the reference (this is seasons, not aging). Strictly preserve identity across all four figures — identical face, eye shape, eye color, brow, nose, ear shape, and bone structure from the reference; only wardrobe, hair styling, and a subtle seasonal color grade change. Spring: light pastel layers, fresh airy tone. Summer: light tee, warm sunny tone. Autumn: knit sweater, golden amber tone. Winter: coat and scarf, cool crisp tone. Even soft studio key light with a gentle seasonal color cast per figure, clean dark-grey gradient seamless backdrop. High-end editorial portrait photography, sharp facial detail, natural skin tones; the four figures fill the frame.",
         negativePrompt: "different people, inconsistent identity, aging, deformed, watermark, text",
       },
     },
@@ -1424,7 +1424,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
         provider: "nano-banana-pro",
         aspectRatio: "3:4",
         prompt:
-          "Generate a single photorealistic 3:4 vertical composite of the person in the reference image across four times of day, shoulder-to-shoulder from left to right: dawn, midday, golden hour, and night. Chest-up framing, all facing the camera with the same calm expression, all at the SAME age as the reference. Strictly preserve identity across all four figures — identical face, eye shape, eye color, brow, nose, ear shape, and bone structure from the reference; only the lighting and color temperature change between figures. Dawn: soft cool blue light. Midday: bright neutral daylight. Golden hour: warm amber backlight with a gentle glow. Night: moody low light with a cool rim. Consistent chest-up framing and a clean dark-grey gradient seamless backdrop. High-end editorial portrait photography, sharp facial detail, natural skin tones; the four figures fill the frame.",
+          "Generate a single photorealistic composite of the person in the reference image across four times of day, shoulder-to-shoulder from left to right: dawn, midday, golden hour, and night. Chest-up framing, all facing the camera with the same calm expression, all at the SAME age as the reference. Strictly preserve identity across all four figures — identical face, eye shape, eye color, brow, nose, ear shape, and bone structure from the reference; only the lighting and color temperature change between figures. Dawn: soft cool blue light. Midday: bright neutral daylight. Golden hour: warm amber backlight with a gentle glow. Night: moody low light with a cool rim. Consistent chest-up framing and a clean dark-grey gradient seamless backdrop. High-end editorial portrait photography, sharp facial detail, natural skin tones; the four figures fill the frame.",
         negativePrompt: "different people, inconsistent identity, aging, deformed, watermark, text",
       },
     },
@@ -1733,7 +1733,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
         provider: "veo3.1",
         aspectRatio: "9:16",
         duration: 8,
-        prompt: "vertical cinematic hero shot of {subject}, dynamic motion, punchy and eye-catching, optimized for social reels",
+        prompt: "cinematic hero shot of {subject}, dynamic motion, punchy and eye-catching, optimized for social reels",
       },
     },
     {
@@ -1745,7 +1745,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
         provider: "veo3.1",
         aspectRatio: "9:16",
         duration: 8,
-        prompt: "vertical talking-head shot of {subject} speaking to the camera, clean background, natural movement and expression",
+        prompt: "talking-head shot of {subject} speaking to the camera, clean background, natural movement and expression",
       },
     },
     {
@@ -1757,7 +1757,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
         provider: "seedance-2-fast",
         aspectRatio: "9:16",
         duration: 5,
-        prompt: "vertical product reveal of {product}, dynamic rotation and pop, eye-catching, social-ready",
+        prompt: "product reveal of {product}, dynamic rotation and pop, eye-catching, social-ready",
       },
     },
     {
@@ -1769,7 +1769,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
         provider: "seedance-2-fast",
         aspectRatio: "9:16",
         duration: 5,
-        prompt: "energetic vertical clip of {subject}, fast dynamic motion, trendy and high-energy social video",
+        prompt: "energetic clip of {subject}, fast dynamic motion, trendy and high-energy social video",
       },
     },
     {
@@ -1781,7 +1781,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
         provider: "kling-3.0",
         aspectRatio: "9:16",
         duration: 5,
-        prompt: "vertical POV shot walking through {location}, immersive first-person, handheld feel",
+        prompt: "POV shot walking through {location}, immersive first-person, handheld feel",
       },
     },
 
