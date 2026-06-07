@@ -1,10 +1,27 @@
-import type { FastifyInstance } from "fastify"
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
 import { CreditsService } from "../services/credits.js"
 import { supabase } from "../../lib/supabase.js"
 import { formatZodError } from "../../lib/zod-error.js"
 import { handlePriceNotConfigured } from "../lib/credit-guard-impl.js"
 import { PriceNotConfiguredError } from "../billing/credits.js"
+
+/**
+ * Internal-only gate for the credit-mutation routes (/reserve, /commit, /refund).
+ * They mutate balances directly with NO job-status check (they trust the worker
+ * lifecycle), so only the internal orchestrator (via the shared secret, which sets
+ * req.isInternalCall) may call them — a user JWT / API token must NOT, else a user
+ * could refund/zero their own reservation mid-job (the worker's later commit then
+ * CAS-no-ops) → free generations. Returns true (+ sends 403) when not internal; the
+ * handler must `return`.
+ */
+function requireInternalCall(req: FastifyRequest, reply: FastifyReply): boolean {
+  if (!req.isInternalCall) {
+    reply.status(403).send({ error: { code: "forbidden", message: "Internal endpoint" } })
+    return true
+  }
+  return false
+}
 
 const modelCostsBody = z.object({
   models: z.array(z.string().min(1)).min(1).max(50),
@@ -233,14 +250,7 @@ export async function creditsRoutes(app: FastifyInstance) {
       })
     }
 
-    // Internal-only. These three routes mutate credit balances directly with NO
-    // job-status check (they trust the worker lifecycle to drive them). Reachable
-    // only via the internal-orchestrator secret — a user JWT / API token must NOT
-    // reach them, else a user could refund/zero-out their own reservation mid-job
-    // (worker's later commit then CAS-no-ops) → unlimited free generations.
-    if (!req.isInternalCall) {
-      return reply.status(403).send({ error: { code: "forbidden", message: "Internal endpoint" } })
-    }
+    if (requireInternalCall(req, reply)) return
 
     const parsed = reserveBody.safeParse(req.body ?? {})
     if (!parsed.success) {
@@ -281,10 +291,7 @@ export async function creditsRoutes(app: FastifyInstance) {
       })
     }
 
-    // Internal-only (see /reserve) — block direct user/API access.
-    if (!req.isInternalCall) {
-      return reply.status(403).send({ error: { code: "forbidden", message: "Internal endpoint" } })
-    }
+    if (requireInternalCall(req, reply)) return
 
     const parsed = commitBody.safeParse(req.body ?? {})
     if (!parsed.success) {
@@ -330,10 +337,7 @@ export async function creditsRoutes(app: FastifyInstance) {
       })
     }
 
-    // Internal-only (see /reserve) — block direct user/API access.
-    if (!req.isInternalCall) {
-      return reply.status(403).send({ error: { code: "forbidden", message: "Internal endpoint" } })
-    }
+    if (requireInternalCall(req, reply)) return
 
     const parsed = refundBody.safeParse(req.body ?? {})
     if (!parsed.success) {

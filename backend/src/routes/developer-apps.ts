@@ -57,14 +57,16 @@ function formatApp(row: Record<string, unknown>) {
 
 const MAX_APPS_PER_USER = 5
 
+// First-party / SDK only — reject OAuth app tokens (no scope authorizes managing
+// developer apps, so a third-party app must not create/rotate/delete the owner's).
+const DEV_APPS_NO_OAUTH_MSG = "Developer-app management is not available to OAuth apps."
+
 export async function developerAppRoutes(app: FastifyInstance) {
   app.post("/v1/developer-apps", async (req, reply) => {
     if (!req.userId) {
       return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
     }
-    // First-party / SDK only — reject OAuth app tokens (no scope authorizes managing
-    // developer apps, so a third-party app must not create/rotate/delete the owner's).
-    if (rejectProgrammaticAuth(req, reply, "Developer-app management is not available to OAuth apps.", { allowPersonalToken: true })) return
+    if (rejectProgrammaticAuth(req, reply, DEV_APPS_NO_OAUTH_MSG, { allowPersonalToken: true })) return
 
     const parsed = createBody.safeParse(req.body)
     if (!parsed.success) {
@@ -115,9 +117,7 @@ export async function developerAppRoutes(app: FastifyInstance) {
     if (!req.userId) {
       return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
     }
-    // First-party / SDK only — reject OAuth app tokens (no scope authorizes managing
-    // developer apps, so a third-party app must not create/rotate/delete the owner's).
-    if (rejectProgrammaticAuth(req, reply, "Developer-app management is not available to OAuth apps.", { allowPersonalToken: true })) return
+    if (rejectProgrammaticAuth(req, reply, DEV_APPS_NO_OAUTH_MSG, { allowPersonalToken: true })) return
     const { data, error } = await supabase
       .from("developer_apps")
       .select("*")
@@ -133,9 +133,7 @@ export async function developerAppRoutes(app: FastifyInstance) {
     if (!req.userId) {
       return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
     }
-    // First-party / SDK only — reject OAuth app tokens (no scope authorizes managing
-    // developer apps, so a third-party app must not create/rotate/delete the owner's).
-    if (rejectProgrammaticAuth(req, reply, "Developer-app management is not available to OAuth apps.", { allowPersonalToken: true })) return
+    if (rejectProgrammaticAuth(req, reply, DEV_APPS_NO_OAUTH_MSG, { allowPersonalToken: true })) return
     const parsed = idParams.safeParse(req.params)
     if (!parsed.success) {
       return reply.status(400).send({ error: { code: "validation_error", message: "Invalid id" } })
@@ -156,9 +154,7 @@ export async function developerAppRoutes(app: FastifyInstance) {
     if (!req.userId) {
       return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
     }
-    // First-party / SDK only — reject OAuth app tokens (no scope authorizes managing
-    // developer apps, so a third-party app must not create/rotate/delete the owner's).
-    if (rejectProgrammaticAuth(req, reply, "Developer-app management is not available to OAuth apps.", { allowPersonalToken: true })) return
+    if (rejectProgrammaticAuth(req, reply, DEV_APPS_NO_OAUTH_MSG, { allowPersonalToken: true })) return
     const idParsed = idParams.safeParse(req.params)
     if (!idParsed.success) {
       return reply.status(400).send({ error: { code: "validation_error", message: "Invalid id" } })
@@ -197,9 +193,7 @@ export async function developerAppRoutes(app: FastifyInstance) {
     if (!req.userId) {
       return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
     }
-    // First-party / SDK only — reject OAuth app tokens (no scope authorizes managing
-    // developer apps, so a third-party app must not create/rotate/delete the owner's).
-    if (rejectProgrammaticAuth(req, reply, "Developer-app management is not available to OAuth apps.", { allowPersonalToken: true })) return
+    if (rejectProgrammaticAuth(req, reply, DEV_APPS_NO_OAUTH_MSG, { allowPersonalToken: true })) return
     const parsed = idParams.safeParse(req.params)
     if (!parsed.success) {
       return reply.status(400).send({ error: { code: "validation_error", message: "Invalid id" } })
@@ -221,9 +215,7 @@ export async function developerAppRoutes(app: FastifyInstance) {
     if (!req.userId) {
       return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
     }
-    // First-party / SDK only — reject OAuth app tokens (no scope authorizes managing
-    // developer apps, so a third-party app must not create/rotate/delete the owner's).
-    if (rejectProgrammaticAuth(req, reply, "Developer-app management is not available to OAuth apps.", { allowPersonalToken: true })) return
+    if (rejectProgrammaticAuth(req, reply, DEV_APPS_NO_OAUTH_MSG, { allowPersonalToken: true })) return
     const parsed = idParams.safeParse(req.params)
     if (!parsed.success) {
       return reply.status(400).send({ error: { code: "validation_error", message: "Invalid id" } })

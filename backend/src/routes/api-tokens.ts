@@ -131,6 +131,10 @@ function resolveInputOverrides(
 // Schemas
 // ---------------------------------------------------------------------------
 
+// JWT-only management: block OAuth app tokens AND personal API tokens (an OAuth
+// app could otherwise mint an unscoped personal token → account takeover).
+const API_TOKENS_JWT_ONLY_MSG = "API token management is only available from a logged-in session."
+
 const createTokenBody = z.object({
   name: z.string().min(1).max(100),
   workflowIds: z.array(z.string().uuid()).max(50).default([]),
@@ -180,7 +184,7 @@ export async function apiTokenRoutes(app: FastifyInstance) {
 
     // JWT-only: an OAuth app token (any scope) or personal API token must NOT be
     // able to mint a new — unscoped — personal token (privilege escalation).
-    if (rejectProgrammaticAuth(req, reply, "API token management is only available from a logged-in session.")) return
+    if (rejectProgrammaticAuth(req, reply, API_TOKENS_JWT_ONLY_MSG)) return
 
     if (!hasAdmin()) {
       return reply.status(403).send({
@@ -259,7 +263,7 @@ export async function apiTokenRoutes(app: FastifyInstance) {
       })
     }
 
-    if (rejectProgrammaticAuth(req, reply, "API token management is only available from a logged-in session.")) return
+    if (rejectProgrammaticAuth(req, reply, API_TOKENS_JWT_ONLY_MSG)) return
 
     if (!hasAdmin()) {
       return reply.status(403).send({
@@ -290,7 +294,7 @@ export async function apiTokenRoutes(app: FastifyInstance) {
       })
     }
 
-    if (rejectProgrammaticAuth(req, reply, "API token management is only available from a logged-in session.")) return
+    if (rejectProgrammaticAuth(req, reply, API_TOKENS_JWT_ONLY_MSG)) return
 
     const paramsParsed = tokenIdParams.safeParse(req.params)
     if (!paramsParsed.success) {
@@ -351,7 +355,7 @@ export async function apiTokenRoutes(app: FastifyInstance) {
       })
     }
 
-    if (rejectProgrammaticAuth(req, reply, "API token management is only available from a logged-in session.")) return
+    if (rejectProgrammaticAuth(req, reply, API_TOKENS_JWT_ONLY_MSG)) return
 
     const parsed = tokenIdParams.safeParse(req.params)
     if (!parsed.success) {

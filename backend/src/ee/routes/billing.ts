@@ -36,6 +36,10 @@ const changePlanSchema = z.object({
   newPriceId: z.string(),
 })
 
+// Billing is a first-party UI action — block OAuth apps + personal tokens
+// (no scope authorizes changing the owner's Stripe subscription / charges).
+const BILLING_JWT_ONLY_MSG = "Billing management is only available from a logged-in session."
+
 export async function billingRoutes(app: FastifyInstance) {
   // Get current subscription for a user
   app.get("/v1/billing/subscription", async (req, reply) => {
@@ -93,7 +97,7 @@ export async function billingRoutes(app: FastifyInstance) {
     }
     // Billing is a first-party UI action — block OAuth apps + personal tokens
     // (no scope authorizes changing the owner's Stripe subscription / charges).
-    if (rejectProgrammaticAuth(req, reply, "Billing management is only available from a logged-in session.")) return
+    if (rejectProgrammaticAuth(req, reply, BILLING_JWT_ONLY_MSG)) return
 
     const parsed = checkoutSessionSchema.safeParse(req.body)
     if (!parsed.success) {
@@ -171,7 +175,7 @@ export async function billingRoutes(app: FastifyInstance) {
     if (!userId) {
       return reply.status(401).send({ error: "Authentication required" })
     }
-    if (rejectProgrammaticAuth(req, reply, "Billing management is only available from a logged-in session.")) return
+    if (rejectProgrammaticAuth(req, reply, BILLING_JWT_ONLY_MSG)) return
 
     // Look up Stripe customer ID
     const { data: customer } = await supabase
@@ -203,7 +207,7 @@ export async function billingRoutes(app: FastifyInstance) {
     if (!userId) {
       return reply.status(400).send({ error: "Authentication and newPriceId are required" })
     }
-    if (rejectProgrammaticAuth(req, reply, "Billing management is only available from a logged-in session.")) return
+    if (rejectProgrammaticAuth(req, reply, BILLING_JWT_ONLY_MSG)) return
 
     const parsed = changePlanSchema.safeParse(req.body)
     if (!parsed.success) {

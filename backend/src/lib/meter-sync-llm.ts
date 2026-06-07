@@ -3,8 +3,6 @@ import { supabase } from "./supabase.js"
 import { reserveCreditsForJob } from "../middleware/credit-guard.js"
 
 export interface SyncLlmMeter {
-  jobId: string
-  usageLogId?: string
   /** Mark the job completed + commit the reserved credits. */
   commit: () => Promise<void>
   /** Mark the job failed + refund the reserved credits. */
@@ -50,8 +48,6 @@ export async function meterSyncLlm(
   const credits = usageLogId ? (await import("../ee/services/credits.js")).CreditsService : null
 
   return {
-    jobId: job.id,
-    usageLogId,
     commit: async () => {
       await supabase
         .from("jobs")

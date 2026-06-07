@@ -27,19 +27,12 @@ export function rejectProgrammaticAuth(
   message: string,
   opts?: { allowPersonalToken?: boolean },
 ): boolean {
-  // OAuth app tokens are ALWAYS rejected on these routes — no scope exists that
-  // could authorize them, so a third-party app (granted any scope) must never
-  // reach here (the privilege-escalation class).
-  if (req.appAuthorization) {
-    reply.status(403).send({ error: { code: "forbidden", message } })
-    return true
-  }
-  // Personal API tokens are the user's OWN full-access key. Rejected by default
-  // (JWT-only routes like /v1/api-tokens), but allowed when the route is a
-  // supported SDK surface (e.g. developer-app management has a @nodaro/client
-  // resource that authenticates with a personal token). JWT sessions set neither
-  // field and always pass.
-  if (req.apiToken && !opts?.allowPersonalToken) {
+  // OAuth app tokens are ALWAYS rejected (no scope can authorize these first-party
+  // routes → privilege-escalation class). Personal API tokens (the user's own
+  // full-access key) are rejected too, unless the route is a supported SDK surface
+  // (allowPersonalToken — e.g. developer-app management has a @nodaro/client
+  // resource that uses a personal token). First-party JWT sets neither field and passes.
+  if (req.appAuthorization || (req.apiToken && !opts?.allowPersonalToken)) {
     reply.status(403).send({ error: { code: "forbidden", message } })
     return true
   }

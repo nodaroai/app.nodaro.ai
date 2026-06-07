@@ -7,6 +7,10 @@ import { rejectProgrammaticAuth } from "../lib/api-auth-mode.js"
 
 const PLATFORMS = ["instagram", "tiktok", "youtube", "linkedin", "x", "facebook", "telegram"] as const
 
+// No social scope exists — block OAuth apps from managing the owner's connections
+// (sever links / inject a bot credential). Personal-token SDK + JWT still allowed.
+const SOCIAL_NO_OAUTH_MSG = "Social account management is not available to OAuth apps."
+
 export async function socialAuthRoutes(app: FastifyInstance) {
   // GET /v1/social/auth-url?platform=instagram
   app.get("/v1/social/auth-url", async (req, reply) => {
@@ -105,7 +109,7 @@ export async function socialAuthRoutes(app: FastifyInstance) {
     const userId = req.userId
     if (!userId) return reply.status(401).send({ error: { code: "unauthorized" } })
     // No social scope exists — block OAuth apps from severing the owner's social links.
-    if (rejectProgrammaticAuth(req, reply, "Social account management is not available to OAuth apps.", { allowPersonalToken: true })) return
+    if (rejectProgrammaticAuth(req, reply, SOCIAL_NO_OAUTH_MSG, { allowPersonalToken: true })) return
 
     const { id } = req.params as { id: string }
 
@@ -124,7 +128,7 @@ export async function socialAuthRoutes(app: FastifyInstance) {
     const userId = req.userId
     if (!userId) return reply.status(401).send({ error: { code: "unauthorized" } })
     // No social scope exists — block OAuth apps from injecting a bot credential.
-    if (rejectProgrammaticAuth(req, reply, "Social account management is not available to OAuth apps.", { allowPersonalToken: true })) return
+    if (rejectProgrammaticAuth(req, reply, SOCIAL_NO_OAUTH_MSG, { allowPersonalToken: true })) return
 
     const schema = z.object({ botToken: z.string().min(10) })
     const parsed = schema.safeParse(req.body)
