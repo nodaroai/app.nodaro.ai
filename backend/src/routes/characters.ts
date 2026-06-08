@@ -4,6 +4,7 @@ import { PLACEHOLDER_CHARACTER_NAME } from "@nodaro/shared"
 import type { ReferenceSheet } from "@nodaro/shared"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { normalizeImageProvider } from "../lib/image-provider.js"
+import { capSelectedAssetByVariant } from "../lib/selected-asset-by-variant.js"
 import { supabase } from "../lib/supabase.js"
 import { deriveAvailableName } from "../lib/entity-naming.js"
 import { requireAppScope } from "../lib/scope-prehandler.js"
@@ -122,6 +123,12 @@ export const upsertCharacterBody = z.object({
     .refine((obj) => !obj || Object.keys(obj).length <= 20, {
       message: "reference_videos_by_variant: max 20 keys",
     }),
+  // The user's chosen DEFAULT asset take per variant (Studio version-history
+  // "pick this take"). OPAQUE string->string map: key "<bucket>:<variant>",
+  // value = the chosen URL. Validate values are strings; caps + key passthrough
+  // happen in `capSelectedAssetByVariant` (soft-capped, overflow dropped — NOT a
+  // 400), so unlike `referenceVideosByVariant` we DON'T normalize keys or refine.
+  selectedAssetByVariant: z.record(z.string()).optional(),
 })
 
 const deleteCharacterParams = z.object({
@@ -140,7 +147,7 @@ const listCharactersQuery = z.object({
 })
 
 const SELECT_COLUMNS =
-  "id, user_id, node_id, project_id, name, description, gender, style, base_outfit, source_image_url, image_provider, expressions, poses, lighting_variations, angles, body_angles, motions, reference_videos_by_variant, voice, personality, canonical_description, lora_training_status, lora_replicate_version, lora_trigger_word, lora_trained_at, sheets, detail_closeups, outfit_variations, deleted_at, created_at, updated_at"
+  "id, user_id, node_id, project_id, name, description, gender, style, base_outfit, source_image_url, image_provider, expressions, poses, lighting_variations, angles, body_angles, motions, reference_videos_by_variant, selected_asset_by_variant, voice, personality, canonical_description, lora_training_status, lora_replicate_version, lora_trigger_word, lora_trained_at, sheets, detail_closeups, outfit_variations, deleted_at, created_at, updated_at"
 
 type CharacterRow = {
   id: string
@@ -161,6 +168,7 @@ type CharacterRow = {
   body_angles: { name: string; url: string }[] | null
   motions: { name: string; url: string }[] | null
   reference_videos_by_variant: Record<string, string[]> | null
+  selected_asset_by_variant: Record<string, string> | null
   voice: { voiceId: string; voiceName: string; traits: string; voiceType?: "premade" | "library" | "custom" } | null
   personality: { mood: string; speechStyle: string; movementStyle: string; behavioralNotes: string } | null
   canonical_description: string | null
@@ -200,6 +208,7 @@ function toCamel(c: CharacterRow) {
     detailCloseups: c.detail_closeups ?? [],
     outfitVariations: c.outfit_variations ?? [],
     referenceVideosByVariant: c.reference_videos_by_variant ?? {},
+    selectedAssetByVariant: c.selected_asset_by_variant ?? {},
     voice: c.voice,
     personality: c.personality,
     canonicalDescription: c.canonical_description,
@@ -480,7 +489,7 @@ export async function characterRoutes(app: FastifyInstance) {
       })
     }
 
-    const { id, nodeId, workflowId, projectId, name, description, gender, style, baseOutfit, sourceImageUrl, expressions, poses, lightingVariations, angles, bodyAngles, motions, voice, personality, seedPrompt, canonicalDescription, referencePhotos, realLifeRefsByVariant, referenceVideosByVariant, imageProvider } = parsed.data
+    const { id, nodeId, workflowId, projectId, name, description, gender, style, baseOutfit, sourceImageUrl, expressions, poses, lightingVariations, angles, bodyAngles, motions, voice, personality, seedPrompt, canonicalDescription, referencePhotos, realLifeRefsByVariant, referenceVideosByVariant, selectedAssetByVariant, imageProvider } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -492,6 +501,9 @@ export async function characterRoutes(app: FastifyInstance) {
     // regardless of casing/spacing. Done once here so INSERT + UPDATE agree.
     const normalizedVariantRefs = normalizeVariantKeys(realLifeRefsByVariant)
     const normalizedVideoRefs = normalizeVariantKeys(referenceVideosByVariant)
+    // OPAQUE map — soft-capped only, keys passed through verbatim (no
+    // lowercase/trim): the studio owns the "<bucket>:<variant>" id format.
+    const cappedSelectedAssets = capSelectedAssetByVariant(selectedAssetByVariant)
 
     if (id) {
       // UPDATE: only touch columns the caller explicitly sent. `name` itself
@@ -522,6 +534,7 @@ export async function characterRoutes(app: FastifyInstance) {
       if (referencePhotos !== undefined) patch.reference_photos = referencePhotos
       if (normalizedVariantRefs !== undefined) patch.real_life_refs_by_variant = normalizedVariantRefs
       if (normalizedVideoRefs !== undefined) patch.reference_videos_by_variant = normalizedVideoRefs
+      if (cappedSelectedAssets !== undefined) patch.selected_asset_by_variant = cappedSelectedAssets
 
       const { data: updated, error } = await supabase
         .from("characters")
@@ -574,6 +587,7 @@ export async function characterRoutes(app: FastifyInstance) {
       reference_photos: referencePhotos ?? [],
       real_life_refs_by_variant: normalizedVariantRefs ?? {},
       reference_videos_by_variant: normalizedVideoRefs ?? {},
+      selected_asset_by_variant: cappedSelectedAssets ?? {},
       updated_at: new Date().toISOString(),
     }
 

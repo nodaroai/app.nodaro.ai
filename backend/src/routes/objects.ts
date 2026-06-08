@@ -4,6 +4,7 @@ import { OBJECT_ATTACH_COLUMNS } from "@nodaro/shared"
 import type { ReferenceSheet } from "@nodaro/shared"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { normalizeImageProvider } from "../lib/image-provider.js"
+import { capSelectedAssetByVariant } from "../lib/selected-asset-by-variant.js"
 import { supabase } from "../lib/supabase.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { requireAppScope } from "../lib/scope-prehandler.js"
@@ -45,6 +46,12 @@ const upsertObjectBody = z.object({
   referencePhotos: z.array(referencePhoto).max(20).optional(),
   canonicalDescription: z.string().max(4000).optional(),
   styleLock: z.boolean().optional(),
+  // The user's chosen DEFAULT asset take per variant (Studio version-history
+  // "pick this take"). OPAQUE string->string map: key "<bucket>:<variant>",
+  // value = the chosen URL. User-owned (flows through INSERT + UPDATE). Validate
+  // values are strings; caps + verbatim-key passthrough happen in
+  // `capSelectedAssetByVariant` (soft-capped, overflow dropped — NOT a 400).
+  selectedAssetByVariant: z.record(z.string()).optional(),
   // Optimistic-concurrency token: when present, UPDATE only succeeds if the
   // row's `updated_at` still matches. On mismatch we return 409 so the Studio
   // can re-fetch + merge instead of silently overwriting a worker write.
@@ -117,7 +124,7 @@ const listObjectsQuery = z.object({
 
 // Single source of truth for the GET column list — keeps single + list in lock-step.
 const SELECT_COLUMNS =
-  "id, user_id, node_id, project_id, name, description, category, style, source_image_url, image_provider, angles, materials, variations, motion_clips, reference_photos, canonical_description, style_lock, sheets, detail_closeups, deleted_at, created_at, updated_at"
+  "id, user_id, node_id, project_id, name, description, category, style, source_image_url, image_provider, angles, materials, variations, motion_clips, reference_photos, canonical_description, style_lock, selected_asset_by_variant, sheets, detail_closeups, deleted_at, created_at, updated_at"
 
 type ObjectRow = {
   id: string
@@ -137,6 +144,7 @@ type ObjectRow = {
   reference_photos: { kind: string; url: string }[] | null
   canonical_description: string | null
   style_lock: boolean | null
+  selected_asset_by_variant: Record<string, string> | null
   // Reference-sheet buckets (migration 200).
   sheets: ReferenceSheet[] | null
   detail_closeups: unknown[] | null
@@ -166,6 +174,7 @@ function toCamel(obj: ObjectRow) {
     referencePhotos: obj.reference_photos ?? [],
     canonicalDescription: obj.canonical_description ?? "",
     styleLock: obj.style_lock ?? true,
+    selectedAssetByVariant: obj.selected_asset_by_variant ?? {},
     sheets: obj.sheets ?? [],
     detailCloseups: obj.detail_closeups ?? [],
     deletedAt: obj.deleted_at,
@@ -297,6 +306,7 @@ export async function objectRoutes(app: FastifyInstance) {
       referencePhotos,
       canonicalDescription,
       styleLock,
+      selectedAssetByVariant,
       expectedUpdatedAt,
     } = parsed.data
     const userId = req.userId
@@ -306,6 +316,10 @@ export async function objectRoutes(app: FastifyInstance) {
         error: { code: "unauthorized", message: "Authentication required" },
       })
     }
+
+    // OPAQUE map — soft-capped only, keys passed through verbatim (no
+    // lowercase/trim): the studio owns the "<bucket>:<variant>" id format.
+    const cappedSelectedAssets = capSelectedAssetByVariant(selectedAssetByVariant)
 
     if (id) {
       // UPDATE — deliberately EXCLUDE worker-owned columns so a Studio
@@ -329,6 +343,7 @@ export async function objectRoutes(app: FastifyInstance) {
       if (imageProvider !== undefined) updateRow.image_provider = normalizeImageProvider(imageProvider)
       if (referencePhotos !== undefined) updateRow.reference_photos = referencePhotos
       if (styleLock !== undefined) updateRow.style_lock = styleLock
+      if (cappedSelectedAssets !== undefined) updateRow.selected_asset_by_variant = cappedSelectedAssets
 
       let query = supabase
         .from("objects")
@@ -390,6 +405,7 @@ export async function objectRoutes(app: FastifyInstance) {
       reference_photos: referencePhotos ?? [],
       canonical_description: canonicalDescription ?? null,
       style_lock: styleLock ?? true,
+      selected_asset_by_variant: cappedSelectedAssets ?? {},
       updated_at: new Date().toISOString(),
     }
 

@@ -91,6 +91,7 @@ const CAMEL_CHARACTER = {
   poses: [],
   lightingVariations: [],
   referenceVideosByVariant: {},
+  selectedAssetByVariant: {},
   sheets: [],
   detailCloseups: [],
   outfitVariations: [],
@@ -501,6 +502,28 @@ describe("GET /v1/characters/:id", () => {
 
     expect(res.statusCode).toBe(200)
     expect(res.json().imageProvider).toBe("flux")
+  })
+
+  it("returns selected_asset_by_variant on the row (read round-trip)", async () => {
+    const rowWithSelection = {
+      ...DB_CHARACTER,
+      selected_asset_by_variant: { "angles:3/4 left": "https://example.com/a.png" },
+    }
+    const charsByIdChain = getByIdChain({ data: rowWithSelection, error: null })
+    const jobs = mockGetByIdJobs()
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "jobs") return jobs.next() as never
+      return { select: charsByIdChain.mockSelect } as never
+    })
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/characters/${TEST_CHARACTER_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().selectedAssetByVariant).toEqual({ "angles:3/4 left": "https://example.com/a.png" })
   })
 
   it("maps in-flight jobs to assetType buckets for spinner rehydration", async () => {
@@ -1328,6 +1351,138 @@ describe("POST /v1/characters", () => {
     })
     expect(res.statusCode).toBe(400)
     expect(res.json().error.code).toBe("validation_error")
+  })
+
+  // -------------------------------------------------------------------------
+  // selected_asset_by_variant (migration 205): the user's chosen default asset
+  // take per variant. OPAQUE string->string map — keys stored VERBATIM (NOT
+  // lowercased/trimmed like reference_videos_by_variant); key-count + value
+  // length are soft-capped with overflow DROPPED SILENTLY (never a 400). A
+  // separate column from the asset buckets so a selection never rewrites one.
+  // -------------------------------------------------------------------------
+
+  it("persists selected_asset_by_variant VERBATIM on insert (no key normalization)", async () => {
+    const { mockInsert, captured } = mockInsertCapture()
+    vi.mocked(supabase.from).mockReturnValue({ insert: mockInsert } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: {
+        name: "Hero",
+        nodeId: "node-1",
+        userId: TEST_USER_ID,
+        selectedAssetByVariant: {
+          "bodyAngles:Front 3/4": "https://example.com/body-front.png",
+          "expressions:Smile": "https://example.com/smile.png",
+        },
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    // Keys preserved EXACTLY (camelCase bucket + exact variant string) — unlike
+    // reference_videos_by_variant these are NOT lowercased/trimmed.
+    expect(captured.row?.selected_asset_by_variant).toEqual({
+      "bodyAngles:Front 3/4": "https://example.com/body-front.png",
+      "expressions:Smile": "https://example.com/smile.png",
+    })
+  })
+
+  it("soft-caps selected_asset_by_variant to 200 keys (truncates, NOT a 400)", async () => {
+    const { mockInsert, captured } = mockInsertCapture()
+    vi.mocked(supabase.from).mockReturnValue({ insert: mockInsert } as never)
+
+    const oversized: Record<string, string> = {}
+    for (let i = 0; i < 250; i++) oversized[`angles:v${i}`] = `https://example.com/${i}.png`
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: { name: "Hero", nodeId: "node-1", userId: TEST_USER_ID, selectedAssetByVariant: oversized },
+    })
+
+    // Overflow dropped silently — the request still succeeds with exactly 200 kept.
+    expect(res.statusCode).toBe(200)
+    expect(Object.keys(captured.row?.selected_asset_by_variant as Record<string, string>)).toHaveLength(200)
+  })
+
+  it("drops selected_asset_by_variant entries whose value exceeds 2048 chars (no 400)", async () => {
+    const { mockInsert, captured } = mockInsertCapture()
+    vi.mocked(supabase.from).mockReturnValue({ insert: mockInsert } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: {
+        name: "Hero",
+        nodeId: "node-1",
+        userId: TEST_USER_ID,
+        selectedAssetByVariant: {
+          "angles:ok": "https://example.com/ok.png",
+          "angles:huge": `https://example.com/${"x".repeat(2100)}.png`,
+        },
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(captured.row?.selected_asset_by_variant).toEqual({
+      "angles:ok": "https://example.com/ok.png",
+    })
+  })
+
+  it("update with selected_asset_by_variant does NOT touch the asset buckets", async () => {
+    const captured: { patch: Record<string, unknown> | null } = { patch: null }
+    const mockSingle = vi.fn().mockResolvedValue({ data: { id: TEST_CHARACTER_ID }, error: null })
+    const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
+    const eq2 = vi.fn().mockReturnValue({ select: mockSelect })
+    const eq1 = vi.fn().mockReturnValue({ eq: eq2 })
+    const mockUpdate = vi.fn((patch: Record<string, unknown>) => {
+      captured.patch = patch
+      return { eq: eq1 }
+    })
+    vi.mocked(supabase.from).mockReturnValue({ update: mockUpdate } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: {
+        id: TEST_CHARACTER_ID,
+        nodeId: "node-1",
+        userId: TEST_USER_ID,
+        selectedAssetByVariant: { "poses:standing": "https://example.com/stand.png" },
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(captured.patch?.selected_asset_by_variant).toEqual({ "poses:standing": "https://example.com/stand.png" })
+    // The selection write must NOT drag any asset bucket into the patch.
+    for (const col of ["expressions", "poses", "lighting_variations", "angles", "body_angles", "motions"]) {
+      expect(captured.patch).not.toHaveProperty(col)
+    }
+  })
+
+  it("partial update of gender alone leaves selected_asset_by_variant untouched", async () => {
+    const captured: { patch: Record<string, unknown> | null } = { patch: null }
+    const mockSingle = vi.fn().mockResolvedValue({ data: { id: TEST_CHARACTER_ID }, error: null })
+    const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
+    const eq2 = vi.fn().mockReturnValue({ select: mockSelect })
+    const eq1 = vi.fn().mockReturnValue({ eq: eq2 })
+    const mockUpdate = vi.fn((patch: Record<string, unknown>) => {
+      captured.patch = patch
+      return { eq: eq1 }
+    })
+    vi.mocked(supabase.from).mockReturnValue({ update: mockUpdate } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: { id: TEST_CHARACTER_ID, nodeId: "node-1", userId: TEST_USER_ID, gender: "female" },
+    })
+
+    expect(res.statusCode).toBe(200)
+    // gender alone → selected_asset_by_variant key absent from the patch (untouched).
+    expect(captured.patch).not.toHaveProperty("selected_asset_by_variant")
+    expect(captured.patch?.gender).toBe("female")
   })
 
   it("accepts reference_photos with all 7 kinds + one extra `other` (8 photos)", async () => {

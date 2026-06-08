@@ -66,6 +66,12 @@ export interface Character {
    *  `realLifeRefsByVariant` for video clips; read the chosen URLs off the row
    *  to feed generate-video's `referenceVideoUrls`. Defaults to `{}`. */
   referenceVideosByVariant?: Record<string, string[]> | null
+  /** The user's chosen DEFAULT asset take per variant (Studio version history).
+   *  OPAQUE map: key `"<bucket>:<variant>"` (e.g. `"bodyAngles:front"`,
+   *  `"expressions:smile"`) → the chosen asset URL (one already present in that
+   *  bucket). Stored verbatim — keys are NOT normalized; soft-capped server-side
+   *  at 200 keys / 2048-char values (overflow dropped silently). Defaults to `{}`. */
+  selectedAssetByVariant?: Record<string, string> | null
   /** `voiceType` records the selected voice's KIND (premade voices are
    *  addressed by name; library/custom voices by id at text-to-speech time).
    *  Optional — a character may have no voice, or a legacy voice predating the
@@ -177,6 +183,11 @@ export interface UpsertCharacterInput {
    *  URLs are read back off the row to drive generate-video's
    *  `referenceVideoUrls`. */
   referenceVideosByVariant?: Record<string, string[]>
+  /** The user's chosen DEFAULT asset take per variant. OPAQUE
+   *  `"<bucket>:<variant>"` → chosen-URL map; a write REPLACES the whole map
+   *  (the studio sends the full map each save). Omit to leave the row untouched.
+   *  Keys stored verbatim; soft-capped server-side at 200 keys / 2048-char values. */
+  selectedAssetByVariant?: Record<string, string>
 }
 
 export interface UpsertCharacterResult {

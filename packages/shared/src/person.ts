@@ -816,6 +816,29 @@ export const PERSON_DIMENSION_LABELS: Readonly<Record<PersonDimension, string>> 
 }
 
 /**
+ * Cross-dimension grouping for the compact Person picker view. The detailed
+ * view renders one row per dimension (PERSON_DIMENSION_ORDER); the compact
+ * view collapses those rows into these six labelled sections. This is the
+ * machine-readable form of the section comments in PERSON_DIMENSION_ORDER —
+ * the guard test (person-sections.test.ts) asserts it partitions every
+ * PersonDimension exactly once, so a newly added dimension can't silently
+ * drop out of the compact grouping.
+ */
+export interface PersonDimensionSection {
+  readonly label: string
+  readonly dimensions: ReadonlyArray<PersonDimension>
+}
+
+export const PERSON_DIMENSION_SECTIONS: ReadonlyArray<PersonDimensionSection> = [
+  { label: "Identity",    dimensions: ["type", "age", "ethnicity", "regional-aesthetic"] },
+  { label: "Body",        dimensions: ["build", "body-proportions"] },
+  { label: "Face",        dimensions: ["face-shape", "jawline", "eye-shape", "nose", "lips", "lip-state"] },
+  { label: "Hair",        dimensions: ["hair-base", "hair-color", "eyebrows"] },
+  { label: "Skin & Eyes", dimensions: ["skin-tone", "skin-texture", "eye-color", "eye-state"] },
+  { label: "Features",    dimensions: ["facial-hair", "distinctive-features"] },
+] as const
+
+/**
  * Maps each PersonDimension to the consumer data field name holding the
  * selected entry id. Multi-dimension model: a consumer (PersonData) may
  * independently set a value in each of the dimensions.

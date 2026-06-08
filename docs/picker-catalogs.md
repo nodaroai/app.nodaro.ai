@@ -1,6 +1,6 @@
 # Parameter Picker Catalogs
 
-Nodaro's editor has a family of **parameter pickers** — curated, tile-grid selectors for things like Mood, Lens, Setting, Framing, Lighting, Person, Music Genre, Voice Character, and ~40 more. A picker never calls the API; it contributes a **descriptive clause** to a downstream node's prompt.
+Nodaro's editor has a family of **parameter pickers** — curated, tile-grid selectors for things like Mood, Lens, Setting, Framing, Lighting, Person, Music Genre, Voice Character, and ~40 more. A picker never calls the API; it contributes a **descriptive clause** to a downstream node's prompt. (The deepest multi-dim picker, **Person**, defaults to a **Compact** grouped-pill view with a per-device **Detailed** toggle for the full tile-grid; the view mode is purely presentational and never changes the emitted clause — see the [Person node page](./nodes/parameters/person.md).)
 
 Every picker's data — its options, the prompt fragment each option contributes, its categories, and its i18n keys — ships as **pure data in [`@nodaro/shared`](https://www.npmjs.com/package/@nodaro/shared)**. So you can build the exact same pickers in your own app, in your own styling, and assemble the exact same prompts, with **no API calls and no coupling to Nodaro's UI**.
 
