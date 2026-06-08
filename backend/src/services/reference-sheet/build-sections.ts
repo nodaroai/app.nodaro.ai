@@ -37,6 +37,11 @@ export function buildResolvedSections(
       const panels = present
         .map((p) => ({ image: c.panelBufByUrl[p.url], label: p.label }))
         .filter((p): p is { image: Buffer; label: string } => p.image instanceof Buffer)
+      // Omit a board that resolved to zero usable panels. The node is
+      // compose-only: a freshly-connected entity may have no generated panels
+      // for this board yet, and a labeled EMPTY band makes the sheet look broken.
+      // Skipping keeps a sparse sheet clean (header + whatever exists + palette).
+      if (panels.length === 0) continue
       out.push({ kind: section.kind, title: section.subtitle ?? headingFor(section.kind), panels })
     }
   }
@@ -79,6 +84,10 @@ export function buildMotionBackgroundSections(
       // Per-section motion resolution (mirrors the still path's per-section
       // resolvePanels) — one slot per present clip, in plan order.
       const { present } = resolveMotionPanels(entityKind, [section], flavour, c.motionBucket)
+      // Omit a board with zero present clips (parity with the still path). An
+      // empty board contributes zero slots either way, so the Nth-clip→Nth-slot
+      // overlay alignment is unchanged — this just drops the empty labeled band.
+      if (present.length === 0) continue
       const panels = present.map((p) => ({ image: Buffer.alloc(0), label: p.label }))
       out.push({ kind: section.kind, title: section.subtitle ?? headingFor(section.kind), panels })
     }

@@ -2564,6 +2564,16 @@ export function buildPayload(
       // MUST match the route's `videoQueue.add("reference-sheet", { ...body })`
       // shape so workflow-run + single-node Run hit the same handler.
       const { entityKind, entityDbId } = resolveSheetEntity(node.id, buildCtx)
+      // Compose-only nodes have no raw-image path in a workflow run — the only
+      // valid source is a SAVED upstream entity. An unsaved/unwired entity
+      // resolves to an empty DbId; fail fast (spec §13 `entity_not_ready`) so the
+      // orchestrator deletes the pending job and never reserves the assembly fee,
+      // instead of the worker defaulting entityKind to "character" and composing a
+      // blank, credit-charged sheet. Single-node Run guards the same case in
+      // execute-node.ts ("Connect a character/object/location with a main image").
+      if (!entityKind || !entityDbId) {
+        throw new Error("entity_not_ready")
+      }
       return {
         jobName: "reference-sheet",
         queueName: "video-generation",

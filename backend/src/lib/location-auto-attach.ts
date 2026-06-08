@@ -25,7 +25,7 @@ export const LOCATION_ATTACH_COLUMN_SET: ReadonlySet<string> = new Set(
 export async function attachAssetToLocation(
   locationId: string,
   column: LocationAttachColumn,
-  item: { name: string; url: string },
+  item: { name: string; url: string } & Record<string, unknown>,
 ): Promise<void> {
   try {
     const { error } = await supabase.rpc("append_location_asset", {
@@ -67,8 +67,12 @@ export async function autoAttachLocationAsset(args: {
   name: string | undefined
   userId: string | undefined
   url: string
+  /** Full JSONB record to persist verbatim (e.g. a reference-sheet record with
+   *  type/skin/flavour/panelUrls). Defaults to a minimal `{ name, url }`. The
+   *  RPC stores whatever JSONB it's given and dedups by `url`. */
+  item?: Record<string, unknown>
 }): Promise<void> {
-  const { locationId, column, name, userId, url } = args
+  const { locationId, column, name, userId, url, item } = args
   if (!locationId || !column || !name || !userId) return
   if (!LOCATION_ATTACH_COLUMN_SET.has(column)) return
 
@@ -84,6 +88,6 @@ export async function autoAttachLocationAsset(args: {
   await attachAssetToLocation(
     locationId,
     column as LocationAttachColumn,
-    { name, url },
+    item ? { ...item, name, url } : { name, url },
   )
 }

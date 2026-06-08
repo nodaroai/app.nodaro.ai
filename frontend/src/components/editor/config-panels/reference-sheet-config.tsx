@@ -51,9 +51,10 @@ const ENTITY_META: Record<EntityKind, { label: string; Icon: typeof User }> = {
 const ENTITY_TYPES = new Set<string>(["character", "object", "location"])
 
 /**
- * Settings panel for the Reference Sheet node (compose-only). The node composes
- * a sheet from the panels its connected entity already has — there's no in-node
- * panel generation here (that's the Studio tab's job). The panel exposes:
+ * Settings panel for the Reference Sheet node. On Run the node generates any
+ * panels the chosen type needs but the connected entity lacks (off its main
+ * image), then composites them into the sheet — a one-click reference sheet
+ * (Stage A + B live in execute-node's reference-sheet block). The panel exposes:
  *   1. Connected-entity indicator (read from nodes+edges on the `in` handle) —
  *      mirrors the ConnectedCinematographySources pattern.
  *   2. Sheet TYPE (turnaround / variation-board / detail / full-reference).
@@ -121,7 +122,7 @@ export function ReferenceSheetConfig({
           </div>
         )}
         <p className="text-[11px] text-muted-foreground mt-1 leading-snug">
-          Composes a sheet from the panels the connected entity already has. The entity needs a main image.
+          Generates any missing panels from the main image, then composes the sheet. The entity needs a main image.
         </p>
       </div>
 

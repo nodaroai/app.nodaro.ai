@@ -126,8 +126,10 @@ function buildOverlaySvg(
       parts.push(`<rect x="0" y="${band.y}" width="${layout.width}" height="${band.height}" fill="${tokens.accent}" opacity="0.06"/>`)
     }
 
-    // Section heading (structural label — always shown).
-    if (s.title) {
+    // Section heading. Structural board labels (EXPRESSIONS, COLOR PALETTE, …)
+    // always show; the header band's title is the entity NAME — content text that
+    // must honor the `withText` toggle (spec §2: withText = name/role/traits/notes).
+    if (s.title && (s.kind !== "header" || withText)) {
       const big = s.kind === "header"
       parts.push(svgText({
         x: PAD, y: headingY, content: s.title, size: big ? 34 : 18,

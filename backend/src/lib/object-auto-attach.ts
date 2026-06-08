@@ -27,7 +27,7 @@ export const OBJECT_ATTACH_COLUMN_SET: ReadonlySet<string> = new Set(
 export async function attachAssetToObject(
   objectId: string,
   column: ObjectAttachColumn,
-  item: { name: string; url: string },
+  item: { name: string; url: string } & Record<string, unknown>,
 ): Promise<void> {
   try {
     const { error } = await supabase.rpc("append_object_asset", {
@@ -69,8 +69,12 @@ export async function autoAttachObjectAsset(args: {
   name: string | undefined
   userId: string | undefined
   url: string
+  /** Full JSONB record to persist verbatim (e.g. a reference-sheet record with
+   *  type/skin/flavour/panelUrls). Defaults to a minimal `{ name, url }`. The
+   *  RPC stores whatever JSONB it's given and dedups by `url`. */
+  item?: Record<string, unknown>
 }): Promise<void> {
-  const { objectId, column, name, userId, url } = args
+  const { objectId, column, name, userId, url, item } = args
   if (!objectId || !column || !name || !userId) return
   if (!OBJECT_ATTACH_COLUMN_SET.has(column)) return
 
@@ -86,7 +90,7 @@ export async function autoAttachObjectAsset(args: {
   await attachAssetToObject(
     objectId,
     column as ObjectAttachColumn,
-    { name, url },
+    item ? { ...item, name, url } : { name, url },
   )
 }
 

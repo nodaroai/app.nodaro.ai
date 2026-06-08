@@ -93,16 +93,29 @@ describe("reference-sheet buildPayload", () => {
     expect(result.payload.flavour).toEqual(sheetNode.data.flavour)
   })
 
-  it("composes gracefully with no entity (entityDbId undefined → worker fails at runtime)", () => {
-    const result = buildPayload(sheetNode, "job-2", {}, undefined, ctx([sheetNode], []))
-    expect(result.payload.entityKind).toBeUndefined()
-    expect(result.payload.entityDbId).toBeUndefined()
+  it("throws entity_not_ready when nothing is connected (fail fast, no blank charged sheet)", () => {
+    // Compose-only: a workflow run with no wired entity must fail at BUILD time so
+    // node-executor deletes the pending job and reserves nothing — NOT build a
+    // payload that the worker turns into a blank, credit-charged sheet (spec §13).
+    expect(() => buildPayload(sheetNode, "job-2", {}, undefined, ctx([sheetNode], []))).toThrow(
+      "entity_not_ready",
+    )
+  })
+
+  it("throws entity_not_ready when the connected entity is unsaved (no DB id yet)", () => {
+    const char: SimpleNode = { id: "n1", type: "character", data: { label: "Hero" } }
+    const edges: SimpleEdge[] = [{ id: "e1", source: "n1", target: "n2" }]
+    expect(() =>
+      buildPayload(sheetNode, "job-2b", {}, undefined, ctx([char, sheetNode], edges)),
+    ).toThrow("entity_not_ready")
   })
 
   it("prices a still sheet as reference-sheet:assembly (flavour-aware, 4cr)", () => {
     // sheetNode's flavour.outputFormat is "still" — the orchestrator must reserve
     // the still assembly id, matching the route's `sheetCreditId` discriminator.
-    const result = buildPayload(sheetNode, "job-3", {}, "usage-3", ctx([sheetNode], []))
+    const char: SimpleNode = { id: "n1", type: "character", data: { characterDbId: "char-123" } }
+    const edges: SimpleEdge[] = [{ id: "e1", source: "n1", target: "n2" }]
+    const result = buildPayload(sheetNode, "job-3", {}, "usage-3", ctx([char, sheetNode], edges))
     expect(result.modelIdentifier).toBe("reference-sheet:assembly")
   })
 
@@ -119,7 +132,9 @@ describe("reference-sheet buildPayload", () => {
         flavour: { outputFormat: "motion", withText: true, showLabels: true, aspect: "landscape", background: "grey" },
       },
     }
-    const result = buildPayload(motionSheet, "job-4", {}, "usage-4", ctx([motionSheet], []))
+    const char: SimpleNode = { id: "n1", type: "character", data: { characterDbId: "char-123" } }
+    const edges: SimpleEdge[] = [{ id: "e1", source: "n1", target: "n2" }]
+    const result = buildPayload(motionSheet, "job-4", {}, "usage-4", ctx([char, motionSheet], edges))
     expect(result.modelIdentifier).toBe("reference-sheet:assembly-motion")
   })
 })
