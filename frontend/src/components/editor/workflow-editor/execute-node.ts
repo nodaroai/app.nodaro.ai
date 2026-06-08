@@ -4642,6 +4642,7 @@ export function executeNode(
           ctx,
           nodeId: node.id,
           label: sheetData.label ?? "Reference Sheet",
+          assemblyFee: sheetData.flavour?.outputFormat === "motion" ? 6 : 4,
         });
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Stage A failed";

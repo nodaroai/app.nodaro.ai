@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useState, type MouseEvent } from "react"
+import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import {
   LayoutGrid,
@@ -18,7 +18,9 @@ import { BaseNode } from "./base-node"
 import { imageNodeSizing, videoNodeSizing } from "./video-node-defaults"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { useUpstreamImageAspect } from "@/hooks/use-upstream-image-aspect"
+import { useFullResolution } from "@/hooks/use-full-resolution"
 import { NodeQuickStrip } from "./node-quick-strip"
+import { ResultsThumbnailsPanel } from "./results-thumbnails-panel"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -56,6 +58,10 @@ function ReferenceSheetNodeComponent({ id, data, selected }: NodeProps) {
 
   const { aspectRatio, onLoadDimensions } = useResultAspectRatio(id, results, activeIndex)
   const upstreamImageAspect = useUpstreamImageAspect(id)
+  // Zoom-aware: serve the full-res transcode (not the 400px thumbnail) once the
+  // node is rendered large/zoomed-in, so a detailed sheet stays crisp (mirrors
+  // generate-image-node). A reference sheet is a dense poster users zoom into.
+  const useFull = useFullResolution(id)
 
   // Motion sheets render a video (the chrome PNG with motion clips overlaid → MP4).
   // Drive off the configured flavour, with the active URL's .mp4 extension as a
@@ -104,37 +110,16 @@ function ReferenceSheetNodeComponent({ id, data, selected }: NodeProps) {
         }
         bottomToolbarContent={
           showThumbnails && results.length > 1 ? (
-            <div className="flex gap-1.5 px-2 py-1.5 bg-black/60 backdrop-blur-sm rounded-xl border border-white/10">
-              {results.slice(0, 8).map((r, i) => {
-                const tileClass = `w-12 h-12 object-cover rounded-lg cursor-pointer transition-all ${
-                  i === activeIndex ? "ring-2 ring-[#ff0073]" : "opacity-60 hover:opacity-100"
-                }`
-                const onPick = (e: MouseEvent) => {
-                  e.stopPropagation()
-                  updateNodeData(id, { activeResultIndex: i, generatedImageUrl: r.url })
-                }
-                return isMotion ? (
-                  <video
-                    key={`${r.url}-${i}`}
-                    src={r.url}
-                    muted
-                    preload="metadata"
-                    className={`${tileClass} bg-black`}
-                    onClick={onPick}
-                  />
-                ) : (
-                  <CachedImage
-                    key={`${r.url}-${i}`}
-                    src={r.url}
-                    alt={`Sheet ${i + 1}`}
-                    className={tileClass}
-                    thumbnail
-                    thumbnailWidth={96}
-                    onClick={onPick}
-                  />
-                )
-              })}
-            </div>
+            <ResultsThumbnailsPanel
+              results={results}
+              activeIndex={activeIndex}
+              nodeSelected={!!selected || isSettingsOpen}
+              mediaType={isMotion ? "video" : "image"}
+              onSelect={(i) =>
+                updateNodeData(id, { activeResultIndex: i, generatedImageUrl: results[i].url })
+              }
+              onDelete={(i) => setDeleteConfirm(i)}
+            />
           ) : undefined
         }
         handles={[
@@ -214,7 +199,7 @@ function ReferenceSheetNodeComponent({ id, data, selected }: NodeProps) {
                     src={activeImageUrl}
                     alt="Reference sheet"
                     className="w-full h-full object-cover rounded-xl"
-                    thumbnail
+                    thumbnail={!useFull}
                     thumbnailWidth={400}
                     onLoadDimensions={onLoadDimensions}
                   />

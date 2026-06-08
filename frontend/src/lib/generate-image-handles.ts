@@ -110,6 +110,12 @@ export const IMAGE_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   // downstream image consumers (Generate Image References, etc.) enumerate it
   // as a valid candidate.
   "generate-mask",
+  // reference-sheet's `sheet` handle is a single composited image and `panels`
+  // carries clean reference images; both resolve to image URLs at runtime
+  // (node-input-resolver.ts / input-resolver.ts route them into
+  // referenceImageUrls). Membership lets the canvas accept sheet/panels → any
+  // image input; edge colors stay handle-correct via HANDLE_OUTPUT_TYPES.
+  "reference-sheet",
 ])
 
 /** Identity-locking source node types that feed Subjects. */
