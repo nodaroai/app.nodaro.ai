@@ -646,6 +646,7 @@ export type {
   CommunitySort,
   CommunityReportReason,
   CommunityCard,
+  CommunityFullDetail,
   BrowseCommunityParams,
   BrowseCommunityResult,
   CloneListingResult,

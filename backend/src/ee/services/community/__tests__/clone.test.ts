@@ -16,6 +16,7 @@ vi.mock("../../../../lib/storage.js", () => ({
 }))
 import { cloneListing } from "../clone.js"
 import { reserveStorageIfWithinLimit, refundStorage } from "../../../../utils/file-validation.js"
+import { copyR2ObjectToPrefix } from "../../../../lib/storage.js"
 
 beforeEach(() => vi.clearAllMocks())
 
@@ -47,6 +48,15 @@ describe("cloneListing", () => {
     mockSnapshotAndInsert({ name: "Hero", source_image_url: "u" }, false)
     await expect(cloneListing({ listingId: "L1", entityType: "character", userId: "u1" })).rejects.toThrow()
     expect(refundStorage).toHaveBeenCalled()
+  })
+  it("re-copies emotion-clip URLs inside reference_videos_by_variant", async () => {
+    mockSnapshotAndInsert(
+      { name: "Hero", reference_videos_by_variant: { smile: ["x", "y"] } },
+      true,
+    )
+    await cloneListing({ listingId: "L1", entityType: "character", userId: "u1" })
+    expect(copyR2ObjectToPrefix).toHaveBeenCalledWith("x", expect.any(String))
+    expect(copyR2ObjectToPrefix).toHaveBeenCalledWith("y", expect.any(String))
   })
   it("rejects with listing_unavailable when the listing is inactive (no clone recorded)", async () => {
     from.mockImplementation((table: string) => {
