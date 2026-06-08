@@ -55,6 +55,17 @@ describe("POST /v1/admin/community/:entityType/:id/publish", () => {
     expect(r.statusCode).toBe(200)
     expect(r.json().slug).toBe("hero-abc")
   })
+  it("accepts entityType=creature (no likenessAttestation required for non-characters)", async () => {
+    publishListing.mockResolvedValue({ slug: "smaug-abc", id: "L-cr" })
+    const r = await app.inject({ method: "POST", url: "/v1/admin/community/creature/cr1/publish", headers: { "x-user-id": "admin1" }, payload: { title: "Smaug", attestation: true } })
+    expect(r.statusCode).toBe(200)
+    expect(r.json().slug).toBe("smaug-abc")
+    expect(publishListing).toHaveBeenCalledWith(expect.objectContaining({ entityType: "creature" }))
+  })
+  it("400 on an unknown entityType", async () => {
+    const r = await app.inject({ method: "POST", url: "/v1/admin/community/widget/x1/publish", headers: { "x-user-id": "admin1" }, payload: { title: "X", attestation: true } })
+    expect(r.statusCode).toBe(400)
+  })
 })
 
 describe("GET /v1/admin/community/by-source/:entityType/:id", () => {

@@ -72,4 +72,34 @@ describe("cloneListing", () => {
     expect(reserveStorageIfWithinLimit).not.toHaveBeenCalled()
     expect(rpc).not.toHaveBeenCalled()
   })
+
+  it("clones a creature: inserts into the creatures table + copies the poses asset slot", async () => {
+    const insertedTables: string[] = []
+    from.mockImplementation((table: string) => {
+      if (table === "community_listings") {
+        const single = vi.fn().mockResolvedValue({ data: { is_active: true } })
+        return { select: () => ({ eq: () => ({ single }) }) }
+      }
+      if (table === "community_listing_snapshots") {
+        const single = vi.fn().mockResolvedValue({
+          data: { snapshot: { name: "Smaug", species: "dragon", main_image_url: "m", poses: [{ name: "coiled", url: "p" }] } },
+        })
+        return { select: () => ({ eq: () => ({ single }) }) }
+      }
+      insertedTables.push(table)
+      const single = vi.fn().mockResolvedValue({ data: { id: "cr-new" }, error: null })
+      return { insert: () => ({ select: () => ({ single }) }) }
+    })
+    rpc.mockResolvedValue({ data: 1, error: null })
+    const res = await cloneListing({ listingId: "L-cr", entityType: "creature", userId: "u1" })
+    expect(res).toEqual({ entityType: "creature", id: "cr-new" })
+    // The entity row landed in the creatures table (adapter.table = "creatures").
+    expect(insertedTables).toContain("creatures")
+    // poses is a creature assetField (the renamed object materials slot) → its url is re-copied.
+    expect(copyR2ObjectToPrefix).toHaveBeenCalledWith("m", expect.any(String))
+    expect(copyR2ObjectToPrefix).toHaveBeenCalledWith("p", expect.any(String))
+    expect(rpc).toHaveBeenCalledWith("record_clone", expect.objectContaining({
+      p_listing_id: "L-cr", p_user_id: "u1", p_entity_type: "creature", p_new_entity_id: "cr-new",
+    }))
+  })
 })

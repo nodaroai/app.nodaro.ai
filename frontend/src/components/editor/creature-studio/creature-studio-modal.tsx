@@ -1,10 +1,25 @@
-import { useEffect, useState } from "react"
+import { Suspense, lazy, useEffect, useState } from "react"
+import { Upload } from "lucide-react"
 import { useCreatureStudio } from "./use-creature-studio"
 import { AppearanceTab } from "./appearance-tab"
 import { AnglesTab } from "./angles-tab"
 import { PosesTab } from "./poses-tab"
 import { VariationsTab } from "./variations-tab"
 import { MotionTab } from "./motion-tab"
+import { Button } from "@/components/ui/button"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import { useAuth } from "@/hooks/use-auth"
+import { isMultiUser } from "@/lib/edition"
+
+// Lazy dynamic import keeps this core file off the ee/ static-import graph
+// (check-ee-imports.mjs only flags top-level `import ... from "@/ee/..."`,
+// not `import()` call expressions — same pattern as object-studio-modal.tsx).
+const PublishDialog = lazy(() => import("@/ee/components/community/publish-dialog"))
 
 /**
  * Creature Studio — fullscreen modal shell.
@@ -17,9 +32,10 @@ import { MotionTab } from "./motion-tab"
  *  - The 6th object tab — "Sheet" (reference-sheet) — is DEFERRED this phase
  *    and DROPPED entirely. No ReferenceSheetTab, no SHEET_TAB_ADAPTERS, no
  *    modal-level jobs hook for the sheet's Stage-A panel.
- *  - Community publishing ("Share to community" / PublishDialog) is NOT wired
- *    for creatures (publish-dialog only supports character/location/object),
- *    so that header affordance is omitted.
+ *  - Community publishing ("Share to community" / PublishDialog) mirrors the
+ *    object precedent exactly: header button gated on `isAdmin && isMultiUser()`,
+ *    disabled until the creature is saved (no `creatureDbId`), opening a
+ *    PublishDialog with `entityType="creature"`.
  *  - Accent is purple (#A78BFA), matching the creature node + MiniMap color,
  *    vs object's cyan (#22d3ee).
  *  - Sidebar sections: Identity / Composition / Variants / Motion (same 4 as
@@ -80,7 +96,9 @@ interface CreatureStudioModalProps {
 
 export function CreatureStudioModal({ nodeId, onClose }: CreatureStudioModalProps) {
   const studio = useCreatureStudio(nodeId)
+  const { isAdmin } = useAuth()
   const [activeTab, setActiveTab] = useState<TabId>("appearance")
+  const [showPublish, setShowPublish] = useState(false)
 
   // Escape closes the modal — with a dirty-check prompt so unsaved edits
   // aren't silently discarded. In-flight saves block close entirely (the
@@ -174,6 +192,32 @@ export function CreatureStudioModal({ nodeId, onClose }: CreatureStudioModalProp
           >
             {studio.isSaving ? "Saving…" : "Save"}
           </button>
+          {isAdmin && isMultiUser() && (
+            <TooltipProvider delayDuration={0}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  {/* span wrapper so the tooltip still fires while the button is disabled */}
+                  <span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 gap-1.5 text-[11px] text-slate-300 hover:text-white hover:bg-[#1e293b]"
+                      disabled={!data.creatureDbId}
+                      onClick={() => setShowPublish(true)}
+                    >
+                      <Upload className="h-3.5 w-3.5" />
+                      Share to community
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {!data.creatureDbId && (
+                  <TooltipContent side="bottom">
+                    Generate an appearance to save the creature first
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            </TooltipProvider>
+          )}
           <button
             type="button"
             onClick={() => {
@@ -189,6 +233,18 @@ export function CreatureStudioModal({ nodeId, onClose }: CreatureStudioModalProp
           </button>
         </div>
       </div>
+
+      {isAdmin && isMultiUser() && data.creatureDbId && (
+        <Suspense fallback={null}>
+          <PublishDialog
+            entityType="creature"
+            entityId={data.creatureDbId}
+            defaultTitle={data.creatureName}
+            open={showPublish}
+            onOpenChange={setShowPublish}
+          />
+        </Suspense>
+      )}
 
       {/* body */}
       <div className="flex flex-1 overflow-hidden">

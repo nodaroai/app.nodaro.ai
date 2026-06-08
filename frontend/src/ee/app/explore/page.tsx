@@ -1,7 +1,18 @@
 import { useState, useEffect, useMemo, useRef } from "react"
 import { useSearchParams } from "react-router-dom"
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query"
-import { Compass, Search, X, SlidersHorizontal, Heart } from "lucide-react"
+import {
+  Compass,
+  Search,
+  X,
+  SlidersHorizontal,
+  Heart,
+  User,
+  MapPin,
+  Package,
+  PawPrint,
+  type LucideIcon,
+} from "lucide-react"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -23,14 +34,15 @@ import {
 } from "@/ee/components/community/community-card"
 import { CommunityPreviewModal } from "@/ee/components/community/community-preview-modal"
 
-type EntityType = "character" | "location" | "object"
+type EntityType = "character" | "location" | "object" | "creature"
 type ViewMode = "browse" | "favorites"
 type SortMode = "popular" | "newest"
 
-const ENTITY_TABS: { value: EntityType; label: string }[] = [
-  { value: "character", label: "Characters" },
-  { value: "location", label: "Locations" },
-  { value: "object", label: "Objects" },
+const ENTITY_TABS: { value: EntityType; label: string; icon: LucideIcon }[] = [
+  { value: "character", label: "Characters", icon: User },
+  { value: "location", label: "Locations", icon: MapPin },
+  { value: "object", label: "Objects", icon: Package },
+  { value: "creature", label: "Creatures", icon: PawPrint },
 ]
 
 export default function ExplorePage() {
@@ -161,7 +173,7 @@ export default function ExplorePage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-foreground">Explore</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Discover community-shared characters, locations, and objects
+          Discover community-shared characters, locations, objects, and creatures
         </p>
       </div>
 
@@ -170,21 +182,25 @@ export default function ExplorePage() {
         <div className="flex items-center gap-2 flex-wrap">
           {/* Entity tabs */}
           <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-800/50 rounded-lg p-1">
-            {ENTITY_TABS.map((tab) => (
-              <button
-                key={tab.value}
-                type="button"
-                className={cn(
-                  "px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
-                  entityType === tab.value
-                    ? "bg-white dark:bg-zinc-700 text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-                onClick={() => setEntityType(tab.value)}
-              >
-                {tab.label}
-              </button>
-            ))}
+            {ENTITY_TABS.map((tab) => {
+              const Icon = tab.icon
+              return (
+                <button
+                  key={tab.value}
+                  type="button"
+                  className={cn(
+                    "px-3 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center gap-1.5",
+                    entityType === tab.value
+                      ? "bg-white dark:bg-zinc-700 text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                  onClick={() => setEntityType(tab.value)}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {tab.label}
+                </button>
+              )
+            })}
           </div>
 
           {/* View toggle */}

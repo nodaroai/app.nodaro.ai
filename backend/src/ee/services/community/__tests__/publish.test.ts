@@ -51,3 +51,28 @@ describe("publishListing (character)", () => {
     expect(purgeCommunityListingBlobs).toHaveBeenCalledWith("L-old")
   })
 })
+
+describe("publishListing (creature)", () => {
+  it("routes entityType=creature through the creature adapter end-to-end", async () => {
+    mockLookup(null)
+    rpc.mockResolvedValue({ data: [{ id: "L-cr", slug: "hero-abc123" }], error: null })
+    const row = { id: "cr1", name: "Smaug", species: "dragon", source_image_url: "u", canonical_description: "cd" }
+    const res = await publishListing({
+      entityType: "creature", sourceRow: row, creatorId: "admin1",
+      title: "Smaug", description: "a dragon", category: "mythical", style: "epic", tags: ["dragon"],
+      // likenessAttestation is irrelevant for non-character entities — the RPC arg
+      // is hard-NULL unless entityType === "character".
+      likenessAttestation: false,
+    })
+    expect(res.slug).toBe("hero-abc123")
+    // listingId is a freshly generated UUID on a new publish (the "L-cr" above is
+    // only the RPC return id), so assert the adapter routing + preview budget, not it.
+    expect(copyEntityAssetsToPrefix).toHaveBeenCalledWith("creature", row, expect.any(String), 4)
+    expect(rpc).toHaveBeenCalledWith("publish_community_listing", expect.objectContaining({
+      p_entity_type: "creature",
+      p_creator_id: "admin1",
+      p_likeness_attestation_at: null,
+    }))
+    expect(accountStorage).toHaveBeenCalledWith("admin1", 50)
+  })
+})

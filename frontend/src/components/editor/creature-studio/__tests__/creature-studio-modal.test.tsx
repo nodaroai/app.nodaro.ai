@@ -71,9 +71,29 @@ vi.mock("../motion-tab", () => ({
 // studio hooks. These tests render the modal without a Router, so mock the auth
 // hook to avoid the useNavigate throw. getCachedUserId is also exported here
 // because the same module supplies it to the studio hooks.
+//
+// `isAdmin` defaults to true (mutable per-test via `mockAuth`) because the
+// "Share to community" button is gated on `isAdmin && isMultiUser()` — the
+// positive share-button test below mirrors object-studio's affordance.
+const mockAuth = vi.hoisted(() => ({ isAdmin: true }))
 vi.mock("@/hooks/use-auth", () => ({
-  useAuth: () => ({ isAdmin: false }),
+  useAuth: () => mockAuth,
   getCachedUserId: () => "user-1",
+}))
+
+// The "Share to community" button is also gated on `isMultiUser()` (business +
+// cloud editions). Tests run with the default community edition, so force it
+// true so the share affordance renders.
+vi.mock("@/lib/edition", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/edition")>()
+  return { ...actual, isMultiUser: () => true }
+})
+
+// The Share button opens a lazy-loaded PublishDialog from `@/ee/...`. Stub it
+// inert so this modal-shell test doesn't pull the ee community surface (and its
+// API client) into the render tree. Publishing is covered elsewhere.
+vi.mock("@/ee/components/community/publish-dialog", () => ({
+  default: () => null,
 }))
 
 // The realtime hook builds a Supabase client (createClient() →
@@ -126,6 +146,7 @@ describe("CreatureStudioModal", () => {
     mockStudioState.isDirty = false
     mockStudioState.isSaving = false
     mockStudioState.isApprovingMainImage = false
+    mockAuth.isAdmin = true
     vi.clearAllMocks()
     mockStudioState.saveStaged = vi.fn().mockResolvedValue("uuid-1")
     mockStudioState.ensureSavedBeforeGen = vi.fn().mockResolvedValue("uuid-1")
@@ -206,9 +227,35 @@ describe("CreatureStudioModal", () => {
     expect(screen.queryByRole("button", { name: /materials/i })).not.toBeInTheDocument()
   })
 
-  it("does NOT render the 'Share to community' affordance (creature publishing not wired)", () => {
+  it("renders the 'Share to community' affordance for an admin in a multi-user edition", () => {
     render(<CreatureStudioModal nodeId="cre-1" onClose={() => {}} />)
-    expect(screen.queryByRole("button", { name: /share to community/i })).not.toBeInTheDocument()
+    expect(
+      screen.getByRole("button", { name: /share to community/i }),
+    ).toBeInTheDocument()
+  })
+
+  it("Share button is disabled until the creature is saved (no creatureDbId)", () => {
+    const data = mockStudioState.stagedData as Record<string, unknown>
+    data.creatureDbId = ""
+    render(<CreatureStudioModal nodeId="cre-1" onClose={() => {}} />)
+    expect(screen.getByRole("button", { name: /share to community/i })).toBeDisabled()
+  })
+
+  it("Share button is enabled once the creature is saved (creatureDbId present)", () => {
+    const data = mockStudioState.stagedData as Record<string, unknown>
+    data.creatureDbId = "creature-uuid-1"
+    render(<CreatureStudioModal nodeId="cre-1" onClose={() => {}} />)
+    expect(
+      screen.getByRole("button", { name: /share to community/i }),
+    ).not.toBeDisabled()
+  })
+
+  it("hides the 'Share to community' affordance for a non-admin", () => {
+    mockAuth.isAdmin = false
+    render(<CreatureStudioModal nodeId="cre-1" onClose={() => {}} />)
+    expect(
+      screen.queryByRole("button", { name: /share to community/i }),
+    ).not.toBeInTheDocument()
   })
 
   it("renders 4 sidebar section headers (Identity / Composition / Variants / Motion)", () => {

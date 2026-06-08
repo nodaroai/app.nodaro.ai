@@ -85,7 +85,7 @@ export async function communityRoutes(app: FastifyInstance) {
     { preHandler: requireAppScope("assets:write") },
     async (req, reply) => {
       const userId = auth(req, reply); if (!userId) return
-      const body = z.object({ entityType: z.enum(["character", "location", "object"]) }).safeParse(req.body)
+      const body = z.object({ entityType: z.enum(["character", "location", "object", "creature"]) }).safeParse(req.body)
       if (!body.success) return reply.status(400).send({ error: { code: "validation_error", message: "entityType required" } })
       try {
         const res = await cloneListing({ listingId: req.params.id, entityType: body.data.entityType as EntityType, userId })

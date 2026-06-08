@@ -6,7 +6,7 @@ import { publishListing } from "../services/community/publish.js"
 import { purgeCommunityListingBlobs } from "../services/community/asset-lifecycle.js"
 import type { EntityType } from "../lib/community-entity-adapters.js"
 
-const ENTITY_TABLE: Record<EntityType, string> = { character: "characters", location: "locations", object: "objects" }
+const ENTITY_TABLE: Record<EntityType, string> = { character: "characters", location: "locations", object: "objects", creature: "creatures" }
 
 const publishBody = z.object({
   title: z.string().min(1).max(120),
@@ -28,7 +28,7 @@ export async function adminCommunityRoutes(app: FastifyInstance) {
     { preHandler: requireAdmin },
     async (req, reply) => {
       const { entityType, id } = req.params
-      if (!["character", "location", "object"].includes(entityType)) return bad(reply, "Invalid entityType")
+      if (!["character", "location", "object", "creature"].includes(entityType)) return bad(reply, "Invalid entityType")
       const parsed = publishBody.safeParse(req.body)
       if (!parsed.success) return bad(reply, parsed.error.issues[0]?.message ?? "Invalid request")
       const body = parsed.data
@@ -72,7 +72,7 @@ export async function adminCommunityRoutes(app: FastifyInstance) {
     { preHandler: requireAdmin },
     async (req, reply) => {
       const { entityType, id } = req.params
-      if (!["character", "location", "object"].includes(entityType)) return bad(reply, "Invalid entityType")
+      if (!["character", "location", "object", "creature"].includes(entityType)) return bad(reply, "Invalid entityType")
       const { data } = await supabase
         .from("community_listings")
         .select("id, slug, entity_type, title, is_active, is_listed, clone_count, favorite_count, created_at, updated_at")
