@@ -1,17 +1,12 @@
-# CLAUDE.md Maintenance Rule
+# CLAUDE.md — Maintenance
 
-**Update only when conventions, architecture, or registration steps change** — NOT on every commit. Change history belongs in `git log` and PR descriptions, not inline here.
-- This root CLAUDE.md is tracked in git. Subdirectory CLAUDE.md files are gitignored.
-- Full project spec is in `specs/FULL_SPEC.md` (reference only, don't load into context).
-- If you find yourself writing a "Last updated: <date>" paragraph at the bottom, stop — that content goes in the PR description.
+***REDACTED-OSS-SCRUB***
 
 # Public Docs Maintenance Rule (CRITICAL)
 
-**Whenever a change affects user-facing behavior, ALSO update `docs/`** in the same PR.
+**Whenever a change affects user-facing behavior, ALSO update `docs/` in the same PR.** `docs/` is the public reference (GitHub Pages) and must stay in sync with editor reality.
 
-The `docs/` directory is published as the public reference (GitHub Pages). It must stay in sync with the editor reality. Treat it as a release artifact, not "we'll get to it."
-
-**Triggers — you MUST update docs when:**
+**Triggers — update docs when:**
 
 | Change | Docs to update |
 |--------|----------------|
@@ -30,12 +25,6 @@ The `docs/` directory is published as the public reference (GitHub Pages). It mu
 - Worked examples in docs MUST match the test cases in code (cross-check before committing).
 - For dynamic-priced nodes, document both the formula AND the fallback behavior (what happens when upstream metadata is missing).
 - If the change is rolled out under a flag, gate-check the doc — note the flag explicitly so users don't see undocumented behavior.
-
-**See also:**
-- `frontend/CLAUDE.md` — Frontend patterns (API proxy, SSE client, UI styling)
-- `backend/CLAUDE.md` — Backend patterns (providers, credits, billing, worker)
-- `backend/src/providers/kie/CLAUDE.md` — KIE.ai API docs, model key → doc map, param gotchas
-- `backend/src/providers/replicate/CLAUDE.md` — Replicate provider patterns, Flux 2 routing, Character LoRA training
 
 # Nodaro.ai — Claude Code Reference
 
@@ -75,7 +64,7 @@ The `docs/` directory is published as the public reference (GitHub Pages). It mu
 Enterprise code lives under `backend/src/ee/` and `frontend/src/ee/` and is governed by the Nodaro Enterprise License (separate from the root SUL). The npm SDK packages under `packages/client/` and `packages/shared/` are Apache 2.0. See `LICENSE.md` at the repo root for the dual-license overview.
 
 **Hard rules:**
-1. **Core code may NOT statically import from `ee/`.** Enforced by `tools/check-ee-imports.mjs` in CI. Two permanent allowlist exceptions: `backend/src/app.ts` (route registration) and `backend/src/server.ts` (cleanup cron startup) — both gate the imports at registration time.
+1. **Core code may NOT statically import from `ee/`.** Enforced by `tools/check-ee-imports.mjs` in CI. Two permanent allowlist exceptions: `backend/src/app.ts` (route registration) and `backend/src/server.ts` (cleanup cron + worker startup) — both gate the imports at registration time.
 2. **Default placement:** put enterprise code in `backend/src/ee/` or `frontend/src/ee/`. The structure inside ee/ mirrors core (routes/, billing/, middleware/, lib/, services/, hooks/, layouts/, components/, app/).
 3. **`*.ee.<ext>` filename suffix** is a deliberate exception for in-place enterprise variants of core files (e.g., `cost-tab.tsx` + `cost-tab.ee.tsx`). Per the Enterprise License, ANY file whose name contains the `.ee.` substring is enterprise — extension is unrestricted (`.ts`, `.tsx`, `.sql`, `.md`, `.json`, etc.). Use `ee/` directory by default; the suffix is reserved for tight coupling with a core sibling.
 4. **Shim pattern for hot-path code:** `backend/src/middleware/credit-guard.ts` stays in core as a thin dispatcher; the heavy implementation lives in `backend/src/ee/lib/credit-guard-impl.ts` and is loaded via dynamic `import()` only when `hasCredits()` is true. Same pattern applies to `backend/src/workers/shared.ts` for credit operations.
@@ -152,7 +141,7 @@ Enterprise code lives under `backend/src/ee/` and `frontend/src/ee/` and is gove
 
 **Steps 8 and 9 are separate node lists — missing either means the node won't appear in that UI.**
 
-**Bottom run strip (the hover dropdown menus + Run/Run-from-here button):** `BaseNode` frames whatever you pass as `topToolbarContent` in the shared zoom-scaled pill (`NodeRunStripShell`), so the container, zoom-scaling, and click-isolation are identical for EVERY node and never drift — pass a bare `<RunNodeButton .../>` (use `runFromHere` for pass-through list/text/data nodes) or a `<NodeQuickStrip .../>` (auto-shows the per-type quick-config dropdowns from `NODE_QUICK_CONFIGS`). Do NOT hand-roll a pill or re-apply zoom scaling, and do NOT gate the strip behind `!isRunning` (that hides the Stop/Discard affordance mid-run). Only a bespoke self-framing toolbar with its own compact-mode pill (generate-image/video, llm-chat, video-retake, video-sfx) passes via `rawToolbarContent` to skip the shell. Quick-config dropdowns that depend on the chosen provider MUST use a provider-aware `options: (data) => ...` returning `[]` when that provider has no such lever (the registry self-hides + clears the stale value); never a static superset (Zod-reject trap).
+**Bottom run strip:** `BaseNode` frames `topToolbarContent` in the shared zoom-scaled pill (`NodeRunStripShell`) so container/zoom/click-isolation never drift — pass a bare `<RunNodeButton .../>` (use `runFromHere` for pass-through list/text/data nodes) or `<NodeQuickStrip .../>` (auto-shows per-type dropdowns from `NODE_QUICK_CONFIGS`). Don't hand-roll a pill, re-apply zoom scaling, or gate the strip behind `!isRunning` (hides Stop/Discard mid-run). Only bespoke self-framing toolbars with their own compact pill (generate-image/video, llm-chat, video-retake, video-sfx) use `rawToolbarContent` to skip the shell. Provider-dependent quick-config dropdowns MUST use provider-aware `options: (data) => ...` returning `[]` when the provider lacks that lever (registry self-hides + clears the stale value) — never a static superset (Zod-reject trap).
 
 **Video/image-output nodes (shared sizing):** any node rendering a video OR image result preview must size through the shared helper in `frontend/src/components/nodes/video-node-defaults.ts` — never hand-pick `minWidth`/`minHeight`/`imageAspectRatio` (that's what caused per-node size drift). Drive the result aspect via `useResultAspectRatio(id, results, activeIndex)`, then spread onto `<BaseNode>`:
 - **video** → `{...videoNodeSizing(mediaAspectRatio)}` — aspect = result → 16:9.
@@ -191,8 +180,8 @@ There are FIVE registries a parameter picker must appear in. **Missing any one o
 
 **Steps 24 and 25 are the EXECUTION-side gate.** `PARAMETER_NODE_TYPES` is what `payload-builder.ts`, `input-resolver.ts`, and `resolve-field-mappings.ts` check to decide "this node is read from `data`, not executed as a job." A picker node missing from this set will: (a) get a stale `pending` jobs row created on every workflow run, (b) cause `buildPayload` to throw, (c) fail the entire workflow. The case in `getParameterValue` is unreachable until the type is in the set, so adding both together is mandatory.
 
-**Reference example (single-dim picker):** `loop-subject` — see `parameter-picker-registry.tsx` line ~277, `parameter-picker-types.ts`, `parameter-node-value.ts` (set + `case "loop-subject"`), `parameter-prompt-hint.ts`.
-**Reference example (multi-dim picker):** `person` — see `parameter-picker-registry.tsx` line ~424 + the `PersonPicker` component + `parameter-node-value.ts` `case "person"` (returns first non-empty dimension as the single-string fallback).
+**Reference example (single-dim):** `loop-subject` — in `parameter-picker-registry.tsx`, `parameter-picker-types.ts`, `parameter-node-value.ts` (set + `case`), `parameter-prompt-hint.ts`.
+**Reference example (multi-dim):** `person` — `parameter-picker-registry.tsx` + the `PersonPicker` component + `parameter-node-value.ts` `case "person"` (returns first non-empty dimension as the single-string fallback).
 
 ### Database Rules
 - RLS on every table.
@@ -210,11 +199,11 @@ Most subsystem rules live in subdirectory CLAUDE.md files — Claude Code auto-l
 |------|------|
 ***REDACTED-OSS-SCRUB***
 | Deployment | Railway + single multi-stage Dockerfile at repo root. `dev` → `next.nodaro.ai` (staging), `main` → `app.nodaro.ai` (prod). New `VITE_*` env vars MUST get both `ARG` and `ENV` lines in the Dockerfile — Vite inlines them at build time. |
-| `@nodaro/shared` + `@nodaro/client` + `@nodaro/cli` | Public npm packages. `@nodaro/shared` exports types + model registries + prompt helpers (re-used by backend, frontend, client SDK). `@nodaro/client` is the typed REST client (createClient + 17 resources: workflows/projects/jobs/executions/nodes/characters/locations/objects/pipelines/reduce/promptHelper/apps/developerApps/oauth/voices/credits/uploads). `@nodaro/cli` (`packages/cli/`) is a thin commander-based wrapper around `@nodaro/client` — multi-profile auth at `~/.config/nodaro/config.json`, JSON output, `--watch` polling. Workspaces under `packages/`. Backend imports use `@nodaro/shared` (workspace symlink); frontend uses both via npm + `@nodaro/client` for the executions resource (incremental dogfood). Build via `tsup` (dual ESM+CJS). CLI also distributes standalone binaries via `bun build --compile` for darwin-{arm64,x64} + linux-{arm64,x64} + windows-x64; release workflow `cli-release.yml` triggers on `cli-v*` tags. Releases via changesets — see `.changeset/`. |
+| `@nodaro/shared` + `@nodaro/client` + `@nodaro/cli` | Public npm packages (`packages/`, Apache 2.0, built via `tsup`, released via changesets). `@nodaro/shared`: types + model registries + prompt helpers (re-used by backend/frontend/SDK). `@nodaro/client`: typed REST client (`createClient` + one resource per feature area — workflows, jobs, executions, characters, …). `@nodaro/cli` (`packages/cli/`): commander wrapper over `@nodaro/client` (multi-profile auth, JSON, `--watch`); ships standalone binaries via `bun build --compile`, release workflow `cli-release.yml` on `cli-v*` tags. Backend imports `@nodaro/shared` via workspace symlink; frontend uses npm. |
 | Documentation | `docs/` is published via GitHub Pages (public). `specs/` is internal planning (NOT public). LICENSE is Apache 2.0. Public docs cover: deployment, architecture, OAuth flow, API integration, SDK quickstart + reference, contributing. The `.gitignore` rule for `ARCHITECTURE.md` is anchored to repo root (`/ARCHITECTURE.md`) so it does NOT silently match `docs/architecture.md` on case-insensitive filesystems. |
 
 **Subsystem rules** — see the relevant subdirectory CLAUDE.md (auto-loaded by Claude Code when you work in that directory):
-- **`backend/CLAUDE.md`** — Credit pricing, LLM routing, Workflow orchestrator, Sub-workflow hierarchy, Tier parallelism, Single-node execution history, Watermark, Webhook triggers, TTS v3 vs v2, Auth + OAuth, Dynamic CORS, Developer apps, MCP server, Image-to-video Loop Trim, Combine-videos resolution, Default project per user, Internal-only models, Suno Voice Persona, Character LoRA training, App Run Archive (soft-delete), `packages/shared/` build invariants.
+- **`backend/CLAUDE.md`** — credits/billing, LLM routing, Workflow orchestrator + sub-workflows, tier parallelism, auth/OAuth, dynamic CORS, developer apps, MCP server, webhook triggers, provider gotchas (TTS, Loop Trim, combine-videos, LoRA training), `packages/shared/` build invariants.
 - **`frontend/CLAUDE.md`** — Image generation params (per-provider param routing), UI styling, API proxy, SSE client.
 - **`backend/src/providers/kie/CLAUDE.md`** — KIE i2v image input (size cap + Hailuo JPEG re-encode), KIE API patterns, model key → doc map.
 - **`backend/src/providers/replicate/CLAUDE.md`** — Replicate provider patterns, Character LoRA training (Cloud-only, webhook + CAS slot claim), Flux 2 Klein/Pro/Max routing with pinned `safety_tolerance: 5`.
