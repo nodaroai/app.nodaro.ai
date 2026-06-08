@@ -75,10 +75,17 @@ describe("buildMcpServer full catalog (v1.1)", () => {
     expect(names.has("generate_music")).toBe(true)
     expect(names.has("generate_speech")).toBe(true)
     expect(names.has("download_youtube_audio")).toBe(true)
-    // character / location / object
+    // character / location / object / creature
     expect(names.has("generate_character")).toBe(true)
     expect(names.has("generate_location")).toBe(true)
     expect(names.has("generate_object")).toBe(true)
+    expect(names.has("generate_creature")).toBe(true)
+
+    // creature Studio tools — mirror the object Studio surface (assets:write
+    // for approve/recaption, workflows:execute for motion).
+    expect(names.has("approve_creature_main_image")).toBe(true)
+    expect(names.has("recaption_creature")).toBe(true)
+    expect(names.has("generate_creature_motion")).toBe(true)
 
     // utility tools (jobs / workflows / projects / components / apps / models / credits)
     expect(names.has("list_jobs")).toBe(true)

@@ -421,4 +421,132 @@ export function registerCloVerbs({ server, session, fastify }: RegisterOpts): vo
       })
     },
   )
+
+  // ── generate_creature ──
+  // 1:1 mirror of generate_object with the Animal/Creature delta: free-text
+  // `species` (the creature delta vs object — a creature can be any animal),
+  // free-text `category` + `style` (the creature CRUD/generate route uses open
+  // strings, NOT object's fixed category/style enums), and the asset_type
+  // enum swaps object's `materials` for `poses`. Hits
+  // `/v1/generate-creature` (kind="main") / `/v1/generate-creature-asset`
+  // (kind="asset"). The main route returns the dual `{ jobId, jobIds }` shape
+  // (harmonized with characters) so we prefer `jobIds[0]`.
+  server.registerTool(
+    "generate_creature",
+    {
+      title: "Generate Creature",
+      description:
+        "Generate a creature/animal image (kind: 'main') or a variant (kind: 'asset' with asset_type — angles/poses/variations/custom). `species` (free text, e.g. 'dragon', 'wolf') is the creature delta vs objects.",
+      inputSchema: {
+        kind: z.enum(["main", "asset"]).default("main"),
+        name: z.string().min(1).max(200),
+        description: z.string().max(2000).optional(),
+        species: z
+          .string()
+          .max(200)
+          .optional()
+          .describe("Free-text species/type — e.g. 'dragon', 'wolf', 'griffin'. The creature delta vs objects."),
+        category: z
+          .string()
+          .max(50)
+          .optional()
+          .describe("Free-text category (creatures use open strings, not a fixed enum) — e.g. 'mammal', 'mythical', 'reptile'."),
+        style: z
+          .string()
+          .max(50)
+          .optional()
+          .describe("Free-text style — e.g. 'realistic', 'anime', '3d-pixar', 'illustration'."),
+        source_image_url: z.string().url().optional(),
+        model: z.string().optional().describe("Image model (defaults to nano-banana)"),
+        // asset-only
+        asset_type: z.enum(["angles", "poses", "variations", "custom"]).optional(),
+        variant: z
+          .string()
+          .min(1)
+          .max(100)
+          .optional()
+          .describe("Required when kind='asset'. e.g. 'front', 'standing', 'weathered'."),
+      },
+              outputSchema: {
+          jobId: z.string(),
+          prompt: z.string().optional(),
+          model: z.string().optional(),
+          aspectRatio: z.string().optional(),
+          resolution: z.string().optional(),
+          duration: z.number().optional(),
+          outputUrl: z.string().optional(),
+        },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: true,
+      },
+    _meta: {
+      "ui/resourceUri": "ui://nodaro/widget/v3/job-image",
+      ui: {
+        resourceUri: "ui://nodaro/widget/v3/job-image",
+        visibility: ["model", "app"],
+      },
+    },
+    },
+    async (args) => {
+      const isAsset = args.kind === "asset"
+      if (isAsset && (!args.asset_type || !args.variant)) {
+        return {
+          content: [
+            { type: "text", text: "kind='asset' requires asset_type and variant" },
+          ],
+          isError: true,
+        }
+      }
+      const payload: Record<string, unknown> = {
+        name: args.name,
+        description: args.description,
+        species: args.species,
+        category: args.category,
+        style: args.style,
+        sourceImageUrl: args.source_image_url,
+        provider: args.model,
+        mcp_client: session.clientName,
+        userId: session.userId,
+      }
+      if (isAsset) {
+        payload.assetType = args.asset_type
+        payload.variant = args.variant
+      }
+      const url = isAsset ? "/v1/generate-creature-asset" : "/v1/generate-creature"
+      const res = await fastify.inject({
+        method: "POST",
+        url,
+        headers: {
+          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
+        },
+        payload,
+      })
+      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+      // The main /v1/generate-creature route returns the dual shape
+      // { jobId, jobIds } (harmonized with characters); the asset route still
+      // returns { jobId } only. MCP semantics resolve to a single job result
+      // per call (this tool always implies count=1), so we destructure both
+      // and prefer jobIds[0] when present, falling back to jobId.
+      let parsed: { jobId?: string; jobIds?: string[] } | null = null
+      try {
+        parsed = JSON.parse(res.body) as { jobId?: string; jobIds?: string[] }
+      } catch {
+        // fall through — parseFailure below handles the unparseable case
+      }
+      const jobId = parsed?.jobIds?.[0] ?? parsed?.jobId ?? parseJobId(res.body)
+      if (!jobId) return parseFailure(res.body)
+      return jobResultWithWidget({
+        jobId,
+        label: isAsset ? "creature asset" : "creature",
+        session,
+        widgetKind: "image",
+        widgetData: {
+          prompt: args.description ?? args.name,
+          model: args.model ?? "nano-banana",
+        },
+      })
+    },
+  )
 }

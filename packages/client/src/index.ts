@@ -44,6 +44,7 @@ export { AppsResource } from "./resources/apps.js"
 export { CharactersResource } from "./resources/characters.js"
 export { LocationsResource } from "./resources/locations.js"
 export { ObjectsResource } from "./resources/objects.js"
+export { CreaturesResource } from "./resources/creatures.js"
 export { PipelinesResource } from "./resources/pipelines.js"
 export { ReduceResource } from "./resources/reduce.js"
 export { PromptHelperResource } from "./resources/prompt-helper.js"
@@ -198,6 +199,36 @@ export {
   OBJECT_ASPECT_OPTIONS,
   OBJECT_ASPECT_DEFAULTS,
 } from "./resources/objects.js"
+
+export type {
+  Creature,
+  CreatureDetail,
+  CreatureReferencePhoto,
+  CreatureReferencePhotoKind,
+  CreateCreatureInput,
+  UpdateCreatureInput,
+  UpdateCreatureResult,
+  UpsertCreatureInput,
+  UpsertCreatureResult,
+  ListCreaturesParams,
+  GenerateCreatureInput,
+  GenerateCreatureResult,
+  GenerateCreatureAssetInput,
+  GenerateCreatureAssetResult,
+  GenerateCreatureMotionInput,
+  GenerateCreatureMotionResult,
+  ApproveCreatureMainImageResult,
+  RecaptionCreatureResult,
+  CreatureAssetType,
+  CreatureAttachColumn,
+  CreatureAspectRatio,
+} from "./resources/creatures.js"
+export {
+  CREATURE_ASSET_TYPES,
+  CREATURE_ATTACH_COLUMNS,
+  CREATURE_ASPECT_OPTIONS,
+  CREATURE_ASPECT_DEFAULTS,
+} from "./resources/creatures.js"
 
 export type {
   BranchPipelineInput,
