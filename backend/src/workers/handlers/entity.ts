@@ -24,6 +24,7 @@ import {
 } from "../../lib/character-auto-attach.js"
 import { autoAttachLocationAsset } from "../../lib/location-auto-attach.js"
 import { autoAttachObjectAsset, setObjectMainImage } from "../../lib/object-auto-attach.js"
+import { autoAttachCreatureAsset, setCreatureMainImage } from "../../lib/creature-auto-attach.js"
 
 interface EntityImageJobData {
   jobId: string
@@ -57,6 +58,15 @@ interface EntityImageJobData {
   // else's object row. For `logPrefix === "generate-object"` (main image)
   // the worker calls setObjectMainImage instead of attachAssetToObject.
   attachToObjectId?: string
+  // Creature Studio auto-attach. Mirrors the Object fields but writes to
+  // the `creatures` table via the `append_creature_asset` RPC (migration
+  // 206). When `attachToCreatureId` is set the worker performs a
+  // belt-and-braces ownership re-query against `(id, user_id, deleted_at IS
+  // NULL)` before firing the RPC, so a forged BullMQ payload can't attach to
+  // someone else's creature row. For `logPrefix === "generate-creature"`
+  // (main image) the worker calls setCreatureMainImage instead of
+  // attachAssetToCreature.
+  attachToCreatureId?: string
   // Richer Character Studio fields that travel alongside the asset for
   // downstream prompt enrichment. Routes (later tasks) put these on
   // `job.data`; the worker only reads + forwards them.
@@ -86,6 +96,7 @@ function makeEntityImageHandler(
       attachName,
       attachToLocationId,
       attachToObjectId,
+      attachToCreatureId,
       description,
       motionDescription,
       realLifeRefs,
@@ -193,6 +204,35 @@ function makeEntityImageHandler(
         // Asset variant → JSONB column (angles / materials / variations)
         await autoAttachObjectAsset({
           objectId: attachToObjectId,
+          column: attachToColumn,
+          name: attachName,
+          userId: ctx.jobUserId,
+          url: r2Url,
+        })
+      }
+    }
+
+    // Creature Studio auto-attach. Mirrors the Object pattern: main-image
+    // branch sets source_image_url; asset variant branch appends to a JSONB
+    // column via the append_creature_asset RPC (migration 206). The helpers
+    // re-verify `(id, user_id, deleted_at IS NULL)` so a forged BullMQ
+    // payload can't attach to another user's row OR a creature that was
+    // soft-deleted between route accept and worker pickup. Like the Object
+    // branch, no explicit column-resolve call is needed here —
+    // `autoAttachCreatureAsset` narrows internally against
+    // `CREATURE_ATTACH_COLUMN_SET`.
+    if (attachToCreatureId && ctx.jobUserId) {
+      if (logPrefix === "generate-creature") {
+        // Main image (single-candidate) → source_image_url
+        await setCreatureMainImage({
+          creatureId: attachToCreatureId,
+          userId: ctx.jobUserId,
+          url: r2Url,
+        })
+      } else if (attachToColumn && attachName) {
+        // Asset variant → JSONB column (angles / poses / variations)
+        await autoAttachCreatureAsset({
+          creatureId: attachToCreatureId,
           column: attachToColumn,
           name: attachName,
           userId: ctx.jobUserId,
@@ -508,16 +548,119 @@ const handleGenerateObjectMotion: HandlerFn = async function handleGenerateObjec
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
 }
 
+/**
+ * Worker handler for `POST /v1/generate-creature-motion` (image-to-video for
+ * creature motion clips: walk, idle, attack, etc.). Mirrors
+ * `handleGenerateObjectMotion` verbatim with object → creature substitution.
+ *
+ * Default provider is `"kling-turbo"` (matches the object motion default and
+ * the route's Zod default).
+ *
+ * Belt-and-braces ownership re-verification inside `autoAttachCreatureAsset`:
+ * even though the route already verified ownership pre-credit-reservation, the
+ * worker helper re-checks `(id, user_id, deleted_at IS NULL)` so a forged
+ * BullMQ payload can't trick a stale worker into attaching to another user's
+ * row OR a creature that was soft-deleted between route accept and worker
+ * pickup.
+ *
+ * Error policy: RPC failures swallowed by `attachAssetToCreature`. Ownership-
+ * check failure (no row) silently skips attach but still completes the job
+ * + commits credits.
+ */
+const handleGenerateCreatureMotion: HandlerFn = async function handleGenerateCreatureMotion(job, ctx) {
+  const {
+    prompt,
+    sourceImageUrl,
+    refineFromVideoUrl,
+    provider,
+    aspectRatio,
+    attachToCreatureId,
+    attachToColumn,
+    attachName,
+  } = job.data as {
+    jobId: string
+    prompt: string
+    sourceImageUrl: string
+    /** When set, refine this clip via video-to-video instead of running
+     *  image-to-video from sourceImageUrl. */
+    refineFromVideoUrl?: string
+    provider?: string
+    aspectRatio?: string
+    attachToCreatureId?: string
+    attachToColumn?: string
+    attachName?: string
+  }
+  const resolvedProvider = provider ?? "kling-turbo"
+  const mode = refineFromVideoUrl ? "vid2vid-refine" : "img2vid"
+  console.log(`[worker] generate-creature-motion ${ctx.jobId} (provider: ${resolvedProvider}, mode: ${mode}): "${prompt}"`)
+
+  const onTaskCreated = makeOnTaskCreated(
+    ctx.jobId,
+    providerKindForVideoModel(resolvedProvider),
+  )
+
+  const result = refineFromVideoUrl
+    ? await videoToVideo(
+        refineFromVideoUrl,
+        resolvedProvider,
+        prompt,
+        aspectRatio ? { aspectRatio } : undefined,
+        { onTaskCreated },
+      )
+    : await imageToVideo(
+        sourceImageUrl,
+        resolvedProvider,
+        prompt,
+        undefined,
+        undefined,
+        aspectRatio ? { aspectRatio } : undefined,
+        { onTaskCreated },
+      )
+  await setJobProgress(job, ctx.jobId, 50)
+
+  const r2Url = await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  await setJobProgress(job, ctx.jobId, 100)
+
+  if (!await shouldSaveJobResult(ctx.jobId)) return
+
+  const ok = await markJobCompleted(ctx.jobId, {
+    output_data: { videoUrl: r2Url },
+    provider: result.providerUsed,
+    provider_cost: result.cost,
+    display_cost: result.displayCost,
+  })
+  if (!ok) return
+
+  await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
+
+  // Best-effort attach to creatures.motion_clips (or whichever motion column
+  // the route specified — currently always "motion_clips"). The helper
+  // re-verifies (id, user_id, deleted_at IS NULL) so a forged BullMQ payload
+  // can't bypass ownership.
+  await autoAttachCreatureAsset({
+    creatureId: attachToCreatureId,
+    column: attachToColumn,
+    name: attachName,
+    userId: ctx.jobUserId,
+    url: r2Url,
+  })
+
+  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
+}
+
 export const entityHandlers: Record<string, HandlerFn> = {
   "generate-character": makeEntityImageHandler("generate-character"),
   "generate-face": makeEntityImageHandler("generate-face", { aspectRatio: "1:1" }),
   "generate-character-asset": makeEntityImageHandler("generate-character-asset", { includeAssetType: true }),
   "generate-object": makeEntityImageHandler("generate-object"),
   "generate-object-asset": makeEntityImageHandler("generate-object-asset", { includeAssetType: true }),
+  "generate-creature": makeEntityImageHandler("generate-creature"),
+  "generate-creature-asset": makeEntityImageHandler("generate-creature-asset", { includeAssetType: true }),
   "generate-location": makeEntityImageHandler("generate-location"),
   "generate-location-asset": makeEntityImageHandler("generate-location-asset", { includeAssetType: true }),
   "generate-script": handleGenerateScript,
   "generate-character-motion": handleGenerateCharacterMotion,
   "generate-location-motion": handleGenerateLocationMotion,
   "generate-object-motion": handleGenerateObjectMotion,
+  "generate-creature-motion": handleGenerateCreatureMotion,
 }

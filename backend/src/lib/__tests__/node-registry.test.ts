@@ -39,3 +39,17 @@ describe("NODE_REGISTRY: reduce", () => {
     expect(entry!.creditCost).toBe("0-3")
   })
 })
+
+describe("NODE_REGISTRY: creature entity", () => {
+  // Mirrors the sibling entity descriptors (character / object / location):
+  // category "entity", outputType "data" (OutputType has no entity-ref member;
+  // the entity reference rides through the `data` channel like the other
+  // entity nodes).
+  it("has a 'creature' entry mirroring the object/character entity shape", () => {
+    const entry = NODE_REGISTRY.find((n) => n.type === "creature")
+    expect(entry).toBeDefined()
+    expect(entry!.label).toBe("Animal/Creature")
+    expect(entry!.category).toBe("entity")
+    expect(entry!.outputType).toBe("data")
+  })
+})

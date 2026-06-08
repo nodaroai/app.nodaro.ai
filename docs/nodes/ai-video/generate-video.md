@@ -76,7 +76,7 @@ Providers that accept a paired last frame: `veo3`, `veo3.1`, `veo3_lite` (`image
 
 ### Multimodal references
 
-Seedance 2 (`seedance-2` / `seedance-2-fast`) accepts up to 9 image refs, 3 video refs, and 3 audio refs in a single call. HappyHorse Ref2V accepts 1–9 image refs. VEO 3.1 (`veo3.1`) supports `REFERENCE_2_VIDEO` mode when image references are wired without a start frame.
+Seedance 2 (`seedance-2` / `seedance-2-fast`) accepts up to 9 image refs, 3 video refs, and 3 audio refs in a single call. **`seedance-2-fast` requires each reference audio clip to be ≤ 15.2 seconds** (audio-driven r2v mode) — longer clips are rejected before the job is created with an `audio_too_long` error. HappyHorse Ref2V accepts 1–9 image refs. VEO 3.1 (`veo3.1`) supports `REFERENCE_2_VIDEO` mode when image references are wired without a start frame.
 
 ### LTX 2.3 — auto-dispatch by wired inputs
 

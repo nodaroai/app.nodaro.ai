@@ -27,4 +27,8 @@ describe("deriveAvailableName", () => {
     mockExistingNames(["hero", "hero 2"])
     expect(await deriveAvailableName("characters", "u1", "Hero")).toBe("Hero 3")
   })
+  it("works for the creatures table", async () => {
+    mockExistingNames(["dragon"])
+    expect(await deriveAvailableName("creatures", "u1", "Dragon")).toBe("Dragon 2")
+  })
 })

@@ -613,6 +613,11 @@ interface WorkflowState {
   /** Node ID whose Object Studio modal is open (null = closed). UI-only. */
   readonly objectStudioNodeId: string | null
   readonly setObjectStudioNodeId: (id: string | null) => void
+  /** Node ID whose Creature Studio modal is open (null = closed). UI-only.
+   *  Backs the creature node's "Open Studio" button; the render block lives in
+   *  workflow-editor-main.tsx and the modal in creature-studio/. */
+  readonly creatureStudioNodeId: string | null
+  readonly setCreatureStudioNodeId: (id: string | null) => void
   readonly createSceneNodeFromScript: ((scriptNodeId: string, sceneIndex: number) => void) | null
   readonly setCreateSceneNodeFromScript: (fn: ((scriptNodeId: string, sceneIndex: number) => void) | null) => void
   readonly generateCharacterAssetFn: ((nodeId: string, assetType: "expressions" | "poses" | "lighting" | "angles") => Promise<void>) | null
@@ -2197,9 +2202,9 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         "face-swap", "scene",
       ])
       // Identity entities route to the `assets` typed handle (mirrors
-      // generate-video's assets handle for character/face/object/location).
+      // generate-video's assets handle for character/face/object/creature/location).
       const IDENTITY_TYPES_FOR_CLASSIFIER: ReadonlySet<string> = new Set([
-        "character", "face", "object", "location",
+        "character", "face", "object", "creature", "location",
       ])
       const VIDEO_SOURCE_TYPES_FOR_CLASSIFIER: ReadonlySet<string> = new Set([
         "image-to-video", "text-to-video", "generate-video", "video-to-video",
@@ -2894,6 +2899,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   setLocationStudioNodeId: (id) => set({ locationStudioNodeId: id }),
   objectStudioNodeId: null,
   setObjectStudioNodeId: (id) => set({ objectStudioNodeId: id }),
+  creatureStudioNodeId: null,
+  setCreatureStudioNodeId: (id) => set({ creatureStudioNodeId: id }),
   createSceneNodeFromScript: null,
   setCreateSceneNodeFromScript: (fn) => set({ createSceneNodeFromScript: fn }),
   generateCharacterAssetFn: null,

@@ -569,7 +569,7 @@ describe("buildPayload", () => {
 
   // --- Entity nodes ---
   describe("entity nodes", () => {
-    for (const entityType of ["character", "face", "object", "location"]) {
+    for (const entityType of ["character", "face", "object", "location", "creature"]) {
       it(`builds ${entityType} payload`, () => {
         const n = node("n1", entityType, { description: `a ${entityType}`, provider: "flux" })
         const result = buildPayload(n, jobId, {})
@@ -578,6 +578,29 @@ describe("buildPayload", () => {
         expect(result.payload.provider).toBe("flux")
       })
     }
+
+    // The creature node carries a `species` field (its delta vs object) that
+    // buildCreaturePrompt leads with. Verify the structured prompt path uses it
+    // and that the orchestrator does NOT throw "Unknown node type: creature".
+    it("builds creature payload from name + species (structured prompt)", () => {
+      const n = node("n1", "creature", {
+        name: "Smaug",
+        species: "dragon",
+        description: "scaled, fire-breathing",
+        provider: "nano-banana",
+      })
+      const result = buildPayload(n, jobId, {})
+      expect(result.jobName).toBe("generate-creature")
+      expect(result.payload.provider).toBe("nano-banana")
+      // species leads the establishing-shot prompt; name + description follow.
+      expect(result.payload.prompt).toContain("dragon")
+      expect(result.payload.prompt).toContain("Smaug")
+    })
+
+    it("does not throw Unknown node type for a creature node", () => {
+      const n = node("n1", "creature", { description: "a creature" })
+      expect(() => buildPayload(n, jobId, {})).not.toThrow()
+    })
   })
 
   // --- Suno ---

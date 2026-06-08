@@ -120,7 +120,7 @@ export const IMAGE_PRODUCER_TYPES: ReadonlySet<string> = new Set([
 
 /** Identity-locking source node types that feed Subjects. */
 export const IDENTITY_TYPES: ReadonlySet<string> = new Set([
-  "character", "location", "object", "face",
+  "character", "location", "object", "creature", "face",
 ])
 
 /**

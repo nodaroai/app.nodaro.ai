@@ -8,6 +8,7 @@ import {
 import {
   getCharacters,
   getObjects,
+  getCreatures,
   getLocations,
   getFaces,
   getLibraryAssets,
@@ -57,6 +58,17 @@ export function useObjects(projectId?: string, userId?: string) {
     enabled: !!userId,
     staleTime: 60_000,
     select: (data) => data.objects,
+  })
+}
+
+// --- Animal/Creatures ---
+export function useCreatures(projectId?: string, userId?: string) {
+  return useQuery({
+    queryKey: queryKeys.assets.creatures(projectId, userId),
+    queryFn: () => getCreatures(projectId, userId),
+    enabled: !!userId,
+    staleTime: 60_000,
+    select: (data) => data.creatures,
   })
 }
 

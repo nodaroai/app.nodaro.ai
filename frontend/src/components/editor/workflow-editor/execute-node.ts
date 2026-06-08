@@ -150,6 +150,7 @@ import type {
   CharacterNodeData,
   FaceNodeData,
   ObjectNodeData,
+  CreatureNodeData,
   LocationNodeData,
   SceneNodeDataType,
   CombineTextNodeData,
@@ -216,6 +217,7 @@ import {
   runCharacterGeneration,
   runFaceGeneration,
   runObjectGeneration,
+  runCreatureGeneration,
   runLocationGeneration,
 } from "./asset-executors";
 import { buildImagePrompt, assembleImageInput, applyReferenceOrderToVideo } from "@nodaro/shared";
@@ -689,6 +691,13 @@ const WIRED_SOURCE_TYPE_MAP: Record<string, ReferenceSource> = {
   "character": "wired-character",
   "face": "wired-face",
   "object": "wired-object",
+  // Animal/Creature is an image-emitting entity (creatureRef → imageRef). The
+  // shared `ReferenceSource` enum has no dedicated `wired-creature` member, and
+  // the backend orchestrator treats a wired creature exactly like a wired
+  // object (referenceImageUrls + canonical-description fallback), so we map it
+  // to `wired-object` — keeps it a valid candidate AND inherits the object
+  // canonical-style fallback in the shared prompt-builder. See F-batch-B notes.
+  "creature": "wired-object",
   "location": "wired-location",
 };
 
@@ -1297,6 +1306,10 @@ export function executeNode(
         "character": "wired-character",
         "face": "wired-face",
         "object": "wired-object",
+        // Creature → wired-object (no dedicated ReferenceSource member;
+        // backend resolves creature like object). See the top-level
+        // WIRED_SOURCE_TYPE_MAP note above.
+        "creature": "wired-object",
         "location": "wired-location",
       };
       const wiredSourceNodes = incomingEdges
@@ -2465,7 +2478,7 @@ export function executeNode(
     let upstreamRefImages = inputs.referenceImageUrls as string[] | undefined
     if (t2vData.connectedRefImageOrder?.length) {
       const t2vRefAllowedTypes = new Set([
-        "generate-image", "upload-image", "character", "object", "location",
+        "generate-image", "upload-image", "character", "object", "creature", "location",
         "edit-image", "image-to-image", "scene",
       ]);
       const refSourceNodes = edges
@@ -3876,6 +3889,7 @@ export function executeNode(
         "remove-background",
         "character",
         "object",
+        "creature",
         "location",
         "face",
       ]);
@@ -6253,6 +6267,27 @@ export function executeNode(
       attachName: objData.objectName,
       seedPromptHint: seedPromptHint || undefined,
       expectedUpdatedAt: objData.updatedAt,
+      count: 1,
+    });
+  }
+
+  // Animal/Creature single-node Run — a faithful mirror of the object block
+  // (auto-attach + seed-prompt + optimistic-concurrency + count:1). The
+  // creature `type` handle accepts the same object-type pickers (animal/etc.),
+  // so `resolveSeedPromptHint(..., "creature")` reads the same picker set.
+  // Reference-sheet asset generation is DEFERRED this phase.
+  if (node.type === "creature") {
+    const creatureData = node.data as CreatureNodeData;
+    if (!creatureData.creatureName) {
+      toast.error(`Node "${creatureData.label}": no creature name set`);
+      return Promise.reject(new Error("No creature name"));
+    }
+    const seedPromptHint = resolveSeedPromptHint(node, edges, nodes, "creature");
+    return runCreatureGeneration(node.id, creatureData, ctx, {
+      attachToCreatureId: creatureData.creatureDbId || undefined,
+      attachName: creatureData.creatureName,
+      seedPromptHint: seedPromptHint || undefined,
+      expectedUpdatedAt: creatureData.updatedAt,
       count: 1,
     });
   }

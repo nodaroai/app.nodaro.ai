@@ -49,6 +49,7 @@ const BASELINE_PATH = join(__dirname, "tenant-scope-baseline.json")
 const TENANT_TABLES = new Set([
   "characters",
   "objects",
+  "creatures",
   "locations",
   "faces",
   "voice_clones",

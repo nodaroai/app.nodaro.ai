@@ -764,6 +764,45 @@ export const SEEDANCE_2_REF_LIMITS = {
 } as const
 
 /**
+ * Per-provider max reference-audio duration (seconds) for Seedance 2.0 r2v
+ * (audio-driven image-to-video). KIE rejects longer clips with a 400 BEFORE
+ * generation (e.g. "audio duration must be ≤ 15.2 for dreamina-seedance-2-0-fast
+ * in r2v"). Data-driven: only providers with a VERIFIED limit are listed, so an
+ * unknown provider is never false-rejected.
+ *   - seedance-2-fast: 15.2s (verified against KIE).
+ *   - seedance-2 (non-fast): limit unverified → not enforced yet (add after
+ *     confirming via docs.kie.ai).
+ */
+export const SEEDANCE_2_R2V_MAX_AUDIO_SEC_BY_PROVIDER: Record<string, number> = {
+  "seedance-2-fast": 15.2,
+}
+
+/** The verified r2v reference-audio cap (seconds) for a provider, or null when
+ *  none is enforced. */
+export function seedance2AudioLimitSec(provider: string | undefined): number | null {
+  if (!provider) return null
+  return SEEDANCE_2_R2V_MAX_AUDIO_SEC_BY_PROVIDER[provider] ?? null
+}
+
+/**
+ * First reference-audio duration (seconds) that exceeds the provider's r2v cap,
+ * or null when all are within limit (or the provider has no enforced cap).
+ * Non-finite durations (probe failures) are ignored. Used to reject over-long
+ * audio BEFORE submitting to the provider — which would otherwise 400.
+ */
+export function findSeedance2AudioOverLimit(
+  provider: string | undefined,
+  durationsSec: readonly number[],
+): number | null {
+  const limit = seedance2AudioLimitSec(provider)
+  if (limit === null) return null
+  for (const d of durationsSec) {
+    if (Number.isFinite(d) && d > limit) return d
+  }
+  return null
+}
+
+/**
  * Per-provider connection caps for the typed reference handles on Generate Video.
  * - Seedance 2 providers: full multimodal caps from SEEDANCE_2_REF_LIMITS.
  * - Other providers in PROVIDERS_WITH_REFERENCES: typically 1 image, no video/audio.

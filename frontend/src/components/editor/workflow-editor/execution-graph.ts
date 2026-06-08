@@ -552,6 +552,16 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
       results[activeIndex]?.url ?? (data.sourceImageUrl as string | undefined)
     );
   }
+  if (type === "creature") {
+    // Mirrors object — emits the active result image, falling back to the
+    // persisted source image. creatureRef → imageRef downstream.
+    const results =
+      (data.generatedResults as GeneratedResult[] | undefined) ?? [];
+    const activeIndex = (data.activeResultIndex as number | undefined) ?? 0;
+    return (
+      results[activeIndex]?.url ?? (data.sourceImageUrl as string | undefined)
+    );
+  }
   if (type === "location") {
     const results =
       (data.generatedResults as GeneratedResult[] | undefined) ?? [];
@@ -848,6 +858,7 @@ export const IMAGE_SOURCE_TYPES = new Set([
   "character",
   "face",
   "object",
+  "creature",
   "location",
   "scene",
 ]);

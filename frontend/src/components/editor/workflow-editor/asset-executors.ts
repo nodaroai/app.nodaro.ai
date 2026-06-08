@@ -11,6 +11,8 @@ import {
   generateObject,
   generateObjectAsset,
   saveObject,
+  generateCreature,
+  saveCreature,
   generateLocation,
   generateLocationAsset,
   saveLocation,
@@ -22,6 +24,7 @@ import type {
   CharacterNodeData,
   FaceNodeData,
   ObjectNodeData,
+  CreatureNodeData,
   LocationNodeData,
 } from "@/types/nodes";
 import {
@@ -562,6 +565,202 @@ export function runObjectGeneration(
         });
         if (!checkStorageError(err, ctx)) {
           guardedToast.error("Failed to start object generation", {
+            description: errMsg,
+          });
+        }
+        reject(err);
+      });
+  });
+}
+
+/**
+ * Animal/Creature single-node generation — a faithful mirror of
+ * `runObjectGeneration` with the creature DELTA: `generateCreature` /
+ * `saveCreature`, `creatureName` / `creatureDbId`, `attachToCreatureId`,
+ * `poses` (not `materials`), + the free-text `species` field. All extras are
+ * optional. Reference-sheet / asset generation is DEFERRED, so this only runs
+ * the main-image generation + persists the row (exactly what the object DAG
+ * block does on the canvas).
+ */
+export interface CreatureGenerationExtras {
+  readonly seedPromptHint?: string;
+  readonly attachToCreatureId?: string;
+  readonly attachName?: string;
+  readonly expectedUpdatedAt?: string;
+  readonly count?: 1 | 2 | 4;
+}
+
+export function runCreatureGeneration(
+  nodeId: string,
+  data: CreatureNodeData,
+  ctx: ExecutionContext,
+  extras: CreatureGenerationExtras = {},
+): Promise<string> {
+  const { updateNodeData } = useWorkflowStore.getState();
+  updateNodeData(nodeId, { executionStatus: "running" });
+
+  return new Promise<string>((resolve, reject) => {
+    generateCreature({
+      name: data.creatureName,
+      description: data.description || undefined,
+      // Creature delta vs object — free-text species/type.
+      species: data.species || undefined,
+      category: data.category || undefined,
+      style: data.style || undefined,
+      sourceImageUrl: data.sourceImageUrl || undefined,
+      provider: data.provider,
+      userId: ctx.userId,
+      // Auto-attach + seed-hint pass-through. Backend ignores undefined keys
+      // via Zod's `.optional()`, so leaving them off is a no-op.
+      count: extras.count ?? 1,
+      attachToCreatureId: extras.attachToCreatureId,
+      attachName: extras.attachName,
+      seedPromptHint: extras.seedPromptHint,
+      expectedUpdatedAt: extras.expectedUpdatedAt,
+    })
+      .then((result) => {
+        // generateCreature returns { jobId } when count omitted/=1, and
+        // { jobIds } when count > 1. Canvas executor defaults count=1
+        // (multi-candidate is the Studio's job, not the DAG), but the return
+        // type is a union — normalize defensively here (mirrors object). We
+        // follow the first job's lifecycle and ignore the rest.
+        const jobId = "jobId" in result ? result.jobId : result.jobIds[0]
+        if (!jobId) {
+          reject(new Error("Backend returned no job id"))
+          return
+        }
+        if (ctx.signal?.aborted) {
+          // Run discarded/aborted while the create-job request was in flight.
+          // Cancel phase-aware (pre-call cancels+refunds; in-flight finishes →
+          // My Library), then bail without re-attaching currentJobId. Mirrors
+          // the object branch.
+          cancelJob(jobId).catch(() => {});
+          resolve("");
+          return;
+        }
+        guardedToast.info("Creature generation started", {
+          description: `Job ID: ${jobId}`,
+        });
+        updateNodeData(nodeId, { currentJobId: jobId });
+
+        let pollFailures = 0;
+        const poll = ctx.trackInterval(
+          setInterval(async () => {
+            if (ctx.isWorkflowStale()) {
+              ctx.untrackInterval(poll);
+              reject(new WorkflowStaleError());
+              return;
+            }
+            try {
+              const job = await getJobStatusLean(jobId);
+              pollFailures = 0;
+              if (job.status === "completed" || job.status === "failed") {
+                if (shouldAbandonNode(nodeId, jobId)) {
+                  // Run discarded/replaced — the job still lands in My Library,
+                  // but we must not write its result/error onto the canvas.
+                  ctx.untrackInterval(poll);
+                  resolve("");
+                  return;
+                }
+              }
+              if (job.status === "completed") {
+                ctx.untrackInterval(poll);
+                const imageUrl = job.output_data?.imageUrl;
+                const currentNode = useWorkflowStore
+                  .getState()
+                  .nodes.find((n) => n.id === nodeId);
+                const currentData = currentNode?.data as
+                  | CreatureNodeData
+                  | undefined;
+                const existingResults = currentData?.generatedResults ?? [];
+                const newResult: GeneratedResult = {
+                  url: imageUrl ?? "",
+                  timestamp: new Date().toISOString(),
+                  jobId,
+                };
+                updateNodeData(nodeId, {
+                  executionStatus: "completed",
+                  sourceImageUrl: imageUrl,
+                  generatedResults: [newResult, ...existingResults],
+                  activeResultIndex: 0,
+                  currentJobId: undefined,
+                });
+                guardedToast.success("Creature image generated");
+
+                const supabaseCreature = createClient();
+                const {
+                  data: { user: creatureUser },
+                } = await supabaseCreature.auth.getUser();
+                saveCreature({
+                  id: currentData?.creatureDbId || undefined,
+                  userId: creatureUser?.id,
+                  nodeId,
+                  projectId: ctx.projectId || undefined,
+                  name: data.creatureName,
+                  description: data.description || undefined,
+                  species: data.species || undefined,
+                  category: data.category || undefined,
+                  style: data.style || undefined,
+                  sourceImageUrl: imageUrl || undefined,
+                  angles: currentData?.angles ?? [],
+                  poses: currentData?.poses ?? [],
+                  variations: currentData?.variations ?? [],
+                })
+                  .then(({ id: dbId }) => {
+                    if (!currentData?.creatureDbId) {
+                      updateNodeData(nodeId, { creatureDbId: dbId });
+                    }
+                  })
+                  .catch(() => {});
+
+                resolve((imageUrl as string) ?? "");
+              } else if (job.status === "failed") {
+                ctx.untrackInterval(poll);
+                const errMsg = job.error_message ?? "Unknown error";
+                updateNodeData(nodeId, {
+                  executionStatus: "failed",
+                  errorMessage: errMsg,
+                  currentJobId: undefined,
+                });
+                guardedToast.error("Creature generation failed", {
+                  description: errMsg,
+                });
+                reject(new Error(errMsg));
+              }
+            } catch (err) {
+              pollFailures++;
+              if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                ctx.untrackInterval(poll);
+                if (shouldAbandonNode(nodeId, jobId)) {
+                  // Run discarded/replaced — don't write a failure to the canvas.
+                  resolve("");
+                  return;
+                }
+                const errMsg =
+                  err instanceof Error
+                    ? err.message
+                    : "Failed to check job status";
+                updateNodeData(nodeId, {
+                  executionStatus: "failed",
+                  errorMessage: errMsg,
+                  currentJobId: undefined,
+                });
+                guardedToast.error("Failed to check job status");
+                reject(err);
+              }
+            }
+          }, 2000),
+        );
+      })
+      .catch((err) => {
+        const errMsg = err instanceof Error ? err.message : "Unknown error";
+        updateNodeData(nodeId, {
+          executionStatus: "failed",
+          errorMessage: errMsg,
+          currentJobId: undefined,
+        });
+        if (!checkStorageError(err, ctx)) {
+          guardedToast.error("Failed to start creature generation", {
             description: errMsg,
           });
         }

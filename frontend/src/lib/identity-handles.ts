@@ -1,6 +1,6 @@
 /**
- * Per-node typed-handle predicates for the 4 identity-reference nodes:
- * character, face, object, location.
+ * Per-node typed-handle predicates for the 5 identity-reference nodes:
+ * character, face, object, creature, location.
  *
  * Each `isValid<Node>Connection(targetHandleId, sourceType, isPickerType)`
  * returns true iff a source node type is allowed on the given target
@@ -101,6 +101,27 @@ export function isValidObjectConnection(
   }
 }
 
+// ─── creature ──────────────────────────────────────────────────────────
+// Animal/Creature entity. Mirrors `isValidObjectConnection` — two inputs:
+// `in` (text-prompt) + `type` (identity-type picker; for a creature the
+// relevant family is `animal`, but the full OBJECT_TYPE_PICKERS set is
+// accepted so the validator stays a faithful clone of object). Source:
+// creatureRef.
+export function isValidCreatureConnection(
+  targetHandleId: string,
+  sourceType: string,
+  isVisualPicker: (t: string) => boolean,
+): boolean {
+  switch (targetHandleId) {
+    case "in":
+      return ACCEPTS_PROMPT(sourceType, isVisualPicker)
+    case "type":
+      return OBJECT_TYPE_PICKERS.has(sourceType)
+    default:
+      return false
+  }
+}
+
 // ─── location ──────────────────────────────────────────────────────────
 // Two inputs: `in` (text-prompt) + `cinematography` (visual pickers).
 // Source: locationRef.
@@ -125,5 +146,6 @@ export const IDENTITY_HANDLE_LABELS: Record<string, Record<string, string>> = {
   "character": { in: "Prompt" },
   "face":      { in: "Prompt" },
   "object":    { in: "Prompt", type: "Object type" },
+  "creature":  { in: "Prompt", type: "Creature type" },
   "location":  { in: "Prompt", cinematography: "Cinematography" },
 }

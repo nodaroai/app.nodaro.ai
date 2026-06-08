@@ -158,6 +158,7 @@ import {
   CharacterConfig,
   FaceConfig,
   ObjectConfig,
+  CreatureConfig,
   LocationConfig,
   LLMChatConfig,
   WebScrapeConfig,
@@ -342,6 +343,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "webhook-output": "Webhook Output",
   "character": "Character",
   "object": "Object",
+  "creature": "Animal/Creature",
   "location": "Location",
   "scene": "Scene",
   "sub-workflow-input": "Sub-Workflow Input",
@@ -632,6 +634,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "character": return <CharacterConfig {...configProps} nodeId={selectedNodeId} />
     case "face": return <FaceConfig {...configProps} />
     case "object": return <ObjectConfig {...configProps} nodeId={selectedNodeId!} />
+    case "creature": return <CreatureConfig {...configProps} nodeId={selectedNodeId!} />
     case "location": return <LocationConfig {...configProps} nodeId={selectedNodeId!} />
     case "scene": return (
       <SceneConfig

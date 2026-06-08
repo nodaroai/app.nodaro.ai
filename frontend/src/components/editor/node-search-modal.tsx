@@ -59,6 +59,7 @@ const NODE_TYPE_LABELS: Record<string, string> = {
   "character": "Character",
   "location": "Location",
   "object": "Object",
+  "creature": "Animal/Creature",
   "face": "Face",
   "scene": "Scene",
   "list": "List",

@@ -949,7 +949,7 @@ const REFERENCE_HANDLE_MAP: Record<string, "referenceImageUrls" | "referenceVide
   "audioReferences": "referenceAudioUrls",
 }
 
-const ENTITY_NODE_TYPES = new Set(["character", "face", "object", "location"])
+const ENTITY_NODE_TYPES = new Set(["character", "face", "object", "creature", "location"])
 
 // Derived from the shared VIDEO_PRODUCER_TYPES single source of truth, minus the
 // two pure-source types (upload-video / youtube-video) which routeOutput handles

@@ -38,6 +38,22 @@ export interface WorkflowExportObject {
   variations?: AssetVariant[]
 }
 
+/** Animal/Creature entity export shape. Structural clone of {@link WorkflowExportObject}
+ *  with the object→creature DELTA MAP: adds free-text `species`, and the `materials`
+ *  asset slot becomes `poses`. */
+export interface WorkflowExportCreature {
+  id: string
+  nodeId: string
+  name: string
+  description?: string | null
+  species?: string | null
+  style?: string | null
+  sourceImageUrl?: string | null
+  angles?: AssetVariant[]
+  poses?: AssetVariant[]
+  variations?: AssetVariant[]
+}
+
 export interface WorkflowExportLocation {
   id: string
   nodeId: string
@@ -67,6 +83,7 @@ export interface WorkflowExport {
   assets?: {
     characters: WorkflowExportCharacter[]
     objects: WorkflowExportObject[]
+    creatures?: WorkflowExportCreature[]
     locations: WorkflowExportLocation[]
   }
 }
@@ -85,6 +102,7 @@ const GENERATED_FIELDS = [
 const NODE_EXTRA_FIELDS: Record<string, string[]> = {
   character: ["expressions", "poses", "lightingVariations", "angles", "customVariations"],
   object: ["angles", "materials", "variations", "customVariations"],
+  creature: ["angles", "poses", "variations", "customVariations"],
   location: [
     "timeOfDay",
     "weather",

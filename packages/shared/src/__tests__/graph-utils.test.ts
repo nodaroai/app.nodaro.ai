@@ -383,7 +383,7 @@ describe("filterCloneNodes", () => {
 describe("IMAGE_REF_TYPES", () => {
   it("contains the expected image-producing node types", () => {
     const expected = [
-      "upload-image", "face", "character", "object", "location",
+      "upload-image", "face", "character", "object", "creature", "location",
       "generate-image", "edit-image", "image-to-image",
     ]
     for (const t of expected) {

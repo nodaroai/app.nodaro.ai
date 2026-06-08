@@ -61,6 +61,13 @@ import { objectLlmCaptionRoutes } from "./routes/object-llm-caption.js"
 import { generateObjectAssetRoutes } from "./routes/generate-object-asset.js"
 import { generateObjectRoutes } from "./routes/generate-object.js"
 import { generateObjectMotionRoutes } from "./routes/generate-object-motion.js"
+import { creatureRoutes } from "./routes/creatures.js"
+import { creatureRestoreRoutes } from "./routes/creature-restore.js"
+import { creatureMainImageApprovalRoutes } from "./routes/creature-main-image-approval.js"
+import { creatureLlmCaptionRoutes } from "./routes/creature-llm-caption.js"
+import { generateCreatureRoutes } from "./routes/generate-creature.js"
+import { generateCreatureAssetRoutes } from "./routes/generate-creature-asset.js"
+import { generateCreatureMotionRoutes } from "./routes/generate-creature-motion.js"
 import { locationRoutes } from "./routes/locations.js"
 import { nodePresetRoutes } from "./routes/node-presets.js"
 import { nodePresetGroupRoutes } from "./routes/node-preset-groups.js"
@@ -323,6 +330,13 @@ export async function buildApp() {
   await app.register(generateObjectAssetRoutes)
   await app.register(generateObjectRoutes)
   await app.register(generateObjectMotionRoutes)
+  await app.register(creatureRoutes)
+  await app.register(creatureRestoreRoutes)
+  await app.register(creatureMainImageApprovalRoutes)
+  await app.register(creatureLlmCaptionRoutes)
+  await app.register(generateCreatureRoutes)
+  await app.register(generateCreatureAssetRoutes)
+  await app.register(generateCreatureMotionRoutes)
   await app.register(locationRoutes)
   await app.register(nodePresetRoutes)
   await app.register(nodePresetGroupRoutes)

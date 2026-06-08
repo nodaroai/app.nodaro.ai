@@ -314,11 +314,12 @@ AI-powered video composition and rendering. Create professional video production
 
 ## Asset Nodes
 
-Create reusable character, object, location, and face assets with multiple variations for consistent generation across workflows.
+Create reusable character, creature, object, location, and face assets with multiple variations for consistent generation across workflows.
 
 | Node | Description | When to Use |
 |------|-------------|-------------|
 | [Create Character](./assets/character.md) | Multi-variation character assets, built in the full-screen Character Studio | Define characters with expressions, poses, motions, lighting, voice, and personality |
+| [Animal/Creature](./assets/creature.md) | Animal or creature with angles, poses, variations, motion — built in the full-screen Creature Studio | Define recurring animals or creatures (free-text species, incl. mythical) for consistent scenes |
 | [Create Object](./assets/object.md) | Object with angles, materials, variations | Define props with multiple viewing angles and material options |
 | [Create Location](./assets/location.md) | Environment with time/weather variations | Define settings with time-of-day and weather variations |
 | [Create Face](./assets/face.md) | Facial asset for lip-sync and replacement | Maintain facial identity across generated images and video |

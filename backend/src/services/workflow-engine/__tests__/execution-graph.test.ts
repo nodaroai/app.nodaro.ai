@@ -139,6 +139,10 @@ describe("isSourceNode", () => {
   it("returns false for non-source types", () => {
     expect(isSourceNode("generate-image")).toBe(false)
     expect(isSourceNode("combine-text")).toBe(false)
+    // creature is EXECUTABLE (generates its image like object/character/location).
+    // It must NOT be a source node — that would make isSourceNode() true and the
+    // orchestrator would skip enqueuing the generate-creature job.
+    expect(isSourceNode("creature")).toBe(false)
   })
 })
 
@@ -196,6 +200,9 @@ describe("media type sets", () => {
     expect(IMAGE_SOURCE_TYPES.has("generate-image")).toBe(true)
     expect(IMAGE_SOURCE_TYPES.has("upload-image")).toBe(true)
     expect(IMAGE_SOURCE_TYPES.has("scene")).toBe(true)
+    // creature emits an image and must be treated as an image source feeding
+    // downstream image/video generation (mirrors object/character/location).
+    expect(IMAGE_SOURCE_TYPES.has("creature")).toBe(true)
   })
 
   it("VIDEO_SOURCE_TYPES includes key types", () => {

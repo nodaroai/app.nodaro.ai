@@ -24,10 +24,12 @@ import type {
   CharacterNodeData,
   FaceNodeData,
   ObjectNodeData,
+  CreatureNodeData,
   LocationNodeData,
   GeneratedScript,
   GeneratedScriptResult,
 } from "@/types/nodes"
+import { ANIMALS } from "@nodaro/shared"
 import {
   LocationAssetButton,
   LocationAssetGrid,
@@ -476,6 +478,110 @@ export function ObjectConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
             value={data.objectName}
             onChange={(e) => onUpdate({ objectName: e.target.value })}
             placeholder="e.g. Magic Sword (use {} to inject input)"
+          />
+        </MappableField>
+      </div>
+    </div>
+  )
+}
+
+type CreatureConfigProps = ConfigProps<CreatureNodeData> & { nodeId?: string }
+
+// Datalist suggestions for the free-text species field — the 126-entry animal
+// catalog (cats/dogs/wild/birds/sea/mythical/etc.). The field accepts ANY free
+// text (e.g. "griffin", "red fox"); these are just autocomplete hints. Ids are
+// stable so they're safe as React keys.
+const ANIMAL_SPECIES_SUGGESTIONS = ANIMALS
+
+export function CreatureConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeId }: CreatureConfigProps) {
+  const setCreatureStudioNodeId = useWorkflowStore((s) => s.setCreatureStudioNodeId)
+
+  const anglesCount = (data.angles ?? []).length
+  const posesCount = (data.poses ?? []).length
+  const variationsCount = (data.variations ?? []).length
+  const motionCount = (data.motionClips ?? []).length
+  const refsCount = (data.referencePhotos ?? []).length
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div>
+        <div className="text-[9px] uppercase tracking-wide text-muted-foreground mb-1">Animal/Creature</div>
+        <div className="text-[13px] font-semibold text-foreground">{data.creatureName || "(unnamed creature)"}</div>
+        <div className="text-[10px] text-muted-foreground">
+          {data.style} · {data.species || data.category} · {anglesCount} angles · {posesCount} poses · {variationsCount} variations · {motionCount} motion · {refsCount} refs
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => nodeId && setCreatureStudioNodeId(nodeId)}
+        className="w-full text-left bg-[#2e1e4a] border border-[#A78BFA44] rounded-md px-3.5 py-2.5 flex items-center gap-2 hover:bg-[#3a2960] transition-colors disabled:opacity-50"
+        disabled={!nodeId}
+        aria-label="Open Creature Studio"
+      >
+        <span className="text-base leading-none">⬡</span>
+        <span>
+          <span className="block text-[11px] font-semibold text-[#c4b5fd]">Open Creature Studio</span>
+          <span className="block text-[9px] text-muted-foreground">Edit appearance, assets, motion &amp; reference photos</span>
+        </span>
+        <span className="ml-auto text-[#A78BFA]">→</span>
+      </button>
+
+      <div className="border-t border-border pt-3 flex flex-col gap-3">
+        {/* Appearance — free-text species/type with autocomplete from the
+            animal catalog. Accepts arbitrary text (e.g. "griffin") so mythical
+            / hybrid creatures aren't locked to the 126-entry catalog. Distinct
+            from object's hard category enum. */}
+        <div className="flex flex-col gap-1">
+          <Label htmlFor="creature-species" className="text-xs">
+            Species / Type
+          </Label>
+          <Input
+            id="creature-species"
+            list="creature-species-suggestions"
+            value={data.species ?? ""}
+            onChange={(e) => onUpdate({ species: e.target.value })}
+            placeholder="e.g. red fox, griffin, dragon"
+          />
+          <datalist id="creature-species-suggestions">
+            {ANIMAL_SPECIES_SUGGESTIONS.map((a) => (
+              <option key={a.id} value={a.label} />
+            ))}
+          </datalist>
+          <p className="text-[10px] text-muted-foreground">
+            Free text — pick a suggestion or type any animal / mythical creature.
+          </p>
+        </div>
+
+        {/* Style Lock — when enabled, downstream image/video nodes wired to
+            this creature will use the canonical caption + style lock for better
+            visual consistency. Default ON. */}
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="creature-style-lock"
+              checked={data.styleLock ?? true}
+              onChange={(e) => onUpdate({ styleLock: e.target.checked })}
+            />
+            <Label htmlFor="creature-style-lock" className="text-xs">
+              Style Lock
+            </Label>
+          </div>
+          <p className="text-[10px] text-muted-foreground">
+            When enabled, downstream image/video nodes wired to this creature will use the canonical caption for better consistency.
+          </p>
+        </div>
+
+        {/* Field Mappings — keep the {} input-injection mapping for the
+            Creature Name, the one referenceable field that survives the move
+            to the studio. */}
+        <MappableField field="creatureName" label="Creature Name" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <Input
+            id="creature-name"
+            value={data.creatureName}
+            onChange={(e) => onUpdate({ creatureName: e.target.value })}
+            placeholder="e.g. Spark the Fox (use {} to inject input)"
           />
         </MappableField>
       </div>

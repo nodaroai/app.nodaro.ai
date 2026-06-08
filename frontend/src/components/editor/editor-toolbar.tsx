@@ -53,7 +53,7 @@ import {
 import { createClient } from "@/lib/supabase"
 import { ensureNodePositions } from "@/lib/node-position"
 import type { WorkflowExport } from "@nodaro/shared"
-import type { WorkflowNode, WorkflowEdge, CharacterNodeData, ObjectNodeData, LocationNodeData } from "@/types/nodes"
+import type { WorkflowNode, WorkflowEdge, CharacterNodeData, ObjectNodeData, CreatureNodeData, LocationNodeData } from "@/types/nodes"
 
 type EditorTab = "editor" | "present" | "executions" | "cost"
 
@@ -284,6 +284,10 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
             const nd = node.data as ObjectNodeData
             if (nd.objectDbId && assetIdMap[nd.objectDbId])
               return { ...node, data: { ...nd, objectDbId: assetIdMap[nd.objectDbId] } }
+          } else if (node.type === "creature") {
+            const nd = node.data as CreatureNodeData
+            if (nd.creatureDbId && assetIdMap[nd.creatureDbId])
+              return { ...node, data: { ...nd, creatureDbId: assetIdMap[nd.creatureDbId] } }
           } else if (node.type === "location") {
             const nd = node.data as LocationNodeData
             if (nd.locationDbId && assetIdMap[nd.locationDbId])

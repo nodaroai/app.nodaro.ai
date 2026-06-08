@@ -1176,6 +1176,12 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     category: "Assets",
   },
   {
+    type: "creature",
+    label: "Create Animal/Creature",
+    icon: <PawPrint className="h-4 w-4" />,
+    category: "Assets",
+  },
+  {
     type: "location",
     label: "Create Location",
     icon: <MapPin className="h-4 w-4" />,
@@ -1388,7 +1394,7 @@ const COMMON_PICKER_SECTIONS: ReadonlyArray<CommonSection> = [
 ];
 const COMMON_ASSETS_SECTION: CommonSection = {
   title: "Assets",
-  types: ["character", "object", "location"],
+  types: ["character", "object", "creature", "location"],
 };
 /** Nav-list sentinel for the "Common Pickers" row. It has `id` but no `type`,
  *  so the popup's keyboard nav treats it like a category — Enter/click opens

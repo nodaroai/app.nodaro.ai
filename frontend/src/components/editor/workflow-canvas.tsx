@@ -101,6 +101,7 @@ const SOURCE_LABELS: Record<string, string> = {
   characterRef: "Character",
   faceRef: "Face",
   objectRef: "Object",
+  creatureRef: "Animal/Creature",
   locationRef: "Location",
   voiceId: "Voice ID",
   approved: "Approved",
@@ -131,7 +132,7 @@ const TARGET_LABELS: Record<string, string> = {
 }
 
 // Entity node types that always represent a reference connection
-const ENTITY_NODE_TYPES = new Set(["character", "face", "object", "location"])
+const ENTITY_NODE_TYPES = new Set(["character", "face", "object", "creature", "location"])
 
 // Target node types where an incoming image connection means "Reference"
 const REFERENCE_IMAGE_TARGETS = new Set(["generate-image", "edit-image", "image-to-image"])
@@ -336,6 +337,8 @@ function getMiniMapNodeColor(node: { type?: string }): string {
   if (nodeType === 'face') return '#FB923C'
   // Object nodes - mint green
   if (nodeType === 'object') return '#34D399'
+  // Animal/Creature nodes - violet
+  if (nodeType === 'creature') return '#A78BFA'
   // Location nodes - cyan/turquoise
   if (nodeType === 'location') return '#22D3EE'
   // Scene and AI nodes - brand pink (spotlight)

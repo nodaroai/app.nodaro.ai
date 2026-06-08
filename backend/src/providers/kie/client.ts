@@ -40,16 +40,23 @@ export const MAX_POLL_ATTEMPTS_LIP_SYNC_LONG = 360
 export class KieError extends Error {
   public readonly internalDetails: string
   public readonly context: string
+  /** True when KIE reported a TERMINAL `state:"fail"` for the task (as opposed
+   *  to a timeout / transient / network error). Reconcile keys off this to
+   *  fail-fast + refund instead of bumping toward the 18-attempt exhaustion.
+   *  The raw failCode/failMsg stay in `internalDetails` (and are logged). */
+  public readonly isUpstreamFailure: boolean
 
   constructor(
     sanitizedMessage: string,
     internalDetails: string,
-    context: string
+    context: string,
+    isUpstreamFailure = false,
   ) {
     super(sanitizedMessage)
     this.name = "KieError"
     this.internalDetails = internalDetails
     this.context = context
+    this.isUpstreamFailure = isUpstreamFailure
   }
 
   /** Get full error message including internal details (for logging/debugging) */
@@ -65,7 +72,8 @@ export class KieError extends Error {
  */
 export function createSanitizedError(
   internalMessage: string,
-  context: string
+  context: string,
+  isUpstreamFailure = false,
 ): KieError {
   // Log the full internal error for debugging (visible in Railway logs)
   console.error(
@@ -138,7 +146,25 @@ export function createSanitizedError(
     sanitizedMessage = `${context} failed. Please try again or contact support if the issue persists.`
   }
 
-  return new KieError(sanitizedMessage, internalMessage, context)
+  return new KieError(sanitizedMessage, internalMessage, context, isUpstreamFailure)
+}
+
+/** Construct a KieError for a TERMINAL upstream provider failure (KIE reported
+ *  `state:"fail"` / `successFlag` 2|3 / a callback error). Sets isUpstreamFailure
+ *  so the reconcile cron fails the job fast + refunds instead of bumping it
+ *  toward the 18-attempt / 90-min exhaustion. Use this at EVERY terminal-failure
+ *  throw in the poll clients — a transient/timeout/no-result error must NOT use
+ *  it (those should keep bumping for the next cron tick). */
+export function createUpstreamFailureError(internalMessage: string, context: string): KieError {
+  return createSanitizedError(internalMessage, context, true)
+}
+
+/** True for a KieError marking a terminal upstream provider failure (vs a
+ *  transient/timeout/network error). The single classification shared by every
+ *  reconcile path (`reconcileKieJob`, `reconcileKieSunoJob`) — never string-match
+ *  the sanitized `.message`. */
+export function isUpstreamKieFailure(err: unknown): boolean {
+  return err instanceof KieError && err.isUpstreamFailure
 }
 
 // =============================================================================
@@ -473,9 +499,10 @@ export async function pollKieTask(
       console.error(
         `  Full response: ${JSON.stringify(detailData, null, 2)}`
       )
-      throw createSanitizedError(
+      // Terminal upstream failure → reconcile fails fast + refunds.
+      throw createUpstreamFailureError(
         `task failed: [${failCode}] ${failMsg}`,
-        "Generation"
+        "Generation",
       )
     }
 
@@ -796,7 +823,7 @@ async function pollVeoRecordInfo(
 
     if (successFlag === 2 || successFlag === 3) {
       const errorMsg = detailData.data.errorMessage ?? `Error code: ${detailData.data.errorCode ?? "unknown"}`
-      throw createSanitizedError(`${label} failed: ${errorMsg}`, "Video generation")
+      throw createUpstreamFailureError(`${label} failed: ${errorMsg}`, "Video generation")
     }
   }
 
