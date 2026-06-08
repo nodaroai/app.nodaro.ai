@@ -328,7 +328,9 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
         px: Math.round(6 * zoom),
         gap: Math.round(3 * zoom),
         radius: Math.round(5 * zoom),
-        maxName: Math.round(96 * zoom),
+        // Trigger name width — 2× wider so longer preset names show on the node before truncating.
+        // Only this cap doubles; the icon/chevron/font stay glyph-sized to keep matching the title.
+        maxName: Math.round(192 * zoom),
       }
     : null
 
