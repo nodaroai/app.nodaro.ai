@@ -109,6 +109,7 @@ const CAMEL_OBJECT = {
   referencePhotos: [],
   canonicalDescription: "", // coerced from null
   styleLock: true,
+  selectedAssetByVariant: {},
   sheets: [],
   detailCloseups: [],
   deletedAt: null,
@@ -282,6 +283,24 @@ describe("GET /v1/objects/:id", () => {
     expect(chain.is).toHaveBeenCalledWith("deleted_at", null)
   })
 
+  it("returns selected_asset_by_variant on the row (read round-trip)", async () => {
+    const rowWithSelection = {
+      ...DB_OBJECT,
+      selected_asset_by_variant: { "angles:Front": "https://example.com/front.png" },
+    }
+    const { mockSelect } = getByIdChain({ data: rowWithSelection, error: null })
+    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/objects/${TEST_OBJECT_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().selectedAssetByVariant).toEqual({ "angles:Front": "https://example.com/front.png" })
+  })
+
   it("returns 404 on PGRST116 (not found OR archived OR not owned — uniform code)", async () => {
     const { mockSelect } = getByIdChain({
       data: null,
@@ -389,6 +408,84 @@ describe("POST /v1/objects", () => {
     })
     expect(res.statusCode).toBe(200)
     expect(mockInsert).toHaveBeenCalledWith(expect.objectContaining({ image_provider: null }))
+  })
+
+  // selected_asset_by_variant (migration 205): OPAQUE per-variant "chosen take"
+  // map. Keys stored VERBATIM (no normalization); soft-capped with overflow
+  // dropped silently. Shared capSelectedAssetByVariant helper (same as characters).
+  it("persists selected_asset_by_variant VERBATIM on insert", async () => {
+    const mockSingle = vi.fn().mockResolvedValue({ data: { id: TEST_OBJECT_ID }, error: null })
+    const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
+    const mockInsert = vi.fn().mockReturnValue({ select: mockSelect })
+    vi.mocked(supabase.from).mockReturnValue({ insert: mockInsert } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/objects",
+      payload: {
+        name: "Sword",
+        nodeId: "node-3",
+        userId: TEST_USER_ID,
+        selectedAssetByVariant: { "angles:Front 3/4": "https://example.com/f34.png" },
+      },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selected_asset_by_variant: { "angles:Front 3/4": "https://example.com/f34.png" },
+      }),
+    )
+  })
+
+  it("soft-caps selected_asset_by_variant to 200 keys on insert (truncates, NOT a 400)", async () => {
+    const captured: { row: Record<string, unknown> | null } = { row: null }
+    const mockSingle = vi.fn().mockResolvedValue({ data: { id: TEST_OBJECT_ID }, error: null })
+    const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
+    const mockInsert = vi.fn((row: Record<string, unknown>) => {
+      captured.row = row
+      return { select: mockSelect }
+    })
+    vi.mocked(supabase.from).mockReturnValue({ insert: mockInsert } as never)
+
+    const oversized: Record<string, string> = {}
+    for (let i = 0; i < 250; i++) oversized[`angles:v${i}`] = `https://example.com/${i}.png`
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/objects",
+      payload: { name: "Sword", nodeId: "node-3", userId: TEST_USER_ID, selectedAssetByVariant: oversized },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(Object.keys(captured.row?.selected_asset_by_variant as Record<string, string>)).toHaveLength(200)
+  })
+
+  it("UPDATE writes selected_asset_by_variant while still EXCLUDING worker-owned buckets", async () => {
+    const mockSingle = vi.fn().mockResolvedValue({
+      data: { id: TEST_OBJECT_ID, updated_at: "2026-01-02T00:00:00Z" },
+      error: null,
+    })
+    const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
+    const chain: Record<string, unknown> = { eq: vi.fn().mockReturnThis(), select: mockSelect }
+    const mockUpdate = vi.fn().mockReturnValue(chain)
+    vi.mocked(supabase.from).mockReturnValue({ update: mockUpdate } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/objects",
+      payload: {
+        id: TEST_OBJECT_ID,
+        name: "Sword",
+        nodeId: "node-3",
+        userId: TEST_USER_ID,
+        selectedAssetByVariant: { "materials:Brushed Steel": "https://example.com/steel.png" },
+        // Worker-owned — must still be dropped from the UPDATE row.
+        angles: [{ name: "stale", url: "https://r2.example.com/stale.png" }],
+      },
+    })
+    expect(res.statusCode).toBe(200)
+    const updateArg = vi.mocked(mockUpdate).mock.calls[0]?.[0] as Record<string, unknown>
+    expect(updateArg.selected_asset_by_variant).toEqual({ "materials:Brushed Steel": "https://example.com/steel.png" })
+    expect(updateArg).not.toHaveProperty("angles")
   })
 
   it("INSERT path accepts ALL fields incl. worker-owned (motionClips, angles, materials, variations)", async () => {

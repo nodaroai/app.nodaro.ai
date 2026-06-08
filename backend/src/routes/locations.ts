@@ -4,6 +4,7 @@ import { LOCATION_REFERENCE_PHOTO_KINDS, LOCATION_ATTACH_COLUMNS } from "@nodaro
 import type { ReferenceSheet } from "@nodaro/shared"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { normalizeImageProvider } from "../lib/image-provider.js"
+import { capSelectedAssetByVariant } from "../lib/selected-asset-by-variant.js"
 import { supabase } from "../lib/supabase.js"
 import { requireAppScope } from "../lib/scope-prehandler.js"
 import { formatZodError } from "../lib/zod-error.js"
@@ -46,6 +47,12 @@ const upsertLocationBody = z.object({
   referencePhotos: z.array(referencePhoto).max(20).optional(),
   canonicalDescription: z.string().max(4000).optional(),
   styleLock: z.boolean().optional(),
+  // The user's chosen DEFAULT asset take per variant (Studio version-history
+  // "pick this take"). OPAQUE string->string map: key "<bucket>:<variant>",
+  // value = the chosen URL. User-owned (flows through INSERT + UPDATE). Validate
+  // values are strings; caps + verbatim-key passthrough happen in
+  // `capSelectedAssetByVariant` (soft-capped, overflow dropped — NOT a 400).
+  selectedAssetByVariant: z.record(z.string()).optional(),
   // PII consent timestamp (Phase 2 #7). When the user first adds a reference
   // photo, the studio sends now() so the backend records the consent moment.
   // Once set, the studio's checkbox stays hidden and the user can add more
@@ -125,7 +132,7 @@ const listLocationsQuery = z.object({
 
 // Single source of truth for the GET column list — keeps single + list in lock-step.
 const SELECT_COLUMNS =
-  "id, user_id, node_id, project_id, name, description, category, style, source_image_url, image_provider, time_of_day, weather, angles, lighting, seasons, atmosphere_motions, reference_photos, canonical_description, style_lock, pii_consent_at, sheets, detail_closeups, deleted_at, created_at, updated_at"
+  "id, user_id, node_id, project_id, name, description, category, style, source_image_url, image_provider, time_of_day, weather, angles, lighting, seasons, atmosphere_motions, reference_photos, canonical_description, style_lock, pii_consent_at, selected_asset_by_variant, sheets, detail_closeups, deleted_at, created_at, updated_at"
 
 type LocationRow = {
   id: string
@@ -148,6 +155,7 @@ type LocationRow = {
   canonical_description: string | null
   style_lock: boolean | null
   pii_consent_at: string | null
+  selected_asset_by_variant: Record<string, string> | null
   // Reference-sheet buckets (migration 200).
   sheets: ReferenceSheet[] | null
   detail_closeups: unknown[] | null
@@ -180,6 +188,7 @@ function toCamel(loc: LocationRow) {
     canonicalDescription: loc.canonical_description ?? "",
     styleLock: loc.style_lock ?? true,
     piiConsentAt: loc.pii_consent_at,
+    selectedAssetByVariant: loc.selected_asset_by_variant ?? {},
     sheets: loc.sheets ?? [],
     detailCloseups: loc.detail_closeups ?? [],
     deletedAt: loc.deleted_at,
@@ -351,10 +360,15 @@ export async function locationRoutes(app: FastifyInstance) {
       referencePhotos,
       canonicalDescription,
       styleLock,
+      selectedAssetByVariant,
       piiConsentAt,
       expectedUpdatedAt,
     } = parsed.data
     const userId = req.userId
+
+    // OPAQUE map — soft-capped only, keys passed through verbatim (no
+    // lowercase/trim): the studio owns the "<bucket>:<variant>" id format.
+    const cappedSelectedAssets = capSelectedAssetByVariant(selectedAssetByVariant)
 
     if (!userId) {
       return reply.status(401).send({
@@ -386,6 +400,7 @@ export async function locationRoutes(app: FastifyInstance) {
       if (canonicalDescription !== undefined) updateRow.canonical_description = canonicalDescription
       if (styleLock !== undefined) updateRow.style_lock = styleLock
       if (piiConsentAt !== undefined) updateRow.pii_consent_at = piiConsentAt
+      if (cappedSelectedAssets !== undefined) updateRow.selected_asset_by_variant = cappedSelectedAssets
 
       let query = supabase
         .from("locations")
@@ -449,6 +464,7 @@ export async function locationRoutes(app: FastifyInstance) {
       canonical_description: canonicalDescription ?? null,
       style_lock: styleLock ?? true,
       pii_consent_at: piiConsentAt ?? null,
+      selected_asset_by_variant: cappedSelectedAssets ?? {},
       updated_at: new Date().toISOString(),
     }
 

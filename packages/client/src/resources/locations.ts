@@ -80,6 +80,12 @@ export interface Location {
    *  sends `""`, normalized to `null` in `get()` to match character semantics. */
   canonicalDescription: string | null
   styleLock: boolean
+  /** The user's chosen DEFAULT asset take per variant (Studio version history).
+   *  OPAQUE map: key `"<bucket>:<variant>"` (e.g. `"timeOfDay:dawn"`) → the chosen
+   *  asset URL (one already present in that bucket). Stored verbatim — keys are
+   *  NOT normalized; soft-capped server-side at 200 keys / 2048-char values
+   *  (overflow dropped silently). Defaults to `{}`. */
+  selectedAssetByVariant?: Record<string, string> | null
   deletedAt: string | null
   createdAt: string
   updatedAt: string
@@ -119,6 +125,10 @@ export interface CreateLocationInput {
   referencePhotos?: LocationReferencePhoto[]
   canonicalDescription?: string
   styleLock?: boolean
+  /** The user's chosen DEFAULT asset take per variant. OPAQUE
+   *  `"<bucket>:<variant>"` → chosen-URL map; a write REPLACES the whole map.
+   *  Keys stored verbatim; soft-capped server-side at 200 keys / 2048-char values. */
+  selectedAssetByVariant?: Record<string, string>
 }
 
 /**
@@ -146,6 +156,11 @@ export interface UpdateLocationInput {
   referencePhotos?: LocationReferencePhoto[]
   canonicalDescription?: string
   styleLock?: boolean
+  /** The user's chosen DEFAULT asset take per variant. OPAQUE
+   *  `"<bucket>:<variant>"` → chosen-URL map; a write REPLACES the whole map
+   *  (omit to leave untouched). Keys stored verbatim; soft-capped server-side
+   *  at 200 keys / 2048-char values. */
+  selectedAssetByVariant?: Record<string, string>
   /** ISO-8601 timestamp recording when PII consent was captured for this location. */
   piiConsentAt?: string
   expectedUpdatedAt?: string

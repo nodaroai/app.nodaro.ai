@@ -45,6 +45,7 @@ The `objects` table stores one row per object. Highlights:
 | `angles` / `materials` / `variations` | jsonb[] | Three image asset buckets — each entry is `{ name, url }`. |
 | `motion_clips` | jsonb[] | The fourth bucket: looping video clips animated from the main image (i2v). Each entry is `{ name, url }` where `url` is a video. |
 | `reference_photos` | jsonb[] | Mood-board photos (cap 20), each `{ kind, url }` with `kind ∈ {front, side, detail, context, moodBoard, other}`. |
+| `selected_asset_by_variant` | jsonb | The user's chosen DEFAULT take per variant (Studio version history). OPAQUE map: key `"<bucket>:<variant>"` (e.g. `angles:front`) → the chosen asset URL (one already in that bucket). Keys stored **verbatim** (not normalized); soft-capped at 200 keys / 2048-char values, overflow dropped silently. A separate column — a selection never rewrites an asset bucket. |
 | `deleted_at` | timestamptz | Non-null = soft-deleted (archived). |
 | `created_at` / `updated_at` | timestamptz | Timestamps. |
 

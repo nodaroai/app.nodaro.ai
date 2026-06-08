@@ -41,6 +41,7 @@ The `characters` table stores one row per character. Highlights:
 | `reference_photos` | jsonb[] | Real-life reference photos, one per kind (`frontFace`, `sideLeft`, …). |
 | `real_life_refs_by_variant` | jsonb | Per-variant reference URL arrays (e.g. `{ smile: [url1, url2] }`). |
 | `reference_videos_by_variant` | jsonb | Per-label user-uploaded reference VIDEO URL arrays (e.g. `{ angry: [url1] }`). Mirrors `real_life_refs_by_variant` for clips; read off the row to drive generate-video's `referenceVideoUrls`. Max 20 keys, 5 URLs each. |
+| `selected_asset_by_variant` | jsonb | The user's chosen DEFAULT take per variant (Studio version history). OPAQUE map: key `"<bucket>:<variant>"` (e.g. `bodyAngles:front`, `expressions:smile`) → the chosen asset URL (one already in that bucket). Keys stored **verbatim** (not normalized); soft-capped at 200 keys / 2048-char values, overflow dropped silently. A separate column — a selection never rewrites an asset bucket. |
 | `voice` / `personality` | jsonb | Optional voice + personality blocks for audio nodes. |
 | `deleted_at` | timestamptz | Non-null = soft-deleted (archived). |
 | `created_at` / `updated_at` | timestamptz | Timestamps. |

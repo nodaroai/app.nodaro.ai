@@ -113,6 +113,7 @@ const CAMEL_LOCATION = {
   referencePhotos: [],
   canonicalDescription: "", // coerced from null
   styleLock: true,
+  selectedAssetByVariant: {},
   sheets: [],
   detailCloseups: [],
   deletedAt: null,
@@ -268,6 +269,27 @@ describe("GET /v1/locations/:id", () => {
     expect(locChain.eq).toHaveBeenCalledWith("user_id", TEST_USER_ID)
   })
 
+  it("returns selected_asset_by_variant on the row (read round-trip)", async () => {
+    const rowWithSelection = {
+      ...DB_LOCATION,
+      selected_asset_by_variant: { "timeOfDay:Dawn": "https://example.com/dawn.png" },
+    }
+    const { mockSelect: locSelect } = getByIdChain({ data: rowWithSelection, error: null })
+    const { mockSelect: jobsSelect } = jobsChain()
+    vi.mocked(supabase.from)
+      .mockReturnValueOnce({ select: locSelect } as never)
+      .mockReturnValueOnce({ select: jobsSelect } as never)
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/locations/${TEST_LOCATION_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().selectedAssetByVariant).toEqual({ "timeOfDay:Dawn": "https://example.com/dawn.png" })
+  })
+
   it("returns 404 on PGRST116 (not found OR not owned)", async () => {
     const { mockSelect: locSelect } = getByIdChain({
       data: null,
@@ -383,6 +405,85 @@ describe("POST /v1/locations", () => {
     })
     expect(res.statusCode).toBe(200)
     expect(mockInsert).toHaveBeenCalledWith(expect.objectContaining({ image_provider: null }))
+  })
+
+  // selected_asset_by_variant (migration 205): OPAQUE per-variant "chosen take"
+  // map. Keys stored VERBATIM (no normalization); soft-capped with overflow
+  // dropped silently. Mirrors the characters wiring via the shared
+  // capSelectedAssetByVariant helper.
+  it("persists selected_asset_by_variant VERBATIM on insert", async () => {
+    const mockSingle = vi.fn().mockResolvedValue({ data: { id: TEST_LOCATION_ID }, error: null })
+    const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
+    const mockInsert = vi.fn().mockReturnValue({ select: mockSelect })
+    vi.mocked(supabase.from).mockReturnValue({ insert: mockInsert } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/locations",
+      payload: {
+        name: "Forest",
+        nodeId: "node-2",
+        userId: TEST_USER_ID,
+        selectedAssetByVariant: { "timeOfDay:Golden Hour": "https://example.com/golden.png" },
+      },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selected_asset_by_variant: { "timeOfDay:Golden Hour": "https://example.com/golden.png" },
+      }),
+    )
+  })
+
+  it("soft-caps selected_asset_by_variant to 200 keys on insert (truncates, NOT a 400)", async () => {
+    const captured: { row: Record<string, unknown> | null } = { row: null }
+    const mockSingle = vi.fn().mockResolvedValue({ data: { id: TEST_LOCATION_ID }, error: null })
+    const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
+    const mockInsert = vi.fn((row: Record<string, unknown>) => {
+      captured.row = row
+      return { select: mockSelect }
+    })
+    vi.mocked(supabase.from).mockReturnValue({ insert: mockInsert } as never)
+
+    const oversized: Record<string, string> = {}
+    for (let i = 0; i < 250; i++) oversized[`timeOfDay:v${i}`] = `https://example.com/${i}.png`
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/locations",
+      payload: { name: "Forest", nodeId: "node-2", userId: TEST_USER_ID, selectedAssetByVariant: oversized },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(Object.keys(captured.row?.selected_asset_by_variant as Record<string, string>)).toHaveLength(200)
+  })
+
+  it("update persists selected_asset_by_variant without dragging in worker-owned buckets", async () => {
+    const captured: { patch: Record<string, unknown> | null } = { patch: null }
+    const mockSingle = vi.fn().mockResolvedValue({ data: { id: TEST_LOCATION_ID, updated_at: "2026-01-02T00:00:00Z" }, error: null })
+    const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
+    const chain: Record<string, unknown> = { eq: vi.fn().mockReturnThis(), select: mockSelect }
+    const mockUpdate = vi.fn((patch: Record<string, unknown>) => {
+      captured.patch = patch
+      return chain
+    })
+    vi.mocked(supabase.from).mockReturnValue({ update: mockUpdate } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/locations",
+      payload: {
+        id: TEST_LOCATION_ID,
+        name: "Forest",
+        nodeId: "node-2",
+        userId: TEST_USER_ID,
+        selectedAssetByVariant: { "weather:Rain": "https://example.com/rain.png" },
+      },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(captured.patch?.selected_asset_by_variant).toEqual({ "weather:Rain": "https://example.com/rain.png" })
+    for (const col of ["time_of_day", "weather", "angles", "lighting", "seasons", "atmosphere_motions"]) {
+      expect(captured.patch).not.toHaveProperty(col)
+    }
   })
 
   it("returns 200 on update (id in body) and scopes by user_id", async () => {
