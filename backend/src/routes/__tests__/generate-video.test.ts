@@ -302,6 +302,33 @@ describe("POST /v1/generate-video", () => {
     )
   })
 
+  it("persists attachReferenceVideoVariant in input_data so finalize can auto-attach the clip", async () => {
+    const { mockInsert } = mockJobInsert({ data: { id: "job-1" }, error: null })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-video",
+      payload: {
+        imageUrl: "https://example.com/image.png",
+        prompt: "she smiles",
+        userId: "00000000-0000-4000-8000-000000000001",
+        provider: "kling",
+        attachToCharacterId: "00000000-0000-4000-8000-0000000000cc",
+        attachReferenceVideoVariant: "happy",
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input_data: expect.objectContaining({
+          attachToCharacterId: "00000000-0000-4000-8000-0000000000cc",
+          attachReferenceVideoVariant: "happy",
+        }),
+      }),
+    )
+  })
+
   it("returns 500 when job insert fails", async () => {
     mockJobInsert({
       data: null,

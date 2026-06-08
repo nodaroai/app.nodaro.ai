@@ -148,6 +148,34 @@ describe("generateVideo", () => {
       generateVideo({ startFrameUrl: "http://img.png" }),
     ).rejects.toThrow("Video gen failed")
   })
+
+  it("forwards attachReferenceVideoVariant + attachToCharacterId into the body when provided", async () => {
+    noSession()
+    const mock = mockFetchJson({ jobId: "j-att" })
+    vi.stubGlobal("fetch", mock)
+
+    await generateVideo({
+      startFrameUrl: "http://start.png",
+      provider: "seedance-2-fast",
+      attachToCharacterId: "char-1",
+      attachReferenceVideoVariant: "happy",
+    })
+
+    const body = JSON.parse(mock.mock.calls[0][1].body as string)
+    expect(body.attachToCharacterId).toBe("char-1")
+    expect(body.attachReferenceVideoVariant).toBe("happy")
+  })
+
+  it("omits attachReferenceVideoVariant when not provided", async () => {
+    noSession()
+    const mock = mockFetchJson({ jobId: "j-noatt" })
+    vi.stubGlobal("fetch", mock)
+
+    await generateVideo({ startFrameUrl: "http://start.png" })
+
+    const body = JSON.parse(mock.mock.calls[0][1].body as string)
+    expect(body).not.toHaveProperty("attachReferenceVideoVariant")
+  })
 })
 
 // ---------------------------------------------------------------------------

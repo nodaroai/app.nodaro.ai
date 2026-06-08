@@ -87,6 +87,55 @@ export async function attachAssetToCharacter(args: {
 }
 
 /**
+ * Atomic append of a completed generate-video clip's R2 URL to
+ * `characters.reference_videos_by_variant[variant]`. Mirrors
+ * `attachAssetToCharacter`: best-effort, swallows + logs failure, never throws.
+ *
+ * Used by `lib/job-finalize.ts` after a video job completes (worker AND
+ * reconcile cron paths) when the originating request carried
+ * `attachToCharacterId` + `attachReferenceVideoVariant` in `jobs.input_data`.
+ *
+ * The RPC (`append_character_reference_video`, migration 206) re-verifies
+ * ownership inside the DB (`WHERE id = p_character_id AND user_id = p_user_id
+ * AND deleted_at IS NULL`) — and `userId` here is the authoritative job owner
+ * (`jobs.user_id`, set from the auth token at job creation), NOT a body field
+ * — so a forged `attachToCharacterId` pointing at another user's character is
+ * a silent no-op. It also lowercases/trims the key, dedupes, and enforces the
+ * same caps as the route (20 keys, 5 URLs each).
+ *
+ * On failure: returns false (logged, swallowed). The clip still lives on
+ * `jobs.output_data`; throwing here would only orphan committed credits.
+ */
+export async function appendCharacterReferenceVideo(args: {
+  characterId: string
+  userId: string
+  variant: string
+  url: string
+}): Promise<boolean> {
+  const { characterId, userId, variant, url } = args
+  try {
+    const { error } = await supabase.rpc("append_character_reference_video", {
+      p_character_id: characterId,
+      p_user_id: userId,
+      p_variant: variant,
+      p_url: url,
+    })
+    if (error) {
+      console.warn(
+        `[character-attach] reference-video append failed (character=${characterId}, variant=${variant}): ${error.message}`,
+      )
+      return false
+    }
+    return true
+  } catch (e) {
+    console.warn(
+      `[character-attach] reference-video append threw (character=${characterId}, variant=${variant}): ${String(e)}`,
+    )
+    return false
+  }
+}
+
+/**
  * Set `characters.source_image_url` on the user's row. No race concern (one
  * portrait at a time per studio session), so a plain UPDATE is fine.
  */

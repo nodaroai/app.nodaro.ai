@@ -112,6 +112,19 @@ const storageMocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/storage.js", () => storageMocks)
 
+// Mock lib/character-auto-attach.js: the reference-video auto-attach is
+// best-effort and verified at the finalize boundary — assert it's invoked with
+// the right args without exercising the real RPC.
+const autoAttachMocks = vi.hoisted(() => ({
+  appendCharacterReferenceVideo: vi
+    .fn<
+      (args: { characterId: string; userId: string; variant: string; url: string }) => Promise<boolean>
+    >()
+    .mockResolvedValue(true),
+}))
+
+vi.mock("@/lib/character-auto-attach.js", () => autoAttachMocks)
+
 import { finalizeJobWithMedia } from "@/lib/job-finalize.js"
 
 // ---------------------------------------------------------------------------
@@ -148,6 +161,8 @@ function resetMocksToHappyPath() {
   sharedMocks.createAssetFromJob.mockResolvedValue(undefined)
 
   storageMocks.uploadToR2.mockResolvedValue("https://r2.example/audio-j-aud.mp3")
+
+  autoAttachMocks.appendCharacterReferenceVideo.mockResolvedValue(true)
 }
 
 // ===========================================================================
@@ -633,5 +648,194 @@ describe("finalizeJobWithMedia", () => {
 
     const updateArg = sharedMocks.markJobCompleted.mock.calls[0]![1] as { output_data: { audioUrl: string } }
     expect(updateArg.output_data.audioUrl).toBe("https://r2.example/pre-uploaded.mp3")
+  })
+
+  // -------------------------------------------------------------------------
+  // Reference-video auto-attach: when a completed VIDEO job's input_data carries
+  // attachToCharacterId + attachReferenceVideoVariant (set by the generate-video
+  // route), append the R2 clip to characters.reference_videos_by_variant. Shared
+  // worker + reconcile path, best-effort, never fails the job.
+  // -------------------------------------------------------------------------
+  it("auto-attach: video job with attachToCharacterId + attachReferenceVideoVariant appends the R2 clip", async () => {
+    mocks.jobsSingleMock.mockResolvedValueOnce({
+      data: {
+        id: "j-vid",
+        user_id: "u1",
+        should_watermark: false,
+        is_public: true,
+        job_type: "image-to-video",
+        workflow_execution_id: null,
+        status: "processing",
+        input_data: { attachToCharacterId: "char-1", attachReferenceVideoVariant: "happy" },
+      },
+      error: null,
+    })
+
+    const result = await finalizeJobWithMedia({
+      jobId: "j-vid",
+      jobType: "image-to-video",
+      result: { url: "https://kie.example/raw.mp4", cost: 0.4, providerUsed: "p" },
+    })
+
+    expect(result.ok).toBe(true)
+    expect(autoAttachMocks.appendCharacterReferenceVideo).toHaveBeenCalledTimes(1)
+    expect(autoAttachMocks.appendCharacterReferenceVideo).toHaveBeenCalledWith({
+      characterId: "char-1",
+      userId: "u1",
+      variant: "happy",
+      url: "https://r2.example/vid-j1.mp4",
+    })
+  })
+
+  it("auto-attach: uses the pre-uploaded mediaUrl when finalize didn't upload", async () => {
+    mocks.jobsSingleMock.mockResolvedValueOnce({
+      data: {
+        id: "j-pre",
+        user_id: "u1",
+        should_watermark: false,
+        is_public: true,
+        job_type: "image-to-video",
+        workflow_execution_id: null,
+        status: "processing",
+        input_data: { attachToCharacterId: "char-1", attachReferenceVideoVariant: "happy" },
+      },
+      error: null,
+    })
+
+    await finalizeJobWithMedia({
+      jobId: "j-pre",
+      jobType: "image-to-video",
+      result: { url: "https://kie.example/raw.mp4", cost: 0.4, providerUsed: "p" },
+      mediaUrl: "https://r2.example/already-uploaded.mp4",
+    })
+
+    expect(autoAttachMocks.appendCharacterReferenceVideo).toHaveBeenCalledWith(
+      expect.objectContaining({ url: "https://r2.example/already-uploaded.mp4" }),
+    )
+  })
+
+  it("auto-attach: NOT called when attachReferenceVideoVariant is absent (attachToCharacterId alone = identity injection only)", async () => {
+    mocks.jobsSingleMock.mockResolvedValueOnce({
+      data: {
+        id: "j-noattach",
+        user_id: "u1",
+        should_watermark: false,
+        is_public: true,
+        job_type: "image-to-video",
+        workflow_execution_id: null,
+        status: "processing",
+        input_data: { attachToCharacterId: "char-1" },
+      },
+      error: null,
+    })
+
+    await finalizeJobWithMedia({
+      jobId: "j-noattach",
+      jobType: "image-to-video",
+      result: { url: "https://kie.example/raw.mp4", cost: 0.4, providerUsed: "p" },
+    })
+
+    expect(autoAttachMocks.appendCharacterReferenceVideo).not.toHaveBeenCalled()
+  })
+
+  it("auto-attach: NOT called when the variant is whitespace-only", async () => {
+    mocks.jobsSingleMock.mockResolvedValueOnce({
+      data: {
+        id: "j-blank",
+        user_id: "u1",
+        should_watermark: false,
+        is_public: true,
+        job_type: "image-to-video",
+        workflow_execution_id: null,
+        status: "processing",
+        input_data: { attachToCharacterId: "char-1", attachReferenceVideoVariant: "   " },
+      },
+      error: null,
+    })
+
+    await finalizeJobWithMedia({
+      jobId: "j-blank",
+      jobType: "image-to-video",
+      result: { url: "https://kie.example/raw.mp4", cost: 0.4, providerUsed: "p" },
+    })
+
+    expect(autoAttachMocks.appendCharacterReferenceVideo).not.toHaveBeenCalled()
+  })
+
+  it("auto-attach: NOT called for non-video job types even with attach fields present", async () => {
+    mocks.jobsSingleMock.mockResolvedValueOnce({
+      data: {
+        id: "j-img",
+        user_id: "u1",
+        should_watermark: false,
+        is_public: true,
+        job_type: "generate-image",
+        workflow_execution_id: null,
+        status: "processing",
+        input_data: { attachToCharacterId: "char-1", attachReferenceVideoVariant: "happy" },
+      },
+      error: null,
+    })
+
+    await finalizeJobWithMedia({
+      jobId: "j-img",
+      jobType: "generate-image",
+      result: { url: "https://kie.example/x.png", cost: 0.02, providerUsed: "p" },
+    })
+
+    expect(autoAttachMocks.appendCharacterReferenceVideo).not.toHaveBeenCalled()
+  })
+
+  it("auto-attach: best-effort — a rejecting helper does NOT fail the job", async () => {
+    autoAttachMocks.appendCharacterReferenceVideo.mockRejectedValueOnce(new Error("attach blew up"))
+    mocks.jobsSingleMock.mockResolvedValueOnce({
+      data: {
+        id: "j-besteffort",
+        user_id: "u1",
+        should_watermark: false,
+        is_public: true,
+        job_type: "image-to-video",
+        workflow_execution_id: null,
+        status: "processing",
+        input_data: { attachToCharacterId: "char-1", attachReferenceVideoVariant: "happy" },
+      },
+      error: null,
+    })
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
+
+    const result = await finalizeJobWithMedia({
+      jobId: "j-besteffort",
+      jobType: "image-to-video",
+      result: { url: "https://kie.example/raw.mp4", cost: 0.4, providerUsed: "p" },
+    })
+
+    expect(result.ok).toBe(true)
+    warnSpy.mockRestore()
+  })
+
+  it("auto-attach: NOT attempted when the job did not complete (markJobCompleted CAS miss)", async () => {
+    sharedMocks.markJobCompleted.mockResolvedValueOnce(false)
+    mocks.jobsSingleMock.mockResolvedValueOnce({
+      data: {
+        id: "j-casmiss",
+        user_id: "u1",
+        should_watermark: false,
+        is_public: true,
+        job_type: "image-to-video",
+        workflow_execution_id: null,
+        status: "processing",
+        input_data: { attachToCharacterId: "char-1", attachReferenceVideoVariant: "happy" },
+      },
+      error: null,
+    })
+
+    const result = await finalizeJobWithMedia({
+      jobId: "j-casmiss",
+      jobType: "image-to-video",
+      result: { url: "https://kie.example/raw.mp4", cost: 0.4, providerUsed: "p" },
+    })
+
+    expect(result.ok).toBe(false)
+    expect(autoAttachMocks.appendCharacterReferenceVideo).not.toHaveBeenCalled()
   })
 })

@@ -1961,6 +1961,16 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
 
   const currentProvider = (rawData.provider || "seedance-2-fast") as string
 
+  // A wired-in Character enables the optional "save result to character"
+  // control — the finished clip is appended to that character's
+  // reference_videos_by_variant on completion (see
+  // ImageToVideoData.attachReferenceVideoVariant). Hidden when no Character is
+  // connected (the attach has nowhere to go).
+  const connectedCharacter = useMemo(
+    () => sources.find((s) => s.type === "character"),
+    [sources],
+  )
+
   // Fail-safe: snap stale resolution + duration + fps values that don't apply
   // to the current provider. Same Provider-Enum-Sync step-12b pattern as
   // i2v/t2v — without this, persisted values + admin defaults leak across
@@ -2873,6 +2883,46 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
           alt="Connected image"
           onClose={() => setLightboxImage(null)}
         />
+      )}
+
+      {connectedCharacter && (
+        <div className="flex flex-col gap-1.5 rounded-md border border-border p-2.5">
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="gv-save-to-character"
+              checked={data.attachReferenceVideoVariant !== undefined}
+              onCheckedChange={(v) =>
+                onUpdate({
+                  attachReferenceVideoVariant: v
+                    ? (data.attachReferenceVideoVariant && data.attachReferenceVideoVariant.length > 0
+                        ? data.attachReferenceVideoVariant
+                        : "generated")
+                    : undefined,
+                })
+              }
+            />
+            <Label htmlFor="gv-save-to-character" className="text-xs cursor-pointer">
+              Save clip to “{connectedCharacter.label}” as reference video
+            </Label>
+          </div>
+          {data.attachReferenceVideoVariant !== undefined && (
+            <div className="flex flex-col gap-1 pl-6">
+              <Label htmlFor="gv-save-variant" className="text-[11px] text-muted-foreground">
+                Variant label
+              </Label>
+              <Input
+                id="gv-save-variant"
+                value={data.attachReferenceVideoVariant ?? ""}
+                onChange={(e) => onUpdate({ attachReferenceVideoVariant: e.target.value })}
+                placeholder="e.g. happy, take-2"
+                className="h-7 text-xs"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Saved to {connectedCharacter.label}’s reference videos on completion — reusable as a video reference.
+              </p>
+            </div>
+          )}
+        </div>
       )}
 
       <ConnectedCinematographySources consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />

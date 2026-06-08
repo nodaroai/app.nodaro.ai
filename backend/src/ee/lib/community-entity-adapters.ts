@@ -1,7 +1,7 @@
-export type EntityType = "character" | "location" | "object"
+export type EntityType = "character" | "location" | "object" | "creature"
 
 export interface CommunityEntityAdapter {
-  readonly table: "characters" | "locations" | "objects"
+  readonly table: "characters" | "locations" | "objects" | "creatures"
   readonly publicTextFields: readonly string[]
   readonly assetFields: readonly string[]
   readonly stripFields: readonly string[]
@@ -37,6 +37,24 @@ export const COMMUNITY_ENTITY_ADAPTERS: Record<EntityType, CommunityEntityAdapte
     table: "objects",
     publicTextFields: ["name", "description", "category", "style", "canonical_description", "style_lock"],
     assetFields: ["main_image_url", "source_image_url", "angles", "materials", "variations", "motion_clips"],
+    stripFields: ["reference_photos", "custom_variations"],
+  },
+  // Creature mirrors the object adapter for the shared column set (D10 — the
+  // creatures table is a structural clone of objects), with three deltas:
+  //   • species → publicTextFields (creature-specific column)
+  //   • poses   → assetFields      (the renamed objects.materials slot)
+  //   • the four columns the object adapter omits (pre-existing drift) are
+  //     classified here: sheets/detail_closeups → assetFields (R2-backed
+  //     {name,url} arrays); image_provider/selected_asset_by_variant are
+  //     system/derived and live in the test's ALWAYS_IGNORED set.
+  // Every column in 206_creatures.sql is classified — see COLUMNS.creatures in
+  // the classification test.
+  creature: {
+    table: "creatures",
+    publicTextFields: ["name", "description", "species", "category", "style", "canonical_description", "style_lock"],
+    assetFields: ["main_image_url", "source_image_url", "angles", "poses", "variations", "motion_clips", "sheets", "detail_closeups"],
+    // custom_variations is STRIPPED (mirrors object/location): user-authored private
+    // variation content must not be R2-copied into the public snapshot on share.
     stripFields: ["reference_photos", "custom_variations"],
   },
 }

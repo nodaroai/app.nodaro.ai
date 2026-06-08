@@ -71,6 +71,11 @@ export const generateVideoBody = z.object({
   // before reservation and worker enqueue. Default off.
   injectCharacterContext: z.boolean().optional().default(false),
   attachToCharacterId: z.string().uuid().optional(),
+  // When set alongside attachToCharacterId, the completed clip is appended to
+  // characters.reference_videos_by_variant[<this label>] on job completion
+  // (worker + reconcile, via job-finalize.ts). The label is the variant slug
+  // (e.g. an emotion take "happy"); the RPC lowercases/trims + caps it.
+  attachReferenceVideoVariant: z.string().min(1).max(80).optional(),
   userId: z.string().uuid().optional(),
   videoTrimStart: z.number().int().min(0).optional(),
   videoTrimEnd: z.number().int().min(0).optional(),

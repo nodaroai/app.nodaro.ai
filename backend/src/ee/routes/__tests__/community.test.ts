@@ -34,6 +34,16 @@ describe("POST /v1/community/listings/:id/clone", () => {
     const r = await app.inject({ method: "POST", url: "/v1/community/listings/L1/clone", headers: { "x-user-id": "u1" }, payload: { entityType: "character" } })
     expect(r.statusCode).toBe(413); expect(r.json().error.code).toBe("storage_limit_exceeded")
   })
+  it("accepts entityType=creature in the clone enum", async () => {
+    cloneListing.mockResolvedValue({ entityType: "creature", id: "cr-new" })
+    const r = await app.inject({ method: "POST", url: "/v1/community/listings/L-cr/clone", headers: { "x-user-id": "u1" }, payload: { entityType: "creature" } })
+    expect(r.statusCode).toBe(200); expect(r.json().id).toBe("cr-new")
+    expect(cloneListing).toHaveBeenCalledWith(expect.objectContaining({ entityType: "creature" }))
+  })
+  it("400 on an entityType outside the enum", async () => {
+    const r = await app.inject({ method: "POST", url: "/v1/community/listings/L1/clone", headers: { "x-user-id": "u1" }, payload: { entityType: "widget" } })
+    expect(r.statusCode).toBe(400)
+  })
 })
 
 describe("GET /v1/community/detail/:slug/full", () => {

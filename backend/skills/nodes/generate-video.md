@@ -1,7 +1,7 @@
 ---
 node_type: generate-video
-generated_at: 2026-06-04T15:28:16.444Z
-generated_from: b204e991
+generated_at: 2026-06-08T19:29:01.651Z
+generated_from: 6afbb8275
 ---
 
 # Generate Video
@@ -43,6 +43,7 @@ generated_from: b204e991
 - `nsfwChecker?: boolean`
 - `videoTrimStart?: number`
 - `videoTrimEnd?: number`
+- `attachReferenceVideoVariant?: string`
 - `loopTrim?: {
     enabled: boolean
     framesToTest?: number

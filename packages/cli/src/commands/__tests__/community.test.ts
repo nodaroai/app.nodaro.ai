@@ -125,6 +125,13 @@ describe("community command", () => {
     })
   })
 
+  it("browse --entity-type creature forwards entityType", async () => {
+    mocks.browse.mockResolvedValueOnce({ data: [], nextCursor: null })
+    await runCmd("community", "browse", "--entity-type", "creature", "--json")
+    expect(mocks.browse).toHaveBeenCalledTimes(1)
+    expect(mocks.browse.mock.calls[0][0]).toMatchObject({ entityType: "creature" })
+  })
+
   it("browse rejects an invalid --entity-type", async () => {
     await expect(
       runCmd("community", "browse", "--entity-type", "bogus", "--json"),
@@ -156,6 +163,12 @@ describe("community command", () => {
     mocks.clone.mockResolvedValueOnce({ entityType: "character", id: "new-id" })
     await runCmd("community", "clone", "abc", "--type", "character", "--json")
     expect(mocks.clone).toHaveBeenCalledWith("abc", "character")
+  })
+
+  it("clone <id> --type creature forwards (id, creature)", async () => {
+    mocks.clone.mockResolvedValueOnce({ entityType: "creature", id: "new-id" })
+    await runCmd("community", "clone", "abc", "--type", "creature", "--json")
+    expect(mocks.clone).toHaveBeenCalledWith("abc", "creature")
   })
 
   it("clone rejects an invalid --type", async () => {

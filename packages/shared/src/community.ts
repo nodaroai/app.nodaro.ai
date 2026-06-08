@@ -5,7 +5,7 @@
  */
 
 /** The kind of shared asset a community listing wraps. */
-export type CommunityEntityType = "character" | "location" | "object"
+export type CommunityEntityType = "character" | "location" | "object" | "creature"
 
 /** How `browse` orders results. `newest` (default) or most-cloned first. */
 export type CommunitySort = "newest" | "popular"

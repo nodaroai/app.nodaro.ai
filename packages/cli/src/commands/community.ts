@@ -20,7 +20,12 @@ interface GlobalOpts extends OutputOpts {
   profile?: string
 }
 
-const ENTITY_TYPES: readonly CommunityEntityType[] = ["character", "location", "object"]
+const ENTITY_TYPES: readonly CommunityEntityType[] = [
+  "character",
+  "location",
+  "object",
+  "creature",
+]
 const SORTS: readonly CommunitySort[] = ["newest", "popular"]
 const REPORT_REASONS: readonly CommunityReportReason[] = [
   "real_person_no_consent",
@@ -60,7 +65,7 @@ export function communityCommand(): Command {
   cmd
     .command("browse")
     .description("list public community listings (paged via --cursor)")
-    .option("--entity-type <type>", "filter by kind: character|location|object")
+    .option("--entity-type <type>", "filter by kind: character|location|object|creature")
     .option("--q <text>", "free-text search query")
     .option("--category <cat>", "filter by category")
     .option("--sort <sort>", "ordering: newest|popular")
@@ -148,7 +153,7 @@ export function communityCommand(): Command {
   cmd
     .command("clone <id>")
     .description("copy a community listing into your library")
-    .requiredOption("--type <entityType>", "kind of asset: character|location|object")
+    .requiredOption("--type <entityType>", "kind of asset: character|location|object|creature")
     .option("--profile <name>")
     .option("--json")
     .action(async (id: string, opts: { type: string } & GlobalOpts) => {

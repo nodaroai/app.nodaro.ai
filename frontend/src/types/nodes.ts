@@ -1598,6 +1598,14 @@ export type ImageToVideoData = {
   nsfwChecker?: boolean
   videoTrimStart?: number
   videoTrimEnd?: number
+  // "Save result to character" — when set (a non-empty variant label) AND an
+  // upstream Character is wired in, the completed clip is appended to that
+  // character's reference_videos_by_variant[<label>] on job completion
+  // (server-side, via job-finalize). `undefined` = the control is off; a
+  // string (incl. "") = on, with that label. Independent of the Character
+  // node's injectIdentityInPrompts (saving ≠ identity injection). The editor
+  // forwards it as `attachReferenceVideoVariant` on POST /v1/generate-video.
+  attachReferenceVideoVariant?: string
   // Smart-loop-cut post-process. When `enabled: true`, the worker runs a
   // PSNR-based loop-point search after generation and trims the clip there.
   // Replaces the legacy autoLoopTrim (VEO 3.1 only, fixed 8 frames).
