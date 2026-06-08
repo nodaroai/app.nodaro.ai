@@ -36,6 +36,11 @@ vi.mock("@/middleware/credit-guard.js", () => ({
   }),
 }))
 
+vi.mock("@/providers/video/ffmpeg-utils.js", async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>
+  return { ...actual, probeMediaDuration: vi.fn() }
+})
+
 vi.mock("@/lib/admin-check.js", () => ({
   warmAdminCache: vi.fn(),
   checkIsAdmin: vi.fn().mockResolvedValue(false),
@@ -74,6 +79,7 @@ vi.mock("@/lib/video-schemas.js", async () => {
 import { generateVideoRoutes } from "../generate-video.js"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
+import { probeMediaDuration } from "../../providers/video/ffmpeg-utils.js"
 
 // ---------------------------------------------------------------------------
 // Test app setup
@@ -122,6 +128,56 @@ function mockJobInsert(result: { data: unknown; error: unknown }) {
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
+
+describe("POST /v1/generate-video — Seedance 2 reference-audio limit", () => {
+  const SEEDANCE_BODY = {
+    userId: "00000000-0000-4000-8000-000000000001",
+    provider: "seedance-2-fast",
+    prompt: "a person speaking",
+    referenceImageUrls: ["https://cdn.example/face.png"],
+    referenceAudioUrls: ["https://cdn.example/voice.mp3"],
+  }
+
+  it("rejects with 400 audio_too_long when reference audio exceeds the 15.2s cap", async () => {
+    vi.mocked(probeMediaDuration).mockResolvedValue(21)
+    const res = await app.inject({ method: "POST", url: "/v1/generate-video", payload: SEEDANCE_BODY })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("audio_too_long")
+    expect(probeMediaDuration).toHaveBeenCalledWith("https://cdn.example/voice.mp3")
+  })
+
+  it("does NOT reject for audio within the 15.2s cap (probe ran and passed)", async () => {
+    mockJobInsert({ data: { id: "job-ok" }, error: null })
+    vi.mocked(probeMediaDuration).mockResolvedValue(12)
+    const res = await app.inject({ method: "POST", url: "/v1/generate-video", payload: SEEDANCE_BODY })
+    expect(probeMediaDuration).toHaveBeenCalled()
+    // The preHandler must not be the one rejecting — any 400 here would be a
+    // downstream/Zod concern, never audio_too_long.
+    if (res.statusCode === 400) {
+      expect(res.json().error.code).not.toBe("audio_too_long")
+    }
+  })
+
+  it("does not probe audio for providers without an enforced cap", async () => {
+    mockJobInsert({ data: { id: "job-mm" }, error: null })
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-video",
+      payload: { ...SEEDANCE_BODY, provider: "minimax" },
+    })
+    expect(probeMediaDuration).not.toHaveBeenCalled()
+  })
+
+  it("skips the audio check in frames input mode (audio is dropped there)", async () => {
+    mockJobInsert({ data: { id: "job-frames" }, error: null })
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-video",
+      payload: { ...SEEDANCE_BODY, seedance2InputMode: "frames" },
+    })
+    expect(probeMediaDuration).not.toHaveBeenCalled()
+  })
+})
 
 describe("POST /v1/generate-video", () => {
   it("returns 400 when imageUrl is missing", async () => {

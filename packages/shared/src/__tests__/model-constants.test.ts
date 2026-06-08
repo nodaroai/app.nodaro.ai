@@ -3,7 +3,42 @@ import {
   VIDEO_MODEL_CAPS,
   modelsForInputMode,
   preferredInputModeForModel,
+  seedance2AudioLimitSec,
+  findSeedance2AudioOverLimit,
 } from "../model-constants.js"
+
+describe("seedance2AudioLimitSec", () => {
+  it("returns the verified 15.2s cap for seedance-2-fast (KIE r2v)", () => {
+    expect(seedance2AudioLimitSec("seedance-2-fast")).toBe(15.2)
+  })
+
+  it("returns null for providers without a verified cap (no false rejects)", () => {
+    expect(seedance2AudioLimitSec("seedance-2")).toBeNull() // non-fast limit unverified
+    expect(seedance2AudioLimitSec("minimax")).toBeNull()
+    expect(seedance2AudioLimitSec(undefined)).toBeNull()
+  })
+})
+
+describe("findSeedance2AudioOverLimit", () => {
+  it("flags the first reference audio over the cap", () => {
+    expect(findSeedance2AudioOverLimit("seedance-2-fast", [10, 16, 12])).toBe(16)
+  })
+
+  it("allows audio at or under the cap", () => {
+    expect(findSeedance2AudioOverLimit("seedance-2-fast", [10, 15.2])).toBeNull()
+    expect(findSeedance2AudioOverLimit("seedance-2-fast", [15.2])).toBeNull()
+  })
+
+  it("never rejects for providers without an enforced cap", () => {
+    expect(findSeedance2AudioOverLimit("seedance-2", [99])).toBeNull()
+    expect(findSeedance2AudioOverLimit("minimax", [99])).toBeNull()
+  })
+
+  it("ignores non-finite durations (probe failures) but still catches a real overage", () => {
+    expect(findSeedance2AudioOverLimit("seedance-2-fast", [NaN, 20])).toBe(20)
+    expect(findSeedance2AudioOverLimit("seedance-2-fast", [NaN])).toBeNull()
+  })
+})
 
 describe("modelsForInputMode", () => {
   it("returns kling for first_frame", () => {

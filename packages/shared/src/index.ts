@@ -84,6 +84,9 @@ export {
   VIDEO_MODEL_CAPS,
   modelsForInputMode,
   preferredInputModeForModel,
+  SEEDANCE_2_R2V_MAX_AUDIO_SEC_BY_PROVIDER,
+  seedance2AudioLimitSec,
+  findSeedance2AudioOverLimit,
 } from "./model-constants.js"
 
 export {

@@ -40,16 +40,23 @@ export const MAX_POLL_ATTEMPTS_LIP_SYNC_LONG = 360
 export class KieError extends Error {
   public readonly internalDetails: string
   public readonly context: string
+  /** True when KIE reported a TERMINAL `state:"fail"` for the task (as opposed
+   *  to a timeout / transient / network error). Reconcile keys off this to
+   *  fail-fast + refund instead of bumping toward the 18-attempt exhaustion.
+   *  The raw failCode/failMsg stay in `internalDetails` (and are logged). */
+  public readonly isUpstreamFailure: boolean
 
   constructor(
     sanitizedMessage: string,
     internalDetails: string,
-    context: string
+    context: string,
+    isUpstreamFailure = false,
   ) {
     super(sanitizedMessage)
     this.name = "KieError"
     this.internalDetails = internalDetails
     this.context = context
+    this.isUpstreamFailure = isUpstreamFailure
   }
 
   /** Get full error message including internal details (for logging/debugging) */
@@ -65,7 +72,8 @@ export class KieError extends Error {
  */
 export function createSanitizedError(
   internalMessage: string,
-  context: string
+  context: string,
+  isUpstreamFailure = false,
 ): KieError {
   // Log the full internal error for debugging (visible in Railway logs)
   console.error(
@@ -138,7 +146,7 @@ export function createSanitizedError(
     sanitizedMessage = `${context} failed. Please try again or contact support if the issue persists.`
   }
 
-  return new KieError(sanitizedMessage, internalMessage, context)
+  return new KieError(sanitizedMessage, internalMessage, context, isUpstreamFailure)
 }
 
 // =============================================================================
@@ -475,7 +483,8 @@ export async function pollKieTask(
       )
       throw createSanitizedError(
         `task failed: [${failCode}] ${failMsg}`,
-        "Generation"
+        "Generation",
+        true, // terminal upstream failure → reconcile fails fast + refunds
       )
     }
 

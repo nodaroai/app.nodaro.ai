@@ -236,8 +236,12 @@ export async function reconcileKieJob(row: KieJobRow): Promise<void> {
     result = await singlePoll(row)
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
+    // Classify off the STRUCTURED flag, never the message text: KieError.message
+    // is sanitized for user display (e.g. the generic "Generation failed…"), so a
+    // string match on "task failed" silently missed every terminal failure and
+    // bumped it toward the 18-attempt / 90-min exhaustion (seedance-2 r2v incident).
     const isUpstreamFailure =
-      err instanceof KieError && msg.includes("task failed")
+      err instanceof KieError && err.isUpstreamFailure
     if (isUpstreamFailure) {
       await markFailed(row.id, msg)
       await refundReservedCreditsForJob(row.id)

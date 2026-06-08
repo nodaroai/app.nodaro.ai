@@ -1,16 +1,17 @@
-import type { FastifyInstance } from "fastify"
+import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { shotsSchema, elementsSchema } from "../lib/video-schemas.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
+import { probeMediaDuration } from "../providers/video/ffmpeg-utils.js"
 import { getModelCreditBaseCost } from "../ee/billing/credits.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
-import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, isSeedance2Provider, estimateLoopTrimAddonCredits } from "@nodaro/shared"
+import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, isSeedance2Provider, estimateLoopTrimAddonCredits, seedance2AudioLimitSec, findSeedance2AudioOverLimit } from "@nodaro/shared"
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 
@@ -91,9 +92,59 @@ export const generateVideoBody = z.object({
 const IDENTITY_PRESERVE_SUFFIX =
   "The subject must remain exactly the same person — preserve facial identity, eye color, hair color, skin tone, and unique features."
 
+/**
+ * Fastify preHandler: for Seedance 2.0 providers with a verified r2v
+ * reference-audio cap (e.g. seedance-2-fast ≤ 15.2s), ffprobe each reference
+ * audio and reject BEFORE submit if any exceeds the limit — otherwise KIE 400s
+ * after the job is created (and, pre-fix, the reconcile cron sat on it ~90 min).
+ * Best-effort on the probe: a probe failure does NOT block the request (it
+ * proceeds; a genuinely-too-long clip is then caught by KIE and fails fast via
+ * the reconcile upstream-failure path). Skips frames-mode (audio is dropped
+ * there) and any provider without an enforced cap. Runs BEFORE creditGuard so
+ * we never reserve credits for a request we're about to reject.
+ */
+export async function validateSeedance2AudioPreHandler(
+  req: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
+  const body = (req.body ?? {}) as Record<string, unknown>
+  const provider = body.provider as string | undefined
+  const limit = seedance2AudioLimitSec(provider)
+  if (limit === null) return
+  if (body.seedance2InputMode === "frames") return // frames mode ignores audio
+  const urls = body.referenceAudioUrls
+  if (!Array.isArray(urls) || urls.length === 0) return
+
+  // Probe in parallel, bounded to the route's accepted ref count — this runs
+  // BEFORE the Zod `.max(SEEDANCE_2_REF_LIMITS.audio)` check, so never ffprobe an
+  // unbounded list. A probe failure is best-effort: map it to NaN (which
+  // findSeedance2AudioOverLimit ignores) so a blip can't block a valid request.
+  const candidates = urls
+    .slice(0, SEEDANCE_2_REF_LIMITS.audio)
+    .filter((u): u is string => typeof u === "string" && u.length > 0)
+  const settled = await Promise.allSettled(candidates.map((u) => probeMediaDuration(u)))
+  const durations = settled.map((r, i) => {
+    if (r.status === "fulfilled") return r.value
+    req.log.warn({ err: r.reason, url: candidates[i] }, "generate-video: seedance-2 reference-audio ffprobe failed; skipping length check")
+    return NaN
+  })
+
+  const over = findSeedance2AudioOverLimit(provider, durations)
+  if (over !== null) {
+    reply.status(400).send({
+      error: {
+        code: "audio_too_long",
+        message: `Reference audio is too long for this model: ${over.toFixed(1)}s exceeds the ${limit}s limit. Please use a shorter audio clip.`,
+      },
+    })
+  }
+}
+
 export async function generateVideoRoutes(app: FastifyInstance) {
   app.post("/v1/generate-video", {
-    preHandler: creditGuard(
+    preHandler: [
+      validateSeedance2AudioPreHandler,
+      creditGuard(
       (req) => {
         const body = req.body as Record<string, unknown>
         const hasVideoRef = Array.isArray(body?.referenceVideoUrls) && (body.referenceVideoUrls as unknown[]).length > 0
@@ -133,6 +184,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
         },
       },
     ),
+    ],
   }, async (req, reply) => {
     const parsed = generateVideoBody.safeParse(req.body)
     if (!parsed.success) {
