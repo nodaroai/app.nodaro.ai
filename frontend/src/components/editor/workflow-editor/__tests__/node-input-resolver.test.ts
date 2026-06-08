@@ -83,6 +83,52 @@ describe("resolveNodeInputs", () => {
     expect(inputs.referenceImageUrls).toContain("http://char.png")
   })
 
+  // Identity injection (inject canonical_description into the prompt) and the
+  // reference-video auto-attach (save the clip back to the character) are
+  // SEPARATE opt-ins. The resolver carries `attachToCharacterId` whenever a
+  // Character with a DB id is wired in (so the attach can use it); it only sets
+  // `injectCharacterContext` when the Character's injectIdentityInPrompts is on.
+  it("sets attachToCharacterId WITHOUT injectCharacterContext when identity injection is off", () => {
+    const char = makeNode("c1", "character", {
+      sourceImageUrl: "http://char.png",
+      characterDbId: "db-1",
+      injectIdentityInPrompts: false,
+    })
+    const target = makeNode("t1", "image-to-video")
+    const edges = [makeEdge("c1", "t1")]
+
+    const inputs = resolveNodeInputs(target, [char, target], edges)
+    expect(inputs.attachToCharacterId).toBe("db-1")
+    expect(inputs.injectCharacterContext).toBeUndefined()
+  })
+
+  it("sets BOTH attachToCharacterId and injectCharacterContext when identity injection is on", () => {
+    const char = makeNode("c1", "character", {
+      sourceImageUrl: "http://char.png",
+      characterDbId: "db-1",
+      injectIdentityInPrompts: true,
+    })
+    const target = makeNode("t1", "image-to-video")
+    const edges = [makeEdge("c1", "t1")]
+
+    const inputs = resolveNodeInputs(target, [char, target], edges)
+    expect(inputs.attachToCharacterId).toBe("db-1")
+    expect(inputs.injectCharacterContext).toBe(true)
+  })
+
+  it("does NOT set attachToCharacterId when the Character has no characterDbId", () => {
+    const char = makeNode("c1", "character", {
+      sourceImageUrl: "http://char.png",
+      injectIdentityInPrompts: true,
+    })
+    const target = makeNode("t1", "image-to-video")
+    const edges = [makeEdge("c1", "t1")]
+
+    const inputs = resolveNodeInputs(target, [char, target], edges)
+    expect(inputs.attachToCharacterId).toBeUndefined()
+    expect(inputs.injectCharacterContext).toBeUndefined()
+  })
+
   it("resolves face node as referenceImageUrls", () => {
     const faceNode = makeNode("f1", "face", {
       sourceImageUrl: "http://face.png",

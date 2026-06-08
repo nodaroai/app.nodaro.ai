@@ -2273,6 +2273,12 @@ export interface GenerateVideoOptions {
    *  identity-preserve suffix to the prompt. Requires attachToCharacterId. */
   injectCharacterContext?: boolean
   attachToCharacterId?: string
+  /** When set (a non-empty variant label) alongside attachToCharacterId, the
+   *  backend appends the completed clip to the character's
+   *  reference_videos_by_variant[<label>] on job completion (job-finalize).
+   *  Independent of injectCharacterContext — saving the result and injecting
+   *  identity are separate opt-ins. */
+  attachReferenceVideoVariant?: string
   userId?: string
   /** Per-click idempotency key. Same UUID across retries of one click;
    *  fresh UUID for the next click. See generateIdempotencyKey(). */
@@ -2332,6 +2338,9 @@ export async function generateVideo(
     }
     if (opts.attachToCharacterId) {
       body.attachToCharacterId = opts.attachToCharacterId
+    }
+    if (opts.attachReferenceVideoVariant) {
+      body.attachReferenceVideoVariant = opts.attachReferenceVideoVariant
     }
     if (opts.userId) {
       body.userId = opts.userId

@@ -2348,6 +2348,16 @@ export function executeNode(
         ...(inputs.injectCharacterContext && inputs.attachToCharacterId
           ? { injectCharacterContext: true, attachToCharacterId: inputs.attachToCharacterId }
           : {}),
+        // Save result to character — when the node carries a non-empty variant
+        // label AND a Character is wired in (resolver carries its id), forward
+        // the id + label so the backend appends the finished clip to
+        // reference_videos_by_variant. Independent of identity injection.
+        ...((i2vData.attachReferenceVideoVariant ?? "").trim().length > 0 && inputs.attachToCharacterId
+          ? {
+              attachToCharacterId: inputs.attachToCharacterId,
+              attachReferenceVideoVariant: (i2vData.attachReferenceVideoVariant as string).trim(),
+            }
+          : {}),
       },
       idempotencyKey,
     );

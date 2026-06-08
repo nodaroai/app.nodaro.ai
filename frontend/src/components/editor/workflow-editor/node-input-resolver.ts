@@ -1502,11 +1502,18 @@ export function resolveNodeInputs(
       // forwards them only on those API calls.
       if (src.type === "character") {
         const charData = src.data as Record<string, unknown>;
-        const inject = charData.injectIdentityInPrompts === true;
         const dbId = typeof charData.characterDbId === "string" ? charData.characterDbId : "";
-        if (inject && dbId.length > 0) {
-          inputs.injectCharacterContext = true;
+        if (dbId.length > 0) {
+          // Carry the character id whenever a Character is wired in — it's
+          // needed by BOTH the identity-injection forward AND the
+          // reference-video auto-attach. The two are independent opt-ins:
+          // `attachToCharacterId` alone never triggers injection (the
+          // executor + backend both gate injection on injectCharacterContext)
+          // nor an attach (that needs the node's attachReferenceVideoVariant).
           inputs.attachToCharacterId = dbId;
+          if (charData.injectIdentityInPrompts === true) {
+            inputs.injectCharacterContext = true;
+          }
         }
       }
     } else if (src.type === "location") {

@@ -1,7 +1,7 @@
 ---
 node_type: image-to-video
-generated_at: 2026-05-29T10:18:56.937Z
-generated_from: 691ceafd
+generated_at: 2026-06-08T19:29:01.634Z
+generated_from: 6afbb8275
 ---
 
 # image-to-video
@@ -44,6 +44,7 @@ generated_from: 691ceafd
 - `nsfwChecker?: boolean`
 - `videoTrimStart?: number`
 - `videoTrimEnd?: number`
+- `attachReferenceVideoVariant?: string`
 - `loopTrim?: {
     enabled: boolean
     framesToTest?: number
