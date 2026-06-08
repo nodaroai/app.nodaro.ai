@@ -1,5 +1,5 @@
-# Object
-> Create a reusable object asset with angle, material, and variation sets.
+# Object/Props
+> Create a reusable object or prop asset with angle, material, and variation sets.
 
 ## Overview
 The Object node creates a persistent object asset with a base image and multiple variation categories. Objects can be viewed from different angles, rendered with different materials, and generated in visual variations. Objects are stored per-project in the database and can be referenced by scene nodes for consistent placement across compositions.

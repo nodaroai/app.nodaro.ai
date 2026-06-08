@@ -63,7 +63,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "save-to-storage": "Save to Storage",
   "webhook-output": "Webhook Output",
   "character": "Character",
-  "object": "Object",
+  "object": "Object/Props",
   "location": "Location",
   "scene": "Scene",
 }

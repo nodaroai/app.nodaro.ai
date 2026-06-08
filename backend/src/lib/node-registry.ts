@@ -639,7 +639,7 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
 
   { type: "character", label: "Character", category: "entity", description: "Reusable character — portrait, expressions, poses, motion clips, voice & personality, edited in the full-screen Character Studio.", outputType: "data" },
   { type: "face", label: "Face", category: "entity", description: "Reusable face reference.", outputType: "data" },
-  { type: "object", label: "Object", category: "entity", description: "Reusable object reference.", outputType: "data" },
+  { type: "object", label: "Object/Props", category: "entity", description: "Reusable object / prop reference.", outputType: "data" },
   { type: "creature", label: "Animal/Creature", category: "entity", description: "Reusable animal / creature reference — species, angles, poses, variations, motion clips, edited in the full-screen Creature Studio.", outputType: "data" },
   { type: "location", label: "Location", category: "entity", description: "Reusable location reference.", outputType: "data" },
 

@@ -58,7 +58,7 @@ const NODE_TYPE_LABELS: Record<string, string> = {
   "text-prompt": "Text",
   "character": "Character",
   "location": "Location",
-  "object": "Object",
+  "object": "Object/Props",
   "creature": "Animal/Creature",
   "face": "Face",
   "scene": "Scene",

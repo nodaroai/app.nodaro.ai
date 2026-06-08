@@ -395,7 +395,7 @@ describe("ObjectNode", () => {
   // ---- Phase E3 — Studio integration -------------------------------------
   it("renders the Studio button and opens the studio for this node on click", () => {
     renderObjectNode()
-    const btn = screen.getByRole("button", { name: "Open Object Studio" })
+    const btn = screen.getByRole("button", { name: "Open Object/Props Studio" })
     expect(btn).toBeInTheDocument()
     fireEvent.click(btn)
     expect(setObjectStudioNodeIdMock).toHaveBeenCalledWith("node-1")

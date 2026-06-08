@@ -1171,7 +1171,7 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   },
   {
     type: "object",
-    label: "Create Object",
+    label: "Create Object/Props",
     icon: <Package className="h-4 w-4" />,
     category: "Assets",
   },
