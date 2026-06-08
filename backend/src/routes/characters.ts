@@ -81,7 +81,13 @@ export const upsertCharacterBody = z.object({
   // a library/custom voice by id (premade voices are addressed by name). Always
   // OPTIONAL: a character may have no voice, or a legacy voice with no recorded
   // type. Without this field Zod would strip a client-sent `voiceType` on save.
-  voice: z.object({ voiceId: z.string(), voiceName: z.string(), traits: z.string(), voiceType: z.enum(["premade", "library", "custom"]).optional() }).nullable().optional(),
+  // `previewUrl` is a playable audio sample (ElevenLabs `preview_url` for premade/
+  // library voices, the clone's sample for custom) the studio plays in an <audio>
+  // element — persisted on the voice so Voice Library voices (which have NO by-id
+  // lookup) stay previewable after reload. Client-played only (server never fetches
+  // it), so a plain bounded URL — NOT the SSRF-guarded `safeUrlSchema`. Optional +
+  // backward-compatible: legacy voices without it simply have no preview.
+  voice: z.object({ voiceId: z.string(), voiceName: z.string(), traits: z.string(), voiceType: z.enum(["premade", "library", "custom"]).optional(), previewUrl: z.string().url().max(2048).optional() }).nullable().optional(),
   personality: z.object({ mood: z.string(), speechStyle: z.string(), movementStyle: z.string(), behavioralNotes: z.string() }).nullable().optional(),
   // Identity-foundation fields (migration 114). Length caps mirror the DB
   // CHECK constraints so we reject at the boundary with a 400 rather than a
@@ -169,7 +175,7 @@ type CharacterRow = {
   motions: { name: string; url: string }[] | null
   reference_videos_by_variant: Record<string, string[]> | null
   selected_asset_by_variant: Record<string, string> | null
-  voice: { voiceId: string; voiceName: string; traits: string; voiceType?: "premade" | "library" | "custom" } | null
+  voice: { voiceId: string; voiceName: string; traits: string; voiceType?: "premade" | "library" | "custom"; previewUrl?: string } | null
   personality: { mood: string; speechStyle: string; movementStyle: string; behavioralNotes: string } | null
   canonical_description: string | null
   lora_training_status: string | null

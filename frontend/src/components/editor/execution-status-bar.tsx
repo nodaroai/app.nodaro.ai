@@ -11,11 +11,35 @@ import { discardWorkflowExecution, stopWorkflowExecution, getWorkflowExecution }
 import { hasCredits } from "@/lib/edition"
 import { toast } from "sonner"
 import { useQuery } from "@tanstack/react-query"
+import { isNotFound } from "@/lib/api-errors"
 
 interface ExecutionStatusBarProps {
   readonly executionId: string
   readonly onStopped: () => void
   readonly onRunInstead?: () => void
+}
+
+const TERMINAL_STATUSES = new Set([
+  "completed",
+  "failed",
+  "cancelled",
+  "timed_out",
+  "discarded",
+])
+
+/**
+ * `refetchInterval` policy for the execution poll. Stop (return false) when the
+ * run reaches a terminal status OR when the execution 404s — the row is gone, so
+ * continued polling is just the "404 storm". Any other (transient) error keeps
+ * the 3s cadence so a live run recovers from a network blip.
+ */
+export function executionStatusRefetchInterval(
+  data: { status?: string } | undefined,
+  error: unknown,
+): number | false {
+  if (data?.status && TERMINAL_STATUSES.has(data.status)) return false
+  if (isNotFound(error)) return false
+  return 3000
 }
 
 export function ExecutionStatusBar({ executionId, onStopped, onRunInstead }: ExecutionStatusBarProps) {
@@ -24,7 +48,10 @@ export function ExecutionStatusBar({ executionId, onStopped, onRunInstead }: Exe
   const { data: exec } = useQuery({
     queryKey: ["workflow-execution", executionId],
     queryFn: () => getWorkflowExecution(executionId),
-    refetchInterval: 3000,
+    // Stop polling on a terminal status or a definitive 404 (execution gone);
+    // keep the 3s cadence otherwise. Don't retry a 404 — it won't come back.
+    refetchInterval: (query) => executionStatusRefetchInterval(query.state.data, query.state.error),
+    retry: (failureCount, error) => !isNotFound(error) && failureCount < 3,
     enabled: !!executionId,
   })
 

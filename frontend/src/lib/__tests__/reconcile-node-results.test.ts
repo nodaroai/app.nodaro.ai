@@ -116,7 +116,7 @@ describe("computeReconciledNodeResults", () => {
     const node = makeNode("node_5", "generate-image", {
       executionStatus: "completed",
       generatedResults: [
-        { url: "https://cdn/img.png", jobId: "img-base", timestamp: "2026-05-20T20:00:05Z" },
+        { url: "https://cdn/img.png", jobId: "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d", timestamp: "2026-05-20T20:00:05Z" },
       ],
     })
 
@@ -221,5 +221,49 @@ describe("computeReconciledNodeResults", () => {
 
     const updates = await computeReconciledNodeResults([node])
     expect(updates).toHaveLength(0)
+  })
+
+  it("skips synthetic non-UUID jobIds (exec-node_*, upload-url-*) instead of polling them as backend jobs", async () => {
+    // The production "404 storm": reconcile sent local placeholder ids to
+    // GET /v1/jobs/:id/status, which 404 on every workflow load. A real backend
+    // job id is always a UUID; these synthetic ids must be skipped entirely.
+    const synthNode = makeNode("node_4", "generate-video", {
+      executionStatus: "completed",
+      generatedResults: [
+        { url: "https://cdn/x.mp4", jobId: "exec-node_4", timestamp: "x" },
+      ],
+    })
+    const uploadNode = makeNode("node_9", "upload-image", {
+      executionStatus: "completed",
+      generatedResults: [
+        { url: "https://cdn/y.png", jobId: "upload-url-1780778224300", timestamp: "x" },
+      ],
+    })
+
+    const updates = await computeReconciledNodeResults([synthNode, uploadNode])
+
+    expect(updates).toHaveLength(0)
+    expect(mocks.getJobStatusLean).not.toHaveBeenCalled()
+  })
+
+  it("still reconciles real UUID jobIds, including -v<n> variants (guard strips suffix first)", async () => {
+    mocks.getJobStatusLean.mockResolvedValueOnce({
+      id: baseJobId,
+      status: "completed",
+      output_data: {
+        audioUrls: [`https://cdn/${baseJobId}.wav`, `https://cdn/${baseJobId}-v1.wav`],
+      },
+    })
+
+    const node = makeNode("node_8", "suno-generate", {
+      executionStatus: "completed",
+      generatedResults: [
+        { url: `https://cdn/${baseJobId}-v1.wav`, jobId: `${baseJobId}-v1`, timestamp: "x" },
+      ],
+    })
+
+    const updates = await computeReconciledNodeResults([node])
+    expect(mocks.getJobStatusLean).toHaveBeenCalledWith(baseJobId)
+    expect(updates).toHaveLength(1)
   })
 })

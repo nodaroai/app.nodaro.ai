@@ -92,7 +92,11 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
         .from("characters")
         .select("lora_replicate_version, lora_trigger_word, lora_training_status")
         .eq("id", nodeData.characterDbId)
-        .single()
+        // maybeSingle, NOT single: a deleted or cross-project character (RLS is
+        // project-scoped) is an expected state. single() makes PostgREST return
+        // HTTP 406 on 0 rows; maybeSingle() returns { data: null }, which the
+        // `!row` guard below already handles.
+        .maybeSingle()
       const row = data as unknown as {
         lora_replicate_version: string | null
         lora_trigger_word: string | null

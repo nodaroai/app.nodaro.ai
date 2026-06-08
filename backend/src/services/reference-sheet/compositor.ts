@@ -11,7 +11,7 @@ const LABEL_H = 24
 
 /**
  * Render a still reference sheet: lay out the bands, composite each panel buffer
- * into its slot (resize cover), then composite ONE SVG overlay carrying all text,
+ * into its slot (resize contain — never crop), then composite ONE SVG overlay with all text,
  * panel labels, header metadata, palette swatches, and notes. Returns a PNG buffer.
  */
 export async function composeSheet(input: ComposeInput): Promise<Buffer> {
@@ -46,7 +46,11 @@ export async function composeSheet(input: ComposeInput): Promise<Buffer> {
       for (let i = 0; i < band.slots.length && i < panels.length; i++) {
         const slot = band.slots[i]
         resizeJobs.push({
-          buf: sharp(panels[i].image).resize(slot.w, slot.h, { fit: "cover" }).toBuffer(),
+          // `contain` (not cover): show the WHOLE panel — never crop heads/feet off
+          // portrait full-body / pose / wardrobe panels. The cell aspect is matched
+          // to the board (layout.ts SECTION_CELL_ASPECT), so the letterbox is
+          // minimal; what remains is filled with the band background so it blends.
+          buf: sharp(panels[i].image).resize(slot.w, slot.h, { fit: "contain", background: tokens.bg }).toBuffer(),
           top: slot.y,
           left: slot.x,
         })

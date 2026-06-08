@@ -277,6 +277,23 @@ describe("GET /v1/characters", () => {
     expect(res.json().characters).toEqual([CAMEL_CHARACTER])
   })
 
+  it("round-trips voice.previewUrl on list() (same toCamel as GET /:id)", async () => {
+    const voice = {
+      voiceId: "vl-aria",
+      voiceName: "Aria",
+      traits: "warm",
+      voiceType: "library",
+      previewUrl: "https://cdn.elevenlabs.io/aria-preview.mp3",
+    }
+    const { mockSelect } = mockListChain({ data: [{ ...DB_CHARACTER, voice }], error: null })
+    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
+
+    const res = await app.inject({ method: "GET", url: "/v1/characters" })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().characters[0].voice).toEqual(voice)
+  })
+
   it("returns 200 filtered by projectId query param", async () => {
     const { mockSelect, chainable } = mockListChain({ data: [], error: null })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
@@ -524,6 +541,41 @@ describe("GET /v1/characters/:id", () => {
 
     expect(res.statusCode).toBe(200)
     expect(res.json().selectedAssetByVariant).toEqual({ "angles:3/4 left": "https://example.com/a.png" })
+  })
+
+  it("returns voice.previewUrl inside the voice object (read round-trip)", async () => {
+    const rowWithVoice = {
+      ...DB_CHARACTER,
+      voice: {
+        voiceId: "vl-aria",
+        voiceName: "Aria",
+        traits: "warm, expressive",
+        voiceType: "library",
+        previewUrl: "https://cdn.elevenlabs.io/aria-preview.mp3",
+      },
+    }
+    const charsByIdChain = getByIdChain({ data: rowWithVoice, error: null })
+    const jobs = mockGetByIdJobs()
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "jobs") return jobs.next() as never
+      return { select: charsByIdChain.mockSelect } as never
+    })
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/characters/${TEST_CHARACTER_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    // The whole voice JSONB passes through toCamel verbatim — previewUrl included.
+    expect(res.json().voice).toEqual({
+      voiceId: "vl-aria",
+      voiceName: "Aria",
+      traits: "warm, expressive",
+      voiceType: "library",
+      previewUrl: "https://cdn.elevenlabs.io/aria-preview.mp3",
+    })
   })
 
   it("maps in-flight jobs to assetType buckets for spinner rehydration", async () => {
@@ -1483,6 +1535,64 @@ describe("POST /v1/characters", () => {
     // gender alone → selected_asset_by_variant key absent from the patch (untouched).
     expect(captured.patch).not.toHaveProperty("selected_asset_by_variant")
     expect(captured.patch?.gender).toBe("female")
+  })
+
+  // voice.previewUrl — a new OPTIONAL field inside the existing `voice` JSONB (no
+  // migration). Persists a playable sample so any voice — incl. Voice Library
+  // voices that have NO by-id lookup — stays previewable after reload. Client-
+  // played only, so a plain bounded URL (NOT the SSRF-guarded safeUrlSchema).
+  it("persists voice.previewUrl on insert (inside the voice object, all fields intact)", async () => {
+    const { mockInsert, captured } = mockInsertCapture()
+    vi.mocked(supabase.from).mockReturnValue({ insert: mockInsert } as never)
+
+    const voice = {
+      voiceId: "vl-aria",
+      voiceName: "Aria",
+      traits: "warm",
+      voiceType: "library",
+      previewUrl: "https://cdn.elevenlabs.io/aria-preview.mp3",
+    }
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: { name: "Hero", nodeId: "node-1", userId: TEST_USER_ID, voice },
+    })
+
+    expect(res.statusCode).toBe(200)
+    // The whole voice object round-trips — previewUrl persisted alongside the rest,
+    // and the other voice fields are undisturbed.
+    expect(captured.row?.voice).toEqual(voice)
+  })
+
+  it("accepts a legacy voice WITHOUT previewUrl (validates; field absent, not null-forced)", async () => {
+    const { mockInsert, captured } = mockInsertCapture()
+    vi.mocked(supabase.from).mockReturnValue({ insert: mockInsert } as never)
+
+    const voice = { voiceId: "pm-rachel", voiceName: "Rachel", traits: "calm", voiceType: "premade" }
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: { name: "Hero", nodeId: "node-1", userId: TEST_USER_ID, voice },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(captured.row?.voice).toEqual(voice)
+    expect(captured.row?.voice).not.toHaveProperty("previewUrl")
+  })
+
+  it("rejects voice.previewUrl that is not a valid URL (400)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: {
+        name: "Hero",
+        nodeId: "node-1",
+        userId: TEST_USER_ID,
+        voice: { voiceId: "v1", voiceName: "X", traits: "y", previewUrl: "not-a-url" },
+      },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
   })
 
   it("accepts reference_photos with all 7 kinds + one extra `other` (8 photos)", async () => {

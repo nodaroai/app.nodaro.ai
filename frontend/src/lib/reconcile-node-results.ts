@@ -32,6 +32,7 @@
  */
 
 import { getJobStatusLean } from "./api"
+import { isValidUuid } from "./uuid"
 import { buildVariantResults } from "@/components/editor/workflow-editor/variant-results"
 import type { WorkflowNode } from "@/types/nodes"
 import type { GeneratedResult } from "@/types/nodes"
@@ -120,6 +121,13 @@ export async function computeReconciledNodeResults(
     if (typeof firstJobId !== "string" || firstJobId.length === 0) continue
 
     const baseJobId = stripVariantSuffix(firstJobId)
+
+    // Only real backend jobs (UUIDs) can be polled. Synthetic local ids —
+    // `exec-<nodeId>` (orchestrator/SSE results that never got a job UUID) and
+    // `upload-url-<ts>` (pasted external URLs) — would 404 on every workflow
+    // load (the "404 storm"). Skip them. `syncNodeResultsFromDB` guards the
+    // same way (shared `isValidUuid`).
+    if (!isValidUuid(baseJobId)) continue
 
     let job: Awaited<ReturnType<typeof getJobStatusLean>>
     try {

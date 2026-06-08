@@ -9,6 +9,7 @@ import type { WorkflowNode, WorkflowEdge, CharacterDefinition, GeneratedResult, 
 import { filterCloneNodes } from "@nodaro/shared"
 import { orderNodesParentFirst } from "@/components/editor/workflow-editor/group-coords"
 import { isStudioWorkflowSettings } from "@/lib/studio"
+import { isValidUuid } from "@/lib/uuid"
 
 interface StillRunningJob {
   readonly nodeId: string
@@ -48,16 +49,6 @@ interface SaveResult {
 }
 
 const SAVED_DISPLAY_DURATION = 2000
-
-// UUID v4 regex pattern
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-/**
- * Check if a string is a valid UUID
- */
-function isValidUuid(id: string): boolean {
-  return UUID_REGEX.test(id)
-}
 
 /**
  * Sync node results from jobs table via backend API.

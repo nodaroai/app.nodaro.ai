@@ -74,9 +74,12 @@ export interface Character {
   selectedAssetByVariant?: Record<string, string> | null
   /** `voiceType` records the selected voice's KIND (premade voices are
    *  addressed by name; library/custom voices by id at text-to-speech time).
-   *  Optional — a character may have no voice, or a legacy voice predating the
-   *  field. */
-  voice: { voiceId: string; voiceName: string; traits: string; voiceType?: "premade" | "library" | "custom" } | null
+   *  `previewUrl` is a playable audio sample (the voice's `preview_url` / clone
+   *  sample) the studio plays in an `<audio>` element — persisted so Voice Library
+   *  voices (which have no by-id lookup) stay previewable after reload. Client-
+   *  played only; the server never fetches it. Both optional — a character may
+   *  have no voice, or a legacy voice predating these fields. */
+  voice: { voiceId: string; voiceName: string; traits: string; voiceType?: "premade" | "library" | "custom"; previewUrl?: string } | null
   personality: {
     mood: string
     speechStyle: string
@@ -164,9 +167,10 @@ export interface UpsertCharacterInput {
   angles?: Array<{ name: string; url: string }>
   bodyAngles?: Array<{ name: string; url: string }>
   motions?: Array<{ name: string; url: string }>
-  /** See `Character.voice.voiceType` — persisted alongside the voice so TTS can
-   *  resolve a library/custom voice by id. Optional. */
-  voice?: { voiceId: string; voiceName: string; traits: string; voiceType?: "premade" | "library" | "custom" } | null
+  /** See `Character.voice` — persisted alongside the voice so TTS can resolve a
+   *  library/custom voice by id, and `previewUrl` keeps the sample playable after
+   *  reload. Both optional. */
+  voice?: { voiceId: string; voiceName: string; traits: string; voiceType?: "premade" | "library" | "custom"; previewUrl?: string } | null
   personality?: {
     mood: string
     speechStyle: string
