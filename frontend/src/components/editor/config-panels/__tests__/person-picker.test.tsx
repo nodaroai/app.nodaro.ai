@@ -8,6 +8,14 @@ import { Dialog, DialogContent } from "@/components/ui/dialog"
 import * as prefs from "@/lib/parameter-node-prefs"
 import { PERSON_DIMENSION_SECTIONS, type PersonValue } from "@nodaro/shared"
 
+// This file renders the FULL PersonPickerDetailed (every dimension + all options)
+// dozens of times and leans on getByRole, whose accessible-name computation over
+// the large tree is genuinely slow — several tests run 4–6s. The 5s default times
+// out on slower CI runners (the ethnicity-tab tests flaked on CI while passing
+// locally). Raise the per-file timeout to absorb CI variance. Scoped to this file
+// so it can't mask slow tests elsewhere.
+vi.setConfig({ testTimeout: 15000 })
+
 /**
  * Characterization tests for the DETAILED person-picker view.
  *
