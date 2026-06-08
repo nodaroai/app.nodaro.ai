@@ -39,6 +39,24 @@ const NATIVE_NEGATIVE_PROMPT_MODELS = new Set([
   "qwen", "qwen-edit",                          // up to 500 chars
 ])
 
+// GPT Image text-to-image endpoints SILENTLY IGNORE a supplied reference image —
+// they generate purely from the prompt, which destroys character/entity identity
+// when an anchor is passed (e.g. Studio asset shots: angles, poses, expressions).
+// Their image-to-image siblings consume the anchor via `input_urls`. When
+// reference image(s) are present, `generateImage` swaps the t2i provider for its
+// i2i sibling below so the anchor is actually honored.
+//
+// TARGETED to GPT Image only — do NOT widen to a blanket "any t2i + refs → i2i"
+// rule: models like nano-banana and seedream t2i legitimately accept reference
+// images via `image_input` as a STYLE reference, and remapping them would change
+// their behavior. Pricing parity holds (each pair costs identically at every
+// tier) and credit reservation already happened at the route on the ORIGINAL
+// provider id — this swap only affects the actual KIE call.
+const GPT_IMAGE_T2I_TO_I2I: Record<string, string> = {
+  "gpt-image-2": "gpt-image-2-i2i",
+  "gpt-image": "gpt-image-i2i",
+}
+
 // Map ratio strings → named image_size values for models that require them
 const RATIO_TO_NAMED_SIZE: Record<string, string> = {
   "1:1": "square_hd",
@@ -105,13 +123,28 @@ export class KieImageProvider
     extraParams?: Record<string, unknown>,
     reconcileOpts?: ReconcileOpts,
   ): Promise<ProviderResult> {
-    const provider = model ?? "nano-banana"
-    const modelConfig = KIE_IMAGE_MODELS[provider]
+    let provider = model ?? "nano-banana"
+    let modelConfig = KIE_IMAGE_MODELS[provider]
     if (!modelConfig) {
       throw createSanitizedError(
         `does not support image provider: ${provider}`,
         "Image generation"
       )
+    }
+
+    // Anchor/reference image present + GPT Image t2i → route to the i2i sibling
+    // that actually consumes the reference (via `input_urls`). The t2i endpoint
+    // drops `image_input`, so without this the anchor is ignored and identity is
+    // lost. Swapping the local `provider` too keeps the request logging and
+    // credit-audit entry reflecting the model truly called. See
+    // GPT_IMAGE_T2I_TO_I2I for why this is intentionally GPT-Image-only.
+    if (referenceImageUrls?.length) {
+      const i2iSibling = GPT_IMAGE_T2I_TO_I2I[provider]
+      const i2iConfig = i2iSibling ? KIE_IMAGE_MODELS[i2iSibling] : undefined
+      if (i2iSibling && i2iConfig) {
+        provider = i2iSibling
+        modelConfig = i2iConfig
+      }
     }
 
     console.log(
