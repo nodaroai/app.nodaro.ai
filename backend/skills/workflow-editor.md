@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-06-07T18:49:00.936Z
-generated_from: db2337ab
+generated_at: 2026-06-08T17:01:13.825Z
+generated_from: bacc5721
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -88,6 +88,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `component` — Component
 - `composite` — Composite
 - `composition-effects` — Composition Effects
+- `creature` — Animal/Creature
 - `deduplicate` — Remove Duplicates
 - `dubbing` — Dubbing
 - `duration` — Duration

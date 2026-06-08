@@ -6,7 +6,7 @@ import { supabase } from "./supabase.js"
  * character-private original so locations/objects can reuse it.
  */
 export async function deriveAvailableName(
-  table: "characters" | "locations" | "objects",
+  table: "characters" | "locations" | "objects" | "creatures",
   userId: string,
   baseName: string,
 ): Promise<string> {

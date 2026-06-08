@@ -74,6 +74,7 @@ export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleCo
   "motion-graphics": { composition: "control" },
   "motion-transfer": { video: "video" },
   "object": { objectRef: "imageRef" },
+  "creature": { creatureRef: "imageRef" },
   "preview": { out: "control" },
   "qa-check": { approved: "approve", rejected: "negative" },
   "reduce": { out: "control" },

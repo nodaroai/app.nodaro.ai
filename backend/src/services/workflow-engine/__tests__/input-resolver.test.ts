@@ -232,6 +232,19 @@ describe("resolveNodeInputs", () => {
     expect(result.referenceImageUrls).toContain("https://char.png")
   })
 
+  it("routes a creature node to referenceImageUrls (treated as image source)", () => {
+    const target = node("t", "generate-image")
+    const creatureNode = node("c", "creature")
+    const allNodes = [creatureNode, target]
+    const edges = [edge("c", "t")]
+    const states: Record<string, NodeExecutionState> = {
+      c: { status: "completed", output: { imageUrl: "https://creature.png" } },
+    }
+
+    const result = resolveNodeInputs(target, edges, states, allNodes)
+    expect(result.referenceImageUrls).toContain("https://creature.png")
+  })
+
   it("routes entity to imageUrl for lip-sync target", () => {
     const target = node("t", "lip-sync")
     const charNode = node("c", "character")

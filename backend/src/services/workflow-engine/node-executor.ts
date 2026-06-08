@@ -161,6 +161,7 @@ export function extractUserPromptTemplate(node: SimpleNode): string | undefined 
     case "character":
     case "face":
     case "object":
+    case "creature":
     case "location":
       // Entity nodes have BOTH a free-form `prompt` and a structured
       // `description`. The route-level enrichment uses `description` first.

@@ -38,6 +38,7 @@ import { buildLlmCreditIdentifier } from "@nodaro/shared"
 import {
   buildCharacterPrompt,
   buildObjectPrompt,
+  buildCreaturePrompt,
   buildLocationPrompt,
   buildFaceTemplateInputs,
   LOCATION_REFERENCE_PHOTO_KINDS,
@@ -906,6 +907,7 @@ const VIDEO_REF_IMAGE_SOURCE_TYPES = new Set([
   "upload-image",
   "character",
   "object",
+  "creature",
   "location",
   "edit-image",
   "image-to-image",
@@ -3827,6 +3829,35 @@ export function buildPayload(
           ?? resolveRefs(data.prompt as string | undefined, refMap)
       return {
         jobName: "generate-object",
+        queueName: "video-generation",
+        modelIdentifier: provider,
+        payload: {
+          jobId,
+          prompt: entityPrompt,
+          sourceImageUrl: data.sourceImageUrl,
+          provider,
+          referenceImageUrls: resolvedInputs.referenceImageUrls,
+          usageLogId,
+        },
+      }
+    }
+    case "creature": {
+      // Mirrors `case "object"` — the creature delta is the free-text `species`
+      // (a dragon/wolf IS the subject), which buildCreaturePrompt leads with.
+      const provider = (data.provider as string) ?? "nano-banana"
+      const name = (data.name as string | undefined) ?? ""
+      const entityPrompt = name
+        ? buildCreaturePrompt({
+            name,
+            description: data.description as string | undefined,
+            species: data.species as string | undefined,
+            category: data.category as string | undefined,
+            style: data.style as string | undefined,
+          })
+        : resolveRefs(data.description as string | undefined, refMap)
+          ?? resolveRefs(data.prompt as string | undefined, refMap)
+      return {
+        jobName: "generate-creature",
         queueName: "video-generation",
         modelIdentifier: provider,
         payload: {

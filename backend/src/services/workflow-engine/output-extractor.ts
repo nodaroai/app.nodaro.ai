@@ -854,6 +854,7 @@ const ENTITY_RESULT_TYPES = new Set([
   "character",
   "face",
   "object",
+  "creature",
   "location",
 ])
 

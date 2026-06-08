@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { CHARACTER_ATTACH_COLUMNS, OBJECT_ATTACH_COLUMNS, LOCATION_ATTACH_COLUMNS } from "../entity-prompts.js"
+import { CHARACTER_ATTACH_COLUMNS, OBJECT_ATTACH_COLUMNS, LOCATION_ATTACH_COLUMNS, CREATURE_ATTACH_COLUMNS } from "../entity-prompts.js"
 
 describe("attach columns include the reference-sheet buckets", () => {
   it("character gains sheets, detail_closeups, outfit_variations", () => {
@@ -15,5 +15,14 @@ describe("attach columns include the reference-sheet buckets", () => {
   it("location gains sheets, detail_closeups", () => {
     for (const c of ["sheets", "detail_closeups"]) expect(LOCATION_ATTACH_COLUMNS).toContain(c)
     for (const c of ["time_of_day", "weather", "seasons", "angles", "lighting", "atmosphere_motions"]) expect(LOCATION_ATTACH_COLUMNS).toContain(c)
+  })
+})
+
+describe("CREATURE_ATTACH_COLUMNS", () => {
+  it("has the worker-attachable creature asset columns (poses, not materials)", () => {
+    expect([...CREATURE_ATTACH_COLUMNS].sort()).toEqual(
+      ["angles", "detail_closeups", "motion_clips", "poses", "sheets", "variations"].sort(),
+    )
+    expect(CREATURE_ATTACH_COLUMNS).not.toContain("materials")
   })
 })

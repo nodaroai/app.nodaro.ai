@@ -331,6 +331,7 @@ export { settledWithLimit } from "./settled-with-limit.js"
 export {
   buildCharacterPrompt,
   buildObjectPrompt,
+  buildCreaturePrompt,
   buildLocationPrompt,
   buildFaceTemplateInputs,
   buildMotionPrompt,
@@ -349,6 +350,7 @@ export {
   locationReferencePhotoKindLabel,
   OBJECT_ASSET_TYPES,
   OBJECT_ATTACH_COLUMNS,
+  CREATURE_ATTACH_COLUMNS,
   OBJECT_ASSET_VARIANTS,
   type LocationAssetType,
   type LocationAttachColumn,
@@ -364,6 +366,7 @@ export {
   type CharacterMotionPromptInput,
   type ObjectAssetType,
   type ObjectAttachColumn,
+  type CreatureAttachColumn,
   type ObjectMotionPromptInput,
 } from "./entity-prompts.js"
 
@@ -1074,6 +1077,7 @@ export type {
   WorkflowExport,
   WorkflowExportCharacter,
   WorkflowExportObject,
+  WorkflowExportCreature,
   WorkflowExportLocation,
 } from "./workflow-export.js"
 export { stripExportContent } from "./workflow-export.js"

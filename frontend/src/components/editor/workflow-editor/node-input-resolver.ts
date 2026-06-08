@@ -50,7 +50,7 @@ export function resolveSeedPromptHint(
   entityNode: { id: string },
   edges: ReadonlyArray<{ source: string; target: string; targetHandle?: string | null }>,
   nodes: ReadonlyArray<{ id: string; type?: string; data?: Record<string, unknown> }>,
-  entityType: "object" | "location" | "character",
+  entityType: "object" | "creature" | "location" | "character",
 ): string {
   const typeConnections = edges.filter(
     (e) => e.target === entityNode.id && e.targetHandle === "type",
@@ -60,6 +60,9 @@ export function resolveSeedPromptHint(
   let pickerNodeTypes: ReadonlySet<string>;
   switch (entityType) {
     case "object":
+    // Creature's `type` handle accepts the same object-type pickers (animal
+    // is the relevant family), so it resolves seed hints from the same set.
+    case "creature":
       pickerNodeTypes = OBJECT_PICKER_NODE_TYPES;
       break;
     case "location":
@@ -1467,7 +1470,8 @@ export function resolveNodeInputs(
     } else if (
       src.type === "character" ||
       src.type === "face" ||
-      src.type === "object"
+      src.type === "object" ||
+      src.type === "creature"
     ) {
       if (node.type === "lip-sync" || node.type === "speech-to-video" || node.type === "motion-transfer" || node.type === "ai-avatar") {
         inputs.imageUrl = output;

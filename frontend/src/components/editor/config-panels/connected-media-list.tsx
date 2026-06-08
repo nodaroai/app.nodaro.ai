@@ -56,6 +56,7 @@ export function getSourceThumbnail(
     source.type === "character" ||
     source.type === "face" ||
     source.type === "object" ||
+    source.type === "creature" ||
     source.type === "location"
   )
     return (nd.sourceImageUrl as string) || undefined
@@ -116,6 +117,7 @@ const IMAGE_TYPES = new Set([
   "character",
   "face",
   "object",
+  "creature",
   "location",
   "scene",
 ])
@@ -184,6 +186,7 @@ const TYPE_BADGE: Record<string, { label: string; className: string }> = {
   character: { label: "Char", className: "bg-pink-500/10 text-pink-500" },
   face: { label: "Face", className: "bg-orange-500/10 text-orange-500" },
   object: { label: "Obj", className: "bg-emerald-500/10 text-emerald-500" },
+  creature: { label: "Animal", className: "bg-violet-500/10 text-violet-500" },
   location: { label: "Loc", className: "bg-cyan-500/10 text-cyan-500" },
   scene: { label: "Scene", className: "bg-pink-500/10 text-pink-500" },
 }

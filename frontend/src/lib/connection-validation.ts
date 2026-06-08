@@ -70,6 +70,7 @@ import {
   isValidCharacterConnection,
   isValidFaceConnection,
   isValidObjectConnection,
+  isValidCreatureConnection,
   isValidLocationConnection,
 } from "./identity-handles"
 import { isVisualPickerType } from "./parameter-picker-types"
@@ -294,9 +295,9 @@ export function isValidWorkflowConnection(
     }
   }
 
-  // Identity nodes (character, face, object, location) — Phase 23.
-  // Each has a `in` text-prompt input; object adds a `type` picker target
-  // and location adds a `cinematography` picker target.
+  // Identity nodes (character, face, object, creature, location) — Phase 23.
+  // Each has a `in` text-prompt input; object + creature add a `type` picker
+  // target and location adds a `cinematography` picker target.
   if (connection.targetHandle) {
     const validator = IDENTITY_VALIDATORS[targetType ?? ""]
     if (validator) {
@@ -442,6 +443,7 @@ const IDENTITY_VALIDATORS: Record<string, AudioTextValidator> = {
   "character": isValidCharacterConnection,
   "face":      isValidFaceConnection,
   "object":    isValidObjectConnection,
+  "creature":  isValidCreatureConnection,
   "location":  isValidLocationConnection,
 }
 

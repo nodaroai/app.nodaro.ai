@@ -142,6 +142,7 @@ import { SceneNode } from "./scene-node";
 import { CharacterNode } from "./character-node";
 import { FaceNode } from "./face-node";
 import { ObjectNode } from "./object-node";
+import { CreatureNode } from "./creature-node";
 import { LocationNode } from "./location-node";
 import { CombineTextNode } from "./combine-text-node";
 import { SplitTextNode } from "./split-text-node";
@@ -318,6 +319,8 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   face: FaceNode,
   // Object
   object: ObjectNode,
+  // Animal/Creature
+  creature: CreatureNode,
   // Location
   location: LocationNode,
   // Utility
