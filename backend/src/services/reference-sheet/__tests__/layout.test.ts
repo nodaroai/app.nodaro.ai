@@ -32,3 +32,29 @@ describe("computeLayout", () => {
     for (const s of lay.bands[0].slots) expect(s.x + s.w).toBeLessThanOrEqual(lay.width)
   })
 })
+
+// Regression: per-board cell aspect so portrait full-body / pose / wardrobe panels
+// aren't squashed into square cells and cropped (the reported "images are cut" bug).
+describe("computeLayout — per-board cell aspect", () => {
+  const board = (kind: string): ResolvedSection =>
+    ({ kind, title: kind, panels: [{ image: Buffer.alloc(1), label: "p" }] }) as ResolvedSection
+  const firstSlot = (kind: string) =>
+    computeLayout({ skin: "studio", aspect: "landscape", sections: [board(kind)] }).bands[0].slots[0]
+
+  it("expression-board cells are square", () => {
+    const s = firstSlot("expression-board")
+    expect(s.w).toBe(s.h)
+  })
+  it("body-turnaround + pose-board + wardrobe cells are PORTRAIT (taller than wide)", () => {
+    for (const kind of ["body-turnaround", "pose-board", "wardrobe-board", "head-turnaround"]) {
+      const s = firstSlot(kind)
+      expect(s.h, kind).toBeGreaterThan(s.w)
+    }
+  })
+  it("location coverage + environment cells are LANDSCAPE (wider than tall)", () => {
+    for (const kind of ["coverage", "environment-board"]) {
+      const s = firstSlot(kind)
+      expect(s.w, kind).toBeGreaterThan(s.h)
+    }
+  })
+})
