@@ -178,6 +178,7 @@ import { registerAuthHook } from "./middleware/auth.js"
 import { registerMcpHostFilter } from "./middleware/mcp-host-filter.js"
 import rateLimit from "@fastify/rate-limit"
 import formbody from "@fastify/formbody"
+import { installEmptyJsonBodyFix } from "./lib/empty-json-body-fix.js"
 
 /**
  * Rate-limit key derivation.
@@ -225,6 +226,12 @@ export async function buildApp() {
   // bodies per RFC 6749 §3.2. Without this, Fastify's default JSON parser
   // drops the body and Zod sees undefined fields.
   await app.register(formbody)
+
+  // Drop a misleading application/json content-type from BODYLESS requests (e.g.
+  // a DELETE that still carries Content-Type: application/json from the SDK) so
+  // Fastify skips parsing instead of 400ing on the empty body. A global parser
+  // can't be used — the Stripe webhook registers its own. See the helper.
+  installEmptyJsonBodyFix(app)
 
   // Claude.ai MCP UI iframes get a per-instance sandbox subdomain on
   // claudemcpcontent.com. Origins look like
