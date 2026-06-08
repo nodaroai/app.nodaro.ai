@@ -8,6 +8,14 @@ import type {
 import { buildClient, handleError } from "../client.js"
 import { detail, dim, emit, success, table, type OutputOpts } from "../output.js"
 
+/** Split a comma-separated CLI list into a trimmed, non-empty string[]. */
+function parseList(value: string): string[] {
+  return value
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+}
+
 interface GlobalOpts extends OutputOpts {
   profile?: string
 }
@@ -46,7 +54,7 @@ function parseEntityType(value: string): CommunityEntityType {
 
 export function communityCommand(): Command {
   const cmd = new Command("community").description(
-    "browse, clone, favorite, and report shared community assets",
+    "browse, clone, favorite, report, publish, and unpublish community assets",
   )
 
   cmd
@@ -203,6 +211,116 @@ export function communityCommand(): Command {
           return
         }
         success("reported")
+      } catch (err) {
+        handleError(err)
+      }
+    })
+
+  cmd
+    .command("publish <entityType> <id>")
+    .description(
+      "share one of YOUR entities to the community (admin token); requires --consent",
+    )
+    .requiredOption("--title <t>", "public listing title")
+    .option("--description <d>", "public listing description")
+    .option("--category <c>", "listing category")
+    .option("--style <s>", "listing style tag")
+    .option("--tags <list>", "comma-separated tags", parseList)
+    .option(
+      "--consent",
+      "attest you have the rights to share this publicly (required)",
+    )
+    .option(
+      "--likeness-consent",
+      "attest to rights/consent of any real person depicted, 18+ (required for characters)",
+    )
+    .option("--profile <name>")
+    .option("--json")
+    .action(
+      async (
+        entityType: string,
+        id: string,
+        opts: {
+          title: string
+          description?: string
+          category?: string
+          style?: string
+          tags?: string[]
+          consent?: boolean
+          likenessConsent?: boolean
+        } & GlobalOpts,
+      ) => {
+        try {
+          const parsedEntityType = parseEntityType(entityType)
+          if (!opts.consent) {
+            throw new Error(
+              "publishing requires --consent (you attest you have the rights to share this publicly)",
+            )
+          }
+          if (parsedEntityType === "character" && !opts.likenessConsent) {
+            throw new Error(
+              "characters require --likeness-consent (rights/consent of any real person depicted, 18+)",
+            )
+          }
+          const client = buildClient(opts.profile)
+          const result = await client.community.publish(parsedEntityType, id, {
+            title: opts.title,
+            description: opts.description,
+            category: opts.category,
+            style: opts.style,
+            tags: opts.tags,
+            attestation: true,
+            likenessAttestation: opts.likenessConsent,
+          })
+          if (opts.json) {
+            emit(result, opts)
+            return
+          }
+          success(`shared → ${result.slug}`)
+          emit(result, { json: true })
+        } catch (err) {
+          handleError(err)
+        }
+      },
+    )
+
+  cmd
+    .command("unpublish <listingId>")
+    .description("unshare (deactivate) a listing you published (admin token)")
+    .option("--profile <name>")
+    .option("--json")
+    .action(async (listingId: string, opts: GlobalOpts) => {
+      try {
+        const client = buildClient(opts.profile)
+        const result = await client.community.unpublish(listingId)
+        if (opts.json) {
+          emit(result, opts)
+          return
+        }
+        success(`unshared listing ${listingId}`)
+      } catch (err) {
+        handleError(err)
+      }
+    })
+
+  cmd
+    .command("shared-status <entityType> <sourceId>")
+    .description(
+      "look up YOUR existing listing (if any) for a source entity (admin token)",
+    )
+    .option("--profile <name>")
+    .option("--json")
+    .action(async (entityType: string, sourceId: string, opts: GlobalOpts) => {
+      try {
+        const parsedEntityType = parseEntityType(entityType)
+        const client = buildClient(opts.profile)
+        const result = await client.community.sharedListing(parsedEntityType, sourceId)
+        if (opts.json) {
+          emit(result, opts)
+          return
+        }
+        if (result.data) detail(result.data)
+        else success("not shared")
       } catch (err) {
         handleError(err)
       }
