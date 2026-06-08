@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest"
-import { streamRequest } from "../sse-client"
+import { streamRequest, streamGet, SseHttpError } from "../sse-client"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -222,5 +222,35 @@ describe("streamRequest", () => {
       "/v1/test",
       expect.objectContaining({ signal: controller.signal }),
     )
+  })
+
+  it("throws SseHttpError carrying .status on a non-ok response (callers detect 404)", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
+      mockErrorResponse(404, "Execution not found"),
+    ))
+
+    const err = await collect(streamRequest("/v1/test", { body: {} })).catch((e) => e)
+    expect(err).toBeInstanceOf(SseHttpError)
+    expect((err as SseHttpError).status).toBe(404)
+    // Message format is preserved for backward-compat.
+    expect((err as SseHttpError).message).toContain("SSE request failed (404)")
+  })
+})
+
+describe("streamGet", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it("throws SseHttpError with .status=404 (the execution-stream not-found path)", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
+      mockErrorResponse(404, "Execution not found"),
+    ))
+
+    const err = await collect(
+      streamGet("/v1/workflow-executions/x/stream", {}),
+    ).catch((e) => e)
+    expect(err).toBeInstanceOf(SseHttpError)
+    expect((err as SseHttpError).status).toBe(404)
   })
 })

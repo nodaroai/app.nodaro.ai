@@ -24,6 +24,21 @@ export type StreamEvent =
   | { type: "done"; data: Record<string, unknown> }
   | { type: "error"; data: { code: string; message: string } }
 
+/**
+ * Thrown when the SSE endpoint responds with a non-2xx status. Carries the HTTP
+ * `status` so callers can distinguish a definitive 404 ("execution gone — stop
+ * polling") from a transient failure ("retry"). The message format is preserved
+ * for backward-compat with existing `.toThrow("SSE request failed (...)")` checks.
+ */
+export class SseHttpError extends Error {
+  readonly status: number
+  constructor(status: number, body: string) {
+    super(`SSE request failed (${status}): ${body}`)
+    this.name = "SseHttpError"
+    this.status = status
+  }
+}
+
 export async function* streamRequest<T = StreamEvent>(
   url: string,
   options: {
@@ -45,7 +60,7 @@ export async function* streamRequest<T = StreamEvent>(
 
   if (!response.ok) {
     const text = await response.text().catch(() => "")
-    throw new Error(`SSE request failed (${response.status}): ${text}`)
+    throw new SseHttpError(response.status, text)
   }
 
   const body = response.body
@@ -137,7 +152,7 @@ export async function* streamGet<T = StreamEvent>(
 
   if (!response.ok) {
     const text = await response.text().catch(() => "")
-    throw new Error(`SSE request failed (${response.status}): ${text}`)
+    throw new SseHttpError(response.status, text)
   }
 
   const body = response.body

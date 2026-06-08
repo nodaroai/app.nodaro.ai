@@ -4,6 +4,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { getJobStatusLean, getUserCredits, getWorkflowExecution, runWorkflow, streamWorkflowExecution, WorkflowAlreadyRunningError, withDedupRaceRetry } from "@/lib/api";
 import { generateIdempotencyKey } from "@/lib/idempotency-key";
 import { registerNodeRunAbort, clearNodeRunAbort } from "@/lib/node-run-abort";
+import { isNotFound } from "@/lib/api-errors";
 import { hasCredits } from "@/lib/edition";
 import { getCachedUserId } from "@/hooks/use-auth";
 import { setSkipUndoCapture } from "@/hooks/undo-flags";
@@ -881,17 +882,26 @@ export function streamBackendExecution(
     abortController.signal,
   ).catch((err) => {
     if (err instanceof DOMException && err.name === "AbortError") return;
+    if (isNotFound(err)) {
+      // 404 on /stream is definitive — the execution row is gone. The poll
+      // safety-net below confirms and tears down fast; don't imply this is a
+      // transient blip ("polling still active") nor keep the stream alive.
+      console.warn("[SSE] Execution stream not found (404) — execution no longer exists");
+      return;
+    }
     console.warn("[SSE] Streaming connection lost, polling still active:", err);
   });
 
   // --- Polling safety net (runs in parallel with SSE) ---
   let pollFailures = 0;
+  let notFoundFailures = 0;
   const pollOnce = async () => {
     if (finished || ctx.isWorkflowStale()) return;
 
     try {
       const exec = await getWorkflowExecution(executionId);
       pollFailures = 0;
+      notFoundFailures = 0;
 
       if (exec.status === "discarded") { onDiscarded(); return; }
 
@@ -922,7 +932,20 @@ export function streamBackendExecution(
         }
         return;
       }
-    } catch {
+    } catch (err) {
+      // A 404 means the execution row is GONE (cleaned up / never persisted /
+      // restored-then-deleted). Don't burn the full MAX_CONSECUTIVE_POLL_FAILURES
+      // budget (~60s of repeated 404s — the "404 storm"). Allow ONE transient
+      // miss (a fresh-run replication race) then give up.
+      if (isNotFound(err)) {
+        notFoundFailures++;
+        if (notFoundFailures >= 2 && !finished) {
+          cleanup();
+          toast.error("Backend execution no longer exists");
+          return;
+        }
+        return;
+      }
       pollFailures++;
       if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES && !finished) {
         // Final verification before giving up

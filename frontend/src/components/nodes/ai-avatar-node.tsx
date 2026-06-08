@@ -19,6 +19,7 @@ import { CachedImage } from "@/components/ui/cached-image"
 import type { AiAvatarData } from "@/types/nodes"
 import { isValidAiAvatarConnection } from "@/lib/video-producer-handles"
 import { isVisualPickerType } from "@/lib/parameter-picker-types"
+import { resolveAiAvatarCreditId } from "@nodaro/shared"
 
 const ACCEPTS_SCRIPT = (t: string) => isValidAiAvatarConnection("script", t, isVisualPickerType)
 const ACCEPTS_AUDIO  = (t: string) => isValidAiAvatarConnection("audio",  t, isVisualPickerType)
@@ -56,8 +57,11 @@ function AiAvatarNodeComponent({ id, data, selected }: NodeProps) {
   const { aspectRatio: mediaAspectRatio, onLoadDimensions: handleLoadDimensions } =
     useResultAspectRatio(id, results, activeIndex)
 
-  // Credit model id based on engine + resolution (coarse ceiling; refined in Phase 3)
-  const creditModelId = `heygen-${nodeData.engine ?? "avatar-iv"}:${nodeData.resolution ?? "720p"}:max`
+  // Exact-bucket reserve id from the shared single source of truth (mirrors
+  // cinematic-avatar-node). resolveAiAvatarCreditId always returns a seeded id
+  // (∈ AI_AVATAR_RESERVE_IDS), so the cost preview never hits the 503
+  // price-not-configured trap the old hand-built `:max` id caused.
+  const creditModelId = resolveAiAvatarCreditId(nodeData)
   const credits = useModelCredits(creditModelId, 9)
 
   useEffect(() => {

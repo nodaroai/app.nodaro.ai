@@ -33,7 +33,8 @@ vi.mock("sonner", () => ({
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
-import { ExecutionStatusBar } from "../execution-status-bar"
+import { ExecutionStatusBar, executionStatusRefetchInterval } from "../execution-status-bar"
+import { NotFoundError } from "@nodaro/client"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -119,5 +120,29 @@ describe("ExecutionStatusBar", () => {
     await userEvent.click(runInstead)
 
     expect(onRunInstead).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("executionStatusRefetchInterval", () => {
+  it("keeps polling (3s) while the execution is still active", () => {
+    expect(executionStatusRefetchInterval({ status: "running" }, null)).toBe(3000)
+    expect(executionStatusRefetchInterval({ status: "pending" }, null)).toBe(3000)
+    expect(executionStatusRefetchInterval(undefined, null)).toBe(3000)
+  })
+
+  it("stops polling once the run reaches a terminal status", () => {
+    for (const s of ["completed", "failed", "cancelled", "timed_out", "discarded"]) {
+      expect(executionStatusRefetchInterval({ status: s }, null)).toBe(false)
+    }
+  })
+
+  it("stops polling when the execution 404s (row is gone — no 404 storm)", () => {
+    expect(
+      executionStatusRefetchInterval(undefined, new NotFoundError("Execution not found")),
+    ).toBe(false)
+  })
+
+  it("keeps polling on a transient (non-404) error so a live run recovers", () => {
+    expect(executionStatusRefetchInterval(undefined, new Error("network blip"))).toBe(3000)
   })
 })
