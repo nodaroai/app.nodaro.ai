@@ -12,7 +12,7 @@ import { buildSheetMetadata } from "../../services/reference-sheet/sheet-text.js
 import { attachAssetToCharacter, type CharacterAssetItem } from "../../lib/character-auto-attach.js"
 import { autoAttachObjectAsset } from "../../lib/object-auto-attach.js"
 import { autoAttachLocationAsset } from "../../lib/location-auto-attach.js"
-import { MOTION_COLUMN } from "@nodaro/shared"
+import { MOTION_COLUMN, resolveSheetSections } from "@nodaro/shared"
 import type { SheetSection, SheetFlavour, SheetSkin, SheetType, EntityKind } from "@nodaro/shared"
 import { shouldSaveJobResult, markJobCompleted, commitJobCredits, type HandlerFn, type JobContext } from "../shared.js"
 
@@ -31,8 +31,8 @@ async function fetchBuffer(url: string): Promise<Buffer> {
 
 async function attachSheet(kind: EntityKind, id: string, userId: string, item: SheetItem): Promise<void> {
   if (kind === "character") await attachAssetToCharacter({ characterId: id, userId, column: "sheets", item })
-  else if (kind === "object") await autoAttachObjectAsset({ objectId: id, userId, column: "sheets", name: item.name, url: item.url })
-  else await autoAttachLocationAsset({ locationId: id, userId, column: "sheets", name: item.name, url: item.url })
+  else if (kind === "object") await autoAttachObjectAsset({ objectId: id, userId, column: "sheets", name: item.name, url: item.url, item })
+  else await autoAttachLocationAsset({ locationId: id, userId, column: "sheets", name: item.name, url: item.url, item })
 }
 
 const handleReferenceSheet: HandlerFn = async function handleReferenceSheet(job: Job, ctx: JobContext) {
@@ -41,8 +41,12 @@ const handleReferenceSheet: HandlerFn = async function handleReferenceSheet(job:
     entityKind?: EntityKind; entityDbId?: string; imageUrl?: string
   }
   const flavour = data.flavour
-  const sections: SheetSection[] = flavour.sections ?? []
   const entityKind: EntityKind = data.entityKind ?? "character"
+  // The Studio "Sheet" tab sends an explicit section stack in `flavour.sections`;
+  // the canvas node, workflow runs, and API/MCP callers send only `type`. Expand
+  // it into the default stack for (entityKind, type) — otherwise the sheet
+  // composes with zero bands (a blank image). Shared single source of truth.
+  const sections: SheetSection[] = resolveSheetSections(entityKind, data.type, flavour.sections)
 
   // Load the owned entity row + buckets (entity mode).
   let heroUrl = data.imageUrl
@@ -63,9 +67,18 @@ const handleReferenceSheet: HandlerFn = async function handleReferenceSheet(job:
   }
 
   // Hero buffer + palette are needed by BOTH branches (header thumbnail + the
-  // color-palette section). Fetch + extract them up front.
-  const heroBuf = heroUrl ? await fetchBuffer(heroUrl) : undefined
-  const palette = heroBuf ? await extractPalette(heroBuf, 5) : []
+  // color-palette section). Both are best-effort: a corrupt/expired hero or a
+  // palette-extraction failure must NOT fail the whole sheet (spec §13 — "palette
+  // failure → neutral default; sheet still composes"). On failure the header just
+  // omits its thumbnail and the palette band renders empty.
+  let heroBuf: Buffer | undefined
+  if (heroUrl) {
+    try { heroBuf = await fetchBuffer(heroUrl) } catch { heroBuf = undefined }
+  }
+  let palette: Awaited<ReturnType<typeof extractPalette>> = []
+  if (heroBuf) {
+    try { palette = await extractPalette(heroBuf, 5) } catch { palette = [] }
+  }
 
   // ── Motion sheets: render the chrome as a background PNG (empty slots) then
   // overlay the entity's motion clips into the slot rectangles via FFmpeg → MP4.
@@ -111,9 +124,15 @@ const handleReferenceSheet: HandlerFn = async function handleReferenceSheet(job:
   const { present } = resolvePanels(entityKind, sections, flavour, buckets)
   const panelUrls = present.map((p) => p.url)
   const uniqueUrls = [...new Set(panelUrls)]
-  const fetched = await Promise.all(uniqueUrls.map(fetchBuffer))
+  // allSettled, not all: one unreachable/expired panel URL must not fail the
+  // whole sheet. A dropped URL is simply absent from panelBufByUrl, and
+  // buildResolvedSections filters slots whose buffer isn't a Buffer (§13).
+  const fetched = await Promise.allSettled(uniqueUrls.map(fetchBuffer))
   const panelBufByUrl: Record<string, Buffer> = {}
-  uniqueUrls.forEach((u, i) => { panelBufByUrl[u] = fetched[i] })
+  uniqueUrls.forEach((u, i) => {
+    const r = fetched[i]
+    if (r.status === "fulfilled") panelBufByUrl[u] = r.value
+  })
   const resolved = buildResolvedSections(sections, flavour, entityKind, { title, metadata, notes, heroBuf, palette, buckets, panelBufByUrl })
   const input: ComposeInput = { skin: data.skin, aspect: flavour.aspect, sections: resolved, withText: flavour.withText, showLabels: flavour.showLabels }
   const png = await composeSheet(input)

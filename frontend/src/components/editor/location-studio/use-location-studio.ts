@@ -156,6 +156,20 @@ export function useLocationStudio(nodeId: string): LocationStudioState {
     }
   }, [nodeId, updateNodeData])
 
+  // On open, refetch the canonical row ONCE (when saved) so the Sheet tab's
+  // "Existing sheets" grid + detail-closeup reuse reflect what's actually
+  // persisted. The canvas node only carries what was mirrored at save time, and
+  // the realtime merge (mergeRealtimeLocationRow) doesn't include the `sheets`
+  // bucket — so without this, a sheet generated in a prior session is invisible.
+  // refetchAndRestage already hydrates sheets + detailCloseups from
+  // getLocationById. Mirrors the character-studio seed+refetch.
+  const refetchedRef = useRef(false)
+  useEffect(() => {
+    if (refetchedRef.current || !stagedData?.locationDbId) return
+    refetchedRef.current = true
+    void refetchAndRestage()
+  }, [stagedData?.locationDbId, refetchAndRestage])
+
   const saveStaged = useCallback(async (): Promise<string> => {
     const current = stagedRef.current
     if (!current) throw new Error("Studio state not ready.")

@@ -196,6 +196,7 @@ import { collectPreviewItems } from "./preview-items";
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
 import { resolveFieldMappings, NODE_MAPPABLE_FIELDS } from "./resolve-field-mappings";
 import { pollJobWithNodeUpdate, guardedToast } from "./poll-job";
+import { ensureNodeSheetPanels, SHEET_STAGE_A_CANCELLED } from "../reference-sheet/node-sheet-stage-a";
 import { shouldAbandonNode } from "./abandon-guard";
 import {
   runImageGeneration,
@@ -4608,9 +4609,10 @@ export function executeNode(
 
   if (node.type === "reference-sheet") {
     const sheetData = node.data as unknown as ReferenceSheetData;
-    // Compose-only: the sheet is composited from the panels the connected
-    // entity already has. The (kind, DB id) are resolved by the input resolver
-    // from the upstream character/object/location node (NOT a wired image URL).
+    // One-click reference sheet. The (kind, DB id) are resolved by the input
+    // resolver from the upstream character/object/location node (NOT a wired
+    // image URL). Stage A generates any panels the chosen type needs but the
+    // entity lacks (off its main image); Stage B composites them into the sheet.
     const entityKind = inputs.entityKind;
     const entityDbId = inputs.entityDbId;
     if (!entityKind || !entityDbId) {
@@ -4625,27 +4627,73 @@ export function executeNode(
       return Promise.reject(new Error(errMsg));
     }
     setUserPromptTemplate(undefined);
-    // Standard GeneratedResult[] shape → use the shared poll helper. `outputKey`
-    // writes the composited sheet into generatedResults/generatedImageUrl; the
-    // `extraOutputFields` callback lifts the clean `panelUrls` from output_data
-    // onto node data so the `panels` output handle can spread them downstream.
-    return pollJobWithNodeUpdate(
-      node.id,
-      () => generateReferenceSheet({
-        type: sheetData.type,
-        skin: sheetData.skin,
-        flavour: sheetData.flavour,
-        entityKind,
-        entityDbId,
-      }),
-      "generatedImageUrl",
-      "Reference Sheet",
-      ctx,
-      (od) => {
-        const panels = od.panelUrls;
-        return Array.isArray(panels) ? { panelUrls: panels } : {};
-      },
-    );
+    return (async () => {
+      // ── Stage A: generate the panels the chosen type needs but the entity
+      // lacks (turnarounds/expressions/…) off its main image, so the sheet isn't
+      // header-only. Mirrors the Studio Sheet tab — headless, with node-card
+      // progress + a cost confirm. Reuses existing panels; tolerates individual
+      // panel failures (compose proceeds with whatever landed).
+      try {
+        await ensureNodeSheetPanels({
+          entityKind,
+          entityDbId,
+          type: sheetData.type,
+          flavour: sheetData.flavour,
+          ctx,
+          nodeId: node.id,
+          label: sheetData.label ?? "Reference Sheet",
+        });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Stage A failed";
+        if (msg === SHEET_STAGE_A_CANCELLED) {
+          // User declined the cost confirm (or aborted) — unwind quietly without
+          // painting a failure or charging the assembly fee.
+          useWorkflowStore.getState().updateNodeData(node.id, {
+            executionStatus: "idle",
+            currentJobId: undefined,
+            currentJobProgress: undefined,
+          });
+          return "";
+        }
+        if (e instanceof WorkflowStaleError) {
+          // Workflow switched mid-Stage-A — unwind the run; do NOT compose.
+          throw e;
+        }
+        if (msg.includes("main image")) {
+          // Hard requirement: panels (and the sheet hero) need the main image.
+          useWorkflowStore.getState().updateNodeData(node.id, {
+            executionStatus: "failed",
+            errorMessage: msg,
+            currentJobId: undefined,
+            currentJobProgress: undefined,
+          });
+          toast.error(`Node "${sheetData.label}": ${msg}`);
+          throw e;
+        }
+        // Any other Stage-A error (e.g. one panel failed) — fall through and
+        // compose with whatever panels exist; empty bands are skipped.
+      }
+      // ── Stage B: composite (the server re-fetches fresh entity state). The
+      // `extraOutputFields` callback lifts the clean `panelUrls` onto node data
+      // so the `panels` output handle can spread them downstream.
+      return pollJobWithNodeUpdate(
+        node.id,
+        () => generateReferenceSheet({
+          type: sheetData.type,
+          skin: sheetData.skin,
+          flavour: sheetData.flavour,
+          entityKind,
+          entityDbId,
+        }),
+        "generatedImageUrl",
+        "Reference Sheet",
+        ctx,
+        (od) => {
+          const panels = od.panelUrls;
+          return Array.isArray(panels) ? { panelUrls: panels } : {};
+        },
+      );
+    })();
   }
 
   if (node.type === "video-sfx") {

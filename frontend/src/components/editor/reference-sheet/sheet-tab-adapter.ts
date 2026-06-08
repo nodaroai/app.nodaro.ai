@@ -99,8 +99,13 @@ export const SHEET_TAB_ADAPTERS: Record<EntityKind, SheetTabAdapter> = {
     bucketsByColumn: (st) => ({ angles: st.angles, time_of_day: st.timeOfDay, weather: st.weather, seasons: st.seasons, lighting: st.lighting, detail_closeups: st.detailCloseups }),
     generateAsset: (dbId, r) =>
       generateLocationAsset({
+        // Pass the establishing shot so sheet panels are image-to-image off it
+        // (the sheet flow always has a main image — it's gated). NOTE: this is the
+        // sheet path only; the Location Studio's environmental tabs call
+        // generateLocationAsset directly and intentionally omit sourceImageUrl
+        // when Style Lock is OFF (text-only) — that toggle is unaffected.
         assetType: r.assetType as never, variant: r.variant, name: r.name, userPrompt: r.userPrompt,
-        attachToLocationId: dbId, attachToColumn: r.attachToColumn as never, attachName: r.attachName,
+        sourceImageUrl: r.sourceImageUrl, attachToLocationId: dbId, attachToColumn: r.attachToColumn as never, attachName: r.attachName,
       }),
     awaitJob: (jobs, jobId, _assetType, name) => awaitViaPoll(jobs, jobId, name),
     setThumbnail: (s, url, name) => s.patch({ defaultAssetUrl: url, defaultAssetName: name }),

@@ -4,9 +4,9 @@
 
 ## Overview
 
-Reference Sheet assembles a single, presentation-ready model sheet for an entity (a Character, Object, or Location) out of the panels that entity already has. A sheet can include a turnaround (multiple angles), an expression or variation board, detail close-ups, a wardrobe row, a color palette extracted from the main image, and a notes block — laid out on one canvas in one of four visual **skins**.
+Reference Sheet assembles a single, presentation-ready model sheet for an entity (a Character, Object, or Location). A sheet can include a turnaround (multiple angles), an expression or variation board, detail close-ups, a wardrobe row, a color palette extracted from the main image, and a notes block — laid out on one canvas in one of four visual **skins**.
 
-The node does **not** generate new artwork. It reads the panels saved on the connected entity (its angles, expressions, materials, variations, etc.), lays them out, extracts a palette from the entity's main image, and composites everything into one image plus a clean panel set. To get a fuller sheet, generate the panels you want (extra angles, expressions, details) in the entity's **Studio** first; the sheet then reuses them.
+On Run, the node first **generates any panels the chosen type needs but the entity is missing** (extra angles, expressions, details, …) off the entity's main image, reuses the ones it already has, extracts a palette from the main image, and composites everything into one image plus a clean panel set. Because generating panels costs credits, the node tells you how many it will generate and asks you to **confirm** before it starts. To control cost (or pre-build exactly the panels you want), you can also generate them ahead of time in the entity's **Studio** — the sheet then reuses them for free.
 
 You can also generate sheets directly from the **Sheet** tab inside an entity's Studio — the node is the canvas-wired equivalent so a sheet can be produced as part of a workflow.
 
@@ -20,9 +20,9 @@ You can also generate sheets directly from the **Sheet** tab inside an entity's 
    - **Full Reference** — the complete stack (header + turnaround + board + detail + palette + notes).
 3. Pick a **Skin** — **Studio** (clean neutral), **Cinematic** (dark, accent rules under each heading), **Blueprint** (drafting grid + corner ticks, monospace), or **Illustrated** (warm storybook plate, serif).
 4. Adjust the **flavour** knobs as needed: show/hide text, show/hide panel labels, aspect (landscape / square / story), and background.
-5. **Run.** The node composes the panels the entity already has into the sheet.
+5. **Run.** If the entity is missing any panels the type needs, the node tells you how many it will generate (each is charged) and asks you to confirm; it then generates them, reuses any that already exist, and composites the sheet.
 
-> Tip: the sheet is only as rich as the entity's saved panels. Generate the angles, expressions, or details you want in the entity's **Studio** first, then run the sheet to lay them out.
+> Tip: the node generates whatever panels the chosen type needs that the entity is missing. To keep a Run cheap, generate (or trim) the panels you want in the entity's **Studio** first — the sheet reuses existing panels for free and only generates what's absent.
 
 ## Configuration
 
@@ -71,7 +71,7 @@ Cost = **(newly-generated panels at the entity provider's rate)** + a flat **4-c
 | 4 new angles generated with Nano Banana (1 cr each) | `4×1 + 4` | **8** |
 | Full reference with 4 new angles generated with Flux 2 Pro (3 cr each) | `4×3 + 4` | **16** |
 
-The flat assembly fee covers layout, palette extraction, and compositing. The exact credit cost is shown on the node's Run button before you generate.
+The flat assembly fee covers layout, palette extraction, and compositing. The node's Run button shows the assembly fee; when panels need generating, the node first asks you to confirm how many it will generate (each charged at the entity provider's rate) before it starts.
 
 ## Motion / video sheets
 
@@ -91,11 +91,11 @@ Motion sheets are **compose-only**: they use the motion clips the entity **alrea
 ## Requirements & errors
 
 - The connected entity **must have a saved main image**. Without one, the node returns `main_image_required` — approve a main image in the entity's Studio first.
-- The richer the entity's saved panel set (more angles / expressions / details), the fuller the sheet. An entity with only a main image produces a minimal sheet.
+- An entity with only a main image is fine — the node generates the panels the chosen type needs on Run. The more panels the entity already has, the fewer the node generates (and the cheaper the Run).
 
 ## Best Practices
 
-- Build the entity's panels in its Studio **before** running the sheet — the node lays out what exists, it does not generate.
+- To control cost, build (or trim) the entity's panels in its Studio **before** running the sheet — the node reuses existing panels for free and only generates the ones that are missing.
 - Use `panels` (not `sheet`) when feeding a sheet into a generator for character/object consistency. `sheet` is the human-facing poster.
 - Pick **Blueprint** for technical/asset documentation, **Cinematic** for pitch decks, **Illustrated** for storybook/character bibles, and **Studio** when you just want a clean grid.
 
