@@ -10,7 +10,7 @@ On Run, the node first **generates any panels the chosen type needs but the enti
 
 You can also generate sheets directly from the **Sheet** tab inside an entity's Studio — the node is the canvas-wired equivalent so a sheet can be produced as part of a workflow.
 
-> **Note — auto-generation runs on single-node Run only.** When you click **Run** directly on the node (on the canvas), it generates the missing panels (with the cost confirm) then composes. In an **automated whole-workflow run**, the node is **compose-only**: it assembles whatever panels the entity already has and does *not* generate missing ones (an automated run can't pause for confirmation). If the connected entity has no panels for the chosen type, a workflow run fails with `no_panels` (and refunds the assembly fee) rather than charging for an empty sheet — so **pre-build the panels in the entity's Studio before using the node in a workflow.**
+> **Note — auto-generation: workflow vs single-node runs.** Both generate the missing panels off the main image, then compose. The only difference is the **cost confirmation**: clicking **Run** directly on the node shows a confirm dialog with the panel count before it generates; an **automated workflow or app run can't prompt**, so it generates the missing panels **without** a confirm (each charged at the per-panel rate). To control cost in automated runs, pre-build the panels in the entity's Studio first — existing panels are reused for free. (If the entity has no main image, the run fails `main_image_required`; if generation can't produce any panels, the compose fails `no_panels` and refunds the assembly fee rather than charging for an empty sheet.)
 
 ## How to use
 
