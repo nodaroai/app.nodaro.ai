@@ -8,7 +8,7 @@ import type { GenericNode, GenericEdge } from "./types.js"
 
 // Node types that produce reference images
 export const IMAGE_REF_TYPES = new Set([
-  "upload-image", "face", "character", "object", "location",
+  "upload-image", "face", "character", "object", "creature", "location",
   "generate-image", "edit-image", "image-to-image",
 ])
 

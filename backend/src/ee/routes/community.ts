@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
-import type { CommunityCard } from "@nodaro/shared"
+import type { CommunityCard, CommunityFullDetail } from "@nodaro/shared"
 import { supabase } from "../../lib/supabase.js"
 import { cloneListing } from "../services/community/clone.js"
 import { requireAppScope } from "../../lib/scope-prehandler.js"
@@ -56,12 +56,36 @@ export async function communityRoutes(app: FastifyInstance) {
     return reply.send({ data: data as unknown as CommunityCard })
   })
 
+  app.get<{ Params: { slug: string } }>("/v1/community/detail/:slug/full", async (req, reply) => {
+    if (!auth(req, reply)) return
+    const { data: listing } = await supabase
+      .from("community_listings")
+      .select("id, slug, entity_type, title, creator_display_name")
+      .eq("slug", req.params.slug)
+      .eq("is_active", true)
+      .single()
+    if (!listing) return reply.status(404).send({ error: { code: "not_found", message: "Listing not found" } })
+    // snapshot lives in the RLS-deny-by-default community_listing_snapshots table;
+    // this route runs on the service-role `supabase` client, which bypasses RLS.
+    const { data: snap } = await supabase
+      .from("community_listing_snapshots")
+      .select("snapshot")
+      .eq("listing_id", (listing as { id: string }).id)
+      .single()
+    return reply.send({
+      data: {
+        ...(listing as Record<string, unknown>),
+        snapshot: (snap?.snapshot ?? {}) as Record<string, unknown>,
+      } as unknown as CommunityFullDetail,
+    })
+  })
+
   app.post<{ Params: { id: string } }>(
     "/v1/community/listings/:id/clone",
     { preHandler: requireAppScope("assets:write") },
     async (req, reply) => {
       const userId = auth(req, reply); if (!userId) return
-      const body = z.object({ entityType: z.enum(["character", "location", "object"]) }).safeParse(req.body)
+      const body = z.object({ entityType: z.enum(["character", "location", "object", "creature"]) }).safeParse(req.body)
       if (!body.success) return reply.status(400).send({ error: { code: "validation_error", message: "entityType required" } })
       try {
         const res = await cloneListing({ listingId: req.params.id, entityType: body.data.entityType as EntityType, userId })

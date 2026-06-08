@@ -13,6 +13,7 @@ import {
   MAX_POLL_ATTEMPTS_VIDEO,
   sleep,
   createSanitizedError,
+  createUpstreamFailureError,
   pollDelay,
 } from "./client.js"
 import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
@@ -380,7 +381,7 @@ export async function pollKling3Task(
         (data.errorMessage as string) ??
         "Unknown error"
       console.warn(`[Kling3] taskId=${taskId} failed: ${failMsg}`)
-      throw createSanitizedError(
+      throw createUpstreamFailureError(
         `Kling 3.0 generation failed: ${failMsg}`,
         "Kling 3.0"
       )

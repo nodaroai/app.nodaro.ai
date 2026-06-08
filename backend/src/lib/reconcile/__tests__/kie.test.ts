@@ -15,9 +15,11 @@ const mocks = vi.hoisted(() => {
   // KieError subclass — matches the real one's name property so the runtime
   // check `err instanceof KieError` works inside the handler.
   class FakeKieError extends Error {
-    constructor(message: string) {
+    isUpstreamFailure: boolean
+    constructor(message: string, isUpstreamFailure = false) {
       super(message)
       this.name = "KieError"
+      this.isUpstreamFailure = isUpstreamFailure
     }
   }
 
@@ -88,6 +90,8 @@ vi.mock("../../../providers/kie/client.js", () => ({
   pollVeoTask: mocks.pollVeoTaskMock,
   runVeo1080pTask: mocks.runVeo1080pTaskMock,
   KieError: mocks.FakeKieError,
+  isUpstreamKieFailure: (err: unknown) =>
+    err instanceof mocks.FakeKieError && err.isUpstreamFailure,
 }))
 
 vi.mock("../../../providers/kie/kling3-client.js", () => ({
@@ -223,19 +227,47 @@ describe("reconcileKieJob", () => {
     expect(mocks.finalizeMock).toHaveBeenCalled()
   })
 
-  it("upstream failure (KieError 'task failed') → markFailed + refund, no finalize", async () => {
+  it("upstream failure (KieError with upstreamFailure flag) → markFailed + refund, no finalize", async () => {
+    // Regression: the REAL KieError.message is SANITIZED (e.g. the generic
+    // "Generation failed…"), so the old `err.message.includes("task failed")`
+    // check never matched and reconcile bumped a TERMINAL failure toward the
+    // 18-attempt / 90-min exhaustion (the seedance-2 r2v incident). Classify
+    // off the structured `upstreamFailure` flag, never the sanitized message.
     mocks.pollKieTaskMock.mockRejectedValueOnce(
-      new mocks.FakeKieError("task failed: [content_policy] Content policy violation"),
+      new mocks.FakeKieError(
+        "Generation failed. Please try again or contact support if the issue persists.",
+        true, // structured terminal-failure flag (NOT the sanitized message)
+      ),
     )
     const row: KieJobRow = {
       id: "j-failed",
       provider_kind: "kie-standard",
       provider_task_id: "t-failed",
       reconcile_attempts: 0,
-      job_type: "generate-image",
+      job_type: "image-to-video",
     }
     await reconcileKieJob(row)
     expect(mocks.refundMock).toHaveBeenCalledWith("j-failed")
+    expect(mocks.finalizeMock).not.toHaveBeenCalled()
+  })
+
+  it("kie-veo upstream failure → markFailed + refund (fail-fast for non-kie-standard kinds)", async () => {
+    // The shared isUpstreamKieFailure must fail-fast for EVERY poll client, not
+    // just kie-standard — VEO/Kling-3/Kontext/Luma/Runway/Aleph terminal failures
+    // previously rode to the 90-min exhaustion because only the sanitized message
+    // was inspected.
+    mocks.pollVeoTaskMock.mockRejectedValueOnce(
+      new mocks.FakeKieError("Generation failed. Please try again or contact support.", true),
+    )
+    const row: KieJobRow = {
+      id: "j-veo-failed",
+      provider_kind: "kie-veo",
+      provider_task_id: "t-veo-failed",
+      reconcile_attempts: 0,
+      job_type: "image-to-video",
+    }
+    await reconcileKieJob(row)
+    expect(mocks.refundMock).toHaveBeenCalledWith("j-veo-failed")
     expect(mocks.finalizeMock).not.toHaveBeenCalled()
   })
 

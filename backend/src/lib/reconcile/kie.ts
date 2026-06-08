@@ -5,7 +5,7 @@ import {
   pollKieTask,
   pollVeoTask,
   runVeo1080pTask,
-  KieError,
+  isUpstreamKieFailure,
 } from "../../providers/kie/client.js"
 import { pollKling3Task } from "../../providers/kie/kling3-client.js"
 import { pollKontextTask } from "../../providers/kie/kontext-client.js"
@@ -43,7 +43,8 @@ const SUNO_MUSIC_JOB_TYPES: ReadonlySet<string> = new Set([
 
 /** Single-attempt poll dispatcher. Returns the recovered URL(s) on success;
  *  throws when the upstream task is still running OR has terminally failed.
- *  Caller distinguishes via the `KieError` "task failed" vs timeout patterns. */
+ *  Caller distinguishes terminal failure via `isUpstreamKieFailure(err)` (the
+ *  structured flag) vs transient (timeout/network → bump). */
 async function singlePoll(row: KieJobRow): Promise<{
   url: string
   extraUrls: readonly string[]
@@ -147,7 +148,11 @@ async function reconcileKieSunoJob(row: KieJobRow): Promise<void> {
     result = await pollSunoTask(row.provider_task_id)
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
-    if (err instanceof KieError && msg.includes("task failed")) {
+    // Same shared classifier as reconcileKieJob — pollSunoTask sets the flag via
+    // createUpstreamFailureError, so a terminal Suno failure fails fast + refunds
+    // instead of riding to the 18-attempt exhaustion (the old msg.includes match
+    // never matched the sanitized message).
+    if (isUpstreamKieFailure(err)) {
       await markFailed(row.id, msg)
       await refundReservedCreditsForJob(row.id)
     } else {
@@ -218,7 +223,7 @@ async function markFailed(jobId: string, reason: string): Promise<void> {
  *   - on success: forwards the result URLs to `finalizeJobWithMedia` so
  *     output_data gets written, credits commit, asset row created, workflow
  *     execution reopens if sole-cause.
- *   - on upstream failure (`KieError` with "task failed"): marks the job
+ *   - on upstream failure (`isUpstreamKieFailure(err)`): marks the job
  *     failed + refunds reserved credits.
  *   - on transient (still running, network blip): bumps `reconcile_attempts`
  *     and leaves the row in place for the next cron tick.
@@ -236,9 +241,13 @@ export async function reconcileKieJob(row: KieJobRow): Promise<void> {
     result = await singlePoll(row)
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
-    const isUpstreamFailure =
-      err instanceof KieError && msg.includes("task failed")
-    if (isUpstreamFailure) {
+    // Classify off the STRUCTURED flag via the shared isUpstreamKieFailure helper,
+    // never the message text: KieError.message is sanitized (e.g. the generic
+    // "Generation failed…"), so a string match silently missed every terminal
+    // failure and bumped it toward the 18-attempt / 90-min exhaustion. ALL KIE
+    // poll clients now set the flag (createUpstreamFailureError), so every
+    // provider fails fast here — not just kie-standard.
+    if (isUpstreamKieFailure(err)) {
       await markFailed(row.id, msg)
       await refundReservedCreditsForJob(row.id)
     } else {

@@ -607,7 +607,7 @@ export async function workflowRoutes(app: FastifyInstance) {
   })
 
   // Import a workflow from a portable JSON bundle, re-creating bundled assets
-  // (characters, objects, locations) under the caller's account.
+  // (characters, objects, creatures, locations) under the caller's account.
   app.post("/v1/workflows/import", async (req, reply) => {
     const userId = authorize(req, reply, "workflows:write")
     if (!userId) return

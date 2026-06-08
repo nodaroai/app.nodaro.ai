@@ -70,7 +70,15 @@ export async function cloneListing(input: {
       } else if (typeof v === "object") {
         const obj: Record<string, unknown> = {}
         for (const [k, vv] of Object.entries(v as Record<string, unknown>)) {
-          obj[k] = typeof vv === "string" ? await copyUrl(vv) : vv
+          if (typeof vv === "string") {
+            obj[k] = await copyUrl(vv)
+          } else if (Array.isArray(vv)) {
+            obj[k] = await Promise.all(
+              vv.map((u) => (typeof u === "string" ? copyUrl(u) : u)),
+            )
+          } else {
+            obj[k] = vv
+          }
         }
         copiedAssets[f] = obj
       }

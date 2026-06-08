@@ -5,7 +5,7 @@
  */
 
 /** The kind of shared asset a community listing wraps. */
-export type CommunityEntityType = "character" | "location" | "object"
+export type CommunityEntityType = "character" | "location" | "object" | "creature"
 
 /** How `browse` orders results. `newest` (default) or most-cloned first. */
 export type CommunitySort = "newest" | "popular"
@@ -94,4 +94,19 @@ export interface SharedListing {
   favorite_count: number
   created_at: string
   updated_at: string
+}
+
+/**
+ * Full read-only detail for a community listing: the card identity plus the
+ * stored public `snapshot`. The snapshot is an opaque per-entity-type JSON blob
+ * (asset URLs + public text + reduced voice); consumers map it to their own
+ * shape. Backed by `GET /v1/community/detail/:slug/full`.
+ */
+export interface CommunityFullDetail {
+  id: string
+  slug: string
+  entity_type: CommunityEntityType
+  title: string
+  creator_display_name: string | null
+  snapshot: Record<string, unknown>
 }

@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-06-07T18:49:00.936Z
-generated_from: db2337ab
+generated_at: 2026-06-08T20:18:25.825Z
+generated_from: 365d4ab0
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -88,6 +88,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `component` — Component
 - `composite` — Composite
 - `composition-effects` — Composition Effects
+- `creature` — Animal/Creature
 - `deduplicate` — Remove Duplicates
 - `dubbing` — Dubbing
 - `duration` — Duration
@@ -141,7 +142,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `motion-transfer` — Motion Transfer
 - `music-genre` — Music Genre
 - `music-mood` — Music Mood
-- `object` — Object
+- `object` — Object/Props
 - `person` — Person
 - `photo-genre` — Photo Genre
 - `photographer` — Photographer / Artist Style

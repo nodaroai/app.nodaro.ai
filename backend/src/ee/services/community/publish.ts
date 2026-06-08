@@ -5,7 +5,7 @@ import { buildSnapshot, type EntityType } from "../../lib/community-entity-adapt
 import { copyEntityAssetsToPrefix, purgeCommunityListingBlobs } from "./asset-lifecycle.js"
 import { accountStorage } from "../../../utils/file-validation.js"
 
-const PREVIEW_BUDGET: Record<EntityType, number> = { character: 8, location: 4, object: 4 }
+const PREVIEW_BUDGET: Record<EntityType, number> = { character: 8, location: 4, object: 4, creature: 4 }
 
 export interface PublishInput {
   entityType: EntityType

@@ -1,18 +1,18 @@
 import { useState, useMemo } from "react"
-import { X, Loader2, AlertCircle, Search, UserCircle, Package, MapPin, SmilePlus } from "lucide-react"
+import { X, Loader2, AlertCircle, Search, UserCircle, Package, PawPrint, MapPin, SmilePlus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useAuth } from "@/hooks/use-auth"
-import { useCharacters, useObjects, useLocations, useFaces } from "@/hooks/queries/use-assets-queries"
+import { useCharacters, useObjects, useCreatures, useLocations, useFaces } from "@/hooks/queries/use-assets-queries"
 import { CachedImage } from "@/components/ui/cached-image"
 import { cn } from "@/lib/utils"
 
-type AssetType = "all" | "character" | "object" | "location" | "face"
+type AssetType = "all" | "character" | "object" | "creature" | "location" | "face"
 
 export interface SelectedAsset {
   id: string
   name: string
-  type: "character" | "object" | "location" | "face"
+  type: "character" | "object" | "creature" | "location" | "face"
   thumbnailUrl?: string
   description?: string
 }
@@ -28,7 +28,7 @@ interface AssetSelectionModalProps {
 interface UnifiedAsset {
   id: string
   name: string
-  type: "character" | "object" | "location" | "face"
+  type: "character" | "object" | "creature" | "location" | "face"
   thumbnailUrl?: string
   description?: string
 }
@@ -46,11 +46,12 @@ export function AssetSelectionModal({
 
   const { data: characters = [], isLoading: loadingChars, error: charError } = useCharacters(undefined, user?.id)
   const { data: objects = [], isLoading: loadingObjs, error: objError } = useObjects(undefined, user?.id)
+  const { data: creatures = [], isLoading: loadingCreatures, error: creatureError } = useCreatures(undefined, user?.id)
   const { data: locations = [], isLoading: loadingLocs, error: locError } = useLocations(undefined, user?.id)
   const { data: faces = [], isLoading: loadingFaces, error: faceError } = useFaces(undefined, user?.id)
 
-  const loading = loadingChars || loadingObjs || loadingLocs || loadingFaces
-  const error = charError || objError || locError || faceError
+  const loading = loadingChars || loadingObjs || loadingCreatures || loadingLocs || loadingFaces
+  const error = charError || objError || creatureError || locError || faceError
 
   const assets = useMemo(() => {
     const unified: UnifiedAsset[] = [
@@ -68,6 +69,13 @@ export function AssetSelectionModal({
         thumbnailUrl: o.sourceImageUrl ?? undefined,
         description: o.description ?? undefined,
       })),
+      ...creatures.map((c): UnifiedAsset => ({
+        id: c.id,
+        name: c.name,
+        type: "creature",
+        thumbnailUrl: c.sourceImageUrl ?? undefined,
+        description: c.description ?? undefined,
+      })),
       ...locations.map((l): UnifiedAsset => ({
         id: l.id,
         name: l.name,
@@ -84,7 +92,7 @@ export function AssetSelectionModal({
       })),
     ]
     return unified
-  }, [characters, objects, locations, faces])
+  }, [characters, objects, creatures, locations, faces])
 
   const filteredAssets = useMemo(() => {
     return assets.filter((asset) => {
@@ -113,6 +121,7 @@ export function AssetSelectionModal({
       all: filtered.length,
       character: filtered.filter((a) => a.type === "character").length,
       object: filtered.filter((a) => a.type === "object").length,
+      creature: filtered.filter((a) => a.type === "creature").length,
       location: filtered.filter((a) => a.type === "location").length,
       face: filtered.filter((a) => a.type === "face").length,
     }
@@ -187,7 +196,16 @@ export function AssetSelectionModal({
               className={cn("text-xs", typeFilter === "object" && "bg-emerald-500 hover:bg-emerald-600")}
             >
               <Package className="w-3.5 h-3.5 mr-1" />
-              Objects ({counts.object})
+              Objects/Props ({counts.object})
+            </Button>
+            <Button
+              variant={typeFilter === "creature" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setTypeFilter("creature")}
+              className={cn("text-xs", typeFilter === "creature" && "bg-[#A78BFA] hover:bg-[#9170f0]")}
+            >
+              <PawPrint className="w-3.5 h-3.5 mr-1" />
+              Animal/Creature ({counts.creature})
             </Button>
             <Button
               variant={typeFilter === "location" ? "default" : "outline"}
@@ -241,6 +259,7 @@ export function AssetSelectionModal({
                     "group relative flex flex-col items-center p-2 rounded-lg border-2 transition-all hover:shadow-md",
                     asset.type === "character" && "hover:border-pink-500/50",
                     asset.type === "object" && "hover:border-emerald-500/50",
+                    asset.type === "creature" && "hover:border-[#A78BFA]/50",
                     asset.type === "location" && "hover:border-cyan-500/50",
                     asset.type === "face" && "hover:border-violet-500/50",
                   )}
@@ -258,11 +277,13 @@ export function AssetSelectionModal({
                       "w-full aspect-square rounded-md flex items-center justify-center",
                       asset.type === "character" && "bg-pink-500/10",
                       asset.type === "object" && "bg-emerald-500/10",
+                      asset.type === "creature" && "bg-[#A78BFA]/10",
                       asset.type === "location" && "bg-cyan-500/10",
                       asset.type === "face" && "bg-violet-500/10",
                     )}>
                       {asset.type === "character" && <UserCircle className="w-8 h-8 text-pink-500/50" />}
                       {asset.type === "object" && <Package className="w-8 h-8 text-emerald-500/50" />}
+                      {asset.type === "creature" && <PawPrint className="w-8 h-8 text-[#A78BFA]/50" />}
                       {asset.type === "location" && <MapPin className="w-8 h-8 text-cyan-500/50" />}
                       {asset.type === "face" && <SmilePlus className="w-8 h-8 text-violet-500/50" />}
                     </div>
@@ -272,6 +293,7 @@ export function AssetSelectionModal({
                     "text-[9px] px-1.5 py-0.5 rounded mt-0.5",
                     asset.type === "character" && "bg-pink-500/10 text-pink-500",
                     asset.type === "object" && "bg-emerald-500/10 text-emerald-500",
+                    asset.type === "creature" && "bg-[#A78BFA]/10 text-[#A78BFA]",
                     asset.type === "location" && "bg-cyan-500/10 text-cyan-500",
                     asset.type === "face" && "bg-violet-500/10 text-violet-500",
                   )}>

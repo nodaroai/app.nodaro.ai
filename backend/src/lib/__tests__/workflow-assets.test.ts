@@ -58,8 +58,10 @@ vi.mock("../supabase.js", () => ({
 }))
 
 import {
+  collectAssetIds,
   fetchExportAssets,
   reCreateAssets,
+  remapNodeAssetIds,
   workflowExportSchema,
 } from "../workflow-assets.js"
 
@@ -252,7 +254,7 @@ describe("fetchExportAssets — reads the 6 new location columns", () => {
     })
 
     const result = await fetchExportAssets(
-      { characterIds: [], objectIds: [], locationIds: ["loc-1"] },
+      { characterIds: [], objectIds: [], creatureIds: [], locationIds: ["loc-1"] },
       "user-1",
     )
 
@@ -269,6 +271,156 @@ describe("fetchExportAssets — reads the 6 new location columns", () => {
     ])
     expect(loc.canonicalDescription).toBe("Windswept beach.")
     expect(loc.styleLock).toBe(false)
+  })
+})
+
+describe("workflow-assets — creature node round-trip (Phase H)", () => {
+  it("collectAssetIds picks up creatureDbId from a creature node", () => {
+    const ids = collectAssetIds([
+      { type: "creature", data: { creatureDbId: "crt-1" } },
+      { type: "object", data: { objectDbId: "obj-1" } },
+      { type: "creature", data: {} }, // no id → skipped
+    ])
+    expect(ids.creatureIds).toEqual(["crt-1"])
+    expect(ids.objectIds).toEqual(["obj-1"])
+  })
+
+  it("workflowExportSchema parses a bundle carrying creatures", () => {
+    const parsed = workflowExportSchema.safeParse({
+      version: 1,
+      name: "Beast scene",
+      nodes: [],
+      edges: [],
+      assets: {
+        characters: [],
+        objects: [],
+        creatures: [
+          {
+            id: "crt-1",
+            nodeId: "node-crt-1",
+            name: "Wolf",
+            description: "A grey wolf",
+            species: "wolf",
+            style: "cinematic",
+            sourceImageUrl: "https://r2/crt/main.png",
+            angles: [{ name: "side", url: "https://r2/crt/side.png" }],
+            poses: [{ name: "howling", url: "https://r2/crt/howl.png" }],
+            variations: [{ name: "snowy", url: "https://r2/crt/snowy.png" }],
+          },
+        ],
+        locations: [],
+      },
+    })
+    expect(parsed.success).toBe(true)
+    if (!parsed.success) return
+    const crt = parsed.data.assets!.creatures![0]
+    expect(crt.species).toBe("wolf")
+    expect(crt.poses).toEqual([{ name: "howling", url: "https://r2/crt/howl.png" }])
+  })
+
+  it("DB row → bundle → re-create → remap rewrites creatureDbId on the node", async () => {
+    selectResponses.set("creatures", {
+      data: [
+        {
+          id: "crt-1",
+          node_id: "node-crt-1",
+          name: "Wolf",
+          description: "A grey wolf",
+          species: "wolf",
+          style: "cinematic",
+          source_image_url: "https://r2/crt/main.png",
+          angles: [{ name: "side", url: "https://r2/crt/side.png" }],
+          poses: [{ name: "howling", url: "https://r2/crt/howl.png" }],
+          variations: [{ name: "snowy", url: "https://r2/crt/snowy.png" }],
+        },
+      ],
+      error: null,
+    })
+
+    // 1. Collect from nodes
+    const nodes = [{ id: "n1", type: "creature", data: { creatureDbId: "crt-1" } }]
+    const ids = collectAssetIds(nodes)
+    expect(ids.creatureIds).toEqual(["crt-1"])
+
+    // 2. Export from DB → bundle
+    const exported = await fetchExportAssets(ids, "user-1")
+    expect("error" in exported).toBe(false)
+    if ("error" in exported) return
+    const crt = exported.creatures![0]
+    expect(crt.id).toBe("crt-1")
+    expect(crt.species).toBe("wolf")
+    expect(crt.poses).toEqual([{ name: "howling", url: "https://r2/crt/howl.png" }])
+    expect(crt.angles).toEqual([{ name: "side", url: "https://r2/crt/side.png" }])
+    expect(crt.variations).toEqual([{ name: "snowy", url: "https://r2/crt/snowy.png" }])
+
+    // 3. Bundle round-trips through the Zod schema
+    const reparsed = workflowExportSchema.safeParse({
+      version: 1,
+      name: "Round-trip",
+      nodes: [],
+      edges: [],
+      assets: {
+        characters: exported.characters,
+        objects: exported.objects,
+        creatures: exported.creatures,
+        locations: exported.locations,
+      },
+    })
+    expect(reparsed.success).toBe(true)
+    if (!reparsed.success) return
+
+    // 4. Re-create writes back to creatures + returns the id map
+    insertCalls.length = 0
+    const idMap = await reCreateAssets(reparsed.data.assets!, "user-2", "project-2")
+    expect(idMap).toBeInstanceOf(Map)
+    if (!(idMap instanceof Map)) return
+    const crtInsert = insertCalls.find((c) => c.table === "creatures")
+    expect(crtInsert).toBeDefined()
+    const row = crtInsert!.row
+    expect(row.user_id).toBe("user-2")
+    expect(row.project_id).toBe("project-2")
+    expect(row.node_id).toBe("node-crt-1")
+    expect(row.species).toBe("wolf")
+    expect(row.poses).toEqual([{ name: "howling", url: "https://r2/crt/howl.png" }])
+    expect(row.angles).toEqual([{ name: "side", url: "https://r2/crt/side.png" }])
+    expect(row.variations).toEqual([{ name: "snowy", url: "https://r2/crt/snowy.png" }])
+    // The created id (mock returns `new-<n>`) is mapped from the original.
+    const newId = idMap.get("crt-1")
+    expect(newId).toBeDefined()
+
+    // 5. remapNodeAssetIds rewrites the new id onto the node's creatureDbId
+    const remapped = remapNodeAssetIds(nodes, idMap)
+    expect((remapped[0].data as Record<string, unknown>).creatureDbId).toBe(newId)
+  })
+
+  it("defaults poses/angles/variations when the bundle omits them (legacy import)", async () => {
+    insertCalls.length = 0
+    await reCreateAssets(
+      {
+        characters: [],
+        objects: [],
+        creatures: [
+          {
+            id: "crt-1",
+            nodeId: "node-crt-1",
+            name: "Legacy beast",
+            description: null,
+            species: null,
+            style: null,
+            sourceImageUrl: null,
+            // angles/poses/variations intentionally omitted
+          },
+        ],
+        locations: [],
+      },
+      "user-1",
+      "project-1",
+    )
+    const row = insertCalls.find((c) => c.table === "creatures")!.row
+    expect(row.species).toBeNull()
+    expect(row.angles).toEqual([])
+    expect(row.poses).toEqual([])
+    expect(row.variations).toEqual([])
   })
 })
 
@@ -299,7 +451,7 @@ describe("workflow-assets — full round-trip parity", () => {
 
     // 1. Export from DB → bundle
     const exported = await fetchExportAssets(
-      { characterIds: [], objectIds: [], locationIds: ["loc-1"] },
+      { characterIds: [], objectIds: [], creatureIds: [], locationIds: ["loc-1"] },
       "user-1",
     )
     expect("error" in exported).toBe(false)

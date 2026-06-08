@@ -9,8 +9,8 @@ vi.mock("../../../../lib/storage.js", () => ({
 }))
 vi.mock("../../../../utils/file-validation.js", () => ({ refundStorage: vi.fn() }))
 
-import { purgeCommunityListingBlobs } from "../asset-lifecycle.js"
-import { listObjectsByPrefix, batchDeleteFromR2 } from "../../../../lib/storage.js"
+import { purgeCommunityListingBlobs, copyEntityAssetsToPrefix } from "../asset-lifecycle.js"
+import { listObjectsByPrefix, batchDeleteFromR2, copyR2ObjectToPrefix } from "../../../../lib/storage.js"
 import { refundStorage } from "../../../../utils/file-validation.js"
 
 beforeEach(() => vi.clearAllMocks())
@@ -22,6 +22,33 @@ function mockClaim(rows: Array<{ published_bytes: number; creator_id: string }>)
   const update = vi.fn().mockReturnValue({ eq })
   purgeUpdate.mockReturnValue({ update })
 }
+
+describe("copyEntityAssetsToPrefix — nested by-variant maps", () => {
+  it("copies every URL inside a Record<string,string[]> field", async () => {
+    vi.mocked(copyR2ObjectToPrefix).mockImplementation(
+      async (url: string) => ({ url: `copied:${url}`, bytes: 1 }),
+    )
+    const row = { reference_videos_by_variant: { smile: ["a", "b"], angry: ["c"] } }
+    const { copiedAssets } = await copyEntityAssetsToPrefix(
+      "character", row as Record<string, unknown>, "L1", 8,
+    )
+    expect(copiedAssets.reference_videos_by_variant).toEqual({
+      smile: ["copied:a", "copied:b"],
+      angry: ["copied:c"],
+    })
+  })
+
+  it("does NOT push video URLs into previewImages", async () => {
+    vi.mocked(copyR2ObjectToPrefix).mockImplementation(
+      async (url: string) => ({ url: `copied:${url}`, bytes: 1 }),
+    )
+    const row = { reference_videos_by_variant: { smile: ["a"] } }
+    const { previewImages } = await copyEntityAssetsToPrefix(
+      "character", row as Record<string, unknown>, "L1", 8,
+    )
+    expect(previewImages).toEqual([])
+  })
+})
 
 describe("purgeCommunityListingBlobs", () => {
   it("claims, deletes, refunds once", async () => {

@@ -2,6 +2,7 @@ import { z } from "zod"
 import type {
   WorkflowExport,
   WorkflowExportCharacter,
+  WorkflowExportCreature,
   WorkflowExportLocation,
   WorkflowExportObject,
 } from "@nodaro/shared"
@@ -13,10 +14,10 @@ import { supabase } from "./supabase.js"
  * `backend/src/routes/workflows.ts` (REST) and `backend/src/lib/mcp/tools/workflows.ts`
  * (MCP tools), since both surfaces need to:
  *   1. Validate an incoming bundle (Zod schema)
- *   2. Collect entity DB ids referenced by `character` / `object` / `location` nodes
+ *   2. Collect entity DB ids referenced by `character` / `object` / `creature` / `location` nodes
  *   3. Fetch those entity rows from Supabase, scoped to the caller
  *   4. Re-create those entities under the caller's account on import
- *   5. Remap node `data.{character,object,location}DbId` fields to the new rows
+ *   5. Remap node `data.{character,object,creature,location}DbId` fields to the new rows
  */
 
 const assetVariantSchema = z.object({ name: z.string(), url: z.string() })
@@ -52,6 +53,21 @@ const exportObjectSchema = z.object({
   variations: z.array(assetVariantSchema).optional(),
 })
 
+// Animal/Creature entity (migration 206). Mirrors `exportObjectSchema` with the
+// object→creature DELTA MAP: adds free-text `species`, `materials` slot → `poses`.
+const exportCreatureSchema = z.object({
+  id: z.string(),
+  nodeId: z.string(),
+  name: z.string(),
+  description: z.string().nullish(),
+  species: z.string().nullish(),
+  style: z.string().nullish(),
+  sourceImageUrl: z.string().nullish(),
+  angles: z.array(assetVariantSchema).optional(),
+  poses: z.array(assetVariantSchema).optional(),
+  variations: z.array(assetVariantSchema).optional(),
+})
+
 const exportLocationSchema = z.object({
   id: z.string(),
   nodeId: z.string(),
@@ -83,23 +99,32 @@ export const workflowExportSchema = z.object({
     .object({
       characters: z.array(exportCharacterSchema),
       objects: z.array(exportObjectSchema),
+      // Optional so bundles exported before Animal/Creature (migration 206) still parse.
+      creatures: z.array(exportCreatureSchema).optional(),
       locations: z.array(exportLocationSchema),
     })
     .optional(),
 })
 
-const ASSET_FIELDS = ["characterDbId", "objectDbId", "locationDbId"] as const
+const ASSET_FIELDS = [
+  "characterDbId",
+  "objectDbId",
+  "creatureDbId",
+  "locationDbId",
+] as const
 
 interface AssetIds {
   characterIds: string[]
   objectIds: string[]
+  creatureIds: string[]
   locationIds: string[]
 }
 
-/** Collect entity DB ids referenced by `character` / `object` / `location` nodes. */
+/** Collect entity DB ids referenced by `character` / `object` / `creature` / `location` nodes. */
 export function collectAssetIds(nodes: readonly Record<string, unknown>[]): AssetIds {
   const characterIds: string[] = []
   const objectIds: string[] = []
+  const creatureIds: string[] = []
   const locationIds: string[] = []
   for (const node of nodes) {
     const data = (node.data ?? {}) as Record<string, unknown>
@@ -107,11 +132,13 @@ export function collectAssetIds(nodes: readonly Record<string, unknown>[]): Asse
       characterIds.push(data.characterDbId)
     } else if (node.type === "object" && typeof data.objectDbId === "string") {
       objectIds.push(data.objectDbId)
+    } else if (node.type === "creature" && typeof data.creatureDbId === "string") {
+      creatureIds.push(data.creatureDbId)
     } else if (node.type === "location" && typeof data.locationDbId === "string") {
       locationIds.push(data.locationDbId)
     }
   }
-  return { characterIds, objectIds, locationIds }
+  return { characterIds, objectIds, creatureIds, locationIds }
 }
 
 function asVariants(value: unknown): Array<{ name: string; url: string }> {
@@ -140,7 +167,7 @@ export async function fetchExportAssets(
   ids: AssetIds,
   userId: string,
 ): Promise<WorkflowAssets | { error: string }> {
-  const [charsRes, objsRes, locsRes] = await Promise.all([
+  const [charsRes, objsRes, creaturesRes, locsRes] = await Promise.all([
     fetchByIds(
       "characters",
       "id, node_id, name, description, gender, style, base_outfit, source_image_url, expressions, poses, lighting_variations",
@@ -154,6 +181,12 @@ export async function fetchExportAssets(
       userId,
     ),
     fetchByIds(
+      "creatures",
+      "id, node_id, name, description, species, style, source_image_url, angles, poses, variations",
+      ids.creatureIds,
+      userId,
+    ),
+    fetchByIds(
       "locations",
       "id, node_id, name, description, style, source_image_url, time_of_day, weather, angles, lighting, seasons, atmosphere_motions, reference_photos, canonical_description, style_lock",
       ids.locationIds,
@@ -161,7 +194,7 @@ export async function fetchExportAssets(
     ),
   ])
 
-  const firstError = charsRes.error ?? objsRes.error ?? locsRes.error
+  const firstError = charsRes.error ?? objsRes.error ?? creaturesRes.error ?? locsRes.error
   if (firstError) return { error: firstError.message }
 
   return {
@@ -195,6 +228,21 @@ export async function fetchExportAssets(
         variations: asVariants(r.variations),
       }
     }),
+    creatures: (creaturesRes.data ?? []).map((row): WorkflowExportCreature => {
+      const r = row as Record<string, unknown>
+      return {
+        id: r.id as string,
+        nodeId: r.node_id as string,
+        name: r.name as string,
+        description: (r.description ?? null) as string | null,
+        species: (r.species ?? null) as string | null,
+        style: (r.style ?? null) as string | null,
+        sourceImageUrl: (r.source_image_url ?? null) as string | null,
+        angles: asVariants(r.angles),
+        poses: asVariants(r.poses),
+        variations: asVariants(r.variations),
+      }
+    }),
     locations: (locsRes.data ?? []).map((row): WorkflowExportLocation => {
       const r = row as Record<string, unknown>
       return {
@@ -220,7 +268,7 @@ export async function fetchExportAssets(
 }
 
 type AssetBundle = NonNullable<z.infer<typeof workflowExportSchema>["assets"]>
-export type AssetKind = "character" | "object" | "location"
+export type AssetKind = "character" | "object" | "creature" | "location"
 
 export interface ReCreateAssetsError {
   kind: AssetKind
@@ -292,6 +340,25 @@ export async function reCreateAssets(
     if (err) return { error: err }
   }
 
+  // Animal/Creature (migration 206). Mirrors the object arm with the
+  // object→creature DELTA MAP: `species` column + `materials` slot → `poses`.
+  for (const c of assets.creatures ?? []) {
+    const err = await insertOne("creatures", "creature", c.id, {
+      user_id: userId,
+      node_id: c.nodeId,
+      project_id: projectId,
+      name: c.name,
+      description: c.description ?? null,
+      species: c.species ?? null,
+      style: c.style ?? null,
+      source_image_url: c.sourceImageUrl ?? null,
+      angles: c.angles ?? [],
+      poses: c.poses ?? [],
+      variations: c.variations ?? [],
+    })
+    if (err) return { error: err }
+  }
+
   for (const l of assets.locations) {
     const err = await insertOne("locations", "location", l.id, {
       user_id: userId,
@@ -321,9 +388,9 @@ export async function reCreateAssets(
 }
 
 /**
- * Replace `characterDbId` / `objectDbId` / `locationDbId` on each node's `data`
- * with the freshly-created ids from {@link reCreateAssets}. Returns new node
- * objects; inputs are not mutated.
+ * Replace `characterDbId` / `objectDbId` / `creatureDbId` / `locationDbId` on
+ * each node's `data` with the freshly-created ids from {@link reCreateAssets}.
+ * Returns new node objects; inputs are not mutated.
  */
 export function remapNodeAssetIds<T extends Record<string, unknown>>(
   nodes: readonly T[],

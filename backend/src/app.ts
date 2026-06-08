@@ -61,6 +61,13 @@ import { objectLlmCaptionRoutes } from "./routes/object-llm-caption.js"
 import { generateObjectAssetRoutes } from "./routes/generate-object-asset.js"
 import { generateObjectRoutes } from "./routes/generate-object.js"
 import { generateObjectMotionRoutes } from "./routes/generate-object-motion.js"
+import { creatureRoutes } from "./routes/creatures.js"
+import { creatureRestoreRoutes } from "./routes/creature-restore.js"
+import { creatureMainImageApprovalRoutes } from "./routes/creature-main-image-approval.js"
+import { creatureLlmCaptionRoutes } from "./routes/creature-llm-caption.js"
+import { generateCreatureRoutes } from "./routes/generate-creature.js"
+import { generateCreatureAssetRoutes } from "./routes/generate-creature-asset.js"
+import { generateCreatureMotionRoutes } from "./routes/generate-creature-motion.js"
 import { locationRoutes } from "./routes/locations.js"
 import { nodePresetRoutes } from "./routes/node-presets.js"
 import { nodePresetGroupRoutes } from "./routes/node-preset-groups.js"
@@ -171,6 +178,7 @@ import { registerAuthHook } from "./middleware/auth.js"
 import { registerMcpHostFilter } from "./middleware/mcp-host-filter.js"
 import rateLimit from "@fastify/rate-limit"
 import formbody from "@fastify/formbody"
+import { installEmptyJsonBodyFix } from "./lib/empty-json-body-fix.js"
 
 /**
  * Rate-limit key derivation.
@@ -218,6 +226,12 @@ export async function buildApp() {
   // bodies per RFC 6749 §3.2. Without this, Fastify's default JSON parser
   // drops the body and Zod sees undefined fields.
   await app.register(formbody)
+
+  // Drop a misleading application/json content-type from BODYLESS requests (e.g.
+  // a DELETE that still carries Content-Type: application/json from the SDK) so
+  // Fastify skips parsing instead of 400ing on the empty body. A global parser
+  // can't be used — the Stripe webhook registers its own. See the helper.
+  installEmptyJsonBodyFix(app)
 
   // Claude.ai MCP UI iframes get a per-instance sandbox subdomain on
   // claudemcpcontent.com. Origins look like
@@ -323,6 +337,13 @@ export async function buildApp() {
   await app.register(generateObjectAssetRoutes)
   await app.register(generateObjectRoutes)
   await app.register(generateObjectMotionRoutes)
+  await app.register(creatureRoutes)
+  await app.register(creatureRestoreRoutes)
+  await app.register(creatureMainImageApprovalRoutes)
+  await app.register(creatureLlmCaptionRoutes)
+  await app.register(generateCreatureRoutes)
+  await app.register(generateCreatureAssetRoutes)
+  await app.register(generateCreatureMotionRoutes)
   await app.register(locationRoutes)
   await app.register(nodePresetRoutes)
   await app.register(nodePresetGroupRoutes)

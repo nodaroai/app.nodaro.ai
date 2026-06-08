@@ -247,6 +247,32 @@ export function buildObjectPrompt(input: ObjectPromptInput): string {
   ].join(" ")
 }
 
+export interface CreaturePromptInput {
+  name: string
+  description?: string
+  /** Free-text species/type (e.g. "dragon", "wolf") — the creature delta vs object. */
+  species?: string
+  category?: string
+  style?: EntityStyle | string
+}
+
+/**
+ * Creature establishing-shot prompt. Mirrors {@link buildObjectPrompt} but leads
+ * with the free-text `species` (a dragon/wolf/etc. IS the subject) and frames the
+ * subject as a living creature rather than a product. Falls back to "creature"
+ * when no species is given so the prompt always names a subject.
+ */
+export function buildCreaturePrompt(input: CreaturePromptInput): string {
+  const subject = input.species?.trim() || "creature"
+  const descPart = input.description ? `, ${input.description}` : ""
+  const styleDesc = input.style ?? "realistic"
+  return [
+    `Single ${subject}, ${input.name}${descPart},`,
+    `${styleDesc} art style, full body, front view,`,
+    "4k, highly detailed, plain background, no text, no labels, no watermarks.",
+  ].join(" ")
+}
+
 export interface LocationPromptInput {
   name: string
   description?: string
@@ -367,6 +393,13 @@ export const OBJECT_ATTACH_COLUMNS = [
   "detail_closeups",
 ] as const
 export type ObjectAttachColumn = (typeof OBJECT_ATTACH_COLUMNS)[number]
+
+/** Worker-attachable JSONB asset columns on `creatures` (mirrors OBJECT_ATTACH_COLUMNS;
+ *  `materials`→`poses`). The append_creature_asset RPC (migration 206) whitelists these. */
+export const CREATURE_ATTACH_COLUMNS = [
+  "angles", "poses", "variations", "motion_clips", "sheets", "detail_closeups",
+] as const
+export type CreatureAttachColumn = (typeof CREATURE_ATTACH_COLUMNS)[number]
 
 /**
  * Canonical variant presets per OBJECT asset type — hoisted from

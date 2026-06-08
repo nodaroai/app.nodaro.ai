@@ -134,6 +134,8 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
           "generate-location-asset",
           "generate-object",
           "generate-object-asset",
+          "generate-creature",
+          "generate-creature-asset",
         ],
         video: [
           "image-to-video",

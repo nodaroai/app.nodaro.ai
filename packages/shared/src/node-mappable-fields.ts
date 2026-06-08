@@ -56,6 +56,7 @@ export const NODE_MAPPABLE_FIELDS: Readonly<Record<string, readonly string[]>> =
   "character":           ["characterName", "description", "baseOutfit"],
   "face":                ["faceName", "description"],
   "object":              ["objectName", "description"],
+  "creature":            ["creatureName", "description"],
   "location":            ["locationName", "description"],
   "web-scrape":          ["query", "url", "target"],
 }

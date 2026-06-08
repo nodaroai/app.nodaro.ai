@@ -1,5 +1,6 @@
 import type {
   CommunityEntityType, CommunitySort, CommunityReportReason, CommunityCard,
+  CommunityFullDetail,
   BrowseCommunityParams, BrowseCommunityResult, CloneListingResult,
   FavoriteListingResult, ReportListingResult,
   PublishListingParams, PublishListingResult, SharedListing,
@@ -14,6 +15,7 @@ import type { NodaroClient } from "../client.js"
  */
 export type {
   CommunityEntityType, CommunitySort, CommunityReportReason, CommunityCard,
+  CommunityFullDetail,
   BrowseCommunityParams, BrowseCommunityResult, CloneListingResult,
   FavoriteListingResult, ReportListingResult,
   PublishListingParams, PublishListingResult, SharedListing,
@@ -54,6 +56,18 @@ export class CommunityResource {
     return this.client.request(
       "GET",
       `/v1/community/detail/${encodeURIComponent(slug)}`,
+    )
+  }
+
+  /**
+   * `GET /v1/community/detail/:slug/full` → the full read-only detail (card
+   * identity + the stored public snapshot). Like {@link get}, but includes the
+   * snapshot asset/voice/text blob needed to render the full cross-user view.
+   */
+  getFull(slug: string): Promise<{ data: CommunityFullDetail }> {
+    return this.client.request(
+      "GET",
+      `/v1/community/detail/${encodeURIComponent(slug)}/full`,
     )
   }
 

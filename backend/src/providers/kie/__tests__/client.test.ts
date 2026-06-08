@@ -15,8 +15,30 @@ vi.mock("@/lib/config.js", () => ({
 import {
   KieError,
   createSanitizedError,
+  createUpstreamFailureError,
+  isUpstreamKieFailure,
   pollDelay,
 } from "../client.js"
+
+describe("createUpstreamFailureError + isUpstreamKieFailure", () => {
+  it("flags the KieError as a terminal upstream failure (sanitized message preserved)", () => {
+    const err = createUpstreamFailureError("task failed: [400] audio too long", "Generation")
+    expect(err).toBeInstanceOf(KieError)
+    expect(err.isUpstreamFailure).toBe(true)
+    expect(err.internalDetails).toBe("task failed: [400] audio too long")
+  })
+
+  it("plain createSanitizedError is NOT flagged (transient/timeout default)", () => {
+    expect(createSanitizedError("task timed out after 60 attempts", "Generation").isUpstreamFailure).toBe(false)
+  })
+
+  it("isUpstreamKieFailure is true only for a flagged KieError", () => {
+    expect(isUpstreamKieFailure(createUpstreamFailureError("x", "Generation"))).toBe(true)
+    expect(isUpstreamKieFailure(createSanitizedError("x", "Generation"))).toBe(false)
+    expect(isUpstreamKieFailure(new Error("x"))).toBe(false)
+    expect(isUpstreamKieFailure(null)).toBe(false)
+  })
+})
 
 // ---------------------------------------------------------------------------
 // Tests

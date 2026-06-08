@@ -10,7 +10,7 @@ export { CombineVideosConfig, AddCaptionsConfig, ResizeVideoConfig, SocialMediaF
 export { CombineAudioConfig } from "./combine-audio-config"
 export { VideoComposerConfig, AfterEffectsConfig, LottieOverlayConfig, ThreeDTitleConfig, MotionGraphicsConfig, CompositeConfig, RenderVideoConfig } from "./composition-configs"
 export { MergeVideoAudioConfig } from "./merge-audio-config"
-export { CharacterConfig, FaceConfig, ObjectConfig, LocationConfig } from "./entity-configs"
+export { CharacterConfig, FaceConfig, ObjectConfig, CreatureConfig, LocationConfig } from "./entity-configs"
 export { LLMChatConfig } from "./llm-chat-config"
 export { CombineTextConfig, SaveToStorageConfig, WebhookOutputConfig, SplitTextConfig, ExtractFieldConfig, JsonProcessConfig, FilterListConfig, DeduplicateConfig, MergeListsConfig, SortListConfig, PreviewConfig, TeleporterConfig, RouterConfig } from "./utility-configs"
 export { CollectConfig } from "./collect-config"

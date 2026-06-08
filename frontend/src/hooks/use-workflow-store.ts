@@ -10,6 +10,7 @@ import {
 import type { WorkflowNode, WorkflowEdge, SceneNodeData, SceneNodeType, CharacterDefinition, LoopNodeData, LoopColumn, PreviewItem, PreviewNodeData, TeleportSendData, TeleportReceiveData } from "@/types/nodes"
 import type { PresentationDisplay, InputMode } from "@/types/nodes"
 import { NODE_DEFINITIONS, NODE_DEF_MAP, TELEPORTER_CHANNEL_COLORS, LOOP_COL_ADD_HANDLE, loopColInputHandle, loopColBaseHandle } from "@/types/nodes"
+import { HANDLE_OUTPUT_TYPES } from "@/lib/handle-output-types"
 import type { WorkflowSnapshot } from "./use-undo-redo-store"
 import { setSkipUndoCapture } from "./undo-flags"
 import { filterCloneNodes, EXECUTION_DATA_KEYS } from "@nodaro/shared"
@@ -92,6 +93,15 @@ function detectLoopColumnType(
       const upstream = allNodes.find((n) => n.id === inEdge.source)
       if (upstream) return detectLoopColumnType(upstream, inEdge.sourceHandle, allNodes, allEdges)
     }
+  }
+  // Authoritative per-(nodeType, handle) output type — covers typed pips whose
+  // handle id isn't literally image/video/audio (e.g. reference-sheet `sheet`,
+  // `panels`). Falls back to the legacy handle-name / outputs heuristic below.
+  if (sourceHandle) {
+    const handleType = HANDLE_OUTPUT_TYPES[sourceNode.type ?? ""]?.[sourceHandle]
+    if (handleType === "image" || handleType === "imageRef" || handleType === "reference") return "image-url"
+    if (handleType === "video") return "video-url"
+    if (handleType === "audio" || handleType === "audioRef") return "audio-url"
   }
   const def = NODE_DEF_MAP.get(sourceNode.type ?? "")
   if (!def) return "text"
@@ -603,6 +613,11 @@ interface WorkflowState {
   /** Node ID whose Object Studio modal is open (null = closed). UI-only. */
   readonly objectStudioNodeId: string | null
   readonly setObjectStudioNodeId: (id: string | null) => void
+  /** Node ID whose Creature Studio modal is open (null = closed). UI-only.
+   *  Backs the creature node's "Open Studio" button; the render block lives in
+   *  workflow-editor-main.tsx and the modal in creature-studio/. */
+  readonly creatureStudioNodeId: string | null
+  readonly setCreatureStudioNodeId: (id: string | null) => void
   readonly createSceneNodeFromScript: ((scriptNodeId: string, sceneIndex: number) => void) | null
   readonly setCreateSceneNodeFromScript: (fn: ((scriptNodeId: string, sceneIndex: number) => void) | null) => void
   readonly generateCharacterAssetFn: ((nodeId: string, assetType: "expressions" | "poses" | "lighting" | "angles") => Promise<void>) | null
@@ -2187,9 +2202,9 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         "face-swap", "scene",
       ])
       // Identity entities route to the `assets` typed handle (mirrors
-      // generate-video's assets handle for character/face/object/location).
+      // generate-video's assets handle for character/face/object/creature/location).
       const IDENTITY_TYPES_FOR_CLASSIFIER: ReadonlySet<string> = new Set([
-        "character", "face", "object", "location",
+        "character", "face", "object", "creature", "location",
       ])
       const VIDEO_SOURCE_TYPES_FOR_CLASSIFIER: ReadonlySet<string> = new Set([
         "image-to-video", "text-to-video", "generate-video", "video-to-video",
@@ -2884,6 +2899,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   setLocationStudioNodeId: (id) => set({ locationStudioNodeId: id }),
   objectStudioNodeId: null,
   setObjectStudioNodeId: (id) => set({ objectStudioNodeId: id }),
+  creatureStudioNodeId: null,
+  setCreatureStudioNodeId: (id) => set({ creatureStudioNodeId: id }),
   createSceneNodeFromScript: null,
   setCreateSceneNodeFromScript: (fn) => set({ createSceneNodeFromScript: fn }),
   generateCharacterAssetFn: null,

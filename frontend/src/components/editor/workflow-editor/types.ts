@@ -223,6 +223,7 @@ export const EXECUTABLE_TYPES = new Set([
   "character",
   "face",
   "object",
+  "creature",
   "location",
   "llm-chat",
   "combine-text",

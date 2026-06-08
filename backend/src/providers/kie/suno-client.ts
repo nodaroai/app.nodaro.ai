@@ -11,7 +11,7 @@
  */
 
 import { config } from "../../lib/config.js"
-import { KIE_API_BASE, createSanitizedError, sleep, pollDelay } from "./client.js"
+import { KIE_API_BASE, createSanitizedError, createUpstreamFailureError, sleep, pollDelay } from "./client.js"
 import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
 import type { ReconcileOpts } from "../provider.interface.js"
 import type { SunoModel, SunoAddTrackModel } from "@nodaro/shared"
@@ -737,7 +737,7 @@ export async function pollSunoTask(taskId: string): Promise<SunoTaskResult> {
           detailData.data?.failReason ??
           detailData.data?.errorMessage ??
           "Unknown error"
-        throw createSanitizedError(
+        throw createUpstreamFailureError(
           `Suno task failed: ${reason}`,
           "Music generation"
         )

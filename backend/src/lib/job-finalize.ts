@@ -1,6 +1,7 @@
 import { supabase } from "./supabase.js"
 import { uploadToR2 } from "./storage.js"
 import { runPostProcessing } from "./post-processing-error.js"
+import { appendCharacterReferenceVideo } from "./character-auto-attach.js"
 import {
   uploadImageVariantsMaybeWatermark,
   uploadVideoMaybeWatermark,
@@ -61,6 +62,10 @@ interface JobRow {
   job_type: string | null
   workflow_execution_id: string | null
   status: string
+  /** The user-submitted request config (see `lib/job-input-data.ts`). Read
+   *  here only for the reference-video auto-attach intent fields
+   *  (`attachToCharacterId` + `attachReferenceVideoVariant`). */
+  input_data: Record<string, unknown> | null
 }
 
 const IMAGE_TYPES: ReadonlySet<FinalizeJobType> = new Set<FinalizeJobType>([
@@ -207,7 +212,7 @@ export async function finalizeJobWithMedia(
   // 1. Load job row (the shape we need for upload / asset / reopen).
   const { data: jobRow } = await supabase
     .from("jobs")
-    .select("id, user_id, should_watermark, is_public, job_type, workflow_execution_id, status")
+    .select("id, user_id, should_watermark, is_public, job_type, workflow_execution_id, status, input_data")
     .eq("id", jobId)
     .single()
   const job = jobRow as JobRow | null
@@ -232,6 +237,9 @@ export async function finalizeJobWithMedia(
   //    (e.g., video handlers after audio-merge produces a local file) pass
   //    `input.mediaUrl` so we skip the upload and use it directly.
   let outputData: Record<string, unknown>
+  // Captured for the reference-video auto-attach below — set only on the video
+  // path (the R2 URL we record as the clip's canonical location).
+  let videoR2Url: string | undefined
   if (IMAGE_TYPES.has(jobType)) {
     const r2Urls = input.mediaUrl !== undefined
       ? [input.mediaUrl, ...(input.extraMediaUrls ?? [])]
@@ -254,6 +262,7 @@ export async function finalizeJobWithMedia(
           job.user_id ?? undefined,
           watermark,
         )
+    videoR2Url = r2Url
     outputData = { videoUrl: r2Url }
   } else if (AUDIO_TYPES.has(jobType)) {
     // Audio is never watermarked. Callers with a pre-uploaded R2 URL pass it
@@ -293,6 +302,41 @@ export async function finalizeJobWithMedia(
   // 7. Reopen workflow_execution if this was the sole-cause failure
   if (job.workflow_execution_id) {
     await reopenWorkflowExecutionIfSoleCause(job.workflow_execution_id, jobId)
+  }
+
+  // 8. Best-effort reference-video auto-attach. When the generate-video request
+  //    carried an explicit "save this clip to a character" intent
+  //    (attachToCharacterId + attachReferenceVideoVariant, persisted in
+  //    input_data), append the completed R2 clip to
+  //    characters.reference_videos_by_variant. Runs for BOTH the worker and
+  //    reconcile paths (this is the shared completion point) and only after the
+  //    job actually completed (we're past the markJobCompleted CAS), so a clip
+  //    is never attached for a job that lost the completion race. `videoR2Url`
+  //    is set only on the video path, so this naturally no-ops for image/audio.
+  //    The atomic RPC re-verifies ownership against job.user_id (the
+  //    authoritative job owner, NOT a body field), so a forged
+  //    attachToCharacterId pointing at another user's character is a no-op.
+  //    Never throws — a failed attach must not undo a committed completion.
+  if (videoR2Url && job.user_id) {
+    const inputData = job.input_data ?? {}
+    const characterId =
+      typeof inputData.attachToCharacterId === "string" ? inputData.attachToCharacterId : null
+    const variant =
+      typeof inputData.attachReferenceVideoVariant === "string"
+        ? inputData.attachReferenceVideoVariant.trim()
+        : ""
+    if (characterId && variant) {
+      try {
+        await appendCharacterReferenceVideo({
+          characterId,
+          userId: job.user_id,
+          variant,
+          url: videoR2Url,
+        })
+      } catch (e) {
+        console.warn(`[job-finalize] reference-video auto-attach threw for job ${jobId}: ${String(e)}`)
+      }
+    }
   }
 
   return { ok: true }

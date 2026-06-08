@@ -41,7 +41,7 @@ import type { CharacterFxPosition, CharacterFxDuration, CharacterFxIntensity } f
 import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
 import { IMAGE_STYLE_PRESETS } from "@/components/editor/config-panels/model-options"
 
-export type NodeCategory = "input" | "parameter" | "ai" | "processing" | "output" | "scene" | "character" | "face" | "object" | "location" | "utility"
+export type NodeCategory = "input" | "parameter" | "ai" | "processing" | "output" | "scene" | "character" | "face" | "object" | "creature" | "location" | "utility"
 
 export interface FieldMapping {
   readonly sourceNodeId: string
@@ -1333,7 +1333,7 @@ export interface CharacterDefinition {
   readonly id: string
   readonly name: string
   readonly type: "reference" | "description"
-  readonly category?: "character" | "face" | "location" | "object"
+  readonly category?: "character" | "face" | "location" | "object" | "creature"
   readonly referenceImageUrl?: string
   readonly description?: string
   readonly sourceSceneIndex?: number
@@ -1598,6 +1598,14 @@ export type ImageToVideoData = {
   nsfwChecker?: boolean
   videoTrimStart?: number
   videoTrimEnd?: number
+  // "Save result to character" — when set (a non-empty variant label) AND an
+  // upstream Character is wired in, the completed clip is appended to that
+  // character's reference_videos_by_variant[<label>] on job completion
+  // (server-side, via job-finalize). `undefined` = the control is off; a
+  // string (incl. "") = on, with that label. Independent of the Character
+  // node's injectIdentityInPrompts (saving ≠ identity injection). The editor
+  // forwards it as `attachReferenceVideoVariant` on POST /v1/generate-video.
+  attachReferenceVideoVariant?: string
   // Smart-loop-cut post-process. When `enabled: true`, the worker runs a
   // PSNR-based loop-point search after generation and trims the clip there.
   // Replaces the legacy autoLoopTrim (VEO 3.1 only, fixed 8 frames).
@@ -3576,6 +3584,81 @@ export type ObjectNodeData = {
 }
 
 /**
+ * Animal/Creature entity node. Mirrors ObjectNodeData (same Studio asset
+ * model — angles / poses / variations / motion clips / reference photos) with
+ * the creature-specific deltas:
+ *  - `creatureDbId` / `creatureName` instead of `objectDbId` / `objectName`
+ *  - `species` (free-text, e.g. "red fox", "griffin") — nullable in DB
+ *  - `category` is FREE-TEXT (matches the backend `creatures` route's
+ *    `z.string().max(50)`), not the object's constrained enum
+ *  - the 2nd image asset bucket is `poses` (the object's `materials` has no
+ *    meaning for a living creature)
+ * Reference-sheet support is DEFERRED (no Sheet tab in this phase); the
+ * `sheets` / `detailCloseups` fields are carried for forward-compat with the
+ * GET route shape, exactly as ObjectNodeData carries them.
+ */
+export type CreatureNodeData = {
+  [key: string]: unknown
+  label: string
+  creatureDbId: string
+  creatureName: string
+  description: string
+  // Free-text species/type (e.g. "red fox", "griffin"). Nullable in DB.
+  species?: string
+  // Free-text category (backend stores via z.string().max(50)). Distinct from
+  // ObjectNodeData.category which is a hard enum.
+  category: string
+  style: "realistic" | "anime" | "3d-pixar" | "illustration"
+  provider?: string
+  sourceImageUrl: string
+  projectId: string
+  createdAt: string
+  executionStatus: "idle" | "running" | "completed" | "failed"
+  currentJobProgress?: number
+  errorMessage?: string
+  generatedResults: GeneratedResult[]
+  activeResultIndex: number
+  fieldMappings: FieldMappings
+  // Individual asset images
+  angles: ObjectAssetItem[]
+  poses: ObjectAssetItem[]
+  variations: ObjectAssetItem[]
+  // Asset generation status
+  anglesStatus: "idle" | "running" | "completed" | "failed"
+  posesStatus: "idle" | "running" | "completed" | "failed"
+  variationsStatus: "idle" | "running" | "completed" | "failed"
+  // Custom variations
+  customVariations: Array<{ prompt: string; url: string; createdAt: string }>
+  // Creature Studio: motion clips + reference photos (mirror ObjectNodeData).
+  motionClips: ObjectAssetItem[]
+  motionStatus: AssetStatus
+  referencePhotos: ObjectReferencePhoto[]
+  // Reference sheets (composited boards) — carried for forward-compat with the
+  // GET route shape; the Sheet tab is DEFERRED this phase.
+  sheets?: ReferenceSheet[]
+  readonly detailCloseups?: ObjectAssetItem[]
+  // Per-CANVAS-NODE thumbnail override (frontend-only; mirrors
+  // ObjectNodeData.defaultAssetUrl). Drives the canvas thumbnail, falling back
+  // to the active result then `sourceImageUrl`. Never sent to saveCreature.
+  readonly defaultAssetUrl?: string
+  readonly defaultAssetName?: string
+  // LLM-authored canonical description (set on approve-main-image; coerced
+  // from DB null → "" in API response).
+  canonicalDescription: string
+  // When true, every variant gen passes the main image as reference for
+  // form/species consistency. Default true.
+  styleLock: boolean
+  // ISO-8601 from creatures.updated_at; optimistic-concurrency token.
+  updatedAt?: string
+  // Phase 1B.4 — pipeline lifecycle (see CharacterNodeData for full JSDoc).
+  readonly pipeline_id?: string
+  readonly pipeline_entity_id?: string
+  readonly pipeline_owned?: boolean
+  readonly pipeline_state?: PipelineState
+  readonly is_stale?: boolean
+}
+
+/**
  * Raw shape of an `objects` row as it arrives from Postgres replication
  * (snake_case columns from the underlying table). Consumed by E2's
  * `useObjectRealtimeSync` hook. Permissive about JSONB column types — the
@@ -4507,6 +4590,7 @@ export type SceneNodeData =
   | SceneNodeDataType
   | CharacterNodeData
   | ObjectNodeData
+  | CreatureNodeData
   | LocationNodeData
   | FaceNodeData
   | LLMChatData
@@ -4677,6 +4761,7 @@ export type SceneNodeType =
   | "character"
   | "face"
   | "object"
+  | "creature"
   | "location"
   | "llm-chat"
   | "combine-text"
@@ -6564,13 +6649,13 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
   // Object
   {
     type: "object",
-    label: "Object",
+    label: "Object/Props",
     category: "object",
     creditCost: 5,
     inputs: ["in"],
     outputs: ["objectRef"],
     defaultData: {
-      label: "Object",
+      label: "Object/Props",
       objectDbId: "",
       objectName: "",
       description: "",
@@ -6599,6 +6684,46 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       // updatedAt omitted — set on first save
       // legacyPickerSelection omitted — populated by loadWorkflow migration
     } as ObjectNodeData,
+  },
+  // Animal/Creature (mirrors Object — Creature Studio asset model:
+  // angles / poses / variations / motion clips / reference photos)
+  {
+    type: "creature",
+    label: "Animal/Creature",
+    category: "creature",
+    creditCost: 5,
+    inputs: ["in"],
+    outputs: ["creatureRef"],
+    defaultData: {
+      label: "Animal/Creature",
+      creatureDbId: "",
+      creatureName: "",
+      description: "",
+      species: "",
+      category: "",
+      style: "realistic",
+      sourceImageUrl: "",
+      projectId: "",
+      createdAt: "",
+      executionStatus: "idle",
+      generatedResults: [],
+      activeResultIndex: 0,
+      fieldMappings: {},
+      angles: [],
+      poses: [],
+      variations: [],
+      anglesStatus: "idle",
+      posesStatus: "idle",
+      variationsStatus: "idle",
+      customVariations: [],
+      // Creature Studio defaults — mirror ObjectNodeData defaults.
+      motionClips: [],
+      motionStatus: "idle",
+      referencePhotos: [],
+      canonicalDescription: "",
+      styleLock: true,
+      // updatedAt omitted — set on first save
+    } as CreatureNodeData,
   },
   // Location
   {

@@ -4,7 +4,7 @@ import type { SubWorkflowRouteSnapshot, SocialConnection } from "@/types/nodes"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import type { ReduceMeta, ImageCriticMode, WorkflowExport, ReferenceSheet } from "@nodaro/shared"
 import type { SheetType, SheetSkin, SheetFlavour, EntityKind } from "@nodaro/shared"
-import type { CharacterAttachColumn, ObjectAttachColumn, LocationAttachColumn } from "@nodaro/shared"
+import type { CharacterAttachColumn, ObjectAttachColumn, CreatureAttachColumn, LocationAttachColumn } from "@nodaro/shared"
 import type { CommunityCard, CommunitySort } from "@nodaro/shared"
 import { FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared"
 import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
@@ -1591,6 +1591,316 @@ export async function getObjectById(objectId: string): Promise<DbObject | null> 
   return res.json()
 }
 
+// --- Animal/Creature API functions ---
+//
+// Mirrors the Object API surface (generateObject / generateCreatureAsset /
+// generateCreatureMotion / saveCreature / approve / recaption / delete /
+// restore / list / get-by-id) with the creature DELTA:
+//   objectName → creatureName, attachToObjectId → attachToCreatureId,
+//   materials  → poses, + species (free-text). The reference-sheet *Sheet tab*
+//   (sheets / detail_closeups buckets) is the only piece still deferred — the
+//   asset (Angles/Poses/Variations) and motion clients below are live and back
+//   the Creature Studio tabs (routes: POST /v1/generate-creature-asset and
+//   /v1/generate-creature-motion). Auth-header + error handling go through the
+//   shared `apiJson` helper / `throwApiError`, identical to object.
+
+export async function generateCreature(data: {
+  name: string
+  description?: string
+  // Creature delta vs object — free-text species/type (e.g. "red fox",
+  // "griffin"). Nullable server-side; omitted when blank.
+  species?: string
+  category?: string
+  style?: string
+  sourceImageUrl?: string
+  provider?: string
+  userId?: string
+  // Multi-candidate generation + studio auto-attach + seed-prompt context.
+  // Backend returns `{ jobIds: string[] }` when count > 1, `{ jobId }`
+  // otherwise (matches generate-object).
+  count?: 1 | 2 | 4
+  attachToCreatureId?: string
+  attachName?: string
+  seedPromptHint?: string
+  expectedUpdatedAt?: string
+}): Promise<{ jobId: string } | { jobIds: string[] }> {
+  return apiJson("/v1/generate-creature", {
+    body: data,
+    workflowId: true,
+    label: "Failed to start creature generation",
+  })
+}
+
+/**
+ * Kicks off a Creature Studio per-asset (angles / poses / variations / custom)
+ * image-to-image generation. Mirrors `generateObjectAsset` with object →
+ * creature substitution (`materials`→`poses`, `attachToObjectId`→
+ * `attachToCreatureId`). Worker payload pass-through: when the studio attach
+ * fields are set, the worker appends the generated `{name, url}` to the
+ * matching JSONB column on the creature row via `append_creature_asset` RPC.
+ *
+ * Backend route: `POST /v1/generate-creature-asset` — Zod schema in
+ * `backend/src/routes/generate-creature-asset.ts`. `provider` defaults to
+ * `"nano-banana"` server-side. These are what the Studio Angles / Poses /
+ * Variations tabs call.
+ */
+export async function generateCreatureAsset(data: {
+  assetType: "angles" | "poses" | "variations" | "custom"
+  variant: string
+  name: string
+  description?: string
+  // Free-form override prompt for assetType === "custom" — backend builds its
+  // prompt from `userPrompt` when set, otherwise falls back to a template
+  // seeded by `variant`. Mirrors the object route's contract.
+  userPrompt?: string
+  category?: string
+  style?: string
+  // Optional — backend Zod is `safeUrlSchema.optional()`. Studio passes the
+  // approved main image only when style-lock is on; otherwise omit it
+  // (undefined) for text-only generation. Do NOT send "" — an empty string
+  // fails URL validation (HTTP 400).
+  sourceImageUrl?: string
+  provider?: string
+  userId?: string
+  attachToCreatureId?: string
+  // Shared single-source-of-truth union (includes the reference-sheet buckets
+  // sheets/detail_closeups) — kept in lockstep with the backend route + RPC
+  // via CREATURE_ATTACH_COLUMNS in @nodaro/shared.
+  attachToColumn?: CreatureAttachColumn
+  attachName?: string
+  seedPromptHint?: string
+}): Promise<{ jobId: string }> {
+  return apiJson("/v1/generate-creature-asset", {
+    body: data,
+    workflowId: true,
+    label: "Failed to start creature asset generation",
+  })
+}
+
+/**
+ * Kicks off the Creature Studio motion (image-to-video) generation. Mirrors
+ * `generateObjectMotion` but for the creature motion tab. `sourceImageUrl` is
+ * REQUIRED — image-to-video needs a source frame.
+ *
+ * Backend route: `POST /v1/generate-creature-motion` — Zod schema in
+ * `backend/src/routes/generate-creature-motion.ts`. `provider` defaults to
+ * `"kling-turbo"` server-side. When `attachToCreatureId` is set the worker
+ * appends to the creature row's `motion_clips` JSONB column (single attach
+ * column; the route sets it implicitly so callers don't supply it). Default
+ * aspect-ratio is `1:1` — resolved server-side via
+ * `resolveObjectAspectRatio({ assetType: "motion" })`.
+ */
+export async function generateCreatureMotion(data: {
+  motionPrompt: string
+  sourceImageUrl: string
+  provider?: string
+  name: string
+  category?: string
+  style?: string
+  canonicalDescription?: string
+  seedPromptHint?: string
+  userId?: string
+  attachToCreatureId?: string
+  attachName?: string
+  aspectRatio?: "1:1" | "3:4" | "16:9" | "9:16" | "4:3"
+}): Promise<{ jobId: string }> {
+  return apiJson("/v1/generate-creature-motion", {
+    body: data,
+    workflowId: true,
+    label: "Failed to start creature motion generation",
+  })
+}
+
+export async function saveCreature(data: {
+  id?: string
+  userId?: string
+  nodeId: string
+  projectId?: string
+  name: string
+  description?: string
+  // Creature delta vs object — free-text species/type.
+  species?: string
+  category?: string
+  style?: string
+  sourceImageUrl?: string
+  angles?: { name: string; url: string }[]
+  // Creature delta vs object — `poses` replaces object's `materials`.
+  poses?: { name: string; url: string }[]
+  variations?: { name: string; url: string }[]
+  // Mirrors saveObject — frontend stays a dumb pass-through; the backend route
+  // owns the INSERT-vs-UPDATE distinction (silently ignores worker-owned
+  // async-write columns on UPDATE so a stale studio snapshot can't clobber
+  // atomic append-RPC writes).
+  motionClips?: { name: string; url: string }[]
+  referencePhotos?: { kind: string; url: string }[]
+  canonicalDescription?: string
+  styleLock?: boolean
+  /**
+   * Optimistic-concurrency token. When present, the backend gates the UPDATE
+   * on the row's current `updated_at` and returns 409 on mismatch → surfaced
+   * here as `ConcurrentModificationError` (via the central `throwApiError`
+   * helper). Mirrors the saveObject pattern.
+   */
+  expectedUpdatedAt?: string
+}): Promise<{ id: string; updatedAt?: string }> {
+  return apiJson("/v1/creatures", {
+    body: data,
+    workflowId: true,
+    label: "Failed to save creature",
+  })
+}
+
+/**
+ * Approve a candidate-generation job as the creature's permanent
+ * `source_image_url`. Also fires the vision caption inline to populate
+ * `canonical_description`. Returns 200 with `canonicalDescription: ""` on
+ * caption sub-failure (frontend retries via `recaptionCreature`). Mirrors
+ * `approveObjectMainImage`.
+ */
+export async function approveCreatureMainImage(
+  creatureId: string,
+  candidateJobId: string,
+  expectedUpdatedAt?: string,
+): Promise<{ readonly sourceImageUrl: string; readonly canonicalDescription: string }> {
+  const body: Record<string, unknown> = { candidateJobId }
+  if (expectedUpdatedAt) body.expectedUpdatedAt = expectedUpdatedAt
+  return apiJson(
+    `/v1/creatures/${encodeURIComponent(creatureId)}/approve-main-image`,
+    { body, label: "Failed to approve creature main image" },
+  )
+}
+
+/**
+ * Re-runs the vision caption against the creature's existing
+ * `source_image_url` and persists the result. Mirrors `recaptionObject`.
+ */
+export async function recaptionCreature(
+  creatureId: string,
+): Promise<{ readonly canonicalDescription: string }> {
+  return apiJson(
+    `/v1/creatures/${encodeURIComponent(creatureId)}/llm-caption`,
+    { label: "Failed to caption creature" },
+  )
+}
+
+/**
+ * Archives the creature (soft delete). `opts.permanent === true` flips the
+ * route into hard-delete mode (the row MUST already be archived). Mirrors
+ * `deleteObject`.
+ */
+export async function deleteCreature(
+  creatureId: string,
+  opts?: { permanent?: boolean },
+): Promise<{ success: boolean; archived?: boolean; permanent?: boolean }> {
+  const path = opts?.permanent
+    ? `/v1/creatures/${encodeURIComponent(creatureId)}?permanent=true`
+    : `/v1/creatures/${encodeURIComponent(creatureId)}`
+  return apiJson(path, {
+    method: "DELETE",
+    label: opts?.permanent ? "Failed to permanently delete creature" : "Failed to archive creature",
+  })
+}
+
+/**
+ * Un-archive a soft-deleted creature (mirror of `restoreObject`). On name
+ * collision with an active row, the backend auto-suffixes "(restored)" so the
+ * returned name may differ from the original.
+ */
+export async function restoreCreature(creatureId: string): Promise<{ id: string; name: string }> {
+  return apiJson(
+    `/v1/creatures/${encodeURIComponent(creatureId)}/restore`,
+    { label: "Failed to restore creature" },
+  )
+}
+
+/**
+ * Permanent (hard) delete a soft-deleted creature row. UI-only — backed by the
+ * DELETE route with `?permanent=true`. Mirrors `permanentDeleteObject`.
+ */
+export async function permanentDeleteCreature(
+  creatureId: string,
+): Promise<{ success: boolean; permanent: boolean }> {
+  const res = (await deleteCreature(creatureId, { permanent: true })) as {
+    success: boolean
+    permanent: boolean
+  }
+  return res
+}
+
+export interface DbCreature {
+  id: string
+  userId: string | null
+  nodeId: string
+  projectId: string | null
+  name: string
+  description: string | null
+  // Creature delta vs object — free-text species/type (nullable in DB).
+  species: string | null
+  category: string | null
+  style: string | null
+  sourceImageUrl: string | null
+  angles: { name: string; url: string }[]
+  // Creature delta vs object — `poses` replaces object's `materials`.
+  poses: { name: string; url: string }[]
+  variations: { name: string; url: string }[]
+  motionClips: { name: string; url: string }[]
+  referencePhotos: { kind: string; url: string }[]
+  canonicalDescription: string
+  styleLock: boolean
+  // Reference-sheet buckets — carried for forward-compat with the GET routes'
+  // shape (Sheet tab DEFERRED this phase). Mirrors DbObject.
+  sheets?: ReferenceSheet[]
+  detailCloseups?: unknown[]
+  deletedAt?: string | null
+  createdAt: string
+  updatedAt: string
+  // Only populated by `getCreatureById` (the GET single-row route); the list
+  // route omits this. In-flight generation jobs targeting this creature.
+  pendingJobs?: { jobId: string; assetType: string; name: string; status: string }[]
+}
+
+export async function getCreatures(
+  projectId?: string,
+  userId?: string,
+  opts?: { archived?: boolean },
+): Promise<{ creatures: DbCreature[] }> {
+  const params = new URLSearchParams()
+  if (projectId) params.set("projectId", projectId)
+  if (userId) params.set("userId", userId)
+  if (opts?.archived) params.set("archived", "true")
+  const qs = params.toString()
+  return apiJson(`/v1/creatures${qs ? `?${qs}` : ""}`, {
+    method: "GET",
+    label: "Failed to fetch creatures",
+  })
+}
+
+/**
+ * List of archived (soft-deleted) creatures for the library's "Archived" tab.
+ * Backed by `GET /v1/creatures?archived=true`. Mirrors `listArchivedObjects`.
+ */
+export async function listArchivedCreatures(
+  projectId?: string,
+  userId?: string,
+): Promise<{ creatures: DbCreature[] }> {
+  return getCreatures(projectId, userId, { archived: true })
+}
+
+export async function getCreatureById(creatureId: string): Promise<DbCreature | null> {
+  const res = await fetch(`${API_BASE_URL}/v1/creatures/${encodeURIComponent(creatureId)}`, {
+    method: "GET",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+  })
+  if (res.status === 404) {
+    return null
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to fetch creature")
+  }
+  return res.json()
+}
+
 // Location API functions
 export async function generateLocation(data: {
   name: string
@@ -1963,6 +2273,12 @@ export interface GenerateVideoOptions {
    *  identity-preserve suffix to the prompt. Requires attachToCharacterId. */
   injectCharacterContext?: boolean
   attachToCharacterId?: string
+  /** When set (a non-empty variant label) alongside attachToCharacterId, the
+   *  backend appends the completed clip to the character's
+   *  reference_videos_by_variant[<label>] on job completion (job-finalize).
+   *  Independent of injectCharacterContext — saving the result and injecting
+   *  identity are separate opt-ins. */
+  attachReferenceVideoVariant?: string
   userId?: string
   /** Per-click idempotency key. Same UUID across retries of one click;
    *  fresh UUID for the next click. See generateIdempotencyKey(). */
@@ -2022,6 +2338,9 @@ export async function generateVideo(
     }
     if (opts.attachToCharacterId) {
       body.attachToCharacterId = opts.attachToCharacterId
+    }
+    if (opts.attachReferenceVideoVariant) {
+      body.attachReferenceVideoVariant = opts.attachReferenceVideoVariant
     }
     if (opts.userId) {
       body.userId = opts.userId

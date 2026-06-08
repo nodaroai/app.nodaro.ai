@@ -305,6 +305,7 @@ export const IMAGE_SOURCE_TYPES = new Set([
   "character",
   "face",
   "object",
+  "creature",
   "location",
   "scene",
 ])

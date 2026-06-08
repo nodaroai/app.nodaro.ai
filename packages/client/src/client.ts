@@ -11,6 +11,7 @@ import { AppsResource } from "./resources/apps.js"
 import { CharactersResource } from "./resources/characters.js"
 import { LocationsResource } from "./resources/locations.js"
 import { ObjectsResource } from "./resources/objects.js"
+import { CreaturesResource } from "./resources/creatures.js"
 import { PipelinesResource } from "./resources/pipelines.js"
 import { ReduceResource } from "./resources/reduce.js"
 import { PromptHelperResource } from "./resources/prompt-helper.js"
@@ -84,6 +85,7 @@ export class NodaroClient {
   readonly characters: CharactersResource
   readonly locations: LocationsResource
   readonly objects: ObjectsResource
+  readonly creatures: CreaturesResource
   readonly pipelines: PipelinesResource
   readonly reduce: ReduceResource
   readonly promptHelper: PromptHelperResource
@@ -111,6 +113,7 @@ export class NodaroClient {
     this.characters = new CharactersResource(this)
     this.locations = new LocationsResource(this)
     this.objects = new ObjectsResource(this)
+    this.creatures = new CreaturesResource(this)
     this.pipelines = new PipelinesResource(this)
     this.reduce = new ReduceResource(this)
     this.promptHelper = new PromptHelperResource(this)

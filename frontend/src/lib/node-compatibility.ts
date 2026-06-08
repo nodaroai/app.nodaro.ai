@@ -78,6 +78,7 @@ export const HANDLE_COMPATIBILITY: Record<string, readonly string[]> = {
   characterRef: ["characterRef"],
   faceRef: ["faceRef", "face"],
   objectRef: ["objectRef"],
+  creatureRef: ["creatureRef"],
   locationRef: ["locationRef"],
 
   // JSON outputs → json or text-like inputs (auto-stringify at runtime)

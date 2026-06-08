@@ -16,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { publishToCommunity } from "@/lib/api"
 
 interface PublishDialogProps {
-  entityType: "character" | "location" | "object"
+  entityType: "character" | "location" | "object" | "creature"
   entityId: string
   defaultTitle?: string
   open: boolean

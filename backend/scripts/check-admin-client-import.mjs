@@ -191,6 +191,20 @@ const ALLOWED_PATHS = [
   // Mirrors generate-location-motion.ts (Phase C1b).
   /^src\/routes\/generate-object-motion\.ts$/,
 
+  // Animal/Creature entity routes (PR1): faithful service-role mirror of the
+  // object entity routes above. Every query is owner-scoped in-handler
+  // (.eq("user_id", userId), uniform "not_found" 404); the append_creature_asset
+  // RPC is service_role-only; generation routes re-check attachToCreatureId
+  // ownership BEFORE reserveCreditsForJob. Owner-scoping guarded by
+  // check-tenant-scope.mjs (creatures is in TENANT_TABLES).
+  /^src\/routes\/creatures\.ts$/,
+  /^src\/routes\/creature-restore\.ts$/,
+  /^src\/routes\/creature-main-image-approval\.ts$/,
+  /^src\/routes\/creature-llm-caption\.ts$/,
+  /^src\/routes\/generate-creature\.ts$/,
+  /^src\/routes\/generate-creature-asset\.ts$/,
+  /^src\/routes\/generate-creature-motion\.ts$/,
+
   // Story-to-Video pipelines (Phase 1A): every handler scopes by req.userId
   // in-handler (.eq("user_id", userId) on pipelines + JOIN-based checks for
   // child tables; cross-user rows return 404 to avoid existence leak — audited

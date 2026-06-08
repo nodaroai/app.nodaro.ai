@@ -862,6 +862,88 @@ describe("generate_object verb", () => {
   })
 })
 
+// generate_creature mirrors generate_object 1:1 with the Animal/Creature
+// delta: free-text `species` field, and the asset_type enum swaps `materials`
+// for `poses`. The main route returns the dual { jobId, jobIds } shape
+// (harmonized with characters) so the tool prefers jobIds[0].
+describe("generate_creature verb", () => {
+  it("calls /v1/generate-creature on kind='main' and forwards species", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/generate-creature", { jobId: "j-c1" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const result = await callTool(server, "generate_creature", {
+      kind: "main",
+      name: "Emerald Dragon",
+      species: "dragon",
+      category: "mythical",
+    })
+
+    expect(result.isError).toBeUndefined()
+    expect(((result.structuredContent as Record<string, unknown>)?.jobId ?? (result.structuredContent as Record<string, unknown>)?.executionId)).toBe("j-c1")
+    expect(received.body?.name).toBe("Emerald Dragon")
+    // Creature delta vs object — free-text species is forwarded to the route.
+    expect(received.body?.species).toBe("dragon")
+    expect(received.body?.category).toBe("mythical")
+    expect(received.body?.mcp_client).toBe("Claude")
+    expect(received.body?.userId).toBe("u1")
+  })
+
+  it("prefers jobIds[0] when the main route returns the dual shape", async () => {
+    const { fastify } = stubRoute("POST", "/v1/generate-creature", {
+      jobId: "j-legacy",
+      jobIds: ["j-c-dual"],
+    })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const result = await callTool(server, "generate_creature", {
+      kind: "main",
+      name: "Wolf",
+    })
+
+    expect(result.isError).toBeUndefined()
+    expect((result.structuredContent as Record<string, unknown>)?.jobId).toBe("j-c-dual")
+  })
+
+  it("calls /v1/generate-creature-asset on kind='asset' with poses (materials->poses delta)", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/generate-creature-asset", { jobId: "j-c2" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const result = await callTool(server, "generate_creature", {
+      kind: "asset",
+      name: "Emerald Dragon",
+      asset_type: "poses",
+      variant: "standing",
+    })
+
+    expect(result.isError).toBeUndefined()
+    expect(received.body?.assetType).toBe("poses")
+    expect(received.body?.variant).toBe("standing")
+  })
+
+  it("errors when kind='asset' is missing asset_type/variant", async () => {
+    const { fastify } = stubRoute("POST", "/v1/generate-creature-asset", { jobId: "j-c3" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const result = await callTool(server, "generate_creature", {
+      kind: "asset",
+      name: "Emerald Dragon",
+    })
+    expect(result.isError).toBe(true)
+  })
+
+  it("does NOT register without workflows:execute scope", async () => {
+    const fastify = Fastify()
+    const server = buildServer()
+    registerVerbs({ server, session: readOnlySession(), fastify })
+    const tools = await listTools(server)
+    expect(tools.map((t) => t.name)).not.toContain("generate_creature")
+  })
+})
+
 describe("voice_changer verb", () => {
   it("calls /v1/voice-changer with audio_url + voice_id", async () => {
     const { fastify, received } = stubRoute("POST", "/v1/voice-changer", { jobId: "j-vc" })

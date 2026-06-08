@@ -60,12 +60,13 @@ async function runBounded<T>(items: readonly T[], limit: number, fn: (item: T) =
   await Promise.all(Array.from({ length: Math.min(limit, queue.length) }, worker))
 }
 
-function defaultConfirm(missingCount: number, label: string): boolean {
+function defaultConfirm(missingCount: number, label: string, assemblyFee: number): boolean {
   const n = missingCount
+  const estTotal = n + assemblyFee // panels are ≈1 credit each (nano-banana) + the flat assembly fee
   return window.confirm(
     `"${label}": this reference sheet needs ${n} more panel${n === 1 ? "" : "s"} generated from the ` +
-      `main image (each is charged separately, then composing adds the assembly fee). ` +
-      `Generate ${n} panel${n === 1 ? "" : "s"} now?`,
+      `main image — about ${n} credit${n === 1 ? "" : "s"} (≈1 each), then composing adds ${assemblyFee} ` +
+      `credits. ≈ ${estTotal} credits total. Generate now?`,
   )
 }
 
@@ -77,6 +78,9 @@ export async function ensureNodeSheetPanels(args: {
   ctx: ExecutionContext
   nodeId: string
   label: string
+  /** Flat assembly fee (still 4 / motion 6) — shown in the cost confirm so the
+   *  user sees the panel cost + assembly total before generating. Default 4. */
+  assemblyFee?: number
   /** Override the cost confirm (tests). Return false to cancel. */
   confirm?: (missingCount: number, label: string) => boolean
 }): Promise<void> {
@@ -98,7 +102,8 @@ export async function ensureNodeSheetPanels(args: {
     throw new Error(`Approve a main image for the connected ${entityKind} before generating its sheet`)
   }
 
-  const confirm = args.confirm ?? defaultConfirm
+  const assemblyFee = args.assemblyFee ?? 4
+  const confirm = args.confirm ?? ((n, l) => defaultConfirm(n, l, assemblyFee))
   if (!confirm(missing.length, label)) throw new Error(SHEET_STAGE_A_CANCELLED)
   if (ctx.signal?.aborted) throw new Error(SHEET_STAGE_A_CANCELLED)
 

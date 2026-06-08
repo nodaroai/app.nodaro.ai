@@ -33,7 +33,7 @@ interface BaseNodeProps {
   readonly id: string
   readonly label: string
   readonly icon: ReactNode
-  readonly category: "input" | "parameter" | "ai" | "processing" | "output" | "scene" | "character" | "face" | "object" | "location" | "script" | "i2v" | "component"
+  readonly category: "input" | "parameter" | "ai" | "processing" | "output" | "scene" | "character" | "face" | "object" | "creature" | "location" | "script" | "i2v" | "component"
   readonly credits?: number
   readonly handles: ReadonlyArray<HandleConfig>
   readonly children?: ReactNode
@@ -87,6 +87,7 @@ const CATEGORY_STYLES: Record<string, string> = {
   character: NEUTRAL_CARD_STYLE,
   face: NEUTRAL_CARD_STYLE,
   object: NEUTRAL_CARD_STYLE,
+  creature: NEUTRAL_CARD_STYLE,
   location: NEUTRAL_CARD_STYLE,
   script: NEUTRAL_CARD_STYLE,
   i2v: NEUTRAL_CARD_STYLE,
@@ -105,6 +106,7 @@ const CATEGORY_HEADER: Record<string, string> = {
   character: "bg-[#F8FAFC] text-[#1E293B] border-t-2 border-t-[#EC4899] dark:bg-[#F472B6] dark:text-white dark:border-t-0",
   face: "bg-[#F8FAFC] text-[#1E293B] border-t-2 border-t-[#F97316] dark:bg-[#FB923C] dark:text-white dark:border-t-0",
   object: "bg-[#F8FAFC] text-[#1E293B] border-t-2 border-t-[#10B981] dark:bg-[#34D399] dark:text-white dark:border-t-0",
+  creature: "bg-[#F8FAFC] text-[#1E293B] border-t-2 border-t-[#8B5CF6] dark:bg-[#A78BFA] dark:text-white dark:border-t-0",
   location: "bg-[#F8FAFC] text-[#1E293B] border-t-2 border-t-[#06B6D4] dark:bg-[#22D3EE] dark:text-white dark:border-t-0",
   script: "bg-[#282828] text-white dark:bg-[#ff0073] dark:shadow-[0_0_20px_rgba(255,0,115,0.3)]",
   i2v: "bg-[#282828] text-white dark:bg-[#ff0073] dark:shadow-[0_0_20px_rgba(255,0,115,0.3)]",
@@ -122,6 +124,7 @@ const CATEGORY_ICON_COLOR: Record<string, string> = {
   character: "text-[#EC4899] dark:text-white",
   face: "text-[#F97316] dark:text-white",
   object: "text-[#10B981] dark:text-white",
+  creature: "text-[#8B5CF6] dark:text-white",
   location: "text-[#06B6D4] dark:text-white",
   script: "text-white",
   i2v: "text-white",
@@ -502,6 +505,7 @@ function BaseNodeComponent({
           isEditing && category === "character" && "dark:shadow-[0_0_20px_rgba(244,114,182,0.4)]",
           isEditing && category === "location" && "dark:shadow-[0_0_20px_rgba(34,211,238,0.4)]",
           isEditing && category === "object" && "dark:shadow-[0_0_20px_rgba(52,211,153,0.4)]",
+          isEditing && category === "creature" && "dark:shadow-[0_0_20px_rgba(167,139,250,0.4)]",
           isEditing && category === "output" && "dark:shadow-[0_0_20px_rgba(34,197,94,0.4)]",
           isEditing && category === "component" && "dark:shadow-[0_0_20px_rgba(168,85,247,0.4)]",
           (isRunning || isPending) && "node-running",
@@ -536,7 +540,7 @@ function BaseNodeComponent({
               category === "processing" ? "bg-[#475569]/10 dark:bg-white/20 text-[#475569] dark:text-white hover:text-[#ff0073]" :
               category === "output"     ? "bg-[#22C55E]/10 dark:bg-white/20 text-[#22C55E] dark:text-white hover:text-[#ff0073]" :
               category === "component"  ? "bg-[#A855F7]/10 dark:bg-white/20 text-[#A855F7] dark:text-white hover:text-[#ff0073]" :
-              (category === "character" || category === "location" || category === "object" ||
+              (category === "character" || category === "location" || category === "object" || category === "creature" ||
                category === "ai"        || category === "scene"    || category === "script" || category === "i2v")
                                         ? "bg-[#ff0073] dark:bg-white/20 text-white hover:opacity-70" :
               cn(CATEGORY_ICON_COLOR[category], "hover:text-[#ff0073]")

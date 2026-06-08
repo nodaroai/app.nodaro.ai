@@ -117,22 +117,22 @@ describe("ObjectConfig (Phase E3/2 — Studio stub)", () => {
     setObjectStudioNodeIdMock.mockClear()
   })
 
-  it("renders the Open Object Studio button", () => {
+  it("renders the Open Object/Props Studio button", () => {
     renderObjectConfig()
-    const btn = screen.getByRole("button", { name: "Open Object Studio" })
+    const btn = screen.getByRole("button", { name: "Open Object/Props Studio" })
     expect(btn).toBeInTheDocument()
   })
 
   it("clicking the Studio button calls setObjectStudioNodeId with the nodeId", () => {
     renderObjectConfig()
-    const btn = screen.getByRole("button", { name: "Open Object Studio" })
+    const btn = screen.getByRole("button", { name: "Open Object/Props Studio" })
     fireEvent.click(btn)
     expect(setObjectStudioNodeIdMock).toHaveBeenCalledWith("obj-node-1")
   })
 
   it("disables the Studio button when nodeId is undefined (no-op)", () => {
     renderObjectConfig({ nodeId: undefined })
-    const btn = screen.getByRole("button", { name: "Open Object Studio" })
+    const btn = screen.getByRole("button", { name: "Open Object/Props Studio" })
     expect(btn).toBeDisabled()
     fireEvent.click(btn)
     expect(setObjectStudioNodeIdMock).not.toHaveBeenCalled()

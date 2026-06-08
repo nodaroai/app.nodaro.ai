@@ -1059,6 +1059,54 @@ describe("image-to-video", () => {
     )
   })
 
+  it("forwards attachReferenceVideoVariant + attachToCharacterId to runVideoGeneration when a variant is set and a Character is wired", async () => {
+    mockResolveNodeInputs.mockReturnValue({
+      imageUrl: "http://frame.png",
+      attachToCharacterId: "char-db-1",
+    })
+    mockRunVideoGeneration.mockResolvedValue(undefined)
+
+    await executeNode(
+      makeNode("image-to-video", { attachReferenceVideoVariant: "happy" }),
+      makeCtx(),
+    )
+
+    const extras = mockRunVideoGeneration.mock.calls[0][24] as Record<string, unknown>
+    expect(extras.attachReferenceVideoVariant).toBe("happy")
+    expect(extras.attachToCharacterId).toBe("char-db-1")
+  })
+
+  it("does NOT forward attach fields when no variant label is set", async () => {
+    mockResolveNodeInputs.mockReturnValue({
+      imageUrl: "http://frame.png",
+      attachToCharacterId: "char-db-1", // character wired, but save not enabled
+    })
+    mockRunVideoGeneration.mockResolvedValue(undefined)
+
+    await executeNode(makeNode("image-to-video", {}), makeCtx())
+
+    const extras = mockRunVideoGeneration.mock.calls[0][24] as Record<string, unknown>
+    expect(extras.attachReferenceVideoVariant).toBeUndefined()
+    expect(extras.attachToCharacterId).toBeUndefined()
+  })
+
+  it("trims a whitespace-only variant to nothing (no attach)", async () => {
+    mockResolveNodeInputs.mockReturnValue({
+      imageUrl: "http://frame.png",
+      attachToCharacterId: "char-db-1",
+    })
+    mockRunVideoGeneration.mockResolvedValue(undefined)
+
+    await executeNode(
+      makeNode("image-to-video", { attachReferenceVideoVariant: "   " }),
+      makeCtx(),
+    )
+
+    const extras = mockRunVideoGeneration.mock.calls[0][24] as Record<string, unknown>
+    expect(extras.attachReferenceVideoVariant).toBeUndefined()
+    expect(extras.attachToCharacterId).toBeUndefined()
+  })
+
   it("resolves @character:N:variant mentions when a Character is wired upstream", async () => {
     // Frontend = backend parity test. User scenario: a Character node "shira"
     // wired upstream of image-to-video, with smile + laughing expressions.

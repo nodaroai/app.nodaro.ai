@@ -2,7 +2,7 @@
 
 import { useEffect } from "react"
 import type { LucideIcon } from "lucide-react"
-import { Sparkles, Languages, Image as ImageIcon } from "lucide-react"
+import { Sparkles, Languages, Image as ImageIcon, LayoutGrid, Palette } from "lucide-react"
 import {
   Select,
   SelectContent,
@@ -28,7 +28,7 @@ import {
   CINEMATIC_ASPECT_RATIO_OPTIONS,
   CINEMATIC_RESOLUTION_OPTIONS,
 } from "@/components/editor/config-panels/model-options"
-import { LLM_MODELS } from "@nodaro/shared"
+import { LLM_MODELS, SHEET_TYPES, SHEET_SKINS } from "@nodaro/shared"
 import { ALL_LANGUAGES } from "@/lib/audio-tags"
 
 /**
@@ -208,6 +208,10 @@ const maskThresholdControl: QuickConfigControl = {
   ],
 }
 
+/** Title-case a kebab sheet enum value for the dropdown label (drift-proof — no
+ *  separate label map to keep in sync with SHEET_TYPES/SHEET_SKINS). */
+const sheetLabel = (v: string) => v.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+
 export const NODE_QUICK_CONFIGS: Readonly<Record<string, ReadonlyArray<QuickConfigControl>>> = {
   // `edit-image` / `image-to-image` are legacy types folded into `modify-image`
   // (not creatable, never mounted) — no quick-config entry; guard test enforces.
@@ -257,6 +261,14 @@ export const NODE_QUICK_CONFIGS: Readonly<Record<string, ReadonlyArray<QuickConf
   "face-swap": [faceSwapProviderControl],
   "remove-background": [removeBgMotionControl],
   "generate-mask": [maskThresholdControl],
+  // ── Reference Sheet — top-level `type` + `skin` (flat fields the strip can
+  // address). `aspect`/`withText`/`showLabels` live under `flavour` (nested) so
+  // they stay in the config panel. Registering entries also suppresses the
+  // fallback "Settings" strip button (the node has its own on-body gear). ──
+  "reference-sheet": [
+    { field: "type", ariaLabel: "Sheet type", icon: LayoutGrid, options: SHEET_TYPES.map((t) => ({ value: t, label: sheetLabel(t) })) },
+    { field: "skin", ariaLabel: "Skin", icon: Palette, options: SHEET_SKINS.map((s) => ({ value: s, label: sheetLabel(s) })) },
+  ],
   // ── AI Avatar (HeyGen) ──
   "ai-avatar": [
     {

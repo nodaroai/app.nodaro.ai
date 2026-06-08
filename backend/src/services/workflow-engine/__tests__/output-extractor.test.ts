@@ -454,7 +454,7 @@ describe("extractSavedNodeOutput", () => {
   })
 
   it("extracts entity imageUrl from sourceImageUrl", () => {
-    for (const type of ["character", "face", "object", "location"]) {
+    for (const type of ["character", "face", "object", "location", "creature"]) {
       const n = node("1", type, { sourceImageUrl: "entity.png" })
       expect(extractSavedNodeOutput(n)?.imageUrl).toBe("entity.png")
     }

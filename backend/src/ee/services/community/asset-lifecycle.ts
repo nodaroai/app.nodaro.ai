@@ -46,7 +46,15 @@ export async function copyEntityAssetsToPrefix(
     } else if (typeof val === "object") {
       const obj: Record<string, unknown> = {}
       for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
-        obj[k] = typeof v === "string" ? await copyUrl(v) : v
+        if (typeof v === "string") {
+          obj[k] = await copyUrl(v)
+        } else if (Array.isArray(v)) {
+          obj[k] = await Promise.all(
+            v.map((u) => (typeof u === "string" ? copyUrl(u) : u)),
+          )
+        } else {
+          obj[k] = v
+        }
       }
       copiedAssets[field] = obj
     }

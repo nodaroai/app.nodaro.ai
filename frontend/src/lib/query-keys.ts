@@ -74,6 +74,8 @@ export const queryKeys = {
       ["assets", "characters", projectId ?? "", userId ?? ""] as const,
     objects: (projectId?: string, userId?: string) =>
       ["assets", "objects", projectId ?? "", userId ?? ""] as const,
+    creatures: (projectId?: string, userId?: string) =>
+      ["assets", "creatures", projectId ?? "", userId ?? ""] as const,
     locations: (projectId?: string, userId?: string) =>
       ["assets", "locations", projectId ?? "", userId ?? ""] as const,
     faces: (projectId?: string, userId?: string) =>

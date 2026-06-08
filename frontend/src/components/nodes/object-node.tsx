@@ -152,7 +152,7 @@ function ObjectNodeComponent({ id, data, selected }: NodeProps) {
               )}
               <CachedImage
                 src={activeUrl}
-                alt={nodeData.objectName || "Object"}
+                alt={nodeData.objectName || "Object/Props"}
                 className="w-full h-full object-cover cursor-pointer"
                 thumbnail={!useFull}
                 thumbnailWidth={320}
@@ -305,7 +305,7 @@ function ObjectNodeComponent({ id, data, selected }: NodeProps) {
         {/* Open Studio button */}
         <button
           type="button"
-          aria-label="Open Object Studio"
+          aria-label="Open Object/Props Studio"
           className="w-full flex items-center justify-center gap-1 px-2 py-1 text-[10px] font-medium bg-[#0e3a2e] border border-[#34D39944] text-[#6ee7b7] rounded hover:bg-[#114b3b] transition-colors"
           onClick={(e) => {
             e.stopPropagation()
@@ -326,7 +326,7 @@ function ObjectNodeComponent({ id, data, selected }: NodeProps) {
 
     <HandleWithPopover nodeId={id} nodeType="object" handleId="in"        type="target" position={Position.Left}  label="Prompt"      color={HANDLE_COLORS.text} icon={<Type />}    side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_PROMPT} />
     <HandleWithPopover nodeId={id} nodeType="object" handleId="type"      type="target" position={Position.Left}  label="Object type" color={HANDLE_COLORS.imageRef} icon={<Package />} side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_TYPE} />
-    <HandleWithPopover nodeId={id} nodeType="object" handleId="objectRef" type="source" position={Position.Right} label="Object"      color={HANDLE_COLORS.imageRef} icon={<Package />} side="right" top="24px" />
+    <HandleWithPopover nodeId={id} nodeType="object" handleId="objectRef" type="source" position={Position.Right} label="Object/Props" color={HANDLE_COLORS.imageRef} icon={<Package />} side="right" top="24px" />
 
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}
@@ -338,7 +338,7 @@ function ObjectNodeComponent({ id, data, selected }: NodeProps) {
 
     <ImageLightbox
       src={lightboxSrc}
-      alt={nodeData.objectName || "Object"}
+      alt={nodeData.objectName || "Object/Props"}
       onClose={() => setLightboxSrc(null)}
     />
     </div>

@@ -193,7 +193,8 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   // Assets
   { type: "character", label: "Create Character", icon: <UserPlus className="h-4 w-4" />, category: "Assets" },
   { type: "face", label: "Create Face", icon: <SmilePlus className="h-4 w-4" />, category: "Assets" },
-  { type: "object", label: "Create Object", icon: <Package className="h-4 w-4" />, category: "Assets" },
+  { type: "object", label: "Create Object/Props", icon: <Package className="h-4 w-4" />, category: "Assets" },
+  { type: "creature", label: "Create Animal/Creature", icon: <PawPrint className="h-4 w-4" />, category: "Assets" },
   { type: "location", label: "Create Location", icon: <MapPin className="h-4 w-4" />, category: "Assets" },
   // Scene (Phase 1B.2 pipeline-managed SceneNode — replaces legacy scene)
   { type: "scene", label: "Scene", icon: <Clapperboard className="h-4 w-4" />, category: "AI", group: "Pipeline", keywords: ["scene", "shot list", "storyboard", "camera", "pipeline"] },

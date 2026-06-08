@@ -280,6 +280,11 @@ export function runVideoGeneration(
      *  canonical_description to the prompt. */
     injectCharacterContext?: boolean;
     attachToCharacterId?: string;
+    /** "Save result to character" — a non-empty variant label tells the
+     *  backend to append the completed clip to the character's
+     *  reference_videos_by_variant on job completion. Independent of
+     *  injectCharacterContext. */
+    attachReferenceVideoVariant?: string;
     videoTrimStart?: number;
     videoTrimEnd?: number;
   },
@@ -323,6 +328,7 @@ export function runVideoGeneration(
         videoTrimEnd: extras?.videoTrimEnd,
         injectCharacterContext: extras?.injectCharacterContext,
         attachToCharacterId: extras?.attachToCharacterId,
+        attachReferenceVideoVariant: extras?.attachReferenceVideoVariant,
         userId: ctx.userId,
         idempotencyKey,
       }),
