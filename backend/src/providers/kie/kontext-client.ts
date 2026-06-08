@@ -12,6 +12,7 @@ import {
   sleep,
   pollDelay,
   createSanitizedError,
+  createUpstreamFailureError,
   MAX_POLL_ATTEMPTS,
   type KieResultJson,
   type KieTaskResponse,
@@ -187,7 +188,7 @@ export async function pollKontextTask(
       const errorMsg =
         detailData.data.errorMessage ??
         `Error code: ${detailData.data.errorCode ?? "unknown"}`
-      throw createSanitizedError(
+      throw createUpstreamFailureError(
         `Kontext task failed: ${errorMsg}`,
         "Image generation"
       )

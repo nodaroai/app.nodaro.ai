@@ -149,6 +149,24 @@ export function createSanitizedError(
   return new KieError(sanitizedMessage, internalMessage, context, isUpstreamFailure)
 }
 
+/** Construct a KieError for a TERMINAL upstream provider failure (KIE reported
+ *  `state:"fail"` / `successFlag` 2|3 / a callback error). Sets isUpstreamFailure
+ *  so the reconcile cron fails the job fast + refunds instead of bumping it
+ *  toward the 18-attempt / 90-min exhaustion. Use this at EVERY terminal-failure
+ *  throw in the poll clients — a transient/timeout/no-result error must NOT use
+ *  it (those should keep bumping for the next cron tick). */
+export function createUpstreamFailureError(internalMessage: string, context: string): KieError {
+  return createSanitizedError(internalMessage, context, true)
+}
+
+/** True for a KieError marking a terminal upstream provider failure (vs a
+ *  transient/timeout/network error). The single classification shared by every
+ *  reconcile path (`reconcileKieJob`, `reconcileKieSunoJob`) — never string-match
+ *  the sanitized `.message`. */
+export function isUpstreamKieFailure(err: unknown): boolean {
+  return err instanceof KieError && err.isUpstreamFailure
+}
+
 // =============================================================================
 // TYPES
 // =============================================================================
@@ -481,10 +499,10 @@ export async function pollKieTask(
       console.error(
         `  Full response: ${JSON.stringify(detailData, null, 2)}`
       )
-      throw createSanitizedError(
+      // Terminal upstream failure → reconcile fails fast + refunds.
+      throw createUpstreamFailureError(
         `task failed: [${failCode}] ${failMsg}`,
         "Generation",
-        true, // terminal upstream failure → reconcile fails fast + refunds
       )
     }
 
@@ -805,7 +823,7 @@ async function pollVeoRecordInfo(
 
     if (successFlag === 2 || successFlag === 3) {
       const errorMsg = detailData.data.errorMessage ?? `Error code: ${detailData.data.errorCode ?? "unknown"}`
-      throw createSanitizedError(`${label} failed: ${errorMsg}`, "Video generation")
+      throw createUpstreamFailureError(`${label} failed: ${errorMsg}`, "Video generation")
     }
   }
 

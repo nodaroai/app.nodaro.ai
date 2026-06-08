@@ -17,6 +17,7 @@ import {
   sleep,
   pollDelay,
   createSanitizedError,
+  createUpstreamFailureError,
   MAX_POLL_ATTEMPTS_VIDEO,
   type KieResultJson,
 } from "./client.js"
@@ -206,7 +207,7 @@ async function pollRunwayRecordDetail(
     if (state === "fail") {
       const failMsg = detailData.data?.failMsg ?? "Unknown error"
       const failCode = detailData.data?.failCode ?? "no_code"
-      throw createSanitizedError(`${label} failed: [${failCode}] ${failMsg}`, "Video generation")
+      throw createUpstreamFailureError(`${label} failed: [${failCode}] ${failMsg}`, "Video generation")
     }
   }
 
@@ -349,12 +350,12 @@ async function pollAlephRecordInfo(
     // VEO (client.ts) and Kontext failure handling.
     if (successFlag === 2 || successFlag === 3) {
       const errorMsg = detailData.data?.errorMessage ?? "task failed"
-      throw createSanitizedError(`Aleph failed: ${errorMsg}`, "Video generation")
+      throw createUpstreamFailureError(`Aleph failed: ${errorMsg}`, "Video generation")
     }
 
     if (detailData.data?.errorCode && detailData.data.errorCode !== 0) {
       const errorMsg = detailData.data?.errorMessage ?? "Unknown error"
-      throw createSanitizedError(`Aleph failed: [${detailData.data.errorCode}] ${errorMsg}`, "Video generation")
+      throw createUpstreamFailureError(`Aleph failed: [${detailData.data.errorCode}] ${errorMsg}`, "Video generation")
     }
 
     // successFlag === 0 means still processing — continue polling

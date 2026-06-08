@@ -20,6 +20,7 @@ import {
   sleep,
   pollDelay,
   createSanitizedError,
+  createUpstreamFailureError,
   MAX_POLL_ATTEMPTS_VIDEO,
   type KieResultJson,
 } from "./client.js"
@@ -209,7 +210,7 @@ export async function pollLumaTask(
         }
       }
       // No results — treat as failure
-      throw createSanitizedError(
+      throw createUpstreamFailureError(
         "Luma Modify task callback failed with no results",
         "Video generation"
       )
@@ -220,7 +221,7 @@ export async function pollLumaTask(
       const errorMsg =
         detailData.data?.errorMessage ??
         `Error code: ${detailData.data?.errorCode ?? "unknown"}`
-      throw createSanitizedError(
+      throw createUpstreamFailureError(
         `Luma Modify task failed: ${errorMsg}`,
         "Video generation"
       )
