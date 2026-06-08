@@ -65,7 +65,7 @@ describe("buildSnapshot (character)", () => {
     voice: { voiceId: "v", voiceType: "custom" },
     lora_trigger_word: "trg",
   }
-  it("includes public text + COPIED assets, strips PII/lora/custom-voice", () => {
+  it("includes public text + COPIED assets, strips PII/lora; drops a custom voice with no name", () => {
     const snap = buildSnapshot("character", row, { source_image_url: "COPIED" }) as Record<string, unknown>
     expect(snap.name).toBe("Hero")
     expect(snap.canonical_description).toBe("cd")
@@ -77,6 +77,24 @@ describe("buildSnapshot (character)", () => {
   it("keeps premade voice", () => {
     const snap = buildSnapshot("character", { ...row, voice: { voiceId: "v", voiceType: "premade" } }, {}) as Record<string, unknown>
     expect(snap.voice).toEqual({ voiceId: "v", voiceType: "premade" })
+  })
+
+  it("reduces a custom voice to display-name-only (drops voiceId)", () => {
+    const snap = buildSnapshot(
+      "character",
+      { ...row, voice: { voiceId: "v", voiceName: "My Clone", traits: "warm", voiceType: "custom" } },
+      {},
+    ) as Record<string, unknown>
+    expect(snap.voice).toEqual({ voiceName: "My Clone", voiceType: "custom" })
+  })
+
+  it("carries reference_videos_by_variant from copiedAssets", () => {
+    const snap = buildSnapshot(
+      "character",
+      row,
+      { reference_videos_by_variant: { smile: ["c1", "c2"] } },
+    ) as Record<string, unknown>
+    expect(snap.reference_videos_by_variant).toEqual({ smile: ["c1", "c2"] })
   })
 })
 

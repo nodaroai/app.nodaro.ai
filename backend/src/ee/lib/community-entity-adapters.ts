@@ -17,9 +17,10 @@ export const COMMUNITY_ENTITY_ADAPTERS: Record<EntityType, CommunityEntityAdapte
     assetFields: [
       "source_image_url", "character_sheet", "expressions", "poses",
       "lighting_variations", "angles", "body_angles", "motions",
+      "reference_videos_by_variant",
     ],
     stripFields: [
-      "reference_photos", "real_life_refs_by_variant", "reference_videos_by_variant",
+      "reference_photos", "real_life_refs_by_variant",
       "voice",
       "lora_replicate_version", "lora_trigger_word", "lora_training_status",
       "lora_training_replicate_id", "lora_training_error", "lora_trained_at",
@@ -54,8 +55,19 @@ export function buildSnapshot(
   const snap: Record<string, unknown> = {}
   for (const f of a.publicTextFields) if (row[f] !== undefined && row[f] !== null) snap[f] = row[f]
   for (const f of a.assetFields) if (copiedAssets[f] !== undefined) snap[f] = copiedAssets[f]
-  const voice = row.voice as { voiceType?: string } | null | undefined
-  if (entityType === "character" && voice && voice.voiceType === "premade") snap.voice = voice
+  const voice = row.voice as
+    | { voiceId?: string; voiceName?: string; voiceType?: string }
+    | null
+    | undefined
+  if (entityType === "character" && voice) {
+    if (voice.voiceType === "premade") {
+      snap.voice = voice
+    } else if (voice.voiceName) {
+      // Custom/cloned: carry the DISPLAY NAME only — never a usable voiceId
+      // cross-user (privacy). Decision A.
+      snap.voice = { voiceName: voice.voiceName, voiceType: voice.voiceType }
+    }
+  }
   return snap
 }
 
