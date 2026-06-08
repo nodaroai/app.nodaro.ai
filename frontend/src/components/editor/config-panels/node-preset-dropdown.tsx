@@ -367,7 +367,7 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
             <ChevronDown className={cn("shrink-0 opacity-60", !isNode && "ml-auto h-3.5 w-3.5")} size={np?.icon} />
           </button>
         </PopoverTrigger>
-        <PopoverContent align="start" className="w-80 p-0" onClick={(e) => e.stopPropagation()}>
+        <PopoverContent align="start" className="w-[40rem] p-0" onClick={(e) => e.stopPropagation()}>
           <div className="border-b border-gray-200 p-2 dark:border-[#2D2D2D]">
             <Input
               placeholder="Search presets…"

@@ -2,14 +2,16 @@ import { type MouseEvent as ReactMouseEvent, type ReactNode } from "react"
 import { useStore } from "@xyflow/react"
 import { MoreHorizontal } from "lucide-react"
 import { PresetDropdown } from "@/components/editor/config-panels/node-preset-dropdown"
+import { flooredCanvasScale } from "@/lib/zoom-floor"
 
 /**
  * Content of a node's top hover toolbar (preset dropdown + 3-dots + per-node actions).
  *
  * React Flow's `NodeToolbar` positions its content but renders it at a CONSTANT screen size — it
- * does NOT scale with the canvas (viewport) zoom (its transform is translate-only). The node title,
- * by contrast, scales with both the canvas zoom and the per-node zoom. So to keep the toolbar text
- * the same size as the node title, we scale our content by `canvasZoom × nodeZoom`.
+ * does NOT scale with the canvas (viewport) zoom (its transform is translate-only). So to keep the
+ * toolbar the same size as the node's floating title (`EditableNodeLabel`), we scale our content
+ * manually via `flooredCanvasScale` — the same canvas-zoom-floored scale the title uses, and NOT
+ * the per-node zoom (`data.zoom`), which the title ignores.
  *
  * `canvasZoom` is read here (not in BaseNode) on purpose: this component only mounts while the
  * toolbar is visible (NodeToolbar returns null when hidden), so the viewport-zoom subscription is
@@ -17,7 +19,6 @@ import { PresetDropdown } from "@/components/editor/config-panels/node-preset-dr
  */
 export function NodeTopToolbar({
   nodeId,
-  nodeZoom,
   showActions,
   onMoreMenu,
   toolbarActions,
@@ -26,8 +27,6 @@ export function NodeTopToolbar({
   onPresetOpenChange,
 }: {
   readonly nodeId: string
-  /** Per-node zoom (`data.zoom`, default 1). */
-  readonly nodeZoom: number
   /** Show the ⋯ menu + per-node actions. False when the toolbar is visible only because a preset
    *  is applied (node not hovered) — then we show just the preset pill, not the whole action row. */
   readonly showActions: boolean
@@ -38,7 +37,7 @@ export function NodeTopToolbar({
   readonly onPresetOpenChange: (open: boolean) => void
 }) {
   const canvasZoom = useStore((s) => s.transform[2])
-  const scale = canvasZoom * nodeZoom
+  const scale = flooredCanvasScale(canvasZoom)
   return (
     <div className="flex items-center gap-1" onMouseEnter={onEnter} onMouseLeave={onLeave}>
       <PresetDropdown nodeId={nodeId} variant="node" zoom={scale} onOpenChange={onPresetOpenChange} />
