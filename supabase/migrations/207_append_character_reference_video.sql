@@ -1,5 +1,8 @@
--- 206: append_character_reference_video — atomic auto-attach of a completed
+-- 207: append_character_reference_video — atomic auto-attach of a completed
 -- generate-video clip to characters.reference_videos_by_variant.
+-- (Renumbered 206->207: 206 was taken by 206_creatures.sql, which merged to dev
+--  first; two files sharing version 206 collide in Supabase's migration tracker
+--  and would silently skip one.)
 --
 -- Why
 -- ---
