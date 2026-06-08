@@ -10,6 +10,7 @@ import {
 import type { WorkflowNode, WorkflowEdge, SceneNodeData, SceneNodeType, CharacterDefinition, LoopNodeData, LoopColumn, PreviewItem, PreviewNodeData, TeleportSendData, TeleportReceiveData } from "@/types/nodes"
 import type { PresentationDisplay, InputMode } from "@/types/nodes"
 import { NODE_DEFINITIONS, NODE_DEF_MAP, TELEPORTER_CHANNEL_COLORS, LOOP_COL_ADD_HANDLE, loopColInputHandle, loopColBaseHandle } from "@/types/nodes"
+import { HANDLE_OUTPUT_TYPES } from "@/lib/handle-output-types"
 import type { WorkflowSnapshot } from "./use-undo-redo-store"
 import { setSkipUndoCapture } from "./undo-flags"
 import { filterCloneNodes, EXECUTION_DATA_KEYS } from "@nodaro/shared"
@@ -92,6 +93,15 @@ function detectLoopColumnType(
       const upstream = allNodes.find((n) => n.id === inEdge.source)
       if (upstream) return detectLoopColumnType(upstream, inEdge.sourceHandle, allNodes, allEdges)
     }
+  }
+  // Authoritative per-(nodeType, handle) output type — covers typed pips whose
+  // handle id isn't literally image/video/audio (e.g. reference-sheet `sheet`,
+  // `panels`). Falls back to the legacy handle-name / outputs heuristic below.
+  if (sourceHandle) {
+    const handleType = HANDLE_OUTPUT_TYPES[sourceNode.type ?? ""]?.[sourceHandle]
+    if (handleType === "image" || handleType === "imageRef" || handleType === "reference") return "image-url"
+    if (handleType === "video") return "video-url"
+    if (handleType === "audio" || handleType === "audioRef") return "audio-url"
   }
   const def = NODE_DEF_MAP.get(sourceNode.type ?? "")
   if (!def) return "text"

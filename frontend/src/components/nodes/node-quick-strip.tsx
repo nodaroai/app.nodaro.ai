@@ -5,6 +5,7 @@ import { Settings2 } from "lucide-react"
 import { RunNodeButton } from "./run-node-button"
 import { PromptEditButton } from "./prompt-edit-button"
 import { QuickConfigSelect, getQuickConfigs } from "./node-quick-configs"
+import { nodeHasPromptField } from "@/lib/prompt-fields"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 
 interface NodeQuickStripProps {
@@ -34,6 +35,9 @@ export function NodeQuickStrip({ nodeId, credits, isRunning, children }: NodeQui
 
   const data = (node?.data ?? {}) as Record<string, unknown>
   const configs = getQuickConfigs(node?.type)
+  // Prompt button only for node types that actually have a prompt field (the
+  // single source is NODE_PROMPT_FIELDS) — reference-sheet etc. have none.
+  const hasPrompt = nodeHasPromptField(node?.type)
 
   // Keep the toolbar pinned while any dropdown is open. Count opens/closes;
   // defer the decrement a macrotask so moving between two dropdowns stays net
@@ -66,7 +70,7 @@ export function NodeQuickStrip({ nodeId, credits, isRunning, children }: NodeQui
   // scaling, and click-isolation live there (single source of truth).
   return (
     <>
-      <PromptEditButton nodeId={nodeId} />
+      {hasPrompt && <PromptEditButton nodeId={nodeId} />}
       {configs.map((control) => (
         <QuickConfigSelect
           key={control.field}
