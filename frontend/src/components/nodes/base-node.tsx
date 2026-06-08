@@ -463,7 +463,6 @@ function BaseNodeComponent({
             shows when a preset is active. */}
         <NodeTopToolbar
           nodeId={id}
-          nodeZoom={zoom}
           showActions={isHovered || presetMenuOpen}
           onMoreMenu={handleMoreMenu}
           toolbarActions={toolbarActions}
