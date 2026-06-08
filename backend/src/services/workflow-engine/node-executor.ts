@@ -16,6 +16,7 @@ import { hasCredits, config } from "../../lib/config.js"
 import { CreditsService } from "../../ee/billing/credits.js"
 import { refundJobCredits } from "../../workers/shared.js"
 import { buildPayload, buildNodeRefMap, type WorkflowSettings } from "./payload-builder.js"
+import { ensureWorkflowSheetPanels } from "./reference-sheet-stage-a.js"
 import { buildNodeOutputFromJobData } from "./output-extractor.js"
 import { resolveFieldMappings, NODE_MAPPABLE_FIELDS } from "./resolve-field-mappings.js"
 
@@ -370,6 +371,17 @@ export async function executeNode(
   // Sync HTTP nodes
   if (SYNC_HTTP_NODES.has(node.type)) {
     return executeSyncHttpNode(node, resolvedInputs, ctx, userPromptTemplate, edges, allNodes, nodeStates)
+  }
+
+  // Reference Sheet — run Stage A (generate the panels the chosen type needs but
+  // the connected entity lacks, off its main image) BEFORE the compose job, so a
+  // workflow run produces a full sheet like single-node Run does. No-op when
+  // every panel already exists; throws main_image_required / entity_not_ready
+  // (the compose payload) for the unready cases. Then fall through to the normal
+  // worker-queued compose, which re-fetches the entity and finds the new panels.
+  if (node.type === "reference-sheet") {
+    await ensureWorkflowSheetPanels(node, ctx, { nodes: allNodes, edges, nodeStates })
+    return executeWorkerNode(node, resolvedInputs, ctx, edges, allNodes, nodeStates, userPromptTemplate, iterationIndex)
   }
 
   // Worker-queued nodes (default)

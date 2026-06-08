@@ -15,7 +15,14 @@ vi.mock("../models.js", () => ({
   KIE_IMAGE_MODELS: {
     "nano-banana": { model: "nano-banana-pro", cost: 0.02, inputType: "text-to-image", extraParams: { output_format: "png" } },
     "flux": { model: "flux-2/pro-text-to-image", cost: 0.05, inputType: "text-to-image", extraParams: {} },
-    "gpt-image": { model: "gpt-image/1.5-text-to-image", cost: 0.06, inputType: "image-to-image", imageParam: "input_urls", extraParams: {} },
+    // GPT Image 1.5 — t2i endpoint IGNORES a supplied anchor; the i2i sibling
+    // consumes it via input_urls. Mirrors the real models.ts shapes (t2i has no
+    // inputType/imageParam) so the t2i→i2i anchor routing is exercised honestly.
+    "gpt-image": { model: "gpt-image/1.5-text-to-image", cost: 0.02, extraParams: { aspect_ratio: "3:2", quality: "medium" } },
+    "gpt-image-i2i": { model: "gpt-image/1.5-image-to-image", cost: 0.02, inputType: "image-to-image", imageParam: "input_urls", extraParams: { aspect_ratio: "3:2", quality: "medium" } },
+    // GPT Image 2 — same quirk; resolution-based pricing instead of quality.
+    "gpt-image-2": { model: "gpt-image-2-text-to-image", cost: 0.02, extraParams: { aspect_ratio: "16:9", resolution: "1K" } },
+    "gpt-image-2-i2i": { model: "gpt-image-2-image-to-image", cost: 0.02, inputType: "image-to-image", imageParam: "input_urls", extraParams: { aspect_ratio: "16:9", resolution: "1K" } },
     "grok-i2i": { model: "grok-imagine/image-to-image", cost: 0.04, inputType: "image-to-image", imageParam: "image_urls", extraParams: {} },
     "recraft-upscale": { model: "recraft/crisp-upscale", cost: 0.04, inputType: "image-to-image", imageParam: "image", extraParams: {} },
     "recraft-remove-bg": { model: "recraft/remove-background", cost: 0.03, inputType: "image-to-image", imageParam: "image", extraParams: {} },
@@ -65,17 +72,6 @@ describe("KieImageProvider.generateImage", () => {
     )
   })
 
-  it("passes reference images via array imageParam for gpt-image (input_urls)", async () => {
-    await provider.generateImage("edit", ["https://img1.png", "https://img2.png"], "gpt-image")
-    expect(mocks.mockRunKieTask).toHaveBeenCalledWith(
-      "gpt-image/1.5-text-to-image",
-      expect.objectContaining({ input_urls: ["https://img1.png", "https://img2.png"] }),
-      undefined,
-      undefined,
-      undefined,
-    )
-  })
-
   it("passes reference images via array imageParam for grok (image_urls)", async () => {
     await provider.generateImage("edit", ["https://img.png"], "grok-i2i")
     expect(mocks.mockRunKieTask).toHaveBeenCalledWith(
@@ -99,6 +95,46 @@ describe("KieImageProvider.generateImage", () => {
     expect(callArgs[1]).toMatchObject({ aspect_ratio: "9:16" })
     expect(callArgs[1]).not.toHaveProperty("image_size")
     expect(callArgs[1]).not.toHaveProperty("resolution")
+  })
+})
+
+describe("KieImageProvider.generateImage — GPT Image t2i → i2i anchor routing", () => {
+  // Regression: GPT Image text-to-image endpoints ignore a supplied anchor (they
+  // generate from the prompt only → entity identity loss). When a reference image
+  // is present, generateImage must route to the i2i sibling so the anchor is
+  // consumed via input_urls (NOT image_input, which the t2i endpoint drops).
+
+  it("gpt-image-2 + anchor routes to gpt-image-2-image-to-image via input_urls", async () => {
+    const result = await provider.generateImage("front 3/4 view", ["https://anchor.png"], "gpt-image-2")
+    const [modelId, body] = mocks.mockRunKieTask.mock.calls[0]
+    expect(modelId).toBe("gpt-image-2-image-to-image")
+    expect(body).toMatchObject({ input_urls: ["https://anchor.png"] })
+    expect(body).not.toHaveProperty("image_input")
+    // pricing parity: the i2i sibling costs the same as the t2i base
+    expect(result.cost).toBe(0.02)
+  })
+
+  it("gpt-image-2 WITHOUT an anchor stays on gpt-image-2-text-to-image", async () => {
+    await provider.generateImage("a stone castle", undefined, "gpt-image-2")
+    const [modelId, body] = mocks.mockRunKieTask.mock.calls[0]
+    expect(modelId).toBe("gpt-image-2-text-to-image")
+    expect(body).not.toHaveProperty("input_urls")
+    expect(body).not.toHaveProperty("image_input")
+  })
+
+  it("gpt-image (1.5) + anchor routes to gpt-image/1.5-image-to-image via input_urls", async () => {
+    await provider.generateImage("smiling expression", ["https://a.png", "https://b.png"], "gpt-image")
+    const [modelId, body] = mocks.mockRunKieTask.mock.calls[0]
+    expect(modelId).toBe("gpt-image/1.5-image-to-image")
+    expect(body).toMatchObject({ input_urls: ["https://a.png", "https://b.png"] })
+    expect(body).not.toHaveProperty("image_input")
+  })
+
+  it("gpt-image (1.5) WITHOUT an anchor stays on gpt-image/1.5-text-to-image", async () => {
+    await provider.generateImage("a wide landscape", undefined, "gpt-image")
+    const [modelId, body] = mocks.mockRunKieTask.mock.calls[0]
+    expect(modelId).toBe("gpt-image/1.5-text-to-image")
+    expect(body).not.toHaveProperty("input_urls")
   })
 })
 

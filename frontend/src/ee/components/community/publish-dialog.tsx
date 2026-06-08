@@ -94,7 +94,10 @@ export function PublishDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      {/* Opened from inside the character/location/object studio modals, which are
+          fixed overlays at z-[100]–z-[1000]. Raise this dialog (content + backdrop)
+          above them so it isn't rendered behind the studio (was invisible on click). */}
+      <DialogContent className="sm:max-w-lg z-[10000]" overlayClassName="z-[10000]">
         <DialogHeader>
           <DialogTitle>Share to community</DialogTitle>
           <DialogDescription>

@@ -1,6 +1,7 @@
 import type { Job } from "bullmq"
 import { supabase } from "../../lib/supabase.js"
 import { safeFetch } from "../../lib/safe-fetch.js"
+import sharp from "sharp"
 import { uploadBufferToR2 } from "../../lib/storage.js"
 import { composeSheet, sheetSlots, extractPalette } from "../../services/reference-sheet/index.js"
 import type { ComposeInput } from "../../services/reference-sheet/index.js"
@@ -26,7 +27,14 @@ type SheetItem = CharacterAssetItem & Record<string, unknown>
 async function fetchBuffer(url: string): Promise<Buffer> {
   const res = await safeFetch(url)
   if (!res.ok) throw new Error(`reference-sheet panel fetch ${res.status}: ${url}`)
-  return Buffer.from(await res.arrayBuffer())
+  const buf = Buffer.from(await res.arrayBuffer())
+  // Decode-validate: a 200 can still carry non-image bytes (an expired signed
+  // URL serving HTML, a truncated object). Probe with Sharp so a corrupt panel
+  // is dropped by the allSettled caller and a corrupt hero degrades to "no
+  // thumbnail" — instead of throwing deep inside composeSheet and failing the
+  // whole sheet (spec §13: one bad panel must not sink the entire compose).
+  await sharp(buf).metadata()
+  return buf
 }
 
 async function attachSheet(kind: EntityKind, id: string, userId: string, item: SheetItem): Promise<void> {
@@ -87,6 +95,13 @@ const handleReferenceSheet: HandlerFn = async function handleReferenceSheet(job:
   if (flavour.outputFormat === "motion") {
     const motionBucket = (buckets[MOTION_COLUMN[entityKind]] ?? []) as Array<{ name?: string; url?: string }>
     const { present: motionPresent } = resolveMotionPanels(entityKind, sections, flavour, motionBucket)
+    // Charge-for-nothing guard (spec §13): with zero present clips a motion sheet
+    // is just the static chrome rendered as a video, yet commit would still bill
+    // the 6cr assembly fee. Fail BEFORE markJobCompleted so the worker's refund
+    // path returns the fee (covers raw-image + workflow-run on an empty entity).
+    if (motionPresent.length === 0) {
+      throw new Error("no_panels: the connected entity has no motion clips for this sheet")
+    }
     const motionUrls = motionPresent.map((p) => p.url)
     // Background chrome PNG with one EMPTY slot per PRESENT motion clip (NOT the
     // still `resolved`, whose slots track still-panel presence — they can diverge
@@ -133,6 +148,17 @@ const handleReferenceSheet: HandlerFn = async function handleReferenceSheet(job:
     const r = fetched[i]
     if (r.status === "fulfilled") panelBufByUrl[u] = r.value
   })
+  // Charge-for-nothing guard (spec §13): with zero usable panel buffers the sheet
+  // is just header/palette/notes chrome — raw-image mode, a workflow-run on an
+  // entity with no generated panels, or every panel failing to fetch/decode — yet
+  // commit would still bill the 4cr assembly fee. Fail BEFORE markJobCompleted so
+  // the worker's refund path returns it. (Single-node Run generates panels in
+  // Stage A first, so this only fires when there genuinely are none.)
+  if (Object.keys(panelBufByUrl).length === 0) {
+    throw new Error(
+      "no_panels: no usable panels for this sheet — generate panels in the entity's Studio, or run the node directly to auto-generate them",
+    )
+  }
   const resolved = buildResolvedSections(sections, flavour, entityKind, { title, metadata, notes, heroBuf, palette, buckets, panelBufByUrl })
   const input: ComposeInput = { skin: data.skin, aspect: flavour.aspect, sections: resolved, withText: flavour.withText, showLabels: flavour.showLabels }
   const png = await composeSheet(input)

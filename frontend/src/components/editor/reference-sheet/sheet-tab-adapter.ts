@@ -127,7 +127,9 @@ const PANEL_POLL_MAX_ATTEMPTS = 150 // ~5 min ceiling so a stuck job can't hang 
 function awaitViaPoll(jobs: any, jobId: string, name: string): Promise<string> {
   // Register so the worker auto-attaches to the entity row's bucket and the
   // modal renders a placeholder card; we don't rely on the hook's callbacks.
-  try { jobs.trackJob({ jobId, assetType: "sheet-panel", name }) } catch { /* non-fatal */ }
+  // Object/Location jobs hooks expose trackJob; the Character hook doesn't (it
+  // uses track/trackAndWait), so feature-detect rather than swallow a TypeError.
+  if (typeof jobs?.trackJob === "function") jobs.trackJob({ jobId, assetType: "sheet-panel", name })
   return new Promise<string>((resolve, reject) => {
     let attempts = 0
     const tick = async () => {
