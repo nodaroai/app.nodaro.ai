@@ -2,6 +2,7 @@ import type {
   CommunityEntityType, CommunitySort, CommunityReportReason, CommunityCard,
   BrowseCommunityParams, BrowseCommunityResult, CloneListingResult,
   FavoriteListingResult, ReportListingResult,
+  PublishListingParams, PublishListingResult, SharedListing,
 } from "@nodaro/shared"
 import type { NodaroClient } from "../client.js"
 
@@ -15,6 +16,7 @@ export type {
   CommunityEntityType, CommunitySort, CommunityReportReason, CommunityCard,
   BrowseCommunityParams, BrowseCommunityResult, CloneListingResult,
   FavoriteListingResult, ReportListingResult,
+  PublishListingParams, PublishListingResult, SharedListing,
 } from "@nodaro/shared"
 
 /**
@@ -93,6 +95,53 @@ export class CommunityResource {
       "POST",
       `/v1/community/listings/${encodeURIComponent(id)}/report`,
       { body: { reason } },
+    )
+  }
+
+  /**
+   * `POST /v1/admin/community/:entityType/:id/publish` → share one of YOUR
+   * entities to the community, returning the new listing's `slug` + `id`.
+   *
+   * **Requires an admin token** (the route is `requireAdmin`) AND the caller
+   * must own the source entity. Personal/OAuth tokens without admin role get a
+   * 401. For `character` listings, `params.likenessAttestation` must be `true`.
+   */
+  publish(
+    entityType: CommunityEntityType,
+    entityId: string,
+    params: PublishListingParams,
+  ): Promise<PublishListingResult> {
+    return this.client.request(
+      "POST",
+      `/v1/admin/community/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}/publish`,
+      { body: params },
+    )
+  }
+
+  /**
+   * `DELETE /v1/admin/community/listings/:id` → unshare (deactivate) a listing
+   * you published. **Requires an admin token** (the route is `requireAdmin`).
+   */
+  unpublish(listingId: string): Promise<{ ok: boolean }> {
+    return this.client.request(
+      "DELETE",
+      `/v1/admin/community/listings/${encodeURIComponent(listingId)}`,
+    )
+  }
+
+  /**
+   * `GET /v1/admin/community/by-source/:entityType/:sourceId` → look up YOUR
+   * existing listing (if any) for a source entity. Returns `{ data: null }`
+   * when the entity hasn't been shared. **Requires an admin token** (the route
+   * is `requireAdmin`); only returns listings created by the caller.
+   */
+  sharedListing(
+    entityType: CommunityEntityType,
+    sourceId: string,
+  ): Promise<{ data: SharedListing | null }> {
+    return this.client.request(
+      "GET",
+      `/v1/admin/community/by-source/${encodeURIComponent(entityType)}/${encodeURIComponent(sourceId)}`,
     )
   }
 }

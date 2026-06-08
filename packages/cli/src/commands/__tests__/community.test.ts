@@ -19,6 +19,9 @@ const mocks = {
   clone: vi.fn(),
   favorite: vi.fn(),
   report: vi.fn(),
+  publish: vi.fn(),
+  unpublish: vi.fn(),
+  sharedListing: vi.fn(),
 }
 
 vi.mock("../../client.js", () => ({
@@ -30,6 +33,9 @@ vi.mock("../../client.js", () => ({
       clone: mocks.clone,
       favorite: mocks.favorite,
       report: mocks.report,
+      publish: mocks.publish,
+      unpublish: mocks.unpublish,
+      sharedListing: mocks.sharedListing,
     },
   }),
   handleError: (err: unknown) => {
@@ -186,5 +192,97 @@ describe("community command", () => {
   it("report without --reason triggers commander's requiredOption error", async () => {
     await expect(runCmd("community", "report", "abc", "--json")).rejects.toThrow()
     expect(mocks.report).not.toHaveBeenCalled()
+  })
+
+  it("publish character with --consent + --likeness-consent forwards attestations", async () => {
+    mocks.publish.mockResolvedValueOnce({ slug: "my-char", id: "L1" })
+    await runCmd(
+      "community",
+      "publish",
+      "character",
+      "c1",
+      "--title",
+      "T",
+      "--consent",
+      "--likeness-consent",
+      "--json",
+    )
+    expect(mocks.publish).toHaveBeenCalledTimes(1)
+    expect(mocks.publish).toHaveBeenCalledWith(
+      "character",
+      "c1",
+      expect.objectContaining({
+        title: "T",
+        attestation: true,
+        likenessAttestation: true,
+      }),
+    )
+  })
+
+  it("publish character without --likeness-consent rejects", async () => {
+    await expect(
+      runCmd("community", "publish", "character", "c1", "--title", "T", "--consent"),
+    ).rejects.toThrow(/likeness-consent/)
+    expect(mocks.publish).not.toHaveBeenCalled()
+  })
+
+  it("publish without --consent rejects", async () => {
+    await expect(
+      runCmd("community", "publish", "object", "o1", "--title", "T"),
+    ).rejects.toThrow(/--consent/)
+    expect(mocks.publish).not.toHaveBeenCalled()
+  })
+
+  it("publish a non-character needs no --likeness-consent", async () => {
+    mocks.publish.mockResolvedValueOnce({ slug: "my-loc", id: "L2" })
+    await runCmd(
+      "community",
+      "publish",
+      "location",
+      "l1",
+      "--title",
+      "T",
+      "--consent",
+      "--json",
+    )
+    expect(mocks.publish).toHaveBeenCalledTimes(1)
+    expect(mocks.publish).toHaveBeenCalledWith(
+      "location",
+      "l1",
+      expect.objectContaining({ title: "T", attestation: true }),
+    )
+  })
+
+  it("publish rejects an invalid entityType", async () => {
+    await expect(
+      runCmd("community", "publish", "bogus", "x1", "--title", "T", "--consent"),
+    ).rejects.toThrow(/invalid --type/)
+    expect(mocks.publish).not.toHaveBeenCalled()
+  })
+
+  it("publish without --title triggers commander's requiredOption error", async () => {
+    await expect(
+      runCmd("community", "publish", "location", "l1", "--consent", "--json"),
+    ).rejects.toThrow()
+    expect(mocks.publish).not.toHaveBeenCalled()
+  })
+
+  it("unpublish <listingId> forwards the listing id", async () => {
+    mocks.unpublish.mockResolvedValueOnce({ ok: true })
+    await runCmd("community", "unpublish", "L1", "--json")
+    expect(mocks.unpublish).toHaveBeenCalledWith("L1")
+  })
+
+  it("shared-status <entityType> <sourceId> forwards (entityType, sourceId)", async () => {
+    mocks.sharedListing.mockResolvedValueOnce({ data: null })
+    await runCmd("community", "shared-status", "character", "c1", "--json")
+    expect(mocks.sharedListing).toHaveBeenCalledWith("character", "c1")
+  })
+
+  it("shared-status rejects an invalid entityType", async () => {
+    await expect(
+      runCmd("community", "shared-status", "bogus", "c1", "--json"),
+    ).rejects.toThrow(/invalid --type/)
+    expect(mocks.sharedListing).not.toHaveBeenCalled()
   })
 })
