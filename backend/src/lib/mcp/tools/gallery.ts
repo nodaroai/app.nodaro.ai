@@ -32,6 +32,8 @@ const IMAGE_JOBS = new Set([
   "generate-character-asset",
   "generate-object",
   "generate-object-asset",
+  "generate-creature",
+  "generate-creature-asset",
   "generate-location",
   "generate-location-asset",
 ])

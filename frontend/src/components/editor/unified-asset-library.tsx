@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { createPortal } from "react-dom"
-import { Grid3X3, X, Loader2, AlertCircle, Plus, Search, UserCircle, Package, MapPin, SmilePlus, FolderOpen, Images, Film, Music } from "lucide-react"
+import { Grid3X3, X, Loader2, AlertCircle, Plus, Search, UserCircle, Package, PawPrint, MapPin, SmilePlus, FolderOpen, Images, Film, Music } from "lucide-react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,31 +14,32 @@ import {
 } from "@/components/ui/select"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAuth } from "@/hooks/use-auth"
-import { useCharacters, useObjects, useLocations, useFaces } from "@/hooks/queries/use-assets-queries"
+import { useCharacters, useObjects, useCreatures, useLocations, useFaces } from "@/hooks/queries/use-assets-queries"
 import { queryKeys } from "@/lib/query-keys"
 const CharacterPageModal = lazy(() => import("./character-page-modal").then(m => ({ default: m.CharacterPageModal })))
 const ObjectPageModal = lazy(() => import("./object-page-modal").then(m => ({ default: m.ObjectPageModal })))
+const CreatureStudioModal = lazy(() => import("./creature-studio/creature-studio-modal"))
 const LocationStudioModal = lazy(() => import("./location-studio/location-studio-modal"))
 import { createClient } from "@/lib/supabase"
-import type { DbCharacter, DbObject, DbLocation, DbFace, LibraryAsset } from "@/lib/api"
+import type { DbCharacter, DbObject, DbCreature, DbLocation, DbFace, LibraryAsset } from "@/lib/api"
 import { CachedImage } from "@/components/ui/cached-image"
 import { LibraryMediaBrowser } from "./library-media-browser"
 import { assetToUploadNode } from "@/lib/asset-to-node"
-import type { CharacterNodeData, ObjectNodeData, LocationNodeData, FaceNodeData } from "@/types/nodes"
+import type { CharacterNodeData, ObjectNodeData, CreatureNodeData, LocationNodeData, FaceNodeData } from "@/types/nodes"
 
 // Definition-asset tabs + media tabs (images/videos/audio pulled from the
 // user's account library).
-type AssetType = "all" | "character" | "object" | "location" | "face" | "image" | "video" | "audio"
+type AssetType = "all" | "character" | "object" | "creature" | "location" | "face" | "image" | "video" | "audio"
 const MEDIA_TYPES: ReadonlySet<AssetType> = new Set<AssetType>(["image", "video", "audio"])
 
 interface UnifiedAsset {
   id: string
   dbId: string
   name: string
-  type: "character" | "object" | "location" | "face"
+  type: "character" | "object" | "creature" | "location" | "face"
   thumbnailUrl?: string
   projectId?: string
-  originalData: DbCharacter | DbObject | DbLocation | DbFace
+  originalData: DbCharacter | DbObject | DbCreature | DbLocation | DbFace
 }
 
 interface UnifiedAssetLibraryModalProps {
@@ -52,11 +53,12 @@ function useAssetData() {
 
   const { data: characters = [], isLoading: loadingChars, error: charError } = useCharacters(undefined, user?.id)
   const { data: objects = [], isLoading: loadingObjs, error: objError } = useObjects(undefined, user?.id)
+  const { data: creatures = [], isLoading: loadingCreatures, error: creatureError } = useCreatures(undefined, user?.id)
   const { data: locations = [], isLoading: loadingLocs, error: locError } = useLocations(undefined, user?.id)
   const { data: faces = [], isLoading: loadingFaces, error: faceError } = useFaces(undefined, user?.id)
 
-  const loading = loadingChars || loadingObjs || loadingLocs || loadingFaces
-  const error = charError || objError || locError || faceError
+  const loading = loadingChars || loadingObjs || loadingCreatures || loadingLocs || loadingFaces
+  const error = charError || objError || creatureError || locError || faceError
 
   const assets = useMemo((): UnifiedAsset[] => [
     ...characters.map((c): UnifiedAsset => ({
@@ -77,6 +79,15 @@ function useAssetData() {
       projectId: o.projectId ?? undefined,
       originalData: o,
     })),
+    ...creatures.map((c): UnifiedAsset => ({
+      id: `cre-${c.id}`,
+      dbId: c.id,
+      name: c.name,
+      type: "creature",
+      thumbnailUrl: c.sourceImageUrl ?? undefined,
+      projectId: c.projectId ?? undefined,
+      originalData: c,
+    })),
     ...locations.map((l): UnifiedAsset => ({
       id: `loc-${l.id}`,
       dbId: l.id,
@@ -95,7 +106,7 @@ function useAssetData() {
       projectId: f.projectId ?? undefined,
       originalData: f,
     })),
-  ], [characters, objects, locations, faces])
+  ], [characters, objects, creatures, locations, faces])
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects", "list", user?.id],
@@ -155,6 +166,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
   // Page modals
   const [characterPageNodeId, setCharacterPageNodeId] = useState<string | null>(null)
   const [objectPageNodeId, setObjectPageNodeId] = useState<string | null>(null)
+  const [creatureStudioNodeId, setCreatureStudioNodeId] = useState<string | null>(null)
   const [locationPageNodeId, setLocationPageNodeId] = useState<string | null>(null)
 
   const nodes = useWorkflowStore((s) => s.nodes)
@@ -180,6 +192,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
     all: assets.length,
     character: assets.filter((a) => a.type === "character").length,
     object: assets.filter((a) => a.type === "object").length,
+    creature: assets.filter((a) => a.type === "creature").length,
     location: assets.filter((a) => a.type === "location").length,
     face: assets.filter((a) => a.type === "face").length,
   }), [assets])
@@ -195,6 +208,9 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
       } else if (node.type === "object") {
         const d = node.data as ObjectNodeData
         if (d.objectDbId) map.set(`object:${d.objectDbId}`, node.id)
+      } else if (node.type === "creature") {
+        const d = node.data as CreatureNodeData
+        if (d.creatureDbId) map.set(`creature:${d.creatureDbId}`, node.id)
       } else if (node.type === "location") {
         const d = node.data as LocationNodeData
         if (d.locationDbId) map.set(`location:${d.locationDbId}`, node.id)
@@ -222,6 +238,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
         // Set Page modal state first, then close library after a microtask to ensure state is processed
         if (asset.type === "character") setCharacterPageNodeId(existingNodeId)
         else if (asset.type === "object") setObjectPageNodeId(existingNodeId)
+        else if (asset.type === "creature") setCreatureStudioNodeId(existingNodeId)
         else if (asset.type === "location") setLocationPageNodeId(existingNodeId)
         else if (asset.type === "face") selectNode(existingNodeId)
         // Delay onClose to ensure local state update is processed before parent re-renders
@@ -264,6 +281,22 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
             })
             selectNode(nodeId)
             setObjectPageNodeId(nodeId)
+          } else if (asset.type === "creature") {
+            const c = asset.originalData as DbCreature
+            updateNodeData(nodeId, {
+              creatureDbId: c.id,
+              creatureName: c.name,
+              description: c.description ?? "",
+              species: c.species ?? "",
+              category: c.category ?? "",
+              style: c.style ?? "realistic",
+              sourceImageUrl: c.sourceImageUrl ?? "",
+              angles: c.angles ?? [],
+              poses: c.poses ?? [],
+              variations: c.variations ?? [],
+            })
+            selectNode(nodeId)
+            setCreatureStudioNodeId(nodeId)
           } else if (asset.type === "location") {
             const l = asset.originalData as DbLocation
             updateNodeData(nodeId, {
@@ -336,6 +369,20 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
             materials: o.materials ?? [],
             variations: o.variations ?? [],
           })
+        } else if (asset.type === "creature") {
+          const c = asset.originalData as DbCreature
+          updateNodeData(nodeId, {
+            creatureDbId: c.id,
+            creatureName: c.name,
+            description: c.description ?? "",
+            species: c.species ?? "",
+            category: c.category ?? "",
+            style: c.style ?? "realistic",
+            sourceImageUrl: c.sourceImageUrl ?? "",
+            angles: c.angles ?? [],
+            poses: c.poses ?? [],
+            variations: c.variations ?? [],
+          })
         } else if (asset.type === "location") {
           const l = asset.originalData as DbLocation
           updateNodeData(nodeId, {
@@ -368,12 +415,14 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
   )
 
   // Type badge colors and icons
-  function getTypeBadge(type: "character" | "object" | "location" | "face") {
+  function getTypeBadge(type: "character" | "object" | "creature" | "location" | "face") {
     switch (type) {
       case "character":
         return { color: "bg-pink-500/10 text-pink-600", icon: UserCircle }
       case "object":
         return { color: "bg-emerald-500/10 text-emerald-600", icon: Package }
+      case "creature":
+        return { color: "bg-[#A78BFA]/10 text-[#A78BFA]", icon: PawPrint }
       case "location":
         return { color: "bg-cyan-500/10 text-cyan-600", icon: MapPin }
       case "face":
@@ -502,6 +551,19 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
               <Package className="h-3 w-3" />
               Objects/Props
               <span className="text-[10px] opacity-70">({counts.object})</span>
+            </button>
+            <button
+              type="button"
+              className={`h-8 px-4 text-xs font-medium rounded-full transition-colors flex items-center gap-1 ${
+                typeFilter === "creature"
+                  ? "bg-[#ff0073] text-white"
+                  : "bg-gray-100 dark:bg-[#2D2D2D] text-gray-500 dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-[#3D3D3D]"
+              }`}
+              onClick={() => setTypeFilter("creature")}
+            >
+              <PawPrint className="h-3 w-3" />
+              Creatures
+              <span className="text-[10px] opacity-70">({counts.creature})</span>
             </button>
             <button
               type="button"
@@ -687,6 +749,17 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
           />
         </Suspense>
       )}
+      {creatureStudioNodeId && (
+        <Suspense fallback={null}>
+          <CreatureStudioModal
+            nodeId={creatureStudioNodeId}
+            onClose={() => {
+              setCreatureStudioNodeId(null)
+              invalidateAssets()
+            }}
+          />
+        </Suspense>
+      )}
       {locationPageNodeId && (
         <Suspense fallback={null}>
           <LocationStudioModal
@@ -714,6 +787,7 @@ export function UnifiedAssetLibraryButton() {
   // Page modals
   const [characterPageNodeId, setCharacterPageNodeId] = useState<string | null>(null)
   const [objectPageNodeId, setObjectPageNodeId] = useState<string | null>(null)
+  const [creatureStudioNodeId, setCreatureStudioNodeId] = useState<string | null>(null)
   const [locationPageNodeId, setLocationPageNodeId] = useState<string | null>(null)
 
   const nodes = useWorkflowStore((s) => s.nodes)
@@ -739,6 +813,7 @@ export function UnifiedAssetLibraryButton() {
     all: assets.length,
     character: assets.filter((a) => a.type === "character").length,
     object: assets.filter((a) => a.type === "object").length,
+    creature: assets.filter((a) => a.type === "creature").length,
     location: assets.filter((a) => a.type === "location").length,
     face: assets.filter((a) => a.type === "face").length,
   }), [assets])
@@ -754,6 +829,9 @@ export function UnifiedAssetLibraryButton() {
       } else if (node.type === "object") {
         const d = node.data as ObjectNodeData
         if (d.objectDbId) map.set(`object:${d.objectDbId}`, node.id)
+      } else if (node.type === "creature") {
+        const d = node.data as CreatureNodeData
+        if (d.creatureDbId) map.set(`creature:${d.creatureDbId}`, node.id)
       } else if (node.type === "location") {
         const d = node.data as LocationNodeData
         if (d.locationDbId) map.set(`location:${d.locationDbId}`, node.id)
@@ -781,6 +859,7 @@ export function UnifiedAssetLibraryButton() {
         // Already on canvas - open Page modal for that node
         if (asset.type === "character") setCharacterPageNodeId(existingNodeId)
         else if (asset.type === "object") setObjectPageNodeId(existingNodeId)
+        else if (asset.type === "creature") setCreatureStudioNodeId(existingNodeId)
         else if (asset.type === "location") setLocationPageNodeId(existingNodeId)
         else if (asset.type === "face") selectNode(existingNodeId)
         setOpen(false)
@@ -824,6 +903,22 @@ export function UnifiedAssetLibraryButton() {
             })
             selectNode(nodeId)
             setObjectPageNodeId(nodeId)
+          } else if (asset.type === "creature") {
+            const c = asset.originalData as DbCreature
+            updateNodeData(nodeId, {
+              creatureDbId: c.id,
+              creatureName: c.name,
+              description: c.description ?? "",
+              species: c.species ?? "",
+              category: c.category ?? "",
+              style: c.style ?? "realistic",
+              sourceImageUrl: c.sourceImageUrl ?? "",
+              angles: c.angles ?? [],
+              poses: c.poses ?? [],
+              variations: c.variations ?? [],
+            })
+            selectNode(nodeId)
+            setCreatureStudioNodeId(nodeId)
           } else if (asset.type === "location") {
             const l = asset.originalData as DbLocation
             updateNodeData(nodeId, {
@@ -895,6 +990,20 @@ export function UnifiedAssetLibraryButton() {
             materials: o.materials ?? [],
             variations: o.variations ?? [],
           })
+        } else if (asset.type === "creature") {
+          const c = asset.originalData as DbCreature
+          updateNodeData(nodeId, {
+            creatureDbId: c.id,
+            creatureName: c.name,
+            description: c.description ?? "",
+            species: c.species ?? "",
+            category: c.category ?? "",
+            style: c.style ?? "realistic",
+            sourceImageUrl: c.sourceImageUrl ?? "",
+            angles: c.angles ?? [],
+            poses: c.poses ?? [],
+            variations: c.variations ?? [],
+          })
         } else if (asset.type === "location") {
           const l = asset.originalData as DbLocation
           updateNodeData(nodeId, {
@@ -927,12 +1036,14 @@ export function UnifiedAssetLibraryButton() {
   )
 
   // Type badge colors and icons
-  function getTypeBadge(type: "character" | "object" | "location" | "face") {
+  function getTypeBadge(type: "character" | "object" | "creature" | "location" | "face") {
     switch (type) {
       case "character":
         return { color: "bg-pink-500/10 text-pink-600", icon: UserCircle }
       case "object":
         return { color: "bg-emerald-500/10 text-emerald-600", icon: Package }
+      case "creature":
+        return { color: "bg-[#A78BFA]/10 text-[#A78BFA]", icon: PawPrint }
       case "location":
         return { color: "bg-cyan-500/10 text-cyan-600", icon: MapPin }
       case "face":
@@ -1082,6 +1193,19 @@ export function UnifiedAssetLibraryButton() {
               <button
                 type="button"
                 className={`h-8 px-4 text-xs font-medium rounded-full transition-colors flex items-center gap-1 ${
+                  typeFilter === "creature"
+                    ? "bg-[#ff0073] text-white"
+                    : "bg-gray-100 dark:bg-[#2D2D2D] text-gray-500 dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-[#3D3D3D]"
+                }`}
+                onClick={() => setTypeFilter("creature")}
+              >
+                <PawPrint className="h-3 w-3" />
+                Creatures
+                <span className="text-[10px] opacity-70">({counts.creature})</span>
+              </button>
+              <button
+                type="button"
+                className={`h-8 px-4 text-xs font-medium rounded-full transition-colors flex items-center gap-1 ${
                   typeFilter === "location"
                     ? "bg-[#ff0073] text-white"
                     : "bg-gray-100 dark:bg-[#2D2D2D] text-gray-500 dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-[#3D3D3D]"
@@ -1218,6 +1342,17 @@ export function UnifiedAssetLibraryButton() {
             objectNodeId={objectPageNodeId}
             onClose={() => {
               setObjectPageNodeId(null)
+              invalidateAssets()
+            }}
+          />
+        </Suspense>
+      )}
+      {creatureStudioNodeId && (
+        <Suspense fallback={null}>
+          <CreatureStudioModal
+            nodeId={creatureStudioNodeId}
+            onClose={() => {
+              setCreatureStudioNodeId(null)
               invalidateAssets()
             }}
           />

@@ -9,7 +9,7 @@ interface ResolveOpts {
 /**
  * Job names that produce an IMAGE in `output_data.imageUrl`.
  * Mirrors `IMAGE_JOBS` in `routes/gallery.ts` plus generators (character/
- * location/object) that the MCP plan exposes via image_asset_id, plus
+ * location/object/creature) that the MCP plan exposes via image_asset_id, plus
  * `extract-frame` (FFmpeg job that emits an imageUrl).
  */
 const IMAGE_TYPES = new Set<string>([
@@ -20,6 +20,8 @@ const IMAGE_TYPES = new Set<string>([
   "generate-character-asset",
   "generate-object",
   "generate-object-asset",
+  "generate-creature",
+  "generate-creature-asset",
   "generate-location",
   "generate-location-asset",
   "extract-frame",

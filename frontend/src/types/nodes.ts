@@ -1333,7 +1333,7 @@ export interface CharacterDefinition {
   readonly id: string
   readonly name: string
   readonly type: "reference" | "description"
-  readonly category?: "character" | "face" | "location" | "object"
+  readonly category?: "character" | "face" | "location" | "object" | "creature"
   readonly referenceImageUrl?: string
   readonly description?: string
   readonly sourceSceneIndex?: number
