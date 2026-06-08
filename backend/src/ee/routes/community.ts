@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
+import type { CommunityCard } from "@nodaro/shared"
 import { supabase } from "../../lib/supabase.js"
 import { cloneListing } from "../services/community/clone.js"
 import { requireAppScope } from "../../lib/scope-prehandler.js"
@@ -45,14 +46,14 @@ export async function communityRoutes(app: FastifyInstance) {
     const nextCursor = hasMore && last
       ? encodeCommunityCursor({ count: last.clone_count as number, createdAt: last.created_at as string, id: last.id as string })
       : null
-    return reply.send({ data: page, nextCursor })
+    return reply.send({ data: page as unknown as CommunityCard[], nextCursor })
   })
 
   app.get<{ Params: { slug: string } }>("/v1/community/detail/:slug", async (req, reply) => {
     if (!auth(req, reply)) return
     const { data } = await supabase.from("community_listings").select(PUBLIC_COLS).eq("slug", req.params.slug).eq("is_active", true).single()
     if (!data) return reply.status(404).send({ error: { code: "not_found", message: "Listing not found" } })
-    return reply.send({ data })
+    return reply.send({ data: data as unknown as CommunityCard })
   })
 
   app.post<{ Params: { id: string } }>(
@@ -96,6 +97,6 @@ export async function communityRoutes(app: FastifyInstance) {
   app.get("/v1/community/favorites", async (req, reply) => {
     const userId = auth(req, reply); if (!userId) return
     const { data } = await supabase.from("community_listing_favorites").select(`listing:listing_id(${PUBLIC_COLS})`).eq("user_id", userId)
-    return reply.send({ data: (data ?? []).map((r) => (r as { listing: unknown }).listing).filter(Boolean) })
+    return reply.send({ data: (data ?? []).map((r) => (r as { listing: unknown }).listing).filter(Boolean) as unknown as CommunityCard[] })
   })
 }
