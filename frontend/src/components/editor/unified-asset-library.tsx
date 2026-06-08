@@ -500,7 +500,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
               onClick={() => setTypeFilter("object")}
             >
               <Package className="h-3 w-3" />
-              Objects
+              Objects/Props
               <span className="text-[10px] opacity-70">({counts.object})</span>
             </button>
             <button
@@ -1076,7 +1076,7 @@ export function UnifiedAssetLibraryButton() {
                 onClick={() => setTypeFilter("object")}
               >
                 <Package className="h-3 w-3" />
-                Objects
+                Objects/Props
                 <span className="text-[10px] opacity-70">({counts.object})</span>
               </button>
               <button

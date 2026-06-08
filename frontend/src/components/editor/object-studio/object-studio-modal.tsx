@@ -119,7 +119,7 @@ export function ObjectStudioModal({ nodeId, onClose }: ObjectStudioModalProps) {
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Object Studio"
+        aria-label="Object/Props Studio"
         className="fixed inset-0 z-[1000] bg-[#0d1017] flex items-center justify-center"
       >
         <div className="text-sm text-slate-400">Loading object…</div>

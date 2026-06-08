@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-06-08T17:01:13.825Z
-generated_from: bacc5721
+generated_at: 2026-06-08T20:18:25.825Z
+generated_from: 365d4ab0
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -142,7 +142,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `motion-transfer` — Motion Transfer
 - `music-genre` — Music Genre
 - `music-mood` — Music Mood
-- `object` — Object
+- `object` — Object/Props
 - `person` — Person
 - `photo-genre` — Photo Genre
 - `photographer` — Photographer / Artist Style

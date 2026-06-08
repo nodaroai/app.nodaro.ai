@@ -426,7 +426,7 @@ export function ObjectConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <div className="text-[9px] uppercase tracking-wide text-muted-foreground mb-1">Object</div>
+        <div className="text-[9px] uppercase tracking-wide text-muted-foreground mb-1">Object/Props</div>
         <div className="text-[13px] font-semibold text-foreground">{data.objectName || "(unnamed object)"}</div>
         <div className="text-[10px] text-muted-foreground">
           {data.style} · {data.category} · {anglesCount} angles · {materialsCount} materials · {variationsCount} variations · {motionCount} motion · {refsCount} refs
@@ -438,11 +438,11 @@ export function ObjectConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
         onClick={() => nodeId && setObjectStudioNodeId(nodeId)}
         className="w-full text-left bg-[#0e3a2e] border border-[#34D39944] rounded-md px-3.5 py-2.5 flex items-center gap-2 hover:bg-[#114b3b] transition-colors disabled:opacity-50"
         disabled={!nodeId}
-        aria-label="Open Object Studio"
+        aria-label="Open Object/Props Studio"
       >
         <span className="text-base leading-none">⬡</span>
         <span>
-          <span className="block text-[11px] font-semibold text-[#6ee7b7]">Open Object Studio</span>
+          <span className="block text-[11px] font-semibold text-[#6ee7b7]">Open Object/Props Studio</span>
           <span className="block text-[9px] text-muted-foreground">Edit appearance, assets, motion &amp; reference photos</span>
         </span>
         <span className="ml-auto text-[#34D399]">→</span>
@@ -472,7 +472,7 @@ export function ObjectConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
         {/* Field Mappings — keep the {} input-injection mapping for the
             Object Name, the one referenceable field that survives the move
             to the studio. */}
-        <MappableField field="objectName" label="Object Name" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <MappableField field="objectName" label="Object/Props Name" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
           <Input
             id="obj-name"
             value={data.objectName}

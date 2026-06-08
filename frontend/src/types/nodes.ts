@@ -6649,13 +6649,13 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
   // Object
   {
     type: "object",
-    label: "Object",
+    label: "Object/Props",
     category: "object",
     creditCost: 5,
     inputs: ["in"],
     outputs: ["objectRef"],
     defaultData: {
-      label: "Object",
+      label: "Object/Props",
       objectDbId: "",
       objectName: "",
       description: "",

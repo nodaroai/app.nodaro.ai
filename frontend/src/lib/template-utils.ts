@@ -55,7 +55,7 @@ const NODE_TYPE_LABELS: Record<string, string> = {
   "upload-audio": "Upload Audio",
   "character": "Character",
   "face": "Face",
-  "object": "Object",
+  "object": "Object/Props",
   "creature": "Animal/Creature",
   "location": "Location",
   "composite": "Composite",

@@ -187,7 +187,7 @@ export function AssetSelectionModal({
               className={cn("text-xs", typeFilter === "object" && "bg-emerald-500 hover:bg-emerald-600")}
             >
               <Package className="w-3.5 h-3.5 mr-1" />
-              Objects ({counts.object})
+              Objects/Props ({counts.object})
             </Button>
             <Button
               variant={typeFilter === "location" ? "default" : "outline"}

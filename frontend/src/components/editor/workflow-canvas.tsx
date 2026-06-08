@@ -100,7 +100,7 @@ const SOURCE_LABELS: Record<string, string> = {
   payload: "Payload",
   characterRef: "Character",
   faceRef: "Face",
-  objectRef: "Object",
+  objectRef: "Object/Props",
   creatureRef: "Animal/Creature",
   locationRef: "Location",
   voiceId: "Voice ID",
