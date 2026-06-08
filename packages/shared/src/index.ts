@@ -641,6 +641,18 @@ export {
   INSTAGRAM_CAROUSEL_MAX_ITEMS,
 } from "./social-post.js"
 
+export type {
+  CommunityEntityType,
+  CommunitySort,
+  CommunityReportReason,
+  CommunityCard,
+  BrowseCommunityParams,
+  BrowseCommunityResult,
+  CloneListingResult,
+  FavoriteListingResult,
+  ReportListingResult,
+} from "./community.js"
+
 export {
   NODE_DEFAULT_TYPES,
   validateProviderForNodeType,

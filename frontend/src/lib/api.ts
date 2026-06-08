@@ -5,6 +5,7 @@ import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import type { ReduceMeta, ImageCriticMode, WorkflowExport, ReferenceSheet } from "@nodaro/shared"
 import type { SheetType, SheetSkin, SheetFlavour, EntityKind } from "@nodaro/shared"
 import type { CharacterAttachColumn, ObjectAttachColumn, LocationAttachColumn } from "@nodaro/shared"
+import type { CommunityCard, CommunitySort } from "@nodaro/shared"
 import { FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared"
 import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
 import { withIdempotencyHeader } from "@/lib/idempotency-key"
@@ -6140,26 +6141,13 @@ export async function getTemplateFavorites(): Promise<string[]> {
 
 // --- Community Sharing ---
 
-export interface CommunityCard {
-  id: string
-  entity_type: "character" | "location" | "object"
-  creator_display_name: string | null
-  slug: string
-  title: string
-  description: string | null
-  category: string | null
-  style: string | null
-  tags: string[]
-  preview_media_url: string | null
-  preview_images: { url: string }[]
-  clone_count: number
-  favorite_count: number
-  created_at: string
-}
+// Listing shape is the single source of truth in `@nodaro/shared`; re-export so
+// existing `@/lib/api` importers of `CommunityCard` keep working.
+export type { CommunityCard } from "@nodaro/shared"
 
 export async function browseCommunity(params: {
   entityType?: string; q?: string; category?: string
-  sort?: "popular" | "newest"; cursor?: string; limit?: number
+  sort?: CommunitySort; cursor?: string; limit?: number
 }): Promise<{ data: CommunityCard[]; nextCursor: string | null }> {
   const qs = new URLSearchParams()
   for (const [k, v] of Object.entries(params)) if (v != null && v !== "") qs.set(k, String(v))

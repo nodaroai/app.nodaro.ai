@@ -1,85 +1,21 @@
+import type {
+  CommunityEntityType, CommunitySort, CommunityReportReason, CommunityCard,
+  BrowseCommunityParams, BrowseCommunityResult, CloneListingResult,
+  FavoriteListingResult, ReportListingResult,
+} from "@nodaro/shared"
 import type { NodaroClient } from "../client.js"
 
-/** The kind of shared asset a community listing wraps. */
-export type CommunityEntityType = "character" | "location" | "object"
-
-/** How `browse` orders results. `newest` (default) or most-cloned first. */
-export type CommunitySort = "newest" | "popular"
-
 /**
- * Why a listing is being reported. Mirrors the backend's accepted reasons —
- * any other value is rejected with a validation error.
+ * The community-listing types are the single source of truth in
+ * `@nodaro/shared` (re-used by the backend, frontend, and CLI). Re-export them
+ * here so SDK consumers don't have to add `@nodaro/shared` as a second
+ * dependency just to typecheck `browse`/`clone`/`favorite`/`report`.
  */
-export type CommunityReportReason =
-  | "real_person_no_consent"
-  | "inappropriate"
-  | "ip_violation"
-  | "other"
-
-/**
- * A public community listing — a shared character, location, or object that
- * other users can browse, favorite, and clone into their own library. Field
- * names mirror the backend row shape (snake_case) exactly.
- */
-export interface CommunityCard {
-  id: string
-  entity_type: CommunityEntityType
-  /** Display name of the creator who published the listing. */
-  creator_display_name: string | null
-  /** URL-safe identifier used by {@link CommunityResource.get}. */
-  slug: string
-  title: string
-  description: string | null
-  category: string | null
-  style: string | null
-  tags: string[]
-  /** Primary preview (a video for animated assets, else the main image). */
-  preview_media_url: string | null
-  /** Additional preview images shown in the detail/clone gallery. */
-  preview_images: { url: string }[]
-  /** Number of times this listing has been cloned. */
-  clone_count: number
-  /** Number of users who have favorited this listing. */
-  favorite_count: number
-  created_at: string
-}
-
-export interface BrowseCommunityParams {
-  /** Filter to a single asset kind. */
-  entityType?: CommunityEntityType
-  /** Full-text search across title/description/tags. */
-  q?: string
-  /** Filter to a single category. */
-  category?: string
-  /** Order results. Defaults to `newest`. */
-  sort?: CommunitySort
-  /** Cursor token returned by the previous page. */
-  cursor?: string
-  /** Page size; the backend caps at 50 (default 20). */
-  limit?: number
-}
-
-export interface BrowseCommunityResult {
-  data: CommunityCard[]
-  /** Token for the next page, or `null` when there are no more results. */
-  nextCursor: string | null
-}
-
-/** Result of cloning a listing — the new asset's kind and id in your library. */
-export interface CloneListingResult {
-  entityType: CommunityEntityType
-  id: string
-}
-
-/** Result of toggling a favorite — the listing's new favorited state. */
-export interface FavoriteListingResult {
-  favorited: boolean
-}
-
-/** Result of reporting a listing. */
-export interface ReportListingResult {
-  ok: boolean
-}
+export type {
+  CommunityEntityType, CommunitySort, CommunityReportReason, CommunityCard,
+  BrowseCommunityParams, BrowseCommunityResult, CloneListingResult,
+  FavoriteListingResult, ReportListingResult,
+} from "@nodaro/shared"
 
 /**
  * Community — browse, favorite, clone, and report shared characters,
