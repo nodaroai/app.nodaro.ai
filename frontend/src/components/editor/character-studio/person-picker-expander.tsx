@@ -1,17 +1,18 @@
 import { useState } from "react"
 import { ChevronDown, ChevronRight } from "lucide-react"
 import { buildPersonHints, type PersonValue } from "@nodaro/shared"
-import { PersonPicker } from "@/components/editor/config-panels/person-picker"
+import { PersonPickerDetailed } from "@/components/editor/config-panels/person-picker"
 
 interface PersonPickerExpanderProps {
   readonly onPromptFragment: (fragment: string) => void
 }
 
 /**
- * Default-collapsed wrapper for the existing Person Picker. When opened, lets
- * the user pick age/build/hair/etc. across the 19 person dimensions, then
+ * Default-collapsed wrapper for the detailed Person Picker. When opened, lets
+ * the user pick age/build/hair/etc. across the 21 person dimensions, then
  * composes a prompt fragment via `buildPersonHints` and emits it through
- * `onPromptFragment`.
+ * `onPromptFragment`. Character Studio deliberately stays on the detailed grid
+ * (PersonPickerDetailed) — the compact/detailed toggle is for the node picker.
  *
  * `onPromptFragment` is intentionally fire-and-forget — the parent decides
  * whether to append, replace, or insert at cursor.
@@ -20,7 +21,7 @@ export function PersonPickerExpander({ onPromptFragment }: PersonPickerExpanderP
   const [open, setOpen] = useState(false)
   const [value, setValue] = useState<PersonValue>({})
 
-  // PersonPicker exposes patch-style updates (Partial<PersonValue>). Merge
+  // PersonPickerDetailed exposes patch-style updates (Partial<PersonValue>). Merge
   // patches into local state so the picker stays in sync across re-renders.
   const handleChange = (patch: Partial<PersonValue>) => {
     setValue((prev) => ({ ...prev, ...patch }))
@@ -49,7 +50,7 @@ export function PersonPickerExpander({ onPromptFragment }: PersonPickerExpanderP
       </button>
       {open && (
         <div className="border border-[#334155] rounded p-2 bg-[#13161f] space-y-2">
-          <PersonPicker value={value} onChange={handleChange} />
+          <PersonPickerDetailed value={value} onChange={handleChange} />
           <div className="flex justify-end">
             <button
               type="button"

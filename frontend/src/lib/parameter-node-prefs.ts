@@ -31,3 +31,35 @@ export function setStickyParameterDisplayMode(mode: ParameterDisplayMode): void 
     // Ignore storage failures (private mode, quota, etc.).
   }
 }
+
+/** Person picker layout mode (compact / detailed) — persisted per-device.
+ *
+ *  Same persistence + guard convention as the display-mode pref above: a
+ *  cross-origin iframe (embeddable published apps) or private mode can make
+ *  `localStorage` THROW on access, so every read/write is guarded.
+ *
+ *  Pref key: `nodaro:person-picker-mode` (per-device). Default: compact.
+ */
+
+export type PersonPickerMode = "compact" | "detailed"
+
+const PERSON_PICKER_MODE_KEY = "nodaro:person-picker-mode"
+
+export function getStickyPersonPickerMode(): PersonPickerMode {
+  if (typeof window === "undefined") return "compact"
+  try {
+    return window.localStorage.getItem(PERSON_PICKER_MODE_KEY) === "detailed" ? "detailed" : "compact"
+  } catch {
+    // localStorage may throw in private mode / cross-origin iframe — fall through.
+    return "compact"
+  }
+}
+
+export function setStickyPersonPickerMode(mode: PersonPickerMode): void {
+  if (typeof window === "undefined") return
+  try {
+    window.localStorage.setItem(PERSON_PICKER_MODE_KEY, mode)
+  } catch {
+    // Ignore storage failures (iframe / private mode, quota, etc.).
+  }
+}

@@ -812,13 +812,14 @@ export {
   PEOPLE,
   PERSON_DIMENSION_ORDER,
   PERSON_DIMENSION_LABELS,
+  PERSON_DIMENSION_SECTIONS,
   PERSON_FIELD_BY_DIMENSION,
   getPerson,
   getPersonLabel,
   getPersonPromptHint,
   buildPersonHints,
 } from "./person.js"
-export type { Person, PersonDimension, PersonValue } from "./person.js"
+export type { Person, PersonDimension, PersonDimensionSection, PersonValue } from "./person.js"
 
 export {
   PHOTO_GENRES,

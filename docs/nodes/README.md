@@ -131,7 +131,7 @@ Pickers that combine multiple independent dimensions into a single descriptor.
 |------|-------------|-------------|
 | [Framing](./parameters/framing.md) | Multi-dim: shot size + angle + coverage + composition + vantage (72 options across 5 fields) | Per-shot framing direction |
 | [Lighting](./parameters/lighting.md) | Multi-dim: time-of-day + style + direction (72 options across 3 fields) | Compose a full lighting setup |
-| [Person](./parameters/person.md) | Multi-dim: 20 attributes (type, age, ethnicity, build, face, hair, eyes, skin, …) — 547 options | Casting brief / recurring-character generation |
+| [Person](./parameters/person.md) | Multi-dim: 21 attributes (type, age, ethnicity, regional aesthetic, build, face, hair, eyes, skin, …) — 547 options | Casting brief / recurring-character generation |
 | [Styling](./parameters/styling.md) | Multi-dim: makeup + eyewear + headwear + hair + jewelry + nails + face-paint + fabric (262 options across 9 fields) | Fashion-editorial / character continuity |
 | [Temporal](./parameters/temporal.md) | Multi-dim: speed + freeze + direction + shutter (18 options across 4 fields) | Time-based effects (slow-mo, freeze, reverse) |
 | [Exposure Settings](./parameters/exposure-settings.md) | Multi-dim: aperture + shutter speed + ISO (20 options across 3 fields) | Photographic exposure-triangle direction |
