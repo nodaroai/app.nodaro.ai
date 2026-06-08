@@ -107,4 +107,54 @@ describe("community resource", () => {
     expect(JSON.parse(init.body)).toEqual({ reason: "inappropriate" })
     expect(out).toEqual({ ok: true })
   })
+
+  it("publish() POSTs /v1/admin/community/:entityType/:id/publish with the params body", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ slug: "hero-abc", id: "L1" }))
+    const params = { title: "Hero", attestation: true as const, likenessAttestation: true }
+    const out = await client(fetchMock).community.publish("character", "src1", params)
+
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/admin/community/character/src1/publish")
+    const init = fetchMock.mock.calls[0][1] as { method: string; body: string }
+    expect(init.method).toBe("POST")
+    expect(JSON.parse(init.body)).toEqual(params)
+    expect(out).toEqual({ slug: "hero-abc", id: "L1" })
+  })
+
+  it("unpublish() DELETEs /v1/admin/community/listings/:id and returns { ok }", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ ok: true }))
+    const out = await client(fetchMock).community.unpublish("L1")
+
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/admin/community/listings/L1")
+    expect((fetchMock.mock.calls[0][1] as { method: string }).method).toBe("DELETE")
+    expect(out).toEqual({ ok: true })
+  })
+
+  it("sharedListing() GETs /v1/admin/community/by-source/:entityType/:sourceId and returns { data }", async () => {
+    const row = {
+      id: "L1",
+      slug: "hero-abc",
+      entity_type: "character" as const,
+      title: "Hero",
+      is_active: true,
+      is_listed: true,
+      clone_count: 2,
+      favorite_count: 5,
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-02T00:00:00Z",
+    }
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: row }))
+    const out = await client(fetchMock).community.sharedListing("character", "src1")
+
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/admin/community/by-source/character/src1")
+    expect((fetchMock.mock.calls[0][1] as { method: string }).method).toBe("GET")
+    expect(out).toEqual({ data: row })
+  })
+
+  it("sharedListing() returns { data: null } when the entity hasn't been shared", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: null }))
+    const out = await client(fetchMock).community.sharedListing("location", "src9")
+
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/admin/community/by-source/location/src9")
+    expect(out).toEqual({ data: null })
+  })
 })

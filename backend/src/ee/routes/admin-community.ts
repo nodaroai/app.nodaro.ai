@@ -67,6 +67,22 @@ export async function adminCommunityRoutes(app: FastifyInstance) {
     },
   )
 
+  app.get<{ Params: { entityType: string; id: string } }>(
+    "/v1/admin/community/by-source/:entityType/:id",
+    { preHandler: requireAdmin },
+    async (req, reply) => {
+      const { entityType, id } = req.params
+      if (!["character", "location", "object"].includes(entityType)) return bad(reply, "Invalid entityType")
+      const { data } = await supabase
+        .from("community_listings")
+        .select("id, slug, entity_type, title, is_active, is_listed, clone_count, favorite_count, created_at, updated_at")
+        .eq("source_id", id)
+        .eq("creator_id", req.userId!)
+        .maybeSingle()
+      return reply.send({ data: data ?? null })
+    },
+  )
+
   app.get("/v1/admin/community/reports", { preHandler: requireAdmin }, async (_req, reply) => {
     const { data } = await supabase
       .from("community_listing_reports")

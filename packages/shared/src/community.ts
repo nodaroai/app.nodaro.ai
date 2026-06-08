@@ -64,3 +64,34 @@ export interface FavoriteListingResult {
 export interface ReportListingResult {
   ok: boolean
 }
+
+/** Body for publishing (sharing) an entity to the community. */
+export interface PublishListingParams {
+  title: string
+  description?: string
+  category?: string
+  style?: string
+  tags?: string[]
+  attestation: true
+  likenessAttestation?: boolean
+}
+
+/** Result of publishing — the new listing's slug + id. */
+export interface PublishListingResult {
+  slug: string
+  id: string
+}
+
+/** A creator's own listing for one source entity (from the by-source lookup). */
+export interface SharedListing {
+  id: string
+  slug: string
+  entity_type: CommunityEntityType
+  title: string
+  is_active: boolean
+  is_listed: boolean
+  clone_count: number
+  favorite_count: number
+  created_at: string
+  updated_at: string
+}

@@ -261,4 +261,7 @@ export type {
   CloneListingResult,
   FavoriteListingResult,
   ReportListingResult,
+  PublishListingParams,
+  PublishListingResult,
+  SharedListing,
 } from "./resources/community.js"
