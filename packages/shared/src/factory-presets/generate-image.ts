@@ -87,6 +87,33 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
         "illustration, cartoon, 3d render, garbled text, misspelled labels, watermark, deformed faces, blurry, low resolution",
     },
   },
+  // ── Edit by Name (two-step recipe) ───────────────────────────────────────
+  {
+    id: "generate-image/label-elements",
+    name: "Label Elements",
+    description: "Step 1 · connect a photo → the same image with a numbered label on each changeable element.",
+    group: "Edit by Name",
+    data: {
+      provider: "gpt-image-2",
+      quality: "high",
+      prompt: `Using the attached photo as the exact source, return the SAME image unchanged except for added annotations: overlay a small, clearly legible callout label on each distinct element a user might want to edit. Draw a thin leader line from each label to the element it names. Use short lowercase names in clear English (e.g. "drink 1", "drink 2", "flower basket", "hammock", "table", "sky", "sand", "palm tree"). Number duplicate element types ("drink 1", "drink 2"). Place labels on empty areas so they never overlap each other or hide the element they point to. Label only distinct, meaningful, editable objects — about 6 to 10 of them — and skip trivial background texture. Do NOT restyle, recolor, relight, or redraw the scene; keep every pixel of the underlying photo as close to the original as possible. The labels are an overlay on top of the otherwise-unchanged image.`,
+      negativePrompt:
+        "garbled text, misspelled labels, overlapping labels, illegible text, restyled scene, recolored scene, redrawn image, cartoon, illustration, watermark, blurry",
+    },
+  },
+  {
+    id: "generate-image/edit-by-name",
+    name: "Apply Named Edit",
+    description: "Step 2 · connect the labeled sheet → edit elements by name; the labels are removed from the result.",
+    group: "Edit by Name",
+    data: {
+      provider: "gpt-image-2",
+      quality: "high",
+      prompt: `This image has callout labels naming its elements (made with the Label Elements preset). Use the labels ONLY to locate elements, then produce a clean edited photo with NO labels. Replace the next sentence with your change, referring to the labels: change "drink 1" to blue and replace the "flower basket" with a small dog. REMOVE every callout label, text box and leader line so none appear in the final image. Keep everything else exactly as it is.`,
+      negativePrompt:
+        "leftover callout labels, visible text labels, text boxes, leader lines, garbled text, restyled scene, recolored unrelated elements, redrawn image, cartoon, illustration, watermark, blurry",
+    },
+  },
   // ── Photography & Cinematic ──────────────────────────────────────────────
   {
     id: "generate-image/cinematic-portrait",
