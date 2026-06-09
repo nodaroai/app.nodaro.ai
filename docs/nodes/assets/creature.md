@@ -43,8 +43,8 @@ A canonical, LLM-authored description is set when the main image is approved; it
 
 The creature node itself is a setup/reference node and does not bill credits to exist on the canvas. Generation inside the Creature Studio bills per the chosen provider, the same as the standalone generation nodes:
 
-- **Image assets** (angles / poses / variations / main image) bill per the selected image provider (default `nano-banana`, 2 credits). See [Generate Image](../ai-image/generate-image.md) for the per-provider credit table.
-- **Motion clips** bill per the selected image-to-video provider (default `kling-turbo`, 10 credits). See [Image to Video](../ai-video/image-to-video.md) for the per-provider credit table.
+- **Image assets** (angles / poses / variations / main image) bill per the selected image provider (default `nano-banana`, 1 credit). See [Generate Image](../ai-image/generate-image.md) for the per-provider credit table.
+- **Motion clips** bill per the selected image-to-video provider (default `kling-turbo`, 11 credits). See [Image to Video](../ai-video/image-to-video.md) for the per-provider credit table.
 
 ## Best Practices
 - Approve a strong main image first — it becomes the visual anchor for every other asset when Style Lock is on.

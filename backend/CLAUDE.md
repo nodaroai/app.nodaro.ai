@@ -241,12 +241,12 @@ All use **lowercase with hyphens** except VEO which uses **dot notation**: `veo3
 - `topup_credits` — never expire
 - **Deduction order:** subscription first -> then topup
 - `deduct_credits` RPC handles atomic deduction with FOR UPDATE lock
-- Free tier: 250 credits, 50/day cap, veo3/sora2-pro blocked, outputs watermarked
+- Free tier: **150** credits, 50/day cap, veo3/sora2-pro blocked, outputs watermarked
 
 ### Pricing
 ***REDACTED-OSS-SCRUB***
-- Tiers: Free ($0/250cr), Basic ($24mo/$19yr/475cr), Standard ($49mo/$39yr/1175cr), Pro ($99mo/$79yr/2650cr), Business ($189mo/$149yr/5600cr)
-- Top-ups: $10/275cr, $25/750cr, $50/1650cr, $100/3500cr (never expire)
+- Tiers: Free ($0/150cr), Basic ($12mo/$10yr/250cr), Standard ($29mo/$24yr/850cr), Pro ($59mo/$49yr/2000cr), Business ($129mo/$109yr/4800cr)
+- Top-ups: $10/150cr, $25/450cr, $50/1000cr, $100/2200cr (never expire)
 
 ### Variable Credit Pricing (Composite Model Identifiers)
 Some models cost different credits based on quality/resolution settings.
@@ -254,11 +254,11 @@ Composite identifiers use `:` separator: `{provider}:{setting_value}`.
 
 | Model | Default | Higher Setting | Credits (default → higher) |
 |-------|---------|----------------|----------------------------|
-| gpt-image | medium | high | 2 → 7 |
-| nano-banana-pro | 1K/2K | 4K | 6 → 8 |
-| flux | 1K | 2K | 2 → 3 |
-| flux-flex | 1K | 2K | 5 → 8 |
-| ideogram | BALANCED | TURBO/QUALITY | 6 → 4/8 |
+| gpt-image | medium | high | 4 → 6 |
+| nano-banana-pro | 1K/2K | 4K | 5 → 6 |
+| flux | 1K | 2K | 2 → 2 (2K no longer surcharges) |
+| flux-flex | 1K | 2K | 4 → 6 |
+| ideogram-v3 | BALANCED | TURBO/QUALITY | 2 → 1/3 |
 
 **Implementation:**
 - Backend: `buildCreditModelIdentifier()` in `generate-image.ts` / `image-to-image.ts` builds composite ID from request body
@@ -272,23 +272,23 @@ Composite identifiers use `:` separator: `{provider}:{setting_value}`.
 
 | Node Type | Credits | Notes |
 |-----------|---------|-------|
-| generate-script | 5 | Gemini Flash |
-| generate-image | 1-8 | z-image=1, nano-banana=2, flux=2, grok=2, gpt-image=2 (medium) / 7 (high), nano-banana-pro=6/8, ideogram=4-8 |
-| image-to-image | 2-8 | flux-pro-i2i=2/3, gpt-image-i2i=2/7, flux-i2i=5/8, ideogram variants=4-8 |
-| edit-image | 0-2 | recraft-remove-bg=0, recraft-upscale/nano-banana-edit/topaz=2 |
-| image-to-video | 10-125 | kling-turbo=10, minimax=25, kling=22, grok-i2v=19, veo3.1=40, veo3=125 |
-| text-to-video | 10-125 | Same as image-to-video |
-| text-to-speech | 4 | ElevenLabs v3 (default, direct API), Turbo v2.5 / Multilingual v2 (via KIE.ai); `stripAudioTags()` removes `[...]` for v2 |
+| generate-script | 2 | Gemini Flash (economy 1 / standard 2 / premium 3) |
+| generate-image | 1-6 | z-image=1, nano-banana=1, flux=2, grok=1, gpt-image=4 (medium) / 6 (high), nano-banana-pro=5/6, ideogram-v3=1-3 |
+| image-to-image | 1-6 | flux-pro-i2i=2/2, gpt-image-i2i=4/6, flux-i2i=4/6, ideogram variants=1-6 |
+| edit-image | 1-3 | recraft-remove-bg=1, recraft-upscale=1, nano-banana-edit=2, topaz=3 |
+| image-to-video | 5-63 | kling-turbo=11, minimax=15, kling=28, grok-i2v=5, veo3.1=15, veo3=63 — most are duration/resolution-tiered composites |
+| text-to-video | 5-63 | Same as image-to-video |
+| text-to-speech | 3 | ElevenLabs v3 (default, direct API), Turbo v2.5 / Multilingual v2 (via KIE.ai); `stripAudioTags()` removes `[...]` for v2 |
 | voice-clone | 5 | ElevenLabs instant voice clone (direct API) |
-| generate-music | 7-13 | Suno v4=7, Suno v5=13 |
-| text-to-audio | 4 | ElevenLabs SFX |
+| generate-music | 18 | node-type id reserves 18, metered down to the provider actual at commit (Suno v4/v5 = 3) |
+| text-to-audio | 3 | ElevenLabs SFX |
 | ai-writer | 3 | Claude Sonnet (standard LLM tier); varies by tier via `ai-writer:economy` / `ai-writer:premium` |
-| lottie-overlay | 5 | Claude Sonnet → Lottie overlay plan |
-| 3d-title | 15 | Claude Sonnet → 3D title plan (camera, lighting, text, particles) |
+| lottie-overlay | 2 | Claude Sonnet → Lottie overlay plan |
+| 3d-title | 2 | Claude Sonnet → 3D title plan (camera, lighting, text, particles) |
 | voice-design | 5 | ElevenLabs `/v1/text-to-voice/design` (direct API), full controls: model, loudness, guidance, seed, quality, enhance |
-| qa-check | 3 | Gemini Flash |
-| render-video | 15 | Remotion cloud render |
-| FFmpeg nodes | 0 | combine-videos, merge-video-audio, add-captions, resize, trim, extract-audio, mix-audio, adjust-volume |
+| qa-check | 1 | Gemini Flash |
+| render-video | 5 | Remotion cloud render |
+| FFmpeg nodes | dynamic (duration-based) | combine-videos/merge-video-audio/add-captions/resize/trim/extract-audio/mix-audio/adjust-volume — computed at runtime; static fallbacks 1-3 |
 
 ### Credit Flow
 1. Job created -> Reserve credits (estimate based on model)
@@ -418,7 +418,7 @@ Import `createSSEStream` from `../lib/sse.js`. Send `metadata` -> stream `token`
 
 ## AI Agent Node (formerly AI Writer)
 
-Generates multiple image prompts from a single concept via Claude Sonnet (2 credits). Spawns individual Generate Image nodes on canvas.
+Generates multiple image prompts from a single concept via Claude Sonnet (3 credits). Spawns individual Generate Image nodes on canvas.
 
 ### Workflow
 1. Connect a **reference image** + optionally a **Face** node

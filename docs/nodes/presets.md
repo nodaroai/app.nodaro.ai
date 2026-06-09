@@ -20,6 +20,7 @@ the same idea**:
 
 | Folder | Examples |
 |--------|----------|
+| **Reference Sheet** *(connect a photo)* | **Character Board**, **Location Board**, **Product Board**, **Outfit Board**, **Scene Board**, **Creature Board** — dense multi-panel reference sheets generated from one connected photo |
 | **Photography & Cinematic** | Cinematic Still / Widescreen (21:9), Studio & Golden-Hour Portrait, B&W, Macro, Food, Aerial, Landscape |
 | **Characters** | **Character Sheet** family — Turnaround (3-view), Action Poses ×4, Expressions ×6 / ×16, Outfit Variations, With Text Labels, Chibi — plus Portrait, Full-Body Hero, Creature, Avatar |
 | **Product & Commerce** | Product on White, Lifestyle, Flat-Lay, Packaging / Device Mockup, Beauty Hero |
@@ -34,7 +35,10 @@ the same idea**:
 
 Each preset pre-selects the **best provider and aspect ratio** for its job (e.g. text-strong models
 for logos and thumbnails) and includes **`{placeholder}` slots** in the prompt — fill them in (for
-example `{character description}` or `{brand}`) before you run.
+example `{character description}` or `{brand}`) before you run. Placeholders now support **default
+values** with the `{token || default}` syntax (e.g. `{brand || a modern tech startup}`), so a preset
+renders into a sensible image even if you run it unedited — the fallback is used until you type your
+own value (shipped in [PR #3250](https://github.com/nodaroai/app.nodaro.ai/pull/3250)).
 
 > **Selective stylization** ("make the person a cartoon but keep the background photoreal") is a
 > transform effect. The **Stylized Subject** folder ships *Cartoon Person · Real World*, *Caricature
