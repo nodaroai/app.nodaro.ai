@@ -1,4 +1,4 @@
-import { NODE_REF_PATTERN, RESERVED_TEMPLATE_VARS } from "@nodaro/shared"
+import { NODE_REF_PATTERN, RESERVED_TEMPLATE_VARS, parseNodeRef } from "@nodaro/shared"
 
 /** Tokens never treated as a real reference: empty, image-ref tokens, reserved vars. */
 export function isExcludedToken(raw: string): boolean {
@@ -14,8 +14,8 @@ export function referencedRefs(data: Record<string, unknown>, fields: readonly s
     const value = data[field]
     if (typeof value !== "string" || value.length === 0) continue
     for (const match of value.matchAll(NODE_REF_PATTERN)) {
-      const raw = (match[1] ?? "").trim()
-      if (!isExcludedToken(raw)) refs.add(raw)
+      const { name } = parseNodeRef(match[1] ?? "")
+      if (!isExcludedToken(name)) refs.add(name)
     }
   }
   return refs

@@ -36,3 +36,4 @@ The Text Prompt node is the most common starting point for workflows. It provide
 - Text Prompt outputs can fan out to multiple downstream nodes simultaneously
 - For batch workflows, use a List node instead, which feeds items one at a time
 - Node references allow you to dynamically include output from other nodes in your text
+- A reference can carry a default: `{Label || fallback}` uses the trimmed `fallback` when nothing provides `Label`. `{Label || }` (empty after `||`) resolves to nothing; plain `{Label}` (no `||`) stays literal when unresolved

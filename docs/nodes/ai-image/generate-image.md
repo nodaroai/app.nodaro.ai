@@ -38,6 +38,8 @@ The Generate Image node has 6 typed input handles on its left edge (color-coded 
 | `elements` | indigo | "Subject / Object" family pickers (Person, Pose, Animal, Vehicle, Weapon, Furniture, Material, Held-Prop, Styling, Instrumentation) | Pickers wired here tail-append their value to the prompt at execution time. |
 | `look` | indigo | "Look" + "Camera" family pickers (Style, Lens, Lighting, Color Look, Framing, Camera Format, Photographer, Aesthetic, Era, Photo Genre, Mood, Atmosphere, Backdrop, Exposure Settings, Render Quality, Composition Effects, Post-Process Effects, Tone, Camera Motion, Temporal, Transition, Character FX) | Pickers wired here tail-append their value to the prompt — same runtime path as the legacy `cinematography` handle. |
 
+**Variable defaults:** any `{Label}` reference can carry a fallback with `||` — `{Label || default}`. If nothing provides `Label`, the trimmed default is used; e.g. `generate a {person || man} running` becomes "generate a man running" when no `person` is wired, or uses the wired/picked value when it is. `{person || }` (empty after `||`) resolves to nothing when unset; plain `{person}` (no `||`) stays literal when unset.
+
 **Outputs:**
 - `image` (cyan) — generated image URL. Shares the References color since both are "image" type.
 

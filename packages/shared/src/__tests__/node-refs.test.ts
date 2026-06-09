@@ -1,4 +1,4 @@
-import { NODE_REF_PATTERN, resolveNodeRefs } from "../node-refs.js"
+import { NODE_REF_PATTERN, resolveNodeRefs, parseNodeRef } from "../node-refs.js"
 
 // ---------------------------------------------------------------------------
 // NODE_REF_PATTERN
@@ -86,5 +86,50 @@ describe("resolveNodeRefs", () => {
   it("returns text unchanged when there are no refs", () => {
     const map = new Map([["A", "alpha"]])
     expect(resolveNodeRefs("no refs here", map)).toBe("no refs here")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// parseNodeRef
+// ---------------------------------------------------------------------------
+describe("parseNodeRef", () => {
+  it("splits on the first || and trims both sides", () => {
+    expect(parseNodeRef("person || man")).toEqual({ name: "person", fallback: "man" })
+    expect(parseNodeRef("person||man")).toEqual({ name: "person", fallback: "man" })
+    expect(parseNodeRef("person     || ")).toEqual({ name: "person", fallback: "" })
+    expect(parseNodeRef("p || a || b")).toEqual({ name: "p", fallback: "a || b" })
+  })
+  it("returns null fallback when there is no ||", () => {
+    expect(parseNodeRef("person")).toEqual({ name: "person", fallback: null })
+    expect(parseNodeRef("p|man")).toEqual({ name: "p|man", fallback: null }) // single pipe is literal
+  })
+  it("handles a degenerate empty name", () => {
+    expect(parseNodeRef("|| man")).toEqual({ name: "", fallback: "man" })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// resolveNodeRefs — {name || default} fallback
+// ---------------------------------------------------------------------------
+describe("resolveNodeRefs with fallback", () => {
+  it("uses the connected node output over the fallback", () => {
+    expect(resolveNodeRefs("a {person || man} b", new Map([["person", "dog"]]))).toBe("a dog b")
+  })
+  it("uses the fallback when the node is absent", () => {
+    expect(resolveNodeRefs("a {person || man} b", new Map())).toBe("a man b")
+  })
+  it("falls back to empty for {person || } when absent (fallback !== null, not truthiness)", () => {
+    expect(resolveNodeRefs("a {person || } b", new Map())).toBe("a  b")
+  })
+  it("falls back when the connected node output is empty (maps drop empty → absent)", () => {
+    // Empty outputs are never inserted into the label→output map, so an empty-but-connected
+    // node is indistinguishable from absent and the fallback fires.
+    expect(resolveNodeRefs("a {person || man} b", new Map())).toBe("a man b")
+  })
+  it("leaves {name} literal when absent and there is no ||", () => {
+    expect(resolveNodeRefs("a {person} b", new Map())).toBe("a {person} b")
+  })
+  it("leaves a reserved var with a fallback untouched", () => {
+    expect(resolveNodeRefs("{name || x}", new Map())).toBe("{name || x}")
   })
 })

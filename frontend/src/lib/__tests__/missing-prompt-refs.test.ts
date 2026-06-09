@@ -36,6 +36,21 @@ describe("computeMissingPromptRefs", () => {
     expect(computeMissingPromptRefs(nodes, [edge("hero", "img")], "img")).toEqual([])
   })
 
+  it("flags {person || man} by its parsed name, not the raw token", () => {
+    const nodes = [node("img", "generate-image", { prompt: "a {person || man} b" })]
+    expect(computeMissingPromptRefs(nodes, [], "img")).toEqual([
+      { kind: "text", name: "person" },
+    ])
+  })
+
+  it("does not flag {person || man} when person is connected", () => {
+    const nodes = [
+      node("img", "generate-image", { prompt: "a {person || man} b" }),
+      node("p", "text-prompt", { label: "person", text: "a dog" }),
+    ]
+    expect(computeMissingPromptRefs(nodes, [edge("p", "img")], "img")).toEqual([])
+  })
+
   it("excludes reserved template vars", () => {
     const nodes = [
       node("img", "generate-image", { prompt: "{name} {description} {userPrompt}" }),

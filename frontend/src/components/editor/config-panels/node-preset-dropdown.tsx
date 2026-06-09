@@ -3,7 +3,6 @@ import { Check, ChevronDown, ChevronRight, Download, Folder, FolderOpen, Layers,
 import {
   buildNodePresetExport,
   extractPresetData,
-  FACTORY_POPULAR_IDS,
   getFactoryPresets,
   groupFactoryPresets,
   parseNodePresetExport,
@@ -25,7 +24,13 @@ import {
 } from "@/components/ui/alert-dialog"
 import { useAuth } from "@/hooks/use-auth"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { useNodePresets, useNodePresetGroups, useNodePresetMutations } from "@/hooks/queries/use-node-presets-queries"
+import {
+  useNodePresets,
+  useNodePresetGroups,
+  useNodePresetMutations,
+  useNodePresetFavorites,
+  useNodePresetFavoriteMutations,
+} from "@/hooks/queries/use-node-presets-queries"
 import { NodePresetNameTakenError, type NodePreset, type NodePresetGroup } from "@/lib/api"
 import { buildPresetTree, presetMatchesQuery, buildResetToDefaultData } from "@/lib/preset-tree"
 import { NodePresetManageDialog } from "./node-preset-manage-dialog"
@@ -148,12 +153,14 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
   )
   // Factory presets bucketed into folders/sections for the browse (non-search) view.
   const factoryGroups = useMemo(() => groupFactoryPresets(factory), [factory])
-  // Curated "most used" quick-picks, surfaced at the top of the Factory section (browse view).
-  const popular = useMemo<MergedPreset[]>(() => {
-    const ids = FACTORY_POPULAR_IDS[nodeType] ?? []
-    const byId = new Map(factory.map((p) => [p.id, p]))
-    return ids.map((id) => byId.get(id)).filter((p): p is MergedPreset => p !== undefined)
-  }, [factory, nodeType])
+  // User-curated favorites (factory ids AND user-preset uuids), most-recent first.
+  const { data: favoriteIds = [] } = useNodePresetFavorites(nodeType, user?.id)
+  const favMutations = useNodePresetFavoriteMutations(nodeType)
+  const favoriteSet = useMemo(() => new Set(favoriteIds), [favoriteIds])
+  const toggleFavorite = (id: string) => {
+    if (favoriteSet.has(id)) favMutations.remove.mutate(id)
+    else favMutations.add.mutate(id)
+  }
   const userMerged = useMemo<MergedPreset[]>(
     () =>
       (userPresets as NodePreset[]).map((p) => ({
@@ -166,6 +173,12 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
     [userPresets],
   )
   const all = useMemo(() => [...factory, ...userMerged], [factory, userMerged])
+  // Resolve favorite ids against ALL presets (favorites can be user presets too); skip any
+  // id that no longer resolves (deleted user preset / removed factory id).
+  const favoriteRows = useMemo(
+    () => favoriteIds.map((id) => all.find((p) => p.id === id)).filter((p): p is MergedPreset => p !== undefined),
+    [favoriteIds, all],
+  )
 
   const activeId = data.__activePresetId as string | undefined
   const activePreset = useMemo(() => all.find((p) => p.id === activeId), [all, activeId])
@@ -379,6 +392,27 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
             />
           </div>
           <div className="max-h-72 overflow-y-auto p-1">
+            {/* FAVORITES band — user-starred presets (factory or user), pinned to the top.
+                Hidden while searching and when empty. */}
+            {!searching && favoriteRows.length > 0 && (
+              <>
+                <div className="flex items-center gap-1.5 px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  <Star className="h-3 w-3 shrink-0" /> Favorites
+                </div>
+                {favoriteRows.map((p) => (
+                  <PresetRow
+                    key={`fav:${p.id}`}
+                    preset={p}
+                    active={p.id === activeId}
+                    indented
+                    onSelect={() => onSelect(p)}
+                    isFavorite={favoriteSet.has(p.id)}
+                    onToggleFavorite={() => toggleFavorite(p.id)}
+                  />
+                ))}
+              </>
+            )}
+
             {/* USER (custom) presets first — flat when searching, organized tree when browsing. */}
             {(searching ? userMatches.length > 0 : tree.length > 0) && (
               <>
@@ -391,6 +425,8 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
                         active={p.id === activeId}
                         onSelect={() => onSelect(p)}
                         onDelete={() => doDelete(p)}
+                        isFavorite={favoriteSet.has(p.id)}
+                        onToggleFavorite={() => toggleFavorite(p.id)}
                       />
                     ))
                   : tree.map((node) => {
@@ -403,6 +439,8 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
                             active={mp.id === activeId}
                             onSelect={() => onSelect(mp)}
                             onDelete={() => doDelete(mp)}
+                            isFavorite={favoriteSet.has(mp.id)}
+                            onToggleFavorite={() => toggleFavorite(mp.id)}
                           />
                         )
                       }
@@ -419,6 +457,8 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
                             indented
                             onSelect={() => onSelect(mp)}
                             onDelete={() => doDelete(mp)}
+                            isFavorite={favoriteSet.has(mp.id)}
+                            onToggleFavorite={() => toggleFavorite(mp.id)}
                           />
                         )
                       })
@@ -445,26 +485,23 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
               </>
             )}
 
-            {/* FACTORY presets second — "Popular" quick-picks band, then the full folders. */}
+            {/* FACTORY presets second — organized into folders/sections. */}
             {(searching ? factoryMatches.length > 0 : factory.length > 0) && (
               <>
                 <GroupLabel>Factory</GroupLabel>
                 {searching ? (
                   factoryMatches.map((p) => (
-                    <PresetRow key={p.id} preset={p} active={p.id === activeId} onSelect={() => onSelect(p)} />
+                    <PresetRow
+                      key={p.id}
+                      preset={p}
+                      active={p.id === activeId}
+                      onSelect={() => onSelect(p)}
+                      isFavorite={favoriteSet.has(p.id)}
+                      onToggleFavorite={() => toggleFavorite(p.id)}
+                    />
                   ))
                 ) : (
                   <>
-                    {popular.length > 0 && (
-                      <>
-                        <div className="flex items-center gap-1.5 px-2 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                          <Star className="h-3 w-3 shrink-0" /> Popular
-                        </div>
-                        {popular.map((p) => (
-                          <PresetRow key={`pop:${p.id}`} preset={p} active={p.id === activeId} indented onSelect={() => onSelect(p)} />
-                        ))}
-                      </>
-                    )}
                     {factoryGroups.map((g) => {
                       const isRoot = g.group === null
                       const folderKey = `factory:${g.key}`
@@ -495,6 +532,8 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
                                 active={p.id === activeId}
                                 indented={!isRoot}
                                 onSelect={() => onSelect(p)}
+                                isFavorite={favoriteSet.has(p.id)}
+                                onToggleFavorite={() => toggleFavorite(p.id)}
                               />
                             ))}
                         </div>
@@ -679,12 +718,16 @@ function PresetRow({
   indented,
   onSelect,
   onDelete,
+  isFavorite,
+  onToggleFavorite,
 }: {
   preset: MergedPreset
   active: boolean
   indented?: boolean
   onSelect: () => void
   onDelete?: () => void
+  isFavorite: boolean
+  onToggleFavorite: () => void
 }) {
   return (
     <div
@@ -702,6 +745,22 @@ function PresetRow({
             <span className="block truncate text-[11px] text-muted-foreground">{preset.description}</span>
           )}
         </span>
+      </button>
+      {/* Favorite toggle — visible on hover, always visible once favorited. Shown on every row
+          (factory + user), so it must NOT be gated behind onDelete. */}
+      <button
+        type="button"
+        aria-label={isFavorite ? "Unfavorite" : "Favorite"}
+        className={cn(
+          "shrink-0 text-muted-foreground hover:text-[#ff0073]",
+          isFavorite ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+        )}
+        onClick={(e) => {
+          e.stopPropagation()
+          onToggleFavorite()
+        }}
+      >
+        <Star className={cn("h-3.5 w-3.5", isFavorite && "fill-current text-[#ff0073]")} />
       </button>
       {onDelete && (
         <button

@@ -45,16 +45,15 @@ describe("presets resource", () => {
     expect(out[0]!.kind).toBe("folder")
   })
 
-  it("listFactory() GETs /v1/node-presets/factory and returns { data, popularIds }", async () => {
+  it("listFactory() GETs /v1/node-presets/factory and returns { data }", async () => {
     const result: FactoryPresetsResult = {
       data: [{ id: "generate-image/cinematic-portrait", name: "Cinematic Portrait", data: {} }],
-      popularIds: ["generate-image/cinematic-portrait"],
     }
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk(result))
     const out = await client(fetchMock).presets.listFactory("generate-image")
 
     expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/node-presets/factory?nodeType=generate-image")
     expect(out).toEqual(result)
-    expect(out.popularIds).toContain("generate-image/cinematic-portrait")
+    expect(out.data[0]!.id).toBe("generate-image/cinematic-portrait")
   })
 })

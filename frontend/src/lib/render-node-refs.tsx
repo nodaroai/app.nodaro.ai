@@ -1,4 +1,5 @@
 import type { ReactNode } from "react"
+import { parseNodeRef } from "@nodaro/shared"
 import type { VariableDisplayMode } from "@/components/editor/config-panels/types"
 
 /**
@@ -24,18 +25,22 @@ export function renderNodeRefs(
       parts.push(text.slice(lastIndex, match.index))
     }
 
-    const refName = match[1]
-    const resolvedValue = refMap.get(refName)
-    const isResolved = resolvedValue !== undefined && resolvedValue !== ""
+    // Mirror resolveNodeRefs: connected non-empty output → its value; absent/empty + fallback →
+    // the fallback ("" for {name || }); else unresolved. Parsing the {name || default} body keeps
+    // the preview in sync with execution.
+    const { name, fallback } = parseNodeRef(match[1])
+    const resolved = refMap.get(name)
+    const effective = resolved !== undefined && resolved !== "" ? resolved : fallback
+    const isResolved = effective !== null && effective !== undefined
 
     if (mode === "annotated") {
       parts.push(
         <span key={key++} className="node-ref-highlight">
           {"{"}
-          {refName}
+          {name}
           {": "}
           {isResolved ? (
-            <span className="ref-resolved-highlight">{resolvedValue}</span>
+            <span className="ref-resolved-highlight">{effective}</span>
           ) : (
             <span className="ref-unresolved-highlight">?</span>
           )}
@@ -45,7 +50,7 @@ export function renderNodeRefs(
     } else {
       if (isResolved) {
         parts.push(
-          <span key={key++} className="ref-resolved-highlight">{resolvedValue}</span>
+          <span key={key++} className="ref-resolved-highlight">{effective}</span>
         )
       } else {
         parts.push(

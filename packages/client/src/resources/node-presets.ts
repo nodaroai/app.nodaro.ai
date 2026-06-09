@@ -32,12 +32,10 @@ export interface NodePresetGroup {
 
 /**
  * Result of `GET /v1/node-presets/factory` — the built-in (factory) catalog for
- * a node type, plus `popularIds`: the ids of the "most used" quick-picks, in
- * popularity order (a subset of `data`, surfaced first in the editor dropdown).
+ * a node type.
  */
 export interface FactoryPresetsResult {
   data: FactoryPreset[]
-  popularIds: string[]
 }
 
 /**
@@ -72,9 +70,9 @@ export class PresetsResource {
   }
 
   /**
-   * `GET /v1/node-presets/factory` → the built-in catalog for `nodeType` plus
-   * its `popularIds`. These ship with the app (no account needed to exist), so
-   * they're a good starting point for "what configs are available".
+   * `GET /v1/node-presets/factory` → the built-in catalog for `nodeType`. These
+   * ship with the app (no account needed to exist), so they're a good starting
+   * point for "what configs are available".
    */
   listFactory(nodeType: string): Promise<FactoryPresetsResult> {
     return this.client.request<FactoryPresetsResult>(

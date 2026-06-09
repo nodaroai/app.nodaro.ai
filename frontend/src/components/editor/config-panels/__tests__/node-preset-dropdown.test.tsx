@@ -13,6 +13,8 @@ const h = vi.hoisted(() => ({
   nodeType: "generate-image" as string,
   data: { prompt: "a", provider: "nano-banana" } as Record<string, unknown>,
   updateNodeData: vi.fn(),
+  // Favorited preset ids — overridden per-test (e.g. the Favorites band test).
+  favoriteIds: [] as string[],
 }))
 
 vi.mock("@/hooks/use-workflow-store", () => ({
@@ -39,6 +41,8 @@ vi.mock("@/hooks/queries/use-node-presets-queries", () => ({
     updateGroup: noop,
     removeGroup: noop,
   }),
+  useNodePresetFavorites: () => ({ data: h.favoriteIds }),
+  useNodePresetFavoriteMutations: () => ({ add: { mutate: vi.fn() }, remove: { mutate: vi.fn() } }),
 }))
 vi.mock("@/hooks/use-auth", () => ({ useAuth: () => ({ user: { id: "user-1" } }) }))
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
@@ -55,6 +59,7 @@ describe("PresetDropdown", () => {
     vi.clearAllMocks()
     h.nodeType = "generate-image"
     h.data = { prompt: "a", provider: "nano-banana" }
+    h.favoriteIds = []
   })
 
   it("hides for asset nodes (character)", () => {
@@ -152,24 +157,35 @@ describe("PresetDropdown", () => {
   it("renders factory presets as folders, collapsed by default, expanding on click", async () => {
     wrap(<PresetDropdown nodeId="n1" variant="panel" />)
     fireEvent.click(screen.getByRole("button", { name: /presets/i }))
-    // Folder header is visible; its presets are hidden until expanded. (Use a NON-popular
-    // preset — popular ones like "Cinematic Portrait" surface in the Popular band already.)
+    // Folder header is visible; its presets are hidden until expanded.
     const folder = await screen.findByText("Photography & Cinematic")
     expect(screen.queryByText("Cinematic Still")).toBeNull()
     fireEvent.click(folder)
     expect(await screen.findByText("Cinematic Still")).toBeInTheDocument()
   })
 
-  it("lists custom presets above factory, with a Popular quick-pick band", async () => {
+  it("lists custom presets above factory", async () => {
     wrap(<PresetDropdown nodeId="n1" variant="panel" />)
     fireEvent.click(screen.getByRole("button", { name: /presets/i }))
     const my = await screen.findByText("My Presets")
     const factory = screen.getByText("Factory")
     // User section precedes the factory section in the menu.
     expect(my.compareDocumentPosition(factory) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    // The Popular band surfaces a top preset without expanding any folder.
-    expect(screen.getByText("Popular")).toBeInTheDocument()
-    expect(screen.getByText("Cinematic Portrait")).toBeInTheDocument()
+  })
+
+  it("shows a Favorites band only when the user has favorited presets", async () => {
+    // Default (no favorites): the band is absent.
+    const { unmount } = wrap(<PresetDropdown nodeId="n1" variant="panel" />)
+    fireEvent.click(screen.getByRole("button", { name: /presets/i }))
+    await screen.findByText("Factory")
+    expect(screen.queryByText("Favorites")).toBeNull()
+    unmount()
+
+    // With a favorited factory id, a "Favorites" header surfaces it at the top.
+    h.favoriteIds = ["generate-image/cinematic-portrait"]
+    wrap(<PresetDropdown nodeId="n1" variant="panel" />)
+    fireEvent.click(screen.getByRole("button", { name: /presets/i }))
+    expect(await screen.findByText("Favorites")).toBeInTheDocument()
   })
 
   it("offers Override only when the active preset is a custom one", async () => {

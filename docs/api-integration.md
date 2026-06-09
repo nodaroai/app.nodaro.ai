@@ -608,9 +608,9 @@ captured node config; merge it into a node's data when you build a workflow to
 |---|---|---|---|
 | `GET` | `/v1/node-presets` | `nodeType` (optional) | Your custom presets (newest first). |
 | `GET` | `/v1/node-preset-groups` | `nodeType` (optional) | Your preset folders/sections. |
-| `GET` | `/v1/node-presets/factory` | `nodeType` (**required**) | The built-in catalog for a node type, plus `popularIds` (most-used quick-picks, in order). |
+| `GET` | `/v1/node-presets/factory` | `nodeType` (**required**) | The built-in catalog for a node type. |
 
-A custom preset has `{ id, nodeType, name, description?, data, groupId?, tags, sortOrder, createdAt, updatedAt }`. The factory response is `{ data: FactoryPreset[], popularIds: string[] }`, where each entry has `{ id, name, description?, group?, groupKind?, data }`.
+A custom preset has `{ id, nodeType, name, description?, data, groupId?, tags, sortOrder, createdAt, updatedAt }`. The factory response is `{ data: FactoryPreset[] }`, where each entry has `{ id, name, description?, group?, groupKind?, data }`.
 
 **Auth/scope:** same bearer-token auth as every other endpoint
 (`ndr_…` / `ndr_app_…` / Supabase JWT). OAuth app tokens additionally need the
@@ -621,9 +621,43 @@ A custom preset has `{ id, nodeType, name, description?, data, groupId?, tags, s
 curl -s https://app.nodaro.ai/v1/node-presets?nodeType=generate-image \
   -H "Authorization: Bearer $NODARO_TOKEN" | jq '.data[].name'
 
-# Built-in catalog + which ones are "popular"
+# Built-in catalog
 curl -s "https://app.nodaro.ai/v1/node-presets/factory?nodeType=generate-image" \
-  -H "Authorization: Bearer $NODARO_TOKEN" | jq '{count: (.data|length), popular: .popularIds}'
+  -H "Authorization: Bearer $NODARO_TOKEN" | jq '{count: (.data|length)}'
+```
+
+### Favorites
+
+Per-user **favorites** let you star presets (factory or custom) so they surface
+at the top of the editor's preset dropdown. These routes are **editor-auth /
+first-party**: the reads also accept OAuth app tokens carrying the
+`presets:read` scope, but the writes are **first-party only** (no OAuth scope
+grants them).
+
+| Method | Path | Query / Body | Purpose |
+|---|---|---|---|
+| `GET` | `/v1/node-presets/favorites` | `nodeType` (**required**) | Your favorited preset ids for that node type, most-recent first. Returns `{ data: string[] }`. |
+| `POST` | `/v1/node-presets/favorites` | body `{ nodeType, presetId }` | Add a favorite (idempotent). Returns `{ data: { success: true } }`. |
+| `DELETE` | `/v1/node-presets/favorites` | `nodeType`, `presetId` (**required**) | Remove a favorite. Returns `{ data: { success: true } }`. |
+
+A favorite id is either a **factory preset id** (e.g.
+`generate-image/character-board`) or a **user-preset uuid**. Because factory ids
+contain a `/`, url-encode `presetId` in the `DELETE` query string.
+
+```bash
+# Your favorited generate-image presets (most-recent first)
+curl -s "https://app.nodaro.ai/v1/node-presets/favorites?nodeType=generate-image" \
+  -H "Authorization: Bearer $NODARO_TOKEN" | jq '.data'
+
+# Favorite a factory preset
+curl -s -X POST "https://app.nodaro.ai/v1/node-presets/favorites" \
+  -H "Authorization: Bearer $NODARO_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"nodeType": "generate-image", "presetId": "generate-image/character-board"}' | jq .
+
+# Remove it again (url-encode the "/" in the factory id)
+curl -s -X DELETE "https://app.nodaro.ai/v1/node-presets/favorites?nodeType=generate-image&presetId=generate-image%2Fcharacter-board" \
+  -H "Authorization: Bearer $NODARO_TOKEN" | jq .
 ```
 
 ## 17. Community

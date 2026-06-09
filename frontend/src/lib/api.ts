@@ -1145,6 +1145,33 @@ export async function listNodePresets(nodeType?: string): Promise<NodePreset[]> 
   return res.data
 }
 
+// ---- Node preset favorites (per-user; powers the dropdown's Favorites band) ----
+// `presetId` is a factory id ("generate-image/character-board") OR a user-preset uuid.
+
+/** The caller's favorited preset ids for a node type, most-recent first. */
+export async function listNodePresetFavorites(nodeType: string): Promise<string[]> {
+  const res = await apiJson<{ data: string[] }>(
+    `/v1/node-presets/favorites?nodeType=${encodeURIComponent(nodeType)}`,
+    { method: "GET", label: "Failed to load favorites" },
+  )
+  return res.data
+}
+
+export async function addNodePresetFavorite(nodeType: string, presetId: string): Promise<void> {
+  await apiJson(`/v1/node-presets/favorites`, {
+    method: "POST",
+    body: { nodeType, presetId },
+    label: "Failed to favorite preset",
+  })
+}
+
+export async function removeNodePresetFavorite(nodeType: string, presetId: string): Promise<void> {
+  await apiJson(
+    `/v1/node-presets/favorites?nodeType=${encodeURIComponent(nodeType)}&presetId=${encodeURIComponent(presetId)}`,
+    { method: "DELETE", label: "Failed to unfavorite preset" },
+  )
+}
+
 export async function createNodePreset(input: {
   nodeType: string
   name: string

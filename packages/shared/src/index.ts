@@ -714,7 +714,7 @@ export type { PickerOption, PickerCatalog, PickerDimension } from "./picker-cata
 
 export { resolveFieldMappings, resolveLocationFields } from "./resolve-field-mappings.js"
 
-export { resolveNodeRefs, NODE_REF_PATTERN, RESERVED_TEMPLATE_VARS } from "./node-refs.js"
+export { resolveNodeRefs, parseNodeRef, NODE_REF_PATTERN, RESERVED_TEMPLATE_VARS } from "./node-refs.js"
 
 export { resolvePrompt, NODE_PROMPT_CANDIDATE_FIELDS, computeNodePrompt, computeLlmChatFields } from "./resolve-prompt.js"
 
@@ -1185,7 +1185,7 @@ export {
 export { EXECUTION_DATA_KEYS } from "./node-runtime-keys.js"
 export { extractPresetData, PRESET_EXCLUDED_KEYS, presetDataMatches } from "./node-preset-extract.js"
 export type { FactoryPreset, FactoryPresetGroup } from "./factory-presets.js"
-export { FACTORY_PRESETS, getFactoryPresets, groupFactoryPresets, FACTORY_POPULAR_IDS, getPopularFactoryPresets } from "./factory-presets.js"
+export { FACTORY_PRESETS, getFactoryPresets, groupFactoryPresets } from "./factory-presets.js"
 export type { ExportedPreset, NodePresetExport } from "./node-preset-export.js"
 export {
   NODE_PRESET_EXPORT_KIND,
