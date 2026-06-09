@@ -31,6 +31,62 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
         "illustration, cartoon, 3d render, garbled text, misspelled labels, watermark, deformed faces, blurry, low resolution",
     },
   },
+  {
+    id: "generate-image/product-board",
+    name: "Product Board",
+    description: "Connect a photo → dense product reference sheet.",
+    group: "Reference Sheet",
+    data: {
+      provider: "nano-banana-pro",
+      aspectRatio: "16:9",
+      resolution: "2K",
+      prompt: `Create a single high-resolution, densely packed product reference sheet titled "PRODUCT BOARD" using the attached photo of the product as the single source of truth for its shape, materials, colorway, proportions, branding and finish. The same product must appear in every panel — identical model, identical colorway and markings. All on-image labels in ENGLISH. Editorial product-reference layout with a dark near-black background, thin yellow neon accent light, faint film-grain overlay, and production-grade industrial-design UI. The composition should feel organized but not rigidly locked: allow the hero shot, metadata, and supporting panels to shift position naturally within the board while remaining readable, balanced, and premium. Design the board to adapt cleanly to different aspect ratios without depending on a fixed left-column layout. Include a large hero product shot with a metadata block: NAME · CATEGORY · BRAND · DIMENSIONS · WEIGHT · MATERIALS · FINISH · KEY FEATURES · COLORWAY. Also include six content groupings: PANEL 01 — VIEWS (5 studio shots on a seamless background, identical lighting): FRONT · 3/4 · SIDE · BACK · TOP. PANEL 02 — DETAILS (3 macros): material/texture close-up · seam/joint or mechanism · logo/branding detail. PANEL 03 — COLORWAYS (4 isolated shots of the same product in alternate finishes). PANEL 04 — SCALE (the product beside a common reference object, with a dimension callout). PANEL 05 — IN USE / CONTEXT (3 lifestyle shots in a real setting). PANEL 06 — COLOR PALETTE: 6 swatches with HEX codes from the product's materials and finish. Bottom caption: "Use this product board as a visual reference for consistent depiction of the product across all generations." Bottom-right tags: STYLE · Modern · Realistic · Studio. Style: photorealistic, no illustration. Consistent product across every panel. 8K, fine grain, studio product photography, crisp reflections.`,
+      negativePrompt:
+        "illustration, cartoon, 3d render, garbled text, misspelled labels, watermark, deformed faces, blurry, low resolution",
+    },
+  },
+  {
+    id: "generate-image/outfit-board",
+    name: "Outfit Board",
+    description: "Connect a photo → dense wardrobe reference sheet.",
+    group: "Reference Sheet",
+    data: {
+      provider: "nano-banana-pro",
+      aspectRatio: "16:9",
+      resolution: "2K",
+      prompt: `Create a single high-resolution, densely packed wardrobe reference sheet titled "OUTFIT BOARD" using the attached photo of the outfit as the single source of truth for its garments, fabrics, colorway, silhouette and styling. The same outfit must appear in every panel — identical garments, identical colors and trims. All on-image labels in ENGLISH. Editorial fashion-reference layout with a dark near-black background, thin yellow neon accent light, faint film-grain overlay, and production-grade stylist UI. The composition should feel organized but not rigidly locked: allow the hero look, metadata, and supporting panels to shift position naturally while remaining readable, balanced, and premium. Design the board to adapt cleanly to different aspect ratios without depending on a fixed left-column layout. Include a hero full-look shot with a metadata block: LOOK NAME · STYLE · SEASON · FABRICS · PALETTE · FIT · OCCASION. Also include six content groupings: PANEL 01 — ON-BODY VIEWS (4 full-length shots, identical lighting): FRONT · 3/4 · SIDE · BACK. PANEL 02 — FLAT-LAYS (5 isolated garment shots on a dark surface): top · bottom · outerwear · footwear · headwear. PANEL 03 — FABRIC & DETAIL (3 macros): weave/texture close-up · stitching or hardware · print or trim detail. PANEL 04 — ACCESSORIES (4 isolated accessory studies: bag · jewelry · belt · eyewear). PANEL 05 — COLORWAYS (3 alternate colorways of the same look). PANEL 06 — COLOR PALETTE: 6 swatches with HEX codes from the garments. Bottom caption: "Use this outfit board as a visual reference for consistent depiction of the wardrobe across all generations." Bottom-right tags: STYLE · Modern · Editorial · Fashion. Style: photorealistic, no illustration. Consistent outfit across every panel. 8K, fine grain, editorial fashion photography.`,
+      negativePrompt:
+        "illustration, cartoon, 3d render, garbled text, misspelled labels, watermark, deformed faces, blurry, low resolution",
+    },
+  },
+  {
+    id: "generate-image/scene-board",
+    name: "Scene Board",
+    description: "Connect a photo → set-dressing & props study.",
+    group: "Reference Sheet",
+    data: {
+      provider: "nano-banana-pro",
+      aspectRatio: "16:9",
+      resolution: "2K",
+      prompt: `Create a single high-resolution, densely packed set-dressing reference sheet titled "SCENE BOARD" using the attached photo of the scene as the single source of truth for its props, set dressing, materials, signage and mood. The space and its contents must be consistent across every panel — same props, same materials, same era. All on-image labels in ENGLISH. Editorial set-decoration layout with a dark near-black background, thin yellow neon accent light, faint film-grain overlay, and production-grade art-department UI. The composition should feel organized but not rigidly locked: allow the hero shot, metadata, and supporting panels to shift position naturally while remaining readable, balanced, and premium. Design the board to adapt cleanly to different aspect ratios without depending on a fixed left-column layout. Include a hero establishing shot with a metadata block: SCENE NAME · TYPE · ERA · MOOD · KEY MATERIALS · PURPOSE. Also include six content groupings: PANEL 01 — KEY PROPS (5 isolated prop studies on a dark background). PANEL 02 — SIGNAGE / GRAPHICS (3 readable signage or printed-graphic elements from the scene). PANEL 03 — MATERIALS & TEXTURES (3 macros: surface · fabric/wood/metal · wear/patina). PANEL 04 — LAYOUT / BLOCKING (a simple top-down or wide diagram of where key elements sit). PANEL 05 — LIGHTING STATES (3 same-angle shots: day · practical-lit night · dramatic). PANEL 06 — COLOR PALETTE: 6 swatches with HEX codes from the scene's dominant tones. Bottom caption: "Use this scene board as a visual reference for consistent set dressing across all generations." Bottom-right tags: STYLE · Modern · Realistic · Cinematic. Style: photorealistic, no illustration. Consistent scene across every panel. 8K, fine grain, cinematic color grading.`,
+      negativePrompt:
+        "illustration, cartoon, 3d render, garbled text, misspelled labels, watermark, deformed faces, blurry, low resolution",
+    },
+  },
+  {
+    id: "generate-image/creature-board",
+    name: "Creature Board",
+    description: "Connect a photo → dense creature reference sheet.",
+    group: "Reference Sheet",
+    data: {
+      provider: "nano-banana-pro",
+      aspectRatio: "16:9",
+      resolution: "2K",
+      prompt: `Create a single high-resolution, densely packed creature reference sheet titled "CREATURE BOARD" using the attached photo of the creature as the single source of truth for its anatomy, silhouette, coloration, textures and features. The same creature must appear in every panel — identical species, identical markings and proportions. All on-image labels in ENGLISH. Editorial creature-design layout with a dark near-black background, thin yellow neon accent light, faint film-grain overlay, and production-grade concept-design UI. The composition should feel organized but not rigidly locked: allow the hero render, metadata, and supporting panels to shift position naturally while remaining readable, balanced, and premium. Design the board to adapt cleanly to different aspect ratios without depending on a fixed left-column layout. Include a large hero full-body render with a metadata block: NAME · SPECIES · SIZE · BUILD · COLORATION · TEXTURES · TEMPERAMENT · FEATURES. Also include six content groupings: PANEL 01 — VIEWS (4 full-body angles, neutral pose, identical lighting): FRONT · 3/4 · SIDE · BACK. PANEL 02 — POSES (4 dynamic full-body poses: idle · moving · alert · aggressive). PANEL 03 — DETAILS (3 macros): head/face close-up · hide/scale/fur texture · distinctive feature (claw, horn, fin). PANEL 04 — EXPRESSIONS (4 head studies showing temperament range). PANEL 05 — SCALE (the creature beside a human silhouette for size reference). PANEL 06 — COLOR PALETTE: 6 swatches with HEX codes from the creature's coloration. Bottom caption: "Use this creature board as a visual reference for consistent depiction of the creature across all generations." Bottom-right tags: STYLE · Modern · Realistic · Cinematic. Style: photorealistic, no illustration. Consistent creature across every panel. 8K, fine grain, cinematic color grading.`,
+      negativePrompt:
+        "illustration, cartoon, 3d render, garbled text, misspelled labels, watermark, deformed faces, blurry, low resolution",
+    },
+  },
   // ── Photography & Cinematic ──────────────────────────────────────────────
   {
     id: "generate-image/cinematic-portrait",
@@ -41,8 +97,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "9:16",
       prompt:
-        "cinematic portrait, shallow depth of field, soft rim lighting, film grain, 85mm lens",
-      negativePrompt: "lowres, deformed, extra fingers, watermark, text",
+        "cinematic portrait of {subject || a pensive young man with stubble}, 85mm lens at f/1.8, shallow depth of field with creamy bokeh, soft key with warm rim separation against a moody low-key background, gentle film grain, filmic teal-and-amber grade, natural skin texture, tack-sharp eyes",
+      negativePrompt:
+        "flat lighting, deep focus, plastic skin, blown highlights, extra fingers, lowres, deformed, watermark, text",
     },
   },
   {
@@ -54,8 +111,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "16:9",
       prompt:
-        "cinematic film still of {subject}, dramatic three-point lighting, shallow depth of field, anamorphic lens, subtle film grain, professional color grade",
-      negativePrompt: "lowres, deformed, watermark, text, oversaturated",
+        "cinematic film still of {subject || a lone detective in a rain-slicked alley at night}, anamorphic lens at 40mm and f/2, shallow depth of field with oval bokeh and subtle horizontal flares, dramatic motivated key light with deep falloff, off-center framing with negative space, tense noir mood in a moody teal-and-amber grade, fine film grain, photoreal detail",
+      negativePrompt:
+        "flat lighting, deep focus, oversaturated, washed out, video-game render, lowres, deformed, watermark, text",
     },
   },
   {
@@ -67,8 +125,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "seedream",
       aspectRatio: "21:9",
       prompt:
-        "epic cinematic still of {subject}, anamorphic framing, atmospheric haze, dramatic lighting, color graded, film grain",
-      negativePrompt: "lowres, deformed, watermark, text",
+        "epic ultra-wide cinematic still of {subject || a lone traveler dwarfed by towering desert canyons}, anamorphic widescreen framing, 35mm lens at f/4 with deep focus, layered atmospheric haze catching backlight, dramatic god-ray lighting, expansive scale with the subject small against the vista, awe-struck mood in a cool cinematic grade, subtle film grain, crisp distant detail",
+      negativePrompt:
+        "cropped framing, cluttered composition, flat lighting, oversaturated, lowres, deformed, watermark, text",
     },
   },
   {
@@ -80,8 +139,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "4:5",
       prompt:
-        "studio portrait of {subject}, 85mm lens, soft key light with gentle fill, seamless backdrop, sharp focus on the eyes, natural skin texture",
-      negativePrompt: "lowres, deformed, extra fingers, watermark, text, plastic skin",
+        "studio portrait of {subject || a confident woman with sleek dark hair}, 85mm lens at f/2.8, shallow depth of field, soft octabox key with gentle fill and a subtle hair light, clean seamless gray backdrop, tight head-and-shoulders framing, polished editorial mood with a neutral true-to-life palette, natural skin texture, catchlights and tack-sharp eyes",
+      negativePrompt:
+        "harsh shadows, plastic skin, over-retouched, blown highlights, busy background, extra fingers, lowres, deformed, watermark, text",
     },
   },
   {
@@ -93,8 +153,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "1:1",
       prompt:
-        "professional corporate headshot of {subject}, clean neutral background, soft even lighting, confident friendly expression, sharp focus",
-      negativePrompt: "lowres, deformed, watermark, text, busy background",
+        "professional corporate headshot of {subject || a friendly executive in a tailored navy blazer}, 85mm lens at f/4, soft even three-point lighting with a broad key and clean fill, smooth neutral gray-blue background, centered head-and-shoulders framing, approachable confident expression, crisp business mood with a clean neutral palette, sharp focus and natural skin texture",
+      negativePrompt:
+        "harsh shadows, busy background, casual snapshot, over-retouched, plastic skin, extra fingers, lowres, deformed, watermark, text",
     },
   },
   {
@@ -106,8 +167,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "seedream",
       aspectRatio: "2:3",
       prompt:
-        "outdoor portrait of {subject} at golden hour, warm backlight, gentle lens flare, creamy bokeh, 85mm lens",
-      negativePrompt: "lowres, deformed, watermark, text, harsh shadows",
+        "outdoor portrait of {subject || a smiling woman with windswept hair in a field}, 85mm lens at f/1.8, shallow depth of field with creamy bokeh, low golden-hour sun as a warm backlight with a glowing rim and gentle lens flare, off-center rule-of-thirds framing, dreamy romantic mood in a warm amber grade, soft halation, natural skin texture and sharp eyes",
+      negativePrompt:
+        "harsh midday shadows, flat lighting, overexposed sky, plastic skin, extra fingers, lowres, deformed, watermark, text",
     },
   },
   {
@@ -119,8 +181,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "4:5",
       prompt:
-        "black and white portrait of {subject}, high-contrast dramatic lighting, deep shadows, fine grain, timeless editorial mood",
-      negativePrompt: "color, lowres, deformed, watermark, text",
+        "black and white editorial portrait of {subject || a weathered old fisherman with a lined face}, 85mm lens at f/2, shallow depth of field, dramatic single-source chiaroscuro with deep falloff, tight off-center framing, timeless brooding mood with a rich high-contrast monochrome tonal range, deep blacks and luminous highlights, fine silver grain, sharp eyes and natural skin texture",
+      negativePrompt:
+        "color, muddy gray tones, flat lighting, low contrast, plastic skin, extra fingers, lowres, deformed, watermark, text",
     },
   },
   {
@@ -132,8 +195,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "seedream",
       aspectRatio: "1:1",
       prompt:
-        "extreme macro photograph of {subject}, ultra close-up, focus stacking, crisp detail, soft studio lighting, shallow depth of field",
-      negativePrompt: "lowres, blurry, watermark, text",
+        "extreme macro photograph of {subject || a dew-covered bee on a flower petal}, 100mm macro lens at f/8, focus-stacked for razor-sharp life-size detail with a softly defocused background, soft diffused studio light with a subtle rim, centered close-up composition, intimate jewel-like mood with rich saturated color, glistening micro-textures and crisp surface detail",
+      negativePrompt:
+        "blurry, out of focus, soft detail, harsh glare, dust spots, lowres, deformed, watermark, text",
     },
   },
   {
@@ -145,8 +209,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "4:5",
       prompt:
-        "appetizing food photograph of {dish}, 45-degree angle, soft natural window light, shallow depth of field, fresh garnish, styled on a rustic surface",
-      negativePrompt: "lowres, unappetizing, watermark, text, plastic look",
+        "appetizing hero food photograph of {dish || a rustic bowl of ramen with a soft-boiled egg}, 50mm lens at f/2.8, shallow depth of field, soft diffused window light from the side with a gentle fill, 45-degree angle on a weathered rustic surface, props and steam fading into a clean background, warm mouth-watering mood with natural color, fresh garnish, glistening textures and crisp focus on the hero",
+      negativePrompt:
+        "unappetizing, plastic look, fake glossy food, messy spills, dull colors, harsh flash, lowres, deformed, watermark, text",
     },
   },
   {
@@ -158,8 +223,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "1:1",
       prompt:
-        "overhead flat-lay food photograph of {dish}, top-down, styled props, soft shadows, vibrant fresh ingredients",
-      negativePrompt: "lowres, cluttered, watermark, text",
+        "overhead flat-lay food photograph of {dish || a colorful brunch spread with coffee and pastries}, 35mm lens at f/5.6 with even focus, perfect top-down ninety-degree angle, soft diffused daylight casting gentle natural shadows, balanced styled arrangement with breathing room and scattered ingredients, fresh vibrant editorial mood with a clean color palette on a textured surface, crisp appetizing detail",
+      negativePrompt:
+        "cluttered, overcrowded, tilted angle, harsh shadows, plastic look, dull colors, lowres, deformed, watermark, text",
     },
   },
   {
@@ -171,8 +237,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "seedream",
       aspectRatio: "16:9",
       prompt:
-        "aerial drone photograph of {scene}, top-down perspective, golden hour, high altitude, crisp detail",
-      negativePrompt: "lowres, blurry, watermark, text",
+        "aerial drone photograph of {scene || a winding coastal road along turquoise cliffs}, ultra-wide 24mm lens at f/5.6 with crisp deep focus, straight-down top-down perspective from high altitude, low golden-hour sun casting long raking shadows that reveal terrain, bold graphic composition emphasizing pattern and scale, expansive serene mood with rich warm color, sharp detail across the frame",
+      negativePrompt:
+        "blurry, soft focus, flat midday light, tilted horizon, lens distortion, lowres, deformed, watermark, text",
     },
   },
   {
@@ -184,8 +251,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "seedream",
       aspectRatio: "21:9",
       prompt:
-        "sweeping landscape photograph of {scene}, ultra-wide vista, dramatic sky, golden hour, high dynamic range, depth and scale",
-      negativePrompt: "lowres, watermark, text, oversaturated",
+        "sweeping ultra-wide landscape photograph of {scene || a misty mountain range over a glassy alpine lake at dawn}, 16mm lens at f/11 with edge-to-edge deep focus, layered foreground, midground and distant peaks for depth, dramatic golden-hour sky with breaking light, rule-of-thirds horizon, awe-inspiring grand mood with high dynamic range and natural color, crisp detail and a sense of vast scale",
+      negativePrompt:
+        "oversaturated, hdr halos, blown sky, flat lighting, soft focus, lens distortion, lowres, deformed, watermark, text",
     },
   },
 
@@ -199,8 +267,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "16:9",
       prompt:
-        "full-body character reference sheet of {character description}, three views in a row: front, side profile, and back, T-pose, neutral expression, consistent design, plain grey background, concept art model sheet",
-      negativePrompt: "inconsistent design, extra limbs, deformed, watermark, busy background",
+        "full-body character turnaround model sheet of {character description || a rugged space mercenary with a scarred jaw and worn leather armor}, three matching views in a row — front, side profile, and back — held in a clean T-pose with a neutral expression, identical proportions and costume details across all three views, flat even studio lighting with no harsh shadows so every view reads the same, evenly spaced on a plain light-grey backdrop, crisp concept-art model-sheet style, clean line work and consistent color palette across panels",
+      negativePrompt:
+        "inconsistent design between views, mismatched proportions, extra limbs, deformed anatomy, dynamic pose, dramatic shadows, busy background, watermark, text",
     },
   },
   {
@@ -212,8 +281,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "16:9",
       prompt:
-        "character model sheet of {character description}, four dynamic full-body action poses in a row, consistent character design and outfit, plain background",
-      negativePrompt: "inconsistent design, deformed, extra limbs, watermark",
+        "character action model sheet of {character description || a nimble rogue archer in a hooded green cloak}, four distinct full-body dynamic action poses in a row — running, leaping, attacking, landing — strictly consistent face, character design, and outfit across every pose, full-figure framing with confident gesture and clear silhouettes, even studio lighting that stays identical across all four poses, plain neutral backdrop, energetic concept-art model sheet, clean linework and matching color palette",
+      negativePrompt:
+        "inconsistent design between poses, changed outfit, deformed anatomy, extra limbs, fused figures, static stiff posture, busy background, watermark, text",
     },
   },
   {
@@ -225,8 +295,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "4:3",
       prompt:
-        "character expression sheet of {character description}, six head-and-shoulders portraits arranged in two rows of three, emotions: neutral, happy, angry, surprised, sad, determined, highly consistent face",
-      negativePrompt: "inconsistent face, deformed, watermark, text",
+        "character expression model sheet of {character description || a cheerful freckled teen with messy red hair}, six head-and-shoulders portraits arranged in two even rows of three, labeled emotions in order — neutral, happy, angry, surprised, sad, determined — strictly consistent face, hairstyle, and features across every panel with only the expression changing, flat even portrait lighting identical in all six panels, evenly spaced on a plain neutral backdrop, clean concept-art model sheet, natural facial detail and matching color palette",
+      negativePrompt:
+        "inconsistent face, drifting features, changed hairstyle, deformed, asymmetrical eyes, uneven lighting, busy background, watermark, garbled text",
     },
   },
   {
@@ -238,8 +309,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "1:1",
       prompt:
-        "16-panel expression grid of {character description}, 4x4 layout, varied facial emotions, highly consistent face and design, model sheet",
-      negativePrompt: "inconsistent face, deformed, watermark",
+        "16-panel character expression grid of {character description || a stoic silver-haired knight with a faint scar}, evenly spaced 4x4 layout of head-and-shoulders portraits, sixteen distinct facial emotions ranging from calm to intense, strictly consistent face, hairstyle, and design across every cell with only the expression changing, flat even portrait lighting identical in all panels, plain neutral backdrop, clean concept-art model sheet, natural facial detail and matching color palette",
+      negativePrompt:
+        "inconsistent face, drifting features, changed hairstyle, deformed, asymmetrical eyes, uneven panels, uneven lighting, busy background, watermark, text",
     },
   },
   {
@@ -251,8 +323,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "16:9",
       prompt:
-        "outfit variation sheet of {character description}, the same character shown in four different outfits, full body, consistent face, plain background",
-      negativePrompt: "inconsistent face, deformed, watermark",
+        "outfit variation model sheet of {character description || a confident young woman with a sleek dark bob}, the same character shown full-body in four different complete outfits side by side — casual, formal, athletic, seasonal — strictly consistent face, body, and hairstyle across all four with only the wardrobe changing, full-figure framing in a relaxed standing pose, flat even studio lighting identical across every panel, evenly spaced on a plain neutral backdrop, clean concept-art model sheet, matching color palette and crisp fabric detail",
+      negativePrompt:
+        "inconsistent face, changed body or hairstyle, deformed, mismatched proportions, repeated identical outfit, busy background, watermark, text",
     },
   },
   {
@@ -264,8 +337,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "gpt-image-2",
       aspectRatio: "16:9",
       prompt:
-        "character model sheet of {character description}: front, side, and back turnaround with clear text labels under each view and a height reference chart, production reference, neat annotations",
-      negativePrompt: "inconsistent design, deformed, misspelled labels",
+        "annotated full-body character turnaround model sheet of {character description || a seasoned bounty hunter in a weathered duster and wide-brim hat}, front, side, and back views in a row with crisp legible text labels reading FRONT, SIDE, and BACK beneath each view, a vertical height reference chart with tick marks along one edge, strictly consistent design and proportions across all three views, flat even studio lighting identical across every view, neat production-reference layout on a clean light-grey backdrop, sharp typography and tidy annotations, consistent color palette",
+      negativePrompt:
+        "misspelled labels, garbled text, inconsistent design between views, mismatched proportions, deformed, dynamic pose, dramatic shadows, busy background, watermark",
     },
   },
   {
@@ -277,8 +351,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "1:1",
       prompt:
-        "chibi character sheet of {character description}, super-deformed cute proportions, multiple small poses, consistent design, plain background",
-      negativePrompt: "inconsistent design, deformed, watermark",
+        "chibi character model sheet of {character description || a tiny brave knight with oversized armor}, adorable super-deformed proportions with a big head and small body, several cute mini full-body poses arranged across the sheet, strictly consistent design and color palette across every pose, soft even flat lighting identical across all poses, evenly spaced on a plain pastel backdrop, clean bold outlines and flat cel shading, charming concept-art model sheet",
+      negativePrompt:
+        "realistic proportions, inconsistent design, deformed, off-model, gritty shading, busy background, watermark, text",
     },
   },
   {
@@ -290,8 +365,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "seedream",
       aspectRatio: "2:3",
       prompt:
-        "detailed character portrait of {character description}, expressive, dramatic lighting, rich detail",
-      negativePrompt: "lowres, deformed, extra fingers, watermark, text",
+        "detailed character portrait of {character description || a battle-worn elven ranger with piercing green eyes}, painterly fantasy concept art, fine brushwork with crisp edge detail, dramatic chiaroscuro key light with a soft rim separating the subject from a moody dark background, tight three-quarter view framing the face and shoulders, expressive confident gaze, rich saturated color grade, intricate costume detail and tack-sharp eyes",
+      negativePrompt:
+        "flat lighting, lowres, deformed, extra fingers, asymmetrical eyes, plastic skin, blurry, washed-out colors, watermark, text",
     },
   },
   {
@@ -303,8 +379,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "2:3",
       prompt:
-        "full-body hero shot of {character description}, confident dynamic pose, dramatic rim lighting, detailed costume, subtle background",
-      negativePrompt: "lowres, deformed, extra limbs, watermark, text",
+        "full-body hero shot of {character description || a heroic armored warrior with a flowing crimson cape}, cinematic character key art, confident dynamic power pose, dramatic rim lighting with a warm key and cool back-light carving the silhouette, low camera angle for an imposing heroic stance, softly blurred atmospheric background, bold dramatic color grade, intricately detailed costume and crisp material textures",
+      negativePrompt:
+        "flat lighting, static stiff pose, lowres, deformed, extra limbs, cropped feet, cluttered background, blurry, watermark, text",
     },
   },
   {
@@ -316,8 +393,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "16:9",
       prompt:
-        "creature design sheet of {creature description}, multiple angles, anatomy details, concept art, neutral background",
-      negativePrompt: "inconsistent design, deformed, watermark",
+        "creature design model sheet of {creature description || a six-legged bioluminescent forest beast with mossy scales}, several full-body views from multiple angles plus inset anatomy and texture close-ups, strictly consistent species, markings, and proportions across every view, professional creature-concept art, flat even studio lighting identical across all views so the design reads clearly, neatly arranged on a plain neutral backdrop, detailed believable anatomy and crisp surface textures, cohesive color palette",
+      negativePrompt:
+        "inconsistent design between views, mismatched proportions, deformed anatomy, extra or missing limbs, dramatic shadows, busy background, watermark, text",
     },
   },
   {
@@ -329,8 +407,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "1:1",
       prompt:
-        "stylized avatar profile picture of {character or subject}, centered head-and-shoulders, clean solid-color background, bold and friendly",
-      negativePrompt: "lowres, deformed, watermark, text, busy background",
+        "stylized avatar profile picture of {character or subject || a friendly fox with bright amber eyes}, clean modern character illustration, bold thick outlines with smooth flat shading, soft even front lighting with a gentle glow, perfectly centered head-and-shoulders composition with comfortable margins, vibrant punchy color palette on a clean solid-color background, crisp friendly and instantly readable as a small icon",
+      negativePrompt:
+        "off-center, cropped face, busy background, lowres, deformed, muddy colors, harsh shadows, watermark, text",
     },
   },
 
@@ -344,8 +423,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "1:1",
       prompt:
-        "studio product photograph on seamless white background, soft even lighting, high detail, centered",
-      negativePrompt: "clutter, shadow, reflection, text, watermark",
+        "e-commerce studio product photograph of {product || a matte-black wireless headphone}, on a seamless pure-white background, 100mm lens at f/8 with deep focus, soft even high-key lighting from a large diffused softbox with gentle fill, perfectly centered with generous margins, clean catalog-ready mood with true-to-life color, crisp edges and accurate material texture",
+      negativePrompt:
+        "clutter, props, harsh shadows, blown highlights, color cast, reflections, tilted angle, lowres, deformed, watermark, text",
     },
   },
   {
@@ -357,8 +437,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "seedream",
       aspectRatio: "4:3",
       prompt:
-        "lifestyle product photograph of {product} in {setting}, in use, natural light, editorial styling, shallow depth of field",
-      negativePrompt: "clutter, lowres, watermark, text",
+        "lifestyle product photograph of {product || a ceramic pour-over coffee set} in {setting || a sunlit minimalist kitchen}, shown naturally in use, 50mm lens at f/2.8 with shallow depth of field, soft directional window light with a warm glow, off-center rule-of-thirds framing with the product as hero, aspirational editorial mood with a warm natural palette, tactile materials and crisp focus on the product",
+      negativePrompt:
+        "clutter, busy background, distracting props, harsh flash, dull colors, plastic look, lowres, deformed, watermark, text",
     },
   },
   {
@@ -370,8 +451,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "1:1",
       prompt:
-        "overhead flat-lay of {product} with complementary props, styled arrangement, soft shadows, clean background",
-      negativePrompt: "clutter, lowres, watermark, text",
+        "overhead flat-lay product photograph of {product || a leather travel wallet} surrounded by complementary props, 35mm lens at f/5.6 with even focus, perfect top-down ninety-degree angle, soft diffused daylight casting gentle natural shadows, balanced styled arrangement with breathing room around the hero, clean modern editorial mood with a cohesive palette on a textured surface, crisp material detail",
+      negativePrompt:
+        "cluttered, overcrowded, tilted angle, harsh shadows, dull colors, plastic look, lowres, deformed, watermark, text",
     },
   },
   {
@@ -383,8 +465,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "1:1",
       prompt:
-        "product packaging mockup of {product}, {format}, photorealistic printed label, studio lighting, clean background",
-      negativePrompt: "lowres, distorted label, watermark, clutter",
+        "photorealistic product packaging mockup of {product || an artisanal coffee brand}, presented as {format || a standing kraft pouch}, with a crisp accurately-printed label wrapping the form, 85mm lens at f/8 with deep focus, soft studio lighting with a subtle highlight and grounded contact shadow, centered hero composition on a clean seamless background, premium retail mood with true-to-life color, sharp legible label artwork and realistic material finish",
+      negativePrompt:
+        "distorted label, warped text, misspelled words, floating object, harsh shadows, clutter, lowres, deformed, watermark",
     },
   },
   {
@@ -396,8 +479,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "gpt-image-2",
       aspectRatio: "16:9",
       prompt:
-        "{device} mockup displaying {screen content}, clean studio setting, slight angle, soft reflections, crisp screen",
-      negativePrompt: "lowres, distorted screen, watermark, clutter",
+        "product mockup of {device || a modern smartphone} displaying {screen content || a clean mobile app dashboard}, crisp pixel-accurate screen with no glare obscuring the UI, 50mm lens at f/5.6 with the device tack-sharp, soft studio lighting with gentle reflections on the bezel and a subtle grounded shadow, slight three-quarter angle on a clean minimal surface, sleek premium tech mood with a neutral palette, sharp screen content and realistic device materials",
+      negativePrompt:
+        "distorted screen, warped UI, glare washout, off-model device, wrong proportions, clutter, lowres, deformed, watermark",
     },
   },
   {
@@ -409,8 +493,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "4:5",
       prompt:
-        "luxury beauty product hero shot of {product}, dramatic lighting, water droplets, premium reflective surface, elegant composition",
-      negativePrompt: "lowres, clutter, watermark, text",
+        "luxury beauty product hero shot of {product || a frosted-glass serum bottle with a gold dropper}, 100mm macro lens at f/8 with crisp focus, dramatic single-source key light with a soft gradient falloff and a bright specular edge, fresh water droplets beading on the surface, centered low hero angle on a premium glossy reflective surface, elegant high-end mood with a refined jewel-toned palette, immaculate detail and luminous reflections",
+      negativePrompt:
+        "cheap plastic look, fingerprints, dust, busy background, flat lighting, dull colors, lowres, deformed, watermark, text",
     },
   },
 
@@ -424,8 +509,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "ideogram-v3",
       aspectRatio: "1:1",
       prompt:
-        "minimalist wordmark logo for '{BRAND}', clean modern typography, flat vector style, centered, solid background, professional",
-      negativePrompt: "photorealistic, cluttered, gradient mesh, watermark",
+        "minimalist wordmark logo for '{BRAND}', clean geometric sans-serif, balanced letter-spacing, flat vector, centered on a solid background, crisp edges, professional brand identity, legible correctly-spelled text",
+      negativePrompt:
+        "photorealistic, 3d, gradient mesh, cluttered, misspelled letters, garbled text, extra characters, watermark",
     },
   },
   {
@@ -437,8 +523,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "ideogram-v3",
       aspectRatio: "1:1",
       prompt:
-        "emblem badge logo for '{BRAND}', {concept}, circular composition, flat vector, limited color palette, crisp edges, white background",
-      negativePrompt: "photorealistic, cluttered, watermark",
+        "emblem badge logo for '{BRAND}', built around {concept || a mountain peak and pine motif}, symmetrical circular composition with the brand name set cleanly along the ring, flat vector with a limited two-or-three-color palette, crisp edges and even line weights, centered on a white background, heritage brand-identity feel, legible correctly-spelled text",
+      negativePrompt:
+        "photorealistic, 3d, gradient mesh, cluttered, asymmetrical, misspelled letters, garbled text, watermark",
     },
   },
   {
@@ -450,8 +537,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "ideogram-v3",
       aspectRatio: "1:1",
       prompt:
-        "mascot logo for '{BRAND}', friendly {character} mascot, bold flat colors, clean vector style, white background",
-      negativePrompt: "photorealistic, cluttered, watermark",
+        "mascot logo for '{BRAND}', a friendly {character || a plucky cartoon fox} mascot with an approachable expression and a clear readable silhouette, bold flat colors with confident thick outlines, clean vector style with the brand name set neatly below, centered on a white background, playful memorable brand-identity feel, legible correctly-spelled text",
+      negativePrompt:
+        "photorealistic, 3d, gradient mesh, cluttered, busy detail, off-model, misspelled letters, garbled text, watermark",
     },
   },
   {
@@ -463,8 +551,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "gpt-image-2",
       aspectRatio: "1:1",
       prompt:
-        "modern app icon for '{APP}', rounded square, simple bold glyph of {concept}, subtle gradient, centered, flat design",
-      negativePrompt: "cluttered, photorealistic, watermark, text",
+        "modern app icon for '{APP}', rounded-square tile with a single bold simple glyph of {concept || a paper-plane}, smooth subtle gradient fill, perfectly centered with balanced padding inside the rounded square, flat clean design with crisp edges, vibrant cohesive color, instantly readable at small sizes",
+      negativePrompt:
+        "cluttered, intricate detail, photorealistic, harsh drop shadow, off-center, lettering, text, watermark",
     },
   },
   {
@@ -476,8 +565,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "ideogram-v3",
       aspectRatio: "1:1",
       prompt:
-        "elegant monogram logo combining the letters '{INITIALS}', refined geometric design, single color, white background",
-      negativePrompt: "cluttered, photorealistic, watermark",
+        "elegant monogram logo gracefully interlocking the letters '{INITIALS}', refined geometric construction with balanced symmetry and even line weights, flat vector in a single sophisticated color, centered on a white background, crisp edges, timeless luxury brand-identity feel, legible correctly-spelled letters",
+      negativePrompt:
+        "cluttered, photorealistic, 3d, gradient mesh, extra letters, misspelled letters, garbled text, watermark",
     },
   },
 
@@ -491,8 +581,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "ideogram-v3",
       aspectRatio: "16:9",
       prompt:
-        "YouTube thumbnail: {subject}, bold expressive subject, high-contrast punchy colors, dramatic composition, large bold readable text '{TEXT}'",
-      negativePrompt: "lowres, cluttered, tiny text, watermark",
+        "punchy YouTube thumbnail featuring {subject || a wide-eyed creator reacting in shock}, bold expressive close-up subject cut out against a saturated high-contrast background, dramatic off-center composition with the face large and a clear focal point, large bold sans-serif headline text '{TEXT}' in a heavy outlined style with a strong drop shadow, vivid eye-catching color grade, crisp clickable poster look, legible correctly-spelled text",
+      negativePrompt:
+        "muddy low-contrast colors, tiny unreadable text, cluttered busy layout, misspelled text, garbled letters, lowres, blurry, watermark",
     },
   },
   {
@@ -504,8 +595,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "ideogram-v3",
       aspectRatio: "1:1",
       prompt:
-        "Instagram post graphic about {topic}, modern branded design, clean layout, bold text '{TEXT}'",
-      negativePrompt: "lowres, cluttered, tiny text, watermark",
+        "square Instagram post graphic about {topic || launching a new product}, modern branded design with a clean grid layout and generous margins, a clear visual focal point paired with bold headline text '{TEXT}', confident contemporary type hierarchy, cohesive on-brand color palette, crisp flat finish, balanced centered composition, legible correctly-spelled text",
+      negativePrompt:
+        "cluttered busy layout, tiny unreadable text, misspelled text, garbled letters, off-brand clashing colors, lowres, blurry, watermark",
     },
   },
   {
@@ -517,8 +609,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "ideogram-v3",
       aspectRatio: "9:16",
       prompt:
-        "social story graphic about {topic}, full-bleed background, bold headline text '{TEXT}', modern design",
-      negativePrompt: "lowres, cluttered, tiny text, watermark",
+        "vertical full-bleed social story graphic about {topic || a weekend flash sale}, immersive edge-to-edge background image, bold stacked headline text '{TEXT}' set high with breathing room, thumb-friendly safe margins top and bottom, modern punchy design with a vibrant cohesive palette, strong type hierarchy and a single clear focal point, crisp mobile-first finish, legible correctly-spelled text",
+      negativePrompt:
+        "letterboxed bars, cramped edges, tiny unreadable text, cluttered layout, misspelled text, garbled letters, lowres, blurry, watermark",
     },
   },
   {
@@ -530,8 +623,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "gpt-image-2",
       aspectRatio: "3:4",
       prompt:
-        "advertising creative for {product}, attention-grabbing hero composition, clear headline '{TEXT}', professional, open space for a call to action",
-      negativePrompt: "lowres, cluttered, misspelled text, watermark",
+        "polished advertising creative for {product || a sleek wireless earbud case}, attention-grabbing hero product shot as the centerpiece, clear bold headline '{TEXT}' across the top, clean studio lighting with a soft gradient backdrop, confident brand-grade composition with deliberate negative space reserved at the bottom for a call-to-action button, premium commercial finish, vibrant on-brand color, legible correctly-spelled text",
+      negativePrompt:
+        "cluttered busy layout, no negative space, tiny unreadable text, misspelled text, garbled letters, amateurish, lowres, blurry, watermark",
     },
   },
   {
@@ -543,8 +637,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "ideogram-v3",
       aspectRatio: "1:1",
       prompt:
-        "inspirational quote card with the text '{QUOTE}', elegant typography, {background style}, balanced composition",
-      negativePrompt: "lowres, cluttered, misspelled text, watermark",
+        "elegant inspirational quote card centered on the text '{QUOTE}', refined typographic design as the hero with a tasteful serif-and-sans pairing and graceful line breaks, {background style || a soft minimal gradient with subtle paper texture}, generous margins and balanced symmetrical composition, calm sophisticated color palette, crisp print-ready finish, legible correctly-spelled text",
+      negativePrompt:
+        "cluttered layout, clashing fonts, busy distracting background, misspelled text, garbled letters, lowres, blurry, watermark",
     },
   },
   {
@@ -556,8 +651,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "ideogram-v3",
       aspectRatio: "16:9",
       prompt:
-        "web banner for {brand or topic}, clean modern design, headline text '{TEXT}', space for a logo",
-      negativePrompt: "lowres, cluttered, tiny text, watermark",
+        "wide web banner header for {brand or topic || a modern SaaS startup}, clean modern design with a horizontal layout, headline text '{TEXT}' set on the left with clear hierarchy, a complementary hero graphic on the right and deliberate clear space reserved for a logo, cohesive on-brand palette, crisp flat web-ready finish, balanced composition, legible correctly-spelled text",
+      negativePrompt:
+        "cluttered busy layout, tiny unreadable text, no clear space, misspelled text, garbled letters, lowres, blurry, watermark",
     },
   },
 
@@ -571,8 +667,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "2:3",
       prompt:
-        "movie poster for '{TITLE}', cinematic key art, dramatic hero composition, atmospheric lighting, title treatment at the bottom, tagline",
-      negativePrompt: "lowres, cluttered, misspelled text, watermark",
+        "theatrical movie poster for '{TITLE}', cinematic key art in a {genre || gritty sci-fi thriller} mood, dramatic vertical hero composition with a commanding central figure, moody atmospheric lighting with strong rim light and volumetric haze, rich filmic teal-and-amber color grade, bold title treatment along the bottom with a short tagline above it and a small billing-block strip, premium high-detail finish, legible correctly-spelled text",
+      negativePrompt:
+        "flat lighting, cluttered composition, amateurish layout, misspelled text, garbled letters, extra limbs, deformed faces, lowres, blurry, watermark",
     },
   },
   {
@@ -584,8 +681,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "ideogram-v3",
       aspectRatio: "3:4",
       prompt:
-        "event poster for '{EVENT}', {date and venue}, bold graphic design, striking typography, eye-catching",
-      negativePrompt: "lowres, cluttered, misspelled text, watermark",
+        "bold graphic event poster for '{EVENT}', with the detail line '{date and venue || Saturday Sept 14 · The Grand Hall}' set cleanly below, striking oversized display typography as the hero, dynamic eye-catching layout with strong shapes and a vivid high-energy color palette, clear type hierarchy and generous margins, crisp flat print-ready finish, balanced composition, legible correctly-spelled text",
+      negativePrompt:
+        "cluttered busy layout, muddy colors, tiny unreadable text, misspelled text, garbled letters, lowres, blurry, watermark",
     },
   },
   {
@@ -597,8 +695,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "2:3",
       prompt:
-        "book cover for '{TITLE}' by {AUTHOR}, {genre} mood and imagery, title and author typography, professional cover design",
-      negativePrompt: "lowres, cluttered, misspelled text, watermark",
+        "professional book cover for '{TITLE}' by {AUTHOR}, evocative {genre || literary thriller} mood and symbolic central imagery, vertical composition with a strong focal point, bold title typography across the top and the author name along the bottom with clear hierarchy, atmospheric lighting and a cohesive genre-appropriate color palette, refined bookstore-quality finish, legible correctly-spelled text",
+      negativePrompt:
+        "cluttered layout, clashing fonts, generic stock look, misspelled text, garbled letters, deformed faces, lowres, blurry, watermark",
     },
   },
   {
@@ -610,8 +709,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "ideogram-v3",
       aspectRatio: "1:1",
       prompt:
-        "t-shirt graphic design: {concept}, bold centered illustration, limited color palette, isolated on a plain background, print-ready, no mockup",
-      negativePrompt: "photo background, mockup, lowres, watermark",
+        "print-ready t-shirt graphic of {concept || a snarling wolf in a moonlit forest}, bold centered illustration with confident clean linework, limited flat screen-print color palette, strong silhouette that reads at a glance, crisp vector-style edges, perfectly isolated on a plain flat background as artwork only with no garment and no mockup",
+      negativePrompt:
+        "t-shirt mockup, person wearing shirt, photographic background, soft gradients, photorealistic, busy clutter, misspelled text, garbled letters, lowres, blurry, watermark",
     },
   },
   {
@@ -623,8 +723,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "ideogram-v3",
       aspectRatio: "1:1",
       prompt:
-        "die-cut sticker design of {subject}, thick white border, bold flat colors, glossy, cute, isolated on a plain background",
-      negativePrompt: "photo background, lowres, watermark",
+        "die-cut sticker design of {subject || a smiling cartoon avocado}, thick clean white die-cut border hugging the silhouette, bold flat colors with a confident dark outline, cute kawaii style, subtle glossy vinyl sheen and a soft contact shadow, single centered subject isolated on a plain flat background",
+      negativePrompt:
+        "photographic background, scene, no white border, soft blurry edges, photorealistic, busy clutter, misspelled text, garbled letters, lowres, watermark",
     },
   },
   {
@@ -636,8 +737,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "seedream",
       aspectRatio: "1:1",
       prompt:
-        "album cover art for '{TITLE}', {genre} aesthetic, striking central image, mood-setting color palette",
-      negativePrompt: "lowres, cluttered, watermark",
+        "striking square album cover art for '{TITLE}', bold {genre || dreamy synthwave} aesthetic, single arresting central image as the focal point, dramatic mood-setting lighting and a distinctive cohesive color palette, the title set as clean tasteful typography that complements the artwork, refined high-detail finish, balanced composition, legible correctly-spelled text",
+      negativePrompt:
+        "cluttered busy layout, muddy colors, weak focal point, misspelled text, garbled letters, lowres, blurry, watermark",
     },
   },
 
@@ -651,8 +753,8 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "16:9",
       style: "anime",
-      prompt: "{scene or subject}",
-      negativePrompt: "lowres, deformed, watermark, text",
+      prompt: "{scene or subject || a girl watching fireworks over a summer festival}, cel-shaded with crisp linework, expressive eyes, soft gradient sky, gentle bloom",
+      negativePrompt: "photorealistic, 3d render, muddy colors, lowres, deformed, extra fingers, watermark, text",
     },
   },
   {
@@ -664,8 +766,8 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "4:3",
       style: "comic-book",
-      prompt: "{scene}, dynamic comic book panel composition, action lines, space for a speech bubble",
-      negativePrompt: "lowres, deformed, watermark",
+      prompt: "{scene || a caped hero landing on a rooftop at dusk}, dynamic comic panel composition, bold ink outlines, motion lines, clear space for a speech bubble",
+      negativePrompt: "photorealistic, muddy colors, cluttered, lowres, deformed, extra fingers, watermark",
     },
   },
   {
@@ -677,8 +779,8 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "3:4",
       style: "manga",
-      prompt: "{scene}, manga panel, screentone shading, dramatic angle",
-      negativePrompt: "color, lowres, deformed, watermark",
+      prompt: "{scene || a swordsman bracing against the wind}, black-and-white manga panel, crisp inking, screentone shading, dramatic low angle, speed lines",
+      negativePrompt: "color, grayscale photo, muddy tones, lowres, deformed, extra fingers, watermark",
     },
   },
   {
@@ -690,8 +792,8 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "flux",
       aspectRatio: "4:3",
       style: "watercolor",
-      prompt: "{subject}",
-      negativePrompt: "lowres, harsh edges, watermark, text",
+      prompt: "{subject || a quiet harbor at dawn}, loose wet-on-wet washes, soft bleeding edges, paper texture showing through, gentle pastel palette",
+      negativePrompt: "hard edges, photorealistic, heavy outlines, lowres, watermark, text",
     },
   },
   {
@@ -703,8 +805,8 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "flux",
       aspectRatio: "4:3",
       style: "oil-painting",
-      prompt: "{subject}",
-      negativePrompt: "lowres, flat, watermark, text",
+      prompt: "{subject || a still life of fruit on a draped table}, thick impasto brushstrokes, visible canvas texture, warm chiaroscuro light, rich classical palette",
+      negativePrompt: "photorealistic, flat digital, smooth airbrush, lowres, watermark, text",
     },
   },
   {
@@ -716,8 +818,8 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "ideogram-v3",
       aspectRatio: "16:9",
       style: "flat-vector",
-      prompt: "{subject or scene}, clean flat illustration",
-      negativePrompt: "photorealistic, gradient mesh, lowres, watermark",
+      prompt: "{subject or scene || a person working at a laptop in a cozy home office}, clean flat shapes, bold simple forms, limited modern palette, generous negative space",
+      negativePrompt: "photorealistic, gradient mesh, heavy texture, drop shadows, lowres, watermark",
     },
   },
   {
@@ -729,8 +831,8 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "1:1",
       style: "isometric",
-      prompt: "isometric {building or scene}, clean game-art style",
-      negativePrompt: "perspective distortion, lowres, watermark",
+      prompt: "isometric {building or scene || a cozy corner coffee shop}, true 3/4 axonometric angle, clean miniature game-art forms, soft even lighting, tidy modular detail",
+      negativePrompt: "perspective distortion, vanishing-point view, photorealistic, lowres, watermark",
     },
   },
   {
@@ -742,8 +844,8 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "1:1",
       style: "pixel-art",
-      prompt: "{subject}, retro pixel art",
-      negativePrompt: "smooth, antialiased, lowres blur, watermark",
+      prompt: "{subject || a hero exploring a torch-lit dungeon}, retro 16-bit pixel art, crisp pixel grid, limited dithered palette, hard-edged sprite detail",
+      negativePrompt: "smooth gradients, antialiasing, blur, photorealistic, vector art, watermark",
     },
   },
   {
@@ -755,8 +857,8 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "1:1",
       style: "pixar-3d",
-      prompt: "{character or subject}, polished 3D animated character render",
-      negativePrompt: "lowres, deformed, watermark, text",
+      prompt: "{character or subject || a curious round-cheeked kid with big expressive eyes}, polished 3D animated render, soft subsurface skin, warm key light with gentle bounce, charming appeal",
+      negativePrompt: "photorealistic, uncanny, flat 2d, lowres, deformed, extra fingers, watermark, text",
     },
   },
   {
@@ -768,8 +870,8 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "ideogram-v3",
       aspectRatio: "1:1",
       prompt:
-        "black and white line art coloring page of {subject}, clean bold outlines, no shading, no color, white background",
-      negativePrompt: "color, shading, grayscale fill, watermark",
+        "black and white line-art coloring page of {subject || a friendly dinosaur in a jungle}, clean even-weight ink outlines, simple uncluttered shapes with generous open areas to fill in, pure white background, crisp vector-style edges, no shading and no color",
+      negativePrompt: "color, shading, grayscale fill, gradients, sketchy hatching, photorealistic, busy background, lowres, watermark, text",
     },
   },
   {
@@ -781,8 +883,8 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "2:3",
       prompt:
-        "tattoo flash design of {subject}, {tattoo style} style, bold clean linework, isolated on white",
-      negativePrompt: "photo background, lowres, watermark",
+        "tattoo flash design of {subject || a roaring tiger with peony flowers} in {tattoo style || bold American traditional} style, confident clean linework with strong outlines, limited tattoo-ink palette, solid black fills and tasteful negative space, single centered motif isolated on a plain white sheet",
+      negativePrompt: "photographic background, scene, soft gradients, photorealistic, fine grayscale shading, blurry, lowres, watermark, text",
     },
   },
   {
@@ -794,8 +896,8 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "16:9",
       style: "concept-art",
-      prompt: "concept art of {environment or subject}, painterly, dramatic lighting, sense of scale, mood",
-      negativePrompt: "lowres, flat, watermark, text",
+      prompt: "concept art of {environment or subject || ancient ruins reclaimed by a glowing jungle}, sweeping sense of scale, atmospheric depth and haze, dramatic god-ray light",
+      negativePrompt: "flat lighting, photo, cluttered, lowres, deformed, watermark, text",
     },
   },
 
@@ -809,8 +911,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana",
       aspectRatio: "16:9",
       prompt:
-        "storyboard frame: {shot description}, {shot size} shot, rough black-and-white sketch, clear composition, {camera angle}, arrows indicating motion",
-      negativePrompt: "color, photorealistic, lowres, watermark",
+        "rough storyboard frame of {shot description || a detective shouldering open a warehouse door}, loose black-and-white pencil sketch, {shot size || medium} shot framing with clear staging and readable blocking, gestural hatching for tone, {camera angle || slight low angle}, bold directional arrows indicating subject and camera motion, quick previsualization sketch — not a finished render",
+      negativePrompt:
+        "color, photorealistic, rendered, polished finish, fine detail, grayscale photo, lowres, watermark, garbled text",
     },
   },
   {
@@ -822,8 +925,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "seedream",
       aspectRatio: "16:9",
       prompt:
-        "cinematic keyframe: {scene}, film still, {mood} lighting, color graded, atmospheric",
-      negativePrompt: "lowres, watermark, text",
+        "cinematic keyframe of {scene || a weary traveler pausing at a neon-lit roadside diner}, film still, anamorphic 40mm look with shallow depth of field and gentle bokeh, {mood || tense and intimate} motivated lighting with soft key and deep falloff, off-center framing with negative space, richly color-graded teal-and-amber palette, atmospheric haze, fine film grain, photoreal detail",
+      negativePrompt:
+        "flat lighting, deep focus, oversaturated, washed out, video-game render, lowres, deformed, watermark, text",
     },
   },
   {
@@ -835,8 +939,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "seedream",
       aspectRatio: "21:9",
       prompt:
-        "matte painting of {environment}, epic scale, cinematic, atmospheric depth, photorealistic detail",
-      negativePrompt: "lowres, flat, watermark, text",
+        "epic ultra-wide matte painting of {environment || a ruined citadel half-swallowed by jungle at sunrise}, sweeping cinematic vista, painterly photoreal rendering with crisp distant detail, layered foreground, midground and background for deep atmospheric perspective, dramatic god-ray lighting breaking through haze, vast awe-inspiring scale, rich filmic color grade, fine detail",
+      negativePrompt:
+        "flat, low detail, shallow composition, cluttered foreground, oversaturated, lowres, watermark, text",
     },
   },
   {
@@ -848,8 +953,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "1:1",
       prompt:
-        "mood board reference image capturing {aesthetic or theme}, {color palette}, evocative, single cohesive image",
-      negativePrompt: "collage, text, watermark, lowres",
+        "single cohesive mood-board tile capturing {aesthetic or theme || warm Scandinavian minimalism}, one unified evocative image — not a collage or grid, soft natural lighting with gentle texture and tactile materials, balanced editorial composition, restrained {color palette || muted oat, sage and terracotta} grade, calm atmospheric mood, crisp tasteful detail",
+      negativePrompt:
+        "collage, grid, split panels, multiple frames, text, labels, busy clutter, watermark, lowres",
     },
   },
   {
@@ -861,8 +967,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "seedream",
       aspectRatio: "21:9",
       prompt:
-        "establishing wide shot of {location}, cinematic, atmospheric, sense of place and scale",
-      negativePrompt: "lowres, watermark, text",
+        "sweeping ultra-wide establishing shot of {location || a fog-wrapped fishing village at first light}, cinematic film still, wide lens with edge-to-edge deep focus, layered foreground, midground and distant background conveying a strong sense of place and scale, soft directional dawn light with atmospheric haze, expansive epic composition, evocative filmic color grade, crisp detail across the frame",
+      negativePrompt:
+        "cropped framing, cluttered composition, flat lighting, oversaturated, soft focus, lowres, watermark, text",
     },
   },
 
@@ -876,8 +983,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "seedream",
       aspectRatio: "16:9",
       prompt:
-        "architectural exterior visualization of {building}, {architectural style}, photorealistic, golden hour, professional architecture photography",
-      negativePrompt: "lowres, distorted geometry, watermark, text",
+        "photoreal architectural exterior visualization of {building || a glass-and-timber hillside villa}, {architectural style || warm modern minimalism}, professional architecture photography with a tilt-shift lens keeping verticals perfectly straight, warm golden-hour light raking across the facade with soft long shadows, three-quarter hero angle with clean foreground landscaping, aspirational editorial mood with natural color, accurate geometry and crisp material detail",
+      negativePrompt:
+        "distorted geometry, warped perspective, bent verticals, melting structure, flat lighting, lowres, watermark, text",
     },
   },
   {
@@ -889,8 +997,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "seedream",
       aspectRatio: "4:3",
       prompt:
-        "interior design of {room}, {style}, natural light, photorealistic, wide angle, magazine quality",
-      negativePrompt: "lowres, distorted, clutter, watermark, text",
+        "photoreal interior design visualization of {room || a sunlit open-plan living room}, {style || warm contemporary Scandinavian}, soft natural light pouring through large windows with gentle ambient fill, wide-angle architectural lens with straight true verticals and corrected perspective, balanced styled composition with curated furnishings and breathing room, inviting magazine-quality mood with a cohesive natural palette, accurate geometry and crisp material texture",
+      negativePrompt:
+        "distorted geometry, warped perspective, bent verticals, fisheye bulge, cluttered, dark, lowres, watermark, text",
     },
   },
   {
@@ -902,8 +1011,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "16:9",
       prompt:
-        "real estate photograph of {property}, bright and inviting, wide angle, high dynamic range, clean staging",
-      negativePrompt: "lowres, dark, clutter, watermark, text",
+        "professional real estate photograph of {property || a bright open-concept living room with patio doors}, wide-angle architectural lens with straight true verticals and corrected perspective, bright airy natural daylight balanced with warm interior fill for a high-dynamic-range look, clean tasteful staging with uncluttered surfaces, welcoming aspirational mood with a fresh neutral palette, accurate geometry and crisp listing-ready detail",
+      negativePrompt:
+        "distorted geometry, warped perspective, bent verticals, fisheye bulge, dark, dingy, cluttered, lowres, watermark, text",
     },
   },
   {
@@ -915,8 +1025,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "seedream",
       aspectRatio: "2:3",
       prompt:
-        "architectural photograph of {tall building}, dramatic upward angle, blue sky, modern design",
-      negativePrompt: "lowres, distorted geometry, watermark, text",
+        "photoreal architectural photograph of {tall building || a sleek glass-and-steel skyscraper}, dramatic worm's-eye upward angle exaggerating its soaring height, wide lens with controlled converging verticals, crisp midday sun glinting off the facade against a deep blue sky with wispy clouds, bold graphic composition emphasizing repeating structure, striking modern mood with clean color, accurate geometry and sharp reflective detail",
+      negativePrompt:
+        "distorted geometry, warped perspective, melting structure, leaning collapse, overcast haze, lowres, watermark, text",
     },
   },
 
@@ -930,8 +1041,8 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "1:1",
       prompt:
-        "polished game UI icon of {item}, rounded, glossy, vibrant, isolated on a dark background, RPG inventory style",
-      negativePrompt: "lowres, cluttered background, watermark, text",
+        "polished RPG inventory game icon of {item || a glowing enchanted health potion in a crystal vial}, rounded glossy 3D style with smooth beveled edges and a subtle inner glow, soft studio key light with a bright specular highlight and a faint magical rim, single object perfectly centered with generous margins, isolated on a clean dark gradient background, vibrant saturated game-art palette, crisp readable silhouette at small sizes",
+      negativePrompt: "flat, 2d, lowres, cluttered background, multiple objects, busy scene, harsh shadows, watermark, text",
     },
   },
   {
@@ -943,8 +1054,8 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "1:1",
       prompt:
-        "seamless tileable texture of {material}, top-down flat view, repeating pattern, even lighting, high detail, no visible seams",
-      negativePrompt: "perspective, seams, lighting gradient, watermark, text",
+        "seamless tileable PBR-style surface texture of {material || weathered mossy cobblestone}, perfectly repeating with no visible seams, dead-flat top-down orthographic view, even diffuse flat lighting across the whole frame with no shadows or hotspots, edges that wrap cleanly when tiled, fine high-resolution material detail, true-to-life color, crisp uniform grain",
+      negativePrompt: "visible seams, perspective, lighting gradient, shadows, vignette, hotspots, single object, foreground subject, lowres, watermark, text",
     },
   },
   {
@@ -956,8 +1067,8 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "ideogram-v3",
       aspectRatio: "1:1",
       prompt:
-        "seamless repeating decorative pattern with {motif}, flat colors, tileable, balanced composition",
-      negativePrompt: "seams, photorealistic, watermark, text",
+        "seamless repeating decorative surface pattern of {motif || delicate botanical leaves and blossoms}, perfectly tileable with no visible seams where edges meet, flat clean vector colors, even balanced top-down composition with uniform motif spacing and consistent flat lighting, cohesive limited palette, crisp print-ready finish",
+      negativePrompt: "visible seams, perspective, lighting gradient, shadows, photorealistic, 3d render, uneven spacing, single centered subject, lowres, watermark, text",
     },
   },
   {
@@ -969,8 +1080,8 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "1:1",
       prompt:
-        "set of glossy 3D emoji-style icons of {subject}, multiple expressions, consistent style, plain background",
-      negativePrompt: "inconsistent style, lowres, watermark, text",
+        "a set of glossy 3D emoji-style reaction icons of {subject || a round smiling yellow face}, several distinct expressions arranged in an even grid — happy, laughing, surprised, sad, angry, love — strictly consistent style, shading, and proportions across every icon with only the expression changing, smooth rounded inflatable forms with a candy-gloss finish, soft even studio lighting identical on each icon with a bright specular highlight, evenly spaced on a clean plain background, vibrant saturated palette, crisp and instantly readable at small sizes",
+      negativePrompt: "inconsistent style, mismatched shading, off-model, realistic photo, flat 2d, muddy colors, cluttered background, lowres, watermark, text",
     },
   },
   {
@@ -982,8 +1093,8 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "1:1",
       style: "pixel-art",
-      prompt: "pixel art game sprite of {character or item}, clean pixels, game asset, plain background",
-      negativePrompt: "smooth, antialiased, blur, watermark",
+      prompt: "game-ready sprite of {character or item || a plucky knight with a tiny sword}, crisp clean pixels, bold readable silhouette, limited palette, centered on a plain background",
+      negativePrompt: "smooth, antialiased, blurry, soft gradients, 3d render, cluttered background, watermark, text",
     },
   },
 
@@ -993,21 +1104,42 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     name: "Silhouette",
     description: "Backlit subject, dramatic sky.",
     group: "Photography & Cinematic",
-    data: { provider: "nano-banana-pro", aspectRatio: "16:9", prompt: "dramatic silhouette of {subject} backlit against a vivid sunset sky, high contrast, minimal detail, glowing rim light", negativePrompt: "flat lighting, lowres, watermark" },
+    data: {
+      provider: "nano-banana-pro",
+      aspectRatio: "16:9",
+      prompt:
+        "dramatic silhouette of {subject || a lone figure on a hilltop with arms outstretched}, 50mm lens at f/8 with crisp deep focus, subject fully backlit against a vivid sunset sky and rendered as a clean dark shape with a glowing rim, low-angle composition with the figure off-center on the horizon, bold high-contrast mood in a fiery orange-to-purple gradient, smooth graded sky, minimal interior detail and clean recognizable outline",
+      negativePrompt:
+        "flat lighting, front lighting, visible face detail, washed-out sky, muddy tones, lowres, deformed, watermark, text",
+    },
   },
   {
     id: "generate-image/long-exposure",
     name: "Long Exposure",
     description: "Silky motion, light trails.",
     group: "Photography & Cinematic",
-    data: { provider: "seedream", aspectRatio: "16:9", prompt: "long-exposure photograph of {scene}, silky smooth motion blur, light trails, glassy water, tripod-steady, blue hour", negativePrompt: "noise, lowres, watermark" },
+    data: {
+      provider: "seedream",
+      aspectRatio: "16:9",
+      prompt:
+        "long-exposure photograph of {scene || a coastal lighthouse above mist-smoothed ocean waves}, 24mm lens at f/11 on a tripod with a multi-second shutter, silky smooth motion blur with streaking light trails and glassy water, razor-sharp stationary elements, balanced wide composition during the cool blue hour, tranquil ethereal mood with deep clean shadows and minimal noise, crisp fine detail where the frame is still",
+      negativePrompt:
+        "noise, harsh motion artifacts, double exposure, banding, blurry stationary objects, blown highlights, lowres, deformed, watermark, text",
+    },
   },
   {
     id: "generate-image/tilt-shift",
     name: "Tilt-Shift Miniature",
     description: "Fake-miniature selective blur.",
     group: "Photography & Cinematic",
-    data: { provider: "nano-banana-pro", aspectRatio: "16:9", prompt: "tilt-shift miniature photograph of {scene}, selective focus, toy-like miniature effect, high saturation, elevated angle", negativePrompt: "lowres, watermark" },
+    data: {
+      provider: "nano-banana-pro",
+      aspectRatio: "16:9",
+      prompt:
+        "tilt-shift miniature photograph of {scene || a bustling city intersection with tiny cars and crowds}, tilt-shift lens with a narrow band of sharp focus and strong blur above and below, high elevated bird's-eye angle, tiny people and vehicles reading like toys, centered subject band, playful diorama mood with punchy high saturation and crisp clean detail in the focus zone",
+      negativePrompt:
+        "uniform sharp focus, eye-level angle, flat colors, dull lighting, realistic scale, lowres, deformed, watermark, text",
+    },
   },
 
   // ── More Product & Commerce ──────────────────────────────────────────────
@@ -1016,14 +1148,28 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     name: "Knolling Flat-Lay",
     description: "Objects arranged at 90°.",
     group: "Product & Commerce",
-    data: { provider: "nano-banana-pro", aspectRatio: "1:1", prompt: "knolling flat-lay of {items}, objects neatly arranged at 90-degree angles, evenly spaced, top-down, clean background, soft shadows", negativePrompt: "cluttered, messy, watermark" },
+    data: {
+      provider: "nano-banana-pro",
+      aspectRatio: "1:1",
+      prompt:
+        "knolling flat-lay photograph of {items || an everyday-carry kit — knife, pen, watch, wallet and keys}, every object precisely aligned at ninety-degree right angles and evenly spaced in a tidy grid, 35mm lens at f/8 with even edge-to-edge focus, perfect top-down ninety-degree angle, soft diffused overhead light with gentle even shadows, organized symmetrical composition with consistent gaps, satisfying orderly editorial mood with a clean palette on a smooth neutral surface, crisp product detail",
+      negativePrompt:
+        "cluttered, messy, overlapping objects, diagonal placement, uneven spacing, tilted angle, harsh shadows, lowres, deformed, watermark, text",
+    },
   },
   {
     id: "generate-image/ghost-mannequin",
     name: "Ghost-Mannequin Apparel",
     description: "Invisible-mannequin clothing shot.",
     group: "Product & Commerce",
-    data: { provider: "nano-banana-pro", aspectRatio: "4:5", prompt: "ghost mannequin product photo of {garment}, invisible-mannequin hollow 3D effect, clean white background, even studio lighting, e-commerce", negativePrompt: "visible mannequin, person, wrinkles, watermark" },
+    data: {
+      provider: "nano-banana-pro",
+      aspectRatio: "4:5",
+      prompt:
+        "ghost-mannequin apparel photograph of {garment || a tailored wool blazer}, invisible-mannequin hollow three-dimensional effect with the garment holding its worn shape and a visible hollow neckline and cuffs, 85mm lens at f/8 with deep focus, soft even studio lighting from large diffusers with a subtle grounding shadow, centered front-facing composition on a clean pure-white background, crisp commercial e-commerce mood with true-to-life color, accurate fabric texture and sharp seams",
+      negativePrompt:
+        "visible mannequin, body, person, neck, hands, flat lifeless shape, wrinkles, color cast, lowres, deformed, watermark, text",
+    },
   },
 
   // ── More Illustration & Art Styles ───────────────────────────────────────
@@ -1032,49 +1178,49 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     name: "Double Exposure",
     description: "Silhouette filled with a 2nd scene.",
     group: "Illustration & Art Styles",
-    data: { provider: "seedream", aspectRatio: "2:3", prompt: "double exposure of {subject} silhouette blended with {secondary scene}, artistic overlay, high contrast", negativePrompt: "muddy, lowres, watermark" },
+    data: { provider: "seedream", aspectRatio: "2:3", prompt: "double-exposure portrait, the silhouette of {subject || a person's profile} cleanly filled with {secondary scene || a misty pine forest}, the second scene contained within the silhouette and fading to a clean light background at the edges, crisp high-contrast blend, fine art monochrome-to-color treatment", negativePrompt: "muddy overlap, low contrast, cluttered background, lowres, deformed, watermark, text" },
   },
   {
     id: "generate-image/vaporwave",
     name: "Vaporwave",
     description: "80s neon pastel aesthetic.",
     group: "Illustration & Art Styles",
-    data: { provider: "nano-banana-pro", aspectRatio: "16:9", style: "vaporwave", prompt: "{subject}", negativePrompt: "lowres, watermark" },
+    data: { provider: "nano-banana-pro", aspectRatio: "16:9", style: "vaporwave", prompt: "{subject || a marble bust beside a glowing palm tree}, neon pink-and-cyan glow, retro grid horizon, dreamy gradient sunset, subtle VHS haze", negativePrompt: "muted colors, photorealistic, dull, lowres, watermark, text" },
   },
   {
     id: "generate-image/cyberpunk-scene",
     name: "Cyberpunk Scene",
     description: "Neon-lit dystopian night.",
     group: "Illustration & Art Styles",
-    data: { provider: "nano-banana-pro", aspectRatio: "16:9", style: "cyberpunk", prompt: "{scene}, neon-lit rainy night", negativePrompt: "lowres, watermark" },
+    data: { provider: "nano-banana-pro", aspectRatio: "16:9", style: "cyberpunk", prompt: "{scene || a crowded neon market street}, rain-slicked night with glowing reflections, holographic signage, dense atmospheric haze, moody teal-and-magenta glow", negativePrompt: "daylight, flat lighting, washed out, lowres, deformed, watermark, text" },
   },
   {
     id: "generate-image/pop-art",
     name: "Pop Art",
     description: "Bold Warhol/Lichtenstein graphic.",
     group: "Illustration & Art Styles",
-    data: { provider: "ideogram-v3", aspectRatio: "1:1", style: "pop-art", prompt: "{subject}", negativePrompt: "muted colors, lowres, watermark" },
+    data: { provider: "ideogram-v3", aspectRatio: "1:1", style: "pop-art", prompt: "{subject || a woman in sunglasses blowing a bubble}, bold flat color blocks, thick black outlines, halftone Ben-Day dots, punchy primary palette", negativePrompt: "muted colors, photorealistic, soft gradients, lowres, watermark, text" },
   },
   {
     id: "generate-image/low-poly",
     name: "Low Poly",
     description: "Faceted geometric 3D.",
     group: "Illustration & Art Styles",
-    data: { provider: "nano-banana-pro", aspectRatio: "1:1", style: "low-poly", prompt: "{subject}", negativePrompt: "smooth, lowres, watermark" },
+    data: { provider: "nano-banana-pro", aspectRatio: "1:1", style: "low-poly", prompt: "{subject || a stylized mountain fox}, faceted triangular geometry, crisp flat-shaded polygons, clean gradient color blocking, soft studio light", negativePrompt: "smooth surfaces, rounded organic detail, photorealistic, lowres, watermark, text" },
   },
   {
     id: "generate-image/paper-cut",
     name: "Paper Cut",
     description: "Layered cut-paper craft.",
     group: "Illustration & Art Styles",
-    data: { provider: "nano-banana-pro", aspectRatio: "1:1", style: "paper-cutout", prompt: "{subject}", negativePrompt: "flat, lowres, watermark" },
+    data: { provider: "nano-banana-pro", aspectRatio: "1:1", style: "paper-cutout", prompt: "{subject || a fox in a layered forest}, layered cut-paper craft, stacked depth with soft drop shadows between layers, clean torn-and-cut edges, warm tactile palette", negativePrompt: "photorealistic, flat single-layer, smooth gradients, lowres, watermark, text" },
   },
   {
     id: "generate-image/stained-glass",
     name: "Stained Glass",
     description: "Leaded colored-glass mosaic.",
     group: "Illustration & Art Styles",
-    data: { provider: "nano-banana-pro", aspectRatio: "2:3", style: "stained-glass", prompt: "{subject}", negativePrompt: "lowres, watermark" },
+    data: { provider: "nano-banana-pro", aspectRatio: "2:3", style: "stained-glass", prompt: "{subject || a phoenix rising in flames}, bold black leading lines between glowing colored glass panes, luminous backlit jewel tones, symmetrical mosaic composition", negativePrompt: "photorealistic, flat, muddy colors, broken composition, lowres, watermark, text" },
   },
 
   // ── Diagrams & Infographics ──────────────────────────────────────────────
@@ -1083,49 +1229,49 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     name: "Blueprint Schematic",
     description: "White-on-blue technical drawing.",
     group: "Diagrams & Infographics",
-    data: { provider: "ideogram-v3", aspectRatio: "4:3", style: "blueprint", prompt: "technical blueprint schematic of {subject}, white line work on blue paper, dimension lines and callout labels", negativePrompt: "photorealistic, lowres, watermark" },
+    data: { provider: "ideogram-v3", aspectRatio: "4:3", style: "blueprint", prompt: "technical blueprint schematic of {subject || a vintage propeller aircraft}, crisp white line work on deep blue drafting paper, dimension lines with measurements and callout labels, legible correctly-spelled labels, tidy orthographic engineering-drawing layout", negativePrompt: "photorealistic, color fill, shading, misspelled labels, garbled text, sloppy lines, lowres, watermark" },
   },
   {
     id: "generate-image/infographic",
     name: "Infographic",
     description: "Icons + labels data layout.",
     group: "Diagrams & Infographics",
-    data: { provider: "ideogram-v3", aspectRatio: "4:3", prompt: "clean modern infographic about {topic}, simple icons, short labels, data-visualization layout, flat design, clear hierarchy", negativePrompt: "cluttered, misspelled text, lowres, watermark" },
+    data: { provider: "ideogram-v3", aspectRatio: "4:3", prompt: "clean modern infographic about {topic || how renewable energy works}, structured data-visualization layout with simple flat icons, short labeled callouts and a few key stats, clear visual hierarchy with a strong title and numbered sections, generous spacing and aligned grid, cohesive limited palette, legible correctly-spelled text, crisp flat editorial finish", negativePrompt: "cluttered busy layout, misspelled text, gibberish labels, overlapping elements, tiny unreadable type, photorealistic, lowres, watermark" },
   },
   {
     id: "generate-image/ui-mockup",
     name: "UI / App Mockup",
     description: "Clean app/website screen design.",
     group: "Diagrams & Infographics",
-    data: { provider: "gpt-image-2", aspectRatio: "16:9", prompt: "modern UI design mockup of {app or website screen}, clean interface, cards and buttons, realistic legible text, polished product design", negativePrompt: "cluttered, gibberish text, lowres, watermark" },
+    data: { provider: "gpt-image-2", aspectRatio: "16:9", prompt: "modern UI design mockup of {app or website screen || a fitness tracker dashboard}, clean polished product interface with a clear navigation bar, real cards, buttons, charts and icons, consistent spacing and alignment on a tidy grid, contemporary design-system styling with a cohesive accent color, realistic legible correctly-spelled text and labels, crisp flat high-fidelity finish", negativePrompt: "cluttered, misspelled text, gibberish labels, garbled UI text, misaligned elements, blurry, photorealistic photo, lowres, watermark" },
   },
   {
     id: "generate-image/flowchart",
     name: "Flowchart / Diagram",
     description: "Boxes, arrows, labels.",
     group: "Diagrams & Infographics",
-    data: { provider: "ideogram-v3", aspectRatio: "16:9", prompt: "clean flowchart diagram of {process}, labeled boxes connected by arrows, clear hierarchy, flat modern design", negativePrompt: "cluttered, misspelled text, lowres, watermark" },
+    data: { provider: "ideogram-v3", aspectRatio: "16:9", prompt: "clean flowchart diagram of {process || a customer onboarding workflow}, clearly labeled rounded boxes connected by directional arrows, logical left-to-right flow with decision diamonds and a clear top-down hierarchy, evenly spaced nodes on a tidy grid, cohesive limited palette, legible correctly-spelled labels, crisp flat modern finish", negativePrompt: "cluttered, tangled crossing arrows, misspelled text, gibberish labels, overlapping boxes, tiny unreadable type, photorealistic, lowres, watermark" },
   },
   {
     id: "generate-image/chart-graph",
     name: "Chart / Graph",
     description: "Bar / line / pie data viz.",
     group: "Diagrams & Infographics",
-    data: { provider: "ideogram-v3", aspectRatio: "4:3", prompt: "clean data-visualization chart of {data}, {bar, line or pie} graph, labeled axes and legend, flat modern design", negativePrompt: "cluttered, misspelled text, lowres, watermark" },
+    data: { provider: "ideogram-v3", aspectRatio: "4:3", prompt: "clean data-visualization chart of {data || quarterly revenue growth}, a {bar, line or pie || bar} graph with clearly labeled axes, gridlines, value labels and a legend, balanced composition with a clear title and generous margins, cohesive limited palette with one accent color, legible correctly-spelled text, crisp flat modern finish", negativePrompt: "cluttered, distorted proportions, misleading scale, misspelled text, gibberish labels, overlapping elements, tiny unreadable type, photorealistic, lowres, watermark" },
   },
   {
     id: "generate-image/timeline",
     name: "Timeline",
     description: "Milestones along an axis.",
     group: "Diagrams & Infographics",
-    data: { provider: "ideogram-v3", aspectRatio: "16:9", prompt: "timeline infographic of {topic}, milestones along a line with dates, icons and short labels, flat modern design", negativePrompt: "cluttered, misspelled text, lowres, watermark" },
+    data: { provider: "ideogram-v3", aspectRatio: "16:9", prompt: "horizontal timeline infographic of {topic || the history of space exploration}, evenly spaced chronological milestones along a central axis, each marked with a date, a simple icon and a short labeled caption alternating above and below the line, clear left-to-right reading order with a strong title, cohesive limited palette, legible correctly-spelled text, crisp flat modern finish", negativePrompt: "cluttered, out-of-order milestones, uneven spacing, misspelled text, gibberish labels, overlapping elements, tiny unreadable type, photorealistic, lowres, watermark" },
   },
   {
     id: "generate-image/x-ray",
     name: "X-Ray / See-Through",
     description: "Internal-structure radiograph look.",
     group: "Illustration & Art Styles",
-    data: { provider: "nano-banana-pro", aspectRatio: "4:3", prompt: "x-ray style see-through render of {subject}, internal structure visible, glowing white-on-dark radiograph aesthetic", negativePrompt: "opaque, lowres, watermark" },
+    data: { provider: "nano-banana-pro", aspectRatio: "4:3", prompt: "x-ray see-through render of {subject || a blooming flower}, translucent body revealing the internal structure and skeleton beneath, glowing luminous white-and-cyan lines on a deep black background, crisp radiograph aesthetic, centered specimen composition", negativePrompt: "opaque solid surface, full color, photorealistic skin, cluttered background, lowres, watermark, text" },
   },
 
   // ── More Icons, Game Assets & Textures ───────────────────────────────────
@@ -1134,7 +1280,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     name: "3D Icon",
     description: "Glossy single 3D-rendered icon.",
     group: "Icons, Game Assets & Textures",
-    data: { provider: "nano-banana-pro", aspectRatio: "1:1", prompt: "single glossy 3D rendered icon of {subject}, soft studio lighting, rounded clay-like form, vibrant, isolated on a plain background", negativePrompt: "flat, 2d, cluttered, watermark" },
+    data: { provider: "nano-banana-pro", aspectRatio: "1:1", prompt: "a single glossy 3D rendered icon of {subject || a friendly chat bubble}, smooth rounded clay-like form with soft beveled edges, soft studio key light with a gentle gradient falloff, a bright specular highlight and a soft contact shadow, perfectly centered with generous padding, isolated on a clean plain background, vibrant cohesive palette, crisp and readable at small sizes", negativePrompt: "flat, 2d, multiple objects, cluttered background, harsh shadows, photographic scene, lowres, watermark, text" },
   },
 
   // ── More Architecture & Interiors ────────────────────────────────────────
@@ -1143,14 +1289,14 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     name: "Floor Plan",
     description: "Top-down labeled layout.",
     group: "Architecture & Interiors",
-    data: { provider: "ideogram-v3", aspectRatio: "1:1", prompt: "top-down architectural floor plan of {space}, clean line work, room labels, furniture layout, scale bar, blueprint style", negativePrompt: "perspective, photorealistic, lowres, watermark" },
+    data: { provider: "ideogram-v3", aspectRatio: "1:1", prompt: "clean top-down architectural floor plan of {space || a two-bedroom apartment}, precise orthographic plan view, crisp thin black line work on a white background, clearly labeled rooms with legible correctly-spelled text, dimension lines with measurements, simple furniture symbols, a north arrow and a scale bar, tidy professional blueprint style, accurate proportions", negativePrompt: "perspective, 3d view, photorealistic, misspelled labels, garbled text, sloppy lines, lowres, watermark" },
   },
   {
     id: "generate-image/aerial-site",
     name: "Aerial Site View",
     description: "Drone view of building + context.",
     group: "Architecture & Interiors",
-    data: { provider: "seedream", aspectRatio: "16:9", prompt: "aerial architectural site view of {building}, drone perspective showing surrounding context and landscaping, photorealistic, golden hour", negativePrompt: "distorted geometry, lowres, watermark" },
+    data: { provider: "seedream", aspectRatio: "16:9", prompt: "photoreal aerial architectural site view of {building || a modern campus among landscaped grounds}, high top-down drone perspective revealing the building footprint, surrounding context, roads and landscaping, warm golden-hour sun casting long raking shadows that define the layout, bold graphic composition emphasizing site planning and scale, expansive serene mood with natural color, accurate geometry and crisp detail across the frame", negativePrompt: "distorted geometry, warped perspective, tilted horizon, lens distortion, flat midday light, lowres, watermark, text" },
   },
 
   // ── Portrait Transformations (identity-locked, from a connected reference photo) ──
@@ -1168,8 +1314,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "3:4",
       prompt:
-        "Generate a single photorealistic studio composite of the person in the reference image at five stages of life, lined up shoulder-to-shoulder from left to right in a smooth age progression: a child around 7, a teenager around 15, a young adult around 27, a mature adult around 45, and an elder around 70. Frame each figure from the chest up, all facing the camera with the same calm expression. Strictly preserve identity across all five figures — identical eye shape, eye color, brow line, nose, ear shape, and facial bone structure from the reference — aged ONLY via skin texture, fine lines and wrinkles, hairline, hair color (darker in youth, gradually greying with age), and slight changes in facial fullness. Dress each figure for its age: striped tee for the child, hoodie or denim jacket for the teen, casual shirt for the young adult, blazer or button-up for the mature adult, soft cardigan for the elder. Even soft cinematic studio key light hitting all five consistently, gentle rim separation from the background, clean dark-grey gradient seamless backdrop (slightly darker at the edges, softly lit toward the center). High-end editorial portrait photography, sharp facial detail, natural skin tones; the five figures fill the frame.",
-      negativePrompt: "five different people, inconsistent identity, deformed, extra fingers, watermark, text",
+        "Single photorealistic studio composite of the SAME person from the reference image at five stages of life, shoulder-to-shoulder left to right in a smooth age progression: a child around 7, a teen around 15, a young adult around 27, a mature adult around 45, and an elder around 70. Editorial portrait photography, 85mm lens at f/2.8, each figure framed chest-up, all facing camera with the same calm expression. CRITICAL identity lock — same eyes, eye color, brow, nose, ears, jawline and facial bone structure across every figure, unmistakably the same person; age ONLY via skin texture, fine lines and wrinkles, hairline, hair color (darker in youth, greying with age), and a slight shift in facial fullness. Age-appropriate wardrobe per stage. Even soft cinematic studio key with gentle rim separation, clean dark-grey gradient seamless backdrop, refined neutral grade, natural skin tones, tack-sharp facial detail; the five figures fill the frame.",
+      negativePrompt:
+        "different person, inconsistent face between figures, distorted features, identity drift across ages, wrong eye color, plastic skin, deformed, extra fingers, blurry, lowres, watermark, text",
     },
   },
   {
@@ -1181,8 +1328,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "3:4",
       prompt:
-        "Generate a single photorealistic studio composite of the person in the reference image at three stages of life, shoulder-to-shoulder from left to right: around age 10, around age 40, and around age 75. Frame each figure from the chest up, facing the camera with the same calm expression. Strictly preserve identity across all three — identical eye shape, eye color, brow line, nose, ear shape, and facial bone structure from the reference — aged ONLY via skin texture, fine lines, hairline, hair color (darker in youth, greying with age), and slight facial fullness. Age-appropriate clothing for each stage. Even soft cinematic studio key light, clean dark-grey gradient seamless backdrop, high-end editorial portrait photography, sharp facial detail, natural skin tones; the three figures fill the frame.",
-      negativePrompt: "three different people, inconsistent identity, deformed, watermark, text",
+        "Single photorealistic studio composite of the SAME person from the reference image as a three-age triptych, shoulder-to-shoulder left to right: around age 10, around age 40, and around age 75. Editorial portrait photography, 85mm lens at f/2.8, each figure framed chest-up, facing camera with the same calm expression. CRITICAL identity lock — same eyes, eye color, brow, nose, ears, jawline and facial bone structure across all three, unmistakably the same person; age ONLY via skin texture, fine lines, hairline, hair color (darker in youth, greying with age), and a slight shift in facial fullness. Age-appropriate clothing per stage. Even soft cinematic studio key light with gentle rim separation, clean dark-grey gradient seamless backdrop, refined neutral grade, natural skin tones, tack-sharp facial detail; the three figures fill the frame.",
+      negativePrompt:
+        "different person, inconsistent face between figures, distorted features, identity drift across ages, wrong eye color, plastic skin, deformed, blurry, lowres, watermark, text",
     },
   },
   {
@@ -1194,8 +1342,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "3:4",
       prompt:
-        "Generate a single black-and-white photorealistic studio composite of the person in the reference image at five stages of life, shoulder-to-shoulder from left to right in a smooth age progression: around 7, 15, 27, 45, and 70. Chest-up framing, all facing the camera with the same calm expression. Strictly preserve identity across all five figures — identical eye shape, eye color, brow line, nose, ear shape, and facial bone structure from the reference — aged ONLY via skin texture, fine lines, hairline, greying hair, and slight facial fullness. Age-appropriate clothing per stage. Even soft studio key light, clean dark-grey gradient backdrop. Monochrome high-end black-and-white studio portrait, deep tonal range, fine film grain, sharp facial detail; the five figures fill the frame.",
-      negativePrompt: "color, five different people, inconsistent identity, deformed, watermark, text",
+        "Single black-and-white photorealistic studio composite of the SAME person from the reference image rendered at five stages of life, shoulder-to-shoulder left to right in a smooth age progression: around 7, 15, 27, 45, and 70. Fine-art monochrome portraiture, 85mm lens at f/2.8, chest-up framing, all facing camera with the same calm expression. CRITICAL identity lock — same eyes, brow, nose, ears, jawline and facial bone structure across every figure, unmistakably the same person; age ONLY via skin texture, fine lines, hairline, greying hair, and a slight shift in facial fullness. Age-appropriate clothing per stage. Even soft studio key light with gentle rim separation, clean dark-grey gradient backdrop. Deep tonal range from rich blacks to clean highlights, fine silver-gelatin film grain, tack-sharp facial detail; the five figures fill the frame.",
+      negativePrompt:
+        "color, color tint, different person, inconsistent face between figures, distorted features, identity drift across ages, plastic skin, deformed, blurry, lowres, watermark, text",
     },
   },
   {
@@ -1207,8 +1356,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "3:4",
       prompt:
-        "Generate a single photorealistic studio composite of the person in the reference image across five decades, shoulder-to-shoulder from left to right with a smooth age progression and period-accurate styling: a 1980s child, a 1990s teenager, a 2000s young adult, a 2010s adult, and a 2020s mature adult. Chest-up framing, all facing the camera with the same calm expression. Strictly preserve identity across all five figures — identical eye shape, eye color, brow line, nose, ear shape, and facial bone structure from the reference — aged ONLY via skin texture, fine lines, hairline, hair color, and slight facial fullness. Style each figure to its decade in hair and wardrobe: 1980s bright bold colors and big hair, 1990s casual grunge, 2000s frosted-tips and low-rise era, 2010s clean modern, 2020s contemporary. Subtle period-accurate photo treatment per decade. Even soft studio key light, clean dark-grey gradient seamless backdrop. High-end editorial portrait photography, sharp facial detail, natural skin tones; the five figures fill the frame.",
-      negativePrompt: "different people, inconsistent identity, deformed, watermark, text",
+        "Single photorealistic studio composite of the SAME person from the reference image across five decades, shoulder-to-shoulder left to right with a smooth age progression and period-accurate styling: a 1980s child, a 1990s teen, a 2000s young adult, a 2010s adult, and a 2020s mature adult. Editorial portrait photography, 85mm lens at f/2.8, chest-up framing, all facing camera with the same calm expression. CRITICAL identity lock — same eyes, eye color, brow, nose, ears, jawline and facial bone structure across every figure, unmistakably the same person; age ONLY via skin texture, fine lines, hairline, hair color, and a slight shift in facial fullness. Style each to its decade in hair and wardrobe with a subtle period-accurate film treatment per decade: 1980s bold colors and big hair, 1990s casual grunge, 2000s frosted tips, 2010s clean modern, 2020s contemporary. Even soft studio key with gentle rim separation, clean dark-grey gradient seamless backdrop, natural skin tones, tack-sharp facial detail; the five figures fill the frame.",
+      negativePrompt:
+        "different person, inconsistent face between figures, distorted features, identity drift across decades, anachronistic styling, plastic skin, deformed, blurry, lowres, watermark, text",
     },
   },
   {
@@ -1220,8 +1370,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "3:4",
       prompt:
-        "Generate a single photorealistic studio composite of the person in the reference image in four seasonal looks, shoulder-to-shoulder from left to right: spring, summer, autumn, and winter. Chest-up framing, all facing the camera with the same calm expression, all at the SAME age as the reference (this is seasons, not aging). Strictly preserve identity across all four figures — identical face, eye shape, eye color, brow, nose, ear shape, and bone structure from the reference; only wardrobe, hair styling, and a subtle seasonal color grade change. Spring: light pastel layers, fresh airy tone. Summer: light tee, warm sunny tone. Autumn: knit sweater, golden amber tone. Winter: coat and scarf, cool crisp tone. Even soft studio key light with a gentle seasonal color cast per figure, clean dark-grey gradient seamless backdrop. High-end editorial portrait photography, sharp facial detail, natural skin tones; the four figures fill the frame.",
-      negativePrompt: "different people, inconsistent identity, aging, deformed, watermark, text",
+        "Single photorealistic studio composite of the SAME person from the reference image in four seasonal looks, shoulder-to-shoulder left to right: spring, summer, autumn, and winter. Editorial portrait photography, 85mm lens at f/2.8, chest-up framing, all facing camera with the same calm expression, all at the SAME age as the reference — this is seasons, not aging. CRITICAL identity lock — same eyes, eye color, brow, nose, ears, jawline and facial bone structure across all four figures, unmistakably the same person; ONLY wardrobe, hair styling and a subtle seasonal color grade change. Spring: light pastel layers, fresh airy tone. Summer: light tee, warm sunny tone. Autumn: knit sweater, golden amber tone. Winter: coat and scarf, cool crisp tone. Even soft studio key light with a gentle seasonal color cast and rim separation per figure, clean dark-grey gradient seamless backdrop, natural skin tones, tack-sharp facial detail; the four figures fill the frame.",
+      negativePrompt:
+        "different person, inconsistent face between figures, distorted features, aging, age differences between figures, plastic skin, deformed, blurry, lowres, watermark, text",
     },
   },
   {
@@ -1233,8 +1384,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "3:4",
       prompt:
-        "Generate a single photorealistic composite of the person in the reference image across four times of day, shoulder-to-shoulder from left to right: dawn, midday, golden hour, and night. Chest-up framing, all facing the camera with the same calm expression, all at the SAME age as the reference. Strictly preserve identity across all four figures — identical face, eye shape, eye color, brow, nose, ear shape, and bone structure from the reference; only the lighting and color temperature change between figures. Dawn: soft cool blue light. Midday: bright neutral daylight. Golden hour: warm amber backlight with a gentle glow. Night: moody low light with a cool rim. Consistent chest-up framing and a clean dark-grey gradient seamless backdrop. High-end editorial portrait photography, sharp facial detail, natural skin tones; the four figures fill the frame.",
-      negativePrompt: "different people, inconsistent identity, aging, deformed, watermark, text",
+        "Single photorealistic composite of the SAME person from the reference image across four times of day, shoulder-to-shoulder left to right: dawn, midday, golden hour, and night. Editorial portrait photography, 85mm lens at f/2.8, chest-up framing, all facing camera with the same calm expression, all at the SAME age as the reference. CRITICAL identity lock — same eyes, eye color, brow, nose, ears, jawline and facial bone structure across all four figures, unmistakably the same person; ONLY the lighting and color temperature change between figures. Dawn: soft cool blue light. Midday: bright neutral daylight. Golden hour: warm amber backlight with a gentle glow. Night: moody low light with a cool rim. Consistent chest-up framing and a clean dark-grey gradient seamless backdrop, natural skin tones, tack-sharp facial detail; the four figures fill the frame.",
+      negativePrompt:
+        "different person, inconsistent face between figures, distorted features, aging, age differences between figures, blown highlights, plastic skin, deformed, blurry, lowres, watermark, text",
     },
   },
   {
@@ -1246,8 +1398,9 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       provider: "nano-banana-pro",
       aspectRatio: "4:5",
       prompt:
-        "Premium studio portrait of the person in the reference image wearing an oversized modern football jersey in the colors of {team}. Strictly preserve identity — exact face, bone structure, skin tone, and all unique features. Soft directional stadium-spotlight lighting with natural shadow depth; a monochrome or gradient backdrop in the team colors with a subtle geometric pattern and faint pitch markings; gentle atmospheric haze and light film grain. Confident, relaxed pose, sharp focus on the subject against a softly blurred background. High-end sports-fashion editorial, 8K, cinematic framing.",
-      negativePrompt: "different face, inconsistent identity, deformed, distorted logo, watermark, text artifacts",
+        "Premium studio editorial portrait of the SAME person from the reference image wearing an oversized modern football jersey in the colors of {team || deep crimson and gold}. Sports-fashion editorial photography, 85mm lens at f/2, shallow depth of field with the subject tack-sharp against a softly blurred background. CRITICAL identity lock — same eyes, brow, nose, ears, jawline and facial bone structure, unmistakably the same person, exact skin tone preserved. Soft directional stadium-spotlight key with natural shadow depth and a subtle rim; gradient backdrop in the jersey colors with a faint geometric pattern and soft pitch markings; gentle atmospheric haze and light film grain. Confident, relaxed three-quarter pose, rich saturated grade. Crisp fabric weave and clean jersey graphics.",
+      negativePrompt:
+        "different person, inconsistent face, distorted features, altered skin tone, distorted or garbled logo, misspelled team name, deformed, extra fingers, blurry, lowres, watermark, text artifacts",
     },
   },
   // ── Stylized Subject + Edits (shared with the deprecating modify-image) ──

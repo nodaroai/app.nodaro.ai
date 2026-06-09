@@ -147,6 +147,35 @@ describe("generate-image factory preset data validity", () => {
     expect(loc?.data.resolution).toBe("2K")
   })
 
+  it("includes the four new Reference Sheet boards", () => {
+    for (const id of [
+      "generate-image/product-board", "generate-image/outfit-board",
+      "generate-image/scene-board", "generate-image/creature-board",
+    ]) {
+      const b = presets.find((p) => p.id === id)
+      expect(b, `${id} missing`).toBeTruthy()
+      expect(b!.group).toBe("Reference Sheet")
+      expect(b!.data.provider).toBe("nano-banana-pro")
+      expect(b!.data.resolution).toBe("2K")
+      expect((b!.data.negativePrompt as string)?.length).toBeGreaterThan(0)
+    }
+  })
+
+  it("every generate-image preset has a non-empty negativePrompt", () => {
+    for (const p of presets) {
+      const neg = (p.data.negativePrompt as string | undefined) ?? ""
+      expect(neg.trim().length, `${p.id}: missing negativePrompt`).toBeGreaterThan(0)
+    }
+  })
+
+  it("non-style-pinned generate-image prompts are substantive (no thin one-liners)", () => {
+    for (const p of presets) {
+      if (p.data.style !== undefined) continue // style field carries the look; short prompt is fine
+      const prompt = (p.data.prompt as string | undefined) ?? ""
+      expect(prompt.trim().length, `${p.id}: prompt too thin (${prompt.length} chars)`).toBeGreaterThanOrEqual(40)
+    }
+  })
+
   it("groups every preset under a folder (no stray ungrouped presets)", () => {
     for (const p of presets) {
       expect(p.group, `${p.id}: missing group`).toBeTruthy()

@@ -20,7 +20,9 @@ const STYLIZED_SUBJECT: ReadonlyArray<{
     data: {
       provider: "nano-banana-pro",
       prompt:
-        "Turn the person into a stylized 3D cartoon character (Pixar/Disney look). Important: only the person becomes a cartoon — keep the background, clothing textures, lighting, and everything else photorealistic and unchanged.",
+        "Restyle ONLY the person in the reference image into a polished 3D animated character — Pixar/Disney sensibility: soft subsurface skin shading, expressive oversized eyes, smoothly stylized hair, clean rounded forms. Preserve their identity, exact pose, expression, and framing. Everything else stays untouched and fully photorealistic: keep the original background, props, clothing fabric and texture, and the scene's real lighting, shadows, and color grade. Composite the stylized figure into the real plate so it sits naturally — matched light direction, contact shadows, and depth.",
+      negativePrompt:
+        "changing the background, altering the unstylized parts, restyling clothing fabric or props, relighting the scene, distorting the subject, changing identity or pose, flat 2D look, extra limbs, deformed hands, warped face",
     },
   },
   {
@@ -30,7 +32,9 @@ const STYLIZED_SUBJECT: ReadonlyArray<{
     data: {
       provider: "nano-banana-pro",
       prompt:
-        "Exaggerate the person into a caricature with an oversized head and amplified features, in a fun illustrated style. Keep the body, background, and overall scene photorealistic and unchanged.",
+        "Turn ONLY the person into a playful hand-illustrated caricature: enlarge the head, exaggerate their most recognizable features, and amplify expression with bold, confident linework and clean cel-style shading — while keeping them clearly identifiable. Leave everything else exactly as shot and photorealistic: the body proportions below the neck, the clothing, the background, props, and the scene's real lighting and shadows remain unchanged. Blend the caricature head onto the real photo seamlessly with matched lighting and a believable neckline.",
+      negativePrompt:
+        "changing the background, altering the unstylized parts, restyling the body or clothing, relighting the scene, distorting the subject beyond intent, losing likeness, photorealistic head, harsh seam at the neck, deformed features",
     },
   },
   {
@@ -40,7 +44,9 @@ const STYLIZED_SUBJECT: ReadonlyArray<{
     data: {
       provider: "nano-banana-pro",
       prompt:
-        "Restyle only the person as a 2D anime character with cel shading. Keep the real-world background, lighting, and environment photorealistic and untouched.",
+        "Restyle ONLY the person as a crisp 2D anime character — clean ink outlines, flat cel shading with sharp shadow shapes, glossy stylized hair, and expressive anime eyes — while preserving their identity, pose, expression, and framing. Keep the real-world background, environment, props, and the original photographic lighting, shadows, and color completely untouched and photorealistic. Integrate the 2D figure into the live-action plate so the light direction and contact shadows read naturally.",
+      negativePrompt:
+        "changing the background, altering the unstylized parts, restyling the environment or props, relighting the scene, distorting the subject, 3D render look, photorealistic skin on the subject, extra fingers, warped anatomy, broken outlines",
     },
   },
   {
@@ -50,7 +56,9 @@ const STYLIZED_SUBJECT: ReadonlyArray<{
     data: {
       provider: "nano-banana-pro",
       prompt:
-        "Keep the person photorealistic and unchanged. Transform only the background and environment into a colorful stylized cartoon world.",
+        "Inverse stylization: keep the PERSON completely photorealistic and unchanged — real skin, hair, clothing, identity, pose, and framing all preserved exactly. Restyle ONLY the surrounding world into a vibrant, hand-crafted cartoon environment: simplified painterly shapes, bold saturated colors, soft graphic shading, and whimsical stylized props and scenery. Light the real person to match the cartoon world's color and direction so they sit convincingly inside it, with believable contact shadows.",
+      negativePrompt:
+        "stylizing or cartoonifying the person, altering the subject's skin, face, hair or clothing, distorting the subject, changing the subject's pose, photorealistic background, flat lifeless scene, harsh cut-out edges around the person",
     },
   },
   {
@@ -60,7 +68,9 @@ const STYLIZED_SUBJECT: ReadonlyArray<{
     data: {
       provider: "nano-banana-pro",
       prompt:
-        "Turn the person into a tactile stop-motion claymation figure with visible fingerprints and plasticine texture. Keep the surrounding set and background photorealistic.",
+        "Restyle ONLY the person into a tactile stop-motion claymation figure — molded plasticine surface with visible fingerprints, tool marks, subtle seams, and a soft matte sheen, in the handmade spirit of Aardman puppets — while keeping their identity, pose, expression, and framing. Everything else stays exactly as shot and photorealistic: the real background, set, props, and the scene's natural lighting and shadows are unchanged. Seat the clay figure into the real plate with matched light direction and grounded contact shadows.",
+      negativePrompt:
+        "changing the background or set, altering the unstylized parts, restyling props, relighting the scene, distorting the subject, smooth plastic toy look, glossy CGI surface, melted or deformed figure, missing fingerprints, extra limbs",
     },
   },
 ]
@@ -94,7 +104,9 @@ const IMAGE_EDITS: ReadonlyArray<{
     data: {
       provider: "nano-banana-pro",
       prompt:
-        "Remove the background completely and place the subject on a clean solid white background. Keep the subject sharp, complete and unchanged.",
+        "Cleanly cut the main subject out of the reference image and place it on a pure, solid white background. Trace a crisp, accurate edge — preserve fine detail like hair strands, fur, and translucent or wispy edges — with no leftover background pixels and no color fringing. Keep the subject itself completely unchanged: same pose, lighting, color, and full silhouette, nothing cropped.",
+      negativePrompt:
+        "fringing, color halo, cut-off subject, leftover background, jagged or rough edges, missing hair detail, semi-transparent matte, drop shadow, gray or off-white background, altering the subject",
     },
   },
   {
@@ -104,7 +116,9 @@ const IMAGE_EDITS: ReadonlyArray<{
     data: {
       provider: "nano-banana-pro",
       prompt:
-        "Replace the background with {scene}. Keep the subject unchanged and blend the lighting and shadows naturally.",
+        "Replace the background behind the subject with {scene || a sunlit Mediterranean terrace}. Keep the subject perfectly unchanged — identity, pose, edges, and proportions intact — and composite it into the new scene so it looks truly photographed there: relight the subject's rim and ambient tones to match the new environment, cast believable contact shadows, and match perspective, depth of field, and color grade.",
+      negativePrompt:
+        "altering the subject, changing the subject's pose or proportions, fringing, halo, floating subject, missing or wrong-direction shadows, mismatched lighting, flat composite, harsh cut-out edges, perspective mismatch",
     },
   },
   {
@@ -114,7 +128,9 @@ const IMAGE_EDITS: ReadonlyArray<{
     data: {
       provider: "nano-banana-pro",
       prompt:
-        "Colorize this black-and-white photo with natural, realistic colors. Preserve all original detail and composition.",
+        "Colorize this black-and-white photograph with natural, historically plausible color. Give skin realistic, even tones, and assign believable hues to clothing, foliage, sky, and materials. Preserve every original detail, grain, contrast, and the exact composition — add color only, never invent or remove content.",
+      negativePrompt:
+        "oversaturated, anachronistic colors, neon or cartoon tones, color bleeding outside edges, blotchy or uneven skin, lost detail, altered composition, added or hallucinated objects, washed-out contrast",
     },
   },
   {
@@ -124,7 +140,9 @@ const IMAGE_EDITS: ReadonlyArray<{
     data: {
       provider: "nano-banana-pro",
       prompt:
-        "Restore and enhance this old photo: remove scratches, dust and noise, repair damage, and sharpen detail while keeping it authentic.",
+        "Restore this old, damaged photograph: remove scratches, dust, creases, stains, and noise, repair torn or missing areas by reconstructing what is plainly there, and gently recover sharpness and tonal detail. Keep the result authentic and true to the original — preserve identity, era, natural film grain, and composition. Repair only; do not beautify, restyle, or invent new features.",
+      negativePrompt:
+        "over-smoothed, plastic skin, waxy or airbrushed look, hallucinated details, invented faces or objects, changing identity or age, removing authentic grain, modern restyling, oversharpening halos, altered composition",
     },
   },
   {
@@ -134,7 +152,9 @@ const IMAGE_EDITS: ReadonlyArray<{
     data: {
       provider: "nano-banana-pro",
       prompt:
-        "Relight the scene with {lighting style}. Keep the subject, pose and composition unchanged.",
+        "Relight the image with {lighting style || soft golden-hour key light from the left}. Re-derive highlights, shadows, ambient fill, and color temperature consistently across the whole frame for a believable, physically plausible result. Keep the subject, pose, expression, materials, and composition completely unchanged — only the lighting changes.",
+      negativePrompt:
+        "changing the subject, pose, expression, or composition, altering materials or clothing, flat or inconsistent lighting, blown-out highlights, crushed shadows, color casts on skin, double or contradictory light directions, repositioning anything",
     },
   },
   {
@@ -144,7 +164,9 @@ const IMAGE_EDITS: ReadonlyArray<{
     data: {
       provider: "nano-banana-pro",
       prompt:
-        "Restyle the entire image in a {art style} look while keeping the composition and subject recognizable.",
+        "Restyle the entire image in a {art style || soft watercolor illustration} look, applying the style consistently to the subject, background, and every element. Keep the composition, subject placement, and the subject clearly recognizable — reinterpret texture, color, and rendering, not the underlying content or layout.",
+      negativePrompt:
+        "changing the composition or layout, moving or removing the subject, losing recognizability, applying the style to only part of the image, photorealistic patches, added or hallucinated objects, distorted anatomy, inconsistent style across the frame",
     },
   },
 ]
