@@ -33,6 +33,12 @@ export const queryKeys = {
     list: (nodeType?: string) => ["nodePresets", "list", nodeType ?? ""] as const,
   },
 
+  // Node preset favorites (per-user starred presets, keyed by node type)
+  nodePresetFavorites: {
+    all: ["nodePresetFavorites"] as const,
+    list: (nodeType?: string) => ["nodePresetFavorites", "list", nodeType ?? ""] as const,
+  },
+
   // Node preset groups (folders / sections)
   nodePresetGroups: {
     all: ["nodePresetGroups"] as const,

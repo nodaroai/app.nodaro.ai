@@ -2251,12 +2251,11 @@ listGroups(nodeType?: string): Promise<NodePresetGroup[]>
 listFactory(nodeType: string): Promise<FactoryPresetsResult>
 ```
 
-`GET /v1/node-presets/factory` → the built-in catalog for `nodeType` plus
-`popularIds` (ids of the most-used quick-picks, in popularity order).
+`GET /v1/node-presets/factory` → the built-in catalog for `nodeType`.
 
 ```ts
-const { data, popularIds } = await client.presets.listFactory("generate-video")
-const popular = data.filter((p) => popularIds.includes(p.id))
+const { data } = await client.presets.listFactory("generate-video")
+const orbit = data.find((p) => p.id === "generate-video/orbit-360")
 ```
 
 ---

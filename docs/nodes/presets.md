@@ -158,8 +158,9 @@ Every configurable node has a **preset dropdown** in two places:
 - On the **node itself** — in the top-right hover toolbar, left of the ⋯ menu.
 
 Until you pick one, the trigger shows a muted **PRESET** hint. The menu puts **your own presets
-("My Presets") at the top**, then the read-only **Factory** catalog below — whose **most-used presets
-surface in a "Popular" band** so you can reach them without opening folders. Open the dropdown to:
+("My Presets") at the top**, then the read-only **Factory** catalog below. Any presets you **star
+surface in a "Favorites" band** at the very top so you can reach them without opening folders — the
+band stays hidden until you favorite something. Open the dropdown to:
 
 - **Select a preset** — loads its settings onto the node. Selecting a preset that would overwrite
   your current settings asks you to confirm first. (Undo with ⌘/Ctrl-Z.)
@@ -178,6 +179,10 @@ surface in a "Popular" band** so you can reach them without opening folders. Ope
 The dropdown appears automatically on any node that has configurable settings. Nodes with no
 settings (such as sticky notes) and asset nodes (Character/Location/Object) don't show it.
 
+**Favorites** — click the **☆** star on any preset row (factory or custom) to favorite it. Your
+favorites collect in a band at the top of the dropdown, hidden until you have at least one, so the
+presets you reach for most are always one click away.
+
 ## Organizing presets
 
 Click **Manage presets…** in the dropdown to open the management dialog, where you can organize your
@@ -194,8 +199,9 @@ Click **Manage presets…** in the dropdown to open the management dialog, where
   to the top level (presets are never lost).
 
 In the dropdown, your custom folders show as collapsible rows and sections as inline headers, in the
-order you set. **Your presets appear first** (the **My Presets** section); then the read-only
-**Factory** section — a **Popular** band of the most-used presets, followed by the category folders
+order you set. A **Favorites** band sits at the very top — it spans **both** your custom presets and
+factory presets, and is hidden when you haven't favorited anything. Below it, **your presets appear
+first** (the **My Presets** section); then the read-only **Factory** section's category folders
 (collapsed by default so you can scan them at a glance). Searching flattens everything into a single
 filtered list.
 
@@ -243,7 +249,7 @@ On import, any preset whose name already exists for that node type is kept by ap
 Presets are also **readable programmatically** (creating/editing stays in the editor for now):
 
 - **REST** — `GET /v1/node-presets` (your custom presets), `GET /v1/node-preset-groups`, and
-  `GET /v1/node-presets/factory?nodeType=…` (the built-in catalog + `popularIds`). OAuth tokens need
+  `GET /v1/node-presets/factory?nodeType=…` (the built-in catalog). OAuth tokens need
   the `presets:read` scope. See [API Integration §16](../api-integration.md).
 - **SDK** — `client.presets.list()`, `.listGroups()`, `.listFactory(nodeType)`. See the
   [SDK reference](../sdk-reference.md#clientpresets).

@@ -32,15 +32,13 @@ export function presetsCommand(): Command {
             emit(result, opts)
             return
           }
-          const popular = new Set(result.popularIds)
           table(
             result.data.map((p) => ({
               id: p.id,
               name: p.name,
               group: p.group ?? "",
-              popular: popular.has(p.id) ? "★" : "",
             })),
-            ["id", "name", "group", "popular"],
+            ["id", "name", "group"],
           )
           return
         }

@@ -38,6 +38,7 @@ function makeQB(opts: { rows?: unknown; single?: unknown; error?: { code?: strin
   const qb: Record<string, unknown> = {}
   qb.select = vi.fn(() => qb)
   qb.insert = vi.fn(() => qb)
+  qb.upsert = vi.fn(() => qb)
   qb.update = vi.fn(() => qb)
   qb.delete = vi.fn(() => qb)
   qb.eq = vi.fn(() => qb)
@@ -221,7 +222,7 @@ describe("node-presets routes", () => {
     expect(res.statusCode).toBe(401)
   })
 
-  it("GET /v1/node-presets/factory returns the built-in catalog + popularIds (subset)", async () => {
+  it("GET /v1/node-presets/factory returns the built-in catalog (no popularIds — Popular removed)", async () => {
     const app = buildApp()
     await app.register(nodePresetRoutes)
     const res = await app.inject({ method: "GET", url: "/v1/node-presets/factory?nodeType=generate-image" })
@@ -229,10 +230,7 @@ describe("node-presets routes", () => {
     const body = res.json()
     expect(Array.isArray(body.data)).toBe(true)
     expect(body.data.length).toBeGreaterThan(0)
-    expect(Array.isArray(body.popularIds)).toBe(true)
-    expect(body.popularIds.length).toBeGreaterThan(0)
-    const ids = new Set((body.data as { id: string }[]).map((p) => p.id))
-    for (const pid of body.popularIds as string[]) expect(ids.has(pid)).toBe(true)
+    expect(body.popularIds).toBeUndefined()
   })
 
   it("GET /v1/node-presets/factory requires a nodeType", async () => {
@@ -240,6 +238,74 @@ describe("node-presets routes", () => {
     await app.register(nodePresetRoutes)
     const res = await app.inject({ method: "GET", url: "/v1/node-presets/factory" })
     expect(res.statusCode).toBe(400)
+  })
+
+  // ── Favorites ────────────────────────────────────────────────────────────
+  it("GET /v1/node-presets/favorites returns the user's favorite ids, most-recent first", async () => {
+    fromMock.mockReturnValue(
+      makeQB({ rows: [{ preset_id: "generate-image/character-board" }, { preset_id: "p-uuid" }] }),
+    )
+    const app = buildApp()
+    await app.register(nodePresetRoutes)
+    const res = await app.inject({ method: "GET", url: "/v1/node-presets/favorites?nodeType=generate-image" })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toEqual(["generate-image/character-board", "p-uuid"])
+  })
+
+  it("GET /v1/node-presets/favorites requires a nodeType", async () => {
+    const app = buildApp()
+    await app.register(nodePresetRoutes)
+    const res = await app.inject({ method: "GET", url: "/v1/node-presets/favorites" })
+    expect(res.statusCode).toBe(400)
+  })
+
+  it("POST /v1/node-presets/favorites adds a favorite (idempotent upsert)", async () => {
+    const qb = makeQB({})
+    fromMock.mockReturnValue(qb)
+    const app = buildApp()
+    await app.register(nodePresetRoutes)
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/node-presets/favorites",
+      payload: { nodeType: "generate-image", presetId: "generate-image/character-board" },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toEqual({ success: true })
+    expect(qb.upsert).toHaveBeenCalled()
+  })
+
+  it("DELETE /v1/node-presets/favorites requires nodeType and presetId", async () => {
+    const app = buildApp()
+    await app.register(nodePresetRoutes)
+    const res = await app.inject({ method: "DELETE", url: "/v1/node-presets/favorites?nodeType=generate-image" })
+    expect(res.statusCode).toBe(400)
+  })
+
+  it("DELETE /v1/node-presets/favorites removes a favorite", async () => {
+    const qb = makeQB({})
+    fromMock.mockReturnValue(qb)
+    const app = buildApp()
+    await app.register(nodePresetRoutes)
+    const url = "/v1/node-presets/favorites?nodeType=generate-image&presetId=" + encodeURIComponent("generate-image/character-board")
+    const res = await app.inject({ method: "DELETE", url })
+    expect(res.statusCode).toBe(200)
+    expect(qb.delete).toHaveBeenCalled()
+  })
+
+  it("favorites writes reject programmatic (OAuth app) tokens with 403", async () => {
+    const app = Fastify()
+    app.addHook("preHandler", async (req) => {
+      const r = req as { userId?: string; appAuthorization?: { appId: string; authorizationId: string; scopes: string[] } }
+      r.userId = USER
+      r.appAuthorization = { appId: "a", authorizationId: "z", scopes: ["presets:read"] }
+    })
+    await app.register(nodePresetRoutes)
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/node-presets/favorites",
+      payload: { nodeType: "generate-image", presetId: "x" },
+    })
+    expect(res.statusCode).toBe(403)
   })
 
   it("LIST enforces presets:read for OAuth app tokens (403 without, 200 with)", async () => {

@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply } from "fastify"
 import { z } from "zod"
-import { extractPresetData, getFactoryPresets, getPopularFactoryPresets } from "@nodaro/shared"
+import { extractPresetData, getFactoryPresets } from "@nodaro/shared"
 import { supabase } from "../lib/supabase.js"
 import { requireScope } from "../lib/scopes.js"
 import { rejectProgrammaticAuth } from "../lib/api-auth-mode.js"
@@ -56,6 +56,13 @@ const importBody = z.object({
       }),
     )
     .max(500),
+})
+
+// A favorite points at a factory preset id ("generate-image/character-board") OR a
+// user-preset uuid (as text) — both fit `presetId`.
+const favoriteBody = z.object({
+  nodeType: z.string().min(1).max(120),
+  presetId: z.string().min(1).max(200),
 })
 
 type Row = {
@@ -144,8 +151,70 @@ export async function nodePresetRoutes(app: FastifyInstance) {
       groupKind: p.groupKind,
       data: p.data,
     }))
-    const popularIds = getPopularFactoryPresets(nodeType).map((p) => p.id)
-    return reply.send({ data, popularIds })
+    return reply.send({ data })
+  })
+
+  // FAVORITES — per-user starred presets (factory OR user). Powers the dropdown's "Favorites"
+  // band (which replaced the static "Popular" band). Static "/favorites" paths are matched
+  // ahead of the parametric "/:id" routes by the router (find-my-way: static > parametric).
+  // LIST favorite preset ids for a node type, most-recent first.
+  app.get("/v1/node-presets/favorites", async (req, reply) => {
+    const userId = req.userId
+    if (!userId) return unauthorized(reply)
+    if (req.appAuthorization) {
+      const err = requireScope(req.appAuthorization.scopes, "presets:read")
+      if (err) return reply.status(err.statusCode).send(err.body)
+    }
+    const nodeType = (req.query as { nodeType?: string }).nodeType
+    if (!nodeType) {
+      return reply.status(400).send({ error: { code: "validation_error", message: "nodeType query param is required" } })
+    }
+    const { data, error } = await supabase
+      .from("node_preset_favorites")
+      .select("preset_id")
+      .eq("user_id", userId)
+      .eq("node_type", nodeType)
+      .order("created_at", { ascending: false })
+    if (error) return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
+    return reply.send({ data: ((data ?? []) as { preset_id: string }[]).map((r) => r.preset_id) })
+  })
+
+  // ADD a favorite (editor-only; idempotent on the unique constraint).
+  app.post("/v1/node-presets/favorites", async (req, reply) => {
+    const userId = req.userId
+    if (!userId) return unauthorized(reply)
+    if (rejectProgrammaticAuth(req, reply, PRESETS_READ_ONLY_MSG)) return
+    const parsed = favoriteBody.safeParse(req.body)
+    if (!parsed.success) {
+      return reply.status(400).send({ error: { code: "validation_error", message: parsed.error.issues[0]?.message ?? "Invalid body" } })
+    }
+    const { error } = await supabase
+      .from("node_preset_favorites")
+      .upsert(
+        { user_id: userId, node_type: parsed.data.nodeType, preset_id: parsed.data.presetId },
+        { onConflict: "user_id,node_type,preset_id", ignoreDuplicates: true },
+      )
+    if (error) return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
+    return reply.send({ data: { success: true } })
+  })
+
+  // REMOVE a favorite (editor-only). Query params because factory presetIds contain "/".
+  app.delete("/v1/node-presets/favorites", async (req, reply) => {
+    const userId = req.userId
+    if (!userId) return unauthorized(reply)
+    if (rejectProgrammaticAuth(req, reply, PRESETS_READ_ONLY_MSG)) return
+    const q = req.query as { nodeType?: string; presetId?: string }
+    if (!q.nodeType || !q.presetId) {
+      return reply.status(400).send({ error: { code: "validation_error", message: "nodeType and presetId query params are required" } })
+    }
+    const { error } = await supabase
+      .from("node_preset_favorites")
+      .delete()
+      .eq("user_id", userId)
+      .eq("node_type", q.nodeType)
+      .eq("preset_id", q.presetId)
+    if (error) return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
+    return reply.send({ data: { success: true } })
   })
 
   // CREATE
@@ -228,6 +297,9 @@ export async function nodePresetRoutes(app: FastifyInstance) {
     const id = (req.params as { id: string }).id
     const { error } = await supabase.from("node_presets").delete().eq("id", id).eq("user_id", userId)
     if (error) return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
+    // Best-effort: drop any favorite rows pointing at this now-deleted user preset
+    // (preset_id is polymorphic → no FK cascade). Non-fatal if it errors.
+    await supabase.from("node_preset_favorites").delete().eq("preset_id", id).eq("user_id", userId)
     return reply.send({ data: { success: true } })
   })
 

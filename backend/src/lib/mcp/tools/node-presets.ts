@@ -4,7 +4,7 @@ import type { FastifyInstance } from "fastify"
 import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
-import { getFactoryPresets, getPopularFactoryPresets } from "@nodaro/shared"
+import { getFactoryPresets } from "@nodaro/shared"
 
 const presetsReadGate: ToolGate = { required: ["presets:read"] }
 
@@ -75,13 +75,11 @@ export function registerPresets({ server, session }: RegisterPresetsOpts): void 
               isError: true,
             }
           }
-          const popular = new Set(getPopularFactoryPresets(args.nodeType).map((p) => p.id))
           out.factory = getFactoryPresets(args.nodeType).map((p) => ({
             id: p.id,
             name: p.name,
             description: p.description,
             group: p.group,
-            popular: popular.has(p.id),
           }))
         }
 

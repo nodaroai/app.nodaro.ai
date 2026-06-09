@@ -11,6 +11,9 @@ import {
   createNodePresetGroup,
   updateNodePresetGroup,
   deleteNodePresetGroup,
+  listNodePresetFavorites,
+  addNodePresetFavorite,
+  removeNodePresetFavorite,
   type NodePreset,
   type NodePresetGroup,
 } from "@/lib/api"
@@ -22,6 +25,59 @@ export function useNodePresets(nodeType: string | undefined, userId: string | un
     enabled: !!userId && !!nodeType,
     staleTime: 60_000,
   })
+}
+
+/** A node's favorited preset ids (factory + user), most-recent first. */
+export function useNodePresetFavorites(nodeType: string | undefined, userId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.nodePresetFavorites.list(nodeType),
+    queryFn: () => listNodePresetFavorites(nodeType as string),
+    enabled: !!userId && !!nodeType,
+    staleTime: 60_000,
+  })
+}
+
+type FavCtx = { prev: string[] | undefined }
+
+/**
+ * Add/remove a preset favorite for one node type. Unlike the preset/group mutations below
+ * (invalidate-only), these are OPTIMISTIC — a star toggle needs instant feedback — so they
+ * flip the cached id-array immediately and roll back on error. Intentional divergence; do not
+ * "simplify" back to invalidate-only.
+ */
+export function useNodePresetFavoriteMutations(nodeType: string | undefined) {
+  const qc = useQueryClient()
+  const key = queryKeys.nodePresetFavorites.list(nodeType)
+
+  const add = useMutation<void, Error, string, FavCtx>({
+    mutationFn: (presetId) => addNodePresetFavorite(nodeType as string, presetId),
+    onMutate: async (presetId) => {
+      await qc.cancelQueries({ queryKey: key })
+      const prev = qc.getQueryData<string[]>(key)
+      qc.setQueryData<string[]>(key, (cur) => (cur?.includes(presetId) ? cur : [presetId, ...(cur ?? [])]))
+      return { prev }
+    },
+    onError: (_e, _presetId, ctx) => {
+      if (ctx?.prev) qc.setQueryData(key, ctx.prev)
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: key }),
+  })
+
+  const remove = useMutation<void, Error, string, FavCtx>({
+    mutationFn: (presetId) => removeNodePresetFavorite(nodeType as string, presetId),
+    onMutate: async (presetId) => {
+      await qc.cancelQueries({ queryKey: key })
+      const prev = qc.getQueryData<string[]>(key)
+      qc.setQueryData<string[]>(key, (cur) => (cur ?? []).filter((id) => id !== presetId))
+      return { prev }
+    },
+    onError: (_e, _presetId, ctx) => {
+      if (ctx?.prev) qc.setQueryData(key, ctx.prev)
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: key }),
+  })
+
+  return { add, remove }
 }
 
 export function useNodePresetGroups(nodeType: string | undefined, userId: string | undefined) {
