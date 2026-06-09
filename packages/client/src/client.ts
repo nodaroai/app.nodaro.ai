@@ -18,6 +18,7 @@ import { PromptHelperResource } from "./resources/prompt-helper.js"
 import { VoicesResource } from "./resources/voices.js"
 import { CreditsResource } from "./resources/credits.js"
 import { UploadsResource } from "./resources/uploads.js"
+import { LibraryResource } from "./resources/library.js"
 import { PresetsResource } from "./resources/node-presets.js"
 import { CommunityResource } from "./resources/community.js"
 
@@ -91,6 +92,7 @@ export class NodaroClient {
   readonly voices: VoicesResource
   readonly credits: CreditsResource
   readonly uploads: UploadsResource
+  readonly library: LibraryResource
   readonly presets: PresetsResource
   readonly community: CommunityResource
 
@@ -118,6 +120,7 @@ export class NodaroClient {
     this.voices = new VoicesResource(this)
     this.credits = new CreditsResource(this)
     this.uploads = new UploadsResource(this)
+    this.library = new LibraryResource(this)
     this.presets = new PresetsResource(this)
     this.community = new CommunityResource(this)
   }

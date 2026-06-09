@@ -51,6 +51,7 @@ export { PromptHelperResource } from "./resources/prompt-helper.js"
 export { VoicesResource } from "./resources/voices.js"
 export { CreditsResource } from "./resources/credits.js"
 export { UploadsResource } from "./resources/uploads.js"
+export { LibraryResource } from "./resources/library.js"
 export { PresetsResource } from "./resources/node-presets.js"
 export { CommunityResource } from "./resources/community.js"
 
@@ -275,6 +276,12 @@ export type {
 } from "./resources/credits.js"
 
 export type { UploadResult } from "./resources/uploads.js"
+
+export type {
+  LibraryAsset,
+  ListLibraryParams,
+  ListLibraryResult,
+} from "./resources/library.js"
 
 export type {
   NodePreset,

@@ -8,7 +8,7 @@ import { extractWorkflowId, extractForcePrivate, extractProvider } from "../lib/
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { llmComplete } from "../lib/llm-client.js"
-import { IMAGE_I2I_PROVIDERS } from "@nodaro/shared"
+import { IMAGE_I2I_PROVIDERS, IMAGE_PROMPT_MAX } from "@nodaro/shared"
 import { buildCreditModelIdentifier } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 import {
@@ -19,7 +19,7 @@ import {
 
 const imageToImageBody = z.object({
   imageUrl: safeUrlSchema,
-  prompt: z.string().min(1).max(2000),
+  prompt: z.string().min(1).max(IMAGE_PROMPT_MAX),
   userPrompt: z.string().max(8000).optional(),
   provider: z.enum(IMAGE_I2I_PROVIDERS).optional(),
   referenceImageUrls: z.array(safeUrlSchema).max(13).optional(),
@@ -214,7 +214,7 @@ export async function imageToImageRoutes(app: FastifyInstance) {
           // Mirror the final prompt into parsed.data so buildJobInputData
           // persists it (input_data is what gallery/debug surfaces read back).
           parsed.data.prompt = prompt
-          if (prompt.length > 2000) {
+          if (prompt.length > IMAGE_PROMPT_MAX) {
             req.log.warn(
               { characterId: parsed.data.attachToCharacterId, finalPromptLength: prompt.length },
               "[image-to-image] character context injection produced a long prompt; consider trimming canonicalDescription",

@@ -9,7 +9,7 @@ import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.j
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
-import { IMAGE_GEN_PROVIDERS, T2I_TO_I2I_VARIANT, FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared"
+import { IMAGE_GEN_PROVIDERS, T2I_TO_I2I_VARIANT, FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_PROMPT_MAX } from "@nodaro/shared"
 import { buildCreditModelIdentifier } from "@nodaro/shared"
 import {
   assembleImageInput,
@@ -155,7 +155,7 @@ export const generateImageBody = z.object({
   // assembly that produces a truly-empty prompt → 400). The flat path (no
   // structured fields) still effectively requires a prompt because no other
   // input can populate it — see the post-assembly empty check in the handler.
-  prompt: z.string().min(0).max(2000),
+  prompt: z.string().min(0).max(IMAGE_PROMPT_MAX),
   userPrompt: z.string().max(8000).optional(),
   referenceImageUrls: z.array(safeUrlSchema).max(14).optional(),
   // ─── WI-1b structured inputs (all optional; ADDITIVE) ────────────────────
@@ -520,7 +520,7 @@ export async function generateImageRoutes(app: FastifyInstance) {
         const identityText = canonical.length > 0 ? canonical : (desc.length > 0 ? desc : "")
         if (identityText.length > 0) {
           prompt = `${prompt.trim()}\n\n${identityText}\n\n${IDENTITY_PRESERVE_SUFFIX}`
-          if (prompt.length > 2000) {
+          if (prompt.length > IMAGE_PROMPT_MAX) {
             req.log.warn(
               { characterId: parsed.data.attachToCharacterId, finalPromptLength: prompt.length },
               "[generate-image] character context injection produced a long prompt; consider trimming canonicalDescription",

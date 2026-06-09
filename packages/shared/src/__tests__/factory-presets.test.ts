@@ -16,6 +16,7 @@ import {
   AUDIO_CROSSFADE_CURVE_IDS,
   aspectRatioOptionsByKind,
   durationsByMode,
+  IMAGE_PROMPT_MAX,
 } from "../index.js"
 
 describe("FACTORY_PRESETS", () => {
@@ -126,13 +127,24 @@ describe("generate-image factory preset data validity", () => {
     }
   })
 
-  it("respects prompt (2000) and negativePrompt (5000) length caps", () => {
+  it("respects prompt (IMAGE_PROMPT_MAX) and negativePrompt (5000) length caps", () => {
     for (const p of presets) {
       const prompt = (p.data.prompt as string | undefined) ?? ""
       const neg = (p.data.negativePrompt as string | undefined) ?? ""
-      expect(prompt.length, `${p.id}: prompt exceeds 2000 chars`).toBeLessThanOrEqual(2000)
+      expect(prompt.length, `${p.id}: prompt exceeds cap`).toBeLessThanOrEqual(IMAGE_PROMPT_MAX)
       expect(neg.length, `${p.id}: negativePrompt exceeds 5000 chars`).toBeLessThanOrEqual(5000)
     }
+  })
+
+  it("includes the Reference Sheet group with Character + Location boards", () => {
+    const char = presets.find((p) => p.id === "generate-image/character-board")
+    const loc = presets.find((p) => p.id === "generate-image/location-board")
+    expect(char?.group).toBe("Reference Sheet")
+    expect(char?.data.provider).toBe("nano-banana-pro")
+    expect(char?.data.resolution).toBe("2K")
+    expect(loc?.group).toBe("Reference Sheet")
+    expect(loc?.data.provider).toBe("nano-banana-pro")
+    expect(loc?.data.resolution).toBe("2K")
   })
 
   it("groups every preset under a folder (no stray ungrouped presets)", () => {
