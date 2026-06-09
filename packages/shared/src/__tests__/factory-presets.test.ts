@@ -261,6 +261,21 @@ describe("generate-video factory preset data validity", () => {
     }
   })
 
+  it("every generate-video preset has a non-empty negativePrompt", () => {
+    for (const p of presets) {
+      const neg = (p.data.negativePrompt as string | undefined) ?? ""
+      expect(neg.trim().length, `${p.id}: missing negativePrompt`).toBeGreaterThan(0)
+    }
+  })
+
+  it("non-style-pinned generate-video prompts are substantive", () => {
+    for (const p of presets) {
+      if (p.data.style !== undefined) continue
+      const prompt = (p.data.prompt as string | undefined) ?? ""
+      expect(prompt.trim().length, `${p.id}: prompt too thin (${prompt.length} chars)`).toBeGreaterThanOrEqual(40)
+    }
+  })
+
   it("groups every preset under a folder", () => {
     for (const p of presets) expect(p.group, `${p.id}: missing group`).toBeTruthy()
   })

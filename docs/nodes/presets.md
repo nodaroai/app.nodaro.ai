@@ -60,7 +60,11 @@ own value (shipped in [PR #3250](https://github.com/nodaroai/app.nodaro.ai/pull/
 
 **Generate Video** ships a cinematography-driven catalog. Camera moves are written as composable
 prompt fragments (you can stack them), and each preset pre-selects a fitting provider + aspect ratio
-+ a provider-valid duration (social presets default to 9:16):
++ a provider-valid duration (social presets default to 9:16). Consistent with the Generate Image
+catalog, every video preset now ships a tuned **`negativePrompt`** (to suppress common motion
+artifacts — warping, flicker, morphing) and uses the **`{token || default}`** placeholder syntax for
+its `{placeholder}` slots, so each preset renders into a sensible clip even if you run it unedited —
+the fallback is used until you type your own value.
 
 | Folder | Examples |
 |--------|----------|
