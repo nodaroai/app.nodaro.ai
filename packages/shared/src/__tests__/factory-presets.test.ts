@@ -620,3 +620,24 @@ describe("presets don't bake config-field values (framing) into the prompt", () 
     ).toEqual([])
   })
 })
+
+describe("factory-presets split integrity", () => {
+  // The exact node-type keys, in the exact insertion order the single-file
+  // catalog declared them. The split's index.ts must reproduce this order.
+  const EXPECTED_KEYS = [
+    "generate-image", "modify-image", "generate-video", "text-to-speech",
+    "text-to-audio", "generate-music", "suno-generate", "llm-chat",
+    "generate-script", "image-to-text", "voice-design", "video-to-video",
+    "voice-changer", "add-captions", "combine-videos",
+  ]
+
+  it("exposes exactly the expected node-type keys in order", () => {
+    expect(Object.keys(FACTORY_PRESETS)).toEqual(EXPECTED_KEYS)
+  })
+
+  it("every declared node type has at least one preset", () => {
+    for (const k of EXPECTED_KEYS) {
+      expect(getFactoryPresets(k).length, `${k} is empty`).toBeGreaterThan(0)
+    }
+  })
+})
