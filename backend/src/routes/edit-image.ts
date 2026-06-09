@@ -7,7 +7,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { IMAGE_EDIT_PROVIDERS } from "@nodaro/shared"
+import { IMAGE_EDIT_PROVIDERS, IMAGE_PROMPT_MAX } from "@nodaro/shared"
 import { buildCreditModelIdentifier } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 
@@ -23,7 +23,7 @@ const editImageBody = z.object({
    * a separate field instead of overloading imageUrl.
    */
   taskId: z.string().min(1).max(200).optional(),
-  prompt: z.string().max(2000).optional(),
+  prompt: z.string().max(IMAGE_PROMPT_MAX).optional(),
   userPrompt: z.string().max(8000).optional(),
   provider: z.enum(IMAGE_EDIT_PROVIDERS).optional(),
   upscaleFactor: z.enum(["1", "2", "4"]).optional(),

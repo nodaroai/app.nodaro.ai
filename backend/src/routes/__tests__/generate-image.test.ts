@@ -100,6 +100,14 @@ describe("generateImageBody aspectRatio enum", () => {
   })
 })
 
+describe("generateImageBody prompt length cap", () => {
+  it("accepts a prompt up to 5000 chars and rejects 5001", () => {
+    // 5000 = IMAGE_PROMPT_MAX (raised from the legacy 2000 day-one cap)
+    expect(generateImageBody.safeParse({ prompt: "a".repeat(5000) }).success).toBe(true)
+    expect(generateImageBody.safeParse({ prompt: "a".repeat(5001) }).success).toBe(false)
+  })
+})
+
 // ---------------------------------------------------------------------------
 // Drift guard for the hand-mirrored `connectedReferenceSchema` (WI-1b).
 //

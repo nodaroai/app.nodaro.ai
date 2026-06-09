@@ -13,6 +13,7 @@ export { DEFAULT_LABEL_BY_SOURCE } from "./types.js"
 
 export {
   CREDIT_BASE_USD,
+  IMAGE_PROMPT_MAX,
   NATIVE_NEGATIVE_PROMPT_MODELS,
   NATIVE_NEGATIVE_VIDEO_PROVIDERS,
   applyVideoNegativePrompt,

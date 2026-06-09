@@ -7,6 +7,11 @@ import { z } from "zod"
 /** Base USD cost per 1 Nodaro credit (before markup). Used for cost→credit conversion. */
 export const CREDIT_BASE_USD = 0.02
 
+/** Max characters for the (assembled) prompt accepted by the image-generation routes
+ *  (generate-image, image-to-image, edit-image). Single source of truth — the route Zod
+ *  schemas and the factory-preset guard test all read this. Prompt cap ONLY (not negativePrompt). */
+export const IMAGE_PROMPT_MAX = 5000
+
 // Models that accept negative_prompt as a native API parameter.
 // All other models get negative prompt appended to the prompt text as "Avoid: ...".
 export const NATIVE_NEGATIVE_PROMPT_MODELS = new Set([

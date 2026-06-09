@@ -222,6 +222,35 @@ function editsFor(nodeType: string): FactoryPreset[] {
  */
 export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>> = {
   "generate-image": [
+    // ── Reference Sheet ──────────────────────────────────────────────────────
+    {
+      id: "generate-image/character-board",
+      name: "Character Board",
+      description: "Connect a photo → dense character reference sheet.",
+      group: "Reference Sheet",
+      data: {
+        provider: "nano-banana-pro",
+        aspectRatio: "16:9",
+        resolution: "2K",
+        prompt: `Create a single high-resolution, densely packed character reference sheet titled "CHARACTER BOARD" using the attached photo of the person as the single source of truth for face, hair, beard, eyes, skin tone and body proportions. The same person must appear in every panel — same age, same features. Outfit identical to the attached photo across all panels. All on-image labels in ENGLISH. Editorial reference-board layout with a dark near-black background, thin yellow neon accent light, faint film-grain overlay, and production-grade character-design UI. The composition should feel organized but not rigidly locked: allow the main portrait, metadata, and supporting panels to shift position naturally within the board. The panel arrangement can vary from generation to generation while remaining readable, balanced, and premium. Design the board so it works cleanly in different aspect ratios without depending on a fixed left-column structure. Include: A large hero portrait or 3/4-length character image, accompanied by a detailed metadata block: NAME · AGE · HEIGHT · BUILD · HAIR · EYES · FEATURES · OUTFIT (describe the exact clothing from the attached photo) · CHARACTER · MOOD. Also include six content groupings: PANEL 01 — VIEWS (4 full-body angles, neutral pose, identical lighting): FRONT · 3/4 LEFT · SIDE LEFT · BACK. PANEL 02 — EXPRESSIONS (5 tight headshots, same lighting): CALM · LAUGHING · INTENSE · CONTEMPLATIVE · CONFIDENT. PANEL 03 — DETAILS (3 macros): face/eyes close-up · hand close-up (showing ring, watch or cuff) · distinctive outfit detail. PANEL 04 — OUTFIT FLAT-LAYS (5 isolated product shots on dark background): outerwear · top · bottom · footwear · main accessory. PANEL 05 — LIGHTING / MOOD (4 same-pose portraits under different lighting): SOFT WINDOW LIGHT · GOLDEN HOUR · COOL BLUE NIGHT · DRAMATIC RIM-LIGHT. PANEL 06 — COLOR PALETTE: 6 swatches with HEX codes derived from the outfit and skin tones. Bottom caption: "Use this character board as a visual reference for consistent depiction of the character across all generations." Bottom-right tags: STYLE · Modern · Realistic · Cinematic. Style: photorealistic, no illustration. Consistent face across every single panel. 8K, fine grain, cinematic color grading.`,
+        negativePrompt:
+          "illustration, cartoon, 3d render, garbled text, misspelled labels, watermark, deformed faces, blurry, low resolution",
+      },
+    },
+    {
+      id: "generate-image/location-board",
+      name: "Location Board",
+      description: "Connect a photo → dense location reference sheet.",
+      group: "Reference Sheet",
+      data: {
+        provider: "nano-banana-pro",
+        aspectRatio: "16:9",
+        resolution: "2K",
+        prompt: `Create a single high-resolution, densely packed location reference sheet titled "LOCATION BOARD" using the attached photo of the location as the single source of truth for its architecture, atmosphere, lighting, materials and color palette. The space must be identical across every panel — same place, same materials, same era. All on-image labels in ENGLISH. Editorial location-reference board layout with a dark near-black background, thin yellow neon accent light on the far left, faint film-grain overlay, subtle cinematic interface elements, and production-grade location-scout UI. The composition should feel structured but not rigidly fixed: allow the hero location view, metadata, environmental studies, and supporting panels to shift position naturally within the board. The arrangement may vary from generation to generation while remaining readable, balanced, and premium. Design the board so it adapts cleanly to different aspect ratios without depending on a fixed left-column layout. Include a prominent hero shot of the location, ideally a wide establishing or defining view, accompanied by a detailed metadata block: NAME · TYPE (street / interior / exterior / forest) · ERA · SCALE (intimate / vast) ARCHITECTURE: (key features) MATERIALS: (stone, brick, wood, glass, etc.) ATMOSPHERE: (busy / quiet / eerie / romantic) DEFAULT TIME · DEFAULT WEATHER · PURPOSE (e.g. chase sequence, dialogue scene). Also include six content groupings: PANEL 01 — VIEWS (5 same-location shots, identical lighting): WIDE · MID · TIGHT · ALT ANGLE · OVERHEAD. PANEL 02 — TIME OF DAY (4 same-angle shots): DAWN · NOON · DUSK · NIGHT. PANEL 03 — DETAILS (2 macros): material/texture close-up · distinctive architectural detail. PANEL 04 — SET DRESSING / PROPS (5 isolated prop or signage studies on dark background): 5 key props or signage elements from the location. PANEL 05 — WEATHER / MOOD (4 same-angle shots): CLEAR SUNNY · OVERCAST · RAIN-SOAKED · MISTY FOG. PANEL 06 — COLOR PALETTE: 6 swatches with HEX codes from the location's dominant tones. Bottom caption: "Use this location board as a visual reference for consistent depiction of the environment across all generations." Bottom-right tags: STYLE · Modern · Realistic · Cinematic. Style: photorealistic, no illustration. Consistent location across every panel. 8K, fine grain, cinematic color grading.`,
+        negativePrompt:
+          "illustration, cartoon, 3d render, garbled text, misspelled labels, watermark, deformed faces, blurry, low resolution",
+      },
+    },
     // ── Photography & Cinematic ──────────────────────────────────────────────
     {
       id: "generate-image/cinematic-portrait",
