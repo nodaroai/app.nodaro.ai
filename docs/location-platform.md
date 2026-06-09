@@ -685,12 +685,12 @@ generation routes:
 - `POST /v1/generate-location` — `creditCost(provider) × count` credits,
   reserved for ALL jobs up-front before any is enqueued. Mid-batch
   reservation failures roll back atomically. The image-provider cost
-  depends on the model (`nano-banana = 2 cr`, `flux = 2 cr`, etc.) — see
+  depends on the model (`nano-banana = 1 cr`, `flux = 2 cr`, etc.) — see
   `docs/nodes/ai-image/generate-image.md` for the per-provider table.
 - `POST /v1/generate-location-asset` — `creditCost(provider)` credits per
   variant. Same per-provider table as `generate-image`.
 - `POST /v1/generate-location-motion` — `creditCost(provider)` credits per
-  motion clip. Provider defaults to `kling` (~28 credits / 5-second clip).
+  motion clip. Provider defaults to `kling` (~28 credits / 10-second clip (kling:5s = 14)).
   See `docs/nodes/ai-video/generate-video.md` for the full per-provider
   table.
 - `POST /v1/locations/:id/approve-main-image` — currently free; the LLM

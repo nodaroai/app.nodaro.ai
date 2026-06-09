@@ -884,7 +884,7 @@ the orchestrator transparently swaps:
 - `referenceImageUrls` → `[]`
 - Prompt → `TOK_<slug>_<6hex>, <your prompt with @-tokens stripped>`
 
-The credit identifier becomes `flux-lora-character` (**3 cr**). Multi-character
+The credit identifier becomes `flux-lora-character` (**2 cr**). Multi-character
 mentions fall back to the selected provider + ref injection.
 
 ## See also
