@@ -3,15 +3,30 @@
  * the current user and invokes a caller-supplied handler when a tracked
  * job updates.
  *
- * Why a single per-user channel
- * -----------------------------
+ * Why a per-user filter with a per-INSTANCE channel topic
+ * -------------------------------------------------------
  * The Location Studio commonly tracks 1-4 candidate-generation jobs at
  * once, and any tab the user has open might track a different set of
  * jobs. A per-job channel would scale poorly (one CDC subscription per
- * pending job). Instead this hook opens ONE channel filtered by
+ * pending job). Instead each hook instance opens one channel filtered by
  * `user_id=eq.<userId>` and drops events whose job id isn't in the
  * caller's tracked-set ref. RLS already restricts the per-user filter
  * so the broadcast cost is bounded by the user's own activity.
+ *
+ * The channel TOPIC must be unique per hook instance (`jobs:<userId>:<n>`),
+ * not shared per user. supabase-js (realtime-js ≥2.105) dedupes
+ * `client.channel(name)` by topic — a second caller gets the FIRST
+ * caller's channel instance back, and `.on("postgres_changes", …)` throws
+ * once that instance is subscribed. Multiple consumers of this hook DO
+ * mount concurrently for the same user (the studio modal's sheet-tab jobs
+ * hook + the active tab's own jobs hook), which crashed the studio on
+ * open. A unique suffix gives every consumer an independent channel, so
+ * any number of concurrent mounts (and rapid unmount/remount cycles,
+ * where async channel teardown could otherwise hand back a dying
+ * instance) stay correct by default. Delivery is defined by the
+ * `postgres_changes` filter, not the topic, so events are unaffected;
+ * the cost is one extra CDC subscription per concurrently-open consumer
+ * (bounded: 2-3 while a studio is open).
  *
  * Replacement for polling
  * -----------------------
@@ -42,6 +57,12 @@
  */
 import { useEffect, useRef } from "react"
 import { createClient } from "@/lib/supabase"
+
+/**
+ * Monotonic counter making every subscribe-effect run use a fresh channel
+ * topic. See "Why a per-user filter with a per-INSTANCE channel topic" above.
+ */
+let channelSeq = 0
 
 /**
  * Raw shape of a `jobs` row as it arrives from Postgres replication
@@ -89,7 +110,8 @@ export function useJobsRealtimeSync(
     if (!userId) return
 
     const supabase = createClient()
-    const channelName = `jobs:${userId}`
+    channelSeq += 1
+    const channelName = `jobs:${userId}:${channelSeq}`
 
     const channel = supabase
       .channel(channelName)
