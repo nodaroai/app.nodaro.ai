@@ -17,6 +17,11 @@ describe("referencedRefs", () => {
   it("matches duplicate-suffixed labels like {Hero (2)}", () => {
     expect(referencedRefs({ prompt: "{Hero (2)}" }, ["prompt"]).has("Hero (2)")).toBe(true)
   })
+  it("extracts the parsed name for {Label || default} refs", () => {
+    const r = referencedRefs({ prompt: "a {person || man} b" }, ["prompt"])
+    expect(r.has("person")).toBe(true)
+    expect(r.has("person || man")).toBe(false)
+  })
 })
 describe("hasEmptyInjection", () => {
   it("detects literal {} (which NODE_REF_PATTERN ignores)", () => {

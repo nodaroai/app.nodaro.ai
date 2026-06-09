@@ -714,7 +714,7 @@ export type { PickerOption, PickerCatalog, PickerDimension } from "./picker-cata
 
 export { resolveFieldMappings, resolveLocationFields } from "./resolve-field-mappings.js"
 
-export { resolveNodeRefs, NODE_REF_PATTERN, RESERVED_TEMPLATE_VARS } from "./node-refs.js"
+export { resolveNodeRefs, parseNodeRef, NODE_REF_PATTERN, RESERVED_TEMPLATE_VARS } from "./node-refs.js"
 
 export { resolvePrompt, NODE_PROMPT_CANDIDATE_FIELDS, computeNodePrompt, computeLlmChatFields } from "./resolve-prompt.js"
 

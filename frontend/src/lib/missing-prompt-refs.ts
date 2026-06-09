@@ -1,5 +1,5 @@
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
-import { NODE_REF_PATTERN, NODE_MAPPABLE_FIELDS } from "@nodaro/shared"
+import { NODE_REF_PATTERN, NODE_MAPPABLE_FIELDS, parseNodeRef } from "@nodaro/shared"
 import { getUpstreamNodes } from "@/lib/node-refs"
 import { isExcludedToken } from "@/lib/prompt-ref-scan"
 
@@ -44,10 +44,10 @@ export function computeMissingPromptRefs(
     const value = data[field]
     if (typeof value !== "string" || value.length === 0) continue
     for (const match of value.matchAll(NODE_REF_PATTERN)) {
-      const raw = (match[1] ?? "").trim()
-      if (isExcludedToken(raw) || resolvable.has(raw) || seen.has(raw)) continue
-      seen.add(raw)
-      missing.push({ kind: "text", name: raw })
+      const { name } = parseNodeRef(match[1] ?? "")
+      if (isExcludedToken(name) || resolvable.has(name) || seen.has(name)) continue
+      seen.add(name)
+      missing.push({ kind: "text", name })
     }
   }
   return missing
