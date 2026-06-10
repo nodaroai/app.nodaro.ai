@@ -6,21 +6,35 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
   {
     id: "generate-image/character-board",
     name: "Character Board",
-    description: "Connect a photo → dense character reference sheet.",
+    description: "Connect a sharp, well-lit photo → dense character sheet; reuse it as a reference for consistent shots.",
     group: "Reference Sheet",
     data: {
       provider: "nano-banana-pro",
       aspectRatio: "16:9",
       resolution: "2K",
-      prompt: `Create a single high-resolution, densely packed character reference sheet titled "CHARACTER BOARD" using the attached photo of the person as the single source of truth for face, hair, beard, eyes, skin tone and body proportions. The same person must appear in every panel — same age, same features. Outfit identical to the attached photo across all panels. All on-image labels in ENGLISH. Editorial reference-board layout with a dark near-black background, thin yellow neon accent light, faint film-grain overlay, and production-grade character-design UI. The composition should feel organized but not rigidly locked: allow the main portrait, metadata, and supporting panels to shift position naturally within the board. The panel arrangement can vary from generation to generation while remaining readable, balanced, and premium. Design the board so it works cleanly in different aspect ratios without depending on a fixed left-column structure. Include: A large hero portrait or 3/4-length character image, accompanied by a detailed metadata block: NAME · AGE · HEIGHT · BUILD · HAIR · EYES · FEATURES · OUTFIT (describe the exact clothing from the attached photo) · CHARACTER · MOOD. Also include six content groupings: PANEL 01 — VIEWS (4 full-body angles, neutral pose, identical lighting): FRONT · 3/4 LEFT · SIDE LEFT · BACK. PANEL 02 — EXPRESSIONS (5 tight headshots, same lighting): CALM · LAUGHING · INTENSE · CONTEMPLATIVE · CONFIDENT. PANEL 03 — DETAILS (3 macros): face/eyes close-up · hand close-up (showing ring, watch or cuff) · distinctive outfit detail. PANEL 04 — OUTFIT FLAT-LAYS (5 isolated product shots on dark background): outerwear · top · bottom · footwear · main accessory. PANEL 05 — LIGHTING / MOOD (4 same-pose portraits under different lighting): SOFT WINDOW LIGHT · GOLDEN HOUR · COOL BLUE NIGHT · DRAMATIC RIM-LIGHT. PANEL 06 — COLOR PALETTE: 6 swatches with HEX codes derived from the outfit and skin tones. Bottom caption: "Use this character board as a visual reference for consistent depiction of the character across all generations." Bottom-right tags: STYLE · Modern · Realistic · Cinematic. Style: photorealistic, no illustration. Consistent face across every single panel. 8K, fine grain, cinematic color grading.`,
+      prompt: `Create a single high-resolution, densely packed character reference sheet titled "CHARACTER BOARD" using the attached photo of the person as the single source of truth for face, hair, beard, eyes, skin tone and body proportions. The same person must appear in every panel — same age, same features. Outfit identical to the attached photo across all panels. All on-image labels in ENGLISH. Editorial reference-board layout with a dark near-black background, thin yellow neon accent light, faint film-grain overlay, and production-grade character-design UI. The composition should feel organized but not rigidly locked: allow the main portrait, metadata, and supporting panels to shift position naturally within the board. The panel arrangement can vary from generation to generation while remaining readable, balanced, and premium. Design the board so it works cleanly in different aspect ratios without depending on a fixed left-column structure. Include: A large hero portrait or 3/4-length character image, accompanied by a detailed metadata block: NAME · AGE · HEIGHT · BUILD · HAIR · EYES · FEATURES · OUTFIT (describe the exact clothing from the attached photo) · CHARACTER · MOOD. Also include six content groupings: PANEL 01 — VIEWS (5 full-body shots, neutral pose, identical outfit and lighting, neutral tan backdrop): FRONT · 3/4 LEFT · SIDE LEFT · BACK · 3/4 RIGHT. PANEL 02 — EXPRESSIONS (5 tight headshots, same lighting): CALM · LAUGHING · INTENSE · CONTEMPLATIVE · CONFIDENT. PANEL 03 — DETAILS (3 macros): face/eyes close-up · hand close-up (showing ring, watch or cuff) · distinctive outfit detail. PANEL 04 — OUTFIT FLAT-LAYS (5 isolated product shots on dark background): outerwear · top · bottom · footwear · main accessory. PANEL 05 — LIGHTING / MOOD (4 same-pose portraits under different lighting): SOFT WINDOW LIGHT · GOLDEN HOUR · COOL BLUE NIGHT · DRAMATIC RIM-LIGHT. PANEL 06 — COLOR PALETTE: 6 swatches with HEX codes derived from the outfit and skin tones. Bottom caption: "Use this character board as a visual reference for consistent depiction of the character across all generations." Bottom-right tags: STYLE · Modern · Realistic · Cinematic. Style: photorealistic, no illustration. Consistent face across every single panel. 8K, fine grain, cinematic color grading.`,
       negativePrompt:
         "illustration, cartoon, 3d render, garbled text, misspelled labels, watermark, deformed faces, blurry, low resolution",
     },
   },
   {
+    id: "generate-image/pose-board",
+    name: "Pose Board",
+    description: "Connect a sharp photo → animation-ready pose & expression sheet; reuse it as a reference for consistent action.",
+    group: "Reference Sheet",
+    data: {
+      provider: "nano-banana-pro",
+      aspectRatio: "16:9",
+      resolution: "2K",
+      prompt: `Create a single high-resolution, densely packed pose reference sheet titled "POSE BOARD" using the attached photo of the person as the single source of truth for face, hair, eyes, skin tone, body proportions and outfit. The same person must appear in every panel — same age, same features, outfit identical to the attached photo across all panels. All on-image labels in ENGLISH. Editorial reference-board layout with a dark near-black background, thin yellow neon accent light, faint film-grain overlay, and production-grade animation-planning UI. The composition should feel organized but not rigidly locked: allow the hero figure, metadata, and supporting panels to shift position naturally within the board while remaining readable, balanced, and premium. Design the board to adapt cleanly to different aspect ratios without depending on a fixed left-column layout. Include a large full-body hero shot in a relaxed standing pose with a metadata block: NAME · AGE · BUILD · HEIGHT · OUTFIT · POSE LANGUAGE · CENTER OF GRAVITY · DOMINANT HAND · PURPOSE. Also include five content groupings: PANEL 01 — BASIC POSES (5 full-body shots, identical outfit and lighting, neutral tan backdrop): STANDING · SITTING · WALKING · RUNNING · JUMPING. PANEL 02 — ACTION POSES (5 dynamic full-body shots with clear silhouettes): FIGHT STANCE · THROW · DODGE · CLIMB · LAND. PANEL 03 — EXPRESSIONS (5 tight headshots, same lighting): NEUTRAL · LAUGHING · ANGRY · SAD · SURPRISED. PANEL 04 — ANGLE COVERAGE (4 chest-up portraits): FRONT · 3/4 · SIDE · BACK. PANEL 05 — COLOR PALETTE: 6 swatches with HEX codes derived from the outfit and skin tones. Bottom caption: "Use this pose board as a visual reference for consistent posing of the character across all generations." Bottom-right tags: STYLE · Modern · Realistic · Cinematic. Style: photorealistic, no illustration. Consistent identity across every single panel. 8K, fine grain, cinematic color grading.`,
+      negativePrompt:
+        "illustration, cartoon, 3d render, garbled text, misspelled labels, watermark, deformed faces, inconsistent identity between panels, extra limbs, blurry, low resolution",
+    },
+  },
+  {
     id: "generate-image/location-board",
     name: "Location Board",
-    description: "Connect a photo → dense location reference sheet.",
+    description: "Connect a photo → dense location sheet; reuse it as a reference for consistent scenes.",
     group: "Reference Sheet",
     data: {
       provider: "nano-banana-pro",
@@ -34,7 +48,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
   {
     id: "generate-image/product-board",
     name: "Product Board",
-    description: "Connect a photo → dense product reference sheet.",
+    description: "Connect a photo → dense product sheet; reuse it as a reference for consistent shots.",
     group: "Reference Sheet",
     data: {
       provider: "nano-banana-pro",
@@ -48,13 +62,13 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
   {
     id: "generate-image/outfit-board",
     name: "Outfit Board",
-    description: "Connect a photo → dense wardrobe reference sheet.",
+    description: "Connect a photo → dense wardrobe sheet; reuse it as a reference for consistent looks.",
     group: "Reference Sheet",
     data: {
       provider: "nano-banana-pro",
       aspectRatio: "16:9",
       resolution: "2K",
-      prompt: `Create a single high-resolution, densely packed wardrobe reference sheet titled "OUTFIT BOARD" using the attached photo of the outfit as the single source of truth for its garments, fabrics, colorway, silhouette and styling. The same outfit must appear in every panel — identical garments, identical colors and trims. All on-image labels in ENGLISH. Editorial fashion-reference layout with a dark near-black background, thin yellow neon accent light, faint film-grain overlay, and production-grade stylist UI. The composition should feel organized but not rigidly locked: allow the hero look, metadata, and supporting panels to shift position naturally while remaining readable, balanced, and premium. Design the board to adapt cleanly to different aspect ratios without depending on a fixed left-column layout. Include a hero full-look shot with a metadata block: LOOK NAME · STYLE · SEASON · FABRICS · PALETTE · FIT · OCCASION. Also include six content groupings: PANEL 01 — ON-BODY VIEWS (4 full-length shots, identical lighting): FRONT · 3/4 · SIDE · BACK. PANEL 02 — FLAT-LAYS (5 isolated garment shots on a dark surface): top · bottom · outerwear · footwear · headwear. PANEL 03 — FABRIC & DETAIL (3 macros): weave/texture close-up · stitching or hardware · print or trim detail. PANEL 04 — ACCESSORIES (4 isolated accessory studies: bag · jewelry · belt · eyewear). PANEL 05 — COLORWAYS (3 alternate colorways of the same look). PANEL 06 — COLOR PALETTE: 6 swatches with HEX codes from the garments. Bottom caption: "Use this outfit board as a visual reference for consistent depiction of the wardrobe across all generations." Bottom-right tags: STYLE · Modern · Editorial · Fashion. Style: photorealistic, no illustration. Consistent outfit across every panel. 8K, fine grain, editorial fashion photography.`,
+      prompt: `Create a single high-resolution, densely packed wardrobe reference sheet titled "OUTFIT BOARD" using the attached photo of the outfit as the single source of truth for its garments, fabrics, colorway, silhouette and styling. The same outfit must appear in every panel — identical garments, identical colors and trims. All on-image labels in ENGLISH. Editorial fashion-reference layout with a dark near-black background, thin yellow neon accent light, faint film-grain overlay, and production-grade stylist UI. The composition should feel organized but not rigidly locked: allow the hero look, metadata, and supporting panels to shift position naturally while remaining readable, balanced, and premium. Design the board to adapt cleanly to different aspect ratios without depending on a fixed left-column layout. Include a hero full-look shot with a metadata block: LOOK NAME · STYLE · SEASON · FABRICS · PALETTE · FIT · OCCASION. Also include six content groupings: PANEL 01 — ON-BODY VIEWS (5 full-length shots, identical lighting): FRONT · 3/4 LEFT · SIDE · BACK · 3/4 RIGHT. PANEL 02 — FLAT-LAYS (5 isolated garment shots on a dark surface): top · bottom · outerwear · footwear · headwear. PANEL 03 — FABRIC & DETAIL (3 macros): weave/texture close-up · stitching or hardware · print or trim detail. PANEL 04 — ACCESSORIES (4 isolated accessory studies: bag · jewelry · belt · eyewear). PANEL 05 — COLORWAYS (3 alternate colorways of the same look). PANEL 06 — COLOR PALETTE: 6 swatches with HEX codes from the garments. Bottom caption: "Use this outfit board as a visual reference for consistent depiction of the wardrobe across all generations." Bottom-right tags: STYLE · Modern · Editorial · Fashion. Style: photorealistic, no illustration. Consistent outfit across every panel. 8K, fine grain, editorial fashion photography.`,
       negativePrompt:
         "illustration, cartoon, 3d render, garbled text, misspelled labels, watermark, deformed faces, blurry, low resolution",
     },
@@ -62,7 +76,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
   {
     id: "generate-image/scene-board",
     name: "Scene Board",
-    description: "Connect a photo → set-dressing & props study.",
+    description: "Connect a photo → set-dressing & props study; reuse it as a reference for consistent sets.",
     group: "Reference Sheet",
     data: {
       provider: "nano-banana-pro",
@@ -76,15 +90,118 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
   {
     id: "generate-image/creature-board",
     name: "Creature Board",
-    description: "Connect a photo → dense creature reference sheet.",
+    description: "Connect a sharp photo → dense creature sheet; reuse it as a reference for consistent shots.",
     group: "Reference Sheet",
     data: {
       provider: "nano-banana-pro",
       aspectRatio: "16:9",
       resolution: "2K",
-      prompt: `Create a single high-resolution, densely packed creature reference sheet titled "CREATURE BOARD" using the attached photo of the creature as the single source of truth for its anatomy, silhouette, coloration, textures and features. The same creature must appear in every panel — identical species, identical markings and proportions. All on-image labels in ENGLISH. Editorial creature-design layout with a dark near-black background, thin yellow neon accent light, faint film-grain overlay, and production-grade concept-design UI. The composition should feel organized but not rigidly locked: allow the hero render, metadata, and supporting panels to shift position naturally while remaining readable, balanced, and premium. Design the board to adapt cleanly to different aspect ratios without depending on a fixed left-column layout. Include a large hero full-body render with a metadata block: NAME · SPECIES · SIZE · BUILD · COLORATION · TEXTURES · TEMPERAMENT · FEATURES. Also include six content groupings: PANEL 01 — VIEWS (4 full-body angles, neutral pose, identical lighting): FRONT · 3/4 · SIDE · BACK. PANEL 02 — POSES (4 dynamic full-body poses: idle · moving · alert · aggressive). PANEL 03 — DETAILS (3 macros): head/face close-up · hide/scale/fur texture · distinctive feature (claw, horn, fin). PANEL 04 — EXPRESSIONS (4 head studies showing temperament range). PANEL 05 — SCALE (the creature beside a human silhouette for size reference). PANEL 06 — COLOR PALETTE: 6 swatches with HEX codes from the creature's coloration. Bottom caption: "Use this creature board as a visual reference for consistent depiction of the creature across all generations." Bottom-right tags: STYLE · Modern · Realistic · Cinematic. Style: photorealistic, no illustration. Consistent creature across every panel. 8K, fine grain, cinematic color grading.`,
+      prompt: `Create a single high-resolution, densely packed creature reference sheet titled "CREATURE BOARD" using the attached photo of the creature as the single source of truth for its anatomy, silhouette, coloration, textures and features. The same creature must appear in every panel — identical species, identical markings and proportions. All on-image labels in ENGLISH. Editorial creature-design layout with a dark near-black background, thin yellow neon accent light, faint film-grain overlay, and production-grade concept-design UI. The composition should feel organized but not rigidly locked: allow the hero render, metadata, and supporting panels to shift position naturally while remaining readable, balanced, and premium. Design the board to adapt cleanly to different aspect ratios without depending on a fixed left-column layout. Include a large hero full-body render with a metadata block: NAME · SPECIES · SIZE · BUILD · COLORATION · TEXTURES · TEMPERAMENT · FEATURES · MOVEMENT · VOCALIZATION. Also include six content groupings: PANEL 01 — VIEWS (5 full-body angles, neutral pose, identical lighting): FRONT · 3/4 · SIDE · BACK · TOP-DOWN. PANEL 02 — POSES (4 dynamic full-body poses: idle · moving · alert · aggressive). PANEL 03 — DETAILS (3 macros): head/face close-up · hide/scale/fur texture · distinctive feature (claw, horn, fin). PANEL 04 — EXPRESSIONS (4 head studies showing temperament range). PANEL 05 — SCALE (the creature beside a human silhouette for size reference). PANEL 06 — COLOR PALETTE: 6 swatches with HEX codes from the creature's coloration. Bottom caption: "Use this creature board as a visual reference for consistent depiction of the creature across all generations." Bottom-right tags: STYLE · Modern · Realistic · Cinematic. Style: photorealistic, no illustration. Consistent creature across every panel. 8K, fine grain, cinematic color grading.`,
       negativePrompt:
         "illustration, cartoon, 3d render, garbled text, misspelled labels, watermark, deformed faces, blurry, low resolution",
+    },
+  },
+  {
+    id: "generate-image/vehicle-board",
+    name: "Vehicle Board",
+    description: "Connect a photo → dense vehicle sheet; reuse it as a reference for consistent shots.",
+    group: "Reference Sheet",
+    data: {
+      provider: "nano-banana-pro",
+      aspectRatio: "16:9",
+      resolution: "2K",
+      prompt: `Create a single high-resolution, densely packed vehicle reference sheet titled "VEHICLE BOARD" using the attached photo of the vehicle as the single source of truth for its body shape, proportions, paintwork, trim, wheels and condition. The same vehicle must appear in every panel — identical model, identical colorway, markings and wear. All on-image labels in ENGLISH. Editorial vehicle-reference layout with a dark near-black background, thin yellow neon accent light, faint film-grain overlay, and production-grade transportation-design UI. The composition should feel organized but not rigidly locked: allow the hero shot, metadata, and supporting panels to shift position naturally while remaining readable, balanced, and premium. Design the board to adapt cleanly to different aspect ratios without depending on a fixed left-column layout. Include a large three-quarter hero shot with a metadata block: NAME · TYPE · ERA · SCALE · BODY & MATERIALS · FINISH · SEATS · TOP SPEED · SIGNATURE FEATURE · ROLE. Also include six content groupings: PANEL 01 — VIEWS (5 studio shots, identical lighting): FRONT · 3/4 · SIDE · BACK · TOP-DOWN. PANEL 02 — INTERIOR / CABIN (4 close shots): cockpit through the window · dashboard detail · seats or cargo area · driver POV. PANEL 03 — DETAIL MACROS (4): headlight or light cluster · wheel and tire · badge or panel line · paint and wear close-up. PANEL 04 — IN MOTION (4 staged frames): driving straight · cornering · parked on an incline · night with headlights on. PANEL 05 — LIGHTING / MOOD (4 same-angle hero shots): DESERT MIDDAY · GOLDEN HOUR · STORMY OVERCAST · NIGHT NEON. PANEL 06 — COLOR PALETTE: 6 swatches with HEX codes from the paintwork and trim. Bottom caption: "Use this vehicle board as a visual reference for consistent depiction of the vehicle across all generations." Bottom-right tags: STYLE · Modern · Realistic · Cinematic. Style: photorealistic, no illustration. Consistent vehicle across every panel. 8K, fine grain, cinematic color grading.`,
+      negativePrompt:
+        "illustration, cartoon, 3d render, garbled text, misspelled labels, watermark, warped body panels, distorted geometry, blurry, low resolution",
+    },
+  },
+  {
+    id: "generate-image/food-board",
+    name: "Food Board",
+    description: "Connect a photo → dense dish sheet; reuse it as a reference for consistent food shots.",
+    group: "Reference Sheet",
+    data: {
+      provider: "nano-banana-pro",
+      aspectRatio: "16:9",
+      resolution: "2K",
+      prompt: `Create a single high-resolution, densely packed dish reference sheet titled "FOOD BOARD" using the attached photo of the dish as the single source of truth for its ingredients, plating, colors, textures and garnish. The same dish must appear in every panel — identical recipe, identical plating, bowl or plate, and props. All on-image labels in ENGLISH. Editorial culinary-reference layout with a dark near-black background, thin yellow neon accent light, faint film-grain overlay, and production-grade food-styling UI. The composition should feel organized but not rigidly locked: allow the hero shot, metadata, and supporting panels to shift position naturally while remaining readable, balanced, and premium. Design the board to adapt cleanly to different aspect ratios without depending on a fixed left-column layout. Include a large appetizing hero shot with a metadata block: DISH NAME · CUISINE · CATEGORY · KEY INGREDIENTS · TEXTURES · GARNISH · SERVED · AUDIENCE. Also include six content groupings: PANEL 01 — PLATING ANGLES (5 beauty shots, identical styling): TOP-DOWN · 3/4 HERO · SIDE · EXTREME CLOSE-UP · IN HAND OR WITH UTENSIL. PANEL 02 — INGREDIENT BREAKDOWN (5 isolated ingredient studies on a dark background). PANEL 03 — DETAIL MACROS (4): surface texture · glaze or sauce sheen · steam or freshness cue · garnish detail. PANEL 04 — IN CONTEXT (4 staged frames): steam rising · utensil lifting a bite · sauce pour frozen mid-action · hands holding the dish. PANEL 05 — LIGHTING / MOOD (4 same-angle hero shots): WARM APPETIZING · COOL EDITORIAL · HARD COMMERCIAL · MOODY DRAMATIC. PANEL 06 — COLOR PALETTE: 6 swatches with HEX codes from the dish and plating. Bottom caption: "Use this food board as a visual reference for consistent depiction of the dish across all generations." Bottom-right tags: STYLE · Modern · Realistic · Commercial. Style: photorealistic, no illustration. Consistent dish across every panel. 8K, fine grain, appetizing commercial color grading.`,
+      negativePrompt:
+        "illustration, cartoon, 3d render, garbled text, misspelled labels, watermark, unappetizing, plastic fake food, messy spills, blurry, low resolution",
+    },
+  },
+  {
+    id: "generate-image/mascot-board",
+    name: "Mascot Board",
+    description: "Connect a mascot image → brand-character sheet with brand applications; reuse it for a consistent mascot.",
+    group: "Reference Sheet",
+    data: {
+      provider: "nano-banana-pro",
+      aspectRatio: "16:9",
+      resolution: "2K",
+      prompt: `Create a single high-resolution, densely packed mascot reference sheet titled "MASCOT BOARD" using the attached image of the mascot as the single source of truth for its design, proportions, colors, materials and personality. The same mascot must appear in every panel — identical design, identical colors and details — rendered in the mascot's native art style read from the attached image (illustrated, plush, costumed or 3D), never drifting between styles. All on-image labels in ENGLISH. Editorial brand-character layout with a dark near-black background, thin yellow neon accent light, faint film-grain overlay, and production-grade brand-design UI. The composition should feel organized but not rigidly locked: allow the hero pose, metadata, and supporting panels to shift position naturally while remaining readable, balanced, and premium. Design the board to adapt cleanly to different aspect ratios without depending on a fixed left-column layout. Include a large hero pose with a metadata block: MASCOT NAME · BRAND · CATEGORY · MATERIAL / STYLE · PERSONALITY · CATCHPHRASE · SIZE · USE CASES. Also include six content groupings: PANEL 01 — VIEWS (5 full-body angles, identical lighting): FRONT · 3/4 LEFT · SIDE · BACK · 3/4 RIGHT. PANEL 02 — EXPRESSIONS (6 head studies): HAPPY · WAVING · SHOCKED · WINKING · SLEEPY · CURIOUS. PANEL 03 — DETAIL MACROS (3): face detail · material or texture close-up · signature accessory. PANEL 04 — BRAND APPLICATIONS (4 mockups): on product packaging · on a storefront sign · in a print ad · on merch. PANEL 05 — POSES (4 action poses): GREETING · CELEBRATING · PRESENTING · THUMBS-UP. PANEL 06 — BRAND COLOR PALETTE: 6 swatches with HEX codes from the mascot's colors. Bottom caption: "Use this mascot board as a visual reference for consistent depiction of the mascot across all generations." Bottom-right tags: STYLE · Brand · Character · Consistent. Consistent mascot and consistent art style across every panel. 8K, fine grain, premium brand-design finish.`,
+      negativePrompt:
+        "inconsistent art style between panels, design drift, off-model mascot, garbled text, misspelled labels, watermark, blurry, low resolution",
+    },
+  },
+  {
+    id: "generate-image/pet-board",
+    name: "Pet Board",
+    description: "Connect a sharp photo → dense pet sheet; reuse it as a reference for consistent shots.",
+    group: "Reference Sheet",
+    data: {
+      provider: "nano-banana-pro",
+      aspectRatio: "16:9",
+      resolution: "2K",
+      prompt: `Create a single high-resolution, densely packed pet reference sheet titled "PET BOARD" using the attached photo of the pet as the single source of truth for its species, breed, coat colors, markings, eyes and build. The same animal must appear in every panel — identical markings, identical proportions, identical collar or accessories. All on-image labels in ENGLISH. Editorial reference-board layout with a dark near-black background, thin yellow neon accent light, faint film-grain overlay, and production-grade character-design UI. The composition should feel organized but not rigidly locked: allow the hero portrait, metadata, and supporting panels to shift position naturally while remaining readable, balanced, and premium. Design the board to adapt cleanly to different aspect ratios without depending on a fixed left-column layout. Include a large hero portrait with a metadata block: NAME · SPECIES · BREED · AGE · SIZE · COAT & MARKINGS · EYES · COLLAR / ACCESSORIES · TEMPERAMENT · SIGNATURE BEHAVIOR. Also include six content groupings: PANEL 01 — VIEWS (5 full-body angles, neutral stance, identical lighting): FRONT · 3/4 · SIDE · BACK · TOP-DOWN. PANEL 02 — EXPRESSIONS & MOODS (6 head studies): ALERT · CURIOUS · PLAYFUL · SLEEPY · GRUMPY · HAPPY. PANEL 03 — DETAIL MACROS (4): eye close-up · coat or fur texture · paw detail · collar tag or accessory. PANEL 04 — POSES (5 natural poses): SITTING · LYING DOWN · WALKING · PLAYING · CURLED ASLEEP. PANEL 05 — LIGHTING / MOOD (4 same-pose portraits): SOFT WINDOW LIGHT · GOLDEN HOUR · COOL BLUE NIGHT · DRAMATIC RIM-LIGHT. PANEL 06 — COLOR PALETTE: 6 swatches with HEX codes from the coat and accessories. Bottom caption: "Use this pet board as a visual reference for consistent depiction of the pet across all generations." Bottom-right tags: STYLE · Modern · Realistic · Cinematic. Style: photorealistic, no illustration. Consistent animal across every single panel. 8K, fine grain, cinematic color grading.`,
+      negativePrompt:
+        "illustration, cartoon, 3d render, garbled text, misspelled labels, watermark, deformed anatomy, inconsistent markings between panels, wrong breed, blurry, low resolution",
+    },
+  },
+  // ── Cast & Consistency (clean grids per the multi-character workflow:
+  // sterile neutral-background reference grids built to be FED BACK as identity
+  // anchors — unlike the editorial boards above, decoration here is noise.
+  // nano-banana-2 per the source guide: cheaper/faster per attempt with strong
+  // practical consistency; 4K so panel faces stay sharp when reused as refs.) ──
+  {
+    id: "generate-image/character-reference-grid",
+    name: "Character Reference Grid",
+    description: "Connect a photo → clean 4-angle identity grid (no decorations) — the strongest consistency anchor.",
+    group: "Cast & Consistency",
+    data: {
+      provider: "nano-banana-2",
+      aspectRatio: "3:4",
+      resolution: "4K",
+      prompt: `Create a clean character reference grid using the attached photo of the person as the single source of truth for face, hair, eyes, skin tone, build and outfit. Four equal panels arranged in a tidy two-by-two grid on a single seamless neutral light-grey studio background: a tight front-facing portrait close-up, a 3/4-view portrait, a full-body shot from the front in a relaxed neutral stance, and a full-body shot from the back. The SAME person in every panel — identical age, features, hairstyle and outfit from the attached photo. Identical soft, even studio lighting in all four panels with no dramatic shadows. No decorations, no background props, no text, no UI elements — a sterile, production-neutral reference sheet built to be reused as an identity reference in later generations. Photorealistic, sharp focus, accurate natural skin texture, true-to-life color.`,
+      negativePrompt:
+        "stylization, illustration, decorative background, props, text, labels, UI elements, dramatic lighting, inconsistent face between panels, identity drift, changed outfit, deformed, blurry, watermark",
+    },
+  },
+  {
+    id: "generate-image/cast-mega-grid",
+    name: "Cast Mega Grid",
+    description: "Connect 2–4 character refs → one labeled cast sheet; then reference cast members by name in scenes.",
+    group: "Cast & Consistency",
+    data: {
+      provider: "nano-banana-2",
+      aspectRatio: "3:4",
+      resolution: "4K",
+      prompt: `Create a clean multi-character cast reference sheet composed as horizontal strips stacked vertically in one image — one strip per character from the attached reference images, in the order they are attached, using exactly as many strips as there are attached characters. Each strip shows that character in four aligned studio panels: tight front portrait close-up · 3/4 portrait · full body front · full body back, all in a relaxed neutral stance. Label each strip on the left edge with the character's name in clean bold lettering: {character names || ALEX · MAYA · SAM}. Every character must match their attached reference exactly — same face, hair, skin tone, build and outfit — with no identity blending between rows. Single seamless neutral light-grey studio background across the whole sheet, identical soft even lighting in every panel, consistent panel sizing and alignment. No decorations, no props, no UI elements beyond the row name labels. A sterile production casting sheet built to be reused as the single identity reference for this cast in later generations. Photorealistic, sharp focus, natural skin texture, true-to-life color.`,
+      negativePrompt:
+        "blended or swapped identities between rows, inconsistent faces, missing characters, misspelled name labels, garbled text, decorative background, props, dramatic lighting, stylization, illustration, deformed, blurry, watermark",
+    },
+  },
+  {
+    id: "generate-image/cast-scene",
+    name: "Cast Scene (by name)",
+    description: "Connect a cast grid → stage a scene naming the characters; never re-describe their looks.",
+    group: "Cast & Consistency",
+    data: {
+      provider: "nano-banana-2",
+      aspectRatio: "16:9",
+      resolution: "2K",
+      prompt: `Using the attached character reference sheet as the single source of truth for every named character's face, hair, build and outfit, generate one photorealistic scene: {scene || ALEX and MAYA share a quiet laugh at the counter of a sunlit ramen bar while SAM studies the menu}. Refer to the characters ONLY by the names labeled on the reference sheet and keep each one perfectly consistent with their reference row — do not invent new physical traits, do not blend identities, and do not alter outfits unless the scene says so. Stage them naturally in the environment with believable eye-lines, interactions and spacing. Cinematic photography, 35mm lens look with gentle depth of field, soft motivated lighting that matches the location, cohesive filmic color grade, natural skin texture, sharp detail on every character.`,
+      negativePrompt:
+        "identity drift, blended or swapped faces, re-invented outfits, reference-sheet grid visible in the result, panel borders, name labels in the scene, deformed, extra fingers, blurry, lowres, watermark, text",
     },
   },
   // ── Edit by Name (two-step recipe) ───────────────────────────────────────
@@ -925,6 +1042,94 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       style: "concept-art",
       prompt: "concept art of {environment or subject || ancient ruins reclaimed by a glowing jungle}, sweeping sense of scale, atmospheric depth and haze, dramatic god-ray light",
       negativePrompt: "flat lighting, photo, cluttered, lowres, deformed, watermark, text",
+    },
+  },
+
+  // ── Handmade & Stop-Motion (tactile crafted looks — the in-prompt
+  // "NOT digital CG, NOT a 3D render" clause is what holds the handmade feel;
+  // named quality anchors (Aardman/Laika/Henson/Gondry) pin the reference bar) ──
+  {
+    id: "generate-image/claymation-scene",
+    name: "Claymation Scene",
+    description: "Plasticine stop-motion look, thumbprints included.",
+    group: "Handmade & Stop-Motion",
+    data: {
+      provider: "nano-banana-pro",
+      aspectRatio: "16:9",
+      prompt:
+        "{scene || a tiny clay fisherman rowing across a stormy plasticine sea}, tactile stop-motion claymation scene — real plasticine clay characters and set with visible thumbprints, tool marks, seam lines and a soft matte sheen, miniature studio photography with shallow depth of field and warm practical lighting, handmade Aardman-quality charm. NOT digital CG, NOT a 3D render, NOT 2D illustration — a physically sculpted miniature scene photographed on a real stop-motion stage",
+      negativePrompt:
+        "smooth plastic CGI surface, digital 3d render, 2d illustration, cartoon shading, perfect seamless surfaces, real human actors, lowres, deformed, watermark, text",
+    },
+  },
+  {
+    id: "generate-image/needle-felt",
+    name: "Needle-Felt",
+    description: "Fuzzy felted-wool miniature.",
+    group: "Handmade & Stop-Motion",
+    data: {
+      provider: "nano-banana-pro",
+      aspectRatio: "1:1",
+      prompt:
+        "{subject || a round little fox curled in a mossy nest}, needle-felted wool sculpture — soft wool roving with visible fluffy fibers and a halo of stray strands, glass-bead eyes with a tiny sheen, embroidered nose and stitched details, handcrafted miniature photographed in a cozy diorama with soft window light, Laika-quality handmade charm. NOT digital CG, NOT a 3D render, NOT 2D illustration — real felted wool photographed up close",
+      negativePrompt:
+        "smooth plastic surface, digital 3d render, 2d illustration, real animal fur, photorealistic animal, hard CGI edges, lowres, deformed, watermark, text",
+    },
+  },
+  {
+    id: "generate-image/sock-puppet",
+    name: "Sock Puppet",
+    description: "Stitched-sock character on stage.",
+    group: "Handmade & Stop-Motion",
+    data: {
+      provider: "nano-banana-pro",
+      aspectRatio: "4:3",
+      prompt:
+        "{character || a cheerful sock-puppet chef holding a tiny wooden spoon}, handmade sock puppet — thick cotton knit texture, stitched felt mouth, ping-pong-ball eyes with painted pupils, yarn hair, visible seams and hot-glue details, puppet-studio photography with soft even lighting and a simple stage backdrop, Henson-style handmade charm. NOT digital CG, NOT a 3D render, NOT 2D illustration — a real fabric puppet photographed on a puppet stage",
+      negativePrompt:
+        "smooth CGI fabric, digital 3d render, 2d illustration, human face, realistic skin, plastic toy look, lowres, deformed, watermark, text",
+    },
+  },
+  {
+    id: "generate-image/cardboard-diorama",
+    name: "Cardboard Diorama",
+    description: "Cut-cardboard craft set, tape & paint.",
+    group: "Handmade & Stop-Motion",
+    data: {
+      provider: "nano-banana-pro",
+      aspectRatio: "16:9",
+      prompt:
+        "{scene || a rocket launching over a tiny cardboard city}, handmade cardboard-craft diorama — corrugated cardboard structures with visible cut edges, masking tape, hot-glue joints and hand-painted acrylic surfaces, hand-lettered signs, miniature set photography with warm practical lighting and gentle depth of field, Michel Gondry handmade-prop charm. NOT digital CG, NOT a 3D render, NOT 2D illustration — a real cardboard miniature set photographed in studio",
+      negativePrompt:
+        "clean vector shapes, digital 3d render, 2d illustration, smooth plastic surfaces, real buildings, photoreal city, lowres, deformed, watermark, garbled text",
+    },
+  },
+  {
+    id: "generate-image/embroidered-art",
+    name: "Embroidered Art",
+    description: "Hand-stitched thread on hooped linen.",
+    group: "Handmade & Stop-Motion",
+    data: {
+      provider: "nano-banana-pro",
+      aspectRatio: "1:1",
+      prompt:
+        "{subject || a songbird on a blossoming branch} rendered as fine hand embroidery — visible individual thread stitches, satin-stitch fills and chain-stitch outlines, subtle thread sheen, slight fabric pucker around dense stitching, hooped natural linen background with a few loose thread tails, soft daylight craft photography, artisan needlework quality. NOT digital CG, NOT a 3D render, NOT 2D illustration, NOT a print — real stitched thread on real fabric",
+      negativePrompt:
+        "printed fabric, flat digital illustration, 3d render, smooth painted texture, photorealistic subject, lowres, deformed, watermark, text",
+    },
+  },
+  {
+    id: "generate-image/faux-food-clay",
+    name: "Faux-Food (Clay)",
+    description: "Plasticine dish styled as a commercial.",
+    group: "Handmade & Stop-Motion",
+    data: {
+      provider: "nano-banana-pro",
+      aspectRatio: "4:5",
+      prompt:
+        "{dish || a steaming bowl of ramen with a soft egg and curled noodles} sculpted entirely from plasticine modeling clay and styled as a glossy food commercial — visible sculpting tool marks, clear gloss varnish standing in for broth sheen, wool-tuft steam, clay ingredients with charming hand-modeled imperfection, miniature studio food-commercial lighting with a warm appetizing key, Aardman-quality handmade charm. NOT real food photography, NOT digital CG, NOT a 3D render, NOT 2D illustration — a physically sculpted clay dish photographed like a commercial",
+      negativePrompt:
+        "real food, photorealistic food, digital 3d render, 2d illustration, smooth plastic CGI, melted shapeless clay, unappetizing, lowres, watermark, text",
     },
   },
 

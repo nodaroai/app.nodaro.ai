@@ -161,6 +161,58 @@ describe("generate-image factory preset data validity", () => {
     }
   })
 
+  it("includes the five audit-expansion Reference Sheet boards", () => {
+    for (const id of [
+      "generate-image/pose-board", "generate-image/vehicle-board",
+      "generate-image/food-board", "generate-image/mascot-board",
+      "generate-image/pet-board",
+    ]) {
+      const b = presets.find((p) => p.id === id)
+      expect(b, `${id} missing`).toBeTruthy()
+      expect(b!.group).toBe("Reference Sheet")
+      expect(b!.data.provider).toBe("nano-banana-pro")
+      expect(b!.data.resolution).toBe("2K")
+      expect((b!.data.negativePrompt as string)?.length).toBeGreaterThan(0)
+    }
+  })
+
+  it("includes the Cast & Consistency grids on nano-banana-2", () => {
+    // Grids are FED BACK as identity references — they ride nano-banana-2
+    // (cheap, consistency-strong) at 4K so reused panel faces stay sharp.
+    for (const id of ["generate-image/character-reference-grid", "generate-image/cast-mega-grid"]) {
+      const g = presets.find((p) => p.id === id)
+      expect(g, `${id} missing`).toBeTruthy()
+      expect(g!.group).toBe("Cast & Consistency")
+      expect(g!.data.provider).toBe("nano-banana-2")
+      expect(g!.data.aspectRatio).toBe("3:4")
+      expect(g!.data.resolution).toBe("4K")
+    }
+    const scene = presets.find((p) => p.id === "generate-image/cast-scene")
+    expect(scene?.group).toBe("Cast & Consistency")
+    expect(scene?.data.provider).toBe("nano-banana-2")
+  })
+
+  it("ships the Handmade & Stop-Motion family with the in-prompt NOT-digital-CG clause", () => {
+    // The "NOT digital CG" clause is what holds the tactile handmade look —
+    // a negativePrompt alone is not enough. Guard it so edits can't drop it.
+    const handmade = presets.filter((p) => p.group === "Handmade & Stop-Motion")
+    expect(handmade.length).toBeGreaterThanOrEqual(6)
+    for (const p of handmade) {
+      expect(p.data.prompt as string, `${p.id}: missing the NOT digital CG clause`).toContain("NOT digital CG")
+    }
+  })
+
+  it("shares the Doodle Overlay edits with modify-image (same catalog, provider valid for both)", () => {
+    for (const nodeType of ["generate-image", "modify-image"] as const) {
+      for (const slug of ["doodle-overlay", "doodle-overlay-expressive"]) {
+        const p = getFactoryPresets(nodeType).find((x) => x.id === `${nodeType}/${slug}`)
+        expect(p, `${nodeType}/${slug} missing`).toBeTruthy()
+        expect(p!.group).toBe("Edits")
+        expect(p!.data.provider).toBe("nano-banana-pro")
+      }
+    }
+  })
+
   it("every generate-image preset has a non-empty negativePrompt", () => {
     for (const p of presets) {
       const neg = (p.data.negativePrompt as string | undefined) ?? ""

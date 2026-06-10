@@ -169,6 +169,30 @@ const IMAGE_EDITS: ReadonlyArray<{
         "changing the composition or layout, moving or removing the subject, losing recognizability, applying the style to only part of the image, photorealistic patches, added or hallucinated objects, distorted anatomy, inconsistent style across the frame",
     },
   },
+  {
+    slug: "doodle-overlay",
+    name: "Doodle Overlay",
+    description: "Hand-drawn marker doodles on top — photo stays untouched.",
+    data: {
+      provider: "nano-banana-pro",
+      prompt:
+        "Layer playful hand-drawn doodles ON TOP of the reference photo while keeping every pixel of the underlying photograph completely unchanged — same people, same colors, same lighting, same crop. Doodle style: wobbly hand-drawn felt-tip marker lines in white with a few yellow accents, like quick sketches on a printed photo. Add: loose outline traces hugging one or two key shapes, small sparkles and stars, a hand-drawn thought cloud or speech bubble with a short witty handwritten phrase that reacts to what is actually happening in the photo, and simple arrows or underlines pointing at fun details. Outlines only — never fill shapes with color. Never cover faces or the main focal point; place doodles in empty areas like sky, walls or margins. Keep it balanced: four to seven doodle elements total, charming and confident, not cluttered. The photo is the hero — the doodles are the seasoning.",
+      negativePrompt:
+        "altered photo, restyled or recolored scene, redrawn subject, covered faces, filled color shapes, digital sticker or emoji look, vector clipart, cluttered doodles, garbled or misspelled handwriting, watermark, blurry",
+    },
+  },
+  {
+    slug: "doodle-overlay-expressive",
+    name: "Doodle Overlay · Expressive",
+    description: "Looser free-form doodles — the model improvises.",
+    data: {
+      provider: "nano-banana-pro",
+      prompt:
+        "Decorate the reference photo with expressive hand-drawn doodles layered on top, keeping the underlying photograph itself completely unchanged. Free, confident hand-drawn marker linework — wobbly outlines, sparkles, squiggles, little flames or hearts where they fit the mood, and a short handwritten phrase that responds cleverly to the content of the photo (never a generic cliché). Mix of white and one or two bright accent colors. Outline style only, no filled shapes. Compose the doodles around the subject — never on top of faces or the focal point — using empty areas and edges. Loose, playful, zine-like energy: it should feel like a bored genius doodled on a printed photo. Keep the original image pixels intact beneath the doodle layer.",
+      negativePrompt:
+        "altered photo, restyled or recolored scene, covered faces, filled color blocks, sticker or clipart look, cliché phrases, garbled or misspelled handwriting, cluttered composition, watermark, blurry",
+    },
+  },
 ]
 
 /** Build the Edits presets for a node type (id = `<nodeType>/<slug>`). */
