@@ -35,6 +35,7 @@ export {
   VIDEO_DURATION_TIERS,
   ASPECT_RATIO_DIMENSIONS,
   COMPOSER_PLAN_MAP,
+  COMPOSER_PLAN_FIELDS,
   IMAGE_GEN_PROVIDERS,
   IMAGE_I2I_PROVIDERS,
   IMAGE_EDIT_PROVIDERS,
@@ -1201,7 +1202,7 @@ export {
 
 // --- Node presets ---
 export { EXECUTION_DATA_KEYS } from "./node-runtime-keys.js"
-export { extractPresetData, PRESET_EXCLUDED_KEYS, presetDataMatches } from "./node-preset-extract.js"
+export { extractPresetData, PRESET_EXCLUDED_KEYS, PRESET_APPLY_CLEAR_KEYS, presetDataMatches } from "./node-preset-extract.js"
 export type { FactoryPreset, FactoryPresetGroup } from "./factory-presets.js"
 export { FACTORY_PRESETS, getFactoryPresets, groupFactoryPresets } from "./factory-presets.js"
 

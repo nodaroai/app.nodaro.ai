@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { FACTORY_PRESETS, getFactoryPresets, groupFactoryPresets } from "../factory-presets.js"
-import { extractPresetData } from "../node-preset-extract.js"
+import { extractPresetData, PRESET_APPLY_CLEAR_KEYS } from "../node-preset-extract.js"
+import { COMPOSER_PLAN_MAP, COMPOSER_PLAN_FIELDS } from "../model-constants.js"
 import {
   IMAGE_GEN_PROVIDERS,
   MODIFY_IMAGE_PROVIDERS,
@@ -802,6 +803,154 @@ describe("combine-videos factory preset data validity", () => {
   })
 })
 
+describe("motion-graphics factory preset data validity", () => {
+  const presets = getFactoryPresets("motion-graphics")
+  // MotionGraphicsData.aspectRatio union (frontend/src/types/nodes.ts).
+  const ASPECTS = ["16:9", "9:16", "1:1", "4:5"]
+  // The 6 groups, in spec §4 table order — exact set + order is the catalog contract.
+  const GROUP_ORDER = [
+    "Titles & Text", "Intros & Logos", "Social & CTA", "UI & Icons", "FX Overlays", "Backgrounds",
+  ]
+  // The authoritative slot contract from the spec §4 table — preset id → required sids.
+  const SLOT_CONTRACT: Record<string, string[]> = {
+    "motion-graphics/lower-third": ["primaryColor", "nameText", "roleText"],
+    "motion-graphics/title-card": ["primaryColor", "titleText", "subtitleText"],
+    "motion-graphics/kinetic-typography": ["accentColor", "wordOne", "wordTwo", "wordThree"],
+    "motion-graphics/quote-card": ["accentColor", "quoteText", "attributionText"],
+    "motion-graphics/end-card-cta": ["primaryColor", "headlineText", "ctaText"],
+    "motion-graphics/logo-sting": ["brandColor", "brandName"],
+    "motion-graphics/channel-intro": ["primaryColor", "channelName", "taglineText"],
+    "motion-graphics/countdown": ["ringColor", "numberColor"],
+    "motion-graphics/subscribe-reminder": ["buttonColor", "buttonText"],
+    "motion-graphics/like-follow-bug": ["accentColor", "handleText"],
+    "motion-graphics/sale-badge": ["badgeColor", "saleText", "detailText"],
+    "motion-graphics/story-highlight": ["primaryColor", "headlineText", "subText"],
+    "motion-graphics/loader-spinner": ["dotColor", "trailColor"],
+    "motion-graphics/success-check": ["strokeColor", "ringColor"],
+    "motion-graphics/error-cross": ["strokeColor", "ringColor"],
+    "motion-graphics/progress-bar": ["barColor", "trackColor", "labelText"],
+    "motion-graphics/notification-pop": ["cardColor", "titleText", "bodyText"],
+    "motion-graphics/confetti-burst": ["colorA", "colorB", "colorC", "colorD"],
+    "motion-graphics/sparkle-shimmer": ["sparkleColor"],
+    "motion-graphics/speed-lines": ["lineColor"],
+    "motion-graphics/gradient-blob-loop": ["colorA", "colorB"],
+    "motion-graphics/geometric-pattern-loop": ["shapeColor", "backdropColor"],
+  }
+  // Rows the spec §4 table marks "transparent" — must be the fully-transparent overlay bg.
+  const TRANSPARENT_IDS = new Set([
+    "motion-graphics/lower-third",
+    "motion-graphics/subscribe-reminder",
+    "motion-graphics/like-follow-bug",
+    "motion-graphics/sale-badge",
+    "motion-graphics/loader-spinner",
+    "motion-graphics/success-check",
+    "motion-graphics/error-cross",
+    "motion-graphics/progress-bar",
+    "motion-graphics/notification-pop",
+    "motion-graphics/confetti-burst",
+    "motion-graphics/sparkle-shimmer",
+    "motion-graphics/speed-lines",
+  ])
+
+  it("ships exactly the 22 catalog presets named in the spec table", () => {
+    expect(presets.length).toBe(22)
+    expect(new Set(presets.map((p) => p.id))).toEqual(new Set(Object.keys(SLOT_CONTRACT)))
+  })
+
+  it("every preset targets the Lottie engine", () => {
+    for (const p of presets) expect(p.data.engine, `${p.id}: not lottie`).toBe("lottie")
+  })
+
+  it("every preset has a non-empty description and group", () => {
+    for (const p of presets) {
+      expect((p.description ?? "").trim().length, `${p.id}: missing description`).toBeGreaterThan(0)
+      expect((p.group ?? "").trim().length, `${p.id}: missing group`).toBeGreaterThan(0)
+    }
+  })
+
+  it("uses exactly the six spec groups, in table order", () => {
+    const seen: string[] = []
+    for (const p of presets) if (p.group && !seen.includes(p.group)) seen.push(p.group)
+    expect(seen).toEqual(GROUP_ORDER)
+  })
+
+  it("aspectRatio is in the MotionGraphicsData union", () => {
+    for (const p of presets) {
+      expect(ASPECTS, `${p.id}: bad aspectRatio "${String(p.data.aspectRatio)}"`).toContain(p.data.aspectRatio as never)
+    }
+  })
+
+  it("durationSeconds is between 2 and 8", () => {
+    for (const p of presets) {
+      const d = p.data.durationSeconds as number
+      expect(d, `${p.id}: duration ${d} below 2`).toBeGreaterThanOrEqual(2)
+      expect(d, `${p.id}: duration ${d} above 8`).toBeLessThanOrEqual(8)
+    }
+  })
+
+  it("backgroundColor parses as a hex color", () => {
+    for (const p of presets) {
+      const bg = p.data.backgroundColor as string
+      expect(bg, `${p.id}: bg "${bg}" not hex`).toMatch(/^#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/)
+    }
+  })
+
+  it("never carries motionPlan (generated state is solved generically, not per-preset)", () => {
+    for (const p of presets) {
+      expect("motionPlan" in p.data, `${p.id}: must not carry motionPlan`).toBe(false)
+    }
+  })
+
+  it("every motionPrompt is a rich art-direction brief (>200 chars) ending in an Expose slots sentence", () => {
+    for (const p of presets) {
+      const prompt = p.data.motionPrompt as string
+      expect(prompt.length, `${p.id}: prompt too thin (${prompt.length} chars)`).toBeGreaterThan(200)
+      expect(prompt, `${p.id}: missing "Expose slots:"`).toMatch(/Expose slots:/)
+    }
+  })
+
+  it("each prompt literally names every slot from its spec-table contract (stable-contract guard)", () => {
+    for (const p of presets) {
+      const sids = SLOT_CONTRACT[p.id]
+      expect(sids, `${p.id}: not in the slot-contract table`).toBeTruthy()
+      const prompt = p.data.motionPrompt as string
+      for (const sid of sids!) {
+        expect(prompt, `${p.id}: prompt is missing sid "${sid}"`).toContain(sid)
+      }
+    }
+  })
+
+  it("transparent-overlay presets use #00000000 and state transparency in the prompt", () => {
+    for (const p of presets) {
+      if (!TRANSPARENT_IDS.has(p.id)) continue
+      expect(p.data.backgroundColor, `${p.id}: overlay bg must be #00000000`).toBe("#00000000")
+      expect(p.data.motionPrompt as string, `${p.id}: prompt must mention transparency`).toMatch(/[Tt]ransparent/)
+    }
+  })
+
+  it("Backgrounds presets are opaque and declare a seamless loop", () => {
+    for (const p of presets) {
+      if (p.group !== "Backgrounds") continue
+      expect(p.data.backgroundColor, `${p.id}: backdrop must be opaque`).not.toBe("#00000000")
+      expect(p.data.motionPrompt as string, `${p.id}: must declare a seamless loop`).toMatch(/[Ss]eamless loop/)
+    }
+  })
+})
+
+describe("PRESET_APPLY_CLEAR_KEYS", () => {
+  it("equals every COMPOSER_PLAN_MAP plan field plus lottieUrl (drift guard)", () => {
+    // Deliberately re-derived from COMPOSER_PLAN_MAP (not COMPOSER_PLAN_FIELDS):
+    // asserting against the same constant production reads would be tautological.
+    const expected = [...new Set(Object.values(COMPOSER_PLAN_MAP).map((m) => m.planField)), "lottieUrl"]
+    expect([...PRESET_APPLY_CLEAR_KEYS].sort()).toEqual([...expected].sort())
+  })
+
+  it("covers the motion-graphics plan field + lottieUrl explicitly", () => {
+    expect(PRESET_APPLY_CLEAR_KEYS).toContain("motionPlan")
+    expect(PRESET_APPLY_CLEAR_KEYS).toContain("lottieUrl")
+  })
+})
+
 describe("presets don't bake config-field values (framing) into the prompt", () => {
   // The aspectRatio field is the single source of truth for framing. If a prompt also NAMES a
   // ratio, the model follows the prompt — so changing the aspect-ratio dropdown silently fails
@@ -833,7 +982,7 @@ describe("factory-presets split integrity", () => {
     "generate-image", "modify-image", "generate-video", "text-to-speech",
     "text-to-audio", "generate-music", "suno-generate", "llm-chat",
     "generate-script", "image-to-text", "voice-design", "video-to-video",
-    "voice-changer", "add-captions", "combine-videos",
+    "voice-changer", "add-captions", "combine-videos", "motion-graphics",
   ]
 
   it("exposes exactly the expected node-type keys in order", () => {

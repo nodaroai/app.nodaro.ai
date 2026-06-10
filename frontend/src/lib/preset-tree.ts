@@ -1,4 +1,4 @@
-import { extractPresetData } from "@nodaro/shared"
+import { extractPresetData, PRESET_APPLY_CLEAR_KEYS } from "@nodaro/shared"
 import type { NodePreset, NodePresetGroup } from "@/lib/api"
 
 /** A root-level node in the organized preset tree: a group (folder/section) with its presets, or a
@@ -77,6 +77,11 @@ export function buildResetToDefaultData(
   const payload: Record<string, unknown> = {}
   // Clear every config field the node currently carries (so extras not in the default reset too).
   for (const key of Object.keys(extractPresetData(currentData))) payload[key] = undefined
+  // Also clear generated composer-plan state (motionPlan/lottieUrl/etc). These are
+  // capture-EXCLUDED, so the loop above no longer enumerates them — without this a
+  // reset node keeps showing (and emitting) the old animation under default config.
+  // Same hygiene as buildPresetApplyPatch on apply.
+  for (const key of PRESET_APPLY_CLEAR_KEYS) payload[key] = undefined
   // Apply the default config values.
   Object.assign(payload, defConfig)
   // Back to "no preset".

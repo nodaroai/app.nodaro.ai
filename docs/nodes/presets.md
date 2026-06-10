@@ -166,6 +166,31 @@ and — the headliner — **Seamless Join (One-Shot)**.
 > and 3 off each start** to drop the artifact frames, and applies an **equal-power audio crossfade** to
 > hide the audio seam. Connect your clips in order and run.
 
+### Motion Graphics factory catalog
+
+**Motion Graphics** ships 22 presets across six folders, **all targeting the Lottie engine** (the
+LLM authors a complete Lottie animation with **named, editable slots**). Each preset is a rich
+art-direction brief that pre-selects a fitting aspect ratio, duration, and background, and ends by
+naming the **stable slots** it exposes — so after generating you can re-color and re-caption for free
+(no credits, no regeneration), and those same slots surface as editable fields when the node is added
+as an input in a published app. Overlay presets ship a transparent background (`#00000000`) and say so
+in the brief; standalone presets (title cards, intro, countdown, looping backgrounds) set an opaque
+dark background. Text slots carry placeholder copy (e.g. "Jane Doe", "SUBSCRIBE") for you to retype.
+
+| Folder | Presets |
+|--------|---------|
+| **Titles & Text** | Lower Third, Title Card, Kinetic Typography, Quote Card, End Card (CTA) |
+| **Intros & Logos** | Logo Sting, Channel Intro, Countdown |
+| **Social & CTA** | Subscribe Reminder, Like + Follow Bug, Sale Badge, Story Highlight |
+| **UI & Icons** | Loader / Spinner, Success Check, Error Cross, Progress Bar, Notification Pop |
+| **FX Overlays** | Confetti Burst, Sparkle Shimmer, Speed Lines |
+| **Backgrounds** | Gradient Blob Loop, Geometric Pattern Loop |
+
+Selecting a preset **overwrites** the node's prompt and canvas settings (engine, aspect ratio,
+duration, background) and **clears any previously generated plan** — so the old animation never lingers
+under the new prompt. Run the node to author the animation, then tweak its slots. (These presets target
+the Lottie engine; for the Classic/elements engine, describe your look directly in the prompt.)
+
 ## Using presets
 
 Every configurable node has a **preset dropdown** in two places:
@@ -232,6 +257,10 @@ It deliberately does **not** store:
 - **The node's label** — applying a preset never renames your node.
 - **Wired inputs (field mappings)** — connections to other nodes are specific to one workflow and
   aren't portable, so they're left untouched when you apply a preset.
+- **Generated composer-plan state** (a Motion Graphics / Composite / After Effects / 3D Title /
+  Lottie Overlay node's authored plan and any rendered Lottie URL) — that's a per-run generated
+  artifact, not configuration. Applying a preset also **clears** it, so the old animation never shows
+  under the new settings.
 
 Because a preset applies the provider and its dependent settings together, switching to a preset
 built for a different provider just works — any setting that doesn't apply to the new provider is

@@ -47,7 +47,8 @@ vi.mock("@/hooks/queries/use-node-presets-queries", () => ({
 vi.mock("@/hooks/use-auth", () => ({ useAuth: () => ({ user: { id: "user-1" } }) }))
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
-import { PresetDropdown } from "../node-preset-dropdown"
+import { PresetDropdown, buildPresetApplyPatch } from "../node-preset-dropdown"
+import { PRESET_APPLY_CLEAR_KEYS } from "@nodaro/shared"
 
 function wrap(ui: ReactNode) {
   const qc = new QueryClient()
@@ -119,14 +120,18 @@ describe("PresetDropdown", () => {
     await waitFor(() => expect(h.updateNodeData).toHaveBeenCalledWith("n1", { __activePresetId: "u-new" }))
   })
 
-  it("selecting a differing preset opens a confirm, then applies on Apply", async () => {
+  it("selecting a differing preset opens a confirm, then applies on Apply (clearing stale plan state)", async () => {
     wrap(<PresetDropdown nodeId="n1" variant="panel" />) // current prompt "a" != preset "z"
     fireEvent.click(screen.getByRole("button", { name: /presets/i }))
     fireEvent.click(await screen.findByText(/My Look/i))
     // confirm dialog
     const applyBtn = await screen.findByRole("button", { name: /^apply$/i })
     fireEvent.click(applyBtn)
-    expect(h.updateNodeData).toHaveBeenCalledWith("n1", { prompt: "z", __activePresetId: "u1" })
+    // Preset config + active id, plus generated composer-plan state cleared to undefined.
+    expect(h.updateNodeData).toHaveBeenCalledWith(
+      "n1",
+      expect.objectContaining({ prompt: "z", __activePresetId: "u1", motionPlan: undefined, lottieUrl: undefined }),
+    )
   })
 
   // Regression: on the node-variant (hover-toolbar) dropdown, selecting a DIFFERING preset
@@ -141,7 +146,10 @@ describe("PresetDropdown", () => {
     fireEvent.click(await screen.findByText(/My Look/i)) // differs → popover closes, confirm pending
     expect(onOpenChange).toHaveBeenLastCalledWith(true) // still active → toolbar (and dialog) stay mounted
     fireEvent.click(await screen.findByRole("button", { name: /^apply$/i }))
-    expect(h.updateNodeData).toHaveBeenCalledWith("n1", { prompt: "z", __activePresetId: "u1" })
+    expect(h.updateNodeData).toHaveBeenCalledWith(
+      "n1",
+      expect.objectContaining({ prompt: "z", __activePresetId: "u1", motionPlan: undefined }),
+    )
     await waitFor(() => expect(onOpenChange).toHaveBeenLastCalledWith(false)) // confirm resolved → inactive
   })
 
@@ -206,5 +214,42 @@ describe("PresetDropdown", () => {
       expect(call).toBeTruthy()
       expect((call![1] as Record<string, unknown>).__activePresetId).toBeUndefined()
     })
+  })
+
+  it("selecting a preset whose config already matches still clears stale plan state (no confirm)", () => {
+    // Node config equals the preset ("z"), but a stale generated plan lingers from a prior run.
+    h.data = { prompt: "z", motionPlan: { layers: [] }, lottieUrl: "https://r2/x.json" }
+    wrap(<PresetDropdown nodeId="n1" variant="panel" />)
+    fireEvent.click(screen.getByRole("button", { name: /presets/i }))
+    fireEvent.click(screen.getByText(/My Look/i)) // matches → no confirm dialog, applied directly
+    expect(h.updateNodeData).toHaveBeenCalledWith(
+      "n1",
+      expect.objectContaining({ __activePresetId: "u1", motionPlan: undefined, lottieUrl: undefined }),
+    )
+    // It must NOT re-write config fields on the no-change path.
+    expect((h.updateNodeData.mock.calls[0]![1] as Record<string, unknown>).prompt).toBeUndefined()
+  })
+})
+
+describe("buildPresetApplyPatch", () => {
+  it("clears every generated plan field to undefined, beneath the preset's config + active id", () => {
+    const patch = buildPresetApplyPatch({ prompt: "z", provider: "flux" }, "u1")
+    for (const k of PRESET_APPLY_CLEAR_KEYS) expect(patch[k], `${k} not cleared`).toBeUndefined()
+    expect(patch.prompt).toBe("z")
+    expect(patch.provider).toBe("flux")
+    expect(patch.__activePresetId).toBe("u1")
+  })
+
+  it("lets preset data override a clear key (spread order: clear → preset → marker)", () => {
+    // No factory preset does this today, but the contract must hold by construction.
+    const patch = buildPresetApplyPatch({ motionPlan: { layers: [1] } }, "u2")
+    expect(patch.motionPlan).toEqual({ layers: [1] })
+    expect(patch.__activePresetId).toBe("u2")
+  })
+
+  it("includes motionPlan + lottieUrl among the cleared keys", () => {
+    const patch = buildPresetApplyPatch({ prompt: "x" }, "u3")
+    expect("motionPlan" in patch && patch.motionPlan === undefined).toBe(true)
+    expect("lottieUrl" in patch && patch.lottieUrl === undefined).toBe(true)
   })
 })
