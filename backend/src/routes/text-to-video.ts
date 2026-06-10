@@ -81,7 +81,7 @@ export async function textToVideoRoutes(app: FastifyInstance) {
       return reply.status(400).send({
         error: {
           code: "image_required",
-          message: `${provider} requires an input image — use it in image-to-video (connect an image).`,
+          message: `${provider} requires an input image — connect an image to the node's image input (reference images alone are not enough).`,
         },
       })
     }

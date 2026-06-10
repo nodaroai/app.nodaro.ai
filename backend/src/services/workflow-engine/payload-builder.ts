@@ -10,7 +10,7 @@ import { collectAncestorRefs as sharedCollectAncestorRefs } from "@nodaro/shared
 import { buildImagePrompt, assembleImageInput, buildScenePrompt, applyReferenceOrderToVideo } from "@nodaro/shared"
 import { collectIdentityLockClause as sharedCollectIdentityLockClause } from "@nodaro/shared"
 import { resolveTemplate, applyTemplate } from "@nodaro/shared"
-import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt, resolveVideoProviderForMode } from "@nodaro/shared"
+import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt, resolveVideoProviderForMode, videoProviderRequiresImage } from "@nodaro/shared"
 import { buildLipSyncCreditId, isPerSecondLipSyncProvider } from "@nodaro/shared"
 import { resolveAiAvatarCreditId } from "@nodaro/shared"
 import { resolveCinematicCreditId } from "@nodaro/shared"
@@ -2411,6 +2411,14 @@ export function buildPayload(
       // No-op for single-id providers. Mirrors the frontend executor
       // (execute-node.ts) — shared source of truth in @nodaro/shared.
       const resolvedProvider = resolveVideoProviderForMode(provider, effectiveMode)
+
+      // i2v-only providers (kling-3-omni, kling-master, happyhorse-ref2v, …)
+      // cannot run the t2v path — fail with the same clear message the
+      // /v1/text-to-video route returns, BEFORE a job row is created and
+      // credits are reserved, instead of a provider-lookup error mid-run.
+      if (effectiveMode === "text-to-video" && videoProviderRequiresImage(resolvedProvider)) {
+        throw new Error(`${resolvedProvider} requires an input image — connect an image to the node's image input.`)
+      }
 
       // Prompt composition (typed-primary, via the shared helper): list-override
       // → data.prompt → data.motionPrompt (legacy field still emitted by the

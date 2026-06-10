@@ -106,7 +106,7 @@ Enterprise code lives under `backend/src/ee/` and `frontend/src/ee/` and is gove
 
 **Common pitfalls (each has caused a recurring outage):**
 1. **Step 2b registry drift** — a provider rendered in JSX but missing from `model-options.ts` won't have its stale state cleared by the fail-safe useEffect.
-2. **Step 3 Zod enum forgotten** — has caused the same validation bug 3 times.
+2. **Step 3 Zod enum forgotten** — has caused the same validation bug 4 times (latest: `kling-3-omni` + 6 other i2v-only models missing from `TEXT_TO_VIDEO_PROVIDERS`, crashing every image-less unified-node run). For video providers this is now self-guarding: the dispatch-totality test in `packages/shared/src/__tests__/video-mode-aliases.test.ts` fails when any `VIDEO_GEN_PROVIDERS` member can't resolve into BOTH `TEXT_TO_VIDEO_PROVIDERS` and `IMAGE_TO_VIDEO_PROVIDERS` (directly or via `VIDEO_MODE_ALIASES`). i2v-only models must be listed in `TEXT_TO_VIDEO_PROVIDERS` (so the t2v route's Zod passes) and are then auto-gated by `VIDEO_PROVIDERS_REQUIRING_IMAGE` — DERIVED from `MODEL_CATALOG` `modes`, never hand-edited. Set the catalog `modes` honestly and the friendly "image required" 400 follows everywhere (route + orchestrator).
 3. **Step 9 DB migration forgotten** — model invisible in `/admin/models` (the admin UI reads from DB only, not `STATIC_CREDIT_COSTS`). Audit with `audit-credits` skill.
 4. **Step 12 `field` discriminator wrong** — silently writes a quality value into `data.resolution` (or vice versa), then the route's Zod enum rejects at generate-time.
 5. **Step 12b fail-safe useEffect missing** — node configured for provider A carries A's resolution after switching to B; dropdown hides while data persists; B's Zod enum rejects A's value.

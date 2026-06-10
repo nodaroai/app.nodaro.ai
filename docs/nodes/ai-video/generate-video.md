@@ -41,9 +41,13 @@ The backend orchestrator inspects the wired inputs at job-build time and dispatc
 | No image / no references | `text-to-video` | `TEXT_2_VIDEO` |
 | `startFrame` only | `image-to-video` | (unset — default i2v path) |
 | `startFrame` + `endFrame` | `image-to-video` | `FIRST_AND_LAST_FRAMES_2_VIDEO` |
-| `imageReferences` and/or `videoReferences` (with or without `startFrame`) | `image-to-video` | `REFERENCE_2_VIDEO` |
+| `imageReferences` / `videoReferences` **with** `startFrame` | `image-to-video` | `REFERENCE_2_VIDEO` |
+| `imageReferences` only (no `startFrame`) | `text-to-video` — references are forwarded and used by reference-capable models (Gemini Omni, Seedance 2, VEO 3.1) | `REFERENCE_2_VIDEO` |
+| `videoReferences` only (no `startFrame`) | `text-to-video`, except Gemini Omni which routes `image-to-video` (its video-edit mode) | `REFERENCE_2_VIDEO` |
 
 `endFrame` only (no `startFrame`) is swapped server-side — the end frame is promoted to `imageUrl` so providers that take a single image (`veo3`, `minimax`, `kling-turbo`, ...) get a usable input.
+
+> **Image-required models.** Models with no text-to-video mode — `kling-3-omni`, `kling-master`, `hailuo-2.3`, `hailuo-2.3-pro`, `bytedance-pro-fast`, `happyhorse-ref2v`, `grok-imagine-video-1.5` — return a clean `image_required` error when run without a `startFrame` image. Reference images alone do **not** satisfy this; they are conditioning inputs, not the start frame. (Derived from the model catalog: `VIDEO_PROVIDERS_REQUIRING_IMAGE` in `@nodaro/shared`.)
 
 ## Providers
 
@@ -53,7 +57,7 @@ Generate Video covers the union of the legacy image-to-video and text-to-video c
 |---|---|---|---|
 | VEO 3.x | `veo3` (Quality), `veo3.1` (Fast), `veo3_lite` (Lite) | T2V, I2V, first+last, reference | 4 / 6 / 8s; 720p / 1080p; generate-audio default on; auto-translate |
 | Gemini Omni | `gemini-omni-video` | T2V, I2V, video-edit (V2V) | 4 / 6 / 8 / 10s; 720p / 1080p / 4K (4K not on free tier); native audio output; up to 7 reference images; V2V uses trim window ≤ 10 s |
-| Kling | `kling`, `kling-turbo`, `kling-3.0`, `kling-master` | T2V, I2V | 5 / 10s (Kling 3.0: continuous 3–15s) |
+| Kling | `kling`, `kling-turbo`, `kling-3.0`, `kling-master` | T2V, I2V (`kling-master` is I2V-only) | 5 / 10s (Kling 3.0: continuous 3–15s) |
 | Seedance / Seedance 2 | `seedance`, `seedance-2`, `seedance-2-fast` | T2V, I2V, reference (S2) | S2: 4–15s; 480p / 720p / 1080p; up to 9 image + 3 video + 3 audio refs |
 | Hailuo | `hailuo-2.3-pro`, `hailuo-2.3`, `hailuo-standard` | T2V (`hailuo-standard`), I2V | 6 / 10s |
 | Bytedance | `bytedance-lite`, `bytedance-pro`, `bytedance-pro-fast` | T2V (lite, pro), I2V | 5 / 10s |
@@ -61,14 +65,14 @@ Generate Video covers the union of the legacy image-to-video and text-to-video c
 | Grok Imagine 1 | `grok-i2v` (one picker row; remaps to `grok` for T2V) | T2V + I2V — mode auto-selected by image presence | 6 / 10s; resolution + mode (fun/normal/spicy) |
 | Grok Imagine 1.5 | `grok-imagine-video-1.5` | I2V (input image required) | 1–15s; 480p / 720p; per-second pricing; offered in the T2V picker too but returns "requires an input image" without one |
 | Wan | `wan-i2v` (Wan 2.6), `wan-2.7-i2v` (Wan 2.7), `wan-turbo` | T2V + I2V — Wan 2.6/2.7 are one picker row each (remap to `wan` / `wan-2.7-t2v` for T2V); `wan-turbo` fixed 5s | 5 / 10 / 15s |
-| HappyHorse | `happyhorse-i2v`, `happyhorse-ref2v`, `happyhorse` | I2V, reference, T2V | 3–15s; 720p / 1080p |
+| HappyHorse | `happyhorse-i2v` (one picker row; remaps to `happyhorse` for T2V), `happyhorse-ref2v` | T2V + I2V — mode auto-selected by image presence; Ref2V is reference-only (image required) | 3–15s; 720p / 1080p |
 | Runway (KIE) | `runway-kie` | T2V, I2V | Fixed configurations |
-| Kling 3 Omni | `kling-3-omni` | I2V | — |
+| Kling 3 Omni | `kling-3-omni` | I2V (input image required) | 3–15s; 720p / 1080p; end frame + up to 7 reference images; native audio; runs on Replicate |
 | LTX 2.3 | `ltx-2.3-pro`, `ltx-2.3-fast` | T2V, I2V, audio→V (Pro only) | Pro: 6 / 8 / 10s; Fast: 6–20s; 1080p / 2k / 4k; aspect 16:9 / 9:16; fps 24 / 25 / 48 / 50; supports `last_frame_image` (end-frame interpolation). Fast does not accept audio. |
 
 Source of truth: `IMAGE_TO_VIDEO_PROVIDERS` + `TEXT_TO_VIDEO_PROVIDERS` in `packages/shared/src/model-constants.ts`. Full per-provider pricing and parameters: `/admin/models` in the admin panel, or the `model_pricing` table.
 
-> **Unified picker collapse.** A few models expose a *different* provider id per mode but are one user-facing model — Grok Imagine 1 (`grok-i2v` / `grok`), Wan 2.6 (`wan-i2v` / `wan`), Wan 2.7 (`wan-2.7-i2v` / `wan-2.7-t2v`). The picker shows a **single row** for each (keyed by the image-to-video id); execution remaps it to the correct mode-specific endpoint based on image presence via `resolveVideoProviderForMode` (driven by `VIDEO_MODE_ALIASES` in `@nodaro/shared`). Picking one row therefore works in both text-to-video and image-to-video. Single-id models (VEO, Kling, Seedance, Grok Imagine 1.5, …) are unaffected.
+> **Unified picker collapse.** A few models expose a *different* provider id per mode but are one user-facing model — Grok Imagine 1 (`grok-i2v` / `grok`), Wan 2.6 (`wan-i2v` / `wan`), Wan 2.7 (`wan-2.7-i2v` / `wan-2.7-t2v`), HappyHorse (`happyhorse-i2v` / `happyhorse`). The picker shows a **single row** for each (keyed by the image-to-video id); execution remaps it to the correct mode-specific endpoint based on image presence via `resolveVideoProviderForMode` (driven by `VIDEO_MODE_ALIASES` in `@nodaro/shared`). Picking one row therefore works in both text-to-video and image-to-video. Single-id models (VEO, Kling, Seedance, Grok Imagine 1.5, …) are unaffected.
 
 ### End-frame support
 
@@ -76,7 +80,9 @@ Providers that accept a paired last frame: `veo3`, `veo3.1`, `veo3_lite` (`image
 
 ### Multimodal references
 
-Seedance 2 (`seedance-2` / `seedance-2-fast`) accepts up to 9 image refs, 3 video refs, and 3 audio refs in a single call. **`seedance-2-fast` requires each reference audio clip to be ≤ 15.2 seconds** (audio-driven r2v mode) — longer clips are rejected before the job is created with an `audio_too_long` error. HappyHorse Ref2V accepts 1–9 image refs. VEO 3.1 (`veo3.1`) supports `REFERENCE_2_VIDEO` mode when image references are wired without a start frame.
+Seedance 2 (`seedance-2` / `seedance-2-fast`) accepts up to 9 image refs, 3 video refs, and 3 audio refs in a single call. **`seedance-2-fast` requires each reference audio clip to be ≤ 15.2 seconds** (audio-driven r2v mode) — longer clips are rejected before the job is created with an `audio_too_long` error. HappyHorse Ref2V accepts 1–9 image refs. VEO 3.1 (`veo3.1`) supports `REFERENCE_2_VIDEO` mode when image references are wired without a start frame. Gemini Omni (`gemini-omni-video`) accepts up to 7 image refs in both modes — with a start frame (i2v) or without one (reference-conditioned t2v).
+
+Reference arrays are forwarded to the backend for **every** provider in both dispatch modes; models that don't support them ignore them. (Earlier editor builds dropped reference images on the text-to-video path for all providers except Kling and Seedance 2.)
 
 ### LTX 2.3 — auto-dispatch by wired inputs
 
@@ -96,7 +102,7 @@ LTX 2.3 Fast has its audio handle visually muted because Fast does not accept au
 
 | Mode | Dispatch condition | Notes |
 |---|---|---|
-| Text-to-video | No image / video input wired | Prompt-only generation |
+| Text-to-video | No image / video input wired | Prompt-only generation; wired reference images (no start frame) condition the output in this mode |
 | Image-to-video | `startFrame` wired (up to 7 reference images) | Up to 7 image references accepted |
 | Video-edit (V2V) | `video` input wired | Source clip trimmed to ≤ 10 s; see trim fields below |
 

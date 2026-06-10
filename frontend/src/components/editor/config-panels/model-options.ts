@@ -102,7 +102,7 @@ export const VIDEO_I2V_MODELS = [
   { value: "wan-i2v", label: "Wan 2.6", desc: "Wan I2V, 5-15s, resolution options" },
   { value: "wan-turbo", label: "Wan Turbo", desc: "Fast Wan, 5s clips" },
   { value: "wan-2.7-i2v",    label: "Wan 2.7",            desc: "Wan 2.7 I2V, 2–15s, 720p/1080p, start+end frame" },
-  { value: "happyhorse-i2v",  label: "HappyHorse I2V",    desc: "3–15s, 720p/1080p, single start frame" },
+  { value: "happyhorse-i2v",  label: "HappyHorse",        desc: "3–15s, 720p/1080p, image or text" },
   { value: "happyhorse-ref2v", label: "HappyHorse Ref2V", desc: "1–9 reference images to video, 3–15s" },
   { value: "kling-3-omni", label: "Kling 3 Omni", desc: "Replicate, 3–15s, 720p/1080p, end frame + up to 7 reference images" },
   { value: "ltx-2.3-pro", label: "LTX 2.3 Pro", desc: "Lightricks LTX 2.3 Pro — text/image/audio→video, up to 4K" },

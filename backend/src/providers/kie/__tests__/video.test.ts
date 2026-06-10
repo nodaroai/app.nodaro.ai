@@ -440,6 +440,31 @@ describe("KieVideoProvider.textToVideo", () => {
     expect(input.aspect_ratio).toBe("9:16")
   })
 
+  it("veo3 t2v forwards reference images as imageUrls with REFERENCE_2_VIDEO", async () => {
+    // Ref-only runs (no start frame) dispatch down the t2v path with
+    // referenceImageUrls forwarded — VEO must receive them as imageUrls with
+    // an explicit REFERENCE_2_VIDEO generationType (a bare single image would
+    // otherwise be misread as an IMAGE_2_VIDEO start frame).
+    await provider.textToVideo("space exploration", "veo3", undefined, undefined, {
+      referenceImageUrls: ["https://cdn.example/ref1.png", "https://cdn.example/ref2.png"],
+    })
+    expect(mocks.mockRunVeoTask).toHaveBeenCalledWith(
+      "veo3",
+      "space exploration",
+      ["https://cdn.example/ref1.png", "https://cdn.example/ref2.png"],
+      expect.objectContaining({ generationType: "REFERENCE_2_VIDEO" }),
+      undefined,
+    )
+  })
+
+  it("veo3 t2v caps reference images at 3 (VEO limit)", async () => {
+    await provider.textToVideo("space exploration", "veo3", undefined, undefined, {
+      referenceImageUrls: ["u1", "u2", "u3", "u4", "u5"].map((n) => `https://cdn.example/${n}.png`),
+    })
+    const passedUrls = mocks.mockRunVeoTask.mock.calls[0][2] as string[]
+    expect(passedUrls).toHaveLength(3)
+  })
+
   it("calls kling3Generate for kling-3.0 (no imageUrls)", async () => {
     const result = await provider.textToVideo("cinematic", "kling-3.0")
     expect(mocks.mockKling3Generate).toHaveBeenCalledWith(

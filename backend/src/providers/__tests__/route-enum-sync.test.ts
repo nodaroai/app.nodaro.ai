@@ -69,6 +69,7 @@ import {
   LIP_SYNC_PROVIDERS,
   TTS_PROVIDERS,
   TRANSCRIBE_PROVIDERS,
+  VIDEO_PROVIDERS_REQUIRING_IMAGE,
 } from "@nodaro/shared"
 
 /**
@@ -119,14 +120,20 @@ const DIRECT_API_EXEMPTIONS = new Set<string>([
   // Zod/UI but NOT registered in KIE_VIDEO_MODELS / KIE_TEXT_TO_VIDEO_MODELS.
   "ltx-2.3-pro",
   "ltx-2.3-fast",
-  // ── Grok Imagine Video 1.5 — image-to-video only ──────────────────────
-  // Registered in KIE_VIDEO_MODELS (i2v works), but deliberately NOT in
-  // KIE_TEXT_TO_VIDEO_MODELS. It's listed in TEXT_TO_VIDEO_PROVIDERS so the
-  // unified Generate Video node offers it everywhere, but KIE requires an
-  // input image — so /v1/text-to-video early-returns a clean "requires an
-  // input image" 400 (videoProviderRequiresImage) before reaching a provider.
-  "grok-imagine-video-1.5",
 ])
+
+/**
+ * i2v-only providers surfaced in TEXT_TO_VIDEO_PROVIDERS purely so the
+ * unified Generate Video node's image-less runs reach the route's clean
+ * "requires an input image" 400 (instead of a raw Zod enum error). They are
+ * registered for i2v (KIE or Replicate) but deliberately NOT in
+ * KIE_TEXT_TO_VIDEO_MODELS — /v1/text-to-video rejects them before any
+ * provider dispatch. Derived in @nodaro/shared from MODEL_CATALOG modes;
+ * exempting via the same set means a new i2v-only model needs no edit here.
+ * (grok-imagine-video-1.5, kling-3-omni, kling-master, hailuo-2.3,
+ * hailuo-2.3-pro, bytedance-pro-fast, happyhorse-ref2v as of 2026-06.)
+ */
+const T2V_IMAGE_REQUIRED_EXEMPTIONS = VIDEO_PROVIDERS_REQUIRING_IMAGE
 
 /**
  * Models that are registered in `kie/models.ts` but not in any shared
@@ -233,11 +240,12 @@ function checkReverseSync(
   shared: readonly string[],
   registeredKeys: string[],
   registeredVia: string,
+  extraExemptions?: ReadonlySet<string>,
 ) {
   it(`every entry in ${label} is registered via ${registeredVia} or in DIRECT_API_EXEMPTIONS`, () => {
     const registered = new Set(registeredKeys)
     const unreachable = shared.filter(
-      (s) => !registered.has(s) && !DIRECT_API_EXEMPTIONS.has(s),
+      (s) => !registered.has(s) && !DIRECT_API_EXEMPTIONS.has(s) && !extraExemptions?.has(s),
     )
     expect(
       unreachable,
@@ -259,6 +267,7 @@ describe("shared provider arrays ⊆ KIE registered (with documented exemptions)
     TEXT_TO_VIDEO_PROVIDERS,
     Object.keys(KIE_TEXT_TO_VIDEO_MODELS),
     "KIE_TEXT_TO_VIDEO_MODELS",
+    T2V_IMAGE_REQUIRED_EXEMPTIONS,
   )
 
   checkReverseSync(
