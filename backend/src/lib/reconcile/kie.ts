@@ -168,37 +168,44 @@ async function reconcileKieSunoJob(row: KieJobRow): Promise<void> {
     return
   }
 
-  // Upload each track to R2 under variant-suffixed keys (matches the worker
-  // handler's uploadAllSunoTracks).
-  const r2Urls = await Promise.all(
-    validTracks.map((t, i) =>
-      uploadToR2(t.audioUrl, variantJobId(row.id, i), "audio", userId),
-    ),
-  )
-  const primary = validTracks[0]!
+  // P0.1 (audit Blocker B1): uploads + finalize must bump on failure — same
+  // rationale as reconcileKieJob's post-poll wrap (deterministic failures
+  // must exhaust to refund+anomaly, never loop forever).
+  try {
+    // Upload each track to R2 under variant-suffixed keys (matches the worker
+    // handler's uploadAllSunoTracks).
+    const r2Urls = await Promise.all(
+      validTracks.map((t, i) =>
+        uploadToR2(t.audioUrl, variantJobId(row.id, i), "audio", userId),
+      ),
+    )
+    const primary = validTracks[0]!
 
-  await finalizeJobWithMedia({
-    jobId: row.id,
-    jobType: "generate-music",
-    result: { url: r2Urls[0]!, cost: null, providerUsed: "suno" },
-    mediaUrl: r2Urls[0]!,
-    extraOutputData: {
-      ...(r2Urls.length > 1 ? { audioUrls: r2Urls } : {}),
-      sunoTrackId: primary.id,
-      sunoTitle: primary.title,
-      sunoDuration: primary.duration,
-      sunoImageUrl: primary.imageUrl,
-      sunoTaskId: result.taskId,
-      sunoTracks: validTracks.map((t, i) => ({
-        id: t.id,
-        title: t.title,
-        duration: t.duration,
-        imageUrl: t.imageUrl,
-        audioUrl: r2Urls[i]!,
-      })),
-      trackCount: validTracks.length,
-    },
-  })
+    await finalizeJobWithMedia({
+      jobId: row.id,
+      jobType: "generate-music",
+      result: { url: r2Urls[0]!, cost: null, providerUsed: "suno" },
+      mediaUrl: r2Urls[0]!,
+      extraOutputData: {
+        ...(r2Urls.length > 1 ? { audioUrls: r2Urls } : {}),
+        sunoTrackId: primary.id,
+        sunoTitle: primary.title,
+        sunoDuration: primary.duration,
+        sunoImageUrl: primary.imageUrl,
+        sunoTaskId: result.taskId,
+        sunoTracks: validTracks.map((t, i) => ({
+          id: t.id,
+          title: t.title,
+          duration: t.duration,
+          imageUrl: t.imageUrl,
+          audioUrl: r2Urls[i]!,
+        })),
+        trackCount: validTracks.length,
+      },
+    })
+  } catch (err) {
+    await bumpAttemptsOrExhaust(row.id, err)
+  }
 }
 
 async function markFailed(jobId: string, reason: string): Promise<void> {
@@ -257,20 +264,31 @@ export async function reconcileKieJob(row: KieJobRow): Promise<void> {
     return
   }
 
-  // i2v + loopTrim.enabled: reconcile uploads the RAW (un-trimmed) clip and
-  // commits the reserved tier, so refund the loop-trim add-on BEFORE finalize
-  // (commit is CAS-once → this commit wins). No-op otherwise.
-  await refundLoopTrimAddonOnReconcile(row.job_type, row.id, row.input_data ?? null)
+  // P0.1 (audit Blocker B1): the post-poll completion phase MUST bump
+  // reconcile_attempts on failure. Without this, a poll-success-but-
+  // finalize-failure propagated to the cron's per-row catch (errors++ only)
+  // and a deterministic failure (size cap, bad transcode) looped at every
+  // tick FOREVER — user charged, credits stranded `reserved`, no refund, no
+  // anomaly. Bumping routes it into the 18-attempt exhaustion path
+  // (forceFailExhausted → refund + credit_anomalies), which terminates.
+  try {
+    // i2v + loopTrim.enabled: reconcile uploads the RAW (un-trimmed) clip and
+    // commits the reserved tier, so refund the loop-trim add-on BEFORE finalize
+    // (commit is CAS-once → this commit wins). No-op otherwise.
+    await refundLoopTrimAddonOnReconcile(row.job_type, row.id, row.input_data ?? null)
 
-  await finalizeJobWithMedia({
-    jobId: row.id,
-    jobType: (row.job_type ?? "generate-image") as FinalizeJobType,
-    result: {
-      url: result.url,
-      extraUrls: result.extraUrls,
-      cost: null,  // committed at reservation; actual cost is unknown post-reconcile
-      providerUsed: null,
-      providerMs: result.providerMs,
-    },
-  })
+    await finalizeJobWithMedia({
+      jobId: row.id,
+      jobType: (row.job_type ?? "generate-image") as FinalizeJobType,
+      result: {
+        url: result.url,
+        extraUrls: result.extraUrls,
+        cost: null,  // committed at reservation; actual cost is unknown post-reconcile
+        providerUsed: null,
+        providerMs: result.providerMs,
+      },
+    })
+  } catch (err) {
+    await bumpAttemptsOrExhaust(row.id, err)
+  }
 }

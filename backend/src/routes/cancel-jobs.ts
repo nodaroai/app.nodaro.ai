@@ -54,7 +54,7 @@ export async function cancelJobsRoutes(app: FastifyInstance) {
         // the job can't be killed (no provider cancel API), it runs to completion.
         const { data: job, error: fetchError } = await supabase
           .from("jobs") // tenant-scope-ignore: ownership verified post-fetch (job.user_id !== userId → 403 below)
-          .select("id, status, user_id, input_data, output_data, provider_task_id")
+          .select("id, status, user_id, input_data, output_data, provider_task_id, reconcile_attempts")
           .eq("id", jobId)
           .single()
 
@@ -82,28 +82,50 @@ export async function cancelJobsRoutes(app: FastifyInstance) {
           })
         }
 
-        // In flight: the external provider call already went out. We can't kill
-        // it — let it finish (the user keeps the result they paid for). Report
-        // `inFlight` so the UI shows a graceful "Stopping…" rather than pretending
-        // it was cancelled. No status change, no refund.
-        if (job.provider_task_id) {
+        // In flight: the external provider call already went out and a live
+        // worker is polling it. We can't kill it — let it finish (the user
+        // keeps the result they paid for). Report `inFlight` so the UI shows
+        // a graceful "Stopping…" rather than pretending it was cancelled.
+        //
+        // EXCEPTION (audit D2): a row the reconcile system has already touched
+        // (`reconcile_attempts > 0`) was abandoned by its worker — the user is
+        // staring at a stuck progress bar with no kill path, possibly for the
+        // full exhaustion budget (~90+ min). Cancelling converts the wait into
+        // an immediate refund; the provider cost is sunk either way (the same
+        // trade reconcile exhaustion makes). The CAS below + reserved-only
+        // refund keep the race with a concurrent cron completion safe in both
+        // directions: cron wins → CAS flips 0 rows, no refund; cancel wins →
+        // the cron's claim RPC + finalize + markJobCompleted all refuse
+        // cancelled rows.
+        const inRecovery = ((job.reconcile_attempts as number | null) ?? 0) > 0
+        if (job.provider_task_id && !inRecovery) {
           return { success: true, cancelled: 0, inFlight: true }
         }
 
-        // Pre-call: truly cancel. Remove from the queue (if still waiting), flip
-        // to cancelled (the worker's pre-call guard aborts before createTask if
-        // it had already been picked up), and refund the reserved credits.
+        // Truly cancel. Remove from the queue (if still waiting), CAS-flip to
+        // cancelled (only live rows — a concurrent completion between our read
+        // and this write must NOT be trampled into `cancelled` after its
+        // credits committed), and refund ONLY when we actually flipped the row.
         await tryRemoveFromQueue(jobId)
 
-        const { error: updateError } = await supabase
+        const { data: cancelledRows, error: updateError } = await supabase
           .from("jobs")
           .update({ status: "cancelled" })
           .eq("id", jobId)
+          .eq("user_id", userId)
+          .in("status", ["pending", "queued", "processing"])
+          .select("id")
 
         if (updateError) {
           return reply.status(500).send({
             error: { code: "internal_error", message: updateError.message },
           })
+        }
+
+        if (!cancelledRows || cancelledRows.length === 0) {
+          // Lost the race to a terminal writer (completed/failed/cancelled).
+          // The job's own lifecycle handled credits — nothing to refund here.
+          return { success: true, cancelled: 0, inFlight: false }
         }
 
         await refundReservedCreditsForJobs([jobId])
@@ -130,15 +152,17 @@ export async function cancelJobsRoutes(app: FastifyInstance) {
     }
 
     try {
-      // Get all cancellable jobs for this user that have NOT yet hit the
-      // external provider (provider_task_id IS NULL). In-flight jobs can't be
-      // killed — they run to completion — so we leave them alone.
+      // Get all cancellable jobs for this user: not yet at the external
+      // provider (provider_task_id IS NULL), OR abandoned to the reconcile
+      // system (reconcile_attempts > 0 — audit D2, same rule as single
+      // cancel). Live in-flight jobs can't be killed — they run to
+      // completion — so we leave them alone.
       const { data: jobs, error: fetchError } = await supabase
         .from("jobs")
         .select("id")
         .eq("user_id", userId)
         .in("status", ["pending", "queued", "processing"])
-        .is("provider_task_id", null)
+        .or("provider_task_id.is.null,reconcile_attempts.gt.0")
 
       if (fetchError) {
         return reply.status(500).send({
@@ -157,11 +181,15 @@ export async function cancelJobsRoutes(app: FastifyInstance) {
         await tryRemoveFromQueue(jobId)
       }
 
-      // Update all jobs to cancelled
-      const { error: updateError } = await supabase
+      // CAS-update to cancelled (live rows only) and refund ONLY the rows we
+      // actually flipped — a job that completed between the SELECT and this
+      // UPDATE keeps its committed credits.
+      const { data: cancelledRows, error: updateError } = await supabase
         .from("jobs")
         .update({ status: "cancelled" })
         .in("id", jobIds)
+        .in("status", ["pending", "queued", "processing"])
+        .select("id")
 
       if (updateError) {
         return reply.status(500).send({
@@ -169,11 +197,14 @@ export async function cancelJobsRoutes(app: FastifyInstance) {
         })
       }
 
-      // Refund reserved credits for every cancelled job in one pass.
-      await refundReservedCreditsForJobs(jobIds)
-      invalidateBalanceCache(userId)
+      const cancelledIds = (cancelledRows ?? []).map((r) => r.id as string)
+      if (cancelledIds.length > 0) {
+        // Refund reserved credits for every cancelled job in one pass.
+        await refundReservedCreditsForJobs(cancelledIds)
+        invalidateBalanceCache(userId)
+      }
 
-      return { success: true, cancelled: jobIds.length }
+      return { success: true, cancelled: cancelledIds.length }
     } catch (err) {
       console.error("[cancel-all] Error:", err)
       return reply.status(500).send({

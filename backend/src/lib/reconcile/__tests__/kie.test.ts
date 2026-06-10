@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => {
   const pollLumaTaskMock = vi.fn()
   const pollRunwayTaskMock = vi.fn()
   const pollAlephTaskMock = vi.fn()
+  const pollSunoTaskMock = vi.fn()
+  const uploadToR2Mock = vi.fn()
   const finalizeMock = vi.fn().mockResolvedValue({ ok: true })
   const refundMock = vi.fn().mockResolvedValue(undefined)
 
@@ -71,6 +73,8 @@ const mocks = vi.hoisted(() => {
     pollLumaTaskMock,
     pollRunwayTaskMock,
     pollAlephTaskMock,
+    pollSunoTaskMock,
+    uploadToR2Mock,
     finalizeMock,
     refundMock,
     FakeKieError,
@@ -109,6 +113,17 @@ vi.mock("../../../providers/kie/luma-client.js", () => ({
 vi.mock("../../../providers/kie/runway-client.js", () => ({
   pollRunwayTask: mocks.pollRunwayTaskMock,
   pollAlephTask: mocks.pollAlephTaskMock,
+}))
+
+vi.mock("../../../providers/kie/suno-client.js", () => ({
+  pollSunoTask: mocks.pollSunoTaskMock,
+}))
+
+vi.mock("../../storage.js", () => ({
+  uploadToR2: mocks.uploadToR2Mock,
+  uploadBufferToR2: vi.fn(),
+  uploadFileToR2: vi.fn(),
+  uploadFileWithKeyToR2: vi.fn(),
 }))
 
 vi.mock("../../job-finalize.js", () => ({
@@ -337,8 +352,68 @@ describe("reconcileKieJob", () => {
     expect(mocks.jobsUpdateMock).toHaveBeenCalled()
   })
 
-  // The kie-suno music path is covered by integration testing via the cron.
-  // Mocking pollSunoTask + uploadToR2 + supabase chains in isolation is
-  // boilerplate-heavy; the cron+handler integration in dev is the cleaner
-  // verification surface.
+  // -------------------------------------------------------------------------
+  // Post-poll failures MUST bump reconcile_attempts (P0.1, audit Blocker B1).
+  // Before this, a poll-success-but-finalize-failure propagated to the cron's
+  // per-row catch (errors++ only) — a deterministic upload failure looped at
+  // every tick FOREVER: charged user, credits stranded `reserved`, no refund,
+  // no anomaly row. Bumping routes it into the 18-attempt exhaustion path
+  // (forceFailExhausted → refund + credit_anomalies), which terminates.
+  // -------------------------------------------------------------------------
+  it("kie-standard: finalize throws → bumps reconcile_attempts, no markFailed, no refund, no propagation", async () => {
+    mocks.pollKieTaskMock.mockResolvedValueOnce({
+      resultJson: { resultUrls: ["https://kie.example/r.png"] },
+      providerMs: 1000,
+      taskId: "t-fin",
+    })
+    mocks.finalizeMock.mockRejectedValueOnce(new Error("R2 upload failed"))
+    const row: KieJobRow = {
+      id: "j-finalize-throw",
+      provider_kind: "kie-standard",
+      provider_task_id: "t-fin",
+      reconcile_attempts: 0,
+      job_type: "generate-image",
+    }
+
+    await expect(reconcileKieJob(row)).resolves.toBeUndefined()
+
+    expect(mocks.refundMock).not.toHaveBeenCalled()
+    const bumpCall = mocks.jobsUpdateMock.mock.calls.find(
+      (c) => (c[0] as Record<string, unknown>).reconcile_attempts === 1,
+    )
+    expect(bumpCall).toBeTruthy()
+    expect(String((bumpCall![0] as Record<string, unknown>).reconcile_last_error)).toContain(
+      "R2 upload failed",
+    )
+    const failCall = mocks.jobsUpdateMock.mock.calls.find(
+      (c) => (c[0] as Record<string, unknown>).status === "failed",
+    )
+    expect(failCall).toBeUndefined()
+  })
+
+  it("kie-suno music: track upload throws → bumps reconcile_attempts, no finalize, no refund", async () => {
+    mocks.pollSunoTaskMock.mockResolvedValueOnce({
+      taskId: "t-suno-up",
+      tracks: [
+        { id: "tr1", title: "Track", duration: 30, imageUrl: "", audioUrl: "https://suno.example/a.mp3" },
+      ],
+    })
+    mocks.uploadToR2Mock.mockRejectedValueOnce(new Error("upload-size-exceeded: cap"))
+    const row: KieJobRow = {
+      id: "j-suno-upload-throw",
+      provider_kind: "kie-suno",
+      provider_task_id: "t-suno-up",
+      reconcile_attempts: 0,
+      job_type: "suno-generate",
+    }
+
+    await expect(reconcileKieJob(row)).resolves.toBeUndefined()
+
+    expect(mocks.finalizeMock).not.toHaveBeenCalled()
+    expect(mocks.refundMock).not.toHaveBeenCalled()
+    const bumpCall = mocks.jobsUpdateMock.mock.calls.find(
+      (c) => (c[0] as Record<string, unknown>).reconcile_attempts === 1,
+    )
+    expect(bumpCall).toBeTruthy()
+  })
 })

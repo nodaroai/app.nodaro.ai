@@ -211,7 +211,14 @@ export async function reconcileReplicateJob(row: ReplicateJobRow): Promise<void>
       await bumpAttemptsOrExhaust(row.id, "no character linked to training")
       return
     }
-    await applyTrainingTerminalStatus(row.id, character, remote)
+    // P0.1 (audit Blocker B1): terminal-status application must bump on
+    // failure — an uncaught throw here only increments the cron's error
+    // counter and the row retries identically forever.
+    try {
+      await applyTrainingTerminalStatus(row.id, character, remote)
+    } catch (err) {
+      await bumpAttemptsOrExhaust(row.id, err)
+    }
     return
   }
 
@@ -248,20 +255,27 @@ export async function reconcileReplicateJob(row: ReplicateJobRow): Promise<void>
   const providerMs = pred.metrics?.predict_time
     ? Math.round(pred.metrics.predict_time * 1000)
     : undefined
-  // i2v + loopTrim.enabled: reconcile uploads the RAW (un-trimmed) clip and
-  // commits the reserved tier, so refund the loop-trim add-on BEFORE finalize
-  // (commit is CAS-once → this commit wins). No-op otherwise.
-  await refundLoopTrimAddonOnReconcile(row.job_type, row.id, row.input_data ?? null)
+  // P0.1 (audit Blocker B1): the post-poll completion phase must bump on
+  // failure so deterministic failures exhaust to refund+anomaly instead of
+  // looping at every cron tick forever (see kie.ts twin for the full story).
+  try {
+    // i2v + loopTrim.enabled: reconcile uploads the RAW (un-trimmed) clip and
+    // commits the reserved tier, so refund the loop-trim add-on BEFORE finalize
+    // (commit is CAS-once → this commit wins). No-op otherwise.
+    await refundLoopTrimAddonOnReconcile(row.job_type, row.id, row.input_data ?? null)
 
-  await finalizeJobWithMedia({
-    jobId: row.id,
-    jobType: (row.job_type ?? "generate-image") as FinalizeJobType,
-    result: {
-      url: urls[0]!,
-      extraUrls: urls.slice(1),
-      cost: null,
-      providerUsed: "replicate",
-      providerMs,
-    },
-  })
+    await finalizeJobWithMedia({
+      jobId: row.id,
+      jobType: (row.job_type ?? "generate-image") as FinalizeJobType,
+      result: {
+        url: urls[0]!,
+        extraUrls: urls.slice(1),
+        cost: null,
+        providerUsed: "replicate",
+        providerMs,
+      },
+    })
+  } catch (err) {
+    await bumpAttemptsOrExhaust(row.id, err)
+  }
 }

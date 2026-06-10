@@ -144,7 +144,13 @@ export function createVideoWorker() {
         // overwrites both fields via `makeOnTaskCreated` once it has a
         // taskId, so the pre-task sentinel survives only on crash.
         const nowIso = new Date().toISOString()
-        await supabase
+        // A1 (audit 2026-06-10): CAS on live statuses + abort on 0 rows.
+        // Queue removal on cancel is best-effort (BullMQ ids are auto-
+        // generated, see lib/queue.ts), so a job cancelled while queued is
+        // still dequeued here. The old unguarded overwrite resurrected the
+        // cancelled+refunded row to 'processing' and ran the full provider
+        // generation — the user kept the refund AND got the output.
+        const { data: pickedRows } = await supabase
           .from("jobs")
           .update({
             status: "processing",
@@ -155,6 +161,14 @@ export function createVideoWorker() {
             job_type: job.name,
           })
           .eq("id", jobId)
+          .in("status", ["pending", "processing"])
+          .select("id")
+        if (!pickedRows || pickedRows.length === 0) {
+          console.log(
+            `[worker] Job ${jobId} not in a runnable state at pickup (cancelled/terminal while queued) — discarding`,
+          )
+          return
+        }
 
         const handler = allHandlers[job.name]
         if (!handler) {

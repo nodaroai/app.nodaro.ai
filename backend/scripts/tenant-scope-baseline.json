@@ -39,12 +39,6 @@
       "line": 281
     },
     {
-      "file": "src/routes/cancel-jobs.ts",
-      "table": "jobs",
-      "hash": "a2ddf32c242f",
-      "line": 88
-    },
-    {
       "file": "src/routes/image-to-text.ts",
       "table": "jobs",
       "hash": "bdb95e5e650d",
@@ -223,12 +217,6 @@
       "table": "jobs",
       "hash": "f66588aaeefb",
       "line": 95
-    },
-    {
-      "file": "src/routes/workflow-execution.ts",
-      "table": "jobs",
-      "hash": "388dd93c4002",
-      "line": 442
     },
     {
       "file": "src/routes/workflow-execution.ts",

@@ -404,6 +404,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
           placeholder="Describe the image to generate..."
           referenceImages={refImagesForAutocomplete}
           nodeRefs={nodeRefs}
+          refMap={refMap}
         />
       </MappableField>
       <MappableField field="style" label="Style" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -1264,6 +1265,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
           placeholder={isNanoBananaEdit ? "Describe how to edit the image..." : "Describe how to transform the input image..."}
           referenceImages={refImagesForAutocomplete}
           nodeRefs={nodeRefs}
+          refMap={refMap}
         />
       </MappableField>
       <MappableField field="style" label="Style" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -1315,6 +1317,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
           placeholder="Things to avoid..."
           referenceImages={refImagesForAutocomplete}
           nodeRefs={nodeRefs}
+          refMap={refMap}
         />
         <p className="text-[10px] text-muted-foreground mt-0.5">Appended to prompt as exclusion guidance</p>
       </MappableField>

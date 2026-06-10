@@ -8,7 +8,6 @@ import {
   sweepSoftDeletedLocationAssets,
 } from "./cleanup-service.js"
 import { recordKieCreditSnapshot } from "../routes/admin-kie-credits.js"
-import { reconcileInflightJobs } from "../../lib/reconcile/cron.js"
 
 /**
  * Start all billing cleanup cron jobs.
@@ -17,8 +16,6 @@ import { reconcileInflightJobs } from "../../lib/reconcile/cron.js"
  * - expireSubscriptions:        every hour at :00
  * - renewSubscriptionCredits:   every hour at :30
  * - recordKieCreditSnapshot:    every hour at :15
- * - reconcileInflightJobs:      every 5 minutes (sync-sweep + async recovery
- *                                including replicate-training, suno-voice-*)
  * - cleanupFreeUserMedia:       daily at 03:00 UTC
  * - cleanupCanceledUserMedia:   daily at 03:30 UTC
  * - sweepSoftDeletedLocationAssets: daily at 04:00 UTC (Phase 2 #8)
@@ -147,22 +144,11 @@ export function startCleanupCron(): void {
     }
   })
 
-  // External-call reconciliation sweep — every 5 minutes.
-  // Replaces the standalone Character LoRA training cron: replicate-training
-  // rows are now dispatched through reconcileReplicateJob.
-  cron.schedule("*/5 * * * *", async () => {
-    const start = Date.now()
-    try {
-      const result = await reconcileInflightJobs()
-      if (result.scanned > 0 || result.errors > 0) {
-        console.log(
-          `[cron] reconcile: scanned=${result.scanned} recovered=${result.recovered} swept=${result.swept} notStale=${result.notStale} errors=${result.errors} (${Date.now() - start}ms)`,
-        )
-      }
-    } catch (err) {
-      console.error("[cron] reconcile failed:", err)
-    }
-  })
+  // NOTE: the external-call reconciliation sweep (reconcileInflightJobs) is
+  // deliberately NOT here anymore. It is a core correctness mechanism, not
+  // billing — scheduling it behind hasCredits() left Community/Business with
+  // no reconcile at all (audit B2). It now starts unconditionally from
+  // server.ts via lib/reconcile/start.ts.
 
-  console.log("[cron] Billing cleanup cron jobs started (8 schedules)")
+  console.log("[cron] Billing cleanup cron jobs started (7 schedules)")
 }

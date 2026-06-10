@@ -608,15 +608,24 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       // Try to remove from BullMQ queue before marking cancelled
       tryRemoveFromQueue(parsed.data.id).catch(() => {})
 
-      await supabase
+      // CAS on live statuses (audit D2): a concurrent completion landing
+      // between the status read above and this write must NOT be trampled
+      // `completed → cancelled` after its credits committed. Refund only
+      // when WE flipped the row (mirrors the child-job branch below).
+      const { data: cancelledRows } = await supabase
         .from("jobs")
         .update({ status: "cancelled" })
         .eq("id", parsed.data.id)
+        .eq("user_id", req.userId)
+        .in("status", ["pending", "queued", "processing", "running"])
+        .select("id")
 
-      // Refund the reserved credit hold so cancelling doesn't silently
-      // forfeit the user's balance (mirrors cancel-jobs.ts after #1508).
-      await refundReservedCreditsForJobs([parsed.data.id])
-      invalidateBalanceCache(req.userId)
+      if (cancelledRows && cancelledRows.length > 0) {
+        // Refund the reserved credit hold so cancelling doesn't silently
+        // forfeit the user's balance (mirrors cancel-jobs.ts after #1508).
+        await refundReservedCreditsForJobs([parsed.data.id])
+        invalidateBalanceCache(req.userId)
+      }
 
       return { success: true }
     }

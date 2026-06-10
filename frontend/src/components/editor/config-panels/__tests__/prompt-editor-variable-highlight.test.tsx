@@ -57,13 +57,86 @@ describe("PromptEditor variable highlighting", () => {
   it("rendering guard: decoration spans never change the visible text", async () => {
     // No {image:N} here — that token promotes to a pill whose DOM textContent
     // intentionally differs (the literal round-trips via renderText/getText,
-    // which the pill's own tests cover). This guard is about variable spans.
-    const value = "a {Setting} b {Style Guide} c {person || man}"
+    // which the pill's own tests cover). This guard is about variable spans —
+    // including the sep/fallback sub-decorations (refMap provided: one dormant
+    // token, one active token).
+    const value = "a {Setting || base} b {Style Guide} c {person || man}"
     const { container } = render(
-      <PromptEditor value={value} onChange={vi.fn()} nodeRefs={REFS} />,
+      <PromptEditor
+        value={value}
+        onChange={vi.fn()}
+        nodeRefs={REFS}
+        refMap={new Map([["Setting", "sunset beach"]])}
+      />,
     )
     await waitFor(() => {
       expect(container.querySelector(".ProseMirror")?.textContent).toBe(value)
+      expect(container.querySelector(".ref-fallback-dormant")).not.toBeNull()
+      expect(container.querySelector(".ref-fallback-active")).not.toBeNull()
+    })
+  })
+})
+
+describe("fallback value-aware rendering", () => {
+  const VALUE_MAP = new Map([["Setting", "sunset beach"]])
+
+  it("dormant default: grey strikethrough span when a wired value exists", async () => {
+    const { container } = render(
+      <PromptEditor value="in {Setting || a misty forest}" onChange={vi.fn()} nodeRefs={REFS} refMap={VALUE_MAP} />,
+    )
+    await waitFor(() => {
+      expect(container.querySelector(".ref-fallback-dormant")?.textContent).toBe("a misty forest")
+      expect(container.querySelector(".ref-fallback-sep")?.textContent).toBe("||")
+      expect(container.querySelector(".ref-fallback-active")).toBeNull()
+    })
+  })
+
+  it("active default when the label is unwired (amber token, bright default)", async () => {
+    const { container } = render(
+      <PromptEditor value="{Mood || serene}" onChange={vi.fn()} nodeRefs={REFS} refMap={VALUE_MAP} />,
+    )
+    await waitFor(() => {
+      expect(container.querySelector(".ref-unresolved-highlight")).not.toBeNull()
+      expect(container.querySelector(".ref-fallback-active")?.textContent).toBe("serene")
+      expect(container.querySelector(".ref-fallback-dormant")).toBeNull()
+    })
+  })
+
+  it("active default when wired but the upstream value is empty", async () => {
+    const { container } = render(
+      <PromptEditor value="{Setting || x}" onChange={vi.fn()} nodeRefs={REFS} refMap={new Map()} />,
+    )
+    await waitFor(() => {
+      expect(container.querySelector(".node-ref-highlight")).not.toBeNull()
+      expect(container.querySelector(".ref-fallback-active")?.textContent).toBe("x")
+    })
+  })
+
+  it("no fallback spans at all when refMap is not provided", async () => {
+    const { container } = render(
+      <PromptEditor value="{Setting || x}" onChange={vi.fn()} nodeRefs={REFS} />,
+    )
+    await waitFor(() => {
+      expect(container.querySelector(".node-ref-highlight")).not.toBeNull()
+    })
+    expect(container.querySelector(".ref-fallback-active")).toBeNull()
+    expect(container.querySelector(".ref-fallback-dormant")).toBeNull()
+    expect(container.querySelector(".ref-fallback-sep")).toBeNull()
+  })
+
+  it("flips dormant→active when the upstream value empties (no remount)", async () => {
+    const { container, rerender } = render(
+      <PromptEditor value="{Setting || x}" onChange={vi.fn()} nodeRefs={REFS} refMap={VALUE_MAP} />,
+    )
+    await waitFor(() =>
+      expect(container.querySelector(".ref-fallback-dormant")?.textContent).toBe("x"),
+    )
+    rerender(
+      <PromptEditor value="{Setting || x}" onChange={vi.fn()} nodeRefs={REFS} refMap={new Map()} />,
+    )
+    await waitFor(() => {
+      expect(container.querySelector(".ref-fallback-dormant")).toBeNull()
+      expect(container.querySelector(".ref-fallback-active")?.textContent).toBe("x")
     })
   })
 })
