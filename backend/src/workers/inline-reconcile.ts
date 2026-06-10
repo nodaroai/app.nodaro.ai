@@ -26,18 +26,14 @@ interface InlineReconcileRow {
   job_type: string | null
 }
 
-const KIE_KINDS: ReadonlySet<string> = new Set([
-  "kie-standard", "kie-veo", "kie-veo-1080p", "kie-suno", "kie-kontext",
-  "kie-luma", "kie-kling3", "kie-runway", "kie-aleph", "kie-lip-sync",
-])
-
-const REPLICATE_KINDS: ReadonlySet<string> = new Set([
-  "replicate-prediction", "replicate-training",
-])
-
-const ELEVENLABS_KINDS: ReadonlySet<string> = new Set([
-  "elevenlabs-async",
-])
+// Dispatch sets live in lib/reconcile/types.ts (single source of truth,
+// audit M5) — shared with the cron dispatcher and the worker's
+// leave-for-reconcile predicate so the three consumers can never drift.
+import {
+  KIE_RECOVER_KINDS as KIE_KINDS,
+  REPLICATE_RECOVER_KINDS as REPLICATE_KINDS,
+  ELEVENLABS_RECOVER_KINDS as ELEVENLABS_KINDS,
+} from "../lib/reconcile/types.js"
 
 export async function tryInlineReconcile(row: InlineReconcileRow): Promise<void> {
   const kind = row.provider_kind
@@ -58,7 +54,7 @@ export async function tryInlineReconcile(row: InlineReconcileRow): Promise<void>
         `[worker:inline-reconcile] Stall-retry recovery for job ${row.id} ` +
         `(kind=${kind}, task=${row.provider_task_id}) — running reconcileKieJob inline`,
       )
-      await reconcileKieJob(row)
+      await reconcileKieJob(row, { claimant: "worker" })
       return
     }
     if (REPLICATE_KINDS.has(kind)) {
@@ -67,7 +63,7 @@ export async function tryInlineReconcile(row: InlineReconcileRow): Promise<void>
         `[worker:inline-reconcile] Stall-retry recovery for job ${row.id} ` +
         `(kind=${kind}, task=${row.provider_task_id}) — running reconcileReplicateJob inline`,
       )
-      await reconcileReplicateJob(row)
+      await reconcileReplicateJob(row, { claimant: "worker" })
       return
     }
     if (ELEVENLABS_KINDS.has(kind)) {
@@ -78,7 +74,7 @@ export async function tryInlineReconcile(row: InlineReconcileRow): Promise<void>
       )
       // ElevenLabs handler accepts a wider row shape (includes input_data) but
       // ignores fields it doesn't read; passing the narrow row is safe.
-      await reconcileElevenLabsJob({ ...row, input_data: null })
+      await reconcileElevenLabsJob({ ...row, input_data: null }, { claimant: "worker" })
       return
     }
     // Unknown async kind — leave to the cron's catch-all sync sweep.

@@ -206,11 +206,15 @@ export async function markJobCompleted(
     completed_at: new Date().toISOString(),
     ...fields,
   }
+  // CAS on LIVE statuses (audit H3) — not .neq("cancelled"): the old guard
+  // let a slow finalizer flip a FAILED row (already exhaustion-refunded)
+  // back to completed, gifting refund + output. Live-status gating makes
+  // completion single-shot against every terminal state.
   const { data, error } = await supabase
     .from("jobs")
     .update(completion)
     .eq("id", jobId)
-    .neq("status", "cancelled")
+    .in("status", ["pending", "processing"])
     .select("id")
 
   if (error) {
@@ -218,7 +222,7 @@ export async function markJobCompleted(
     return false
   }
   if (!data || data.length === 0) {
-    console.log(`[worker] Job ${jobId} cancelled mid-update — not flipping to completed`)
+    console.log(`[worker] Job ${jobId} already terminal (cancelled/failed/completed) — not flipping to completed`)
     return false
   }
   return true

@@ -154,6 +154,9 @@ vi.mock("@/providers/kie/client.js", () => {
 
 import { createVideoWorker } from "../video-worker.js"
 import { KieError } from "../../providers/kie/client.js"
+// Real class (module not mocked) — the worker's self-heal branch discriminates
+// on isPostProcessingError, so tests must throw the genuine type.
+import { PostProcessingError } from "../../lib/post-processing-error.js"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -408,6 +411,8 @@ describe("video worker processor", () => {
     mocks.mockCasSelect
       .mockResolvedValueOnce({ data: [{ id: "job-1" }], error: null })
       .mockResolvedValueOnce({ data: [], error: null })
+    // Deliberately a PLAIN Error: upgrading it to PostProcessingError would
+    // reroute this test into the self-heal branch (row left processing).
     mocks.mockHandler.mockRejectedValueOnce(new Error("post-provider upload 500"))
 
     const job = makeBullJob("generate-image")
@@ -436,6 +441,135 @@ describe("video worker processor", () => {
     expect(mocks.mockUpdate).not.toHaveBeenCalledWith(
       expect.objectContaining({ status: "failed" }),
     )
+  })
+
+  // -------------------------------------------------------------------------
+  // Post-provider self-heal (audit spec, worker branch). A PostProcessingError
+  // on the FINAL attempt means the provider already delivered and we already
+  // paid — if the row is reconcile-recoverable (persisted task id + a kind the
+  // reconcile system owns), marking it failed+charged throws away a result the
+  // cron can recover (or a refund the sweep would grant). Leave it
+  // `processing`; reconcile drives it to completed or refunded+anomaly.
+  // -------------------------------------------------------------------------
+  describe("post-provider self-heal branch", () => {
+    it.each([
+      ["kie-standard", "t-kie"],
+      ["kie-suno", "t-suno"],
+      ["replicate-prediction", "p-rep"],
+      ["heygen", "video-hg"], // D3: leave for the sync-sweep's fail+refund
+    ])(
+      "final attempt + PostProcessingError + recoverable row (%s) → resolves, row left processing, no refund",
+      async (kind, taskId) => {
+        // First select: fresh run (no task id → stall guard doesn't divert).
+        // Second select: the catch-branch's fresh row read.
+        mocks.mockSingle
+          .mockResolvedValueOnce({ data: mockJobRecord({ provider_task_id: null }), error: null })
+          .mockResolvedValueOnce({
+            data: { provider_kind: kind, provider_task_id: taskId, status: "processing" },
+            error: null,
+          })
+        mocks.mockHandler.mockRejectedValueOnce(new PostProcessingError("R2 upload failed"))
+
+        const job = makeBullJob("generate-image")
+        await expect(processor(job)).resolves.toBeUndefined()
+
+        expect(mocks.mockUpdate).not.toHaveBeenCalledWith(
+          expect.objectContaining({ status: "failed" }),
+        )
+        expect(mocks.mockRefundJobCredits).not.toHaveBeenCalled()
+      },
+    )
+
+    it("final attempt + PostProcessingError + SYNC kind → existing fail path (refund guard decides)", async () => {
+      mocks.mockSingle
+        .mockResolvedValueOnce({ data: mockJobRecord({ provider_task_id: null }), error: null })
+        .mockResolvedValueOnce({
+          data: { provider_kind: "elevenlabs-sync", provider_task_id: "t-x", status: "processing" },
+          error: null,
+        })
+      const err = new PostProcessingError("R2 upload failed")
+      mocks.mockHandler.mockRejectedValueOnce(err)
+
+      const job = makeBullJob("generate-image")
+      await expect(processor(job)).rejects.toThrow("R2 upload failed")
+
+      expect(mocks.mockUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({ status: "failed" }),
+      )
+      // refundJobCredits receives the typed error and SKIPS internally — the
+      // worker must still forward it (refund-direction contract unchanged).
+      expect(mocks.mockRefundJobCredits).toHaveBeenCalledWith("usage-1", "job-1", err)
+    })
+
+    it("final attempt + PostProcessingError + NO provider_task_id → existing fail path", async () => {
+      mocks.mockSingle
+        .mockResolvedValueOnce({ data: mockJobRecord({ provider_task_id: null }), error: null })
+        .mockResolvedValueOnce({
+          data: { provider_kind: "kie-standard", provider_task_id: null, status: "processing" },
+          error: null,
+        })
+      mocks.mockHandler.mockRejectedValueOnce(new PostProcessingError("watermark failed"))
+
+      const job = makeBullJob("generate-image")
+      await expect(processor(job)).rejects.toThrow("watermark failed")
+
+      expect(mocks.mockUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({ status: "failed" }),
+      )
+    })
+
+    it("row already cancelled at the fresh read → falls through; CAS flips 0 rows → no refund", async () => {
+      mocks.mockSingle
+        .mockResolvedValueOnce({ data: mockJobRecord({ provider_task_id: null }), error: null })
+        .mockResolvedValueOnce({
+          data: { provider_kind: "kie-standard", provider_task_id: "t-1", status: "cancelled" },
+          error: null,
+        })
+      // Pickup CAS wins; failure CAS misses (row is cancelled).
+      mocks.mockCasSelect
+        .mockResolvedValueOnce({ data: [{ id: "job-1" }], error: null })
+        .mockResolvedValueOnce({ data: [], error: null })
+      mocks.mockHandler.mockRejectedValueOnce(new PostProcessingError("upload failed"))
+
+      const job = makeBullJob("generate-image")
+      await expect(processor(job)).rejects.toThrow("upload failed")
+
+      expect(mocks.mockRefundJobCredits).not.toHaveBeenCalled()
+    })
+
+    it("NON-final attempt + PostProcessingError → rethrows without consulting the row", async () => {
+      mocks.mockIsFinalJobAttempt.mockReturnValueOnce(false)
+      mocks.mockHandler.mockRejectedValueOnce(new PostProcessingError("transient R2 blip"))
+
+      const job = makeBullJob("generate-image")
+      await expect(processor(job)).rejects.toThrow("transient R2 blip")
+
+      // Only the initial jobRecord fetch — the self-heal branch (and its
+      // fresh select) must not run on retryable attempts.
+      expect(mocks.mockSingle).toHaveBeenCalledTimes(1)
+      expect(mocks.mockRefundJobCredits).not.toHaveBeenCalled()
+    })
+
+    it("plain Error + recoverable-looking row → existing fail path (inpaint composite guard)", async () => {
+      // REFUND-CRITICAL boundary (handlers/image-ai.ts): compositeInpaint
+      // failures throw PLAIN errors precisely so they refund. The self-heal
+      // branch must never divert them to reconcile — the cron would
+      // "recover" the job by finalizing the raw, un-composited image.
+      mocks.mockSingle.mockResolvedValueOnce({
+        data: mockJobRecord({ provider_task_id: null }),
+        error: null,
+      })
+      const plain = new Error("composite failed")
+      mocks.mockHandler.mockRejectedValueOnce(plain)
+
+      const job = makeBullJob("generate-image")
+      await expect(processor(job)).rejects.toThrow("composite failed")
+
+      expect(mocks.mockUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({ status: "failed" }),
+      )
+      expect(mocks.mockRefundJobCredits).toHaveBeenCalledWith("usage-1", "job-1", plain)
+    })
   })
 
   it("does NOT refund or mark failed on a non-final attempt — BullMQ will retry", async () => {

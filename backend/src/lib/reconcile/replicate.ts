@@ -1,10 +1,11 @@
 import { config } from "../config.js"
 import { supabase } from "../supabase.js"
 import { finalizeJobWithMedia, type FinalizeJobType } from "../job-finalize.js"
+import type { ReconcileOpts } from "./kie.js"
 import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
 import { deleteCharacterLora } from "../../providers/replicate/training.js"
 import { bumpAttemptsOrExhaust } from "./bump-attempts.js"
-import { refundLoopTrimAddonOnReconcile } from "./loop-trim-refund.js"
+import { loopTrimAddonForReconcile } from "./loop-trim-refund.js"
 
 export interface ReplicateJobRow {
   id: string
@@ -191,7 +192,7 @@ async function markFailed(jobId: string, reason: string): Promise<void> {
  * the same terminal-state updates the LoRA webhook handler would have.
  * Replaces the standalone reconcileOrphanedTrainings cron (deleted in P3.5).
  */
-export async function reconcileReplicateJob(row: ReplicateJobRow): Promise<void> {
+export async function reconcileReplicateJob(row: ReplicateJobRow, opts?: ReconcileOpts): Promise<void> {
   if (!row.provider_task_id) return
 
   if (row.provider_kind === "replicate-training") {
@@ -259,14 +260,15 @@ export async function reconcileReplicateJob(row: ReplicateJobRow): Promise<void>
   // failure so deterministic failures exhaust to refund+anomaly instead of
   // looping at every cron tick forever (see kie.ts twin for the full story).
   try {
-    // i2v + loopTrim.enabled: reconcile uploads the RAW (un-trimmed) clip and
-    // commits the reserved tier, so refund the loop-trim add-on BEFORE finalize
-    // (commit is CAS-once → this commit wins). No-op otherwise.
-    await refundLoopTrimAddonOnReconcile(row.job_type, row.id, row.input_data ?? null)
+    // i2v + loopTrim.enabled (single-node): addon comes OFF the commit,
+    // applied by finalize post-completion (audit P0.3 — see kie.ts twin).
+    const loopTrimAddon = loopTrimAddonForReconcile(row.job_type, row.input_data ?? null)
 
     await finalizeJobWithMedia({
       jobId: row.id,
       jobType: (row.job_type ?? "generate-image") as FinalizeJobType,
+      claimant: opts?.claimant ?? "cron",
+      ...(loopTrimAddon > 0 && { loopTrimAddonRefundCredits: loopTrimAddon }),
       result: {
         url: urls[0]!,
         extraUrls: urls.slice(1),

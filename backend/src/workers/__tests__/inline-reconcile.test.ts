@@ -19,18 +19,18 @@ vi.mock("../../lib/reconcile/elevenlabs.js", () => ({
 }))
 
 import { tryInlineReconcile } from "../inline-reconcile.js"
+import { KIE_RECOVER_KINDS } from "../../lib/reconcile/types.js"
 
 describe("tryInlineReconcile", () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
-  it("dispatches every kie-* kind to reconcileKieJob", async () => {
-    const kieKinds = [
-      "kie-standard", "kie-veo", "kie-veo-1080p", "kie-suno", "kie-kontext",
-      "kie-luma", "kie-kling3", "kie-runway", "kie-aleph", "kie-lip-sync",
-    ]
-    for (const kind of kieKinds) {
+  it("dispatches every kie-* kind to reconcileKieJob as claimant 'worker'", async () => {
+    // Iterate the SHARED dispatch set (audit M5) — a hardcoded copy here was
+    // the fourth divergent list. Claimant "worker" (audit H1) lets the stall
+    // re-pick re-claim its own crashed predecessor's finalize claim.
+    for (const kind of KIE_RECOVER_KINDS) {
       mocks.reconcileKieJob.mockClear()
       await tryInlineReconcile({
         id: `j-${kind}`,
@@ -42,6 +42,7 @@ describe("tryInlineReconcile", () => {
       expect(mocks.reconcileKieJob).toHaveBeenCalledTimes(1)
       expect(mocks.reconcileKieJob).toHaveBeenCalledWith(
         expect.objectContaining({ provider_kind: kind }),
+        { claimant: "worker" },
       )
     }
   })
@@ -55,6 +56,10 @@ describe("tryInlineReconcile", () => {
       job_type: "image-to-video",
     })
     expect(mocks.reconcileReplicateJob).toHaveBeenCalledTimes(1)
+    expect(mocks.reconcileReplicateJob).toHaveBeenCalledWith(
+      expect.objectContaining({ provider_kind: "replicate-prediction" }),
+      { claimant: "worker" },
+    )
     expect(mocks.reconcileKieJob).not.toHaveBeenCalled()
   })
 
@@ -69,6 +74,7 @@ describe("tryInlineReconcile", () => {
     expect(mocks.reconcileElevenLabsJob).toHaveBeenCalledTimes(1)
     expect(mocks.reconcileElevenLabsJob).toHaveBeenCalledWith(
       expect.objectContaining({ provider_kind: "elevenlabs-async", input_data: null }),
+      { claimant: "worker" },
     )
   })
 

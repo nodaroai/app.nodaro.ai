@@ -20,14 +20,17 @@ const mocks = vi.hoisted(() => {
   const mockMaybeSingle = vi.fn().mockResolvedValue({ data: null, error: null })
   // Terminal `.select()` after a conditional UPDATE — used by markJobCompleted.
   // Default: 1-row response so the existing complete*Job tests treat the
-  // conditional UPDATE as successful.
+  // conditional UPDATE as successful. markJobCompleted CASes via
+  // .in("status",[...]) (audit H3); .neq kept for older chains.
   const mockUpdateSelect = vi.fn().mockResolvedValue({ data: [{ id: "ok" }], error: null })
   const mockNeq = vi.fn().mockReturnValue({ select: mockUpdateSelect })
+  const mockIn = vi.fn().mockReturnValue({ select: mockUpdateSelect })
   const mockEq = vi.fn().mockReturnValue({
     single: mockSingle,
     maybeSingle: mockMaybeSingle,
     eq: vi.fn().mockReturnValue({ single: mockSingle, maybeSingle: mockMaybeSingle }),
     neq: mockNeq,
+    in: mockIn,
   })
   const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
   const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq })
@@ -201,22 +204,22 @@ describe("shouldSaveJobResult", () => {
 // ---------------------------------------------------------------------------
 
 describe("markJobCompleted", () => {
-  // Each test installs its own mock supabase.from chain because the new
-  // helper uses .update().eq().neq().select() which the shared mock above
+  // Each test installs its own mock supabase.from chain because the
+  // helper uses .update().eq().in().select() which the shared mock above
   // doesn't terminate cleanly (it returns chainable objects, not a Promise).
 
   function installUpdateMock(updateResult: { data: unknown; error: unknown }): {
     update: ReturnType<typeof vi.fn>
     eq: ReturnType<typeof vi.fn>
-    neq: ReturnType<typeof vi.fn>
+    in: ReturnType<typeof vi.fn>
     select: ReturnType<typeof vi.fn>
   } {
     const select = vi.fn().mockResolvedValue(updateResult)
-    const neq = vi.fn().mockReturnValue({ select })
-    const eq = vi.fn().mockReturnValue({ neq })
+    const inFn = vi.fn().mockReturnValue({ select })
+    const eq = vi.fn().mockReturnValue({ in: inFn })
     const update = vi.fn().mockReturnValue({ eq })
     mocks.mockFrom.mockReturnValueOnce({ update } as never)
-    return { update, eq, neq, select }
+    return { update, eq, in: inFn, select }
   }
 
   it("returns true when the row was updated (status was not cancelled)", async () => {
@@ -243,13 +246,17 @@ describe("markJobCompleted", () => {
     expect(ok).toBe(false)
   })
 
-  it("uses .neq('status', 'cancelled') to gate the update atomically", async () => {
-    const { eq, neq } = installUpdateMock({ data: [{ id: "job-1" }], error: null })
+  it("gates the update atomically on LIVE statuses only (audit H3)", async () => {
+    // .in(["pending","processing"]), NOT .neq("cancelled"): the old guard let
+    // a slow finalizer flip a FAILED row (already exhaustion-refunded) back to
+    // completed — refund + delivered output, a double benefit. Live-status CAS
+    // makes completion single-shot against every terminal state.
+    const { eq, in: inFn } = installUpdateMock({ data: [{ id: "job-1" }], error: null })
 
     await markJobCompleted("job-1", { output_data: {} })
 
     expect(eq).toHaveBeenCalledWith("id", "job-1")
-    expect(neq).toHaveBeenCalledWith("status", "cancelled")
+    expect(inFn).toHaveBeenCalledWith("status", ["pending", "processing"])
   })
 
   it("includes status, progress, and completed_at in the update payload", async () => {
