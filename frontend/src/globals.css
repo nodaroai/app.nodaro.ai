@@ -1115,6 +1115,20 @@ html, body {
   background: color-mix(in srgb, #f59e0b 18%, transparent);
 }
 
+/* {Label || default} fallback-text states inside the prompt editor.
+   active = the default WILL be injected (nothing wired / wired-but-empty);
+   dormant = a wired node's non-empty value overrides it. */
+.ref-fallback-sep { opacity: 0.45; }
+/* "active" = render like normal body text — bind to the theme foreground so it
+   can never drift from the surrounding prompt text in either mode. */
+.ref-fallback-active { color: var(--foreground); }
+.ref-fallback-dormant {
+  color: #94A3B8;
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+.dark .ref-fallback-dormant { color: #64748B; }
+
 /* TagTextarea inside text-prompt canvas nodes — keep backdrop/textarea in perfect sync:
    do NOT override padding, font-size, or line-height on either layer independently */
 .text-prompt-tag-textarea {

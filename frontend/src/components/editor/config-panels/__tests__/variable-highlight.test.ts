@@ -36,3 +36,70 @@ describe("collectVariableRanges", () => {
     ])
   })
 })
+
+describe("collectVariableRanges — fallback sub-ranges", () => {
+  const labels = new Set(["Setting"])
+  const values = new Set(["Setting"])
+
+  it("emits sep + trimmed fallback spans, dormant when the label has a value", () => {
+    const s = "{Setting || a misty forest}"
+    expect(collectVariableRanges(s, labels, values)).toEqual([
+      {
+        from: 0, to: 27, kind: "wired",
+        sep: { from: 9, to: 11 },
+        fallback: { from: 12, to: 26, active: false },
+      },
+    ])
+  })
+
+  it("active when the label is unwired (amber token)", () => {
+    const s = "{Mood || serene}"
+    expect(collectVariableRanges(s, labels, values)).toEqual([
+      {
+        from: 0, to: 16, kind: "missing",
+        sep: { from: 6, to: 8 },
+        fallback: { from: 9, to: 15, active: true },
+      },
+    ])
+  })
+
+  it("active when wired but the value is empty (label in resolvable, not in values)", () => {
+    const s = "{Style || cinematic}"
+    expect(collectVariableRanges(s, new Set(["Style"]), new Set())).toEqual([
+      {
+        from: 0, to: 20, kind: "wired",
+        sep: { from: 7, to: 9 },
+        fallback: { from: 10, to: 19, active: true },
+      },
+    ])
+  })
+
+  it("splits on the FIRST || — later || belongs to the default text", () => {
+    const s = "{a || b || c}"
+    expect(collectVariableRanges(s, labels, values)).toEqual([
+      {
+        from: 0, to: 13, kind: "missing",
+        sep: { from: 3, to: 5 },
+        fallback: { from: 6, to: 12, active: true },
+      },
+    ])
+  })
+
+  it("no sub-ranges for an empty default", () => {
+    expect(collectVariableRanges("{x || }", labels, values)).toEqual([
+      { from: 0, to: 7, kind: "missing" },
+    ])
+  })
+
+  it("no sub-ranges for reserved tokens (their fallback is never applied)", () => {
+    expect(collectVariableRanges("{userPrompt || hi}", labels, values)).toEqual([
+      { from: 0, to: 18, kind: "reserved" },
+    ])
+  })
+
+  it("no sub-ranges when valueLabels is omitted/null (suppression)", () => {
+    expect(collectVariableRanges("{Setting || x}", labels)).toEqual([
+      { from: 0, to: 14, kind: "wired" },
+    ])
+  })
+})

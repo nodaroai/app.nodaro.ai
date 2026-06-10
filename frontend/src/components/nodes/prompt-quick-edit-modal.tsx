@@ -15,7 +15,7 @@ import { FinalPromptPreview } from "@/components/editor/config-panels/final-prom
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { getPromptFields } from "@/lib/prompt-fields"
 import { getPromptIcon } from "./prompt-edit-button"
-import { getUpstreamNodes } from "@/lib/node-refs"
+import { getUpstreamNodes, buildNodeRefMap } from "@/lib/node-refs"
 import { getConnectedSources } from "@/components/editor/config-panels/helpers"
 import {
   buildImageConnectedReferences,
@@ -65,6 +65,17 @@ export function PromptQuickEditModal() {
 
   const nodeRefs = useMemo(
     () => (nodeId ? getUpstreamNodes(nodeId, nodesRef.current, edges) : []),
+    [nodeId, edges],
+  )
+
+  // Per-open snapshot of label → non-empty upstream output. Same deps as the
+  // nodeRefs memo: refreshes on wiring changes, not on keystrokes (nodesRef
+  // keeps live prompt edits from rebuilding it). The modal is a blocking
+  // overlay so WIRING can't change mid-session; upstream VALUES still can
+  // (background runs, collab) — accepted stale-until-reopen, matching the
+  // spec's freshness contract.
+  const refMap = useMemo(
+    () => (nodeId ? buildNodeRefMap(nodeId, nodesRef.current, edges) : new Map<string, string>()),
     [nodeId, edges],
   )
 
@@ -161,6 +172,7 @@ export function PromptQuickEditModal() {
               rows={10}
               referenceImages={referenceImages}
               nodeRefs={nodeRefs}
+              refMap={refMap}
             />
           </div>
           {negativeField && (
@@ -173,6 +185,7 @@ export function PromptQuickEditModal() {
                 rows={3}
                 referenceImages={referenceImages}
                 nodeRefs={nodeRefs}
+                refMap={refMap}
               />
             </div>
           )}

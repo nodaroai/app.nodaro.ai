@@ -63,6 +63,9 @@ interface PromptEditorProps {
   readonly referenceImages?: readonly RefImageItem[]
   /** Upstream node references for the `{` typeahead. */
   readonly nodeRefs?: readonly NodeRefItem[]
+  /** Label → current non-empty upstream output (buildNodeRefMap). Drives the
+   *  {Label || default} active/dormant fallback styling; omit to suppress it. */
+  readonly refMap?: ReadonlyMap<string, string>
 }
 
 export interface JsonNode {
@@ -293,6 +296,16 @@ function labelSetsEqual(
   return true
 }
 
+/** Keep the previous reference while contents are equal. Render-phase ref
+ *  mutation (not an effect) so the stabilized value is usable during the same
+ *  render — the extension closures read `.current` at decoration-build time,
+ *  including the very first build during editor creation. */
+function useContentStable<T>(incoming: T, equal: (a: T, b: T) => boolean) {
+  const ref = useRef(incoming)
+  if (!equal(ref.current, incoming)) ref.current = incoming
+  return ref
+}
+
 export function PromptEditor({
   value,
   onChange,
@@ -301,6 +314,7 @@ export function PromptEditor({
   className,
   referenceImages,
   nodeRefs,
+  refMap,
 }: PromptEditorProps) {
   // Content-stabilize the incoming reference list. The parent config panels
   // build this via `.map()` inside a useMemo, so it can arrive as a fresh array
@@ -321,17 +335,24 @@ export function PromptEditor({
   refsRef.current = stableReferenceImages
   const nodeRefsRef = useRef<readonly NodeRefItem[]>(nodeRefs ?? [])
   nodeRefsRef.current = nodeRefs ?? []
-  // Content-stable resolvable-label set for the variable-highlight plugin.
-  // A fresh Set is built per render (labels are few) but the previous
-  // reference is reused when contents are equal, so the live-update effect
-  // below fires only on real wiring changes. null (prop absent) = amber
-  // suppressed — "no data" ≠ "nothing wired".
-  const incomingLabels = nodeRefs ? new Set(nodeRefs.map((r) => r.label)) : null
-  const stableLabelsRef = useRef<ReadonlySet<string> | null>(incomingLabels)
-  if (!labelSetsEqual(stableLabelsRef.current, incomingLabels)) {
-    stableLabelsRef.current = incomingLabels
-  }
+  // Content-stable label sets for the variable-highlight plugin. Fresh Sets
+  // are built per render (labels are few) but the previous reference is kept
+  // while contents are equal, so the live-update effect below fires only on
+  // real changes. null (prop absent) ≠ empty: it suppresses the corresponding
+  // signal entirely — "no data" must never masquerade as a state.
+  // resolvable = wired upstream labels (cyan/amber); value = labels whose
+  // upstream currently produces a NON-EMPTY output (fallback active/dormant;
+  // buildNodeRefMap only inserts non-empty outputs).
+  const stableLabelsRef = useContentStable<ReadonlySet<string> | null>(
+    nodeRefs ? new Set(nodeRefs.map((r) => r.label)) : null,
+    labelSetsEqual,
+  )
   const resolvableLabels = stableLabelsRef.current
+  const stableValueLabelsRef = useContentStable<ReadonlySet<string> | null>(
+    refMap ? new Set(refMap.keys()) : null,
+    labelSetsEqual,
+  )
+  const valueLabels = stableValueLabelsRef.current
   // Known-slug sets derived from the current reference list. Recomputed when
   // the list changes; the suggestion-plugin's `items()` closure stays stable.
   const knownSlugsRef = useRef<KnownSlugSets>(buildKnownSlugSets(stableReferenceImages))
@@ -706,6 +727,7 @@ export function PromptEditor({
       }),
       VariableHighlightExtension.configure({
         getResolvableLabels: () => stableLabelsRef.current,
+        getValueLabels: () => stableValueLabelsRef.current,
       }),
     ], []), // intentionally created once — dynamic data flows via storage + refs
     content: valueToDoc(value, knownSlugsRef.current),
@@ -760,12 +782,14 @@ export function PromptEditor({
     editor.view.dispatch(editor.state.tr.setMeta("refs-changed", true))
   }, [editor, stableReferenceImages])
 
-  // Rebuild variable decorations when the upstream label set changes —
-  // wiring/unwiring an upstream node flips cyan↔amber without a remount.
+  // Rebuild variable decorations when the upstream label set OR the
+  // non-empty-value set changes — wiring/unwiring flips cyan↔amber, and an
+  // upstream value emptying/filling flips the fallback active↔dormant,
+  // both without a remount.
   useEffect(() => {
     if (!editor) return
     editor.view.dispatch(editor.state.tr.setMeta(VARIABLE_HIGHLIGHT_META, true))
-  }, [editor, resolvableLabels])
+  }, [editor, resolvableLabels, valueLabels])
 
   // Sync external value → editor when the prop changes from somewhere other
   // than this editor. Compare against the editor's serialized text to avoid

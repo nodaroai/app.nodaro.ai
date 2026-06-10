@@ -44,7 +44,7 @@ The Generate Image node has 6 typed input handles on its left edge (color-coded 
 
 **Variable defaults:** any `{Label}` reference can carry a fallback with `||` — `{Label || default}`. If nothing provides `Label`, the trimmed default is used; e.g. `generate a {person || man} running` becomes "generate a man running" when no `person` is wired, or uses the wired/picked value when it is. `{person || }` (empty after `||`) resolves to nothing when unset; plain `{person}` (no `||`) stays literal when unset.
 
-**Variable highlighting:** in the prompt editor (config panel and the ⌘E prompt modal), `{Label}` variables are highlighted — cyan when a matching upstream node is wired (or for built-in template variables like `{userPrompt}`), amber when nothing upstream provides that label yet. Amber means "nothing wired", not "will fail": a `{Label || default}` variable still resolves to its default at run time.
+**Variable highlighting:** in the prompt editor (config panel and the ⌘E prompt modal), `{Label}` variables are highlighted — cyan when a matching upstream node is wired (or for built-in template variables like `{userPrompt}`), amber when nothing upstream provides that label yet. Amber means "nothing wired", not "will fail": a `{Label || default}` variable still resolves to its default at run time. Inside `{Label || default}`, the default text renders bright when it will actually be injected (nothing wired, or the wired node's text is empty) and greyed-out with a strikethrough when a wired node's value overrides it.
 
 **Outputs:**
 - `image` (cyan) — generated image URL. Shares the References color since both are "image" type.

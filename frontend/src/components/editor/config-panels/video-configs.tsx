@@ -495,6 +495,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
           placeholder="Describe the motion or animation you want..."
           referenceImages={refImagesForAutocomplete}
           nodeRefs={nodeRefs}
+          refMap={refMap}
         />
       </MappableField>
 
@@ -1148,6 +1149,7 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
           placeholder="Describe what to change or continue..."
           referenceImages={refImagesForAutocomplete}
           nodeRefs={nodeRefs}
+          refMap={refMap}
         />
       </MappableField>
 
@@ -1671,6 +1673,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
           placeholder="Describe the video to generate..."
           referenceImages={refImagesForAutocomplete}
           nodeRefs={nodeRefs}
+          refMap={refMap}
         />
       </MappableField>
       <ExtraRefsSection
@@ -2256,6 +2259,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
           placeholder={connectedImages.length > 0 ? "Describe the motion or animation you want..." : "Describe the video to generate..."}
           referenceImages={refImagesForAutocomplete}
           nodeRefs={nodeRefs}
+          refMap={refMap}
         />
       </MappableField>
 
