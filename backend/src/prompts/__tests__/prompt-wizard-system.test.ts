@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { buildWizardEnhanceSystem } from "../prompt-wizard-system.js"
+import { buildWizardEnhanceSystem, buildWizardGenerateSystem } from "../prompt-wizard-system.js"
 
 describe("buildWizardEnhanceSystem", () => {
   it("does NOT throw for a node type absent from the wizard category map (lip-sync)", () => {
@@ -12,5 +12,27 @@ describe("buildWizardEnhanceSystem", () => {
     expect(sys).not.toContain("Available Categories")  // not the analyze form
     expect(sys).toMatch(/do not ask questions/i)
     expect(sys).toContain("Current provider: flux")
+  })
+
+  it("injects the Seedance doctrine when the current provider has one", () => {
+    const sys = buildWizardEnhanceSystem({ nodeType: "text-to-video", provider: "seedance-2" })
+    expect(sys).toContain("Provider Prompting Doctrine")
+    expect(sys).toContain("Shot 1")           // untimed storyboard rule
+    expect(sys).toContain("headshot")          // identity rule
+    expect(sys).toContain("（")                // audio symbol semantics
+  })
+
+  it("omits the doctrine section for providers without one", () => {
+    const sys = buildWizardEnhanceSystem({ nodeType: "text-to-video", provider: "veo3.1" })
+    expect(sys).not.toContain("Provider Prompting Doctrine")
+  })
+
+  it("generate-form also receives the doctrine", () => {
+    const sys = buildWizardGenerateSystem({
+      nodeType: "text-to-video",
+      provider: "seedance-2-fast",
+      selections: [{ category: "mood-tone", value: "melancholic", isCustom: false }],
+    })
+    expect(sys).toContain("Provider Prompting Doctrine")
   })
 })

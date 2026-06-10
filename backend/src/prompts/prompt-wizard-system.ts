@@ -2,6 +2,7 @@
 
 import {
   getCategoriesForNodeType,
+  getPromptDoctrine,
   PROVIDER_CAPABILITIES,
   REFERENCE_IMAGE_ROLES,
 } from "@nodaro/shared"
@@ -148,19 +149,34 @@ When the user's input suggests ARTISTIC styles (anime, watercolor, pixel art, et
 }`
 }
 
-function buildProviderBlock(nodeType: string): string {
+function buildProviderBlock(nodeType: string, provider?: string): string {
   const providerCaps = PROVIDER_CAPABILITIES[nodeType]
-  if (!providerCaps || Object.keys(providerCaps).length <= 1) return ""
-  const entries = Object.entries(providerCaps)
-    .map(([p, desc]) => `- ${p}: ${desc}`)
-    .join("\n")
-  return `
+  let block = ""
+  if (providerCaps && Object.keys(providerCaps).length > 1) {
+    const entries = Object.entries(providerCaps)
+      .map(([p, desc]) => `- ${p}: ${desc}`)
+      .join("\n")
+    block += `
 
 ## Available Providers
 ${entries}
 
 If a particular provider would excel at this content, include "recommendedModel" in your response.
 For suno-generate nodes, use field: "model" instead of field: "provider".`
+  }
+  // Model-family-specific prompting rules for the CURRENT provider — the
+  // registry lives in @nodaro/shared so the wizard, gen-skills docs, and
+  // list_models promptTips can never drift apart.
+  const doctrine = provider ? getPromptDoctrine(provider) : undefined
+  if (doctrine) {
+    block += `
+
+## Provider Prompting Doctrine — ${doctrine.heading}
+The CURRENT provider is ${provider}. Apply this model-specific doctrine when writing the prompt:
+
+${doctrine.doctrine}`
+  }
+  return block
 }
 
 function buildContextBlock(ctx: { provider?: string; style?: string; aspectRatio?: string; duration?: number }): string {
@@ -180,7 +196,7 @@ export function buildWizardGenerateSystem(ctx: WizardGenerateContext): string {
     .map((s) => `- ${s.category}: ${s.value}${s.isCustom ? " (custom)" : ""}`)
     .join("\n")
 
-  const providerBlock = buildProviderBlock(ctx.nodeType)
+  const providerBlock = buildProviderBlock(ctx.nodeType, ctx.provider)
   const contextBlock = buildContextBlock(ctx)
 
   return `${persona}
@@ -228,7 +244,7 @@ export function buildWizardEnhanceSystem(ctx: WizardEnhanceContext): string {
   const contentCategory = NODE_CATEGORY_MAP[ctx.nodeType] ?? "image"
   const persona = PERSONA[contentCategory] ?? PERSONA.image
 
-  const providerBlock = buildProviderBlock(ctx.nodeType)
+  const providerBlock = buildProviderBlock(ctx.nodeType, ctx.provider)
   const contextBlock = buildContextBlock(ctx)
 
   const refCount = ctx.nodeContext?.referenceImageCount ?? 0

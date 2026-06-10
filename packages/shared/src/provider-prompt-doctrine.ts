@@ -1,135 +1,39 @@
----
-node_type: generate-video
-generated_at: 2026-06-10T20:57:26.708Z
-generated_from: 2fc5e6fd3
----
-
-# Generate Video
-
-<!-- AUTO-GEN:START node-data-shape -->
-**Type:** `generate-video`
-**Category:** ai
-**Credit cost:** 20
-**Inputs (target handles):** `startFrame`, `endFrame`, `audio`
-**Outputs (source handles):** `video`
-
-**Required data fields:**
-- `label: string`
-- `model: string`
-- `duration: number`
-- `fieldMappings: FieldMappings`
-- `provider: VideoGenProvider`
-
-**Optional data fields:**
-- `motion?: "subtle" | "moderate" | "dynamic"`
-- `motionEnabled?: boolean`
-- `prompt?: string`
-- `negativePrompt?: string`
-- `generateAudio?: boolean`
-- `executionStatus?: "idle" | "running" | "completed" | "failed"`
-- `errorMessage?: string`
-- `generatedVideoUrl?: string`
-- `generatedResults?: GeneratedResult[]`
-- `activeResultIndex?: number`
-- `multiShot?: boolean`
-- `resolution?: string`
-- `grokMode?: "fun" | "normal" | "spicy"`
-- `videoSize?: "standard" | "high"`
-- `seed?: number`
-- `cameraFixed?: boolean`
-- `shots?: Array<{ prompt: string; duration: number }>`
-- `elements?: Array<{ name: string; description: string; type: "image" | "video"; urls: string[] }>`
-- `webSearch?: boolean`
-- `nsfwChecker?: boolean`
-- `videoTrimStart?: number`
-- `videoTrimEnd?: number`
-- `attachReferenceVideoVariant?: string`
-- `loopTrim?: {
-    enabled: boolean
-    framesToTest?: number
-    quality?: "lossless" | "precise"
-  }`
-- `enableTranslation?: boolean`
-- `selectedStartFrameNodeId?: string`
-- `selectedEndFrameNodeId?: string`
-- `selectedAudioNodeId?: string`
-- `currentJobId?: string`
-- `currentJobProgress?: number`
-- `kieTaskId?: string`
-- `connectedImageOrder?: readonly string[]`
-- `referenceOrder?: readonly string[]`
-- `suppressedCanonicalCharacterIds?: readonly string[]`
-- `suppressedCanonicalLocationIds?: readonly string[]`
-- `veoMode?: "frame-to-frame" | "reference"`
-- `extraRefs?: readonly ExtraRef[]`
-- `videoPlayState?: "loop" | "paused" | "stopped"`
-- `pausedAtTime?: number`
-- `aspectRatio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "21:9" | "adaptive" | "Auto"`
-- `referenceImageOrder?: readonly string[]`
-
-**Default data:**
-```json
-{
-  "label": "Generate Video",
-  "provider": "seedance-2-fast",
-  "duration": 5,
-  "fieldMappings": {}
+/**
+ * Per-provider prompting doctrine — the single source of truth for "how to
+ * prompt model family X well". Consumed by:
+ *   1. backend/src/prompts/prompt-wizard-system.ts  (enhance/generate system prompts)
+ *   2. backend/scripts/gen-skills (provider-prompting block in video node skills)
+ *   3. backend/src/lib/mcp/tools/models.ts          (list_models promptTips)
+ *   4. compact recipes in MCP tool descriptions point here via get_node_skill
+ *
+ * Sources, in precedence order (conflicts resolve top-down):
+ *   - Official BytePlus ModelArk "Dreamina Seedance 2.0 series prompt guide"
+ *     https://docs.byteplus.com/en/docs/ModelArk/2222480
+ *   - Official launch post https://seed.bytedance.com/en/blog/official-launch-of-seedance-2-0
+ *   - KIE API docs https://docs.kie.ai/market/bytedance/seedance-2
+ */
+export interface ProviderPromptDoctrine {
+  /** MODEL_CATALOG ids this doctrine covers. */
+  readonly providers: readonly string[]
+  /** Human heading for skill docs, e.g. "Seedance 2.0 (seedance-2, seedance-2-fast)". */
+  readonly heading: string
+  /** Short bullets for compact surfaces (list_models promptTips). ≤220 chars each. */
+  readonly tips: readonly string[]
+  /** Full markdown doctrine for system prompts and generated skill docs. */
+  readonly doctrine: string
 }
-```
-<!-- AUTO-GEN:END node-data-shape -->
 
-## When to use
-
-(Add prose here. Auto-gen will preserve it across regenerations.)
-
-<!-- AUTO-GEN:START mcp-call -->
-**MCP tool:** `generate_video`
-
-**Input parameters:**
-- `prompt`
-- `model`
-- `duration`
-- `aspect_ratio`
-- `resolution`
-- `sound`
-- `negative_prompt`
-- `seed`
-- `structured`
-<!-- AUTO-GEN:END mcp-call -->
-
-## Common gotchas
-
-(Add prose here.)
-
-<!-- AUTO-GEN:START examples -->
-## Worked example
-
-```json
-{
-  "id": "generate-video-1",
-  "type": "generate-video",
-  "position": {
-    "x": 0,
-    "y": 0
-  },
-  "data": {
-    "label": "Generate Video",
-    "provider": "seedance-2-fast",
-    "duration": 5,
-    "fieldMappings": {}
-  }
-}
-```
-<!-- AUTO-GEN:END examples -->
-
-<!-- AUTO-GEN:START provider-prompting -->
-## Provider prompting doctrine
-
-Model-family-specific prompting rules. Apply the section matching the node's `provider`.
-
-### Seedance 2.0 (seedance-2, seedance-2-fast)
-
-Prompt structure (front-load what matters most):
+const SEEDANCE_2_DOCTRINE: ProviderPromptDoctrine = {
+  providers: ["seedance-2", "seedance-2-fast"],
+  heading: "Seedance 2.0 (seedance-2, seedance-2-fast)",
+  tips: [
+    "Storyboard complex videos as 'Shot 1: … Shot 2: …' WITHOUT timestamps — timed shots like '(0-3s)' are officially unstable and can break generation.",
+    "One camera movement per shot; describe actions per body part with degree ('slowly raises a hand'); express emotion as physical detail, never abstract words.",
+    "Native multi-track audio — cue it inline: （background music）, <sound effects>, and quoted dialogue.",
+    "References go by ordinal (@Image 1, Video 2) in attachment order; earlier = higher priority. Identity = ONE headshot + ONE full-body (multi-view sheets cause ID drift). 4-5 assets total beats maxing the 9/3/3 caps.",
+    "No negative-prompt parameter — put constraints in the prompt: 'keep it subtitle-free, do not generate a watermark, do not generate a logo'.",
+  ],
+  doctrine: `Prompt structure (front-load what matters most):
 precise subject → action details → scene/environment → lighting & color tone → camera movement → visual style → image quality → constraints.
 
 **Shots & pacing**
@@ -159,7 +63,23 @@ precise subject → action details → scene/environment → lighting & color to
 **Known weaknesses → workarounds**
 - Text rendering is weak: keep on-screen text to short common words; for exact text or logos, attach the artwork as a reference image and instruct "the logo from Image N stays in the corner unchanged".
 - More than 4 referenced people gets unstable: group people into composite images of ≤4 first (image generation), then reference those composites.
-- Repeated extension degrades quality: prefer high-definition reference assets and avoid stacking many continuations.
+- Repeated extension degrades quality: prefer high-definition reference assets and avoid stacking many continuations.`,
+}
 
-_Generated from `PROVIDER_PROMPT_DOCTRINES` in `@nodaro/shared` — edit there, then `npm run gen:skills`._
-<!-- AUTO-GEN:END provider-prompting -->
+export const PROVIDER_PROMPT_DOCTRINES: readonly ProviderPromptDoctrine[] = [
+  SEEDANCE_2_DOCTRINE,
+]
+
+const DOCTRINE_BY_PROVIDER: ReadonlyMap<string, ProviderPromptDoctrine> = new Map(
+  PROVIDER_PROMPT_DOCTRINES.flatMap((d) => d.providers.map((p) => [p, d] as const)),
+)
+
+/** Full doctrine for a provider id, or undefined when none exists. */
+export function getPromptDoctrine(providerId: string): ProviderPromptDoctrine | undefined {
+  return DOCTRINE_BY_PROVIDER.get(providerId)
+}
+
+/** Compact tips for a provider id ([] when none) — used by list_models. */
+export function getPromptTips(providerId: string): readonly string[] {
+  return DOCTRINE_BY_PROVIDER.get(providerId)?.tips ?? []
+}

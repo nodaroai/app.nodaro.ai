@@ -35,9 +35,11 @@ import {
   type NodeDef,
 } from "./lib/gen-skills/parse-node-definitions.js"
 import {
+  PROVIDER_PROMPTING_NODE_TYPES,
   renderExampleBlock,
   renderMcpCallBlock,
   renderNodeDataShapeBlock,
+  renderProviderPromptingBlock,
   renderWorkflowEditorCatalog,
 } from "./lib/gen-skills/render-skill.js"
 
@@ -266,6 +268,16 @@ async function main(): Promise<void> {
 
     const examplesBody = renderExampleBlock(def)
     source = rewriteBlock(source, "examples", examplesBody)
+
+    // Per-provider prompting doctrine — video-gen nodes only. rewriteBlock
+    // appends the marker pair when a file doesn't have one yet, so the block
+    // rolls out to already-generated files without hand edits.
+    if (PROVIDER_PROMPTING_NODE_TYPES.has(def.type)) {
+      const doctrineBody = renderProviderPromptingBlock()
+      if (doctrineBody) {
+        source = rewriteBlock(source, "provider-prompting", doctrineBody)
+      }
+    }
 
     const final = refreshFrontmatterIfChanged(source, existing, def.type, sha)
     if (existing === null || final !== existing) {

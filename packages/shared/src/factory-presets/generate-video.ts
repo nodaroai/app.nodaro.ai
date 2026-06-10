@@ -955,4 +955,162 @@ export const GENERATE_VIDEO_PRESETS: readonly FactoryPreset[] = [
         "identity drift from the reference boards, swapped pursuer and pursued, characters teleporting, unreadable screen direction, motion-sickness shake, cartoon style, on-screen text, subtitles, warping, morphing, flickering, jitter, stutter, distorted anatomy, extra limbs, low quality, blurry, artifacts, watermark",
     },
   },
+  // ── Seedance Director (official Seedance 2.0 doctrine — BytePlus prompt guide).
+  // No negativePrompt by design: Seedance has no native negative param, so the
+  // fallback would append "Avoid: …" to the prompt — constraints live in-prompt
+  // instead. Audio is cued with the official symbols: （music）, <sfx>, "dialogue".
+  {
+    id: "generate-video/seedance-calm-scene",
+    name: "Calm Scene Close-Up",
+    description: "Hyper-real quiet moment with layered ambient audio.",
+    group: "Seedance Director",
+    data: {
+      provider: "seedance-2",
+      aspectRatio: "16:9",
+      duration: 8,
+      generateAudio: true,
+      prompt:
+        "Extreme close-up of {subject || a young woman in a thick knitted wool sweater holding a steaming ceramic mug}, 85mm portrait lens, fixed camera with a slow imperceptible push-in, shallow depth of field. {environment || A dark wooden coffee shop interior at golden hour}, soft window light mixed with cool side light, subtle volumetric dust in the air. She slowly lifts the mug, eyes softening, the corners of her mouth rising faintly. Hyper-realistic skin and fabric texture, film grain, cinematic color grading. （soft muffled jazz piano playing far away）<steady rain tapping on the window glass, slow gentle breathing> HD, rich details, cinematic texture, natural colors, stable picture, keep it subtitle-free, do not generate a watermark.",
+    },
+  },
+  {
+    id: "generate-video/seedance-multi-shot-story",
+    name: "Multi-Shot Mini Story",
+    description: "Three-shot storyboard with dialogue and per-shot audio.",
+    group: "Seedance Director",
+    data: {
+      provider: "seedance-2",
+      aspectRatio: "16:9",
+      duration: 12,
+      generateAudio: true,
+      prompt:
+        "{subject || A young courier} in {environment || a rainy neon-lit city street at night}. Shot 1: wide establishing shot, slow push-in; the courier weaves through the crowd, shoulders hunched against the rain. <city traffic, rain on umbrellas> Shot 2: medium tracking shot from the side; they stop under a doorway, check a small parcel, slightly lower their head. （low tense synth pulse building） Shot 3: close-up; they look up, the corners of the mouth rising into a relieved smile, and say \"It's finally here\". The camera slowly pulls back and freezes. Warm-against-cold color contrast, cinematic documentary style. HD, rich details, stable picture, keep it subtitle-free, do not generate a watermark.",
+    },
+  },
+  {
+    id: "generate-video/seedance-continuous-take",
+    name: "One Continuous Take",
+    description: "Single unbroken FPV shot along a chronological route.",
+    group: "Seedance Director",
+    data: {
+      provider: "seedance-2",
+      aspectRatio: "16:9",
+      duration: 10,
+      generateAudio: true,
+      prompt:
+        "ONE CONTINUOUS UNINTERRUPTED TAKE, single unbroken shot, no cuts. FPV camera flying smoothly: it starts {route_start || diving from a glass rooftop}, glides {route_mid || through an open window into a sunlit empty office where loose papers swirl in the draft}, and exits {route_end || through the far doorway into a dark stairwell}. The environment unfolds as one chronological route; dynamic lighting shifts from bright exterior sun to cold interior shadow; one fluid camera path at steady speed. <howling wind, papers rustling, a deep echo as the space closes in> Cinematic motion, photorealistic render. HD, rich details, stable picture, keep it subtitle-free, do not generate a watermark.",
+    },
+  },
+  {
+    id: "generate-video/seedance-action-beat",
+    name: "Action Beat (Chase)",
+    description: "Two-shot parkour beat — body-specific action, one move per shot.",
+    group: "Seedance Director",
+    data: {
+      provider: "seedance-2",
+      aspectRatio: "16:9",
+      duration: 8,
+      generateAudio: true,
+      prompt:
+        "{subject || A parkour runner in a worn gray hoodie} sprints down {environment || a narrow brick alley at dusk}. Shot 1: low tracking shot from behind; he pushes hard off the ground and vaults a low barrier, arms swinging with momentum. Shot 2: handheld side shot with motion blur; he lands, knees bending to absorb the impact, and keeps running without breaking stride. <pounding footsteps, sharp breathing, fabric rustling>（fast percussive beat）High-contrast dusk light, gritty cinematic style. HD, rich details, stable picture, accurate anatomy, keep it subtitle-free, do not generate a watermark.",
+    },
+  },
+  {
+    id: "generate-video/seedance-food-macro",
+    name: "Food Macro Commercial",
+    description: "Sizzling macro food shot with foley-rich native audio.",
+    group: "Seedance Director",
+    data: {
+      provider: "seedance-2",
+      aspectRatio: "16:9",
+      duration: 8,
+      generateAudio: true,
+      prompt:
+        "Extreme macro shot of {dish || a gourmet smash burger on a charred rustic wooden board}. The camera glides slowly across the surface and tilts up toward the top. {action || A thick strand of glossy melted cheddar slowly falls over the hot patty}, dense steam rising, glistening highlights on the juicy surface. Harsh warm backlight to catch the steam, soft fill light, brutal shallow depth of field. <loud crisp sizzling, soft bubbling, one heavy juicy drip> Commercial food styling, photorealistic textures. HD, rich macro details, cinematic texture, stable picture, keep it subtitle-free, do not generate a watermark.",
+    },
+  },
+  {
+    id: "generate-video/seedance-film-noir",
+    name: "Film Noir Scene",
+    description: "Chiaroscuro single-source lighting, oppressive mood.",
+    group: "Seedance Director",
+    data: {
+      provider: "seedance-2",
+      aspectRatio: "16:9",
+      duration: 8,
+      generateAudio: true,
+      prompt:
+        "{subject || A detective in a long trench coat} stands in {environment || a dead-end alley at midnight}. Extreme low-key chiaroscuro lighting: a single flickering tungsten street lamp directly above carves a harsh cone of light, the rest of the frame sinks into deep black shadow. Fixed camera, slow imperceptible push-in. His face stays half-hidden under the hat brim; he slowly raises his head into the light. Film noir, heavy film grain, deep blacks, moody oppressive atmosphere. <hissing wind, the low broken electrical hum of the lamp, distant thunder>（sparse lonely saxophone, very quiet）HD, cinematic contrast, stable picture, keep it subtitle-free, do not generate a watermark.",
+    },
+  },
+  {
+    id: "generate-video/seedance-asmr-foley",
+    name: "ASMR Foley Close-Up",
+    description: "First-person trigger sounds, no music — pure foley.",
+    group: "Seedance Director",
+    data: {
+      provider: "seedance-2-fast",
+      aspectRatio: "9:16",
+      duration: 10,
+      generateAudio: true,
+      prompt:
+        "Immersive first-person hand ASMR video. Close-up shot under warm, soft lighting, fixed camera. A pair of slender hands gently triggers {objects || frosted glass, plush fabric, an acrylic board, bubble wrap and a wooden comb} in sequence: light scratching, slow rubbing, gentle tapping, soft pinching. Finger movements are slow, gentle and continuous. <pure natural trigger sounds only: scratching, rubbing, tapping, popping> No background music. Relaxing, healing visual atmosphere. HD, rich details, natural colors, stable picture, keep it subtitle-free, do not generate a watermark.",
+    },
+  },
+  {
+    id: "generate-video/seedance-silhouette-crowd",
+    name: "Epic Silhouette Crowd",
+    description: "Backlit crowd at scale — silhouettes hide face complexity.",
+    group: "Seedance Director",
+    data: {
+      provider: "seedance-2",
+      aspectRatio: "16:9",
+      duration: 8,
+      generateAudio: true,
+      prompt:
+        "{crowd || A massive army} marching over {terrain || a hill ridge} at sunset, backlit by a blazing low sun so the crowd reads as dark epic silhouettes against the burning orange sky. 24mm wide-angle establishing shot, slow lateral pan, waist-high dust haze drifting through the ranks. One {foreground_figure || banner-bearer} in the near foreground in sharp focus, the masses soft behind. （slow war drums building）<rhythmic marching feet, wind sweeping over the ridge> Epic cinematic scale, volumetric light. HD, rich details, stable picture, keep it subtitle-free, do not generate a watermark.",
+    },
+  },
+  {
+    id: "generate-video/seedance-speed-ramp-duel",
+    name: "Speed-Ramp Duel",
+    description: "Wuxia clash with ultra-slow-motion ramp (official showcase).",
+    group: "Seedance Director",
+    data: {
+      provider: "seedance-2",
+      aspectRatio: "16:9",
+      duration: 10,
+      generateAudio: true,
+      prompt:
+        "A wuxia duel in {environment || a rain-soaked bamboo forest}. Shot 1: the camera slowly pushes in between {fighter_a || a white-clad swordsman} and {fighter_b || a straw-caped blademaster}, focus shifting between falling raindrops and sword hilts; the air is oppressive and only rain is heard. <heavy rain, a low rumble of thunder> Shot 2: both charge at once; a fast side tracking shot catches mud splashing under their steps. At the exact moment the weapons clash, the footage switches to ultra slow motion, showing ring-shaped shockwaves of rainwater blasted away by the blades, then normal speed resumes as they land back-to-back. （one sharp orchestral hit on the clash, then silence）Cinematic wuxia style, high contrast. HD, rich details, stable picture, accurate anatomy, keep it subtitle-free, do not generate a watermark.",
+    },
+  },
+  {
+    id: "generate-video/seedance-vertical-dance-reel",
+    name: "Vertical Dance Reel",
+    description: "9:16 music-driven dance edit with whip-pan energy.",
+    group: "Seedance Director",
+    data: {
+      provider: "seedance-2-fast",
+      aspectRatio: "9:16",
+      duration: 8,
+      generateAudio: true,
+      prompt:
+        "Vertical reel of {subject || a street dancer in a neon-lit underpass}. Shot 1: full-body fixed low-angle shot; she hits sharp isolations, arms snapping in time with the beat. Shot 2: quick whip pan into a closer medium shot; footwork detail, sneakers splashing a shallow neon puddle. Shot 3: high-angle overhead shot for the final frozen pose. Movement speed and cut rhythm follow the music. （aggressive bass-heavy phonk beat driving the edit）<sneaker squeaks, water splashes> Neon magenta and cyan rim light, cinematic motion. HD, rich details, stable picture, keep it subtitle-free, do not generate a watermark.",
+    },
+  },
+  {
+    id: "generate-video/seedance-creature-feature",
+    name: "Creature Feature",
+    description: "Mythic creature anchored to real-animal anatomy.",
+    group: "Seedance Director",
+    data: {
+      provider: "seedance-2",
+      aspectRatio: "16:9",
+      duration: 8,
+      generateAudio: true,
+      prompt:
+        "{creature || A monstrous yeti with the physique and bone structure of a giant silverback gorilla}, {texture || thick matted white fur with snow crusted on the shoulders}, charges forward and smashes both fists into the ground. Low-angle ground shot looking up to emphasize its scale, heavy camera shake on impact, snow and debris bursting toward the lens. Overcast mountain light, volumetric breath mist around its muzzle. <deep guttural roar, the crunch of impact, debris scattering>（low ominous brass drone）Biologically accurate anatomy, epic cinematic scale. HD, sharp micro-details, stable picture, keep it subtitle-free, do not generate a watermark.",
+    },
+  },
 ]
