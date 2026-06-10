@@ -2,7 +2,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const mocks = vi.hoisted(() => ({
   rows: [] as any[],
-  selectChain: { data: null as any[] | null, error: null as { message: string } | null },
+  selectChain: { data: null as any[] | null, error: null as { message: string; code?: string } | null },
+  // When non-null, successive MAIN-scan queries consume results from this
+  // queue in order (used by the 42703 column-missing fallback tests).
+  mainScanQueue: null as Array<{ data: any[] | null; error: { message: string; code?: string } | null }> | null,
   // Rows returned by the never-started sweep query (the one using `.is(...)`).
   // Defaults empty so pre-existing tests (which only seed `rows`) are unaffected.
   neverStartedRows: [] as any[],
@@ -51,7 +54,8 @@ vi.mock("../../supabase.js", () => ({
                 ? { data: [], error: null }
                 : isNeverStarted
                   ? { data: mocks.neverStartedChain.data ?? mocks.neverStartedRows, error: mocks.neverStartedChain.error }
-                  : { data: mocks.selectChain.data ?? mocks.rows, error: mocks.selectChain.error },
+                  : (mocks.mainScanQueue?.shift()
+                      ?? { data: mocks.selectChain.data ?? mocks.rows, error: mocks.selectChain.error }),
           ),
         ),
       }
@@ -87,6 +91,7 @@ describe("reconcileInflightJobs", () => {
     mocks.rows.length = 0
     mocks.selectChain.data = null
     mocks.selectChain.error = null
+    mocks.mainScanQueue = null
     mocks.neverStartedRows.length = 0
     mocks.neverStartedChain.data = null
     mocks.neverStartedChain.error = null
@@ -296,6 +301,43 @@ describe("reconcileInflightJobs", () => {
     const result = await reconcileInflightJobs()
     expect(result.scanned).toBe(0)
     expect(result.errors).toBe(0)  // pre-loop select error is recorded but not counted here
+  })
+
+  it("42703 (finalize_claimed_at column missing) → retries the scan without the column and still dispatches (audit H2)", async () => {
+    // Deploy window: new code, migration 210/211 not applied yet. The first
+    // candidate SELECT names finalize_claimed_at and fails with 42703; the
+    // cron must fall back to a column-less scan (pre-claim semantics: treat
+    // all claims as absent) instead of silently disabling ALL reconciliation.
+    const stale = new Date(Date.now() - 30 * 60 * 1000).toISOString()
+    mocks.mainScanQueue = [
+      { data: null, error: { message: 'column "jobs.finalize_claimed_at" does not exist', code: "42703" } },
+      {
+        data: [{
+          id: "j-fallback",
+          status: "processing",
+          provider_kind: "kie-standard",
+          provider_task_id: "t-fb",
+          provider_call_started_at: stale,
+          reconcile_attempts: 0,
+        }],
+        error: null,
+      },
+    ]
+    const result = await reconcileInflightJobs()
+    expect(reconcileKieJob).toHaveBeenCalledWith(expect.objectContaining({ id: "j-fallback" }))
+    expect(result.recovered).toBe(1)
+  })
+
+  it("main-scan error does NOT skip the auxiliary sweeps (audit H2)", async () => {
+    // The old early-return on a scan error also skipped sweepNeverStartedJobs /
+    // sweepStuckComponentWrappers / sweepStuckRenderJobs — one bad column or
+    // transient DB error silently disabled the whole refund-sweep system.
+    mocks.selectChain.data = null
+    mocks.selectChain.error = { message: "transient" }
+    mocks.neverStartedRows.push({ id: "j-orphan-x", provider_kind: null, reconcile_attempts: 0 })
+    const result = await reconcileInflightJobs()
+    expect(sweepStaleSyncJob).toHaveBeenCalledWith(expect.objectContaining({ id: "j-orphan-x" }))
+    expect(result.swept).toBe(1)
   })
 
   it("sweeps never-started pending jobs (provider_call_started_at IS NULL) the main scan can't see", async () => {

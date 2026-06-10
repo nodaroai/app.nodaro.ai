@@ -161,6 +161,11 @@ describe("reconcileKieJob", () => {
     expect(mocks.finalizeMock).toHaveBeenCalledWith({
       jobId: "j-success",
       jobType: "generate-image",
+      // Claimant identity (audit H1): the cron must claim as "cron" so it
+      // never steals a live worker's fresh claim (and vice versa), while a
+      // stall re-pick (inline reconcile, claimant "worker") can immediately
+      // re-claim its own crashed predecessor's claim.
+      claimant: "cron",
       result: expect.objectContaining({
         url: "https://kie.example/result.png",
         extraUrls: [],
@@ -168,6 +173,25 @@ describe("reconcileKieJob", () => {
       }),
     })
     expect(mocks.refundMock).not.toHaveBeenCalled()
+  })
+
+  it("inline (stall re-pick) caller: claimant 'worker' is threaded through to finalize", async () => {
+    mocks.pollKieTaskMock.mockResolvedValueOnce({
+      resultJson: { resultUrls: ["https://kie.example/result.png"] },
+      providerMs: 99,
+      taskId: "t-inline",
+    })
+    const row: KieJobRow = {
+      id: "j-inline",
+      provider_kind: "kie-standard",
+      provider_task_id: "t-inline",
+      reconcile_attempts: 0,
+      job_type: "generate-image",
+    }
+    await reconcileKieJob(row, { claimant: "worker" })
+    expect(mocks.finalizeMock).toHaveBeenCalledWith(
+      expect.objectContaining({ claimant: "worker" }),
+    )
   })
 
   it("kie-veo success → uses pollVeoTask + finalize with the resultUrls", async () => {

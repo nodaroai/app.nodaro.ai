@@ -109,6 +109,7 @@ const sharedMocks = vi.hoisted(() => ({
     .fn<(jobId: string, fields: Record<string, unknown>) => Promise<boolean>>()
     .mockResolvedValue(true),
   commitJobCredits: vi.fn().mockResolvedValue(undefined),
+  refundLoopTrimAddon: vi.fn().mockResolvedValue(undefined),
   createAssetFromJob: vi.fn().mockResolvedValue(undefined),
 }))
 
@@ -174,6 +175,7 @@ function resetMocksToHappyPath() {
   }))
   sharedMocks.markJobCompleted.mockResolvedValue(true)
   sharedMocks.commitJobCredits.mockResolvedValue(undefined)
+  sharedMocks.refundLoopTrimAddon.mockResolvedValue(undefined)
   sharedMocks.createAssetFromJob.mockResolvedValue(undefined)
 
   storageMocks.uploadToR2.mockResolvedValue("https://r2.example/audio-j-aud.mp3")
@@ -864,7 +866,7 @@ describe("finalizeJobWithMedia", () => {
   // exits with { ok: false } (the standard graceful-skip contract).
   // -------------------------------------------------------------------------
   describe("finalize claim", () => {
-    it("claims via claim_job_finalize BEFORE uploading; default TTL is the shared reconcile constant", async () => {
+    it("claims via claim_job_finalize BEFORE uploading; default claimant is 'worker'", async () => {
       await finalizeJobWithMedia({
         jobId: "j1",
         jobType: "generate-image",
@@ -874,12 +876,32 @@ describe("finalizeJobWithMedia", () => {
       expect(mocks.rpcMock).toHaveBeenCalledWith("claim_job_finalize", {
         p_job_id: "j1",
         p_ttl_seconds: 600,
+        p_claimant: "worker",
       })
       // Claim must precede the upload (the expensive, racy part).
       const claimOrder = mocks.rpcMock.mock.invocationCallOrder[0]!
       const uploadOrder =
         sharedMocks.uploadImageVariantsMaybeWatermark.mock.invocationCallOrder[0]!
       expect(claimOrder).toBeLessThan(uploadOrder)
+    })
+
+    it("passes the caller's claimant through (reconcile cron claims as 'cron')", async () => {
+      // Claimant identity (audit H1): a crashed claimant's BullMQ stall
+      // re-pick must be able to re-claim its own dead claim immediately
+      // (same claimant) while the cron still can't steal a fresh worker
+      // claim — and vice versa.
+      await finalizeJobWithMedia({
+        jobId: "j1",
+        jobType: "generate-image",
+        result: { url: "https://kie.example/x.png", cost: null, providerUsed: null },
+        claimant: "cron",
+      })
+
+      expect(mocks.rpcMock).toHaveBeenCalledWith("claim_job_finalize", {
+        p_job_id: "j1",
+        p_ttl_seconds: 600,
+        p_claimant: "cron",
+      })
     })
 
     it("claim lost (fresh claim held elsewhere): returns { ok: false } without uploading or completing", async () => {
@@ -925,10 +947,13 @@ describe("finalizeJobWithMedia", () => {
         }),
       ).rejects.toThrow("KIE download blip")
 
-      // Release: UPDATE jobs SET finalize_claimed_at = NULL
+      // Release: UPDATE jobs SET finalize_claimed_at/by = NULL
       //   WHERE id = 'j1' AND finalize_claimed_at = <our claim ts>
       // The ts guard means we never clear a claim a NEWER finalizer took.
-      expect(mocks.jobsUpdateMock).toHaveBeenCalledWith({ finalize_claimed_at: null })
+      expect(mocks.jobsUpdateMock).toHaveBeenCalledWith({
+        finalize_claimed_at: null,
+        finalize_claimed_by: null,
+      })
       expect(mocks.jobsUpdateEqMock).toHaveBeenCalledWith("id", "j1")
       expect(mocks.jobsUpdateEq2Mock).toHaveBeenCalledWith(
         "finalize_claimed_at",
@@ -945,6 +970,70 @@ describe("finalizeJobWithMedia", () => {
       })
 
       expect(mocks.jobsUpdateMock).not.toHaveBeenCalled()
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // Loop-trim addon at COMMIT time (audit P0.3 / M3). The reconcile path
+  // recovers the RAW i2v clip (the smart-loop-cut never ran), so the addon
+  // must come off the commit — but committing (reserved − addon) BEFORE
+  // finalize flipped the log out of `reserved` and silently defeated the
+  // exhaustion refund when finalize kept failing. The addon is now applied
+  // by finalize itself, only after markJobCompleted wins.
+  // -------------------------------------------------------------------------
+  describe("loop-trim addon refund at commit", () => {
+    it("single-node job: commits via refundLoopTrimAddon (reserved − addon) instead of plain commit", async () => {
+      const result = await finalizeJobWithMedia({
+        jobId: "j1",
+        jobType: "image-to-video",
+        result: { url: "https://kie.example/x.mp4", cost: null, providerUsed: null },
+        loopTrimAddonRefundCredits: 3,
+      })
+
+      expect(result.ok).toBe(true)
+      expect(sharedMocks.refundLoopTrimAddon).toHaveBeenCalledWith("j1", "u-log-1", 3)
+      expect(sharedMocks.commitJobCredits).not.toHaveBeenCalled()
+      // Applied AFTER completion — never on a row that lost the CAS.
+      const completedOrder = sharedMocks.markJobCompleted.mock.invocationCallOrder[0]!
+      const refundOrder = sharedMocks.refundLoopTrimAddon.mock.invocationCallOrder[0]!
+      expect(completedOrder).toBeLessThan(refundOrder)
+    })
+
+    it("ORCHESTRATED job (workflow_execution_id set): plain commit — the addon was never reserved", async () => {
+      mocks.jobsSingleMock.mockResolvedValueOnce({
+        data: {
+          id: "j1",
+          user_id: "u1",
+          should_watermark: false,
+          is_public: true,
+          job_type: "image-to-video",
+          workflow_execution_id: "exec-9",
+          status: "processing",
+        },
+        error: null,
+      })
+
+      const result = await finalizeJobWithMedia({
+        jobId: "j1",
+        jobType: "image-to-video",
+        result: { url: "https://kie.example/x.mp4", cost: null, providerUsed: null },
+        loopTrimAddonRefundCredits: 3,
+      })
+
+      expect(result.ok).toBe(true)
+      expect(sharedMocks.refundLoopTrimAddon).not.toHaveBeenCalled()
+      expect(sharedMocks.commitJobCredits).toHaveBeenCalledTimes(1)
+    })
+
+    it("no addon: plain commit (unchanged path)", async () => {
+      await finalizeJobWithMedia({
+        jobId: "j1",
+        jobType: "generate-image",
+        result: { url: "https://kie.example/x.png", cost: 0.02, providerUsed: "p" },
+      })
+
+      expect(sharedMocks.refundLoopTrimAddon).not.toHaveBeenCalled()
+      expect(sharedMocks.commitJobCredits).toHaveBeenCalledTimes(1)
     })
   })
 })

@@ -12,8 +12,8 @@ import { pollKontextTask } from "../../providers/kie/kontext-client.js"
 import { pollLumaTask } from "../../providers/kie/luma-client.js"
 import { pollRunwayTask, pollAlephTask } from "../../providers/kie/runway-client.js"
 import { pollSunoTask, type SunoTaskResult } from "../../providers/kie/suno-client.js"
-import { finalizeJobWithMedia, type FinalizeJobType } from "../job-finalize.js"
-import { refundLoopTrimAddonOnReconcile } from "./loop-trim-refund.js"
+import { finalizeJobWithMedia, type FinalizeJobType, type FinalizeClaimant } from "../job-finalize.js"
+import { loopTrimAddonForReconcile } from "./loop-trim-refund.js"
 import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
 import { bumpAttemptsOrExhaust } from "./bump-attempts.js"
 
@@ -24,6 +24,13 @@ export interface KieJobRow {
   reconcile_attempts: number
   job_type: string | null
   input_data?: Record<string, unknown> | null
+}
+
+/** Caller identity for the finalize claim (audit H1). The cron omits it
+ *  (default "cron"); the worker's stall re-pick passes "worker" via
+ *  tryInlineReconcile so it can re-claim its crashed predecessor's claim. */
+export interface ReconcileOpts {
+  claimant?: FinalizeClaimant
 }
 
 /** Suno music job_types whose poll shape matches `SunoTaskResult` (multi-track
@@ -126,7 +133,7 @@ async function singlePoll(row: KieJobRow): Promise<{
  * and `extraOutputData` carrying the full multi-track metadata. This preserves
  * the same output_data shape the worker handler writes via uploadAllSunoTracks.
  */
-async function reconcileKieSunoJob(row: KieJobRow): Promise<void> {
+async function reconcileKieSunoJob(row: KieJobRow, opts?: ReconcileOpts): Promise<void> {
   if (!row.provider_task_id) return
   if (!row.job_type || !SUNO_MUSIC_JOB_TYPES.has(row.job_type)) {
     // Suno variant we don't recover (lyrics, separate, music-video, wav).
@@ -184,6 +191,7 @@ async function reconcileKieSunoJob(row: KieJobRow): Promise<void> {
     await finalizeJobWithMedia({
       jobId: row.id,
       jobType: "generate-music",
+      claimant: opts?.claimant ?? "cron",
       result: { url: r2Urls[0]!, cost: null, providerUsed: "suno" },
       mediaUrl: r2Urls[0]!,
       extraOutputData: {
@@ -235,12 +243,12 @@ async function markFailed(jobId: string, reason: string): Promise<void> {
  *   - on transient (still running, network blip): bumps `reconcile_attempts`
  *     and leaves the row in place for the next cron tick.
  */
-export async function reconcileKieJob(row: KieJobRow): Promise<void> {
+export async function reconcileKieJob(row: KieJobRow, opts?: ReconcileOpts): Promise<void> {
   if (!row.provider_task_id) return
 
   // Suno is a special case: multi-track output, dedicated upload + finalize path.
   if (row.provider_kind === "kie-suno") {
-    return reconcileKieSunoJob(row)
+    return reconcileKieSunoJob(row, opts)
   }
 
   let result: { url: string; extraUrls: readonly string[]; providerMs?: number }
@@ -272,14 +280,18 @@ export async function reconcileKieJob(row: KieJobRow): Promise<void> {
   // anomaly. Bumping routes it into the 18-attempt exhaustion path
   // (forceFailExhausted → refund + credit_anomalies), which terminates.
   try {
-    // i2v + loopTrim.enabled: reconcile uploads the RAW (un-trimmed) clip and
-    // commits the reserved tier, so refund the loop-trim add-on BEFORE finalize
-    // (commit is CAS-once → this commit wins). No-op otherwise.
-    await refundLoopTrimAddonOnReconcile(row.job_type, row.id, row.input_data ?? null)
+    // i2v + loopTrim.enabled (single-node): the recovered RAW clip never got
+    // the smart-loop-cut, so the addon comes OFF the commit. Computed here
+    // (pure), applied by finalize AFTER markJobCompleted wins — committing it
+    // up-front flipped the log out of `reserved` and defeated the exhaustion
+    // refund when finalize kept failing (audit P0.3).
+    const loopTrimAddon = loopTrimAddonForReconcile(row.job_type, row.input_data ?? null)
 
     await finalizeJobWithMedia({
       jobId: row.id,
       jobType: (row.job_type ?? "generate-image") as FinalizeJobType,
+      claimant: opts?.claimant ?? "cron",
+      ...(loopTrimAddon > 0 && { loopTrimAddonRefundCredits: loopTrimAddon }),
       result: {
         url: result.url,
         extraUrls: result.extraUrls,

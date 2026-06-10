@@ -2,6 +2,7 @@ import { config } from "../config.js"
 import { supabase } from "../supabase.js"
 import { uploadBufferToR2 } from "../storage.js"
 import { finalizeJobWithMedia } from "../job-finalize.js"
+import type { ReconcileOpts } from "./kie.js"
 import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
 import { bumpAttemptsOrExhaust } from "./bump-attempts.js"
 
@@ -86,7 +87,7 @@ async function markFailed(jobId: string, reason: string): Promise<void> {
  * URL we could pass to finalize. The handler uploads to R2, then calls finalize
  * with the R2 URL as mediaUrl.
  */
-export async function reconcileElevenLabsJob(row: ElevenLabsJobRow): Promise<void> {
+export async function reconcileElevenLabsJob(row: ElevenLabsJobRow, opts?: ReconcileOpts): Promise<void> {
   if (!row.provider_task_id) return
   if (row.provider_kind !== "elevenlabs-async") {
     await bumpAttemptsOrExhaust(row.id, `unknown elevenlabs kind: ${row.provider_kind}`)
@@ -141,6 +142,7 @@ export async function reconcileElevenLabsJob(row: ElevenLabsJobRow): Promise<voi
     await finalizeJobWithMedia({
       jobId: row.id,
       jobType: "text-to-audio",
+      claimant: opts?.claimant ?? "cron",
       result: { url: r2Url, cost: null, providerUsed: "elevenlabs-dubbing" },
       mediaUrl: r2Url,
     })

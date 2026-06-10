@@ -7,7 +7,11 @@
  *
  *   1. `refundJobCredits` — fires on job failure. SKIPS the refund when
  *      the error is a post-processing failure (provider already charged
- *      us, so we keep the user's credits to cover that cost).
+ *      us, so we keep the user's credits to cover that cost). NOTE: since
+ *      the self-heal branch (video-worker.ts), a reconcile-recoverable row
+ *      never reaches this call on a post-processing failure — it is left
+ *      `processing` for the cron; this skip path now covers sync kinds and
+ *      rows without a provider_task_id.
  *
  *   2. `refundLoopTrimAddon` — fires when the smart-loop-cut post-process
  *      failed but the underlying i2v generation succeeded. Refunds ONLY

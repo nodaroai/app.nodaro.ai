@@ -140,3 +140,69 @@ export function isSyncKind(kind: ProviderKind): boolean {
 export function isAsyncKind(kind: ProviderKind): boolean {
   return !isSyncKind(kind)
 }
+
+// ---------------------------------------------------------------------------
+// Recoverable-kind dispatch sets — SINGLE SOURCE OF TRUTH (audit M5).
+//
+// Consumed by: the cron dispatcher (cron.ts), the worker's stall-retry inline
+// dispatcher (workers/inline-reconcile.ts), and the worker's post-provider
+// leave-for-reconcile branch (video-worker.ts). These used to be duplicated
+// per consumer; a kind added to one copy but not another silently changed
+// behavior (cron-recoverable but inline-skipped, etc.). The parity test in
+// types.test.ts pins ASYNC_RECOVERABLE_KINDS ≡ {k : isAsyncKind(k)} so the
+// dispatch sets and the sync/async classification can never drift apart.
+// ---------------------------------------------------------------------------
+
+/** Kinds recovered via the KIE poll dispatchers (reconcileKieJob). */
+export const KIE_RECOVER_KINDS: ReadonlySet<string> = new Set([
+  "kie-standard", "kie-veo", "kie-veo-1080p", "kie-suno", "kie-kontext",
+  "kie-luma", "kie-kling3", "kie-runway", "kie-aleph", "kie-lip-sync",
+])
+
+/** Kinds recovered via reconcileReplicateJob. */
+export const REPLICATE_RECOVER_KINDS: ReadonlySet<string> = new Set([
+  "replicate-prediction", "replicate-training",
+])
+
+/** Kinds recovered via reconcileElevenLabsJob. */
+export const ELEVENLABS_RECOVER_KINDS: ReadonlySet<string> = new Set([
+  "elevenlabs-async",
+])
+
+/** Every kind with an async recover handler — the provider result can be
+ *  re-fetched from the persisted provider_task_id and the job completed. */
+export const ASYNC_RECOVERABLE_KINDS: ReadonlySet<string> = new Set([
+  ...KIE_RECOVER_KINDS,
+  ...REPLICATE_RECOVER_KINDS,
+  ...ELEVENLABS_RECOVER_KINDS,
+])
+
+/**
+ * Kinds the WORKER may leave at `processing` after a post-provider failure,
+ * trusting the reconcile system to drive the row to a terminal state.
+ *
+ * = ASYNC_RECOVERABLE_KINDS (output re-fetched and the job completed, or
+ *   exhausted to refund+anomaly after MAX_ATTEMPTS)
+ * + "heygen" (decision D3): heygen has NO recover handler — the sync-sweep
+ *   fail+refunds it at its 30-min threshold. "Recoverable" here means
+ *   "reconcile owns the terminal outcome", not "output recovered": for
+ *   heygen that outcome is refund-instead-of-charge.
+ */
+const WORKER_LEAVE_FOR_RECONCILE_KINDS: ReadonlySet<string> = new Set([
+  ...ASYNC_RECOVERABLE_KINDS,
+  "heygen",
+])
+
+/**
+ * True when a post-provider failure on this row should be left to the
+ * reconcile system instead of being marked failed+charged by the worker:
+ * the provider task id is persisted AND the kind has a reconcile-owned
+ * terminal path (recovery or sweep-refund).
+ */
+export function isReconcileRecoverable(row: {
+  provider_kind: string | null
+  provider_task_id: string | null
+}): boolean {
+  if (!row.provider_task_id) return false
+  return WORKER_LEAVE_FOR_RECONCILE_KINDS.has(row.provider_kind ?? "")
+}

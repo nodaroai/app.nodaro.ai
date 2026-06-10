@@ -9,6 +9,7 @@ import {
   buildImageOutputData,
   markJobCompleted,
   commitJobCredits,
+  refundLoopTrimAddon,
   createAssetFromJob,
 } from "../workers/shared.js"
 
@@ -100,10 +101,17 @@ async function loadUsageLogId(jobId: string): Promise<string | null> {
   return (data?.[0] as { id: string } | undefined)?.id ?? null
 }
 
+/** Who is finalizing — drives same-claimant claim re-entry (audit H1): a
+ *  BullMQ stall re-pick (claimant "worker", via inline reconcile) instantly
+ *  re-claims its crashed predecessor's claim; the cron ("cron") still cannot
+ *  steal a fresh worker claim before the TTL, and vice versa. */
+export type FinalizeClaimant = "worker" | "cron"
+
 /**
  * CAS-claim the finalize phase for a job via the `claim_job_finalize` RPC
- * (migration 210). Returns the claim timestamp when won, `{ won: false }`
- * when another finalizer holds an unexpired claim (or the row went terminal).
+ * (migrations 210 + 211). Returns the claim timestamp when won, `{ won:
+ * false }` when ANOTHER claimant holds an unexpired claim (or the row went
+ * terminal). A fresh claim held by the SAME claimant is re-claimable.
  *
  * This is the mutual exclusion between the worker and the reconcile cron:
  * both funnel through `finalizeJobWithMedia` for the same jobId and used to
@@ -117,10 +125,12 @@ async function loadUsageLogId(jobId: string): Promise<string | null> {
  */
 async function claimJobFinalize(
   jobId: string,
+  claimant: FinalizeClaimant,
 ): Promise<{ won: boolean; ts: string | null }> {
   const { data, error } = await supabase.rpc("claim_job_finalize", {
     p_job_id: jobId,
     p_ttl_seconds: Math.floor(FINALIZE_CLAIM_TTL_MS / 1000),
+    p_claimant: claimant,
   })
   if (error) {
     console.warn(
@@ -141,11 +151,16 @@ async function claimJobFinalize(
  */
 async function releaseJobFinalizeClaim(jobId: string, claimTs: string): Promise<void> {
   try {
-    await supabase
+    const { error } = await supabase
       .from("jobs")
-      .update({ finalize_claimed_at: null })
+      .update({ finalize_claimed_at: null, finalize_claimed_by: null })
       .eq("id", jobId)
       .eq("finalize_claimed_at", claimTs)
+    if (error) {
+      // Surface PostgREST errors too (they resolve, not throw) — a silently
+      // dead release means every failed finalize waits out the full TTL.
+      console.warn(`[job-finalize] claim release failed for ${jobId}: ${error.message}`)
+    }
   } catch (err) {
     console.warn(`[job-finalize] claim release failed for ${jobId}: ${String(err)}`)
   }
@@ -237,6 +252,18 @@ export interface FinalizeInput {
    *  successful loop-trim add-on). Passed through to commitJobCredits so the
    *  provider-cost reconciliation doesn't refund it. Defaults to none. */
   extraNonProviderCredits?: number
+  /** Who is finalizing (audit H1). Worker handlers omit it (default
+   *  "worker"); the reconcile cron passes "cron"; the stall re-pick's inline
+   *  reconcile passes "worker" so it can re-claim its predecessor's claim. */
+  claimant?: FinalizeClaimant
+  /** Loop-trim add-on credits to take OFF the commit (audit P0.3): reconcile
+   *  recovery delivers the RAW i2v clip without the smart-loop-cut, so the
+   *  single-node addon must not be charged. Applied AFTER markJobCompleted
+   *  wins (committing reserved − addon via refundLoopTrimAddon) — never
+   *  before, so a failed finalize leaves the log `reserved` and the
+   *  exhaustion refund stays effective. Ignored for orchestrated jobs
+   *  (base-only reservation — the addon was never charged). */
+  loopTrimAddonRefundCredits?: number
 }
 
 /**
@@ -286,13 +313,13 @@ export async function finalizeJobWithMedia(
 
   const watermark = job.should_watermark ?? false
 
-  // 1.5. CAS-claim the finalize phase. The loser (a concurrent worker /
-  //    reconcile-cron finalizer, or a row that just went terminal) exits here
-  //    with the standard graceful-skip contract — BEFORE downloading the
-  //    provider result or touching the deterministic R2 key. A claimant that
-  //    fails mid-upload releases the claim below; a claimant that crashes is
-  //    covered by the claim TTL.
-  const claim = await claimJobFinalize(jobId)
+  // 1.5. CAS-claim the finalize phase. The loser (a concurrent finalizer of a
+  //    DIFFERENT claimant, or a row that just went terminal) exits here with
+  //    the standard graceful-skip contract — BEFORE downloading the provider
+  //    result or touching the deterministic R2 key. A claimant that fails
+  //    mid-upload releases the claim below; a crashed one is covered by the
+  //    TTL, and its own stall re-pick re-claims immediately (same claimant).
+  const claim = await claimJobFinalize(jobId, input.claimant ?? "worker")
   if (!claim.won) return { ok: false }
 
   // 2. Look up usage_log_id from usage_logs (NOT from a jobs.* column —
@@ -367,8 +394,18 @@ export async function finalizeJobWithMedia(
   if (!ok) return { ok: false }
 
   // 5. Commit credits (idempotent: CAS on usage_logs.status='reserved' inside
-  //    commitJobCredits; null usageLogId is a graceful no-op).
-  await commitJobCredits(usageLogId, jobId, result.cost, input.extraNonProviderCredits, result.meteredCost)
+  //    both branches; null usageLogId is a graceful no-op). When a loop-trim
+  //    addon must come off (reconcile-recovered raw i2v clip, single-node
+  //    reservation only), commit at (reserved − addon) via refundLoopTrimAddon
+  //    INSTEAD of the plain commit — deliberately here, AFTER the CAS win,
+  //    so a failed finalize never strands the log outside `reserved` (which
+  //    silently defeated the exhaustion refund — audit P0.3).
+  const loopTrimRefund = input.loopTrimAddonRefundCredits ?? 0
+  if (loopTrimRefund > 0 && !job.workflow_execution_id) {
+    await refundLoopTrimAddon(jobId, usageLogId, loopTrimRefund)
+  } else {
+    await commitJobCredits(usageLogId, jobId, result.cost, input.extraNonProviderCredits, result.meteredCost)
+  }
 
   // 6. Create asset record so the output appears in /library.
   await createAssetFromJob(jobId, job.user_id ?? undefined)

@@ -12,6 +12,11 @@
  *
  * Crucially they ALSO assert the SAFE direction: a PRE-provider input-download
  * failure stays a plain Error and is refunded.
+ *
+ * End-state note: for reconcile-recoverable rows the worker no longer marks a
+ * post-processing failure failed+charged — the self-heal branch leaves the row
+ * `processing` for the cron (complete or exhaust→refund). The refund-SKIP
+ * contract proven here still governs sync kinds and task-id-less rows.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 

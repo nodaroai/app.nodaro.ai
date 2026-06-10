@@ -3,6 +3,9 @@ import {
   STALE_THRESHOLD_MS,
   MIN_STALE_THRESHOLD_MS,
   FINALIZE_CLAIM_TTL_MS,
+  KIE_RECOVER_KINDS,
+  REPLICATE_RECOVER_KINDS,
+  ELEVENLABS_RECOVER_KINDS,
   isSyncKind,
   type ProviderKind,
 } from "./types.js"
@@ -39,18 +42,12 @@ interface CandidateRow {
   finalize_claimed_at: string | null
 }
 
-const KIE_KINDS: ReadonlySet<string> = new Set([
-  "kie-standard", "kie-veo", "kie-veo-1080p", "kie-suno", "kie-kontext",
-  "kie-luma", "kie-kling3", "kie-runway", "kie-aleph", "kie-lip-sync",
-])
-
-const REPLICATE_KINDS: ReadonlySet<string> = new Set([
-  "replicate-prediction", "replicate-training",
-])
-
-const ELEVENLABS_KINDS: ReadonlySet<string> = new Set([
-  "elevenlabs-async",
-])
+// Dispatch sets live in types.ts (single source of truth, audit M5) — shared
+// with workers/inline-reconcile.ts and the worker's leave-for-reconcile
+// predicate, parity-tested against the sync/async classification.
+const KIE_KINDS = KIE_RECOVER_KINDS
+const REPLICATE_KINDS = REPLICATE_RECOVER_KINDS
+const ELEVENLABS_KINDS = ELEVENLABS_RECOVER_KINDS
 
 function sqlCutoff(): string {
   return new Date(Date.now() - SQL_PREFILTER_BUFFER_MS).toISOString()
@@ -99,20 +96,40 @@ export async function reconcileInflightJobs(): Promise<ReconcileResult> {
     errors: 0,
   }
 
-  const { data, error } = await supabase
-    .from("jobs")
-    .select("id, provider_kind, provider_task_id, provider_call_started_at, reconcile_attempts, job_type, input_data, finalize_claimed_at")
-    .in("status", ["pending", "processing"])
-    .not("provider_call_started_at", "is", null)
-    .lt("provider_call_started_at", sqlCutoff())
-    .limit(BATCH_LIMIT)
+  const candidateScan = (columns: string) =>
+    supabase
+      .from("jobs")
+      .select(columns)
+      .in("status", ["pending", "processing"])
+      .not("provider_call_started_at", "is", null)
+      .lt("provider_call_started_at", sqlCutoff())
+      .limit(BATCH_LIMIT)
 
-  if (error) {
-    console.error(`[reconcile/cron] candidate query failed:`, error.message)
-    return result
+  const BASE_COLUMNS =
+    "id, provider_kind, provider_task_id, provider_call_started_at, reconcile_attempts, job_type, input_data"
+  let { data, error } = await candidateScan(`${BASE_COLUMNS}, finalize_claimed_at`)
+
+  // Migration-window resilience (audit H2): if migration 210/211 hasn't
+  // applied yet, the claim column doesn't exist and the SELECT fails with
+  // 42703 — retry WITHOUT it (pre-claim semantics: all claims treated as
+  // absent) rather than disabling the entire reconcile pass. Standing
+  // pattern for any future cron-consumed column.
+  if (error && (error as { code?: string }).code === "42703") {
+    console.warn(
+      "[reconcile/cron] finalize_claimed_at column missing (migration pending) — retrying scan without it",
+    )
+    ;({ data, error } = await candidateScan(BASE_COLUMNS))
   }
 
-  const rows = (data ?? []) as CandidateRow[]
+  let rows: CandidateRow[] = []
+  if (error) {
+    // Scan failure must NOT short-circuit the function — the auxiliary
+    // sweeps below (never-started / component-wrapper / stuck-render) are
+    // independent refund paths and previously died with this early return.
+    console.error(`[reconcile/cron] candidate query failed:`, error.message)
+  } else {
+    rows = (data ?? []) as unknown as CandidateRow[]
+  }
   result.scanned = rows.length
 
   for (const row of rows) {

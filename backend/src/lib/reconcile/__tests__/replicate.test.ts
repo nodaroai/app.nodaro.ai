@@ -75,6 +75,7 @@ describe("reconcileReplicateJob", () => {
     expect(mocks.finalizeMock).toHaveBeenCalledWith({
       jobId: "j-r",
       jobType: "generate-image",
+      claimant: "cron",
       result: expect.objectContaining({
         url: "https://replicate.example/result.png",
         providerUsed: "replicate",
@@ -103,6 +104,7 @@ describe("reconcileReplicateJob", () => {
     expect(mocks.finalizeMock).toHaveBeenCalledWith({
       jobId: "j-r2",
       jobType: "generate-image",
+      claimant: "cron",
       result: expect.objectContaining({
         url: "https://r.example/v0.png",
         extraUrls: ["https://r.example/v1.png"],

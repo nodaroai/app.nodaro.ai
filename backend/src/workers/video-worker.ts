@@ -5,6 +5,10 @@ import { supabase } from "../lib/supabase.js"
 import { initProviders } from "../providers/index.js"
 import { KieError } from "../providers/kie/client.js"
 import { runWithJobCancellation, JobCancelledError } from "../lib/job-cancellation.js"
+// NOTE: imported from their CORE modules, not re-exported through ./shared.js —
+// the test harness mocks shared.js wholesale and would undefine them.
+import { isPostProcessingError } from "../lib/post-processing-error.js"
+import { isReconcileRecoverable } from "../lib/reconcile/types.js"
 import { isPromptBlocked } from "../config/content-filter.js"
 import { refundJobCredits, createAssetFromJob, isFinalJobAttempt, type HandlerFn, type JobContext } from "./shared.js"
 import { imageAIHandlers } from "./handlers/image-ai.js"
@@ -222,13 +226,52 @@ export function createVideoWorker() {
           console.error(`[worker] Job ${jobId} failed:`, message)
         }
 
-        // Only finalize (mark failed) + refund on the FINAL attempt. On a
+        const finalAttempt = isFinalJobAttempt(job)
+
+        // Post-provider self-heal (audit spec, worker branch). On the FINAL
+        // attempt, a PostProcessingError means the provider already delivered
+        // and billed us — only a post-delivery step (R2 upload, watermark,
+        // transcode) failed. If the row is reconcile-recoverable (persisted
+        // provider_task_id + a kind the reconcile system owns), marking it
+        // failed+charged throws away a result the cron can re-fetch — leave
+        // it `processing` instead: the cron completes it (or, for heygen /
+        // exhaustion, fail+refunds with an anomaly row). Plain Errors (e.g.
+        // the inpaint composite, REFUND-CRITICAL in handlers/image-ai.ts)
+        // deliberately do NOT qualify — they must keep refunding.
+        if (finalAttempt && isPostProcessingError(err)) {
+          const { data: row } = await supabase
+            .from("jobs")
+            .select("provider_kind, provider_task_id, status")
+            .eq("id", jobId)
+            .single()
+          const recoverableRow = row as {
+            provider_kind: string | null
+            provider_task_id: string | null
+            status: string
+          } | null
+          if (
+            recoverableRow &&
+            recoverableRow.status === "processing" &&
+            isReconcileRecoverable(recoverableRow)
+          ) {
+            console.warn(
+              `[worker] Job ${jobId} post-provider failure left for reconcile ` +
+              `(kind=${recoverableRow.provider_kind}, task=${recoverableRow.provider_task_id}): ${message}`,
+            )
+            // No rethrow: the BullMQ job ends here; the jobs row stays
+            // `processing` and the reconcile cron owns the terminal outcome.
+            return
+          }
+        }
+
+        // Only finalize (mark failed) + refund on the FINAL attempt (and only
+        // when the self-heal branch above did not take the row). On a
         // non-final attempt BullMQ will retry, and marking the row failed +
         // refunding the reservation now would let a successful retry deliver
         // the media for free (commit_credits no-ops against an already-refunded
         // usage_log). On non-final attempts we just rethrow so BullMQ retries
         // with the reservation intact.
-        if (isFinalJobAttempt(job)) {
+        if (finalAttempt) {
           // Save only the sanitized message to DB (internal details already logged above).
           // CAS on status so a job a concurrent writer already moved to a terminal
           // state (inflight-reconcile cron completing it, or a stall re-pick) is NOT

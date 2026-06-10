@@ -369,9 +369,11 @@ describe("forced-alignment handler", () => {
 
 // ---------------------------------------------------------------------------
 // Refund-correctness: POST-provider upload failures must tag a
-// PostProcessingError so the worker SKIPS the refund (we already paid the
-// provider). PRE-provider (input-side) failures must stay plain so the worker
-// REFUNDS. `isPostProcessingError` is the exact predicate refundJobCredits uses.
+// PostProcessingError so the worker never refunds work the provider billed:
+// recoverable rows are left `processing` for reconcile (self-heal branch),
+// the rest skip the refund. PRE-provider (input-side) failures must stay
+// plain so the worker REFUNDS. `isPostProcessingError` is the exact
+// predicate both the self-heal branch and refundJobCredits use.
 // ---------------------------------------------------------------------------
 
 /** Run `fn`, return the thrown error (fails the test if nothing throws). */
