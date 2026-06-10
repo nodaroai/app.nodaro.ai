@@ -75,6 +75,11 @@ export interface Location {
   lighting: Array<{ name: string; url: string }>
   seasons: Array<{ name: string; url: string }>
   atmosphereMotions: Array<{ name: string; url: string }>
+  /** Named Location Boards — dense reference sheets, one per variant/mood
+   *  (the `generate-image/location-board` factory preset rendered from the
+   *  location's images). A first-class bucket: community publish snapshots it
+   *  and clone hands the consumer their own copy to extend. Defaults to `[]`. */
+  boards?: Array<{ name: string; url: string }> | null
   referencePhotos: LocationReferencePhoto[]
   /** `null` when no caption is set (or the LLM caption sub-failed) — the wire
    *  sends `""`, normalized to `null` in `get()` to match character semantics. */
@@ -161,6 +166,10 @@ export interface UpdateLocationInput {
    *  (omit to leave untouched). Keys stored verbatim; soft-capped server-side
    *  at 200 keys / 2048-char values. */
   selectedAssetByVariant?: Record<string, string>
+  /** Named Location Boards (see `Location.boards`) — whole-array replace,
+   *  USER-owned (unlike the worker-owned buckets it flows through UPDATE).
+   *  Server caps: 24 boards, 200-char names. */
+  boards?: Array<{ name: string; url: string }>
   /** ISO-8601 timestamp recording when PII consent was captured for this location. */
   piiConsentAt?: string
   expectedUpdatedAt?: string

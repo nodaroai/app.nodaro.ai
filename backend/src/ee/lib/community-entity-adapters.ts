@@ -30,13 +30,13 @@ export const COMMUNITY_ENTITY_ADAPTERS: Record<EntityType, CommunityEntityAdapte
   location: {
     table: "locations",
     publicTextFields: ["name", "description", "category", "style", "canonical_description", "style_lock"],
-    assetFields: ["main_image_url", "source_image_url", "time_of_day", "weather", "angles", "lighting", "seasons", "atmosphere_motions"],
+    assetFields: ["main_image_url", "source_image_url", "time_of_day", "weather", "angles", "lighting", "seasons", "atmosphere_motions", "boards"],
     stripFields: ["reference_photos", "custom_variations", "pii_consent_at"],
   },
   object: {
     table: "objects",
     publicTextFields: ["name", "description", "category", "style", "canonical_description", "style_lock"],
-    assetFields: ["main_image_url", "source_image_url", "angles", "materials", "variations", "motion_clips"],
+    assetFields: ["main_image_url", "source_image_url", "angles", "materials", "variations", "motion_clips", "boards"],
     stripFields: ["reference_photos", "custom_variations"],
   },
   // Creature mirrors the object adapter for the shared column set (D10 — the
