@@ -239,6 +239,16 @@ describe("getModelIdentifier", () => {
     const node = makeNode({ type: undefined as any, data: { label: "X" } as any })
     expect(getModelIdentifier(node)).toBe("unknown")
   })
+
+  it("motion-graphics defaults to the elements feature", () => {
+    const node = makeNode({ type: "motion-graphics", data: { label: "MG" } as any })
+    expect(getModelIdentifier(node)).toBe("motion-graphics")
+  })
+
+  it("motion-graphics with engine 'lottie' uses the lottie feature", () => {
+    const node = makeNode({ type: "motion-graphics", data: { label: "MG", engine: "lottie" } as any })
+    expect(getModelIdentifier(node)).toBe("motion-graphics-lottie")
+  })
 })
 
 describe("buildCreditModelIdentifier", () => {

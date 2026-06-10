@@ -35,6 +35,7 @@ import type {
 import { LlmModelSelect } from "./llm-model-select"
 import { MappableField } from "./mappable-field"
 import type { ConfigProps } from "./types"
+import { motionGraphicsFeature } from "@nodaro/shared"
 import {
   useMediaOrder,
   MediaOrderList,
@@ -43,6 +44,7 @@ import {
 } from "./composition-shared"
 import { AspectRatioSelector } from "./aspect-ratio-selector"
 import { COMPOSITION_RATIOS } from "./model-options"
+import { LottieSlotControls } from "./lottie-slot-controls"
 
 export function VideoComposerConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<VideoComposerData>) {
   const { sensors, orderedIds, orderedSources, handleDragEnd } = useMediaOrder(sources, data.assetOrder, onUpdate)
@@ -354,14 +356,26 @@ export function ThreeDTitleConfig({ data, onUpdate, sources, fieldMappings, onMa
 
 const LazyMotionGraphicsPreview = lazy(() => import("@/components/editor/motion-graphics-preview").then(m => ({ default: m.MotionGraphicsPreview })))
 const LazyMotionGraphicsPlayerPreview = lazy(() => import("@/components/editor/motion-graphics-player-preview").then(m => ({ default: m.MotionGraphicsPlayerPreview })))
+const LazyLottieGraphicPlayerPreview = lazy(() => import("@/components/editor/lottie-graphic-player-preview").then(m => ({ default: m.LottieGraphicPlayerPreview })))
 
 export function MotionGraphicsConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<MotionGraphicsData>) {
   const [showInfo, setShowInfo] = useState(false)
 
   return (
     <div className="flex flex-col gap-3">
+      <div>
+        <Label htmlFor="mg-engine" className="mb-1.5 block text-xs">Engine</Label>
+        <Select value={data.engine ?? "elements"} onValueChange={(v) => onUpdate({ engine: v as MotionGraphicsData["engine"] })}>
+          <SelectTrigger id="mg-engine" className="h-8 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="elements">Classic (elements)</SelectItem>
+            <SelectItem value="lottie">Lottie (AI-authored)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
       <LlmModelSelect
-        feature="motion-graphics"
+        feature={motionGraphicsFeature(data.engine)}
         value={data.llmModel}
         onChange={(v) => onUpdate({ llmModel: v })}
       />
@@ -420,19 +434,35 @@ export function MotionGraphicsConfig({ data, onUpdate, sources, fieldMappings, o
       {data.motionPlan && (
         <>
           <Separator />
-          <Suspense fallback={<div className="text-xs text-muted-foreground py-2">Loading player...</div>}>
-            <LazyMotionGraphicsPlayerPreview
-              motionPlan={data.motionPlan}
-              fps={data.fps}
-            />
-          </Suspense>
-          <Suspense fallback={<div className="text-xs text-muted-foreground py-2">Loading preview...</div>}>
-            <LazyMotionGraphicsPreview
-              motionPlan={data.motionPlan}
-              fps={data.fps}
-              onUpdate={(mp) => onUpdate({ motionPlan: mp })}
-            />
-          </Suspense>
+          {data.motionPlan.planType === "lottie-graphic" ? (
+            <>
+              <Suspense fallback={<div className="text-xs text-muted-foreground py-2">Loading player...</div>}>
+                <LazyLottieGraphicPlayerPreview
+                  motionPlan={data.motionPlan}
+                  fps={data.fps}
+                />
+              </Suspense>
+              {Object.keys((data.motionPlan.slots as Record<string, unknown>) ?? {}).length > 0 && (
+                <LottieSlotControls plan={data.motionPlan} onUpdate={onUpdate} />
+              )}
+            </>
+          ) : (
+            <>
+              <Suspense fallback={<div className="text-xs text-muted-foreground py-2">Loading player...</div>}>
+                <LazyMotionGraphicsPlayerPreview
+                  motionPlan={data.motionPlan}
+                  fps={data.fps}
+                />
+              </Suspense>
+              <Suspense fallback={<div className="text-xs text-muted-foreground py-2">Loading preview...</div>}>
+                <LazyMotionGraphicsPreview
+                  motionPlan={data.motionPlan}
+                  fps={data.fps}
+                  onUpdate={(mp) => onUpdate({ motionPlan: mp })}
+                />
+              </Suspense>
+            </>
+          )}
         </>
       )}
 

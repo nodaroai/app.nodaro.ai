@@ -307,5 +307,22 @@ export interface CompositePlan {
   readonly layers: CompositeLayer[]
 }
 
+// ── Lottie Graphic (LLM-authored Lottie) ─────────────────────────────────
+
+export interface LottieGraphicPlan {
+  readonly planType: "lottie-graphic"
+  readonly fps: number
+  readonly width: number
+  readonly height: number
+  readonly durationInFrames: number
+  readonly backgroundColor: string
+  /** Complete Lottie (Bodymovin) document — vector-only, expressions stripped. */
+  readonly lottie: Record<string, unknown>
+  /** sid → { p: <property object | raw value> } manifest authored by the LLM. */
+  readonly slots: Record<string, unknown>
+  /** User overrides (raw values), applied via applySlots at render/preview. */
+  readonly slotValues: Record<string, unknown>
+}
+
 // Union type for all composer plans (extend as more composers are added)
-export type ComposerPlanType = "scene-graph" | "after-effects" | "lottie-overlay" | "3d-title" | "motion-graphics" | "composite"
+export type ComposerPlanType = "scene-graph" | "after-effects" | "lottie-overlay" | "3d-title" | "motion-graphics" | "composite" | "lottie-graphic"

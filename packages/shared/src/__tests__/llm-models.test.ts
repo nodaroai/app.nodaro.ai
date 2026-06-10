@@ -7,6 +7,7 @@ import {
   getLlmTier,
   buildLlmCreditIdentifier,
   resolveLlmCreditId,
+  motionGraphicsFeature,
 } from "../llm-models.js"
 import type { LlmModelDef, LlmTier, LlmFeature } from "../llm-models.js"
 
@@ -395,6 +396,7 @@ describe("LLM_FEATURE_DEFAULTS", () => {
     "scene-graph-ai",
     "after-effects",
     "motion-graphics",
+    "motion-graphics-lottie",
     "lottie-overlay",
     "3d-title",
     "image-to-text",
@@ -404,8 +406,8 @@ describe("LLM_FEATURE_DEFAULTS", () => {
     "image-critic",
   ]
 
-  it("has entries for all 13 features", () => {
-    expect(Object.keys(LLM_FEATURE_DEFAULTS)).toHaveLength(13)
+  it("has entries for all 14 features", () => {
+    expect(Object.keys(LLM_FEATURE_DEFAULTS)).toHaveLength(14)
     for (const feature of ALL_FEATURES) {
       expect(LLM_FEATURE_DEFAULTS).toHaveProperty(feature)
     }
@@ -441,11 +443,26 @@ describe("LLM_FEATURE_DEFAULTS", () => {
       "scene-graph-ai",
       "after-effects",
       "motion-graphics",
+      "motion-graphics-lottie",
       "lottie-overlay",
       "3d-title",
     ]
     for (const feature of compositionFeatures) {
       expect(LLM_FEATURE_DEFAULTS[feature]).toBe("claude-sonnet-4.6")
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// motionGraphicsFeature
+// ---------------------------------------------------------------------------
+describe("motionGraphicsFeature", () => {
+  it.each([
+    [undefined, "motion-graphics"],
+    ["elements", "motion-graphics"],
+    ["lottie", "motion-graphics-lottie"],
+    ["junk", "motion-graphics"],
+  ] as const)("%s -> %s", (engine, expected) => {
+    expect(motionGraphicsFeature(engine)).toBe(expected)
   })
 })

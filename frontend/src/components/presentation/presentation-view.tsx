@@ -66,7 +66,7 @@ import { useIsMobile } from "@/hooks/use-is-mobile"
 import { StatusBadge } from "./output-cards/shared"
 import type { OutputCardActions } from "./output-cards/shared"
 import { HiddenNodesPill } from "./hidden-nodes-pill"
-import { getCardTitle as getCardTitleHelper, orderNodesByIds, getNodeResultWithInputFallback, getLoopFirstMedia, areAllInputsFilled, resolveInputItems, resolveOutputItems } from "./helpers"
+import { getCardTitle as getCardTitleHelper, orderNodesByIds, getNodeResultWithInputFallback, getLoopFirstMedia, areAllInputsFilled, resolveInputItems, resolveOutputItems, findExposableField } from "./helpers"
 import { buildNodeRefMap } from "@/lib/node-refs"
 import { RunTargetSelector } from "./run-target-selector"
 import { ViewModeSelector, ALL_VIEW_MODES } from "./view-mode-selector"
@@ -78,7 +78,6 @@ import { RichtextEditor } from "./richtext-editor"
 import { GroupCard } from "./group-card"
 import type { PresentationItem, ExposableField } from "@nodaro/shared"
 import { getItemSortId } from "@nodaro/shared"
-import { NODE_DEF_MAP } from "@/types/nodes"
 import {
   HorizontalView,
   VerticalView,
@@ -1045,13 +1044,11 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     [isFullscreen, presNodeStates],
   )
 
-  // Look up an exposable field definition from NODE_DEFINITIONS
+  // Look up an exposable field definition (static NODE_DEFINITIONS fields, plus
+  // dynamic lottie slot fields derived from a motion-graphics plan).
   const findFieldDef = useCallback(
     (nodeId: string, fieldKey: string): ExposableField | undefined => {
-      const node = nodeMap.get(nodeId)
-      if (!node?.type) return undefined
-      const def = NODE_DEF_MAP.get(node.type)
-      return def?.exposableFields?.find((f) => f.key === fieldKey)
+      return findExposableField(nodeMap.get(nodeId), fieldKey)
     },
     [nodeMap],
   )

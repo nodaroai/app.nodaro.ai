@@ -761,6 +761,74 @@ describe("buildPayload", () => {
       expect(result.queueName).toBe("video-render")
       expect(result.modelIdentifier).toBe("render-video")
     })
+
+    it("render-video planType passes through from the plan itself (lottie-graphic from a motion-graphics node)", () => {
+      const render = node("r1", "render-video", {})
+      const source = node("s1", "motion-graphics", {})
+      const plan = { planType: "lottie-graphic", lottie: { layers: [] }, slots: {} }
+      const states: Record<string, NodeExecutionState> = {
+        s1: { status: "completed", output: { plan } },
+      }
+      const result = buildPayload(render, jobId, {}, undefined, {
+        nodes: [render, source],
+        edges: [edge("s1", "r1")],
+        nodeStates: states,
+      })
+      // pass-through: the plan's own planType wins over the map's static "motion-graphics"
+      expect(result.payload.planType).toBe("lottie-graphic")
+      expect(result.payload.plan).toBe(plan)
+      expect(result.payload.sceneGraph).toBeUndefined()
+    })
+
+    it("render-video planType falls back to the map when the plan has no planType", () => {
+      const render = node("r1", "render-video", {})
+      const source = node("s1", "motion-graphics", {})
+      const plan = { lottie: { layers: [] } } // legacy plan, no planType
+      const states: Record<string, NodeExecutionState> = {
+        s1: { status: "completed", output: { plan } },
+      }
+      const result = buildPayload(render, jobId, {}, undefined, {
+        nodes: [render, source],
+        edges: [edge("s1", "r1")],
+        nodeStates: states,
+      })
+      expect(result.payload.planType).toBe("motion-graphics")
+      expect(result.payload.plan).toBe(plan)
+      expect(result.payload.sceneGraph).toBeUndefined()
+    })
+  })
+
+  // --- Motion graphics (lottie engine — async worker queue) ---
+  describe("motion-graphics (lottie engine)", () => {
+    it("motion-graphics with engine=lottie builds a worker-queue payload", () => {
+      const n = node("n1", "motion-graphics", {
+        engine: "lottie",
+        motionPrompt: "confetti burst",
+        fps: 30,
+        durationSeconds: 5,
+        aspectRatio: "16:9",
+        backgroundColor: "#00000000",
+        llmModel: undefined,
+      })
+      const result = buildPayload(n, jobId, {}, undefined, {})
+      expect(result.jobName).toBe("motion-graphics-lottie")
+      expect(result.queueName).toBe("video-generation")
+      // default model => standard tier => bare feature id
+      expect(result.modelIdentifier).toBe("motion-graphics-lottie")
+      expect(result.payload).toMatchObject({
+        jobId,
+        fps: 30,
+        durationInFrames: 150,
+        width: 1920,
+        height: 1080,
+        prompt: "confetti burst",
+      })
+    })
+
+    it("motion-graphics with elements engine throws in buildPayload (sync-HTTP only)", () => {
+      const n = node("n1", "motion-graphics", { engine: "elements" })
+      expect(() => buildPayload(n, jobId, {}, undefined, {})).toThrow(/sync/i)
+    })
   })
 
   // --- Error handling ---

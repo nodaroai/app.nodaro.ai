@@ -1,6 +1,6 @@
 import { memo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Shapes, Film, Loader2, AlertCircle } from "lucide-react"
+import { Shapes, Film, Layers, Loader2, AlertCircle } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { NodeQuickStrip } from "./node-quick-strip"
 import { EditableNodeLabel } from "./editable-node-label"
@@ -8,21 +8,25 @@ import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { NodeJobProgress } from "./node-job-progress"
-import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
+import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS, motionGraphicsFeature } from "@nodaro/shared"
 import type { MotionGraphicsData } from "@/types/nodes"
 
 function MotionGraphicsNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as MotionGraphicsData
-  const credits = useModelCredits(buildLlmCreditIdentifier("motion-graphics", nodeData.llmModel || LLM_FEATURE_DEFAULTS["motion-graphics"]), 10)
+  const mgFeature = motionGraphicsFeature(nodeData.engine)
+  const credits = useModelCredits(buildLlmCreditIdentifier(mgFeature, nodeData.llmModel || LLM_FEATURE_DEFAULTS[mgFeature]), 10)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
   const isRunning = status === "running"
   const motionPlan = nodeData.motionPlan as Record<string, unknown> | undefined
 
+  const isLottieEngine = nodeData.engine === "lottie"
+  const isLottiePlan = motionPlan?.planType === "lottie-graphic"
   const elementCount = motionPlan
     ? ((motionPlan.elements as unknown[])?.length ?? 0)
     : 0
+  const lottieLayerCount = (motionPlan?.lottie as { layers?: unknown[] } | undefined)?.layers?.length ?? 0
 
   return (
     <div className="relative" style={{ maxWidth: '220px' }}>
@@ -46,6 +50,11 @@ function MotionGraphicsNodeComponent({ id, data, selected }: NodeProps) {
       handles={[
         { id: "video",       type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
         { id: "composition", type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
+        // `lottie` source handle only exists for the Lottie engine — it emits the
+        // authored Lottie JSON's R2 URL for placement by a Lottie Overlay node.
+        ...(isLottieEngine
+          ? [{ id: "lottie", type: "source" as const, position: Position.Right, customStyle: { top: '56px', right: '-29px' }, external: true }]
+          : []),
       ]}
     >
       <div className="flex flex-col gap-1">
@@ -60,7 +69,7 @@ function MotionGraphicsNodeComponent({ id, data, selected }: NodeProps) {
           <div className="flex items-center justify-center h-16 rounded-md bg-[#ff0073]/5 border border-[#ff0073]/20">
             <div className="text-center">
               <div className="text-sm font-medium text-[#ff0073]">
-                {elementCount} elements
+                {isLottiePlan ? `Lottie · ${lottieLayerCount} layers` : `${elementCount} elements`}
               </div>
               <div className="text-[10px] text-muted-foreground">{nodeData.durationSeconds}s</div>
             </div>
@@ -96,6 +105,9 @@ function MotionGraphicsNodeComponent({ id, data, selected }: NodeProps) {
     </BaseNode>
     <HandleWithPopover nodeId={id} nodeType="motion-graphics" handleId="video"       type="target" position={Position.Left}  label="Video"       color={HANDLE_COLORS.video} icon={<Film />}   side="left"  top="calc(100% - 24px)" />
     <HandleWithPopover nodeId={id} nodeType="motion-graphics" handleId="composition" type="source" position={Position.Right} label="Composition" color={HANDLE_COLORS.control} icon={<Shapes />} side="right" top="24px" />
+    {isLottieEngine && (
+      <HandleWithPopover nodeId={id} nodeType="motion-graphics" handleId="lottie" type="source" position={Position.Right} label="Lottie JSON" color={HANDLE_COLORS.control} icon={<Layers />} side="right" top="56px" />
+    )}
     </div>
   )
 }

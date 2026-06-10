@@ -167,6 +167,16 @@ export const ACCEPTS_CHARACTER_REF = (sourceType: string): boolean => IDENTITY_T
 export const ACCEPTS_ENTITY_REF = (sourceType: string): boolean =>
   sourceType === "character" || sourceType === "object" || sourceType === "location"
 
+/**
+ * Lottie Overlay's `lottie` target accepts authored-animation producers — the
+ * motion-graphics node running its Lottie engine, which emits the authored
+ * Lottie JSON's R2 URL on its `lottie` source handle (Phase 4). The runtime
+ * resolver (input-resolver.ts) routes any URL on the `lottie` targetHandle into
+ * `lottieAssets`, but only motion-graphics produces a placeable Lottie document,
+ * so only it lights up the pip + appears as a source-direction candidate.
+ */
+export const ACCEPTS_LOTTIE_ASSET = (sourceType: string): boolean => sourceType === "motion-graphics"
+
 /** Friendly labels for Generate Image's six input handles, used by the
  *  candidate-row chip in source-direction popovers. */
 const GENERATE_IMAGE_HANDLE_LABELS: Record<string, string> = {
@@ -241,6 +251,14 @@ export const TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEnt
   "mix-audio":          [{ handleId: "in", label: "Audio", accepts: ACCEPTS_AUDIO }],
   "merge-video-audio":  [{ handleId: "in", label: "Video + Audio", accepts: ACCEPTS_MEDIA }],
   "adjust-volume":      [{ handleId: "in", label: "Video or Audio", accepts: ACCEPTS_MEDIA }],
+
+  // Lottie Overlay — `video` accepts video producers; `lottie` accepts the
+  // motion-graphics lottie engine (authored animation assets). Lets a
+  // motion-graphics source pip's popover surface "→ Lottie" as a candidate.
+  "lottie-overlay":     [
+    { handleId: "video",  label: "Video",  accepts: ACCEPTS_VIDEO },
+    { handleId: "lottie", label: "Lottie", accepts: ACCEPTS_LOTTIE_ASSET },
+  ],
 
   // ─── Audio & Speech (Batch 1 of audio/text typed-handles migration) ───
   // Each predicate's accepts is built inline from the per-handle predicate

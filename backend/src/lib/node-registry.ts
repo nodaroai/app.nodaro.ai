@@ -576,7 +576,7 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
 
   { type: "render-video", label: "Render Video", category: "composition", description: "Render a Remotion composition to MP4.", outputType: "video", creditCost: 15 },
   { type: "after-effects", label: "After Effects", category: "composition", description: "AI-generated post-processing layer.", outputType: "video", creditCost: 2 },
-  { type: "motion-graphics", label: "Motion Graphics", category: "composition", description: "AI-generated 2D motion graphics.", outputType: "video", creditCost: 2 },
+  { type: "motion-graphics", label: "Motion Graphics", category: "composition", description: "AI-generated 2D motion graphics (classic elements or AI-authored Lottie).", outputType: "video", creditCost: "1-8" },
   { type: "3d-title", label: "3D Title", category: "composition", description: "AI-generated 3D animated text.", outputType: "video", creditCost: 15 },
   // composition siblings of after-effects / motion-graphics / 3d-title (rendered video output).
   { type: "video-composer", label: "Video Composer", category: "composition", description: "AI-powered scene-graph video composition from natural language prompts.", outputType: "video", creditCost: "1-4" },

@@ -1,7 +1,7 @@
 ---
 node_type: motion-graphics
-generated_at: 2026-05-18T13:23:37.611Z
-generated_from: cb1e786d
+generated_at: 2026-06-10T21:38:16.979Z
+generated_from: 5ef104b5
 ---
 
 # Motion Graphics
@@ -11,7 +11,7 @@ generated_from: cb1e786d
 **Category:** ai
 **Credit cost:** 2
 **Inputs (target handles):** `in`
-**Outputs (source handles):** `composition`
+**Outputs (source handles):** `composition`, `lottie`
 
 **Required data fields:**
 - `label: string`
@@ -23,6 +23,8 @@ generated_from: cb1e786d
 
 **Optional data fields:**
 - `motionPlan?: Record<string, unknown>`
+- `engine?: "elements" | "lottie"`
+- `lottieUrl?: string`
 - `llmModel?: string`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `currentJobProgress?: number`
@@ -33,6 +35,7 @@ generated_from: cb1e786d
 {
   "label": "Motion Graphics",
   "motionPrompt": "",
+  "engine": "elements",
   "aspectRatio": "16:9",
   "backgroundColor": "#00000000",
   "fps": 30,
@@ -68,6 +71,7 @@ generated_from: cb1e786d
   "data": {
     "label": "Motion Graphics",
     "motionPrompt": "",
+    "engine": "elements",
     "aspectRatio": "16:9",
     "backgroundColor": "#00000000",
     "fps": 30,

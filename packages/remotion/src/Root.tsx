@@ -11,8 +11,9 @@ import { AfterEffectsRenderer } from "./compositions/after-effects-renderer"
 import { LottieOverlayRenderer } from "./compositions/lottie-overlay-renderer"
 import { MotionGraphicsRenderer } from "./compositions/motion-graphics-renderer"
 import { CompositeRenderer } from "./compositions/composite-renderer"
+import { LottieGraphicRenderer } from "./compositions/lottie-graphic-renderer"
 import { BurnCaptions } from "./compositions/burn-captions"
-import type { AfterEffectsPlan, LottieOverlayPlan, MotionGraphicsPlan, CompositePlan } from "./plan-types"
+import type { AfterEffectsPlan, LottieOverlayPlan, MotionGraphicsPlan, CompositePlan, LottieGraphicPlan } from "./plan-types"
 
 /**
  * Bridge specific component prop types with Remotion's
@@ -122,6 +123,16 @@ const COMPOSITE_DEFAULT_PROPS: { plan: CompositePlan } = {
   },
 }
 
+const LOTTIE_GRAPHIC_DEFAULT_PROPS: { plan: LottieGraphicPlan } = {
+  plan: {
+    planType: "lottie-graphic",
+    fps: 30, width: 1920, height: 1080, durationInFrames: 150,
+    backgroundColor: "#00000000",
+    lottie: { v: "5.7.0", fr: 30, ip: 0, op: 150, w: 1920, h: 1080, nm: "empty", layers: [] },
+    slots: {}, slotValues: {},
+  },
+}
+
 const BURN_CAPTIONS_DEFAULT_PROPS: BurnCaptionsInputProps = {
   plan: {
     planType: "burn-captions",
@@ -188,6 +199,15 @@ function RemotionRoot() {
         width={1920}
         height={1080}
         defaultProps={MOTION_GRAPHICS_DEFAULT_PROPS}
+      />
+      <Composition
+        id="lottie-graphic"
+        component={asRemotionComponent(LottieGraphicRenderer)}
+        durationInFrames={150}
+        fps={30}
+        width={1920}
+        height={1080}
+        defaultProps={LOTTIE_GRAPHIC_DEFAULT_PROPS}
       />
       <Composition
         id="composite"

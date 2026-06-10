@@ -14,6 +14,7 @@
 import type { FastifyInstance } from "fastify"
 import type { McpSession } from "../session.js"
 import { registerTask } from "../tasks.js"
+import { resolveAssetId } from "../asset-resolver.js"
 import { config } from "../../config.js"
 import { validateModelInput } from "@nodaro/shared"
 
@@ -51,6 +52,68 @@ export function parseFailure(body: string) {
     ],
     isError: true,
   }
+}
+
+/**
+ * Coerce a tolerant ref-array input into a clean string[].
+ *
+ * MCP clients sometimes serialize array params as a JSON-encoded STRING
+ * (`"[\"https://…\"]"`) or pass a single bare URL. Ref-array schemas accept
+ * `array | string` so those calls don't hard-reject; this helper normalizes
+ * whatever arrived into a trimmed, capped string array (the "tool calls
+ * should never reject — normalize" principle).
+ */
+export function coerceStringArray(value: unknown, max: number): string[] {
+  let items: unknown[]
+  if (Array.isArray(value)) {
+    items = value
+  } else if (typeof value === "string") {
+    const trimmed = value.trim()
+    if (!trimmed) return []
+    if (trimmed.startsWith("[")) {
+      try {
+        const parsed: unknown = JSON.parse(trimmed)
+        items = Array.isArray(parsed) ? parsed : [trimmed]
+      } catch {
+        items = [trimmed]
+      }
+    } else {
+      items = [trimmed]
+    }
+  } else {
+    return []
+  }
+  return items
+    .filter((v): v is string => typeof v === "string")
+    .map((v) => v.trim())
+    .filter((v) => v.length > 0)
+    .slice(0, max)
+}
+
+/**
+ * Normalize a mixed ref input (array | JSON-string | lone string) where each
+ * item is either a public URL or a Nodaro asset id. Asset ids are resolved
+ * via `resolveAssetId` (kind-typed); unresolvable entries are dropped.
+ * Shared by generate_image and animate_image so every ref param tolerates
+ * the same client quirks.
+ */
+export async function resolveRefArray(
+  value: unknown,
+  userId: string,
+  expectedKind: "image" | "video" | "audio",
+  max: number,
+): Promise<string[]> {
+  const items = coerceStringArray(value, max)
+  const out: string[] = []
+  for (const item of items) {
+    if (/^https?:\/\//.test(item)) {
+      out.push(item)
+      continue
+    }
+    const resolved = await resolveAssetId({ assetId: item, userId, expectedKind })
+    if (resolved) out.push(resolved)
+  }
+  return out
 }
 
 /**

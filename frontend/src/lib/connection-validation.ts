@@ -74,7 +74,7 @@ import {
   isValidLocationConnection,
 } from "./identity-handles"
 import { isVisualPickerType } from "./parameter-picker-types"
-import { ACCEPTS_CHARACTER_REF, ACCEPTS_ENTITY_REF, ACCEPTS_PARAMETER_PICKER } from "./target-handle-registry"
+import { ACCEPTS_CHARACTER_REF, ACCEPTS_ENTITY_REF, ACCEPTS_LOTTIE_ASSET, ACCEPTS_PARAMETER_PICKER } from "./target-handle-registry"
 
 const MEDIA_ONLY_HANDLES: ReadonlySet<string> = new Set([
   "image",
@@ -173,6 +173,15 @@ export function isValidWorkflowConnection(
   // workflow-canvas.tsx::isValidConnection.)
   if (connection.sourceHandle === "composition") {
     return typeOf(connection.target) === "render-video"
+  }
+
+  // motion-graphics `lottie` source (the authored Lottie JSON URL, lottie
+  // engine only) may ONLY feed a lottie-overlay `lottie` target — that is the
+  // single consumer of authored-animation assets. Symmetric to the
+  // `composition` rule above; keeps the source pip from lighting up arbitrary
+  // targets during a drag.
+  if (connection.sourceHandle === "lottie") {
+    return typeOf(connection.target) === "lottie-overlay" && connection.targetHandle === "lottie"
   }
 
   // JSON output cannot feed media-only inputs.
@@ -389,6 +398,15 @@ export function isValidWorkflowConnection(
       typeOf(connection.source) ?? "",
       isVisualPickerType,
     )
+  }
+
+  // Lottie Overlay — `lottie` target accepts the authored-animation producers
+  // (motion-graphics lottie engine + upload nodes that pass a URL); `video`
+  // accepts video producers. Keeps the canvas validator and the source-pip
+  // glow in agreement with the source-handle rule above (motion-graphics
+  // `lottie` → lottie-overlay `lottie`). Other handles are not validated here.
+  if (targetType === "lottie-overlay" && connection.targetHandle === "lottie") {
+    return ACCEPTS_LOTTIE_ASSET(typeOf(connection.source) ?? "")
   }
 
   // Audio & Speech, Suno Music, Script & Text, and Processing (Audio + Text)

@@ -30,6 +30,19 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "remotion": "4.0.453",
+    "@remotion/bundler": "4.0.453",
+    "@remotion/captions": "4.0.453",
+    "@remotion/cli": "4.0.453",
+    "@remotion/elevenlabs": "4.0.453",
+    "@remotion/gif": "4.0.453",
+    "@remotion/google-fonts": "4.0.453",
+    "@remotion/lottie": "4.0.453",
+    "@remotion/noise": "4.0.453",
+    "@remotion/paths": "4.0.453",
+    "@remotion/player": "4.0.453",
+    "@remotion/renderer": "4.0.453",
+    "@remotion/three": "4.0.453"
   }
 }

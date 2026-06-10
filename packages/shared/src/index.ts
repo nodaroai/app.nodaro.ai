@@ -264,6 +264,7 @@ export {
   calculateLlmCost,
   buildLlmCreditIdentifier,
   resolveLlmCreditId,
+  motionGraphicsFeature,
   type LlmTier,
   type LlmFeature,
   type KieApiFormat,
@@ -713,6 +714,18 @@ export { VARIABLES_HANDLE_ID, buildConditionVariables } from "./condition-variab
 export { extractAllGeneratedResults, extractGeneratedJsonAsList, spreadJsonArrayIfSingleton } from "./generated-results.js"
 
 export { getParameterPromptHint } from "./parameter-prompt-hint.js"
+
+export {
+  applySlots,
+  describeSlotControl,
+  rgbaArrayToHex,
+  hexToRgbaArray,
+  listSlotSids,
+  humanizeSlotSid,
+  deriveLottieSlotFields,
+  LOTTIE_SLOT_FIELD_PREFIX,
+} from "./lottie-slots.js"
+export type { SlotControlKind, SlotControlDescriptor, LottieSlotField } from "./lottie-slots.js"
 
 export { PICKER_CATALOGS, getPickerCatalog, listPickerCatalogs } from "./picker-catalogs.js"
 export type { PickerOption, PickerCatalog, PickerDimension } from "./picker-catalogs.js"

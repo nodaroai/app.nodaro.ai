@@ -12,6 +12,8 @@ import {
   runSharedWorkflow,
   getSharedExecutionStatus,
 } from "@/lib/api"
+import { composeLottieSlotOverrides, collectSlotExposedNodeIds } from "@/lib/lottie-slot-overrides"
+import { resolveInputItems } from "@/components/presentation/helpers"
 
 export type PresentationStatus = "idle" | "loading" | "running" | "completed" | "failed"
 
@@ -142,7 +144,7 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
   },
 
   run: async () => {
-    const { shareToken, inputValues, presentationSettings } = get()
+    const { shareToken, inputValues, presentationSettings, nodes } = get()
     if (!shareToken) return
 
     clearPollTimeout()
@@ -155,9 +157,17 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
     })
 
     try {
+      // Fold lottie slot edits into a full-plan motionPlan override per node
+      // (the orchestrator merge is shallow — see lottie-slot-overrides). Pass the
+      // set of slot-exposed node ids (derived from the SAME items this store
+      // renders) so a slot-exposed lottie node ALWAYS emits its full-plan
+      // override — the freeze-on-exposure signal (design F16) the backend uses to
+      // pre-complete the node instead of re-rolling + re-charging it.
+      const slotExposedNodeIds = collectSlotExposedNodeIds(resolveInputItems(presentationSettings))
+      const overrides = composeLottieSlotOverrides(inputValues, nodes, slotExposedNodeIds)
       const { executionId } = await runSharedWorkflow(
         shareToken,
-        Object.keys(inputValues).length > 0 ? inputValues : undefined,
+        Object.keys(overrides).length > 0 ? overrides : undefined,
         presentationSettings.runTarget !== "workflow" ? presentationSettings : undefined,
       )
       set({ executionId })

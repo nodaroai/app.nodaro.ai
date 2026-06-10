@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
+import { videoQueue } from "../lib/queue.js"
 import { config } from "../lib/config.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { rateLimiter } from "../middleware/rate-limit.js"
@@ -12,7 +13,7 @@ import { MOTION_GRAPHICS_SYSTEM_PROMPT } from "../prompts/motion-graphics-system
 import { validateMotionGraphicsPlan } from "../lib/motion-graphics-validator.js"
 import { extractJsonFromAIResponse } from "../lib/json-utils.js"
 import { llmComplete } from "../lib/llm-client.js"
-import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
+import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS, motionGraphicsFeature } from "@nodaro/shared"
 import { ASPECT_DIMENSIONS } from "../lib/aspect-dimensions.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
@@ -29,13 +30,22 @@ const generateBody = z.object({
   backgroundColor: z.string().optional(),
   userId: z.string().uuid(),
   llmModel: z.enum(LLM_MODEL_IDS as [string, ...string[]]).optional(),
+  engine: z.enum(["elements", "lottie"]).default("elements"),
+  previousSids: z.array(z.string()).max(40).optional(),
 })
 
 export async function motionGraphicsAIRoutes(app: FastifyInstance) {
   app.post(
     "/v1/motion-graphics/generate",
     {
-      preHandler: [aiRateLimit, creditGuard((req) => resolveLlmCreditId("motion-graphics", req.body))],
+      preHandler: [
+        aiRateLimit,
+        creditGuard((req) => {
+          const body = req.body as Record<string, unknown> | undefined
+          const feature = motionGraphicsFeature(body?.engine as string | undefined)
+          return resolveLlmCreditId(feature, req.body)
+        }),
+      ],
       config: { requestTimeout: 60000 } as Record<string, unknown>,
     },
     async (req, reply) => {
@@ -74,6 +84,59 @@ export async function motionGraphicsAIRoutes(app: FastifyInstance) {
 
       const backgroundColor = parsed.data.backgroundColor ?? "#00000000"
       const durationInFrames = Math.round(durationSeconds * fps)
+
+      // ── Lottie engine (async) ─────────────────────────────────────────────
+      // The LLM authors a complete Lottie document; that work is bounded-retry
+      // heavy, so it runs on the video worker (generate-script precedent) rather
+      // than inline in the request. The route only inserts the job, reserves
+      // credits, and enqueues — the worker calls the LLM + validator + finalizes.
+      if (parsed.data.engine === "lottie") {
+        const lottieLlmModel = parsed.data.llmModel ?? LLM_FEATURE_DEFAULTS["motion-graphics-lottie"]
+
+        const { data: lottieJob, error: lottieJobError } = await supabase
+          .from("jobs")
+          .insert({
+            workflow_id: extractWorkflowId(req.body),
+            force_private: extractForcePrivate(req.body) || undefined,
+            user_id: userId,
+            status: "pending",
+            input_data: {
+              ...buildJobInputData(parsed.data, "motion-graphics"),
+              width,
+              height,
+              backgroundColor,
+              engine: "lottie",
+            },
+          })
+          .select("id")
+          .single()
+
+        if (lottieJobError) {
+          return reply.status(500).send({
+            error: { code: "internal_error", message: lottieJobError.message },
+          })
+        }
+
+        const modelIdentifier = buildLlmCreditIdentifier("motion-graphics-lottie", lottieLlmModel)
+        const reservation = await reserveCreditsForJob(req, reply, lottieJob.id, modelIdentifier)
+        if (reply.sent) return
+        const usageLogId = reservation?.usageLogId
+
+        await videoQueue.add("motion-graphics-lottie", {
+          jobId: lottieJob.id,
+          prompt,
+          fps,
+          width,
+          height,
+          durationInFrames,
+          backgroundColor,
+          llmModel: lottieLlmModel,
+          previousSids: parsed.data.previousSids,
+          usageLogId,
+        })
+
+        return { jobId: lottieJob.id }
+      }
 
       // Create job record
       const { data: job, error: jobError } = await supabase

@@ -1,7 +1,7 @@
 ---
 node_type: generate-image
-generated_at: 2026-06-09T19:26:10.809Z
-generated_from: 45c55140
+generated_at: 2026-06-10T21:26:03.755Z
+generated_from: 9b3fe93c9
 ---
 
 # generate-image
@@ -77,6 +77,7 @@ generated_from: 45c55140
 - `quality`
 - `aspect_ratio`
 - `negative_prompt`
+- `reference_image_urls`
 - `base_image_url`
 - `mask_url`
 - `strength`

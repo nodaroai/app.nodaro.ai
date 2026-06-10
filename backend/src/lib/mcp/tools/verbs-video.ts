@@ -10,6 +10,7 @@ import {
   parseFailure,
   jobResultWithWidget,
   dispatchJob,
+  resolveRefArray,
 } from "./_verb-helpers.js"
 import {
   modelIdsByKindMode,
@@ -167,28 +168,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
   )
 
   // ── animate_image (image-to-video) ──
-  /**
-   * Resolve a mixed array where each item is either a public URL or a Nodaro
-   * asset id. Asset ids are resolved via `resolveAssetId` (kind-typed). Returns
-   * the URL list, dropping any unresolvable entries.
-   */
-  async function resolveRefArray(
-    items: string[] | undefined,
-    userId: string,
-    expectedKind: "image" | "video" | "audio",
-  ): Promise<string[]> {
-    if (!items?.length) return []
-    const out: string[] = []
-    for (const item of items) {
-      if (/^https?:\/\//.test(item)) {
-        out.push(item)
-        continue
-      }
-      const resolved = await resolveAssetId({ assetId: item, userId, expectedKind })
-      if (resolved) out.push(resolved)
-    }
-    return out
-  }
+  // Ref arrays resolve via the shared `resolveRefArray` in _verb-helpers.ts
+  // (URL pass-through + asset-id resolution + tolerant string coercion).
   server.registerTool(
     "animate_image",
     {
@@ -269,29 +250,32 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
             "Use this instead of end_frame_url when you have a Nodaro asset — never " +
             "construct /jobs/.../output URLs manually, those don't exist.",
           ),
+        // Tolerant unions: clients sometimes send a JSON-stringified array or a
+        // lone URL; the handler coerces via resolveRefArray and enforces the
+        // per-kind caps there (the route re-validates them too).
         reference_image_urls: z
-          .array(z.string())
-          .max(SEEDANCE_2_REF_LIMITS.images)
+          .union([z.array(z.string()), z.string()])
           .optional()
           .describe(
             "Seedance 2 only: reference images (URLs or Nodaro asset IDs) used in " +
-            "'references' mode. Max 9. Resolved server-side. Silently ignored on other providers.",
+            "'references' mode. Max 9. Resolved server-side. Silently ignored on other providers. " +
+            "Accepts an array; a lone URL or JSON-stringified array is coerced.",
           ),
         reference_video_urls: z
-          .array(z.string())
-          .max(SEEDANCE_2_REF_LIMITS.videos)
+          .union([z.array(z.string()), z.string()])
           .optional()
           .describe(
             "Seedance 2 only: reference videos for style/motion transfer (URLs or " +
-            "Nodaro asset IDs). Max 3. Used in 'references' mode; ignored in 'frames' mode.",
+            "Nodaro asset IDs). Max 3. Used in 'references' mode; ignored in 'frames' mode. " +
+            "Accepts an array; a lone URL or JSON-stringified array is coerced.",
           ),
         reference_audio_urls: z
-          .array(z.string())
-          .max(SEEDANCE_2_REF_LIMITS.audio)
+          .union([z.array(z.string()), z.string()])
           .optional()
           .describe(
             "Seedance 2 only: reference audio for soundtrack-driven motion (URLs or " +
-            "Nodaro asset IDs). Max 3. Used in 'references' mode; ignored in 'frames' mode.",
+            "Nodaro asset IDs). Max 3. Used in 'references' mode; ignored in 'frames' mode. " +
+            "Accepts an array; a lone URL or JSON-stringified array is coerced.",
           ),
         seedance2_input_mode: z
           .enum(["frames", "references"])
@@ -386,9 +370,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       // Seedance 2 multimodal refs — resolve per-item URL/asset_id, then
       // gate by provider. Other providers silently drop these args.
       const isSd2 = isSeedance2Provider(model)
-      const refImageUrls = isSd2 ? await resolveRefArray(args.reference_image_urls, session.userId, "image") : []
-      const refVideoUrls = isSd2 ? await resolveRefArray(args.reference_video_urls, session.userId, "video") : []
-      const refAudioUrls = isSd2 ? await resolveRefArray(args.reference_audio_urls, session.userId, "audio") : []
+      const refImageUrls = isSd2 ? await resolveRefArray(args.reference_image_urls, session.userId, "image", SEEDANCE_2_REF_LIMITS.images) : []
+      const refVideoUrls = isSd2 ? await resolveRefArray(args.reference_video_urls, session.userId, "video", SEEDANCE_2_REF_LIMITS.videos) : []
+      const refAudioUrls = isSd2 ? await resolveRefArray(args.reference_audio_urls, session.userId, "audio", SEEDANCE_2_REF_LIMITS.audio) : []
 
       // KIE forbids combining multimodal-ref mode with start+end frame mode.
       // Fail fast with a clear MCP error rather than letting the route 400.

@@ -143,6 +143,11 @@ const DIRECT_OUTPUT_KEYS: Array<keyof NodeOutput> = [
   "maskUrl",
   "videoUrl",
   "audioUrl",
+  // motion-graphics (lottie engine) emits { motionPlan, lottieUrl }. lottieUrl
+  // flows on the `lottie` source handle into lottie-overlay's lottieAssets; the
+  // default `composition` handle resolves to the plan marker. Without this key
+  // the live DAG path drops the URL and the handle output is empty.
+  "lottieUrl",
   "imageUrls",
   "audioUrls",
   "text",
@@ -534,6 +539,16 @@ export function getPrimaryOutput(
       if (firstValue) return firstValue
     }
     return output.text
+  }
+
+  // motion-graphics (lottie engine): the `lottie` source handle emits the
+  // authored Lottie JSON's R2 URL (Phase 4), routed into lottie-overlay's
+  // lottieAssets by input-resolver's `lottie` targetHandle case. Every other
+  // handle (default `composition`) keeps the plan-marker path below. Must
+  // precede the generic PLAN_NODE_TYPES check, which returns "plan-ready" for
+  // every handle. Mirrors frontend execution-graph.ts extractNodeOutput.
+  if (sourceType === "motion-graphics" && sourceHandle === "lottie") {
+    return output.lottieUrl
   }
 
   // Plan nodes return a marker

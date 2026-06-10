@@ -2318,6 +2318,53 @@ describe("render-video", () => {
     expect(mockBuildAutoComposition).toHaveBeenCalled()
     expect(mockPollJobWithNodeUpdate).toHaveBeenCalled()
   })
+
+  it("passes planType through from the upstream plan itself (lottie-graphic)", async () => {
+    const motionNode = {
+      id: "mg1",
+      type: "motion-graphics",
+      data: {
+        label: "MG",
+        // plan declares its OWN planType — must win over the map's static value
+        motionPlan: { planType: "lottie-graphic", lottie: { layers: [] }, slots: {} },
+      },
+    }
+    mockNodes = [makeNode("render-video", {}), motionNode]
+    mockEdges = [{ id: "e1", source: "mg1", target: "n1" }]
+    mockResolveNodeInputs.mockReturnValue({})
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    mockRenderVideoWithPlan.mockResolvedValue({ jobId: "j1" })
+    await executeNode(makeNode("render-video", {}), makeCtx())
+    // runProcessingNode delegates the apiCall factory to pollJobWithNodeUpdate;
+    // invoke it to assert the planType baked into the render call.
+    const apiCall = mockPollJobWithNodeUpdate.mock.calls[0][1] as () => Promise<unknown>
+    await apiCall()
+    expect(mockRenderVideoWithPlan).toHaveBeenCalledWith(
+      expect.objectContaining({ planType: "lottie-graphic" }),
+    )
+  })
+
+  it("falls back to the map's planType when the upstream plan declares none", async () => {
+    const motionNode = {
+      id: "mg1",
+      type: "motion-graphics",
+      data: {
+        label: "MG",
+        motionPlan: { lottie: { layers: [] } }, // legacy plan, no planType
+      },
+    }
+    mockNodes = [makeNode("render-video", {}), motionNode]
+    mockEdges = [{ id: "e1", source: "mg1", target: "n1" }]
+    mockResolveNodeInputs.mockReturnValue({})
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    mockRenderVideoWithPlan.mockResolvedValue({ jobId: "j1" })
+    await executeNode(makeNode("render-video", {}), makeCtx())
+    const apiCall = mockPollJobWithNodeUpdate.mock.calls[0][1] as () => Promise<unknown>
+    await apiCall()
+    expect(mockRenderVideoWithPlan).toHaveBeenCalledWith(
+      expect.objectContaining({ planType: "motion-graphics" }),
+    )
+  })
 })
 
 // ---------------------------------------------------------------------------

@@ -180,3 +180,64 @@ describe("cinematic-avatar source-direction connectivity", () => {
     expect(directTypes.has("cinematic-avatar")).toBe(true)
   })
 })
+
+// Phase 4: the motion-graphics `lottie` source handle (lottie engine) carries
+// the authored Lottie JSON URL and may ONLY feed a lottie-overlay `lottie`
+// target. Symmetric to the `composition` source rule.
+describe("motion-graphics lottie source handle connectivity", () => {
+  const typeOf = (id: string) =>
+    id === "mg" ? "motion-graphics" : id === "lo" ? "lottie-overlay" : id === "rv" ? "render-video" : "generate-image"
+
+  it("allows motion-graphics lottie → lottie-overlay lottie", () => {
+    const ok = isValidWorkflowConnection(
+      { source: "mg", target: "lo", sourceHandle: "lottie", targetHandle: "lottie" },
+      typeOf,
+    )
+    expect(ok).toBe(true)
+  })
+
+  it("rejects the lottie source onto render-video (composition consumer)", () => {
+    const ok = isValidWorkflowConnection(
+      { source: "mg", target: "rv", sourceHandle: "lottie", targetHandle: "composition" },
+      typeOf,
+    )
+    expect(ok).toBe(false)
+  })
+
+  it("rejects the lottie source onto a non-lottie target handle of lottie-overlay", () => {
+    const ok = isValidWorkflowConnection(
+      { source: "mg", target: "lo", sourceHandle: "lottie", targetHandle: "video" },
+      typeOf,
+    )
+    expect(ok).toBe(false)
+  })
+
+  it("lottie-overlay lottie target accepts motion-graphics but not arbitrary producers", () => {
+    expect(
+      isValidWorkflowConnection(
+        { source: "mg", target: "lo", sourceHandle: "lottie", targetHandle: "lottie" },
+        typeOf,
+      ),
+    ).toBe(true)
+    // An image producer dragging into the lottie target (no sourceHandle "lottie"
+    // restriction on its side) must be rejected by the target predicate.
+    expect(
+      isValidWorkflowConnection(
+        { source: "gi", target: "lo", sourceHandle: "image", targetHandle: "lottie" },
+        (id: string) => (id === "lo" ? "lottie-overlay" : "generate-image"),
+      ),
+    ).toBe(false)
+  })
+
+  it("a motion-graphics node dragging out offers lottie-overlay as a candidate", () => {
+    const options = NODE_DEFINITIONS.map((d) => ({ type: d.type, label: d.label, icon: null, category: d.category }))
+    const { directTypes } = getCompatibleNodes("lottie", "source", options)
+    expect(directTypes.has("lottie-overlay")).toBe(true)
+  })
+
+  it("the lottie target's add-node popup offers motion-graphics as a candidate", () => {
+    const options = NODE_DEFINITIONS.map((d) => ({ type: d.type, label: d.label, icon: null, category: d.category }))
+    const { directTypes } = getCompatibleNodes("lottie", "target", options, "lottie-overlay")
+    expect(directTypes.has("motion-graphics")).toBe(true)
+  })
+})

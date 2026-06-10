@@ -684,6 +684,9 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "motion-graphics": 2,         // standard
   "motion-graphics:economy": 1,
   "motion-graphics:premium": 3,
+  "motion-graphics-lottie": 5,         // standard (Sonnet 4.6, ~3K in + 4K out)
+  "motion-graphics-lottie:economy": 1,
+  "motion-graphics-lottie:premium": 8, // Opus 4.7 at the lottie token profile
   "composite": 0,
   "sub-workflow": 0,
   // ── Inline / control nodes — pure in-process logic, no provider cost (0cr).

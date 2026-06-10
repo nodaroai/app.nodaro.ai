@@ -18,6 +18,7 @@ function resolveDisplayValue(field: ExposableField, value: unknown): string {
     case "slider":
       return String(value ?? field.min ?? 0)
     case "text":
+    case "color":
       return String(value ?? "")
   }
 }

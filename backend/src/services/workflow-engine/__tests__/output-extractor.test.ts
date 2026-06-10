@@ -282,6 +282,23 @@ describe("getPrimaryOutput", () => {
     expect(getPrimaryOutput({}, "video-composer")).toBeUndefined()
   })
 
+  it("routes motion-graphics lottie handle to the authored Lottie URL", () => {
+    const output: NodeOutput = {
+      plan: { planType: "lottie-graphic" },
+      lottieUrl: "https://cdn/lottie/job-1.json",
+    }
+    expect(getPrimaryOutput(output, "motion-graphics", "lottie")).toBe("https://cdn/lottie/job-1.json")
+  })
+
+  it("returns the plan marker for the default motion-graphics handle (not the lottie URL)", () => {
+    const output: NodeOutput = {
+      plan: { planType: "lottie-graphic" },
+      lottieUrl: "https://cdn/lottie/job-1.json",
+    }
+    expect(getPrimaryOutput(output, "motion-graphics", "composition")).toBe("plan-ready")
+    expect(getPrimaryOutput(output, "motion-graphics")).toBe("plan-ready")
+  })
+
   it("routes suno-separate vocal handle", () => {
     const output: NodeOutput = { audioUrl: "main.mp3", vocalUrl: "vocal.mp3" }
     expect(getPrimaryOutput(output, "suno-separate", "vocal")).toBe("vocal.mp3")
@@ -616,6 +633,15 @@ describe("buildNodeOutputFromJobData", () => {
     }, "suno-generate")
     expect(result.sunoTrackId).toBe("track-1")
     expect(result.kieTaskId).toBe("kie-1")
+  })
+
+  it("surfaces motion-graphics lottieUrl from completed job output_data (with the plan)", () => {
+    const result = buildNodeOutputFromJobData({
+      motionPlan: { planType: "lottie-graphic" },
+      lottieUrl: "https://cdn/lottie/job-1.json",
+    }, "motion-graphics")
+    expect(result.lottieUrl).toBe("https://cdn/lottie/job-1.json")
+    expect(result.plan).toEqual({ planType: "lottie-graphic" })
   })
 
   it("extracts text from generate-script scenes", () => {

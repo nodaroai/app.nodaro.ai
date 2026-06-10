@@ -96,6 +96,28 @@ describe("resolveNodeInputs", () => {
     expect(result.videoUrl).toBe("https://vid.mp4")
   })
 
+  it("routes a motion-graphics lottie source into lottie-overlay lottieAssets", () => {
+    // Phase 4 end-to-end: a motion-graphics (lottie engine) node emits its
+    // authored Lottie URL on the `lottie` source handle; the existing generic
+    // `lottie` targetHandle case (input-resolver.ts:1155) routes any URL into
+    // inputs.lottieAssets as { id, url, name }.
+    const target = node("t", "lottie-overlay")
+    const src = node("s", "motion-graphics", { label: "Confetti" })
+    const allNodes = [src, target]
+    const edges = [edge("s", "t", "lottie", "lottie")]
+    const states: Record<string, NodeExecutionState> = {
+      s: {
+        status: "completed",
+        output: { plan: { planType: "lottie-graphic" }, lottieUrl: "https://cdn/lottie/s.json" },
+      },
+    }
+
+    const result = resolveNodeInputs(target, edges, states, allNodes)
+    expect(result.lottieAssets).toEqual([
+      { id: "s", url: "https://cdn/lottie/s.json", name: "Confetti" },
+    ])
+  })
+
   it("resolves audioUrl from audio source", () => {
     const target = node("t", "merge-video-audio")
     const src = node("s", "text-to-speech")

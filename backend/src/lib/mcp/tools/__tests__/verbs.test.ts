@@ -115,6 +115,43 @@ describe("generate_image verb", () => {
     expect(result.isError).toBe(true)
   })
 
+  // Regression: reference_image_urls used to be missing from the schema
+  // entirely — the SDK's z.object() stripped the unknown key, the job ran
+  // as plain t2i, and the user's reference was silently ignored.
+  it("forwards reference_image_urls to the route and reports the count in the response text", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/generate-image", { jobId: "j-ref" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const result = await callTool(server, "generate_image", {
+      prompt: "same woman, full body",
+      model: "nano-banana-pro",
+      reference_image_urls: ["https://cdn.nodaro.ai/uploads/images/ref-1.png"],
+    })
+
+    expect(result.isError).toBeUndefined()
+    expect(received.body?.referenceImageUrls).toEqual([
+      "https://cdn.nodaro.ai/uploads/images/ref-1.png",
+    ])
+    expect((result.content[0] as { text: string }).text).toContain("1 reference image")
+  })
+
+  it("coerces a JSON-stringified reference_image_urls (client serialization slip) into an array", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/generate-image", { jobId: "j-ref2" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const result = await callTool(server, "generate_image", {
+      prompt: "same woman, full body",
+      reference_image_urls: "[\"https://cdn.nodaro.ai/uploads/images/ref-1.png\"]",
+    })
+
+    expect(result.isError).toBeUndefined()
+    expect(received.body?.referenceImageUrls).toEqual([
+      "https://cdn.nodaro.ai/uploads/images/ref-1.png",
+    ])
+  })
+
   it("does NOT register without workflows:execute scope", async () => {
     const fastify = Fastify()
     const server = buildServer()

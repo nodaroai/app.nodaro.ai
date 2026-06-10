@@ -20,8 +20,18 @@
  * Both produce the same NormalizedInputSchema so the run_* tools can use
  * one translation function.
  */
-import type { ComponentMetadata, PresentationItem, InputFieldSchema } from "@nodaro/shared"
-import { migrateToItems, getInputFieldSchema } from "@nodaro/shared"
+import type {
+  ComponentMetadata,
+  PresentationItem,
+  InputFieldSchema,
+  LottieSlotField,
+} from "@nodaro/shared"
+import {
+  migrateToItems,
+  getInputFieldSchema,
+  deriveLottieSlotFields,
+  LOTTIE_SLOT_FIELD_PREFIX,
+} from "@nodaro/shared"
 import { sanitizeSlug } from "./slug-sanitizer.js"
 import { normalizeLegacyNodeTypes } from "../../services/workflow-engine/normalize-node-types.js"
 
@@ -32,7 +42,16 @@ export interface NormalizedInputField {
   /** Human-readable label (taken from the node label or field name) */
   readonly label: string
   /** Coarse type hint so the LLM knows what kind of value to pass */
-  readonly type: "image" | "video" | "audio" | "text" | "select" | "number" | "boolean" | "list"
+  readonly type:
+    | "image"
+    | "video"
+    | "audio"
+    | "text"
+    | "select"
+    | "number"
+    | "boolean"
+    | "list"
+    | "color"
   readonly required: boolean
   /** When type=select: enum of allowed values (string|number|boolean) */
   readonly options?: ReadonlyArray<string | number | boolean>
@@ -130,6 +149,47 @@ function resolveListInfo(
   }
   // Single-column (or legacy newline-string) list: one value per row.
   return { fieldKey: "items", type: "list" }
+}
+
+/**
+ * A `slot:<sid>` field item on a motion-graphics node resolves through the
+ * shared `deriveLottieSlotFields` (the single source of truth the editor picker
+ * and the app runtime also use). We re-derive the whole manifest and pick the
+ * matching descriptor by key — cheap (the slot manifest is tiny) and keeps the
+ * "what an app exposes" set identical across all three surfaces.
+ *
+ * Coarse-type mapping for the LLM schema:
+ *   - color  → `"color"` (NormalizedInputField gained the member; MCP clients
+ *     just see the string hint, no exhaustive consumer to break)
+ *   - slider → `"number"` (+ a description carrying the slider range)
+ *   - text   → `"text"`
+ */
+function lottieSlotFieldInfo(
+  node: { type?: string; data?: Record<string, unknown> } | undefined,
+  fieldKey: string,
+): { type: NormalizedInputField["type"]; label: string; description?: string; defaultValue?: unknown } | undefined {
+  if (node?.type !== "motion-graphics") return undefined
+  const derived = deriveLottieSlotFields(node.data?.motionPlan as Record<string, unknown> | undefined)
+  const slot: LottieSlotField | undefined = derived.find((f) => f.key === fieldKey)
+  if (!slot) return undefined
+
+  if (slot.type === "color") {
+    return {
+      type: "color",
+      label: slot.label,
+      description: "Hex color, e.g. #ff0073",
+      defaultValue: slot.defaultValue,
+    }
+  }
+  if (slot.type === "slider") {
+    return {
+      type: "number",
+      label: slot.label,
+      description: `Number between ${slot.min ?? 0} and ${slot.max ?? 100}.`,
+      defaultValue: slot.defaultValue,
+    }
+  }
+  return { type: "text", label: slot.label, defaultValue: slot.defaultValue }
 }
 
 /**
@@ -282,16 +342,33 @@ export function extractAppInputSchema({
     } else {
       // type === "field"
       const node = nodesById.get(item.nodeId)
-      const label =
+      const nodeLabel =
         (node?.data?.label as string | undefined) ?? `${item.nodeId}.${item.field}`
-      const key = uniqueKey(seen, `${label}_${item.field}`, `${item.nodeId}_${item.field}`)
-      const type: NormalizedInputField["type"] = item.allowedValues ? "select" : "text"
-      const field: NormalizedInputField = {
-        key,
-        label: `${label}: ${item.field}`,
-        type,
-        required: false,
-        ...(item.allowedValues ? { options: item.allowedValues } : {}),
+      const key = uniqueKey(seen, `${nodeLabel}_${item.field}`, `${item.nodeId}_${item.field}`)
+      // A `slot:<sid>` field on a lottie motion-graphics node carries a derived
+      // descriptor (color / number / text) from the shared single source of
+      // truth — not a generic select/text.
+      const lottieSlot = item.field.startsWith(LOTTIE_SLOT_FIELD_PREFIX)
+        ? lottieSlotFieldInfo(node, item.field)
+        : undefined
+      let field: NormalizedInputField
+      if (lottieSlot) {
+        field = {
+          key,
+          label: `${nodeLabel}: ${lottieSlot.label}`,
+          type: lottieSlot.type,
+          required: false,
+          ...(lottieSlot.description ? { description: lottieSlot.description } : {}),
+        }
+      } else {
+        const type: NormalizedInputField["type"] = item.allowedValues ? "select" : "text"
+        field = {
+          key,
+          label: `${nodeLabel}: ${item.field}`,
+          type,
+          required: false,
+          ...(item.allowedValues ? { options: item.allowedValues } : {}),
+        }
       }
       fields.push(field)
       keyMap[key] = { nodeId: item.nodeId, fieldKey: item.field }

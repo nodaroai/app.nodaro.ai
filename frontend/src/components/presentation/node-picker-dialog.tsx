@@ -25,7 +25,7 @@ import type { WorkflowNode } from "@/types/nodes"
 import { NODE_DEF_MAP } from "@/types/nodes"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import type { ExposableField, ExposableOutput, PresentationItem } from "@nodaro/shared"
-import { migrateToItems } from "@nodaro/shared"
+import { migrateToItems, deriveLottieSlotFields } from "@nodaro/shared"
 import { RestrictPopover } from "./restrict-popover"
 import { DEFAULT_SYSTEM_MAX_FANOUT } from "./input-card"
 import { PickerRestrictDialog } from "./picker-restrict-dialog"
@@ -197,6 +197,7 @@ const FIELD_TYPE_LABELS: Record<ExposableField["type"], string> = {
   slider: "Slider",
   toggle: "Toggle",
   text: "Text",
+  color: "Color",
 }
 
 function NodeRow({
@@ -227,7 +228,20 @@ function NodeRow({
   const typeBadge = getOutputType(node.type)
 
   const def = getNodeDef(node.type)
-  const exposableFields = def?.exposableFields
+  // Static exposable fields from NODE_DEFINITIONS, plus dynamic lottie slot
+  // fields derived from a motion-graphics node's lottie-graphic plan (the same
+  // shared derivation the runtime + backend MCP extractor use — single source of
+  // truth). Returns [] for non-lottie / elements-engine nodes, so the merge is a
+  // no-op everywhere except a lottie motion-graphics node.
+  const exposableFields = useMemo<ReadonlyArray<ExposableField> | undefined>(() => {
+    const staticFields = def?.exposableFields ?? []
+    if (node.type !== "motion-graphics") return def?.exposableFields
+    const slotFields = deriveLottieSlotFields(
+      data.motionPlan as Record<string, unknown> | undefined,
+    ) as ReadonlyArray<ExposableField>
+    if (slotFields.length === 0) return def?.exposableFields
+    return [...staticFields, ...slotFields]
+  }, [def?.exposableFields, node.type, data.motionPlan])
   const exposableOutputs = def?.exposableOutputs
   const hasExposable = (exposableFields && exposableFields.length > 0) || (exposableOutputs && exposableOutputs.length > 0)
 

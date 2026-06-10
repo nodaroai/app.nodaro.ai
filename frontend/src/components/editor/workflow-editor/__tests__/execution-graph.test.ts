@@ -344,6 +344,23 @@ describe("extractNodeOutput", () => {
     expect(extractNodeOutput(node)).toBe("plan-ready")
   })
 
+  it("motion-graphics: default handle → plan marker; lottie handle → authored Lottie URL", () => {
+    const node = makeNode("1", "motion-graphics", {
+      motionPlan: { planType: "lottie-graphic" },
+      lottieUrl: "https://cdn/lottie/1.json",
+    })
+    // Default (composition) handle stays the plan marker.
+    expect(extractNodeOutput(node)).toBe("plan-ready")
+    expect(extractNodeOutput(node, "composition")).toBe("plan-ready")
+    // The lottie handle resolves to the authored Lottie URL.
+    expect(extractNodeOutput(node, "lottie")).toBe("https://cdn/lottie/1.json")
+  })
+
+  it("motion-graphics lottie handle is undefined before the URL exists", () => {
+    const node = makeNode("1", "motion-graphics", { motionPlan: { planType: "lottie-graphic" } })
+    expect(extractNodeOutput(node, "lottie")).toBeUndefined()
+  })
+
   it("returns generatedVideoUrl fallback for combine-videos", () => {
     const node = makeNode("1", "combine-videos", {
       generatedVideoUrl: "http://combined.mp4",

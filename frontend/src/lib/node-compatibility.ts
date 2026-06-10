@@ -165,6 +165,9 @@ export const TYPED_HANDLE_IDS: ReadonlySet<string> = new Set([
   // inputs that bypass the Parameter-category filter like the other media
   // handles.
   "ref-video", "ref-image",
+  // lottie-overlay `lottie` target — accepts the motion-graphics lottie engine's
+  // authored-animation asset (Phase 4). Typed (not a Parameter-category gate).
+  "lottie",
 ])
 /** Subset that requires consumer-type dispatch — the dev-time warning in
  *  getCompatibleNodes triggers when one of these is passed without a

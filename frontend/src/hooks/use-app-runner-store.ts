@@ -20,6 +20,9 @@ import {
 import { buildProgressSegments, calculateCombinedProgress, type ProgressSegment, CATEGORY_DURATION_DEFAULTS } from "@nodaro/shared"
 import { getOutputNodes } from "@nodaro/shared"
 import { migrateListLoopNodes } from "@/lib/list-loop-migration"
+import { composeLottieSlotOverrides, collectSlotExposedNodeIds } from "@/lib/lottie-slot-overrides"
+import { resolveInputItems } from "@/components/presentation/helpers"
+import type { PresentationSettings } from "@/hooks/use-workflow-store"
 
 export type AppRunnerStatus = "idle" | "loading" | "running" | "completed" | "failed"
 
@@ -181,7 +184,7 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
   },
 
   run: async (existingRunId?: string) => {
-    const { slug, inputValues, selectedVersion } = get()
+    const { slug, inputValues, selectedVersion, app } = get()
     if (!slug) return
 
     clearPollTimeout()
@@ -196,9 +199,24 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
     })
 
     try {
+      // Fold lottie slot edits into a full-plan motionPlan override per node
+      // (the orchestrator merge is shallow — see lottie-slot-overrides).
+      const snapshotNodes = (app?.snapshotNodes ?? []) as ReadonlyArray<{
+        id: string
+        type?: string
+        data?: Record<string, unknown>
+      }>
+      // Slot-exposed node ids derived from the SAME snapshot settings the app
+      // renders its input cards from — so a slot-exposed lottie node ALWAYS emits
+      // its full-plan override (freeze-on-exposure, design F16): the backend
+      // pre-completes the node instead of re-rolling + re-charging it.
+      const slotExposedNodeIds = collectSlotExposedNodeIds(
+        resolveInputItems((app?.snapshotSettings ?? {}) as unknown as PresentationSettings),
+      )
+      const overrides = composeLottieSlotOverrides(inputValues, snapshotNodes, slotExposedNodeIds)
       const { executionId, runId } = await runPublishedApp(
         slug,
-        Object.keys(inputValues).length > 0 ? inputValues : undefined,
+        Object.keys(overrides).length > 0 ? overrides : undefined,
         existingRunId,
         selectedVersion ?? undefined,
       )

@@ -9,6 +9,8 @@ import { config } from "../../config.js"
 import {
   errorResult,
   dispatchJob,
+  coerceStringArray,
+  resolveRefArray,
 } from "./_verb-helpers.js"
 import { modelIdsByKindMode } from "@nodaro/shared"
 import { getUserMcpPreferences } from "../user-preferences.js"
@@ -115,6 +117,12 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           "  • `z-image` — cheapest stylized output\n" +
           "  • **AVOID `flux`** for general use — degrades in multi-turn workflows; " +
           "use one of the above instead.\n\n" +
+          "**Reference images**: pass `reference_image_urls` (up to 14 URLs or " +
+          "Nodaro asset ids) whenever the user wants 'the same person / character / " +
+          "product as this image' — identity, style, and composition guidance. " +
+          "nano-banana-pro is the face-identity pick. The response text confirms " +
+          "how many references were attached; if it doesn't mention them, they " +
+          "didn't make it.\n\n" +
           "Accepts a text prompt and optional Path-1 structured fields " +
           "(person, styling, setting, camera, mood, lens). Returns a job_id; " +
           "the iframe widget will surface the final image automatically.",
@@ -147,6 +155,15 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
               "Variations like 16x9 / 16-9 are accepted; unsupported values fall back.",
             ),
           negative_prompt: z.string().max(2000).optional(),
+          reference_image_urls: z
+            .union([z.array(z.string()), z.string()])
+            .optional()
+            .describe(
+              "Reference images (URLs or Nodaro asset ids, up to 14) for identity / " +
+              "style / composition guidance — use whenever the output must match a " +
+              "given person, character, or product. Accepts an array; a lone URL or " +
+              "a JSON-stringified array is tolerated and coerced.",
+            ),
           base_image_url: z.string().url().optional().describe("Image to edit; the masked region is regenerated and composited back over it. Enables inpaint."),
           mask_url: z.string().url().optional().describe("Inpainting mask image URL (white=edit, black=keep). Requires base_image_url."),
           strength: z.number().min(0).max(1).optional().describe("How much the prompt overrides the base image (0=subtle, 1=full repaint). Provider-dependent."),
@@ -221,6 +238,9 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           )
 
         const compositePrompt = buildCompositePrompt(args.prompt, args.structured)
+        // Tolerant: array | JSON-string | lone URL; asset ids resolved to URLs.
+        // The route's referenceImageUrls schema is URL-only (max 14).
+        const refUrls = await resolveRefArray(args.reference_image_urls, session.userId, "image", 14)
         const payload = {
           prompt: compositePrompt,
           provider: model,
@@ -228,6 +248,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           resolution,
           quality,
           negativePrompt: args.negative_prompt,
+          ...(refUrls.length ? { referenceImageUrls: refUrls } : {}),
           ...(args.base_image_url ? { baseImageUrl: args.base_image_url } : {}),
           ...(args.mask_url ? { maskUrl: args.mask_url } : {}),
           ...(args.strength !== undefined ? { strength: args.strength } : {}),
@@ -239,7 +260,11 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         return dispatchJob(fastify, session, {
           url: "/v1/generate-image",
           payload,
-          label: "image generation",
+          // Ref count in the label = visible confirmation in the response
+          // text, so a silently-dropped reference can't masquerade as success.
+          label: refUrls.length
+            ? `image generation (using ${refUrls.length} reference image${refUrls.length === 1 ? "" : "s"})`
+            : "image generation",
           widgetKind: "image",
           widgetData: {
             prompt: compositePrompt,
@@ -527,7 +552,13 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         model: z.string().optional().describe(
           `img2img model. Default nano-banana. Options: ${I2I_MODEL_IDS.join(", ")}. Unknown values fall back to nano-banana.`,
         ),
-        reference_image_urls: z.array(z.string()).max(13).optional().describe("Extra reference images (URLs or Nodaro asset ids) for multi-ref models."),
+        reference_image_urls: z
+          .union([z.array(z.string()), z.string()])
+          .optional()
+          .describe(
+            "Extra reference images (URLs or Nodaro asset ids, up to 13) for multi-ref " +
+            "models. Accepts an array; a lone URL or a JSON-stringified array is coerced.",
+          ),
         resolution: z.enum(["1K", "2K", "4K"]).optional(),
         quality: z.enum(["medium", "high", "basic"]).optional(),
         strength: z.number().min(0).max(1).optional().describe("How much the prompt overrides the source image (0=subtle, 1=full repaint)."),
@@ -556,11 +587,12 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           : null)
       if (!imageUrl) return { content: [{ type: "text" as const, text: "Pass image_url or image_asset_id." }], isError: true }
 
+      const i2iRefs = coerceStringArray(args.reference_image_urls, 13)
       const payload: Record<string, unknown> = {
         imageUrl,
         prompt: args.prompt,
         provider: args.model ?? "nano-banana",
-        ...(args.reference_image_urls?.length ? { referenceImageUrls: args.reference_image_urls } : {}),
+        ...(i2iRefs.length ? { referenceImageUrls: i2iRefs } : {}),
         ...(args.resolution ? { resolution: args.resolution } : {}),
         ...(args.quality ? { quality: args.quality } : {}),
         ...(args.strength !== undefined ? { strength: args.strength } : {}),

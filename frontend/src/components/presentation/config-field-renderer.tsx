@@ -22,8 +22,9 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
-import { NODE_DEF_MAP } from "@/types/nodes"
+import type { WorkflowNode } from "@/types/nodes"
 import { FieldInputCard } from "./field-input-card"
+import { findExposableField } from "./helpers"
 
 interface ConfigFieldRendererProps {
   nodeType: string
@@ -483,13 +484,18 @@ function renderGenerateVideo(
 }
 
 // ---------------------------------------------------------------------------
-// Fallback: delegate to generic FieldInputCard using NODE_DEF_MAP metadata
+// Fallback: delegate to generic FieldInputCard using the shared exposable-field
+// resolver (static NODE_DEFINITIONS fields + dynamic lottie slot fields)
 // ---------------------------------------------------------------------------
 
 function FallbackField(props: ConfigFieldRendererProps): React.ReactNode | null {
-  const { nodeType, field, value, onChange, allowedValues, readOnly, customLabel } = props
-  const def = NODE_DEF_MAP.get(nodeType)
-  const fieldDef = def?.exposableFields?.find((f) => f.key === field)
+  const { nodeType, field, value, nodeData, onChange, allowedValues, readOnly, customLabel } = props
+  // Static NODE_DEFINITIONS fields, plus dynamic lottie slot fields derived from
+  // a motion-graphics plan — resolved through the shared single source of truth.
+  const fieldDef = findExposableField(
+    { type: nodeType, data: nodeData } as unknown as WorkflowNode,
+    field,
+  )
   if (!fieldDef) return null
 
   return (

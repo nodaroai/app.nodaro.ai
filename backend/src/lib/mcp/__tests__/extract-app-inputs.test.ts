@@ -344,6 +344,79 @@ describe("extractAppInputSchema", () => {
     // The 2D shape requirement is documented for the caller.
     expect(schema.fields[0]!.description).toMatch(/rows/i)
   })
+
+  // Phase 3 — lottie slot fields. A `slot:<sid>` field item on a lottie
+  // motion-graphics node resolves through the shared deriveLottieSlotFields
+  // single source of truth: color → "color", number → "number", text → "text".
+  it("derives lottie slot field items into typed schema entries", () => {
+    const schema = extractAppInputSchema({
+      snapshotSettings: {
+        presentationSettings: {
+          inputItems: [
+            { type: "field", id: "i1", nodeId: "mg1", field: "slot:primaryColor" },
+            { type: "field", id: "i2", nodeId: "mg1", field: "slot:nameText" },
+            { type: "field", id: "i3", nodeId: "mg1", field: "slot:barWidth" },
+          ],
+        },
+      },
+      snapshotNodes: [
+        {
+          id: "mg1",
+          type: "motion-graphics",
+          data: {
+            label: "Title Card",
+            motionPlan: {
+              planType: "lottie-graphic",
+              slots: {
+                primaryColor: { p: { a: 0, k: [1, 0, 0, 1] } },
+                nameText: { p: "Jane Doe" },
+                barWidth: { p: { a: 0, k: 360 } },
+              },
+            },
+          },
+        },
+      ],
+    })
+
+    expect(schema.fields).toHaveLength(3)
+    const byField = Object.fromEntries(
+      schema.fields.map((f) => [schema.keyMap[f.key]!.fieldKey, f]),
+    )
+
+    expect(byField["slot:primaryColor"]).toMatchObject({
+      label: "Title Card: Primary Color",
+      type: "color",
+      description: "Hex color, e.g. #ff0073",
+    })
+    expect(byField["slot:nameText"]).toMatchObject({
+      label: "Title Card: Name Text",
+      type: "text",
+    })
+    expect(byField["slot:barWidth"]!.type).toBe("number")
+    expect(byField["slot:barWidth"]!.description).toMatch(/720/)
+
+    // Override field keys are preserved verbatim (slot:<sid>) so the runtime
+    // can compose the full-plan replacement.
+    expect(schema.keyMap[schema.fields[0]!.key]).toEqual({
+      nodeId: "mg1",
+      fieldKey: "slot:primaryColor",
+    })
+  })
+
+  it("falls back to generic text for a slot: field on a non-lottie node", () => {
+    // Guard: the slot:* prefix alone must NOT trigger lottie derivation —
+    // only a motion-graphics node carrying a lottie-graphic plan does.
+    const schema = extractAppInputSchema({
+      snapshotSettings: {
+        presentationSettings: {
+          inputItems: [{ type: "field", id: "i1", nodeId: "n1", field: "slot:foo" }],
+        },
+      },
+      snapshotNodes: [{ id: "n1", type: "scene", data: { label: "Scene" } }],
+    })
+    expect(schema.fields[0]!.type).toBe("text")
+    expect(schema.fields[0]!.label).toBe("Scene: slot:foo")
+  })
 })
 
 describe("extractComponentInputSchema", () => {
