@@ -328,6 +328,46 @@ describe("generate-video factory preset data validity", () => {
     }
   })
 
+  it("includes the board-driven Scene Recipes on seedance-2", () => {
+    // Step-2 companions to the generate-image boards/grids — seedance-2 is the
+    // one provider with native audio + quoted-line lip-sync + up-to-9 refs.
+    for (const id of [
+      "generate-video/viral-meteor-scene",
+      "generate-video/cartoon-short-opening",
+      "generate-video/cartoon-short-chase",
+      "generate-video/cartoon-short-resolution",
+      "generate-video/two-character-dialogue",
+      "generate-video/disaster-reveal",
+      "generate-video/chase-scene",
+    ]) {
+      const p = presets.find((x) => x.id === id)
+      expect(p, `${id} missing`).toBeTruthy()
+      expect(p!.group).toBe("Scene Recipes")
+      expect(p!.data.provider).toBe("seedance-2")
+    }
+  })
+
+  it("cartoon Scene Recipes hold the look with an in-prompt NOT-photorealistic clause", () => {
+    // Mirror of the image catalog's "NOT digital CG" guard — the clause in the
+    // positive prompt is what locks cartoon rendering; negativePrompt alone drifts.
+    for (const id of [
+      "generate-video/cartoon-short-opening",
+      "generate-video/cartoon-short-chase",
+      "generate-video/cartoon-short-resolution",
+    ]) {
+      const p = presets.find((x) => x.id === id)
+      expect(p?.data.prompt as string, `${id}: missing the NOT photorealistic clause`).toContain("NOT photorealistic")
+    }
+  })
+
+  it("reveal-timing negatives survive on the surprise Scene Recipes", () => {
+    // The source guide's load-bearing line — without it the event fires too early.
+    const meteor = presets.find((x) => x.id === "generate-video/viral-meteor-scene")
+    expect(meteor?.data.negativePrompt as string).toContain("noticing the meteor before impact")
+    const reveal = presets.find((x) => x.id === "generate-video/disaster-reveal")
+    expect(reveal?.data.negativePrompt as string).toContain("noticing the event before the shockwave")
+  })
+
   it("groups every preset under a folder", () => {
     for (const p of presets) expect(p.group, `${p.id}: missing group`).toBeTruthy()
   })

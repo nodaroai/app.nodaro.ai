@@ -81,6 +81,7 @@ the fallback is used until you type your own value.
 | **Animation & Style** | Anime Motion, 3D Cartoon, Claymation, Living Watercolor |
 | **Looping & Backgrounds** | Subtle Motion, Living Wallpaper |
 | **Viral & Effects** *(best with an input image)* | Frozen in Ice, Superhero Transformation, Elevator Doors Reveal, POV Skydive, Underwater POV |
+| **Scene Recipes** *(board-driven · Step 2)* | **Viral Meteor Scene**, **Cartoon Short · Opening / Chase / Resolution**, Two-Character Dialogue, Disaster Reveal, Chase Scene — beat-scripted Seedance-2 scenes with native audio and quoted-line **lip-sync**; connect your **Reference Sheet boards / Cast & Consistency grids** (from Generate Image) as reference images so every character stays on-model. Chain multi-scene shorts with Combine Videos' **Seamless Join (One-Shot)** |
 
 ### Music factory catalogs
 
