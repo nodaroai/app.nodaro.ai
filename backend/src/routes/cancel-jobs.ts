@@ -112,6 +112,7 @@ export async function cancelJobsRoutes(app: FastifyInstance) {
           .from("jobs")
           .update({ status: "cancelled" })
           .eq("id", jobId)
+          .eq("user_id", userId)
           .in("status", ["pending", "queued", "processing"])
           .select("id")
 

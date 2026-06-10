@@ -616,6 +616,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
         .from("jobs")
         .update({ status: "cancelled" })
         .eq("id", parsed.data.id)
+        .eq("user_id", req.userId)
         .in("status", ["pending", "queued", "processing", "running"])
         .select("id")
 

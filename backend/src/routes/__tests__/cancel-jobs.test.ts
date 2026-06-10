@@ -139,8 +139,8 @@ function jobsHandler(opts: {
     const eqAfterSelect = vi.fn().mockReturnValue({ single, in: inForList })
     const select = vi.fn().mockReturnValue({ eq: eqAfterSelect })
 
-    // CAS update chains (audit D2):
-    //   single: update().eq("id").in("status",[...]).select("id")
+    // CAS update chains (audit D2 + tenant scoping):
+    //   single: update().eq("id").eq("user_id").in("status",[...]).select("id")
     //   bulk:   update().in("id",[...]).in("status",[...]).select("id")
     const defaultRows =
       opts.cancelledRows ??
@@ -151,7 +151,10 @@ function jobsHandler(opts: {
     })
     const updateIn2 = vi.fn().mockReturnValue({ select: updateSelect })
     const updateIn1 = vi.fn().mockReturnValue({ select: updateSelect, in: updateIn2 })
-    const updateEq = vi.fn().mockReturnValue({ in: updateIn1 })
+    // Self-chaining eq so .eq("id").eq("user_id") both resolve to the same node.
+    const updateEqResult: Record<string, unknown> = {}
+    const updateEq = vi.fn().mockReturnValue(updateEqResult)
+    Object.assign(updateEqResult, { in: updateIn1, eq: updateEq })
     const update = vi.fn().mockReturnValue({ eq: updateEq, in: updateIn1 })
     return { select, update }
   }
