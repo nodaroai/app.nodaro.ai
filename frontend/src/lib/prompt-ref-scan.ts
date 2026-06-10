@@ -1,10 +1,29 @@
 import { NODE_REF_PATTERN, RESERVED_TEMPLATE_VARS, parseNodeRef } from "@nodaro/shared"
 
+/** How a `{...}` token (parsed name) renders/behaves. Single source of truth for
+ *  the editor decoration AND the missing-refs chip — predicate-level identity. */
+export type PromptTokenKind = "wired" | "reserved" | "missing" | "skip" | "unknown"
+
+/**
+ * Classify a parsed token name against the resolvable upstream label set.
+ * `resolvable === null` means the consumer has no ref data at all (PromptEditor
+ * without a `nodeRefs` prop) — such tokens classify `unknown` and render like
+ * wired (cyan), never amber, so "no data" never masquerades as "nothing wired".
+ */
+export function classifyPromptToken(
+  name: string,
+  resolvable: ReadonlySet<string> | null,
+): PromptTokenKind {
+  if (name === "" || name.startsWith("image:")) return "skip"
+  if (RESERVED_TEMPLATE_VARS.has(name)) return "reserved"
+  if (resolvable === null) return "unknown"
+  return resolvable.has(name) ? "wired" : "missing"
+}
+
 /** Tokens never treated as a real reference: empty, image-ref tokens, reserved vars. */
 export function isExcludedToken(raw: string): boolean {
-  if (raw === "") return true
-  if (raw.startsWith("image:")) return true
-  return RESERVED_TEMPLATE_VARS.has(raw)
+  const kind = classifyPromptToken(raw, null)
+  return kind === "skip" || kind === "reserved"
 }
 
 /** Non-excluded `{Label}` tokens referenced across the given string fields (trimmed). */
