@@ -7,6 +7,7 @@ import {
   groupFactoryPresets,
   parseNodePresetExport,
   presetDataMatches,
+  PRESET_APPLY_CLEAR_KEYS,
   type FactoryPreset,
 } from "@nodaro/shared"
 import { Button } from "@/components/ui/button"
@@ -61,6 +62,26 @@ const toMerged = (p: NodePreset): MergedPreset => ({
   description: p.description,
   data: p.data,
 })
+
+/**
+ * Build the data patch that applying a preset writes to the node. Spread order is
+ * load-bearing: clear every generated composer-plan field (PRESET_APPLY_CLEAR_KEYS
+ * -> undefined; use-workflow-store merges shallowly, so this drops the stale
+ * plan/url from both the preview and the output handle) FIRST, then the preset's
+ * own config (so a preset that ever sets a plan field could still override the
+ * clear), then the active-preset marker. Pass empty presetData to only clear +
+ * mark active (the no-config-change path). Exported pure for unit testing.
+ */
+export function buildPresetApplyPatch(
+  presetData: Record<string, unknown>,
+  presetId: string,
+): Record<string, unknown> {
+  return {
+    ...Object.fromEntries(PRESET_APPLY_CLEAR_KEYS.map((k) => [k, undefined])),
+    ...presetData,
+    __activePresetId: presetId,
+  }
+}
 
 interface PresetDropdownProps {
   readonly nodeId: string
@@ -236,7 +257,7 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
       toast.error("Can't apply a preset while the node is running.")
       return
     }
-    updateNodeData(nodeId, { ...p.data, __activePresetId: p.id })
+    updateNodeData(nodeId, buildPresetApplyPatch(p.data, p.id))
     toast.success(`Applied preset "${p.name}"`)
   }
 
@@ -246,8 +267,11 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
       return
     }
     if (presetDataMatches(data, p.data)) {
-      // No config change needed — just mark it active (no destructive confirm).
-      updateNodeData(nodeId, { __activePresetId: p.id })
+      // No config change needed — mark it active (no destructive confirm). Still
+      // clear any stale generated plan-state: the node can match the preset's
+      // config yet carry a plan/lottieUrl from a prior run, which would otherwise
+      // keep showing the old animation under the now-active preset.
+      updateNodeData(nodeId, buildPresetApplyPatch({}, p.id))
       setOpenState(false)
       return
     }

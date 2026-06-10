@@ -14,7 +14,7 @@ import {
   AUDIO_SOURCE_TYPES,
   TEXT_SOURCE_TYPES,
 } from "./execution-graph.js"
-import { COMPOSER_PLAN_MAP } from "@nodaro/shared"
+import { COMPOSER_PLAN_MAP, COMPOSER_PLAN_FIELDS } from "@nodaro/shared"
 import { buildScenePrompt } from "@nodaro/shared"
 import type { SceneData } from "@nodaro/shared"
 import { extractAllGeneratedResults } from "@nodaro/shared"
@@ -178,10 +178,7 @@ const DIRECT_OUTPUT_KEYS: Array<keyof NodeOutput> = [
 ]
 
 // Job output_data keys that all map to NodeOutput.plan — derived from COMPOSER_PLAN_MAP + generic "plan"
-const PLAN_OUTPUT_KEYS = [
-  ...new Set(Object.values(COMPOSER_PLAN_MAP).map((m) => m.planField)),
-  "plan",
-]
+const PLAN_OUTPUT_KEYS = [...COMPOSER_PLAN_FIELDS, "plan"]
 
 /**
  * Extract output from a source node's static data (no execution needed).

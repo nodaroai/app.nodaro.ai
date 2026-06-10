@@ -91,6 +91,19 @@ describe("buildResetToDefaultData", () => {
     expect("generatedResults" in payload).toBe(false)
   })
 
+  it("clears generated composer-plan state (motionPlan/lottieUrl) even though capture excludes it", () => {
+    const current = {
+      motionPrompt: "old prompt",
+      motionPlan: { planType: "lottie-graphic" },
+      lottieUrl: "https://cdn.example/lottie/x.json",
+    }
+    const payload = buildResetToDefaultData(current, { motionPrompt: "" })
+    expect("motionPlan" in payload).toBe(true)
+    expect(payload.motionPlan).toBeUndefined()
+    expect("lottieUrl" in payload).toBe(true)
+    expect(payload.lottieUrl).toBeUndefined()
+  })
+
   it("handles an undefined default (no defaults to apply, still clears active)", () => {
     const payload = buildResetToDefaultData({ prompt: "x", __activePresetId: "u1" }, undefined)
     expect(payload.prompt).toBeUndefined()
