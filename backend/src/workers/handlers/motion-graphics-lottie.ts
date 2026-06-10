@@ -18,6 +18,7 @@ import { llmComplete } from "../../lib/llm-client.js"
 import { extractJsonFromAIResponse } from "../../lib/json-utils.js"
 import { validateLottieGraphic } from "../../lib/lottie-graphic-validator.js"
 import { LOTTIE_GRAPHIC_SYSTEM_PROMPT } from "../../prompts/lottie-graphic-system.js"
+import { uploadBufferToR2 } from "../../lib/storage.js"
 import {
   type HandlerFn,
   markJobCompleted,
@@ -120,12 +121,30 @@ const handleMotionGraphicsLottie: HandlerFn = async function handleMotionGraphic
   await setJobProgress(job, ctx.jobId, 100)
   if (!(await shouldSaveJobResult(ctx.jobId))) return
 
+  // Persist the authored Lottie JSON to R2 so it can flow over the `lottie`
+  // source handle into lottie-overlay (Phase 4). This is ADDITIVE — the inline
+  // plan in output_data is fully usable for preview + render without it, so a
+  // failed upload NEVER fails the job (no refund, no throw). The deterministic
+  // key (`lottie/<jobId>.json`) is never deleted on failure (repo invariant).
+  // Placed after the shouldSaveJobResult gate so cancelled jobs skip the upload.
+  let lottieUrl: string | undefined
+  try {
+    const lottieBuffer = Buffer.from(JSON.stringify(validation.plan!.lottie), "utf-8")
+    lottieUrl = await uploadBufferToR2(lottieBuffer, `lottie/${ctx.jobId}.json`, "application/json", ctx.jobUserId)
+  } catch (err) {
+    console.warn(
+      `[worker] motion-graphics-lottie ${ctx.jobId} lottie JSON upload failed (plan still delivered):`,
+      err,
+    )
+  }
+
   const ok = await markJobCompleted(ctx.jobId, {
     output_data: {
       motionPlan: validation.plan,
       validationErrors: validation.errors,
       autoFixes: validation.autoFixed,
       usage: lastUsage,
+      ...(lottieUrl ? { lottieUrl } : {}),
     },
     provider_cost: totalProviderCost || null,
   })

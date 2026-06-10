@@ -33,6 +33,10 @@ export interface NodeOutput {
   /** JSON Process node output — filtered/transformed JSON value. */
   processedResult?: unknown
   plan?: Record<string, unknown>
+  /** motion-graphics (lottie engine) second output — the authored Lottie JSON's
+   *  R2 URL. Routed to the "lottie" source handle by getPrimaryOutput (the
+   *  default "composition" handle returns the plan marker). */
+  lottieUrl?: string
   thumbnailUrl?: string
   sunoTrackId?: string
   sunoTaskId?: string

@@ -20,7 +20,8 @@ const mocks = vi.hoisted(() => {
   const markJobCompleted = vi.fn().mockResolvedValue(true)
   const setJobProgress = vi.fn().mockResolvedValue(undefined)
   const supabaseFrom = vi.fn()
-  return { llmComplete, commitJobCredits, shouldSaveJobResult, markJobCompleted, setJobProgress, supabaseFrom }
+  const uploadBufferToR2 = vi.fn().mockResolvedValue("https://cdn.example.com/lottie/job-1.json")
+  return { llmComplete, commitJobCredits, shouldSaveJobResult, markJobCompleted, setJobProgress, supabaseFrom, uploadBufferToR2 }
 })
 
 vi.mock("../../../lib/llm-client.js", () => ({ llmComplete: mocks.llmComplete }))
@@ -30,6 +31,7 @@ vi.mock("../../shared.js", () => ({
   markJobCompleted: mocks.markJobCompleted,
   setJobProgress: mocks.setJobProgress,
 }))
+vi.mock("../../../lib/storage.js", () => ({ uploadBufferToR2: mocks.uploadBufferToR2 }))
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: mocks.supabaseFrom } }))
 
 import { motionGraphicsLottieHandlers } from "../motion-graphics-lottie.js"
@@ -85,6 +87,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.shouldSaveJobResult.mockResolvedValue(true)
   mocks.markJobCompleted.mockResolvedValue(true)
+  mocks.uploadBufferToR2.mockResolvedValue("https://cdn.example.com/lottie/job-1.json")
   mocks.llmComplete.mockResolvedValue({ text: VALID_LOTTIE, usage: { inputTokens: 100, outputTokens: 500 }, providerCost: 0.01 })
 })
 
@@ -99,15 +102,48 @@ describe("motion-graphics-lottie handler", () => {
     expect(call.timeoutMs).toBe(240_000)
     expect(call.system).toContain("Lottie")
 
-    // Job completed with the assembled plan (planType from the real validator).
+    // The authored Lottie JSON is persisted to R2 under the deterministic key
+    // with the JSON content type, tracked against the job's user (Phase 4).
+    expect(mocks.uploadBufferToR2).toHaveBeenCalledTimes(1)
+    const [buffer, key, contentType, trackUserId] = mocks.uploadBufferToR2.mock.calls[0]
+    expect(Buffer.isBuffer(buffer)).toBe(true)
+    expect(key).toBe("lottie/job-1.json")
+    expect(contentType).toBe("application/json")
+    expect(trackUserId).toBe("user-1")
+
+    // Job completed with the assembled plan (planType from the real validator)
+    // plus the R2 lottieUrl on output_data (the `lottie` source-handle output).
     expect(mocks.markJobCompleted).toHaveBeenCalledTimes(1)
     const [jobId, patch] = mocks.markJobCompleted.mock.calls[0]
     expect(jobId).toBe("job-1")
     expect(patch.output_data.motionPlan.planType).toBe("lottie-graphic")
+    expect(patch.output_data.lottieUrl).toBe("https://cdn.example.com/lottie/job-1.json")
     expect(patch.provider_cost).toBe(0.01)
 
     // Credits committed with (usageLogId, jobId, providerCost).
     expect(mocks.commitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", 0.01)
+  })
+
+  it("upload failure: job still completes WITHOUT lottieUrl (the plan is additive)", async () => {
+    mocks.uploadBufferToR2.mockRejectedValueOnce(new Error("R2 unavailable"))
+
+    await expect(handler(makeJob() as never, makeCtx())).resolves.toBeUndefined()
+
+    // The plan is delivered + credits committed despite the upload failure.
+    expect(mocks.markJobCompleted).toHaveBeenCalledTimes(1)
+    const patch = mocks.markJobCompleted.mock.calls[0][1]
+    expect(patch.output_data.motionPlan.planType).toBe("lottie-graphic")
+    expect("lottieUrl" in patch.output_data).toBe(false)
+    expect(mocks.commitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", 0.01)
+  })
+
+  it("cancellation skips the upload entirely (shouldSaveJobResult=false)", async () => {
+    mocks.shouldSaveJobResult.mockResolvedValueOnce(false)
+
+    await expect(handler(makeJob() as never, makeCtx())).resolves.toBeUndefined()
+
+    expect(mocks.uploadBufferToR2).not.toHaveBeenCalled()
+    expect(mocks.markJobCompleted).not.toHaveBeenCalled()
   })
 
   it("invalid JSON then valid on retry: two llmComplete calls; second includes prior response + feedback; cost summed", async () => {

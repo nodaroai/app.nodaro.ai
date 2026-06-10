@@ -85,6 +85,7 @@ $0.086 / $0.02 = 4.3   →   ceil   →   5 credits
 
 **Outputs:**
 - `composition` -- Motion graphics plan (JSON). Connect to a Render Video node for final output.
+- `lottie` -- *(Lottie engine only)* The authored Lottie JSON's URL. Appears when the **Engine** is set to **Lottie**, and can be connected to a **Lottie Overlay** node's `lottie` input so the authored animation is placed and timed over a video. (The Classic/elements engine does not expose this handle.)
 ## Best Practices
 - Use the info guide in the prompt field for tips on what the AI can generate.
 - Specify colors, fonts, and animation styles explicitly for consistent branding.

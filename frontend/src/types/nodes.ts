@@ -3102,6 +3102,7 @@ export type MotionGraphicsData = {
   motionPrompt: string
   motionPlan?: Record<string, unknown>
   engine?: "elements" | "lottie" // undefined → "elements" (back-compat)
+  lottieUrl?: string // R2 URL of the authored lottie JSON — Phase 4 handle output (lottie engine)
   aspectRatio: "16:9" | "9:16" | "1:1" | "4:5"
   backgroundColor: string
   llmModel?: string
@@ -6227,7 +6228,9 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "ai",
     creditCost: 2,
     inputs: ["in"],
-    outputs: ["composition"],
+    // `lottie` is emitted only by the lottie engine (the authored Lottie JSON's
+    // R2 URL); the node-component renders that source handle when engine="lottie".
+    outputs: ["composition", "lottie"],
     defaultData: {
       label: "Motion Graphics",
       motionPrompt: "",

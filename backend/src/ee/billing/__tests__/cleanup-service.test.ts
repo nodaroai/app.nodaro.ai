@@ -486,6 +486,46 @@ describe("cleanup-service", () => {
       expect(result.errors).toBe(0)
     })
 
+    it("reaps an authored Lottie JSON (output_data.lottieUrl) from a job row", async () => {
+      // Phase 4 invariant guard (design F2): the motion-graphics-lottie handler
+      // persists the authored Lottie under output_data.lottieUrl. The cleanup
+      // sweep's extractR2UrlsFromOutput is generic (any string starting with
+      // R2_PUBLIC_URL, and any *Url key) — `lottieUrl` satisfies BOTH, so the
+      // upload + sweep coverage land together. This asserts the R2 key derived
+      // from output_data.lottieUrl reaches the deletion batch.
+      mockTableQueue("profiles", [
+        { data: [{ id: "user-expired", tier: "pro", subscription_tier: null }], error: null },
+      ])
+      mockTableQueue("assets", [
+        { data: [], error: null },
+      ])
+      mockTableQueue("jobs", [
+        {
+          data: [
+            {
+              id: "job-lottie",
+              output_data: {
+                motionPlan: { planType: "lottie-graphic" },
+                lottieUrl: "https://cdn.example.com/lottie/job-lottie.json",
+              },
+            },
+          ],
+          error: null,
+        },
+        { data: [], error: null },
+      ])
+
+      const allKeysSeen: string[] = []
+      mockBatchDeleteFromR2.mockImplementation((keys: readonly string[]) => {
+        allKeysSeen.push(...keys)
+        return Promise.resolve({ deleted: keys.length, errors: 0 })
+      })
+
+      await cleanupCanceledUserMedia()
+
+      expect(allKeysSeen).toContain("lottie/job-lottie.json")
+    })
+
     it("SKIPS a candidate who still has an active subscription (never reaps a paying customer)", async () => {
       // Data-loss guard: a reactivated paying customer can be left with a stale
       // subscription_ended_at, so they match the candidate query (tier != free).

@@ -660,6 +660,9 @@ export function runLottiePlanGeneration(
                 updateNodeData(nodeId, {
                   executionStatus: "completed",
                   motionPlan,
+                  // R2 URL of the authored Lottie JSON — flows over the `lottie`
+                  // source handle into a Lottie Overlay node (Phase 4).
+                  lottieUrl: job.output_data?.lottieUrl as string | undefined,
                   currentJobId: undefined,
                 });
                 guardedToast.success("Lottie animation generated");

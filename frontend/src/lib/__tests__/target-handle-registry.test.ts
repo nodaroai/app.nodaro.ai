@@ -34,6 +34,16 @@ describe("target-handle-registry", () => {
     expect(pairs).toContain("generate-image:references")
   })
 
+  it("getTargetHandlesAccepting('motion-graphics') returns lottie-overlay.lottie (Phase 4)", () => {
+    // The motion-graphics lottie source produces a placeable Lottie asset, so its
+    // source-direction popover surfaces lottie-overlay's `lottie` target.
+    const matches = getTargetHandlesAccepting("motion-graphics")
+    const pairs = matches.map(m => `${m.nodeType}:${m.handleId}`)
+    expect(pairs).toContain("lottie-overlay:lottie")
+    // It must NOT match lottie-overlay's `video` target (that's a video producer slot).
+    expect(pairs).not.toContain("lottie-overlay:video")
+  })
+
   it("getTargetHandlesAccepting('nonexistent') returns only the preview pass-through", () => {
     // preview accepts ANY source by design — it's an inspector. So a
     // synthetic "nonexistent" source still matches preview's `in` handle.

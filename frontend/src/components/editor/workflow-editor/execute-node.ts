@@ -5911,7 +5911,10 @@ export function executeNode(
       if (edge.targetHandle !== "lottie") continue;
       const sourceNode = nodes.find((n) => n.id === edge.source);
       if (!sourceNode) continue;
-      const output = extractNodeOutput(sourceNode);
+      // Pass the sourceHandle so a motion-graphics `lottie` source resolves to
+      // its authored Lottie URL (data.lottieUrl) instead of the plan marker
+      // (default handle). Mirrors backend input-resolver's lottie routing.
+      const output = extractNodeOutput(sourceNode, edge.sourceHandle ?? undefined);
       if (output && (output.startsWith("http") || output.startsWith("/"))) {
         lottieAssets.push({
           id: sourceNode.id,

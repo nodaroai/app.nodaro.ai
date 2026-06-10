@@ -16,7 +16,7 @@ The Lottie Overlay node uses Claude Sonnet to interpret a prompt and select, pos
 
 **Inputs:**
 - `in` -- Source video to overlay animations onto.
-- `lottie` -- Optional Lottie asset input.
+- `lottie` -- Optional Lottie asset input. Connect a **Motion Graphics** node running its **Lottie** engine here: its authored Lottie animation is supplied as a placeable asset (via the Motion Graphics `lottie` output handle), letting you position and time an AI-authored animation over the video instead of relying solely on the built-in catalog.
 
 **Outputs:**
 - `composition` -- Overlay plan (JSON). Connect to a Render Video node for final output.

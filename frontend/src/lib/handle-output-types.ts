@@ -71,7 +71,7 @@ export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleCo
   "merge-video-audio": { "video-out": "video" },
   "mix-audio": { "audio-out": "audio" },
   "modify-image": { image: "image" },
-  "motion-graphics": { composition: "control" },
+  "motion-graphics": { composition: "control", lottie: "control" },
   "motion-transfer": { video: "video" },
   "object": { objectRef: "imageRef" },
   "creature": { creatureRef: "imageRef" },

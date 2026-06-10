@@ -1,7 +1,7 @@
 ---
 node_type: motion-graphics
-generated_at: 2026-06-10T19:25:26.132Z
-generated_from: 79f78130
+generated_at: 2026-06-10T21:38:16.979Z
+generated_from: 5ef104b5
 ---
 
 # Motion Graphics
@@ -11,7 +11,7 @@ generated_from: 79f78130
 **Category:** ai
 **Credit cost:** 2
 **Inputs (target handles):** `in`
-**Outputs (source handles):** `composition`
+**Outputs (source handles):** `composition`, `lottie`
 
 **Required data fields:**
 - `label: string`
@@ -24,6 +24,7 @@ generated_from: 79f78130
 **Optional data fields:**
 - `motionPlan?: Record<string, unknown>`
 - `engine?: "elements" | "lottie"`
+- `lottieUrl?: string`
 - `llmModel?: string`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `currentJobProgress?: number`

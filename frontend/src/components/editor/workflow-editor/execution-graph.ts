@@ -703,6 +703,12 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
       : undefined;
   }
   if (type === "motion-graphics") {
+    // The `lottie` source handle (lottie engine only) emits the authored Lottie
+    // JSON's R2 URL for placement by a Lottie Overlay node — NOT the plan marker.
+    // Mirrors backend getPrimaryOutput(motion-graphics, "lottie").
+    if (sourceHandle === "lottie") {
+      return (data.lottieUrl as string | undefined)?.trim() || undefined;
+    }
     return (data.motionPlan as Record<string, unknown> | undefined)
       ? "plan-ready"
       : undefined;
