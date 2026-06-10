@@ -390,7 +390,7 @@ prompt with no questions round-trip.
 
 | Tool | Description |
 |------|-------------|
-| `generate_image` | Text-to-image generation. Accepts `prompt`, `model`, `aspect_ratio`, `resolution`, `quality`, `negative_prompt`, and optional `structured` fields. For reference-guided / multi-reference generation use `image_to_image`. |
+| `generate_image` | Text-to-image generation. Accepts `prompt`, `model`, `aspect_ratio`, `resolution`, `quality`, `negative_prompt`, `reference_image_urls` (up to 14 URLs or asset ids for identity/style/composition guidance — the response text confirms how many were attached), and optional `structured` fields. |
 | `modify_image` | Image-to-image transformation — apply a style, change colors, swap backgrounds. Accepts `image_url`, `prompt`, and strength controls. |
 | `image_to_image` | Structural image-to-image (i2i) using a dedicated i2i model. Distinct from `modify_image` in that it uses models optimized for structural transfer. Supports multi-reference composition via `reference_image_urls` (up to 13). |
 | `edit_image` | Targeted edits: remove background, upscale, inpaint, or use Nodaro's nano-banana-edit model. |

@@ -33,6 +33,7 @@ exports[`per-node skill file snapshots > generate-image.md auto-gen blocks match
 - \`quality\`
 - \`aspect_ratio\`
 - \`negative_prompt\`
+- \`reference_image_urls\`
 - \`base_image_url\`
 - \`mask_url\`
 - \`strength\`
