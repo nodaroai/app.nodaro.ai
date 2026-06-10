@@ -1650,6 +1650,13 @@ export function buildPayload(
           renderingSpeed: data.renderingSpeed,
           styleType: data.styleType,
           expandPrompt: data.expandPrompt,
+          // Inpaint fields — carried through identically to image-to-image so a
+          // workflow run produces the same payload as the single-node
+          // /v1/generate-image route (routes/generate-image.ts:636).
+          baseImageUrl: resolvedInputs.baseImageUrl || (data.baseImageUrl as string | undefined),
+          maskUrl: resolvedInputs.maskUrl || (data.maskUrl as string | undefined),
+          strength: data.strength,
+          guidanceScale: data.guidanceScale,
           // Pass lora_version + lora_trigger through to ReplicateImageProvider.buildInput.
           extraParams: loraExtras,
           usageLogId,

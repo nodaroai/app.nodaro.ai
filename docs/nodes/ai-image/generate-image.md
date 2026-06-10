@@ -22,6 +22,10 @@ Generate Image is the primary text-to-image node. It accepts a text prompt (with
 | Expand Prompt | boolean | -- | Ideogram-specific prompt expansion toggle |
 | Reference Images | image list | -- | Supported by nano-banana, nano-banana-pro, nano-banana-2 only. Upload or select from library. |
 | Character/Asset References | references | -- | Connect Character, Object, or Location nodes for visual consistency |
+| Strength | slider | varies | i2i denoising strength. Shown only for providers that support it (`ideogram-remix`, `qwen-i2i`). Lower = stays closer to the base image. |
+| Guidance Scale | slider | varies | Prompt-adherence guidance. Shown only for providers that support it (`qwen-i2i`, `qwen-edit`). |
+| `baseImageUrl` | image url | -- | Inpaint / refine base image. Set automatically from the node's own current result at run time (or a connected image). See [Inpainting & Refine](#inpainting--refine). |
+| `maskUrl` | mask url | -- | Inpaint mask (white = edit, black = keep). Produced by the in-panel Mask Painter or a [Generate Mask](./generate-mask.md) node. |
 
 ## Inputs & Outputs
 
@@ -82,6 +86,36 @@ The migration runs on the frontend (`loadWorkflow`) plus three defensive backend
 | flux-2-klein | Flux 2 Klein (Open) | BFL Flux 2 9B Klein via Replicate — fast, no safety filter. Resolution 0.5 / 1 / 2 / 4 MP (default 1 MP). **1 credit at 1 MP** (`ceil([figures removed])`). | Same as Flux |
 | flux-2-pro | Flux 2 Pro (Safety Tolerance) | BFL Flux 2 Pro flagship via Replicate — `safety_tolerance` pinned to 5 (max for Pro). Resolution 0.5 / 1 / 2 / 4 MP (**default 2 MP**). Per-megapixel pricing ($0.015 base + $0.015/output-MP): **3 credits at 2 MP**. | Same as Flux |
 | flux-2-max | Flux 2 Max (Safety Tolerance) | BFL Flux 2 Max via Replicate — `safety_tolerance=5`, up to 8 reference images. Resolution 0.5 / 1 / 2 / 4 MP (**default 2 MP**). **Per-megapixel pricing** ($0.07/output-MP + $0.03/ref-MP): **7 credits at 2 MP** (0 refs), **14 credits at 4 MP** (0 refs), scaling with resolution and refs. | Same as Flux |
+
+## Inpainting & Refine
+
+Once a Generate Image node has a result, you can edit it **in place** — re-render a painted region (inpaint) or refine the whole image (image-to-image) — without adding a separate Edit Image / Modify Image node.
+
+### Inpaint (masked edit)
+
+When the node has a current result, open its config panel and scroll to the **Inpainting Mask** painter. Paint over the area you want to change:
+
+- **White = edit, black = keep.** Only the masked area is regenerated; everything outside the mask stays **pixel-identical** to the original.
+- Run the node again with a new prompt describing the change. The provider re-renders, and the masked region of the new image is composited back over the original.
+
+This works on **every image provider**, not just one model. A server-side **composite floor** restricts the change to the masked region (`out = base·(1−mask) + result·mask`), so even providers that have no native mask parameter produce a clean, localized edit.
+
+**Strong instruction-following editors** (`gpt-image`, `gpt-image-2`, `nano-banana`, `nano-banana-pro`, `nano-banana-2`, `seedream`, `seedream-5-lite`, `qwen`, `flux-kontext`, `flux-kontext-max`) additionally get a natural-language **region hint** injected into the prompt (e.g. "Apply the following change only to the upper-left region…") for better in-region results. This is automatic — no user action required. Other providers rely on the composite floor alone, which still keeps the edit localized.
+
+The mask comes from either:
+
+- The in-panel **Mask Painter** (click **Edit Mask** to paint or touch up), or
+- A wired [Generate Mask](./generate-mask.md) node, which auto-segments a subject from a text description (white = subject) and can seed the painter.
+
+### Refine from this result
+
+The node also exposes a **↻ Refine from this result** affordance. It takes the current result as the base for a **full-image image-to-image refine** (no mask) and re-runs the provider over the entire frame. Use it for whole-image iteration — "make the whole thing more cinematic", "warmer grade", "more detail" — where you want to evolve the image rather than surgically patch one spot.
+
+For providers that expose them, the **Strength** (i2i denoising) and **Guidance Scale** sliders appear in the panel and let you control how far the refine moves from the base image.
+
+### Credits
+
+An inpaint or refine edit is **one generation at the provider's normal cost** — there is **no extra surcharge** for the mask or the composite step. The price is exactly the per-provider Generate Image cost listed in [Supported Providers](#supported-providers) above (e.g. nano-banana-pro inpaint costs the same as a fresh nano-banana-pro generation).
 
 ## Best Practices
 

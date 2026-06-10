@@ -147,6 +147,10 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
               "Variations like 16x9 / 16-9 are accepted; unsupported values fall back.",
             ),
           negative_prompt: z.string().max(2000).optional(),
+          base_image_url: z.string().url().optional().describe("Image to edit; the masked region is regenerated and composited back over it. Enables inpaint."),
+          mask_url: z.string().url().optional().describe("Inpainting mask image URL (white=edit, black=keep). Requires base_image_url."),
+          strength: z.number().min(0).max(1).optional().describe("How much the prompt overrides the base image (0=subtle, 1=full repaint). Provider-dependent."),
+          guidance_scale: z.number().min(0).max(20).optional().describe("Guidance scale (provider-dependent)."),
           structured: StructuredFields.optional().describe(
             "Path-1 structured fields composed into the final prompt.",
           ),
@@ -224,6 +228,10 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           resolution,
           quality,
           negativePrompt: args.negative_prompt,
+          ...(args.base_image_url ? { baseImageUrl: args.base_image_url } : {}),
+          ...(args.mask_url ? { maskUrl: args.mask_url } : {}),
+          ...(args.strength !== undefined ? { strength: args.strength } : {}),
+          ...(args.guidance_scale !== undefined ? { guidanceScale: args.guidance_scale } : {}),
           mcp_client: session.clientName,
           userId: session.userId,
         }

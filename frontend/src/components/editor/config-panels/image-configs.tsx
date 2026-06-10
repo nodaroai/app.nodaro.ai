@@ -171,6 +171,10 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
   const supportsSeed = SEED_SUPPORT.has(currentProvider)
   const supportsRenderingSpeed = RENDERING_SPEED_SUPPORT.has(currentProvider)
   const maxRefImages = REF_IMAGE_MAX_LIMITS[currentProvider] ?? DEFAULT_REF_IMAGE_MAX
+  // i2i levers — only shown for providers that accept them (single-provider
+  // mode; in multi mode the i2i inpaint loop is not offered).
+  const strengthConfig = isMulti ? undefined : I2I_STRENGTH_SUPPORT[currentProvider]
+  const guidanceScaleConfig = isMulti ? undefined : GUIDANCE_SCALE_SUPPORT[currentProvider]
 
   // When the cohort changes (provider added/removed/swapped), reset narrowed
   // fields whose current value isn't supported by all providers, and drop ref
@@ -226,6 +230,12 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
       updates.referenceImageUrls = undefined
       updates.referenceImageOrder = undefined
     }
+    // i2i levers: clear stale values when the new provider doesn't expose them
+    // so the backend route's Zod schema doesn't reject params the provider can't
+    // accept. maskUrl is NOT provider-gated in Phase 1 (the composite inpaint
+    // floor works on all providers), so it is intentionally left untouched.
+    if (data.strength != null && !I2I_STRENGTH_SUPPORT[currentProvider]) updates.strength = undefined
+    if (data.guidanceScale != null && !GUIDANCE_SCALE_SUPPORT[currentProvider]) updates.guidanceScale = undefined
     if (Object.keys(updates).length > 0) {
       onUpdate(updates)
     }
@@ -247,6 +257,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
   const [showDefineNewMenu, setShowDefineNewMenu] = useState(false)
   const refImageInputRef = useRef<HTMLInputElement>(null)
   const [uploadingRefImage, setUploadingRefImage] = useState(false)
+  const [showMaskPainter, setShowMaskPainter] = useState(false)
   const genImgMediaEditor = useMediaEditor({
     onComplete: async (results) => {
       const currentManual = [...(data.referenceImageUrls ?? [])]
@@ -334,6 +345,20 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
     () => connectedReferencesToRefImages(connectedReferences),
     [connectedReferences],
   )
+
+  // Inpaint base image. The node's own current result drives the in-place
+  // inpaint loop (paint a mask on the last render, regenerate). If there's no
+  // result yet, fall back to a connected upstream image (excluding the mask
+  // input). An explicit `data.baseImageUrl` (persisted on a prior paint) wins.
+  const currentResultUrl = data.generatedResults?.[data.activeResultIndex ?? 0]?.url ?? data.generatedImageUrl
+  const upstreamImageUrl = useMemo(() => {
+    const imgSource = sources.find((s) => IMAGE_SOURCE_TYPES.has(s.type) && s.targetHandle !== "mask")
+    if (imgSource?.nodeData) {
+      return (imgSource.nodeData.generatedImageUrl as string) || (imgSource.nodeData.url as string)
+    }
+    return undefined
+  }, [sources])
+  const sourceImageUrl = data.baseImageUrl ?? currentResultUrl ?? upstreamImageUrl
 
   function handleRefImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files
@@ -674,6 +699,46 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
               </div>
             </>
           )}
+          {strengthConfig && (
+            <div>
+              <Label className="text-xs">Strength</Label>
+              <div className="flex items-center gap-2 mt-1">
+                <input
+                  type="range"
+                  min={strengthConfig.min}
+                  max={strengthConfig.max}
+                  step={strengthConfig.step}
+                  value={data.strength ?? strengthConfig.default}
+                  onChange={(e) => onUpdate({ strength: parseFloat(e.target.value) })}
+                  className="flex-1"
+                />
+                <span className="text-xs text-muted-foreground w-8 text-right">
+                  {(data.strength ?? strengthConfig.default).toFixed(2)}
+                </span>
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Lower = closer to original, higher = more creative</p>
+            </div>
+          )}
+          {guidanceScaleConfig && (
+            <div>
+              <Label className="text-xs">Guidance Scale</Label>
+              <div className="flex items-center gap-2 mt-1">
+                <input
+                  type="range"
+                  min={guidanceScaleConfig.min}
+                  max={guidanceScaleConfig.max}
+                  step={guidanceScaleConfig.step}
+                  value={data.guidanceScale ?? guidanceScaleConfig.default}
+                  onChange={(e) => onUpdate({ guidanceScale: parseFloat(e.target.value) })}
+                  className="flex-1"
+                />
+                <span className="text-xs text-muted-foreground w-8 text-right">
+                  {(data.guidanceScale ?? guidanceScaleConfig.default).toFixed(1)}
+                </span>
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Higher = stricter prompt adherence</p>
+            </div>
+          )}
           {supportsSeed && (
             <div>
               <Label className="text-xs">Seed</Label>
@@ -693,6 +758,60 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
           )}
         </div>
       </div>
+
+      {/* Inpainting Mask — paint over the node's current result (or a connected
+          upstream image) to drive the worker's inpaint composite. Persists
+          baseImageUrl alongside the mask so the worker knows which image the
+          mask applies to. Not provider-gated: the composite floor works on all
+          providers (Phase 1). */}
+      {sourceImageUrl && (
+        <div className="pt-1">
+          <Separator className="mb-3" />
+          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Inpainting Mask</label>
+          <div className="flex flex-col gap-2 mt-2">
+            {data.maskUrl ? (
+              <div className="flex items-center gap-2">
+                <img src={optimizedImageUrl(data.maskUrl)} alt="Mask" className="w-16 h-16 object-cover rounded border border-[#2D2D2D]" />
+                <div className="flex flex-col gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowMaskPainter(true)}
+                    className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md border hover:bg-muted transition-colors"
+                  >
+                    <Paintbrush className="w-3 h-3" /> Edit Mask
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onUpdate({ maskUrl: undefined })}
+                    className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-md border hover:bg-destructive/10 hover:text-destructive transition-colors"
+                  >
+                    <X className="w-3 h-3" /> Clear Mask
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowMaskPainter(true)}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs rounded-md border border-dashed hover:bg-muted transition-colors"
+              >
+                <Paintbrush className="w-3.5 h-3.5" />
+                Paint Mask
+              </button>
+            )}
+            <p className="text-[10px] text-muted-foreground">White areas in the mask will be edited, black areas preserved</p>
+          </div>
+          <Suspense fallback={null}>
+            <MaskPainterModal
+              isOpen={showMaskPainter}
+              onClose={() => setShowMaskPainter(false)}
+              imageUrl={sourceImageUrl}
+              initialMaskUrl={data.maskUrl}
+              onSave={(maskUrl) => onUpdate({ maskUrl, baseImageUrl: sourceImageUrl })}
+            />
+          </Suspense>
+        </div>
+      )}
 
       {showAssetLibrary && (
         <Suspense fallback={null}>

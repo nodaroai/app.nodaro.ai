@@ -1627,6 +1627,27 @@ export function executeNode(
     // Capture the user-typed template (pre-resolution) so it lands in
     // jobs.input_data.userPrompt for debugging.
     setUserPromptTemplate(imgData.prompt?.trim() || undefined);
+
+    // Inpaint base default — when a mask is painted but no base was pinned
+    // (the config-panel painter + Refine button normally pin one), fall back
+    // to the node's CURRENT result so a single-node Run inpaints in place.
+    // Uses the same current-result accessor the node component reads. No-op
+    // when baseImageUrl is already set or there's no mask.
+    const effectiveBase =
+      imgData.baseImageUrl ??
+      (imgData.maskUrl
+        ? imgData.generatedResults?.[imgData.activeResultIndex ?? 0]?.url ??
+          imgData.generatedImageUrl
+        : undefined);
+    const inpaint =
+      effectiveBase || imgData.maskUrl || imgData.strength != null || imgData.guidanceScale != null
+        ? {
+            baseImageUrl: effectiveBase,
+            maskUrl: imgData.maskUrl,
+            strength: imgData.strength,
+            guidanceScale: imgData.guidanceScale,
+          }
+        : undefined;
     return runImageGeneration(
       node.id,
       result.prompt,
@@ -1649,6 +1670,7 @@ export function executeNode(
         : undefined,
       internalLora,
       idempotencyKey,
+      inpaint,
     );
   }
 

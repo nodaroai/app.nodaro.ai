@@ -1,7 +1,7 @@
 ---
 node_type: generate-image
-generated_at: 2026-05-25T09:50:13.251Z
-generated_from: 4f5087a5
+generated_at: 2026-06-09T19:26:10.809Z
+generated_from: 45c55140
 ---
 
 # generate-image
@@ -33,6 +33,10 @@ generated_from: 4f5087a5
 - `expandPrompt?: boolean`
 - `referenceImageUrl?: string`
 - `referenceImageUrls?: readonly ManualReferenceImage[]`
+- `baseImageUrl?: string`
+- `maskUrl?: string`
+- `strength?: number`
+- `guidanceScale?: number`
 - `referenceImageOrder?: readonly string[]`
 - `referenceOrder?: readonly string[]`
 - `suppressedCanonicalCharacterIds?: readonly string[]`
@@ -73,6 +77,10 @@ generated_from: 4f5087a5
 - `quality`
 - `aspect_ratio`
 - `negative_prompt`
+- `base_image_url`
+- `mask_url`
+- `strength`
+- `guidance_scale`
 - `structured`
 <!-- AUTO-GEN:END mcp-call -->
 

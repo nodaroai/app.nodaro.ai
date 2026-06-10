@@ -33,6 +33,10 @@ exports[`per-node skill file snapshots > generate-image.md auto-gen blocks match
 - \`quality\`
 - \`aspect_ratio\`
 - \`negative_prompt\`
+- \`base_image_url\`
+- \`mask_url\`
+- \`strength\`
+- \`guidance_scale\`
 - \`structured\`",
   "node-data-shape": "**Type:** \`generate-image\`
 **Category:** ai
@@ -60,6 +64,10 @@ exports[`per-node skill file snapshots > generate-image.md auto-gen blocks match
 - \`expandPrompt?: boolean\`
 - \`referenceImageUrl?: string\`
 - \`referenceImageUrls?: readonly ManualReferenceImage[]\`
+- \`baseImageUrl?: string\`
+- \`maskUrl?: string\`
+- \`strength?: number\`
+- \`guidanceScale?: number\`
 - \`referenceImageOrder?: readonly string[]\`
 - \`referenceOrder?: readonly string[]\`
 - \`suppressedCanonicalCharacterIds?: readonly string[]\`

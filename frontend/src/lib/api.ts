@@ -328,6 +328,18 @@ export async function generateImage(
    * the same value to all retries of that click.
    */
   idempotencyKey?: string,
+  /**
+   * Inpaint / i2i levers. `baseImageUrl` + `maskUrl` together turn this into
+   * an in-place inpaint (white mask = edit region, black = keep). `strength`
+   * and `guidanceScale` are provider-gated on the backend. All four are only
+   * placed on the body when present (mirrors negativePrompt/seed).
+   */
+  inpaint?: {
+    baseImageUrl?: string
+    maskUrl?: string
+    strength?: number
+    guidanceScale?: number
+  },
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { prompt }
   if (referenceImageUrls && referenceImageUrls.length > 0) {
@@ -375,6 +387,18 @@ export async function generateImage(
   if (internalLora) {
     body._internalLora = internalLora
     body.provider = FLUX_LORA_CHARACTER_MODEL_ID
+  }
+  if (inpaint?.baseImageUrl) {
+    body.baseImageUrl = inpaint.baseImageUrl
+  }
+  if (inpaint?.maskUrl) {
+    body.maskUrl = inpaint.maskUrl
+  }
+  if (inpaint?.strength != null) {
+    body.strength = inpaint.strength
+  }
+  if (inpaint?.guidanceScale != null) {
+    body.guidanceScale = inpaint.guidanceScale
   }
   return apiJson("/v1/generate-image", {
     body,
