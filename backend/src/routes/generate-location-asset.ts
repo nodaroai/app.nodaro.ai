@@ -194,11 +194,19 @@ export async function generateLocationAssetRoutes(app: FastifyInstance) {
     // Approved-source-image gate (Location Studio path). Mirrors the
     // character/object routes: when attaching to a location, require an
     // approved establishing shot to i2i from. Runs BEFORE credit reservation
-    // and the DB insert so a missing anchor costs nothing.
+    // and the DB insert so a missing anchor costs nothing. The SAME row read
+    // also supplies the identity anchors the prompt/worker need: the main
+    // image (i2i source), the row's real name, and the canonical description
+    // — previously the gate read the row and then DISCARDED it, so location
+    // assets generated unanchored ("Untitled location at golden hour" with no
+    // reference image → an unrelated landscape).
+    let sourceImageUrlAnchor: string | null = null
+    let anchorName: string | null = null
+    let anchorDescription: string | null = null
     if (attachToLocationId) {
       const { data: locRow } = await supabase
         .from("locations")
-        .select("source_image_url")
+        .select("source_image_url, name, canonical_description")
         .eq("id", attachToLocationId)
         .eq("user_id", userId)
         .is("deleted_at", null)
@@ -213,11 +221,24 @@ export async function generateLocationAssetRoutes(app: FastifyInstance) {
               error: { code: "main_image_required", message: "Generate a main image first" },
             })
       }
+      sourceImageUrlAnchor = (locRow?.source_image_url as string | null) ?? null
+      anchorName = (locRow?.name as string | null) ?? null
+      anchorDescription = (locRow?.canonical_description as string | null) ?? null
     }
 
     const modelIdentifier = parsed.data.provider
 
-    const prompt = buildVariantPrompt(assetType, variant, name, description, category, style, userPrompt)
+    // Use the location's anchor image as the i2i source when the studio path
+    // runs, UNLESS the caller passed an explicit sourceImageUrl (their choice
+    // wins). Outside the studio path, behavior is unchanged.
+    const resolvedSourceImageUrl = sourceImageUrl ?? sourceImageUrlAnchor ?? undefined
+    // The ROW is the identity truth when attaching: its real name beats the
+    // caller's placeholder, and the canonical description (when the caller
+    // sent none) keeps the variant on-model even before the image lands.
+    const promptName = anchorName ?? name
+    const promptDescription = description ?? anchorDescription ?? undefined
+
+    const prompt = buildVariantPrompt(assetType, variant, promptName, promptDescription, category, style, userPrompt)
 
     const mcpClient = extractMcpClient(req.body)
     const { data: job, error } = await supabase
@@ -247,7 +268,7 @@ export async function generateLocationAssetRoutes(app: FastifyInstance) {
     await videoQueue.add("generate-location-asset", {
       jobId: job.id,
       prompt,
-      sourceImageUrl,
+      sourceImageUrl: resolvedSourceImageUrl,
       assetType,
       variant,
       provider: parsed.data.provider,

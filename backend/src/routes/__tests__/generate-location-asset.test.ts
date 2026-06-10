@@ -104,9 +104,14 @@ beforeEach(async () => {
   // (parity with character/object). The attach-param test below sets
   // attachToLocationId, so the gate now fetches the row — return one with an
   // approved source_image_url so the gate passes and the job still enqueues.
-  const locSingle = vi
-    .fn()
-    .mockResolvedValue({ data: { source_image_url: "https://r2.example/anchor.png" }, error: null })
+  const locSingle = vi.fn().mockResolvedValue({
+    data: {
+      source_image_url: "https://r2.example/anchor.png",
+      name: "Hidden Lagoon",
+      canonical_description: "a turquoise lagoon ringed by limestone cliffs",
+    },
+    error: null,
+  })
   const locIs = vi.fn().mockReturnValue({ single: locSingle })
   const locEqUser = vi.fn().mockReturnValue({ is: locIs })
   const locEqId = vi.fn().mockReturnValue({ eq: locEqUser })
@@ -232,6 +237,67 @@ describe("POST /v1/generate-location-asset — extended asset types (Task 9)", (
         attachName: "neon",
       }),
     )
+  })
+
+  it("anchors studio-path generations: row source image, name, and canonical description flow into the job", async () => {
+    // Regression — the gate used to read the row and then DISCARD it: the
+    // worker received sourceImageUrl=undefined (no i2i reference) and the
+    // prompt said "Untitled location", so assets came back as unrelated
+    // landscapes. When attaching, the row anchors identity.
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-location-asset",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        assetType: "timeOfDay",
+        variant: "golden hour",
+        name: "Untitled location",
+        attachToLocationId: TEST_LOCATION_ID,
+        attachToColumn: "time_of_day",
+        attachName: "golden hour",
+      },
+    })
+
+    expect(videoQueue.add).toHaveBeenCalledTimes(1)
+    const enqueued = vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>
+    expect(enqueued.sourceImageUrl).toBe("https://r2.example/anchor.png")
+    expect(String(enqueued.prompt)).toContain("Hidden Lagoon")
+    expect(String(enqueued.prompt)).toContain("a turquoise lagoon ringed by limestone cliffs")
+    expect(String(enqueued.prompt)).not.toContain("Untitled location")
+  })
+
+  it("an explicit caller sourceImageUrl wins over the row anchor (chained generations)", async () => {
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-location-asset",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        assetType: "custom",
+        variant: "custom",
+        name: "Hidden Lagoon",
+        userPrompt: "rotate the camera 45 degrees right",
+        sourceImageUrl: "https://r2.example/previous-view.png",
+        attachToLocationId: TEST_LOCATION_ID,
+        attachToColumn: "angles",
+        attachName: "Pan 45",
+      },
+    })
+
+    const enqueued = vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>
+    expect(enqueued.sourceImageUrl).toBe("https://r2.example/previous-view.png")
+  })
+
+  it("non-attach calls keep sourceImageUrl undefined (no row read, no anchor)", async () => {
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-location-asset",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { assetType: "seasons", variant: "winter", name: "Forest Glade" },
+    })
+
+    const enqueued = vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>
+    expect(enqueued.sourceImageUrl).toBeUndefined()
+    expect(String(enqueued.prompt)).toContain("Forest Glade")
   })
 
   it("404s and does not enqueue when attachToLocationId resolves to no owned row", async () => {
