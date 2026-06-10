@@ -371,8 +371,11 @@ export async function executeNode(
     return executeInlineNode(node, resolvedInputs, edges, allNodes, nodeStates, ctx)
   }
 
-  // Sync HTTP nodes
-  if (SYNC_HTTP_NODES.has(node.type)) {
+  // Sync HTTP nodes. Exception: motion-graphics with the lottie engine runs
+  // worker-queued (async LLM job — generate-script precedent); elements stays sync.
+  const isLottieMotionGraphics =
+    node.type === "motion-graphics" && (node.data.engine as string | undefined) === "lottie"
+  if (SYNC_HTTP_NODES.has(node.type) && !isLottieMotionGraphics) {
     return executeSyncHttpNode(node, resolvedInputs, ctx, userPromptTemplate, edges, allNodes, nodeStates)
   }
 

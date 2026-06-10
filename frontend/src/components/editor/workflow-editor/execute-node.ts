@@ -211,6 +211,7 @@ import {
   runTextToVideoGeneration,
   runTextToSpeechGeneration,
   runScriptGeneration,
+  runLottiePlanGeneration,
   runCombineVideos,
 } from "./node-executors";
 import {
@@ -6022,13 +6023,27 @@ export function executeNode(
 
   if (node.type === "motion-graphics") {
     const d = node.data as MotionGraphicsData;
+    const dims = ASPECT_RATIO_DIMENSIONS[d.aspectRatio] ?? { width: 1920, height: 1080 };
+    // Lottie engine runs async (LLM authors a full Lottie doc on the video
+    // worker — generate-script precedent). Elements stays synchronous below.
+    if (d.engine === "lottie") {
+      return runLottiePlanGeneration(node.id, {
+        prompt: inputs.prompt || d.motionPrompt,
+        fps: d.fps,
+        aspectRatio: d.aspectRatio,
+        width: dims.width,
+        height: dims.height,
+        durationSeconds: d.durationSeconds,
+        backgroundColor: d.backgroundColor,
+        llmModel: d.llmModel,
+      }, ctx);
+    }
     const { updateNodeData } = useWorkflowStore.getState();
     updateNodeData(node.id, {
       executionStatus: "running",
       motionPlan: undefined,
       errorMessage: undefined,
     });
-    const dims = ASPECT_RATIO_DIMENSIONS[d.aspectRatio] ?? { width: 1920, height: 1080 };
     return generateMotionGraphics({
       prompt: inputs.prompt || d.motionPrompt,
       fps: d.fps,
@@ -6174,7 +6189,11 @@ export function executeNode(
       if (composerInfo) {
         const nodePlan = (sourceNode.data as Record<string, unknown>)[composerInfo.planField];
         if (nodePlan) {
-          upstreamPlanType = composerInfo.planType;
+          // Pass-through: a plan that declares its own planType (e.g. a lottie
+          // motion-graphics node emitting "lottie-graphic") wins over the map's
+          // static value, so render-video routes to the right renderer.
+          upstreamPlanType =
+            ((nodePlan as Record<string, unknown>).planType as string | undefined) ?? composerInfo.planType;
           upstreamPlan = nodePlan as Record<string, unknown>;
           break;
         }

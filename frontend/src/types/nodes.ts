@@ -3101,6 +3101,7 @@ export type MotionGraphicsData = {
   label: string
   motionPrompt: string
   motionPlan?: Record<string, unknown>
+  engine?: "elements" | "lottie" // undefined → "elements" (back-compat)
   aspectRatio: "16:9" | "9:16" | "1:1" | "4:5"
   backgroundColor: string
   llmModel?: string
@@ -6230,6 +6231,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     defaultData: {
       label: "Motion Graphics",
       motionPrompt: "",
+      engine: "elements",
       aspectRatio: "16:9",
       backgroundColor: "#00000000",
       fps: 30,

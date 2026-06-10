@@ -166,8 +166,8 @@ function makeSceneGraphPlan(overrides: Record<string, unknown> = {}) {
 // ── PLAN_TYPES ───────────────────────────────────────────────────────────
 
 describe("PLAN_TYPES", () => {
-  it("has exactly 7 entries", () => {
-    expect(PLAN_TYPES).toHaveLength(7)
+  it("has exactly 8 entries", () => {
+    expect(PLAN_TYPES).toHaveLength(8)
   })
 
   it("contains all expected types", () => {
@@ -178,6 +178,34 @@ describe("PLAN_TYPES", () => {
     expect(PLAN_TYPES).toContain("motion-graphics")
     expect(PLAN_TYPES).toContain("composite")
     expect(PLAN_TYPES).toContain("burn-captions")
+    expect(PLAN_TYPES).toContain("lottie-graphic")
+  })
+})
+
+// ── lottie-graphic ───────────────────────────────────────────────────────
+
+describe("lottie-graphic plan schema", () => {
+  const plan = {
+    planType: "lottie-graphic",
+    fps: 30, width: 1920, height: 1080, durationInFrames: 150,
+    backgroundColor: "#00000000",
+    lottie: { v: "5.7.0", fr: 30, ip: 0, op: 150, w: 1920, h: 1080, layers: [] },
+    slots: { primaryColor: { p: { a: 0, k: [1, 0, 0, 1] } } },
+    slotValues: {},
+  }
+  it("is registered in PLAN_TYPES", () => {
+    expect(PLAN_TYPES).toContain("lottie-graphic")
+  })
+  it("round-trips through validatePlanByType", () => {
+    const validated = validatePlanByType("lottie-graphic", plan) as Record<string, unknown>
+    expect(validated.planType).toBe("lottie-graphic")
+    expect(validated.lottie).toEqual(plan.lottie)
+  })
+  it("defaults slots/slotValues to {}", () => {
+    const { slots: _s, slotValues: _sv, ...rest } = plan
+    const validated = validatePlanByType("lottie-graphic", rest) as Record<string, unknown>
+    expect(validated.slots).toEqual({})
+    expect(validated.slotValues).toEqual({})
   })
 })
 

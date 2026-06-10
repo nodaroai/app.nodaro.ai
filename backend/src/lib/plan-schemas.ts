@@ -12,6 +12,7 @@ export const PLAN_TYPES = [
   "motion-graphics",
   "composite",
   "burn-captions",
+  "lottie-graphic",
 ] as const
 
 export type PlanType = (typeof PLAN_TYPES)[number]
@@ -330,6 +331,27 @@ export const motionGraphicsPlanSchema = z
   })
   .passthrough()
 
+// ── Lottie Graphic Plan ─────────────────────────────────────────────────
+// Render-time envelope for an LLM-authored Lottie document. The `lottie`
+// field is the raw Lottie JSON; it is structurally validated by the
+// dedicated lottie-graphic validator at generation time, so here it is only
+// typed as an opaque record. `slots`/`slotValues` carry the slot bindings
+// applied via applySlots before render.
+
+export const lottieGraphicPlanSchema = z
+  .object({
+    planType: z.literal("lottie-graphic"),
+    fps: z.number().min(15).max(60),
+    width: z.number().min(100).max(3840),
+    height: z.number().min(100).max(3840),
+    durationInFrames: z.number().min(1).max(54000),
+    backgroundColor: z.string(),
+    lottie: z.record(z.unknown()),
+    slots: z.record(z.unknown()).default({}),
+    slotValues: z.record(z.unknown()).default({}),
+  })
+  .passthrough()
+
 // ── Composite Plan ────────────────────────────────────────────────────
 
 const compositeLayerSchema = z.object({
@@ -482,6 +504,7 @@ export const renderPlanSchema = z.discriminatedUnion("planType", [
   motionGraphicsPlanSchema,
   compositePlanSchema,
   burnCaptionsPlanSchema,
+  lottieGraphicPlanSchema,
 ])
 
 // ── Plan type → schema lookup ───────────────────────────────────────────
@@ -494,6 +517,7 @@ const planSchemaMap: Record<string, z.ZodType> = {
   "motion-graphics": motionGraphicsPlanSchema,
   "composite": compositePlanSchema,
   "burn-captions": burnCaptionsPlanSchema,
+  "lottie-graphic": lottieGraphicPlanSchema,
 }
 
 /**

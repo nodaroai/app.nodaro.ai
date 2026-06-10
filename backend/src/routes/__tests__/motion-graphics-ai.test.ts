@@ -11,8 +11,19 @@ vi.mock("@/lib/config.js", () => ({
   isCloud: () => true, hasCredits: () => true, isCommunity: () => false, isBusiness: () => false, hasAdmin: () => true,
 }))
 
+vi.mock("@/lib/queue.js", () => ({
+  videoQueue: { add: vi.fn().mockResolvedValue({ id: "queue-job-1" }) },
+  redis: {},
+}))
+
+// Capture the resolver fn passed to creditGuard so we can unit-assert the
+// engine-aware credit-id mapping without changing the route's surface.
+const creditGuardResolvers: Array<(req: { body: unknown }) => string> = []
 vi.mock("@/middleware/credit-guard.js", () => ({
-  creditGuard: () => async () => {},
+  creditGuard: (resolver: (req: { body: unknown }) => string) => {
+    creditGuardResolvers.push(resolver)
+    return async () => {}
+  },
   reserveCreditsForJob: vi.fn().mockResolvedValue({ usageLogId: "usage-1" }),
 }))
 
@@ -49,6 +60,7 @@ import { supabase } from "../../lib/supabase.js"
 import { CreditsService } from "../../ee/billing/credits.js"
 import { getAnthropicClient } from "../../lib/anthropic.js"
 import { validateMotionGraphicsPlan } from "../../lib/motion-graphics-validator.js"
+import { videoQueue } from "../../lib/queue.js"
 
 let app: FastifyInstance
 
@@ -67,6 +79,7 @@ const MOCK_ANTHROPIC_RESPONSE = {
 
 beforeEach(async () => {
   vi.clearAllMocks()
+  creditGuardResolvers.length = 0
   app = Fastify({ logger: false })
   app.addHook("preHandler", async (req, reply) => {
     req.raw.setTimeout = (() => {}) as never
@@ -194,5 +207,113 @@ describe("POST /v1/motion-graphics/generate", () => {
     const payload = { ...VALID_PAYLOAD, backgroundColor: "#FF0000" }
     const res = await app.inject({ method: "POST", url: "/v1/motion-graphics/generate", payload })
     expect(res.statusCode).toBe(200)
+  })
+})
+
+describe("POST /v1/motion-graphics/generate — engine=lottie (async enqueue)", () => {
+  const LOTTIE_PAYLOAD = {
+    prompt: "animated lower third",
+    durationSeconds: 5,
+    aspectRatio: "16:9",
+    userId: "00000000-0000-4000-8000-000000000001",
+    engine: "lottie" as const,
+  }
+
+  it("returns 200 with jobId only and enqueues a motion-graphics-lottie worker job", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/motion-graphics/generate",
+      payload: LOTTIE_PAYLOAD,
+    })
+
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.jobId).toBe("job-1")
+    // Async path: NO inline motionPlan / validation result returned by the route.
+    expect(body.motionPlan).toBeUndefined()
+    expect(body.validationErrors).toBeUndefined()
+    expect(body.autoFixes).toBeUndefined()
+
+    expect(videoQueue.add).toHaveBeenCalledTimes(1)
+    expect(videoQueue.add).toHaveBeenCalledWith("motion-graphics-lottie", {
+      jobId: "job-1",
+      prompt: "animated lower third",
+      fps: 30,
+      width: 1920,
+      height: 1080,
+      // 5s × 30fps = 150 frames (computed exactly like the elements path).
+      durationInFrames: 150,
+      backgroundColor: "#00000000",
+      llmModel: "claude-sonnet-4.6",
+      previousSids: undefined,
+      usageLogId: "usage-1",
+    })
+  })
+
+  it("does not call the LLM and does not write a completed job from the route", async () => {
+    const mockCreate = vi.fn()
+    vi.mocked(getAnthropicClient).mockReturnValue({ messages: { create: mockCreate } } as never)
+
+    await app.inject({ method: "POST", url: "/v1/motion-graphics/generate", payload: LOTTIE_PAYLOAD })
+
+    // llmComplete routes through the Anthropic client — never invoked on the
+    // async lottie path (the worker handles the LLM call).
+    expect(mockCreate).not.toHaveBeenCalled()
+    expect(validateMotionGraphicsPlan).not.toHaveBeenCalled()
+    expect(CreditsService.commitCredits).not.toHaveBeenCalled()
+    // The route never updates the job to a terminal status — only inserts it.
+    const fromCalls = vi.mocked(supabase.from).mock.calls
+    expect(fromCalls.every(([table]) => table === "jobs")).toBe(true)
+  })
+
+  it("forwards previousSids to the enqueued payload", async () => {
+    await app.inject({
+      method: "POST",
+      url: "/v1/motion-graphics/generate",
+      payload: { ...LOTTIE_PAYLOAD, previousSids: ["a", "b"] },
+    })
+
+    expect(videoQueue.add).toHaveBeenCalledWith(
+      "motion-graphics-lottie",
+      expect.objectContaining({ previousSids: ["a", "b"] }),
+    )
+  })
+
+  it("returns 400 when previousSids exceeds the max of 40", async () => {
+    const previousSids = Array.from({ length: 41 }, (_, i) => `sid-${i}`)
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/motion-graphics/generate",
+      payload: { ...LOTTIE_PAYLOAD, previousSids },
+    })
+
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+    expect(videoQueue.add).not.toHaveBeenCalled()
+  })
+
+  it("respects an explicit llmModel (economy tier → :economy credit id)", async () => {
+    await app.inject({
+      method: "POST",
+      url: "/v1/motion-graphics/generate",
+      payload: { ...LOTTIE_PAYLOAD, llmModel: "gemini-3-flash" },
+    })
+
+    expect(videoQueue.add).toHaveBeenCalledWith(
+      "motion-graphics-lottie",
+      expect.objectContaining({ llmModel: "gemini-3-flash" }),
+    )
+  })
+})
+
+describe("motion-graphics creditGuard resolver (engine-aware)", () => {
+  it("maps engine=lottie to a motion-graphics-lottie credit id and {} to motion-graphics", () => {
+    expect(creditGuardResolvers).toHaveLength(1)
+    const resolver = creditGuardResolvers[0]
+    expect(resolver({ body: { engine: "lottie" } })).toMatch(/^motion-graphics-lottie/)
+    expect(resolver({ body: {} })).toBe("motion-graphics")
+    expect(resolver({ body: undefined })).toBe("motion-graphics")
+    // explicit elements engine still maps to the base feature
+    expect(resolver({ body: { engine: "elements" } })).toBe("motion-graphics")
   })
 })

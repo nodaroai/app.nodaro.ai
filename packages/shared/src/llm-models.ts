@@ -145,6 +145,7 @@ export type LlmFeature =
   | "scene-graph-ai"
   | "after-effects"
   | "motion-graphics"
+  | "motion-graphics-lottie"
   | "lottie-overlay"
   | "3d-title"
   | "image-to-text"
@@ -152,6 +153,11 @@ export type LlmFeature =
   | "generate-script"
   | "translate"
   | "image-critic"
+
+/** Engine-dependent LlmFeature for the motion-graphics node (design §8: every credit-id site must branch on engine). */
+export function motionGraphicsFeature(engine?: string): LlmFeature {
+  return engine === "lottie" ? "motion-graphics-lottie" : "motion-graphics"
+}
 
 /** Feature → default model when user hasn't selected one */
 export const LLM_FEATURE_DEFAULTS: Record<LlmFeature, string> = {
@@ -161,6 +167,7 @@ export const LLM_FEATURE_DEFAULTS: Record<LlmFeature, string> = {
   "scene-graph-ai": "claude-sonnet-4.6",
   "after-effects": "claude-sonnet-4.6",
   "motion-graphics": "claude-sonnet-4.6",
+  "motion-graphics-lottie": "claude-sonnet-4.6",
   "lottie-overlay": "claude-sonnet-4.6",
   "3d-title": "claude-sonnet-4.6",
   "image-to-text": "claude-sonnet-4.6",

@@ -4254,7 +4254,14 @@ export async function generateMotionGraphics(params: {
   backgroundColor?: string
   userId: string
   llmModel?: string
-}): Promise<{ jobId: string; motionPlan: Record<string, unknown> }> {
+  engine?: "elements" | "lottie"
+  previousSids?: string[]
+}): Promise<{
+  jobId: string
+  motionPlan?: Record<string, unknown>
+  validationErrors?: string[]
+  autoFixes?: string[]
+}> {
   return apiJson("/v1/motion-graphics/generate", {
     body: params,
     workflowId: true,

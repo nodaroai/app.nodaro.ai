@@ -11,6 +11,7 @@ import {
   textToVideo,
   textToSpeech,
   generateScriptApi,
+  generateMotionGraphics,
   combineVideos,
   getJobStatusLean,
   cancelJob,
@@ -580,6 +581,129 @@ export function runScriptGeneration(
         });
         if (!checkStorageError(err, ctx)) {
           guardedToast.error("Failed to start script generation", {
+            description: err instanceof Error ? err.message : "Unknown error",
+          });
+        }
+        reject(err);
+      });
+  });
+}
+
+// --- Motion Graphics (Lottie engine — async LLM authoring job) ---
+
+export function runLottiePlanGeneration(
+  nodeId: string,
+  params: {
+    prompt: string;
+    fps: number;
+    aspectRatio?: string;
+    width?: number;
+    height?: number;
+    durationSeconds: number;
+    backgroundColor?: string;
+    llmModel?: string;
+    previousSids?: string[];
+  },
+  ctx: ExecutionContext,
+): Promise<string> {
+  const { updateNodeData } = useWorkflowStore.getState();
+  updateNodeData(nodeId, {
+    executionStatus: "running",
+    motionPlan: undefined,
+    errorMessage: undefined,
+  });
+
+  return new Promise<string>((resolve, reject) => {
+    generateMotionGraphics({ ...params, engine: "lottie", userId: ctx.userId! })
+      .then(({ jobId }) => {
+        if (ctx.signal?.aborted) {
+          // Run discarded/aborted while the create-job request was in flight.
+          // Don't re-attach currentJobId or start polling — that would defeat
+          // the discard and paint the result over the existing one. Cancel
+          // phase-aware (pre-call cancels+refunds; in-flight finishes → My
+          // Library), then bail. `new Promise` → unwind by resolving "",
+          // mirroring the shouldAbandonNode abandon-branch below.
+          cancelJob(jobId).catch(() => {});
+          resolve("");
+          return;
+        }
+        guardedToast.info("Lottie generation started", {
+          description: `Job ID: ${jobId}`,
+        });
+        updateNodeData(nodeId, { currentJobId: jobId });
+
+        let pollFailures = 0;
+        const poll = ctx.trackInterval(
+          setInterval(async () => {
+            if (ctx.isWorkflowStale()) {
+              ctx.untrackInterval(poll);
+              reject(new WorkflowStaleError());
+              return;
+            }
+            try {
+              const job = await getJobStatusLean(jobId);
+              pollFailures = 0;
+              if (job.status === "completed" || job.status === "failed") {
+                if (shouldAbandonNode(nodeId, jobId)) {
+                  // Run discarded/replaced — the job still lands in My Library,
+                  // but we must not write its result/error onto the canvas.
+                  ctx.untrackInterval(poll);
+                  resolve("");
+                  return;
+                }
+              }
+              if (job.status === "completed") {
+                ctx.untrackInterval(poll);
+                const motionPlan = job.output_data?.motionPlan as
+                  | Record<string, unknown>
+                  | undefined;
+                updateNodeData(nodeId, {
+                  executionStatus: "completed",
+                  motionPlan,
+                  currentJobId: undefined,
+                });
+                guardedToast.success("Lottie animation generated");
+                resolve("plan-ready");
+              } else if (job.status === "failed") {
+                ctx.untrackInterval(poll);
+                const errMsg = job.error_message ?? "Unknown error";
+                updateNodeData(nodeId, {
+                  executionStatus: "failed",
+                  errorMessage: errMsg,
+                  currentJobId: undefined,
+                });
+                guardedToast.error("Lottie generation failed", {
+                  description: errMsg,
+                });
+                reject(new Error(errMsg));
+              }
+            } catch (err) {
+              pollFailures++;
+              if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                ctx.untrackInterval(poll);
+                if (shouldAbandonNode(nodeId, jobId)) {
+                  // Run discarded/replaced — don't write a failure to the canvas.
+                  resolve("");
+                  return;
+                }
+                updateNodeData(nodeId, {
+                  executionStatus: "failed",
+                  currentJobId: undefined,
+                });
+                guardedToast.error("Failed to check Lottie generation status");
+                reject(err);
+              }
+            }
+          }, 2000),
+        );
+      })
+      .catch((err) => {
+        updateNodeData(nodeId, {
+          executionStatus: "failed",
+          currentJobId: undefined,
+        });
+        if (!checkStorageError(err, ctx)) {
+          guardedToast.error("Failed to start Lottie generation", {
             description: err instanceof Error ? err.message : "Unknown error",
           });
         }

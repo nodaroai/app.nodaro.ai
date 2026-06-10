@@ -1,7 +1,7 @@
 ---
 node_type: motion-graphics
-generated_at: 2026-05-18T13:23:37.611Z
-generated_from: cb1e786d
+generated_at: 2026-06-10T19:25:26.132Z
+generated_from: 79f78130
 ---
 
 # Motion Graphics
@@ -23,6 +23,7 @@ generated_from: cb1e786d
 
 **Optional data fields:**
 - `motionPlan?: Record<string, unknown>`
+- `engine?: "elements" | "lottie"`
 - `llmModel?: string`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `currentJobProgress?: number`
@@ -33,6 +34,7 @@ generated_from: cb1e786d
 {
   "label": "Motion Graphics",
   "motionPrompt": "",
+  "engine": "elements",
   "aspectRatio": "16:9",
   "backgroundColor": "#00000000",
   "fps": 30,
@@ -68,6 +70,7 @@ generated_from: cb1e786d
   "data": {
     "label": "Motion Graphics",
     "motionPrompt": "",
+    "engine": "elements",
     "aspectRatio": "16:9",
     "backgroundColor": "#00000000",
     "fps": 30,

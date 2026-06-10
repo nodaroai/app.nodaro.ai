@@ -37,6 +37,7 @@
     "@radix-ui/react-tabs": "^1.1.13",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@remotion/google-fonts": "^4.0.0",
+    "@remotion/lottie": "4.0.453",
     "@remotion/player": "^4.0.0",
     "@stripe/stripe-js": "^8.9.0",
     "@supabase/supabase-js": "^2.93.3",

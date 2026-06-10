@@ -8,21 +8,24 @@ import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { NodeJobProgress } from "./node-job-progress"
-import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
+import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS, motionGraphicsFeature } from "@nodaro/shared"
 import type { MotionGraphicsData } from "@/types/nodes"
 
 function MotionGraphicsNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as MotionGraphicsData
-  const credits = useModelCredits(buildLlmCreditIdentifier("motion-graphics", nodeData.llmModel || LLM_FEATURE_DEFAULTS["motion-graphics"]), 10)
+  const mgFeature = motionGraphicsFeature(nodeData.engine)
+  const credits = useModelCredits(buildLlmCreditIdentifier(mgFeature, nodeData.llmModel || LLM_FEATURE_DEFAULTS[mgFeature]), 10)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
   const isRunning = status === "running"
   const motionPlan = nodeData.motionPlan as Record<string, unknown> | undefined
 
+  const isLottiePlan = motionPlan?.planType === "lottie-graphic"
   const elementCount = motionPlan
     ? ((motionPlan.elements as unknown[])?.length ?? 0)
     : 0
+  const lottieLayerCount = (motionPlan?.lottie as { layers?: unknown[] } | undefined)?.layers?.length ?? 0
 
   return (
     <div className="relative" style={{ maxWidth: '220px' }}>
@@ -60,7 +63,7 @@ function MotionGraphicsNodeComponent({ id, data, selected }: NodeProps) {
           <div className="flex items-center justify-center h-16 rounded-md bg-[#ff0073]/5 border border-[#ff0073]/20">
             <div className="text-center">
               <div className="text-sm font-medium text-[#ff0073]">
-                {elementCount} elements
+                {isLottiePlan ? `Lottie · ${lottieLayerCount} layers` : `${elementCount} elements`}
               </div>
               <div className="text-[10px] text-muted-foreground">{nodeData.durationSeconds}s</div>
             </div>

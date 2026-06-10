@@ -19,6 +19,7 @@ import { audioAIHandlers } from "./handlers/audio-ai.js"
 import { sunoHandlers } from "./handlers/suno.js"
 import { entityHandlers } from "./handlers/entity.js"
 import { referenceSheetHandlers } from "./handlers/reference-sheet.js"
+import { motionGraphicsLottieHandlers } from "./handlers/motion-graphics-lottie.js"
 import { buildStatsKey, upsertExecutionStats } from "../services/execution-stats.js"
 import { tryInlineReconcile } from "./inline-reconcile.js"
 
@@ -31,6 +32,7 @@ const allHandlers: Record<string, HandlerFn> = {
   ...sunoHandlers,
   ...entityHandlers,
   ...referenceSheetHandlers,
+  ...motionGraphicsLottieHandlers,
 }
 
 export function createVideoWorker() {

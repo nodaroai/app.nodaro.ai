@@ -39,6 +39,12 @@ export interface LlmRequest {
   temperature?: number
   /** Feature name — used only for default model resolution */
   feature?: string
+  /**
+   * Per-request timeout override in milliseconds. Defaults to LLM_TIMEOUT_MS
+   * (120s) when omitted, so existing callers are unchanged. Large structured
+   * outputs (e.g. the Lottie motion-graphics worker) pass a higher value.
+   */
+  timeoutMs?: number
 }
 
 export interface LlmResponse {
@@ -103,6 +109,11 @@ function resolveModel(req: LlmRequest): LlmModelDef {
     throw new Error(`Unknown LLM model: ${modelId}`)
   }
   return model
+}
+
+/** Effective request timeout — per-request override, else the 120s default. */
+function effectiveTimeout(req: LlmRequest): number {
+  return req.timeoutMs ?? LLM_TIMEOUT_MS
 }
 
 // ---------------------------------------------------------------------------
@@ -280,7 +291,7 @@ async function callKieChatCompletions(model: LlmModelDef, req: LlmRequest): Prom
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.KIE_API_KEY}` },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
+    signal: AbortSignal.timeout(effectiveTimeout(req)),
   })
 
   if (!response.ok) {
@@ -313,7 +324,7 @@ async function streamKieChatCompletions(
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.KIE_API_KEY}` },
     body: JSON.stringify(body),
-    signal: signal ?? AbortSignal.timeout(LLM_TIMEOUT_MS),
+    signal: signal ?? AbortSignal.timeout(effectiveTimeout(req)),
   })
 
   if (!response.ok) {
@@ -335,7 +346,7 @@ async function callKieMessages(model: LlmModelDef, req: LlmRequest): Promise<Llm
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.KIE_API_KEY}` },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
+    signal: AbortSignal.timeout(effectiveTimeout(req)),
   })
 
   if (!response.ok) {
@@ -363,7 +374,7 @@ async function streamKieMessages(
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.KIE_API_KEY}` },
     body: JSON.stringify(body),
-    signal: signal ?? AbortSignal.timeout(LLM_TIMEOUT_MS),
+    signal: signal ?? AbortSignal.timeout(effectiveTimeout(req)),
   })
 
   if (!response.ok) {
@@ -390,7 +401,7 @@ async function callKieResponses(model: LlmModelDef, req: LlmRequest): Promise<Ll
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.KIE_API_KEY}` },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
+    signal: AbortSignal.timeout(effectiveTimeout(req)),
   })
 
   if (!response.ok) {
@@ -426,7 +437,7 @@ async function streamKieResponses(
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.KIE_API_KEY}` },
     body: JSON.stringify(body),
-    signal: signal ?? AbortSignal.timeout(LLM_TIMEOUT_MS),
+    signal: signal ?? AbortSignal.timeout(effectiveTimeout(req)),
   })
 
   if (!response.ok) {
@@ -451,7 +462,7 @@ async function callAnthropicDirect(model: LlmModelDef, req: LlmRequest): Promise
       system: req.system,
       messages: buildAnthropicMessages(req),
     },
-    { timeout: LLM_TIMEOUT_MS },
+    { timeout: effectiveTimeout(req) },
   )
 
   const textBlock = response.content.find((b) => b.type === "text")
@@ -471,7 +482,7 @@ async function streamAnthropicDirect(
       system: req.system,
       messages: buildAnthropicMessages(req),
     },
-    { timeout: LLM_TIMEOUT_MS },
+    { timeout: effectiveTimeout(req) },
   )
 
   // Abort stream if caller signals (e.g. client disconnect)

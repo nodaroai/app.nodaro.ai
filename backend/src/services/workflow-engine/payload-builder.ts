@@ -34,7 +34,7 @@ import { expandExtraRefsToConnectedReferences } from "@nodaro/shared"
 import { PLATFORM_SPECS } from "@nodaro/shared"
 import { isSeedance2Provider, MODEL_CATALOG } from "@nodaro/shared"
 import { COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS } from "@nodaro/shared"
-import { buildLlmCreditIdentifier } from "@nodaro/shared"
+import { buildLlmCreditIdentifier, motionGraphicsFeature } from "@nodaro/shared"
 import {
   buildCharacterPrompt,
   buildObjectPrompt,
@@ -4005,6 +4005,34 @@ export function buildPayload(
       }
     }
 
+    case "motion-graphics": {
+      // Only the lottie engine is worker-queued; elements executes via sync HTTP
+      // and never reaches buildPayload.
+      if ((data.engine as string | undefined) !== "lottie") {
+        throw new Error("motion-graphics (elements engine) executes via sync HTTP, not the worker queue")
+      }
+      const mgLlmModel = data.llmModel as string | undefined
+      const fps = (data.fps as number) ?? 30
+      const aspectRatio = (data.aspectRatio as string) ?? "16:9"
+      const dims = ASPECT_RATIO_DIMENSIONS[aspectRatio] ?? { width: 1920, height: 1080 }
+      return {
+        jobName: "motion-graphics-lottie",
+        queueName: "video-generation",
+        modelIdentifier: buildLlmCreditIdentifier(motionGraphicsFeature(data.engine as string | undefined), mgLlmModel),
+        payload: {
+          jobId,
+          prompt: resolvedInputs.prompt || resolveRefs(data.motionPrompt as string | undefined, refMap),
+          fps,
+          width: (data.width as number) ?? dims.width,
+          height: (data.height as number) ?? dims.height,
+          durationInFrames: Math.round(((data.durationSeconds as number) ?? 5) * fps),
+          backgroundColor: (data.backgroundColor as string) ?? "#00000000",
+          llmModel: mgLlmModel,
+          usageLogId,
+        },
+      }
+    }
+
     // --- Render video (goes to render queue) ---
     case "render-video": {
       // Resolve plan from upstream composer nodes (matches frontend execute-node.ts logic)
@@ -4025,8 +4053,9 @@ export function buildPayload(
             (buildCtx.nodeStates?.[srcNode.id]?.output?.plan as Record<string, unknown> | undefined) ??
             (srcNode.data[mapping.planField] as Record<string, unknown> | undefined)
           if (foundPlan) {
-            resolvedPlanType = mapping.planType
-            if (mapping.planType === "scene-graph") {
+            const planDeclaredType = (foundPlan as Record<string, unknown>).planType as string | undefined
+            resolvedPlanType = planDeclaredType ?? mapping.planType
+            if (resolvedPlanType === "scene-graph") {
               resolvedSceneGraph = foundPlan
             } else {
               resolvedPlan = foundPlan

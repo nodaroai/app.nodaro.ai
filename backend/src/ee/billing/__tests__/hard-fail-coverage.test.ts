@@ -80,6 +80,7 @@ const LLM_FEATURES = [
   "lottie-overlay",
   "3d-title",
   "motion-graphics",
+  "motion-graphics-lottie",
   "qa-check",
   "generate-script",
   "image-to-text",

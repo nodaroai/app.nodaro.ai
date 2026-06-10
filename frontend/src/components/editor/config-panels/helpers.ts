@@ -1,7 +1,7 @@
 import type { WorkflowNode, WorkflowEdge, FieldMappings } from "@/types/nodes"
 import type { SourceNodeInfo } from "./types"
 import { buildCreditModelIdentifier as sharedBuildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier } from "@nodaro/shared"
-import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
+import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS, motionGraphicsFeature } from "@nodaro/shared"
 import type { LlmFeature } from "@nodaro/shared"
 import { buildScraperCreditId, isScraperActor } from "@nodaro/shared"
 import { isKineticCaptionStyle } from "@nodaro/shared"
@@ -269,7 +269,7 @@ const LLM_NODE_FEATURE_MAP: Record<string, LlmFeature> = {
   "after-effects": "after-effects",
   "lottie-overlay": "lottie-overlay",
   "3d-title": "3d-title",
-  "motion-graphics": "motion-graphics",
+  // motion-graphics is handled by an engine-aware special-case in getModelIdentifier
   "generate-script": "generate-script",
   "qa-check": "qa-check",
   "image-to-text": "image-to-text",
@@ -282,6 +282,12 @@ export function getModelIdentifier(node: WorkflowNode): string {
   // Component nodes: return empty string so the fallback estimateNodeCredits is used
   // (component cost depends on estimatedCredits from the published metadata, not a model lookup)
   if (node.type === "component") return ""
+
+  // motion-graphics: feature is engine-dependent (design §8 — every credit-id site branches on engine)
+  if (node.type === "motion-graphics") {
+    const feature = motionGraphicsFeature(data.engine as string | undefined)
+    return buildLlmCreditIdentifier(feature, (data.llmModel as string | undefined) || LLM_FEATURE_DEFAULTS[feature])
+  }
 
   // LLM-powered nodes: use composite credit identifier based on selected model tier
   const llmFeature = LLM_NODE_FEATURE_MAP[node.type ?? ""]
