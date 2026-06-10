@@ -277,6 +277,7 @@ describe("POST /v1/generate-location-asset — extended asset types (Task 9)", (
         name: "Hidden Lagoon",
         userPrompt: "rotate the camera 45 degrees right",
         sourceImageUrl: "https://r2.example/previous-view.png",
+        aspectRatio: "16:9",
         attachToLocationId: TEST_LOCATION_ID,
         attachToColumn: "angles",
         attachName: "Pan 45",
@@ -285,6 +286,25 @@ describe("POST /v1/generate-location-asset — extended asset types (Task 9)", (
 
     const enqueued = vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>
     expect(enqueued.sourceImageUrl).toBe("https://r2.example/previous-view.png")
+    // The framing override rides into the worker payload (the studio's 360°
+    // surround path pins 16:9); absent = undefined (model default).
+    expect(enqueued.aspectRatio).toBe("16:9")
+  })
+
+  it("rejects an aspectRatio outside the shared enum", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-location-asset",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        assetType: "seasons",
+        variant: "winter",
+        name: "Forest Glade",
+        aspectRatio: "21:9",
+      },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
   })
 
   it("non-attach calls keep sourceImageUrl undefined (no row read, no anchor)", async () => {

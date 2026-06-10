@@ -243,6 +243,10 @@ export interface GenerateLocationAssetInput {
   style?: "realistic" | "anime" | "3d-pixar" | "illustration"
   sourceImageUrl?: string
   provider?: string
+  /** Optional framing override (the same 4-value enum as `generateMotion`).
+   *  Absent = the image model's default. The studio's 360° surround path pins
+   *  `"16:9"` so every ring view matches the establishing shot's frame. */
+  aspectRatio?: CharacterAspectRatio
   attachToLocationId?: string
   attachToColumn?: LocationAttachColumn
   attachName?: string

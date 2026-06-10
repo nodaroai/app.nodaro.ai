@@ -7,7 +7,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractForcePrivate, extractProvider } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { LOCATION_ASSET_TYPES, LOCATION_ATTACH_COLUMNS } from "@nodaro/shared"
+import { CHARACTER_ASPECT_OPTIONS, LOCATION_ASSET_TYPES, LOCATION_ATTACH_COLUMNS } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 
 // Single source of truth for the asset-type and attach-column enums lives in
@@ -54,6 +54,11 @@ const generateLocationAssetBody = z.object({
   style: z.enum(["realistic", "anime", "3d-pixar", "illustration"]).optional(),
   sourceImageUrl: safeUrlSchema.optional(),
   provider: z.string().optional().default("nano-banana"),
+  // Optional framing override (the 4-value enum locations already use for
+  // motion). The worker forwards it to the image model; absent = the model's
+  // default. The studio's 360° surround path pins 16:9 so every ring view
+  // matches the establishing shot's cinematic frame.
+  aspectRatio: z.enum(CHARACTER_ASPECT_OPTIONS).optional(),
   userId: z.string().uuid().optional(),
   // Location Studio auto-attach: when all three are set, the worker appends
   // `{name: attachName, url: <result>}` to the named JSONB array column on the
@@ -272,6 +277,7 @@ export async function generateLocationAssetRoutes(app: FastifyInstance) {
       assetType,
       variant,
       provider: parsed.data.provider,
+      aspectRatio: parsed.data.aspectRatio,
       usageLogId,
       attachToLocationId,
       attachToColumn,
