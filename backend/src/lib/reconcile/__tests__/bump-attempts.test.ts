@@ -210,6 +210,36 @@ describe("bumpAttemptsOrExhaust", () => {
     )
   })
 
+  // Audit A5 — the anomaly note must reflect what actually happened, not a
+  // hardcoded "credits refunded" (which lied when the hold was already
+  // committed, e.g. a partial loop-trim commit on a prior worker attempt).
+  it("exhaustion with a refundable hold → note says refunded", async () => {
+    mocks.jobsSelectSingleMock.mockResolvedValueOnce({
+      data: { reconcile_attempts: MAX_ATTEMPTS - 1 },
+      error: null,
+    })
+    mocks.refundMock.mockResolvedValueOnce(1)
+
+    await bumpAttemptsOrExhaust("j-1", "boom")
+
+    const insertArg = mocks.anomaliesInsertMock.mock.calls[0]![0] as Record<string, unknown>
+    expect(String(insertArg.admin_notes)).toContain("reserved credits refunded")
+  })
+
+  it("exhaustion with NO remaining reserved hold → note says user may still be charged", async () => {
+    mocks.jobsSelectSingleMock.mockResolvedValueOnce({
+      data: { reconcile_attempts: MAX_ATTEMPTS - 1 },
+      error: null,
+    })
+    mocks.refundMock.mockResolvedValueOnce(0)
+
+    await bumpAttemptsOrExhaust("j-1", "boom")
+
+    const insertArg = mocks.anomaliesInsertMock.mock.calls[0]![0] as Record<string, unknown>
+    expect(String(insertArg.admin_notes)).toContain("NO reserved hold")
+    expect(String(insertArg.admin_notes)).toContain("user may still be charged")
+  })
+
   it("CAS race: status already cancelled → no refund, no anomaly", async () => {
     mocks.jobsSelectSingleMock.mockResolvedValueOnce({
       data: { reconcile_attempts: MAX_ATTEMPTS - 1 },

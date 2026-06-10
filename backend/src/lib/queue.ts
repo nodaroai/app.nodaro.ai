@@ -27,25 +27,39 @@ const REMOVABLE_STATES = ["prioritized", "waiting", "delayed"] as const
 const REMOVE_SCAN_LIMIT = 500
 
 /**
- * Best-effort removal of a cancelled job from the BullMQ video queue.
+ * Best-effort removal of a cancelled job from the BullMQ queues.
  *
  * BullMQ entries get auto-generated ids (no `add()` call site passes a
  * custom `jobId` option — deliberately, since reusing a DB uuid as the Bull
  * id would dedupe against the removeOnComplete window), so `getJob(<db uuid>)`
  * can never match. We instead scan the not-yet-picked states for an entry
  * whose `data.jobId` is the DB job id. Active jobs cannot be stopped
- * mid-execution; the worker discards them via the pickup status CAS and
+ * mid-execution; the workers discard them via the pickup status CAS and
  * throwIfJobCancelled.
+ *
+ * Scans BOTH queues: render-video jobs live in the separate "video-render"
+ * queue (audit R1 — scanning only the video queue meant cancelled queued
+ * renders were never removed AND, before the render-worker pickup CAS, were
+ * resurrected and rendered anyway). The render queue is imported lazily —
+ * a static import would create a module cycle (render-queue.ts imports
+ * `redis` from this file).
  */
 export async function tryRemoveFromQueue(jobId: string): Promise<void> {
-  try {
-    const queued = await videoQueue.getJobs([...REMOVABLE_STATES], 0, REMOVE_SCAN_LIMIT)
+  const findAndRemove = async (queue: Queue): Promise<boolean> => {
+    const queued = await queue.getJobs([...REMOVABLE_STATES], 0, REMOVE_SCAN_LIMIT)
     const match = queued.find(
       (j) => (j?.data as { jobId?: string } | undefined)?.jobId === jobId,
     )
     if (match) {
       await match.remove()
+      return true
     }
+    return false
+  }
+  try {
+    if (await findAndRemove(videoQueue)) return
+    const { renderQueue } = await import("./render-queue.js")
+    await findAndRemove(renderQueue)
   } catch {
     // Best-effort — job may already be gone or active
   }

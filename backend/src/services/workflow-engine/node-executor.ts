@@ -34,6 +34,8 @@ import type {
 } from "./types.js"
 import { JOB_POLL_INTERVAL_MS, NODE_TIMEOUT_MS, POLL_ABSOLUTE_TIMEOUT_MS } from "./types.js"
 import { isSourceNode, isSkipNode } from "./execution-graph.js"
+import { cancelInFlightChildJobs } from "../../lib/reconcile/cancel-inflight-jobs.js"
+import { refundReservedCreditsForJob } from "../../lib/credits-job-lifecycle.js"
 
 // ---------------------------------------------------------------------------
 // Sync HTTP node types — called via internal fetch
@@ -876,6 +878,26 @@ async function executeWorkerNode(
   userPromptTemplate?: string,
   iterationIndex?: number,
 ): Promise<ExecuteNodeResult> {
+  // 0. Adoption (audit A2): a prior orchestrator attempt's in-flight job for
+  // THIS node whose provider call already went out. Poll it to completion
+  // instead of creating a new job — a cancel+re-run would pay the provider a
+  // second time for the same content. The adopted job keeps its original
+  // credit reservation (committed on completion / refunded on failure by the
+  // normal lifecycle), and the reconcile system owns its terminal outcome if
+  // its worker is gone — so the poll below always sees a terminal status.
+  // Fan-out iterations are never adoptable (see cancelInFlightChildJobs).
+  if (iterationIndex === undefined) {
+    const adopted = ctx.adoptableJobs?.get(node.id)
+    if (adopted) {
+      ctx.adoptableJobs!.delete(node.id)
+      console.log(
+        `[orchestrator/resume] node ${node.id}: adopting in-flight job ${adopted.jobId} (provider already paid) — polling instead of re-running`,
+      )
+      ctx.onJobCreated?.(node.id, adopted.jobId)
+      return pollJobToCompletion(adopted.jobId, node.type, ctx, adopted.usageLogId, adopted.creditsReserved)
+    }
+  }
+
   // 1. Create placeholder job record (we need the jobId for payload building).
   // `node_id` is recorded in `input_data` so the reconcile cron can map a
   // `jobs` row back to its owning node even when the orchestrator died
@@ -1125,11 +1147,46 @@ async function cancelJobAndThrow(
     .update({ status: "cancelled" })
     .eq("id", jobId)
     .not("status", "in", "(completed,failed,cancelled)")
-    .select("id")
+    .select("id, user_id, provider_task_id, provider_kind, model_identifier, credits")
 
   if (flipped && flipped.length > 0) {
     // We genuinely cancelled a still-running job → refund + propagate cancel.
     await refundJobCredits(usageLogId, jobId, reason)
+    // Audit A3: when the cancelled job had a provider task in flight, the
+    // refund is a provider-paid/user-refunded revenue leak (we ate the
+    // provider cost). Log a credit_anomalies row for admin visibility —
+    // exhaustion refunds get one (reconcile_exhausted); timeout refunds
+    // previously leaked invisibly. Best-effort: never block the throw.
+    const row = flipped[0] as {
+      user_id?: string
+      provider_task_id?: string | null
+      provider_kind?: string | null
+      model_identifier?: string | null
+      credits?: number | null
+    }
+    if (row.provider_task_id && row.user_id) {
+      await supabase.from("credit_anomalies" as "assets").insert({
+        job_id: jobId,
+        user_id: row.user_id,
+        usage_log_id: usageLogId ?? null,
+        model_identifier: row.model_identifier ?? row.provider_kind ?? "unknown",
+        provider: row.provider_kind ?? null,
+        credits_estimated: row.credits ?? creditsUsed ?? 0,
+        credits_actual: 0,
+        diff: -(row.credits ?? creditsUsed ?? 0),
+        provider_cost_usd: 0,
+        anomaly_type: "timeout_refund_post_provider",
+        status: "pending",
+        admin_notes:
+          `Node timeout cancelled an in-flight provider job (task=${row.provider_task_id}, ` +
+          `kind=${row.provider_kind ?? "?"}); reserved credits refunded but the provider was paid. Reason: ${reason}`,
+      } as Record<string, unknown>).then(
+        ({ error: anomalyErr }) => {
+          if (anomalyErr) console.warn(`[node-executor] timeout anomaly log failed for ${jobId}: ${anomalyErr.message}`)
+        },
+        (err: unknown) => console.warn(`[node-executor] timeout anomaly log failed for ${jobId}:`, err),
+      )
+    }
     throw new Error(reason)
   }
 
@@ -1248,7 +1305,10 @@ async function pollJobToCompletion(
 // ---------------------------------------------------------------------------
 
 const COMPONENT_POLL_INTERVAL_MS = 3_000 // 3 seconds
-const COMPONENT_TIMEOUT_MS = 30 * 60 * 1000 // 30 minutes
+// Audit A4: aligned with POLL_ABSOLUTE_TIMEOUT_MS (90 min) — the inner
+// execution is allowed 90 minutes of work, so a 30-min parent wait failed the
+// parent while the inner run kept executing AND kept charging.
+const COMPONENT_TIMEOUT_MS = POLL_ABSOLUTE_TIMEOUT_MS
 
 async function executeComponentNode(
   node: SimpleNode,
@@ -1366,7 +1426,50 @@ async function executeComponentNode(
     await sleep(COMPONENT_POLL_INTERVAL_MS)
   }
 
-  throw new Error("Component execution timed out after 30 minutes")
+  // Audit A4: on timeout, CANCEL the inner execution instead of abandoning it
+  // — previously the parent failed while the inner run kept executing and
+  // charging until its own 90-min limits. Cancel the inner child jobs
+  // (pre-provider refunded; in-flight left to their own lifecycle), flip the
+  // inner execution, and CAS-fail the wrapper job + refund its reservation so
+  // the component sweep doesn't have to mop up an hour later. All best-effort
+  // — the timeout error must propagate regardless.
+  try {
+    const { data: wrapperRow } = await supabase
+      .from("jobs")
+      .select("input_data")
+      .eq("id", jobId)
+      .maybeSingle()
+    const innerExecutionId = (wrapperRow?.input_data as Record<string, unknown> | null)?._executionId
+    if (typeof innerExecutionId === "string") {
+      await cancelInFlightChildJobs(innerExecutionId)
+      await supabase
+        .from("workflow_executions")
+        .update({
+          status: "cancelled",
+          error_message: "Cancelled: parent component node timed out",
+          completed_at: new Date().toISOString(),
+        })
+        .eq("id", innerExecutionId)
+        .in("status", ["pending", "running", "stopping"])
+    }
+    const { data: failedWrapper } = await supabase
+      .from("jobs")
+      .update({
+        status: "failed",
+        error_message: `Component execution timed out after ${COMPONENT_TIMEOUT_MS / 60000} minutes`,
+        completed_at: new Date().toISOString(),
+      })
+      .eq("id", jobId)
+      .in("status", ["pending", "processing"])
+      .select("id")
+    if (failedWrapper && failedWrapper.length > 0) {
+      await refundReservedCreditsForJob(jobId)
+    }
+  } catch (err) {
+    console.warn(`[node-executor] component-timeout cleanup failed for ${jobId}:`, err)
+  }
+
+  throw new Error(`Component execution timed out after ${COMPONENT_TIMEOUT_MS / 60000} minutes`)
 }
 
 function sleep(ms: number): Promise<void> {

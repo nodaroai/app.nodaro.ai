@@ -382,13 +382,17 @@ export async function finalizeJobWithMedia(
     outputData = { ...outputData, ...input.extraOutputData }
   }
 
-  // 4. CAS-guarded markJobCompleted — refuses to overwrite a status='cancelled'
-  //    row so a user cancel that beat us isn't trampled.
+  // 4. CAS-guarded markJobCompleted (live statuses only). Null provider /
+  //    cost fields are OMITTED, not written: the reconcile path passes
+  //    cost:null + providerUsed:null ("actual cost unknown post-reconcile"),
+  //    and writing those NULLs clobbered whatever the worker/route had
+  //    already recorded — every cron-completed job lost its provider
+  //    metadata (admin data-quality residual from the 2026-06-10 audit).
   const ok = await markJobCompleted(jobId, {
     output_data: outputData,
-    provider: result.providerUsed,
-    provider_cost: result.cost,
-    display_cost: result.displayCost,
+    ...(result.providerUsed != null && { provider: result.providerUsed }),
+    ...(result.cost != null && { provider_cost: result.cost }),
+    ...(result.displayCost != null && { display_cost: result.displayCost }),
     ...(result.kieTaskId && { provider_task_id: result.kieTaskId }),
   })
   if (!ok) return { ok: false }

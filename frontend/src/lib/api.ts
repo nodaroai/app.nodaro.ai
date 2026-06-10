@@ -3883,6 +3883,9 @@ export type JobStatusLean = {
   id: string
   status: Job["status"]
   progress?: number
+  /** True while the reconcile system is self-healing this job (worker
+   *  abandoned it post-provider; the cron will complete or refund it). */
+  recovering?: boolean
   // Same shape as the full `Job.output_data` so existing poll-loop call sites
   // (`job.output_data?.imageUrl`, etc.) keep their precise field types.
   output_data?: Job["output_data"]

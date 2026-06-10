@@ -10,6 +10,7 @@ import {
   MAX_CONSECUTIVE_POLL_FAILURES,
   checkStorageError,
   updateProgressIfChanged,
+  updateRecoveringIfChanged,
   type ExecutionContext,
 } from "./types";
 
@@ -229,6 +230,10 @@ export function pollJobWithNodeUpdate(
               pollFailures = 0;
 
               if (job.status === "processing") {
+                // Self-heal visibility: surface "Recovering" instead of a
+                // silently stuck bar (node components pass data.jobRecovering
+                // into <NodeJobProgress recovering>).
+                updateRecoveringIfChanged(nodeId, job.recovering === true, updateNodeData);
                 if (resolvedEstimate && resolvedEstimate > 0) {
                   const elapsed = Date.now() - pollStartTime;
                   const simulated = calculateProgress(elapsed, resolvedEstimate);

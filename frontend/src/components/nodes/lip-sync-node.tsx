@@ -623,7 +623,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
         {status === "running" && (
           <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-muted/10 h-[180px]">
             <Loader2 className="w-8 h-8 animate-spin text-muted-foreground/40" />
-            <NodeJobProgress progress={nodeData.currentJobProgress} />
+            <NodeJobProgress progress={nodeData.currentJobProgress} recovering={(nodeData as unknown as Record<string, unknown>).jobRecovering === true} />
           </div>
         )}
 

@@ -284,6 +284,19 @@ export function updateProgressIfChanged(
   }
 }
 
+/** Mirror of updateProgressIfChanged for the self-heal "Recovering" flag —
+ *  only writes on transitions so the 2s poll doesn't churn node data. */
+export function updateRecoveringIfChanged(
+  nodeId: string,
+  recovering: boolean,
+  updateNodeData: (id: string, data: Record<string, unknown>) => void,
+): void {
+  const prev = (useWorkflowStore.getState().nodes.find(n => n.id === nodeId)?.data as Record<string, unknown>)?.jobRecovering;
+  if (recovering !== Boolean(prev)) {
+    updateNodeData(nodeId, { jobRecovering: recovering });
+  }
+}
+
 export function isExecutableNode(node: WorkflowNode): boolean {
   return EXECUTABLE_TYPES.has(node.type ?? "");
 }

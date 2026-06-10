@@ -657,6 +657,14 @@ Throws (all typed, catchable by `instanceof`):
 - `JobTimeoutError` — `maxMs` deadline exceeded.
 - `JobAbortedError` — `signal` fired.
 
+> **Slow recoveries can outlive the default `maxMs`.** If the platform's worker
+> abandons a job after the provider already delivered, the job stays
+> `processing` while the reconcile system self-heals it — the status payload
+> carries `recovering: true` during that window, and recovery can take tens of
+> minutes for slow models. A `JobTimeoutError` does NOT cancel the job: it
+> usually still completes server-side and lands in your library; re-fetch with
+> `jobs.get(jobId)` later, or raise `maxMs` for long-running models.
+
 ```ts
 const output = await client.nodes.runAndWait("generate-image", {
   prompt: "a snow leopard in the mountains",

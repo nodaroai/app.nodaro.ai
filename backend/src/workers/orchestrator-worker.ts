@@ -518,13 +518,16 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
       }
     }
     // Neutralize any in-flight child jobs left by a prior (dead) attempt BEFORE
-    // re-deriving + re-executing non-carried nodes. Without this, the prior
-    // attempt's pending/processing job is later recovered by the reconcile cron
-    // and committed — double-charging the user and double-spending at the provider.
-    // MUST run after the carry-forward above (cancelling earlier would make
-    // reconcile map these to "skipped" and carry their nodes forward as done).
-    // No-op on a first pick. See cancelInFlightChildJobs for the residual-race note.
-    await cancelInFlightChildJobs(executionId)
+    // re-deriving + re-executing non-carried nodes. Pre-provider jobs are
+    // cancelled + refunded (re-running them is free); post-provider jobs
+    // (provider_task_id set) are ADOPTED — the node executor polls the
+    // existing job instead of creating a new one, so the provider is never
+    // paid twice for the same node (audit A2). MUST run after the
+    // carry-forward above (cancelling earlier would make reconcile map these
+    // to "skipped" and carry their nodes forward as done). No-op on a first
+    // pick. See cancelInFlightChildJobs for the residual-race note.
+    const { adoptable } = await cancelInFlightChildJobs(executionId)
+    if (adoptable.size > 0) ctx.adoptableJobs = adoptable
     // Jobs → owning node. Fan-out creates one job per iteration, so the
     // scalar nodeStates[node].jobId field would only remember the last one
     // and onJobProgress couldn't find earlier iterations.
