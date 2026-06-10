@@ -957,10 +957,14 @@ describe("POST /v1/workflow-executions/:id/cancel", () => {
         } as never
       }
       if (callNum === 3) {
-        // Job update
+        // Job update — CAS chain (audit D2): update().eq(id).in(status).select(id)
         return {
           update: vi.fn().mockReturnValue({
-            eq: vi.fn().mockResolvedValue({ data: null, error: null }),
+            eq: vi.fn().mockReturnValue({
+              in: vi.fn().mockReturnValue({
+                select: vi.fn().mockResolvedValue({ data: [{ id: TEST_JOB_ID }], error: null }),
+              }),
+            }),
           }),
         } as never
       }
@@ -994,7 +998,8 @@ describe("POST /v1/workflow-executions/:id/cancel", () => {
         return { select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ single: vi.fn().mockResolvedValue({ data: { id: TEST_JOB_ID, status: "pending" }, error: null }) }) }) }) } as never
       }
       if (callNum === 3) {
-        return { update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ data: null, error: null }) }) } as never
+        // CAS chain (audit D2): update().eq(id).in(status).select(id)
+        return { update: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ in: vi.fn().mockReturnValue({ select: vi.fn().mockResolvedValue({ data: [{ id: TEST_JOB_ID }], error: null }) }) }) }) } as never
       }
       // Call 4: usage_logs lookup — return one reserved hold for this job.
       return {

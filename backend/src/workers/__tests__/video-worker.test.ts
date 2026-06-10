@@ -403,7 +403,11 @@ describe("video worker processor", () => {
     // UPDATE's status CAS (.in("status",["pending","processing"])) then matches 0
     // rows. We must NOT refund (would orphan a delivered+billed result) and the
     // completed status must survive.
-    mocks.mockCasSelect.mockResolvedValueOnce({ data: [], error: null })
+    // Two queued CAS results: pickup CAS wins (row was live at pickup), then
+    // the failure CAS misses (concurrent writer landed mid-handler).
+    mocks.mockCasSelect
+      .mockResolvedValueOnce({ data: [{ id: "job-1" }], error: null })
+      .mockResolvedValueOnce({ data: [], error: null })
     mocks.mockHandler.mockRejectedValueOnce(new Error("post-provider upload 500"))
 
     const job = makeBullJob("generate-image")
@@ -413,6 +417,25 @@ describe("video worker processor", () => {
     expect(mocks.mockIn).toHaveBeenCalledWith("status", ["pending", "processing"])
     // ...and because 0 rows were flipped, no refund fired.
     expect(mocks.mockRefundJobCredits).not.toHaveBeenCalled()
+  })
+
+  it("pickup CAS: discards a job cancelled while queued (0 rows flipped) — handler never runs, no refund", async () => {
+    // A1 (audit): cancelling a still-queued job sets status='cancelled' and
+    // refunds, but BullMQ queue removal is best-effort — the worker still
+    // dequeues the entry. The pickup UPDATE must CAS on live statuses and
+    // abort when it flips 0 rows. The old unguarded overwrite resurrected the
+    // row to 'processing' and ran the full provider generation: the user kept
+    // the refund AND got the output, while we paid the provider.
+    mocks.mockCasSelect.mockResolvedValueOnce({ data: [], error: null })
+
+    const job = makeBullJob("generate-image")
+    await expect(processor(job)).resolves.toBeUndefined()
+
+    expect(mocks.mockHandler).not.toHaveBeenCalled()
+    expect(mocks.mockRefundJobCredits).not.toHaveBeenCalled()
+    expect(mocks.mockUpdate).not.toHaveBeenCalledWith(
+      expect.objectContaining({ status: "failed" }),
+    )
   })
 
   it("does NOT refund or mark failed on a non-final attempt — BullMQ will retry", async () => {

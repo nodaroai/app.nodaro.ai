@@ -121,22 +121,38 @@ function setupTableMocks(handlers: Record<string, TableHandler>) {
   })
 }
 
-/** Build a "jobs" chain that handles both select-by-id and update-by-id. */
+/** Build a "jobs" chain that handles both select-by-id and the CAS update. */
 function jobsHandler(opts: {
   jobLookup?: { data: unknown; error: unknown }
   jobsList?: { data: unknown; error: unknown }
   updateError?: unknown
+  /** Rows the cancel CAS UPDATE reports as flipped. Defaults to echoing the
+   *  requested rows (single → job-1, bulk → the jobsList) = "we won the
+   *  race". Pass [] to simulate a concurrent terminal writer winning. */
+  cancelledRows?: Array<{ id: string }>
 }): TableHandler {
   return () => {
     const single = vi.fn().mockResolvedValue(opts.jobLookup ?? { data: null, error: { message: "not found" } })
-    // cancel-all chain: select().eq().in(status).is(provider_task_id, null)
-    const isForList = vi.fn().mockResolvedValue(opts.jobsList ?? { data: [], error: null })
-    const inForList = vi.fn().mockReturnValue({ is: isForList })
+    // cancel-all list chain: select().eq().in(status).or(pre-call | in-recovery)
+    const orForList = vi.fn().mockResolvedValue(opts.jobsList ?? { data: [], error: null })
+    const inForList = vi.fn().mockReturnValue({ or: orForList })
     const eqAfterSelect = vi.fn().mockReturnValue({ single, in: inForList })
     const select = vi.fn().mockReturnValue({ eq: eqAfterSelect })
 
-    const updateThen = vi.fn().mockResolvedValue({ error: opts.updateError ?? null })
-    const update = vi.fn().mockReturnValue({ eq: updateThen, in: updateThen })
+    // CAS update chains (audit D2):
+    //   single: update().eq("id").in("status",[...]).select("id")
+    //   bulk:   update().in("id",[...]).in("status",[...]).select("id")
+    const defaultRows =
+      opts.cancelledRows ??
+      ((opts.jobsList?.data as Array<{ id: string }> | undefined) ?? [{ id: "job-1" }])
+    const updateSelect = vi.fn().mockResolvedValue({
+      data: defaultRows,
+      error: opts.updateError ?? null,
+    })
+    const updateIn2 = vi.fn().mockReturnValue({ select: updateSelect })
+    const updateIn1 = vi.fn().mockReturnValue({ select: updateSelect, in: updateIn2 })
+    const updateEq = vi.fn().mockReturnValue({ in: updateIn1 })
+    const update = vi.fn().mockReturnValue({ eq: updateEq, in: updateIn1 })
     return { select, update }
   }
 }
@@ -270,6 +286,60 @@ describe("POST /v1/jobs/:jobId/cancel", () => {
     expect(res.json()).toEqual({ success: true, cancelled: 0, inFlight: true })
     // It's already running on the provider — don't touch the queue or refund.
     expect(tryRemoveFromQueue).not.toHaveBeenCalled()
+    expect(mockRefundCredits).not.toHaveBeenCalled()
+  })
+
+  it("cancels an in-recovery job (provider_task_id set, reconcile_attempts > 0) and refunds (audit D2)", async () => {
+    // The worker abandoned this row and the reconcile cron has been retrying
+    // it — without this exception the user has NO kill path for up to the
+    // full exhaustion budget while staring at a stuck progress bar.
+    setupTableMocks({
+      jobs: jobsHandler({
+        jobLookup: {
+          data: {
+            id: "job-1", status: "processing", user_id: TEST_USER_ID,
+            input_data: {}, output_data: {},
+            provider_task_id: "kie-task-abc", reconcile_attempts: 3,
+          },
+          error: null,
+        },
+      }),
+      usage_logs: usageLogsHandler([{ id: "usage-log-1" }]),
+    })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/jobs/job-1/cancel",
+      payload: { userId: TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ success: true, cancelled: 1, inFlight: false })
+    expect(mockRefundCredits).toHaveBeenCalledWith("usage-log-1")
+  })
+
+  it("does NOT refund when the cancel CAS loses to a concurrent completion (0 rows flipped)", async () => {
+    // TOCTOU (audit D2): the cron completed + committed credits between our
+    // status read and the cancel UPDATE. The CAS must miss and the refund
+    // must NOT fire — refunding here would gift a delivered, billed output.
+    setupTableMocks({
+      jobs: jobsHandler({
+        jobLookup: {
+          data: { id: "job-1", status: "pending", user_id: TEST_USER_ID, input_data: {}, output_data: {} },
+          error: null,
+        },
+        cancelledRows: [],
+      }),
+    })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/jobs/job-1/cancel",
+      payload: { userId: TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ success: true, cancelled: 0, inFlight: false })
     expect(mockRefundCredits).not.toHaveBeenCalled()
   })
 

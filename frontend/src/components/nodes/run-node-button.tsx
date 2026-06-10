@@ -158,8 +158,9 @@ export function RunNodeButton({ nodeId, credits, isRunning, onRun, runFromHere }
         <AlertDialogHeader>
           <AlertDialogTitle>Discard this run?</AlertDialogTitle>
           <AlertDialogDescription>
-            In-progress jobs can&apos;t be cancelled — they&apos;ll finish and be saved to My
-            Library, but won&apos;t appear on the canvas.
+            In-progress jobs usually finish in the background and land in My Library
+            (without appearing on the canvas). If a job can&apos;t be completed, its
+            credits are refunded automatically.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">

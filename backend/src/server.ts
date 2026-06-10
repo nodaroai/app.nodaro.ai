@@ -2,6 +2,7 @@ import { config, hasCredits, isMultiUser } from "./lib/config.js"
 import { buildApp } from "./app.js"
 import { startCommunityReaperCron } from "./ee/services/community/reaper.js"
 import { startCleanupCron } from "./ee/billing/cleanup-cron.js"
+import { startReconcileCron } from "./lib/reconcile/start.js"
 import { startScheduleCron, stopScheduleCron } from "./lib/schedule-cron.js"
 import {
   startWorkflowExecutionsReconcileCron,
@@ -39,6 +40,12 @@ async function main() {
   if (hasCredits()) {
     startCleanupCron()
   }
+
+  // External-call reconciliation sweep — ALL editions (audit B2 / decision
+  // D1). Recovers stuck provider jobs and fail+refunds dead ones; previously
+  // gated behind hasCredits() inside the billing cleanup cron, which left
+  // Community/Business with no reconcile tick at all.
+  startReconcileCron()
 
   // Start schedule cron for workflow triggers
   startScheduleCron()

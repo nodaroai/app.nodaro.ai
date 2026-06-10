@@ -127,17 +127,24 @@ export async function reconcileElevenLabsJob(row: ElevenLabsJobRow): Promise<voi
     .single()
   const userId = (jobUser as { user_id?: string } | null)?.user_id ?? undefined
 
-  const r2Url = await uploadBufferToR2(
-    audioBuffer,
-    `audio/${row.id}.mp3`,
-    "audio/mpeg",
-    userId,
-  )
+  // P0.1 (audit Blocker B1): upload + finalize must bump on failure so
+  // deterministic failures exhaust to refund+anomaly instead of looping at
+  // every cron tick forever (see kie.ts twin for the full story).
+  try {
+    const r2Url = await uploadBufferToR2(
+      audioBuffer,
+      `audio/${row.id}.mp3`,
+      "audio/mpeg",
+      userId,
+    )
 
-  await finalizeJobWithMedia({
-    jobId: row.id,
-    jobType: "text-to-audio",
-    result: { url: r2Url, cost: null, providerUsed: "elevenlabs-dubbing" },
-    mediaUrl: r2Url,
-  })
+    await finalizeJobWithMedia({
+      jobId: row.id,
+      jobType: "text-to-audio",
+      result: { url: r2Url, cost: null, providerUsed: "elevenlabs-dubbing" },
+      mediaUrl: r2Url,
+    })
+  } catch (err) {
+    await bumpAttemptsOrExhaust(row.id, err)
+  }
 }

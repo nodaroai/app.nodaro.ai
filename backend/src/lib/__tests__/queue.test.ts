@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
-const { getJobMock } = vi.hoisted(() => ({ getJobMock: vi.fn() }))
+const { getJobsMock } = vi.hoisted(() => ({ getJobsMock: vi.fn() }))
 
 vi.mock("bullmq", () => ({
   Queue: class FakeQueue {
-    getJob = getJobMock
+    getJobs = getJobsMock
   },
 }))
 
@@ -16,46 +16,53 @@ import { tryRemoveFromQueue } from "../queue.js"
 
 describe("tryRemoveFromQueue", () => {
   beforeEach(() => {
-    getJobMock.mockReset()
+    getJobsMock.mockReset()
   })
 
-  it("removes a waiting job", async () => {
+  // BullMQ entry ids are auto-generated (no add() site passes a custom jobId),
+  // so removal scans not-yet-picked states for an entry whose data.jobId is
+  // the DB job id. Audit A1: the old getJob(<db uuid>) lookup could never
+  // match, making every cancel-time removal a silent no-op.
+  it("scans prioritized/waiting/delayed and removes the entry whose data.jobId matches", async () => {
     const remove = vi.fn().mockResolvedValue(undefined)
-    getJobMock.mockResolvedValue({
-      getState: vi.fn().mockResolvedValue("waiting"),
-      remove,
-    })
+    const otherRemove = vi.fn()
+    getJobsMock.mockResolvedValue([
+      { data: { jobId: "other-job" }, remove: otherRemove },
+      { data: { jobId: "job-1" }, remove },
+    ])
+
     await tryRemoveFromQueue("job-1")
+
+    expect(getJobsMock).toHaveBeenCalledWith(
+      ["prioritized", "waiting", "delayed"],
+      0,
+      expect.any(Number),
+    )
     expect(remove).toHaveBeenCalledTimes(1)
+    expect(otherRemove).not.toHaveBeenCalled()
   })
 
-  it("removes a delayed job", async () => {
-    const remove = vi.fn().mockResolvedValue(undefined)
-    getJobMock.mockResolvedValue({
-      getState: vi.fn().mockResolvedValue("delayed"),
-      remove,
-    })
-    await tryRemoveFromQueue("job-2")
-    expect(remove).toHaveBeenCalledTimes(1)
-  })
-
-  it("does not remove an active job", async () => {
-    const remove = vi.fn()
-    getJobMock.mockResolvedValue({
-      getState: vi.fn().mockResolvedValue("active"),
-      remove,
-    })
+  it("does not touch active jobs (only queued states are scanned)", async () => {
+    // The scan itself excludes "active" — assert the state list never asks
+    // for it, so an in-flight job can't be yanked mid-execution.
+    getJobsMock.mockResolvedValue([])
     await tryRemoveFromQueue("job-3")
-    expect(remove).not.toHaveBeenCalled()
+    const states = getJobsMock.mock.calls[0]![0] as string[]
+    expect(states).not.toContain("active")
   })
 
-  it("is a no-op when job is not found", async () => {
-    getJobMock.mockResolvedValue(null)
+  it("is a no-op when no queued entry matches", async () => {
+    getJobsMock.mockResolvedValue([{ data: { jobId: "someone-else" }, remove: vi.fn() }])
     await expect(tryRemoveFromQueue("missing")).resolves.toBeUndefined()
   })
 
+  it("tolerates malformed queue entries (missing data)", async () => {
+    getJobsMock.mockResolvedValue([null, {}, { data: null }, { data: { jobId: "job-4" }, remove: vi.fn() }])
+    await expect(tryRemoveFromQueue("job-4")).resolves.toBeUndefined()
+  })
+
   it("swallows errors silently", async () => {
-    getJobMock.mockRejectedValue(new Error("redis down"))
+    getJobsMock.mockRejectedValue(new Error("redis down"))
     await expect(tryRemoveFromQueue("job-err")).resolves.toBeUndefined()
   })
 })

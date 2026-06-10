@@ -239,4 +239,38 @@ describe("reconcileReplicateJob", () => {
     expect(mocks.refundMock).toHaveBeenCalledWith("j-empty")
     expect(mocks.finalizeMock).not.toHaveBeenCalled()
   })
+
+  // P0.1 (audit Blocker B1): a poll-success-but-finalize-failure must bump
+  // reconcile_attempts so a deterministic failure exhausts to refund+anomaly
+  // instead of looping at every cron tick forever.
+  it("succeeded but finalize throws → bumps reconcile_attempts, no markFailed, no refund, no propagation", async () => {
+    mocks.fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        id: "p-fin",
+        status: "succeeded",
+        output: ["https://replicate.example/out.png"],
+      }),
+    })
+    mocks.finalizeMock.mockRejectedValueOnce(new Error("R2 upload failed"))
+    const row: ReplicateJobRow = {
+      id: "j-finalize-throw",
+      provider_kind: "replicate-prediction",
+      provider_task_id: "p-fin",
+      reconcile_attempts: 0,
+      job_type: "generate-image",
+    }
+
+    await expect(reconcileReplicateJob(row)).resolves.toBeUndefined()
+
+    expect(mocks.refundMock).not.toHaveBeenCalled()
+    const bumpCall = mocks.jobsUpdateMock.mock.calls.find(
+      (c) => (c[0] as Record<string, unknown>).reconcile_attempts === 1,
+    )
+    expect(bumpCall).toBeTruthy()
+    const failCall = mocks.jobsUpdateMock.mock.calls.find(
+      (c) => (c[0] as Record<string, unknown>).status === "failed",
+    )
+    expect(failCall).toBeUndefined()
+  })
 })
