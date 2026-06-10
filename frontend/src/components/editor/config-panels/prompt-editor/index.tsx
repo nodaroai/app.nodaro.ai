@@ -14,6 +14,7 @@ import { LocationRefExtension, parseLocationRefMatch } from "./location-ref-exte
 import { SuggestionList, type SuggestionListHandle, type SuggestionCommandPayload } from "./suggestion-list"
 import { VariableSuggestionExtension } from "./variable-suggestion-extension"
 import { VariableSuggestionList, type VariableSuggestionListHandle } from "./variable-suggestion-list"
+import { VariableHighlightExtension, VARIABLE_HIGHLIGHT_META } from "./variable-highlight-extension"
 import { DEFAULT_USAGE_MODE } from "@nodaro/shared"
 import type { RefImageItem } from "../tag-textarea"
 import type { NodeRefItem } from "@/lib/node-refs"
@@ -279,6 +280,19 @@ function refImagesEqual(
   return true
 }
 
+/** Set equality for the resolvable-label sets (order-insensitive). null means
+ *  "no nodeRefs prop" and only equals null. */
+function labelSetsEqual(
+  a: ReadonlySet<string> | null,
+  b: ReadonlySet<string> | null,
+): boolean {
+  if (a === b) return true
+  if (a === null || b === null) return false
+  if (a.size !== b.size) return false
+  for (const l of a) if (!b.has(l)) return false
+  return true
+}
+
 export function PromptEditor({
   value,
   onChange,
@@ -307,6 +321,17 @@ export function PromptEditor({
   refsRef.current = stableReferenceImages
   const nodeRefsRef = useRef<readonly NodeRefItem[]>(nodeRefs ?? [])
   nodeRefsRef.current = nodeRefs ?? []
+  // Content-stable resolvable-label set for the variable-highlight plugin.
+  // A fresh Set is built per render (labels are few) but the previous
+  // reference is reused when contents are equal, so the live-update effect
+  // below fires only on real wiring changes. null (prop absent) = amber
+  // suppressed — "no data" ≠ "nothing wired".
+  const incomingLabels = nodeRefs ? new Set(nodeRefs.map((r) => r.label)) : null
+  const stableLabelsRef = useRef<ReadonlySet<string> | null>(incomingLabels)
+  if (!labelSetsEqual(stableLabelsRef.current, incomingLabels)) {
+    stableLabelsRef.current = incomingLabels
+  }
+  const resolvableLabels = stableLabelsRef.current
   // Known-slug sets derived from the current reference list. Recomputed when
   // the list changes; the suggestion-plugin's `items()` closure stays stable.
   const knownSlugsRef = useRef<KnownSlugSets>(buildKnownSlugSets(stableReferenceImages))
@@ -679,6 +704,9 @@ export function PromptEditor({
           },
         },
       }),
+      VariableHighlightExtension.configure({
+        getResolvableLabels: () => stableLabelsRef.current,
+      }),
     ], []), // intentionally created once — dynamic data flows via storage + refs
     content: valueToDoc(value, knownSlugsRef.current),
     onUpdate: ({ editor: ed }) => {
@@ -731,6 +759,13 @@ export function PromptEditor({
     // actually changes — not on every parent keystroke.
     editor.view.dispatch(editor.state.tr.setMeta("refs-changed", true))
   }, [editor, stableReferenceImages])
+
+  // Rebuild variable decorations when the upstream label set changes —
+  // wiring/unwiring an upstream node flips cyan↔amber without a remount.
+  useEffect(() => {
+    if (!editor) return
+    editor.view.dispatch(editor.state.tr.setMeta(VARIABLE_HIGHLIGHT_META, true))
+  }, [editor, resolvableLabels])
 
   // Sync external value → editor when the prop changes from somewhere other
   // than this editor. Compare against the editor's serialized text to avoid

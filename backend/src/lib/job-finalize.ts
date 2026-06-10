@@ -2,6 +2,7 @@ import { supabase } from "./supabase.js"
 import { uploadToR2 } from "./storage.js"
 import { runPostProcessing } from "./post-processing-error.js"
 import { appendCharacterReferenceVideo } from "./character-auto-attach.js"
+import { FINALIZE_CLAIM_TTL_MS } from "./reconcile/types.js"
 import {
   uploadImageVariantsMaybeWatermark,
   uploadVideoMaybeWatermark,
@@ -100,6 +101,57 @@ async function loadUsageLogId(jobId: string): Promise<string | null> {
 }
 
 /**
+ * CAS-claim the finalize phase for a job via the `claim_job_finalize` RPC
+ * (migration 210). Returns the claim timestamp when won, `{ won: false }`
+ * when another finalizer holds an unexpired claim (or the row went terminal).
+ *
+ * This is the mutual exclusion between the worker and the reconcile cron:
+ * both funnel through `finalizeJobWithMedia` for the same jobId and used to
+ * download the provider result and upload the same deterministic R2 key
+ * concurrently. The claim makes the loser exit BEFORE any media work.
+ *
+ * On RPC error we proceed unclaimed (availability over exclusion): with the
+ * failure-path delete removed from `uploadToR2`, a duplicate finalize is
+ * benign — an idempotent overwrite plus a CAS-guarded `markJobCompleted` —
+ * while refusing to finalize would strand a deliverable job on a DB hiccup.
+ */
+async function claimJobFinalize(
+  jobId: string,
+): Promise<{ won: boolean; ts: string | null }> {
+  const { data, error } = await supabase.rpc("claim_job_finalize", {
+    p_job_id: jobId,
+    p_ttl_seconds: Math.floor(FINALIZE_CLAIM_TTL_MS / 1000),
+  })
+  if (error) {
+    console.warn(
+      `[job-finalize] claim RPC failed for ${jobId} — proceeding unclaimed: ${error.message}`,
+    )
+    return { won: true, ts: null }
+  }
+  return data
+    ? { won: true, ts: data as string }
+    : { won: false, ts: null }
+}
+
+/**
+ * Release a finalize claim after a failed media step so a BullMQ retry or the
+ * next reconcile tick can re-claim immediately instead of waiting out the TTL.
+ * Scoped to our own claim timestamp — never clears a claim a newer finalizer
+ * took. Best-effort: the TTL is the backstop if this write fails.
+ */
+async function releaseJobFinalizeClaim(jobId: string, claimTs: string): Promise<void> {
+  try {
+    await supabase
+      .from("jobs")
+      .update({ finalize_claimed_at: null })
+      .eq("id", jobId)
+      .eq("finalize_claimed_at", claimTs)
+  } catch (err) {
+    console.warn(`[job-finalize] claim release failed for ${jobId}: ${String(err)}`)
+  }
+}
+
+/**
  * If a workflow_execution was marked `failed` solely because of this job's node,
  * flip it back to `completed`. Used when reconciliation recovers a single stuck
  * node — the rest of the DAG already completed successfully on the prior attempt.
@@ -189,17 +241,22 @@ export interface FinalizeInput {
 
 /**
  * Post-success completion path shared by worker handlers and the reconciliation
- * cron. Uploads media → CAS-guarded markCompleted → commit credits → create
- * asset → reopen workflow_executions if this was the sole-cause failure.
+ * cron. Claims the finalize phase → uploads media → CAS-guarded markCompleted
+ * → commit credits → create asset → reopen workflow_executions if this was the
+ * sole-cause failure.
  *
- * Idempotent under worker+cron race: only one writer wins the CAS UPDATE
- * inside `markJobCompleted`; the other returns `{ ok: false }`. R2 PutObject
- * is atomic per deterministic key, so the duplicate upload is harmless.
+ * Safe under worker+cron race at TWO layers: the `claim_job_finalize` CAS
+ * makes the losing finalizer exit before any media work (no duplicate
+ * download/upload of the same deterministic R2 key), and `markJobCompleted`'s
+ * CAS UPDATE guarantees a single completion writer even if a claim expires
+ * mid-flight. Never delete the deterministic key on a failed upload — see
+ * uploadToR2's catch (incident 2026-06-10).
  *
  * Returns `{ ok: true }` only when the CAS UPDATE succeeded AND we committed
- * credits + created the asset. `{ ok: false }` covers four cases:
+ * credits + created the asset. `{ ok: false }` covers five cases:
  *  - jobs row not found (callsite probably wrong)
  *  - jobs.status already terminal (cancelled / completed / failed)
+ *  - finalize claim lost (another finalizer is mid-flight on this job)
  *  - markJobCompleted CAS missed (concurrent cancel won)
  *
  ***REDACTED-OSS-SCRUB***
@@ -229,6 +286,15 @@ export async function finalizeJobWithMedia(
 
   const watermark = job.should_watermark ?? false
 
+  // 1.5. CAS-claim the finalize phase. The loser (a concurrent worker /
+  //    reconcile-cron finalizer, or a row that just went terminal) exits here
+  //    with the standard graceful-skip contract — BEFORE downloading the
+  //    provider result or touching the deterministic R2 key. A claimant that
+  //    fails mid-upload releases the claim below; a claimant that crashes is
+  //    covered by the claim TTL.
+  const claim = await claimJobFinalize(jobId)
+  if (!claim.won) return { ok: false }
+
   // 2. Look up usage_log_id from usage_logs (NOT from a jobs.* column —
   //    that column doesn't exist; see D7 in the design spec §3).
   const usageLogId = await loadUsageLogId(jobId)
@@ -240,41 +306,49 @@ export async function finalizeJobWithMedia(
   // Captured for the reference-video auto-attach below — set only on the video
   // path (the R2 URL we record as the clip's canonical location).
   let videoR2Url: string | undefined
-  if (IMAGE_TYPES.has(jobType)) {
-    const r2Urls = input.mediaUrl !== undefined
-      ? [input.mediaUrl, ...(input.extraMediaUrls ?? [])]
-      : await uploadImageVariantsMaybeWatermark(
-          [result.url, ...(result.extraUrls ?? [])],
-          jobId,
-          job.user_id ?? undefined,
-          watermark,
-        )
-    outputData = buildImageOutputData(
-      result as Parameters<typeof buildImageOutputData>[0],
-      r2Urls,
-    )
-  } else if (VIDEO_TYPES.has(jobType)) {
-    const r2Url = input.mediaUrl !== undefined
-      ? input.mediaUrl
-      : await uploadVideoMaybeWatermark(
-          result.url,
-          jobId,
-          job.user_id ?? undefined,
-          watermark,
-        )
-    videoR2Url = r2Url
-    outputData = { videoUrl: r2Url }
-  } else if (AUDIO_TYPES.has(jobType)) {
-    // Audio is never watermarked. Callers with a pre-uploaded R2 URL pass it
-    // through `input.mediaUrl`; otherwise finalize uploads via `uploadToR2`.
-    // POST-PROVIDER: `result.url` is the provider's delivered audio — an R2
-    // upload failure here is post-delivery, so tag it (refund guard skips).
-    const r2Url = input.mediaUrl !== undefined
-      ? input.mediaUrl
-      : await runPostProcessing(() => uploadToR2(result.url, jobId, "audio", job.user_id ?? undefined))
-    outputData = { audioUrl: r2Url }
-  } else {
-    throw new Error(`[job-finalize] unknown jobType: ${jobType}`)
+  try {
+    if (IMAGE_TYPES.has(jobType)) {
+      const r2Urls = input.mediaUrl !== undefined
+        ? [input.mediaUrl, ...(input.extraMediaUrls ?? [])]
+        : await uploadImageVariantsMaybeWatermark(
+            [result.url, ...(result.extraUrls ?? [])],
+            jobId,
+            job.user_id ?? undefined,
+            watermark,
+          )
+      outputData = buildImageOutputData(
+        result as Parameters<typeof buildImageOutputData>[0],
+        r2Urls,
+      )
+    } else if (VIDEO_TYPES.has(jobType)) {
+      const r2Url = input.mediaUrl !== undefined
+        ? input.mediaUrl
+        : await uploadVideoMaybeWatermark(
+            result.url,
+            jobId,
+            job.user_id ?? undefined,
+            watermark,
+          )
+      videoR2Url = r2Url
+      outputData = { videoUrl: r2Url }
+    } else if (AUDIO_TYPES.has(jobType)) {
+      // Audio is never watermarked. Callers with a pre-uploaded R2 URL pass it
+      // through `input.mediaUrl`; otherwise finalize uploads via `uploadToR2`.
+      // POST-PROVIDER: `result.url` is the provider's delivered audio — an R2
+      // upload failure here is post-delivery, so tag it (refund guard skips).
+      const r2Url = input.mediaUrl !== undefined
+        ? input.mediaUrl
+        : await runPostProcessing(() => uploadToR2(result.url, jobId, "audio", job.user_id ?? undefined))
+      outputData = { audioUrl: r2Url }
+    } else {
+      throw new Error(`[job-finalize] unknown jobType: ${jobType}`)
+    }
+  } catch (err) {
+    // Failed media step: release our claim so a BullMQ retry or the next
+    // reconcile tick can re-attempt immediately, then surface the error
+    // unchanged (refund classification stays the caller's concern).
+    if (claim.ts) await releaseJobFinalizeClaim(jobId, claim.ts)
+    throw err
   }
 
   if (input.extraOutputData) {

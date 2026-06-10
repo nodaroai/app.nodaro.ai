@@ -37,3 +37,4 @@ The Text Prompt node is the most common starting point for workflows. It provide
 - For batch workflows, use a List node instead, which feeds items one at a time
 - Node references allow you to dynamically include output from other nodes in your text
 - A reference can carry a default: `{Label || fallback}` uses the trimmed `fallback` when nothing provides `Label`. `{Label || }` (empty after `||`) resolves to nothing; plain `{Label}` (no `||`) stays literal when unresolved
+- In the prompt editor of consumer nodes (config panel and the ⌘E prompt modal), `{Label}` variables are highlighted — cyan when a matching upstream node is wired (or for built-in template variables like `{userPrompt}`), amber when nothing upstream provides that label yet. Amber means "nothing wired", not "will fail": a `{Label || default}` variable still resolves to its default at run time

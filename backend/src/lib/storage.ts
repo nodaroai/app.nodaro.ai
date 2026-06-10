@@ -177,17 +177,23 @@ export async function uploadToR2(
   try {
     await streamToR2(key, counter, MEDIA_MIME[type])
   } catch (err) {
-    // Reservation must be released before surfacing the error, otherwise a
-    // failed upload permanently holds the user's quota. lib-storage aborts
-    // in-flight multipart uploads, but a completed single-part PutObject
-    // that failed post-commit could still leak — best-effort delete covers
-    // that case. Refund + delete are independent, so run in parallel.
-    const cleanupTasks: Promise<unknown>[] = [deleteFromR2(key)]
-    if (reserved) cleanupTasks.push(refundStorage(trackUserId!, effectiveCap))
-    const results = await Promise.allSettled(cleanupTasks)
-    for (const r of results) {
-      if (r.status === "rejected") {
-        console.error("[uploadToR2] cleanup failed:", r.reason)
+    // Release the quota reservation before surfacing the error, otherwise a
+    // failed upload permanently holds the user's quota.
+    //
+    // Deliberately NO deleteFromR2(key) here. Keys are deterministic
+    // (`images/<jobId>.png`) and two finalizers can race on the same job (the
+    // worker and the reconcile cron) — a failure-path delete destroys the
+    // OTHER writer's successfully-uploaded object while the job row stays
+    // `completed`, leaving a charged job with a permanent 404 (incident
+    // 2026-06-10, job 7955772a). A failed multipart upload never materializes
+    // an object (lib-storage aborts it), so the only things a delete could
+    // remove are a phantom committed PutObject (rare, a harmless quota
+    // orphan) or another finalizer's good upload (permanent data loss).
+    if (reserved) {
+      try {
+        await refundStorage(trackUserId!, effectiveCap)
+      } catch (refundErr) {
+        console.error("[uploadToR2] reservation refund failed:", refundErr)
       }
     }
     throw err

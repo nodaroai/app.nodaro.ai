@@ -18,6 +18,6 @@
       "@/*": ["src/*"]
     }
   },
-  "include": ["src/**/*", "scripts/lib/**/*", "scripts/gen-skills.ts"],
+  "include": ["src/**/*", "scripts/lib/**/*", "scripts/gen-skills.ts", "scripts/recover-job-media.ts"],
   "exclude": ["node_modules", "dist"]
 }
