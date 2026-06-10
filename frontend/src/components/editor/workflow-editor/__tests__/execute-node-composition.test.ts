@@ -26,6 +26,7 @@ const mockRunVideoToVideoGeneration = vi.fn()
 const mockRunTextToVideoGeneration = vi.fn()
 const mockRunTextToSpeechGeneration = vi.fn()
 const mockRunScriptGeneration = vi.fn()
+const mockRunLottiePlanGeneration = vi.fn()
 const mockRunCombineVideos = vi.fn()
 const mockRunCharacterGeneration = vi.fn()
 const mockRunFaceGeneration = vi.fn()
@@ -196,6 +197,8 @@ vi.mock("../node-executors", () => ({
     mockRunTextToSpeechGeneration(...args),
   runScriptGeneration: (...args: unknown[]) =>
     mockRunScriptGeneration(...args),
+  runLottiePlanGeneration: (...args: unknown[]) =>
+    mockRunLottiePlanGeneration(...args),
   runCombineVideos: (...args: unknown[]) => mockRunCombineVideos(...args),
 }))
 
@@ -643,6 +646,65 @@ describe("motion-graphics", () => {
         executionStatus: "failed",
         errorMessage: "AI failure",
       }),
+    )
+  })
+
+  it("engine=lottie routes to runLottiePlanGeneration (no previousSids on first run)", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    mockRunLottiePlanGeneration.mockResolvedValue("plan-ready")
+
+    await executeNode(
+      makeNode("motion-graphics", {
+        engine: "lottie",
+        motionPrompt: "neon lower third",
+        fps: 30,
+        aspectRatio: "16:9",
+        durationSeconds: 5,
+        llmModel: "claude-sonnet-4.6",
+      }),
+      makeCtx(),
+    )
+
+    expect(mockGenerateMotionGraphics).not.toHaveBeenCalled()
+    expect(mockRunLottiePlanGeneration).toHaveBeenCalledWith(
+      "n1",
+      expect.objectContaining({
+        prompt: "neon lower third",
+        fps: 30,
+        width: 1920,
+        height: 1080,
+        llmModel: "claude-sonnet-4.6",
+        previousSids: undefined,
+      }),
+      expect.anything(),
+    )
+  })
+
+  it("engine=lottie passes stable previousSids from an existing lottie-graphic plan", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    mockRunLottiePlanGeneration.mockResolvedValue("plan-ready")
+
+    await executeNode(
+      makeNode("motion-graphics", {
+        engine: "lottie",
+        motionPrompt: "neon lower third",
+        fps: 30,
+        aspectRatio: "16:9",
+        durationSeconds: 5,
+        motionPlan: {
+          planType: "lottie-graphic",
+          slots: { primaryColor: { p: { a: 0, k: [1, 0, 0, 1] } }, nameText: { p: "John" } },
+        },
+      }),
+      makeCtx(),
+    )
+
+    expect(mockRunLottiePlanGeneration).toHaveBeenCalledWith(
+      "n1",
+      expect.objectContaining({
+        previousSids: ["primaryColor", "nameText"],
+      }),
+      expect.anything(),
     )
   })
 })

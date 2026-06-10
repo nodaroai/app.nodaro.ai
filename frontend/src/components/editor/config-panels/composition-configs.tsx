@@ -44,6 +44,7 @@ import {
 } from "./composition-shared"
 import { AspectRatioSelector } from "./aspect-ratio-selector"
 import { COMPOSITION_RATIOS } from "./model-options"
+import { LottieSlotControls } from "./lottie-slot-controls"
 
 export function VideoComposerConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<VideoComposerData>) {
   const { sensors, orderedIds, orderedSources, handleDragEnd } = useMediaOrder(sources, data.assetOrder, onUpdate)
@@ -434,12 +435,17 @@ export function MotionGraphicsConfig({ data, onUpdate, sources, fieldMappings, o
         <>
           <Separator />
           {data.motionPlan.planType === "lottie-graphic" ? (
-            <Suspense fallback={<div className="text-xs text-muted-foreground py-2">Loading player...</div>}>
-              <LazyLottieGraphicPlayerPreview
-                motionPlan={data.motionPlan}
-                fps={data.fps}
-              />
-            </Suspense>
+            <>
+              <Suspense fallback={<div className="text-xs text-muted-foreground py-2">Loading player...</div>}>
+                <LazyLottieGraphicPlayerPreview
+                  motionPlan={data.motionPlan}
+                  fps={data.fps}
+                />
+              </Suspense>
+              {Object.keys((data.motionPlan.slots as Record<string, unknown>) ?? {}).length > 0 && (
+                <LottieSlotControls plan={data.motionPlan} onUpdate={onUpdate} />
+              )}
+            </>
           ) : (
             <>
               <Suspense fallback={<div className="text-xs text-muted-foreground py-2">Loading player...</div>}>

@@ -94,3 +94,95 @@ export function applySlots(
 ): JsonRecord {
   return walk(lottie, slots ?? {}, overrides ?? {}) as JsonRecord
 }
+
+// ── Slot control descriptors (Phase 2 — UI mapping) ──────────────────────────
+//
+// A slot manifest entry is `{ p: <whatever belongs at the reference position> }`
+// (Amendment 1). `describeSlotControl` unwraps that envelope to the editable raw
+// value and classifies it into the control kind the config panel should render.
+// `p` is either a property object `{a, k}` (colors, sizes, scalars) whose `k`
+// holds the value, or a bare raw value (text strings live unwrapped at `s.t`).
+
+export type SlotControlKind = "color" | "text" | "number" | "point"
+export interface SlotControlDescriptor {
+  kind: SlotControlKind
+  value: unknown
+}
+
+/**
+ * Unwraps a slot entry to its editable raw value and classifies it:
+ *   {p:{a:0,k:[1,0,0,1]}} → { kind:"color", value:[1,0,0,1] }
+ *   {p:"John"}            → { kind:"text",  value:"John" }
+ *   {p:{a:0,k:42}}        → { kind:"number", value:42 }
+ *   {p:{a:0,k:[10,20]}}   → { kind:"point", value:[10,20] }
+ * Animated property objects (`a:1`) and anything that doesn't map to a known
+ * control kind return null (no editable control).
+ */
+export function describeSlotControl(slot: unknown): SlotControlDescriptor | null {
+  if (!isPlainObject(slot)) return null
+  const p = (slot as JsonRecord).p
+  let value: unknown = p
+  if (isPropertyObject(p)) {
+    if ((p as JsonRecord).a === 1) return null
+    value = (p as JsonRecord).k
+  }
+  if (typeof value === "string") return { kind: "text", value }
+  if (typeof value === "number") return { kind: "number", value }
+  if (
+    Array.isArray(value) &&
+    value.length === 4 &&
+    value.every((n) => typeof n === "number" && n >= 0 && n <= 1)
+  ) {
+    return { kind: "color", value }
+  }
+  if (Array.isArray(value) && value.length === 2 && value.every((n) => typeof n === "number")) {
+    return { kind: "point", value }
+  }
+  return null
+}
+
+function clamp01(n: number): number {
+  if (Number.isNaN(n)) return 0
+  return n < 0 ? 0 : n > 1 ? 1 : n
+}
+
+function toHexByte(component: number): string {
+  return Math.round(clamp01(component) * 255)
+    .toString(16)
+    .padStart(2, "0")
+}
+
+/**
+ * RGBA array (components 0..1) → hex string. The alpha component is omitted
+ * when it is exactly 1 (`[1,0,0,1]` → `"#ff0000"`); otherwise an 8-digit hex is
+ * emitted (`[0,1,0,0.5]` → `"#00ff0080"`). Output is always lowercase.
+ */
+export function rgbaArrayToHex(rgba: number[]): string {
+  const [r = 0, g = 0, b = 0, a = 1] = rgba
+  const base = `#${toHexByte(r)}${toHexByte(g)}${toHexByte(b)}`
+  return a >= 1 ? base : `${base}${toHexByte(a)}`
+}
+
+/**
+ * Hex string → RGBA array (components 0..1). Accepts `#rgb`, `#rrggbb`, and
+ * `#rrggbbaa`; alpha defaults to 1 when absent. Leading `#` is optional.
+ */
+export function hexToRgbaArray(hex: string): number[] {
+  let h = hex.trim().replace(/^#/, "")
+  if (h.length === 3) {
+    h = h
+      .split("")
+      .map((c) => c + c)
+      .join("")
+  }
+  const r = parseInt(h.slice(0, 2), 16) / 255
+  const g = parseInt(h.slice(2, 4), 16) / 255
+  const b = parseInt(h.slice(4, 6), 16) / 255
+  const a = h.length >= 8 ? parseInt(h.slice(6, 8), 16) / 255 : 1
+  return [r, g, b, a]
+}
+
+/** Manifest sids in insertion order (drives the slot-control list ordering). */
+export function listSlotSids(slots: Record<string, unknown>): string[] {
+  return Object.keys(slots ?? {})
+}

@@ -715,7 +715,14 @@ export { extractAllGeneratedResults, extractGeneratedJsonAsList, spreadJsonArray
 
 export { getParameterPromptHint } from "./parameter-prompt-hint.js"
 
-export { applySlots } from "./lottie-slots.js"
+export {
+  applySlots,
+  describeSlotControl,
+  rgbaArrayToHex,
+  hexToRgbaArray,
+  listSlotSids,
+} from "./lottie-slots.js"
+export type { SlotControlKind, SlotControlDescriptor } from "./lottie-slots.js"
 
 export { PICKER_CATALOGS, getPickerCatalog, listPickerCatalogs } from "./picker-catalogs.js"
 export type { PickerOption, PickerCatalog, PickerDimension } from "./picker-catalogs.js"

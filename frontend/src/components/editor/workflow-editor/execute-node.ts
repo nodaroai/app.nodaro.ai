@@ -6027,6 +6027,13 @@ export function executeNode(
     // Lottie engine runs async (LLM authors a full Lottie doc on the video
     // worker — generate-script precedent). Elements stays synchronous below.
     if (d.engine === "lottie") {
+      // Regeneration hint: keep slot names stable across re-runs so existing
+      // slotValue overrides survive. Only meaningful when a prior lottie-graphic
+      // plan exists on the node.
+      const previousSids =
+        (d.motionPlan as Record<string, unknown> | undefined)?.planType === "lottie-graphic"
+          ? Object.keys(((d.motionPlan as Record<string, unknown>).slots as Record<string, unknown>) ?? {})
+          : undefined;
       return runLottiePlanGeneration(node.id, {
         prompt: inputs.prompt || d.motionPrompt,
         fps: d.fps,
@@ -6036,6 +6043,7 @@ export function executeNode(
         durationSeconds: d.durationSeconds,
         backgroundColor: d.backgroundColor,
         llmModel: d.llmModel,
+        previousSids,
       }, ctx);
     }
     const { updateNodeData } = useWorkflowStore.getState();

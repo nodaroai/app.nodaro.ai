@@ -26,6 +26,14 @@ The **Engine** field selects how the composition is authored. It does not change
 
 > The default background is fully transparent (`#00000000`) for both engines, so motion graphics layer cleanly over other video.
 
+### Slot editing
+
+Once a Lottie plan is generated, its named slots appear as controls in the node's config panel (under a **Slots** section, below the preview). Colors render as a color picker, text as a text field, and numeric/point slots as number inputs. Each control shows a reset affordance once you've changed it.
+
+These edits are **free** — they adjust the existing plan in place, so there are **no credits** and **no regeneration**. The preview updates live as you edit.
+
+Slot names stay **stable across regenerations**: when you re-run the node, the engine is told to keep the existing slot names, so your adjustments survive a regeneration rather than being discarded.
+
 ## Pricing
 
 Credits follow the standard LLM formula:

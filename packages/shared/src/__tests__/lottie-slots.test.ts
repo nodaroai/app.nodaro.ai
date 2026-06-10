@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest"
-import { applySlots } from "../lottie-slots.js"
+import {
+  applySlots,
+  describeSlotControl,
+  rgbaArrayToHex,
+  hexToRgbaArray,
+  listSlotSids,
+} from "../lottie-slots.js"
 
 const slots = {
   primaryColor: { p: { a: 0, k: [1, 0, 0, 1] } }, // canonical: p = property object
@@ -75,5 +81,59 @@ describe("applySlots", () => {
     expect(lottie).toEqual(lottieCopy)
     expect(slots).toEqual(slotsCopy)
     expect(overrides).toEqual(overridesCopy)
+  })
+})
+
+describe("describeSlotControl", () => {
+  it("maps RGBA arrays to color (unwrapping property-object p)", () => {
+    expect(describeSlotControl({ p: { a: 0, k: [1, 0, 0, 1] } })).toEqual({ kind: "color", value: [1, 0, 0, 1] })
+  })
+  it("maps strings to text (raw-value p, Amendment 1 bare string)", () => {
+    expect(describeSlotControl({ p: "Jane" })).toEqual({ kind: "text", value: "Jane" })
+  })
+  it("maps numbers to number", () => {
+    expect(describeSlotControl({ p: { a: 0, k: 42 } })).toEqual({ kind: "number", value: 42 })
+  })
+  it("maps 2-vectors to point", () => {
+    expect(describeSlotControl({ p: { a: 0, k: [10, 20] } })).toEqual({ kind: "point", value: [10, 20] })
+  })
+  it("returns null for animated property objects (a:1)", () => {
+    expect(describeSlotControl({ p: { a: 1, k: [{ t: 0, s: [0] }] } })).toBeNull()
+  })
+  it("returns null for unknown shapes and non-objects", () => {
+    expect(describeSlotControl({ p: { foo: "bar" } })).toBeNull()
+    expect(describeSlotControl({ p: [1, 2, 3] })).toBeNull()
+    expect(describeSlotControl(null)).toBeNull()
+    expect(describeSlotControl("nope")).toBeNull()
+  })
+})
+
+describe("color conversion", () => {
+  it("round-trips rgba<->hex", () => {
+    expect(rgbaArrayToHex([1, 0, 0, 1])).toBe("#ff0000")
+    expect(hexToRgbaArray("#ff0000")).toEqual([1, 0, 0, 1])
+    expect(hexToRgbaArray("#00ff0080")).toEqual([0, 1, 0, expect.closeTo(0.5, 1)])
+  })
+  it("emits 8-digit hex when alpha < 1", () => {
+    const hex = rgbaArrayToHex([0, 1, 0, 0.5])
+    expect(hex).toBe("#00ff0080")
+  })
+  it("omits the alpha component when alpha === 1", () => {
+    expect(rgbaArrayToHex([0, 0, 1, 1])).toBe("#0000ff")
+  })
+  it("clamps out-of-range components and lowercases output", () => {
+    expect(rgbaArrayToHex([2, -1, 0.5, 1])).toBe("#ff0080")
+  })
+  it("expands #rgb shorthand", () => {
+    expect(hexToRgbaArray("#f00")).toEqual([1, 0, 0, 1])
+  })
+})
+
+describe("listSlotSids", () => {
+  it("returns manifest sids in insertion order", () => {
+    expect(listSlotSids({ a: { p: 1 }, b: { p: 2 } })).toEqual(["a", "b"])
+  })
+  it("tolerates undefined", () => {
+    expect(listSlotSids(undefined as unknown as Record<string, unknown>)).toEqual([])
   })
 })
