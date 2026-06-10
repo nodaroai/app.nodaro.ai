@@ -40,8 +40,7 @@ import { OutputCard, type FieldBadgeEntry } from "@/components/presentation/outp
 import { ConfigFieldRenderer } from "@/components/presentation/config-field-renderer"
 import { RichtextBlock } from "@/components/presentation/richtext-block"
 import { GroupCard } from "@/components/presentation/group-card"
-import { getCardTitle as getCardTitleHelper, orderNodesByIds, getNodeResultWithInputFallback, areAllInputsFilled, resolveInputItems, resolveOutputItems } from "@/components/presentation/helpers"
-import { NODE_DEF_MAP } from "@/types/nodes"
+import { getCardTitle as getCardTitleHelper, orderNodesByIds, getNodeResultWithInputFallback, areAllInputsFilled, resolveInputItems, resolveOutputItems, findExposableField } from "@/components/presentation/helpers"
 import type { PresentationItem } from "@nodaro/shared"
 import { NodeConfigModal, CONFIG_INPUT_TYPES } from "@/components/presentation/node-config-modal"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
@@ -135,10 +134,7 @@ export function MobileAppShell({
 
   const findFieldDef = useCallback(
     (nodeId: string, fieldKey: string) => {
-      const node = nodeMap.get(nodeId)
-      if (!node?.type) return undefined
-      const def = NODE_DEF_MAP.get(node.type)
-      return def?.exposableFields?.find((f) => f.key === fieldKey)
+      return findExposableField(nodeMap.get(nodeId), fieldKey)
     },
     [nodeMap],
   )

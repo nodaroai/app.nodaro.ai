@@ -34,6 +34,8 @@ These edits are **free** — they adjust the existing plan in place, so there ar
 
 Slot names stay **stable across regenerations**: when you re-run the node, the engine is told to keep the existing slot names, so your adjustments survive a regeneration rather than being discarded.
 
+**Exposing slots as app inputs:** when this node is added as an input in the publish dialog, each slot becomes an editable field (color / text / number) in the published app and in presentation mode. End-users adjust them per run without regenerating — the same free, no-credit edit, surfaced to your app's audience. See the [embed-app guide](../../embed-app-guide.md#lottie-slot-fields-slotsid) for the override mechanics.
+
 ## Pricing
 
 Credits follow the standard LLM formula:

@@ -5,6 +5,9 @@ import {
   rgbaArrayToHex,
   hexToRgbaArray,
   listSlotSids,
+  humanizeSlotSid,
+  deriveLottieSlotFields,
+  LOTTIE_SLOT_FIELD_PREFIX,
 } from "../lottie-slots.js"
 
 const slots = {
@@ -135,5 +138,80 @@ describe("listSlotSids", () => {
   })
   it("tolerates undefined", () => {
     expect(listSlotSids(undefined as unknown as Record<string, unknown>)).toEqual([])
+  })
+})
+
+describe("humanizeSlotSid", () => {
+  it("splits camelCase into Title Case", () => {
+    expect(humanizeSlotSid("primaryColor")).toBe("Primary Color")
+  })
+  it("converts snake_case and kebab-case", () => {
+    expect(humanizeSlotSid("bar_size")).toBe("Bar Size")
+    expect(humanizeSlotSid("name-text")).toBe("Name Text")
+  })
+  it("handles a digit boundary and a single word", () => {
+    expect(humanizeSlotSid("color2")).toBe("Color2")
+    expect(humanizeSlotSid("title")).toBe("Title")
+  })
+})
+
+describe("deriveLottieSlotFields", () => {
+  const plan = {
+    planType: "lottie-graphic",
+    slots: {
+      primaryColor: { p: { a: 0, k: [1, 0, 0, 1] } }, // color
+      nameText: { p: "Jane Doe" },                     // text
+      opacity: { p: { a: 0, k: 0.5 } },                // number ≤ 1 → unit slider
+      barWidth: { p: { a: 0, k: 360 } },               // number > 1 → 0..ceil(*2)
+      offset: { p: { a: 0, k: [10, 20] } },            // point → SKIPPED
+    },
+  }
+
+  it("derives one field per non-point slot with prefixed keys + right types/defaults", () => {
+    const fields = deriveLottieSlotFields(plan)
+    // point slot dropped → 4 fields.
+    expect(fields).toHaveLength(4)
+    expect(fields.every((f) => f.key.startsWith(LOTTIE_SLOT_FIELD_PREFIX))).toBe(true)
+
+    const byKey = Object.fromEntries(fields.map((f) => [f.key, f]))
+
+    expect(byKey["slot:primaryColor"]).toMatchObject({
+      label: "Primary Color",
+      type: "color",
+      defaultValue: "#ff0000",
+    })
+    expect(byKey["slot:nameText"]).toMatchObject({
+      label: "Name Text",
+      type: "text",
+      defaultValue: "Jane Doe",
+    })
+    // 0..1 value → unit slider.
+    expect(byKey["slot:opacity"]).toMatchObject({
+      type: "slider",
+      min: 0,
+      max: 1,
+      step: 0.01,
+      defaultValue: 0.5,
+    })
+    // >1 value → 0..ceil(value*2), step 1.
+    expect(byKey["slot:barWidth"]).toMatchObject({
+      type: "slider",
+      min: 0,
+      max: 720,
+      step: 1,
+      defaultValue: 360,
+    })
+    // point slot is intentionally not exposed.
+    expect(byKey["slot:offset"]).toBeUndefined()
+  })
+
+  it("returns [] for an elements (non-lottie) plan", () => {
+    expect(deriveLottieSlotFields({ planType: "elements", slots: { a: { p: "x" } } })).toEqual([])
+  })
+
+  it("returns [] for undefined / empty / non-object slots", () => {
+    expect(deriveLottieSlotFields(undefined)).toEqual([])
+    expect(deriveLottieSlotFields({ planType: "lottie-graphic" })).toEqual([])
+    expect(deriveLottieSlotFields({ planType: "lottie-graphic", slots: {} })).toEqual([])
   })
 })

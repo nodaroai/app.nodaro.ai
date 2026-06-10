@@ -168,6 +168,51 @@ For known field-type hints, see this table (covers ~90% of exposed fields):
 | `enableTranslation`, `addAudio`, `headless`, `loop` | toggle | |
 | `imageUrl`, `videoUrl`, `audioUrl`, `referenceImage` | URL string | upload elsewhere first; paste resulting URL |
 
+### Lottie slot fields (`slot:<sid>`)
+
+A Motion Graphics node running the **Lottie** engine can expose its named slots
+(colors, text, numbers) as app inputs. These show up in `inputItems` as field
+items whose `field` key is prefixed `slot:` — e.g. `slot:primaryColor`,
+`slot:nameText`. End-users edit them per run, with **zero credits** (no
+regeneration — only the existing animation's slot values change).
+
+> **Freeze-on-exposure:** when an app exposes slot fields, that animation's plan
+> is frozen — every run **reuses the published animation** and only swaps slot
+> values (no regeneration cost). An app that does **not** expose any slot fields
+> regenerates the animation each run as usual.
+
+The field **type comes from the slot's value**, not a name pattern:
+
+| Slot value kind | Control | Submit value |
+|---|---|---|
+| RGBA color array `[r,g,b,a]` (0–1) | color picker | hex string, e.g. `"#00ff00"` |
+| string | text input | the string |
+| number | slider | a number |
+
+**Override mechanic (important for raw `inputOverrides`):** a slot value is NOT a
+literal node-data field — it lives inside the node's `motionPlan.slotValues`. To
+override it you replace the **whole** `motionPlan` for that node with a copy of
+the snapshot plan whose `slotValues` carry your edits (colors as 0–1 RGBA
+arrays):
+
+```jsonc
+{
+  "inputOverrides": {
+    "node-mg1": {
+      "motionPlan": {
+        // ...spread the snapshot node's motionPlan unchanged...
+        "slotValues": { "primaryColor": [0, 1, 0, 1], "nameText": "Acme Inc." }
+      }
+    }
+  }
+}
+```
+
+The Nodaro web app and SDK compose this for you automatically — you only need
+the manual form when building a fully custom integration. (The orchestrator
+merge is shallow, so a partial `slotValues` patch would drop the rest of the
+plan; always send the full `motionPlan`.)
+
 ---
 
 ## 4. Step 3 — Map the discovered schema to a form

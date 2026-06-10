@@ -721,8 +721,11 @@ export {
   rgbaArrayToHex,
   hexToRgbaArray,
   listSlotSids,
+  humanizeSlotSid,
+  deriveLottieSlotFields,
+  LOTTIE_SLOT_FIELD_PREFIX,
 } from "./lottie-slots.js"
-export type { SlotControlKind, SlotControlDescriptor } from "./lottie-slots.js"
+export type { SlotControlKind, SlotControlDescriptor, LottieSlotField } from "./lottie-slots.js"
 
 export { PICKER_CATALOGS, getPickerCatalog, listPickerCatalogs } from "./picker-catalogs.js"
 export type { PickerOption, PickerCatalog, PickerDimension } from "./picker-catalogs.js"

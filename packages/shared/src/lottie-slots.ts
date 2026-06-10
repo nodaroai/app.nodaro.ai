@@ -186,3 +186,92 @@ export function hexToRgbaArray(hex: string): number[] {
 export function listSlotSids(slots: Record<string, unknown>): string[] {
   return Object.keys(slots ?? {})
 }
+
+// ── Slot → app-field derivation (Phase 3 — single source of truth) ────────────
+//
+// `deriveLottieSlotFields` turns a lottie-graphic plan's slot manifest into
+// ExposableField-shaped descriptors. ONE function feeds three surfaces: the
+// editor's publish picker, the published-app runtime, and the backend MCP
+// schema extractor — so the set of slots an app exposes can never drift between
+// them. It deliberately mirrors `describeSlotControl`'s classification (the
+// editor's live slot controls use the same source of truth).
+
+/** Prefix for the synthetic field key of a derived slot field: `slot:<sid>`. */
+export const LOTTIE_SLOT_FIELD_PREFIX = "slot:"
+
+/** "primaryColor" → "Primary Color"; "bar_size" → "Bar Size". */
+export function humanizeSlotSid(sid: string): string {
+  return sid
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+/** ExposableField-shaped descriptor derived from one slot. */
+export interface LottieSlotField {
+  /** Synthetic field key: `slot:<sid>`. */
+  key: string
+  /** Humanized sid (camelCase / snake_case → Title Case). */
+  label: string
+  /** Maps onto the `ExposableField.type` members used in apps. */
+  type: "color" | "text" | "slider"
+  min?: number
+  max?: number
+  step?: number
+  /** Hex string for color; raw value for text/number. */
+  defaultValue?: unknown
+}
+
+/**
+ * Derive ExposableField-shaped descriptors from a motion-graphics node's plan.
+ *
+ * Returns [] unless `motionPlan.planType === "lottie-graphic"` and `slots` is a
+ * non-empty object — the elements engine and absent plans expose nothing.
+ *
+ * Per slot, via `describeSlotControl`:
+ *   - color  → `{ type: "color", defaultValue: rgbaArrayToHex(value) }`
+ *   - text   → `{ type: "text", defaultValue: value }`
+ *   - number → `{ type: "slider", min, max, step, defaultValue: value }`
+ *             (0–1 values → 0..1 step 0.01; larger → 0..ceil(value*2) step 1)
+ *   - point / null → SKIPPED. Point-kind slots are intentionally not exposed in
+ *     apps (no paired-number card; positions are rarely end-user-meaningful).
+ */
+export function deriveLottieSlotFields(
+  motionPlan: Record<string, unknown> | undefined,
+): LottieSlotField[] {
+  if (!motionPlan || motionPlan.planType !== "lottie-graphic") return []
+  const slots = motionPlan.slots
+  if (!isPlainObject(slots)) return []
+
+  const fields: LottieSlotField[] = []
+  for (const [sid, slot] of Object.entries(slots)) {
+    const control = describeSlotControl(slot)
+    if (!control) continue
+    const base = { key: `${LOTTIE_SLOT_FIELD_PREFIX}${sid}`, label: humanizeSlotSid(sid) }
+
+    if (control.kind === "color") {
+      fields.push({
+        ...base,
+        type: "color",
+        defaultValue: rgbaArrayToHex(control.value as number[]),
+      })
+    } else if (control.kind === "text") {
+      fields.push({ ...base, type: "text", defaultValue: control.value })
+    } else if (control.kind === "number") {
+      const value = Number(control.value)
+      const isUnit = value <= 1
+      fields.push({
+        ...base,
+        type: "slider",
+        min: 0,
+        max: isUnit ? 1 : Math.ceil(value * 2) || 100,
+        step: isUnit ? 0.01 : 1,
+        defaultValue: control.value,
+      })
+    }
+    // point / unrecognized kinds are intentionally not exposed.
+  }
+  return fields
+}

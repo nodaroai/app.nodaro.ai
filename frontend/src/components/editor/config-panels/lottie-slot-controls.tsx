@@ -8,6 +8,7 @@ import {
   describeSlotControl,
   rgbaArrayToHex,
   hexToRgbaArray,
+  humanizeSlotSid,
   type SlotControlDescriptor,
 } from "@nodaro/shared"
 import type { MotionGraphicsData } from "@/types/nodes"
@@ -17,16 +18,6 @@ interface LottieSlotControlsProps {
   plan: Record<string, unknown>
   /** Same shape MotionGraphicsConfig passes — a partial node-data patch. */
   onUpdate: (patch: Partial<MotionGraphicsData>) => void
-}
-
-/** "primaryColor" → "Primary Color". */
-function humanizeSid(sid: string): string {
-  return sid
-    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-    .replace(/[_-]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
 export function LottieSlotControls({ plan, onUpdate }: LottieSlotControlsProps) {
@@ -60,7 +51,7 @@ export function LottieSlotControls({ plan, onUpdate }: LottieSlotControlsProps) 
       </div>
 
       {entries.map(({ sid, control }) => {
-        const label = humanizeSid(sid)
+        const label = humanizeSlotSid(sid)
         const hasOverride = Object.prototype.hasOwnProperty.call(slotValues, sid)
         const current = hasOverride ? slotValues[sid] : control.value
 
@@ -113,7 +104,7 @@ function SlotControl({ sid, control, current, onChange }: SlotControlProps) {
         <input
           type="color"
           id={id}
-          aria-label={humanizeSid(sid)}
+          aria-label={humanizeSlotSid(sid)}
           // <input type="color"> only accepts #rrggbb; strip any alpha for the
           // swatch. Editing therefore resets a sub-1 alpha to opaque — the
           // native picker has no alpha channel (lottie fills are near-always
@@ -149,14 +140,14 @@ function SlotControl({ sid, control, current, onChange }: SlotControlProps) {
         <Input
           id={id}
           type="number"
-          aria-label={`${humanizeSid(sid)} X`}
+          aria-label={`${humanizeSlotSid(sid)} X`}
           value={x}
           onChange={(e) => onChange([e.target.value === "" ? 0 : Number(e.target.value), y])}
           className="h-8 text-xs"
         />
         <Input
           type="number"
-          aria-label={`${humanizeSid(sid)} Y`}
+          aria-label={`${humanizeSlotSid(sid)} Y`}
           value={y}
           onChange={(e) => onChange([x, e.target.value === "" ? 0 : Number(e.target.value)])}
           className="h-8 text-xs"

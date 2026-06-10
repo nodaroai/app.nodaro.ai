@@ -1,8 +1,9 @@
 import type { WorkflowNode } from "@/types/nodes"
-import type { PresentationItem } from "@nodaro/shared"
+import { NODE_DEF_MAP } from "@/types/nodes"
+import type { ExposableField, PresentationItem } from "@nodaro/shared"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import { getNodeLabel, getNodeResult } from "@/lib/presentation-utils"
-import { migrateToItems } from "@nodaro/shared"
+import { migrateToItems, deriveLottieSlotFields, LOTTIE_SLOT_FIELD_PREFIX } from "@nodaro/shared"
 import { isMultiColumnList } from "@/lib/list-loop-migration"
 
 /** Resolve input items from settings — prefer inputItems, fallback to migrated inputOrder */
@@ -17,6 +18,37 @@ export function resolveOutputItems(settings: PresentationSettings): Presentation
   if (settings.outputItems) return settings.outputItems
   if (settings.outputOrder) return migrateToItems(settings.outputOrder) ?? null
   return null
+}
+
+/**
+ * Resolve the `ExposableField` descriptor for a node + field key — the single
+ * source of truth shared by the publish picker, the presentation runtime, and
+ * the app-runner runtime.
+ *
+ * Static fields come from `NODE_DEFINITIONS`. `slot:<sid>` fields on a
+ * motion-graphics node carrying a lottie-graphic plan are derived dynamically
+ * from the plan's slot manifest via `deriveLottieSlotFields` (the same shared
+ * helper the editor's live slot controls and the backend MCP schema extractor
+ * use), so the exposed-slot set can never drift between surfaces. The derived
+ * descriptors are ExposableField-shaped (their `color`/`text`/`slider` types are
+ * all members of `ExposableField["type"]`).
+ */
+export function findExposableField(
+  node: WorkflowNode | undefined,
+  fieldKey: string,
+): ExposableField | undefined {
+  if (!node?.type) return undefined
+  const def = NODE_DEF_MAP.get(node.type)
+  const staticField = def?.exposableFields?.find((f) => f.key === fieldKey)
+  if (staticField) return staticField
+  if (fieldKey.startsWith(LOTTIE_SLOT_FIELD_PREFIX)) {
+    const motionPlan = (node.data as Record<string, unknown> | undefined)?.motionPlan as
+      | Record<string, unknown>
+      | undefined
+    const slot = deriveLottieSlotFields(motionPlan).find((f) => f.key === fieldKey)
+    if (slot) return slot as ExposableField
+  }
+  return undefined
 }
 
 /** Get display title for a presentation card — custom title from cardMeta, or fallback to node label */

@@ -25,7 +25,7 @@ import {
 import { resolveNodeInputs, getListInputForNode } from "../services/workflow-engine/input-resolver.js"
 import { normalizeLegacyNodeTypes } from "../services/workflow-engine/normalize-node-types.js"
 import { migrateGenerateImageHandles } from "../lib/generate-image-handle-migration.js"
-import { extractSourceNodeOutput, extractSavedNodeOutput, coerceListItemsOverrideToRows } from "../services/workflow-engine/output-extractor.js"
+import { extractSourceNodeOutput, extractSavedNodeOutput } from "../services/workflow-engine/output-extractor.js"
 import { executeNode, loadCompletedFanOutIterations, type ExecuteNodeResult } from "../services/workflow-engine/node-executor.js"
 import type {
   WorkflowExecutionJob,
@@ -37,8 +37,8 @@ import type {
   OrchestratorContext,
 } from "../services/workflow-engine/types.js"
 import { WORKFLOW_TIMEOUT_MS } from "../services/workflow-engine/types.js"
-import { filterCloneNodes, PARAMETER_NODE_TYPES, getParameterPromptHint, locationMentionSlug } from "@nodaro/shared"
-import { LOCATION_VARIANT_BUCKETS } from "../services/workflow-engine/payload-builder.js"
+import { filterCloneNodes, PARAMETER_NODE_TYPES, getParameterPromptHint } from "@nodaro/shared"
+import { applyInputOverridesToNodes } from "./apply-input-overrides.js"
 import { migrateEdgeOutputMode } from "@nodaro/shared"
 import { REPEAT_PLACEHOLDER, getEffectiveRepeatCount, REPEATABLE_NODE_TYPES, expandItemsWithRepeat, decodeProviderItem } from "@nodaro/shared"
 import { buildStatsKey, upsertExecutionStats } from "../services/execution-stats.js"
@@ -239,36 +239,6 @@ async function cleanupStaleExecutions(): Promise<void> {
   }
 }
 
-/**
- * When `data.selectedVariant` is set (e.g. `"weather/rain"` from app-input
- * override), patch `data.sourceImageUrl` to the matching variant's URL so
- * all downstream consumers (output-extractor, expandWiredLocationRefs
- * canonical entry, frontend mirror) treat the variant as the canonical
- * image for this run. Match uses `locationMentionSlug` on both sides so
- * publisher-stored `"Light Rain"` (slug `light-rain`) matches an override
- * of `"weather/light-rain"`. Mutates `data` in place; no-op on malformed
- * input or unknown variant.
- */
-function applyLocationVariantOverride(data: Record<string, unknown>): void {
-  const spec = typeof data.selectedVariant === "string" ? data.selectedVariant.trim() : ""
-  const slashAt = spec.indexOf("/")
-  if (slashAt <= 0) return
-  const bucket = spec.slice(0, slashAt)
-  if (!(LOCATION_VARIANT_BUCKETS as readonly string[]).includes(bucket)) return
-  const target = locationMentionSlug(spec.slice(slashAt + 1))
-  if (!target) return
-  const items = data[bucket]
-  if (!Array.isArray(items)) return
-  for (const it of items) {
-    const name = (it as { name?: unknown } | null)?.name
-    if (typeof name !== "string") continue
-    if (locationMentionSlug(name) !== target) continue
-    const url = (it as { url?: unknown }).url
-    if (typeof url === "string" && url) data.sourceImageUrl = url
-    return
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Worker creation
 // ---------------------------------------------------------------------------
@@ -316,7 +286,37 @@ export function createOrchestratorWorker() {
 // Main execution loop
 // ---------------------------------------------------------------------------
 
-async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise<void> {
+/**
+ * Freeze-on-exposure gate (design F16): true when this run carries a lottie
+ * motionPlan override for `node` AND the node is a motion-graphics node whose
+ * (already override-merged) plan is a lottie-graphic. Such a node must be
+ * pre-completed with its overridden plan instead of re-generated — the creator
+ * exposed slot fields, so end-users edit the published animation rather than
+ * re-rolling it (no re-generation, no 5cr re-charge). The PRESENCE of a
+ * `motionPlan` key in the override is the freeze signal; the frontend
+ * (composeLottieSlotOverrides) emits one for EVERY slot-exposed lottie node,
+ * even when the user touched nothing.
+ *
+ * Covers BOTH the presentation route and the app route: both enqueue the same
+ * orchestrator job with `inputOverrides`, so this one gate fires for both.
+ */
+function isFrozenLottieOverride(
+  node: SimpleNode,
+  inputOverrides: Record<string, Record<string, unknown>> | undefined,
+): boolean {
+  if (node.type !== "motion-graphics") return false
+  const override = inputOverrides?.[node.id]
+  if (!override || !("motionPlan" in override)) return false
+  const plan = node.data?.motionPlan as Record<string, unknown> | undefined
+  return plan?.planType === "lottie-graphic"
+}
+
+/**
+ * @internal Exported for the orchestrator integration test (freeze-on-exposure
+ * guard) so it can drive the real seeding + level-execution path. Not part of
+ * the module's public surface — production callers use `createOrchestratorWorker`.
+ */
+export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise<void> {
   const { executionId, workflowId, userId, triggerType, triggerData, nodeIds, inputOverrides, appVersionId } = job.data
   const nodeSubset = nodeIds ? new Set(nodeIds) : null
 
@@ -422,35 +422,12 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
       ...(userProfile?.prompt_templates ? { userPromptTemplates: userProfile.prompt_templates } : {}),
     }
 
-    // Apply presentation mode input overrides to source node data.
-    // CRITICAL: also clear stale generatedResults/generatedImageUrl from the
-    // workflow snapshot so that extractSourceNodeOutput / extractSavedNodeOutput
-    // never prefer a stale snapshot result over the user's fresh input.
-    if (inputOverrides) {
-      for (const node of nodes) {
-        const overrides = inputOverrides[node.id]
-        if (overrides) {
-          const cleaned = { ...node.data, ...overrides }
-          delete cleaned.generatedResults
-          delete cleaned.activeResultIndex
-          delete cleaned.generatedImageUrl
-          delete cleaned.generatedVideoUrl
-          delete cleaned.generatedAudioUrl
-          delete cleaned.generatedText
-          if (node.type === "location") {
-            applyLocationVariantOverride(cleaned)
-          }
-          // A columns-present `list` (incl. migrated former-`loop`) used as a
-          // published-app input gets the user's value as an `items: string[]`
-          // override (ListInputCard always writes `items`). Both list extractors
-          // read `rows` first when `columns` exist, so without this the override
-          // is ignored and the run uses the STALE snapshot rows. Rewrite rows
-          // from the items override so the user's input is authoritative.
-          coerceListItemsOverrideToRows(cleaned)
-          node.data = cleaned
-        }
-      }
-    }
+    // Apply presentation / published-app input overrides to source node data.
+    // SHALLOW merge per node — a top-level override key replaces the snapshot's
+    // value wholesale (this is what makes the lottie full-plan `motionPlan`
+    // override work; see apply-input-overrides). Also clears stale generated*
+    // results so the user's fresh input wins over a cached snapshot result.
+    applyInputOverridesToNodes(nodes, inputOverrides)
 
     if (nodes.length === 0) {
       await failExecution(executionId, "Workflow has no nodes")
@@ -578,7 +555,27 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
     const skippedIds = getEffectivelySkippedIds(nodes, edges)
 
     for (const node of nodes) {
-      if (isSourceNode(node.type)) {
+      if (isFrozenLottieOverride(node, inputOverrides)) {
+        // Freeze-on-exposure (design F16): an app/presentation run that carries a
+        // lottie motionPlan override means the creator exposed slot fields — the
+        // end-user edits the PUBLISHED animation rather than re-rolling it. Seed the
+        // node as completed with the overridden plan as its output so the DAG skips
+        // re-generation (and the 5cr re-charge) and render-video consumes the edited
+        // plan via nodeStates.output.plan.
+        //
+        // node.data.motionPlan already carries the user's shallow-merged override
+        // (applyInputOverridesToNodes ran above). Mirror the completed-state shape
+        // used by the source/parameter/skip seeds below: status "completed" +
+        // output + completedAt. preResolvedNodeIds (built next) picks it up, the
+        // executable filter excludes it (status === "completed"), and the
+        // render-video payload reads output.plan FIRST (payload-builder §render-video),
+        // so the frozen plan — not a re-roll — drives the render.
+        nodeStates[node.id] = {
+          status: "completed",
+          output: { plan: node.data.motionPlan as Record<string, unknown> },
+          completedAt: new Date().toISOString(),
+        }
+      } else if (isSourceNode(node.type)) {
         const output = extractSourceNodeOutput(node, triggerData)
         if (output) {
           nodeStates[node.id] = {
@@ -643,6 +640,11 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
       if (isSkipNode(n.type)) return false
       if (n.type && PARAMETER_NODE_TYPES.has(n.type)) return false
       if (skippedIds.has(n.id)) return false
+      // Freeze-on-exposure (design F16): a lottie node pre-completed with its
+      // overridden plan is NOT executable — exclude it exactly like a source /
+      // parameter / skipped pre-completed node so it stays out of totalExecutions
+      // (no phantom +1 the progress bar can never reach) and is never dispatched.
+      if (isFrozenLottieOverride(n, inputOverrides)) return false
       if (nodeSubset && !nodeSubset.has(n.id)) return false
       return true
     })

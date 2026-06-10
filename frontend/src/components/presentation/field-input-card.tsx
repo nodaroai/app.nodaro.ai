@@ -181,6 +181,37 @@ function TextField({
   )
 }
 
+function ColorField({
+  field,
+  value,
+  onChange,
+  readOnly,
+}: Omit<FieldInputCardProps, "allowedValues">) {
+  const strValue = String(value ?? field.defaultValue ?? "#ffffff")
+
+  return (
+    <GlassCard>
+      <Label className={cn(LABEL_CLS, "mb-2 block")}>{field.label}</Label>
+      <div className="flex items-center gap-2">
+        <input
+          type="color"
+          // <input type="color"> only accepts #rrggbb — strip any alpha for the
+          // swatch (mirrors the editor's lottie-slot-controls swatch).
+          value={strValue.slice(0, 7)}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={readOnly}
+          aria-label={field.label}
+          className={cn(
+            "h-9 w-12 cursor-pointer rounded border-0 bg-transparent p-0",
+            readOnly && "cursor-default opacity-70",
+          )}
+        />
+        <span className="font-mono text-xs text-muted-foreground">{strValue}</span>
+      </div>
+    </GlassCard>
+  )
+}
+
 export function FieldInputCard(props: FieldInputCardProps) {
   // Apply custom label override if provided
   const effectiveProps = props.customLabel
@@ -197,5 +228,7 @@ export function FieldInputCard(props: FieldInputCardProps) {
       return <ToggleField {...effectiveProps} />
     case "text":
       return <TextField {...effectiveProps} />
+    case "color":
+      return <ColorField {...effectiveProps} />
   }
 }
