@@ -37,7 +37,9 @@ the same idea**:
 | **Portrait Transformations** *(needs a reference photo)* | **Timeless Soul** age progression (Five Ages, Three-Age Triptych, B&W), Decade Timeline ('80s–2020s), Four Seasons, Times of Day, Sports Jersey Portrait |
 
 Each preset pre-selects the **best provider and aspect ratio** for its job (e.g. text-strong models
-for logos and thumbnails) and includes **`{placeholder}` slots** in the prompt — fill them in (for
+for logos and thumbnails) — for boards and grids those defaults are backed by a head-to-head
+provider experiment, written up in the [Reference Boards Guide](../reference-boards-guide.md) —
+and includes **`{placeholder}` slots** in the prompt — fill them in (for
 example `{character description}` or `{brand}`) before you run. Placeholders now support **default
 values** with the `{token || default}` syntax (e.g. `{brand || a modern tech startup}`), so a preset
 renders into a sensible image even if you run it unedited — the fallback is used until you type your

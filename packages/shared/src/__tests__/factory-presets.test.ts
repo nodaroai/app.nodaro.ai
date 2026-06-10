@@ -176,6 +176,19 @@ describe("generate-image factory preset data validity", () => {
     }
   })
 
+  it("every Reference Sheet board enforces the render-all-panel-headings clause", () => {
+    // 2026-06-10 provider experiment: nano-banana-pro merged the DETAILS panel
+    // heading into a neighbor on a board run. The in-prompt "never merging or
+    // omitting a panel" clause is the fix — guard it so a rewrite can't drop it.
+    const boards = presets.filter((p) => p.group === "Reference Sheet")
+    expect(boards.length).toBeGreaterThanOrEqual(11)
+    for (const b of boards) {
+      expect(b.data.prompt as string, `${b.id}: missing the never-merge-panels clause`).toContain(
+        "never merging or omitting a panel",
+      )
+    }
+  })
+
   it("includes the Cast & Consistency grids on nano-banana-2", () => {
     // Grids are FED BACK as identity references — they ride nano-banana-2
     // (cheap, consistency-strong) at 4K so reused panel faces stay sharp.
