@@ -840,4 +840,119 @@ export const GENERATE_VIDEO_PRESETS: readonly FactoryPreset[] = [
       negativePrompt: "warping, morphing, flickering, jitter, violent shake, stutter, motion sickness wobble, visible body or hands, murky muddy water, distorted anatomy, extra limbs, low quality, blurry, artifacts, watermark, text",
     },
   },
+
+  // ── Scene Recipes (board-driven Step-2 scenes; ports of the viral guide
+  // workflows). Step 1 lives in generate-image (Reference Sheet boards /
+  // Cast & Consistency grids); these stage beat-scripted scenes on seedance-2
+  // — native audio, quoted-line lip-sync, up to 9 reference images. The
+  // source guides' "avoid…" tail lives in negativePrompt, where the
+  // reveal-timing line ("noticing … before impact") is load-bearing. Quoted
+  // {line} placeholders are spoken, lip-synced dialogue. Cartoon recipes hold
+  // the look with an in-prompt "NOT photorealistic" clause (the mirror of the
+  // image catalog's "NOT digital CG" guard). ──
+  {
+    id: "generate-video/viral-meteor-scene",
+    name: "Viral Meteor Scene",
+    description: "Step 2 · connect two Character Boards → the argument-meteor-tsunami-embrace short.",
+    group: "Scene Recipes",
+    data: {
+      provider: "seedance-2",
+      aspectRatio: "16:9",
+      duration: 15,
+      prompt:
+        `Beat-scripted prestige drama using the attached character boards as the single source of truth for both characters' faces, hair and outfits. Wide cinematic shot of {location || a stormy rocky northern Atlantic coast} — gray sky, dark waves crashing, wind-whipped grass, salt mist, howling wind and distant ocean roar, mournful strings underneath. The two characters stand in profile facing each other in a heated argument, faces inches apart, shouting, eyes blazing. The first: "{line 1 || You never listened to me.}" The second: "{line 2 || I gave you everything I had.}" Slow handheld push-in. camera switch. The argument escalates, neither looks away. The first: "{line 3 || Then why does it feel like nothing?}" The second, voice cracking: "{line 4 || Because you stopped looking at me.}" Behind them unnoticed, a bright streak of fire tears across the sky — a massive flaming meteor with a long burning tail of white fire and black smoke, a faint screaming whistle, slamming into the far horizon with a blinding white-orange flash, a deafening sub-bass boom and an erupting mushroom fireball. Only at the shockwave do both flinch and freeze mid-shout, expressions snapping to shock; they slowly turn together toward the ocean, backs to camera. Wide pull-back as shockwave rings spread across the water and a colossal tsunami wall rises from the glowing crater, hellish red-orange glow crowning its top, apocalyptic and unstoppable, low rumble. camera switch. His arm comes around her shoulder, she leans into him, both silhouetted against the impossibly tall wave, embers drifting. The camera circles to a tight close-up as they turn to each other — anger gone, tender resigned love, faint tears; tragic string crescendo. camera switch. Tight close-up profile — a deep passionate kiss, hands clutching each other's coats, the colossal wave curling overhead in slow majestic motion, then crashing down with explosive force, sweeping figures and camera into a violent torrent of foam, spray and darkness — a thunderous water crash, the frame shakes hard and cuts to black mid-impact, sudden silence. Hyper-realistic premium feature-film look, cold desaturated slate-gray and steel-blue palette, anamorphic widescreen letterbox feel, shallow depth of field on close-ups, fine film grain, dramatic backlit storm rim lighting, IMAX-scale water and meteor VFX, clear lip-sync on every spoken line.`,
+      negativePrompt:
+        "characters noticing the meteor before impact, meteor appearing too early, multiple meteors, comet flying upward, sunny weather, peaceful ending, slow fade out, cartoon style, on-screen text, subtitles, identity drift from the reference boards, distorted faces, out-of-sync lips, extra fingers, morphing limbs, shaky cam during dialogue, oversaturated colors, cheap CGI water, warping, flickering, stutter, low quality, blurry, artifacts, watermark",
+    },
+  },
+  {
+    id: "generate-video/cartoon-short-opening",
+    name: "Cartoon Short · Opening",
+    description: "Step 2 · connect Character + Location Boards → beat-scripted comedy setup (covet → notice → launch).",
+    group: "Scene Recipes",
+    data: {
+      provider: "seedance-2",
+      aspectRatio: "9:16",
+      duration: 6,
+      prompt:
+        `Hyper-cute premium 3D cartoon animation, NOT photorealistic — strong silhouettes, enormous expressive eyes, clean simplified shading, vivid family-friendly color. Use the attached character and location boards as the single source of truth for every character's design and the set. Opening scene of a comedy short in {location || a bright modern family kitchen with warm morning sunlight}: Beat 1 (0-1.5s) — {character 1 || the dad} holds {the prize || a glorious gourmet burger} reverently, eyes half-closed in bliss, leaning in for the first bite with a stylized sparkle. Beat 2 (1.5-3s) — quick pan to {character 2 || the lazy house cat}: one eye opens slowly, focuses on the prize, narrows in mild interest, closes again with a tiny comedic snore. Beat 3 (3-4.5s) — the camera pulls back to reveal {character 3 || the toddler} peeking around the counter, eyes scanning, then LOCKING onto the prize with an audible target-acquisition ping, eyes widening with the prize reflected in each pupil. Beat 4 (4.5-6s) — close-up of grim tactical determination, then a sudden launch into a high-speed crawl; {character 1 || the dad} glances down, sees them coming, eyes widening to enormous saucers in slow-motion silent horror; cut to black on a single dramatic comedic horn-sting. Snappy classic-animation pause-and-reaction comedy timing, exaggerated expressions, dramatic golden hero-light on the prize. Audio: cheerful warm morning score with light strings and piano, soft ambient room tone, a contented hum, a tactical music shift on a single violin pizzicato, the bright ping, the horn-sting at the cut.`,
+      negativePrompt:
+        "photorealistic rendering, live-action look, realistic skin, identity drift from the reference boards, off-model characters, dull muted colors, scary or sinister tone, warping, morphing, flickering, jitter, stutter, distorted anatomy, extra limbs, low quality, blurry, artifacts, watermark, on-screen text, subtitles",
+    },
+  },
+  {
+    id: "generate-video/cartoon-short-chase",
+    name: "Cartoon Short · Chase",
+    description: "Step 2 · connect boards → the centerpiece chase (torch-run, vault, pet-explosion, slow-mo flight).",
+    group: "Scene Recipes",
+    data: {
+      provider: "seedance-2",
+      aspectRatio: "9:16",
+      duration: 8,
+      prompt:
+        `Hyper-cute premium 3D cartoon animation, NOT photorealistic — strong silhouettes, enormous expressive eyes, clean simplified shading, vivid family-friendly color, maximum comedic chase chaos. Use the attached character and location boards as the single source of truth for every character and the set. Chase scene through {location || an open-plan family home with warm side-window light}: Beat 1 (0-2s) — wide tracking shot: {character 1 || the dad} sprints holding {the prize || the burger} high overhead like a sacred torch; {character 2 || the toddler} pursues at impossibly fast comedic crawl speed and shoots UNDERNEATH {an obstacle || the dining table} without slowing, gaining ground. Beat 2 (2-4s) — a desperate one-handed vault over {a set piece || the sofa}, a throw pillow puffing feathers — revealing {character 3 || the sleeping cat} directly in the landing path; eyes widen — too late. Beat 3 (4-6s) — IMPACT: the startled {character 3 || cat} EXPLODES upward in pure panic — legs splayed, fur puffed to triple size, a silent screaming yowl, comedic exclamation marks — then scrambles onto the runner's head and face; the runner goes cross-eyed, the prize wobbles, feathers float in slow motion. Beat 4 (6-8s) — a slip into a slow-motion fall, the prize flying from his hand in a stylized spinning arc trailing golden light; all three faces track it as it lands perfectly in {character 2 || the toddler}'s reaching starfish-hands — the grim tactical face FINALLY breaking into pure joy. Cut to black on a comedic timing-pause. Classic cartoon sight-gag timing — hold the animal-explosion beat long enough to land. Audio: urgent building chase score with strings and percussion, panicked grunts, rapid pitter-patter, a dramatic vault swoosh, a pillow-puff, one comically loud yowl, a single shimmering chime as the prize flies in slow motion, a soft landing thump.`,
+      negativePrompt:
+        "photorealistic rendering, live-action look, realistic skin, identity drift from the reference boards, off-model characters, missing chase beats, characters teleporting, real violence or injury, dull muted colors, warping, morphing, flickering, jitter, stutter, distorted anatomy, extra limbs, low quality, blurry, artifacts, watermark, on-screen text, subtitles",
+    },
+  },
+  {
+    id: "generate-video/cartoon-short-resolution",
+    name: "Cartoon Short · Resolution",
+    description: "Step 2 · connect boards → the heartwarming share-the-prize finale with FIN card.",
+    group: "Scene Recipes",
+    data: {
+      provider: "seedance-2",
+      aspectRatio: "9:16",
+      duration: 6,
+      prompt:
+        `Hyper-cute premium 3D cartoon animation with warm soft lighting, NOT photorealistic — the heartwarming finale of a comedy short, vivid family-friendly color, slower tender timing. Use the attached character and location boards as the single source of truth for every character and the set. Resolution scene in {location || the living-room floor in warm golden morning light, a few feathers still drifting down}: Beat 1 (0-2s) — wide warm establishing shot: the three characters sit in a perfect triangle around {the prize || the burger}, now divided into three fair portions on a plate between them; {character 2 || the toddler} is mid-bite with comically bulging cheeks, {character 3 || the cat} regards its own portion with regal approval. Beat 2 (2-4s) — slow push-in on {character 1 || the dad}: he looks at one happy face, then the other, and a slow tender realization-smile spreads — it was never about the prize; he picks a stray crumb from his chin and offers it to {character 3 || the cat}, who accepts with a regal head-tilt. Beat 3 (4-6s) — final warm hero shot: all three eat together in synchronized contentment — a blissful closed-eye first bite, another enormous cheek-stuffing bite, a delicate paw-assisted nibble — feathers drifting in slow motion, the warm light brightening around them like a hug; final hold, then a tiny stylized FIN title card in warm gold lettering. Gentle classic-animation resolution timing; the triangle composition is the visual key; every character equally important in the final frame. Audio: warm gentle piano-and-strings score, three distinct contented eating sounds, a happy baby-sigh, a soft purring trill, a warm chuckle, a final musical sting on the FIN card.`,
+      negativePrompt:
+        "photorealistic rendering, live-action look, realistic skin, identity drift from the reference boards, off-model characters, frantic pacing, sad or bitter tone, dull muted colors, warping, morphing, flickering, jitter, stutter, distorted anatomy, extra limbs, low quality, blurry, artifacts, watermark, subtitles, misspelled FIN card text",
+    },
+  },
+  {
+    id: "generate-video/two-character-dialogue",
+    name: "Two-Character Dialogue",
+    description: "Step 2 · connect Character Boards → a charged two-line exchange with lip-sync and a held beat.",
+    group: "Scene Recipes",
+    data: {
+      provider: "seedance-2",
+      aspectRatio: "16:9",
+      duration: 10,
+      prompt:
+        `Board-driven dialogue scene using the attached character boards as the single source of truth for every speaker's face, hair and outfit. Two characters in {location || a dim late-night kitchen with one practical light on} play a charged exchange: the framing opens on a balanced two-shot with a slow handheld push-in as tension builds. The first speaks: "{line 1 || I wasn't going to tell you like this.}" camera switch to a clean single on the second, who answers: "{line 2 || Then you should have said nothing at all.}" camera switch back to a tighter two-shot for the silent beat after — held eye contact, a breath, an unresolved ending on held tension. Naturalistic performances with subtle facial micro-expressions, clear lip-sync on every spoken line, motivated practical lighting with soft falloff, shallow depth of field, fine film grain, restrained cinematic color grade, intimate drama blocking with believable eye-lines. Audio: quiet room tone, a low sparse score entering under the second line, the spoken dialogue clean and intelligible.`,
+      negativePrompt:
+        "out-of-sync lips, garbled speech, identity drift from the reference boards, swapped speakers, distorted faces, cartoon style, on-screen text, subtitles, jump cuts during lines, shaky cam during dialogue, warping, morphing, flickering, stutter, distorted anatomy, extra limbs, low quality, blurry, artifacts, watermark",
+    },
+  },
+  {
+    id: "generate-video/disaster-reveal",
+    name: "Disaster Reveal",
+    description: "Step 2 · connect boards → unnoticed background catastrophe, shockwave, the slow turn.",
+    group: "Scene Recipes",
+    data: {
+      provider: "seedance-2",
+      aspectRatio: "16:9",
+      duration: 10,
+      prompt:
+        `Board-driven spectacle scene using the attached character boards (and location board if attached) as the single source of truth. Characters in the foreground of {location || a windswept clifftop overlook} are absorbed in {foreground action || an animated argument}, NOT noticing the background. Behind them, {the event || a colossal meteor streaks down and detonates on the horizon} — staged in three beats: first a subtle distant cue only the audience catches; then the full event erupting with a blinding flash and a rolling shockwave; only when the shockwave arrives do the characters flinch, freeze, and slowly turn together toward it, backs to camera, dwarfed by the aftermath as {the aftermath || a glowing dust wall climbs the sky}. Wide cinematic staging with deep layered depth, the characters small against the spectacle, dramatic scale contrast, motivated environmental lighting that shifts when the event hits, fine film grain, premium feature-film VFX look. Audio: ambient location sound, a faint early whistle or rumble the characters miss, a deafening impact with sub-bass, then stunned near-silence under wind.`,
+      negativePrompt:
+        "characters noticing the event before the shockwave, event happening too early, characters reacting instantly, multiple simultaneous events, cartoon style, identity drift from the reference boards, distorted faces, on-screen text, subtitles, warping, morphing, flickering, jitter, stutter, distorted anatomy, extra limbs, low quality, blurry, artifacts, watermark, cheap CGI",
+    },
+  },
+  {
+    id: "generate-video/chase-scene",
+    name: "Chase Scene",
+    description: "Step 2 · connect boards → three-beat pursuit with an obstacle gag and a near-catch.",
+    group: "Scene Recipes",
+    data: {
+      provider: "seedance-2",
+      aspectRatio: "16:9",
+      duration: 8,
+      prompt:
+        `Board-driven chase scene using the attached character boards as the single source of truth for every character. {pursued || A breathless courier clutching a satchel} flees through {location || a crowded night market}, pursued by {pursuer || two relentless figures in dark coats}. Three-beat choreography: Beat 1 — a fast tracking shot weaving with the pursued through obstacles, the pursuers gaining. Beat 2 — an obstacle beat at {set piece || a fruit stall}: the pursued slides under it cleanly while the pursuers crash through in a burst of debris. Beat 3 — a near-catch lunge, fingertips brushing the satchel, then the pursued breaks away around a corner and the camera skids to a halt on the empty turn, the pursuers arriving a beat too late. Dynamic handheld energy with motivated whip-pans between beats, kinetic but readable action with clear screen direction, practical motivated lighting, shallow focus pulls between pursued and pursuers, fine film grain, gritty cinematic grade. Audio: a driving percussive chase score, layered footfalls and crowd reactions, the debris crash, hard breathing close to camera, the score cutting to a tense pulse on the empty corner.`,
+      negativePrompt:
+        "identity drift from the reference boards, swapped pursuer and pursued, characters teleporting, unreadable screen direction, motion-sickness shake, cartoon style, on-screen text, subtitles, warping, morphing, flickering, jitter, stutter, distorted anatomy, extra limbs, low quality, blurry, artifacts, watermark",
+    },
+  },
 ]

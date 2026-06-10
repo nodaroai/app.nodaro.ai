@@ -682,6 +682,41 @@ export type VoiceDesignModel = typeof VOICE_DESIGN_MODELS[number]
 /** I2I providers that support mask-based inpainting */
 export const I2I_MASK_SUPPORT = new Set(["ideogram-edit"])
 
+/**
+ * Mask edit tier per image-gen provider (single source of truth for inpaint).
+ * - "native"    → provider takes a real mask param (reserved for Phase 1.5; none today)
+ * - "prompt"    → strong instruction editor; inject a region descriptor into the prompt
+ * - "composite" → rely on the always-on server-side composite floor only
+ * Floor (B·(1−M)+E·M) applies to EVERY tier, so any provider is correct.
+ */
+export type ImageMaskMode = "native" | "prompt" | "composite"
+
+export const IMAGE_MASK_MODE: Record<ImageGenProvider, ImageMaskMode> = {
+  "nano-banana": "prompt",
+  "nano-banana-pro": "prompt",
+  "nano-banana-2": "prompt",
+  "gpt-image": "prompt",
+  "gpt-image-2": "prompt",
+  "seedream": "prompt",
+  "seedream-5-lite": "prompt",
+  "qwen": "prompt",
+  "flux-kontext": "prompt",
+  "flux-kontext-max": "prompt",
+  "flux": "composite",
+  "flux-flex": "composite",
+  "grok": "composite",
+  "imagen4": "composite",
+  "imagen4-fast": "composite",
+  "imagen4-ultra": "composite",
+  "ideogram-v3": "composite",
+  "z-image": "composite",
+  "wan-2.7": "composite",
+  "wan-2.7-pro": "composite",
+  "flux-2-klein": "composite",
+  "flux-2-pro": "composite",
+  "flux-2-max": "composite",
+}
+
 /** I2I providers that support a strength/denoising parameter */
 export const I2I_STRENGTH_SUPPORT: Record<string, { min: number; max: number; step: number; default: number }> = {
   "ideogram-remix": { min: 0.01, max: 1, step: 0.01, default: 0.8 },

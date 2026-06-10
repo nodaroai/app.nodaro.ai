@@ -536,8 +536,11 @@ describe("generate-image", () => {
       undefined,
       // internalLora — undefined when no wired trained character.
       undefined,
-      // idempotencyKey (trailing arg) — undefined here because makeCtx()
-      // doesn't set ctx.idempotencyKey; only set by click handlers.
+      // idempotencyKey — undefined here because makeCtx() doesn't set
+      // ctx.idempotencyKey; only set by click handlers.
+      undefined,
+      // inpaint (trailing arg) — undefined when the node has no mask / base /
+      // strength / guidanceScale set.
       undefined,
     )
   })
@@ -569,7 +572,9 @@ describe("generate-image", () => {
       undefined,
       // internalLora.
       undefined,
-      // idempotencyKey (trailing arg).
+      // idempotencyKey.
+      undefined,
+      // inpaint (trailing arg) — undefined: no mask / base / strength / guidance.
       undefined,
     )
   })

@@ -215,6 +215,15 @@ export const generateImageBody = z.object({
   injectCharacterContext: z.boolean().optional().default(false),
   attachToCharacterId: z.string().uuid().optional(),
   userId: z.string().uuid().optional(),
+  /** Inpaint base image (the image being edited). With maskUrl, the worker
+   *  composites the result's masked region back over this image. */
+  baseImageUrl: safeUrlSchema.optional(),
+  /** Inpaint mask (white = edit region, black = keep). Requires baseImageUrl. */
+  maskUrl: safeUrlSchema.optional(),
+  /** i2i strength (gated per provider by I2I_STRENGTH_SUPPORT). */
+  strength: z.number().min(0).max(1).optional(),
+  /** guidance scale (gated per provider by GUIDANCE_SCALE_SUPPORT). */
+  guidanceScale: z.number().min(0).max(20).optional(),
 })
 
 const IDENTITY_PRESERVE_SUFFIX =
@@ -388,7 +397,7 @@ export async function generateImageRoutes(app: FastifyInstance) {
       })
     }
 
-    const { prompt: rawPrompt, referenceImageUrls, characterDescriptions, provider, aspectRatio, resolution, quality, negativePrompt, seed, renderingSpeed, styleType, expandPrompt } = parsed.data
+    const { prompt: rawPrompt, referenceImageUrls, characterDescriptions, provider, aspectRatio, resolution, quality, negativePrompt, seed, renderingSpeed, styleType, expandPrompt, baseImageUrl, maskUrl, strength, guidanceScale } = parsed.data
     const internalLora = parsed.data._internalLora
     const userId = req.userId
 
@@ -624,6 +633,10 @@ export async function generateImageRoutes(app: FastifyInstance) {
       extraParams: resolvedLora
         ? { lora_version: resolvedLora.version, lora_trigger: resolvedLora.trigger }
         : undefined,
+      baseImageUrl,
+      maskUrl,
+      strength,
+      guidanceScale,
       usageLogId,
     })
 

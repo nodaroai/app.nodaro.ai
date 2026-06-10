@@ -519,7 +519,7 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
     category: "ai-image",
     description: "Produce a binary segmentation mask for a subject described by a text prompt (Grounded SAM).",
     outputType: "image",
-    creditCost: 2,
+    creditCost: 5,
     providers: ["grounded-sam"],
     capabilities: ["segmentation", "inpainting-prep"],
     inputSchema: {

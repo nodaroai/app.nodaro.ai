@@ -50,7 +50,7 @@ function GenerateMaskNodeComponent({ id, data, selected }: NodeProps) {
   const activeImageUrl = activeResult?.imageUrl ?? nodeData.generatedImageUrl
   const activeMaskUrl = activeResult?.maskUrl ?? nodeData.generatedMaskUrl
 
-  const credits = useModelCredits("generate-mask", 2)
+  const credits = useModelCredits("generate-mask", 5)
 
   const [previewOpen, setPreviewOpen] = useState(false)
   const [showThumbnails, setShowThumbnails] = useState(false)

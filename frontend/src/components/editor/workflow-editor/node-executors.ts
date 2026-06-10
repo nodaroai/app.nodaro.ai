@@ -73,6 +73,15 @@ export function runImageGeneration(
    *  executeNode derives a per-iteration suffix for fan-out and passes
    *  the final key here. The backend dedupes POSTs sharing this key. */
   idempotencyKey?: string,
+  /** Inpaint / i2i levers (base image + mask + strength + guidance scale).
+   *  Forwarded verbatim to the api.ts `generateImage` body builder, which
+   *  drops each onto the request only when present. */
+  inpaint?: {
+    baseImageUrl?: string
+    maskUrl?: string
+    strength?: number
+    guidanceScale?: number
+  },
 ): Promise<string> {
   return pollJobWithNodeUpdate(
     nodeId,
@@ -94,6 +103,7 @@ export function runImageGeneration(
         identity,
         internalLora,
         idempotencyKey,
+        inpaint,
       ),
     "generatedImageUrl",
     "Image generation",

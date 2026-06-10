@@ -20,7 +20,9 @@ the same idea**:
 
 | Folder | Examples |
 |--------|----------|
-| **Reference Sheet** *(connect a photo)* | **Character Board**, **Location Board**, **Product Board**, **Outfit Board**, **Scene Board**, **Creature Board** — dense multi-panel reference sheets generated from one connected photo |
+| **Reference Sheet** *(connect a photo)* | **Character Board**, **Pose Board**, **Location Board**, **Product Board**, **Outfit Board**, **Scene Board**, **Creature Board**, **Vehicle Board**, **Food Board**, **Mascot Board**, **Pet Board** — dense multi-panel reference sheets generated from one connected photo; reuse the board as a reference in later generations for consistency |
+| **Cast & Consistency** *(connect photos)* | **Character Reference Grid** (clean 4-angle identity grid, no decorations), **Cast Mega Grid** (one labeled sheet for 2–4 connected characters), **Cast Scene** (stage the cast referencing them by name) — sterile neutral-background grids built to be fed back as identity references |
+| **Edit by Name** *(two-step recipe)* | **Label Elements** (returns the connected photo with numbered callout labels) → **Apply Named Edit** (edit elements by their label name; labels removed from the result) |
 | **Photography & Cinematic** | Cinematic Still / Widescreen (21:9), Studio & Golden-Hour Portrait, B&W, Macro, Food, Aerial, Landscape |
 | **Characters** | **Character Sheet** family — Turnaround (3-view), Action Poses ×4, Expressions ×6 / ×16, Outfit Variations, With Text Labels, Chibi — plus Portrait, Full-Body Hero, Creature, Avatar |
 | **Product & Commerce** | Product on White, Lifestyle, Flat-Lay, Packaging / Device Mockup, Beauty Hero |
@@ -28,13 +30,16 @@ the same idea**:
 | **Marketing & Social** | YouTube Thumbnail, Instagram Post, Story/Reel, Ad Creative, Quote Card, Web Banner |
 | **Print & Posters** | Movie Poster, Event Poster, Book Cover, T-Shirt/POD, Die-Cut Sticker, Album Cover |
 | **Illustration & Art Styles** | Anime, Comic, Manga, Watercolor, Oil, Flat Vector, Isometric, Pixel Art, Pixar-3D, Coloring Page, Tattoo Flash, Concept Art |
+| **Handmade & Stop-Motion** | Claymation Scene, Needle-Felt, Sock Puppet, Cardboard Diorama, Embroidered Art, Faux-Food (Clay) — tactile crafted looks held by an in-prompt "NOT digital CG, NOT a 3D render" clause |
 | **Film & Storyboard** | Storyboard Frame, Cinematic Keyframe, Matte Painting, Mood Board Tile, Establishing Shot |
 | **Architecture & Interiors** | Exterior, Interior, Real Estate Hero, Skyscraper |
 | **Icons, Game Assets & Textures** | Game Icon, Seamless Texture / Pattern, Emoji Set, Pixel Sprite |
 | **Portrait Transformations** *(needs a reference photo)* | **Timeless Soul** age progression (Five Ages, Three-Age Triptych, B&W), Decade Timeline ('80s–2020s), Four Seasons, Times of Day, Sports Jersey Portrait |
 
 Each preset pre-selects the **best provider and aspect ratio** for its job (e.g. text-strong models
-for logos and thumbnails) and includes **`{placeholder}` slots** in the prompt — fill them in (for
+for logos and thumbnails) — for boards and grids those defaults are backed by a head-to-head
+provider experiment, written up in the [Reference Boards Guide](../reference-boards-guide.md) —
+and includes **`{placeholder}` slots** in the prompt — fill them in (for
 example `{character description}` or `{brand}`) before you run. Placeholders now support **default
 values** with the `{token || default}` syntax (e.g. `{brand || a modern tech startup}`), so a preset
 renders into a sensible image even if you run it unedited — the fallback is used until you type your
@@ -78,6 +83,7 @@ the fallback is used until you type your own value.
 | **Animation & Style** | Anime Motion, 3D Cartoon, Claymation, Living Watercolor |
 | **Looping & Backgrounds** | Subtle Motion, Living Wallpaper |
 | **Viral & Effects** *(best with an input image)* | Frozen in Ice, Superhero Transformation, Elevator Doors Reveal, POV Skydive, Underwater POV |
+| **Scene Recipes** *(board-driven · Step 2)* | **Viral Meteor Scene**, **Cartoon Short · Opening / Chase / Resolution**, Two-Character Dialogue, Disaster Reveal, Chase Scene — beat-scripted Seedance-2 scenes with native audio and quoted-line **lip-sync**; connect your **Reference Sheet boards / Cast & Consistency grids** (from Generate Image) as reference images so every character stays on-model. Chain multi-scene shorts with Combine Videos' **Seamless Join (One-Shot)** |
 
 ### Music factory catalogs
 
@@ -125,8 +131,10 @@ Both music nodes ship presets organized along the three axes professional librar
 ### Image edits (shared with Modify Image)
 
 Beyond Stylized Subject, the transform catalog adds an **Edits** folder — *Remove/Replace Background,
-Colorize, Restore Old Photo, Relight, Restyle* — available on both **Generate Image** (with a
-connected reference image) and **Modify Image**. Generate Image also gained a **Diagrams &
+Colorize, Restore Old Photo, Relight, Restyle*, plus two **Doodle Overlay** presets (hand-drawn
+felt-tip marker doodles layered on top of the photo while every pixel underneath stays unchanged —
+one max-control white-and-yellow variant, one loose expressive variant; doodles never cover faces) —
+available on both **Generate Image** (with a connected reference image) and **Modify Image**. Generate Image also gained a **Diagrams &
 Infographics** folder (Blueprint, Infographic, UI / App Mockup, Flowchart, Chart, Timeline).
 
 ### Voice Changer factory catalog

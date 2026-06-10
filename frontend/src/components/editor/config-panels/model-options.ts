@@ -455,10 +455,12 @@ export {
   NATIVE_NEGATIVE_PROMPT_MODELS,
   I2I_STRENGTH_SUPPORT,
   I2I_MASK_SUPPORT,
+  IMAGE_MASK_MODE,
   SEED_SUPPORT,
   RENDERING_SPEED_SUPPORT,
   GUIDANCE_SCALE_SUPPORT,
 } from "@nodaro/shared"
+export type { ImageMaskMode } from "@nodaro/shared"
 import { STYLES } from "@nodaro/shared"
 
 /** Inline Style dropdown options for image config panels. Derived from the

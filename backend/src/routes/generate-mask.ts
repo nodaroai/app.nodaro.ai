@@ -2,7 +2,8 @@
  * Generate Mask Route
  *
  * Produces a binary segmentation mask for a subject described by a text
- * prompt. Provider: adirik/grounded-sam (Replicate — Grounding DINO + SAM).
+ * prompt. Provider: schananas/grounded_sam (Replicate — Grounding DINO + SAM,
+ * version-pinned in providers/replicate/grounded-sam.ts).
  *
  * The job result stores BOTH the original `imageUrl` (passthrough, unchanged)
  * AND the generated `maskUrl`, so a downstream Mask Painter / inpainting node

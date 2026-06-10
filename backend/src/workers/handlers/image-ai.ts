@@ -9,9 +9,11 @@ import { makeOnTaskCreated } from "../../lib/reconcile/persistence.js"
 import { providerKindForImageModel } from "../../lib/reconcile/provider-kind.js"
 import { finalizeJobWithMedia } from "../../lib/job-finalize.js"
 import { supabase } from "../../lib/supabase.js"
+import { IMAGE_MASK_MODE, describeMaskRegion, T2I_TO_I2I_VARIANT, type ImageGenProvider } from "@nodaro/shared"
+import { compositeInpaint, maskBoundingBoxFromUrl, imageDimensions } from "../../services/inpaint/composite.js"
 
 const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, ctx) {
-  const { prompt, referenceImageUrls, provider, model, aspectRatio, resolution, quality, negativePrompt, seed, renderingSpeed, styleType, expandPrompt, extraParams: upstreamExtras } = job.data as {
+  const { prompt, referenceImageUrls, provider, model, aspectRatio, resolution, quality, negativePrompt, seed, renderingSpeed, styleType, expandPrompt, extraParams: upstreamExtras, baseImageUrl, maskUrl, strength, guidanceScale } = job.data as {
     jobId: string
     prompt: string
     referenceImageUrls?: string[]
@@ -34,11 +36,30 @@ const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, c
      *  `lora_trigger` for `flux-lora-character`). Merged with the rebuilt
      *  per-field params below. */
     extraParams?: Record<string, unknown>
+    /** Inpaint: base image to edit + white=edit/black=keep mask. When both are
+     *  present the handler runs i2i conditioned on the base, then composites
+     *  the masked region of the result over the base (the correctness floor). */
+    baseImageUrl?: string
+    maskUrl?: string
+    strength?: number
+    guidanceScale?: number
   }
   const resolvedModel = model ?? provider ?? "nano-banana"
-  console.log(`[worker] generate-image ${ctx.jobId} (model: ${resolvedModel}): "${prompt}"`)
-  if (referenceImageUrls?.length) {
-    console.log(`[worker] Reference images (${referenceImageUrls.length}): ${referenceImageUrls.join(", ")}`)
+  const inpaintBase = baseImageUrl ?? referenceImageUrls?.[0]
+  // A mask present + a base → masked inpaint (composite + region hint).
+  const isInpaint = Boolean(maskUrl && inpaintBase)
+  // An EXPLICIT baseImageUrl (the "refine from this result" / full-image i2i case)
+  // OR an inpaint → run image-to-image conditioned on the base. The route only
+  // swaps T2I→I2I when referenceImageUrls is non-empty, which it isn't for a
+  // baseImageUrl-driven edit — so swap here, and ensure the base is a reference.
+  const isI2I = isInpaint || Boolean(baseImageUrl)
+  const effectiveModel = isI2I ? (T2I_TO_I2I_VARIANT[resolvedModel] ?? resolvedModel) : resolvedModel
+  const providerRefs = isI2I
+    ? [inpaintBase!, ...(referenceImageUrls ?? []).filter((u) => u !== inpaintBase)]
+    : referenceImageUrls
+  console.log(`[worker] generate-image ${ctx.jobId} (model: ${effectiveModel}${isInpaint ? ", inpaint" : isI2I ? ", i2i" : ""}): "${prompt}"`)
+  if (providerRefs?.length) {
+    console.log(`[worker] Reference images (${providerRefs.length}): ${providerRefs.join(", ")}`)
   }
 
   const extraParams: Record<string, unknown> = {
@@ -51,17 +72,38 @@ const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, c
     ...(renderingSpeed && { rendering_speed: renderingSpeed }),
     ...(styleType && { style_type: styleType }),
     ...(expandPrompt != null && { expand_prompt: expandPrompt }),
+    ...(strength != null && { strength }),
+    ...(guidanceScale != null && { guidance_scale: guidanceScale }),
   }
   const hasExtraParams = Object.keys(extraParams).length > 0
   await setJobProgress(job, ctx.jobId, 10)
   const ramp = startProgressRamp(job, ctx.jobId, { start: 10, cap: 80 })
-  const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForImageModel(resolvedModel))
+  // Reconcile kind is keyed off the model actually called (the i2i variant on
+  // an inpaint), so the task-created persistence records the right provider kind.
+  const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForImageModel(effectiveModel))
+
+  // Tier-B hint (best-effort; NEVER fails the job). Look up IMAGE_MASK_MODE by
+  // the ORIGINAL gen provider (`resolvedModel`) — the map is keyed by
+  // ImageGenProvider, not the swapped i2i variant.
+  let effectivePrompt = prompt
+  if (isInpaint && IMAGE_MASK_MODE[resolvedModel as ImageGenProvider] === "prompt") {
+    try {
+      const [box, dims] = await Promise.all([
+        maskBoundingBoxFromUrl(maskUrl!),
+        imageDimensions(inpaintBase!),
+      ])
+      if (box && dims.width && dims.height) effectivePrompt = describeMaskRegion(box, dims).fragment + prompt
+    } catch {
+      /* hint is best-effort — the composite floor still guarantees correctness */
+    }
+  }
+
   let result
   try {
     result = await generateImage(
-      prompt,
-      resolvedModel,
-      referenceImageUrls,
+      effectivePrompt,
+      effectiveModel,
+      providerRefs,
       hasExtraParams ? extraParams : undefined,
       { onTaskCreated },
     )
@@ -70,10 +112,27 @@ const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, c
   }
   await setJobProgress(job, ctx.jobId, 85)
 
+  let mediaUrl: string | undefined
+  if (isInpaint) {
+    // REFUND-CRITICAL: run the composite BEFORE finalizeJobWithMedia and let a
+    // plain Error propagate. Do NOT wrap this in try/catch or runPostProcessing —
+    // swallowing the throw (or running it after finalize) would mark the job
+    // completed and charge the user for a broken composite. The worker's
+    // charge-for-nothing guard only refunds when the job is NOT yet completed.
+    // See test "composite rejects (plain Error): ... finalize is NOT called".
+    mediaUrl = await compositeInpaint({
+      baseUrl: inpaintBase!,
+      resultUrl: result.url,
+      maskUrl: maskUrl!,
+      jobId: ctx.jobId,
+    })
+  }
+
   const { ok } = await finalizeJobWithMedia({
     jobId: ctx.jobId,
     jobType: "generate-image",
     result,
+    ...(mediaUrl && { mediaUrl }),
   })
   if (!ok) return
   await setJobProgress(job, ctx.jobId, 100)

@@ -64,6 +64,7 @@ export {
   MODIFY_IMAGE_PROVIDERS,
   UPSCALE_IMAGE_PROVIDERS,
   I2I_MASK_SUPPORT,
+  IMAGE_MASK_MODE,
   I2I_STRENGTH_SUPPORT,
   SEED_SUPPORT,
   RENDERING_SPEED_SUPPORT,
@@ -108,6 +109,7 @@ export type { FeaturedEntity } from "./featured-entities.js"
 
 export type {
   ImageGenProvider,
+  ImageMaskMode,
   ImageI2IProvider,
   ImageEditProvider,
   ImageToVideoProvider,
@@ -141,6 +143,9 @@ export type {
   VideoAudioMode,
   VideoAudioCapability,
 } from "./model-constants.js"
+
+export { describeMaskRegion } from "./inpaint-region.js"
+export type { MaskRegionDescriptor, PixelBox } from "./inpaint-region.js"
 
 export {
   DEFAULT_TEMPLATES,

@@ -1401,6 +1401,14 @@ export type GenerateImageData = {
   expandPrompt?: boolean
   referenceImageUrl?: string
   referenceImageUrls?: readonly ManualReferenceImage[]
+  /** Inpaint base image (defaults to the node's own current result at run time). */
+  baseImageUrl?: string
+  /** Inpaint mask R2 URL (white = edit, black = keep). */
+  maskUrl?: string
+  /** i2i strength (provider-gated by I2I_STRENGTH_SUPPORT). */
+  strength?: number
+  /** Guidance scale (provider-gated by GUIDANCE_SCALE_SUPPORT). */
+  guidanceScale?: number
   referenceImageOrder?: readonly string[]
   /**
    * Unified reorder of the injected-references list (wired raw + @-mentions

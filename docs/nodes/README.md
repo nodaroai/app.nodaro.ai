@@ -169,7 +169,7 @@ Generate, edit, and transform images using 20+ AI providers.
 
 | Node | Description | When to Use |
 |------|-------------|-------------|
-| [Generate Image](./ai-image/generate-image.md) | AI image generation from text (23 providers) | Create images from prompts with style, aspect ratio, and quality controls |
+| [Generate Image](./ai-image/generate-image.md) | AI image generation from text (23 providers) | Create images from prompts with style, aspect ratio, and quality controls; inpaint a masked region or refine a result in place |
 | [Edit Image](./ai-image/edit-image.md) *(legacy API endpoint)* | Documents the legacy `edit-image` REST endpoint (upscale / remove-bg / nano-banana-edit). **Editor users:** use [Upscale Image](./ai-image/upscale-image.md), [Remove Background](./ai-image/remove-background.md), or [Modify Image](./ai-image/modify-image.md) instead. | Reference for `edit-image` API calls; new workflows should use the dedicated nodes |
 | [Modify Image](./ai-image/modify-image.md) | Transform an image with a text prompt (20+ providers) | Prompt-driven editing: style transfer, inpainting, instruction edits |
 | [Upscale Image](./ai-image/upscale-image.md) | Increase image resolution (Recraft, Topaz) | Enhance generated or uploaded images to 2K/4K/8K |
