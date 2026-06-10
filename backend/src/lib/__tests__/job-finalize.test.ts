@@ -26,6 +26,16 @@ const mocks = vi.hoisted(() => {
   })
   const jobsSelectEqMock = vi.fn(() => ({ single: jobsSingleMock }))
   const jobsSelectMock = vi.fn(() => ({ eq: jobsSelectEqMock }))
+  // UPDATE path (claim release): .from("jobs").update({ finalize_claimed_at: null })
+  //   .eq("id", jobId).eq("finalize_claimed_at", claimTs)
+  const jobsUpdateEq2Mock = vi.fn().mockResolvedValue({ data: [], error: null })
+  const jobsUpdateEqMock = vi.fn(() => ({ eq: jobsUpdateEq2Mock }))
+  const jobsUpdateMock = vi.fn(() => ({ eq: jobsUpdateEqMock }))
+
+  // -------------------------- rpc dispatcher --------------------------
+  // claim_job_finalize returns the fresh claim timestamp when won, null when
+  // another finalizer holds an unexpired claim.
+  const rpcMock = vi.fn().mockResolvedValue({ data: "2026-06-10T10:00:00+00:00", error: null })
 
   // -------------------------- usage_logs table chain --------------------------
   // SELECT path: .from("usage_logs").select("id").eq("job_id", id).eq("status", "reserved").limit(1)
@@ -53,7 +63,7 @@ const mocks = vi.hoisted(() => {
   // -------------------------- per-table dispatcher --------------------------
   const fromMock = vi.fn((table: string) => {
     if (table === "jobs") {
-      return { select: jobsSelectMock }
+      return { select: jobsSelectMock, update: jobsUpdateMock }
     }
     if (table === "usage_logs") {
       return { select: usageSelectMock }
@@ -67,6 +77,9 @@ const mocks = vi.hoisted(() => {
   return {
     jobsSingleMock,
     jobsSelectMock,
+    jobsUpdateMock,
+    jobsUpdateEqMock,
+    jobsUpdateEq2Mock,
     usageLimitMock,
     usageSelectMock,
     wfSingleMock,
@@ -74,11 +87,12 @@ const mocks = vi.hoisted(() => {
     wfUpdateMock,
     wfUpdateEqMock,
     wfUpdateEq2Mock,
+    rpcMock,
     fromMock,
   }
 })
 
-vi.mock("@/lib/supabase.js", () => ({ supabase: { from: mocks.fromMock } }))
+vi.mock("@/lib/supabase.js", () => ({ supabase: { from: mocks.fromMock, rpc: mocks.rpcMock } }))
 
 // Mock workers/shared.js: every helper finalizeJobWithMedia calls is a
 // vi.fn() so we can assert calls / count / arguments per test.
@@ -147,6 +161,8 @@ function resetMocksToHappyPath() {
   mocks.usageLimitMock.mockResolvedValue({ data: [{ id: "u-log-1" }], error: null })
   mocks.wfSingleMock.mockResolvedValue({ data: null, error: null })
   mocks.wfUpdateEq2Mock.mockResolvedValue({ data: [], error: null })
+  mocks.jobsUpdateEq2Mock.mockResolvedValue({ data: [], error: null })
+  mocks.rpcMock.mockResolvedValue({ data: "2026-06-10T10:00:00+00:00", error: null })
 
   sharedMocks.uploadImageVariantsMaybeWatermark.mockResolvedValue([
     "https://r2.example/img-j1.png",
@@ -837,5 +853,98 @@ describe("finalizeJobWithMedia", () => {
 
     expect(result.ok).toBe(false)
     expect(autoAttachMocks.appendCharacterReferenceVideo).not.toHaveBeenCalled()
+  })
+
+  // -------------------------------------------------------------------------
+  // Finalize claim — mutual exclusion between the worker and the reconcile
+  // cron. Both funnel through finalizeJobWithMedia for the same jobId and used
+  // to download + upload the same deterministic R2 key concurrently (incident
+  // 2026-06-10: the loser's failed upload deleted the winner's object). The
+  // claim_job_finalize RPC CAS-claims the job before any media work; the loser
+  // exits with { ok: false } (the standard graceful-skip contract).
+  // -------------------------------------------------------------------------
+  describe("finalize claim", () => {
+    it("claims via claim_job_finalize BEFORE uploading; default TTL is the shared reconcile constant", async () => {
+      await finalizeJobWithMedia({
+        jobId: "j1",
+        jobType: "generate-image",
+        result: { url: "https://kie.example/x.png", cost: 0.02, providerUsed: "p" },
+      })
+
+      expect(mocks.rpcMock).toHaveBeenCalledWith("claim_job_finalize", {
+        p_job_id: "j1",
+        p_ttl_seconds: 600,
+      })
+      // Claim must precede the upload (the expensive, racy part).
+      const claimOrder = mocks.rpcMock.mock.invocationCallOrder[0]!
+      const uploadOrder =
+        sharedMocks.uploadImageVariantsMaybeWatermark.mock.invocationCallOrder[0]!
+      expect(claimOrder).toBeLessThan(uploadOrder)
+    })
+
+    it("claim lost (fresh claim held elsewhere): returns { ok: false } without uploading or completing", async () => {
+      mocks.rpcMock.mockResolvedValueOnce({ data: null, error: null })
+
+      const result = await finalizeJobWithMedia({
+        jobId: "j1",
+        jobType: "generate-image",
+        result: { url: "https://kie.example/x.png", cost: 0.02, providerUsed: "p" },
+      })
+
+      expect(result.ok).toBe(false)
+      expect(sharedMocks.uploadImageVariantsMaybeWatermark).not.toHaveBeenCalled()
+      expect(sharedMocks.markJobCompleted).not.toHaveBeenCalled()
+      expect(sharedMocks.commitJobCredits).not.toHaveBeenCalled()
+    })
+
+    it("claim RPC error: proceeds anyway (availability over exclusion — duplicate uploads are benign)", async () => {
+      mocks.rpcMock.mockResolvedValueOnce({ data: null, error: { message: "rpc down" } })
+
+      const result = await finalizeJobWithMedia({
+        jobId: "j1",
+        jobType: "generate-image",
+        result: { url: "https://kie.example/x.png", cost: 0.02, providerUsed: "p" },
+      })
+
+      expect(result.ok).toBe(true)
+      expect(sharedMocks.uploadImageVariantsMaybeWatermark).toHaveBeenCalledTimes(1)
+      expect(sharedMocks.markJobCompleted).toHaveBeenCalledTimes(1)
+    })
+
+    it("releases the claim (scoped to its own timestamp) when the upload throws, then rethrows", async () => {
+      mocks.rpcMock.mockResolvedValueOnce({ data: "2026-06-10T11:22:33+00:00", error: null })
+      sharedMocks.uploadImageVariantsMaybeWatermark.mockRejectedValueOnce(
+        new Error("KIE download blip"),
+      )
+
+      await expect(
+        finalizeJobWithMedia({
+          jobId: "j1",
+          jobType: "generate-image",
+          result: { url: "https://kie.example/x.png", cost: 0.02, providerUsed: "p" },
+        }),
+      ).rejects.toThrow("KIE download blip")
+
+      // Release: UPDATE jobs SET finalize_claimed_at = NULL
+      //   WHERE id = 'j1' AND finalize_claimed_at = <our claim ts>
+      // The ts guard means we never clear a claim a NEWER finalizer took.
+      expect(mocks.jobsUpdateMock).toHaveBeenCalledWith({ finalize_claimed_at: null })
+      expect(mocks.jobsUpdateEqMock).toHaveBeenCalledWith("id", "j1")
+      expect(mocks.jobsUpdateEq2Mock).toHaveBeenCalledWith(
+        "finalize_claimed_at",
+        "2026-06-10T11:22:33+00:00",
+      )
+      expect(sharedMocks.markJobCompleted).not.toHaveBeenCalled()
+    })
+
+    it("does NOT release the claim on success (terminal row keeps its claim history)", async () => {
+      await finalizeJobWithMedia({
+        jobId: "j1",
+        jobType: "generate-image",
+        result: { url: "https://kie.example/x.png", cost: 0.02, providerUsed: "p" },
+      })
+
+      expect(mocks.jobsUpdateMock).not.toHaveBeenCalled()
+    })
   })
 })

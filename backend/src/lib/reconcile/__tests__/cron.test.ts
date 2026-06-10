@@ -238,6 +238,43 @@ describe("reconcileInflightJobs", () => {
     expect(result.errors).toBe(0)
   })
 
+  it("skips a stale row whose finalize_claimed_at is fresh (a finalizer is mid-flight)", async () => {
+    // The worker (or a prior cron tick) CAS-claimed the finalize via
+    // claim_job_finalize and is downloading/uploading right now. Dispatching a
+    // second finalizer would double-download the provider result and race the
+    // same R2 key — skip and let the next tick re-check.
+    const stale = new Date(Date.now() - 30 * 60 * 1000).toISOString()
+    mocks.rows.push({
+      id: "j-claimed",
+      status: "processing",
+      provider_kind: "kie-standard",
+      provider_task_id: "task-1",
+      provider_call_started_at: stale,
+      reconcile_attempts: 0,
+      finalize_claimed_at: new Date(Date.now() - 60 * 1000).toISOString(),
+    })
+    const result = await reconcileInflightJobs()
+    expect(reconcileKieJob).not.toHaveBeenCalled()
+    expect(sweepStaleSyncJob).not.toHaveBeenCalled()
+    expect(result.notStale).toBe(1)
+  })
+
+  it("dispatches a stale row whose finalize claim has expired (claimant crashed)", async () => {
+    const stale = new Date(Date.now() - 40 * 60 * 1000).toISOString()
+    mocks.rows.push({
+      id: "j-claim-expired",
+      status: "processing",
+      provider_kind: "kie-standard",
+      provider_task_id: "task-2",
+      provider_call_started_at: stale,
+      reconcile_attempts: 0,
+      finalize_claimed_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+    })
+    const result = await reconcileInflightJobs()
+    expect(reconcileKieJob).toHaveBeenCalledWith(expect.objectContaining({ id: "j-claim-expired" }))
+    expect(result.recovered).toBe(1)
+  })
+
   it("counts errors when the sweep handler throws", async () => {
     ;(sweepStaleSyncJob as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error("boom"))
     const stale = new Date(Date.now() - 10 * 60 * 1000).toISOString()

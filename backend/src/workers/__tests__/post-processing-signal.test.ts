@@ -33,6 +33,8 @@ const h = vi.hoisted(() => ({
   applyImageWatermark: vi.fn(),
   // supabase chain for finalize
   supabaseFrom: vi.fn(),
+  // claim_job_finalize RPC — default: claim won (timestamp returned)
+  supabaseRpc: vi.fn().mockResolvedValue({ data: "2026-06-10T10:00:00+00:00", error: null }),
   refundCreditsSpy: vi.fn(),
   hasCreditsState: { enabled: true },
 }))
@@ -70,7 +72,7 @@ vi.mock("@/utils/thumbnail.js", () => ({
   generateThumbnailFromUrl: vi.fn().mockResolvedValue(Buffer.from("thumb")),
 }))
 
-vi.mock("@/lib/supabase.js", () => ({ supabase: { from: h.supabaseFrom } }))
+vi.mock("@/lib/supabase.js", () => ({ supabase: { from: h.supabaseFrom, rpc: h.supabaseRpc } }))
 
 vi.mock("../../ee/services/credits.js", () => ({
   CreditsService: { refundCredits: h.refundCreditsSpy, commitCredits: vi.fn() },

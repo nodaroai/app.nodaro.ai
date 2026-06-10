@@ -36,7 +36,13 @@ const MIN = 60 * 1000
  * (`kie-lip-sync` 75 min) with 15-min headroom for legitimate long runs.
  */
 export const STALE_THRESHOLD_MS: Record<ProviderKind, number> = {
-  "kie-standard":             10 * MIN,
+  // 20 min, NOT 10: gpt-image-2 at 4K legitimately runs 9-13 min of provider
+  // time (plus download/upload), and several i2v models on this kind run
+  // similarly long. At 10 min the cron routinely raced LIVE workers into a
+  // double-finalize of the same job (incident 2026-06-10). The threshold must
+  // exceed the longest legitimate runtime of the kind; dead-job recovery
+  // moving 10 → 20 min is an acceptable trade.
+  "kie-standard":             20 * MIN,
   "kie-veo":                  25 * MIN,
   // VEO 1080p upscale: quasi-sync `/api/v1/veo/get-1080p-video` polling (~1-3 min).
   // Reconcile re-calls the endpoint with the parent kieTaskId. 10 min threshold
@@ -86,6 +92,24 @@ export const STALE_THRESHOLD_MS: Record<ProviderKind, number> = {
 export const MIN_STALE_THRESHOLD_MS = Math.min(
   ...Object.values(STALE_THRESHOLD_MS),
 )
+
+/**
+ * TTL for the finalize claim (`jobs.finalize_claimed_at`, migration 210).
+ *
+ * `finalizeJobWithMedia` CAS-claims a job via the `claim_job_finalize` RPC
+ * before doing any media work, so the worker and the reconcile cron never
+ * download + upload the same job concurrently. The cron additionally skips
+ * stale candidates whose claim is younger than this TTL ("a finalizer is
+ * mid-flight"). A crashed claimant self-heals: once the claim is older than
+ * the TTL it can be re-claimed by the next finalizer.
+ *
+ * Sized to comfortably exceed the longest legitimate finalize (download up to
+ * 500 MB video + watermark + upload). If a legitimate finalize ever outlives
+ * the TTL, the duplicate is benign: uploads to the deterministic key are
+ * idempotent overwrites (the failure-path delete was removed from uploadToR2)
+ * and `markJobCompleted` is CAS-guarded.
+ */
+export const FINALIZE_CLAIM_TTL_MS = 10 * MIN
 
 /** Per-job reconcile attempt cap. After this many failed poll attempts the
  *  shared `bumpAttemptsOrExhaust` helper force-fails the job + refunds + logs

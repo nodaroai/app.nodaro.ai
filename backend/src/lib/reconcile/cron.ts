@@ -2,6 +2,7 @@ import { supabase } from "../supabase.js"
 import {
   STALE_THRESHOLD_MS,
   MIN_STALE_THRESHOLD_MS,
+  FINALIZE_CLAIM_TTL_MS,
   isSyncKind,
   type ProviderKind,
 } from "./types.js"
@@ -35,6 +36,7 @@ interface CandidateRow {
   reconcile_attempts: number
   job_type: string | null
   input_data: Record<string, unknown> | null
+  finalize_claimed_at: string | null
 }
 
 const KIE_KINDS: ReadonlySet<string> = new Set([
@@ -64,6 +66,19 @@ function isStale(row: CandidateRow): boolean {
 }
 
 /**
+ * True when a finalizer (the worker, or a previous cron tick) holds an
+ * unexpired finalize claim on this job — it is mid-download/upload RIGHT NOW.
+ * Dispatching a second finalizer would double-download the provider result
+ * and race the same deterministic R2 key, so the cron defers to the next tick.
+ * A crashed claimant self-heals: the claim ages past FINALIZE_CLAIM_TTL_MS and
+ * the row becomes dispatchable again.
+ */
+function hasFreshFinalizeClaim(row: CandidateRow): boolean {
+  if (!row.finalize_claimed_at) return false
+  return Date.now() - new Date(row.finalize_claimed_at).getTime() < FINALIZE_CLAIM_TTL_MS
+}
+
+/**
  * Reconciliation cron entrypoint. Scans inflight `jobs` rows whose
  * `provider_call_started_at` is past their kind's threshold and dispatches
  * by `provider_kind`:
@@ -86,7 +101,7 @@ export async function reconcileInflightJobs(): Promise<ReconcileResult> {
 
   const { data, error } = await supabase
     .from("jobs")
-    .select("id, provider_kind, provider_task_id, provider_call_started_at, reconcile_attempts, job_type, input_data")
+    .select("id, provider_kind, provider_task_id, provider_call_started_at, reconcile_attempts, job_type, input_data, finalize_claimed_at")
     .in("status", ["pending", "processing"])
     .not("provider_call_started_at", "is", null)
     .lt("provider_call_started_at", sqlCutoff())
@@ -102,6 +117,11 @@ export async function reconcileInflightJobs(): Promise<ReconcileResult> {
 
   for (const row of rows) {
     if (!isStale(row)) {
+      result.notStale++
+      continue
+    }
+    if (hasFreshFinalizeClaim(row)) {
+      // A finalizer is actively completing this job — not actually stuck.
       result.notStale++
       continue
     }

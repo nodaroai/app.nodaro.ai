@@ -382,8 +382,14 @@ describe("uploadToR2 — streaming size enforcement", () => {
     expect(updateStorageUsage).not.toHaveBeenCalled()
   })
 
-  it("deletes the R2 key on upload failure for cleanup", async () => {
-    // Force a failed upload by overflowing the cap.
+  it("does NOT delete the R2 key on upload failure (a concurrent finalizer may own a live object at the same deterministic key)", async () => {
+    // Keys are deterministic (`images/<jobId>.png`), and the worker and the
+    // reconcile cron can finalize the same job concurrently. A failure-path
+    // delete here destroyed the OTHER writer's successfully-uploaded object
+    // while the job stayed `completed` — permanent 404 for a charged job
+    // (incident 2026-06-10, job 7955772a). Incomplete multipart uploads never
+    // materialize an object (lib-storage aborts them), so there is nothing of
+    // ours to clean up; the key must be left untouched.
     const chunks = [new Uint8Array(2000)]
     mocks.safeFetchMock.mockResolvedValueOnce(
       makeResponse({ chunks, headerLength: null }),
@@ -393,13 +399,7 @@ describe("uploadToR2 — streaming size enforcement", () => {
       uploadToR2("https://src.example/x.png", "job-8", "image", "user-8"),
     ).rejects.toThrow()
 
-    expect(mocks.deleteCalls.length).toBeGreaterThanOrEqual(1)
-    expect(mocks.deleteCalls[0]).toEqual(
-      expect.objectContaining({
-        Bucket: "test-bucket",
-        Key: "images/job-8.png",
-      }),
-    )
+    expect(mocks.deleteCalls).toHaveLength(0)
   })
 
   it("throws when the upstream fetch returns a non-ok status", async () => {
