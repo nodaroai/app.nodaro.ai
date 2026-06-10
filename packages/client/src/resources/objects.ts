@@ -83,6 +83,11 @@ export interface Object {
   materials: Array<{ name: string; url: string }>
   variations: Array<{ name: string; url: string }>
   motionClips: Array<{ name: string; url: string }>
+  /** Named Product Boards — dense reference sheets, one per variant/colorway
+   *  (the `generate-image/product-board` factory preset rendered from the
+   *  object's images). A first-class bucket: community publish snapshots it
+   *  and clone hands the consumer their own copy to extend. Defaults to `[]`. */
+  boards?: Array<{ name: string; url: string }> | null
   referencePhotos: ObjectReferencePhoto[]
   /** `null` when no caption is set (or the LLM caption sub-failed) — the wire
    *  sends `""`, normalized to `null` in `get()` to match character semantics. */
@@ -186,6 +191,10 @@ export interface UpdateObjectInput {
    *  (omit to leave untouched). Keys stored verbatim; soft-capped server-side
    *  at 200 keys / 2048-char values. */
   selectedAssetByVariant?: Record<string, string>
+  /** Named Product Boards (see `Object.boards`) — whole-array replace,
+   *  USER-owned (unlike the worker-owned buckets it flows through UPDATE).
+   *  Server caps: 24 boards, 200-char names. */
+  boards?: Array<{ name: string; url: string }>
   expectedUpdatedAt?: string
 }
 
