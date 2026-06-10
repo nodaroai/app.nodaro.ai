@@ -11,6 +11,8 @@ const COLUMNS: Record<string, string[]> = {
     "real_life_refs_by_variant","body_angles","lora_replicate_version","lora_trigger_word",
     "lora_training_status","lora_training_replicate_id","lora_training_error","lora_trained_at",
     "lora_training_image_count","reference_videos_by_variant","created_at","updated_at","deleted_at",
+    // Named Character Boards (migration 212) — published + cloned like the buckets.
+    "boards",
   ],
   locations: [
     "id","project_id","workflow_id","node_id","name","description","category","style","main_image_url",
@@ -136,6 +138,15 @@ describe("buildSnapshot (character)", () => {
     ) as Record<string, unknown>
     expect(snap.reference_videos_by_variant).toEqual({ smile: ["c1", "c2"] })
   })
+
+  it("carries boards (named reference sheets) from copiedAssets", () => {
+    const snap = buildSnapshot(
+      "character",
+      { ...row, boards: [{ name: "Evening gown", url: "PRIVATE" }] },
+      { boards: [{ name: "Evening gown", url: "COPIED-B" }] },
+    ) as Record<string, unknown>
+    expect(snap.boards).toEqual([{ name: "Evening gown", url: "COPIED-B" }])
+  })
 })
 
 describe("buildCloneRow (character)", () => {
@@ -145,6 +156,15 @@ describe("buildCloneRow (character)", () => {
     expect(row.user_id).toBe("u1"); expect(row.project_id).toBe("p1"); expect(row.name).toBe("Hero 2")
     expect(row.canonical_description).toBe("cd")
     expect(row.source_image_url).toBe("CLONED")
+  })
+
+  it("hands the consumer their own boards copy to extend", () => {
+    const snapshot = { name: "Hero", boards: [{ name: "Evening gown", url: "SNAP-B" }] }
+    const row = buildCloneRow("character", snapshot, {
+      userId: "u1", projectId: "p1", name: "Hero 2",
+      copiedAssets: { boards: [{ name: "Evening gown", url: "CLONED-B" }] },
+    }) as Record<string, unknown>
+    expect(row.boards).toEqual([{ name: "Evening gown", url: "CLONED-B" }])
   })
 })
 

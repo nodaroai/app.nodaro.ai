@@ -1,4 +1,4 @@
-import type { CharacterAspectRatio, CharacterAttachColumn, EntityStyle } from "@nodaro/shared"
+﻿import type { CharacterAspectRatio, CharacterAttachColumn, EntityStyle } from "@nodaro/shared"
 import type { NodaroClient } from "../client.js"
 
 /**
@@ -28,17 +28,17 @@ export { CHARACTER_ASPECT_OPTIONS, CHARACTER_ASPECT_DEFAULTS } from "@nodaro/sha
  * `url` points at an R2-hosted asset.
  *
  * Identity-foundation fields:
- *   - `referencePhotos` — caller-supplied real-life refs (max one per
+ *   - `referencePhotos` ג€” caller-supplied real-life refs (max one per
  *     non-`other` kind; cap 20 total). Drive the i2v / i2i path when a
  *     provider supports multi-image conditioning.
- *   - `realLifeRefsByVariant` — per-variant reference URLs (cap 20 keys,
+ *   - `realLifeRefsByVariant` ג€” per-variant reference URLs (cap 20 keys,
  *     5 URLs per key). Keys are lowercased+trimmed.
- *   - `referenceVideosByVariant` — per-label user-uploaded reference VIDEO
+ *   - `referenceVideosByVariant` ג€” per-label user-uploaded reference VIDEO
  *     URLs (cap 20 keys, 5 URLs per key, lowercased+trimmed keys). Mirrors
  *     `realLifeRefsByVariant` for video clips (e.g. emotion takes). Read the
  *     chosen URLs off the row to drive generate-video's `referenceVideoUrls`.
- *   - `seedPrompt` — short prompt fragment that scaffolds portrait gen.
- *   - `canonicalDescription` — ~80–120-word LLM-authored visual caption,
+ *   - `seedPrompt` ג€” short prompt fragment that scaffolds portrait gen.
+ *   - `canonicalDescription` ג€” ~80ג€“120-word LLM-authored visual caption,
  *     populated by `approvePortrait()` / `recaption()`.
  */
 export interface Character {
@@ -61,6 +61,11 @@ export interface Character {
   angles: Array<{ name: string; url: string }> | null
   bodyAngles: Array<{ name: string; url: string }> | null
   motions: Array<{ name: string; url: string }> | null
+  /** Named Character Boards — dense reference sheets, one per persona/look
+   *  (the `generate-image/character-board` factory preset rendered from the
+   *  character's images). A first-class bucket: community publish snapshots it
+   *  and clone hands the consumer their own copy to extend. Defaults to `[]`. */
+  boards?: Array<{ name: string; url: string }> | null
   /** Per-label user-uploaded reference VIDEO URLs (R2), keyed by a
    *  caller-owned label (lowercased+trimmed server-side). Mirrors
    *  `realLifeRefsByVariant` for video clips; read the chosen URLs off the row
@@ -68,16 +73,16 @@ export interface Character {
   referenceVideosByVariant?: Record<string, string[]> | null
   /** The user's chosen DEFAULT asset take per variant (Studio version history).
    *  OPAQUE map: key `"<bucket>:<variant>"` (e.g. `"bodyAngles:front"`,
-   *  `"expressions:smile"`) → the chosen asset URL (one already present in that
-   *  bucket). Stored verbatim — keys are NOT normalized; soft-capped server-side
+   *  `"expressions:smile"`) ג†’ the chosen asset URL (one already present in that
+   *  bucket). Stored verbatim ג€” keys are NOT normalized; soft-capped server-side
    *  at 200 keys / 2048-char values (overflow dropped silently). Defaults to `{}`. */
   selectedAssetByVariant?: Record<string, string> | null
   /** `voiceType` records the selected voice's KIND (premade voices are
    *  addressed by name; library/custom voices by id at text-to-speech time).
    *  `previewUrl` is a playable audio sample (the voice's `preview_url` / clone
-   *  sample) the studio plays in an `<audio>` element — persisted so Voice Library
+   *  sample) the studio plays in an `<audio>` element ג€” persisted so Voice Library
    *  voices (which have no by-id lookup) stay previewable after reload. Client-
-   *  played only; the server never fetches it. Both optional — a character may
+   *  played only; the server never fetches it. Both optional ג€” a character may
    *  have no voice, or a legacy voice predating these fields. */
   voice: { voiceId: string; voiceName: string; traits: string; voiceType?: "premade" | "library" | "custom"; previewUrl?: string } | null
   personality: {
@@ -86,7 +91,7 @@ export interface Character {
     movementStyle: string
     behavioralNotes: string
   } | null
-  /** ~80–120-word LLM-authored visual caption (approve-portrait / recaption).
+  /** ~80ג€“120-word LLM-authored visual caption (approve-portrait / recaption).
    *  Optional on the read surface so existing literal consumers don't break;
    *  the route always returns it (string | null). */
   canonicalDescription?: string | null
@@ -97,7 +102,7 @@ export interface Character {
 
 /**
  * GET /v1/characters/:id appends three live-progress buckets the studio uses
- * to rehydrate spinners after a reload. Optional in the SDK surface — they
+ * to rehydrate spinners after a reload. Optional in the SDK surface ג€” they
  * don't appear on `list()` rows.
  */
 export interface CharacterDetail extends Character {
@@ -136,7 +141,7 @@ export interface ReferencePhoto {
 /**
  * Body for `client.characters.upsert()`. Mirrors `upsertCharacterBody` in
  * `backend/src/routes/characters.ts`. Omitting `id` triggers an INSERT;
- * supplying it triggers an UPDATE that only writes the fields you pass —
+ * supplying it triggers an UPDATE that only writes the fields you pass ג€”
  * undefined keys are NOT touched on the row.
  *
  * `name` is optional at the type level. The route requires `name` on INSERT
@@ -159,7 +164,7 @@ export interface UpsertCharacterInput {
   baseOutfit?: string
   sourceImageUrl?: string
   /** Persistent image-model id (a MODEL_CATALOG image model). Validated
-   *  server-side — unknown / non-image / "" is stored as `null`. */
+   *  server-side ג€” unknown / non-image / "" is stored as `null`. */
   imageProvider?: string | null
   expressions?: Array<{ name: string; url: string }>
   poses?: Array<{ name: string; url: string }>
@@ -167,7 +172,10 @@ export interface UpsertCharacterInput {
   angles?: Array<{ name: string; url: string }>
   bodyAngles?: Array<{ name: string; url: string }>
   motions?: Array<{ name: string; url: string }>
-  /** See `Character.voice` — persisted alongside the voice so TTS can resolve a
+  /** Named Character Boards (see `Character.boards`) — whole-array replace,
+   *  like the asset buckets. Server caps: 24 boards, 200-char names. */
+  boards?: Array<{ name: string; url: string }>
+  /** See `Character.voice` ג€” persisted alongside the voice so TTS can resolve a
    *  library/custom voice by id, and `previewUrl` keeps the sample playable after
    *  reload. Both optional. */
   voice?: { voiceId: string; voiceName: string; traits: string; voiceType?: "premade" | "library" | "custom"; previewUrl?: string } | null
@@ -188,7 +196,7 @@ export interface UpsertCharacterInput {
    *  `referenceVideoUrls`. */
   referenceVideosByVariant?: Record<string, string[]>
   /** The user's chosen DEFAULT asset take per variant. OPAQUE
-   *  `"<bucket>:<variant>"` → chosen-URL map; a write REPLACES the whole map
+   *  `"<bucket>:<variant>"` ג†’ chosen-URL map; a write REPLACES the whole map
    *  (the studio sends the full map each save). Omit to leave the row untouched.
    *  Keys stored verbatim; soft-capped server-side at 200 keys / 2048-char values. */
   selectedAssetByVariant?: Record<string, string>
@@ -206,7 +214,7 @@ export interface ListCharactersParams {
   archived?: boolean
   /**
    * Max rows to return. Server defaults to 100, caps at 500. Omit to take the
-   * server default — passing it just narrows further.
+   * server default ג€” passing it just narrows further.
    */
   limit?: number
 }
@@ -224,8 +232,8 @@ export interface CharacterUsage {
 }
 
 /**
- * Input for `client.characters.generate()` — fires the
- * `POST /v1/generate-character` route. Produces 1–10 portrait candidates;
+ * Input for `client.characters.generate()` ג€” fires the
+ * `POST /v1/generate-character` route. Produces 1ג€“10 portrait candidates;
  * each lands as one `jobs` row in `pending` state and is then enqueued for
  * the worker.
  *
@@ -233,7 +241,7 @@ export interface CharacterUsage {
  * (the backend's refinement rejects empty input with `validation_error`).
  *
  * When `attachToCharacterId` is set, the worker writes the resulting URL
- * directly to `characters.source_image_url` on completion — caller doesn't
+ * directly to `characters.source_image_url` on completion ג€” caller doesn't
  * need a separate `approvePortrait` call for single-candidate runs.
  */
 export interface GenerateCharacterInput {
@@ -249,10 +257,10 @@ export interface GenerateCharacterInput {
   attachToCharacterId?: string
   seedPrompt?: string
   referencePhotos?: ReferencePhoto[]
-  /** Number of candidate images to generate (1–10; server-validated). */
+  /** Number of candidate images to generate (1ג€“10; server-validated). */
   count?: number
   /**
-   * Explicit aspect ratio. Highest precedence — overrides both the character
+   * Explicit aspect ratio. Highest precedence ג€” overrides both the character
    * node toggle and the per-asset-type default (portraits default to `3:4`).
    * Must be one of the 4-value `CharacterAspectRatio` union.
    */
@@ -295,11 +303,11 @@ export interface GenerateAssetInput {
   provider?: string
   /** Auto-attach to character row + asset bucket on completion. */
   attachToCharacterId?: string
-  /** Shared type — auto-includes new buckets (sheets/detail_closeups/outfit_variations); mirrors objects.ts/locations.ts. */
+  /** Shared type ג€” auto-includes new buckets (sheets/detail_closeups/outfit_variations); mirrors objects.ts/locations.ts. */
   attachToColumn?: CharacterAttachColumn
   attachName?: string
   /**
-   * Explicit aspect ratio. Highest precedence — overrides both the character
+   * Explicit aspect ratio. Highest precedence ג€” overrides both the character
    * node toggle and the per-asset-type default (expressions=1:1, poses=9:16,
    * headAngles=3:4, bodyAngles=9:16, lighting=3:4, angles=3:4, custom=3:4).
    */
@@ -313,7 +321,7 @@ export interface GenerateAssetInput {
 
 export interface GenerateMotionInput {
   motionPrompt: string
-  /** Optional when `attachToCharacterId` is set — falls back to the row's portrait. */
+  /** Optional when `attachToCharacterId` is set ג€” falls back to the row's portrait. */
   sourceImageUrl?: string
   provider?: string
   name: string
@@ -326,7 +334,7 @@ export interface GenerateMotionInput {
   attachToCharacterId?: string
   attachName?: string
   /**
-   * Explicit aspect ratio. Highest precedence — overrides both the character
+   * Explicit aspect ratio. Highest precedence ג€” overrides both the character
    * node toggle and the motions default (`9:16`).
    */
   aspectRatio?: CharacterAspectRatio
@@ -341,7 +349,7 @@ export interface ApprovePortraitResult {
   portraitUrl: string
   /**
    * LLM-authored caption. `null` when the LLM call failed during the approval
-   * — the portrait is still set; call `recaption()` to retry.
+   * ג€” the portrait is still set; call `recaption()` to retry.
    */
   canonicalDescription: string | null
 }
@@ -378,7 +386,7 @@ export class CharactersResource {
 
   /**
    * Create or update a character. Omit `id` to create; supply it to update
-   * (only the fields you pass get written — undefined keys are untouched).
+   * (only the fields you pass get written ג€” undefined keys are untouched).
    *
    * If the caller-supplied `name` collides with an existing active character
    * for this user, the request returns 409 `name_taken`. To auto-number a
@@ -392,7 +400,7 @@ export class CharactersResource {
   /**
    * Convenience wrapper around `upsert()` for creating new characters.
    * Equivalent to `upsert({ ...input, id: undefined })`. `name` is REQUIRED
-   * on create — the route 400s on INSERT-without-name; we narrow the type
+   * on create ג€” the route 400s on INSERT-without-name; we narrow the type
    * here so callers fail at compile-time rather than runtime.
    */
   create(
@@ -432,7 +440,7 @@ export class CharactersResource {
 
   /**
    * Duplicate (fork) a character to a new row with a `"(copy)"` suffix.
-   * Asset URLs are shared by reference — the new row can diverge by
+   * Asset URLs are shared by reference ג€” the new row can diverge by
    * regenerating any of them.
    */
   duplicate(id: string, input: DuplicateCharacterInput = {}): Promise<{ id: string; name: string }> {
@@ -454,7 +462,7 @@ export class CharactersResource {
   /**
    * Fire `POST /v1/generate-character` to produce one or more portrait
    * candidates. With `count > 1`, all jobs are reserved up-front before any
-   * is enqueued — mid-batch failures roll back atomically.
+   * is enqueued ג€” mid-batch failures roll back atomically.
    *
    * When `attachToCharacterId` is set, the worker writes the result directly
    * to the row's `source_image_url`; otherwise you must call
@@ -487,7 +495,7 @@ export class CharactersResource {
   /**
    * Approve a completed `generate-character` job as the character's portrait.
    * Sets `source_image_url` and fires the LLM caption (Claude Sonnet vision)
-   * inline. Returns the new portrait URL plus the caption — `canonicalDescription`
+   * inline. Returns the new portrait URL plus the caption ג€” `canonicalDescription`
    * is `null` if the LLM call sub-failed (portrait still set; retry via `recaption()`).
    */
   approvePortrait(id: string, candidateJobId: string): Promise<ApprovePortraitResult> {
