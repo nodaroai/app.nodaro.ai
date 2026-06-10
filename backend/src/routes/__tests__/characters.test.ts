@@ -90,6 +90,7 @@ const CAMEL_CHARACTER = {
   expressions: [],
   poses: [],
   lightingVariations: [],
+  boards: [],
   referenceVideosByVariant: {},
   selectedAssetByVariant: {},
   sheets: [],
@@ -1237,6 +1238,49 @@ describe("POST /v1/characters", () => {
       smile: ["https://example.com/s1.png"],
       walking: ["https://example.com/w1.png", "https://example.com/w2.png"],
     })
+  })
+
+  it("round-trips boards (named reference sheets) on insert", async () => {
+    const { mockInsert, captured } = mockInsertCapture()
+    vi.mocked(supabase.from).mockReturnValue({ insert: mockInsert } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: {
+        name: "Hero",
+        nodeId: "node-1",
+        userId: TEST_USER_ID,
+        boards: [
+          { name: "Evening gown", url: "https://example.com/gown-board.png" },
+          { name: "", url: "https://example.com/board.png" },
+        ],
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(captured.row?.boards).toEqual([
+      { name: "Evening gown", url: "https://example.com/gown-board.png" },
+      { name: "", url: "https://example.com/board.png" },
+    ])
+  })
+
+  it("rejects more than 24 boards (400)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: {
+        name: "Hero",
+        nodeId: "node-1",
+        userId: TEST_USER_ID,
+        boards: Array.from({ length: 25 }, (_, i) => ({
+          name: `b${i}`,
+          url: "https://example.com/x.png",
+        })),
+      },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
   })
 
   it("rejects real_life_refs_by_variant with > 20 keys (400)", async () => {

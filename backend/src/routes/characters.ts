@@ -77,6 +77,12 @@ export const upsertCharacterBody = z.object({
   angles: z.array(z.object({ name: z.string(), url: safeUrlSchema })).optional(),
   bodyAngles: z.array(z.object({ name: z.string(), url: safeUrlSchema })).optional(),
   motions: z.array(z.object({ name: z.string(), url: safeUrlSchema })).optional(),
+  // Named Character Boards (dense reference sheets, one per persona/look —
+  // generated via the generate-image/character-board factory preset). Shaped
+  // like the asset buckets above; `name` is a caller-owned label ("" = the
+  // unnamed board). Bounded so a runaway client can't blow up the row — and
+  // unlike the buckets, names are free text, so cap their length too.
+  boards: z.array(z.object({ name: z.string().max(200), url: safeUrlSchema })).max(24).optional(),
   // `voiceType` records the selected voice's KIND so text-to-speech can resolve
   // a library/custom voice by id (premade voices are addressed by name). Always
   // OPTIONAL: a character may have no voice, or a legacy voice with no recorded
@@ -153,7 +159,7 @@ const listCharactersQuery = z.object({
 })
 
 const SELECT_COLUMNS =
-  "id, user_id, node_id, project_id, name, description, gender, style, base_outfit, source_image_url, image_provider, expressions, poses, lighting_variations, angles, body_angles, motions, reference_videos_by_variant, selected_asset_by_variant, voice, personality, canonical_description, lora_training_status, lora_replicate_version, lora_trigger_word, lora_trained_at, sheets, detail_closeups, outfit_variations, deleted_at, created_at, updated_at"
+  "id, user_id, node_id, project_id, name, description, gender, style, base_outfit, source_image_url, image_provider, expressions, poses, lighting_variations, angles, body_angles, motions, boards, reference_videos_by_variant, selected_asset_by_variant, voice, personality, canonical_description, lora_training_status, lora_replicate_version, lora_trigger_word, lora_trained_at, sheets, detail_closeups, outfit_variations, deleted_at, created_at, updated_at"
 
 type CharacterRow = {
   id: string
@@ -173,6 +179,7 @@ type CharacterRow = {
   angles: { name: string; url: string }[] | null
   body_angles: { name: string; url: string }[] | null
   motions: { name: string; url: string }[] | null
+  boards: { name: string; url: string }[] | null
   reference_videos_by_variant: Record<string, string[]> | null
   selected_asset_by_variant: Record<string, string> | null
   voice: { voiceId: string; voiceName: string; traits: string; voiceType?: "premade" | "library" | "custom"; previewUrl?: string } | null
@@ -210,6 +217,7 @@ function toCamel(c: CharacterRow) {
     angles: c.angles,
     bodyAngles: c.body_angles,
     motions: c.motions,
+    boards: c.boards ?? [],
     sheets: c.sheets ?? [],
     detailCloseups: c.detail_closeups ?? [],
     outfitVariations: c.outfit_variations ?? [],
@@ -495,7 +503,7 @@ export async function characterRoutes(app: FastifyInstance) {
       })
     }
 
-    const { id, nodeId, workflowId, projectId, name, description, gender, style, baseOutfit, sourceImageUrl, expressions, poses, lightingVariations, angles, bodyAngles, motions, voice, personality, seedPrompt, canonicalDescription, referencePhotos, realLifeRefsByVariant, referenceVideosByVariant, selectedAssetByVariant, imageProvider } = parsed.data
+    const { id, nodeId, workflowId, projectId, name, description, gender, style, baseOutfit, sourceImageUrl, expressions, poses, lightingVariations, angles, bodyAngles, motions, boards, voice, personality, seedPrompt, canonicalDescription, referencePhotos, realLifeRefsByVariant, referenceVideosByVariant, selectedAssetByVariant, imageProvider } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -533,6 +541,7 @@ export async function characterRoutes(app: FastifyInstance) {
       if (angles !== undefined) patch.angles = angles
       if (bodyAngles !== undefined) patch.body_angles = bodyAngles
       if (motions !== undefined) patch.motions = motions
+      if (boards !== undefined) patch.boards = boards
       if (voice !== undefined) patch.voice = voice ?? null
       if (personality !== undefined) patch.personality = personality ?? null
       if (seedPrompt !== undefined) patch.seed_prompt = seedPrompt ?? null
@@ -586,6 +595,7 @@ export async function characterRoutes(app: FastifyInstance) {
       angles: angles ?? [],
       body_angles: bodyAngles ?? [],
       motions: motions ?? [],
+      boards: boards ?? [],
       voice: voice ?? null,
       personality: personality ?? null,
       seed_prompt: seedPrompt ?? null,

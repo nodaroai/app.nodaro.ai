@@ -16,7 +16,7 @@ export const COMMUNITY_ENTITY_ADAPTERS: Record<EntityType, CommunityEntityAdapte
     ],
     assetFields: [
       "source_image_url", "character_sheet", "expressions", "poses",
-      "lighting_variations", "angles", "body_angles", "motions",
+      "lighting_variations", "angles", "body_angles", "motions", "boards",
       "reference_videos_by_variant",
     ],
     stripFields: [
