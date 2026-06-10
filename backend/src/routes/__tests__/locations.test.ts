@@ -110,6 +110,7 @@ const CAMEL_LOCATION = {
   lighting: [],
   seasons: [],
   atmosphereMotions: [],
+  boards: [],
   referencePhotos: [],
   canonicalDescription: "", // coerced from null
   styleLock: true,

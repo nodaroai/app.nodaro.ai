@@ -19,11 +19,15 @@ const COLUMNS: Record<string, string[]> = {
     "time_of_day","weather","angles","custom_variations","created_at","updated_at","source_image_url",
     "user_id","lighting","seasons","atmosphere_motions","reference_photos","canonical_description",
     "style_lock","deleted_at","pii_consent_at","r2_assets_purged_at",
+    // Named Location Boards (migration 213) — published + cloned like the buckets.
+    "boards",
   ],
   objects: [
     "id","project_id","workflow_id","node_id","name","description","category","style","main_image_url",
     "angles","materials","variations","custom_variations","created_at","updated_at","source_image_url",
     "user_id","motion_clips","reference_photos","canonical_description","style_lock","deleted_at",
+    // Named Product Boards (migration 213) — published + cloned like the buckets.
+    "boards",
   ],
   // FULL physical column set from migration 206_creatures.sql (NOT copied from the
   // stale objects block above — that one omits image_provider/selected_asset_by_variant/
@@ -146,6 +150,25 @@ describe("buildSnapshot (character)", () => {
       { boards: [{ name: "Evening gown", url: "COPIED-B" }] },
     ) as Record<string, unknown>
     expect(snap.boards).toEqual([{ name: "Evening gown", url: "COPIED-B" }])
+  })
+
+  it("locations + objects carry boards through snapshot AND clone too", () => {
+    const locSnap = buildSnapshot(
+      "location",
+      { name: "Loft", boards: [{ name: "Winter", url: "PRIVATE" }] },
+      { boards: [{ name: "Winter", url: "COPIED-L" }] },
+    ) as Record<string, unknown>
+    expect(locSnap.boards).toEqual([{ name: "Winter", url: "COPIED-L" }])
+
+    const objClone = buildCloneRow(
+      "object",
+      { name: "Lamp", boards: [{ name: "Brass", url: "SNAP-O" }] },
+      {
+        userId: "u1", projectId: "p1", name: "Lamp 2",
+        copiedAssets: { boards: [{ name: "Brass", url: "CLONED-O" }] },
+      },
+    ) as Record<string, unknown>
+    expect(objClone.boards).toEqual([{ name: "Brass", url: "CLONED-O" }])
   })
 })
 

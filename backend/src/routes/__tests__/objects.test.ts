@@ -106,6 +106,7 @@ const CAMEL_OBJECT = {
   materials: [],
   variations: [],
   motionClips: [],
+  boards: [],
   referencePhotos: [],
   canonicalDescription: "", // coerced from null
   styleLock: true,
