@@ -783,7 +783,22 @@ export function createRenderWorker() {
       const workDir = await createWorkDir("render")
 
       try {
-        await supabase.from("jobs").update({ status: "processing", started_at: new Date().toISOString() }).eq("id", jobId)
+        // A1/R1 (audit): CAS on live statuses + abort on 0 rows — a render
+        // job cancelled while queued must be discarded at pickup, not
+        // resurrected to 'processing' and rendered (the user would keep the
+        // refund AND get the output). Mirrors video-worker.ts.
+        const { data: pickedRows } = await supabase
+          .from("jobs")
+          .update({ status: "processing", started_at: new Date().toISOString() })
+          .eq("id", jobId)
+          .in("status", ["pending", "processing"])
+          .select("id")
+        if (!pickedRows || pickedRows.length === 0) {
+          console.log(
+            `[render-worker] Job ${jobId} not in a runnable state at pickup (cancelled/terminal while queued) — discarding`,
+          )
+          return
+        }
 
         await bullJob.updateProgress(20)
 

@@ -68,20 +68,29 @@ async function forceFailExhausted(
     return
   }
 
-  await refundReservedCreditsForJob(jobId)
-  await logExhaustedAnomaly(jobId, finalAttempts).catch((e) =>
+  // Audit A5: capture whether the refund actually fired. 0 reserved logs
+  // means the hold was already committed (e.g. a partial loop-trim commit on
+  // a prior worker attempt) — the user is still charged and the anomaly note
+  // must say so instead of claiming a refund happened.
+  const refundedLogs = await refundReservedCreditsForJob(jobId)
+  await logExhaustedAnomaly(jobId, finalAttempts, refundedLogs > 0).catch((e) =>
     console.error(`[reconcile/exhaust] anomaly log failed for job ${jobId}:`, e),
   )
 
   console.warn(
-    `[reconcile/exhaust] force-failed job ${jobId} after ${finalAttempts} attempts: ${lastError.slice(0, 120)}`,
+    `[reconcile/exhaust] force-failed job ${jobId} after ${finalAttempts} attempts ` +
+    `(refunded=${refundedLogs > 0}): ${lastError.slice(0, 120)}`,
   )
 }
 
-async function logExhaustedAnomaly(jobId: string, finalAttempts: number): Promise<void> {
+async function logExhaustedAnomaly(
+  jobId: string,
+  finalAttempts: number,
+  refunded: boolean,
+): Promise<void> {
   const { data: job } = await supabase
     .from("jobs")
-    .select("user_id, model_identifier, provider, provider_kind")
+    .select("user_id, model_identifier, provider, provider_kind, provider_task_id")
     .eq("id", jobId)
     .single()
   const jobRow = job as {
@@ -89,6 +98,7 @@ async function logExhaustedAnomaly(jobId: string, finalAttempts: number): Promis
     model_identifier?: string
     provider?: string
     provider_kind?: string
+    provider_task_id?: string
   } | null
   if (!jobRow?.user_id) return
 
@@ -115,6 +125,13 @@ async function logExhaustedAnomaly(jobId: string, finalAttempts: number): Promis
     provider_cost_usd: 0,
     anomaly_type: "reconcile_exhausted",
     status: "pending",
-    admin_notes: `Reconcile cron exhausted after ${finalAttempts} attempts. Job auto-failed and credits refunded.`,
+    // A5: provider task id makes the row triage-able without joining jobs;
+    // the refund sentence reflects what actually happened.
+    admin_notes:
+      `Reconcile cron exhausted after ${finalAttempts} attempts ` +
+      `(kind=${jobRow.provider_kind ?? "?"}, task=${jobRow.provider_task_id ?? "none"}). Job auto-failed; ` +
+      (refunded
+        ? "reserved credits refunded."
+        : "NO reserved hold remained to refund (likely committed earlier, e.g. partial loop-trim commit) — user may still be charged."),
   } as Record<string, unknown>)
 }

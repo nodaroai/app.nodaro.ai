@@ -1025,6 +1025,23 @@ describe("finalizeJobWithMedia", () => {
       expect(sharedMocks.commitJobCredits).toHaveBeenCalledTimes(1)
     })
 
+    it("reconcile-shaped result (cost/providerUsed null): completion payload OMITS provider fields", async () => {
+      // Metadata residual (audit): writing NULL provider/provider_cost
+      // clobbered whatever the worker/route already recorded — every
+      // cron-completed job lost its provider metadata.
+      await finalizeJobWithMedia({
+        jobId: "j1",
+        jobType: "generate-image",
+        result: { url: "https://kie.example/x.png", cost: null, providerUsed: null },
+        claimant: "cron",
+      })
+
+      const payload = sharedMocks.markJobCompleted.mock.calls[0]![1]
+      expect(payload).not.toHaveProperty("provider")
+      expect(payload).not.toHaveProperty("provider_cost")
+      expect(payload).not.toHaveProperty("display_cost")
+    })
+
     it("no addon: plain commit (unchanged path)", async () => {
       await finalizeJobWithMedia({
         jobId: "j1",

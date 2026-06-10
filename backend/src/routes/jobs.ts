@@ -33,6 +33,12 @@ const JobSummary = z
     created_at: z.string(),
     started_at: z.string().nullable(),
     completed_at: z.string().nullable(),
+    recovering: z
+      .boolean()
+      .optional()
+      .describe(
+        "Present (true) while the platform's reconcile system is self-healing this job — it will complete or be refunded automatically.",
+      ),
   })
   .openapi("Job")
 
@@ -46,6 +52,12 @@ const JobStatus = z
     progress: z.number().min(0).max(100),
     output_data: z.unknown(),
     error_message: z.string().nullable(),
+    recovering: z
+      .boolean()
+      .optional()
+      .describe(
+        "Present (true) while the platform's reconcile system is self-healing this job — the worker abandoned it after the provider delivered; it will complete or be refunded automatically.",
+      ),
   })
   .openapi("JobStatus")
 
@@ -159,8 +171,16 @@ export function sanitizeJobForPublic(job: JobRecord, isAdmin: boolean): JobRecor
     provider_cost: _providerCost,
     display_cost: _displayCost,
     credits_actual: _creditsActual,
+    reconcile_attempts: _reconcileAttempts,
     ...rest
-  } = job
+  } = job as JobRecord & { reconcile_attempts?: number | null }
+
+  // Recovery visibility (audit UX): expose a boolean instead of the raw
+  // internal counter — a processing row the reconcile system has touched is
+  // self-healing, not just slow.
+  if (job.status === "processing" && ((_reconcileAttempts as number | null) ?? 0) > 0) {
+    ;(rest as Record<string, unknown>).recovering = true
+  }
 
   // Also strip internal fields from input_data (orchestrator stores full payload)
   if (rest.input_data && typeof rest.input_data === "object") {
@@ -239,7 +259,7 @@ export async function jobRoutes(app: FastifyInstance) {
 
     let query = supabase
       .from("jobs")
-      .select("id, status, progress, input_data, output_data, error_message, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits, credits_actual")
+      .select("id, status, progress, input_data, output_data, error_message, created_at, started_at, completed_at, user_id, provider, provider_cost, display_cost, credits, credits_actual, reconcile_attempts")
       .eq("id", id)
 
     if (!isAdmin) {
@@ -254,7 +274,7 @@ export async function jobRoutes(app: FastifyInstance) {
       })
     }
 
-    return { data: sanitizeJobForPublic(job as JobRecord, isAdmin) }
+    return { data: sanitizeJobForPublic(job as unknown as JobRecord, isAdmin) }
   })
 
   // Lean status poll for the per-node 3s poll path. Same auth + ownership
@@ -278,7 +298,7 @@ export async function jobRoutes(app: FastifyInstance) {
 
     let query = supabase
       .from("jobs")
-      .select("id, status, progress, output_data, error_message")
+      .select("id, status, progress, output_data, error_message, reconcile_attempts")
       .eq("id", id)
 
     if (!isAdmin) {
@@ -293,7 +313,17 @@ export async function jobRoutes(app: FastifyInstance) {
       })
     }
 
-    return { data: job }
+    // Recovery visibility (audit UX): a processing row the reconcile system
+    // has touched is being self-healed, not just slow — let pollers say so.
+    const { reconcile_attempts: attempts, ...rest } = job as Record<string, unknown>
+    return {
+      data: {
+        ...rest,
+        ...(job.status === "processing" && ((attempts as number | null) ?? 0) > 0
+          ? { recovering: true }
+          : {}),
+      },
+    }
   })
 
   app.get<{ Querystring: { userId?: string; limit?: string; cursor?: string } }>("/v1/jobs", async (req, reply) => {

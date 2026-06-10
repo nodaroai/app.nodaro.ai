@@ -45,6 +45,9 @@ vi.mock("../types", () => ({
   updateProgressIfChanged: (nodeId: string, progress: number, updateFn: (id: string, data: Record<string, unknown>) => void) => {
     updateFn(nodeId, { currentJobProgress: progress })
   },
+  // Self-heal "Recovering" flag writer — no-op in these tests (transition
+  // detection is covered by the real impl; tests here pin progress flow).
+  updateRecoveringIfChanged: () => {},
 }))
 
 vi.mock("@nodaro/shared", async (importOriginal) => {

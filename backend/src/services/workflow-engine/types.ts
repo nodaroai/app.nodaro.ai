@@ -305,6 +305,12 @@ export interface OrchestratorContext {
   onJobProgress?: (jobId: string, progress: number) => void
   /** Node IDs that have upload-* ancestors — their jobs should be force_private */
   uploadDescendantIds?: Set<string>
+  /** In-flight child jobs from a prior (crashed) orchestrator attempt whose
+   *  provider call already went out — the node executor ADOPTS these (polls
+   *  the existing job) instead of creating a new job + paying the provider a
+   *  second time (audit A2). Keyed by owning node id; populated on re-pick by
+   *  cancelInFlightChildJobs. */
+  adoptableJobs?: Map<string, { jobId: string; usageLogId?: string; creditsReserved?: number }>
   /** Whether this execution is running a published app (affects free-tier app credit allowance) */
   isAppRun?: boolean
   /** Current component nesting depth (limit 5, like sub-workflows) */
