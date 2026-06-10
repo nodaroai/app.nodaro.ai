@@ -943,16 +943,24 @@ export class KieVideoProvider
 
     // VEO 3.1 uses a special API endpoint
     if (isVeoProvider(provider)) {
+      // Defensive REFERENCE_2_VIDEO (mirrors the Gemini Omni t2v handler):
+      // the unified node dispatches ref-only runs (no start frame) down the
+      // t2v path with referenceImageUrls forwarded — pass them as VEO
+      // imageUrls with an explicit REFERENCE_2_VIDEO generationType so the
+      // refs condition the output (a bare single image would otherwise be
+      // misread as an IMAGE_2_VIDEO start frame).
+      const veoRefUrls = (options?.referenceImageUrls ?? []).filter((u): u is string => !!u).slice(0, 3)
       const snappedDuration = duration
         ? snapToAllowedDuration(duration, modelConfig.allowedDurations ?? [])
         : undefined
       const veoResult = await runVeoTask(
         modelConfig.model,
         effectivePrompt,
-        undefined,
+        veoRefUrls.length > 0 ? veoRefUrls : undefined,
         {
           aspectRatio: aspectRatio ?? options?.aspectRatio,
           seed: options?.seed,
+          ...(veoRefUrls.length > 0 ? { generationType: "REFERENCE_2_VIDEO" } : {}),
           resolution: options?.resolution,
           enableTranslation: options?.enableTranslation,
           duration: snappedDuration,

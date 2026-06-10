@@ -2496,10 +2496,6 @@ export function executeNode(
     }
     const t2vProvider = t2vData.provider || "seedance-2-fast";
     const t2vRaw = t2vData as Record<string, unknown>;
-    const isKlingVariant =
-      t2vProvider === "kling" ||
-      t2vProvider === "kling-turbo" ||
-      t2vProvider === "kling-3.0";
     const isSeedance2T2V = isSeedance2Provider(t2vProvider)
     // Apply user-defined reorder from `connectedRefImageOrder` (drag list in
     // the config panel) before mention-merge so positional Image-N letters
@@ -2557,17 +2553,6 @@ export function executeNode(
     }
     const t2vRefVideos = inputs.referenceVideoUrls as string[] | undefined
     const t2vRefAudios = inputs.referenceAudioUrls as string[] | undefined
-    const seedance2Extras = isSeedance2T2V
-      ? {
-          resolution: (t2vRaw.resolution as string | undefined) ?? MODEL_CATALOG[t2vProvider]?.resolutions?.[0],
-          generateAudio: (t2vRaw.generateAudio as boolean | undefined) ?? true,
-          referenceImageUrls: t2vRefImages?.length ? t2vRefImages : undefined,
-          referenceVideoUrls: t2vRefVideos?.length ? t2vRefVideos : undefined,
-          referenceAudioUrls: t2vRefAudios?.length ? t2vRefAudios : undefined,
-          webSearch: (t2vRaw.webSearch as boolean | undefined) ?? false,
-          nsfwChecker: t2vRaw.nsfwChecker as boolean | undefined,
-        }
-      : {};
     // Pickers show "16:9" / "720p" as defaults but don't persist them to
     // data until the user actively picks — so an untouched Seedance 2 node
     // silently submits without aspectRatio/resolution. Fill the defaults
@@ -2576,45 +2561,46 @@ export function executeNode(
     // Typed `negative` handle wins; config-panel field is the fallback —
     // mirrors backend payload-builder generate-video (commit b75b2127).
     const t2vNegativePrompt = inputs.negativePrompt ?? (t2vData.negativePrompt || undefined);
-    const t2vOptions = isKlingVariant
-      ? {
-          duration: t2vData.duration,
-          // Canonical `mode`/`sound` first, legacy `kling3Mode`/`kling3Sound`
-          // as fallback. Mirrors the i2v synthetic path above so the unified
-          // generate-video widget's legacy field names route correctly when
-          // dispatched into the t2v path.
-          mode: (t2vRaw.mode as string | undefined) ?? (t2vRaw.kling3Mode as string | undefined),
-          sound: (t2vRaw.sound as boolean | undefined) ?? (t2vRaw.kling3Sound as boolean | undefined),
-          negativePrompt: t2vNegativePrompt,
-          cfgScale: t2vRaw.cfgScale as number | undefined,
-          aspectRatio: effectiveT2vAspect,
-          multiShot: t2vRaw.multiShot as boolean | undefined,
-          shots: t2vRaw.shots as
-            | Array<{ prompt: string; duration: number }>
-            | undefined,
-          elements: t2vRaw.elements as
-            | Array<{
-                name: string;
-                description: string;
-                type: "image" | "video";
-                urls: string[];
-              }>
-            | undefined,
-          // Forward mention-resolved reference images. The /v1/text-to-video
-          // route accepts these for any provider that supports them; the route
-          // ignores them for providers (like vanilla Kling) that don't. Mirrors
-          // the backend orchestrator's t2v payload-builder which also always
-          // forwards `referenceImageUrls`.
-          referenceImageUrls: t2vRefImages?.length ? t2vRefImages : undefined,
-        }
-      : {
-          duration: t2vData.duration,
-          aspectRatio: effectiveT2vAspect,
-          negativePrompt: t2vNegativePrompt,
-          seed: t2vRaw.seed as number | undefined,
-          enableTranslation: t2vData.enableTranslation,
-          ...seedance2Extras,
-        };
+    // ONE options object for every provider, mirroring the backend
+    // orchestrator's t2v payload (payload-builder.ts case "generate-video"),
+    // which forwards all of these unconditionally. The /v1/text-to-video route
+    // accepts each field for any provider; provider impls ignore what they
+    // don't support. Per-provider branching here is what silently dropped
+    // `referenceImageUrls` (and `resolution`/`generateAudio`) for
+    // gemini-omni-video and every other non-Kling/non-Seedance-2 model.
+    const t2vOptions = {
+      duration: t2vData.duration,
+      // Canonical `mode`/`sound` first, legacy `kling3Mode`/`kling3Sound`
+      // as fallback. Mirrors the i2v synthetic path above so the unified
+      // generate-video widget's legacy field names route correctly when
+      // dispatched into the t2v path.
+      mode: (t2vRaw.mode as string | undefined) ?? (t2vRaw.kling3Mode as string | undefined),
+      sound: (t2vRaw.sound as boolean | undefined) ?? (t2vRaw.kling3Sound as boolean | undefined),
+      negativePrompt: t2vNegativePrompt,
+      cfgScale: t2vRaw.cfgScale as number | undefined,
+      aspectRatio: effectiveT2vAspect,
+      multiShot: t2vRaw.multiShot as boolean | undefined,
+      shots: t2vRaw.shots as
+        | Array<{ prompt: string; duration: number }>
+        | undefined,
+      elements: t2vRaw.elements as
+        | Array<{
+            name: string;
+            description: string;
+            type: "image" | "video";
+            urls: string[];
+          }>
+        | undefined,
+      seed: t2vRaw.seed as number | undefined,
+      enableTranslation: t2vData.enableTranslation,
+      resolution: (t2vRaw.resolution as string | undefined) ?? (isSeedance2T2V ? MODEL_CATALOG[t2vProvider]?.resolutions?.[0] : undefined),
+      generateAudio: (t2vRaw.generateAudio as boolean | undefined) ?? (isSeedance2T2V ? true : undefined),
+      referenceImageUrls: t2vRefImages?.length ? t2vRefImages : undefined,
+      referenceVideoUrls: t2vRefVideos?.length ? t2vRefVideos : undefined,
+      referenceAudioUrls: t2vRefAudios?.length ? t2vRefAudios : undefined,
+      webSearch: (t2vRaw.webSearch as boolean | undefined) ?? (isSeedance2T2V ? false : undefined),
+      nsfwChecker: t2vRaw.nsfwChecker as boolean | undefined,
+    };
     setUserPromptTemplate(t2vData.prompt?.trim() || undefined);
     return runTextToVideoGeneration(
       node.id,

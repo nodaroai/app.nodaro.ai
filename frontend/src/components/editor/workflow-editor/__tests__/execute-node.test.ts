@@ -1615,6 +1615,43 @@ describe("text-to-video", () => {
     const passedOptions = callArgs[4] as { negativePrompt?: string }
     expect(passedOptions.negativePrompt).toBe("blurry, low quality")
   })
+
+  // The t2v options used to branch per provider (Kling variants + Seedance 2
+  // only), silently DROPPING referenceImageUrls / resolution / generateAudio
+  // for everyone else — a gemini-omni-video node with a wired reference image
+  // generated pure t2v without it. The options now mirror the backend
+  // payload-builder: one field set forwarded for ALL providers (the route +
+  // provider impls ignore what a model doesn't support).
+  it("forwards upstream referenceImageUrls for gemini-omni-video (non-Kling/non-Seedance provider)", async () => {
+    mockResolveNodeInputs.mockReturnValue({
+      prompt: "a sunset",
+      referenceImageUrls: ["http://cdn.example/ref-1.png"],
+    })
+    mockRunTextToVideoGeneration.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("text-to-video", { provider: "gemini-omni-video", resolution: "1080p" }),
+      makeCtx(),
+    )
+    const callArgs = mockRunTextToVideoGeneration.mock.calls[0]
+    expect(callArgs[3]).toBe("gemini-omni-video")
+    const passedOptions = callArgs[4] as { referenceImageUrls?: string[]; resolution?: string }
+    expect(passedOptions.referenceImageUrls).toEqual(["http://cdn.example/ref-1.png"])
+    expect(passedOptions.resolution).toBe("1080p")
+  })
+
+  it("forwards upstream referenceImageUrls for VEO providers", async () => {
+    mockResolveNodeInputs.mockReturnValue({
+      prompt: "a sunset",
+      referenceImageUrls: ["http://cdn.example/ref-veo.png"],
+    })
+    mockRunTextToVideoGeneration.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("text-to-video", { provider: "veo3.1" }),
+      makeCtx(),
+    )
+    const passedOptions = mockRunTextToVideoGeneration.mock.calls[0][4] as { referenceImageUrls?: string[] }
+    expect(passedOptions.referenceImageUrls).toEqual(["http://cdn.example/ref-veo.png"])
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -1658,6 +1695,42 @@ describe("generate-video — negative handle parity", () => {
     // runVideoGeneration positional arg: negativePrompt is index 15.
     const passedNegative = callArgs[15] as string | undefined
     expect(passedNegative).toBe("wired text")
+  })
+})
+
+describe("generate-video — reference images + mode-alias dispatch", () => {
+  it("gemini-omni-video with ONLY a reference image stays t2v and forwards the ref", async () => {
+    // The user-reported bug: a wired reference image (no start frame) routed
+    // to t2v and the ref was dropped — Gemini generated without the image.
+    // Refs don't flip the mode (matches backend payload-builder), but they
+    // MUST ride along in the t2v request.
+    mockResolveNodeInputs.mockReturnValue({
+      prompt: "animate this character",
+      referenceImageUrls: ["http://cdn.example/character.png"],
+    })
+    mockRunTextToVideoGeneration.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("generate-video", { provider: "gemini-omni-video" }),
+      makeCtx(),
+    )
+    expect(mockRunVideoGeneration).not.toHaveBeenCalled()
+    const callArgs = mockRunTextToVideoGeneration.mock.calls[0]
+    expect(callArgs[3]).toBe("gemini-omni-video")
+    const passedOptions = callArgs[4] as { referenceImageUrls?: string[] }
+    expect(passedOptions.referenceImageUrls).toEqual(["http://cdn.example/character.png"])
+  })
+
+  it("happyhorse-i2v without an image remaps to its t2v twin instead of crashing the route", async () => {
+    // happyhorse-i2v/happyhorse are mode twins of one model (VIDEO_MODE_ALIASES).
+    // Pre-alias, the image-less run sent 'happyhorse-i2v' to /v1/text-to-video
+    // where the Zod enum rejected it — the kling-3-omni bug class.
+    mockResolveNodeInputs.mockReturnValue({ prompt: "a galloping horse" })
+    mockRunTextToVideoGeneration.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("generate-video", { provider: "happyhorse-i2v" }),
+      makeCtx(),
+    )
+    expect(mockRunTextToVideoGeneration.mock.calls[0][3]).toBe("happyhorse")
   })
 })
 

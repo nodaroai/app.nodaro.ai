@@ -3,6 +3,7 @@
  * Single source of truth for model capability sets and variable pricing rules.
  */
 import { z } from "zod"
+import { MODEL_CATALOG } from "./model-catalog.js"
 
 /** Base USD cost per 1 Nodaro credit (before markup). Used for cost→credit conversion. */
 export const CREDIT_BASE_USD = 0.02
@@ -408,10 +409,21 @@ export const TEXT_TO_VIDEO_PROVIDERS = [
   "gemini-omni-video",
   "ltx-2.3-pro",
   "ltx-2.3-fast",
-  // Grok Imagine Video 1.5 is i2v-only; present here so the unified node offers
-  // it in every surface. /v1/text-to-video early-returns "requires an input
-  // image" for it (VIDEO_PROVIDERS_REQUIRING_IMAGE) — it never reaches KIE.
+  // ── i2v-only providers (image required) ──────────────────────────────────
+  // These have NO text-to-video mode, but the unified Generate Video node can
+  // dispatch ANY of its providers down the t2v path when no image is wired.
+  // They must pass this enum so /v1/text-to-video can return the clean
+  // "requires an input image" 400 (VIDEO_PROVIDERS_REQUIRING_IMAGE — derived
+  // from MODEL_CATALOG modes) instead of an opaque Zod validation error.
+  // They never reach a provider. Guarded by the dispatch-totality test in
+  // __tests__/video-mode-aliases.test.ts.
   "grok-imagine-video-1.5",
+  "kling-3-omni",
+  "kling-master",
+  "hailuo-2.3",
+  "hailuo-2.3-pro",
+  "bytedance-pro-fast",
+  "happyhorse-ref2v",
   // Replicate disabled
   // "runway",
   // "pika",
@@ -459,6 +471,10 @@ export const VIDEO_MODE_ALIASES: readonly VideoModeAlias[] = [
   { base: "grok-i2v", i2v: "grok-i2v", t2v: "grok" },
   { base: "wan-i2v", i2v: "wan-i2v", t2v: "wan" },
   { base: "wan-2.7-i2v", i2v: "wan-2.7-i2v", t2v: "wan-2.7-t2v" },
+  // HappyHorse: happyhorse/image-to-video + happyhorse/text-to-video are mode
+  // twins of one KIE model family — previously TWO unified-picker rows, and the
+  // i2v row crashed the t2v route when run without an image.
+  { base: "happyhorse-i2v", i2v: "happyhorse-i2v", t2v: "happyhorse" },
 ] as const
 
 /**
@@ -888,10 +904,25 @@ export const RESOLUTION_DURATION_PRICING = new Set<string>([
  * they're listed in TEXT_TO_VIDEO_PROVIDERS for unified-node visibility. The
  * `/v1/text-to-video` route early-returns a clean 400 for these before any job
  * is created, instead of letting the prompt-only request fail at the provider.
+ *
+ * DERIVED from MODEL_CATALOG (the capability source of truth): every video
+ * model whose `modes` lacks "t2v" and that isn't remapped to a t2v twin by
+ * VIDEO_MODE_ALIASES. Hand-listing this set is what let kling-3-omni,
+ * kling-master, hailuo-2.3(-pro), bytedance-pro-fast and happyhorse-ref2v
+ * crash the t2v route with a raw Zod enum error — new i2v-only models now get
+ * the friendly gate automatically when their catalog entry is added.
  */
-export const VIDEO_PROVIDERS_REQUIRING_IMAGE = new Set<string>([
-  "grok-imagine-video-1.5",
-])
+export const VIDEO_PROVIDERS_REQUIRING_IMAGE: ReadonlySet<string> = new Set(
+  Object.values(MODEL_CATALOG)
+    .filter((m) =>
+      m.kind === "video" &&
+      m.modes.includes("i2v") &&
+      !m.modes.includes("t2v") &&
+      (VIDEO_GEN_PROVIDERS as readonly string[]).includes(m.id) &&
+      resolveVideoProviderForMode(m.id, "text-to-video") === m.id,
+    )
+    .map((m) => m.id),
+)
 
 /** True when a video provider can only run image-to-video (image required). */
 export function videoProviderRequiresImage(provider: string | undefined): boolean {
