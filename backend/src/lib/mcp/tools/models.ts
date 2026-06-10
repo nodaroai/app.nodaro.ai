@@ -9,6 +9,7 @@ import { CreditsService } from "../../../ee/billing/credits.js"
 import {
   MODEL_CATALOG,
   MODEL_RECOMMENDATIONS,
+  getPromptTips,
   listModels,
   groupByFamily,
   type ModelCatalogEntry,
@@ -43,6 +44,8 @@ function projectModel(m: ModelCatalogEntry): Record<string, unknown> {
   if (m.resolutions?.length) out.resolutions = m.resolutions
   if (m.qualities?.length) out.qualities = m.qualities
   if (m.durations?.length) out.durations = m.durations
+  const promptTips = getPromptTips(m.id)
+  if (promptTips.length) out.promptTips = promptTips
   return out
 }
 

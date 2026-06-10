@@ -80,6 +80,20 @@ describe("list_models tool (always available)", () => {
     expect(text).toContain("\"veo3\"")
     expect(text).not.toContain("\"nano-banana-2\"")
   })
+
+  it("attaches promptTips for providers with a prompting doctrine", async () => {
+    const server = buildServer()
+    registerModels({
+      server,
+      session: newSession({ userId: "u1", scopes: [] as Scope[], clientName: "Claude" }),
+      fastify: Fastify(),
+    })
+    const result = await callTool(server, "list_models", { kind: "video" })
+    expect(result.isError).toBeUndefined()
+    const text = result.content[0]?.text ?? ""
+    expect(text).toContain("\"promptTips\"")
+    expect(text).toContain("WITHOUT timestamps") // distinctive seedance tip
+  })
 })
 
 describe("check_balance tool (cloud + credits:read)", () => {

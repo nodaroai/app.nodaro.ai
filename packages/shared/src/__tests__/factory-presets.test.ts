@@ -17,6 +17,8 @@ import {
   aspectRatioOptionsByKind,
   durationsByMode,
   IMAGE_PROMPT_MAX,
+  MODEL_CATALOG,
+  NATIVE_NEGATIVE_VIDEO_PROVIDERS,
 } from "../index.js"
 
 describe("FACTORY_PRESETS", () => {
@@ -56,6 +58,48 @@ describe("FACTORY_PRESETS", () => {
       if (p.data.provider !== undefined) {
         expect(IMAGE_GEN_PROVIDERS).toContain(p.data.provider as never)
       }
+    }
+  })
+})
+
+describe("Seedance Director factory presets", () => {
+  const pack = getFactoryPresets("generate-video").filter(
+    (p) => p.group === "Seedance Director",
+  )
+
+  it("ships at least 10 presets in the Seedance Director group", () => {
+    expect(pack.length).toBeGreaterThanOrEqual(10)
+  })
+
+  it("every pack preset targets a Seedance 2 provider with valid catalog settings", () => {
+    for (const p of pack) {
+      const provider = p.data.provider as string
+      expect(["seedance-2", "seedance-2-fast"]).toContain(provider)
+      const entry = MODEL_CATALOG[provider]!
+      expect(entry.durations).toContain(p.data.duration as number)
+      expect(entry.aspectRatios).toContain(p.data.aspectRatio as string)
+      expect(p.data.generateAudio).toBe(true)
+    }
+  })
+
+  it("never sets negativePrompt (Seedance has no native negative param — constraints live in the prompt)", () => {
+    for (const p of pack) expect(p.data.negativePrompt).toBeUndefined()
+  })
+
+  it("never uses timestamped shots (officially unstable) and always carries the constraint tail", () => {
+    for (const p of pack) {
+      const prompt = p.data.prompt as string
+      expect(prompt).not.toMatch(/\(\s*\d+\s*[-–]\s*\d+\s*s\s*\)/i) // "(0-3s)" style
+      expect(prompt.length).toBeLessThanOrEqual(2000)
+      expect(prompt).toContain("subtitle-free")
+    }
+  })
+
+  it("uses curly braces ONLY for {slot || default} placeholders (no {} dialogue — Nodaro variable syntax)", () => {
+    for (const p of pack) {
+      const stripped = (p.data.prompt as string).replace(/\{[^{}]*\|\|[^{}]*\}/g, "")
+      expect(stripped).not.toContain("{")
+      expect(stripped).not.toContain("}")
     }
   })
 })
@@ -326,10 +370,22 @@ describe("generate-video factory preset data validity", () => {
     }
   })
 
-  it("every generate-video preset has a non-empty negativePrompt", () => {
+  it("every generate-video preset has a non-empty negativePrompt, or in-prompt constraints when the provider has no native negative support", () => {
     for (const p of presets) {
-      const neg = (p.data.negativePrompt as string | undefined) ?? ""
-      expect(neg.trim().length, `${p.id}: missing negativePrompt`).toBeGreaterThan(0)
+      const neg = ((p.data.negativePrompt as string | undefined) ?? "").trim()
+      if (neg.length > 0) continue
+      // Providers without a native negative_prompt param (e.g. seedance-*) get
+      // "Avoid: …" appended to the prompt by applyVideoNegativePrompt — the
+      // official Seedance doctrine puts constraints in the prompt text instead.
+      const provider = p.data.provider as string
+      expect(
+        NATIVE_NEGATIVE_VIDEO_PROVIDERS.has(provider),
+        `${p.id}: missing negativePrompt on a native-negative provider`,
+      ).toBe(false)
+      expect(
+        (p.data.prompt as string) ?? "",
+        `${p.id}: omits negativePrompt but carries no in-prompt constraint tail`,
+      ).toContain("subtitle-free")
     }
   })
 

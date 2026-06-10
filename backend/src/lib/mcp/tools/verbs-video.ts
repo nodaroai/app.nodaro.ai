@@ -61,7 +61,14 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         "array tells you which is best for cinematic / cheap-batch / audio-" +
         "synced. Pricing is duration-tiered for most providers — check the " +
         "`pricing` array of the chosen model so cost matches what the user " +
-        "expects.",
+        "expects.\n\n" +
+        "**Seedance prompting (the default model family)**: storyboard " +
+        "multi-moment videos as `Shot 1: … Shot 2: …` WITHOUT timestamps " +
+        "(timed shots like '(0-3s)' destabilize generation). One camera move " +
+        "per shot. Cue native audio inline: （background music）, <sound " +
+        "effects>, quoted dialogue. End with: 'HD, rich details, stable " +
+        "picture, keep it subtitle-free, do not generate a watermark.' " +
+        "Full doctrine: `get_node_skill(\"generate-video\")`.",
       inputSchema: {
         prompt: z.string().min(1).max(8000),
         // Schemas are permissive — handler normalizes to closest valid value.
@@ -189,7 +196,16 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         "via `reference_image_urls`, up to 3 reference videos via `reference_video_urls` " +
         "(style/motion transfer), and/or up to 3 audio clips via `reference_audio_urls` " +
         "(soundtrack-driven motion). `image_url` / `end_frame_url` are ignored in " +
-        "this mode. Reference videos/audio cannot be combined with `end_frame_url`.\n\n" +
+        "this mode. Reference videos/audio cannot be combined with `end_frame_url`.\n" +
+        "  • Reference order = priority: put the identity-critical image FIRST " +
+        "and refer by ordinal in the prompt (@Image 1, Video 2). Identity = ONE " +
+        "headshot + ONE full-body image — multi-view character sheets cause ID " +
+        "drift and twin duplicates. 4-5 assets total beats maxing the 9/3/3 caps.\n" +
+        "  • Edit/extend phrasing: name clips directly ('Extend Video 1 backward', " +
+        "'Remove X from Video 1') — saying 'reference Video 1' flips the model " +
+        "into reference mode and breaks the edit. Track completion: 'Video 1 + " +
+        "[transition] + followed by Video 2' (≤3 clips, ≤15s total). Full " +
+        "doctrine: `get_node_skill(\"image-to-video\")`.\n\n" +
         "**Perfect loop** (the canonical recipe — three calls):\n" +
         "  1. `animate_image` with `model: \"veo3.1\"`, `sound: false`, and the " +
         "**same image** as both `image_url` (start) and `end_frame_url` (or the " +
