@@ -1430,6 +1430,19 @@ export type Database = {
         Args: { p_actual_credits?: number; p_usage_log_id: string }
         Returns: undefined
       }
+      apply_workflow_delta: {
+        Args: {
+          p_workflow_id: string
+          p_base_version: number
+          p_upsert_nodes?: Json
+          p_delete_node_ids?: string[]
+          p_upsert_edges?: Json
+          p_delete_edge_ids?: string[]
+          p_set?: Json
+          p_user_id?: string
+        }
+        Returns: { ok: boolean; version: number | null; updated_at: string | null }[]
+      }
       decrement_storage: {
         Args: { p_bytes: number; p_user_id: string }
         Returns: undefined

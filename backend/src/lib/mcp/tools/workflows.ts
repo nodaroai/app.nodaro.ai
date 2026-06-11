@@ -3,6 +3,7 @@ import { z } from "zod"
 import type { FastifyInstance } from "fastify"
 import {
   stripExportContent,
+  stripTransientRuntimeData,
   type GenericNode,
   type WorkflowExport,
 } from "@nodaro/shared"
@@ -318,6 +319,14 @@ export function registerWorkflows({
             .describe(
               "Optimistic concurrency — the updated_at from get_workflow_json. If provided and the DB updated_at doesn't match, returns a conflict error.",
             ),
+          expected_version: z
+            .number()
+            .int()
+            .min(1)
+            .optional()
+            .describe(
+              "Integer CAS — the version from get_workflow_json. Preferred over expected_updated_at (monotonic counter bumped by the DB on every content change).",
+            ),
         },
         annotations: { readOnlyHint: false, destructiveHint: false },
       },
@@ -328,7 +337,9 @@ export function registerWorkflows({
           args.edges as Array<{ id: string; source: string; target: string; sourceHandle: string | null; targetHandle: string | null }>,
         )
         const updates: Record<string, unknown> = {
-          nodes: args.nodes,
+          // Server-side strip of transient run-state (status/jobId/progress) —
+          // agent-authored graphs must never seed phantom "running" state.
+          nodes: stripTransientRuntimeData(args.nodes as Array<{ data?: Record<string, unknown> }>),
           edges: migratedEdges,
           updated_at: new Date().toISOString(),
         }
@@ -348,12 +359,15 @@ export function registerWorkflows({
         if (args.expected_updated_at !== undefined) {
           query = query.eq("updated_at", args.expected_updated_at)
         }
-        const { data, error } = await query.select("id, name, updated_at").maybeSingle()
+        if (args.expected_version !== undefined) {
+          query = query.eq("version", args.expected_version)
+        }
+        const { data, error } = await query.select("id, name, updated_at, version").maybeSingle()
         if (error) return err(`Error: ${error.message}`)
         if (!data) {
           // 0 rows matched. Distinguish a stale-version conflict from a genuine
           // not-found (only does the extra read on this rare path).
-          if (args.expected_updated_at !== undefined) {
+          if (args.expected_updated_at !== undefined || args.expected_version !== undefined) {
             const { data: stillExists } = await supabase
               .from("workflows")
               .select("id")
@@ -372,7 +386,7 @@ export function registerWorkflows({
         const updated = data as Record<string, unknown>
         return ok(
           `Updated workflow ${args.workflow_id} (${args.nodes.length} nodes).`,
-          { id: updated.id, name: updated.name, updated_at: updated.updated_at },
+          { id: updated.id, name: updated.name, updated_at: updated.updated_at, version: updated.version },
         )
       },
     )
