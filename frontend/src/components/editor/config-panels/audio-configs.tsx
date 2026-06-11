@@ -774,11 +774,12 @@ export function SunoReplaceSectionConfig({ data, onUpdate, sources, fieldMapping
   )
 }
 
-export function SunoStyleBoostConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<SunoStyleBoostData>) {
+export function SunoStyleBoostConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<SunoStyleBoostData>) {
+  const styleBoostSnippets = useSnippetPool("audio", "prompt")
   return (
     <div className="flex flex-col gap-3">
       <p className="text-xs text-muted-foreground">Enhance and improve style text using Suno AI.</p>
-      <MappableField field="content" label="Content" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="content" label="Content" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<SnippetMenuButton pool={styleBoostSnippets} value={data.content || ""} onInsert={(v) => onUpdate({ content: v })} target="prompt" media="audio" />}>
         <Textarea rows={4} value={data.content ?? ""} onChange={(e) => { if (e.target.value.length <= 3000) onUpdate({ content: e.target.value }) }} placeholder="Enter style text to enhance..." maxLength={3000} />
         <p className="text-xs text-muted-foreground mt-1">{(data.content ?? "").length}/3000</p>
       </MappableField>

@@ -87,7 +87,7 @@ export const NODE_PROMPT_FIELDS: Readonly<Record<string, PromptFieldSpec>> = {
   "3d-title": { prompt: "titlePrompt", promptLabel: "Title", media: "text" },
   // ── Script / alignment (their primary text field) ──
   "generate-script": { prompt: "styleGuide", promptLabel: "Style guide", media: "text" },
-  "forced-alignment": { prompt: "text", promptLabel: "Text", media: "audio" },
+  "forced-alignment": { prompt: "transcript", promptLabel: "Transcript", media: "audio" },
 }
 
 /** The prompt-field spec for a node type, or undefined if it has none. */
