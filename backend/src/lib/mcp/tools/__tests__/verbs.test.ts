@@ -4,7 +4,7 @@ import { registerVerbs } from "../verbs.js"
 import { newSession } from "../../session.js"
 import { _resetRegistry } from "../../tasks.js"
 import type { Scope } from "../../../scopes.js"
-import { buildServer, callTool, listTools } from "./_helpers.js"
+import { buildServer, callTool, listTools, executeSession, stubRoute } from "./_helpers.js"
 
 beforeEach(() => {
   _resetRegistry()
@@ -39,43 +39,12 @@ vi.mock("../../supabase.js", () => ({
 }))
 
 
-function executeSession() {
-  return newSession({
-    userId: "u1",
-    scopes: ["workflows:execute"] as Scope[],
-    clientName: "Claude",
-  })
-}
-
 function readOnlySession() {
   return newSession({
     userId: "u1",
     scopes: ["jobs:read"] as Scope[],
     clientName: "Claude",
   })
-}
-
-interface StubResult {
-  fastify: FastifyInstance
-  received: { url?: string; body?: Record<string, unknown> }
-}
-
-function stubRoute(method: "POST" | "GET", url: string, response: object): StubResult {
-  const fastify = Fastify()
-  const received: { url?: string; body?: Record<string, unknown> } = {}
-  if (method === "POST") {
-    fastify.post(url, async (req) => {
-      received.url = req.url
-      received.body = req.body as Record<string, unknown>
-      return response
-    })
-  } else {
-    fastify.get(url, async (req) => {
-      received.url = req.url
-      return response
-    })
-  }
-  return { fastify, received }
 }
 
 describe("generate_image verb", () => {
