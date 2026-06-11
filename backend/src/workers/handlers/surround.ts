@@ -1,5 +1,5 @@
 import type { Job } from "bullmq"
-import type { SurroundDirection } from "@nodaro/shared"
+import { DEFAULT_CARRIED_FRACTION, type SurroundDirection } from "@nodaro/shared"
 import { generateImage } from "../../providers/index.js"
 import {
   commitJobCredits,
@@ -55,7 +55,7 @@ const handleGenerateSurroundContinuation: HandlerFn = async function handleGener
     attachName,
   } = data
   const resolvedProvider = provider ?? "nano-banana"
-  const carriedFraction = data.carriedFraction ?? 0.5
+  const carriedFraction = data.carriedFraction ?? DEFAULT_CARRIED_FRACTION
 
   console.log(
     `[worker] generate-surround-continuation ${ctx.jobId} (dir: ${direction}, provider: ${resolvedProvider})`,
