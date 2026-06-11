@@ -6226,7 +6226,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "motion-graphics",
     label: "Motion Graphics",
     category: "ai",
-    creditCost: 2,
+    creditCost: 5,
     inputs: ["in"],
     // `lottie` is emitted only by the lottie engine (the authored Lottie JSON's
     // R2 URL); the node-component renders that source handle when engine="lottie".
@@ -6234,7 +6234,11 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     defaultData: {
       label: "Motion Graphics",
       motionPrompt: "",
-      engine: "elements",
+      // Default flipped to "lottie" post-staging-bake (design decision #1).
+      // Saved nodes without the field still resolve to "elements" (back-compat),
+      // and the API route's own default stays "elements" so integrations that
+      // omit `engine` keep their behavior and pricing.
+      engine: "lottie",
       aspectRatio: "16:9",
       backgroundColor: "#00000000",
       fps: 30,
