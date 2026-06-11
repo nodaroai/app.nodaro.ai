@@ -4,6 +4,7 @@ import {
   filterSnippets,
   computeSnippetInsertPrefix,
   appendSnippetText,
+  groupSnippetsByCategory,
   type SnippetPoolItem,
 } from "../snippet-pool"
 import type { PromptSnippet } from "../api"
@@ -73,5 +74,29 @@ describe("insert separators", () => {
     expect(appendSnippetText("a knight", "golden hour")).toBe("a knight, golden hour")
     expect(appendSnippetText("a knight.", "golden hour")).toBe("a knight. golden hour")
     expect(appendSnippetText("a knight,  ", "golden hour")).toBe("a knight, golden hour")
+  })
+})
+
+describe("groupSnippetsByCategory", () => {
+  const row = (id: string, category: string) => ({ id, category })
+  it("folds consecutive same-category rows into one group each", () => {
+    const groups = groupSnippetsByCategory([
+      row("a", "Lighting"),
+      row("b", "Lighting"),
+      row("c", "Mood"),
+    ])
+    expect(groups).toEqual([
+      { category: "Lighting", entries: [row("a", "Lighting"), row("b", "Lighting")] },
+      { category: "Mood", entries: [row("c", "Mood")] },
+    ])
+  })
+  it("preserves input order — a repeated category opens a new group, not a merge", () => {
+    const groups = groupSnippetsByCategory([
+      row("a", "Lighting"),
+      row("b", "Mood"),
+      row("c", "Lighting"),
+    ])
+    expect(groups.map((g) => g.category)).toEqual(["Lighting", "Mood", "Lighting"])
+    expect(groups[2].entries).toEqual([row("c", "Lighting")])
   })
 })

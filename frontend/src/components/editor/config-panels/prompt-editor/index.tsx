@@ -7,16 +7,16 @@ import { Paragraph } from "@tiptap/extension-paragraph"
 import { Text } from "@tiptap/extension-text"
 import { HardBreak } from "@tiptap/extension-hard-break"
 import { Placeholder, UndoRedo } from "@tiptap/extensions"
-import { createRoot, type Root } from "react-dom/client"
+import { createFloatingSuggestionRenderer } from "./floating-suggestion-renderer"
 import { ImageRefExtension } from "./image-ref-extension"
 import { CharacterRefExtension, parseCharacterRefMatch } from "./character-ref-extension"
 import { LocationRefExtension, parseLocationRefMatch } from "./location-ref-extension"
-import { SuggestionList, type SuggestionListHandle, type SuggestionCommandPayload } from "./suggestion-list"
+import { SuggestionList, type SuggestionCommandPayload } from "./suggestion-list"
 import { VariableSuggestionExtension } from "./variable-suggestion-extension"
-import { VariableSuggestionList, type VariableSuggestionListHandle } from "./variable-suggestion-list"
+import { VariableSuggestionList } from "./variable-suggestion-list"
 import { VariableHighlightExtension, VARIABLE_HIGHLIGHT_META } from "./variable-highlight-extension"
 import { SnippetSuggestionExtension } from "./snippet-suggestion-extension"
-import { SnippetSuggestionList, type SnippetSuggestionListHandle } from "./snippet-suggestion-list"
+import { SnippetSuggestionList } from "./snippet-suggestion-list"
 import { SnippetPillExtension } from "./snippet-pill-extension"
 import { filterSnippets, computeSnippetInsertPrefix, type SnippetPoolItem } from "@/lib/snippet-pool"
 import { matchSnippetRanges, type MatchableSnippet } from "@/lib/snippet-matching"
@@ -592,98 +592,41 @@ export function PromptEditor({
               ])
               .run()
           },
-          render: () => {
-            let mount: HTMLDivElement | null = null
-            let root: Root | null = null
-            let listRef: SuggestionListHandle | null = null
-
-            const positionMount = (rect: DOMRect | null | undefined) => {
-              if (!mount || !rect) return
-              const MARGIN = 4
-              const vh = window.innerHeight
-              const vw = window.innerWidth
-              // Should track the SuggestionList's `max-h` clamp (300px) so
-              // the flip-above decision uses the actual rendered height.
-              const ESTIMATED_H = 300
-              const ESTIMATED_W = 280
-              const spaceBelow = vh - rect.bottom - MARGIN
-              const placeBelow = spaceBelow >= 160 || spaceBelow >= rect.top
-              const top = placeBelow
-                ? rect.bottom + MARGIN
-                : Math.max(MARGIN, rect.top - ESTIMATED_H - MARGIN)
-              const left = Math.min(
-                Math.max(MARGIN, rect.left),
-                vw - ESTIMATED_W - MARGIN,
-              )
-              mount.style.top = `${top}px`
-              mount.style.left = `${left}px`
+          render: createFloatingSuggestionRenderer<{
+            items: readonly RefImageItem[]
+            query: string
+            // TipTap's mention extension passes whatever object the list
+            // returns straight through to the configured `command`. The
+            // 3rd-level drill (mode picker) attaches an optional `usageMode`
+            // sidecar before firing — see `SuggestionCommandPayload`.
+            command: (item: SuggestionCommandPayload) => void
+            clientRect?: (() => DOMRect | null) | null
+            editor: ReturnType<typeof useEditor>
+            range: { from: number; to: number }
+          }>(280, (root, props, setKeyHandle) => {
+            // Clear the typed filter text between the `@` and the cursor.
+            // Used when the list pushes/pops the drill so the new view starts
+            // with an empty filter (mirrors `TagTextarea`'s drill UX).
+            const clearFilter = () => {
+              const ed = props.editor
+              if (!ed) return
+              // Keep the `@` (range.from points at it) — delete from
+              // range.from + 1 to range.to.
+              const start = props.range.from + 1
+              const end = props.range.to
+              if (end <= start) return
+              ed.chain().focus().deleteRange({ from: start, to: end }).run()
             }
-
-            const renderList = (props: {
-              items: readonly RefImageItem[]
-              query: string
-              // TipTap's mention extension passes whatever object the list
-              // returns straight through to the configured `command`. The
-              // 3rd-level drill (mode picker) attaches an optional `usageMode`
-              // sidecar before firing — see `SuggestionCommandPayload`.
-              command: (item: SuggestionCommandPayload) => void
-              clientRect?: (() => DOMRect | null) | null
-              editor: ReturnType<typeof useEditor>
-              range: { from: number; to: number }
-            }) => {
-              if (!root) return
-              positionMount(props.clientRect?.() ?? null)
-              // Clear the typed filter text between the `@` and the cursor.
-              // Used when the list pushes/pops the drill so the new view starts
-              // with an empty filter (mirrors `TagTextarea`'s drill UX).
-              const clearFilter = () => {
-                const ed = props.editor
-                if (!ed) return
-                // Keep the `@` (range.from points at it) — delete from
-                // range.from + 1 to range.to.
-                const start = props.range.from + 1
-                const end = props.range.to
-                if (end <= start) return
-                ed.chain().focus().deleteRange({ from: start, to: end }).run()
-              }
-              root.render(
-                <SuggestionList
-                  ref={(r) => { listRef = r }}
-                  items={props.items}
-                  query={props.query}
-                  command={props.command}
-                  onDrillChange={clearFilter}
-                />,
-              )
-            }
-
-            return {
-              onStart: (props) => {
-                mount = document.createElement("div")
-                mount.style.position = "fixed"
-                mount.style.zIndex = "9999"
-                document.body.appendChild(mount)
-                root = createRoot(mount)
-                renderList(props as never)
-              },
-              onUpdate: (props) => renderList(props as never),
-              onKeyDown: (props) => listRef?.onKeyDown(props.event) ?? false,
-              onExit: () => {
-                if (root) {
-                  // Defer to avoid React's "unmount during render" warning.
-                  const r = root
-                  root = null
-                  setTimeout(() => r.unmount(), 0)
-                }
-                if (mount) {
-                  const m = mount
-                  mount = null
-                  setTimeout(() => m.remove(), 0)
-                }
-                listRef = null
-              },
-            }
-          },
+            root.render(
+              <SuggestionList
+                ref={(r) => setKeyHandle(r)}
+                items={props.items}
+                query={props.query}
+                command={props.command}
+                onDrillChange={clearFilter}
+              />,
+            )
+          }) as never,
         },
       }),
       VariableSuggestionExtension.configure({
@@ -706,75 +649,19 @@ export function PromptEditor({
               .insertContentAt(range, `{${props.label}} `)
               .run()
           },
-          render: () => {
-            let mount: HTMLDivElement | null = null
-            let root: Root | null = null
-            let listRef: VariableSuggestionListHandle | null = null
-
-            const positionMount = (rect: DOMRect | null | undefined) => {
-              if (!mount || !rect) return
-              const MARGIN = 4
-              const vh = window.innerHeight
-              const vw = window.innerWidth
-              // Should track the SuggestionList's `max-h` clamp (300px) so
-              // the flip-above decision uses the actual rendered height.
-              const ESTIMATED_H = 300
-              const ESTIMATED_W = 280
-              const spaceBelow = vh - rect.bottom - MARGIN
-              const placeBelow = spaceBelow >= 160 || spaceBelow >= rect.top
-              const top = placeBelow
-                ? rect.bottom + MARGIN
-                : Math.max(MARGIN, rect.top - ESTIMATED_H - MARGIN)
-              const left = Math.min(
-                Math.max(MARGIN, rect.left),
-                vw - ESTIMATED_W - MARGIN,
-              )
-              mount.style.top = `${top}px`
-              mount.style.left = `${left}px`
-            }
-
-            const renderList = (props: {
-              items: readonly NodeRefItem[]
-              command: (item: NodeRefItem) => void
-              clientRect?: (() => DOMRect | null) | null
-            }) => {
-              if (!root) return
-              positionMount(props.clientRect?.() ?? null)
-              root.render(
-                <VariableSuggestionList
-                  ref={(r) => { listRef = r }}
-                  items={props.items}
-                  command={props.command}
-                />,
-              )
-            }
-
-            return {
-              onStart: (props: never) => {
-                mount = document.createElement("div")
-                mount.style.position = "fixed"
-                mount.style.zIndex = "9999"
-                document.body.appendChild(mount)
-                root = createRoot(mount)
-                renderList(props as never)
-              },
-              onUpdate: (props: never) => renderList(props as never),
-              onKeyDown: (props: { event: KeyboardEvent }) => listRef?.onKeyDown(props.event) ?? false,
-              onExit: () => {
-                if (root) {
-                  const r = root
-                  root = null
-                  setTimeout(() => r.unmount(), 0)
-                }
-                if (mount) {
-                  const m = mount
-                  mount = null
-                  setTimeout(() => m.remove(), 0)
-                }
-                listRef = null
-              },
-            }
-          },
+          render: createFloatingSuggestionRenderer<{
+            items: readonly NodeRefItem[]
+            command: (item: NodeRefItem) => void
+            clientRect?: (() => DOMRect | null) | null
+          }>(280, (root, props, setKeyHandle) => {
+            root.render(
+              <VariableSuggestionList
+                ref={(r) => setKeyHandle(r)}
+                items={props.items}
+                command={props.command}
+              />,
+            )
+          }) as never,
         },
       }),
       SnippetSuggestionExtension.configure({
@@ -803,70 +690,19 @@ export function PromptEditor({
               ])
               .run()
           },
-          render: () => {
-            let mount: HTMLDivElement | null = null
-            let root: Root | null = null
-            let listRef: SnippetSuggestionListHandle | null = null
-
-            const positionMount = (rect: DOMRect | null | undefined) => {
-              if (!mount || !rect) return
-              const MARGIN = 4
-              const vh = window.innerHeight
-              const vw = window.innerWidth
-              const ESTIMATED_H = 300
-              const ESTIMATED_W = 340
-              const spaceBelow = vh - rect.bottom - MARGIN
-              const placeBelow = spaceBelow >= 160 || spaceBelow >= rect.top
-              const top = placeBelow
-                ? rect.bottom + MARGIN
-                : Math.max(MARGIN, rect.top - ESTIMATED_H - MARGIN)
-              const left = Math.min(Math.max(MARGIN, rect.left), vw - ESTIMATED_W - MARGIN)
-              mount.style.top = `${top}px`
-              mount.style.left = `${left}px`
-            }
-
-            const renderList = (props: {
-              items: readonly SnippetPoolItem[]
-              command: (item: SnippetPoolItem) => void
-              clientRect?: (() => DOMRect | null) | null
-            }) => {
-              if (!root) return
-              positionMount(props.clientRect?.() ?? null)
-              root.render(
-                <SnippetSuggestionList
-                  ref={(r) => { listRef = r }}
-                  items={props.items}
-                  command={props.command}
-                />,
-              )
-            }
-
-            return {
-              onStart: (props: never) => {
-                mount = document.createElement("div")
-                mount.style.position = "fixed"
-                mount.style.zIndex = "9999"
-                document.body.appendChild(mount)
-                root = createRoot(mount)
-                renderList(props as never)
-              },
-              onUpdate: (props: never) => renderList(props as never),
-              onKeyDown: (props: { event: KeyboardEvent }) => listRef?.onKeyDown(props.event) ?? false,
-              onExit: () => {
-                if (root) {
-                  const r = root
-                  root = null
-                  setTimeout(() => r.unmount(), 0)
-                }
-                if (mount) {
-                  const m = mount
-                  mount = null
-                  setTimeout(() => m.remove(), 0)
-                }
-                listRef = null
-              },
-            }
-          },
+          render: createFloatingSuggestionRenderer<{
+            items: readonly SnippetPoolItem[]
+            command: (item: SnippetPoolItem) => void
+            clientRect?: (() => DOMRect | null) | null
+          }>(340, (root, props, setKeyHandle) => {
+            root.render(
+              <SnippetSuggestionList
+                ref={(r) => setKeyHandle(r)}
+                items={props.items}
+                command={props.command}
+              />,
+            )
+          }) as never,
         },
       }),
       VariableHighlightExtension.configure({
