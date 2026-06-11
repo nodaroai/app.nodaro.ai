@@ -53,6 +53,8 @@ import type {
 } from "@/types/nodes"
 import { MappableField } from "./mappable-field"
 import { PromptHelperButton } from "./prompt-helper-button"
+import { SnippetMenuButton } from "./snippet-menu-button"
+import { useSnippetPool } from "@/hooks/queries/use-prompt-snippets-queries"
 import { ModelSelectOption } from "./model-select-option"
 import { ModelDescriptionHint } from "./model-description-hint"
 import { ProviderAudioTagWarning } from "./provider-audio-tag-warning"
@@ -187,6 +189,7 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
 }
 
 export function TextToAudioConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<TextToAudioData> & { nodeId?: string }) {
+  const promptSnippets = useSnippetPool("audio", "prompt")
   const isSfx = data.provider === "elevenlabs-sfx"
   const maxPromptLen = isSfx ? 450 : 2000
   const minDuration = isSfx ? 0.5 : 1
@@ -202,7 +205,10 @@ export function TextToAudioConfig({ data, onUpdate, sources, fieldMappings, onMa
         nodes={nodes}
         edges={edges ?? EMPTY_EDGES}
       />
-      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="text-to-audio" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />}>
+      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+        <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => { if (v.length <= maxPromptLen) onUpdate({ prompt: v }) }} target="prompt" media="audio" />
+        <PromptHelperButton nodeType="text-to-audio" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />
+      </span>}>
         <TagTextarea
           rows={3}
           value={data.prompt}
@@ -214,6 +220,7 @@ export function TextToAudioConfig({ data, onUpdate, sources, fieldMappings, onMa
           nodeRefs={nodeRefs}
           displayMode={variableDisplayMode}
           refMap={refMap}
+          snippets={promptSnippets}
         />
         {isSfx && (
           <p className="text-xs text-muted-foreground mt-1">{data.prompt.length}/{maxPromptLen}</p>
@@ -767,11 +774,12 @@ export function SunoReplaceSectionConfig({ data, onUpdate, sources, fieldMapping
   )
 }
 
-export function SunoStyleBoostConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<SunoStyleBoostData>) {
+export function SunoStyleBoostConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<SunoStyleBoostData>) {
+  const styleBoostSnippets = useSnippetPool("audio", "prompt")
   return (
     <div className="flex flex-col gap-3">
       <p className="text-xs text-muted-foreground">Enhance and improve style text using Suno AI.</p>
-      <MappableField field="content" label="Content" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="content" label="Content" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<SnippetMenuButton pool={styleBoostSnippets} value={data.content || ""} onInsert={(v) => { if (v.length <= 3000) onUpdate({ content: v }) }} target="prompt" media="audio" />}>
         <Textarea rows={4} value={data.content ?? ""} onChange={(e) => { if (e.target.value.length <= 3000) onUpdate({ content: e.target.value }) }} placeholder="Enter style text to enhance..." maxLength={3000} />
         <p className="text-xs text-muted-foreground mt-1">{(data.content ?? "").length}/3000</p>
       </MappableField>
@@ -949,6 +957,7 @@ export function TranscribeConfig({ data, onUpdate, sources, fieldMappings, onMap
 }
 
 export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, nodeId }: ConfigProps<LipSyncData> & { nodeId?: string }) {
+  const promptSnippets = useSnippetPool("audio", "prompt")
   const provider = data.provider || "kling-avatar"
   const isKie = !REPLICATE_LIP_SYNC_PROVIDERS.has(provider as never)
   // Seedance 2 / 2 Fast support 1080p (cinematic tier); other KIE providers
@@ -1002,7 +1011,9 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
 
       {/* Motion Prompt — Kling Avatar / InfiniTalk providers only */}
       {isKie && (
-        <MappableField field="prompt" label="Motion Prompt (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <MappableField field="prompt" label="Motion Prompt (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={
+          <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="audio" />
+        }>
           <Textarea rows={2} value={data.prompt ?? ""} onChange={(e) => onUpdate({ prompt: e.target.value })} placeholder="Optional: describe head/expression motions..." />
         </MappableField>
       )}
@@ -1490,6 +1501,7 @@ export function DubbingConfig({ data, onUpdate, nodeRefs }: ConfigProps<DubbingD
 }
 
 export function VoiceRemixConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<VoiceRemixData> & { nodeId?: string }) {
+  const promptSnippets = useSnippetPool("audio", "prompt")
   return (
     <div className="flex flex-col gap-3">
       <ConnectedAudioSources consumerNodeId={nodeId} nodes={nodes} edges={edges ?? EMPTY_EDGES} />
@@ -1500,7 +1512,9 @@ export function VoiceRemixConfig({ data, onUpdate, sources, fieldMappings, onMap
         nodes={nodes}
         edges={edges ?? EMPTY_EDGES}
       />
-      <MappableField field="voiceDescription" label="Voice Description" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="voiceDescription" label="Voice Description" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={
+        <SnippetMenuButton pool={promptSnippets} value={data.voiceDescription || ""} onInsert={(v) => onUpdate({ voiceDescription: v })} target="prompt" media="audio" />
+      }>
         <TagTextarea
           rows={3}
           value={data.voiceDescription || ""}
@@ -1510,6 +1524,7 @@ export function VoiceRemixConfig({ data, onUpdate, sources, fieldMappings, onMap
           nodeRefs={nodeRefs}
           displayMode={variableDisplayMode}
           refMap={refMap}
+          snippets={promptSnippets}
         />
       </MappableField>
       <MappableField field="text" label="Preview Text" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -1539,6 +1554,7 @@ const VOICE_DESIGN_MODEL_TO_TTS_PROVIDER: Record<string, string> = {
 
 export function VoiceDesignConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<VoiceDesignData> & { nodeId?: string }) {
   const ttsProvider = VOICE_DESIGN_MODEL_TO_TTS_PROVIDER[data.model || "eleven_ttv_v3"] || "elevenlabs-v3"
+  const promptSnippets = useSnippetPool("audio", "prompt")
   return (
     <div className="flex flex-col gap-3">
       <ConnectedAudioSources consumerNodeId={nodeId} nodes={nodes} edges={edges ?? EMPTY_EDGES} />
@@ -1549,7 +1565,9 @@ export function VoiceDesignConfig({ data, onUpdate, sources, fieldMappings, onMa
         nodes={nodes}
         edges={edges ?? EMPTY_EDGES}
       />
-      <MappableField field="voiceDescription" label="Voice Description" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="voiceDescription" label="Voice Description" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={
+        <SnippetMenuButton pool={promptSnippets} value={data.voiceDescription || ""} onInsert={(v) => onUpdate({ voiceDescription: v })} target="prompt" media="audio" />
+      }>
         <Textarea
           rows={3}
           value={data.voiceDescription || ""}

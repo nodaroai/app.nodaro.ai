@@ -23,6 +23,7 @@ Nodaro is a Fastify backend + Vite/React frontend, source-available under the [S
 - [Community Library](https://nodaroai.github.io/app.nodaro.ai/community-library.md): admin-curated catalog of shared characters/locations/objects (Business + Cloud editions). Admins publish; any user browses + clones into their own library as independent copies. Likeness/consent attestation on publish; report + admin takedown. REST + SDK (`client.community`); publishing is admin/editor-only.
 - [OAuth Flow](https://nodaroai.github.io/app.nodaro.ai/oauth-flow.md): RFC 6749 authorization-code flow for third-party apps acting on behalf of users — app registration, scope vocabulary (11 scopes), code exchange, token revocation (RFC 7009)
 - [Node Reference](https://nodaroai.github.io/app.nodaro.ai/nodes/README.md): every supported node type with parameters, providers, and examples
+- [Prompt Snippets](https://nodaroai.github.io/app.nodaro.ai/prompt-snippets.md): reusable inline prompt fragments inserted via a `/` slash menu or a snippets button — 67-entry image+video factory catalog plus user-created snippets, scoped by node modality + prompt/negative target. Plain-text storage (what you see is what runs); REST exposes read-only `GET /v1/prompt-snippets` + `/factory`.
 
 ## Contributing
 

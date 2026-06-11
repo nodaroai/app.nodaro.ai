@@ -6,6 +6,8 @@ import { Sparkles, Trash2, Info } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { TagTextarea } from "./tag-textarea"
+import { SnippetMenuButton } from "./snippet-menu-button"
+import { useSnippetPool } from "@/hooks/queries/use-prompt-snippets-queries"
 import {
   Select,
   SelectContent,
@@ -257,6 +259,7 @@ export function LottieOverlayConfig({ data, onUpdate, sources, fieldMappings, on
 const LazyThreeDTitlePreview = lazy(() => import("@/components/editor/three-d-title-preview").then(m => ({ default: m.ThreeDTitlePreview })))
 
 export function ThreeDTitleConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<ThreeDTitleData>) {
+  const promptSnippets = useSnippetPool("text", "prompt")
   return (
     <div className="flex flex-col gap-3">
       <LlmModelSelect
@@ -265,7 +268,9 @@ export function ThreeDTitleConfig({ data, onUpdate, sources, fieldMappings, onMa
         onChange={(v) => onUpdate({ llmModel: v })}
       />
 
-      <MappableField field="titlePrompt" label="Title Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="titlePrompt" label="Title Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={
+        <SnippetMenuButton pool={promptSnippets} value={data.titlePrompt || ""} onInsert={(v) => onUpdate({ titlePrompt: v })} target="prompt" media="text" />
+      }>
         <TagTextarea
           placeholder="Describe the 3D title: epic gold ADVENTURE text with particles, cinematic camera..."
           value={data.titlePrompt ?? ""}
@@ -275,6 +280,7 @@ export function ThreeDTitleConfig({ data, onUpdate, sources, fieldMappings, onMa
           nodeRefs={nodeRefs}
           displayMode={variableDisplayMode}
           refMap={refMap}
+          snippets={promptSnippets}
         />
       </MappableField>
 
@@ -360,6 +366,7 @@ const LazyLottieGraphicPlayerPreview = lazy(() => import("@/components/editor/lo
 
 export function MotionGraphicsConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<MotionGraphicsData>) {
   const [showInfo, setShowInfo] = useState(false)
+  const promptSnippets = useSnippetPool("video", "prompt")
 
   return (
     <div className="flex flex-col gap-3">
@@ -380,7 +387,9 @@ export function MotionGraphicsConfig({ data, onUpdate, sources, fieldMappings, o
         onChange={(v) => onUpdate({ llmModel: v })}
       />
 
-      <MappableField field="motionPrompt" label="Motion Graphics Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="motionPrompt" label="Motion Graphics Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={
+        <SnippetMenuButton pool={promptSnippets} value={data.motionPrompt || ""} onInsert={(v) => onUpdate({ motionPrompt: v })} target="prompt" media="video" />
+      }>
         <div className="flex items-center justify-end mb-1.5">
           <button
             type="button"
@@ -428,6 +437,7 @@ export function MotionGraphicsConfig({ data, onUpdate, sources, fieldMappings, o
           nodeRefs={nodeRefs}
           displayMode={variableDisplayMode}
           refMap={refMap}
+          snippets={promptSnippets}
         />
       </MappableField>
 

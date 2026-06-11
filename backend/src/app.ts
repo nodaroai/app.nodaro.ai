@@ -71,6 +71,7 @@ import { generateCreatureMotionRoutes } from "./routes/generate-creature-motion.
 import { locationRoutes } from "./routes/locations.js"
 import { nodePresetRoutes } from "./routes/node-presets.js"
 import { nodePresetGroupRoutes } from "./routes/node-preset-groups.js"
+import { promptSnippetRoutes } from "./routes/prompt-snippets.js"
 import { locationRestoreRoutes } from "./routes/location-restore.js"
 import { locationMainImageApprovalRoutes } from "./routes/location-main-image-approval.js"
 import { locationLlmCaptionRoutes } from "./routes/location-llm-caption.js"
@@ -348,6 +349,7 @@ export async function buildApp() {
   await app.register(locationRoutes)
   await app.register(nodePresetRoutes)
   await app.register(nodePresetGroupRoutes)
+  await app.register(promptSnippetRoutes)
   await app.register(locationRestoreRoutes)
   await app.register(locationMainImageApprovalRoutes)
   await app.register(locationLlmCaptionRoutes)

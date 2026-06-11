@@ -60,6 +60,8 @@ import {
 } from "@/types/nodes"
 import type { ConfigProps } from "./types"
 import { PromptHelperButton } from "./prompt-helper-button"
+import { SnippetMenuButton } from "./snippet-menu-button"
+import { useSnippetPool } from "@/hooks/queries/use-prompt-snippets-queries"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { resolveEdgeValuesForTableColumn } from "@/components/editor/workflow-editor/node-input-resolver"
 import { SUNO_LYRICS_SUGGESTION_ITEMS } from "@/lib/suno-tags"
@@ -88,6 +90,7 @@ const OUTPUT_TARGETS: readonly { value: "text" | "voice" | "lyrics"; label: stri
 export function TextPromptConfig({ data, onUpdate, nodeRefs, refMap, variableDisplayMode }: ConfigProps<TextPromptData>) {
   const outputTarget: "text" | "voice" | "lyrics" =
     data.outputTarget === "voice" || data.outputTarget === "lyrics" ? data.outputTarget : "text"
+  const promptSnippets = useSnippetPool("text", "prompt")
 
   return (
     <div className="flex flex-col gap-3">
@@ -115,11 +118,14 @@ export function TextPromptConfig({ data, onUpdate, nodeRefs, refMap, variableDis
       <div>
         <div className="flex items-center justify-between mb-1">
           <Label>Prompt Text</Label>
-          <PromptHelperButton
-            nodeType="text-prompt"
-            currentPrompt={data.text || ""}
-            onAccept={(prompt) => onUpdate({ text: prompt })}
-          />
+          <span className="inline-flex items-center gap-0.5">
+            <SnippetMenuButton pool={promptSnippets} value={data.text || ""} onInsert={(v) => onUpdate({ text: v })} target="prompt" media="text" />
+            <PromptHelperButton
+              nodeType="text-prompt"
+              currentPrompt={data.text || ""}
+              onAccept={(prompt) => onUpdate({ text: prompt })}
+            />
+          </span>
         </div>
         {outputTarget === "lyrics" ? (
           <TagTextarea
@@ -154,6 +160,7 @@ export function TextPromptConfig({ data, onUpdate, nodeRefs, refMap, variableDis
             nodeRefs={nodeRefs}
             displayMode={variableDisplayMode}
             refMap={refMap}
+            snippets={promptSnippets}
           />
         )}
       </div>

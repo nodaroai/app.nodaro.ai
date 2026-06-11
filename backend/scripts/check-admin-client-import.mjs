@@ -115,6 +115,14 @@ const ALLOWED_PATHS = [
   /^src\/routes\/node-presets\.ts$/,
   /^src\/routes\/node-preset-groups\.ts$/,
 
+  // Prompt snippets: per-user CRUD collection, same shape as node-presets.
+  // Every handler derives `userId = req.userId` (401 if absent); LIST scopes
+  // by `.eq("user_id", userId)`, CREATE inserts `user_id: userId`, PATCH and
+  // DELETE chain `.eq("id", id).eq("user_id", userId)`. Writes are editor-only
+  // (rejectProgrammaticAuth); prompt_snippets RLS (`auth.uid() = user_id`) is
+  // the DB-level guard.
+  /^src\/routes\/prompt-snippets\.ts$/,
+
   // Embeds / og-tags: fetch public-facing metadata by id, not user-scoped.
   /^src\/routes\/embed\.ts$/,
   /^src\/routes\/og-tags\.ts$/,

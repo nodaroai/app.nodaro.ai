@@ -15,6 +15,9 @@ import { SuggestionList, type SuggestionListHandle, type SuggestionCommandPayloa
 import { VariableSuggestionExtension } from "./variable-suggestion-extension"
 import { VariableSuggestionList, type VariableSuggestionListHandle } from "./variable-suggestion-list"
 import { VariableHighlightExtension, VARIABLE_HIGHLIGHT_META } from "./variable-highlight-extension"
+import { SnippetSuggestionExtension } from "./snippet-suggestion-extension"
+import { SnippetSuggestionList, type SnippetSuggestionListHandle } from "./snippet-suggestion-list"
+import { filterSnippets, computeSnippetInsertPrefix, type SnippetPoolItem } from "@/lib/snippet-pool"
 import { DEFAULT_USAGE_MODE } from "@nodaro/shared"
 import type { RefImageItem } from "../tag-textarea"
 import type { NodeRefItem } from "@/lib/node-refs"
@@ -66,6 +69,9 @@ interface PromptEditorProps {
   /** Label → current non-empty upstream output (buildNodeRefMap). Drives the
    *  {Label || default} active/dormant fallback styling; omit to suppress it. */
   readonly refMap?: ReadonlyMap<string, string>
+  /** Merged snippet pool for THIS field (already target+media filtered).
+   *  Omit/empty → the "/" menu renders nothing. See useSnippetPool(). */
+  readonly snippets?: readonly SnippetPoolItem[]
 }
 
 export interface JsonNode {
@@ -315,6 +321,7 @@ export function PromptEditor({
   referenceImages,
   nodeRefs,
   refMap,
+  snippets,
 }: PromptEditorProps) {
   // Content-stabilize the incoming reference list. The parent config panels
   // build this via `.map()` inside a useMemo, so it can arrive as a fresh array
@@ -335,6 +342,11 @@ export function PromptEditor({
   refsRef.current = stableReferenceImages
   const nodeRefsRef = useRef<readonly NodeRefItem[]>(nodeRefs ?? [])
   nodeRefsRef.current = nodeRefs ?? []
+  // Latest snippet pool in a ref so the "/" Suggestion plugin's items()
+  // closure (created once at editor mount) always sees fresh data — same
+  // pattern as nodeRefsRef above.
+  const snippetsRef = useRef<readonly SnippetPoolItem[]>(snippets ?? [])
+  snippetsRef.current = snippets ?? []
   // Content-stable label sets for the variable-highlight plugin. Fresh Sets
   // are built per render (labels are few) but the previous reference is kept
   // while contents are equal, so the live-update effect below fires only on
@@ -690,6 +702,91 @@ export function PromptEditor({
               positionMount(props.clientRect?.() ?? null)
               root.render(
                 <VariableSuggestionList
+                  ref={(r) => { listRef = r }}
+                  items={props.items}
+                  command={props.command}
+                />,
+              )
+            }
+
+            return {
+              onStart: (props: never) => {
+                mount = document.createElement("div")
+                mount.style.position = "fixed"
+                mount.style.zIndex = "9999"
+                document.body.appendChild(mount)
+                root = createRoot(mount)
+                renderList(props as never)
+              },
+              onUpdate: (props: never) => renderList(props as never),
+              onKeyDown: (props: { event: KeyboardEvent }) => listRef?.onKeyDown(props.event) ?? false,
+              onExit: () => {
+                if (root) {
+                  const r = root
+                  root = null
+                  setTimeout(() => r.unmount(), 0)
+                }
+                if (mount) {
+                  const m = mount
+                  mount = null
+                  setTimeout(() => m.remove(), 0)
+                }
+                listRef = null
+              },
+            }
+          },
+        },
+      }),
+      SnippetSuggestionExtension.configure({
+        suggestion: {
+          char: "/",
+          allowedPrefixes: [" "],
+          items: ({ query }: { query: string }) =>
+            filterSnippets(snippetsRef.current, query).slice(0, 50),
+          command: ({ editor: ed, range, props }: { editor: typeof editor; range: { from: number; to: number }; props: SnippetPoolItem }) => {
+            // Atomically replace "/query" with separator + snippet text + space.
+            // (PR 2 switches the text node to a snippetPill node.)
+            const prevChar = range.from > 1
+              ? ed?.state.doc.textBetween(range.from - 1, range.from, "\n", "\n") ?? ""
+              : ""
+            const prefix = computeSnippetInsertPrefix(prevChar)
+            ed
+              ?.chain()
+              .focus()
+              .insertContentAt(range, `${prefix}${props.text} `)
+              .run()
+          },
+          render: () => {
+            let mount: HTMLDivElement | null = null
+            let root: Root | null = null
+            let listRef: SnippetSuggestionListHandle | null = null
+
+            const positionMount = (rect: DOMRect | null | undefined) => {
+              if (!mount || !rect) return
+              const MARGIN = 4
+              const vh = window.innerHeight
+              const vw = window.innerWidth
+              const ESTIMATED_H = 300
+              const ESTIMATED_W = 340
+              const spaceBelow = vh - rect.bottom - MARGIN
+              const placeBelow = spaceBelow >= 160 || spaceBelow >= rect.top
+              const top = placeBelow
+                ? rect.bottom + MARGIN
+                : Math.max(MARGIN, rect.top - ESTIMATED_H - MARGIN)
+              const left = Math.min(Math.max(MARGIN, rect.left), vw - ESTIMATED_W - MARGIN)
+              mount.style.top = `${top}px`
+              mount.style.left = `${left}px`
+            }
+
+            const renderList = (props: {
+              items: readonly SnippetPoolItem[]
+              command: (item: SnippetPoolItem) => void
+              clientRect?: (() => DOMRect | null) | null
+            }) => {
+              if (!root) return
+              positionMount(props.clientRect?.() ?? null)
+              root.render(
+                <SnippetSuggestionList
                   ref={(r) => { listRef = r }}
                   items={props.items}
                   command={props.command}

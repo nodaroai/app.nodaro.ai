@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { NODE_PROMPT_FIELDS, getPromptFields, nodeHasPromptField } from "./prompt-fields"
+import { NODE_PROMPT_FIELDS, getPromptFields, nodeHasPromptField, getSnippetMedia } from "./prompt-fields"
 import { NODE_QUICK_CONFIGS } from "@/components/nodes/node-quick-configs"
 import { NODE_DEF_MAP } from "@/types/nodes"
 
@@ -50,5 +50,20 @@ describe("prompt-fields / quick-config registries stay in sync with node types",
     expect(getPromptFields("generate-image")?.prompt).toBe("prompt")
     expect(nodeHasPromptField("not-a-real-node")).toBe(false)
     expect(getPromptFields(undefined)).toBeUndefined()
+  })
+})
+
+describe("snippet media declarations", () => {
+  it("every prompt-field entry declares a valid snippet media", () => {
+    for (const [nodeType, spec] of Object.entries(NODE_PROMPT_FIELDS)) {
+      expect(["image", "video", "audio", "text"], `media for ${nodeType}`).toContain(spec.media)
+    }
+  })
+  it("getSnippetMedia resolves per node type", () => {
+    expect(getSnippetMedia("generate-image")).toBe("image")
+    expect(getSnippetMedia("image-to-video")).toBe("video")
+    expect(getSnippetMedia("text-to-speech")).toBe("audio")
+    expect(getSnippetMedia("llm-chat")).toBe("text")
+    expect(getSnippetMedia("unknown-node")).toBeUndefined()
   })
 })

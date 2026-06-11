@@ -1221,6 +1221,9 @@ export { extractPresetData, PRESET_EXCLUDED_KEYS, PRESET_APPLY_CLEAR_KEYS, prese
 export type { FactoryPreset, FactoryPresetGroup } from "./factory-presets.js"
 export { FACTORY_PRESETS, getFactoryPresets, groupFactoryPresets } from "./factory-presets.js"
 
+// --- Factory prompt-snippets (reusable inline prompt fragments) ---
+export * from "./factory-snippets/index.js"
+
 // --- Per-provider prompting doctrine (wizard/enhance + gen-skills + list_models) ---
 export {
   PROVIDER_PROMPT_DOCTRINES,
