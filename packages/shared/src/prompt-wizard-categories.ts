@@ -287,6 +287,7 @@ export const PROVIDER_CAPABILITIES: Record<string, Record<string, string>> = {
   "extend-video": {
     "veo-extend": "Extend VEO-generated videos",
     "runway-extend": "Extend Runway-generated videos",
+    "seedance-2-extend": "Extend ANY video by URL — seamless trim-stitched continuation with audio (Seedance 2.0)",
   },
   "speech-to-video": {
     "wan-speech": "Wan 2.2 speech-driven video generation",

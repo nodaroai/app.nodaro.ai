@@ -1416,6 +1416,23 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["extend"],
     pricing: [{ identifier: "runway-extend", credits: 32 }],
   },
+  "seedance-2-extend": {
+    id: "seedance-2-extend",
+    kind: "video",
+    modes: ["extend"] as const,
+    family: "Bytedance",
+    label: "Seedance 2 Extend",
+    description: "Extend ANY video: generates the continuation (audio included) and trim-stitches it into one seamless clip.",
+    useCases: ["extend"],
+    durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    resolutions: ["480p", "720p", "1080p"],
+    pricing: [
+      { identifier: "seedance-2-extend", credits: 53, note: "default 8s 720p (ref-mode 50 + 3 stitch) — see :NsR variants" },
+      { identifier: "seedance-2-extend:8s:480p", credits: 26, note: "8s 480p (23+3)" },
+      { identifier: "seedance-2-extend:8s:720p", credits: 53, note: "8s 720p (50+3)" },
+      { identifier: "seedance-2-extend:8s:1080p", credits: 78, note: "8s 1080p (75+3)" },
+    ],
+  },
   "veo-1080p": {
     id: "veo-1080p",
     kind: "video",

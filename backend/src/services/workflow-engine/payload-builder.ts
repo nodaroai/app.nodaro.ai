@@ -2978,6 +2978,57 @@ export function buildPayload(
         }
       }
 
+      // Shared by the prompt-consuming branches (seedance + KIE): manual
+      // prompt + cinematography hints + identity lock + "Avoid: …" negative
+      // injection (no extend provider accepts native negative_prompt).
+      // Mirrors the /v1/extend-video route's behavior.
+      const buildExtendPrompt = (): string | undefined => {
+        let p: string | undefined = promptFor("extend-video")
+        {
+          const cinematographyHints = collectCinematographyHints(node.id, buildCtx)
+          if (cinematographyHints.length > 0) {
+            const joined = cinematographyHints.join(", ")
+            p = p ? `${p}. ${joined}` : joined
+          }
+        }
+        const identityClause = collectIdentityLockClause(node.id, buildCtx)
+        if (identityClause) p = p ? `${p} ${identityClause}` : identityClause
+        const neg = (resolvedInputs.negativePrompt || (data.negativePrompt as string | undefined))
+        const { prompt: pWithNeg } = applyVideoNegativePrompt(p, neg, evProvider)
+        return pWithNeg
+      }
+
+      // ─── Seedance 2 trim-stitch extend ───────────────────────────────────
+      // URL-based like LTX, but the continuation CONTENT is required — the
+      // worker wraps it in the spike-proven bare temporal template and then
+      // trim-stitches source+extension. Composite credits (duration tier ×
+      // resolution) via the same shared builder the HTTP route uses, so
+      // orchestrator and single-node runs reserve identically.
+      if (evProvider === "seedance-2-extend") {
+        return {
+          jobName: "extend-video",
+          queueName: "video-generation",
+          modelIdentifier: buildVideoCreditModelIdentifier(
+            evProvider,
+            (data.duration as number) ?? 8,
+            undefined,
+            undefined,
+            undefined,
+            (data.resolution as string) ?? "720p",
+          ),
+          payload: {
+            jobId,
+            provider: evProvider,
+            video: resolvedInputs.videoUrl || data.videoUrl,
+            prompt: buildExtendPrompt(),
+            duration: data.duration,
+            resolution: data.resolution,
+            generateAudio: data.generateAudio,
+            usageLogId,
+          },
+        }
+      }
+
       const evModel = evProvider === "veo-extend"
         ? (evProvider + (data.model === "quality" ? ":quality" : ""))
         : evProvider
@@ -2988,25 +3039,7 @@ export function buildPayload(
         payload: {
           jobId,
           kieTaskId: resolvedInputs.kieTaskId || data.kieTaskId,
-          prompt: (() => {
-            let p: string | undefined = promptFor("extend-video")
-            {
-              const cinematographyHints = collectCinematographyHints(node.id, buildCtx)
-              if (cinematographyHints.length > 0) {
-                const joined = cinematographyHints.join(", ")
-                p = p ? `${p}. ${joined}` : joined
-              }
-            }
-            const identityClause = collectIdentityLockClause(node.id, buildCtx)
-            if (identityClause) p = p ? `${p} ${identityClause}` : identityClause
-            // Inject `Avoid: <negativePrompt>` for non-native providers —
-            // none of the extend providers accept native negative_prompt, so
-            // this always applies when negativePrompt is set. Mirrors the
-            // /v1/extend-video route's behavior.
-            const neg = (resolvedInputs.negativePrompt || (data.negativePrompt as string | undefined))
-            const { prompt: pWithNeg } = applyVideoNegativePrompt(p, neg, evProvider)
-            return pWithNeg
-          })(),
+          prompt: buildExtendPrompt(),
           provider: evProvider,
           model: evProvider === "veo-extend" ? (data.model ?? "fast") : undefined,
           quality: evProvider === "runway-extend" ? (data.quality ?? "720p") : undefined,

@@ -834,6 +834,24 @@ describe("CreditsService", () => {
       ])).toBe(19)
     })
 
+    it("resolves extend-video seedance-2-extend default (8s 720p = ref-mode 50 + 3 stitch)", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "extend-video", data: { provider: "seedance-2-extend" } },
+      ])).toBe(53)
+    })
+
+    it("resolves extend-video seedance-2-extend:12s:1080p", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "extend-video", data: { provider: "seedance-2-extend", duration: 12, resolution: "1080p" } },
+      ])).toBe(116)
+    })
+
+    it("snaps off-tier seedance-2-extend durations into the next tier (6s → 8s 480p)", () => {
+      expect(CreditsService.estimateWorkflowCredits([
+        { type: "extend-video", data: { provider: "seedance-2-extend", duration: 6, resolution: "480p" } },
+      ])).toBe(26)
+    })
+
     it("resolves I2V kling-3.0:5s", () => {
       expect(CreditsService.estimateWorkflowCredits([
         { type: "image-to-video", data: { provider: "kling-3.0", duration: 5 } },
