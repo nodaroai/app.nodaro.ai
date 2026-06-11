@@ -12,6 +12,10 @@ import {
 } from "@/lib/api"
 import { buildSnippetPool, type SnippetPoolItem } from "@/lib/snippet-pool"
 
+/** Stable empty reference so `useSnippetPool`'s memo doesn't see a fresh array
+ *  identity each render while the query data is still undefined. */
+const EMPTY_SNIPPETS: readonly PromptSnippet[] = []
+
 export function usePromptSnippets(userId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.promptSnippets.list(),
@@ -70,7 +74,7 @@ export function useSnippetPool(
   target: SnippetTarget,
 ): SnippetPoolItem[] {
   const { user } = useAuth()
-  const { data: userSnippets = [] } = usePromptSnippets(user?.id)
+  const { data: userSnippets = EMPTY_SNIPPETS } = usePromptSnippets(user?.id)
   return useMemo(
     () => (media ? buildSnippetPool({ media, target, userSnippets }) : []),
     [media, target, userSnippets],

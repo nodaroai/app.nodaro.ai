@@ -30,6 +30,13 @@ describe("buildSnippetPool", () => {
     expect(pool.some((s) => s.id === "a")).toBe(true)
     expect(pool.some((s) => s.id === "v")).toBe(false)
   })
+  it("user snippet custom category survives; whitespace-only category falls back", () => {
+    const custom = userSnippet({ id: "c", name: "C", category: "Faves" })
+    const blank = userSnippet({ id: "b", name: "B", category: "   " })
+    const pool = buildSnippetPool({ media: "image", target: "prompt", userSnippets: [custom, blank] })
+    expect(pool.find((s) => s.id === "c")?.category).toBe("Faves")
+    expect(pool.find((s) => s.id === "b")?.category).toBe("My snippets")
+  })
 })
 
 describe("filterSnippets", () => {
@@ -44,6 +51,12 @@ describe("filterSnippets", () => {
   })
   it("empty query returns the pool unchanged", () => {
     expect(filterSnippets(pool, "")).toEqual(pool)
+  })
+  it("matches on description alone", () => {
+    // "plastic-skin" lives ONLY in real-skin-texture's description
+    // ("The no-plastic-skin anchor") — not in any name, text, or category in
+    // the image+prompt pool — so this exercises the description-only clause.
+    expect(filterSnippets(pool, "plastic-skin").some((s) => s.id === "real-skin-texture")).toBe(true)
   })
 })
 
