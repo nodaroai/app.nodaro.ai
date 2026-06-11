@@ -32,6 +32,8 @@ import type { ConfigProps } from "./types"
 import { MappableField } from "./mappable-field"
 import { TagTextarea } from "./tag-textarea"
 import { PromptHelperButton } from "./prompt-helper-button"
+import { SnippetMenuButton } from "./snippet-menu-button"
+import { useSnippetPool } from "@/hooks/queries/use-prompt-snippets-queries"
 import {
   CINEMATIC_ASPECT_RATIO_OPTIONS,
   CINEMATIC_RESOLUTION_OPTIONS,
@@ -52,6 +54,7 @@ export function CinematicAvatarConfig({
   const looks = data.avatarLooks ?? []
   const lookNames = data.avatarLookNames ?? []
   const autoDuration = data.autoDuration ?? false
+  const promptSnippets = useSnippetPool("video", "prompt")
 
   // ── Wired reference inputs (read-only) ───────────────────────────────────
   // The three optional reference handles (ref-video / ref-audio / ref-image)
@@ -107,12 +110,15 @@ export function CinematicAvatarConfig({
         fieldMappings={fieldMappings}
         onMapField={onMapField}
         labelAction={
-          <PromptHelperButton
-            nodeType="cinematic-avatar"
-            currentPrompt={data.prompt || ""}
-            provider={data.provider}
-            onAccept={(prompt) => onUpdate({ prompt })}
-          />
+          <span className="inline-flex items-center gap-0.5">
+            <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v.slice(0, 10000) })} target="prompt" media="video" />
+            <PromptHelperButton
+              nodeType="cinematic-avatar"
+              currentPrompt={data.prompt || ""}
+              provider={data.provider}
+              onAccept={(prompt) => onUpdate({ prompt })}
+            />
+          </span>
         }
       >
         <TagTextarea
@@ -123,6 +129,7 @@ export function CinematicAvatarConfig({
           nodeRefs={nodeRefs}
           displayMode={variableDisplayMode}
           refMap={refMap}
+          snippets={promptSnippets}
         />
         {(data.prompt?.length ?? 0) > 0 && (
           <span className="text-[10px] text-muted-foreground text-right block">

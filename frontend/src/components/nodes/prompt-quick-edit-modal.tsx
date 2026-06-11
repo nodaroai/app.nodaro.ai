@@ -11,9 +11,11 @@ import {
 } from "@/components/ui/dialog"
 import { PromptEditor } from "@/components/editor/config-panels/prompt-editor"
 import { PromptHelperButton } from "@/components/editor/config-panels/prompt-helper-button"
+import { SnippetMenuButton } from "@/components/editor/config-panels/snippet-menu-button"
 import { FinalPromptPreview } from "@/components/editor/config-panels/final-prompt-preview"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { getPromptFields } from "@/lib/prompt-fields"
+import { getPromptFields, getSnippetMedia } from "@/lib/prompt-fields"
+import { useSnippetPool } from "@/hooks/queries/use-prompt-snippets-queries"
 import { getPromptIcon } from "./prompt-edit-button"
 import { getUpstreamNodes, buildNodeRefMap } from "@/lib/node-refs"
 import { getConnectedSources } from "@/components/editor/config-panels/helpers"
@@ -106,6 +108,13 @@ export function PromptQuickEditModal() {
   // Reset the final-prompt panel each time the modal opens for a node.
   useEffect(() => { setShowFinal(false) }, [nodeId])
 
+  // Snippet pools for this node's modality. Hooks must run unconditionally
+  // (nodeType may be undefined — useSnippetPool returns [] for undefined media),
+  // so they sit above the early return below.
+  const snippetMedia = getSnippetMedia(nodeType)
+  const promptSnippets = useSnippetPool(snippetMedia, "prompt")
+  const negativeSnippets = useSnippetPool(snippetMedia, "negative")
+
   if (!nodeId || !node || !nodeType || !fields) return null
 
   const promptField = fields.prompt
@@ -152,18 +161,21 @@ export function PromptQuickEditModal() {
           <div className="space-y-1.5">
             <div className="flex items-center justify-between gap-2 min-h-[28px]">
               <label className="text-xs font-medium text-muted-foreground">{promptLabel}</label>
-              <PromptHelperButton
-                size="md"
-                nodeType={nodeType}
-                currentPrompt={promptValue}
-                provider={typeof data.provider === "string" ? data.provider : undefined}
-                aspectRatio={typeof data.aspectRatio === "string" ? data.aspectRatio : undefined}
-                duration={typeof data.duration === "number" ? data.duration : undefined}
-                onAccept={(text, mc) => {
-                  writeField(promptField, text)
-                  if (mc) updateNodeData(nodeId!, { [mc.field]: mc.value })
-                }}
-              />
+              <span className="inline-flex items-center gap-0.5">
+                <SnippetMenuButton pool={promptSnippets} value={promptValue} onInsert={(v) => writeField(promptField, v)} target="prompt" media={snippetMedia} />
+                <PromptHelperButton
+                  size="md"
+                  nodeType={nodeType}
+                  currentPrompt={promptValue}
+                  provider={typeof data.provider === "string" ? data.provider : undefined}
+                  aspectRatio={typeof data.aspectRatio === "string" ? data.aspectRatio : undefined}
+                  duration={typeof data.duration === "number" ? data.duration : undefined}
+                  onAccept={(text, mc) => {
+                    writeField(promptField, text)
+                    if (mc) updateNodeData(nodeId!, { [mc.field]: mc.value })
+                  }}
+                />
+              </span>
             </div>
             <PromptEditor
               value={promptValue}
@@ -173,11 +185,15 @@ export function PromptQuickEditModal() {
               referenceImages={referenceImages}
               nodeRefs={nodeRefs}
               refMap={refMap}
+              snippets={promptSnippets}
             />
           </div>
           {negativeField && (
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Negative prompt</label>
+              <div className="flex items-center justify-between gap-2 min-h-[28px]">
+                <label className="text-xs font-medium text-muted-foreground">Negative prompt</label>
+                <SnippetMenuButton pool={negativeSnippets} value={negativeValue} onInsert={(v) => writeField(negativeField, v)} target="negative" media={snippetMedia} />
+              </div>
               <PromptEditor
                 value={negativeValue}
                 onChange={(v) => writeField(negativeField, v)}
@@ -186,6 +202,7 @@ export function PromptQuickEditModal() {
                 referenceImages={referenceImages}
                 nodeRefs={nodeRefs}
                 refMap={refMap}
+                snippets={negativeSnippets}
               />
             </div>
           )}
@@ -213,6 +230,8 @@ export function PromptQuickEditModal() {
                 edges={edges}
                 provider={typeof data.provider === "string" ? data.provider : undefined}
                 connectedReferences={connectedReferences}
+                snippets={promptSnippets}
+                negativeSnippets={negativeSnippets}
               />
             </div>
           )}

@@ -3,22 +3,21 @@ import { PluginKey } from "@tiptap/pm/state"
 import Suggestion from "@tiptap/suggestion"
 
 /**
- * Tiptap extension that wires a `{` typeahead trigger for upstream variable
- * references. Items + render are configured at runtime via the `suggestion`
- * option (see `prompt-editor/index.tsx`).
+ * Tiptap extension wiring the `/` typeahead for prompt snippets. Items,
+ * command, and render are configured at runtime in `prompt-editor/index.tsx`
+ * (same pattern as `VariableSuggestionExtension`).
  *
- * Unlike `ImageRefExtension` (which stores tokens as atomic Mention nodes),
- * variable refs are inserted as plain text in the form `{Node Label}`. The
- * runtime `resolveTextRefs` helper expands them at execution time.
+ * `allowedPrefixes: [" "]` restricts the trigger to line start / after
+ * whitespace, so `https://` never opens the menu.
  */
-export const VariableSuggestionExtension = Extension.create({
-  name: "variableSuggestion",
+export const SnippetSuggestionExtension = Extension.create({
+  name: "snippetSuggestion",
 
   addOptions() {
     return {
       suggestion: {
-        char: "{",
-        // Default no-op — overridden via configure() in PromptEditor.
+        char: "/",
+        allowedPrefixes: [" "],
         items: () => [],
         command: () => undefined,
         render: () => ({}),
@@ -33,7 +32,7 @@ export const VariableSuggestionExtension = Extension.create({
         // is module-level shared, so two bare Suggestion() plugins in one editor
         // collide and throw `RangeError: Adding different instances of a keyed
         // plugin` at construction. Passed first so a configure()-level override wins.
-        pluginKey: new PluginKey("variableSuggestion"),
+        pluginKey: new PluginKey("snippetSuggestion"),
         editor: this.editor,
         ...this.options.suggestion,
       }),

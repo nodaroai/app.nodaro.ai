@@ -882,12 +882,76 @@ export interface BuildImagePromptResult {
   referenceImageUrls: string[] | undefined
 }
 
+export type PromptSegmentOrigin =
+  | "user"      // typed by the user
+  | "variable"  // resolved {Node Label} value
+  | "picker"    // parameter-picker / cinematography fragment
+  | "mention"   // identity/reference directive block
+  | "style"     // auto-appended Style suffix
+  | "negative"  // auto-appended Avoid suffix
+
+export interface PromptSegment {
+  readonly text: string
+  readonly origin: PromptSegmentOrigin
+}
+
+export interface BuildImagePromptSegmentsResult extends BuildImagePromptResult {
+  /** Origin-tagged decomposition of `prompt`. INVARIANT (tested):
+   *  segments.map(s => s.text).join("") === prompt. */
+  segments: PromptSegment[]
+}
+
+/**
+ * Internal capture surface for `buildImagePromptSegments`. `buildImagePrompt`
+ * itself never passes this — its output is byte-identical with or without it.
+ * Each field records a span produced during final assembly so the segment
+ * decomposition can be reconstructed without re-deriving the string:
+ *   - `directivesPrefix`: the directive block PREPENDED ahead of the user body
+ *     (connectedReferences path, "Use these references…/Compose them…" wrap).
+ *     Empty when the directive block was spliced mid-string into a Phase-0
+ *     "Use these characters:" block (documented degradation → body collapses).
+ *   - `bodyBeforeSuffixes`: the prompt string captured immediately BEFORE the
+ *     style/avoid suffixes were appended (covers the common no-truncation case).
+ *   - `styleSuffix` / `avoidSuffix`: the `\nStyle: …` / `\nAvoid: …` strings.
+ */
+interface AssemblyMarks {
+  directivesPrefix: string
+  bodyBeforeSuffixes: string
+  styleSuffix: string
+  avoidSuffix: string
+}
+
+/** Keep `bodySegments` when the assembled body still equals their join;
+ *  otherwise collapse to one `user` segment (assembly rewrote the body —
+ *  mention replacement, {image:N} expansion, truncation, or reorder). */
+function reconcileBodySegments(body: string, bodySegments: readonly PromptSegment[] | undefined): PromptSegment[] {
+  if (!body) return []
+  if (bodySegments && bodySegments.map((s) => s.text).join("") === body) {
+    return [...bodySegments]
+  }
+  return [{ text: body, origin: "user" }]
+}
+
 /**
  * Build the final image generation prompt from config.
  * Handles character description wrapping, style appending, negative prompt routing,
  * truncation, and reference image filtering.
+ *
+ * Thin passthrough over `buildImagePromptInternal` — byte-identical behavior,
+ * no marks captured. Use `buildImagePromptSegments` when you also need the
+ * origin-tagged decomposition.
  */
 export function buildImagePrompt(config: BuildImagePromptConfig): BuildImagePromptResult {
+  return buildImagePromptInternal(config)
+}
+
+/**
+ * Shared assembly body for `buildImagePrompt` + `buildImagePromptSegments`.
+ * When `marks` is provided, records the directive-prefix / body / suffix spans
+ * (guarded by `if (marks)`) so callers can reconstruct an origin-tagged
+ * decomposition. The string output is identical regardless of `marks`.
+ */
+function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: AssemblyMarks): BuildImagePromptResult {
   let {
     provider,
     style,
@@ -1169,6 +1233,12 @@ export function buildImagePrompt(config: BuildImagePromptConfig): BuildImageProm
       suppressedCanonicalLocationIds,
     )
     if (directives) {
+      // Capture the prompt state across the splice so the segment builder can
+      // isolate what the directive block contributed as a PREFIX. Only the
+      // prepend branch yields a clean prefix; the Phase-0 consolidation branch
+      // splices mid-string (no prefix) → marks.directivesPrefix stays "" and
+      // the body collapses via the join fallback (documented degradation).
+      const beforeDirectives = prompt
       if (prompt.startsWith("Use these characters:\n")) {
         // Consolidate into the existing Phase-0 directive block (the same splice
         // pattern Phase 0 uses for fallback / extras) instead of wrapping it in
@@ -1188,13 +1258,27 @@ export function buildImagePrompt(config: BuildImagePromptConfig): BuildImageProm
         prompt = prompt
           ? `Use these references for the output image:\n${directives}\n\nCompose them naturally into a single image: ${prompt}`
           : `Use these references for the output image:\n${directives}`
+        // Prepend case: the new string ends with `beforeDirectives` (or is the
+        // whole prefix when the body was empty). Everything before that tail is
+        // the directive prefix.
+        if (marks) {
+          marks.directivesPrefix = prompt.slice(0, prompt.length - beforeDirectives.length)
+        }
       }
     }
+
+    // Body span = everything after the captured directive prefix (empty in the
+    // Phase-0 consolidation branch, so `bodyBeforeSuffixes` becomes the whole
+    // consolidated string → it won't equal the caller's bodySegments join and
+    // collapses via the fallback, the documented degradation).
+    if (marks) marks.bodyBeforeSuffixes = prompt.slice(marks.directivesPrefix.length)
 
     const styleText = style?.trim()
     if (styleText) {
       const richHint = getStylePromptHint(styleText)
-      prompt += `\nStyle: ${richHint || styleText}`
+      const styleSuffix = `\nStyle: ${richHint || styleText}`
+      if (marks) marks.styleSuffix = styleSuffix
+      prompt += styleSuffix
     }
 
     const negPrompt = negativePrompt?.trim()
@@ -1203,7 +1287,9 @@ export function buildImagePrompt(config: BuildImagePromptConfig): BuildImageProm
       if (NATIVE_NEGATIVE_PROMPT_MODELS.has(provider)) {
         nativeNegativePrompt = negPrompt
       } else {
-        prompt += `\nAvoid: ${negPrompt}`
+        const avoidSuffix = `\nAvoid: ${negPrompt}`
+        if (marks) marks.avoidSuffix = avoidSuffix
+        prompt += avoidSuffix
       }
     }
 
@@ -1273,13 +1359,19 @@ export function buildImagePrompt(config: BuildImagePromptConfig): BuildImageProm
     })
   }
 
+  // Legacy path has no directive prefix; the body is the char-desc-wrapped
+  // prompt as it stands right before the style/avoid suffixes are appended.
+  if (marks) marks.bodyBeforeSuffixes = prompt
+
   // Append style — if the inline `style` is a known STYLES catalog id, inject
   // the richer promptHint; otherwise fall back to the raw text (covers custom
   // free-text styles that don't match a preset).
   const styleText = style?.trim()
   if (styleText) {
     const richHint = getStylePromptHint(styleText)
-    prompt += `\nStyle: ${richHint || styleText}`
+    const styleSuffix = `\nStyle: ${richHint || styleText}`
+    if (marks) marks.styleSuffix = styleSuffix
+    prompt += styleSuffix
   }
 
   // Handle negative prompt: native support vs prompt-appended
@@ -1289,7 +1381,9 @@ export function buildImagePrompt(config: BuildImagePromptConfig): BuildImageProm
     if (NATIVE_NEGATIVE_PROMPT_MODELS.has(provider)) {
       nativeNegativePrompt = negPrompt
     } else {
-      prompt += `\nAvoid: ${negPrompt}`
+      const avoidSuffix = `\nAvoid: ${negPrompt}`
+      if (marks) marks.avoidSuffix = avoidSuffix
+      prompt += avoidSuffix
     }
   }
 
@@ -1307,6 +1401,49 @@ export function buildImagePrompt(config: BuildImagePromptConfig): BuildImageProm
   prompt = expandImagePositionRefs(prompt, allRefs.length)
 
   return { prompt, nativeNegativePrompt, referenceImageUrls: refsToSend }
+}
+
+/**
+ * `buildImagePrompt` plus an origin-tagged decomposition of the assembled
+ * `prompt`. The string output (and all other fields) is byte-identical to
+ * `buildImagePrompt` — the segments are derived from assembly marks recorded
+ * during the same pass.
+ *
+ * ABSOLUTE INVARIANT (tested): `segments.map(s => s.text).join("") === prompt`.
+ * Anything the marks can't model — `{image:N}` token expansion, `referenceOrder`
+ * renumbering, mid-string Phase-0 directive splicing, truncation — breaks the
+ * join, and we collapse to a single `user` segment rather than ship a wrong
+ * decomposition. Callers pass `bodySegments` (origins user/variable/picker/…)
+ * for the body text; they survive only when the assembly didn't rewrite the
+ * body string.
+ */
+export function buildImagePromptSegments(
+  config: BuildImagePromptConfig,
+  bodySegments?: readonly PromptSegment[],
+): BuildImagePromptSegmentsResult {
+  const marks: AssemblyMarks = {
+    directivesPrefix: "",
+    bodyBeforeSuffixes: "",
+    styleSuffix: "",
+    avoidSuffix: "",
+  }
+
+  const result = buildImagePromptInternal(config, marks)
+
+  let segments: PromptSegment[] = [
+    ...(marks.directivesPrefix ? [{ text: marks.directivesPrefix, origin: "mention" as const }] : []),
+    ...reconcileBodySegments(marks.bodyBeforeSuffixes, bodySegments),
+    ...(marks.styleSuffix ? [{ text: marks.styleSuffix, origin: "style" as const }] : []),
+    ...(marks.avoidSuffix ? [{ text: marks.avoidSuffix, origin: "negative" as const }] : []),
+  ]
+  // Absolute invariant: join === prompt. Any assembly step we didn't model
+  // (truncation, token expansion, reorder renumbering, Phase-0 mid-string
+  // splice) breaks the join — detect against the FINAL returned prompt and
+  // fall back rather than ship a wrong decomposition.
+  if (segments.map((s) => s.text).join("") !== result.prompt) {
+    segments = result.prompt ? [{ text: result.prompt, origin: "user" }] : []
+  }
+  return { ...result, segments }
 }
 
 // ---------------------------------------------------------------------------

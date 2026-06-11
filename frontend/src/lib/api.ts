@@ -1320,6 +1320,95 @@ export async function deleteNodePresetGroup(id: string): Promise<void> {
   })
 }
 
+***REDACTED-OSS-SCRUB***
+
+export interface PromptSnippet {
+  id: string
+  name: string
+  description?: string
+  text: string
+  target: "prompt" | "negative"
+  media: string[]
+  category?: string
+  sortOrder: number
+  createdAt: string
+  updatedAt: string
+}
+
+/** Thrown on 409 from create/update so the UI shows a friendly "name taken". */
+export class PromptSnippetNameTakenError extends Error {
+  constructor() {
+    super("name_taken")
+    this.name = "PromptSnippetNameTakenError"
+  }
+}
+
+export async function listPromptSnippets(): Promise<PromptSnippet[]> {
+  const res = await apiJson<{ data: PromptSnippet[] }>(`/v1/prompt-snippets`, {
+    method: "GET",
+    label: "Failed to load snippets",
+  })
+  return res.data
+}
+
+export async function createPromptSnippet(input: {
+  name: string
+  description?: string
+  text: string
+  target: "prompt" | "negative"
+  media: string[]
+  category?: string
+  sortOrder?: number
+}): Promise<PromptSnippet> {
+  const res = await fetch(`${API_BASE_URL}/v1/prompt-snippets`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(await getAuthHeaders()) },
+    body: JSON.stringify(input),
+  })
+  if (res.status === 409) throw new PromptSnippetNameTakenError()
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to save snippet")
+  }
+  return (await res.json()).data
+}
+
+export async function updatePromptSnippet(
+  id: string,
+  patch: {
+    name?: string
+    description?: string | null
+    text?: string
+    target?: "prompt" | "negative"
+    media?: string[]
+    category?: string | null
+    sortOrder?: number
+  },
+): Promise<PromptSnippet> {
+  const res = await fetch(`${API_BASE_URL}/v1/prompt-snippets/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...(await getAuthHeaders()) },
+    body: JSON.stringify(patch),
+  })
+  if (res.status === 409) throw new PromptSnippetNameTakenError()
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to update snippet")
+  }
+  return (await res.json()).data
+}
+
+export async function deletePromptSnippet(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/v1/prompt-snippets/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    headers: await getAuthHeaders(),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to delete snippet")
+  }
+}
+
 // Object API functions
 export async function generateObject(data: {
   name: string

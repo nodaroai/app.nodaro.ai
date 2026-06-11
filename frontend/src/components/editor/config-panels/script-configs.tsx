@@ -32,9 +32,12 @@ import type {
 import { IMAGE_CRITIC_MODES, type ImageCriticMode } from "@nodaro/shared"
 import { LlmModelSelect } from "./llm-model-select"
 import { MappableField } from "./mappable-field"
+import { SnippetMenuButton } from "./snippet-menu-button"
+import { useSnippetPool } from "@/hooks/queries/use-prompt-snippets-queries"
 import type { ConfigProps } from "./types"
 
 export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<GenerateScriptData>) {
+  const promptSnippets = useSnippetPool("text", "prompt")
   const [copied, setCopied] = useState(false)
   const script = data.generatedScript
   const results = data.generatedResults ?? []
@@ -90,7 +93,9 @@ export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, o
           </SelectContent>
         </Select>
       </div>
-      <MappableField field="styleGuide" label="Style Guide" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="styleGuide" label="Style Guide" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={
+        <SnippetMenuButton pool={promptSnippets} value={data.styleGuide || ""} onInsert={(v) => onUpdate({ styleGuide: v })} target="prompt" media="text" />
+      }>
         <TagTextarea
           rows={3}
           value={data.styleGuide}
@@ -99,6 +104,7 @@ export function GenerateScriptConfig({ data, onUpdate, sources, fieldMappings, o
           nodeRefs={nodeRefs}
           displayMode={variableDisplayMode}
           refMap={refMap}
+          snippets={promptSnippets}
         />
       </MappableField>
       <MappableField field="tone" label="Tone" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -263,6 +269,7 @@ export function QACheckConfig({ data, onUpdate }: ConfigProps<QACheckData>) {
 }
 
 export function ImageCriticConfig({ data, onUpdate }: ConfigProps<ImageCriticData>) {
+  const promptSnippets = useSnippetPool("image", "prompt")
   const mode = data.mode ?? "realism"
   const usesPrompt = mode === "prompt-adherence" || mode === "all"
 
@@ -315,7 +322,10 @@ export function ImageCriticConfig({ data, onUpdate }: ConfigProps<ImageCriticDat
 
       {usesPrompt && (
         <div>
-          <Label htmlFor="image-critic-prompt">Prompt (or wire via input edge)</Label>
+          <div className="flex items-center justify-between gap-2">
+            <Label htmlFor="image-critic-prompt">Prompt (or wire via input edge)</Label>
+            <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="image" />
+          </div>
           <textarea
             id="image-critic-prompt"
             className="w-full rounded-md border bg-background p-2 text-sm"
@@ -337,6 +347,7 @@ export function ImageCriticConfig({ data, onUpdate }: ConfigProps<ImageCriticDat
 }
 
 export function ImageToTextConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<ImageToTextData>) {
+  const promptSnippets = useSnippetPool("text", "prompt")
   const imageToTextData = data as ImageToTextData
   const results = imageToTextData.generatedResults ?? []
   const activeIndex = imageToTextData.activeResultIndex ?? 0
@@ -368,7 +379,9 @@ export function ImageToTextConfig({ data, onUpdate, sources, fieldMappings, onMa
       />
 
       <div>
-        <MappableField field="customPrompt" label="Custom Prompt (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <MappableField field="customPrompt" label="Custom Prompt (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={
+          <SnippetMenuButton pool={promptSnippets} value={imageToTextData.customPrompt || ""} onInsert={(v) => onUpdate({ customPrompt: v })} target="prompt" media="text" />
+        }>
           <TagTextarea
             value={imageToTextData.customPrompt ?? ""}
             onChange={(v) => onUpdate({ customPrompt: v })}
@@ -378,6 +391,7 @@ export function ImageToTextConfig({ data, onUpdate, sources, fieldMappings, onMa
             nodeRefs={nodeRefs}
             displayMode={variableDisplayMode}
             refMap={refMap}
+            snippets={promptSnippets}
           />
         </MappableField>
         <p className="text-xs text-muted-foreground mt-1">

@@ -189,6 +189,7 @@ export { extractVideoDurationFromNode } from "./video-duration.js"
 
 export {
   buildImagePrompt,
+  buildImagePromptSegments,
   buildIdentityDirectives,
   buildReferenceBlocks,
   expandImageRefTokens,
@@ -202,6 +203,9 @@ export {
   truncateText,
   type BuildImagePromptConfig,
   type BuildImagePromptResult,
+  type BuildImagePromptSegmentsResult,
+  type PromptSegment,
+  type PromptSegmentOrigin,
   type ResolveCharacterMentionsResult,
 } from "./prompt-builder.js"
 
@@ -1220,6 +1224,9 @@ export { EXECUTION_DATA_KEYS } from "./node-runtime-keys.js"
 export { extractPresetData, PRESET_EXCLUDED_KEYS, PRESET_APPLY_CLEAR_KEYS, presetDataMatches } from "./node-preset-extract.js"
 export type { FactoryPreset, FactoryPresetGroup } from "./factory-presets.js"
 export { FACTORY_PRESETS, getFactoryPresets, groupFactoryPresets } from "./factory-presets.js"
+
+// --- Factory prompt-snippets (reusable inline prompt fragments) ---
+export * from "./factory-snippets/index.js"
 
 // --- Per-provider prompting doctrine (wizard/enhance + gen-skills + list_models) ---
 export {

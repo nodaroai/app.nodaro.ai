@@ -115,6 +115,12 @@ vi.mock("@/components/editor/config-panels/connected-audio-sources", () => ({
 vi.mock("@/components/editor/config-panels/prompt-helper-button", () => ({
   PromptHelperButton: () => null,
 }))
+vi.mock("@/components/editor/config-panels/snippet-menu-button", () => ({
+  SnippetMenuButton: () => null,
+}))
+vi.mock("@/hooks/queries/use-prompt-snippets-queries", () => ({
+  useSnippetPool: () => [],
+}))
 vi.mock("@/components/editor/config-panels/model-select-option", () => ({
   ModelSelectOption: ({ value, label }: any) => <option value={value}>{label}</option>,
 }))

@@ -25,6 +25,8 @@ import { ModelSearchSelect } from "./model-search-select"
 import { ModelDescriptionHint } from "./model-description-hint"
 import { MappableField } from "./mappable-field"
 import { FinalPromptPreview } from "./final-prompt-preview"
+import { SnippetMenuButton } from "./snippet-menu-button"
+import { useSnippetPool } from "@/hooks/queries/use-prompt-snippets-queries"
 import type { ConfigProps } from "./types"
 
 type Kling3Tab = "scene" | "shots" | "elements"
@@ -32,6 +34,7 @@ type Kling3Tab = "scene" | "shots" | "elements"
 export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onMapField, onUpdateNode, nodes, edges, nodeId }: ConfigProps<ImageToVideoData> & { nodeId?: string }) {
   useEffect(() => { prefetchModelCredits(VIDEO_I2V_MODELS.map((m) => m.value)) }, [])
   const { user } = useAuth()
+  const promptSnippets = useSnippetPool("video", "prompt")
   const allNodes = useWorkflowStore((s) => s.nodes)
   const [activeTab, setActiveTab] = useState<Kling3Tab>("scene")
   const [lightboxImage, setLightboxImage] = useState<string | null>(null)
@@ -270,9 +273,12 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
       {/* Manual Motion Prompt */}
       {connectedTextPrompts.length === 0 && (
         <div className="rounded-xl border border-border bg-card p-3 shadow-sm">
-          <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B] mb-2 block">
-            Motion Prompt
-          </Label>
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B] block">
+              Motion Prompt
+            </Label>
+            <SnippetMenuButton pool={promptSnippets} value={(data.motionPrompt as string) || ""} onInsert={(v) => onUpdate({ motionPrompt: v })} target="prompt" media="video" />
+          </div>
           <Textarea
             value={(data.motionPrompt as string) || ""}
             onChange={(e) => onUpdate({ motionPrompt: e.target.value })}

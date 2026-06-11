@@ -45,6 +45,12 @@ export const queryKeys = {
     list: (nodeType?: string) => ["nodePresetGroups", "list", nodeType ?? ""] as const,
   },
 
+  // Prompt snippets (one global per-user pool — scoping is by media/target, not node type)
+  promptSnippets: {
+    all: ["promptSnippets"] as const,
+    list: () => ["promptSnippets", "list"] as const,
+  },
+
   // App settings (admin)
   appSettings: {
     all: ["app-settings"] as const,
