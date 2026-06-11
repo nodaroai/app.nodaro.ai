@@ -205,6 +205,8 @@ exports[`per-node skill file snapshots > generate-video.md auto-gen blocks match
     "label": "Generate Video",
     "provider": "seedance-2-fast",
     "duration": 5,
+    "prompt": "",
+    "negativePrompt": "",
     "fieldMappings": {}
   }
 }
@@ -287,6 +289,8 @@ exports[`per-node skill file snapshots > generate-video.md auto-gen blocks match
   "label": "Generate Video",
   "provider": "seedance-2-fast",
   "duration": 5,
+  "prompt": "",
+  "negativePrompt": "",
   "fieldMappings": {}
 }
 \`\`\`",
@@ -348,6 +352,8 @@ exports[`per-node skill file snapshots > image-to-video.md auto-gen blocks match
     "label": "Image to Video",
     "provider": "seedance-2-fast",
     "duration": 5,
+    "prompt": "",
+    "negativePrompt": "",
     "fieldMappings": {}
   }
 }
@@ -438,6 +444,8 @@ exports[`per-node skill file snapshots > image-to-video.md auto-gen blocks match
   "label": "Image to Video",
   "provider": "seedance-2-fast",
   "duration": 5,
+  "prompt": "",
+  "negativePrompt": "",
   "fieldMappings": {}
 }
 \`\`\`",
