@@ -53,4 +53,16 @@ describe("FACTORY_SNIPPETS catalog invariants", () => {
     // Audio/text catalogs are deliberately empty in v1 — menu shows user snippets only.
     expect(getFactorySnippets("prompt", "audio")).toEqual([])
   })
+
+  it("no snippet text is a substring of another (keeps the pill matcher unambiguous)", () => {
+    for (const a of FACTORY_SNIPPETS) {
+      for (const b of FACTORY_SNIPPETS) {
+        if (a.id === b.id) continue
+        expect(
+          b.text.includes(a.text),
+          `"${a.id}" text is contained in "${b.id}" text`,
+        ).toBe(false)
+      }
+    }
+  })
 })
