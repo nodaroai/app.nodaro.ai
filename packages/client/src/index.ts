@@ -160,14 +160,17 @@ export type {
   GenerateLocationInput,
   GenerateLocationResult,
   GenerateLocationAssetInput,
+  GenerateSurroundContinuationInput,
   ApproveMainImageResult,
   RecaptionLocationResult,
   LocationAssetType,
   LocationAttachColumn,
+  SurroundDirection,
 } from "./resources/locations.js"
 export {
   LOCATION_ASSET_TYPES,
   LOCATION_ATTACH_COLUMNS,
+  SURROUND_DIRECTIONS,
 } from "./resources/locations.js"
 
 export type {

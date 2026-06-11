@@ -18,6 +18,7 @@ import { ffmpegHandlers } from "./handlers/ffmpeg.js"
 import { audioAIHandlers } from "./handlers/audio-ai.js"
 import { sunoHandlers } from "./handlers/suno.js"
 import { entityHandlers } from "./handlers/entity.js"
+import { surroundHandlers } from "./handlers/surround.js"
 import { referenceSheetHandlers } from "./handlers/reference-sheet.js"
 import { motionGraphicsLottieHandlers } from "./handlers/motion-graphics-lottie.js"
 import { buildStatsKey, upsertExecutionStats } from "../services/execution-stats.js"
@@ -31,6 +32,7 @@ const allHandlers: Record<string, HandlerFn> = {
   ...audioAIHandlers,
   ...sunoHandlers,
   ...entityHandlers,
+  ...surroundHandlers,
   ...referenceSheetHandlers,
   ...motionGraphicsLottieHandlers,
 }

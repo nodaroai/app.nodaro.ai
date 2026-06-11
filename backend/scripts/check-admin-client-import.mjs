@@ -159,6 +159,15 @@ const ALLOWED_PATHS = [
   // `.eq("user_id", userId)` in-handler (verified ~lines 80-95).
   /^src\/routes\/generate-location-motion\.ts$/,
 
+  // Generate surround continuation: service-role for job insert +
+  // reserveCreditsForJob, plus an ownership re-check on `attachToLocationId`
+  // (.eq("id", id).eq("user_id", userId).is("deleted_at", null) BEFORE
+  // reserving credits). INSERTs the job with `user_id: userId`; the worker
+  // re-verifies ownership via autoAttachLocationAsset before the attach RPC.
+  // Owner-scoping is enforced by check-tenant-scope.mjs (locations is a
+  // tenant table). Mirrors generate-location-motion.ts / reference-sheet.ts.
+  /^src\/routes\/generate-surround-continuation\.ts$/,
+
   // Reference sheet: job-creation route. Derives userId = req.userId (401 if
   // absent), IDOR-scopes the entity ownership fetch
   // (.eq("id", entityDbId).eq("user_id", userId).is("deleted_at", null)) BEFORE
