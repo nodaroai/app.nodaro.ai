@@ -141,6 +141,27 @@ function clampLayerTimes(doc: JsonRecord, op: number, autoFixed: string[]): void
   }
 }
 
+// ── Rule 12: layer timing completeness (st/sr) ──────────────────────────────
+// lottie-web computes layer-local time as `frame - st`; a missing `st` is NaN,
+// the in-range gate fails, and the layer stays display:none — the document
+// loads but renders blank everywhere (prod incident 2026-06-12). `st`/`sr` are
+// spec-optional with defaults, so complete them at authoring time too (the
+// playback boundary also normalizes via `normalizeLottieLayers` in shared).
+function fixLayerTiming(doc: JsonRecord, autoFixed: string[]): void {
+  let fixed = 0
+  for (const layer of collectLayers(doc)) {
+    if (typeof layer.st !== "number") {
+      layer.st = 0
+      fixed += 1
+    }
+    if (typeof layer.sr !== "number") {
+      layer.sr = 1
+      fixed += 1
+    }
+  }
+  if (fixed > 0) autoFixed.push(`Defaulted ${fixed} missing layer timing field(s) (st/sr)`)
+}
+
 // ── Rule 3: wrap bare shape primitives; ensure groups end in tr ─────────────
 function endsWithTransform(it: unknown[]): boolean {
   const last = it[it.length - 1]
@@ -471,6 +492,7 @@ export function validateLottieGraphic(
   // Rules in order.
   fixEnvelope(doc, expected, autoFixed) // #1
   clampLayerTimes(doc, expected.durationInFrames, autoFixed) // #2
+  fixLayerTiming(doc, autoFixed) // #12 — missing st renders the layer blank in lottie-web
   fixShapeGrouping(doc, autoFixed) // #3
   fixRepeaters(doc, autoFixed) // #11 — after #3 so groups are normalized and tr-terminated
   fixColors(doc, autoFixed) // #4

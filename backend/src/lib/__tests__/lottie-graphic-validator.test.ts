@@ -42,6 +42,34 @@ describe("rule 3: every shape primitive wrapped in a group ending in tr", () => 
   })
 })
 
+describe("rule 12: layer timing completeness (st/sr)", () => {
+  it("defaults missing st/sr — a missing st renders the layer blank in lottie-web", () => {
+    const r = validateLottieGraphic(
+      base({ layers: [{ ty: 4, ip: 0, op: 150, shapes: [] }] }),
+      EXPECTED,
+    )
+    const layer = (r.plan!.lottie as any).layers[0]
+    expect(layer.st).toBe(0)
+    expect(layer.sr).toBe(1)
+    expect(r.autoFixed.some((m) => m.includes("st/sr"))).toBe(true)
+  })
+
+  it("preserves authored st/sr values, including on precomp asset layers", () => {
+    const r = validateLottieGraphic(
+      base({
+        layers: [{ ty: 4, ip: 0, op: 150, st: 30, sr: 2, shapes: [] }],
+        assets: [{ id: "pre_0", layers: [{ ty: 4, ip: 0, op: 150, shapes: [] }] }],
+      }),
+      EXPECTED,
+    )
+    const lottie = r.plan!.lottie as any
+    expect(lottie.layers[0].st).toBe(30)
+    expect(lottie.layers[0].sr).toBe(2)
+    expect(lottie.assets[0].layers[0].st).toBe(0)
+    expect(lottie.assets[0].layers[0].sr).toBe(1)
+  })
+})
+
 describe("rule 11: repeater integrity", () => {
   // Shape of prod job 73e2c691 (2026-06-11): repeater FIRST in the group and
   // missing its `tr` entirely — lottie-web threw on `data.tr.so`, DOMLoaded
