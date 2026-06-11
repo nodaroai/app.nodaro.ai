@@ -230,6 +230,8 @@ export function PromptQuickEditModal() {
                 edges={edges}
                 provider={typeof data.provider === "string" ? data.provider : undefined}
                 connectedReferences={connectedReferences}
+                snippets={promptSnippets}
+                negativeSnippets={negativeSnippets}
               />
             </div>
           )}

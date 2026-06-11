@@ -189,6 +189,7 @@ export { extractVideoDurationFromNode } from "./video-duration.js"
 
 export {
   buildImagePrompt,
+  buildImagePromptSegments,
   buildIdentityDirectives,
   buildReferenceBlocks,
   expandImageRefTokens,
@@ -202,6 +203,9 @@ export {
   truncateText,
   type BuildImagePromptConfig,
   type BuildImagePromptResult,
+  type BuildImagePromptSegmentsResult,
+  type PromptSegment,
+  type PromptSegmentOrigin,
   type ResolveCharacterMentionsResult,
 } from "./prompt-builder.js"
 
