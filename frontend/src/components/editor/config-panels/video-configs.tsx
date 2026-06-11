@@ -53,6 +53,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ConnectedMediaList, getSourceThumbnail } from "./connected-media-list"
 import { InjectedReferenceList } from "./injected-reference-list"
+import { SeedanceReferenceTip } from "./seedance-reference-tip"
 import { removeMentionToken, makeRemoveWiredSource, appendSuppressedSlug } from "./injected-reference-helpers"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { FinalPromptPreview } from "./final-prompt-preview"
@@ -536,6 +537,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
         }
         label="Injected references"
       />
+      <SeedanceReferenceTip provider={data.provider} />
 
       <ExtraRefsSection
         extraRefs={data.extraRefs}
@@ -1199,6 +1201,7 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
         }
         label="Injected references"
       />
+      <SeedanceReferenceTip provider={data.provider} />
 
       {/* Wan / Wan Flash: Duration & Resolution */}
       {isWan && (
@@ -1531,6 +1534,7 @@ function MotionTransferConfigImpl({ data, onUpdate, sources, fieldMappings, onMa
         }
         label="Injected references"
       />
+      <SeedanceReferenceTip provider={data.provider} />
     </div>
   )
 }
@@ -1707,6 +1711,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
         }
         label="Injected references"
       />
+      <SeedanceReferenceTip provider={data.provider} />
 
       <MappableField field="duration" label="Duration (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         {allowedDurations ? (
@@ -2297,6 +2302,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
         }
         label="Injected references"
       />
+      <SeedanceReferenceTip provider={data.provider} />
 
       <ExtraRefsSection
         extraRefs={data.extraRefs}
@@ -3125,6 +3131,7 @@ export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, on
         }
         label="Injected references"
       />
+      <SeedanceReferenceTip provider={data.provider} />
 
       {/* Negative Prompt */}
       <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -3263,6 +3270,7 @@ export function FaceSwapConfig({ data, onUpdate, sources, edges, nodeId }: Confi
         }
         label="Injected references"
       />
+      <SeedanceReferenceTip provider={data.provider} />
     </div>
   )
 }

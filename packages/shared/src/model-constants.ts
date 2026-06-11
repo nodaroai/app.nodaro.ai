@@ -1182,6 +1182,12 @@ export const COMPOSER_PLAN_MAP: Readonly<Record<string, { planType: string; plan
   "composite": { planType: "composite", planField: "compositePlan" },
 }
 
+/** Every composer plan-field name, derived from COMPOSER_PLAN_MAP (single source
+ *  of truth — consumed by preset plan-state hygiene and job-output extraction). */
+export const COMPOSER_PLAN_FIELDS: readonly string[] = [
+  ...new Set(Object.values(COMPOSER_PLAN_MAP).map((m) => m.planField)),
+]
+
 /**
  * Duration tier breakpoints for motion control pricing (per-second billing).
  * Same shape as VIDEO_DURATION_TIERS entries but with 30s tier for long reference videos.

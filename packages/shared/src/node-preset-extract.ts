@@ -1,4 +1,30 @@
 import { EXECUTION_DATA_KEYS } from "./node-runtime-keys.js"
+import { COMPOSER_PLAN_FIELDS } from "./model-constants.js"
+
+/**
+ * Generated-plan state on composer nodes that a preset must NEITHER capture NOR
+ * carry, and that the dropdown must CLEAR when applying a preset:
+ *
+ *  - every composer node's plan field (`COMPOSER_PLAN_MAP[*].planField` —
+ *    sceneGraph / effectPlan / overlayPlan / titlePlan / motionPlan /
+ *    compositePlan): a large LLM-authored plan blob, regenerated per run.
+ *  - `lottieUrl`: the R2 url of the authored Lottie JSON (motion-graphics'
+ *    `lottie` handle output) — a reapable generated artifact, not config.
+ *
+ * Derived from the single source of truth (COMPOSER_PLAN_MAP) so a new composer
+ * node type is covered by construction — no per-type list to keep in sync.
+ *
+ * Two distinct hazards this closes (see motion-graphics-presets design §2a/§2b):
+ *  1. Apply-time staleness: applying a preset over a node that already generated
+ *     a plan would leave the OLD animation showing under the NEW prompt (the
+ *     plan field is named by no patch, so it persists in the preview and on the
+ *     output handle). The dropdown spreads `{ ...clearPatch, ...preset.data }`
+ *     where clearPatch maps each key here to `undefined`.
+ *  2. Capture pollution: a user-saved preset would otherwise capture the plan
+ *     blob (~tens of KB) + a stale url, re-injecting them on every apply and
+ *     bloating the preset row. These keys are in the capture-exclusion set below.
+ */
+export const PRESET_APPLY_CLEAR_KEYS: readonly string[] = [...COMPOSER_PLAN_FIELDS, "lottieUrl"]
 
 /**
  * Config fields that are intentionally NOT part of a preset, because they are not portable
@@ -32,6 +58,12 @@ import { EXECUTION_DATA_KEYS } from "./node-runtime-keys.js"
  *
  *  NOTE: manual reference image urls (`referenceImageUrl` / `referenceImageUrls`) are deliberately
  *  KEPT — they are self-contained R2 urls a user set as input, and portable across nodes.
+ *
+ *  Generated composer-plan state (`PRESET_APPLY_CLEAR_KEYS` — every COMPOSER_PLAN_MAP plan field +
+ *  `lottieUrl`): NOT portable config — a per-run LLM-authored plan blob / reapable artifact url.
+ *  Excluded here (preset-scoped, zero blast radius) rather than via EXECUTION_DATA_KEYS, whose
+ *  non-preset consumers (undo-skip in use-workflow-store, auto-execute IGNORE_KEYS) would then
+ *  treat a legitimately-persisted plan as transient runtime state.
  */
 export const PRESET_EXCLUDED_KEYS: ReadonlySet<string> = new Set([
   "label",
@@ -55,6 +87,8 @@ export const PRESET_EXCLUDED_KEYS: ReadonlySet<string> = new Set([
   "outputPorts",
   "channel",
   "channelColor",
+  // generated composer-plan state (derived from COMPOSER_PLAN_MAP + lottieUrl)
+  ...PRESET_APPLY_CLEAR_KEYS,
 ])
 
 /**

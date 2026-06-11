@@ -35,6 +35,7 @@ export {
   VIDEO_DURATION_TIERS,
   ASPECT_RATIO_DIMENSIONS,
   COMPOSER_PLAN_MAP,
+  COMPOSER_PLAN_FIELDS,
   IMAGE_GEN_PROVIDERS,
   IMAGE_I2I_PROVIDERS,
   IMAGE_EDIT_PROVIDERS,
@@ -727,6 +728,13 @@ export {
 } from "./lottie-slots.js"
 export type { SlotControlKind, SlotControlDescriptor, LottieSlotField } from "./lottie-slots.js"
 
+export {
+  LOTTIE_OVERLAY_CATALOG,
+  LEGACY_LOTTIE_HOST_REMAP,
+  resolveLottieOverlaySrc,
+} from "./lottie-overlay-catalog.js"
+export type { LottieOverlayCatalogEntry } from "./lottie-overlay-catalog.js"
+
 export { PICKER_CATALOGS, getPickerCatalog, listPickerCatalogs } from "./picker-catalogs.js"
 export type { PickerOption, PickerCatalog, PickerDimension } from "./picker-catalogs.js"
 
@@ -1201,9 +1209,17 @@ export {
 
 // --- Node presets ---
 export { EXECUTION_DATA_KEYS } from "./node-runtime-keys.js"
-export { extractPresetData, PRESET_EXCLUDED_KEYS, presetDataMatches } from "./node-preset-extract.js"
+export { extractPresetData, PRESET_EXCLUDED_KEYS, PRESET_APPLY_CLEAR_KEYS, presetDataMatches } from "./node-preset-extract.js"
 export type { FactoryPreset, FactoryPresetGroup } from "./factory-presets.js"
 export { FACTORY_PRESETS, getFactoryPresets, groupFactoryPresets } from "./factory-presets.js"
+
+// --- Per-provider prompting doctrine (wizard/enhance + gen-skills + list_models) ---
+export {
+  PROVIDER_PROMPT_DOCTRINES,
+  getPromptDoctrine,
+  getPromptTips,
+  type ProviderPromptDoctrine,
+} from "./provider-prompt-doctrine.js"
 export type { ExportedPreset, NodePresetExport } from "./node-preset-export.js"
 export {
   NODE_PRESET_EXPORT_KIND,

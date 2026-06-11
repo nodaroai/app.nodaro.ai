@@ -1,6 +1,11 @@
 import { describe, it, expect } from "vitest"
 import { EXECUTION_DATA_KEYS } from "../node-runtime-keys.js"
-import { extractPresetData, PRESET_EXCLUDED_KEYS, presetDataMatches } from "../node-preset-extract.js"
+import {
+  extractPresetData,
+  PRESET_EXCLUDED_KEYS,
+  PRESET_APPLY_CLEAR_KEYS,
+  presetDataMatches,
+} from "../node-preset-extract.js"
 
 describe("EXECUTION_DATA_KEYS", () => {
   it("is non-empty and contains known result keys", () => {
@@ -98,6 +103,31 @@ describe("extractPresetData", () => {
       channelColor: "#f59e0b",
     })
     expect(out).toEqual({ mode: "radio" })
+  })
+
+  it("drops generated composer-plan state (motionPlan + lottieUrl) but keeps the prompt", () => {
+    const out = extractPresetData({
+      motionPrompt: "x",
+      engine: "lottie",
+      motionPlan: { layers: [{ ind: 1 }], slots: {} },
+      lottieUrl: "https://r2.example/lottie/abc.json",
+    })
+    expect(out).toEqual({ motionPrompt: "x", engine: "lottie" })
+  })
+
+  it("excludes every generated composer-plan field for all composer node types", () => {
+    const input: Record<string, unknown> = { keep: 1 }
+    // every plan field (sceneGraph/effectPlan/overlayPlan/titlePlan/motionPlan/compositePlan) + lottieUrl
+    for (const k of PRESET_APPLY_CLEAR_KEYS) input[k] = "generated"
+    expect(extractPresetData(input)).toEqual({ keep: 1 })
+  })
+})
+
+describe("PRESET_EXCLUDED_KEYS ⊇ PRESET_APPLY_CLEAR_KEYS", () => {
+  it("every clear-on-apply key is also capture-excluded (one source covers save + import + override)", () => {
+    for (const k of PRESET_APPLY_CLEAR_KEYS) {
+      expect(PRESET_EXCLUDED_KEYS.has(k), `${k} must be capture-excluded`).toBe(true)
+    }
   })
 })
 

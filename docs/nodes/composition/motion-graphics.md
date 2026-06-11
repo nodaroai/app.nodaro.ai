@@ -36,6 +36,23 @@ Slot names stay **stable across regenerations**: when you re-run the node, the e
 
 **Exposing slots as app inputs:** when this node is added as an input in the publish dialog, each slot becomes an editable field (color / text / number) in the published app and in presentation mode. End-users adjust them per run without regenerating — the same free, no-credit edit, surfaced to your app's audience. See the [embed-app guide](../../embed-app-guide.md#lottie-slot-fields-slotsid) for the override mechanics.
 
+## Presets
+
+The node ships a curated **factory preset catalog** — 22 presets across six folders, **all targeting the Lottie engine**. Each preset is a complete art-direction brief that pre-fills the prompt, aspect ratio, duration, and background, and declares the **stable, editable slots** it exposes (a brand color, a name string, etc.) so your edits survive regeneration and surface as fields in published apps.
+
+| Folder | What's inside |
+|--------|---------------|
+| **Titles & Text** | Lower Third, Title Card, Kinetic Typography, Quote Card, End Card (CTA) — name/role, headline/subtitle, and CTA cards with staggered entrances and clean exits. |
+| **Intros & Logos** | Logo Sting, Channel Intro, Countdown — punchy brand reveals with anticipation/overshoot, plus a keyframed 5→1 ring countdown. |
+| **Social & CTA** | Subscribe Reminder, Like + Follow Bug, Sale Badge, Story Highlight — transparent overlays and a vertical (9:16) story card for short-form. |
+| **UI & Icons** | Loader / Spinner, Success Check, Error Cross, Progress Bar, Notification Pop — draw-on / trim-path UI states, mostly square and transparent. |
+| **FX Overlays** | Confetti Burst, Sparkle Shimmer, Speed Lines — particle-style overlays (built with repeaters to stay light), all transparent for compositing. |
+| **Backgrounds** | Gradient Blob Loop, Geometric Pattern Loop — 8-second seamless looping backdrops on an opaque dark fill. |
+
+Overlay presets set a transparent background (`#00000000`); standalone presets (title cards, intro, countdown, backgrounds) set an opaque dark background. Text slots ship placeholder copy (e.g. "Jane Doe", "SUBSCRIBE") for you to retype.
+
+Selecting a preset **overwrites** the prompt and canvas settings (engine, aspect ratio, duration, background) and **clears any previously generated plan**, so the old animation never lingers under the new prompt. After generating, tweak the named slots for free (no credits, no regeneration). The full catalog is documented in the [Presets reference](../presets.md#motion-graphics-factory-catalog).
+
 ## Pricing
 
 Credits follow the standard LLM formula:

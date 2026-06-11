@@ -2,6 +2,7 @@
 
 import {
   getCategoriesForNodeType,
+  getPromptDoctrine,
   PROVIDER_CAPABILITIES,
   REFERENCE_IMAGE_ROLES,
 } from "@nodaro/shared"
@@ -91,7 +92,7 @@ export function buildWizardAnalyzeSystem(ctx: WizardAnalyzeContext): string {
     referenceBlock = `
 
 ## Reference Images
-${refCount} reference image(s) connected. For EACH reference image, add a question with:
+${refCount} reference image(s) connected. They are delivered to the provider as an ordered array — Image 1 carries the most weight. For EACH reference image, add a question with:
 - category: "reference-role-1", "reference-role-2", etc.
 - multi: true (user can select multiple roles per image)
 - Use these role options:
@@ -148,19 +149,34 @@ When the user's input suggests ARTISTIC styles (anime, watercolor, pixel art, et
 }`
 }
 
-function buildProviderBlock(nodeType: string): string {
+function buildProviderBlock(nodeType: string, provider?: string): string {
   const providerCaps = PROVIDER_CAPABILITIES[nodeType]
-  if (!providerCaps || Object.keys(providerCaps).length <= 1) return ""
-  const entries = Object.entries(providerCaps)
-    .map(([p, desc]) => `- ${p}: ${desc}`)
-    .join("\n")
-  return `
+  let block = ""
+  if (providerCaps && Object.keys(providerCaps).length > 1) {
+    const entries = Object.entries(providerCaps)
+      .map(([p, desc]) => `- ${p}: ${desc}`)
+      .join("\n")
+    block += `
 
 ## Available Providers
 ${entries}
 
 If a particular provider would excel at this content, include "recommendedModel" in your response.
 For suno-generate nodes, use field: "model" instead of field: "provider".`
+  }
+  // Model-family-specific prompting rules for the CURRENT provider — the
+  // registry lives in @nodaro/shared so the wizard, gen-skills docs, and
+  // list_models promptTips can never drift apart.
+  const doctrine = provider ? getPromptDoctrine(provider) : undefined
+  if (doctrine) {
+    block += `
+
+## Provider Prompting Doctrine — ${doctrine.heading}
+The CURRENT provider is ${provider}. Apply this model-specific doctrine when writing the prompt:
+
+${doctrine.doctrine}`
+  }
+  return block
 }
 
 function buildContextBlock(ctx: { provider?: string; style?: string; aspectRatio?: string; duration?: number }): string {
@@ -180,7 +196,7 @@ export function buildWizardGenerateSystem(ctx: WizardGenerateContext): string {
     .map((s) => `- ${s.category}: ${s.value}${s.isCustom ? " (custom)" : ""}`)
     .join("\n")
 
-  const providerBlock = buildProviderBlock(ctx.nodeType)
+  const providerBlock = buildProviderBlock(ctx.nodeType, ctx.provider)
   const contextBlock = buildContextBlock(ctx)
 
   return `${persona}
@@ -197,7 +213,7 @@ ${ctx.userPreference ? `## User Preference\nThe user has set a general preferenc
 1. Weave all selections into one concise, natural-language prompt — under 500 characters.
 2. Preserve the user's original text if provided.
 3. Weave style, mood, lighting naturally — do not keyword-stuff.
-4. For reference-role selections, include explicit per-image role instructions (e.g., "The first image defines the character. Preserve identity exactly. The second image defines the mood and lighting.").
+4. For reference-role selections, include explicit per-image role instructions bound by ordinal (e.g., "Image 1 defines the character — preserve identity exactly. Image 2 defines the mood and lighting.").
 5. If "what-to-avoid" selections are present, append them as a negative instruction at the end of the prompt (e.g., "Avoid: CGI look, plastic skin, oversaturated colors").
 6. Output ONLY valid JSON — no markdown, no wrapping:
 
@@ -228,12 +244,18 @@ export function buildWizardEnhanceSystem(ctx: WizardEnhanceContext): string {
   const contentCategory = NODE_CATEGORY_MAP[ctx.nodeType] ?? "image"
   const persona = PERSONA[contentCategory] ?? PERSONA.image
 
-  const providerBlock = buildProviderBlock(ctx.nodeType)
+  const providerBlock = buildProviderBlock(ctx.nodeType, ctx.provider)
   const contextBlock = buildContextBlock(ctx)
 
   const refCount = ctx.nodeContext?.referenceImageCount ?? 0
+  // References are sent to providers as an ordered array; "Image N" is the
+  // platform-wide ordinal convention (and official Seedance syntax), so the
+  // rewritten prompt should bind subjects to ordinals explicitly.
   const referenceBlock = refCount > 0
-    ? `\n- ${refCount} reference image(s) connected — account for them in the prompt.`
+    ? `\n- ${refCount} reference image(s) are attached in a FIXED order: Image 1 … Image ${refCount}.` +
+      `\n- Bind each subject/element to its reference by ordinal — e.g. "the woman from Image 1", ` +
+      `"the scene style from Image 2" — so every reference has an explicit job. ` +
+      `Earlier references carry more weight.`
     : ""
 
   const imageVocab = contentCategory === "image"

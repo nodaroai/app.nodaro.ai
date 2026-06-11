@@ -104,16 +104,16 @@ export async function resolveRefArray(
   max: number,
 ): Promise<string[]> {
   const items = coerceStringArray(value, max)
-  const out: string[] = []
-  for (const item of items) {
-    if (/^https?:\/\//.test(item)) {
-      out.push(item)
-      continue
-    }
-    const resolved = await resolveAssetId({ assetId: item, userId, expectedKind })
-    if (resolved) out.push(resolved)
-  }
-  return out
+  // Resolve asset ids concurrently (up to ~15 per call across the verb
+  // tools); order is preserved and unresolvable ids drop.
+  const resolved = await Promise.all(
+    items.map((item) =>
+      /^https?:\/\//.test(item)
+        ? item
+        : resolveAssetId({ assetId: item, userId, expectedKind }),
+    ),
+  )
+  return resolved.filter((r): r is string => typeof r === "string" && r.length > 0)
 }
 
 /**

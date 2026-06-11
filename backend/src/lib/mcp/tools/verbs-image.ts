@@ -9,7 +9,6 @@ import { config } from "../../config.js"
 import {
   errorResult,
   dispatchJob,
-  coerceStringArray,
   resolveRefArray,
 } from "./_verb-helpers.js"
 import { modelIdsByKindMode } from "@nodaro/shared"
@@ -557,7 +556,8 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe(
             "Extra reference images (URLs or Nodaro asset ids, up to 13) for multi-ref " +
-            "models. Accepts an array; a lone URL or a JSON-stringified array is coerced.",
+            "models — asset ids are resolved server-side. Accepts an array; a lone URL " +
+            "or a JSON-stringified array is coerced.",
           ),
         resolution: z.enum(["1K", "2K", "4K"]).optional(),
         quality: z.enum(["medium", "high", "basic"]).optional(),
@@ -587,7 +587,9 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           : null)
       if (!imageUrl) return { content: [{ type: "text" as const, text: "Pass image_url or image_asset_id." }], isError: true }
 
-      const i2iRefs = coerceStringArray(args.reference_image_urls, 13)
+      // Resolve asset ids → URLs (route's referenceImageUrls is URL-only);
+      // tolerant of array | lone string | JSON-stringified array inputs.
+      const i2iRefs = await resolveRefArray(args.reference_image_urls, session.userId, "image", 13)
       const payload: Record<string, unknown> = {
         imageUrl,
         prompt: args.prompt,

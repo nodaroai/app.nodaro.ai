@@ -8,6 +8,30 @@ import type {
   InterfaceShape,
 } from "./parse-node-definitions.js"
 import type { CapturedSchema } from "./capture-mcp-schemas.js"
+import { PROVIDER_PROMPT_DOCTRINES } from "@nodaro/shared"
+
+/** Node types whose skill doc carries the per-provider prompting doctrine. */
+export const PROVIDER_PROMPTING_NODE_TYPES = new Set([
+  "generate-video",
+  "text-to-video",
+  "image-to-video",
+])
+
+export function renderProviderPromptingBlock(): string {
+  if (PROVIDER_PROMPT_DOCTRINES.length === 0) return ""
+  const sections = PROVIDER_PROMPT_DOCTRINES.map(
+    (d) => `### ${d.heading}\n\n${d.doctrine}`,
+  ).join("\n\n")
+  return [
+    "## Provider prompting doctrine",
+    "",
+    "Model-family-specific prompting rules. Apply the section matching the node's `provider`.",
+    "",
+    sections,
+    "",
+    "_Generated from `PROVIDER_PROMPT_DOCTRINES` in `@nodaro/shared` — edit there, then `npm run gen:skills`._",
+  ].join("\n")
+}
 
 export function renderNodeDataShapeBlock(
   def: NodeDef,

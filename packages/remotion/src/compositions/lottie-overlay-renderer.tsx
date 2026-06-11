@@ -8,6 +8,7 @@ import {
   cancelRender,
 } from "remotion"
 import { Lottie, type LottieAnimationData } from "@remotion/lottie"
+import { resolveLottieOverlaySrc } from "@nodaro/shared"
 import type { LottieOverlayPlan, LottieOverlayItem } from "../plan-types"
 
 interface LottieOverlayRendererProps {
@@ -23,9 +24,15 @@ function LottieOverlayLayer({ overlay }: { readonly overlay: LottieOverlayItem }
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 30_000)
 
-    fetch(overlay.src, { signal: controller.signal })
+    // Heal legacy plans: a `src` saved before the catalog cut-over still points
+    // at a dead lottie.host URL (origin 403). resolveLottieOverlaySrc rewrites
+    // it to its self-hosted replacement; user-provided/already-migrated URLs
+    // pass through unchanged.
+    const src = resolveLottieOverlaySrc(overlay.src)
+
+    fetch(src, { signal: controller.signal })
       .then((res) => {
-        if (!res.ok) throw new Error(`Failed to fetch Lottie ${overlay.src}: ${res.status}`)
+        if (!res.ok) throw new Error(`Failed to fetch Lottie ${src}: ${res.status}`)
         return res.json()
       })
       .then((json) => {
@@ -37,7 +44,7 @@ function LottieOverlayLayer({ overlay }: { readonly overlay: LottieOverlayItem }
       .catch((err) => {
         if (!cancelled) {
           const message = controller.signal.aborted
-            ? `Lottie fetch timed out after 30s: ${overlay.src}`
+            ? `Lottie fetch timed out after 30s: ${src}`
             : err instanceof Error ? err.message : String(err)
           cancelRender(new Error(message))
         }

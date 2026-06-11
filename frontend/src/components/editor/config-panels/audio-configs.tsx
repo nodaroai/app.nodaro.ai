@@ -61,6 +61,7 @@ import { FinalAudioPromptPreview } from "./final-audio-prompt-preview"
 import { LIP_SYNC_MODELS, TTS_MODELS, SUNO_MODELS } from "./model-options"
 import { REPLICATE_LIP_SYNC_PROVIDERS, getEffectiveSunoCustomMode, SUNO_ADD_TRACK_MODELS } from "@nodaro/shared"
 import { InjectedReferenceList } from "./injected-reference-list"
+import { SeedanceReferenceTip } from "./seedance-reference-tip"
 import { WaveformAudioPlayer } from "@/components/audio-player"
 import { removeMentionToken, makeRemoveWiredSource, appendSuppressedSlug } from "./injected-reference-helpers"
 import { buildConnectedRefsFromSources } from "./connected-refs-builder"
@@ -1031,6 +1032,7 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
         }
         label="Injected references"
       />
+      <SeedanceReferenceTip provider={provider} />
 
       {/* LatentSync params */}
       {provider === "latentsync" && (
