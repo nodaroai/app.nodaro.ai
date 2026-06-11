@@ -112,7 +112,11 @@ describe("useFinalPromptSegments — negativeRouting", () => {
     expect(result.current.negativeRouting).toBeNull()
     // Provider-less surfaces still expose the resolved negative text (flat).
     expect(result.current.negativeText).toBe("blurry")
-    expect(result.current.promptSegments).toEqual([])
+    // Provider-less prompt segments are now tinted (variables/snippets); a plain
+    // prompt with neither yields a single user span. The contract that survives
+    // is the join-guard, not emptiness — assert the decomposition reconstructs
+    // the text (was `[]` under the pre-tinting implementation).
+    expect(result.current.promptSegments.map((s) => s.text).join("")).toBe(result.current.promptText)
   })
 })
 
@@ -188,5 +192,150 @@ describe("useFinalPromptSegments — assembly provenance + copy (ported from PR-
       }),
     )
     expect(result.current.copyText).toContain("Negative prompt: blurry")
+  })
+})
+
+describe("useFinalPromptSegments — provider-less tinting (variables + snippets)", () => {
+  // The provider-less branch (most video/audio/script/llm-chat/composition/input
+  // panels) must now tint resolved {variables} and inserted snippets over the
+  // flat field text — mirroring how the branch composes `promptText` — while
+  // always keeping the absolute join-guard: segments reconstruct the text or we
+  // fall back to `[]` (the view renders plainText). These cases exercise the
+  // branch with NO `provider` set.
+
+  it("(a) tints a {Variable} + a snippet, with join === promptText", () => {
+    // {Var} resolves to "a knight" (variable origin) and the literal text carries
+    // an inserted snippet "golden hour" (snippet origin). No provider → flat path.
+    const nodes = [
+      { id: "n1", type: "speech-to-video", position: { x: 0, y: 0 }, data: {} },
+      {
+        id: "src",
+        type: "text-prompt",
+        position: { x: 0, y: 0 },
+        data: { label: "Hero", text: "a knight" },
+      },
+    ] as never[]
+    const edges = [{ id: "e", source: "src", target: "n1" }] as never[]
+    const snippets: SnippetPoolItem[] = [
+      { id: "gh", name: "Golden Hour", text: "golden hour", target: "prompt", category: "Lighting", source: "factory" },
+    ]
+    const { result } = renderHook(() =>
+      useFinalPromptSegments({
+        userPrompt: "{Hero} in golden hour",
+        consumerNodeId: "n1",
+        nodes,
+        edges,
+        // no provider → flat fallback path
+        snippets,
+      }),
+    )
+    // Variable + snippet origins both present.
+    const variableSeg = result.current.promptSegments.find((s) => s.origin === "variable")
+    expect(variableSeg?.text).toBe("a knight")
+    const snippetSeg = result.current.promptSegments.find((s) => s.origin === "snippet")
+    expect(snippetSeg?.text).toBe("golden hour")
+    // Absolute join-guard: the tinted decomposition reconstructs the flat text.
+    expect(result.current.promptSegments.map((s) => s.text).join("")).toBe(result.current.promptText)
+    // And the assembled text is the resolved prose.
+    expect(result.current.promptText).toBe("a knight in golden hour")
+  })
+
+  it("(b) appends a trailing style-origin segment when a style is set", () => {
+    const { result } = renderHook(() =>
+      useFinalPromptSegments({
+        userPrompt: "a knight",
+        style: "noir",
+        consumerNodeId: "n1",
+        ...EMPTY_GRAPH,
+        // no provider → flat fallback path
+      }),
+    )
+    const styleSeg = result.current.promptSegments.find((s) => s.origin === "style")
+    expect(styleSeg?.text).toContain("Style:")
+    // The style segment is the trailing one and starts with the newline-joiner.
+    const last = result.current.promptSegments[result.current.promptSegments.length - 1]
+    expect(last.origin).toBe("style")
+    expect(last.text.startsWith("\nStyle: ")).toBe(true)
+    // Join-guard holds with the style suffix folded in.
+    expect(result.current.promptSegments.map((s) => s.text).join("")).toBe(result.current.promptText)
+  })
+
+  it("(c) join invariant holds on every representative provider-less input", () => {
+    // A constructed mismatch path is hard to trigger deliberately, so instead we
+    // assert the join invariant across a spread of provider-less shapes — any
+    // divergence would mean a wrong decomposition shipped (the guard would have
+    // collapsed it to [] → plainText, which still satisfies the empty case).
+    const nodes = [
+      { id: "n1", type: "speech-to-video", position: { x: 0, y: 0 }, data: {} },
+      { id: "src", type: "text-prompt", position: { x: 0, y: 0 }, data: { label: "Hero", text: "a knight" } },
+    ] as never[]
+    const edges = [{ id: "e", source: "src", target: "n1" }] as never[]
+    const snippets: SnippetPoolItem[] = [
+      { id: "gh", name: "Golden Hour", text: "golden hour", target: "prompt", category: "Lighting", source: "factory" },
+    ]
+    const cases: Parameters<typeof useFinalPromptSegments>[0][] = [
+      { userPrompt: "plain text only", consumerNodeId: "n1", nodes, edges },
+      { userPrompt: "{Hero} fights", consumerNodeId: "n1", nodes, edges },
+      { userPrompt: "a knight in golden hour", consumerNodeId: "n1", nodes, edges, snippets },
+      { userPrompt: "{Hero} in golden hour", consumerNodeId: "n1", nodes, edges, snippets },
+      { userPrompt: "{Hero}", style: "noir", consumerNodeId: "n1", nodes, edges },
+      { userPrompt: "", style: "noir", consumerNodeId: "n1", nodes, edges },
+      { userPrompt: "{Nope} literal", consumerNodeId: "n1", nodes, edges },
+    ]
+    for (const args of cases) {
+      const { result } = renderHook(() => useFinalPromptSegments(args))
+      const segs = result.current.promptSegments
+      if (segs.length > 0) {
+        expect(segs.map((s) => s.text).join(""), `prompt=${JSON.stringify(args.userPrompt)}`).toBe(
+          result.current.promptText,
+        )
+      }
+    }
+  })
+
+  it("(d) negative: variable + snippet tinting, join === negativeText", () => {
+    const nodes = [
+      { id: "n1", type: "speech-to-video", position: { x: 0, y: 0 }, data: {} },
+      { id: "src", type: "text-prompt", position: { x: 0, y: 0 }, data: { label: "Banned", text: "watermark" } },
+    ] as never[]
+    const edges = [{ id: "e", source: "src", target: "n1" }] as never[]
+    const negativeSnippets: SnippetPoolItem[] = [
+      { id: "bl", name: "Blur Scrub", text: "blurry", target: "negative", category: "Negative", source: "factory" },
+    ]
+    const { result } = renderHook(() =>
+      useFinalPromptSegments({
+        userPrompt: "a knight",
+        negativePrompt: "{Banned}, blurry",
+        consumerNodeId: "n1",
+        nodes,
+        edges,
+        // no provider → flat fallback path
+        negativeSnippets,
+      }),
+    )
+    // No provider → routing stays null, but the negative is still tinted.
+    expect(result.current.negativeRouting).toBeNull()
+    const variableSeg = result.current.negativeSegments.find((s) => s.origin === "variable")
+    expect(variableSeg?.text).toBe("watermark")
+    const snippetSeg = result.current.negativeSegments.find((s) => s.origin === "snippet")
+    expect(snippetSeg?.text).toBe("blurry")
+    // Join-guard vs negativeText (== resolvedNeg).
+    expect(result.current.negativeSegments.map((s) => s.text).join("")).toBe(result.current.negativeText)
+    expect(result.current.negativeText).toBe("watermark, blurry")
+  })
+
+  it("plain text with no variables/snippets/style still tints (single user span), join holds", () => {
+    const { result } = renderHook(() =>
+      useFinalPromptSegments({
+        userPrompt: "just a plain prompt",
+        consumerNodeId: "n1",
+        ...EMPTY_GRAPH,
+        // no provider → flat fallback path
+      }),
+    )
+    expect(result.current.promptText).toBe("just a plain prompt")
+    expect(result.current.promptSegments.map((s) => s.text).join("")).toBe("just a plain prompt")
+    // No non-user origins → the view shows no legend (presentational concern),
+    // but the segments still reconstruct the text.
   })
 })

@@ -296,8 +296,10 @@ export function useFinalPromptSegments(args: UseFinalPromptSegmentsArgs): UseFin
     }
 
     // Provider-less fallback: legacy manual composition (kept for callers that
-    // haven't wired up `provider`). Best-effort preview, not byte-identical, and
-    // rendered as flat text (no provenance spans).
+    // haven't wired up `provider`). Best-effort preview, not byte-identical to a
+    // model payload — but the {variable} + snippet tinting IS exact, and the
+    // join-guard below guarantees the tinted spans always reconstruct the flat
+    // text (else we drop to `[]` and the view renders plainText verbatim).
     const trimmedStyle = styleBypass ? "" : (style ?? "").trim()
     const styleText = trimmedStyle
       ? (getStylePromptHint(trimmedStyle) || trimmedStyle)
@@ -310,6 +312,55 @@ export function useFinalPromptSegments(args: UseFinalPromptSegmentsArgs): UseFin
     }
     if (styleText) promptText += (promptText ? "\n" : "") + `Style: ${styleText}`
 
+    // Origin-tagged decomposition mirroring the flat composition above EXACTLY.
+    //
+    // Body: tint the user prose's {variables} (resolveTextRefsSegments), then
+    // append the picker hints + identity-clause spans with the SAME joiners and
+    // origins as the provider path's `bodySegs` ("." . " " ", " joiners; hints →
+    // "picker", identity clause → "mention"), so their join equals
+    // `preBuildPrompt` — the body half of `promptText`.
+    const userSegsFlat = resolveTextRefsSegments(rawUser, refMap) as DisplaySegment[]
+    const bodySegsFlat: DisplaySegment[] = [...userSegsFlat]
+    if (hints.length > 0) {
+      if (resolvedUser) bodySegsFlat.push({ text: ". ", origin: "user" })
+      hints.forEach((h, i) => {
+        if (i > 0) bodySegsFlat.push({ text: ", ", origin: "user" })
+        bodySegsFlat.push({ text: h, origin: "picker" })
+      })
+    }
+    if (identityClause) {
+      if (bodySegsFlat.length > 0) bodySegsFlat.push({ text: " ", origin: "user" })
+      bodySegsFlat.push({ text: identityClause, origin: "mention" })
+    }
+    // Snippet post-pass over user-origin body spans (matches the provider path;
+    // partitioning only — never alters text, so the join is preserved).
+    const tintedBody = splitUserSegmentsBySnippets(bodySegsFlat, promptSnippets)
+
+    // Wrap: prepend the reference intro (mirror `${refIntro}\n\n${promptText}`
+    // → the prefix string is `refIntro + "\n\n"` when there's a body, else just
+    // `refIntro`) as a "mention" span; append the style suffix (mirror
+    // `(promptText ? "\n" : "") + "Style: " + styleText`) as a "style" span.
+    const bodyText = baseParts.join(". ")
+    const promptSegmentsFlat: DisplaySegment[] = []
+    if (refIntro) {
+      promptSegmentsFlat.push({ text: bodyText ? `${refIntro}\n\n` : refIntro, origin: "mention" })
+    }
+    if (bodyText) promptSegmentsFlat.push(...tintedBody)
+    if (styleText) {
+      // `promptText` here is everything before the style suffix (= refIntro-wrap
+      // + body). Re-derive whether a newline separator precedes the suffix.
+      const beforeStyle = refIntro ? (bodyText ? `${refIntro}\n\n${bodyText}` : refIntro) : bodyText
+      promptSegmentsFlat.push({ text: (beforeStyle ? "\n" : "") + `Style: ${styleText}`, origin: "style" })
+    }
+    // ABSOLUTE join-guard: never ship a decomposition that doesn't reconstruct
+    // the displayed text. On any drift, fall back to `[]` (the view renders
+    // plainText) — the same discipline as the provider path's bodySegs invariant
+    // and `buildNegativeSegments`.
+    const promptSegments =
+      promptSegmentsFlat.map((s) => s.text).join("") === promptText
+        ? promptSegmentsFlat
+        : ([] as DisplaySegment[])
+
     const copyLines: string[] = []
     if (promptText) copyLines.push(promptText)
     if (resolvedNeg) copyLines.push(`Negative prompt: ${resolvedNeg}`)
@@ -320,8 +371,13 @@ export function useFinalPromptSegments(args: UseFinalPromptSegmentsArgs): UseFin
       refBlock: refIntro,
       negativeText: resolvedNeg,
       copyText: copyLines.join("\n\n"),
-      promptSegments: [] as DisplaySegment[],
-      negativeSegments: [] as DisplaySegment[],
+      promptSegments,
+      // Negative: tint {variables} + snippets over the resolved negative. The
+      // join-guard inside buildNegativeSegments collapses to a single plain span
+      // if the decomposition can't reconstruct `resolvedNeg` (defensive; the
+      // node-refs-segments join-invariant test guarantees equality for the
+      // variable layer, and the snippet split only partitions).
+      negativeSegments: buildNegativeSegments(resolvedNeg, rawNeg, refMap, negSnippets),
       // Provider-less surfaces have no native/append routing concept.
       negativeRouting: null,
     }

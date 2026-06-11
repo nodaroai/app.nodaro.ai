@@ -163,10 +163,16 @@ same variable- and snippet-highlighting.
 
 On **every other node** (most video panels, audio, music, script, the text-input
 node, and the ⌘E modal for a provider-less node) the final view shows the same
-read-only assembled text — with your `{variables}` resolved to their upstream
-values — but as **plain text without provenance colors**. Same toggle, same Copy
-button, fewer visuals. (Provider-aware colors require the per-provider assembly
-that only image generation runs today.)
+read-only assembled text with **fewer provenance colors**: your `{variables}`
+resolve to their upstream values (sky blue), inserted snippets are highlighted
+(amber), any connected cinematography / parameter-picker fragments are tinted
+(indigo), a wired identity-lock clause reads as a **References** span (violet),
+and an appended `Style: …` suffix is greyed — exactly as on the provider-aware
+surfaces, for whichever of those are actually present. What these nodes don't
+show is the full reference-directive block (the "Use these characters:" wrap)
+and byte-exact model assembly — both require the per-provider builder that only
+image generation runs today. Same toggle, same Copy button. (If a piece can't be
+matched back cleanly, the field falls back to plain text rather than mis-tint.)
 
 ### Negative-prompt fields
 
