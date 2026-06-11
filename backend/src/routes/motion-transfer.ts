@@ -22,15 +22,15 @@ import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { MOTION_TRANSFER_PROVIDERS } from "@nodaro/shared"
+import { MOTION_TRANSFER_PROVIDERS, VIDEO_PROMPT_MAX } from "@nodaro/shared"
 import { buildMotionCreditModelIdentifier } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 
 const motionTransferBody = z.object({
   imageUrl: safeUrlSchema,
   videoUrl: safeUrlSchema,
-  prompt: z.string().max(2500).optional(),
-  negativePrompt: z.string().max(2500).optional(),
+  prompt: z.string().max(VIDEO_PROMPT_MAX).optional(),
+  negativePrompt: z.string().max(VIDEO_PROMPT_MAX).optional(),
   userPrompt: z.string().max(8000).optional(),
   characterOrientation: z.enum(["image", "video"]).default("image"),
   resolution: z.enum(["480p", "580p", "720p", "1080p"]).default("720p"),

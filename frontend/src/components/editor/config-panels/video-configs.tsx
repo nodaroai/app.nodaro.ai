@@ -35,7 +35,7 @@ import type {
   CharacterNodeData,
 } from "@/types/nodes"
 import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, VIDEO_GEN_MODELS, MOTION_TRANSFER_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, VIDEO_DURATION_OPTIONS, VIDEO_FPS_OPTIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, EXTEND_VIDEO_MODELS, getVideoResolutionOptions, getAspectRatiosForVideoModel, getVideoModelCapabilitiesTooltip } from "./model-options"
-import { isSeedance2Provider, SEEDANCE_2_REF_LIMITS, characterMentionSlug, DEFAULT_LABEL_BY_SOURCE, locationMentionSlug } from "@nodaro/shared"
+import { isSeedance2Provider, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, characterMentionSlug, DEFAULT_LABEL_BY_SOURCE, locationMentionSlug } from "@nodaro/shared"
 import type { ReferenceSource } from "@nodaro/shared"
 import { ModelSearchSelect } from "./model-search-select"
 import { ModelDescriptionHint } from "./model-description-hint"
@@ -1425,14 +1425,14 @@ function MotionTransferConfigImpl({ data, onUpdate, sources, fieldMappings, onMa
       <MappableField field="prompt" label="Prompt (Optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="motion-transfer" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />}>
         <TagTextarea
           value={data.prompt}
-          onChange={(v) => onUpdate({ prompt: v.slice(0, 2500) })}
+          onChange={(v) => onUpdate({ prompt: v.slice(0, VIDEO_PROMPT_MAX) })}
           placeholder="Optional: Describe the motion transfer..."
           rows={2}
           nodeRefs={nodeRefs}
           displayMode={variableDisplayMode}
           refMap={refMap}
         />
-        <span className="text-xs text-muted-foreground">{data.prompt?.length || 0}/2500</span>
+        <span className="text-xs text-muted-foreground">{data.prompt?.length || 0}/{VIDEO_PROMPT_MAX}</span>
       </MappableField>
       {/* Negative Prompt — always visible. Kling 2.6/3.0 send it natively as
           `negative_prompt`; Wan Animate gets it appended to the prompt as
@@ -1440,14 +1440,14 @@ function MotionTransferConfigImpl({ data, onUpdate, sources, fieldMappings, onMa
       <MappableField field="negativePrompt" label="Negative Prompt (Optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <TagTextarea
           value={data.negativePrompt ?? ""}
-          onChange={(v) => onUpdate({ negativePrompt: v.slice(0, 2500) })}
+          onChange={(v) => onUpdate({ negativePrompt: v.slice(0, VIDEO_PROMPT_MAX) })}
           placeholder="Optional: Describe what to avoid…"
           rows={2}
           nodeRefs={nodeRefs}
           displayMode={variableDisplayMode}
           refMap={refMap}
         />
-        <span className="text-xs text-muted-foreground">{data.negativePrompt?.length || 0}/2500</span>
+        <span className="text-xs text-muted-foreground">{data.negativePrompt?.length || 0}/{VIDEO_PROMPT_MAX}</span>
       </MappableField>
       {provider !== "wan-animate-move" && provider !== "wan-animate-replace" && (
         <MappableField field="characterOrientation" label="Character Orientation" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>

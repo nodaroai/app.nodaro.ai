@@ -17,6 +17,8 @@ const map: LocaleCatalogMap = {
   "cooke-s4": { description: "مظهر Cooke — بشرة كريمية رسامية" },
   "helios-44": { description: "بوكيه دوامة سوفيتي قديم" },
   "petzval": { description: "دوامة قديمة جدا، تلاشي درامي" },
+  "probe": { label: "عدسة المسبار", description: "ماكرو أنبوبي — عبر الفتحات والمساحات الضيقة" },
+  "cctv": { label: "كاميرا مراقبة", description: "مظهر لقطات كاميرات المراقبة" },
 }
 
 export default map

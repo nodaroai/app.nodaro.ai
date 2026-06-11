@@ -60,6 +60,7 @@ const map: LocaleCatalogMap = {
   "suspicious": { label: "의심하는", description: "경계하는 불신, 가늘게 뜬 눈, 곁눈질입니다" },
   "resigned": { label: "체념한", description: "불쾌한 상황을 조용히 받아들이는 표정입니다" },
   "conflicted": { label: "갈등하는", description: "내면의 갈등이 보이고 미간이 찌푸려진 표정입니다" },
+  "relieved": { label: "안도", description: "긴장이 풀리며 차분해짐" },
 }
 
 export default map

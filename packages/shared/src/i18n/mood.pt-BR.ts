@@ -58,6 +58,7 @@ const map: LocaleCatalogMap = {
   "suspicious": { label: "Desconfiado", description: "Desconfiança alerta, olhos estreitados, olhar de canto" },
   "resigned": { label: "Resignado", description: "Aceitação silenciosa de uma situação desagradável" },
   "conflicted": { label: "Conflituado", description: "Luta interna visível, sobrancelhas franzidas" },
+  "relieved": { label: "Aliviado", description: "A tensão se dissolve em calma" },
 }
 
 export default map
