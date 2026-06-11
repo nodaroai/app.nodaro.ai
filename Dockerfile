@@ -268,19 +268,40 @@ cd /app/backend
 export BACKEND_PORT=9000
 PORT=$BACKEND_PORT node dist/server.js &
 
+# Supervised process runner: the queue consumers below are background
+# siblings with Caddy as PID 1 — without supervision, a crashed worker
+# (e.g. OOM-killed during a render burst) stays dead while /health keeps
+# serving 200 from server.js (incident 2026-06-11: orchestrator + worker
+# died at ~21:08/21:12 UTC, queues froze for 10h, container stayed green).
+# 10s backoff prevents a hot crash-loop; the loop dies with the container.
+supervise() {
+  name="$1"; shift
+  while :; do
+    "$@"
+    code=$?
+    echo "[supervise] $name exited (code $code) — restarting in 10s"
+    sleep 10
+  done
+}
+
 # Start BullMQ worker (job processor)
-node dist/worker.js &
+supervise worker node dist/worker.js &
 
 # Start BullMQ render worker (Remotion video rendering)
-node dist/render-worker.js &
+supervise render-worker node dist/render-worker.js &
 
 # Start BullMQ orchestrator worker (workflow execution)
-node dist/orchestrator.js &
+supervise orchestrator node dist/orchestrator.js &
 
 # Start BullMQ pipeline worker (Story-to-Video orchestration).
 # Cloud-only — exits cleanly on non-cloud editions so the same image runs
-# for self-hosted Community/Business builds.
-node dist/pipeline-worker.js &
+# for self-hosted Community/Business builds; the supervisor would restart
+# that clean exit too, so gate it: only supervise when EDITION=cloud.
+if [ "$EDITION" = "cloud" ]; then
+  supervise pipeline-worker node dist/pipeline-worker.js &
+else
+  node dist/pipeline-worker.js &
+fi
 
 # Wait for backend to be ready before accepting traffic
 echo "Waiting for backend on port 9000..."

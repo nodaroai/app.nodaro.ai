@@ -68,7 +68,7 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "after-effects": 10,
   "lottie-overlay": 10,
   "3d-title": 15,
-  "motion-graphics": 10,
+  "motion-graphics": 5, // lottie engine standard tier (the default); live cost comes from useModelCredits
   "composite": 0,
   "render-video": 15,
   "character": 2,
