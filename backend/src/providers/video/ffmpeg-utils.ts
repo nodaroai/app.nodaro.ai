@@ -18,6 +18,22 @@ export async function downloadFile(url: string, dest: string): Promise<void> {
   // result uploaded to R2 (read-oracle). See backend/src/lib/safe-fetch.ts.
   const response = await safeFetch(url, { timeoutMs: 120_000 })
   if (!response.ok) {
+    // Cloudflare can negative-cache a 404 per-edge for 40-55min on freshly
+    // finalized media (incidents 2026-06-10/12). When the URL is OUR public
+    // bucket, bypass the edge and stream straight from the R2 origin —
+    // r2KeyFromOurUrl returns null for foreign URLs, so provider links keep
+    // the plain failure path.
+    if (response.status === 404) {
+      // Dynamic import keeps storage (and its module-level S3 client) out of
+      // this module's graph — the fallback is a cold error path and several
+      // test suites load ffmpeg-utils with a minimal config mock.
+      const { r2KeyFromOurUrl, downloadR2ObjectToFile } = await import("../../lib/storage.js")
+      const key = r2KeyFromOurUrl(url)
+      if (key) {
+        await downloadR2ObjectToFile(key, dest)
+        return
+      }
+    }
     throw new Error(`Failed to download: ${url} (${response.status})`)
   }
   const nodeStream = Readable.fromWeb(response.body as import("stream/web").ReadableStream)
@@ -109,7 +125,11 @@ export async function runFfmpegCapture(
 
 export function runFfprobe(args: readonly string[]): Promise<string> {
   return new Promise((resolve, reject) => {
-    execFile("ffprobe", args as string[], { maxBuffer: 5 * 1024 * 1024 }, (error, stdout, stderr) => {
+    // Watchdog: ffprobe accepts remote http(s) inputs (probeVideoSource) and
+    // a stalled edge/socket would otherwise hang the worker indefinitely —
+    // there is no BullMQ-side rescue for a live-but-stuck handler. 120s
+    // matches the safeFetch download timeout.
+    execFile("ffprobe", args as string[], { maxBuffer: 5 * 1024 * 1024, timeout: 120_000 }, (error, stdout, stderr) => {
       if (error) {
         reject(new Error(`ffprobe failed: ${stderr || error.message}`))
       } else {
