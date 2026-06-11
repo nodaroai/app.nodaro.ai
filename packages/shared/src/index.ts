@@ -1222,7 +1222,7 @@ export {
 } from "./producer-types.js"
 
 // --- Node presets ---
-export { EXECUTION_DATA_KEYS } from "./node-runtime-keys.js"
+export { EXECUTION_DATA_KEYS, TRANSIENT_RUNTIME_KEYS, stripTransientRuntimeData } from "./node-runtime-keys.js"
 export { extractPresetData, PRESET_EXCLUDED_KEYS, PRESET_APPLY_CLEAR_KEYS, presetDataMatches } from "./node-preset-extract.js"
 export type { FactoryPreset, FactoryPresetGroup } from "./factory-presets.js"
 export { FACTORY_PRESETS, getFactoryPresets, groupFactoryPresets } from "./factory-presets.js"

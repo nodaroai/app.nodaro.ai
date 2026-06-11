@@ -11,7 +11,9 @@ import type { ProviderResult } from "../providers/provider.interface.js"
 import { uploadToR2, uploadFileToR2, uploadBufferToR2, uploadFileWithKeyToR2 } from "../lib/storage.js"
 import { safeFetch } from "../lib/safe-fetch.js"
 import { isAllowedSocialVideoUrl } from "../lib/url-validator.js"
+import sharp from "sharp"
 import { applyImageWatermark, applyVideoWatermark } from "../utils/watermark.js"
+import { getSizeLimit } from "../utils/file-validation.js"
 import { generateThumbnailFromUrl } from "../utils/thumbnail.js"
 import { createWorkDir, cleanupWorkDir, downloadFile, transcodeToBrowserSafe } from "../providers/video/ffmpeg-utils.js"
 import { isPostProcessingError, runPostProcessing } from "../lib/post-processing-error.js"
@@ -368,6 +370,39 @@ export async function refundJobCredits(
   }
 }
 
+function isUploadSizeExceeded(err: unknown): boolean {
+  return err instanceof Error && err.message.startsWith("upload-size-exceeded")
+}
+
+/**
+ * Oversized provider output fallback. 4K image models can deliver PNGs over
+ * the image size cap (e.g. nano-banana-pro 4K at 33-38MB vs the 25MB cap -
+ * prod jobs 85359bd4 / 900e6402), which used to throw upload-size-exceeded
+ * and zombie the job through reconcile bumps. Recompress to WebP (quality
+ * 92, alpha preserved, dimensions unchanged) and upload under the SAME
+ * deterministic key - the Content-Type wins over the .png suffix, matching
+ * the watermark path's key convention. If even the WebP exceeds the cap
+ * (pathological), rethrow upload-size-exceeded so reconcile fails it fast.
+ */
+async function recompressOversizedImage(
+  sourceUrl: string,
+  jobId: string,
+  jobUserId: string | undefined,
+): Promise<string> {
+  const response = await safeFetch(sourceUrl, { timeoutMs: 120_000 })
+  if (!response.ok) throw new Error(`Failed to download image: ${response.status}`)
+  const buffer = Buffer.from(await response.arrayBuffer())
+  const webp = await sharp(buffer).webp({ quality: 92 }).toBuffer()
+  const cap = getSizeLimit("image")
+  if (webp.length > cap) {
+    throw new Error(`upload-size-exceeded: recompressed WebP ${webp.length} > cap ${cap}`)
+  }
+  console.log(
+    `[worker] recompressed oversized image for job ${jobId}: ${buffer.length} -> ${webp.length} bytes (webp q92)`,
+  )
+  return uploadBufferToR2(webp, `images/${jobId}.png`, "image/webp", jobUserId)
+}
+
 /**
  * Upload image to R2, optionally applying a watermark first.
  * When watermark is true, downloads the source image, composites the
@@ -385,7 +420,12 @@ export async function uploadImageMaybeWatermark(
   // refund guard skips the refund. See lib/post-processing-error.ts.
   return runPostProcessing(async () => {
     if (!watermark) {
-      return uploadToR2(sourceUrl, jobId, "image", jobUserId)
+      try {
+        return await uploadToR2(sourceUrl, jobId, "image", jobUserId)
+      } catch (err) {
+        if (!isUploadSizeExceeded(err)) throw err
+        return await recompressOversizedImage(sourceUrl, jobId, jobUserId)
+      }
     }
     // safeFetch: watermarking path fetches sourceUrl and re-uploads the body
     // (with watermark overlay) to R2. An unvalidated fetch here would be an

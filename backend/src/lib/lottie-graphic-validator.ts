@@ -195,6 +195,98 @@ function fixShapeGrouping(doc: JsonRecord, autoFixed: string[]): void {
   }
 }
 
+// ── Rule 11: repeater integrity ─────────────────────────────────────────────
+// lottie-web's RepeaterModifier reads `data.tr.so` / `data.tr.eo` (and `c`/`o`)
+// unconditionally while BUILDING the animation — a repeater without a complete
+// `tr` throws inside lottie-web, DOMLoaded never fires, and the render hangs
+// until the generic delayRender timeout (prod job 73e2c691, 2026-06-11). A
+// repeater also only duplicates the items ABOVE it in its `it` array (AE
+// stacking), so one emitted before any drawable duplicates nothing.
+
+const REPEATER_DRAWABLE_TYPES = new Set(["el", "rc", "sh", "sr", "gr"])
+const REPEATER_TR_FIELDS = ["a", "p", "r", "s", "so", "eo"] as const
+
+function defaultRepeaterTrField(field: (typeof REPEATER_TR_FIELDS)[number]): JsonRecord {
+  switch (field) {
+    case "a":
+    case "p":
+      return { a: 0, k: [0, 0] }
+    case "r":
+      return { a: 0, k: 0 }
+    case "s":
+      return { a: 0, k: [100, 100] }
+    default: // so / eo — per-copy start/end opacity
+      return { a: 0, k: 100 }
+  }
+}
+
+function fixRepeaterItem(rp: JsonRecord, autoFixed: string[]): void {
+  const filled: string[] = []
+  if (!isPlainObject(rp.tr)) {
+    rp.tr = {}
+    filled.push("tr")
+  }
+  const tr = rp.tr as JsonRecord
+  for (const field of REPEATER_TR_FIELDS) {
+    if (tr[field] === undefined || tr[field] === null) {
+      tr[field] = defaultRepeaterTrField(field)
+      if (!filled.includes("tr")) filled.push(`tr.${field}`)
+    }
+  }
+  if (rp.c === undefined || rp.c === null) {
+    rp.c = { a: 0, k: 1 }
+    filled.push("c")
+  }
+  if (rp.o === undefined || rp.o === null) {
+    rp.o = { a: 0, k: 0 }
+    filled.push("o")
+  }
+  if (rp.m === undefined) {
+    rp.m = 1
+    filled.push("m")
+  }
+  if (filled.length > 0) {
+    autoFixed.push(`Completed repeater properties (${filled.join(", ")}) required by lottie-web`)
+  }
+}
+
+function fixRepeatersInItems(items: unknown[], autoFixed: string[]): void {
+  for (const item of items) {
+    if (isPlainObject(item) && item.ty === "gr" && Array.isArray(item.it)) {
+      fixRepeatersInItems(item.it, autoFixed)
+    }
+  }
+  for (const item of items) {
+    if (isPlainObject(item) && item.ty === "rp") fixRepeaterItem(item, autoFixed)
+  }
+  // Reposition repeaters that precede every drawable sibling: they duplicate
+  // nothing where they are. Move them after the drawables (before a trailing
+  // group transform) so the intended copies actually appear.
+  const hasDrawable = items.some(
+    (item) => isPlainObject(item) && REPEATER_DRAWABLE_TYPES.has(item.ty as string),
+  )
+  if (!hasDrawable) return
+  const leading: number[] = []
+  let seenDrawable = false
+  items.forEach((item, i) => {
+    if (!isPlainObject(item)) return
+    if (REPEATER_DRAWABLE_TYPES.has(item.ty as string)) seenDrawable = true
+    else if (item.ty === "rp" && !seenDrawable) leading.push(i)
+  })
+  if (leading.length === 0) return
+  const moved = leading.map((i) => items[i])
+  for (let j = leading.length - 1; j >= 0; j--) items.splice(leading[j], 1)
+  const insertAt = endsWithTransform(items) ? items.length - 1 : items.length
+  items.splice(insertAt, 0, ...moved)
+  autoFixed.push(`Moved ${moved.length} leading repeater(s) after the shapes they duplicate`)
+}
+
+function fixRepeaters(doc: JsonRecord, autoFixed: string[]): void {
+  for (const layer of collectLayers(doc)) {
+    if (Array.isArray(layer.shapes)) fixRepeatersInItems(layer.shapes, autoFixed)
+  }
+}
+
 // ── Rule 4: normalize color components > 1 to [0, 1] ───────────────────────
 function normalizeColorArray(arr: unknown[]): number[] | null {
   if (!arr.every((n) => typeof n === "number")) return null
@@ -380,6 +472,7 @@ export function validateLottieGraphic(
   fixEnvelope(doc, expected, autoFixed) // #1
   clampLayerTimes(doc, expected.durationInFrames, autoFixed) // #2
   fixShapeGrouping(doc, autoFixed) // #3
+  fixRepeaters(doc, autoFixed) // #11 — after #3 so groups are normalized and tr-terminated
   fixColors(doc, autoFixed) // #4
   fixKeyframeArrays(doc, autoFixed) // #5
   addMissingSlots(doc, slots, autoFixed) // #6

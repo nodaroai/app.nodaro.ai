@@ -18,6 +18,21 @@ import { MAX_ATTEMPTS } from "./types.js"
  * terminal write — the other's UPDATE returns 0 rows and exits without
  * double-refund or double-anomaly.
  */
+/**
+ * Errors that are DETERMINISTIC for a given provider result — retrying them
+ * across reconcile ticks can never succeed, so the job force-fails (+refund)
+ * on the FIRST bump instead of zombieing at "processing" for ~90 minutes.
+ *
+ * Conservative by design (no-false-positive rule): ONLY patterns whose
+ * inputs are immutable belong here. `upload-size-exceeded` qualifies — the
+ * provider result's byte size never changes (and the image path already
+ * tried the WebP recompress fallback before throwing it).
+ * `storage-limit-exceeded` does NOT — the user can free quota mid-window.
+ */
+const DETERMINISTIC_RECONCILE_ERRORS: readonly RegExp[] = [
+  /^upload-size-exceeded/,
+]
+
 export async function bumpAttemptsOrExhaust(
   jobId: string,
   err: unknown,
@@ -31,6 +46,11 @@ export async function bumpAttemptsOrExhaust(
     .single()
   const current = ((data as { reconcile_attempts?: number } | null)?.reconcile_attempts ?? 0)
   const next = current + 1
+
+  if (DETERMINISTIC_RECONCILE_ERRORS.some((re) => re.test(msg))) {
+    await forceFailExhausted(jobId, msg, next)
+    return
+  }
 
   if (next < MAX_ATTEMPTS) {
     await supabase

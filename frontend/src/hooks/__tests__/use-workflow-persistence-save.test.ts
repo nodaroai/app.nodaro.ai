@@ -129,20 +129,26 @@ function makeEdge(id: string, source: string, target: string) {
 function setupSupabaseUpdate(
   error: { message: string } | null = null,
   updatedAt = "2026-01-02T00:00:00Z",
+  opts: { reject?: Error } = {},
 ) {
-  const maybeSingle = vi.fn().mockResolvedValue({
-    data: error ? null : { updated_at: updatedAt },
-    error,
-  })
+  const maybeSingle = opts.reject
+    ? vi.fn().mockRejectedValue(opts.reject)
+    : vi.fn().mockResolvedValue({
+        data: error ? null : { updated_at: updatedAt },
+        error,
+      })
   const select = vi.fn().mockReturnValue({ maybeSingle })
-  const eqUpdatedAt = vi.fn().mockReturnValue({ select })
-  const eqId = vi.fn().mockReturnValue({ select, eq: eqUpdatedAt })
-  mockSupabaseFrom.mockReturnValue({
-    update: vi.fn().mockReturnValue({ eq: eqId }),
-  })
+  // The save chains `.abortSignal(AbortSignal.timeout(...))` before select —
+  // the hard timeout that keeps a hung request from wedging saveStatus.
+  const abortSignal = vi.fn().mockReturnValue({ select })
+  const eqUpdatedAt = vi.fn().mockReturnValue({ select, abortSignal })
+  const eqId = vi.fn().mockReturnValue({ select, eq: eqUpdatedAt, abortSignal })
+  const update = vi.fn().mockReturnValue({ eq: eqId })
+  mockSupabaseFrom.mockReturnValue({ update })
+  return { update, abortSignal, maybeSingle }
 }
 
-/** Set up supabase.from("workflows").insert(...).select("id, updated_at").single() chain for insert (new workflow). */
+/** Set up supabase.from("workflows").insert(...).abortSignal(...).select("id, updated_at").single() chain for insert (new workflow). */
 function setupSupabaseInsert(
   data: { id: string; updated_at?: string } | null = {
     id: "new-workflow-id",
@@ -150,11 +156,12 @@ function setupSupabaseInsert(
   },
   error: { message: string } | null = null,
 ) {
+  const single = vi.fn().mockResolvedValue({ data, error })
+  const select = vi.fn().mockReturnValue({ single })
   mockSupabaseFrom.mockReturnValue({
     insert: vi.fn().mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        single: vi.fn().mockResolvedValue({ data, error }),
-      }),
+      select,
+      abortSignal: vi.fn().mockReturnValue({ select }),
     }),
   })
 }
@@ -254,7 +261,8 @@ describe("useWorkflowPersistence — save", () => {
 
     const maybeSingle = vi.fn().mockResolvedValue({ data: { updated_at: "T1" }, error: null })
     const select = vi.fn().mockReturnValue({ maybeSingle })
-    const eqId = vi.fn().mockReturnValue({ select })
+    const abortSignal = vi.fn().mockReturnValue({ select })
+    const eqId = vi.fn().mockReturnValue({ select, abortSignal })
     const mockUpdate = vi.fn().mockReturnValue({ eq: eqId })
     mockSupabaseFrom.mockReturnValue({ update: mockUpdate })
 
@@ -302,7 +310,10 @@ describe("useWorkflowPersistence — save", () => {
       error: null,
     })
     const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
-    const mockInsert = vi.fn().mockReturnValue({ select: mockSelect })
+    const mockInsert = vi.fn().mockReturnValue({
+      select: mockSelect,
+      abortSignal: vi.fn().mockReturnValue({ select: mockSelect }),
+    })
     mockSupabaseFrom.mockReturnValue({ insert: mockInsert })
 
     const { result } = renderHook(() => useWorkflowPersistence("proj-1"))
@@ -430,8 +441,9 @@ describe("useWorkflowPersistence — save", () => {
     // Then save() issues a fallback SELECT that returns the current value.
     const updateMaybeSingle = vi.fn().mockResolvedValue({ data: null, error: null })
     const updateSelect = vi.fn().mockReturnValue({ maybeSingle: updateMaybeSingle })
-    const eqUpdatedAt = vi.fn().mockReturnValue({ select: updateSelect })
-    const eqId = vi.fn().mockReturnValue({ eq: eqUpdatedAt, select: updateSelect })
+    const updateAbortSignal = vi.fn().mockReturnValue({ select: updateSelect })
+    const eqUpdatedAt = vi.fn().mockReturnValue({ select: updateSelect, abortSignal: updateAbortSignal })
+    const eqId = vi.fn().mockReturnValue({ eq: eqUpdatedAt, select: updateSelect, abortSignal: updateAbortSignal })
     const mockUpdate = vi.fn().mockReturnValue({ eq: eqId })
 
     const fallbackMaybeSingle = vi.fn().mockResolvedValue({
@@ -471,8 +483,9 @@ describe("useWorkflowPersistence — save", () => {
     // the autosave gate would stay null and hot-retry every 3 seconds.
     const updateMaybeSingle = vi.fn().mockResolvedValue({ data: null, error: null })
     const updateSelect = vi.fn().mockReturnValue({ maybeSingle: updateMaybeSingle })
-    const eqUpdatedAt = vi.fn().mockReturnValue({ select: updateSelect })
-    const eqId = vi.fn().mockReturnValue({ eq: eqUpdatedAt, select: updateSelect })
+    const updateAbortSignal = vi.fn().mockReturnValue({ select: updateSelect })
+    const eqUpdatedAt = vi.fn().mockReturnValue({ select: updateSelect, abortSignal: updateAbortSignal })
+    const eqId = vi.fn().mockReturnValue({ eq: eqUpdatedAt, select: updateSelect, abortSignal: updateAbortSignal })
     const mockUpdate = vi.fn().mockReturnValue({ eq: eqId })
 
     const fallbackMaybeSingle = vi.fn().mockResolvedValue({ data: null, error: null })
@@ -539,7 +552,8 @@ describe("useWorkflowPersistence — save", () => {
 
     const maybeSingle = vi.fn().mockResolvedValue({ data: { updated_at: "T1" }, error: null })
     const select = vi.fn().mockReturnValue({ maybeSingle })
-    const eqId = vi.fn().mockReturnValue({ select })
+    const abortSignal = vi.fn().mockReturnValue({ select })
+    const eqId = vi.fn().mockReturnValue({ select, abortSignal })
     const mockUpdate = vi.fn().mockReturnValue({ eq: eqId })
     mockSupabaseFrom.mockReturnValue({ update: mockUpdate })
 
@@ -571,7 +585,8 @@ describe("useWorkflowPersistence — save", () => {
 
     const maybeSingle = vi.fn().mockResolvedValue({ data: { updated_at: "T1" }, error: null })
     const select = vi.fn().mockReturnValue({ maybeSingle })
-    const eqId = vi.fn().mockReturnValue({ select })
+    const abortSignal = vi.fn().mockReturnValue({ select })
+    const eqId = vi.fn().mockReturnValue({ select, abortSignal })
     const mockUpdate = vi.fn().mockReturnValue({ eq: eqId })
     mockSupabaseFrom.mockReturnValue({ update: mockUpdate })
 
@@ -628,5 +643,72 @@ describe("useWorkflowPersistence — save", () => {
 
     expect(saveResult!.success).toBe(false)
     expect(saveResult!.error).toBe("Failed to save")
+  })
+
+  // -----------------------------------------------------------------------
+  // Phantom-dirty / wedge fixes (P0)
+  // -----------------------------------------------------------------------
+
+  it("strips transient run-state from the save payload but keeps results", async () => {
+    const { update } = setupSupabaseUpdate()
+    resetStoreState({
+      workflowId: "w1",
+      nodes: [
+        makeNode("n1", {
+          executionStatus: "running",
+          currentJobId: "job-9",
+          currentJobProgress: 42,
+          __listTotal: 3,
+          generatedResults: [{ url: "https://r2/x.png" }],
+          errorMessage: "previous failure",
+          prompt: "a cat",
+        }),
+      ],
+    })
+
+    const { result } = renderHook(() => useWorkflowPersistence("proj-1"))
+    await act(async () => {
+      await result.current.save()
+    })
+
+    expect(update).toHaveBeenCalledTimes(1)
+    const payload = update.mock.calls[0]![0] as { nodes: Array<{ data: Record<string, unknown> }> }
+    const savedData = payload.nodes[0]!.data
+    expect(savedData.executionStatus).toBeUndefined()
+    expect(savedData.currentJobId).toBeUndefined()
+    expect(savedData.currentJobProgress).toBeUndefined()
+    expect(savedData.__listTotal).toBeUndefined()
+    // Results + outcomes persist — users expect them after reload.
+    expect(savedData.generatedResults).toEqual([{ url: "https://r2/x.png" }])
+    expect(savedData.errorMessage).toBe("previous failure")
+    expect(savedData.prompt).toBe("a cat")
+  })
+
+  it("attaches an abort signal to the update (hung saves cannot wedge saveStatus)", async () => {
+    const { abortSignal } = setupSupabaseUpdate()
+    resetStoreState({ workflowId: "w1", nodes: [makeNode("n1")] })
+
+    const { result } = renderHook(() => useWorkflowPersistence("proj-1"))
+    await act(async () => {
+      await result.current.save()
+    })
+
+    expect(abortSignal).toHaveBeenCalledTimes(1)
+    expect(abortSignal.mock.calls[0]![0]).toBeInstanceOf(AbortSignal)
+  })
+
+  it("a rejecting save (abort/timeout) flips status to error instead of staying 'saving'", async () => {
+    setupSupabaseUpdate(null, "2026-01-02T00:00:00Z", { reject: new Error("AbortError: timeout") })
+    resetStoreState({ workflowId: "w1", nodes: [makeNode("n1")] })
+
+    const { result } = renderHook(() => useWorkflowPersistence("proj-1"))
+    let saveResult: { success: boolean; error?: string } | undefined
+    await act(async () => {
+      saveResult = await result.current.save()
+    })
+
+    expect(saveResult!.success).toBe(false)
+    expect(mockSetSaveStatus).toHaveBeenCalledWith("error", "AbortError: timeout")
+    expect(result.current.saving).toBe(false)
   })
 })

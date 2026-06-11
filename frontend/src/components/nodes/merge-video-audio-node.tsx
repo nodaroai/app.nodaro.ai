@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useState, useMemo, useCallback } from "react"
+import { memo, useState, useEffect, useMemo, useCallback } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { incomingSourcesFingerprint } from "@/lib/node-fingerprint"
 import { Volume2, Loader2, AlertCircle, X, Film, Mic, Music, AudioWaveform, LayoutGrid } from "lucide-react"
@@ -65,13 +65,24 @@ function MergeVideoAudioNodeComponent({ id, data, selected }: NodeProps) {
   // captured index which would point at the wrong result if the user
   // confirmed the dialog after a background poll completed.
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  const [videoError, setVideoError] = useState(false)
   const [showThumbnails, setShowThumbnails] = useState(false)
+
+  // Reset the load-error flag whenever the active result changes so a new (or
+  // re-selected) video gets a fresh chance to render.
+  useEffect(() => {
+    setVideoError(false)
+  }, [activeUrl])
 
   // Result aspect drives node sizing — 16:9 until a result lands, then snaps to
   // the real video aspect (raw dims fed in via the overlay's onRawDimensions).
   const { aspectRatio: mediaAspectRatio, onLoadDimensions: handleLoadDimensions } =
     useResultAspectRatio(id, results, activeIndex)
-  const hasResult = status !== "running" && !!activeUrl
+  // `&& !videoError`: when the inline <video> fails to load/decode, fall back to
+  // the framed error card below instead of leaving a transparent, chrome-less
+  // node (BaseNode goes `!bg-transparent` only while `hasResult`). Mirrors
+  // combine-videos-node.
+  const hasResult = status !== "running" && !!activeUrl && !videoError
   const canBrowseAlternates = !!activeUrl && results.length > 1
 
   const thumbResults = useMemo(
@@ -157,6 +168,20 @@ function MergeVideoAudioNodeComponent({ id, data, selected }: NodeProps) {
               </div>
             )}
 
+            {status !== "running" && activeUrl && videoError && (
+              <div className="relative group">
+                <div className="w-full h-28 rounded-md bg-amber-500/10 border border-amber-500/30 flex flex-col items-center justify-center gap-1">
+                  <AlertCircle className="w-5 h-5 text-amber-500" />
+                  <span className="text-[10px] text-amber-500">Video load failed</span>
+                  <a href={activeUrl} target="_blank" rel="noopener noreferrer" className="text-[9px] text-blue-500 underline" onClick={(e) => e.stopPropagation()}>Open URL</a>
+                </div>
+                <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1 rounded">Merged</div>
+                {results.length > 0 && (
+                  <button type="button" aria-label="Remove" className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); if (activeJobId) setDeleteConfirm(activeJobId) }}><X className="w-3 h-3" /></button>
+                )}
+              </div>
+            )}
+
             {status === "failed" && !activeUrl && (
               <div className="flex flex-col items-center justify-center gap-1 h-16 rounded-md bg-red-500/5 text-red-500 p-2">
                 <div className="flex items-center gap-1.5">
@@ -231,6 +256,8 @@ function MergeVideoAudioNodeComponent({ id, data, selected }: NodeProps) {
           onExpand={() => setPreviewOpen(true)}
           onDelete={() => { if (activeJobId) setDeleteConfirm(activeJobId) }}
           onRawDimensions={handleLoadDimensions}
+          onVideoError={() => setVideoError(true)}
+          onVideoLoad={() => setVideoError(false)}
           onSettings={() => selectNode(isSettingsOpen ? null : id)}
           isSettingsOpen={isSettingsOpen}
         />

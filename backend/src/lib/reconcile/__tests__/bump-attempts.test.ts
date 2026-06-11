@@ -170,6 +170,49 @@ describe("bumpAttemptsOrExhaust", () => {
     expect(mocks.refundMock).not.toHaveBeenCalled()
   })
 
+  // ── deterministic-error fast-fail ──
+  // upload-size-exceeded is immutable for a given provider result: retrying
+  // it 18 times just zombies the job at "processing" for ~90 minutes (prod
+  // jobs 85359bd4 / 900e6402). It force-fails + refunds on the FIRST bump.
+
+  it("upload-size-exceeded: force-fails + refunds on the FIRST bump", async () => {
+    mocks.jobsSelectSingleMock.mockResolvedValueOnce({
+      data: { reconcile_attempts: 0 },
+      error: null,
+    })
+
+    await bumpAttemptsOrExhaust(
+      "j-1",
+      new Error("upload-size-exceeded: Content-Length 33239469 > cap 26214400"),
+    )
+
+    expect(mocks.jobsUpdateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "failed",
+        reconcile_attempts: 1,
+        reconcile_last_error: "exhausted",
+        error_message: expect.stringContaining("upload-size-exceeded"),
+      }),
+    )
+    expect(mocks.refundMock).toHaveBeenCalledWith("j-1")
+    expect(mocks.anomaliesInsertMock).toHaveBeenCalled()
+  })
+
+  it("storage-limit-exceeded stays transient (quota can self-heal) — bumps only", async () => {
+    mocks.jobsSelectSingleMock.mockResolvedValueOnce({
+      data: { reconcile_attempts: 0 },
+      error: null,
+    })
+
+    await bumpAttemptsOrExhaust("j-1", new Error("storage-limit-exceeded: atomic reservation refused"))
+
+    expect(mocks.jobsUpdateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ reconcile_attempts: 1 }),
+    )
+    expect(mocks.jobsUpdateInMock).not.toHaveBeenCalled()
+    expect(mocks.refundMock).not.toHaveBeenCalled()
+  })
+
   it("reaches cap: force-fails + refunds + logs anomaly", async () => {
     // current=17 → next=18 → exhaust
     mocks.jobsSelectSingleMock.mockResolvedValueOnce({
