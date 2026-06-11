@@ -138,12 +138,58 @@ describe("extractFrame", () => {
     expect(args).not.toContain("-ss")
   })
 
-  it("last mode: uses -sseof -1", async () => {
+  // Frame-exact end seeks. Regression coverage for three defects found
+  // 2026-06-11 (user video: 48 frames @ 24fps, duration 2.000s):
+  //   - "last" used `-sseof -1` + first-frame-out → returned the frame ~1s
+  //     before the end (PSNR 18.2dB vs the true last frame).
+  //   - frame-from-end seeked to duration-(k+0.5)/fps → off by one (k
+  //     returned (k-1)-from-end) and k=0 decoded ZERO frames whenever
+  //     duration = N/fps (last PTS is duration - 1/fps, before the target).
+  const probeFor48at24 = (a: string[]) =>
+    a.includes("stream=r_frame_rate") ? "24/1"
+    : a.includes("stream=nb_frames") ? "48"
+    : ""
+
+  it("last mode: frame-exact seek half a frame before the final frame's PTS", async () => {
+    mocks.runFfprobe.mockImplementation(async (a: string[]) => probeFor48at24(a))
     await extractFrame({ videoUrl: "u", mode: "last" })
     const args = ffargs()
-    const idx = args.indexOf("-sseof")
+    expect(args).not.toContain("-sseof")
+    const idx = args.indexOf("-ss")
     expect(idx).toBeGreaterThan(-1)
-    expect(args[idx + 1]).toBe("-1")
+    expect(parseFloat(args[idx + 1]!)).toBeCloseTo((47 - 0.5) / 24, 6) // 1.9375 < last PTS 1.95833
+  })
+
+  it("frame-from-end 0 = the last frame (same seek as mode last)", async () => {
+    mocks.runFfprobe.mockImplementation(async (a: string[]) => probeFor48at24(a))
+    await extractFrame({ videoUrl: "u", mode: "frame-from-end", framesFromEnd: 0 })
+    const args = ffargs()
+    expect(parseFloat(args[args.indexOf("-ss") + 1]!)).toBeCloseTo(1.9375, 6)
+  })
+
+  it("frame-from-end 1 = second-to-last (off-by-one regression)", async () => {
+    mocks.runFfprobe.mockImplementation(async (a: string[]) => probeFor48at24(a))
+    await extractFrame({ videoUrl: "u", mode: "frame-from-end", framesFromEnd: 1 })
+    const args = ffargs()
+    expect(parseFloat(args[args.indexOf("-ss") + 1]!)).toBeCloseTo((46 - 0.5) / 24, 6)
+  })
+
+  it("frame-from-end beyond the clip clamps to frame 0 (seek 0, no negative)", async () => {
+    mocks.runFfprobe.mockImplementation(async (a: string[]) => probeFor48at24(a))
+    await extractFrame({ videoUrl: "u", mode: "frame-from-end", framesFromEnd: 500 })
+    const args = ffargs()
+    expect(parseFloat(args[args.indexOf("-ss") + 1]!)).toBe(0)
+  })
+
+  it("falls back to stream-duration×fps when nb_frames is unavailable", async () => {
+    mocks.runFfprobe.mockImplementation(async (a: string[]) =>
+      a.includes("stream=r_frame_rate") ? "24/1"
+      : a.includes("stream=nb_frames") ? "N/A"
+      : a.includes("stream=duration") ? "2.000000"
+      : "")
+    await extractFrame({ videoUrl: "u", mode: "last" })
+    const args = ffargs()
+    expect(parseFloat(args[args.indexOf("-ss") + 1]!)).toBeCloseTo(1.9375, 6)
   })
 
   it("timestamp mode: uses -ss <timestamp>", async () => {
@@ -191,12 +237,13 @@ describe("extractFrame", () => {
     expect(args).toContain("-skip_frame")
   })
 
-  it("frame-index mode: probes fps and seeks at frameIndex/fps seconds", async () => {
+  it("frame-index mode: probes fps and seeks half a frame before frameIndex/fps", async () => {
     mocks.runFfprobe.mockResolvedValueOnce("24/1") // fps probe
     await extractFrame({ videoUrl: "u", mode: "frame-index", frameIndex: 48 })
     const args = ffargs()
-    // 48 frames / 24 fps = 2s
-    expect(args[args.indexOf("-ss") + 1]).toBe("2")
+    // (48 - 0.5) / 24 — half-frame-early avoids float-equality fragility at
+    // exact PTS boundaries; the first frame at/after the target is frame 48.
+    expect(parseFloat(args[args.indexOf("-ss") + 1]!)).toBeCloseTo(47.5 / 24, 6)
     expect(args).not.toContain("-sseof")
   })
 
@@ -212,32 +259,23 @@ describe("extractFrame", () => {
     await expect(extractFrame({ videoUrl: "u", mode: "frame-index", frameIndex: 10 })).rejects.toThrow(/probe fps/)
   })
 
-  it("frame-from-end mode: probes fps + duration, seeks (duration - (N+0.5)/fps) seconds", async () => {
-    mocks.runFfprobe.mockResolvedValueOnce("24/1") // fps probe
-    mocks.getVideoDuration.mockResolvedValueOnce(10) // duration probe
+  it("frame-from-end mode: frame-exact seek from fps + frame count (240f @ 24fps, k=11 → frame 228)", async () => {
+    mocks.runFfprobe.mockImplementation(async (a: string[]) =>
+      a.includes("stream=r_frame_rate") ? "24/1"
+      : a.includes("stream=nb_frames") ? "240"
+      : "")
     await extractFrame({ videoUrl: "u", mode: "frame-from-end", framesFromEnd: 11 })
     const args = ffargs()
-    // 10 - (11 + 0.5) / 24 = 10 - 0.479166... ≈ 9.520833333
-    const seekSec = parseFloat(args[args.indexOf("-ss") + 1])
-    expect(seekSec).toBeCloseTo(9.5208, 3)
+    // wanted = 240 - 1 - 11 = 228 → seek (228 - 0.5) / 24
+    expect(parseFloat(args[args.indexOf("-ss") + 1]!)).toBeCloseTo(227.5 / 24, 6)
   })
 
-  it("frame-from-end mode: framesFromEnd=0 seeks to the last frame", async () => {
-    mocks.runFfprobe.mockResolvedValueOnce("24/1")
-    mocks.getVideoDuration.mockResolvedValueOnce(10)
-    await extractFrame({ videoUrl: "u", mode: "frame-from-end" })
-    const args = ffargs()
-    // 10 - 0.5/24 ≈ 9.9792
-    const seekSec = parseFloat(args[args.indexOf("-ss") + 1])
-    expect(seekSec).toBeCloseTo(9.9792, 3)
-  })
-
-  it("frame-from-end mode: clamps to 0 when offset would go negative", async () => {
-    mocks.runFfprobe.mockResolvedValueOnce("24/1")
-    mocks.getVideoDuration.mockResolvedValueOnce(0.5)
-    await extractFrame({ videoUrl: "u", mode: "frame-from-end", framesFromEnd: 100 })
-    const args = ffargs()
-    expect(args[args.indexOf("-ss") + 1]).toBe("0")
+  it("frame-from-end mode: hard-fails when neither nb_frames nor stream duration is usable", async () => {
+    mocks.runFfprobe.mockImplementation(async (a: string[]) =>
+      a.includes("stream=r_frame_rate") ? "24/1" : "N/A")
+    await expect(
+      extractFrame({ videoUrl: "u", mode: "frame-from-end", framesFromEnd: 0 }),
+    ).rejects.toThrow(/frame count/)
   })
 })
 
