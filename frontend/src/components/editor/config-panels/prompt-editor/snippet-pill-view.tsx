@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react"
-import { Scissors, ChevronLeft, ChevronRight } from "lucide-react"
+import { CodeXml, ChevronLeft, ChevronRight } from "lucide-react"
 import { computeFlipPosition } from "./flip-position"
 import type { SnippetPillAttrs } from "./snippet-pill-extension"
 
@@ -102,7 +102,7 @@ export function SnippetPillView(props: NodeViewProps) {
         + (props.selected ? "ring-2 ring-amber-400/60 " : "")
       }
     >
-      <Scissors className="w-3 h-3 shrink-0 opacity-70" aria-hidden />
+      <CodeXml className="w-3 h-3 shrink-0 opacity-70" aria-hidden />
       <button
         type="button"
         contentEditable={false}

@@ -52,7 +52,7 @@ separator so the result reads cleanly:
 ## Pills
 
 In a **positive prompt field**, an inserted snippet renders as a compact
-**amber pill** (a small scissors icon plus the snippet's name) instead of the
+**amber pill** (a small `</>` icon plus the snippet’s name) instead of the
 raw words. The pill is purely a way to *see and manage* the fragment — it is
 **not** stored. The prompt behind it is always the snippet's plain text:
 
@@ -98,7 +98,7 @@ separator rules.
 ## The Snippets button
 
 Next to the AI prompt-helper button on a prompt field's label row there is a
-small **scissors button**. It opens the same searchable snippet menu as a
+small **`</>` snippets button**. It opens the same searchable snippet menu as a
 popover anchored to the field. Selecting a snippet **appends** it to the end of
 the field's current text (the `/` menu is what inserts at an arbitrary caret
 position), using the same separator rules.

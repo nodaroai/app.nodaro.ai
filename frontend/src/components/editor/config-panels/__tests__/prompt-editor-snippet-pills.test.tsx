@@ -9,7 +9,7 @@ import type { SnippetPoolItem } from "@/lib/snippet-pool"
  * invariant is that snippet pills are a PURE DISPLAY layer: `editor.getText()`
  * — the value persisted to `node.data.prompt` — always equals the plain text
  * the user would have typed by hand. The rendered DOM intentionally differs
- * (the pill is a React NodeView: scissors icon + name + ×), so these tests
+ * (the pill is a React NodeView: code icon + name + ×), so these tests
  * assert against the live editor state (`editor.getText()` / `editor.state.doc`)
  * reached through the ProseMirror DOM node's `.editor` handle — the same
  * mount/`waitFor` pattern as prompt-editor-variable-highlight.test.tsx.

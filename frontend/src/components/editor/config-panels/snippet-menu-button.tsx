@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useRef, useState } from "react"
-import { Scissors, Plus, Settings2 } from "lucide-react"
+import { CodeXml, Plus, Settings2 } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -21,7 +21,7 @@ interface SnippetMenuButtonProps {
 }
 
 /**
- * Discoverability companion to the in-editor "/" trigger: a small Scissors
+ * Discoverability companion to the in-editor "/" trigger: a small `</>`
  * button in the field's label row. Selecting a snippet APPENDS it to the
  * field (the "/" menu owns caret-position inserts). Footer opens the manage
  * dialog (also used to create — optionally prefilled from the current text
@@ -51,7 +51,7 @@ export function SnippetMenuButton({ pool, value, onInsert, target, media }: Snip
               selectionRef.current = window.getSelection()?.toString() ?? ""
             }}
           >
-            <Scissors className="w-3.5 h-3.5" />
+            <CodeXml className="w-3.5 h-3.5" />
           </button>
         </PopoverTrigger>
         <PopoverContent align="end" className="w-[340px] p-0">

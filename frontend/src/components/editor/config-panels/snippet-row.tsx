@@ -1,10 +1,10 @@
 "use client"
 
-import { Scissors } from "lucide-react"
+import { CodeXml } from "lucide-react"
 
 /**
  * Sticky category header used by both snippet menus (the in-editor `/`
- * suggestion list and the label-row Scissors button popover). Extracted so the
+ * suggestion list and the label-row snippets-button popover). Extracted so the
  * header markup + classes live in one place — the two menus keep their own
  * scroll containers and `<button>` shells.
  */
@@ -17,7 +17,7 @@ export function SnippetCategoryHeader({ category }: { category: string }) {
 }
 
 /**
- * Inner content of a snippet menu row: the Scissors icon + a two-line span
+ * Inner content of a snippet menu row: the `</>` icon + a two-line span
  * (bold name over a truncated text preview). Content ONLY — the caller owns
  * the `<button>` shell, keyboard/selection state, and onMouseDown/onClick
  * semantics. `selected` only tints the icon amber (the slash menu's keyboard
@@ -32,7 +32,7 @@ export function SnippetRowContent({
 }) {
   return (
     <>
-      <Scissors
+      <CodeXml
         className={`w-3 h-3 mt-0.5 shrink-0 ${selected ? "text-amber-600 dark:text-amber-300" : "text-muted-foreground/70"}`}
       />
       <span className="flex-1 min-w-0">
