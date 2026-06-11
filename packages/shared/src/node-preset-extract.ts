@@ -55,6 +55,8 @@ export const PRESET_APPLY_CLEAR_KEYS: readonly string[] = [...COMPOSER_PLAN_FIEL
  *  Preset meta:
  *  - `__activePresetId`: which preset is currently loaded onto the node (for the dropdown's
  *    active-name + dirty `*`). Node-local UI state, never part of a preset's own config.
+ *  - `__promptFinalView`: field keys currently showing the final-prompt view (Edit ⇄ Final
+ *    per-field toggle). Node-local UI state, never part of a preset's own config.
  *
  *  NOTE: manual reference image urls (`referenceImageUrl` / `referenceImageUrls`) are deliberately
  *  KEPT — they are self-contained R2 urls a user set as input, and portable across nodes.
@@ -69,6 +71,7 @@ export const PRESET_EXCLUDED_KEYS: ReadonlySet<string> = new Set([
   "label",
   "fieldMappings",
   "__activePresetId",
+  "__promptFinalView",
   "referenceImageOrder",
   "referenceOrder",
   "connectedMediaOrder",

@@ -110,6 +110,27 @@ export interface ExtraRef {
   readonly usageMode?: import("@nodaro/shared").UsageMode
 }
 
+/**
+ * Per-node UI-state keys shared by every node-data shape.
+ *
+ * There is no single `BaseNodeData` interface that the ~40 node-data types
+ * extend — each is an independent alias carrying its own `[key: string]: unknown`
+ * index signature (which is why pre-existing UI-state keys like `__activePresetId`
+ * are read structurally and never declared per-type). This interface is the one
+ * documented home for cross-cutting `__`-prefixed UI state so the contract lives
+ * in a single place; the index signature on each node-data type already makes
+ * these keys structurally assignable everywhere.
+ */
+export interface NodeUiState {
+  /**
+   * UI state: field keys currently showing the final-prompt view (the per-field
+   * Edit ⇄ Final toggle). Absent/empty ⇒ all fields in edit mode (the default).
+   * Persisted with the workflow via `updateNodeData`; excluded from preset
+   * capture (`PRESET_EXCLUDED_KEYS` in `@nodaro/shared`).
+   */
+  readonly __promptFinalView?: readonly string[]
+}
+
 // --- Input Node Data ---
 
 export type TextPromptData = {
