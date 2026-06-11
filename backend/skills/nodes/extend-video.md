@@ -1,7 +1,7 @@
 ---
 node_type: extend-video
-generated_at: 2026-05-27T21:40:46.962Z
-generated_from: 88c5df99
+generated_at: 2026-06-11T18:52:25.322Z
+generated_from: 36d155ff
 ---
 
 # Extend Video
@@ -43,6 +43,7 @@ generated_from: 88c5df99
   "label": "Extend Video",
   "provider": "veo-extend",
   "prompt": "",
+  "negativePrompt": "",
   "fieldMappings": {},
   "executionStatus": "idle",
   "generatedResults": [],
@@ -86,6 +87,7 @@ generated_from: 88c5df99
     "label": "Extend Video",
     "provider": "veo-extend",
     "prompt": "",
+    "negativePrompt": "",
     "fieldMappings": {},
     "executionStatus": "idle",
     "generatedResults": [],
