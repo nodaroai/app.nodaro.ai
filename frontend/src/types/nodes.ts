@@ -2126,7 +2126,9 @@ export type ExtendVideoData = {
   seeds?: number                   // VEO only
   quality?: "720p" | "1080p"      // Runway only
   extendMode?: "start" | "end"    // LTX 2.3 Pro only — default "end"
-  duration?: number                // LTX 2.3 Pro only — seconds to add (1-20)
+  duration?: number                // Seconds to add — LTX 1-20; seedance-2-extend 4-15
+  resolution?: "480p" | "720p" | "1080p" // seedance-2-extend only — default 720p
+  generateAudio?: boolean          // seedance-2-extend only — default true
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -2135,7 +2137,7 @@ export type ExtendVideoData = {
   activeResultIndex?: number
   currentJobId?: string
   currentJobProgress?: number
-  kieTaskId?: string              // KIE task ID from upstream video node (required)
+  kieTaskId?: string              // KIE task ID from upstream video node (veo/runway only)
   videoPlayState?: "loop" | "paused" | "stopped"
   pausedAtTime?: number
 }

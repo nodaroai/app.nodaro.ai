@@ -4128,7 +4128,7 @@ export async function extendVideo(params: {
   kieTaskId?: string
   prompt?: string
   negativePrompt?: string
-  // LTX 2.3 Pro requires videoUrl; extendMode + duration are LTX-only
+  // LTX 2.3 Pro + seedance-2-extend require videoUrl; extendMode is LTX-only
   videoUrl?: string
   extendMode?: "start" | "end"
   duration?: number
@@ -4136,6 +4136,9 @@ export async function extendVideo(params: {
   model?: string
   seeds?: number
   quality?: string
+  // seedance-2-extend only
+  resolution?: "480p" | "720p" | "1080p"
+  generateAudio?: boolean
   userId?: string
 }): Promise<{ jobId: string }> {
   return apiJson("/v1/extend-video", {

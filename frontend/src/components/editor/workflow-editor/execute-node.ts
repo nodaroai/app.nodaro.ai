@@ -4521,6 +4521,7 @@ export function executeNode(
   if (node.type === "extend-video") {
     const evData = node.data as unknown as ExtendVideoData;
     const isLtx = evData.provider === "ltx-2.3-pro";
+    const isSeedanceExtend = evData.provider === "seedance-2-extend";
 
     // ─── LTX 2.3 Pro path ───────────────────────────────────────────────
     // Replicate-hosted, takes a raw videoUrl + extendMode + duration. No
@@ -4542,6 +4543,53 @@ export function executeNode(
             provider: "ltx-2.3-pro",
             extendMode: evData.extendMode ?? "end",
             duration: evData.duration ?? 8,
+            userId: ctx.userId,
+          }),
+        "generatedVideoUrl",
+        "Extend Video",
+        ctx,
+      );
+    }
+
+    // ─── Seedance 2 trim-stitch path ────────────────────────────────────
+    // URL-based like LTX, but the continuation CONTENT is required — the
+    // worker wraps it in the bare temporal template, generates via the
+    // seedance-2 ref-video transport, and trim-stitches source+extension.
+    // Mirrors payload-builder's seedance branch.
+    if (isSeedanceExtend) {
+      const videoUrl = inputs.videoUrl as string | undefined;
+      if (!videoUrl) {
+        toast.error(`Node "${evData.label}": no upstream video. Wire a video into the left handle.`);
+        return Promise.reject(new Error("No videoUrl for Seedance extend"));
+      }
+      let seedancePrompt: string | undefined = promptOf("extend-video");
+      {
+        const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
+        if (cinematographyHints.length > 0) {
+          const joined = cinematographyHints.join(", ");
+          seedancePrompt = seedancePrompt ? `${seedancePrompt}. ${joined}` : joined;
+        }
+      }
+      {
+        const identityClause = collectIdentityLockClause(node.id, nodes, edges);
+        if (identityClause) seedancePrompt = seedancePrompt ? `${seedancePrompt} ${identityClause}` : identityClause;
+      }
+      if (!seedancePrompt?.trim()) {
+        toast.error(`Node "${evData.label}": describe what happens next in the prompt.`);
+        return Promise.reject(new Error("No prompt for Seedance extend"));
+      }
+      setUserPromptTemplate(evData.prompt?.trim() || undefined);
+      return runProcessingNode(
+        node.id,
+        () =>
+          extendVideo({
+            videoUrl,
+            prompt: seedancePrompt,
+            negativePrompt: inputs.negativePrompt || evData.negativePrompt || undefined,
+            provider: "seedance-2-extend",
+            duration: evData.duration ?? 8,
+            resolution: evData.resolution,
+            generateAudio: evData.generateAudio,
             userId: ctx.userId,
           }),
         "generatedVideoUrl",

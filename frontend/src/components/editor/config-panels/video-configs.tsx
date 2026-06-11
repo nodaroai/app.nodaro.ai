@@ -35,7 +35,7 @@ import type {
   CharacterNodeData,
 } from "@/types/nodes"
 import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, VIDEO_GEN_MODELS, MOTION_TRANSFER_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, VIDEO_DURATION_OPTIONS, VIDEO_FPS_OPTIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, EXTEND_VIDEO_MODELS, getVideoResolutionOptions, getAspectRatiosForVideoModel, getVideoModelCapabilitiesTooltip } from "./model-options"
-import { isSeedance2Provider, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, characterMentionSlug, DEFAULT_LABEL_BY_SOURCE, locationMentionSlug } from "@nodaro/shared"
+import { isSeedance2Provider, MODEL_CATALOG, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, buildVideoCreditModelIdentifier, characterMentionSlug, DEFAULT_LABEL_BY_SOURCE, locationMentionSlug } from "@nodaro/shared"
 import type { ReferenceSource } from "@nodaro/shared"
 import { ModelSearchSelect } from "./model-search-select"
 import { ModelDescriptionHint } from "./model-description-hint"
@@ -2989,6 +2989,36 @@ export const GenerateVideoConfig = memo(GenerateVideoConfigImpl)
 
 export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<ExtendVideoData> & { nodeId?: string }) {
   const promptSnippets = useSnippetPool("video", "prompt")
+  const isSeedanceExtend = data.provider === "seedance-2-extend"
+  // Levers are catalog-driven (single source of truth shared with the
+  // backend route/worker) — durations 4-15, resolutions 480p/720p/1080p.
+  const seedanceCatalog = MODEL_CATALOG["seedance-2-extend"]
+  const seedanceDurations = seedanceCatalog?.durations ?? [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+  const seedanceResolutions = seedanceCatalog?.resolutions ?? ["480p", "720p", "1080p"]
+  const seedanceDuration = data.duration ?? 8
+
+  // Credit labels track the duration tier — re-prefetch when it changes.
+  useEffect(() => {
+    if (!isSeedanceExtend) return
+    prefetchModelCredits(seedanceResolutions.map((r) =>
+      buildVideoCreditModelIdentifier("seedance-2-extend", seedanceDuration, undefined, undefined, undefined, r),
+    ))
+  }, [isSeedanceExtend, seedanceDuration]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fail-safe (Provider Enum Sync step 12b): when the provider changes, snap
+  // a stale duration into seedance's 4–15s window (LTX allows 1–20) and clear
+  // the seedance-only levers when switching away — the dropdowns hide but the
+  // stale values would still be forwarded.
+  useEffect(() => {
+    if (isSeedanceExtend) {
+      if (data.duration !== undefined && (data.duration < 4 || data.duration > 15)) {
+        onUpdate({ duration: Math.min(15, Math.max(4, Math.round(data.duration))) })
+      }
+    } else if (data.resolution !== undefined || data.generateAudio !== undefined) {
+      onUpdate({ resolution: undefined, generateAudio: undefined })
+    }
+  }, [data.provider]) // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <div className="flex flex-col gap-3">
       <FinalPromptPreview userPrompt={data.prompt} negativePrompt={data.negativePrompt} consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
@@ -3006,14 +3036,14 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
         </Select>
       </MappableField>
 
-      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+      <MappableField field="prompt" label={isSeedanceExtend ? "What happens next" : "Prompt"} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
         <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="video" />
         <PromptHelperButton nodeType="extend-video" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />
       </span>}>
         <TagTextarea
           value={data.prompt || ""}
           onChange={(v) => onUpdate({ prompt: v })}
-          placeholder="Describe how the video should continue..."
+          placeholder={isSeedanceExtend ? "What happens next? e.g. the ball keeps rolling until it hits a cup" : "Describe how the video should continue..."}
           rows={3}
           nodeRefs={nodeRefs}
           displayMode={variableDisplayMode}
@@ -3107,8 +3137,58 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
         </>
       )}
 
+      {isSeedanceExtend && (
+        <>
+          <MappableField field="duration" label="Seconds to add" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <Select
+              value={String(seedanceDuration)}
+              onValueChange={(v) => onUpdate({ duration: parseInt(v, 10) })}
+            >
+              <SelectTrigger aria-label="Seconds to add"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {seedanceDurations.map((s) => (
+                  <SelectItem key={s} value={String(s)}>{s} seconds</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </MappableField>
+
+          <div>
+            <Label className="text-xs">Resolution</Label>
+            <Select
+              value={data.resolution || "720p"}
+              onValueChange={(v) => onUpdate({ resolution: v as ExtendVideoData["resolution"] })}
+            >
+              <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {seedanceResolutions.map((r) => {
+                  const credits = getCachedCredits(buildVideoCreditModelIdentifier("seedance-2-extend", seedanceDuration, undefined, undefined, undefined, r))
+                  return (
+                    <SelectItem key={r} value={r}>{credits != null ? `${r} (${credits} credits)` : r}</SelectItem>
+                  )
+                })}
+              </SelectContent>
+            </Select>
+            <p className="text-[10px] text-muted-foreground mt-1">Matching the source video's resolution gives the cleanest seam.</p>
+          </div>
+
+          <div className="flex items-center gap-2 px-1">
+            <input
+              type="checkbox"
+              id="extendGenerateAudio"
+              checked={data.generateAudio !== false}
+              onChange={(e) => onUpdate({ generateAudio: e.target.checked })}
+              className="rounded border-muted-foreground/40"
+            />
+            <label htmlFor="extendGenerateAudio" className="text-xs">Generate Audio</label>
+          </div>
+        </>
+      )}
+
       <p className="text-xs text-muted-foreground px-1">
-        Extends a VEO, Runway, or LTX video with a new prompt. Connect an upstream Image to Video or Text to Video node that produces a kieTaskId.
+        {isSeedanceExtend
+          ? "Extends ANY connected video: Seedance 2 generates what happens next (sound included) and the result is stitched into one seamless clip."
+          : "Extends a VEO, Runway, or LTX video with a new prompt. Connect an upstream Image to Video or Text to Video node that produces a kieTaskId."}
       </p>
 
       <ConnectedCinematographySources consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />

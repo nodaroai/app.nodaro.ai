@@ -1,7 +1,7 @@
 ---
 node_type: extend-video
-generated_at: 2026-06-11T18:52:25.322Z
-generated_from: 36d155ff
+generated_at: 2026-06-11T21:22:39.952Z
+generated_from: 8b0f26429
 ---
 
 # Extend Video
@@ -26,6 +26,8 @@ generated_from: 36d155ff
 - `quality?: "720p" | "1080p"`
 - `extendMode?: "start" | "end"`
 - `duration?: number`
+- `resolution?: "480p" | "720p" | "1080p"`
+- `generateAudio?: boolean`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
 - `generatedVideoUrl?: string`
@@ -62,9 +64,14 @@ generated_from: 36d155ff
 **Input parameters:**
 - `prompt`
 - `kie_task_id`
+- `video_url`
+- `video_asset_id`
 - `model`
 - `veo_quality`
 - `runway_resolution`
+- `duration`
+- `resolution`
+- `generate_audio`
 - `seed`
 <!-- AUTO-GEN:END mcp-call -->
 
