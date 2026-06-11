@@ -1,0 +1,65 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`buildImagePrompt characterization (pre/post segment refactor) > produces stable output across the fixture matrix > connected references directives 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Use these references for the output image:
+- Image 1 (background — a stone castle) — use as the background/setting.
+
+Compose them naturally into a single image: a knight at Image 1 (background)",
+  "referenceImageUrls": [
+    "https://example.com/castle.png",
+  ],
+}
+`;
+
+exports[`buildImagePrompt characterization (pre/post segment refactor) > produces stable output across the fixture matrix > empty prompt + style 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "
+Style: film noir style, high-contrast black-and-white imagery, deep shadows, venetian-blind lighting and moody 1940s cinema feel",
+  "referenceImageUrls": undefined,
+}
+`;
+
+exports[`buildImagePrompt characterization (pre/post segment refactor) > produces stable output across the fixture matrix > negative appended as Avoid (no native field) 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "a knight
+Avoid: blurry, watermark",
+  "referenceImageUrls": undefined,
+}
+`;
+
+exports[`buildImagePrompt characterization (pre/post segment refactor) > produces stable output across the fixture matrix > negative native (imagen4) 1`] = `
+{
+  "nativeNegativePrompt": "blurry",
+  "prompt": "a knight",
+  "referenceImageUrls": undefined,
+}
+`;
+
+exports[`buildImagePrompt characterization (pre/post segment refactor) > produces stable output across the fixture matrix > plain prompt 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "a knight on a cliff",
+  "referenceImageUrls": undefined,
+}
+`;
+
+exports[`buildImagePrompt characterization (pre/post segment refactor) > produces stable output across the fixture matrix > style appended 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "a knight
+Style: cinematic film style, dramatic lighting with cinematic color grading, widescreen aesthetic and film-like depth of field",
+  "referenceImageUrls": undefined,
+}
+`;
+
+exports[`buildImagePrompt characterization (pre/post segment refactor) > produces stable output across the fixture matrix > truncation 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx...",
+  "referenceImageUrls": undefined,
+}
+`;
