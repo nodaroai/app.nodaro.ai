@@ -80,6 +80,7 @@ const map: LocaleCatalogMap = {
   "mother-of-pearl":{ label: "珍珠母",       description: "贝壳内壁的珠光面,虹彩奶白" },
   "carbon-fiber":   { label: "碳纤维",       description: "编织的黑色碳纤维复合材料" },
   "holographic-film":{ label: "全息膜",      description: "折射光线的全息膜,带彩虹闪光" },
+  "subsurface": { label: "次表面散射光", description: "光从表面之下透出" },
 }
 
 export default map

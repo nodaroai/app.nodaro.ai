@@ -55,6 +55,7 @@ const map: LocaleCatalogMap = {
   "suspicious": { label: "مرتاب", description: "ارتياب حذر، عيون ضيقة، نظرة جانبية" },
   "resigned": { label: "مستسلم", description: "قبول هادئ لوضع غير سار" },
   "conflicted": { label: "متناقض", description: "صراع داخلي مرئي، حاجبان مقطبان" },
+  "relieved": { label: "مرتاح", description: "التوتر يذوب إلى هدوء" },
 }
 
 export default map

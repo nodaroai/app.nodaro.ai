@@ -58,6 +58,7 @@ const map: LocaleCatalogMap = {
   "suspicious":  { label: "起疑",       description: "戒备性的不信任、眯起的眼睛、斜睨" },
   "resigned":    { label: "认命",       description: "对不愉快境遇的安静接受" },
   "conflicted":  { label: "矛盾",       description: "可见的内心挣扎、眉头紧锁" },
+  "relieved": { label: "如释重负", description: "紧张化为平静" },
 }
 
 export default map

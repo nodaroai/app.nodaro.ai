@@ -17,6 +17,8 @@ const map: LocaleCatalogMap = {
   "cooke-s4": { description: "Cooke का look — creamy painterly skin" },
   "helios-44": { description: "विंटेज Soviet swirly bokeh" },
   "petzval": { description: "अत्यधिक विंटेज swirl, dramatic falloff" },
+  "probe": { label: "प्रोब लेंस", description: "नली मैक्रो — छिद्रों और तंग जगहों के आर-पार" },
+  "cctv": { label: "सीसीटीवी", description: "निगरानी कैमरा लुक" },
 }
 
 export default map

@@ -4,7 +4,7 @@
 ## Overview
 The Motion Graphics node uses an LLM to generate a plan for 2D motion graphics compositions. It supports lower thirds, title cards, kinetic typography, animated shapes, and SVG path animations. A live preview is available in the config panel. Maximum duration is 60 seconds.
 
-The node ships with two **engines** (see below). The default **Classic** engine produces a compact elements DSL rendered with pure Remotion primitives and a built-in `FONT_MAP`. The **Lottie** engine instead has the LLM author a complete Lottie animation.
+The node ships with two **engines** (see below). The default **Lottie** engine has the LLM author a complete Lottie animation with named editable slots. The **Classic** engine produces a compact elements DSL rendered with pure Remotion primitives and a built-in `FONT_MAP`.
 
 ## Engines
 
@@ -12,8 +12,8 @@ The **Engine** field selects how the composition is authored. It does not change
 
 | Engine | Value | What it does |
 |--------|-------|--------------|
-| **Classic (elements)** | `elements` (default) | The original behavior. The LLM returns a compact elements DSL (text, shapes, SVG paths, transitions) that the renderer maps to Remotion primitives. Synchronous and fast. |
-| **Lottie (AI-authored)** | `lottie` | The LLM authors a complete [Lottie](https://lottiefiles.com/) animation with **named, editable slots**. Choose this for richer, hand-animation-style motion. |
+| **Classic (elements)** | `elements` | The original behavior. The LLM returns a compact elements DSL (text, shapes, SVG paths, transitions) that the renderer maps to Remotion primitives. Synchronous and fast. |
+| **Lottie (AI-authored)** | `lottie` (default for new nodes) | The LLM authors a complete [Lottie](https://lottiefiles.com/) animation with **named, editable slots**. Choose this for richer, hand-animation-style motion. |
 
 **Lottie engine specifics:**
 

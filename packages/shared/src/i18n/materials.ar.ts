@@ -74,6 +74,7 @@ const map: LocaleCatalogMap = {
   "mother-of-pearl": { label: "صدف", description: "بطانة صدف داخلية متقزحة بكريمي" },
   "carbon-fiber": { label: "ألياف الكربون", description: "مركب ألياف كربون منسوج أسود" },
   "holographic-film": { label: "غشاء هولوغرافي", description: "غشاء هولوغرام يكسر الضوء بلمعان قوس قزح" },
+  "subsurface": { label: "توهج تحت السطح", description: "ضوء يتوهج من تحت السطح" },
 }
 
 export default map

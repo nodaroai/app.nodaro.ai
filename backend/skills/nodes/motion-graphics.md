@@ -1,7 +1,7 @@
 ---
 node_type: motion-graphics
-generated_at: 2026-06-10T21:38:16.979Z
-generated_from: 5ef104b5
+generated_at: 2026-06-11T10:53:13.652Z
+generated_from: 3f316820
 ---
 
 # Motion Graphics
@@ -9,7 +9,7 @@ generated_from: 5ef104b5
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `motion-graphics`
 **Category:** ai
-**Credit cost:** 2
+**Credit cost:** 5
 **Inputs (target handles):** `in`
 **Outputs (source handles):** `composition`, `lottie`
 
@@ -35,7 +35,7 @@ generated_from: 5ef104b5
 {
   "label": "Motion Graphics",
   "motionPrompt": "",
-  "engine": "elements",
+  "engine": "lottie",
   "aspectRatio": "16:9",
   "backgroundColor": "#00000000",
   "fps": 30,
@@ -71,7 +71,7 @@ generated_from: 5ef104b5
   "data": {
     "label": "Motion Graphics",
     "motionPrompt": "",
-    "engine": "elements",
+    "engine": "lottie",
     "aspectRatio": "16:9",
     "backgroundColor": "#00000000",
     "fps": 30,

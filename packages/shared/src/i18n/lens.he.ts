@@ -17,6 +17,8 @@ const map: LocaleCatalogMap = {
   "cooke-s4": { description: "מראה Cooke — עור ציורי קרמי" },
   "helios-44": { description: "בוקה מסולסל סובייטי וינטג'" },
   "petzval": { description: "מסולסל אולטרא-וינטג', נפילה דרמטית" },
+  "probe": { label: "עדשת גשש", description: "מאקרו צינורי — דרך חורים ומעברים צרים" },
+  "cctv": { label: "מצלמת אבטחה", description: "מראה צילומי מצלמת אבטחה" },
 }
 
 export default map

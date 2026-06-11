@@ -13,6 +13,14 @@ export const CREDIT_BASE_USD = 0.02
  *  schemas and the factory-preset guard test all read this. Prompt cap ONLY (not negativePrompt). */
 export const IMAGE_PROMPT_MAX = 5000
 
+/**
+ * Video prompt/negative cap shared by routes + editor (MCP verbs already use
+ * 8000). Providers allow far more (KIE seedance-2: 20k chars) — the old
+ * per-route 2500 was a false-positive blocker for legitimate multi-shot
+ * Seedance prompts.
+ */
+export const VIDEO_PROMPT_MAX = 8000
+
 // Models that accept negative_prompt as a native API parameter.
 // All other models get negative prompt appended to the prompt text as "Avoid: ...".
 export const NATIVE_NEGATIVE_PROMPT_MODELS = new Set([

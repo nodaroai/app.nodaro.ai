@@ -17,6 +17,8 @@ const map: LocaleCatalogMap = {
   "cooke-s4": { description: "Cooke独特の表情 — 絵画的でクリーミーな肌" },
   "helios-44": { description: "ヴィンテージのソビエト製スワール（渦巻き）ボケ" },
   "petzval": { label: "ペッツバール・ポートレート", description: "極端にヴィンテージな渦巻き、劇的な周辺減光" },
+  "probe": { label: "プローブレンズ", description: "チューブ型マクロ——穴や狭い隙間を通り抜ける" },
+  "cctv": { label: "監視カメラ", description: "防犯カメラ映像風" },
 }
 
 export default map

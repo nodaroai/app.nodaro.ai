@@ -17,6 +17,8 @@ const map: LocaleCatalogMap = {
   "cooke-s4": { description: "Cooke 룩 — 크리미하고 회화적인 피부톤입니다" },
   "helios-44": { description: "빈티지 소비에트의 소용돌이 보케입니다" },
   "petzval": { label: "Petzval Portrait", description: "초빈티지 소용돌이, 극적인 폴오프입니다" },
+  "probe": { label: "프로브 렌즈", description: "좁은 틈과 구멍을 통과하는 튜브형 매크로" },
+  "cctv": { label: "CCTV", description: "감시 카메라 룩" },
 }
 
 export default map
