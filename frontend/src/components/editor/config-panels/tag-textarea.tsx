@@ -96,6 +96,8 @@ export interface SuggestionItem {
   /** When set, this row is a prompt snippet — selecting inserts this text
    *  (with smart separator) instead of `tag`. `tag` holds a truncated preview. */
   snippetText?: string
+  /** Unique pool identity for snippet rows — keys + dedupe; absent for non-snippet rows. */
+  snippetId?: string
 }
 
 /** A reference image that can be inserted into the prompt via the "@" trigger. */
@@ -485,6 +487,7 @@ export function TagTextarea(props: TagTextareaProps) {
         category: s.category,
         kind: "leaf",
         snippetText: s.text,
+        snippetId: `${s.source}:${s.id}`,
       }))
     }
 
@@ -660,6 +663,10 @@ export function TagTextarea(props: TagTextareaProps) {
   const selectSuggestion = useCallback((item: SuggestionItem) => {
     if (item.snippetText !== undefined) {
       const prevChar = triggerInfo && triggerInfo.position > 0 ? value[triggerInfo.position - 1] : ""
+      // The "/" trigger only fires at line-start or after whitespace, so prevChar
+      // here is always start/whitespace and the computed prefix is effectively "".
+      // We still route through the shared helper for uniformity with the
+      // button/TipTap snippet-insert paths, where prevChar is unconstrained.
       insertTag(computeSnippetInsertPrefix(prevChar) + item.snippetText)
       return
     }
@@ -1088,7 +1095,8 @@ export function TagTextarea(props: TagTextareaProps) {
             const isCharacterRoot = item.kind === "character-root"
             const isVariant = item.kind === "variant"
             const isRefImage = !isBack && !isMode && item.thumbnailUrl !== undefined
-            const isNodeRef = !isBack && !isMode && !isRefImage && category !== "Audio Tags" && category !== "Suno"
+            const isSnippet = item.snippetText !== undefined
+            const isNodeRef = !isBack && !isMode && !isRefImage && !isSnippet && category !== "Audio Tags" && category !== "Suno"
             // Render the mode-picker chip on character variant rows when in
             // the level-2 drill view. The chip is a separate click target
             // that drills one more level into the mode picker (instead of
@@ -1157,7 +1165,7 @@ export function TagTextarea(props: TagTextareaProps) {
 
             return (
               <button
-                key={item.tag}
+                key={isSnippet ? `snippet-${item.snippetId}` : item.tag}
                 type="button"
                 data-index={idx}
                 className={`w-full text-left px-2.5 py-1.5 text-[11px] cursor-pointer transition-colors flex items-center gap-2 ${
@@ -1229,6 +1237,14 @@ export function TagTextarea(props: TagTextareaProps) {
                     )}
                   </>
                 )}
+                {isSnippet && (
+                  // Snippet row: stacked name (primary) + truncated text preview
+                  // (secondary), mirroring the PromptEditor's SnippetSuggestionList.
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-[11px] font-medium truncate">{item.label}</span>
+                    <span className="block text-[10px] text-muted-foreground truncate">{item.tag}</span>
+                  </span>
+                )}
                 {isNodeRef && (
                   <span
                     className={`inline-flex items-center rounded-md border px-1.5 py-0 text-[10px] font-mono font-medium leading-4 ${
@@ -1240,7 +1256,7 @@ export function TagTextarea(props: TagTextareaProps) {
                     {item.tag}
                   </span>
                 )}
-                {!isNodeRef && !isRefImage && (
+                {!isNodeRef && !isRefImage && !isSnippet && (
                   <span className="font-mono text-[11px]">{item.tag}</span>
                 )}
               </button>
