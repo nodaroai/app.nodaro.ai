@@ -76,8 +76,20 @@ vi.mock("@/components/editor/config-panels/reference-support-warning", () => ({
 vi.mock("@/components/editor/config-panels/extra-refs-section", () => ({
   ExtraRefsSection: () => <div />,
 }))
-vi.mock("@/components/editor/config-panels/final-prompt-preview", () => ({
-  FinalPromptPreview: () => <div />,
+// Inline final-view: the toggle lives in the label row (the mocked MappableField
+// only renders `children`, so it never mounts here) and the field-body swap reads
+// the mode from the store mock (no __promptFinalView → edit → editor renders). Mock
+// the view + the assembly hook so the real cinematography walkers aren't pulled in.
+vi.mock("@/components/editor/config-panels/prompt-field-final-view", () => ({
+  PromptFieldFinalView: () => <div />,
+  PromptFieldModeToggle: () => null,
+}))
+vi.mock("@/components/editor/config-panels/use-final-prompt-segments", () => ({
+  useFinalPromptSegments: () => ({
+    promptSegments: [], negativeSegments: [], promptText: "", negativeText: "",
+    copyText: "", negativeRouting: null, cineHints: [], refBlock: "",
+  }),
+  negativeRoutingCaption: () => undefined,
 }))
 vi.mock("@/components/editor/config-panels/connected-cinematography-sources", () => ({
   ConnectedCinematographySources: () => <div />,

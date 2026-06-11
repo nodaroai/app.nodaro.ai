@@ -1,7 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
-import { Eye, EyeOff } from "lucide-react"
+import { useMemo, useRef } from "react"
 import {
   Dialog,
   DialogContent,
@@ -12,7 +11,15 @@ import {
 import { PromptEditor } from "@/components/editor/config-panels/prompt-editor"
 import { PromptHelperButton } from "@/components/editor/config-panels/prompt-helper-button"
 import { SnippetMenuButton } from "@/components/editor/config-panels/snippet-menu-button"
-import { FinalPromptPreview } from "@/components/editor/config-panels/final-prompt-preview"
+import {
+  PromptFieldFinalView,
+  PromptFieldModeToggle,
+} from "@/components/editor/config-panels/prompt-field-final-view"
+import {
+  useFinalPromptSegments,
+  negativeRoutingCaption,
+} from "@/components/editor/config-panels/use-final-prompt-segments"
+import { usePromptFieldMode } from "@/hooks/use-prompt-field-mode"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { getPromptFields, getSnippetMedia } from "@/lib/prompt-fields"
 import { useSnippetPool } from "@/hooks/queries/use-prompt-snippets-queries"
@@ -56,7 +63,12 @@ export function PromptQuickEditModal() {
   const fields = getPromptFields(nodeType)
   const data = (node?.data ?? {}) as Record<string, unknown>
 
-  const [showFinal, setShowFinal] = useState(false)
+  // Persistence keys for the per-field Edit⇄Final toggle. Use the node's actual
+  // data field names (e.g. image nodes → "prompt"/"negativePrompt"), so the
+  // mode state in `data.__promptFinalView` is shared with the config panel for
+  // the same node — toggling here mirrors there and vice-versa.
+  const promptKey = fields?.prompt ?? "prompt"
+  const negativeKey = fields?.negative ?? "negativePrompt"
 
   // Read `nodes` through a ref inside the ref-builders so LIVE prompt edits
   // (which replace the store's nodes array every keystroke) don't rebuild the
@@ -105,15 +117,31 @@ export function PromptQuickEditModal() {
     [connectedReferences],
   )
 
-  // Reset the final-prompt panel each time the modal opens for a node.
-  useEffect(() => { setShowFinal(false) }, [nodeId])
-
   // Snippet pools for this node's modality. Hooks must run unconditionally
   // (nodeType may be undefined — useSnippetPool returns [] for undefined media),
   // so they sit above the early return below.
   const snippetMedia = getSnippetMedia(nodeType)
   const promptSnippets = useSnippetPool(snippetMedia, "prompt")
   const negativeSnippets = useSnippetPool(snippetMedia, "negative")
+
+  // Per-field Edit⇄Final toggle + assembled segments. All unconditional (above
+  // the early return); the segments are read from `data` so they're valid even
+  // before the field locals below are derived. Provider-less nodes get the flat
+  // text path (no provenance colors) automatically — provider is undefined.
+  const promptFieldMode = usePromptFieldMode(nodeId ?? "", promptKey)
+  const negativeFieldMode = usePromptFieldMode(nodeId ?? "", negativeKey)
+  const finalPrompt = useFinalPromptSegments({
+    userPrompt: typeof data[promptKey] === "string" ? (data[promptKey] as string) : undefined,
+    style: typeof data.style === "string" ? data.style : undefined,
+    negativePrompt: typeof data[negativeKey] === "string" ? (data[negativeKey] as string) : undefined,
+    consumerNodeId: nodeId ?? undefined,
+    nodes,
+    edges,
+    provider: typeof data.provider === "string" ? data.provider : undefined,
+    connectedReferences,
+    snippets: promptSnippets,
+    negativeSnippets,
+  })
 
   if (!nodeId || !node || !nodeType || !fields) return null
 
@@ -162,6 +190,7 @@ export function PromptQuickEditModal() {
             <div className="flex items-center justify-between gap-2 min-h-[28px]">
               <label className="text-xs font-medium text-muted-foreground">{promptLabel}</label>
               <span className="inline-flex items-center gap-0.5">
+                <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
                 <SnippetMenuButton pool={promptSnippets} value={promptValue} onInsert={(v) => writeField(promptField, v)} target="prompt" media={snippetMedia} />
                 <PromptHelperButton
                   size="md"
@@ -177,62 +206,55 @@ export function PromptQuickEditModal() {
                 />
               </span>
             </div>
-            <PromptEditor
-              value={promptValue}
-              onChange={(v) => writeField(promptField, v)}
-              placeholder="Describe what you want to generate…  Type @ for references, { for variables"
-              rows={10}
-              referenceImages={referenceImages}
-              nodeRefs={nodeRefs}
-              refMap={refMap}
-              snippets={promptSnippets}
-            />
+            {promptFieldMode.mode === "final" ? (
+              <PromptFieldFinalView
+                segments={finalPrompt.promptSegments}
+                plainText={finalPrompt.promptText}
+                placeholder="Final prompt preview — node has no prompt yet"
+                minHeightRem={10 * 1.5}
+              />
+            ) : (
+              <PromptEditor
+                value={promptValue}
+                onChange={(v) => writeField(promptField, v)}
+                placeholder="Describe what you want to generate…  Type @ for references, { for variables"
+                rows={10}
+                referenceImages={referenceImages}
+                nodeRefs={nodeRefs}
+                refMap={refMap}
+                snippets={promptSnippets}
+              />
+            )}
           </div>
           {negativeField && (
             <div className="space-y-1.5">
               <div className="flex items-center justify-between gap-2 min-h-[28px]">
                 <label className="text-xs font-medium text-muted-foreground">Negative prompt</label>
-                <SnippetMenuButton pool={negativeSnippets} value={negativeValue} onInsert={(v) => writeField(negativeField, v)} target="negative" media={snippetMedia} />
+                <span className="inline-flex items-center gap-0.5">
+                  <PromptFieldModeToggle mode={negativeFieldMode.mode} onToggle={negativeFieldMode.toggle} />
+                  <SnippetMenuButton pool={negativeSnippets} value={negativeValue} onInsert={(v) => writeField(negativeField, v)} target="negative" media={snippetMedia} />
+                </span>
               </div>
-              <PromptEditor
-                value={negativeValue}
-                onChange={(v) => writeField(negativeField, v)}
-                placeholder="What to avoid (optional)…"
-                rows={3}
-                referenceImages={referenceImages}
-                nodeRefs={nodeRefs}
-                refMap={refMap}
-                snippets={negativeSnippets}
-              />
-            </div>
-          )}
-        </div>
-
-        {/* Final prompt — what's actually sent after @-refs, {} variables,
-            cinematography hints + style are resolved. */}
-        <div className="space-y-2">
-          <button
-            type="button"
-            onClick={() => setShowFinal((v) => !v)}
-            className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
-          >
-            {showFinal ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-            {showFinal ? "Hide final prompt" : "Show final prompt"}
-          </button>
-          {showFinal && (
-            <div className="max-h-60 overflow-y-auto">
-              <FinalPromptPreview
-                userPrompt={promptValue}
-                style={typeof data.style === "string" ? data.style : undefined}
-                negativePrompt={negativeValue}
-                consumerNodeId={nodeId}
-                nodes={nodes}
-                edges={edges}
-                provider={typeof data.provider === "string" ? data.provider : undefined}
-                connectedReferences={connectedReferences}
-                snippets={promptSnippets}
-                negativeSnippets={negativeSnippets}
-              />
+              {negativeFieldMode.mode === "final" ? (
+                <PromptFieldFinalView
+                  segments={finalPrompt.negativeSegments}
+                  plainText={finalPrompt.negativeText}
+                  placeholder="Final negative prompt preview — nothing to avoid yet"
+                  routingCaption={negativeRoutingCaption(finalPrompt.negativeRouting)}
+                  minHeightRem={3 * 1.5}
+                />
+              ) : (
+                <PromptEditor
+                  value={negativeValue}
+                  onChange={(v) => writeField(negativeField, v)}
+                  placeholder="What to avoid (optional)…"
+                  rows={3}
+                  referenceImages={referenceImages}
+                  nodeRefs={nodeRefs}
+                  refMap={refMap}
+                  snippets={negativeSnippets}
+                />
+              )}
             </div>
           )}
         </div>

@@ -56,6 +56,11 @@ interface PromptFieldFinalViewProps {
   /** Optional one-line caption under the card (negative-field routing note:
    *  "Sent natively …" vs "Appended to the prompt as \"Avoid: …\""). */
   readonly routingCaption?: string
+  /** Min-height of the card body, in rem — callers pass the editor's
+   *  `rows * 1.5` (the {@link PromptEditor}/`TagTextarea` minHeight formula) so a
+   *  tall field doesn't visibly shrink when toggled to final view. Falls back to
+   *  the default `4.5rem` (= a 3-row prompt) when absent. */
+  readonly minHeightRem?: number
   readonly className?: string
 }
 
@@ -76,6 +81,7 @@ export function PromptFieldFinalView({
   plainText,
   placeholder,
   routingCaption,
+  minHeightRem,
   className,
 }: PromptFieldFinalViewProps) {
   const hasContent = plainText.length > 0
@@ -102,8 +108,12 @@ export function PromptFieldFinalView({
       <div
         className={cn(
           "relative rounded-md border border-input bg-transparent text-sm shadow-xs",
-          "px-3 py-2 min-h-[4.5rem]",
+          "px-3 py-2",
+          // Default min-height (= a 3-row prompt); overridden by the inline
+          // style below when the caller passes the editor's exact rows*1.5.
+          minHeightRem == null && "min-h-[4.5rem]",
         )}
+        style={minHeightRem != null ? { minHeight: `${minHeightRem}rem` } : undefined}
       >
         <button
           type="button"

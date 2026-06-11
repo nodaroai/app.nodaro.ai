@@ -94,6 +94,25 @@ describe("PromptFieldFinalView", () => {
     )
     expect(screen.getByText("Sent natively as the provider's negative prompt")).toBeDefined()
   })
+
+  it("height-matches a tall editor via minHeightRem (inline style, default class dropped)", () => {
+    // A 10-row prompt editor is rows*1.5 = 15rem tall. Without minHeightRem the
+    // card defaults to 4.5rem and the swap visibly shrinks — so the caller
+    // passes 15 and we render an inline minHeight, dropping the 4.5rem class.
+    const segments: DisplaySegment[] = [{ text: "a prompt", origin: "user" }]
+    const { container, rerender } = render(
+      <PromptFieldFinalView segments={segments} plainText="a prompt" minHeightRem={15} />,
+    )
+    const card = container.querySelector("div.relative") as HTMLElement
+    expect(card.style.minHeight).toBe("15rem")
+    expect(card.className).not.toContain("min-h-[4.5rem]")
+
+    // Absent → falls back to the default class, no inline override.
+    rerender(<PromptFieldFinalView segments={segments} plainText="a prompt" />)
+    const cardDefault = container.querySelector("div.relative") as HTMLElement
+    expect(cardDefault.style.minHeight).toBe("")
+    expect(cardDefault.className).toContain("min-h-[4.5rem]")
+  })
 })
 
 describe("PromptFieldModeToggle", () => {

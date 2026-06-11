@@ -77,6 +77,22 @@ function buildNegativeSegments(
  *  - `appended`— folded into the prompt as a trailing `Avoid: …` suffix */
 export type NegativeRouting = "native" | "appended" | null
 
+/** One-line caption for a negative field's final-view, explaining how the
+ *  resolved negative is routed for the selected provider. Derived from
+ *  {@link NegativeRouting} (read back from the builder — never a re-derivation
+ *  of the provider list). `null` (no negative / provider-less) → no caption.
+ *  Shared by every surface that renders the inline negative final-view. */
+export function negativeRoutingCaption(routing: NegativeRouting): string | undefined {
+  switch (routing) {
+    case "native":
+      return "Sent natively as the provider's negative prompt"
+    case "appended":
+      return 'Appended to the prompt as "Avoid: …"'
+    default:
+      return undefined
+  }
+}
+
 export interface UseFinalPromptSegmentsArgs {
   /** User's prompt text (from `data.prompt` or equivalent). */
   readonly userPrompt: string | undefined

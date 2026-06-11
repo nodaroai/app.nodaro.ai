@@ -54,7 +54,9 @@ import type { ConnectedReference, ReferenceSource } from "@nodaro/shared"
 import { DEFAULT_LABEL_BY_SOURCE, characterMentionSlug, locationMentionSlug, expandExtraRefsToConnectedReferences } from "@nodaro/shared"
 import { buildImageConnectedReferences, connectedReferencesToRefImages } from "./connected-references"
 import { ConnectedMediaList } from "./connected-media-list"
-import { FinalPromptPreview } from "./final-prompt-preview"
+import { PromptFieldFinalView, PromptFieldModeToggle } from "./prompt-field-final-view"
+import { useFinalPromptSegments, negativeRoutingCaption } from "./use-final-prompt-segments"
+import { usePromptFieldMode } from "@/hooks/use-prompt-field-mode"
 import { ConnectedCinematographySources } from "./connected-cinematography-sources"
 import { hasConnectedStyleNode } from "@/lib/cinematography-hints"
 import type { ConfigProps } from "./types"
@@ -336,8 +338,8 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
 
   // (refImagesForAutocomplete is derived below, after connectedReferences is built.)
 
-  // Rich connectedReferences for the FinalPromptPreview — mirrors the runtime
-  // path through buildImagePrompt so the preview shows the same fidelity
+  // Rich connectedReferences for the inline final-view — mirrors the runtime
+  // path through buildImagePrompt so the view shows the same fidelity
   // blocks the model will actually receive.
   const connectedReferences = useMemo<ConnectedReference[]>(
     () => buildImageConnectedReferences({ data, sources, nodes, attachedChars }),
@@ -350,6 +352,24 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
     () => connectedReferencesToRefImages(connectedReferences),
     [connectedReferences],
   )
+
+  // Per-field Edit⇄Final toggle state (persisted in node data). The assembled
+  // segments are computed once and fed to whichever field is in final mode.
+  const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
+  const negativeFieldMode = usePromptFieldMode(nodeId ?? "", "negativePrompt")
+  const finalPrompt = useFinalPromptSegments({
+    userPrompt: data.prompt,
+    style: data.style,
+    negativePrompt: data.negativePrompt,
+    consumerNodeId: nodeId,
+    nodes,
+    edges: edges ?? [],
+    provider: currentProvider,
+    connectedReferences,
+    identityMeta: data.identityMeta,
+    snippets: promptSnippets,
+    negativeSnippets,
+  })
 
   // Inpaint base image. The node's own current result drives the in-place
   // inpaint loop (paint a mask on the last render, regenerate). If there's no
@@ -375,19 +395,6 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
 
   return (
     <div className="flex flex-col gap-3">
-      <FinalPromptPreview
-        userPrompt={data.prompt}
-        style={data.style}
-        negativePrompt={data.negativePrompt}
-        consumerNodeId={nodeId}
-        nodes={nodes}
-        edges={edges ?? []}
-        provider={currentProvider}
-        connectedReferences={connectedReferences}
-        identityMeta={data.identityMeta}
-        snippets={promptSnippets}
-        negativeSnippets={negativeSnippets}
-      />
       {/* Provider — primary decision, determines which model-specific fields appear below */}
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="image">
         <MultiProviderPicker
@@ -404,19 +411,29 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
       </MappableField>
 
       <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+        <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
         <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="image" />
         <PromptHelperButton nodeType="generate-image" currentPrompt={data.prompt || ""} provider={currentProvider} aspectRatio={data.aspectRatio} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />
       </span>}>
-        <PromptEditor
-          rows={3}
-          value={data.prompt}
-          onChange={(v) => onUpdate({ prompt: v })}
-          placeholder="Describe the image to generate..."
-          referenceImages={refImagesForAutocomplete}
-          nodeRefs={nodeRefs}
-          refMap={refMap}
-          snippets={promptSnippets}
-        />
+        {promptFieldMode.mode === "final" ? (
+          <PromptFieldFinalView
+            segments={finalPrompt.promptSegments}
+            plainText={finalPrompt.promptText}
+            placeholder="Final prompt preview — node has no prompt yet"
+            minHeightRem={3 * 1.5}
+          />
+        ) : (
+          <PromptEditor
+            rows={3}
+            value={data.prompt}
+            onChange={(v) => onUpdate({ prompt: v })}
+            placeholder="Describe the image to generate..."
+            referenceImages={refImagesForAutocomplete}
+            nodeRefs={nodeRefs}
+            refMap={refMap}
+            snippets={promptSnippets}
+          />
+        )}
       </MappableField>
       <MappableField field="style" label="Style" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select
@@ -459,20 +476,33 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
             : "Appended to prompt as style guidance"}
         </p>
       </MappableField>
-      <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={
+      <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+        <PromptFieldModeToggle mode={negativeFieldMode.mode} onToggle={negativeFieldMode.toggle} />
         <SnippetMenuButton pool={negativeSnippets} value={data.negativePrompt || ""} onInsert={(v) => onUpdate({ negativePrompt: v })} target="negative" media="image" />
-      }>
-        <TagTextarea
-          rows={2}
-          value={data.negativePrompt}
-          onChange={(v) => onUpdate({ negativePrompt: v })}
-          placeholder="Things to avoid..."
-          nodeRefs={nodeRefs}
-          displayMode={variableDisplayMode}
-          refMap={refMap}
-          snippets={negativeSnippets}
-        />
-        <p className="text-[10px] text-muted-foreground mt-0.5">Appended to prompt as exclusion guidance</p>
+      </span>}>
+        {negativeFieldMode.mode === "final" ? (
+          <PromptFieldFinalView
+            segments={finalPrompt.negativeSegments}
+            plainText={finalPrompt.negativeText}
+            placeholder="Final negative prompt preview — nothing to avoid yet"
+            routingCaption={negativeRoutingCaption(finalPrompt.negativeRouting)}
+            minHeightRem={2 * 1.5}
+          />
+        ) : (
+          <>
+            <TagTextarea
+              rows={2}
+              value={data.negativePrompt}
+              onChange={(v) => onUpdate({ negativePrompt: v })}
+              placeholder="Things to avoid..."
+              nodeRefs={nodeRefs}
+              displayMode={variableDisplayMode}
+              refMap={refMap}
+              snippets={negativeSnippets}
+            />
+            <p className="text-[10px] text-muted-foreground mt-0.5">Appended to prompt as exclusion guidance</p>
+          </>
+        )}
       </MappableField>
 
       <ExtraRefsSection
@@ -955,9 +985,9 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
     return undefined
   }, [sources])
 
-  // Connected reference list for FinalPromptPreview + the `@` typeahead in
+  // Connected reference list for the inline final-view + the `@` typeahead in
   // PromptEditor. Mirrors the runtime path through buildImagePrompt so the
-  // preview shows the same fidelity blocks the model will receive.
+  // view shows the same fidelity blocks the model will receive.
   const connectedReferences = useMemo<ConnectedReference[]>(() => {
     const wiredSourceTypeMap: Record<string, ReferenceSource> = {
       "upload-image": "wired-image",
@@ -1006,7 +1036,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
         const slug = characterMentionSlug(charName)
         if (slug) {
           // Propagate the character node's default usage mode into every
-          // derived entry — keeps the modify-image FinalPromptPreview in sync
+          // derived entry — keeps the modify-image final-view in sync
           // with the runtime path through `buildImagePrompt`.
           const defaultUsageMode = charData.defaultUsageMode
           const canonicalUrl =
@@ -1208,6 +1238,24 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
     }))
   }, [connectedReferences])
 
+  // Per-field Edit⇄Final toggle state (persisted in node data); segments built
+  // once and fed to whichever field is in final mode.
+  const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
+  const negativeFieldMode = usePromptFieldMode(nodeId ?? "", "negativePrompt")
+  const finalPrompt = useFinalPromptSegments({
+    userPrompt: data.prompt,
+    style: data.style,
+    negativePrompt: data.negativePrompt,
+    consumerNodeId: nodeId,
+    nodes,
+    edges: edges ?? [],
+    provider: data.provider,
+    connectedReferences,
+    characterDefs: attachedChars,
+    snippets: promptSnippets,
+    negativeSnippets,
+  })
+
   function detachCharacter(id: string) {
     onUpdate({ characterDefinitionIds: attachedIds.filter((cid) => cid !== id) })
   }
@@ -1250,19 +1298,6 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
 
   return (
     <div className="flex flex-col gap-3">
-      <FinalPromptPreview
-        userPrompt={data.prompt}
-        style={data.style}
-        negativePrompt={data.negativePrompt}
-        consumerNodeId={nodeId}
-        nodes={nodes}
-        edges={edges ?? []}
-        provider={data.provider}
-        connectedReferences={connectedReferences}
-        characterDefs={attachedChars}
-        snippets={promptSnippets}
-        negativeSnippets={negativeSnippets}
-      />
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="image">
         <ModelSearchSelect
           value={data.provider || "nano-banana"}
@@ -1276,19 +1311,29 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
         />
       </MappableField>
       <MappableField field="prompt" label={isNanoBananaEdit ? "Edit Instructions" : "Transformation Prompt"} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+        <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
         <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="image" />
         <PromptHelperButton nodeType="image-to-image" currentPrompt={data.prompt || ""} provider={data.provider} aspectRatio={data.aspectRatio} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />
       </span>}>
-        <PromptEditor
-          rows={3}
-          value={data.prompt}
-          onChange={(v) => onUpdate({ prompt: v })}
-          placeholder={isNanoBananaEdit ? "Describe how to edit the image..." : "Describe how to transform the input image..."}
-          referenceImages={refImagesForAutocomplete}
-          nodeRefs={nodeRefs}
-          refMap={refMap}
-          snippets={promptSnippets}
-        />
+        {promptFieldMode.mode === "final" ? (
+          <PromptFieldFinalView
+            segments={finalPrompt.promptSegments}
+            plainText={finalPrompt.promptText}
+            placeholder="Final prompt preview — node has no prompt yet"
+            minHeightRem={3 * 1.5}
+          />
+        ) : (
+          <PromptEditor
+            rows={3}
+            value={data.prompt}
+            onChange={(v) => onUpdate({ prompt: v })}
+            placeholder={isNanoBananaEdit ? "Describe how to edit the image..." : "Describe how to transform the input image..."}
+            referenceImages={refImagesForAutocomplete}
+            nodeRefs={nodeRefs}
+            refMap={refMap}
+            snippets={promptSnippets}
+          />
+        )}
       </MappableField>
       <MappableField field="style" label="Style" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select
@@ -1331,20 +1376,33 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
             : "Appended to prompt as style guidance"}
         </p>
       </MappableField>
-      <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={
+      <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+        <PromptFieldModeToggle mode={negativeFieldMode.mode} onToggle={negativeFieldMode.toggle} />
         <SnippetMenuButton pool={negativeSnippets} value={data.negativePrompt || ""} onInsert={(v) => onUpdate({ negativePrompt: v })} target="negative" media="image" />
-      }>
-        <PromptEditor
-          rows={2}
-          value={data.negativePrompt ?? ""}
-          onChange={(v) => onUpdate({ negativePrompt: v })}
-          placeholder="Things to avoid..."
-          referenceImages={refImagesForAutocomplete}
-          nodeRefs={nodeRefs}
-          refMap={refMap}
-          snippets={negativeSnippets}
-        />
-        <p className="text-[10px] text-muted-foreground mt-0.5">Appended to prompt as exclusion guidance</p>
+      </span>}>
+        {negativeFieldMode.mode === "final" ? (
+          <PromptFieldFinalView
+            segments={finalPrompt.negativeSegments}
+            plainText={finalPrompt.negativeText}
+            placeholder="Final negative prompt preview — nothing to avoid yet"
+            routingCaption={negativeRoutingCaption(finalPrompt.negativeRouting)}
+            minHeightRem={2 * 1.5}
+          />
+        ) : (
+          <>
+            <PromptEditor
+              rows={2}
+              value={data.negativePrompt ?? ""}
+              onChange={(v) => onUpdate({ negativePrompt: v })}
+              placeholder="Things to avoid..."
+              referenceImages={refImagesForAutocomplete}
+              nodeRefs={nodeRefs}
+              refMap={refMap}
+              snippets={negativeSnippets}
+            />
+            <p className="text-[10px] text-muted-foreground mt-0.5">Appended to prompt as exclusion guidance</p>
+          </>
+        )}
       </MappableField>
 
       <ExtraRefsSection
