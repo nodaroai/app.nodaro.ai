@@ -6,7 +6,7 @@ import { reconcileWorkflowNodeResults } from "@/lib/reconcile-node-results"
 import { prefetchModelCredits } from "@/ee/hooks/queries/use-credits-queries"
 import { toast } from "sonner"
 import type { WorkflowNode, WorkflowEdge, CharacterDefinition, GeneratedResult, SceneNodeData } from "@/types/nodes"
-import { filterCloneNodes } from "@nodaro/shared"
+import { filterCloneNodes, stripTransientRuntimeData } from "@nodaro/shared"
 import { orderNodesParentFirst } from "@/components/editor/workflow-editor/group-coords"
 import { isStudioWorkflowSettings } from "@/lib/studio"
 import { isValidUuid } from "@/lib/uuid"
@@ -49,6 +49,11 @@ interface SaveResult {
 }
 
 const SAVED_DISPLAY_DURATION = 2000
+
+/** Hard cap on a single save round-trip. A hung request would otherwise pin
+ *  `saveStatus: "saving"` and silently freeze the autosave gate for the rest
+ *  of the session (the "workflow not saved for a long time" report). */
+const SAVE_TIMEOUT_MS = 30_000
 
 /**
  * Sync node results from jobs table via backend API.
@@ -520,7 +525,11 @@ export function useWorkflowPersistence(projectId?: string) {
         const payload = {
           project_id: resolvedProjectId,
           name: workflowName,
-          nodes: JSON.parse(JSON.stringify(nodes)),
+          // Transient run-state (executionStatus / job ids / progress) never
+          // persists: a mid-run save must not seed other tabs (or the next
+          // reload) with phantom "running" state, and stripping it keeps the
+          // payload from churning on every poll tick.
+          nodes: JSON.parse(JSON.stringify(stripTransientRuntimeData(nodes))),
           edges: JSON.parse(JSON.stringify(edges)),
           settings: {
             characterDefinitions: JSON.parse(JSON.stringify(characterDefinitions)),
@@ -546,7 +555,15 @@ export function useWorkflowPersistence(projectId?: string) {
             .eq("id", workflowId)
           if (loadedUpdatedAt) query = query.eq("updated_at", loadedUpdatedAt)
 
-          const { data, error } = await query.select("updated_at").maybeSingle()
+          // Hard timeout: a hung network call would otherwise pin
+          // saveStatus at "saving" forever, and the autosave gate
+          // (`saveStatus !== "saving"`) would silently stop saving for the
+          // rest of the session. An abort rejects → outer catch flips the
+          // status to "error" → the 10s max-timer retries while dirty.
+          const { data, error } = await query
+            .abortSignal(AbortSignal.timeout(SAVE_TIMEOUT_MS))
+            .select("updated_at")
+            .maybeSingle()
 
           if (error) {
             setSaveStatus("error", error.message)
@@ -614,6 +631,7 @@ export function useWorkflowPersistence(projectId?: string) {
           const { data, error } = await supabase
             .from("workflows")
             .insert({ ...payload, user_id: user.id })
+            .abortSignal(AbortSignal.timeout(SAVE_TIMEOUT_MS))
             .select("id, updated_at")
             .single()
 

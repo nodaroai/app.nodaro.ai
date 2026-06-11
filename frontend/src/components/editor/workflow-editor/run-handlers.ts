@@ -21,7 +21,7 @@ import {
   type ExecutionContext,
 } from "./types";
 import { COMPOSER_PLAN_MAP } from "@nodaro/shared";
-import { expandItemsWithRepeat } from "@nodaro/shared";
+import { expandItemsWithRepeat, TRANSIENT_RUNTIME_KEYS } from "@nodaro/shared";
 import { collapseExpandedClones } from "./execution-graph";
 import { shouldAbandonNode } from "./abandon-guard";
 import { getListInputForNode } from "./node-input-resolver";
@@ -1277,7 +1277,17 @@ function syncNodeStatesToStore(
   if (patchMap.size === 0) return;
 
   // Apply all patches in a single store update (one React re-render).
-  // All updates are execution-only so we skip undo capture.
+  // All updates are execution-only so we skip undo capture. Dirty only when
+  // some patch carries a PERSISTENT key (results, errorMessage, …) — pure
+  // status/progress flips are transient run-state that isn't saved, and
+  // marking them dirty is what phantom-dirtied passive tabs.
+  let hasPersistentChange = false;
+  for (const patch of patchMap.values()) {
+    if (Object.keys(patch).some((k) => !TRANSIENT_RUNTIME_KEYS.has(k))) {
+      hasPersistentChange = true;
+      break;
+    }
+  }
   setSkipUndoCapture(true);
   useWorkflowStore.setState((prev) => ({
     nodes: prev.nodes.map((n) => {
@@ -1285,7 +1295,7 @@ function syncNodeStatesToStore(
       if (!patch) return n;
       return { ...n, data: { ...n.data, ...patch } };
     }),
-    isDirty: true,
+    ...(hasPersistentChange ? { isDirty: true } : {}),
   }));
   setSkipUndoCapture(false);
 }

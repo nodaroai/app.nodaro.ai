@@ -13,7 +13,7 @@ import { NODE_DEFINITIONS, NODE_DEF_MAP, TELEPORTER_CHANNEL_COLORS, LOOP_COL_ADD
 import { HANDLE_OUTPUT_TYPES } from "@/lib/handle-output-types"
 import type { WorkflowSnapshot } from "./use-undo-redo-store"
 import { setSkipUndoCapture } from "./undo-flags"
-import { filterCloneNodes, EXECUTION_DATA_KEYS } from "@nodaro/shared"
+import { filterCloneNodes, EXECUTION_DATA_KEYS, TRANSIENT_RUNTIME_KEYS } from "@nodaro/shared"
 import type { PresentationItem, PipelineStatus } from "@nodaro/shared"
 import { migrateToItems, validateNoNestedGroups, cleanOrphanedItems, isCollectInEdge } from "@nodaro/shared"
 import type { VariableDisplayMode } from "@/components/editor/config-panels/types"
@@ -1346,13 +1346,14 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     const patch: Record<string, unknown> = { executionStatus: status }
     setSkipUndoCapture(true)
     try {
+      // executionStatus is TRANSIENT run-state: no isDirty (it isn't saved),
+      // so optimistic status flips can't phantom-dirty the workflow.
       set((state) => ({
         nodes: state.nodes.map((node) =>
           idSet.has(node.id)
             ? { ...node, data: { ...node.data, ...patch } as SceneNodeData }
             : node,
         ),
-        isDirty: true,
       }))
     } finally {
       setSkipUndoCapture(false)
@@ -1390,7 +1391,13 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     if (get().isReadOnly) return
     // If every key in the update is execution-related, tell the undo system
     // to skip snapshot capture so job polling doesn't pollute undo history.
-    const isExecOnly = Object.keys(data).every((k) => EXECUTION_DATA_KEYS.has(k))
+    const keys = Object.keys(data)
+    const isExecOnly = keys.every((k) => EXECUTION_DATA_KEYS.has(k))
+    // Pure run-state (status/jobId/progress) must not dirty the workflow —
+    // phantom dirt from polling is what produced spurious autosaves, false
+    // "changed in another tab" banners, and the frozen-autosave latch.
+    // Result keys (generated*, errorMessage, …) still dirty: they persist.
+    const isTransientOnly = keys.every((k) => TRANSIENT_RUNTIME_KEYS.has(k))
     if (isExecOnly) setSkipUndoCapture(true)
     set((state) => {
       // Detect label rename for {Node Label} ref sync
@@ -1429,7 +1436,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         return { ...node, data: { ...d, ...patch } as SceneNodeData }
       })
 
-      return { nodes, isDirty: true }
+      return isTransientOnly ? { nodes } : { nodes, isDirty: true }
     })
     if (isExecOnly) setSkipUndoCapture(false)
 
