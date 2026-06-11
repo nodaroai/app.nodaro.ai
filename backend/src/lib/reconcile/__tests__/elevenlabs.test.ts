@@ -93,7 +93,10 @@ describe("reconcileElevenLabsJob", () => {
   // at every cron tick forever.
   it("R2 upload throws → bumps reconcile_attempts, no finalize, no refund, no propagation", async () => {
     mockDubbedFetches()
-    mocks.uploadBufferMock.mockRejectedValueOnce(new Error("upload-size-exceeded: cap"))
+    // Generic transient failure — NOT upload-size-exceeded, which is now a
+    // DETERMINISTIC error that fast-fails on the first bump (see
+    // bump-attempts.test.ts).
+    mocks.uploadBufferMock.mockRejectedValueOnce(new Error("R2 503: service unavailable"))
 
     await expect(reconcileElevenLabsJob(row())).resolves.toBeUndefined()
 

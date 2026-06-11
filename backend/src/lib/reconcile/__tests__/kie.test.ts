@@ -422,7 +422,9 @@ describe("reconcileKieJob", () => {
         { id: "tr1", title: "Track", duration: 30, imageUrl: "", audioUrl: "https://suno.example/a.mp3" },
       ],
     })
-    mocks.uploadToR2Mock.mockRejectedValueOnce(new Error("upload-size-exceeded: cap"))
+    // Generic transient failure — upload-size-exceeded now fast-fails
+    // deterministically on the first bump (bump-attempts.test.ts).
+    mocks.uploadToR2Mock.mockRejectedValueOnce(new Error("R2 503: service unavailable"))
     const row: KieJobRow = {
       id: "j-suno-upload-throw",
       provider_kind: "kie-suno",
