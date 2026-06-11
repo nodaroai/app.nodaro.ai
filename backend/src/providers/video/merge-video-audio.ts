@@ -1,5 +1,5 @@
 import { join } from "node:path"
-import { downloadFile, runFfmpeg, runFfprobe, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
+import { downloadFile, runFfmpeg, needsTranscode, BROWSER_SAFE_VIDEO_ARGS, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
 import { runPostProcessing } from "../../lib/post-processing-error.js"
 
 interface AudioTrack {
@@ -121,21 +121,21 @@ async function mergeVideoAudioImpl(options: MergeVideoAudioOptions): Promise<str
 
     const filterComplex = buildAudioFilter(tracks, voiceoverVolume, bgVol, keepOriginalAudio)
 
-    // Detect if video needs re-encoding (VP8/VP9 cannot be muxed into MP4).
-    // runFfprobe uses execFile with an argv array — no shell, no interpolation.
-    let needsReencode = false
+    // The video stream is stream-COPIED into the MP4 unless it isn't
+    // browser-safe. `needsTranscode` is true when the source isn't H.264/yuv420p
+    // — i.e. VP8/VP9 (can't even mux into MP4), HEVC/H.265, and 10-bit sources.
+    // Those mux + download + play in desktop players fine, but a browser's
+    // <video> element can't decode them, so the node's inline preview is blank
+    // (a valid, downloadable merge that wouldn't render in the canvas). Re-encode
+    // them to browser-safe H.264 so the result plays inline — matching
+    // combine-videos, which normalizes every clip. Default to re-encode if the
+    // probe throws so the output is always guaranteed playable.
+    let needsReencode = true
     try {
-      const probeOut = (await runFfprobe([
-        "-v", "error",
-        "-select_streams", "v:0",
-        "-show_entries", "stream=codec_name",
-        "-of", "default=noprint_wrappers=1:nokey=1",
-        videoPath,
-      ])).trim().toLowerCase()
-      needsReencode = probeOut === "vp8" || probeOut === "vp9"
-      console.log(`[mergeVideoAudio] Video codec: ${probeOut}, needsReencode: ${needsReencode}`)
+      needsReencode = await needsTranscode(videoPath)
+      console.log(`[mergeVideoAudio] needsTranscode: ${needsReencode}`)
     } catch {
-      console.log("[mergeVideoAudio] Could not probe codec, defaulting to copy")
+      console.log("[mergeVideoAudio] Could not probe codec — re-encoding to browser-safe H.264")
     }
 
     const doMerge = async (filter: string) => {
@@ -144,9 +144,7 @@ async function mergeVideoAudioImpl(options: MergeVideoAudioOptions): Promise<str
         "-filter_complex", filter,
         "-map", "0:v",
         "-map", "[aout]",
-        ...(needsReencode
-          ? ["-c:v", "libx264", "-preset", "fast", "-crf", "18"]
-          : ["-c:v", "copy"]),
+        ...(needsReencode ? [...BROWSER_SAFE_VIDEO_ARGS] : ["-c:v", "copy"]),
         "-c:a", "aac",
         outputPath,
       ])
