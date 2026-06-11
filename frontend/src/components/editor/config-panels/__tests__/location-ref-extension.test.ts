@@ -22,6 +22,7 @@ function known(opts: { chars?: string[]; locs?: string[] } = {}): KnownSlugSets 
   return {
     characters: new Set(opts.chars ?? []),
     locations: new Set(opts.locs ?? []),
+    snippets: [],
   }
 }
 
