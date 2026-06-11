@@ -1,4 +1,5 @@
 import { Extension } from "@tiptap/core"
+import { PluginKey } from "@tiptap/pm/state"
 import Suggestion from "@tiptap/suggestion"
 
 /**
@@ -27,6 +28,11 @@ export const SnippetSuggestionExtension = Extension.create({
   addProseMirrorPlugins() {
     return [
       Suggestion({
+        // Distinct key is mandatory: @tiptap/suggestion's default SuggestionPluginKey
+        // is module-level shared, so two bare Suggestion() plugins in one editor
+        // collide and throw `RangeError: Adding different instances of a keyed
+        // plugin` at construction. Passed first so a configure()-level override wins.
+        pluginKey: new PluginKey("snippetSuggestion"),
         editor: this.editor,
         ...this.options.suggestion,
       }),
