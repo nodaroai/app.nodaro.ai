@@ -27,9 +27,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 const mocks = vi.hoisted(() => {
   const downloadFile = vi.fn().mockResolvedValue(undefined)
   const runFfmpeg = vi.fn().mockResolvedValue("")
-  // runFfprobe returns Promise<string> (stdout from execFile). merge-video-audio
-  // uses it to detect VP8/VP9 inputs that need re-encoding to H.264 for MP4 mux.
+  // runFfprobe returns Promise<string> (stdout from execFile). Used by other
+  // wrappers (e.g. the speed-ramp duration probe).
   const runFfprobe = vi.fn().mockResolvedValue("h264")
+  // merge-video-audio uses needsTranscode (codec≠h264 OR pixFmt≠yuv420p) to
+  // decide stream-copy vs re-encode to browser-safe H.264.
+  const needsTranscode = vi.fn().mockResolvedValue(false)
+  const BROWSER_SAFE_VIDEO_ARGS = ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "fast", "-crf", "23", "-movflags", "+faststart"]
   const createWorkDir = vi.fn().mockResolvedValue("/tmp/work")
   const cleanupWorkDir = vi.fn().mockResolvedValue(undefined)
   const fsWriteFile = vi.fn().mockResolvedValue(undefined)
@@ -40,7 +44,8 @@ const mocks = vi.hoisted(() => {
   const uploadFileToR2 = vi.fn()
   const smartLoopCut = vi.fn()
   return {
-    downloadFile, runFfmpeg, runFfprobe, createWorkDir, cleanupWorkDir,
+    downloadFile, runFfmpeg, runFfprobe, needsTranscode, BROWSER_SAFE_VIDEO_ARGS,
+    createWorkDir, cleanupWorkDir,
     fsWriteFile, fsReaddirSync, execSync,
     uploadFileToR2, smartLoopCut,
   }
@@ -50,6 +55,8 @@ vi.mock("../ffmpeg-utils.js", () => ({
   downloadFile: mocks.downloadFile,
   runFfmpeg: mocks.runFfmpeg,
   runFfprobe: mocks.runFfprobe,
+  needsTranscode: mocks.needsTranscode,
+  BROWSER_SAFE_VIDEO_ARGS: mocks.BROWSER_SAFE_VIDEO_ARGS,
   createWorkDir: mocks.createWorkDir,
   cleanupWorkDir: mocks.cleanupWorkDir,
 }))
@@ -99,6 +106,7 @@ beforeEach(() => {
   mocks.downloadFile.mockResolvedValue(undefined)
   mocks.runFfmpeg.mockResolvedValue("")
   mocks.runFfprobe.mockResolvedValue("h264")
+  mocks.needsTranscode.mockResolvedValue(false)
   mocks.fsWriteFile.mockResolvedValue(undefined)
   mocks.fsReaddirSync.mockReturnValue([])
   mocks.execSync.mockReturnValue("h264")
@@ -663,18 +671,22 @@ describe("mergeVideoAudio", () => {
     expect(extractArgs[extractArgs.indexOf("-acodec") + 1]).toBe("pcm_s16le")
   })
 
-  it("re-encodes video for VP9 input (cannot mux into MP4)", async () => {
-    mocks.runFfprobe.mockResolvedValueOnce("vp9\n")
+  it("re-encodes the video to browser-safe H.264 when it isn't (HEVC/VP9/10-bit)", async () => {
+    // needsTranscode true = codec≠h264 OR pixFmt≠yuv420p. Such outputs mux +
+    // download fine but a browser <video> can't decode them, so the inline node
+    // preview is blank — re-encode so the merged result plays in the canvas.
+    mocks.needsTranscode.mockResolvedValueOnce(true)
 
     await mergeVideoAudio({ videoUrl: "v", audioUrl: "a" })
 
     const args = mocks.runFfmpeg.mock.calls[mocks.runFfmpeg.mock.calls.length - 1][0] as string[]
     const idx = args.indexOf("-c:v")
     expect(args[idx + 1]).toBe("libx264")
+    expect(args).toContain("yuv420p") // 8-bit, browser-decodable
   })
 
-  it("stream-copies video for h264 input", async () => {
-    mocks.runFfprobe.mockResolvedValueOnce("h264\n")
+  it("stream-copies the video when it's already browser-safe H.264", async () => {
+    mocks.needsTranscode.mockResolvedValueOnce(false)
 
     await mergeVideoAudio({ videoUrl: "v", audioUrl: "a" })
 
@@ -683,14 +695,14 @@ describe("mergeVideoAudio", () => {
     expect(args[idx + 1]).toBe("copy")
   })
 
-  it("falls back to copy when codec probe throws", async () => {
-    mocks.runFfprobe.mockRejectedValueOnce(new Error("ffprobe missing"))
+  it("re-encodes (safe default) when the codec probe throws", async () => {
+    mocks.needsTranscode.mockRejectedValueOnce(new Error("ffprobe missing"))
 
     await mergeVideoAudio({ videoUrl: "v", audioUrl: "a" })
 
     const args = mocks.runFfmpeg.mock.calls[mocks.runFfmpeg.mock.calls.length - 1][0] as string[]
     const idx = args.indexOf("-c:v")
-    expect(args[idx + 1]).toBe("copy")
+    expect(args[idx + 1]).toBe("libx264")
   })
 
   it("retries without keepOriginalAudio when initial merge fails (no audio stream)", async () => {
