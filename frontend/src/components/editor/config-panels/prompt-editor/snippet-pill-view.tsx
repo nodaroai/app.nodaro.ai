@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react"
 import { Scissors, ChevronLeft, ChevronRight } from "lucide-react"
+import { computeFlipPosition } from "./flip-position"
 import type { SnippetPillAttrs } from "./snippet-pill-extension"
 
 interface PoolEntry {
@@ -129,16 +130,16 @@ export function SnippetPillView(props: NodeViewProps) {
       {menuAnchor && createPortal(
         (() => {
           const MENU_W = 280
-          const MARGIN = 4
-          const vh = window.innerHeight
-          const vw = window.innerWidth
           const estH = Math.min(320, (Math.min(siblings.length, 7) + 3) * 34 + 16)
-          const spaceBelow = vh - menuAnchor.bottom - MARGIN
-          const placeBelow = spaceBelow >= estH || spaceBelow >= menuAnchor.top - MARGIN
-          const top = placeBelow
-            ? menuAnchor.bottom + MARGIN
-            : Math.max(MARGIN, menuAnchor.top - estH - MARGIN)
-          const left = Math.min(Math.max(MARGIN, menuAnchor.left), vw - MENU_W - MARGIN)
+          // Shares the editor's flip-above-when-cramped math (left clamp + top).
+          // The pill's `placeBelow` keys off its dynamic `estH` and keeps the
+          // original `- MARGIN` on the secondary clause; maxHeight stays local.
+          const { top, left } = computeFlipPosition(menuAnchor, {
+            width: MENU_W,
+            estHeight: estH,
+            placeBelowThreshold: estH,
+            secondaryClauseMargin: 4,
+          })
           return (
             <div
               ref={menuRef}

@@ -1,7 +1,7 @@
 ---
 node_type: image-to-video
-generated_at: 2026-06-10T20:57:26.693Z
-generated_from: 2fc5e6fd3
+generated_at: 2026-06-11T18:52:24.841Z
+generated_from: 36d155ff
 ---
 
 # image-to-video
@@ -74,6 +74,8 @@ generated_from: 2fc5e6fd3
   "label": "Image to Video",
   "provider": "seedance-2-fast",
   "duration": 5,
+  "prompt": "",
+  "negativePrompt": "",
   "fieldMappings": {}
 }
 ```
@@ -126,6 +128,8 @@ Animate a still image into a short video clip (5-15s typical). For multi-shot fi
     "label": "Image to Video",
     "provider": "seedance-2-fast",
     "duration": 5,
+    "prompt": "",
+    "negativePrompt": "",
     "fieldMappings": {}
   }
 }

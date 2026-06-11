@@ -1,7 +1,7 @@
 ---
 node_type: video-to-video
-generated_at: 2026-05-18T20:51:28.602Z
-generated_from: af4193bd
+generated_at: 2026-06-11T18:52:24.878Z
+generated_from: 36d155ff
 ---
 
 # Video to Video
@@ -52,6 +52,7 @@ generated_from: af4193bd
   "label": "Video to Video",
   "prompt": "",
   "duration": 5,
+  "negativePrompt": "",
   "fieldMappings": {}
 }
 ```
@@ -97,6 +98,7 @@ generated_from: af4193bd
     "label": "Video to Video",
     "prompt": "",
     "duration": 5,
+    "negativePrompt": "",
     "fieldMappings": {}
   }
 }

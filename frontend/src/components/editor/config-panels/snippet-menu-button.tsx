@@ -5,7 +5,8 @@ import { Scissors, Plus, Settings2 } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { appendSnippetText, filterSnippets, type SnippetPoolItem } from "@/lib/snippet-pool"
+import { appendSnippetText, filterSnippets, groupSnippetsByCategory, type SnippetPoolItem } from "@/lib/snippet-pool"
+import { SnippetCategoryHeader, SnippetRowContent } from "./snippet-row"
 import { SnippetManageDialog } from "./snippet-manage-dialog"
 import type { SnippetMedia, SnippetTarget } from "@nodaro/shared"
 
@@ -34,15 +35,7 @@ export function SnippetMenuButton({ pool, value, onInsert, target, media }: Snip
   const selectionRef = useRef("")
 
   const filtered = useMemo(() => filterSnippets(pool, query), [pool, query])
-  const groups = useMemo(() => {
-    const out: Array<{ category: string; entries: SnippetPoolItem[] }> = []
-    for (const item of filtered) {
-      const last = out[out.length - 1]
-      if (last && last.category === item.category) last.entries.push(item)
-      else out.push({ category: item.category, entries: [item] })
-    }
-    return out
-  }, [filtered])
+  const groups = useMemo(() => groupSnippetsByCategory(filtered), [filtered])
 
   return (
     <>
@@ -77,9 +70,7 @@ export function SnippetMenuButton({ pool, value, onInsert, target, media }: Snip
             )}
             {groups.map((g) => (
               <div key={g.category}>
-                <div className="sticky top-0 bg-muted/80 backdrop-blur-sm px-2.5 py-1 text-[9px] font-semibold text-muted-foreground uppercase tracking-wider border-b border-border/50">
-                  {g.category}
-                </div>
+                <SnippetCategoryHeader category={g.category} />
                 {g.entries.map((item) => (
                   <button
                     key={item.source + item.id}
@@ -91,11 +82,7 @@ export function SnippetMenuButton({ pool, value, onInsert, target, media }: Snip
                       setQuery("")
                     }}
                   >
-                    <Scissors className="w-3 h-3 mt-0.5 shrink-0 text-muted-foreground/70" />
-                    <span className="flex-1 min-w-0">
-                      <span className="block text-[11px] font-medium truncate">{item.name}</span>
-                      <span className="block text-[10px] text-muted-foreground truncate">{item.text}</span>
-                    </span>
+                    <SnippetRowContent item={item} />
                   </button>
                 ))}
               </div>

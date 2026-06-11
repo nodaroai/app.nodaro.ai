@@ -40,6 +40,7 @@ import {
 } from "./model-options"
 
 const MAX_LOOKS = 3
+const PROMPT_MAX = 10000
 
 export function CinematicAvatarConfig({
   data,
@@ -111,7 +112,7 @@ export function CinematicAvatarConfig({
         onMapField={onMapField}
         labelAction={
           <span className="inline-flex items-center gap-0.5">
-            <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v.slice(0, 10000) })} target="prompt" media="video" />
+            <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v.slice(0, PROMPT_MAX) })} target="prompt" media="video" />
             <PromptHelperButton
               nodeType="cinematic-avatar"
               currentPrompt={data.prompt || ""}
@@ -123,7 +124,7 @@ export function CinematicAvatarConfig({
       >
         <TagTextarea
           value={data.prompt ?? ""}
-          onChange={(v) => onUpdate({ prompt: v.slice(0, 10000) })}
+          onChange={(v) => onUpdate({ prompt: v.slice(0, PROMPT_MAX) })}
           placeholder="Describe the cinematic scene the avatar should perform…"
           rows={4}
           nodeRefs={nodeRefs}
@@ -133,7 +134,7 @@ export function CinematicAvatarConfig({
         />
         {(data.prompt?.length ?? 0) > 0 && (
           <span className="text-[10px] text-muted-foreground text-right block">
-            {data.prompt?.length ?? 0} / 10000
+            {data.prompt?.length ?? 0} / {PROMPT_MAX}
           </span>
         )}
       </MappableField>

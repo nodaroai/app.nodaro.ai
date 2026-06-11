@@ -84,6 +84,27 @@ export function computeSnippetInsertPrefix(prevChar: string): string {
   return ", "
 }
 
+/**
+ * Fold a filtered, already-ordered list into consecutive-category groups —
+ * the grouping both snippet menus apply for sticky category headers. The pool
+ * builder + `filterSnippets` keep items ordered (user snippets first, then
+ * factory categories), so a single forward pass that opens a new group each
+ * time the category changes preserves that order while collapsing runs of the
+ * same category under one header. Generic over any `{ category }` row so the
+ * slash-menu (which carries per-item indices) can wrap it too.
+ */
+export function groupSnippetsByCategory<T extends { category: string }>(
+  items: readonly T[],
+): Array<{ category: string; entries: T[] }> {
+  const out: Array<{ category: string; entries: T[] }> = []
+  for (const item of items) {
+    const last = out[out.length - 1]
+    if (last && last.category === item.category) last.entries.push(item)
+    else out.push({ category: item.category, entries: [item] })
+  }
+  return out
+}
+
 /** Button path: append a snippet to the END of the current value with the
  *  same separator rules (trailing whitespace collapsed first). */
 export function appendSnippetText(value: string, text: string): string {
