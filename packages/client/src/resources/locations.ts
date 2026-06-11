@@ -435,6 +435,26 @@ export class LocationsResource {
   }
 
   /**
+   * Atomically remove ONE asset take (every entry matching `url`) from a
+   * worker-owned bucket column — `POST /v1/locations/:id/remove-asset`. The
+   * worker-owned buckets are deliberately not writable through `update()`
+   * (a stale snapshot would race concurrent worker appends), so deleting a
+   * take — e.g. a 360° surround view being regenerated — goes through this
+   * single-statement server-side filter instead. 404s (`NotFoundError`) when
+   * the url isn't in that bucket or the location isn't yours.
+   */
+  removeAsset(
+    id: string,
+    data: { column: LocationAttachColumn; url: string },
+  ): Promise<{ removed: true }> {
+    return this.client.request(
+      "POST",
+      `/v1/locations/${encodeURIComponent(id)}/remove-asset`,
+      { body: data },
+    )
+  }
+
+  /**
    * Approve a completed `generate-location` job as the location's main image.
    * Sets `source_image_url` and fires the LLM caption (Claude Sonnet vision)
    * inline. Returns the new main-image URL plus the caption.
