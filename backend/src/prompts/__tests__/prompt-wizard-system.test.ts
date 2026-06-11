@@ -10,6 +10,15 @@ describe("buildWizardAnalyzeSystem", () => {
     expect(sys).toContain("Image 1 carries the most weight")
     expect(sys).toContain("reference-role-1")
   })
+
+  it("pins the language doctrine: labels mirror the user's language, values are ALWAYS English", () => {
+    // A Hebrew prompt produced Hebrew labels (fine — UI text) but nothing
+    // pinned the option VALUES to English; values are prompt fragments fed
+    // verbatim to generation models, which perform best in English.
+    const sys = buildWizardAnalyzeSystem({ nodeType: "generate-image" })
+    expect(sys).toContain("USER'S language")
+    expect(sys).toMatch(/"value" string MUST be in ENGLISH/i)
+  })
 })
 
 describe("buildWizardEnhanceSystem", () => {
@@ -62,5 +71,15 @@ describe("buildWizardEnhanceSystem", () => {
       selections: [{ category: "mood-tone", value: "melancholic", isCustom: false }],
     })
     expect(sys).toContain("Provider Prompting Doctrine")
+  })
+
+  it("pins English output: the composed/optimized prompt translates non-English input", () => {
+    const gen = buildWizardGenerateSystem({
+      nodeType: "generate-image",
+      selections: [{ category: "subject", value: "a desert road", isCustom: false }],
+    })
+    expect(gen).toMatch(/MUST be entirely in English/i)
+    const enhance = buildWizardEnhanceSystem({ nodeType: "generate-image" })
+    expect(enhance).toMatch(/MUST be entirely in English/i)
   })
 })
