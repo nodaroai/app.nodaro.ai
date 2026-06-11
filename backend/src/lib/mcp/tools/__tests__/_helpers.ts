@@ -1,4 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
+import Fastify, { type FastifyInstance } from "fastify"
+import { newSession, type McpSession } from "../../session.js"
+import type { Scope } from "../../../scopes.js"
 
 /**
  * Shared test helpers for MCP tool unit tests. The MCP SDK's tools/* handlers
@@ -58,4 +61,37 @@ export function buildServer(): McpServer {
     { name: "test", version: "1.0.0" },
     { capabilities: { tools: { listChanged: false } } },
   )
+}
+
+/** Session with the generation-verb scope — the common case in verb tests. */
+export function executeSession(): McpSession {
+  return newSession({
+    userId: "u1",
+    scopes: ["workflows:execute"] as Scope[],
+    clientName: "Claude",
+  })
+}
+
+export interface StubResult {
+  fastify: FastifyInstance
+  received: { url?: string; body?: Record<string, unknown> }
+}
+
+/** Stub Fastify instance capturing the URL + body a verb handler dispatches. */
+export function stubRoute(method: "POST" | "GET", url: string, response: object): StubResult {
+  const fastify = Fastify()
+  const received: { url?: string; body?: Record<string, unknown> } = {}
+  if (method === "POST") {
+    fastify.post(url, async (req) => {
+      received.url = req.url
+      received.body = req.body as Record<string, unknown>
+      return response
+    })
+  } else {
+    fastify.get(url, async (req) => {
+      received.url = req.url
+      return response
+    })
+  }
+  return { fastify, received }
 }
