@@ -380,6 +380,13 @@ export {
 } from "./entity-prompts.js"
 
 export {
+  SURROUND_DIRECTIONS,
+  DEFAULT_CARRIED_FRACTION,
+  buildSurroundFillPrompt,
+  type SurroundDirection,
+} from "./surround.js"
+
+export {
   OBJECT_PICKER_NODE_TYPES,
 } from "./object-picker-types.js"
 

@@ -1083,6 +1083,36 @@ const { jobId } = await client.locations.generateAsset({
 })
 ```
 
+#### `generateSurroundContinuation(input)`
+
+```ts
+generateSurroundContinuation(input: GenerateSurroundContinuationInput): Promise<{ jobId: string }>
+```
+
+Fires `POST /v1/generate-surround-continuation` to produce the next seamless
+360° ring view as an image-to-image continuation of `referenceImageUrl` (the
+previous ring view). The platform builds the half-carry composite server-side
+(carry the reference's trailing half per `direction`, gray the rest), paints the
+gray region, then color-harmonizes the painted half to the carried half so there
+is no tonal seam down the frame's center — the carried half stays pixel-exact, so
+adjacent ring views stitch perfectly. `direction` is `right` / `up` / `down`;
+`carriedFraction` defaults to `0.5`. When the studio path is set, the worker
+appends the result to the location's bucket (studio uses `attachToColumn:
+"angles"`, `attachName: "Surround 45°"`).
+
+```ts
+const { jobId } = await client.locations.generateSurroundContinuation({
+  referenceImageUrl: previousRingView,
+  direction: "right",
+  degrees: 45,
+  provider: "nano-banana-pro",
+  aspectRatio: "16:9",
+  attachToLocationId: locationId,
+  attachToColumn: "angles",
+  attachName: "Surround 45°",
+})
+```
+
 #### `generateMotion(input)`
 
 ```ts
@@ -2466,6 +2496,7 @@ Every type used in a public method signature is re-exported from
 - `ListLocationsParams` — query params for `list()`
 - `GenerateLocationInput`, `GenerateLocationResult` — body + response for `generate()`
 - `GenerateLocationAssetInput` — body for `generateAsset()`
+- `GenerateSurroundContinuationInput` — body for `generateSurroundContinuation()`
 - `ApproveMainImageResult` — `{ ..., canonicalDescription: string | null }`
 - `RecaptionLocationResult` — `{ canonicalDescription }`
 - `LocationAssetType` — asset-bucket enum (re-exported alongside `LOCATION_ASSET_TYPES` runtime tuple)
