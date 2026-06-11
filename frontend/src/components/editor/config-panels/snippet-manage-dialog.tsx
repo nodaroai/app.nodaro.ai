@@ -12,6 +12,7 @@ import { useAuth } from "@/hooks/use-auth"
 import { usePromptSnippets, usePromptSnippetMutations } from "@/hooks/queries/use-prompt-snippets-queries"
 import { PromptSnippetNameTakenError, type PromptSnippet } from "@/lib/api"
 import { SNIPPET_MEDIA_VALUES, type SnippetMedia, type SnippetTarget } from "@nodaro/shared"
+import { toast } from "sonner"
 
 interface SnippetManageDialogProps {
   readonly open: boolean
@@ -167,7 +168,7 @@ export function SnippetManageDialog({
                 <button type="button" aria-label="Edit snippet" className="p-1 text-muted-foreground hover:text-foreground" onClick={() => { setEditingId(s.id); setError(null) }}>
                   <Pencil className="w-3 h-3" />
                 </button>
-                <button type="button" aria-label="Delete snippet" className="p-1 text-muted-foreground hover:text-destructive" onClick={() => remove.mutate(s.id)}>
+                <button type="button" aria-label="Delete snippet" className="p-1 text-muted-foreground hover:text-destructive" onClick={() => remove.mutate(s.id, { onSuccess: () => toast.success("Snippet deleted"), onError: () => toast.error("Delete failed — try again.") })}>
                   <Trash2 className="w-3 h-3" />
                 </button>
               </div>
