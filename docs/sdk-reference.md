@@ -325,8 +325,16 @@ update(id: string, input: UpdateWorkflowInput): Promise<{ data: Workflow }>
 
 PATCHes a workflow. Any subset of fields is allowed.
 
+Optimistic concurrency: pass `expectedVersion` (the integer `version` from a
+prior read — bumped by the database on every content change) to make the
+update conditional; on a mismatch the API returns `409 workflow_conflict`
+with `currentVersion` and `currentUpdatedAt` so you can refetch and retry.
+`expectedUpdatedAt` (string token) remains supported. Transient run-state
+keys on node `data` (`executionStatus`, `currentJobId`, progress counters)
+are stripped server-side and never persist.
+
 ```ts
-await client.workflows.update(id, { name: "Renamed" })
+await client.workflows.update(id, { name: "Renamed", expectedVersion: 7 })
 ```
 
 #### `delete(id)`

@@ -86,6 +86,18 @@ vi.mock("node:dns/promises", () => ({
   lookup: mocks.dnsLookup,
 }))
 
+// R2-origin fallback plumbing: r2KeyFromOurUrl keeps realistic prefix
+// semantics (only OUR public-bucket URLs map to keys) so the foreign-URL
+// tests stay honest; downloadR2ObjectToFile is the spy under test.
+const storageMocks = vi.hoisted(() => ({
+  downloadR2ObjectToFile: vi.fn().mockResolvedValue(undefined),
+}))
+vi.mock("../../../lib/storage.js", () => ({
+  r2KeyFromOurUrl: (url: string) =>
+    url.startsWith("https://r2.example.com/") ? url.slice("https://r2.example.com/".length) : null,
+  downloadR2ObjectToFile: storageMocks.downloadR2ObjectToFile,
+}))
+
 vi.mock("@/lib/config.js", () => ({
   config: {
     FFMPEG_CONCURRENCY: 2,
@@ -210,6 +222,43 @@ describe("downloadFile", () => {
 
     // Should not even attempt to pipe on failure
     expect(mocks.pipeline).not.toHaveBeenCalled()
+  })
+
+  // ── CDN negative-cache fallback (per-edge 404s for media that exists;
+  //    incidents 2026-06-10/12) ──
+
+  it("404 on OUR public-bucket URL falls back to the R2 origin", async () => {
+    mocks.safeFetch.mockResolvedValueOnce({ ok: false, status: 404, body: null })
+
+    await downloadFile("https://r2.example.com/videos/job-1.mp4", "/tmp/o.mp4")
+
+    expect(storageMocks.downloadR2ObjectToFile).toHaveBeenCalledWith("videos/job-1.mp4", "/tmp/o.mp4")
+    expect(mocks.pipeline).not.toHaveBeenCalled()
+  })
+
+  it("404 on a foreign URL does NOT touch the R2 origin", async () => {
+    mocks.safeFetch.mockResolvedValueOnce({ ok: false, status: 404, body: null })
+
+    await expect(downloadFile("https://provider.example/missing.mp4", "/tmp/o.mp4"))
+      .rejects.toThrow(/404/)
+    expect(storageMocks.downloadR2ObjectToFile).not.toHaveBeenCalled()
+  })
+
+  it("non-404 errors on our URL still throw (fallback is 404-only)", async () => {
+    mocks.safeFetch.mockResolvedValueOnce({ ok: false, status: 500, body: null })
+
+    await expect(downloadFile("https://r2.example.com/videos/job-1.mp4", "/tmp/o.mp4"))
+      .rejects.toThrow(/500/)
+    expect(storageMocks.downloadR2ObjectToFile).not.toHaveBeenCalled()
+  })
+})
+
+describe("runFfprobe watchdog", () => {
+  it("enforces a 120s timeout so remote probes can never hang a worker", async () => {
+    execFileOnce("1280,720\n4.0")
+    await runFfprobe(["-v", "error", "https://cdn.example/x.mp4"])
+    const opts = mocks.execFile.mock.calls[0][2] as { timeout?: number }
+    expect(opts.timeout).toBe(120_000)
   })
 })
 

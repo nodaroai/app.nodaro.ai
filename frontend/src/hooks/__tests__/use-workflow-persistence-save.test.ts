@@ -6,12 +6,19 @@ import { renderHook, act } from "@testing-library/react"
 // ---------------------------------------------------------------------------
 
 const mockSupabaseFrom = vi.fn()
+const mockSupabaseRpc = vi.fn()
 const mockGetUser = vi.fn()
 const mockLoadWorkflow = vi.fn()
 const mockSetWorkflowId = vi.fn()
 const mockMarkClean = vi.fn()
 const mockSetSaveStatus = vi.fn()
 const mockSetLoadedUpdatedAt = vi.fn()
+const mockSetLoadedVersion = vi.fn()
+// Mirrors zustand's object-patch setState so code under test that rebases
+// store state (delta conflict path) observes its own writes on re-read.
+const mockStoreSetState = vi.fn((patch: Record<string, unknown>) => {
+  Object.assign(storeState, patch)
+})
 const mockSetRemoteUpdatedAt = vi.fn()
 const mockApplySaveSuccess = vi.fn()
 
@@ -29,6 +36,9 @@ function resetStoreState(overrides: Record<string, unknown> = {}) {
     presentationSettings: { runTarget: "workflow" },
     saveStatus: "idle",
     loadedUpdatedAt: null,
+    loadedVersion: null,
+    lastSavedSnapshot: null,
+    savedViewport: null,
     remoteUpdatedAt: null,
     // Default dirty so the existing save-path tests exercise the network
     // update; the isDirty short-circuit (clean editor → no UPDATE) is covered
@@ -57,6 +67,7 @@ vi.mock("@/lib/api", () => ({
 vi.mock("@/lib/supabase", () => ({
   createClient: () => ({
     from: (...args: unknown[]) => mockSupabaseFrom(...args),
+    rpc: (...args: unknown[]) => mockSupabaseRpc(...args),
     auth: {
       getUser: () => mockGetUser(),
     },
@@ -74,6 +85,7 @@ vi.mock("@/hooks/use-workflow-store", () => {
           markClean: mockMarkClean,
           setSaveStatus: mockSetSaveStatus,
           setLoadedUpdatedAt: mockSetLoadedUpdatedAt,
+          setLoadedVersion: mockSetLoadedVersion,
           setRemoteUpdatedAt: mockSetRemoteUpdatedAt,
           applySaveSuccess: mockApplySaveSuccess,
         }),
@@ -85,10 +97,11 @@ vi.mock("@/hooks/use-workflow-store", () => {
           markClean: mockMarkClean,
           setSaveStatus: mockSetSaveStatus,
           setLoadedUpdatedAt: mockSetLoadedUpdatedAt,
+          setLoadedVersion: mockSetLoadedVersion,
           setRemoteUpdatedAt: mockSetRemoteUpdatedAt,
           applySaveSuccess: mockApplySaveSuccess,
         }),
-        setState: vi.fn(),
+        setState: (patch: Record<string, unknown>) => mockStoreSetState(patch),
         subscribe: vi.fn(),
         destroy: vi.fn(),
       },
@@ -134,7 +147,7 @@ function setupSupabaseUpdate(
   const maybeSingle = opts.reject
     ? vi.fn().mockRejectedValue(opts.reject)
     : vi.fn().mockResolvedValue({
-        data: error ? null : { updated_at: updatedAt },
+        data: error ? null : { updated_at: updatedAt, version: 5 },
         error,
       })
   const select = vi.fn().mockReturnValue({ maybeSingle })
@@ -525,7 +538,7 @@ describe("useWorkflowPersistence — save", () => {
     // Batched: markClean + setLoadedUpdatedAt + setRemoteUpdatedAt + status
     // flip happen in one Zustand set() to close the realtime echo race.
     expect(mockApplySaveSuccess).toHaveBeenCalledTimes(1)
-    expect(mockApplySaveSuccess).toHaveBeenCalledWith("2026-03-04T12:00:00Z")
+    expect(mockApplySaveSuccess).toHaveBeenCalledWith("2026-03-04T12:00:00Z", 5)
   })
 
   it("does NOT call applySaveSuccess on save failure", async () => {
@@ -695,6 +708,229 @@ describe("useWorkflowPersistence — save", () => {
 
     expect(abortSignal).toHaveBeenCalledTimes(1)
     expect(abortSignal.mock.calls[0]![0]).toBeInstanceOf(AbortSignal)
+  })
+
+  it("prefers the integer version CAS when loadedVersion is known", async () => {
+    setupSupabaseUpdate()
+    resetStoreState({
+      workflowId: "w1",
+      nodes: [makeNode("n1")],
+      loadedUpdatedAt: "2026-01-01T00:00:00Z",
+      loadedVersion: 7,
+    })
+
+    const { result } = renderHook(() => useWorkflowPersistence("proj-1"))
+    await act(async () => {
+      await result.current.save()
+    })
+
+    // The first .eq is ("id", ...); the CAS .eq must be version, not updated_at.
+    const update = mockSupabaseFrom.mock.results[0]!.value.update as ReturnType<typeof vi.fn>
+    const eqId = update.mock.results[0]!.value.eq as ReturnType<typeof vi.fn>
+    expect(eqId).toHaveBeenCalledWith("id", "w1")
+    const casEq = eqId.mock.results[0]!.value.eq as ReturnType<typeof vi.fn>
+    expect(casEq).toHaveBeenCalledWith("version", 7)
+    expect(casEq).not.toHaveBeenCalledWith("updated_at", expect.anything())
+  })
+
+  it("falls back to the updated_at lock when loadedVersion is unknown (rollout)", async () => {
+    setupSupabaseUpdate()
+    resetStoreState({
+      workflowId: "w1",
+      nodes: [makeNode("n1")],
+      loadedUpdatedAt: "2026-01-01T00:00:00Z",
+      loadedVersion: null,
+    })
+
+    const { result } = renderHook(() => useWorkflowPersistence("proj-1"))
+    await act(async () => {
+      await result.current.save()
+    })
+
+    const update = mockSupabaseFrom.mock.results[0]!.value.update as ReturnType<typeof vi.fn>
+    const eqId = update.mock.results[0]!.value.eq as ReturnType<typeof vi.fn>
+    const casEq = eqId.mock.results[0]!.value.eq as ReturnType<typeof vi.fn>
+    expect(casEq).toHaveBeenCalledWith("updated_at", "2026-01-01T00:00:00Z")
+    expect(casEq).not.toHaveBeenCalledWith("version", expect.anything())
+  })
+
+  // ── delta-save path (P3, VITE_DELTA_SAVES) ──
+
+  function rpcResolves(rows: Array<{ ok: boolean; version: number | null; updated_at: string | null }>) {
+    mockSupabaseRpc.mockReturnValueOnce({
+      abortSignal: vi.fn().mockResolvedValue({ data: rows, error: null }),
+    })
+  }
+
+  function deltaState() {
+    const unchanged = makeNode("keep")
+    const baseEdited = makeNode("edit")
+    const snapshot = {
+      nodes: [unchanged, baseEdited],
+      edges: [],
+      name: "Test Workflow",
+      characterDefinitions: [],
+      flowPromptTemplates: {},
+      presentationSettings: { runTarget: "workflow" },
+      savedViewport: null,
+    }
+    const edited = { ...baseEdited, data: { ...baseEdited.data, prompt: "changed" } }
+    resetStoreState({
+      workflowId: "w1",
+      nodes: [unchanged, edited],
+      edges: [],
+      loadedUpdatedAt: "2026-01-01T00:00:00Z",
+      loadedVersion: 41,
+      lastSavedSnapshot: snapshot,
+      characterDefinitions: snapshot.characterDefinitions,
+      flowPromptTemplates: snapshot.flowPromptTemplates,
+      presentationSettings: snapshot.presentationSettings,
+    })
+    return { unchanged, edited, snapshot }
+  }
+
+  it("delta: sends ONLY changed nodes via the RPC and advances tokens+snapshot", async () => {
+    vi.stubEnv("VITE_DELTA_SAVES", "1")
+    try {
+      const { edited } = deltaState()
+      rpcResolves([{ ok: true, version: 42, updated_at: "2026-06-12T02:00:00Z" }])
+
+      const { result } = renderHook(() => useWorkflowPersistence("proj-1"))
+      let saveResult: { success: boolean } | undefined
+      await act(async () => {
+        saveResult = await result.current.save()
+      })
+
+      expect(saveResult!.success).toBe(true)
+      expect(mockSupabaseFrom).not.toHaveBeenCalled() // no full UPDATE
+      const [fn, args] = mockSupabaseRpc.mock.calls[0]! as [string, Record<string, unknown>]
+      expect(fn).toBe("apply_workflow_delta")
+      expect(args.p_base_version).toBe(41)
+      const sent = args.p_upsert_nodes as Array<{ id: string }>
+      expect(sent.map((n) => n.id)).toEqual([edited.id])
+      expect(mockApplySaveSuccess).toHaveBeenCalledWith(
+        "2026-06-12T02:00:00Z",
+        42,
+        expect.objectContaining({ name: "Test Workflow" }),
+      )
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it("delta: >50% changed falls back to the full save", async () => {
+    vi.stubEnv("VITE_DELTA_SAVES", "1")
+    try {
+      const a = makeNode("a")
+      const b = makeNode("b")
+      const snapshot = {
+        nodes: [a, b], edges: [], name: "Test Workflow",
+        characterDefinitions: [], flowPromptTemplates: {},
+        presentationSettings: { runTarget: "workflow" }, savedViewport: null,
+      }
+      resetStoreState({
+        workflowId: "w1",
+        nodes: [{ ...a, data: { ...a.data, prompt: "x" } }, { ...b, data: { ...b.data, prompt: "y" } }],
+        loadedUpdatedAt: "2026-01-01T00:00:00Z",
+        loadedVersion: 41,
+        lastSavedSnapshot: snapshot,
+        characterDefinitions: snapshot.characterDefinitions,
+        flowPromptTemplates: snapshot.flowPromptTemplates,
+        presentationSettings: snapshot.presentationSettings,
+      })
+      const { update } = setupSupabaseUpdate()
+
+      const { result } = renderHook(() => useWorkflowPersistence("proj-1"))
+      await act(async () => {
+        await result.current.save()
+      })
+
+      expect(mockSupabaseRpc).not.toHaveBeenCalled()
+      expect(update).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it("delta: missing RPC (PGRST202) latches full-save for the session", async () => {
+    vi.stubEnv("VITE_DELTA_SAVES", "1")
+    try {
+      deltaState()
+      mockSupabaseRpc.mockReturnValueOnce({
+        abortSignal: vi.fn().mockResolvedValue({
+          data: null,
+          error: { code: "PGRST202", message: "function apply_workflow_delta does not exist" },
+        }),
+      })
+      const { update } = setupSupabaseUpdate()
+
+      const { result } = renderHook(() => useWorkflowPersistence("proj-1"))
+      await act(async () => {
+        await result.current.save()
+      })
+      // fell back within the SAME invocation
+      expect(update).toHaveBeenCalledTimes(1)
+
+      // second save: rpc not even attempted (latched)
+      mockSupabaseRpc.mockClear()
+      setupSupabaseUpdate()
+      resetStoreState({
+        workflowId: "w1", nodes: [makeNode("n1")],
+        loadedUpdatedAt: "2026-01-01T00:00:00Z", loadedVersion: 42,
+        lastSavedSnapshot: {
+          nodes: [], edges: [], name: "Test Workflow",
+          characterDefinitions: [], flowPromptTemplates: {},
+          presentationSettings: { runTarget: "workflow" }, savedViewport: null,
+        },
+      })
+      await act(async () => {
+        await result.current.save()
+      })
+      expect(mockSupabaseRpc).not.toHaveBeenCalled()
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it("delta: CAS conflict rebases onto fresh remote and retries once", async () => {
+    vi.stubEnv("VITE_DELTA_SAVES", "1")
+    try {
+      const { unchanged, edited } = deltaState()
+      // attempt 1: conflict at version 43
+      rpcResolves([{ ok: false, version: 43, updated_at: "2026-06-12T02:01:00Z" }])
+      // fresh fetch: remote added node "r1", kept ours untouched
+      const remoteNew = makeNode("r1")
+      const freshMaybeSingle = vi.fn().mockResolvedValue({
+        data: {
+          nodes: [JSON.parse(JSON.stringify(unchanged)), JSON.parse(JSON.stringify({ ...edited, data: { label: "Test", executionStatus: "idle" } })), remoteNew],
+          edges: [], settings: {}, name: "Test Workflow",
+          version: 43, updated_at: "2026-06-12T02:01:00Z",
+        },
+        error: null,
+      })
+      const freshEq = vi.fn().mockReturnValue({ maybeSingle: freshMaybeSingle })
+      mockSupabaseFrom.mockReturnValue({ select: vi.fn().mockReturnValue({ eq: freshEq }) })
+      // attempt 2: success at version 44
+      rpcResolves([{ ok: true, version: 44, updated_at: "2026-06-12T02:02:00Z" }])
+
+      const { result } = renderHook(() => useWorkflowPersistence("proj-1"))
+      let saveResult: { success: boolean } | undefined
+      await act(async () => {
+        saveResult = await result.current.save()
+      })
+
+      expect(saveResult!.success).toBe(true)
+      expect(mockSupabaseRpc).toHaveBeenCalledTimes(2)
+      // retry CAS'd on the FRESH version
+      const retryArgs = mockSupabaseRpc.mock.calls[1]![1] as Record<string, unknown>
+      expect(retryArgs.p_base_version).toBe(43)
+      // store rebased: merged graph adopted + tokens advanced to fresh
+      expect(mockStoreSetState).toHaveBeenCalledWith(
+        expect.objectContaining({ loadedVersion: 43 }),
+      )
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 
   it("a rejecting save (abort/timeout) flips status to error instead of staying 'saving'", async () => {

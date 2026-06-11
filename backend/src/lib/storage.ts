@@ -1,7 +1,8 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand, DeleteObjectsCommand, CopyObjectCommand, HeadObjectCommand, ListObjectsV2Command } from "@aws-sdk/client-s3"
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, DeleteObjectsCommand, CopyObjectCommand, HeadObjectCommand, ListObjectsV2Command } from "@aws-sdk/client-s3"
 import { Upload } from "@aws-sdk/lib-storage"
 import { randomUUID } from "node:crypto"
-import { createReadStream } from "node:fs"
+import { createReadStream, createWriteStream } from "node:fs"
+import { pipeline } from "node:stream/promises"
 import { stat } from "node:fs/promises"
 import { Readable, Transform } from "node:stream"
 import { config } from "./config.js"
@@ -289,6 +290,21 @@ const PREVIEW_EXT_TO_MIME: Record<string, string> = {
  * avoid the substring-prefix pitfall (R2_PUBLIC_URL=https://assets.nodaro.ai
  * would otherwise prefix-match https://assets.nodaro.ai.attacker.com/...).
  */
+/**
+ * Stream an object from the R2 ORIGIN (S3 API) to a local file — bypasses
+ * the public CDN entirely. The fallback for Cloudflare's per-edge negative
+ * cache: a freshly finalized object can 404 on cdn.nodaro.ai for 40-55min
+ * on some edges while the origin has it (incidents 2026-06-10/12). Throws
+ * if the object truly doesn't exist, so callers keep a honest failure path.
+ */
+export async function downloadR2ObjectToFile(key: string, dest: string): Promise<void> {
+  const res = await s3.send(
+    new GetObjectCommand({ Bucket: config.R2_BUCKET_NAME, Key: key }),
+  )
+  if (!res.Body) throw new Error(`R2 origin returned no body for ${key}`)
+  await pipeline(res.Body as Readable, createWriteStream(dest))
+}
+
 export function r2KeyFromOurUrl(url: string): string | null {
   if (!config.R2_PUBLIC_URL) return null
   const prefix = config.R2_PUBLIC_URL.endsWith("/")

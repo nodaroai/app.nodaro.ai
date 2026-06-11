@@ -385,6 +385,30 @@ interface WorkflowState {
    */
   readonly loadedUpdatedAt: string | null
   /**
+   * Monotonic content-version of the loaded snapshot (workflows.version,
+   * bumped by a DB trigger on every content change — migration 218).
+   * Preferred over `loadedUpdatedAt` for save-time CAS: integer compare,
+   * immune to timestamp precision. Null before the first load on rows
+   * predating the rollout (save falls back to the updated_at lock).
+   */
+  readonly loadedVersion: number | null
+  /**
+   * References (NOT copies) to the graph + meta handed to the last
+   * successful save / load / remote-reconcile. The delta-save builder
+   * reference-diffs against this (store immutability makes `ref !==
+   * snapshot` a correct changed-detector). Null → delta saves fall back
+   * to the full-save path.
+   */
+  readonly lastSavedSnapshot: {
+    readonly nodes: WorkflowNode[]
+    readonly edges: WorkflowEdge[]
+    readonly name: string
+    readonly characterDefinitions: CharacterDefinition[]
+    readonly flowPromptTemplates: Record<string, string>
+    readonly presentationSettings: PresentationSettings
+    readonly savedViewport: { x: number; y: number; zoom: number } | null
+  } | null
+  /**
    * Most recent `updated_at` observed on a realtime broadcast that did
    * NOT come from this tab. When this diverges from `loadedUpdatedAt`,
    * another device wrote a newer version while this tab had unsaved
@@ -504,6 +528,7 @@ interface WorkflowState {
   readonly markClean: () => void
   readonly setSaveStatus: (status: SaveStatus, error?: string | null) => void
   readonly setLoadedUpdatedAt: (updatedAt: string | null) => void
+  readonly setLoadedVersion: (version: number | null) => void
   readonly setRemoteUpdatedAt: (updatedAt: string | null) => void
   /**
    * Atomically apply post-save state changes in a single Zustand `set()`.
@@ -513,7 +538,11 @@ interface WorkflowState {
    * `loadedUpdatedAt` and triggering a redundant full reconcile on our own
    * save echo. Batching closes that window.
    */
-  readonly applySaveSuccess: (updatedAt: string) => void
+  readonly applySaveSuccess: (
+    updatedAt: string,
+    version?: number | null,
+    snapshot?: WorkflowState["lastSavedSnapshot"],
+  ) => void
   /**
    * Multi-tab/multi-device sync: snap local state to a remote broadcast.
    * Replaces nodes/edges (and persisted settings fields:
@@ -531,6 +560,7 @@ interface WorkflowState {
     nodes: WorkflowNode[]
     edges: WorkflowEdge[]
     updatedAt: string
+    version?: number | null
     settings?: Record<string, unknown> | null
   }) => void
   readonly setVideoAutoplay: (autoplay: boolean) => void
@@ -816,6 +846,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   saveStatus: "idle" as SaveStatus,
   saveError: null,
   loadedUpdatedAt: null,
+  loadedVersion: null,
+  lastSavedSnapshot: null,
   remoteUpdatedAt: null,
   videoAutoplay: typeof window !== "undefined" && typeof localStorage !== "undefined" && typeof localStorage.getItem === "function" && localStorage.getItem("videoAutoplay") !== null
     ? localStorage.getItem("videoAutoplay") === "true"
@@ -2438,6 +2470,15 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       workflowName: name,
       nodes: migratedNodes,
       edges: migratedEdges,
+      lastSavedSnapshot: {
+        nodes: migratedNodes,
+        edges: migratedEdges,
+        name,
+        characterDefinitions: characterDefinitions ?? [],
+        flowPromptTemplates: flowPromptTemplates ?? {},
+        presentationSettings: presentationSettings ?? DEFAULT_PRESENTATION_SETTINGS,
+        savedViewport: viewport ?? null,
+      },
       selectedNodeId: null,
       isDirty: false,
       isReadOnly: false,
@@ -2446,6 +2487,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       saveStatus: "idle" as SaveStatus,
       saveError: null,
       loadedUpdatedAt: null,
+      loadedVersion: null,
       remoteUpdatedAt: null,
       characterDefinitions: characterDefinitions ?? [],
       flowPromptTemplates: flowPromptTemplates ?? {},
@@ -2470,6 +2512,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       saveStatus: "idle" as SaveStatus,
       saveError: null,
       loadedUpdatedAt: null,
+      loadedVersion: null,
+      lastSavedSnapshot: null,
       remoteUpdatedAt: null,
       characterDefinitions: [],
       flowPromptTemplates: {},
@@ -2483,18 +2527,24 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
   setLoadedUpdatedAt: (updatedAt) => set({ loadedUpdatedAt: updatedAt }),
 
+  setLoadedVersion: (version) => set({ loadedVersion: version }),
+
   setRemoteUpdatedAt: (updatedAt) => set({ remoteUpdatedAt: updatedAt }),
 
-  applySaveSuccess: (updatedAt) =>
+  applySaveSuccess: (updatedAt, version, snapshot) =>
     set({
       loadedUpdatedAt: updatedAt,
+      // Only advance when the caller actually has the new version — an
+      // `undefined` (older callers/tests) must not wipe a known token.
+      ...(version !== undefined ? { loadedVersion: version } : {}),
+      ...(snapshot !== undefined ? { lastSavedSnapshot: snapshot } : {}),
       remoteUpdatedAt: null,
       isDirty: false,
       saveStatus: "saved" as SaveStatus,
       saveError: null,
     }),
 
-  reconcileFromRemote: ({ nodes, edges, updatedAt, settings }) => {
+  reconcileFromRemote: ({ nodes, edges, updatedAt, version, settings }) => {
     // Unify legacy `loop` ("Table") nodes into the canonical `list` type and
     // normalize legacy `items` strings, exactly as `loadWorkflow` does — a raw
     // `loop` node arriving via realtime would otherwise be mishandled by the
@@ -2514,8 +2564,21 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         edges: migratedEdges,
         isDirty: false,
         loadedUpdatedAt: updatedAt,
+        ...(version !== undefined ? { loadedVersion: version } : {}),
         remoteUpdatedAt: null,
         loadGeneration: state.loadGeneration + 1,
+      }
+      // The adopted remote graph becomes the next delta base. Meta fields
+      // mirror what this reconcile leaves in the store (settings fields are
+      // overwritten below when present on the broadcast).
+      next.lastSavedSnapshot = {
+        nodes: orderedNodes,
+        edges: migratedEdges,
+        name: state.workflowName,
+        characterDefinitions: state.characterDefinitions,
+        flowPromptTemplates: state.flowPromptTemplates,
+        presentationSettings: state.presentationSettings,
+        savedViewport: state.savedViewport,
       }
 
       // Clear the selection if the selected node id no longer exists

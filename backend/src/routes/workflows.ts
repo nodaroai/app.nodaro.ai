@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
 import {
   stripExportContent,
+  stripTransientRuntimeData,
   validateSubWorkflowRoutes,
   type WorkflowExport,
 } from "@nodaro/shared"
@@ -105,7 +106,40 @@ const updateWorkflowBody = z.object({
   // merge. Mirrors the MCP `update_workflow_json` contract; safe to
   // omit on legacy callers (last-write-wins fallback).
   expectedUpdatedAt: z.string().datetime({ offset: true }).optional(),
+  // Integer CAS against workflows.version (bumped by DB trigger on every
+  // content change — migration 218). Preferred over expectedUpdatedAt:
+  // monotonic, precision-proof, tamper-proof.
+  expectedVersion: z.number().int().min(1).optional(),
+  // Delta-save protocol (P3, migration 219): id-keyed whole-node/edge delta
+  // applied atomically against baseVersion by apply_workflow_delta. Mutually
+  // exclusive with every full-body content field above.
+  delta: z
+    .object({
+      baseVersion: z.number().int().min(1),
+      upsertNodes: z.array(z.record(z.unknown())).optional(),
+      deleteNodeIds: z.array(z.string()).optional(),
+      upsertEdges: z.array(z.record(z.unknown())).optional(),
+      deleteEdgeIds: z.array(z.string()).optional(),
+      set: z
+        .object({
+          name: z.string().min(1).max(200).optional(),
+          settings: z.record(z.unknown()).optional(),
+        })
+        .optional(),
+    })
+    .optional(),
 })
+
+/** ids of an upsert array; null when any element lacks a string id. */
+function deltaIds(arr: ReadonlyArray<Record<string, unknown>> | undefined): string[] | null {
+  if (!arr) return []
+  const ids: string[] = []
+  for (const item of arr) {
+    if (typeof item.id !== "string" || item.id.length === 0) return null
+    ids.push(item.id)
+  }
+  return ids
+}
 
 const listWorkflowsQuery = z.object({
   limit: z
@@ -461,6 +495,73 @@ export async function workflowRoutes(app: FastifyInstance) {
     const body = parseWith(reply, updateWorkflowBody, req.body, "Invalid request")
     if (!body) return
 
+    if (body.delta) {
+      // Mutually exclusive with full-body fields — a mixed request is
+      // ambiguous about which representation wins.
+      const mixed =
+        body.nodes !== undefined || body.edges !== undefined || body.settings !== undefined ||
+        body.name !== undefined || body.description !== undefined || body.folderId !== undefined ||
+        body.projectId !== undefined || body.sourcePrompt !== undefined ||
+        body.thumbnailUrl !== undefined || body.expectedUpdatedAt !== undefined ||
+        body.expectedVersion !== undefined
+      if (mixed) {
+        return reply.status(400).send({
+          error: { code: "validation_error", message: "delta is mutually exclusive with full-body fields" },
+        })
+      }
+      const upsertNodeIds = deltaIds(body.delta.upsertNodes)
+      const upsertEdgeIds = deltaIds(body.delta.upsertEdges)
+      if (!upsertNodeIds || !upsertEdgeIds) {
+        return reply.status(400).send({
+          error: { code: "validation_error", message: "every delta upsert needs a non-empty string id" },
+        })
+      }
+      const dupNode = upsertNodeIds.length !== new Set(upsertNodeIds).size
+      const dupEdge = upsertEdgeIds.length !== new Set(upsertEdgeIds).size
+      const nodeOverlap = (body.delta.deleteNodeIds ?? []).some((id) => upsertNodeIds.includes(id))
+      const edgeOverlap = (body.delta.deleteEdgeIds ?? []).some((id) => upsertEdgeIds.includes(id))
+      if (dupNode || dupEdge || nodeOverlap || edgeOverlap) {
+        return reply.status(400).send({
+          error: { code: "validation_error", message: "delta ids must be unique and delete/upsert sets disjoint" },
+        })
+      }
+
+      // NOTE: sub-workflow route validation needs the FULL graph and is not
+      // possible on a partial delta — the editor maintains the invariant
+      // client-side, and the full-save path keeps the server-side check.
+      const { data: rpcData, error: rpcError } = await supabase.rpc("apply_workflow_delta", {
+        p_workflow_id: params.id,
+        p_base_version: body.delta.baseVersion,
+        // Server-side strip mirrors the full-body path: transient run-state
+        // never persists, whichever protocol carries the nodes.
+        p_upsert_nodes: stripTransientRuntimeData(
+          (body.delta.upsertNodes ?? []) as Array<{ data?: Record<string, unknown> }>,
+        ),
+        p_delete_node_ids: body.delta.deleteNodeIds ?? [],
+        p_upsert_edges: body.delta.upsertEdges ?? [],
+        p_delete_edge_ids: body.delta.deleteEdgeIds ?? [],
+        p_set: body.delta.set ?? null,
+        p_user_id: userId,
+      })
+      if (rpcError) return internalError(reply, rpcError.message)
+      const row = (Array.isArray(rpcData) ? rpcData[0] : rpcData) as
+        | { ok: boolean; version: number | null; updated_at: string | null }
+        | undefined
+      if (!row) return internalError(reply, "apply_workflow_delta returned no row")
+      if (!row.ok) {
+        if (row.version == null) return notFound(reply, "Workflow not found")
+        return reply.status(409).send({
+          error: {
+            code: "workflow_conflict",
+            message: "Workflow was updated by another writer",
+            currentVersion: row.version,
+            currentUpdatedAt: row.updated_at,
+          },
+        })
+      }
+      return { data: { id: params.id, version: row.version, updatedAt: row.updated_at } }
+    }
+
     if (body.nodes && !checkSubWorkflowShape(reply, body.nodes)) return
 
     if (body.nodes && body.edges) {
@@ -476,7 +577,12 @@ export async function workflowRoutes(app: FastifyInstance) {
     if (body.name !== undefined) updates.name = body.name
     if (body.description !== undefined) updates.description = body.description
     if (body.folderId !== undefined) updates.folder_id = body.folderId
-    if (body.nodes !== undefined) updates.nodes = body.nodes
+    if (body.nodes !== undefined) {
+      // Server-side strip of transient run-state (status/jobId/progress):
+      // pre-P0 clients still send it, and persisted phantom "running" state
+      // is what seeded false cross-tab conflicts. Results stay untouched.
+      updates.nodes = stripTransientRuntimeData(body.nodes as Array<{ data?: Record<string, unknown> }>)
+    }
     if (body.edges !== undefined) updates.edges = body.edges
     if (body.settings !== undefined) updates.settings = body.settings
     if (body.sourcePrompt !== undefined) updates.source_prompt = body.sourcePrompt
@@ -507,6 +613,9 @@ export async function workflowRoutes(app: FastifyInstance) {
     if (body.expectedUpdatedAt) {
       updateQuery = updateQuery.eq("updated_at", body.expectedUpdatedAt)
     }
+    if (body.expectedVersion !== undefined) {
+      updateQuery = updateQuery.eq("version", body.expectedVersion)
+    }
 
     const { data, error } = await updateQuery
       .select(WORKFLOW_FULL_COLS)
@@ -522,10 +631,10 @@ export async function workflowRoutes(app: FastifyInstance) {
       // first) — return 409 with the current `updated_at` so the caller
       // can refetch + merge. If the caller did NOT supply
       // expectedUpdatedAt, the row truly doesn't exist (or isn't owned).
-      if (body.expectedUpdatedAt) {
+      if (body.expectedUpdatedAt || body.expectedVersion !== undefined) {
         const { data: current } = await supabase
           .from("workflows")
-          .select("updated_at")
+          .select("updated_at, version")
           .eq("id", params.id)
           .eq("user_id", userId)
           .maybeSingle()
@@ -535,6 +644,7 @@ export async function workflowRoutes(app: FastifyInstance) {
               code: "workflow_conflict",
               message: "Workflow was updated by another writer",
               currentUpdatedAt: current.updated_at,
+              currentVersion: (current as { version?: number }).version,
             },
           })
         }

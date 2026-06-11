@@ -99,12 +99,16 @@ function isH264(filePath: string): Promise<boolean> {
       filePath,
     ], { stdio: ["ignore", "pipe", "pipe"] })
 
+    // Watchdog: a corrupt download can wedge ffprobe; local probes finish in
+    // well under a second, so 30s is purely a leak guard.
+    const watchdog = setTimeout(() => proc.kill("SIGKILL"), 30_000)
     let stdout = ""
     proc.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString() })
     proc.on("close", (code) => {
+      clearTimeout(watchdog)
       resolve(code === 0 && stdout.trim() === "h264")
     })
-    proc.on("error", () => resolve(false))
+    proc.on("error", () => { clearTimeout(watchdog); resolve(false) })
   })
 }
 
@@ -121,13 +125,18 @@ function reencodeToH264(inputPath: string, outputPath: string): Promise<void> {
       outputPath,
     ], { stdio: ["ignore", "ignore", "pipe"] })
 
+    // Watchdog: an ffmpeg wedged on corrupt input would leak the process and
+    // strand the download in "processing" forever. 10min matches the worker
+    // wrappers' DEFAULT_FFMPEG_TIMEOUT_MS — far above any legit re-encode.
+    const watchdog = setTimeout(() => proc.kill("SIGKILL"), 10 * 60 * 1000)
     let stderrBuf = ""
     proc.stderr.on("data", (chunk: Buffer) => { stderrBuf += chunk.toString() })
     proc.on("close", (code) => {
+      clearTimeout(watchdog)
       if (code === 0) resolve()
       else reject(new Error(`ffmpeg re-encode exited with code ${code}: ${stderrBuf.trim().split("\n").pop()}`))
     })
-    proc.on("error", reject)
+    proc.on("error", (err) => { clearTimeout(watchdog); reject(err) })
   })
 }
 
