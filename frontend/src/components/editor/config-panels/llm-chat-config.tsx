@@ -85,7 +85,7 @@ function MediaRefRow({
   )
 }
 
-export function LLMChatConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<LLMChatData>) {
+export function LLMChatConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeId }: ConfigProps<LLMChatData> & { nodeId?: string }) {
   const activeIdx = data.activeResultIndex ?? 0
   const results = data.generatedResults ?? []
   const promptSnippets = useSnippetPool("text", "prompt")
@@ -109,8 +109,8 @@ export function LLMChatConfig({ data, onUpdate, sources, fieldMappings, onMapFie
 
   // Edit⇄Final toggles for both prompt fields (provider-less — LLMChatData has
   // no provider). Keyed by the real data fields so state persists per node.
-  const systemPromptMode = usePromptFieldMode(selectedNodeId ?? "", "systemPrompt")
-  const userInputMode = usePromptFieldMode(selectedNodeId ?? "", "userInput")
+  const systemPromptMode = usePromptFieldMode(nodeId ?? "", "systemPrompt")
+  const userInputMode = usePromptFieldMode(nodeId ?? "", "userInput")
   const finalSystemPrompt = useFinalPromptSegments({
     userPrompt: data.systemPrompt,
     consumerNodeId: selectedNodeId ?? undefined,

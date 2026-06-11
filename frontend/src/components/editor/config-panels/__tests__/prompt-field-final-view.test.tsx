@@ -13,9 +13,10 @@ import {
  * the colored spans, the legend gating, the plain-text copy payload, the empty
  * placeholder, and the toggle's icon/title/aria + onToggle wiring.
  *
- * Distinct from `final-prompt-preview-segments.test.tsx` (which exercises the
- * legacy block end-to-end through the real builder) — nothing is ported; that
- * suite stays green untouched.
+ * Complements `use-final-prompt-segments.test.tsx`, which exercises the segment
+ * builder end-to-end through the real hook (the old `final-prompt-preview-segments.test.tsx`
+ * was removed when the standalone FinalPromptPreview block was deleted; its
+ * coverage was ported there). This file owns only the presentational layer.
  */
 
 /** Find a rendered <span> whose className contains `classFragment` and whose

@@ -569,7 +569,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "motion-transfer": return <MotionTransferConfig {...configProps} nodeId={selectedNodeId} />
     case "transcribe": return <TranscribeConfig {...configProps} />
     case "image-to-text": return <ImageToTextConfig {...configProps} nodeId={selectedNodeId} />
-    case "llm-chat": return <LLMChatConfig {...configProps} />
+    case "llm-chat": return <LLMChatConfig {...configProps} nodeId={selectedNodeId} />
     case "video-upscale": return <VideoUpscaleConfig {...configProps} />
     case "extend-video": return <ExtendVideoConfig {...configProps} nodeId={selectedNodeId} />
     case "video-retake": return <VideoRetakeConfig {...configProps} nodeId={selectedNodeId} />
