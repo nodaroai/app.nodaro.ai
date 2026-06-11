@@ -1,7 +1,7 @@
 ---
 node_type: speech-to-video
-generated_at: 2026-05-18T20:51:28.941Z
-generated_from: af4193bd
+generated_at: 2026-06-11T18:52:25.288Z
+generated_from: 36d155ff
 ---
 
 # Speech to Video
@@ -45,6 +45,7 @@ generated_from: af4193bd
 {
   "label": "Speech to Video",
   "prompt": "A person speaking naturally",
+  "negativePrompt": "",
   "resolution": "480p",
   "fieldMappings": {},
   "executionStatus": "idle",
@@ -89,6 +90,7 @@ generated_from: af4193bd
   "data": {
     "label": "Speech to Video",
     "prompt": "A person speaking naturally",
+    "negativePrompt": "",
     "resolution": "480p",
     "fieldMappings": {},
     "executionStatus": "idle",

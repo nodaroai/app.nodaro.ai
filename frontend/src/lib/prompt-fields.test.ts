@@ -35,6 +35,30 @@ describe("prompt-fields / quick-config registries stay in sync with node types",
     }
   })
 
+  // Deeper guard than "prompt field is non-empty string": assert the field a
+  // spec names actually EXISTS on the node's defaultData. A registry entry that
+  // points at a renamed/nonexistent data field stays green under the shallow
+  // check above (it's a truthy string) but is silently dead at runtime — the
+  // quick-edit modal reads/writes a key the UI never persists. That's exactly
+  // the forced-alignment dead-field class fixed in f45d9118.
+  it("every declared prompt/negative field exists on the node's defaultData", () => {
+    for (const [nodeType, spec] of Object.entries(NODE_PROMPT_FIELDS)) {
+      const def = NODE_DEF_MAP.get(nodeType)
+      expect(def, `NODE_DEFINITIONS entry for ${nodeType}`).toBeDefined()
+      const defaultData = def!.defaultData as Record<string, unknown>
+      expect(
+        Object.prototype.hasOwnProperty.call(defaultData, spec.prompt),
+        `${nodeType}.${spec.prompt} missing from defaultData`,
+      ).toBe(true)
+      if (spec.negative) {
+        expect(
+          Object.prototype.hasOwnProperty.call(defaultData, spec.negative),
+          `${nodeType}.${spec.negative} missing from defaultData`,
+        ).toBe(true)
+      }
+    }
+  })
+
   it("every quick-config control names a field and at least one option", () => {
     for (const [type, controls] of Object.entries(NODE_QUICK_CONFIGS)) {
       expect(controls.length, `${type} has no quick-config controls`).toBeGreaterThan(0)

@@ -1,7 +1,7 @@
 ---
 node_type: modify-image
-generated_at: 2026-05-18T20:51:28.576Z
-generated_from: af4193bd
+generated_at: 2026-06-11T18:52:24.819Z
+generated_from: 36d155ff
 ---
 
 # Modify Image
@@ -51,6 +51,7 @@ generated_from: af4193bd
   "label": "Modify Image",
   "prompt": "",
   "provider": "nano-banana",
+  "negativePrompt": "",
   "fieldMappings": {}
 }
 ```
@@ -94,6 +95,7 @@ generated_from: af4193bd
     "label": "Modify Image",
     "prompt": "",
     "provider": "nano-banana",
+    "negativePrompt": "",
     "fieldMappings": {}
   }
 }

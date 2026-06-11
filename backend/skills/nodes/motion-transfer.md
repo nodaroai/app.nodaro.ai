@@ -1,7 +1,7 @@
 ---
 node_type: motion-transfer
-generated_at: 2026-05-28T14:07:28.836Z
-generated_from: 54359c42
+generated_at: 2026-06-11T18:52:25.308Z
+generated_from: 36d155ff
 ---
 
 # Motion Transfer
@@ -43,6 +43,7 @@ generated_from: 54359c42
 {
   "label": "Motion Transfer",
   "prompt": "",
+  "negativePrompt": "",
   "characterOrientation": "video",
   "resolution": "720p",
   "fieldMappings": {},
@@ -91,6 +92,7 @@ generated_from: 54359c42
   "data": {
     "label": "Motion Transfer",
     "prompt": "",
+    "negativePrompt": "",
     "characterOrientation": "video",
     "resolution": "720p",
     "fieldMappings": {},

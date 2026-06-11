@@ -1,7 +1,7 @@
 ---
 node_type: video-retake
-generated_at: 2026-05-27T21:40:46.575Z
-generated_from: 88c5df99
+generated_at: 2026-06-11T18:52:24.885Z
+generated_from: 36d155ff
 ---
 
 # Retake Video
@@ -45,6 +45,7 @@ generated_from: 88c5df99
 {
   "label": "Retake Video",
   "provider": "ltx-2.3-pro",
+  "prompt": "",
   "retakeStartTime": 0,
   "retakeDuration": 2,
   "retakeMode": "replace_audio_and_video",
@@ -82,6 +83,7 @@ generated_from: 88c5df99
   "data": {
     "label": "Retake Video",
     "provider": "ltx-2.3-pro",
+    "prompt": "",
     "retakeStartTime": 0,
     "retakeDuration": 2,
     "retakeMode": "replace_audio_and_video",

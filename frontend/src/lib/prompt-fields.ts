@@ -78,7 +78,12 @@ export const NODE_PROMPT_FIELDS: Readonly<Record<string, PromptFieldSpec>> = {
   "suno-extend": { prompt: "prompt", media: "audio" },
   "suno-replace-section": { prompt: "prompt", media: "audio" },
   "suno-upload-extend": { prompt: "prompt", media: "audio" },
-  "suno-add-vocals": { prompt: "prompt", media: "audio" },
+  // NOTE: `suno-add-vocals` is intentionally absent — its node has no
+  // user-editable prompt (SunoAddVocalsData declares only `model`; the config
+  // panel + backend route take taskId/audioId/model, never a prompt). A stale
+  // entry here rendered a phantom Prompt editor in the quick-edit modal that
+  // wrote to a `data.prompt` key nothing ever reads (the dead-field class the
+  // guard test now catches via defaultData ownership).
   "suno-lyrics": { prompt: "prompt", media: "audio" },
   "suno-style-boost": { prompt: "content", promptLabel: "Style", media: "audio" },
   // ── Composition / FX ──

@@ -1444,7 +1444,7 @@ function MotionTransferConfigImpl({ data, onUpdate, sources, fieldMappings, onMa
         />
       </MappableField>
       <MappableField field="prompt" label="Prompt (Optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
-        <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v.slice(0, 2500) })} target="prompt" media="video" />
+        <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v.slice(0, VIDEO_PROMPT_MAX) })} target="prompt" media="video" />
         <PromptHelperButton nodeType="motion-transfer" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />
       </span>}>
         <TagTextarea
@@ -1463,7 +1463,7 @@ function MotionTransferConfigImpl({ data, onUpdate, sources, fieldMappings, onMa
           `negative_prompt`; Wan Animate gets it appended to the prompt as
           "Avoid: …" by the backend helper. */}
       <MappableField field="negativePrompt" label="Negative Prompt (Optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={
-        <SnippetMenuButton pool={negativeSnippets} value={data.negativePrompt ?? ""} onInsert={(v) => onUpdate({ negativePrompt: v.slice(0, 2500) })} target="negative" media="video" />
+        <SnippetMenuButton pool={negativeSnippets} value={data.negativePrompt ?? ""} onInsert={(v) => onUpdate({ negativePrompt: v.slice(0, VIDEO_PROMPT_MAX) })} target="negative" media="video" />
       }>
         <TagTextarea
           value={data.negativePrompt ?? ""}
