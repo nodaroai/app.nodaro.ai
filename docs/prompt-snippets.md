@@ -18,7 +18,7 @@ template, no runtime lookup — the snippet's words become part of
 `prompt` exactly as shown, and that exact string is what gets sent to the model.
 Because of this:
 
-- The final-prompt preview, the AI prompt helper, published apps, the SDK, and
+- The final-prompt view, the AI prompt helper, published apps, the SDK, and
   workflow export/import all see the same plain text — nothing special to strip.
 - Sharing or exporting a workflow carries the inserted text verbatim. The person
   who imports it does **not** need your snippet library; the words are already
@@ -57,7 +57,7 @@ raw words. The pill is purely a way to *see and manage* the fragment — it is
 **not** stored. The prompt behind it is always the snippet's plain text:
 
 - **The stored prompt is always the plain text.** Copying the prompt yields the
-  fragment's words, the final-prompt preview shows the real string, and
+  fragment's words, the final-prompt view shows the real string, and
   export/import/SDK all see plain text. There is no hidden marker.
 - **Hover** a pill to see its full text in a tooltip (the pill itself shows just
   the name to stay compact).
@@ -121,12 +121,31 @@ Some fields are **audio-tag fields** — the text fields on text-to-speech and
 Suno music nodes that use `[tag]` autocomplete. Those keep `/` for inserting
 **audio tags** and do **not** show prompt snippets.
 
-## Final-prompt provenance
+## Final-prompt view (per field)
 
-The **Final prompt** preview on image-generation nodes color-codes the
-assembled prompt by where each piece came from, so you can see at a glance what
-the model will actually receive — your words, plus everything the editor adds
-around them. Each color marks one origin:
+Every prompt and negative-prompt field has its own **Show final prompt** toggle.
+In its label row, next to the `</>` snippets button, is a small **Eye** button.
+Click it and the field swaps from the editor to a read-only rendering of the
+**assembled final prompt** — exactly what the model will receive once the editor
+folds in everything around your words. The button becomes a **Pencil** ("Edit
+prompt"); click it again to swap back to editing. Editing is untouched: pills,
+the `/` menu, the snippets button, and the AI helper all work exactly as before
+in edit mode.
+
+There is no separate "Final prompt" block anymore — this inline view per field
+replaces it, and the **Copy** button and legend now live inside it.
+
+### What the final view shows
+
+In place of the editor, the field renders the assembled text read-only, with a
+**Copy** button (top-right) that copies the **plain text** — no color markup
+ever reaches the clipboard or the model. If the field is empty, the editor's
+placeholder shows muted and the toggle stays available.
+
+On nodes with **provider-aware assembly** — the **Generate Image** and **Modify
+Image** config panels, plus the ⌘E quick-edit modal — the text is color-coded by
+where each piece came from, with a small legend underneath. Each color marks one
+origin:
 
 | Color | Origin | What it is |
 |-------|--------|------------|
@@ -136,16 +155,41 @@ around them. Each color marks one origin:
 | Amber | **Snippet** | An inserted snippet's text (matched back to your snippet pool). |
 | Violet | **References** | The identity / reference directive block added for connected character or reference images. |
 | Grey | **Style** | The auto-appended `Style: …` suffix. |
-| Rose | **Negative** | The negative-prompt content — either its own card, or an `Avoid: …` suffix folded into the prompt for providers that have no separate negative field. |
+| Rose | **Negative** | The negative-prompt content — either its own field, or an `Avoid: …` suffix folded into the prompt for providers that have no separate negative field. |
 
-A small **legend** appears under the preview whenever at least one non-plain
-origin is present (a prompt that is purely your own text shows no legend). The
-negative-prompt card gets the same variable- and snippet-highlighting.
+The **legend** lists only the origins actually present (a prompt that is purely
+your own text shows no legend). The negative field on these surfaces gets the
+same variable- and snippet-highlighting.
 
-This is a **display layer only**. The colors never change the string sent to
-the model, and the **Copy** button copies the plain text with no markup. The
-highlighting shows up once a node has a provider selected; before that the
-preview shows a best-effort plain string.
+On **every other node** (most video panels, audio, music, script, the text-input
+node, and the ⌘E modal for a provider-less node) the final view shows the same
+read-only assembled text — with your `{variables}` resolved to their upstream
+values — but as **plain text without provenance colors**. Same toggle, same Copy
+button, fewer visuals. (Provider-aware colors require the per-provider assembly
+that only image generation runs today.)
+
+### Negative-prompt fields
+
+A negative field's final view shows the **resolved negative** — your text with
+`{variables}` expanded — and a one-line caption telling you **how it is routed**
+for the selected provider, because not every model has a separate negative input:
+
+- **Sent natively as the provider's negative prompt** — the provider takes a
+  real `negative_prompt` parameter (e.g. Imagen 4, Ideogram, Qwen).
+- **Appended to the prompt as "Avoid: …"** — the provider has no native negative
+  field, so the editor folds your negative into the prompt as a trailing
+  `Avoid: …` clause (it then also appears, rose-tinted, inside the prompt view).
+
+The resolved negative is shown in **both** routings — the caption is what tells
+you where it actually goes.
+
+### It's a display layer, and the canvas remembers it
+
+The colors and the assembled rendering never change the string sent to the model
+— Copy always yields the plain text. The per-field mode is remembered **per node**
+(saved with the workflow), so a field you flipped to the final view stays that
+way across closing and reopening the panel and across a reload, and each field's
+mode is independent of the others.
 
 ## Scoping: which snippets a field sees
 
