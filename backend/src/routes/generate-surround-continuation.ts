@@ -11,9 +11,12 @@ import {
   CHARACTER_ASPECT_OPTIONS,
   LOCATION_ATTACH_COLUMNS,
   SURROUND_DIRECTIONS,
-  DEFAULT_CARRIED_FRACTION,
+  defaultCarriedFraction,
   buildSurroundFillPrompt,
 } from "@nodaro/shared"
+
+/** Image upscale/denoise providers offered for the opt-in `refine` step. */
+const REFINE_PROVIDERS = ["recraft-upscale", "topaz-image-upscale"] as const
 import { formatZodError } from "../lib/zod-error.js"
 
 /**
@@ -39,8 +42,14 @@ const generateSurroundContinuationBody = z.object({
   // Ring angle (45, 90, …) — metadata stored on the result; the studio also
   // encodes it in `attachName` ("Surround 45°").
   degrees: z.number().min(0).max(360).optional(),
-  // Fraction of the frame carried from the reference (0.5 = half, studio default).
-  carriedFraction: z.number().min(0.1).max(0.9).optional().default(DEFAULT_CARRIED_FRACTION),
+  // Fraction of the frame carried from the reference. Omitted ⇒ resolved per
+  // direction: 0.5 for a horizontal pan, 0.12 (thin horizon strip) for a tilt.
+  carriedFraction: z.number().min(0.1).max(0.9).optional(),
+  // Opt-in upscale/denoise of the painted result before it becomes the next
+  // ring view's reference — slows the cumulative softening down a long chain.
+  // recraft-upscale = 1 cr, topaz-image-upscale = 3 cr (added to the base).
+  refine: z.boolean().optional().default(false),
+  refineProvider: z.enum(REFINE_PROVIDERS).optional().default("recraft-upscale"),
   // Optional free-form scene hint woven into the fill prompt.
   userPrompt: z.string().max(8000).optional(),
   provider: z.string().optional().default("nano-banana"),
@@ -57,7 +66,23 @@ const generateSurroundContinuationBody = z.object({
 export async function generateSurroundContinuationRoutes(app: FastifyInstance) {
   app.post(
     "/v1/generate-surround-continuation",
-    { preHandler: creditGuard((req) => extractProvider(req.body, "nano-banana")) },
+    {
+      preHandler: creditGuard((req) => extractProvider(req.body, "nano-banana"), {
+        // Add the opt-in refine upscale as a credit addon on top of the image
+        // provider's base. Returns BASE credits (markup applied in creditGuard so
+        // the same number is checked + reserved). Mirrors generate-character.
+        computeCredits: async (body) => {
+          const b = body as Record<string, unknown>
+          const { getModelCreditBaseCost } = await import("../ee/billing/credits.js")
+          let credits = (await getModelCreditBaseCost(extractProvider(body, "nano-banana"))).creditCost
+          if (b.refine === true) {
+            const rp = typeof b.refineProvider === "string" ? b.refineProvider : "recraft-upscale"
+            credits += (await getModelCreditBaseCost(rp)).creditCost
+          }
+          return credits
+        },
+      }),
+    },
     async (req, reply) => {
       const parsed = generateSurroundContinuationBody.safeParse(req.body)
       if (!parsed.success) {
@@ -71,11 +96,15 @@ export async function generateSurroundContinuationRoutes(app: FastifyInstance) {
         direction,
         degrees,
         carriedFraction,
+        refine,
+        refineProvider,
         userPrompt,
         attachToLocationId,
         attachToColumn,
         attachName,
       } = parsed.data
+      // Tilts (up/down) default to a thin horizon strip; pans to half.
+      const resolvedCarriedFraction = carriedFraction ?? defaultCarriedFraction(direction)
       const userId = req.userId
 
       if (!userId) {
@@ -135,7 +164,9 @@ export async function generateSurroundContinuationRoutes(app: FastifyInstance) {
         referenceImageUrl,
         direction,
         degrees,
-        carriedFraction,
+        carriedFraction: resolvedCarriedFraction,
+        refine,
+        refineProvider,
         provider: parsed.data.provider,
         aspectRatio: parsed.data.aspectRatio,
         usageLogId,

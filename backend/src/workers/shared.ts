@@ -834,3 +834,49 @@ export async function refundLoopTrimAddon(
     // Non-fatal: prefer NOT failing the whole job over a refund hiccup.
   }
 }
+
+/**
+ * Partial-success refund for surround continuation: the paint succeeded but the
+ * opt-in refine (upscale/denoise) provider call failed. Keep the un-refined
+ * result, refund only the refine addon (commit actual = reserved - addon).
+ * Mirrors refundLoopTrimAddon; stamps usage_logs.metadata.surround_refine_refunded.
+ */
+export async function refundSurroundRefineAddon(
+  jobId: string,
+  usageLogId: string | null | undefined,
+  addonCredits: number,
+): Promise<void> {
+  if (!hasCredits() || !usageLogId || addonCredits <= 0) return
+
+  try {
+    const { data: usageLog, error } = await supabase
+      .from("usage_logs")
+      .select("credits_used, metadata")
+      .eq("id", usageLogId)
+      .single()
+
+    if (error || !usageLog) {
+      console.error(`[worker] refundSurroundRefineAddon: usage_log not found for ${usageLogId}`)
+      return
+    }
+
+    const reserved = (usageLog.credits_used as number | null) ?? 0
+    const actual = Math.max(0, reserved - addonCredits)
+
+    const { CreditsService } = await import("../ee/services/credits.js")
+    await CreditsService.commitCredits(usageLogId, actual)
+
+    const existingMeta = (usageLog.metadata as Record<string, unknown> | null) ?? {}
+    await supabase
+      .from("usage_logs")
+      .update({ metadata: { ...existingMeta, surround_refine_refunded: true } })
+      .eq("id", usageLogId)
+
+    await supabase.from("jobs").update({ credits_actual: actual }).eq("id", jobId)
+
+    console.log(`[worker] surround refine addon refunded for job ${jobId} (reserved=${reserved}, actual=${actual})`)
+  } catch (err) {
+    console.error(`[worker] refundSurroundRefineAddon failed for job ${jobId}:`, err)
+    // Non-fatal: prefer NOT failing the whole job over a refund hiccup.
+  }
+}

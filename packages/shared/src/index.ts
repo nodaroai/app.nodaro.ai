@@ -388,6 +388,9 @@ export {
 export {
   SURROUND_DIRECTIONS,
   DEFAULT_CARRIED_FRACTION,
+  TILT_CARRIED_FRACTION,
+  isTiltDirection,
+  defaultCarriedFraction,
   buildSurroundFillPrompt,
   type SurroundDirection,
 } from "./surround.js"
