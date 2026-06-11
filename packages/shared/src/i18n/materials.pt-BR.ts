@@ -82,6 +82,7 @@ const map: LocaleCatalogMap = {
   "mother-of-pearl": { label: "Madrepérola", description: "Interior de concha perolado, creme iridescente" },
   "carbon-fiber": { label: "Fibra de Carbono", description: "Compósito de fibra de carbono preta trançada" },
   "holographic-film": { label: "Filme Holográfico", description: "Holograma que refrata luz com brilho arco-íris" },
+  "subsurface": { label: "Brilho subsuperficial", description: "Luz brilhando sob a superfície" },
 }
 
 export default map

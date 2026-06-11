@@ -131,7 +131,8 @@ When the user's input suggests ARTISTIC styles (anime, watercolor, pixel art, et
 3. If the prompt is empty (build from scratch), pick up to 5 key categories with "selected": null.
 4. For each chosen category, generate 4-6 contextually relevant options.
 5. Pre-select the best option based on the user's description.
-6. Output ONLY valid JSON matching this exact schema — no markdown, no explanations, no wrapping:
+6. LANGUAGE: write "label" and "description" fields in the USER'S language (mirror the language of their input — they are UI text). Every "value" string MUST be in ENGLISH regardless of the input language — values are prompt fragments fed verbatim to generation models, which perform best in English.
+7. Output ONLY valid JSON matching this exact schema — no markdown, no explanations, no wrapping:
 
 {
   "questions": [
@@ -211,7 +212,7 @@ ${ctx.originalPrompt ? `\n## Original Prompt\n${ctx.originalPrompt}` : ""}
 ${providerBlock}
 ${ctx.userPreference ? `## User Preference\nThe user has set a general preference. Follow it:\n"${ctx.userPreference}"\n` : ""}## Rules
 1. Weave all selections into one concise, natural-language prompt — under 500 characters.
-2. Preserve the user's original text if provided.
+2. Preserve the user's original intent and details. If the original text is not in English, TRANSLATE it into English — the final prompt MUST be entirely in English (generation models perform best in English).
 3. Weave style, mood, lighting naturally — do not keyword-stuff.
 4. For reference-role selections, include explicit per-image role instructions bound by ordinal (e.g., "Image 1 defines the character — preserve identity exactly. Image 2 defines the mood and lighting.").
 5. If "what-to-avoid" selections are present, append them as a negative instruction at the end of the prompt (e.g., "Avoid: CGI look, plastic skin, oversaturated colors").
@@ -275,7 +276,7 @@ Take the user's rough ${contentCategory} idea and rewrite it into ONE high-quali
 ${providerBlock}
 ${imageVocab}${ctx.userPreference ? `## User Preference\nThe user has set a general preference. Follow it:\n"${ctx.userPreference}"\n\n` : ""}## Rules
 1. Output a single concise, natural-language prompt — under 500 characters.
-2. Preserve the user's intent; expand and refine, do not replace it.
+2. Preserve the user's intent; expand and refine, do not replace it. If the user's text is not in English, TRANSLATE it — the output prompt MUST be entirely in English (generation models perform best in English).
 3. Weave style, mood, and lighting naturally — do not keyword-stuff.
 4. If the content calls for it, append negatives as "Avoid: ..." at the end.
 5. Output ONLY valid JSON — no markdown, no wrapping:

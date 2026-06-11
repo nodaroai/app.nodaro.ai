@@ -327,10 +327,12 @@ describe("combineVideos — cut transition", () => {
     expect(list).toContain("it'\\''s-work")
   })
 
-  it("cut + audioMode=crossfade: takes filter-graph path with concat video + acrossfade audio + apad", async () => {
-    // Regression: previously the concat-demuxer fast path swallowed the
-    // audioMode=crossfade flag by stream-copying audio. Now we route this
-    // combo through a filter graph so the crossfade actually runs.
+  it("cut + audioMode=crossfade: per-boundary afade out/in + aconcat — NO time-shifting acrossfade/apad", async () => {
+    // Regression 2026-06-11: acrossfade OVERLAPS clips in time, so against a
+    // hard-cut video every post-boundary segment's audio ran the full
+    // crossfade duration EARLY (sound led picture by 0.5s in clip 2), and
+    // apad hid the shortfall as end-silence. Hard cuts keep each clip's
+    // audio anchored to its video: fade-out tail / fade-in head + concat.
     stubResolutionProbes(2)
     mocks.getVideoDuration
       .mockResolvedValueOnce(5)
@@ -347,22 +349,57 @@ describe("combineVideos — cut transition", () => {
     // Video: hard-cut concat filter, not xfade
     expect(fc).toContain("[0:v][1:v]concat=n=2:v=1:a=0[vout]")
     expect(fc).not.toContain("xfade=")
-    // Audio: acrossfade with default linear curve
-    expect(fc).toContain("acrossfade=d=0.5")
-    expect(fc).toContain("c1=tri:c2=tri")
-    // Pad audio with silence to match total video duration (5+5=10s)
-    expect(fc).toContain("apad=whole_dur=10")
-    expect(fc).toContain("[aout_padded]")
-    // Map padded audio, not raw acrossfade output
+    // Audio: timeline-preserving fades at the boundary, then sample concat
+    expect(fc).toContain("[0:a]afade=t=out:st=4.5:d=0.5:curve=tri[ac0]")
+    expect(fc).toContain("[1:a]afade=t=in:st=0:d=0.5:curve=tri[ac1]")
+    expect(fc).toContain("[ac0][ac1]concat=n=2:v=0:a=1[aout]")
+    expect(fc).not.toContain("acrossfade")
+    expect(fc).not.toContain("apad")
     const mapCalls = args.reduce<string[]>((acc, a, i) => {
       if (a === "-map") acc.push(args[i + 1])
       return acc
     }, [])
     expect(mapCalls).toContain("[vout]")
-    expect(mapCalls).toContain("[aout_padded]")
+    expect(mapCalls).toContain("[aout]")
     // Not stream-copy: re-encodes through filter graph
     expect(args[args.indexOf("-c:v") + 1]).toBe("libx264")
     expect(args[args.indexOf("-c:a") + 1]).toBe("aac")
+  })
+
+  it("cut + crossfade with transitionDuration 0 degenerates to the stream-copy fast path", async () => {
+    // d=0 fades are a plain cut; previously acrossfade d=0 errored and only
+    // the catch-fallback produced output (job b17b3b86).
+    stubResolutionProbes(2)
+    await combineVideos(defaultOptions({
+      transition: "cut",
+      audioMode: "crossfade",
+      transitionDuration: 0,
+    }))
+    const args = lastArgs()
+    expect(args).toContain("-f")
+    expect(args[args.indexOf("-f") + 1]).toBe("concat")
+    expect(args).toContain("-c")
+    expect(args).not.toContain("-filter_complex")
+  })
+
+  it("cut + crossfade with 3 clips: middle clip fades in AND out, all anchored", async () => {
+    stubResolutionProbes(3)
+    mocks.getVideoDuration
+      .mockResolvedValueOnce(5)
+      .mockResolvedValueOnce(4)
+      .mockResolvedValueOnce(5)
+
+    await combineVideos(defaultOptions({
+      videoUrls: ["https://r2/a.mp4", "https://r2/b.mp4", "https://r2/c.mp4"],
+      transition: "cut",
+      audioMode: "crossfade",
+      transitionDuration: 0.5,
+    }))
+
+    const args = lastArgs()
+    const fc = args[args.indexOf("-filter_complex") + 1]
+    expect(fc).toContain("[1:a]afade=t=in:st=0:d=0.5:curve=tri,afade=t=out:st=3.5:d=0.5:curve=tri[ac1]")
+    expect(fc).toContain("[ac0][ac1][ac2]concat=n=3:v=0:a=1[aout]")
   })
 
   it("cut + audioMode=crossfade: falls back to concat demuxer when filter fails (e.g. clip without audio)", async () => {
@@ -651,7 +688,11 @@ describe("combineVideos — audioMode for xfade transitions", () => {
     expect(fallbackArgs).toContain("-an")
   })
 
-  it("audioMode=keep: concats audio streams with concat filter", async () => {
+  it("audioMode=keep: delays each clip's audio to its xfaded video start and mixes (no late concat)", async () => {
+    // Regression 2026-06-11: xfade compresses the video timeline by D per
+    // boundary, but keep-audio used a plain concat — clip N's audio ran
+    // (N-1)*D seconds LATE. Each clip's audio must start where its video
+    // starts: adelay to the xfade offset, then amix (overlaps mix tails).
     stubResolutionProbes(2)
     mocks.getVideoDuration
       .mockResolvedValueOnce(5)
@@ -659,16 +700,20 @@ describe("combineVideos — audioMode for xfade transitions", () => {
     stubAudioStreamProbes(2, true)
 
     await combineVideos(defaultOptions({
-      transition: "fade", audioMode: "keep",
+      transition: "fade", audioMode: "keep", transitionDuration: 1,
     }))
 
     const args = lastArgs()
     const fc = args[args.indexOf("-filter_complex") + 1]
-    expect(fc).toContain("concat=n=2:v=0:a=1[aout]")
+    // clip 0 starts at 0 (no delay); clip 1 starts at 5-1 = 4s
+    expect(fc).toContain("[0:a]anull[ka0]")
+    expect(fc).toContain("[1:a]adelay=4000:all=1[ka1]")
+    expect(fc).toContain("[ka0][ka1]amix=inputs=2:normalize=0:duration=longest[aout]")
+    expect(fc).not.toContain("concat=n=2:v=0:a=1")
     expect(fc).not.toContain("acrossfade")
   })
 
-  it("audioMode=keep: generates silent placeholder for clips without audio", async () => {
+  it("audioMode=keep: clips without audio are omitted from the mix (silence adds nothing)", async () => {
     mocks.runFfprobe.mockReset()
     mocks.getVideoDuration.mockReset()
 
@@ -690,14 +735,12 @@ describe("combineVideos — audioMode for xfade transitions", () => {
     }))
 
     const fc = lastArgs()[lastArgs().indexOf("-filter_complex") + 1]
-    // Silent placeholder generated for clip 1 with its duration
-    expect(fc).toContain("aevalsrc=0:c=stereo:s=44100:d=3")
-    expect(fc).toContain("[silent_1]")
-    // Concat uses [0:a] for clip 0 and [silent_1] for clip 1
-    expect(fc).toContain("[0:a][silent_1]concat=n=2:v=0:a=1[aout]")
+    expect(fc).not.toContain("aevalsrc")
+    expect(fc).toContain("[0:a]anull[ka0]")
+    expect(fc).toContain("amix=inputs=1:normalize=0:duration=longest[aout]")
   })
 
-  it("audioMode=keep: hasAudioStream tolerates ffprobe rejection (treated as no audio)", async () => {
+  it("audioMode=keep: when NO clip has audio (probe rejections), emits video-only with -an", async () => {
     // Reset clears both call history AND any queued mockResolvedValueOnce
     // entries from prior tests that might leak through clearAllMocks.
     mocks.runFfprobe.mockReset()
@@ -715,9 +758,12 @@ describe("combineVideos — audioMode for xfade transitions", () => {
       transition: "fade", audioMode: "keep",
     }))
 
-    const fc = lastArgs()[lastArgs().indexOf("-filter_complex") + 1]
-    expect(fc).toContain("[silent_0]")
-    expect(fc).toContain("[silent_1]")
+    const args = lastArgs()
+    expect(args).toContain("-an")
+    expect(args).not.toContain("[aout]")
+    const fc = args[args.indexOf("-filter_complex") + 1]
+    expect(fc).toContain("xfade=")
+    expect(fc).not.toContain("amix")
   })
 })
 

@@ -163,6 +163,10 @@ const VIDEO_RATIOS_HV = ["16:9", "9:16"] as const
 const VIDEO_RATIOS_HVS = ["16:9", "9:16", "1:1"] as const
 const WAN_27_IMAGE_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "21:9", "8:1", "1:8"] as const
 const VIDEO_RATIOS_HVS345 = ["16:9", "9:16", "1:1", "4:3", "3:4"] as const
+// Seedance 2.x only — KIE accepts the full fixed-ratio set incl. 21:9
+// (docs.kie.ai/market/bytedance/seedance-2). Kept separate from HVS so the
+// wider set can't leak to models that don't support it.
+const VIDEO_RATIOS_SEEDANCE_2 = ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"] as const
 
 // =============================================================================
 // IMAGE MODELS
@@ -1084,7 +1088,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Seedance 2 — premium tier with native audio. Per-second pricing by resolution.",
     useCases: ["premium", "narrative"],
     features: ["end-frame", "audio", "reference-image"],
-    aspectRatios: VIDEO_RATIOS_HVS,
+    aspectRatios: VIDEO_RATIOS_SEEDANCE_2,
     durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     resolutions: ["480p", "720p", "1080p"],
     pricing: [
@@ -1106,7 +1110,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Cheaper / quicker Seedance 2 tier.",
     useCases: ["fast", "motion"],
     features: ["end-frame", "audio", "reference-image"],
-    aspectRatios: VIDEO_RATIOS_HVS,
+    aspectRatios: VIDEO_RATIOS_SEEDANCE_2,
     durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     resolutions: ["480p", "720p", "1080p"],
     pricing: [

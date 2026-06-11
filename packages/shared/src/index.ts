@@ -14,6 +14,7 @@ export { DEFAULT_LABEL_BY_SOURCE } from "./types.js"
 export {
   CREDIT_BASE_USD,
   IMAGE_PROMPT_MAX,
+  VIDEO_PROMPT_MAX,
   NATIVE_NEGATIVE_PROMPT_MODELS,
   NATIVE_NEGATIVE_VIDEO_PROVIDERS,
   applyVideoNegativePrompt,
@@ -377,6 +378,13 @@ export {
   type CreatureAttachColumn,
   type ObjectMotionPromptInput,
 } from "./entity-prompts.js"
+
+export {
+  SURROUND_DIRECTIONS,
+  DEFAULT_CARRIED_FRACTION,
+  buildSurroundFillPrompt,
+  type SurroundDirection,
+} from "./surround.js"
 
 export {
   OBJECT_PICKER_NODE_TYPES,

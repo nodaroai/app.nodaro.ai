@@ -9,18 +9,18 @@ import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.j
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
-import { TEXT_TO_VIDEO_PROVIDERS, SEEDANCE_2_REF_LIMITS, videoProviderRequiresImage } from "@nodaro/shared"
+import { TEXT_TO_VIDEO_PROVIDERS, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, videoProviderRequiresImage } from "@nodaro/shared"
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 
 export const textToVideoBody = z.object({
-  prompt: z.string().min(1).max(2500),
+  prompt: z.string().min(1).max(VIDEO_PROMPT_MAX),
   userPrompt: z.string().max(8000).optional(),
   provider: z.enum(TEXT_TO_VIDEO_PROVIDERS).optional(),
   duration: z.number().int().min(1).max(60).optional(),
   mode: z.enum(["pro", "std", "4K"]).optional(),
   sound: z.boolean().optional(),
-  negativePrompt: z.string().max(2500).optional(),
+  negativePrompt: z.string().max(VIDEO_PROMPT_MAX).optional(),
   cfgScale: z.number().min(0).max(1).optional(),
   aspectRatio: z.enum(["16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "adaptive"]).optional(),
   multiShot: z.boolean().optional(),

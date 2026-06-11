@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { VIDEO_PROMPT_MAX } from "@nodaro/shared"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
@@ -11,10 +12,10 @@ import { formatZodError } from "../lib/zod-error.js"
 const speechToVideoBody = z.object({
   imageUrl: safeUrlSchema,
   audioUrl: safeUrlSchema,
-  prompt: z.string().min(1).max(2500),
+  prompt: z.string().min(1).max(VIDEO_PROMPT_MAX),
   userPrompt: z.string().max(8000).optional(),
   resolution: z.enum(["480p", "580p", "720p"]).optional().default("480p"),
-  negativePrompt: z.string().max(2500).optional(),
+  negativePrompt: z.string().max(VIDEO_PROMPT_MAX).optional(),
   seed: z.number().int().optional(),
   numFrames: z.number().int().min(16).max(81).optional(),
   fps: z.number().int().min(8).max(24).optional(),

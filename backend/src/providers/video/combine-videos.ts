@@ -198,6 +198,39 @@ function buildAudioFilter(
   return { filter: parts.join(";"), outputLabel: "[aout]" }
 }
 
+/**
+ * Audio for hard-cut joins: per-boundary fade-out/fade-in + sample concat.
+ * acrossfade is WRONG against a hard video cut — it OVERLAPS clips in time,
+ * so every post-boundary segment's audio ran the full crossfade duration
+ * early relative to its video (sound led picture by `d` seconds from the
+ * first cut onward), and the apad that "matched" total durations merely hid
+ * the shortfall as end-silence. Fades keep each clip's audio anchored to its
+ * own video while still killing boundary clicks; durations are preserved
+ * exactly, so no padding is needed.
+ */
+function buildCutAudioFilter(
+  durations: readonly number[],
+  fadeDuration: number,
+  curve: string,
+): { filter: string; outputLabel: string } {
+  const n = durations.length
+  const parts: string[] = []
+  const labels: string[] = []
+  for (let i = 0; i < n; i++) {
+    const fades: string[] = []
+    if (i > 0) fades.push(`afade=t=in:st=0:d=${fadeDuration}:curve=${curve}`)
+    if (i < n - 1) {
+      const st = Math.max(0, durations[i]! - fadeDuration)
+      fades.push(`afade=t=out:st=${st}:d=${fadeDuration}:curve=${curve}`)
+    }
+    const label = `[ac${i}]`
+    parts.push(`[${i}:a]${fades.length > 0 ? fades.join(",") : "anull"}${label}`)
+    labels.push(label)
+  }
+  parts.push(`${labels.join("")}concat=n=${n}:v=0:a=1[aout]`)
+  return { filter: parts.join(";"), outputLabel: "[aout]" }
+}
+
 export async function combineVideos(options: CombineOptions): Promise<string> {
   const { videoUrls, transition, transitionDuration, audioMode, audioCrossfadeCurve, trimStartFrames, trimEndFrames } = options
   const workDir = await createWorkDir("combine")
@@ -236,10 +269,11 @@ export async function combineVideos(options: CombineOptions): Promise<string> {
     const outputPath = join(workDir, "output.mp4")
 
     // Concat-demuxer fast path: stream-copy, no filter graph. Used for cut
-    // transitions where audio doesn't need filtering. cut+crossfade falls
-    // through to the filter-graph path below because acrossfade can't run
-    // under stream-copy.
-    if (transition === "cut" && audioMode !== "crossfade") {
+    // transitions where audio doesn't need filtering — including
+    // cut+crossfade with a zero transition duration, where zero-length
+    // fades degenerate to a plain cut (previously acrossfade d=0 errored
+    // and only the catch-fallback saved the output).
+    if (transition === "cut" && (audioMode !== "crossfade" || transitionDuration <= 0)) {
       const listPath = join(workDir, "filelist.txt")
       const listContent = inputPaths.map((p) => `file '${p.replace(/'/g, "'\\''")}'`).join("\n")
       await fs.writeFile(listPath, listContent)
@@ -273,16 +307,14 @@ export async function combineVideos(options: CombineOptions): Promise<string> {
       inputs.push("-i", p)
     }
 
-    // cut+crossfade: hard-cut video (concat filter) + crossfaded audio
-    // (acrossfade chain). acrossfade shortens audio by (N-1)*d while concat
-    // keeps full video duration, so pad audio with silence (apad) to match.
+    // cut+crossfade: hard-cut video (concat filter) + timeline-preserving
+    // boundary fades on audio (see buildCutAudioFilter — acrossfade would
+    // shift every post-boundary segment's audio early).
     if (transition === "cut") {
       const videoConcatInputs = inputPaths.map((_, i) => `[${i}:v]`).join("")
       const videoConcat = `${videoConcatInputs}concat=n=${inputPaths.length}:v=1:a=0[vout]`
-      const videoTotal = durations.reduce((sum, d) => sum + d, 0)
-      const audioFilter = buildAudioFilter(durations, safeDuration, resolveAudioCrossfadeCurve(audioCrossfadeCurve))
-      const paddedAudio = `${audioFilter.outputLabel}apad=whole_dur=${videoTotal}[aout_padded]`
-      const fullFilter = `${videoConcat};${audioFilter.filter};${paddedAudio}`
+      const audioFilter = buildCutAudioFilter(durations, safeDuration, resolveAudioCrossfadeCurve(audioCrossfadeCurve))
+      const fullFilter = `${videoConcat};${audioFilter.filter}`
 
       try {
         await runFfmpeg([
@@ -290,16 +322,16 @@ export async function combineVideos(options: CombineOptions): Promise<string> {
           ...inputs,
           "-filter_complex", fullFilter,
           "-map", "[vout]",
-          "-map", "[aout_padded]",
+          "-map", audioFilter.outputLabel,
           "-c:v", "libx264",
           "-preset", "fast",
           "-c:a", "aac",
           outputPath,
         ])
       } catch {
-        // acrossfade fails if any clip lacks an audio stream. Fall back to
-        // concat demuxer with stream copy — preserves existing audio at the
-        // cost of the crossfade effect.
+        // The audio graph fails if any clip lacks an audio stream. Fall back
+        // to concat demuxer with stream copy — preserves existing audio at
+        // the cost of the boundary fades.
         console.log("[combineVideos] cut+crossfade failed, falling back to concat (no audio crossfade)")
         const listPath = join(workDir, "filelist.txt")
         const listContent = inputPaths.map((p) => `file '${p.replace(/'/g, "'\\''")}'`).join("\n")
@@ -361,39 +393,57 @@ export async function combineVideos(options: CombineOptions): Promise<string> {
         ])
       }
     } else {
-      // audioMode === "keep": concat audio streams without crossfade
-      // We still need xfade for video, but concat audio separately
-      // Probe each clip for audio; generate silent placeholders for clips without audio
+      // audioMode === "keep": the video xfade chain COMPRESSES the timeline
+      // by D per boundary, so a plain audio concat left clip N's audio
+      // (N-1)*D seconds late relative to its video. Anchor each clip's audio
+      // at its video start instead: adelay to the xfade offset, then amix —
+      // the D-second overlap regions mix the outgoing tail with the incoming
+      // head. Clips without audio are simply omitted (silence adds nothing);
+      // if NO clip has audio, emit video-only.
       const audioFlags = await Promise.all(inputPaths.map((p) => hasAudioStream(p)))
-      const silentParts: string[] = []
-      const concatInputs: string[] = []
-
-      for (let i = 0; i < inputPaths.length; i++) {
-        if (audioFlags[i]) {
-          concatInputs.push(`[${i}:a]`)
-        } else {
-          const label = `[silent_${i}]`
-          silentParts.push(`aevalsrc=0:c=stereo:s=44100:d=${durations[i]}${label}`)
-          concatInputs.push(label)
-        }
+      const starts: number[] = []
+      let acc = 0
+      for (let i = 0; i < durations.length; i++) {
+        starts.push(acc)
+        acc += durations[i] - safeDuration
       }
 
-      const audioPreamble = silentParts.length > 0 ? silentParts.join(";") + ";" : ""
-      const audioConcat = concatInputs.join("") +
-        `concat=n=${inputPaths.length}:v=0:a=1[aout]`
-      const fullFilter = `${videoFilter.filter};${audioPreamble}${audioConcat}`
+      const delayParts: string[] = []
+      const mixInputs: string[] = []
+      for (let i = 0; i < inputPaths.length; i++) {
+        if (!audioFlags[i]) continue
+        const label = `[ka${i}]`
+        const ms = Math.max(0, Math.round(starts[i] * 1000))
+        delayParts.push(ms > 0 ? `[${i}:a]adelay=${ms}:all=1${label}` : `[${i}:a]anull${label}`)
+        mixInputs.push(label)
+      }
 
-      await runFfmpeg([
-        "-y",
-        ...inputs,
-        "-filter_complex", fullFilter,
-        "-map", videoFilter.outputLabel,
-        "-map", "[aout]",
-        "-c:v", "libx264",
-        "-preset", "fast",
-        "-c:a", "aac",
-        outputPath,
-      ])
+      if (mixInputs.length === 0) {
+        await runFfmpeg([
+          "-y",
+          ...inputs,
+          "-filter_complex", videoFilter.filter,
+          "-map", videoFilter.outputLabel,
+          "-c:v", "libx264",
+          "-preset", "fast",
+          "-an",
+          outputPath,
+        ])
+      } else {
+        const audioMix = `${mixInputs.join("")}amix=inputs=${mixInputs.length}:normalize=0:duration=longest[aout]`
+        const fullFilter = `${videoFilter.filter};${delayParts.join(";")};${audioMix}`
+        await runFfmpeg([
+          "-y",
+          ...inputs,
+          "-filter_complex", fullFilter,
+          "-map", videoFilter.outputLabel,
+          "-map", "[aout]",
+          "-c:v", "libx264",
+          "-preset", "fast",
+          "-c:a", "aac",
+          outputPath,
+        ])
+      }
     }
 
     console.log(`[combineVideos] Output: ${outputPath}`)

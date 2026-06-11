@@ -17,6 +17,8 @@ const map: LocaleCatalogMap = {
   "cooke-s4":              { description: "Cooke 之味——奶油般绘画感的肤色" },
   "helios-44":             { description: "复古苏联旋焦散景" },
   "petzval":               { description: "极致复古旋焦,戏剧性边缘衰减" },
+  "probe": { label: "探针镜头", description: "管状微距——穿过孔洞与狭窄空间" },
+  "cctv": { label: "监控镜头", description: "监控摄像画面质感" },
 }
 
 export default map

@@ -511,6 +511,62 @@ export async function locationRoutes(app: FastifyInstance) {
   })
 
   // ---------------------------------------------------------------------------
+  // Remove ONE asset take from a worker-owned bucket column.
+  //
+  // The upsert UPDATE branch deliberately DROPS the worker-owned buckets (a
+  // stale Studio snapshot must not clobber concurrent worker appends), so
+  // deleting one take — e.g. a 360° surround view the user wants to
+  // regenerate — goes through the atomic `remove_location_asset` RPC
+  // (migration 215): a single SQL statement filters the entry out, immune to
+  // the read-modify-write race the upsert guard exists to prevent.
+  // ---------------------------------------------------------------------------
+  app.post("/v1/locations/:id/remove-asset", { preHandler: requireAppScope("assets:write") }, async (req, reply) => {
+    const userId = req.userId
+    if (!userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
+    const parsedParams = deleteLocationParams.safeParse(req.params)
+    if (!parsedParams.success) {
+      return reply.status(400).send({
+        error: {
+          code: "validation_error",
+          message: parsedParams.error.issues[0]?.message ?? "Invalid location ID",
+        },
+      })
+    }
+    const parsedBody = z
+      .object({ column: z.enum(LOCATION_ATTACH_COLUMNS), url: safeUrlSchema })
+      .safeParse(req.body)
+    if (!parsedBody.success) {
+      return reply.status(400).send({
+        error: { code: "validation_error", ...formatZodError(parsedBody.error) },
+      })
+    }
+
+    const { data: removed, error } = await supabase.rpc("remove_location_asset", {
+      p_location_id: parsedParams.data.id,
+      p_user_id: userId,
+      p_column: parsedBody.data.column,
+      p_url: parsedBody.data.url,
+    })
+    if (error) {
+      return reply.status(500).send({
+        error: { code: "internal_error", message: error.message },
+      })
+    }
+    if (!removed) {
+      // Wrong owner, archived row, or the url isn't in that bucket.
+      return reply.status(404).send({
+        error: { code: "not_found", message: "Asset not found on this location" },
+      })
+    }
+    return { removed: true }
+  })
+
+  // ---------------------------------------------------------------------------
   // Delete location
   //
   //   default          → soft-delete (sets deleted_at, leaves row intact for

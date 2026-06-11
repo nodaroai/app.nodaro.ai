@@ -80,6 +80,7 @@ const map: LocaleCatalogMap = {
   "mother-of-pearl": { label: "Mother-of-Pearl", description: "Pearlescent अंदरूनी shell, इंद्रधनुषी क्रीम" },
   "carbon-fiber": { label: "Carbon Fiber", description: "बुना हुआ काला carbon-fiber composite" },
   "holographic-film": { label: "Holographic Film", description: "इंद्रधनुषी चमक के साथ रोशनी-अपवर्तित hologram" },
+  "subsurface": { label: "उपसतही चमक", description: "सतह के नीचे से चमकती रोशनी" },
 }
 
 export default map
