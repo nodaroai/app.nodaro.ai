@@ -92,7 +92,7 @@ export function buildWizardAnalyzeSystem(ctx: WizardAnalyzeContext): string {
     referenceBlock = `
 
 ## Reference Images
-${refCount} reference image(s) connected. For EACH reference image, add a question with:
+${refCount} reference image(s) connected. They are delivered to the provider as an ordered array — Image 1 carries the most weight. For EACH reference image, add a question with:
 - category: "reference-role-1", "reference-role-2", etc.
 - multi: true (user can select multiple roles per image)
 - Use these role options:
@@ -213,7 +213,7 @@ ${ctx.userPreference ? `## User Preference\nThe user has set a general preferenc
 1. Weave all selections into one concise, natural-language prompt — under 500 characters.
 2. Preserve the user's original text if provided.
 3. Weave style, mood, lighting naturally — do not keyword-stuff.
-4. For reference-role selections, include explicit per-image role instructions (e.g., "The first image defines the character. Preserve identity exactly. The second image defines the mood and lighting.").
+4. For reference-role selections, include explicit per-image role instructions bound by ordinal (e.g., "Image 1 defines the character — preserve identity exactly. Image 2 defines the mood and lighting.").
 5. If "what-to-avoid" selections are present, append them as a negative instruction at the end of the prompt (e.g., "Avoid: CGI look, plastic skin, oversaturated colors").
 6. Output ONLY valid JSON — no markdown, no wrapping:
 
@@ -248,8 +248,14 @@ export function buildWizardEnhanceSystem(ctx: WizardEnhanceContext): string {
   const contextBlock = buildContextBlock(ctx)
 
   const refCount = ctx.nodeContext?.referenceImageCount ?? 0
+  // References are sent to providers as an ordered array; "Image N" is the
+  // platform-wide ordinal convention (and official Seedance syntax), so the
+  // rewritten prompt should bind subjects to ordinals explicitly.
   const referenceBlock = refCount > 0
-    ? `\n- ${refCount} reference image(s) connected — account for them in the prompt.`
+    ? `\n- ${refCount} reference image(s) are attached in a FIXED order: Image 1 … Image ${refCount}.` +
+      `\n- Bind each subject/element to its reference by ordinal — e.g. "the woman from Image 1", ` +
+      `"the scene style from Image 2" — so every reference has an explicit job. ` +
+      `Earlier references carry more weight.`
     : ""
 
   const imageVocab = contentCategory === "image"

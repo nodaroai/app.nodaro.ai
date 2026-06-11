@@ -1,5 +1,16 @@
 import { describe, it, expect } from "vitest"
-import { buildWizardEnhanceSystem, buildWizardGenerateSystem } from "../prompt-wizard-system.js"
+import { buildWizardAnalyzeSystem, buildWizardEnhanceSystem, buildWizardGenerateSystem } from "../prompt-wizard-system.js"
+
+describe("buildWizardAnalyzeSystem", () => {
+  it("frames reference order as priority in the per-image role questions", () => {
+    const sys = buildWizardAnalyzeSystem({
+      nodeType: "generate-image",
+      nodeContext: { referenceImageCount: 2 },
+    })
+    expect(sys).toContain("Image 1 carries the most weight")
+    expect(sys).toContain("reference-role-1")
+  })
+})
 
 describe("buildWizardEnhanceSystem", () => {
   it("does NOT throw for a node type absent from the wizard category map (lip-sync)", () => {
@@ -25,6 +36,23 @@ describe("buildWizardEnhanceSystem", () => {
   it("omits the doctrine section for providers without one", () => {
     const sys = buildWizardEnhanceSystem({ nodeType: "text-to-video", provider: "veo3.1" })
     expect(sys).not.toContain("Provider Prompting Doctrine")
+  })
+
+  it("instructs ordinal reference binding when refs are attached", () => {
+    const sys = buildWizardEnhanceSystem({
+      nodeType: "generate-video",
+      provider: "veo3.1",
+      nodeContext: { referenceImageCount: 3 },
+    })
+    expect(sys).toContain("Image 1")
+    expect(sys).toContain("Image 3")
+    expect(sys).toMatch(/bind each subject/i)
+    expect(sys).toMatch(/earlier references carry more weight/i)
+  })
+
+  it("no ordinal block without refs", () => {
+    const sys = buildWizardEnhanceSystem({ nodeType: "generate-video", provider: "veo3.1" })
+    expect(sys).not.toMatch(/bind each subject/i)
   })
 
   it("generate-form also receives the doctrine", () => {
