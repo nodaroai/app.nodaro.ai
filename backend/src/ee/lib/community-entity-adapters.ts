@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto"
+
 export type EntityType = "character" | "location" | "object" | "creature"
 
 export interface CommunityEntityAdapter {
@@ -96,7 +98,16 @@ export function buildCloneRow(
   ctx: { userId: string; projectId: string; name: string; copiedAssets: Record<string, unknown> },
 ): Record<string, unknown> {
   const a = COMMUNITY_ENTITY_ADAPTERS[entityType]
-  const out: Record<string, unknown> = { user_id: ctx.userId, project_id: ctx.projectId, name: ctx.name }
+  const out: Record<string, unknown> = {
+    user_id: ctx.userId,
+    project_id: ctx.projectId,
+    name: ctx.name,
+    // Every entity row carries a canvas-linkage node_id; clones get a FRESH
+    // one (the publisher's is meaningless cross-user). Clones used to land
+    // with node_id NULL, which — combined with the then-required upsert
+    // schemas — 400'd every studio update on the copy (boards, rename, voice…).
+    node_id: randomUUID(),
+  }
   for (const f of a.publicTextFields) if (f !== "name" && snapshot[f] !== undefined) out[f] = snapshot[f]
   for (const f of a.assetFields) if (ctx.copiedAssets[f] !== undefined) out[f] = ctx.copiedAssets[f]
   if (snapshot.voice !== undefined) out.voice = snapshot.voice

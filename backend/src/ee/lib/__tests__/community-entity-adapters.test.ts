@@ -189,6 +189,16 @@ describe("buildCloneRow (character)", () => {
     }) as Record<string, unknown>
     expect(row.boards).toEqual([{ name: "Evening gown", url: "CLONED-B" }])
   })
+
+  it("mints a FRESH node_id for every clone (a NULL node_id used to break studio updates on the copy)", () => {
+    for (const kind of ["character", "location", "object", "creature"] as const) {
+      const row = buildCloneRow(kind, { name: "X" }, {
+        userId: "u1", projectId: "p1", name: "X 2", copiedAssets: {},
+      }) as Record<string, unknown>
+      expect(typeof row.node_id).toBe("string")
+      expect((row.node_id as string).length).toBeGreaterThan(0)
+    }
+  })
 })
 
 describe("buildSnapshot (creature)", () => {

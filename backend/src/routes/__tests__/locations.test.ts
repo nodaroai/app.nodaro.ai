@@ -515,6 +515,47 @@ describe("POST /v1/locations", () => {
     expect(chain.eq).toHaveBeenCalledWith("user_id", TEST_USER_ID)
   })
 
+  it("UPDATE accepts a partial body without name/nodeId (boards-only write)", async () => {
+    // Regression — the schema used to REQUIRE name + nodeId on every request,
+    // 400ing the studio's partial writes ({id, boards} for Location Boards,
+    // {id, imageProvider} for the model pick) even though the update branch
+    // writes both conditionally.
+    const mockSingle = vi.fn().mockResolvedValue({
+      data: { id: TEST_LOCATION_ID, updated_at: "2026-06-11T00:00:00Z" },
+      error: null,
+    })
+    const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
+    const chain: Record<string, unknown> = { eq: vi.fn().mockReturnThis(), select: mockSelect }
+    const mockUpdate = vi.fn().mockReturnValue(chain)
+    vi.mocked(supabase.from).mockReturnValue({ update: mockUpdate } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/locations",
+      payload: {
+        id: TEST_LOCATION_ID,
+        userId: TEST_USER_ID,
+        boards: [{ name: "Winter", url: "https://cdn.example/winter.png" }],
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    const patch = mockUpdate.mock.calls[0][0] as Record<string, unknown>
+    expect(patch.boards).toEqual([{ name: "Winter", url: "https://cdn.example/winter.png" }])
+    expect("name" in patch).toBe(false)
+    expect("node_id" in patch).toBe(false)
+  })
+
+  it("INSERT still requires name + nodeId (enforced in the handler)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/locations",
+      payload: { userId: TEST_USER_ID, name: "Forest" },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+  })
+
   it("returns 500 on DB error (insert)", async () => {
     const mockSingle = vi.fn().mockResolvedValue({
       data: null,

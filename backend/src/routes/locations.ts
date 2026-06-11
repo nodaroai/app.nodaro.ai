@@ -21,10 +21,16 @@ const referencePhoto = z.object({
 const upsertLocationBody = z.object({
   id: z.string().uuid().optional(),
   userId: z.string().uuid().optional(),
-  nodeId: z.string().min(1),
+  // Canvas linkage + display name. Both REQUIRED on INSERT (enforced in the
+  // handler) but OPTIONAL at the schema level so partial UPDATEs ({id, boards},
+  // {id, imageProvider}, a bare rename…) match the SDK's documented "only the
+  // fields you pass are written" contract — the update branch already writes
+  // them conditionally; the old required schema 400'd every partial write.
+  // `.nullish()` keeps clients that re-send a row's `null` node_id working.
+  nodeId: z.string().min(1).nullish(),
   workflowId: z.string().uuid().optional(),
   projectId: z.string().uuid().optional(),
-  name: z.string().min(1).max(200),
+  name: z.string().min(1).max(200).optional(),
   description: z.string().max(2000).optional(),
   category: z.string().max(50).optional(),
   style: z.string().max(50).optional(),
@@ -453,6 +459,16 @@ export async function locationRoutes(app: FastifyInstance) {
 
     // INSERT — accepts ALL fields. New rows start with empty asset buckets
     // (unless the caller explicitly sent values, useful for templates/imports).
+    // `name` + `nodeId` are required here (the schema relaxes them only so
+    // partial UPDATEs typecheck).
+    if (name === undefined || !nodeId) {
+      return reply.status(400).send({
+        error: {
+          code: "validation_error",
+          message: "name and nodeId are required when creating a new location (id omitted).",
+        },
+      })
+    }
     const insertRow = {
       user_id: userId,
       node_id: nodeId,

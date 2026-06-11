@@ -44,7 +44,9 @@ export { CHARACTER_ASPECT_OPTIONS, CHARACTER_ASPECT_DEFAULTS } from "@nodaro/sha
 export interface Character {
   id: string
   userId: string
-  nodeId: string
+  /** Canvas node linkage. `null` only on legacy clone rows that predate the
+   *  clone-side node_id fix (new clones mint one; creates always had one). */
+  nodeId: string | null
   projectId: string | null
   name: string
   description: string | null
@@ -153,8 +155,10 @@ export interface ReferencePhoto {
 export interface UpsertCharacterInput {
   /** UUID of the character row; omit to create. */
   id?: string
-  /** Canvas node id the character belongs to. */
-  nodeId: string
+  /** Canvas node id the character belongs to. REQUIRED on create (the route
+   *  400s without it, like `name`); optional on update — the update branch
+   *  never touches node_id, so partial updates needn't round-trip it. */
+  nodeId?: string
   workflowId?: string
   projectId?: string
   name?: string

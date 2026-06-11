@@ -47,7 +47,14 @@ const referencePhoto = z.object({
 export const upsertCharacterBody = z.object({
   id: z.string().uuid().optional(),
   userId: z.string().uuid().optional(),
-  nodeId: z.string().min(1),
+  // Canvas linkage. REQUIRED on INSERT (enforced in the handler, like `name`);
+  // optional on UPDATE — the update branch never touches node_id, so forcing
+  // every partial update to round-trip it was pure ceremony AND broke rows
+  // whose node_id is legitimately absent (community clones predating the
+  // clone-side node_id fix re-sent `null` and 400'd every studio write:
+  // boards, rename, voice…). `.nullish()` keeps old clients that re-send the
+  // row's `null` working. Mirrors the locations/objects schemas.
+  nodeId: z.string().min(1).nullish(),
   workflowId: z.string().uuid().optional(),
   projectId: z.string().uuid().optional(),
   // On UPDATE, a field that's `undefined` (omitted from the request body)
@@ -568,12 +575,13 @@ export async function characterRoutes(app: FastifyInstance) {
       return { id: updated.id }
     }
 
-    // INSERT — `name` is required when creating a new row.
-    if (name === undefined) {
+    // INSERT — `name` + `nodeId` are required when creating a new row (the
+    // schema relaxes them only so partial UPDATEs typecheck).
+    if (name === undefined || !nodeId) {
       return reply.status(400).send({
         error: {
           code: "validation_error",
-          message: "name is required when creating a new character (id omitted).",
+          message: "name and nodeId are required when creating a new character (id omitted).",
         },
       })
     }

@@ -1104,6 +1104,57 @@ describe("POST /v1/characters", () => {
     expect(chain.eq).toHaveBeenCalledWith("user_id", TEST_USER_ID)
   })
 
+  it("UPDATE accepts a partial body without nodeId (boards-only write)", async () => {
+    // Regression — the schema used to REQUIRE nodeId on every request, so a
+    // partial update ({id, boards}) 400'd even though the update branch never
+    // touches node_id. The studio's board persist sends exactly this shape.
+    const mockSingle = vi.fn().mockResolvedValue({ data: { id: TEST_CHARACTER_ID }, error: null })
+    const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
+    const chain: Record<string, unknown> = { eq: vi.fn().mockReturnThis(), select: mockSelect }
+    const mockUpdate = vi.fn().mockReturnValue(chain)
+    vi.mocked(supabase.from).mockReturnValue({ update: mockUpdate } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: {
+        id: TEST_CHARACTER_ID,
+        userId: TEST_USER_ID,
+        boards: [{ name: "Ryan Hale", url: "https://cdn.example/board.png" }],
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    const patch = mockUpdate.mock.calls[0][0] as Record<string, unknown>
+    expect(patch.boards).toEqual([{ name: "Ryan Hale", url: "https://cdn.example/board.png" }])
+    expect("node_id" in patch).toBe(false)
+  })
+
+  it("UPDATE tolerates nodeId: null (clone rows predating the clone-side node_id fix)", async () => {
+    // Old clones have node_id NULL; clients that round-trip the row re-send
+    // that null. It must not 400 — the update branch ignores nodeId entirely.
+    const mockSingle = vi.fn().mockResolvedValue({ data: { id: TEST_CHARACTER_ID }, error: null })
+    const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
+    const chain: Record<string, unknown> = { eq: vi.fn().mockReturnThis(), select: mockSelect }
+    const mockUpdate = vi.fn().mockReturnValue(chain)
+    vi.mocked(supabase.from).mockReturnValue({ update: mockUpdate } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: {
+        id: TEST_CHARACTER_ID,
+        userId: TEST_USER_ID,
+        nodeId: null,
+        selectedAssetByVariant: { "angles:front": "https://cdn.example/a.png" },
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    const patch = mockUpdate.mock.calls[0][0] as Record<string, unknown>
+    expect("node_id" in patch).toBe(false)
+  })
+
   it("returns 500 on DB error (insert)", async () => {
     const mockSingle = vi.fn().mockResolvedValue({
       data: null,
