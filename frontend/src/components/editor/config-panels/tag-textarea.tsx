@@ -6,6 +6,7 @@ import type { NodeRefItem } from "@/lib/node-refs"
 import type { VariableDisplayMode } from "./types"
 import { renderNodeRefs } from "@/lib/render-node-refs"
 import { optimizedImageUrl } from "@/lib/image"
+import { filterSnippets, computeSnippetInsertPrefix, type SnippetPoolItem } from "@/lib/snippet-pool"
 import { USAGE_MODES, DEFAULT_USAGE_MODE, usageModeLabel, type UsageMode } from "@nodaro/shared"
 
 /** Regex to match bracket tags like [whispers], [Verse 2], <break time="1s" /> */
@@ -28,6 +29,10 @@ interface BaseProps {
   readonly referenceImages?: readonly RefImageItem[]
   readonly displayMode?: VariableDisplayMode
   readonly refMap?: Map<string, string>
+  /** Snippet pool for this field (target+media filtered). Enables the "/"
+   *  snippets dropdown when tagMode is "none" (negative-prompt fields).
+   *  tagMode "audio"/"suno" keep their existing "/" audio-tag behavior. */
+  readonly snippets?: readonly SnippetPoolItem[]
 }
 
 type TagTextareaProps = BaseProps & (
@@ -88,6 +93,9 @@ export interface SuggestionItem {
    * (keeps the casual `@kira:1:smile` insertion clean for the common case).
    */
   defaultUsageMode?: UsageMode
+  /** When set, this row is a prompt snippet — selecting inserts this text
+   *  (with smart separator) instead of `tag`. `tag` holds a truncated preview. */
+  snippetText?: string
 }
 
 /** A reference image that can be inserted into the prompt via the "@" trigger. */
@@ -228,7 +236,7 @@ function nodeTypeCategory(type: string): string {
 }
 
 export function TagTextarea(props: TagTextareaProps) {
-  const { value, onChange, placeholder, rows, className, maxLength, nodeRefs, referenceImages, displayMode = "raw", refMap } = props
+  const { value, onChange, placeholder, rows, className, maxLength, nodeRefs, referenceImages, displayMode = "raw", refMap, snippets } = props
   const tagMode: "audio" | "suno" | "none" = props.tagMode ?? "none"
   const provider = props.tagMode === "audio" ? props.provider : undefined
   const customTags = props.tagMode === "suno" ? props.customTags : undefined
@@ -470,6 +478,16 @@ export function TagTextarea(props: TagTextareaProps) {
       return refImageSuggestions
     }
 
+    if (triggerInfo.char === "/" && tagMode === "none") {
+      return filterSnippets(snippets ?? [], filterText).slice(0, 50).map((s): SuggestionItem => ({
+        tag: s.text.length > 44 ? `${s.text.slice(0, 44)}…` : s.text,
+        label: s.name,
+        category: s.category,
+        kind: "leaf",
+        snippetText: s.text,
+      }))
+    }
+
     let items: readonly SuggestionItem[]
     if (triggerInfo.char === "{") {
       items = nodeRefSuggestions
@@ -486,7 +504,7 @@ export function TagTextarea(props: TagTextareaProps) {
     if (!q) return items
     // Back rows always stay visible — they're navigation, not data.
     return items.filter((s) => s.kind === "back" || s.label.toLowerCase().includes(q) || s.category.toLowerCase().includes(q))
-  }, [showDropdown, triggerInfo, filterText, customTags, nodeRefSuggestions, refImageSuggestions, tagMode])
+  }, [showDropdown, triggerInfo, filterText, customTags, nodeRefSuggestions, refImageSuggestions, tagMode, snippets])
 
   const groupedFiltered = useMemo(() => {
     const map = new Map<string, SuggestionItem[]>()
@@ -640,6 +658,11 @@ export function TagTextarea(props: TagTextareaProps) {
   // user trace each `@-mention` to its corresponding `Image N (Name)` bullet
   // in the final assembled identity directive block.
   const selectSuggestion = useCallback((item: SuggestionItem) => {
+    if (item.snippetText !== undefined) {
+      const prevChar = triggerInfo && triggerInfo.position > 0 ? value[triggerInfo.position - 1] : ""
+      insertTag(computeSnippetInsertPrefix(prevChar) + item.snippetText)
+      return
+    }
     if (item.kind === "back") {
       // Pop one level: mode picker → variant list; variant list → root.
       if (drillVariant) {
@@ -715,12 +738,19 @@ export function TagTextarea(props: TagTextareaProps) {
     const cursor = e.target.selectionStart
     const charBefore = newValue[cursor - 1]
 
+    const charBeforeTrigger = cursor >= 2 ? newValue[cursor - 2] : undefined
+    const isSnippetTrigger =
+      charBefore === "/"
+      && tagMode === "none"
+      && (snippets?.length ?? 0) > 0
+      && (cursor === 1 || /\s/.test(charBeforeTrigger ?? ""))
+
     const isBraceTrigger = charBefore === "{" && nodeRefs && nodeRefs.length > 0
     const isBracketTrigger = (charBefore === "[" || charBefore === "/") && tagMode !== "none"
     const isSsmlTrigger = charBefore === "<" && tagMode === "audio"
     const isAtTrigger = charBefore === "@" && referenceImages && referenceImages.length > 0
 
-    if (isBracketTrigger || isSsmlTrigger || isBraceTrigger || isAtTrigger) {
+    if (isBracketTrigger || isSsmlTrigger || isBraceTrigger || isAtTrigger || isSnippetTrigger) {
       const trigger = charBefore as TriggerChar
       setTriggerInfo({ char: trigger, position: cursor - 1 })
       setFilterText("")
@@ -749,7 +779,7 @@ export function TagTextarea(props: TagTextareaProps) {
         setSelectedIndex(0)
       }
     }
-  }, [maxLength, onChange, showDropdown, triggerInfo, nodeRefs, referenceImages, tagMode, dismiss, updateDropdownPos])
+  }, [maxLength, onChange, showDropdown, triggerInfo, nodeRefs, referenceImages, tagMode, dismiss, updateDropdownPos, snippets])
 
   // Locate every {image:N} or {image:N:label} token in the current value so
   // navigation/deletion can treat each token as one atomic unit.
