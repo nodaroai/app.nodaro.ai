@@ -556,6 +556,52 @@ describe("POST /v1/locations", () => {
     expect(res.json().error.code).toBe("validation_error")
   })
 
+  it("remove-asset calls the atomic RPC and returns removed:true", async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: true, error: null })
+    vi.mocked(supabase).rpc = rpc as never
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/locations/${TEST_LOCATION_ID}/remove-asset`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { column: "angles", url: "https://cdn.example/surround-45.png" },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ removed: true })
+    expect(rpc).toHaveBeenCalledWith("remove_location_asset", {
+      p_location_id: TEST_LOCATION_ID,
+      p_user_id: TEST_USER_ID,
+      p_column: "angles",
+      p_url: "https://cdn.example/surround-45.png",
+    })
+  })
+
+  it("remove-asset 404s when nothing matched (wrong owner / url absent)", async () => {
+    vi.mocked(supabase).rpc = vi.fn().mockResolvedValue({ data: false, error: null }) as never
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/locations/${TEST_LOCATION_ID}/remove-asset`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { column: "angles", url: "https://cdn.example/missing.png" },
+    })
+
+    expect(res.statusCode).toBe(404)
+    expect(res.json().error.code).toBe("not_found")
+  })
+
+  it("remove-asset rejects a column outside LOCATION_ATTACH_COLUMNS (boards is upsert-owned)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/locations/${TEST_LOCATION_ID}/remove-asset`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { column: "boards", url: "https://cdn.example/b.png" },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+  })
+
   it("returns 500 on DB error (insert)", async () => {
     const mockSingle = vi.fn().mockResolvedValue({
       data: null,
