@@ -4,6 +4,19 @@
 ## Overview
 The Lottie Overlay node uses Claude Sonnet to interpret a prompt and select, position, and time Lottie animations from a built-in library. The AI determines which animations to use, where to place them on screen, and when they should appear and disappear. The result is rendered using `@remotion/lottie` with `delayRender`/`continueRender` for each overlay.
 
+The built-in animations are self-hosted on the Nodaro CDN (`https://cdn.nodaro.ai/lottie-catalog/<name>.json`) — there is no third-party dependency. Plans authored before the catalog moved to self-hosting (which referenced the old third-party URLs) heal automatically at render time, so saved workflows keep working without any edit.
+
+### Built-in catalog (12 animations)
+
+| Group | Animations |
+|-------|------------|
+| **Celebration** | Confetti burst, Fireworks, Party popper, Stars sparkle |
+| **Social / Reactions** | Heart pulse, Thumbs up, Fire emoji |
+| **UI / Indicators** | Loading spinner, Checkmark success, Arrow pointer |
+| **Ambient / Decorative** | Floating particles, Glowing ring |
+
+Ambient and continuous effects (stars, heart, fire, spinner, arrow, particles, ring) loop; one-shot effects (confetti, fireworks, party popper, thumbs up, checkmark) play once.
+
 ## Configuration
 
 | Field | Type | Default | Description |
@@ -33,7 +46,7 @@ The Lottie Overlay node uses Claude Sonnet to interpret a prompt and select, pos
 - Adding animated transitions or accent elements to presentations.
 
 ## Tips
-- The AI selects from a built-in Lottie animation library. You do not need to provide Lottie files manually unless you want custom animations.
+- The AI selects from the built-in, self-hosted Lottie animation library (the catalog above). You do not need to provide Lottie files manually unless you want custom animations.
 - Each overlay instance uses `delayRender`/`continueRender` to ensure proper loading before rendering.
 - The output is a plan -- connect to Render Video to produce the final composited video.
 - For best results, describe both the visual effect and the timing (e.g., "arrow pointing down at 0:05 for 2 seconds in the bottom-right corner").

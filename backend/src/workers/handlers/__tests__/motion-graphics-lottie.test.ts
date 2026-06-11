@@ -49,6 +49,40 @@ const VALID_LOTTIE = JSON.stringify({
   layers: [{ ty: 4, ip: 0, op: 150, ks: {}, shapes: [] }],
 })
 
+// A VALID Lottie graphic WITH a root slot manifest + a `{"sid"}` reference node
+// (a slotted fill color). The validator hoists `slots` out of the document and
+// leaves the `{"sid":"primaryColor"}` reference inside `lottie`; the handler must
+// bake it (applySlots) before upload so the exported asset has NO unresolved
+// refs and the fill color equals the slot default.
+const SLOT_DEFAULT_COLOR = [1, 0, 0, 1]
+const VALID_LOTTIE_WITH_SLOTS = JSON.stringify({
+  v: "5.7.0",
+  fr: 30,
+  ip: 0,
+  op: 150,
+  w: 1920,
+  h: 1080,
+  slots: { primaryColor: { p: { a: 0, k: SLOT_DEFAULT_COLOR } } },
+  layers: [
+    {
+      ty: 4,
+      ip: 0,
+      op: 150,
+      ks: {},
+      shapes: [
+        {
+          ty: "gr",
+          it: [
+            { ty: "rc", d: 1, p: { a: 0, k: [0, 0] }, r: { a: 0, k: 0 }, s: { a: 0, k: [100, 100] } },
+            { ty: "fl", c: { sid: "primaryColor" }, o: { a: 0, k: 100 } },
+            { ty: "tr", p: { a: 0, k: [960, 540] }, a: { a: 0, k: [0, 0] }, s: { a: 0, k: [100, 100] }, r: { a: 0, k: 0 }, o: { a: 0, k: 100 } },
+          ],
+        },
+      ],
+    },
+  ],
+})
+
 // A REJECTED Lottie document — same as VALID but with an image asset (rule #8).
 const REJECTED_LOTTIE = JSON.stringify({
   v: "5.7.0",
@@ -122,6 +156,38 @@ describe("motion-graphics-lottie handler", () => {
 
     // Credits committed with (usageLogId, jobId, providerCost).
     expect(mocks.commitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", 0.01)
+  })
+
+  it("bakes slots into the uploaded JSON: no unresolved sid refs, slotted props equal slot defaults", async () => {
+    mocks.llmComplete.mockResolvedValue({
+      text: VALID_LOTTIE_WITH_SLOTS,
+      usage: { inputTokens: 100, outputTokens: 500 },
+      providerCost: 0.01,
+    })
+
+    await handler(makeJob() as never, makeCtx())
+
+    expect(mocks.uploadBufferToR2).toHaveBeenCalledTimes(1)
+    const [buffer] = mocks.uploadBufferToR2.mock.calls[0]
+    const serialized = (buffer as Buffer).toString("utf-8")
+
+    // The baked, exported document carries NO unresolved slot references.
+    expect(serialized).not.toContain('"sid"')
+
+    // The slotted fill color resolved to the slot's default value.
+    const baked = JSON.parse(serialized) as {
+      layers: Array<{ shapes: Array<{ it: Array<Record<string, unknown>> }> }>
+    }
+    const fill = baked.layers[0].shapes[0].it.find((node) => node.ty === "fl") as
+      | { c?: { a?: number; k?: number[] } }
+      | undefined
+    expect(fill?.c?.k).toEqual(SLOT_DEFAULT_COLOR)
+    expect(fill?.c).not.toHaveProperty("sid")
+
+    // The delivered plan still carries the (unbaked) lottie + extracted slots —
+    // baking is for the exported R2 asset only, not the in-memory plan.
+    const patch = mocks.markJobCompleted.mock.calls[0][1]
+    expect(patch.output_data.motionPlan.slots.primaryColor).toBeDefined()
   })
 
   it("upload failure: job still completes WITHOUT lottieUrl (the plan is additive)", async () => {

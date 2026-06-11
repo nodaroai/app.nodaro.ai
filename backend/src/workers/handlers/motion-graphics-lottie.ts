@@ -13,7 +13,7 @@
  * generic "pre-task" pickup is the stale-sweep contract.
  */
 
-import { LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
+import { LLM_FEATURE_DEFAULTS, applySlots } from "@nodaro/shared"
 import { llmComplete } from "../../lib/llm-client.js"
 import { extractJsonFromAIResponse } from "../../lib/json-utils.js"
 import { validateLottieGraphic } from "../../lib/lottie-graphic-validator.js"
@@ -129,7 +129,18 @@ const handleMotionGraphicsLottie: HandlerFn = async function handleMotionGraphic
   // Placed after the shouldSaveJobResult gate so cancelled jobs skip the upload.
   let lottieUrl: string | undefined
   try {
-    const lottieBuffer = Buffer.from(JSON.stringify(validation.plan!.lottie), "utf-8")
+    // Bake the slot manifest into the document before export. The validator
+    // hoists root slots into `plan.slots` and leaves `{"sid": "..."}` reference
+    // nodes inside `plan.lottie`; uploading that raw document ships UNRESOLVED
+    // refs that render broken wherever a slot is referenced (Phase-4 bug). The
+    // baked document is the standalone asset the `lottie` source handle feeds to
+    // lottie-overlay. (No overrides here — the engine's own UI applies those.)
+    const bakedLottie = applySlots(
+      validation.plan!.lottie as Record<string, unknown>,
+      validation.plan!.slots as Record<string, unknown>,
+      {},
+    )
+    const lottieBuffer = Buffer.from(JSON.stringify(bakedLottie), "utf-8")
     lottieUrl = await uploadBufferToR2(lottieBuffer, `lottie/${ctx.jobId}.json`, "application/json", ctx.jobUserId)
   } catch (err) {
     console.warn(

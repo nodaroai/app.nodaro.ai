@@ -1,3 +1,32 @@
+import { LOTTIE_OVERLAY_CATALOG } from "@nodaro/shared"
+
+/**
+ * Build the grouped "Built-in Lottie Assets" menu from the single-source-of-truth
+ * catalog (`LOTTIE_OVERLAY_CATALOG`). Each group becomes a `### <group>` heading
+ * followed by `- <name>: <url> (<description>)` lines, equally LLM-legible to the
+ * old hand-maintained list. The catalog is self-hosted on the Nodaro CDN — the
+ * dead lottie.host URLs it replaced are healed at render time via the legacy
+ * remap, so this prompt only ever emits live CDN URLs.
+ */
+function buildCatalogSection(): string {
+  const order = [
+    "Celebration",
+    "Social / Reactions",
+    "UI / Indicators",
+    "Ambient / Decorative",
+  ] as const
+  return order
+    .map((group) => {
+      const lines = LOTTIE_OVERLAY_CATALOG.filter((e) => e.group === group)
+        .map((e) => `- ${e.name}: ${e.url} (${e.description})`)
+        .join("\n")
+      return `### ${group}\n${lines}`
+    })
+    .join("\n\n")
+}
+
+const CATALOG_SECTION = buildCatalogSection()
+
 export const LOTTIE_OVERLAY_SYSTEM_PROMPT = `You are an expert motion graphics AI. Given a source video and a user prompt, generate a LottieOverlayPlan JSON that places timed Lottie animations over the video.
 
 ## Output Schema
@@ -44,27 +73,9 @@ Example: centered overlay at 20% size: { "x": 40, "y": 40, "width": 20, "height"
 
 ## Built-in Lottie Assets
 
-Use these verified LottieFiles CDN URLs. Pick assets that match the user's intent:
+Use these verified self-hosted CDN URLs. Pick assets that match the user's intent:
 
-### Celebration
-- Confetti burst: https://lottie.host/d7313e87-e4c9-4e0d-8e03-c3a59e87d8fb/TjHnrCGBjI.json
-- Fireworks: https://lottie.host/d5cad0dd-4e93-4bbe-b023-e94a04bc1581/JHEZMrqfMk.json
-- Party popper: https://lottie.host/0060c9cd-75da-42d5-af7c-1a191fa8a8fd/c1xHMRnGTO.json
-- Stars sparkle: https://lottie.host/c04a2758-a1d9-40a9-b81f-6f3e4e13a88c/xKCYDU2w0O.json
-
-### Social / Reactions
-- Heart pulse: https://lottie.host/44c9e8d1-856c-4641-bfbe-d0e2a5c9850e/GIBsMSIkkq.json
-- Thumbs up: https://lottie.host/9a611d56-1f35-4f51-9fa4-6a4daa6b8714/EH71MjHKPD.json
-- Fire emoji: https://lottie.host/66db1de9-c1a8-4d0b-bb03-47a8932a8a86/q5JBGQ8fxu.json
-
-### UI / Indicators
-- Loading spinner: https://lottie.host/b03d748c-3b4a-4c07-a10c-e9eb3c967349/eMVAVEnb5x.json
-- Checkmark success: https://lottie.host/3ffaab4a-58b0-4a72-9f1c-5eaa484d8c88/g27v7IPaJc.json
-- Arrow pointer: https://lottie.host/6f831c6e-693a-4d1d-90a0-d7e2b3f00e68/PFj0MwSPrj.json
-
-### Ambient / Decorative
-- Floating particles: https://lottie.host/9c8e1aef-f8e5-4ce8-bc80-1647ffb0724d/mNDClfKJVB.json
-- Glowing ring: https://lottie.host/b5d3e7e7-40bc-44fa-9a53-78b98ad66e80/pQVdNsVDmQ.json
+${CATALOG_SECTION}
 
 ## User-Provided Assets
 
@@ -99,7 +110,7 @@ User: "add confetti celebration at 3 seconds and floating particles throughout"
   "overlays": [
     {
       "id": "overlay-1",
-      "src": "https://lottie.host/d7313e87-e4c9-4e0d-8e03-c3a59e87d8fb/TjHnrCGBjI.json",
+      "src": "https://cdn.nodaro.ai/lottie-catalog/confetti-burst.json",
       "startFrame": 90,
       "durationInFrames": 90,
       "position": { "x": 10, "y": 5, "width": 80, "height": 80 },
@@ -109,7 +120,7 @@ User: "add confetti celebration at 3 seconds and floating particles throughout"
     },
     {
       "id": "overlay-2",
-      "src": "https://lottie.host/9c8e1aef-f8e5-4ce8-bc80-1647ffb0724d/mNDClfKJVB.json",
+      "src": "https://cdn.nodaro.ai/lottie-catalog/floating-particles.json",
       "startFrame": 0,
       "durationInFrames": 300,
       "position": { "x": 0, "y": 0, "width": 100, "height": 100 },
