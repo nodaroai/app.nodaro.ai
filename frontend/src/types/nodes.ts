@@ -5440,6 +5440,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       label: "Modify Image",
       prompt: "",
       provider: "nano-banana" as ModifyImageProvider,
+      negativePrompt: "",
       fieldMappings: {},
     },
     exposableOutputs: [{ key: "out", label: "Modified Image", outputType: "image" as const }],
@@ -5492,7 +5493,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     width: 220,
     inputs: ["startFrame", "endFrame", "audio"],
     outputs: ["video"],
-    defaultData: { label: "Image to Video", provider: "seedance-2-fast", duration: 5, fieldMappings: {} },
+    defaultData: { label: "Image to Video", provider: "seedance-2-fast", duration: 5, prompt: "", negativePrompt: "", fieldMappings: {} },
     exposableOutputs: [{ key: "result", label: "Result", outputType: "video" as const }],
     exposableFields: [
       {
@@ -5528,7 +5529,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     width: 220,
     inputs: ["startFrame", "endFrame", "audio"],
     outputs: ["video"],
-    defaultData: { label: "Generate Video", provider: "seedance-2-fast", duration: 5, fieldMappings: {} },
+    defaultData: { label: "Generate Video", provider: "seedance-2-fast", duration: 5, prompt: "", negativePrompt: "", fieldMappings: {} },
     exposableOutputs: [{ key: "result", label: "Result", outputType: "video" as const }],
     exposableFields: [
       {
@@ -5590,7 +5591,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 25,
     inputs: ["in"],
     outputs: ["video"],
-    defaultData: { label: "Video to Video", prompt: "", duration: 5, fieldMappings: {} },
+    defaultData: { label: "Video to Video", prompt: "", duration: 5, negativePrompt: "", fieldMappings: {} },
   },
   {
     type: "video-retake",
@@ -5602,6 +5603,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     defaultData: {
       label: "Retake Video",
       provider: "ltx-2.3-pro",
+      prompt: "",
       retakeStartTime: 0,
       retakeDuration: 2,
       retakeMode: "replace_audio_and_video",
@@ -6376,6 +6378,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     defaultData: {
       label: "Speech to Video",
       prompt: "A person speaking naturally",
+      negativePrompt: "",
       resolution: "480p",
       fieldMappings: {},
       executionStatus: "idle",
@@ -6478,6 +6481,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     defaultData: {
       label: "Motion Transfer",
       prompt: "",
+      negativePrompt: "",
       characterOrientation: "video",
       resolution: "720p",
       fieldMappings: {},
@@ -6515,6 +6519,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       label: "Extend Video",
       provider: "veo-extend",
       prompt: "",
+      negativePrompt: "",
       fieldMappings: {},
       executionStatus: "idle",
       generatedResults: [],
