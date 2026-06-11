@@ -132,9 +132,16 @@ export function PromptFieldFinalView({
         </button>
         {hasContent ? (
           <p className="text-[13px] leading-relaxed whitespace-pre-wrap break-words pr-12 text-foreground">
-            {segments.map((s, i) => (
-              <span key={i} className={ORIGIN_CLASS[s.origin]}>{s.text}</span>
-            ))}
+            {/* Flat-path fallback: provider-less surfaces feed `plainText` with
+                empty `segments` (no provenance spans), so render the plain text
+                directly rather than an empty paragraph. Mirrors the old
+                FinalPromptPreview's `segments.length ? … : {plainText}` branch
+                that the extraction into this card otherwise dropped. */}
+            {segments.length > 0
+              ? segments.map((s, i) => (
+                  <span key={i} className={ORIGIN_CLASS[s.origin]}>{s.text}</span>
+                ))
+              : plainText}
           </p>
         ) : (
           <p className="text-[13px] leading-relaxed text-muted-foreground pr-12">

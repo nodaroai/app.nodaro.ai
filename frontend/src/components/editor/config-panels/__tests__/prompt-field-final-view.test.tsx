@@ -74,6 +74,18 @@ describe("PromptFieldFinalView", () => {
     expect(copied).not.toContain("bg-")
   })
 
+  it("renders plainText directly on the flat path (empty segments + non-empty text)", () => {
+    // Provider-less surfaces feed `plainText` with `segments=[]` (no provenance
+    // spans). The card must still show the text, not an empty paragraph — this
+    // is the fallback the old FinalPromptPreview had and the extraction dropped.
+    const { container } = render(
+      <PromptFieldFinalView segments={[]} plainText="a knight in golden hour" placeholder="PH" />,
+    )
+    expect(container.textContent).toContain("a knight in golden hour")
+    // No legend (no non-user origins present).
+    expect(screen.queryByLabelText("Prompt provenance legend")).toBeNull()
+  })
+
   it("shows the placeholder muted when there is no text", () => {
     render(
       <PromptFieldFinalView segments={[]} plainText="" placeholder="Describe your scene…" />,
