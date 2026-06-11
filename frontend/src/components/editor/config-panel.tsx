@@ -443,7 +443,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
   })
 
   switch (nodeType) {
-    case "text-prompt": return <TextPromptConfig {...configProps} />
+    case "text-prompt": return <TextPromptConfig {...configProps} nodeId={selectedNodeId} />
     case "list":
       return <LoopConfig {...configProps} nodeId={selectedNodeId} />
     case "upload-image": return <UploadImageConfig {...configProps} />
@@ -499,12 +499,12 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "post-process-effects": return <PostProcessEffectsConfig {...configProps} />
     case "transition": return <TransitionConfig {...configProps} />
     case "character-fx": return <CharacterFxConfig {...configProps} />
-    case "generate-script": return <GenerateScriptConfig {...configProps} />
+    case "generate-script": return <GenerateScriptConfig {...configProps} nodeId={selectedNodeId} />
     case "generate-image": return <GenerateImageConfig {...configProps} nodeId={selectedNodeId} />
     case "modify-image": return <ModifyImageConfig {...configProps} nodeId={selectedNodeId} />
     case "upscale-image": return <UpscaleImageConfig {...configProps} />
     case "remove-background": return <RemoveBackgroundConfig {...configProps} />
-    case "generate-mask": return <GenerateMaskConfig {...configProps} />
+    case "generate-mask": return <GenerateMaskConfig {...configProps} nodeId={selectedNodeId} />
     // ImageToVideoConfig dispatches the kling-3.0 provider to the
     // (lazy-loaded) Kling3StudioConfig internally — no separate branch needed
     // here, which keeps the studio panel in a single on-demand chunk.
@@ -536,9 +536,9 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
         )}
       </>
     )
-    case "text-to-speech": return <TextToSpeechConfig {...configProps} />
+    case "text-to-speech": return <TextToSpeechConfig {...configProps} nodeId={selectedNodeId} />
     case "qa-check": return <QACheckConfig {...configProps} />
-    case "image-critic": return <ImageCriticConfig {...configProps} />
+    case "image-critic": return <ImageCriticConfig {...configProps} nodeId={selectedNodeId} />
     case "generate-music": return <GenerateMusicConfig {...configProps} nodeId={selectedNodeId} />
     case "text-to-audio": return <TextToAudioConfig {...configProps} nodeId={selectedNodeId} />
     case "audio-isolation": return <AudioIsolationConfig {...configProps} />
@@ -547,34 +547,34 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "dubbing": return <DubbingConfig {...configProps} />
     case "voice-remix": return <VoiceRemixConfig {...configProps} nodeId={selectedNodeId} />
     case "voice-design": return <VoiceDesignConfig {...configProps} nodeId={selectedNodeId} />
-    case "forced-alignment": return <ForcedAlignmentConfig {...configProps} />
+    case "forced-alignment": return <ForcedAlignmentConfig {...configProps} nodeId={selectedNodeId} />
     case "suno-voice": return <SunoVoiceConfig {...configProps} />
     case "suno-generate": return <SunoGenerateConfig {...configProps} nodeId={selectedNodeId} />
-    case "suno-cover": return <SunoCoverConfig {...configProps} />
-    case "suno-extend": return <SunoExtendConfig {...configProps} />
-    case "suno-lyrics": return <SunoLyricsConfig {...configProps} />
+    case "suno-cover": return <SunoCoverConfig {...configProps} nodeId={selectedNodeId} />
+    case "suno-extend": return <SunoExtendConfig {...configProps} nodeId={selectedNodeId} />
+    case "suno-lyrics": return <SunoLyricsConfig {...configProps} nodeId={selectedNodeId} />
     case "suno-separate": return <SunoSeparateConfig {...configProps} />
     case "suno-music-video": return <SunoMusicVideoConfig {...configProps} />
     case "suno-mashup": return <SunoMashupConfig {...configProps} />
-    case "suno-replace-section": return <SunoReplaceSectionConfig {...configProps} />
-    case "suno-style-boost": return <SunoStyleBoostConfig {...configProps} />
+    case "suno-replace-section": return <SunoReplaceSectionConfig {...configProps} nodeId={selectedNodeId} />
+    case "suno-style-boost": return <SunoStyleBoostConfig {...configProps} nodeId={selectedNodeId} />
     case "suno-add-instrumental": return <SunoAddInstrumentalConfig {...configProps} />
     case "suno-add-vocals": return <SunoAddVocalsConfig {...configProps} />
     case "suno-convert-wav": return <SunoConvertWavConfig {...configProps} />
-    case "suno-upload-extend": return <SunoUploadExtendConfig {...configProps} />
+    case "suno-upload-extend": return <SunoUploadExtendConfig {...configProps} nodeId={selectedNodeId} />
     case "lip-sync": return <LipSyncConfig {...configProps} nodeId={selectedNodeId} />
     case "speech-to-video": return <SpeechToVideoConfig {...configProps} nodeId={selectedNodeId} />
     case "ai-avatar": return <AiAvatarConfig {...configProps} />
-    case "cinematic-avatar": return <CinematicAvatarConfig {...configProps} />
+    case "cinematic-avatar": return <CinematicAvatarConfig {...configProps} nodeId={selectedNodeId} />
     case "motion-transfer": return <MotionTransferConfig {...configProps} nodeId={selectedNodeId} />
     case "transcribe": return <TranscribeConfig {...configProps} />
-    case "image-to-text": return <ImageToTextConfig {...configProps} />
+    case "image-to-text": return <ImageToTextConfig {...configProps} nodeId={selectedNodeId} />
     case "llm-chat": return <LLMChatConfig {...configProps} />
     case "video-upscale": return <VideoUpscaleConfig {...configProps} />
     case "extend-video": return <ExtendVideoConfig {...configProps} nodeId={selectedNodeId} />
     case "video-retake": return <VideoRetakeConfig {...configProps} nodeId={selectedNodeId} />
     case "face-swap": return <FaceSwapConfig {...configProps} nodeId={selectedNodeId} />
-    case "video-sfx": return <VideoSfxConfig {...configProps} />
+    case "video-sfx": return <VideoSfxConfig {...configProps} nodeId={selectedNodeId} />
     case "combine-videos": return <CombineVideosConfig {...configProps} />
     case "merge-video-audio": return <MergeVideoAudioConfig {...configProps} />
     case "add-captions": return <AddCaptionsConfig {...configProps} />
@@ -592,8 +592,8 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "video-composer": return <VideoComposerConfig {...configProps} />
     case "after-effects": return <AfterEffectsConfig {...configProps} />
     case "lottie-overlay": return <LottieOverlayConfig {...configProps} />
-    case "3d-title": return <ThreeDTitleConfig {...configProps} />
-    case "motion-graphics": return <MotionGraphicsConfig {...configProps} />
+    case "3d-title": return <ThreeDTitleConfig {...configProps} nodeId={selectedNodeId} />
+    case "motion-graphics": return <MotionGraphicsConfig {...configProps} nodeId={selectedNodeId} />
     case "composite": return <CompositeConfig {...configProps} />
     case "render-video": return <RenderVideoConfig {...configProps} />
     case "speed-ramp": return <SpeedRampConfig {...configProps} />

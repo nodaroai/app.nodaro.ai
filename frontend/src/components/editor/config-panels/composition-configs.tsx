@@ -8,6 +8,9 @@ import { Label } from "@/components/ui/label"
 import { TagTextarea } from "./tag-textarea"
 import { SnippetMenuButton } from "./snippet-menu-button"
 import { useSnippetPool } from "@/hooks/queries/use-prompt-snippets-queries"
+import { PromptFieldFinalView, PromptFieldModeToggle } from "./prompt-field-final-view"
+import { useFinalPromptSegments } from "./use-final-prompt-segments"
+import { usePromptFieldMode } from "@/hooks/use-prompt-field-mode"
 import {
   Select,
   SelectContent,
@@ -258,8 +261,16 @@ export function LottieOverlayConfig({ data, onUpdate, sources, fieldMappings, on
 
 const LazyThreeDTitlePreview = lazy(() => import("@/components/editor/three-d-title-preview").then(m => ({ default: m.ThreeDTitlePreview })))
 
-export function ThreeDTitleConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<ThreeDTitleData>) {
+export function ThreeDTitleConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode, nodes, edges, nodeId }: ConfigProps<ThreeDTitleData> & { nodeId?: string }) {
   const promptSnippets = useSnippetPool("text", "prompt")
+  const promptFieldMode = usePromptFieldMode(nodeId ?? "", "titlePrompt")
+  const finalPrompt = useFinalPromptSegments({
+    userPrompt: data.titlePrompt,
+    consumerNodeId: nodeId,
+    nodes,
+    edges: edges ?? [],
+    snippets: promptSnippets,
+  })
   return (
     <div className="flex flex-col gap-3">
       <LlmModelSelect
@@ -269,19 +280,31 @@ export function ThreeDTitleConfig({ data, onUpdate, sources, fieldMappings, onMa
       />
 
       <MappableField field="titlePrompt" label="Title Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={
-        <SnippetMenuButton pool={promptSnippets} value={data.titlePrompt || ""} onInsert={(v) => onUpdate({ titlePrompt: v })} target="prompt" media="text" />
+        <span className="inline-flex items-center gap-0.5">
+          <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
+          <SnippetMenuButton pool={promptSnippets} value={data.titlePrompt || ""} onInsert={(v) => onUpdate({ titlePrompt: v })} target="prompt" media="text" />
+        </span>
       }>
-        <TagTextarea
-          placeholder="Describe the 3D title: epic gold ADVENTURE text with particles, cinematic camera..."
-          value={data.titlePrompt ?? ""}
-          onChange={(v) => onUpdate({ titlePrompt: v })}
-          rows={3}
-          className="text-sm"
-          nodeRefs={nodeRefs}
-          displayMode={variableDisplayMode}
-          refMap={refMap}
-          snippets={promptSnippets}
-        />
+        {promptFieldMode.mode === "final" ? (
+          <PromptFieldFinalView
+            segments={finalPrompt.promptSegments}
+            plainText={finalPrompt.promptText}
+            placeholder="Final prompt preview — node has no prompt yet"
+            minHeightRem={3 * 1.5}
+          />
+        ) : (
+          <TagTextarea
+            placeholder="Describe the 3D title: epic gold ADVENTURE text with particles, cinematic camera..."
+            value={data.titlePrompt ?? ""}
+            onChange={(v) => onUpdate({ titlePrompt: v })}
+            rows={3}
+            className="text-sm"
+            nodeRefs={nodeRefs}
+            displayMode={variableDisplayMode}
+            refMap={refMap}
+            snippets={promptSnippets}
+          />
+        )}
       </MappableField>
 
       {data.titlePlan && (
@@ -364,9 +387,17 @@ const LazyMotionGraphicsPreview = lazy(() => import("@/components/editor/motion-
 const LazyMotionGraphicsPlayerPreview = lazy(() => import("@/components/editor/motion-graphics-player-preview").then(m => ({ default: m.MotionGraphicsPlayerPreview })))
 const LazyLottieGraphicPlayerPreview = lazy(() => import("@/components/editor/lottie-graphic-player-preview").then(m => ({ default: m.LottieGraphicPlayerPreview })))
 
-export function MotionGraphicsConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<MotionGraphicsData>) {
+export function MotionGraphicsConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode, nodes, edges, nodeId }: ConfigProps<MotionGraphicsData> & { nodeId?: string }) {
   const [showInfo, setShowInfo] = useState(false)
   const promptSnippets = useSnippetPool("video", "prompt")
+  const promptFieldMode = usePromptFieldMode(nodeId ?? "", "motionPrompt")
+  const finalPrompt = useFinalPromptSegments({
+    userPrompt: data.motionPrompt,
+    consumerNodeId: nodeId,
+    nodes,
+    edges: edges ?? [],
+    snippets: promptSnippets,
+  })
 
   return (
     <div className="flex flex-col gap-3">
@@ -388,7 +419,10 @@ export function MotionGraphicsConfig({ data, onUpdate, sources, fieldMappings, o
       />
 
       <MappableField field="motionPrompt" label="Motion Graphics Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={
-        <SnippetMenuButton pool={promptSnippets} value={data.motionPrompt || ""} onInsert={(v) => onUpdate({ motionPrompt: v })} target="prompt" media="video" />
+        <span className="inline-flex items-center gap-0.5">
+          <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
+          <SnippetMenuButton pool={promptSnippets} value={data.motionPrompt || ""} onInsert={(v) => onUpdate({ motionPrompt: v })} target="prompt" media="video" />
+        </span>
       }>
         <div className="flex items-center justify-end mb-1.5">
           <button
@@ -428,17 +462,26 @@ export function MotionGraphicsConfig({ data, onUpdate, sources, fieldMappings, o
             </ul>
           </div>
         )}
-        <TagTextarea
-          placeholder="Describe the motion graphic: modern lower third with name, title card, animated shapes..."
-          value={data.motionPrompt ?? ""}
-          onChange={(v) => onUpdate({ motionPrompt: v })}
-          rows={3}
-          className="text-sm"
-          nodeRefs={nodeRefs}
-          displayMode={variableDisplayMode}
-          refMap={refMap}
-          snippets={promptSnippets}
-        />
+        {promptFieldMode.mode === "final" ? (
+          <PromptFieldFinalView
+            segments={finalPrompt.promptSegments}
+            plainText={finalPrompt.promptText}
+            placeholder="Final prompt preview — node has no prompt yet"
+            minHeightRem={3 * 1.5}
+          />
+        ) : (
+          <TagTextarea
+            placeholder="Describe the motion graphic: modern lower third with name, title card, animated shapes..."
+            value={data.motionPrompt ?? ""}
+            onChange={(v) => onUpdate({ motionPrompt: v })}
+            rows={3}
+            className="text-sm"
+            nodeRefs={nodeRefs}
+            displayMode={variableDisplayMode}
+            refMap={refMap}
+            snippets={promptSnippets}
+          />
+        )}
       </MappableField>
 
       {data.motionPlan && (

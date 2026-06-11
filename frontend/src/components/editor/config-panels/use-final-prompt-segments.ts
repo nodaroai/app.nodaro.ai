@@ -136,7 +136,10 @@ export interface UseFinalPromptSegmentsResult {
   readonly negativeSegments: DisplaySegment[]
   /** Plain assembled prompt (byte-identical to the runtime when `provider` set). */
   readonly promptText: string
-  /** Plain negative text shown in its own card (native negatives + provider-less). */
+  /** The resolved negative input ({variables} expanded), shown in the negative
+   *  field's final view in BOTH routings (native AND appended) and on the
+   *  provider-less path. The routing caption (see {@link negativeRouting})
+   *  explains where it actually goes. */
   readonly negativeText: string
   /** Clipboard payload: prompt + "Negative prompt: …" joined by a blank line. */
   readonly copyText: string
@@ -149,13 +152,12 @@ export interface UseFinalPromptSegmentsResult {
 }
 
 /**
- * Single source of assembly truth for the final-prompt views. Extracted
- * byte-for-byte from the original `FinalPromptPreview` memo: same
+ * Single source of assembly truth for the inline final-prompt views. Same
  * provider-aware (`buildImagePromptSegments`) and provider-less (flat manual
  * composition) branches, same `bodySegs` construction with the dev-invariant,
  * same snippet post-pass over user segments, same negative-segment join
- * guards. Returns structured fields the field views and (until deleted) the
- * legacy block consume.
+ * guards. Returns structured fields every prompt/negative field's final view
+ * consumes.
  */
 export function useFinalPromptSegments(args: UseFinalPromptSegmentsArgs): UseFinalPromptSegmentsResult {
   const {
@@ -249,10 +251,21 @@ export function useFinalPromptSegments(args: UseFinalPromptSegmentsArgs): UseFin
         bodySegsValid ? bodySegs : undefined,
       )
       const promptText = result.prompt
-      const negativeText = result.nativeNegativePrompt ?? ""
+      // The negative field's final view shows the RESOLVED negative input in
+      // BOTH routings (spec: prompt-field-final-view.md §UX) — tinted, with a
+      // caption explaining where it goes. So the display text is `resolvedNeg`
+      // regardless of whether the builder routed it natively or folded it into
+      // the prompt's `Avoid:` suffix. (Previously this returned "" on the
+      // "appended" path — legacy preview semantics — which hid the negative.)
+      const negativeText = resolvedNeg
+      // copyText keeps its legacy shape (prompt + native negative only); it dies
+      // with the standalone FinalPromptPreview block and is not consumed by the
+      // inline field views (which copy their own plainText). When the negative
+      // is folded into the prompt as `Avoid:`, it already rides along in
+      // `promptText`, so appending it again here would double it.
       const copyLines: string[] = []
       if (promptText) copyLines.push(promptText)
-      if (negativeText) copyLines.push(`Negative prompt: ${negativeText}`)
+      if (result.nativeNegativePrompt) copyLines.push(`Negative prompt: ${result.nativeNegativePrompt}`)
       // Snippet post-pass over the user-origin spans (builder guarantees
       // join(segments) === promptText; splitting preserves it).
       const segs = splitUserSegmentsBySnippets(result.segments as DisplaySegment[], promptSnippets)
@@ -274,6 +287,9 @@ export function useFinalPromptSegments(args: UseFinalPromptSegmentsArgs): UseFin
         negativeText,
         copyText: copyLines.join("\n\n"),
         promptSegments: segs,
+        // Tint the resolved negative in both routings. The join-guard inside
+        // buildNegativeSegments collapses to a single plain span if the tinted
+        // decomposition can't reconstruct `negativeText` (defensive).
         negativeSegments: buildNegativeSegments(negativeText, rawNeg, refMap, negSnippets),
         negativeRouting,
       }

@@ -1839,8 +1839,18 @@ export function RemoveBackgroundConfig({ data }: ConfigProps<RemoveBackgroundDat
   )
 }
 
-export function GenerateMaskConfig({ data, onUpdate }: ConfigProps<GenerateMaskData>) {
+export function GenerateMaskConfig({ data, onUpdate, nodes, edges, nodeId }: ConfigProps<GenerateMaskData> & { nodeId?: string }) {
   const promptSnippets = useSnippetPool("image", "prompt")
+  // Edit⇄Final toggle for the mask prompt. Provider-less (Grounded SAM has no
+  // buildImagePrompt assembly); persistence key = "prompt".
+  const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
+  const finalPrompt = useFinalPromptSegments({
+    userPrompt: data.prompt,
+    consumerNodeId: nodeId,
+    nodes,
+    edges: edges ?? [],
+    snippets: promptSnippets,
+  })
   return (
     <div className="flex flex-col gap-4">
       <p className="text-xs text-muted-foreground px-1">
@@ -1850,14 +1860,26 @@ export function GenerateMaskConfig({ data, onUpdate }: ConfigProps<GenerateMaskD
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between gap-2">
           <label className="text-xs font-medium text-muted-foreground">Describe what to mask</label>
-          <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="image" />
+          <span className="inline-flex items-center gap-0.5">
+            <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
+            <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="image" />
+          </span>
         </div>
-        <Textarea
-          rows={2}
-          placeholder={`e.g. "the blonde woman", "the red car", "the background"`}
-          value={data.prompt ?? ""}
-          onChange={(e) => onUpdate({ prompt: e.target.value })}
-        />
+        {promptFieldMode.mode === "final" ? (
+          <PromptFieldFinalView
+            segments={finalPrompt.promptSegments}
+            plainText={finalPrompt.promptText}
+            placeholder="Final mask prompt preview — nothing to mask yet"
+            minHeightRem={2 * 1.5}
+          />
+        ) : (
+          <Textarea
+            rows={2}
+            placeholder={`e.g. "the blonde woman", "the red car", "the background"`}
+            value={data.prompt ?? ""}
+            onChange={(e) => onUpdate({ prompt: e.target.value })}
+          />
+        )}
       </div>
 
       <div className="flex flex-col gap-1.5">

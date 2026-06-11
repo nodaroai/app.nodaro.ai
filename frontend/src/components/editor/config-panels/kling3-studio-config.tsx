@@ -24,7 +24,9 @@ import { AspectRatioSelector } from "./aspect-ratio-selector"
 import { ModelSearchSelect } from "./model-search-select"
 import { ModelDescriptionHint } from "./model-description-hint"
 import { MappableField } from "./mappable-field"
-import { FinalPromptPreview } from "./final-prompt-preview"
+import { PromptFieldFinalView, PromptFieldModeToggle } from "./prompt-field-final-view"
+import { useFinalPromptSegments } from "./use-final-prompt-segments"
+import { usePromptFieldMode } from "@/hooks/use-prompt-field-mode"
 import { SnippetMenuButton } from "./snippet-menu-button"
 import { useSnippetPool } from "@/hooks/queries/use-prompt-snippets-queries"
 import type { ConfigProps } from "./types"
@@ -35,6 +37,18 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
   useEffect(() => { prefetchModelCredits(VIDEO_I2V_MODELS.map((m) => m.value)) }, [])
   const { user } = useAuth()
   const promptSnippets = useSnippetPool("video", "prompt")
+  // Edit⇄Final toggle for the manual motion prompt (the node's primary prompt
+  // field is `motionPrompt`). Provider-less path — the prior preview here was
+  // provider-less. Persistence key = the real data field "motionPrompt".
+  const promptFieldMode = usePromptFieldMode(nodeId ?? "", "motionPrompt")
+  const finalPrompt = useFinalPromptSegments({
+    userPrompt: (data.motionPrompt as string) || "",
+    negativePrompt: data.negativePrompt,
+    consumerNodeId: nodeId,
+    nodes,
+    edges: edges ?? [],
+    snippets: promptSnippets,
+  })
   const allNodes = useWorkflowStore((s) => s.nodes)
   const [activeTab, setActiveTab] = useState<Kling3Tab>("scene")
   const [lightboxImage, setLightboxImage] = useState<string | null>(null)
@@ -213,7 +227,6 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
 
   return (
     <div className="flex flex-col gap-4">
-      <FinalPromptPreview userPrompt={(data.motionPrompt as string) || ""} negativePrompt={data.negativePrompt} consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
       {/* Connected Images */}
       {connectedImages.length > 0 && (
         <div className="rounded-xl border border-border bg-card p-3 shadow-sm">
@@ -277,15 +290,27 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
             <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B] block">
               Motion Prompt
             </Label>
-            <SnippetMenuButton pool={promptSnippets} value={(data.motionPrompt as string) || ""} onInsert={(v) => onUpdate({ motionPrompt: v })} target="prompt" media="video" />
+            <span className="inline-flex items-center gap-0.5">
+              <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
+              <SnippetMenuButton pool={promptSnippets} value={(data.motionPrompt as string) || ""} onInsert={(v) => onUpdate({ motionPrompt: v })} target="prompt" media="video" />
+            </span>
           </div>
-          <Textarea
-            value={(data.motionPrompt as string) || ""}
-            onChange={(e) => onUpdate({ motionPrompt: e.target.value })}
-            placeholder="Describe the overall scene, characters, and setting. Use @name to reference elements. Add dialogue with 'character says ...'"
-            rows={3}
-            className="text-xs bg-muted/30 border-border resize-none"
-          />
+          {promptFieldMode.mode === "final" ? (
+            <PromptFieldFinalView
+              segments={finalPrompt.promptSegments}
+              plainText={finalPrompt.promptText}
+              placeholder="Final prompt preview — node has no motion prompt yet"
+              minHeightRem={3 * 1.5}
+            />
+          ) : (
+            <Textarea
+              value={(data.motionPrompt as string) || ""}
+              onChange={(e) => onUpdate({ motionPrompt: e.target.value })}
+              placeholder="Describe the overall scene, characters, and setting. Use @name to reference elements. Add dialogue with 'character says ...'"
+              rows={3}
+              className="text-xs bg-muted/30 border-border resize-none"
+            />
+          )}
           <p className="text-[10px] text-muted-foreground mt-1.5">
             Tip: Connect a Text Prompt node for reusable prompts
           </p>

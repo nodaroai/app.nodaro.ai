@@ -34,6 +34,9 @@ import { TagTextarea } from "./tag-textarea"
 import { PromptHelperButton } from "./prompt-helper-button"
 import { SnippetMenuButton } from "./snippet-menu-button"
 import { useSnippetPool } from "@/hooks/queries/use-prompt-snippets-queries"
+import { PromptFieldFinalView, PromptFieldModeToggle } from "./prompt-field-final-view"
+import { useFinalPromptSegments } from "./use-final-prompt-segments"
+import { usePromptFieldMode } from "@/hooks/use-prompt-field-mode"
 import {
   CINEMATIC_ASPECT_RATIO_OPTIONS,
   CINEMATIC_RESOLUTION_OPTIONS,
@@ -51,11 +54,25 @@ export function CinematicAvatarConfig({
   nodeRefs,
   refMap,
   variableDisplayMode,
-}: ConfigProps<CinematicAvatarData>) {
+  nodes,
+  edges,
+  nodeId,
+}: ConfigProps<CinematicAvatarData> & { nodeId?: string }) {
   const looks = data.avatarLooks ?? []
   const lookNames = data.avatarLookNames ?? []
   const autoDuration = data.autoDuration ?? false
   const promptSnippets = useSnippetPool("video", "prompt")
+
+  // Edit⇄Final toggle for the generative prompt. Provider-less path (this
+  // panel never passed a provider to a preview); persistence key = "prompt".
+  const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
+  const finalPrompt = useFinalPromptSegments({
+    userPrompt: data.prompt,
+    consumerNodeId: nodeId,
+    nodes,
+    edges: edges ?? [],
+    snippets: promptSnippets,
+  })
 
   // ── Wired reference inputs (read-only) ───────────────────────────────────
   // The three optional reference handles (ref-video / ref-audio / ref-image)
@@ -112,6 +129,7 @@ export function CinematicAvatarConfig({
         onMapField={onMapField}
         labelAction={
           <span className="inline-flex items-center gap-0.5">
+            <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
             <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v.slice(0, PROMPT_MAX) })} target="prompt" media="video" />
             <PromptHelperButton
               nodeType="cinematic-avatar"
@@ -122,20 +140,31 @@ export function CinematicAvatarConfig({
           </span>
         }
       >
-        <TagTextarea
-          value={data.prompt ?? ""}
-          onChange={(v) => onUpdate({ prompt: v.slice(0, PROMPT_MAX) })}
-          placeholder="Describe the cinematic scene the avatar should perform…"
-          rows={4}
-          nodeRefs={nodeRefs}
-          displayMode={variableDisplayMode}
-          refMap={refMap}
-          snippets={promptSnippets}
-        />
-        {(data.prompt?.length ?? 0) > 0 && (
-          <span className="text-[10px] text-muted-foreground text-right block">
-            {data.prompt?.length ?? 0} / {PROMPT_MAX}
-          </span>
+        {promptFieldMode.mode === "final" ? (
+          <PromptFieldFinalView
+            segments={finalPrompt.promptSegments}
+            plainText={finalPrompt.promptText}
+            placeholder="Final prompt preview — node has no prompt yet"
+            minHeightRem={4 * 1.5}
+          />
+        ) : (
+          <>
+            <TagTextarea
+              value={data.prompt ?? ""}
+              onChange={(v) => onUpdate({ prompt: v.slice(0, PROMPT_MAX) })}
+              placeholder="Describe the cinematic scene the avatar should perform…"
+              rows={4}
+              nodeRefs={nodeRefs}
+              displayMode={variableDisplayMode}
+              refMap={refMap}
+              snippets={promptSnippets}
+            />
+            {(data.prompt?.length ?? 0) > 0 && (
+              <span className="text-[10px] text-muted-foreground text-right block">
+                {data.prompt?.length ?? 0} / {PROMPT_MAX}
+              </span>
+            )}
+          </>
         )}
       </MappableField>
 

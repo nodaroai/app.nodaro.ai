@@ -18,6 +18,9 @@ import { MappableField } from "./mappable-field"
 import { PromptHelperButton } from "./prompt-helper-button"
 import { SnippetMenuButton } from "./snippet-menu-button"
 import { useSnippetPool } from "@/hooks/queries/use-prompt-snippets-queries"
+import { PromptFieldFinalView, PromptFieldModeToggle } from "./prompt-field-final-view"
+import { useFinalPromptSegments } from "./use-final-prompt-segments"
+import { usePromptFieldMode } from "@/hooks/use-prompt-field-mode"
 import type { ConfigProps } from "./types"
 import { getLlmModalityCaps, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -103,6 +106,25 @@ export function LLMChatConfig({ data, onUpdate, sources, fieldMappings, onMapFie
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
   const allNodes = useWorkflowStore((s) => s.nodes)
   const allEdges = useWorkflowStore((s) => s.edges)
+
+  // Edit⇄Final toggles for both prompt fields (provider-less — LLMChatData has
+  // no provider). Keyed by the real data fields so state persists per node.
+  const systemPromptMode = usePromptFieldMode(selectedNodeId ?? "", "systemPrompt")
+  const userInputMode = usePromptFieldMode(selectedNodeId ?? "", "userInput")
+  const finalSystemPrompt = useFinalPromptSegments({
+    userPrompt: data.systemPrompt,
+    consumerNodeId: selectedNodeId ?? undefined,
+    nodes: allNodes,
+    edges: allEdges,
+    snippets: promptSnippets,
+  })
+  const finalUserInput = useFinalPromptSegments({
+    userPrompt: data.userInput,
+    consumerNodeId: selectedNodeId ?? undefined,
+    nodes: allNodes,
+    edges: allEdges,
+    snippets: promptSnippets,
+  })
   const userTextTemplates = useWorkflowStore((s) => s.userTextTemplates)
   const setUserTextTemplates = useWorkflowStore((s) => s.setUserTextTemplates)
   const userPromptTemplates = useWorkflowStore((s) => s.userPromptTemplates)
@@ -318,30 +340,50 @@ export function LLMChatConfig({ data, onUpdate, sources, fieldMappings, onMapFie
 
       {/* Instructions (System Prompt) */}
       <MappableField field="systemPrompt" label="Instructions (System Prompt)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+        <PromptFieldModeToggle mode={systemPromptMode.mode} onToggle={systemPromptMode.toggle} />
         <SnippetMenuButton pool={promptSnippets} value={data.systemPrompt || ""} onInsert={(v) => onUpdate({ systemPrompt: v })} target="prompt" media="text" />
         <PromptHelperButton nodeType="llm-chat" currentPrompt={data.systemPrompt || ""} onAccept={(prompt) => onUpdate({ systemPrompt: prompt })} />
       </span>}>
-        <Textarea
-          rows={4}
-          value={data.systemPrompt}
-          onChange={(e) => onUpdate({ systemPrompt: e.target.value })}
-          placeholder="You are a helpful assistant... (use {} to inject input)"
-          className="bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D] text-sm font-mono resize-y"
-        />
+        {systemPromptMode.mode === "final" ? (
+          <PromptFieldFinalView
+            segments={finalSystemPrompt.promptSegments}
+            plainText={finalSystemPrompt.promptText}
+            placeholder="Final system prompt preview — empty"
+            minHeightRem={4 * 1.5}
+          />
+        ) : (
+          <Textarea
+            rows={4}
+            value={data.systemPrompt}
+            onChange={(e) => onUpdate({ systemPrompt: e.target.value })}
+            placeholder="You are a helpful assistant... (use {} to inject input)"
+            className="bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D] text-sm font-mono resize-y"
+          />
+        )}
       </MappableField>
 
       {/* User Prompt */}
       <MappableField field="userInput" label="User Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+        <PromptFieldModeToggle mode={userInputMode.mode} onToggle={userInputMode.toggle} />
         <SnippetMenuButton pool={promptSnippets} value={data.userInput || ""} onInsert={(v) => onUpdate({ userInput: v })} target="prompt" media="text" />
         <PromptHelperButton nodeType="llm-chat" currentPrompt={data.userInput || ""} onAccept={(prompt) => onUpdate({ userInput: prompt })} />
       </span>}>
-        <Textarea
-          rows={4}
-          value={data.userInput}
-          onChange={(e) => onUpdate({ userInput: e.target.value })}
-          placeholder="Enter your prompt... (use {} to inject input)"
-          className="bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D] text-sm resize-y"
-        />
+        {userInputMode.mode === "final" ? (
+          <PromptFieldFinalView
+            segments={finalUserInput.promptSegments}
+            plainText={finalUserInput.promptText}
+            placeholder="Final user prompt preview — empty"
+            minHeightRem={4 * 1.5}
+          />
+        ) : (
+          <Textarea
+            rows={4}
+            value={data.userInput}
+            onChange={(e) => onUpdate({ userInput: e.target.value })}
+            placeholder="Enter your prompt... (use {} to inject input)"
+            className="bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D] text-sm resize-y"
+          />
+        )}
       </MappableField>
 
       {/* Settings */}

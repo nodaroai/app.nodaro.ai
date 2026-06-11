@@ -10,8 +10,7 @@ import type { PromptSegmentOrigin } from "@nodaro/shared"
  * with a frontend-local "snippet" tag (snippets are matched here, in a post-pass
  * over user-origin spans, not by the shared prompt builder).
  *
- * Lives here (the view layer) and is re-exported to the assembly hook and the
- * legacy `FinalPromptPreview` block (until that block is deleted) so the origin
+ * Lives here (the view layer); the assembly hook imports it so the origin
  * vocabulary has a single home.
  */
 export type DisplayOrigin = PromptSegmentOrigin | "snippet"

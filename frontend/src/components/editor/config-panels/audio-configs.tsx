@@ -55,6 +55,9 @@ import { MappableField } from "./mappable-field"
 import { PromptHelperButton } from "./prompt-helper-button"
 import { SnippetMenuButton } from "./snippet-menu-button"
 import { useSnippetPool } from "@/hooks/queries/use-prompt-snippets-queries"
+import { PromptFieldFinalView, PromptFieldModeToggle } from "./prompt-field-final-view"
+import { useFinalPromptSegments } from "./use-final-prompt-segments"
+import { usePromptFieldMode } from "@/hooks/use-prompt-field-mode"
 import { ModelSelectOption } from "./model-select-option"
 import { ModelDescriptionHint } from "./model-description-hint"
 import { ProviderAudioTagWarning } from "./provider-audio-tag-warning"
@@ -76,8 +79,17 @@ import type { ConfigProps } from "./types"
 const EMPTY_EDGES: ReadonlyArray<WorkflowEdge> = []
 const SUNO_ADD_TRACK_MODEL_OPTIONS = SUNO_MODELS.filter(m => (SUNO_ADD_TRACK_MODELS as readonly string[]).includes(m.value))
 
-export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<TextToSpeechData>) {
+export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<TextToSpeechData> & { nodeId?: string }) {
   const textSource = data.textSource || "connected"
+  const promptSnippets = useSnippetPool("audio", "prompt")
+  const promptFieldMode = usePromptFieldMode(nodeId ?? "", "directText")
+  const finalPrompt = useFinalPromptSegments({
+    userPrompt: data.directText,
+    consumerNodeId: nodeId,
+    nodes,
+    edges: edges ?? EMPTY_EDGES,
+    snippets: promptSnippets,
+  })
   return (
     <div className="flex flex-col gap-3">
       <div>
@@ -115,19 +127,32 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
       <ProviderAudioTagWarning provider={data.provider} fieldValues={[data.directText]} />
       <ModelDescriptionHint modelId={data.provider === "elevenlabs" ? "elevenlabs-v3" : (data.provider || "elevenlabs-v3")} />
       {textSource === "direct" && (
-        <MappableField field="directText" label="Text" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-          <TagTextarea
-            rows={4}
-            value={data.directText || ""}
-            onChange={(v) => onUpdate({ directText: v })}
-            placeholder="Enter text to convert to speech... (use {} to inject input)"
-            tagMode="audio"
-            provider={data.provider}
-            nodeRefs={nodeRefs}
-            displayMode={variableDisplayMode}
-            refMap={refMap}
-          />
-          <p className="text-[10px] text-muted-foreground mt-1">Type [ or / for audio tags</p>
+        <MappableField field="directText" label="Text" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+          <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
+        </span>}>
+          {promptFieldMode.mode === "final" ? (
+            <PromptFieldFinalView
+              segments={finalPrompt.promptSegments}
+              plainText={finalPrompt.promptText}
+              placeholder="Final prompt preview — empty"
+              minHeightRem={4 * 1.5}
+            />
+          ) : (
+            <>
+              <TagTextarea
+                rows={4}
+                value={data.directText || ""}
+                onChange={(v) => onUpdate({ directText: v })}
+                placeholder="Enter text to convert to speech... (use {} to inject input)"
+                tagMode="audio"
+                provider={data.provider}
+                nodeRefs={nodeRefs}
+                displayMode={variableDisplayMode}
+                refMap={refMap}
+              />
+              <p className="text-[10px] text-muted-foreground mt-1">Type [ or / for audio tags</p>
+            </>
+          )}
         </MappableField>
       )}
       <div>
@@ -190,6 +215,14 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
 
 export function TextToAudioConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<TextToAudioData> & { nodeId?: string }) {
   const promptSnippets = useSnippetPool("audio", "prompt")
+  const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
+  const finalPrompt = useFinalPromptSegments({
+    userPrompt: data.prompt,
+    consumerNodeId: nodeId,
+    nodes,
+    edges: edges ?? EMPTY_EDGES,
+    snippets: promptSnippets,
+  })
   const isSfx = data.provider === "elevenlabs-sfx"
   const maxPromptLen = isSfx ? 450 : 2000
   const minDuration = isSfx ? 0.5 : 1
@@ -206,24 +239,36 @@ export function TextToAudioConfig({ data, onUpdate, sources, fieldMappings, onMa
         edges={edges ?? EMPTY_EDGES}
       />
       <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+        <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
         <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => { if (v.length <= maxPromptLen) onUpdate({ prompt: v }) }} target="prompt" media="audio" />
         <PromptHelperButton nodeType="text-to-audio" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />
       </span>}>
-        <TagTextarea
-          rows={3}
-          value={data.prompt}
-          onChange={(v) => {
-            if (v.length <= maxPromptLen) onUpdate({ prompt: v })
-          }}
-          placeholder={isSfx ? "Describe the sound effect (max 450 chars)..." : "Describe the sound effect (e.g. dog barking, rain on window)..."}
-          tagMode="none"
-          nodeRefs={nodeRefs}
-          displayMode={variableDisplayMode}
-          refMap={refMap}
-          snippets={promptSnippets}
-        />
-        {isSfx && (
-          <p className="text-xs text-muted-foreground mt-1">{data.prompt.length}/{maxPromptLen}</p>
+        {promptFieldMode.mode === "final" ? (
+          <PromptFieldFinalView
+            segments={finalPrompt.promptSegments}
+            plainText={finalPrompt.promptText}
+            placeholder="Final prompt preview — empty"
+            minHeightRem={3 * 1.5}
+          />
+        ) : (
+          <>
+            <TagTextarea
+              rows={3}
+              value={data.prompt}
+              onChange={(v) => {
+                if (v.length <= maxPromptLen) onUpdate({ prompt: v })
+              }}
+              placeholder={isSfx ? "Describe the sound effect (max 450 chars)..." : "Describe the sound effect (e.g. dog barking, rain on window)..."}
+              tagMode="none"
+              nodeRefs={nodeRefs}
+              displayMode={variableDisplayMode}
+              refMap={refMap}
+              snippets={promptSnippets}
+            />
+            {isSfx && (
+              <p className="text-xs text-muted-foreground mt-1">{data.prompt.length}/{maxPromptLen}</p>
+            )}
+          </>
         )}
       </MappableField>
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -326,6 +371,15 @@ export function SunoVoiceConfig({ data }: ConfigProps<SunoVoiceData>) {
 }
 
 export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<SunoGenerateData> & { nodeId?: string }) {
+  const promptSnippets = useSnippetPool("audio", "prompt")
+  const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
+  const finalPrompt = useFinalPromptSegments({
+    userPrompt: data.prompt,
+    consumerNodeId: nodeId,
+    nodes,
+    edges: edges ?? EMPTY_EDGES,
+    snippets: promptSnippets,
+  })
   return (
     <div className="flex flex-col gap-3">
       <ConnectedAudioSources consumerNodeId={nodeId} nodes={nodes} edges={edges ?? EMPTY_EDGES} />
@@ -338,20 +392,35 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
         nodes={nodes}
         edges={edges ?? EMPTY_EDGES}
       />
-      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="suno-generate" currentPrompt={data.prompt || ""} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />}>
-        <TagTextarea
-          rows={3}
-          value={data.prompt}
-          onChange={(v) => { if (v.length <= 3000) onUpdate({ prompt: v }) }}
-          placeholder="Describe the song... (type [ or / for tags)"
-          maxLength={3000}
-          tagMode="suno"
-          customTags={SUNO_SUGGESTION_ITEMS}
-          nodeRefs={nodeRefs}
-          displayMode={variableDisplayMode}
-          refMap={refMap}
-        />
-        <p className="text-xs text-muted-foreground mt-1">{data.prompt.length}/3000</p>
+      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+        <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
+        <PromptHelperButton nodeType="suno-generate" currentPrompt={data.prompt || ""} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />
+      </span>}>
+        {promptFieldMode.mode === "final" ? (
+          <PromptFieldFinalView
+            segments={finalPrompt.promptSegments}
+            plainText={finalPrompt.promptText}
+            placeholder="Final prompt preview — empty"
+            minHeightRem={3 * 1.5}
+          />
+        ) : (
+          <>
+            <TagTextarea
+              rows={3}
+              value={data.prompt}
+              onChange={(v) => { if (v.length <= 3000) onUpdate({ prompt: v }) }}
+              placeholder="Describe the song... (type [ or / for tags)"
+              maxLength={3000}
+              tagMode="suno"
+              customTags={SUNO_SUGGESTION_ITEMS}
+              nodeRefs={nodeRefs}
+              displayMode={variableDisplayMode}
+              refMap={refMap}
+              snippets={promptSnippets}
+            />
+            <p className="text-xs text-muted-foreground mt-1">{data.prompt.length}/3000</p>
+          </>
+        )}
       </MappableField>
       <MappableField field="model" label="Model" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select value={data.model || "V5_5"} onValueChange={(v) => onUpdate({ model: v as SunoGenerateData["model"] })}>
@@ -456,23 +525,46 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
   )
 }
 
-export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<SunoCoverData>) {
+export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<SunoCoverData> & { nodeId?: string }) {
+  const promptSnippets = useSnippetPool("audio", "prompt")
+  const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
+  const finalPrompt = useFinalPromptSegments({
+    userPrompt: data.prompt,
+    consumerNodeId: nodeId,
+    nodes,
+    edges: edges ?? EMPTY_EDGES,
+    snippets: promptSnippets,
+  })
   return (
     <div className="flex flex-col gap-3">
-      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <TagTextarea
-          rows={3}
-          value={data.prompt}
-          onChange={(v) => { if (v.length <= 3000) onUpdate({ prompt: v }) }}
-          placeholder="Describe the cover style... (type [ or / for tags)"
-          maxLength={3000}
-          tagMode="suno"
-          customTags={SUNO_SUGGESTION_ITEMS}
-          nodeRefs={nodeRefs}
-          displayMode={variableDisplayMode}
-          refMap={refMap}
-        />
-        <p className="text-xs text-muted-foreground mt-1">{data.prompt.length}/3000</p>
+      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+        <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
+      </span>}>
+        {promptFieldMode.mode === "final" ? (
+          <PromptFieldFinalView
+            segments={finalPrompt.promptSegments}
+            plainText={finalPrompt.promptText}
+            placeholder="Final prompt preview — empty"
+            minHeightRem={3 * 1.5}
+          />
+        ) : (
+          <>
+            <TagTextarea
+              rows={3}
+              value={data.prompt}
+              onChange={(v) => { if (v.length <= 3000) onUpdate({ prompt: v }) }}
+              placeholder="Describe the cover style... (type [ or / for tags)"
+              maxLength={3000}
+              tagMode="suno"
+              customTags={SUNO_SUGGESTION_ITEMS}
+              nodeRefs={nodeRefs}
+              displayMode={variableDisplayMode}
+              refMap={refMap}
+              snippets={promptSnippets}
+            />
+            <p className="text-xs text-muted-foreground mt-1">{data.prompt.length}/3000</p>
+          </>
+        )}
       </MappableField>
       <MappableField field="uploadUrl" label="Source Audio URL" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Input value={data.uploadUrl ?? ""} onChange={(e) => onUpdate({ uploadUrl: e.target.value })} placeholder="URL of the audio to cover (or connect an audio node)" />
@@ -551,7 +643,16 @@ export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapF
   )
 }
 
-export function SunoExtendConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<SunoExtendData>) {
+export function SunoExtendConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<SunoExtendData> & { nodeId?: string }) {
+  const promptSnippets = useSnippetPool("audio", "prompt")
+  const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
+  const finalPrompt = useFinalPromptSegments({
+    userPrompt: data.prompt,
+    consumerNodeId: nodeId,
+    nodes,
+    edges: edges ?? EMPTY_EDGES,
+    snippets: promptSnippets,
+  })
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="audioId" label="Audio ID (from Suno node)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -560,20 +661,34 @@ export function SunoExtendConfig({ data, onUpdate, sources, fieldMappings, onMap
       <MappableField field="continueAt" label="Continue From (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Input type="number" min={0} value={data.continueAt ?? 0} onChange={(e) => onUpdate({ continueAt: Number(e.target.value) })} placeholder="0" />
       </MappableField>
-      <MappableField field="prompt" label="Extension Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <TagTextarea
-          rows={3}
-          value={data.prompt ?? ""}
-          onChange={(v) => { if (v.length <= 5000) onUpdate({ prompt: v }) }}
-          placeholder="Describe how the music should continue... (type [ or / for tags)"
-          maxLength={5000}
-          tagMode="suno"
-          customTags={SUNO_SUGGESTION_ITEMS}
-          nodeRefs={nodeRefs}
-          displayMode={variableDisplayMode}
-          refMap={refMap}
-        />
-        <p className="text-xs text-muted-foreground mt-1">{(data.prompt ?? "").length}/5000</p>
+      <MappableField field="prompt" label="Extension Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+        <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
+      </span>}>
+        {promptFieldMode.mode === "final" ? (
+          <PromptFieldFinalView
+            segments={finalPrompt.promptSegments}
+            plainText={finalPrompt.promptText}
+            placeholder="Final prompt preview — empty"
+            minHeightRem={3 * 1.5}
+          />
+        ) : (
+          <>
+            <TagTextarea
+              rows={3}
+              value={data.prompt ?? ""}
+              onChange={(v) => { if (v.length <= 5000) onUpdate({ prompt: v }) }}
+              placeholder="Describe how the music should continue... (type [ or / for tags)"
+              maxLength={5000}
+              tagMode="suno"
+              customTags={SUNO_SUGGESTION_ITEMS}
+              nodeRefs={nodeRefs}
+              displayMode={variableDisplayMode}
+              refMap={refMap}
+              snippets={promptSnippets}
+            />
+            <p className="text-xs text-muted-foreground mt-1">{(data.prompt ?? "").length}/5000</p>
+          </>
+        )}
       </MappableField>
       <MappableField field="model" label="Model" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select value={data.model || "V5_5"} onValueChange={(v) => onUpdate({ model: v as SunoExtendData["model"] })}>
@@ -611,23 +726,46 @@ export function SunoExtendConfig({ data, onUpdate, sources, fieldMappings, onMap
   )
 }
 
-export function SunoLyricsConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<SunoLyricsData>) {
+export function SunoLyricsConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<SunoLyricsData> & { nodeId?: string }) {
+  const promptSnippets = useSnippetPool("audio", "prompt")
+  const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
+  const finalPrompt = useFinalPromptSegments({
+    userPrompt: data.prompt,
+    consumerNodeId: nodeId,
+    nodes,
+    edges: edges ?? EMPTY_EDGES,
+    snippets: promptSnippets,
+  })
   return (
     <div className="flex flex-col gap-3">
-      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <TagTextarea
-          rows={3}
-          value={data.prompt}
-          onChange={(v) => { if (v.length <= 1000) onUpdate({ prompt: v }) }}
-          placeholder="Describe the lyrics you want... (type [ or / for genre/mood suggestions)"
-          maxLength={1000}
-          tagMode="suno"
-          customTags={SUNO_STYLE_SUGGESTION_ITEMS}
-          nodeRefs={nodeRefs}
-          displayMode={variableDisplayMode}
-          refMap={refMap}
-        />
-        <p className="text-xs text-muted-foreground mt-1">{data.prompt.length}/1000</p>
+      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+        <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
+      </span>}>
+        {promptFieldMode.mode === "final" ? (
+          <PromptFieldFinalView
+            segments={finalPrompt.promptSegments}
+            plainText={finalPrompt.promptText}
+            placeholder="Final prompt preview — empty"
+            minHeightRem={3 * 1.5}
+          />
+        ) : (
+          <>
+            <TagTextarea
+              rows={3}
+              value={data.prompt}
+              onChange={(v) => { if (v.length <= 1000) onUpdate({ prompt: v }) }}
+              placeholder="Describe the lyrics you want... (type [ or / for genre/mood suggestions)"
+              maxLength={1000}
+              tagMode="suno"
+              customTags={SUNO_STYLE_SUGGESTION_ITEMS}
+              nodeRefs={nodeRefs}
+              displayMode={variableDisplayMode}
+              refMap={refMap}
+              snippets={promptSnippets}
+            />
+            <p className="text-xs text-muted-foreground mt-1">{data.prompt.length}/1000</p>
+          </>
+        )}
       </MappableField>
       {data.generatedText && (
         <div className="rounded-md border bg-muted/30 p-2 text-xs max-h-40 overflow-y-auto whitespace-pre-wrap">
@@ -751,7 +889,16 @@ export function SunoMashupConfig({ data, onUpdate, sources, fieldMappings, onMap
   )
 }
 
-export function SunoReplaceSectionConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<SunoReplaceSectionData>) {
+export function SunoReplaceSectionConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<SunoReplaceSectionData> & { nodeId?: string }) {
+  const promptSnippets = useSnippetPool("audio", "prompt")
+  const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
+  const finalPrompt = useFinalPromptSegments({
+    userPrompt: data.prompt,
+    consumerNodeId: nodeId,
+    nodes,
+    edges: edges ?? EMPTY_EDGES,
+    snippets: promptSnippets,
+  })
   return (
     <div className="flex flex-col gap-3">
       <p className="text-xs text-muted-foreground">Replace a section of an existing track. Connect an audio source.</p>
@@ -761,8 +908,19 @@ export function SunoReplaceSectionConfig({ data, onUpdate, sources, fieldMapping
       <MappableField field="infillEndS" label="End Time (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Input type="number" min={0} step={1} value={data.infillEndS ?? ""} onChange={(e) => onUpdate({ infillEndS: e.target.value === "" ? undefined : parseFloat(e.target.value) })} placeholder="30" />
       </MappableField>
-      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <TagTextarea rows={3} value={data.prompt ?? ""} onChange={(v) => { if (v.length <= 3000) onUpdate({ prompt: v }) }} placeholder="Describe the replacement..." maxLength={3000} tagMode="suno" customTags={SUNO_SUGGESTION_ITEMS} nodeRefs={nodeRefs} displayMode={variableDisplayMode} refMap={refMap} />
+      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+        <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
+      </span>}>
+        {promptFieldMode.mode === "final" ? (
+          <PromptFieldFinalView
+            segments={finalPrompt.promptSegments}
+            plainText={finalPrompt.promptText}
+            placeholder="Final prompt preview — empty"
+            minHeightRem={3 * 1.5}
+          />
+        ) : (
+          <TagTextarea rows={3} value={data.prompt ?? ""} onChange={(v) => { if (v.length <= 3000) onUpdate({ prompt: v }) }} placeholder="Describe the replacement..." maxLength={3000} tagMode="suno" customTags={SUNO_SUGGESTION_ITEMS} nodeRefs={nodeRefs} displayMode={variableDisplayMode} refMap={refMap} snippets={promptSnippets} />
+        )}
       </MappableField>
       <MappableField field="tags" label="Tags (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <TagTextarea rows={2} value={data.tags ?? ""} onChange={(v) => { if (v.length <= 500) onUpdate({ tags: v }) }} placeholder="Style tags..." maxLength={500} tagMode="suno" customTags={SUNO_STYLE_SUGGESTION_ITEMS} nodeRefs={nodeRefs} displayMode={variableDisplayMode} refMap={refMap} />
@@ -776,14 +934,36 @@ export function SunoReplaceSectionConfig({ data, onUpdate, sources, fieldMapping
 
 const STYLE_BOOST_MAX = 3000
 
-export function SunoStyleBoostConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<SunoStyleBoostData>) {
+export function SunoStyleBoostConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeId }: ConfigProps<SunoStyleBoostData> & { nodeId?: string }) {
   const styleBoostSnippets = useSnippetPool("audio", "prompt")
+  const promptFieldMode = usePromptFieldMode(nodeId ?? "", "content")
+  const finalPrompt = useFinalPromptSegments({
+    userPrompt: data.content,
+    consumerNodeId: nodeId,
+    nodes,
+    edges: edges ?? EMPTY_EDGES,
+    snippets: styleBoostSnippets,
+  })
   return (
     <div className="flex flex-col gap-3">
       <p className="text-xs text-muted-foreground">Enhance and improve style text using Suno AI.</p>
-      <MappableField field="content" label="Content" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<SnippetMenuButton pool={styleBoostSnippets} value={data.content || ""} onInsert={(v) => { if (v.length <= STYLE_BOOST_MAX) onUpdate({ content: v }) }} target="prompt" media="audio" />}>
-        <Textarea rows={4} value={data.content ?? ""} onChange={(e) => { if (e.target.value.length <= STYLE_BOOST_MAX) onUpdate({ content: e.target.value }) }} placeholder="Enter style text to enhance..." maxLength={STYLE_BOOST_MAX} />
-        <p className="text-xs text-muted-foreground mt-1">{(data.content ?? "").length}/{STYLE_BOOST_MAX}</p>
+      <MappableField field="content" label="Content" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+        <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
+        <SnippetMenuButton pool={styleBoostSnippets} value={data.content || ""} onInsert={(v) => { if (v.length <= STYLE_BOOST_MAX) onUpdate({ content: v }) }} target="prompt" media="audio" />
+      </span>}>
+        {promptFieldMode.mode === "final" ? (
+          <PromptFieldFinalView
+            segments={finalPrompt.promptSegments}
+            plainText={finalPrompt.promptText}
+            placeholder="Final prompt preview — empty"
+            minHeightRem={4 * 1.5}
+          />
+        ) : (
+          <>
+            <Textarea rows={4} value={data.content ?? ""} onChange={(e) => { if (e.target.value.length <= STYLE_BOOST_MAX) onUpdate({ content: e.target.value }) }} placeholder="Enter style text to enhance..." maxLength={STYLE_BOOST_MAX} />
+            <p className="text-xs text-muted-foreground mt-1">{(data.content ?? "").length}/{STYLE_BOOST_MAX}</p>
+          </>
+        )}
       </MappableField>
       {data.generatedText && (
         <div>
@@ -844,7 +1024,16 @@ export function SunoConvertWavConfig({ data }: { readonly data: SunoConvertWavDa
   )
 }
 
-export function SunoUploadExtendConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<SunoUploadExtendData>) {
+export function SunoUploadExtendConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<SunoUploadExtendData> & { nodeId?: string }) {
+  const promptSnippets = useSnippetPool("audio", "prompt")
+  const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
+  const finalPrompt = useFinalPromptSegments({
+    userPrompt: data.prompt,
+    consumerNodeId: nodeId,
+    nodes,
+    edges: edges ?? EMPTY_EDGES,
+    snippets: promptSnippets,
+  })
   return (
     <div className="flex flex-col gap-3">
       <p className="text-xs text-muted-foreground">Extend a track from uploaded audio. Connect an audio source.</p>
@@ -859,8 +1048,19 @@ export function SunoUploadExtendConfig({ data, onUpdate, sources, fieldMappings,
         </Select>
       </MappableField>
       <ModelDescriptionHint modelId={data.model} />
-      <MappableField field="prompt" label="Prompt (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <TagTextarea rows={3} value={data.prompt ?? ""} onChange={(v) => { if (v.length <= 3000) onUpdate({ prompt: v }) }} placeholder="Describe the extension..." maxLength={3000} tagMode="suno" customTags={SUNO_SUGGESTION_ITEMS} nodeRefs={nodeRefs} displayMode={variableDisplayMode} refMap={refMap} />
+      <MappableField field="prompt" label="Prompt (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+        <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
+      </span>}>
+        {promptFieldMode.mode === "final" ? (
+          <PromptFieldFinalView
+            segments={finalPrompt.promptSegments}
+            plainText={finalPrompt.promptText}
+            placeholder="Final prompt preview — empty"
+            minHeightRem={3 * 1.5}
+          />
+        ) : (
+          <TagTextarea rows={3} value={data.prompt ?? ""} onChange={(v) => { if (v.length <= 3000) onUpdate({ prompt: v }) }} placeholder="Describe the extension..." maxLength={3000} tagMode="suno" customTags={SUNO_SUGGESTION_ITEMS} nodeRefs={nodeRefs} displayMode={variableDisplayMode} refMap={refMap} snippets={promptSnippets} />
+        )}
       </MappableField>
       <MappableField field="continueAt" label="Continue At (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Input type="number" min={0} step={1} value={data.continueAt ?? ""} onChange={(e) => onUpdate({ continueAt: e.target.value === "" ? undefined : parseFloat(e.target.value) })} placeholder="0" />
@@ -960,6 +1160,14 @@ export function TranscribeConfig({ data, onUpdate, sources, fieldMappings, onMap
 
 export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, nodeId }: ConfigProps<LipSyncData> & { nodeId?: string }) {
   const promptSnippets = useSnippetPool("audio", "prompt")
+  const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
+  const finalPrompt = useFinalPromptSegments({
+    userPrompt: data.prompt,
+    consumerNodeId: nodeId,
+    nodes,
+    edges: edges ?? EMPTY_EDGES,
+    snippets: promptSnippets,
+  })
   const provider = data.provider || "kling-avatar"
   const isKie = !REPLICATE_LIP_SYNC_PROVIDERS.has(provider as never)
   // Seedance 2 / 2 Fast support 1080p (cinematic tier); other KIE providers
@@ -1014,9 +1222,21 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
       {/* Motion Prompt — Kling Avatar / InfiniTalk providers only */}
       {isKie && (
         <MappableField field="prompt" label="Motion Prompt (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={
-          <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="audio" />
+          <span className="inline-flex items-center gap-0.5">
+            <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
+            <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="audio" />
+          </span>
         }>
-          <Textarea rows={2} value={data.prompt ?? ""} onChange={(e) => onUpdate({ prompt: e.target.value })} placeholder="Optional: describe head/expression motions..." />
+          {promptFieldMode.mode === "final" ? (
+            <PromptFieldFinalView
+              segments={finalPrompt.promptSegments}
+              plainText={finalPrompt.promptText}
+              placeholder="Final prompt preview — empty"
+              minHeightRem={2 * 1.5}
+            />
+          ) : (
+            <Textarea rows={2} value={data.prompt ?? ""} onChange={(e) => onUpdate({ prompt: e.target.value })} placeholder="Optional: describe head/expression motions..." />
+          )}
         </MappableField>
       )}
 
@@ -1504,6 +1724,14 @@ export function DubbingConfig({ data, onUpdate, nodeRefs }: ConfigProps<DubbingD
 
 export function VoiceRemixConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<VoiceRemixData> & { nodeId?: string }) {
   const promptSnippets = useSnippetPool("audio", "prompt")
+  const promptFieldMode = usePromptFieldMode(nodeId ?? "", "voiceDescription")
+  const finalPrompt = useFinalPromptSegments({
+    userPrompt: data.voiceDescription,
+    consumerNodeId: nodeId,
+    nodes,
+    edges: edges ?? EMPTY_EDGES,
+    snippets: promptSnippets,
+  })
   return (
     <div className="flex flex-col gap-3">
       <ConnectedAudioSources consumerNodeId={nodeId} nodes={nodes} edges={edges ?? EMPTY_EDGES} />
@@ -1515,19 +1743,31 @@ export function VoiceRemixConfig({ data, onUpdate, sources, fieldMappings, onMap
         edges={edges ?? EMPTY_EDGES}
       />
       <MappableField field="voiceDescription" label="Voice Description" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={
-        <SnippetMenuButton pool={promptSnippets} value={data.voiceDescription || ""} onInsert={(v) => onUpdate({ voiceDescription: v })} target="prompt" media="audio" />
+        <span className="inline-flex items-center gap-0.5">
+          <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
+          <SnippetMenuButton pool={promptSnippets} value={data.voiceDescription || ""} onInsert={(v) => onUpdate({ voiceDescription: v })} target="prompt" media="audio" />
+        </span>
       }>
-        <TagTextarea
-          rows={3}
-          value={data.voiceDescription || ""}
-          onChange={(v) => onUpdate({ voiceDescription: v })}
-          placeholder="Describe the voice you want (e.g. 'A warm, deep male voice with a British accent')"
-          tagMode="none"
-          nodeRefs={nodeRefs}
-          displayMode={variableDisplayMode}
-          refMap={refMap}
-          snippets={promptSnippets}
-        />
+        {promptFieldMode.mode === "final" ? (
+          <PromptFieldFinalView
+            segments={finalPrompt.promptSegments}
+            plainText={finalPrompt.promptText}
+            placeholder="Final prompt preview — empty"
+            minHeightRem={3 * 1.5}
+          />
+        ) : (
+          <TagTextarea
+            rows={3}
+            value={data.voiceDescription || ""}
+            onChange={(v) => onUpdate({ voiceDescription: v })}
+            placeholder="Describe the voice you want (e.g. 'A warm, deep male voice with a British accent')"
+            tagMode="none"
+            nodeRefs={nodeRefs}
+            displayMode={variableDisplayMode}
+            refMap={refMap}
+            snippets={promptSnippets}
+          />
+        )}
       </MappableField>
       <MappableField field="text" label="Preview Text" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <TagTextarea
@@ -1557,6 +1797,14 @@ const VOICE_DESIGN_MODEL_TO_TTS_PROVIDER: Record<string, string> = {
 export function VoiceDesignConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<VoiceDesignData> & { nodeId?: string }) {
   const ttsProvider = VOICE_DESIGN_MODEL_TO_TTS_PROVIDER[data.model || "eleven_ttv_v3"] || "elevenlabs-v3"
   const promptSnippets = useSnippetPool("audio", "prompt")
+  const promptFieldMode = usePromptFieldMode(nodeId ?? "", "voiceDescription")
+  const finalPrompt = useFinalPromptSegments({
+    userPrompt: data.voiceDescription,
+    consumerNodeId: nodeId,
+    nodes,
+    edges: edges ?? EMPTY_EDGES,
+    snippets: promptSnippets,
+  })
   return (
     <div className="flex flex-col gap-3">
       <ConnectedAudioSources consumerNodeId={nodeId} nodes={nodes} edges={edges ?? EMPTY_EDGES} />
@@ -1568,14 +1816,26 @@ export function VoiceDesignConfig({ data, onUpdate, sources, fieldMappings, onMa
         edges={edges ?? EMPTY_EDGES}
       />
       <MappableField field="voiceDescription" label="Voice Description" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={
-        <SnippetMenuButton pool={promptSnippets} value={data.voiceDescription || ""} onInsert={(v) => onUpdate({ voiceDescription: v })} target="prompt" media="audio" />
+        <span className="inline-flex items-center gap-0.5">
+          <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
+          <SnippetMenuButton pool={promptSnippets} value={data.voiceDescription || ""} onInsert={(v) => onUpdate({ voiceDescription: v })} target="prompt" media="audio" />
+        </span>
       }>
-        <Textarea
-          rows={3}
-          value={data.voiceDescription || ""}
-          onChange={(e) => onUpdate({ voiceDescription: e.target.value })}
-          placeholder="Describe the voice you want (e.g. 'A warm, deep male voice with a British accent')"
-        />
+        {promptFieldMode.mode === "final" ? (
+          <PromptFieldFinalView
+            segments={finalPrompt.promptSegments}
+            plainText={finalPrompt.promptText}
+            placeholder="Final prompt preview — empty"
+            minHeightRem={3 * 1.5}
+          />
+        ) : (
+          <Textarea
+            rows={3}
+            value={data.voiceDescription || ""}
+            onChange={(e) => onUpdate({ voiceDescription: e.target.value })}
+            placeholder="Describe the voice you want (e.g. 'A warm, deep male voice with a British accent')"
+          />
+        )}
       </MappableField>
       <MappableField field="text" label="Preview Text (100-1000 chars)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <TagTextarea
@@ -1676,20 +1936,41 @@ export function VoiceDesignConfig({ data, onUpdate, sources, fieldMappings, onMa
   )
 }
 
-export function ForcedAlignmentConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<ForcedAlignmentData>) {
+export function ForcedAlignmentConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<ForcedAlignmentData> & { nodeId?: string }) {
+  const promptSnippets = useSnippetPool("audio", "prompt")
+  const promptFieldMode = usePromptFieldMode(nodeId ?? "", "transcript")
+  const finalPrompt = useFinalPromptSegments({
+    userPrompt: data.transcript,
+    consumerNodeId: nodeId,
+    nodes,
+    edges: edges ?? EMPTY_EDGES,
+    snippets: promptSnippets,
+  })
   return (
     <div className="flex flex-col gap-3">
-      <MappableField field="transcript" label="Transcript" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <TagTextarea
-          rows={5}
-          value={data.transcript || ""}
-          onChange={(v) => onUpdate({ transcript: v })}
-          placeholder="Enter the transcript to align with the audio..."
-          tagMode="none"
-          nodeRefs={nodeRefs}
-          displayMode={variableDisplayMode}
-          refMap={refMap}
-        />
+      <MappableField field="transcript" label="Transcript" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+        <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
+      </span>}>
+        {promptFieldMode.mode === "final" ? (
+          <PromptFieldFinalView
+            segments={finalPrompt.promptSegments}
+            plainText={finalPrompt.promptText}
+            placeholder="Final prompt preview — empty"
+            minHeightRem={5 * 1.5}
+          />
+        ) : (
+          <TagTextarea
+            rows={5}
+            value={data.transcript || ""}
+            onChange={(v) => onUpdate({ transcript: v })}
+            placeholder="Enter the transcript to align with the audio..."
+            tagMode="none"
+            nodeRefs={nodeRefs}
+            displayMode={variableDisplayMode}
+            refMap={refMap}
+            snippets={promptSnippets}
+          />
+        )}
       </MappableField>
       <p className="text-xs text-muted-foreground">
         Aligns audio with a transcript to produce word-level timestamps. Connect an audio source to the input.
