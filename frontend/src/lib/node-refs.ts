@@ -7,7 +7,14 @@
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { extractNodeOutput } from "@/components/editor/workflow-editor/execution-graph"
 import { extractNodeOutputAsList } from "@/components/editor/workflow-editor/node-input-resolver"
-import { resolveIndex, resolveNodeRefs } from "@nodaro/shared"
+import {
+  resolveIndex,
+  resolveNodeRefs,
+  parseNodeRef,
+  NODE_REF_PATTERN,
+  RESERVED_TEMPLATE_VARS,
+} from "@nodaro/shared"
+import type { PromptSegment } from "@nodaro/shared"
 
 export interface NodeRefItem {
   id: string
@@ -239,4 +246,63 @@ export function resolveTextRefs(
 ): string | undefined {
   if (!text || refMap.size === 0) return text
   return resolveNodeRefs(text, refMap)
+}
+
+/**
+ * Segment-emitting twin of {@link resolveTextRefs}: identical replacement
+ * semantics, but each resolved `{Node Label}` value is tagged `origin:
+ * "variable"` while surrounding literal text (and dormant `{name || fallback}`
+ * defaults — author-typed, not a resolved node value) stays `origin: "user"`.
+ *
+ * INVARIANT (guarded by node-refs-segments.test.ts):
+ *   segments.map(s => s.text).join("") === resolveTextRefs(text, refMap)
+ *
+ * Built on the SAME primitives as `resolveNodeRefs` ({@link NODE_REF_PATTERN},
+ * {@link parseNodeRef}, {@link RESERVED_TEMPLATE_VARS}) so it can never drift
+ * from the source of truth. `resolveNodeRefs` iterates to a fixed point for
+ * nested refs (`{List}` → `{Animal1}` → "dog"); we mirror that by fully
+ * resolving each emitted dynamic value through `resolveNodeRefs`, so a
+ * variable segment's text equals exactly what the fixed point produces.
+ */
+export function resolveTextRefsSegments(
+  text: string,
+  refMap: ReadonlyMap<string, string>,
+): PromptSegment[] {
+  if (!text) return []
+  const out: PromptSegment[] = []
+  const pushUser = (t: string) => {
+    if (!t) return
+    const prev = out[out.length - 1]
+    if (prev && prev.origin === "user") out[out.length - 1] = { text: prev.text + t, origin: "user" }
+    else out.push({ text: t, origin: "user" })
+  }
+  // Mutable map view so nested resolution behaves identically to resolveNodeRefs
+  // (which takes a ReadonlyMap and never mutates). resolveNodeRefs accepts a
+  // ReadonlyMap, so this is just a typed reuse of the same instance.
+  const re = new RegExp(NODE_REF_PATTERN.source, "g")
+  let last = 0
+  for (const m of text.matchAll(re)) {
+    const idx = m.index ?? 0
+    const { name, fallback } = parseNodeRef(m[1])
+    if (RESERVED_TEMPLATE_VARS.has(name)) {
+      // resolveNodeRefs leaves reserved vars literal — fold into the gap push.
+      continue
+    }
+    const output = refMap.get(name)
+    if (output !== undefined) {
+      // Connected output (even empty string) → resolved value, tagged variable.
+      pushUser(text.slice(last, idx))
+      // Nested refs inside the value expand to the same fixed point.
+      out.push({ text: resolveNodeRefs(output, refMap), origin: "variable" })
+      last = idx + m[0].length
+    } else if (fallback !== null) {
+      // Absent/empty + `|| fallback` → the author-typed default (user text).
+      pushUser(text.slice(last, idx))
+      pushUser(resolveNodeRefs(fallback, refMap))
+      last = idx + m[0].length
+    }
+    // Absent + no `||` → literal `{name}`: left for the next gap push.
+  }
+  pushUser(text.slice(last))
+  return out
 }

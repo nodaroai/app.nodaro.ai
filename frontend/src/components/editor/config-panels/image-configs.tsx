@@ -385,6 +385,8 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
         provider={currentProvider}
         connectedReferences={connectedReferences}
         identityMeta={data.identityMeta}
+        snippets={promptSnippets}
+        negativeSnippets={negativeSnippets}
       />
       {/* Provider — primary decision, determines which model-specific fields appear below */}
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="image">
@@ -1258,6 +1260,8 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
         provider={data.provider}
         connectedReferences={connectedReferences}
         characterDefs={attachedChars}
+        snippets={promptSnippets}
+        negativeSnippets={negativeSnippets}
       />
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="image">
         <ModelSearchSelect
