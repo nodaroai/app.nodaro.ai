@@ -6,6 +6,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip
 import { hasCredits } from "@/lib/edition"
 import { isWizardSupported, type ModelChange } from "@nodaro/shared"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { buildPromptHelperNodeContext } from "@/lib/prompt-helper-context"
 import { PromptHelperDialog } from "./prompt-helper-dialog"
 
 interface PromptHelperButtonProps {
@@ -21,10 +22,6 @@ interface PromptHelperButtonProps {
   readonly size?: "sm" | "md"
 }
 
-const IMAGE_SOURCE_TYPES = new Set([
-  "generate-image", "upload-image", "edit-image", "image-to-image",
-])
-
 export function PromptHelperButton({
   nodeType,
   currentPrompt,
@@ -39,36 +36,12 @@ export function PromptHelperButton({
   const allEdges = useWorkflowStore((s) => s.edges)
   const allNodes = useWorkflowStore((s) => s.nodes)
 
-  // Collect node context from connected edges
-  const nodeContext = useMemo(() => {
-    if (!selectedNodeId) return undefined
-    if (nodeType === "text-prompt") return undefined // text-prompt uses downstream targeting, not upstream context
-
-    const incomingEdges = allEdges.filter((e) => e.target === selectedNodeId)
-    const connectedInputTypes: string[] = []
-    const referenceImageUrls: string[] = []
-    let hasSourceVideo = false
-
-    for (const edge of incomingEdges) {
-      const sourceNode = allNodes.find((n) => n.id === edge.source)
-      if (!sourceNode?.type) continue
-      connectedInputTypes.push(sourceNode.type)
-      if (IMAGE_SOURCE_TYPES.has(sourceNode.type)) {
-        // Extract image URL from connected node's result data
-        const d = sourceNode.data as Record<string, unknown>
-        const results = d.generatedResults as Array<{ url: string }> | undefined
-        const activeIdx = (d.activeResultIndex as number) ?? 0
-        const imageUrl = results?.[activeIdx]?.url ?? (d.generatedImageUrl as string) ?? (d.url as string)
-        if (imageUrl) referenceImageUrls.push(imageUrl)
-      }
-      if (sourceNode.type.includes("video") || sourceNode.type === "upload-video") hasSourceVideo = true
-    }
-
-    const referenceImageCount = referenceImageUrls.length
-    if (!connectedInputTypes.length && !referenceImageCount && !hasSourceVideo) return undefined
-
-    return { connectedInputTypes, referenceImageCount, referenceImageUrls, hasSourceVideo }
-  }, [selectedNodeId, allEdges, allNodes, nodeType])
+  // Collect node context from connected edges + the node's own manual refs
+  // (counting rules live in lib/prompt-helper-context.ts, unit-tested).
+  const nodeContext = useMemo(
+    () => buildPromptHelperNodeContext(selectedNodeId, allNodes, allEdges, nodeType),
+    [selectedNodeId, allEdges, allNodes, nodeType],
+  )
 
   // For text-prompt nodes: detect downstream wizard-supported nodes
   const downstreamTargets = useMemo(() => {

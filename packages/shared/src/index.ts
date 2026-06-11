@@ -728,6 +728,13 @@ export {
 } from "./lottie-slots.js"
 export type { SlotControlKind, SlotControlDescriptor, LottieSlotField } from "./lottie-slots.js"
 
+export {
+  LOTTIE_OVERLAY_CATALOG,
+  LEGACY_LOTTIE_HOST_REMAP,
+  resolveLottieOverlaySrc,
+} from "./lottie-overlay-catalog.js"
+export type { LottieOverlayCatalogEntry } from "./lottie-overlay-catalog.js"
+
 export { PICKER_CATALOGS, getPickerCatalog, listPickerCatalogs } from "./picker-catalogs.js"
 export type { PickerOption, PickerCatalog, PickerDimension } from "./picker-catalogs.js"
 
