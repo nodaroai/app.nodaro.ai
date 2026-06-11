@@ -17,7 +17,9 @@ import { VariableSuggestionList, type VariableSuggestionListHandle } from "./var
 import { VariableHighlightExtension, VARIABLE_HIGHLIGHT_META } from "./variable-highlight-extension"
 import { SnippetSuggestionExtension } from "./snippet-suggestion-extension"
 import { SnippetSuggestionList, type SnippetSuggestionListHandle } from "./snippet-suggestion-list"
+import { SnippetPillExtension } from "./snippet-pill-extension"
 import { filterSnippets, computeSnippetInsertPrefix, type SnippetPoolItem } from "@/lib/snippet-pool"
+import { matchSnippetRanges, type MatchableSnippet } from "@/lib/snippet-matching"
 import { DEFAULT_USAGE_MODE } from "@nodaro/shared"
 import type { RefImageItem } from "../tag-textarea"
 import type { NodeRefItem } from "@/lib/node-refs"
@@ -92,6 +94,8 @@ export interface KnownSlugSets {
   characters: ReadonlySet<string>
   /** Location slugs known to this editor (from upstream wired locations). */
   locations: ReadonlySet<string>
+  /** Snippets whose text gets promoted to display pills. */
+  snippets: readonly MatchableSnippet[]
 }
 
 /**
@@ -193,11 +197,27 @@ export function collectTokens(line: string, known: KnownSlugSets): TokenMatch[] 
     })
   }
 
-  // Sort by start offset, then drop overlapping tokens (location regex and
-  // character regex can match the same 2-part `@slug:N` shape; the dedup
-  // here keeps whichever appeared first in the token list, which by
-  // matchAll-ordering above is the location match).
-  tokens.sort((a, b) => a.start - b.start)
+  // Snippet display-pills: exact-text matches promote to snippetPill nodes.
+  // Snippet texts can't contain `@`/`{`/`}` (guard-tested), so they can never
+  // overlap a mention/image token span — `occupied` is belt-and-braces.
+  const occupied = tokens.map((t) => ({ start: t.start, end: t.end }))
+  for (const r of matchSnippetRanges(line, known.snippets, occupied)) {
+    tokens.push({
+      start: r.start,
+      end: r.end,
+      node: {
+        type: "snippetPill",
+        attrs: { snippetId: r.snippet.id, name: r.snippet.name, text: r.snippet.text },
+      },
+    })
+  }
+
+  // Sort by start offset (longest-first at equal starts so the longest
+  // snippet/token wins the dedup below), then drop overlapping tokens
+  // (location regex and character regex can match the same 2-part `@slug:N`
+  // shape; the dedup here keeps whichever appeared first in the token list,
+  // which by matchAll-ordering above is the location match).
+  tokens.sort((a, b) => a.start - b.start || b.end - a.end)
   const deduped: TokenMatch[] = []
   let cursor = 0
   for (const t of tokens) {
@@ -252,14 +272,17 @@ function valueToDoc(value: string, known: KnownSlugSets): JsonNode {
  * extensions (via storage) to decide which typed slugs get promoted to
  * pills.
  */
-function buildKnownSlugSets(refs: readonly RefImageItem[]): KnownSlugSets {
+function buildKnownSlugSets(
+  refs: readonly RefImageItem[],
+  snippets: readonly MatchableSnippet[],
+): KnownSlugSets {
   const characters = new Set<string>()
   const locations = new Set<string>()
   for (const r of refs) {
     if (r.source === "character" && r.characterSlug) characters.add(r.characterSlug)
     else if (r.source === "location" && r.locationSlug) locations.add(r.locationSlug)
   }
-  return { characters, locations }
+  return { characters, locations, snippets }
 }
 
 /**
@@ -336,6 +359,22 @@ export function PromptEditor({
   }
   const stableReferenceImages = stableRefsRef.current
 
+  // Content-stabilize the snippet pool the same way as the reference list: the
+  // parent rebuilds it per render (useMemo over a query result), so it can be a
+  // fresh array reference even when nothing meaningful changed. Compare on the
+  // only fields the pill layer consumes (id/text/name) so the storage-mirror +
+  // re-promotion effect below fires on pool load/CRUD, not every keystroke.
+  const stableSnippetsRef = useRef<readonly SnippetPoolItem[]>(snippets ?? [])
+  const incomingSnippets = snippets ?? []
+  if (
+    stableSnippetsRef.current.length !== incomingSnippets.length
+    || stableSnippetsRef.current.some((s, i) =>
+      s.id !== incomingSnippets[i].id || s.text !== incomingSnippets[i].text || s.name !== incomingSnippets[i].name)
+  ) {
+    stableSnippetsRef.current = incomingSnippets
+  }
+  const stableSnippets = stableSnippetsRef.current
+
   // Hold the latest reference list in a ref so the suggestion plugin's items()
   // closure (created once at editor mount) always sees fresh data.
   const refsRef = useRef<readonly RefImageItem[]>(stableReferenceImages)
@@ -367,10 +406,10 @@ export function PromptEditor({
   const valueLabels = stableValueLabelsRef.current
   // Known-slug sets derived from the current reference list. Recomputed when
   // the list changes; the suggestion-plugin's `items()` closure stays stable.
-  const knownSlugsRef = useRef<KnownSlugSets>(buildKnownSlugSets(stableReferenceImages))
+  const knownSlugsRef = useRef<KnownSlugSets>(buildKnownSlugSets(stableReferenceImages, stableSnippets))
   knownSlugsRef.current = useMemo(
-    () => buildKnownSlugSets(stableReferenceImages),
-    [stableReferenceImages],
+    () => buildKnownSlugSets(stableReferenceImages, stableSnippets),
+    [stableReferenceImages, stableSnippets],
   )
 
   // Hold the latest onChange so we can call it without recreating the editor.
@@ -390,6 +429,7 @@ export function PromptEditor({
       Placeholder.configure({ placeholder: placeholder ?? "" }),
       CharacterRefExtension,
       LocationRefExtension,
+      SnippetPillExtension,
       ImageRefExtension.configure({
         suggestion: {
           char: "@",
@@ -744,8 +784,10 @@ export function PromptEditor({
           items: ({ query }: { query: string }) =>
             filterSnippets(snippetsRef.current, query).slice(0, 50),
           command: ({ editor: ed, range, props }: { editor: typeof editor; range: { from: number; to: number }; props: SnippetPoolItem }) => {
-            // Atomically replace "/query" with separator + snippet text + space.
-            // (PR 2 switches the text node to a snippetPill node.)
+            // Atomically replace "/query" with separator + snippetPill node + a
+            // trailing space. The pill's renderText emits attrs.text verbatim, so
+            // editor.getText() (the value persisted to node.data.prompt) is always
+            // the plain fragment — the pill is a pure display layer.
             const prevChar = range.from > 1
               ? ed?.state.doc.textBetween(range.from - 1, range.from, "\n", "\n") ?? ""
               : ""
@@ -753,7 +795,12 @@ export function PromptEditor({
             ed
               ?.chain()
               .focus()
-              .insertContentAt(range, `${prefix}${props.text} `)
+              .deleteRange(range)
+              .insertContent([
+                ...(prefix ? [{ type: "text", text: prefix }] : []),
+                { type: "snippetPill", attrs: { snippetId: props.id, name: props.name, text: props.text } },
+                { type: "text", text: " " },
+              ])
               .run()
           },
           render: () => {
@@ -878,6 +925,29 @@ export function PromptEditor({
     // actually changes — not on every parent keystroke.
     editor.view.dispatch(editor.state.tr.setMeta("refs-changed", true))
   }, [editor, stableReferenceImages])
+
+  // Push the live snippet pool into editor storage (the pill's swap menu reads
+  // it) and re-promote plain text → pills when the pool changes (initial load,
+  // CRUD). setContent resets the caret, so it only runs when a pool snippet's
+  // text actually occurs in the current value — cheap includes() pre-check.
+  useEffect(() => {
+    if (!editor) return
+    const storage = editor.storage as unknown as Record<string, { snippets?: readonly SnippetPoolItem[]; revision?: number }>
+    storage.snippetPill = storage.snippetPill ?? {}
+    storage.snippetPill.snippets = stableSnippets
+    storage.snippetPill.revision = (storage.snippetPill.revision ?? 0) + 1
+    editor.view.dispatch(editor.state.tr.setMeta("refs-changed", true))
+
+    const current = editor.getText({ blockSeparator: "\n" })
+    if (current && stableSnippets.some((s) => s.text && current.includes(s.text))) {
+      applyingExternalRef.current = true
+      try {
+        editor.commands.setContent(valueToDoc(current, knownSlugsRef.current), { emitUpdate: false })
+      } finally {
+        applyingExternalRef.current = false
+      }
+    }
+  }, [editor, stableSnippets])
 
   // Rebuild variable decorations when the upstream label set OR the
   // non-empty-value set changes — wiring/unwiring flips cyan↔amber, and an

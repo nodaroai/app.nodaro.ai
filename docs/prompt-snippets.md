@@ -49,6 +49,52 @@ separator so the result reads cleanly:
 - a single space when the preceding character is sentence punctuation (`. , ; : ! ?`);
 - `", "` when you are gluing the snippet onto the end of a word.
 
+## Pills
+
+In a **positive prompt field**, an inserted snippet renders as a compact
+**amber pill** (a small scissors icon plus the snippet's name) instead of the
+raw words. The pill is purely a way to *see and manage* the fragment — it is
+**not** stored. The prompt behind it is always the snippet's plain text:
+
+- **The stored prompt is always the plain text.** Copying the prompt yields the
+  fragment's words, the final-prompt preview shows the real string, and
+  export/import/SDK all see plain text. There is no hidden marker.
+- **Hover** a pill to see its full text in a tooltip (the pill itself shows just
+  the name to stay compact).
+
+**Click a pill** to open its menu:
+
+- **Swap** — pick any **same-category** snippet from the list to replace this
+  one in place (e.g. swap "Golden Hour" for "Neon Noir" within *Lighting*). The
+  prompt text updates atomically.
+- **◀ / ▶ cycle** — when the category has more than one snippet, the arrows step
+  through the same-category variations one at a time — the quick "compare
+  results" loop without reopening the list.
+- **Edit as text** — unwraps the pill back into editable plain text so you can
+  tweak the wording. (It will re-pillify on the next reload if the edited text
+  still exactly matches a snippet — display state is derived by matching, by
+  design.)
+- **Remove** — deletes the whole fragment, plus a dangling leading separator
+  (a `", "` or space the insertion added) so you are not left with a stray comma.
+
+**Backspace** at a pill deletes the **whole** pill in one keystroke (it is a
+single atomic unit, not character-by-character text).
+
+**Pills are a display layer over matching text.** When a workflow loads, any
+plain text that exactly matches a snippet in your current pool is shown as a
+pill. Two consequences follow:
+
+- If you **edit the underlying snippet** in your library, old occurrences in
+  existing prompts **revert to plain text** (the words no longer match the new
+  snippet) — nothing breaks; the prompt still contains exactly what it always
+  did.
+- A pill whose snippet was deleted still renders from its own stored name and
+  text; only the swap/cycle options go quiet.
+
+**Negative-prompt fields stay text-only** — no pills. Snippets you insert there
+(via the `/` menu or the button) are plain text exactly as shown, with the same
+separator rules.
+
 ## The Snippets button
 
 Next to the AI prompt-helper button on a prompt field's label row there is a
