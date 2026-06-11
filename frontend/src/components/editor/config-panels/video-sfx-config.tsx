@@ -16,6 +16,8 @@ import {
 import { hasCredits } from "@/lib/edition"
 import { MappableField } from "./mappable-field"
 import { PromptHelperButton } from "./prompt-helper-button"
+import { SnippetMenuButton } from "./snippet-menu-button"
+import { useSnippetPool } from "@/hooks/queries/use-prompt-snippets-queries"
 import type { VideoSfxNodeData } from "@/types/nodes"
 import type { ConfigProps } from "./types"
 
@@ -58,6 +60,8 @@ export function VideoSfxConfig({
   onMapField,
 }: ConfigProps<VideoSfxNodeData>) {
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const promptSnippets = useSnippetPool("audio", "prompt")
+  const negativeSnippets = useSnippetPool("audio", "negative")
 
   const versions = Math.min(Math.max(1, data.versions ?? 1), 4)
   const cfgStrength = data.cfgStrength ?? 4.5
@@ -87,14 +91,17 @@ export function VideoSfxConfig({
         fieldMappings={fieldMappings}
         onMapField={onMapField}
         labelAction={
-          hasCredits() ? (
-            <PromptHelperButton
-              nodeType="video-sfx"
-              currentPrompt={data.prompt ?? ""}
-              provider={data.provider}
-              onAccept={(prompt) => onUpdate({ prompt })}
-            />
-          ) : undefined
+          <span className="inline-flex items-center gap-0.5">
+            <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="audio" />
+            {hasCredits() && (
+              <PromptHelperButton
+                nodeType="video-sfx"
+                currentPrompt={data.prompt ?? ""}
+                provider={data.provider}
+                onAccept={(prompt) => onUpdate({ prompt })}
+              />
+            )}
+          </span>
         }
       >
         <Textarea
@@ -118,6 +125,9 @@ export function VideoSfxConfig({
         sources={sources}
         fieldMappings={fieldMappings}
         onMapField={onMapField}
+        labelAction={
+          <SnippetMenuButton pool={negativeSnippets} value={data.negativePrompt ?? "music"} onInsert={(v) => onUpdate({ negativePrompt: v })} target="negative" media="audio" />
+        }
       >
         <Input
           type="text"

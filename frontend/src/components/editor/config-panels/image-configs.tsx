@@ -22,6 +22,8 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { prefetchModelCredits } from "@/ee/hooks/use-model-credits"
 import { useMediaEditor, MediaEditorModal } from "@/components/editor/media-editor"
 import { PromptHelperButton } from "./prompt-helper-button"
+import { SnippetMenuButton } from "./snippet-menu-button"
+import { useSnippetPool } from "@/hooks/queries/use-prompt-snippets-queries"
 import type {
   GenerateImageData,
   ModifyImageData,
@@ -140,6 +142,9 @@ function expandLocationSourceForAutocomplete(
 
 function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<GenerateImageData> & { nodeId?: string }) {
   useEffect(() => { prefetchModelCredits(IMAGE_GEN_MODELS.map((m) => m.value)) }, [])
+
+  const promptSnippets = useSnippetPool("image", "prompt")
+  const negativeSnippets = useSnippetPool("image", "negative")
 
   // The selected providers list is the source of truth. Legacy data with only
   // `data.provider` set falls back to `[data.provider]` so existing workflows work.
@@ -396,7 +401,10 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
         />
       </MappableField>
 
-      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="generate-image" currentPrompt={data.prompt || ""} provider={currentProvider} aspectRatio={data.aspectRatio} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />}>
+      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+        <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="image" />
+        <PromptHelperButton nodeType="generate-image" currentPrompt={data.prompt || ""} provider={currentProvider} aspectRatio={data.aspectRatio} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />
+      </span>}>
         <PromptEditor
           rows={3}
           value={data.prompt}
@@ -405,6 +413,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
           referenceImages={refImagesForAutocomplete}
           nodeRefs={nodeRefs}
           refMap={refMap}
+          snippets={promptSnippets}
         />
       </MappableField>
       <MappableField field="style" label="Style" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -448,7 +457,9 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
             : "Appended to prompt as style guidance"}
         </p>
       </MappableField>
-      <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={
+        <SnippetMenuButton pool={negativeSnippets} value={data.negativePrompt || ""} onInsert={(v) => onUpdate({ negativePrompt: v })} target="negative" media="image" />
+      }>
         <TagTextarea
           rows={2}
           value={data.negativePrompt}
@@ -457,6 +468,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
           nodeRefs={nodeRefs}
           displayMode={variableDisplayMode}
           refMap={refMap}
+          snippets={negativeSnippets}
         />
         <p className="text-[10px] text-muted-foreground mt-0.5">Appended to prompt as exclusion guidance</p>
       </MappableField>
@@ -839,6 +851,8 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
 export const GenerateImageConfig = memo(GenerateImageConfigImpl)
 
 function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<ModifyImageData> & { nodeId?: string }) {
+  const promptSnippets = useSnippetPool("image", "prompt")
+  const negativeSnippets = useSnippetPool("image", "negative")
   useEffect(() => { prefetchModelCredits(MODIFY_IMAGE_MODELS.map((m) => m.value)) }, [])
   const currentProvider = data.provider || "nano-banana"
   const isNanoBananaEdit = currentProvider === "nano-banana-edit"
@@ -1257,7 +1271,10 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
           ariaLabel="Provider"
         />
       </MappableField>
-      <MappableField field="prompt" label={isNanoBananaEdit ? "Edit Instructions" : "Transformation Prompt"} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="image-to-image" currentPrompt={data.prompt || ""} provider={data.provider} aspectRatio={data.aspectRatio} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />}>
+      <MappableField field="prompt" label={isNanoBananaEdit ? "Edit Instructions" : "Transformation Prompt"} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+        <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="image" />
+        <PromptHelperButton nodeType="image-to-image" currentPrompt={data.prompt || ""} provider={data.provider} aspectRatio={data.aspectRatio} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />
+      </span>}>
         <PromptEditor
           rows={3}
           value={data.prompt}
@@ -1266,6 +1283,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
           referenceImages={refImagesForAutocomplete}
           nodeRefs={nodeRefs}
           refMap={refMap}
+          snippets={promptSnippets}
         />
       </MappableField>
       <MappableField field="style" label="Style" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -1309,7 +1327,9 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
             : "Appended to prompt as style guidance"}
         </p>
       </MappableField>
-      <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={
+        <SnippetMenuButton pool={negativeSnippets} value={data.negativePrompt || ""} onInsert={(v) => onUpdate({ negativePrompt: v })} target="negative" media="image" />
+      }>
         <PromptEditor
           rows={2}
           value={data.negativePrompt ?? ""}
@@ -1318,6 +1338,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
           referenceImages={refImagesForAutocomplete}
           nodeRefs={nodeRefs}
           refMap={refMap}
+          snippets={negativeSnippets}
         />
         <p className="text-[10px] text-muted-foreground mt-0.5">Appended to prompt as exclusion guidance</p>
       </MappableField>
@@ -1757,6 +1778,7 @@ export function RemoveBackgroundConfig({ data }: ConfigProps<RemoveBackgroundDat
 }
 
 export function GenerateMaskConfig({ data, onUpdate }: ConfigProps<GenerateMaskData>) {
+  const promptSnippets = useSnippetPool("image", "prompt")
   return (
     <div className="flex flex-col gap-4">
       <p className="text-xs text-muted-foreground px-1">
@@ -1764,7 +1786,10 @@ export function GenerateMaskConfig({ data, onUpdate }: ConfigProps<GenerateMaskD
       </p>
 
       <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-muted-foreground">Describe what to mask</label>
+        <div className="flex items-center justify-between gap-2">
+          <label className="text-xs font-medium text-muted-foreground">Describe what to mask</label>
+          <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="image" />
+        </div>
         <Textarea
           rows={2}
           placeholder={`e.g. "the blonde woman", "the red car", "the background"`}

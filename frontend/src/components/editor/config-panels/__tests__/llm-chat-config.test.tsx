@@ -69,6 +69,12 @@ vi.mock("../llm-model-select", () => ({
 vi.mock("../prompt-helper-button", () => ({
   PromptHelperButton: () => <span data-testid="prompt-helper" />,
 }))
+vi.mock("@/components/editor/config-panels/snippet-menu-button", () => ({
+  SnippetMenuButton: () => null,
+}))
+vi.mock("@/hooks/queries/use-prompt-snippets-queries", () => ({
+  useSnippetPool: () => [],
+}))
 vi.mock("../mappable-field", () => ({
   MappableField: ({ label, children }: any) => (
     <div data-testid="mappable-field" data-label={label}>

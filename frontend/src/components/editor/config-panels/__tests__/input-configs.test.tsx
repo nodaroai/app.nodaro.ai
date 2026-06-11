@@ -115,6 +115,12 @@ vi.mock("@dnd-kit/utilities", () => ({
 vi.mock("./prompt-helper-button", () => ({
   PromptHelperButton: () => null,
 }))
+vi.mock("@/components/editor/config-panels/snippet-menu-button", () => ({
+  SnippetMenuButton: () => null,
+}))
+vi.mock("@/hooks/queries/use-prompt-snippets-queries", () => ({
+  useSnippetPool: () => [],
+}))
 
 vi.mock("lucide-react", () => ({
   X: () => <span data-testid="x-icon" />,

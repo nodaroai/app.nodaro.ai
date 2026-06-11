@@ -16,6 +16,8 @@ import type { LLMChatData } from "@/types/nodes"
 import { LlmModelSelect } from "./llm-model-select"
 import { MappableField } from "./mappable-field"
 import { PromptHelperButton } from "./prompt-helper-button"
+import { SnippetMenuButton } from "./snippet-menu-button"
+import { useSnippetPool } from "@/hooks/queries/use-prompt-snippets-queries"
 import type { ConfigProps } from "./types"
 import { getLlmModalityCaps, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -83,6 +85,7 @@ function MediaRefRow({
 export function LLMChatConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<LLMChatData>) {
   const activeIdx = data.activeResultIndex ?? 0
   const results = data.generatedResults ?? []
+  const promptSnippets = useSnippetPool("text", "prompt")
 
   const currentModel = data.llmModel ?? LLM_FEATURE_DEFAULTS["llm-chat"]
   const caps = getLlmModalityCaps(currentModel)
@@ -314,7 +317,10 @@ export function LLMChatConfig({ data, onUpdate, sources, fieldMappings, onMapFie
       </div>
 
       {/* Instructions (System Prompt) */}
-      <MappableField field="systemPrompt" label="Instructions (System Prompt)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="llm-chat" currentPrompt={data.systemPrompt || ""} onAccept={(prompt) => onUpdate({ systemPrompt: prompt })} />}>
+      <MappableField field="systemPrompt" label="Instructions (System Prompt)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+        <SnippetMenuButton pool={promptSnippets} value={data.systemPrompt || ""} onInsert={(v) => onUpdate({ systemPrompt: v })} target="prompt" media="text" />
+        <PromptHelperButton nodeType="llm-chat" currentPrompt={data.systemPrompt || ""} onAccept={(prompt) => onUpdate({ systemPrompt: prompt })} />
+      </span>}>
         <Textarea
           rows={4}
           value={data.systemPrompt}
@@ -325,7 +331,10 @@ export function LLMChatConfig({ data, onUpdate, sources, fieldMappings, onMapFie
       </MappableField>
 
       {/* User Prompt */}
-      <MappableField field="userInput" label="User Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="llm-chat" currentPrompt={data.userInput || ""} onAccept={(prompt) => onUpdate({ userInput: prompt })} />}>
+      <MappableField field="userInput" label="User Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+        <SnippetMenuButton pool={promptSnippets} value={data.userInput || ""} onInsert={(v) => onUpdate({ userInput: v })} target="prompt" media="text" />
+        <PromptHelperButton nodeType="llm-chat" currentPrompt={data.userInput || ""} onAccept={(prompt) => onUpdate({ userInput: prompt })} />
+      </span>}>
         <Textarea
           rows={4}
           value={data.userInput}

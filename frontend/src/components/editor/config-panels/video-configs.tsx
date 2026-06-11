@@ -61,6 +61,8 @@ import { ConnectedCinematographySources } from "./connected-cinematography-sourc
 import { ExtraRefsSection } from "./extra-refs-section"
 import type { ConfigProps, SourceNodeInfo } from "./types"
 import { PromptHelperButton } from "./prompt-helper-button"
+import { SnippetMenuButton } from "./snippet-menu-button"
+import { useSnippetPool } from "@/hooks/queries/use-prompt-snippets-queries"
 import type { ConnectedReference } from "@nodaro/shared"
 
 // ---------------------------------------------------------------------------
@@ -306,6 +308,8 @@ function toRefImageItems(entries: ReadonlyArray<VideoRefAutocompleteEntry>): Ref
 }
 
 function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, onUpdateNode, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<ImageToVideoData> & { nodeId?: string }) {
+  const promptSnippets = useSnippetPool("video", "prompt")
+  const negativeSnippets = useSnippetPool("video", "negative")
   useEffect(() => { prefetchModelCredits(VIDEO_I2V_MODELS.map((m) => m.value)) }, [])
   const [lightboxImage, setLightboxImage] = useState<string | null>(null)
 
@@ -488,7 +492,10 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
         </div>
       )}
 
-      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="image-to-video" currentPrompt={data.prompt || ""} provider={data.provider} duration={data.duration} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />}>
+      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+        <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="video" />
+        <PromptHelperButton nodeType="image-to-video" currentPrompt={data.prompt || ""} provider={data.provider} duration={data.duration} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />
+      </span>}>
         <PromptEditor
           rows={3}
           value={data.prompt || ""}
@@ -497,13 +504,16 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
           referenceImages={refImagesForAutocomplete}
           nodeRefs={nodeRefs}
           refMap={refMap}
+          snippets={promptSnippets}
         />
       </MappableField>
 
       {/* Negative Prompt — always visible. Kling family providers send it
           natively as `negative_prompt`; non-native providers get it
           appended to the prompt as "Avoid: …" by the backend helper. */}
-      <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={
+        <SnippetMenuButton pool={negativeSnippets} value={(data as Record<string, unknown>).negativePrompt as string || ""} onInsert={(v) => onUpdate({ negativePrompt: v })} target="negative" media="video" />
+      }>
         <Textarea
           rows={2}
           value={(data as Record<string, unknown>).negativePrompt as string || ""}
@@ -1085,6 +1095,8 @@ export const ImageToVideoConfig = memo(ImageToVideoConfigImpl)
 const V2V_IMAGE_TYPES = ["generate-image", "upload-image", "character", "object", "location", "edit-image", "image-to-image", "scene"]
 
 function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<VideoToVideoData> & { nodeId?: string }) {
+  const promptSnippets = useSnippetPool("video", "prompt")
+  const negativeSnippets = useSnippetPool("video", "negative")
   const provider = data.provider || "wan"
   const isWan = provider === "wan" || provider === "wan-flash"
   const isWanFlash = provider === "wan-flash"
@@ -1143,7 +1155,10 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
       </MappableField>
       <ModelDescriptionHint modelId={data.provider} />
 
-      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="video-to-video" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />}>
+      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+        <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="video" />
+        <PromptHelperButton nodeType="video-to-video" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />
+      </span>}>
         <PromptEditor
           rows={3}
           value={data.prompt}
@@ -1152,13 +1167,16 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
           referenceImages={refImagesForAutocomplete}
           nodeRefs={nodeRefs}
           refMap={refMap}
+          snippets={promptSnippets}
         />
       </MappableField>
 
       {/* Negative Prompt — always visible. Wan family providers send it
           natively as `negative_prompt`; non-native providers get it
           appended to the prompt as "Avoid: …" by the backend helper. */}
-      <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={
+        <SnippetMenuButton pool={negativeSnippets} value={data.negativePrompt || ""} onInsert={(v) => onUpdate({ negativePrompt: v || undefined })} target="negative" media="video" />
+      }>
         <TagTextarea
           value={data.negativePrompt || ""}
           onChange={(v) => onUpdate({ negativePrompt: v || undefined })}
@@ -1168,6 +1186,7 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
           referenceImages={refImagesForAutocomplete}
           displayMode={variableDisplayMode}
           refMap={refMap}
+          snippets={negativeSnippets}
         />
       </MappableField>
 
@@ -1354,6 +1373,8 @@ export const VideoToVideoConfig = memo(VideoToVideoConfigImpl)
 const MOTION_VIDEO_NODE_TYPES = new Set(["image-to-video", "text-to-video", "video-to-video", "upload-video", "motion-transfer", "extend-video", "speech-to-video"])
 
 function MotionTransferConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<MotionTransferData> & { nodeId?: string }) {
+  const promptSnippets = useSnippetPool("video", "prompt")
+  const negativeSnippets = useSnippetPool("video", "negative")
   const provider = data.provider || "kling"
 
   // Detect video duration from connected upstream video node's metadata or URL
@@ -1422,7 +1443,10 @@ function MotionTransferConfigImpl({ data, onUpdate, sources, fieldMappings, onMa
           ariaLabel="Provider"
         />
       </MappableField>
-      <MappableField field="prompt" label="Prompt (Optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="motion-transfer" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />}>
+      <MappableField field="prompt" label="Prompt (Optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+        <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v.slice(0, 2500) })} target="prompt" media="video" />
+        <PromptHelperButton nodeType="motion-transfer" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />
+      </span>}>
         <TagTextarea
           value={data.prompt}
           onChange={(v) => onUpdate({ prompt: v.slice(0, 2500) })}
@@ -1431,13 +1455,16 @@ function MotionTransferConfigImpl({ data, onUpdate, sources, fieldMappings, onMa
           nodeRefs={nodeRefs}
           displayMode={variableDisplayMode}
           refMap={refMap}
+          snippets={promptSnippets}
         />
         <span className="text-xs text-muted-foreground">{data.prompt?.length || 0}/2500</span>
       </MappableField>
       {/* Negative Prompt — always visible. Kling 2.6/3.0 send it natively as
           `negative_prompt`; Wan Animate gets it appended to the prompt as
           "Avoid: …" by the backend helper. */}
-      <MappableField field="negativePrompt" label="Negative Prompt (Optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="negativePrompt" label="Negative Prompt (Optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={
+        <SnippetMenuButton pool={negativeSnippets} value={data.negativePrompt ?? ""} onInsert={(v) => onUpdate({ negativePrompt: v.slice(0, 2500) })} target="negative" media="video" />
+      }>
         <TagTextarea
           value={data.negativePrompt ?? ""}
           onChange={(v) => onUpdate({ negativePrompt: v.slice(0, 2500) })}
@@ -1446,6 +1473,7 @@ function MotionTransferConfigImpl({ data, onUpdate, sources, fieldMappings, onMa
           nodeRefs={nodeRefs}
           displayMode={variableDisplayMode}
           refMap={refMap}
+          snippets={negativeSnippets}
         />
         <span className="text-xs text-muted-foreground">{data.negativePrompt?.length || 0}/2500</span>
       </MappableField>
@@ -1590,6 +1618,8 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
 }
 
 function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<TextToVideoData> & { nodeId?: string }) {
+  const promptSnippets = useSnippetPool("video", "prompt")
+  const negativeSnippets = useSnippetPool("video", "negative")
   useEffect(() => { prefetchModelCredits(VIDEO_T2V_MODELS.map((m) => m.value)) }, [])
   const currentProvider = data.provider || "seedance-2-fast"
   const allowedDurations = KIE_T2V_DURATIONS[currentProvider] || null
@@ -1669,7 +1699,10 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
         />
       </MappableField>
       <ModelDescriptionHint modelId={currentProvider} />
-      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="text-to-video" currentPrompt={data.prompt || ""} provider={currentProvider} duration={data.duration} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />}>
+      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+        <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="video" />
+        <PromptHelperButton nodeType="text-to-video" currentPrompt={data.prompt || ""} provider={currentProvider} duration={data.duration} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />
+      </span>}>
         <PromptEditor
           rows={3}
           value={data.prompt}
@@ -1678,6 +1711,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
           referenceImages={refImagesForAutocomplete}
           nodeRefs={nodeRefs}
           refMap={refMap}
+          snippets={promptSnippets}
         />
       </MappableField>
       <ExtraRefsSection
@@ -1913,7 +1947,9 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
           onValueChange={(v) => onUpdate({ aspectRatio: v as TextToVideoData["aspectRatio"] })}
         />
       </MappableField>
-      <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={
+        <SnippetMenuButton pool={negativeSnippets} value={data.negativePrompt || ""} onInsert={(v) => onUpdate({ negativePrompt: v })} target="negative" media="video" />
+      }>
         <TagTextarea
           rows={2}
           value={data.negativePrompt}
@@ -1923,6 +1959,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
           referenceImages={refImagesForAutocomplete}
           displayMode={variableDisplayMode}
           refMap={refMap}
+          snippets={negativeSnippets}
         />
       </MappableField>
 
@@ -1953,6 +1990,8 @@ export const TextToVideoConfig = memo(TextToVideoConfigImpl)
 //   - Kling 3.0 dispatches to Kling3StudioConfig (same as i2v/t2v).
 // ---------------------------------------------------------------------------
 function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources, fieldMappings, onMapField, nodes, edges, onUpdateNode, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<GenerateVideoNodeData> & { nodeId?: string }) {
+  const promptSnippets = useSnippetPool("video", "prompt")
+  const negativeSnippets = useSnippetPool("video", "negative")
   useEffect(() => { prefetchModelCredits(VIDEO_GEN_MODELS.map((m) => m.value)) }, [])
   const [lightboxImage, setLightboxImage] = useState<string | null>(null)
   // GenerateVideoNodeData is structurally `ImageToVideoData & TextToVideoData`
@@ -2256,7 +2295,10 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
         </div>
       )}
 
-      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="image-to-video" currentPrompt={data.prompt || ""} provider={currentProvider} duration={data.duration} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />}>
+      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+        <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="video" />
+        <PromptHelperButton nodeType="image-to-video" currentPrompt={data.prompt || ""} provider={currentProvider} duration={data.duration} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />
+      </span>}>
         <PromptEditor
           rows={3}
           value={data.prompt || ""}
@@ -2265,13 +2307,16 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
           referenceImages={refImagesForAutocomplete}
           nodeRefs={nodeRefs}
           refMap={refMap}
+          snippets={promptSnippets}
         />
       </MappableField>
 
       {/* Negative Prompt — always visible. Kling family providers send it
           natively as `negative_prompt`; non-native providers get it
           appended to the prompt as "Avoid: …" by the backend helper. */}
-      <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={
+        <SnippetMenuButton pool={negativeSnippets} value={(data as Record<string, unknown>).negativePrompt as string || ""} onInsert={(v) => onUpdate({ negativePrompt: v })} target="negative" media="video" />
+      }>
         <Textarea
           rows={2}
           value={(data as Record<string, unknown>).negativePrompt as string || ""}
@@ -2943,6 +2988,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
 export const GenerateVideoConfig = memo(GenerateVideoConfigImpl)
 
 export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<ExtendVideoData> & { nodeId?: string }) {
+  const promptSnippets = useSnippetPool("video", "prompt")
   return (
     <div className="flex flex-col gap-3">
       <FinalPromptPreview userPrompt={data.prompt} negativePrompt={data.negativePrompt} consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
@@ -2960,7 +3006,10 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
         </Select>
       </MappableField>
 
-      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="extend-video" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />}>
+      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+        <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="video" />
+        <PromptHelperButton nodeType="extend-video" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />
+      </span>}>
         <TagTextarea
           value={data.prompt || ""}
           onChange={(v) => onUpdate({ prompt: v })}
@@ -2969,6 +3018,7 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
           nodeRefs={nodeRefs}
           displayMode={variableDisplayMode}
           refMap={refMap}
+          snippets={promptSnippets}
         />
       </MappableField>
 
@@ -3068,6 +3118,8 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
 
 
 export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeId }: ConfigProps<SpeechToVideoData> & { nodeId?: string }) {
+  const promptSnippets = useSnippetPool("video", "prompt")
+  const negativeSnippets = useSnippetPool("video", "negative")
   useEffect(() => { prefetchModelCredits(["speech-to-video", "speech-to-video:580p", "speech-to-video:720p"]) }, [])
   const [showAdvanced, setShowAdvanced] = useState(false)
 
@@ -3094,11 +3146,14 @@ export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, on
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between gap-1.5">
           <Label className="text-xs text-muted-foreground">Prompt</Label>
-          <PromptHelperButton
-            nodeType="speech-to-video"
-            currentPrompt={data.prompt || ""}
-            onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })}
-          />
+          <span className="inline-flex items-center gap-0.5">
+            <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="video" />
+            <PromptHelperButton
+              nodeType="speech-to-video"
+              currentPrompt={data.prompt || ""}
+              onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })}
+            />
+          </span>
         </div>
         <Textarea
           value={data.prompt || ""}
@@ -3134,7 +3189,9 @@ export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, on
       <SeedanceReferenceTip provider={data.provider} />
 
       {/* Negative Prompt */}
-      <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+      <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={
+        <SnippetMenuButton pool={negativeSnippets} value={data.negativePrompt || ""} onInsert={(v) => onUpdate({ negativePrompt: v || undefined })} target="negative" media="video" />
+      }>
         <Textarea
           value={data.negativePrompt || ""}
           onChange={(e) => onUpdate({ negativePrompt: e.target.value || undefined })}
@@ -3284,6 +3341,7 @@ export function FaceSwapConfig({ data, onUpdate, sources, edges, nodeId }: Confi
 // ---------------------------------------------------------------------------
 function VideoRetakeConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<VideoRetakeData> & { nodeId?: string }) {
   useEffect(() => { prefetchModelCredits(["ltx-2.3-pro"]) }, [])
+  const promptSnippets = useSnippetPool("video", "prompt")
   return (
     <div className="flex flex-col gap-3">
       <FinalPromptPreview userPrompt={data.prompt} consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
@@ -3295,13 +3353,16 @@ function VideoRetakeConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
         fieldMappings={fieldMappings}
         onMapField={onMapField}
         labelAction={
-          <PromptHelperButton
-            nodeType="video-retake"
-            currentPrompt={data.prompt || ""}
-            provider={data.provider}
-            aspectRatio={data.aspectRatio}
-            onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })}
-          />
+          <span className="inline-flex items-center gap-0.5">
+            <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="video" />
+            <PromptHelperButton
+              nodeType="video-retake"
+              currentPrompt={data.prompt || ""}
+              provider={data.provider}
+              aspectRatio={data.aspectRatio}
+              onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })}
+            />
+          </span>
         }
       >
         <TagTextarea
@@ -3312,6 +3373,7 @@ function VideoRetakeConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
           nodeRefs={nodeRefs}
           displayMode={variableDisplayMode}
           refMap={refMap}
+          snippets={promptSnippets}
         />
       </MappableField>
 

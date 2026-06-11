@@ -17,6 +17,8 @@ import { uploadAudio, downloadYouTubeAudio } from "@/lib/api"
 import type { GenerateMusicData, WorkflowEdge } from "@/types/nodes"
 import { MappableField } from "./mappable-field"
 import { PromptHelperButton } from "./prompt-helper-button"
+import { SnippetMenuButton } from "./snippet-menu-button"
+import { useSnippetPool } from "@/hooks/queries/use-prompt-snippets-queries"
 import { ConnectedAudioSources } from "./connected-audio-sources"
 import { FinalAudioPromptPreview } from "./final-audio-prompt-preview"
 import type { ConfigProps } from "./types"
@@ -27,6 +29,7 @@ const EMPTY_EDGES: ReadonlyArray<WorkflowEdge> = []
 
 export function GenerateMusicConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeId }: ConfigProps<GenerateMusicData> & { nodeId?: string }) {
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "error">("idle")
+  const promptSnippets = useSnippetPool("audio", "prompt")
   const [ytStatus, setYtStatus] = useState<"idle" | "downloading" | "error">("idle")
 
   const connectedRef = sources.find((s) => s.targetHandle === "ref-audio")
@@ -88,7 +91,10 @@ export function GenerateMusicConfig({ data, onUpdate, sources, fieldMappings, on
           </SelectContent>
         </Select>
       </div>
-      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="generate-music" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />}>
+      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+        <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="audio" />
+        <PromptHelperButton nodeType="generate-music" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />
+      </span>}>
         <Textarea
           id="music-prompt"
           value={data.prompt}
