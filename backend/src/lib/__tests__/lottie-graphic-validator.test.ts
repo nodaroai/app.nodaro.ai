@@ -42,6 +42,95 @@ describe("rule 3: every shape primitive wrapped in a group ending in tr", () => 
   })
 })
 
+describe("rule 11: repeater integrity", () => {
+  // Shape of prod job 73e2c691 (2026-06-11): repeater FIRST in the group and
+  // missing its `tr` entirely — lottie-web threw on `data.tr.so`, DOMLoaded
+  // never fired, and the render hung to the 118s delayRender timeout.
+  const brokenRepeaterGroup = () => ({
+    ty: "gr",
+    it: [
+      { c: { a: 0, k: 30 }, m: 1, o: { a: 0, k: 100 }, ty: "rp" },
+      { d: 1, p: { a: 0, k: [0, 0] }, s: { a: 0, k: [15, 8] }, ty: "rc" },
+      { c: { a: 0, k: [1, 0, 0, 1] }, o: { a: 0, k: 100 }, ty: "fl" },
+      { a: { a: 0, k: [0, 0] }, o: { a: 0, k: 100 }, p: { a: 0, k: [0, 0] }, r: { a: 0, k: 0 }, s: { a: 0, k: [100, 100] }, ty: "tr" },
+    ],
+  })
+
+  it("completes a repeater missing its tr (so/eo) and repositions it after the shapes", () => {
+    const r = validateLottieGraphic(
+      base({ layers: [{ ty: 4, ip: 0, op: 150, shapes: [brokenRepeaterGroup()] }] }),
+      EXPECTED,
+    )
+    expect(r.rejected).toBe(false)
+    const it = (r.plan!.lottie as any).layers[0].shapes[0].it
+    // Order healed: [rc, fl, rp, tr] — repeater after the drawables, before the group tr.
+    expect(it.map((s: any) => s.ty)).toEqual(["rc", "fl", "rp", "tr"])
+    const rp = it[2]
+    expect(rp.tr).toBeDefined()
+    expect(rp.tr.so).toEqual({ a: 0, k: 100 })
+    expect(rp.tr.eo).toEqual({ a: 0, k: 100 })
+    expect(rp.tr.p).toEqual({ a: 0, k: [0, 0] })
+    expect(rp.c).toEqual({ a: 0, k: 30 }) // existing copies count untouched
+    expect(r.autoFixed.some((m) => m.includes("repeater"))).toBe(true)
+  })
+
+  it("fills only missing tr fields, preserving authored per-copy offsets", () => {
+    const group = brokenRepeaterGroup()
+    ;(group.it[0] as any).tr = { p: { a: 0, k: [12, -4] }, r: { a: 0, k: 15 } }
+    const r = validateLottieGraphic(
+      base({ layers: [{ ty: 4, ip: 0, op: 150, shapes: [group] }] }),
+      EXPECTED,
+    )
+    const rp = (r.plan!.lottie as any).layers[0].shapes[0].it[2]
+    expect(rp.tr.p).toEqual({ a: 0, k: [12, -4] })
+    expect(rp.tr.r).toEqual({ a: 0, k: 15 })
+    expect(rp.tr.so).toEqual({ a: 0, k: 100 })
+  })
+
+  it("leaves a complete, correctly placed repeater untouched", () => {
+    const goodGroup = {
+      ty: "gr",
+      it: [
+        { d: 1, p: { a: 0, k: [0, 0] }, s: { a: 0, k: [15, 8] }, ty: "rc" },
+        { c: { a: 0, k: [1, 0, 0, 1] }, o: { a: 0, k: 100 }, ty: "fl" },
+        {
+          ty: "rp", c: { a: 0, k: 12 }, o: { a: 0, k: 0 }, m: 1,
+          tr: { a: { a: 0, k: [0, 0] }, p: { a: 0, k: [20, -10] }, r: { a: 0, k: 30 }, s: { a: 0, k: [98, 98] }, so: { a: 0, k: 100 }, eo: { a: 0, k: 100 } },
+        },
+        { a: { a: 0, k: [0, 0] }, o: { a: 0, k: 100 }, p: { a: 0, k: [0, 0] }, r: { a: 0, k: 0 }, s: { a: 0, k: [100, 100] }, ty: "tr" },
+      ],
+    }
+    const r = validateLottieGraphic(
+      base({ layers: [{ ty: 4, ip: 0, op: 150, shapes: [goodGroup] }] }),
+      EXPECTED,
+    )
+    expect(r.autoFixed.filter((m) => m.toLowerCase().includes("repeater"))).toEqual([])
+    const it = (r.plan!.lottie as any).layers[0].shapes[0].it
+    expect(it.map((s: any) => s.ty)).toEqual(["rc", "fl", "rp", "tr"])
+  })
+
+  it("moves a layer-level leading repeater after the groups it should duplicate", () => {
+    const r = validateLottieGraphic(
+      base({
+        layers: [{
+          ty: 4, ip: 0, op: 150,
+          shapes: [
+            { c: { a: 0, k: 5 }, ty: "rp" },
+            { ty: "gr", it: [{ ty: "el" }, { ty: "tr" }] },
+          ],
+        }],
+      }),
+      EXPECTED,
+    )
+    const shapes = (r.plan!.lottie as any).layers[0].shapes
+    expect(shapes.map((s: any) => s.ty)).toEqual(["gr", "rp"])
+    const rp = shapes[1]
+    expect(rp.tr.so).toEqual({ a: 0, k: 100 })
+    expect(rp.o).toEqual({ a: 0, k: 0 })
+    expect(rp.m).toBe(1)
+  })
+})
+
 describe("rule 4: colors normalized to 0-1", () => {
   it("divides 0-255 components by 255", () => {
     const r = validateLottieGraphic(base({ layers: [{ ty: 4, ip: 0, op: 150, shapes: [{ ty: "gr", it: [{ ty: "fl", c: { a: 0, k: [255, 128, 0, 1] } }, { ty: "tr" }] }] }] }), EXPECTED)

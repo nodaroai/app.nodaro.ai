@@ -55,6 +55,16 @@ For a SEAMLESS LOOP, repeat the first keyframe's value as the last keyframe at t
 - Every layer needs a \`"ks"\` transform object (\`o\`, \`r\`, \`p\`, \`a\`, \`s\`), an \`"ip"\` and \`"op"\` BOTH within \`[0, op]\`, and a UNIQUE integer \`"ind"\`.
 - Keep it tight: ≤12 layers is typical; the HARD MAXIMUM is 50 layers. Keep the entire serialized JSON well under 100 KB.
 
+## Repeaters
+
+A repeater (\`"ty": "rp"\`) is the right tool for confetti, particles, tick marks and ray bursts — author ONE shape and multiply it instead of hand-writing dozens of layers. Two hard rules:
+
+- ORDER: the repeater goes AFTER the shapes and fills it duplicates inside the same group's \`it\` array, just before the group's closing \`"tr"\` — a repeater placed first duplicates nothing.
+- COMPLETE \`"tr"\`: every repeater MUST carry its own full transform with per-copy offsets and start/end opacity — lottie-web crashes on a repeater missing \`tr\`/\`so\`/\`eo\`:
+  \`"tr": { "a": {"a":0,"k":[0,0]}, "p": {"a":0,"k":[<dx per copy>,<dy per copy>]}, "r": {"a":0,"k":<degrees per copy>}, "s": {"a":0,"k":[100,100]}, "so": {"a":0,"k":100}, "eo": {"a":0,"k":100} }\`
+
+Put real offsets in the repeater's \`tr\` (\`p\`, \`r\`, and a slight \`s\` falloff) so the copies fan out instead of stacking on one spot.
+
 ## MANDATORY SLOTS — the editable surface
 
 Every user-meaningful COLOR, every TEXT STRING, and every KEY SCALAR (a headline font size, an accent bar length, etc.) MUST be exposed as an editable slot. Slots are how the end user re-themes and re-captions the graphic without you regenerating it.
