@@ -121,6 +121,32 @@ Some fields are **audio-tag fields** — the text fields on text-to-speech and
 Suno music nodes that use `[tag]` autocomplete. Those keep `/` for inserting
 **audio tags** and do **not** show prompt snippets.
 
+## Final-prompt provenance
+
+The **Final prompt** preview on image-generation nodes color-codes the
+assembled prompt by where each piece came from, so you can see at a glance what
+the model will actually receive — your words, plus everything the editor adds
+around them. Each color marks one origin:
+
+| Color | Origin | What it is |
+|-------|--------|------------|
+| _(no tint)_ | **Your text** | Exactly what you typed. |
+| Sky&nbsp;blue | **Variable** | A resolved `{Node Label}` value pulled from an upstream node. |
+| Indigo | **Picker** | A cinematography / parameter-picker fragment from a connected node (e.g. a Setting or Camera Motion node). |
+| Amber | **Snippet** | An inserted snippet's text (matched back to your snippet pool). |
+| Violet | **References** | The identity / reference directive block added for connected character or reference images. |
+| Grey | **Style** | The auto-appended `Style: …` suffix. |
+| Rose | **Negative** | The negative-prompt content — either its own card, or an `Avoid: …` suffix folded into the prompt for providers that have no separate negative field. |
+
+A small **legend** appears under the preview whenever at least one non-plain
+origin is present (a prompt that is purely your own text shows no legend). The
+negative-prompt card gets the same variable- and snippet-highlighting.
+
+This is a **display layer only**. The colors never change the string sent to
+the model, and the **Copy** button copies the plain text with no markup. The
+highlighting shows up once a node has a provider selected; before that the
+preview shows a best-effort plain string.
+
 ## Scoping: which snippets a field sees
 
 Every snippet declares:
