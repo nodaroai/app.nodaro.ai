@@ -11,7 +11,7 @@ import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.j
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
-import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, isSeedance2Provider, estimateLoopTrimAddonCredits, seedance2AudioLimitSec, findSeedance2AudioOverLimit } from "@nodaro/shared"
+import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, isSeedance2Provider, estimateLoopTrimAddonCredits, seedance2AudioLimitSec, findSeedance2AudioOverLimit } from "@nodaro/shared"
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 
@@ -20,15 +20,15 @@ export const generateVideoBody = z.object({
   endFrameUrl: safeUrlSchema.optional(),
   last_frame_image: safeUrlSchema.optional(),  // LTX image_to_video end-frame URL (snake_case)
   audioUrl: safeUrlSchema.optional(),
-  prompt: z.string().max(2500).optional(),
+  prompt: z.string().max(VIDEO_PROMPT_MAX).optional(),
   userPrompt: z.string().max(8000).optional(),
   provider: z.enum(VIDEO_GEN_PROVIDERS).optional(),
   generateAudio: z.boolean().optional(),
   duration: z.number().int().min(1).max(60).optional(),
   mode: z.enum(["pro", "std", "4K"]).optional(),
   sound: z.boolean().optional(),
-  negativePrompt: z.string().max(2500).optional(),
-  motionPrompt: z.string().max(2500).optional(),
+  negativePrompt: z.string().max(VIDEO_PROMPT_MAX).optional(),
+  motionPrompt: z.string().max(VIDEO_PROMPT_MAX).optional(),
   cfgScale: z.number().min(0).max(1).optional(),
   aspectRatio: z.enum(["16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "adaptive", "Auto"]).optional(),
   multiShot: z.boolean().optional(),

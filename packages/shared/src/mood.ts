@@ -36,7 +36,8 @@ export interface Mood {
 export const MOODS: ReadonlyArray<Mood> = [
   // -------------------- Positive --------------------
   { id: "happy",       label: "Happy",        category: "positive", description: "Warm, smiling happiness",     promptHint: "with a warm, happy expression and a genuine smile" },
-  { id: "joyful",      label: "Joyful",       category: "positive", description: "Radiant, unrestrained joy",   promptHint: "with a radiant, joyful expression full of delight" },
+  { id: "joyful",      label: "Joyful",       category: "positive", description: "Radiant, unrestrained joy",   promptHint: "with a radiant, joyful expression full of delight, the corners of the mouth rising uncontrollably, steps light" },
+  { id: "relieved",    label: "Relieved",     category: "positive", description: "Tension releasing into calm", promptHint: "with a relieved expression, letting out a long breath, shoulders relaxing completely, a faint long-awaited smile" },
   { id: "serene",      label: "Serene",       category: "positive", description: "Calm, peaceful contentment",  promptHint: "with a serene, peaceful expression and relaxed posture" },
   { id: "playful",     label: "Playful",      category: "positive", description: "Mischievous, playful energy", promptHint: "with a playful, mischievous expression and light energy" },
   { id: "confident",   label: "Confident",    category: "positive", description: "Self-assured, confident",     promptHint: "with a confident, self-assured expression and poised demeanor" },
@@ -47,10 +48,10 @@ export const MOODS: ReadonlyArray<Mood> = [
   { id: "hopeful",     label: "Hopeful",      category: "positive", description: "Bright-eyed, optimistic",     promptHint: "with a hopeful expression, a soft slight smile and bright, expectant eyes" },
 
   // -------------------- Negative --------------------
-  { id: "sad",         label: "Sad",          category: "negative", description: "Quietly sad, downcast",       promptHint: "with a quietly sad, downcast expression" },
-  { id: "angry",       label: "Angry",        category: "negative", description: "Clear anger, tension",        promptHint: "with an angry expression, furrowed brow and tight jaw" },
+  { id: "sad",         label: "Sad",          category: "negative", description: "Quietly sad, downcast",       promptHint: "with a quietly sad, downcast expression, head lowered, shoulders trembling slightly, eyes reddening" },
+  { id: "angry",       label: "Angry",        category: "negative", description: "Clear anger, tension",        promptHint: "with an angry expression, furrowed brow and tight jaw, fists clenched, chest heaving" },
   { id: "afraid",      label: "Afraid",       category: "negative", description: "Frightened, wide-eyed",       promptHint: "with a frightened expression, wide eyes and tense posture" },
-  { id: "anxious",     label: "Anxious",      category: "negative", description: "Nervous, worried",            promptHint: "with an anxious, worried expression and restless tension" },
+  { id: "anxious",     label: "Anxious",      category: "negative", description: "Nervous, worried",            promptHint: "with an anxious, worried expression and restless tension, fingers tapping, eyes darting, breath quickening" },
   { id: "melancholy",  label: "Melancholy",   category: "negative", description: "Wistful sadness",             promptHint: "with a melancholy, wistful expression lost in thought" },
   { id: "devastated",  label: "Devastated",   category: "negative", description: "Heartbroken grief",           promptHint: "with a devastated, heartbroken expression" },
   { id: "grieving",    label: "Grieving",     category: "negative", description: "Deep grief, loss",            promptHint: "with a grieving expression of deep loss" },

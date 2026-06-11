@@ -82,6 +82,7 @@ const map: LocaleCatalogMap = {
   "mother-of-pearl": { label: "マザー・オブ・パール", description: "貝の内側の真珠光沢、虹色のクリーム色" },
   "carbon-fiber": { label: "カーボンファイバー", description: "織られた黒いカーボン繊維の複合材" },
   "holographic-film": { label: "ホログラフィックフィルム", description: "光を屈折させるホログラム、虹色の輝き" },
+  "subsurface": { label: "サブサーフェスグロー", description: "表面下から光が透ける" },
 }
 
 export default map

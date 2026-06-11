@@ -82,6 +82,7 @@ const map: LocaleCatalogMap = {
   "mother-of-pearl": { label: "자개", description: "조개 안쪽의 진주층, 무지갯빛 크림색입니다" },
   "carbon-fiber": { label: "카본 파이버", description: "직조된 검은 카본 파이버 복합재입니다" },
   "holographic-film": { label: "홀로그래픽 필름", description: "빛을 굴절시켜 무지갯빛 광채를 내는 홀로그램 필름입니다" },
+  "subsurface": { label: "서브서피스 글로우", description: "표면 아래에서 빛나는 광채" },
 }
 
 export default map

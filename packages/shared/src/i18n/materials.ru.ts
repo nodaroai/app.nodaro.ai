@@ -80,6 +80,7 @@ const map: LocaleCatalogMap = {
   "mother-of-pearl": { label: "Перламутр", description: "Перламутровая внутренняя сторона раковины, переливчатый кремовый" },
   "carbon-fiber": { label: "Карбон", description: "Тканый чёрный карбоновый композит" },
   "holographic-film": { label: "Голографическая плёнка", description: "Светопреломляющая голограмма с радужным мерцанием" },
+  "subsurface": { label: "Подповерхностное свечение", description: "Свет светится под поверхностью" },
 }
 
 export default map

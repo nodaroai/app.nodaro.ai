@@ -60,6 +60,7 @@ const map: LocaleCatalogMap = {
   "suspicious": { label: "疑わしい", description: "警戒した不信、細めた目、横目" },
   "resigned": { label: "諦念", description: "不快な状況を静かに受け入れる" },
   "conflicted": { label: "葛藤", description: "目に見える内的葛藤、寄せた眉" },
+  "relieved": { label: "安堵", description: "緊張が解けて穏やかに" },
 }
 
 export default map

@@ -18,6 +18,8 @@ const map: LocaleCatalogMap = {
   "cooke-s4": { description: "The Cooke look — кремовая живописная кожа" },
   "helios-44": { description: "Винтажное советское закрученное боке" },
   "petzval": { description: "Сверхвинтажный завиток, драматичный спад резкости" },
+  "probe": { label: "Линза-зонд", description: "Трубчатый макро — сквозь отверстия и узкие щели" },
+  "cctv": { label: "Камера наблюдения", description: "Вид записи с камеры видеонаблюдения" },
 }
 
 export default map

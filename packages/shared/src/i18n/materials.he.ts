@@ -80,6 +80,7 @@ const map: LocaleCatalogMap = {
   "mother-of-pearl": { label: "אם הפנינה", description: "פנים פנימיים של קונכייה איריסית בגוון שמנת" },
   "carbon-fiber": { label: "סיבי פחמן", description: "קומפוזיט סיבי פחמן ארוג שחור" },
   "holographic-film": { label: "פילם הולוגרפי", description: "הולוגרמה שוברת אור עם נצנוץ קשת" },
+  "subsurface": { label: "זוהר תת-פני", description: "אור זוהר מתחת לפני השטח" },
 }
 
 export default map

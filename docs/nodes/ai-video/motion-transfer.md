@@ -11,7 +11,7 @@ The Motion Transfer node takes motion from a reference video and applies it to a
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | Provider | Select | kling | AI model for motion transfer |
-| Prompt | Textarea | — | Optional motion description (max 2500 chars) |
+| Prompt | Textarea | — | Optional motion description (max 8000 chars) |
 | Character Orientation | Select | image | Kling only: image or video mode |
 | Background Source | Select | input_video | Kling 3.0 only: input_video or input_image |
 | Resolution | Select | 720p | Provider-specific options |

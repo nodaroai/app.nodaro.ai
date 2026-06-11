@@ -60,6 +60,7 @@ const map: LocaleCatalogMap = {
   "suspicious": { label: "संदेहास्पद", description: "सावधान अविश्वास, सिकुड़ी आँखें, side-eye" },
   "resigned": { label: "विवश", description: "किसी अप्रिय स्थिति की शांत स्वीकार्यता" },
   "conflicted": { label: "द्वंद्वग्रस्त", description: "दिखाई देता आंतरिक संघर्ष, भौंहें सिकुड़ी हुई" },
+  "relieved": { label: "राहत", description: "तनाव शांत हो जाता है" },
 }
 
 export default map
