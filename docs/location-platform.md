@@ -85,6 +85,32 @@ dedup guard and a `deleted_at IS NULL` predicate, so two concurrent jobs
 can't clobber each other and a job finishing after a soft-delete won't
 resurrect the row.
 
+### Seamless 360° surround continuation
+
+`POST /v1/generate-surround-continuation` builds a look-around (45°, 90°, …
+ring views) one frame at a time. Each call generates the next ring view as an
+image-to-image continuation of the previous one (`referenceImageUrl`), so a
+panorama viewer can stitch the views edge-to-edge.
+
+The platform owns the whole pipeline:
+
+1. **Half-carry composite** — it carries the reference's trailing half into the
+   new frame's leading half (per `direction`) and grays the rest; the model
+   paints only the gray region.
+2. **Paint** — image-to-image off the composite (studio pins
+   `provider: "nano-banana-pro"`, `aspectRatio: "16:9"`).
+3. **Color harmonization** — it matches the painted half's exposure / white
+   balance / color grade to the carried half and
+   feathers the seam, so there is no tonal seam down the frame's center even when
+   the model drifts warm. The carried half stays **pixel-exact**, so adjacent
+   ring views line up perfectly.
+
+`direction` is `right` (turn right), `up` (tilt up), or `down` (tilt down);
+`carriedFraction` defaults to `0.5`. The result attaches to the location's
+`angles` bucket when `attachToLocationId` + `attachToColumn: "angles"` +
+`attachName` are supplied. Billed per image provider — same per-provider table
+as `generate-location-asset`.
+
 ### Atmosphere motion clips
 
 `POST /v1/generate-location-motion` animates the location's establishing
@@ -365,6 +391,7 @@ curl -s -X POST "$BASE/v1/generate-location-motion" \
 | `POST` | `/v1/locations/:id/llm-caption` | JWT / `ndr_` | Re-run LLM caption against the current main image. |
 | `POST` | `/v1/generate-location` | JWT / `ndr_` | Generate 1–10 candidate establishing shots. |
 | `POST` | `/v1/generate-location-asset` | JWT / `ndr_` | Generate one variant for any of the 5 image buckets (or `custom`). |
+| `POST` | `/v1/generate-surround-continuation` | JWT / `ndr_` | Generate the next seamless 360° ring view (half-carry composite + paint + color-harmonize); attaches to `angles`. |
 | `POST` | `/v1/generate-location-motion` | JWT / `ndr_` | Animate the establishing shot into an atmosphere motion clip via i2v. |
 
 All `/generate-*` routes return a `jobId` (count=1) or `jobIds[]` (count=2/4)
@@ -415,6 +442,20 @@ await client.locations.generateAsset({
   attachName: "storm",
 })
 
+// Generate the next 360° ring view — the platform builds the half-carry
+// composite, paints, and color-harmonizes so there is no seam; the carried half
+// stays pixel-exact and the result auto-attaches to the `angles` bucket.
+await client.locations.generateSurroundContinuation({
+  referenceImageUrl: previousRingView,
+  direction: "right",
+  degrees: 45,
+  provider: "nano-banana-pro",
+  aspectRatio: "16:9",
+  attachToLocationId: locationId,
+  attachToColumn: "angles",
+  attachName: "Surround 45°",
+})
+
 // Animate the establishing shot into an atmosphere motion clip.
 await client.locations.generateMotion({
   motionPrompt: "slow dolly-in, neon signs flicker, light rain falling",
@@ -440,8 +481,9 @@ await client.locations.restore(locationId)
 ```
 
 Full surface: `list` / `get` / `create` / `update` / `delete` (soft) /
-`restore` / `generate` / `generateAsset` / `generateMotion` /
-`approveMainImage` / `recaption`. Permanent-delete is intentionally absent
+`restore` / `generate` / `generateAsset` / `generateSurroundContinuation` /
+`generateMotion` / `approveMainImage` / `recaption`. Permanent-delete is
+intentionally absent
 — see the Soft delete + archive section.
 
 ### CLI
@@ -689,6 +731,10 @@ generation routes:
   `docs/nodes/ai-image/generate-image.md` for the per-provider table.
 - `POST /v1/generate-location-asset` — `creditCost(provider)` credits per
   variant. Same per-provider table as `generate-image`.
+- `POST /v1/generate-surround-continuation` — `creditCost(provider)` credits
+  per ring view (one image generation). Same per-provider table as
+  `generate-image`; the server-side composite + color-harmonization steps are
+  not separately charged.
 - `POST /v1/generate-location-motion` — `creditCost(provider)` credits per
   motion clip. Provider defaults to `kling` (~28 credits / 10-second clip (kling:5s = 14)).
   See `docs/nodes/ai-video/generate-video.md` for the full per-provider

@@ -2,6 +2,7 @@ import type {
   CharacterAspectRatio,
   LocationAssetType,
   LocationAttachColumn,
+  SurroundDirection,
 } from "@nodaro/shared"
 import type { NodaroClient } from "../client.js"
 
@@ -18,6 +19,8 @@ import type { NodaroClient } from "../client.js"
 export type { LocationAssetType, LocationAttachColumn } from "@nodaro/shared"
 export { LOCATION_ASSET_TYPES, LOCATION_ATTACH_COLUMNS } from "@nodaro/shared"
 export type { CharacterAspectRatio } from "@nodaro/shared"
+export type { SurroundDirection } from "@nodaro/shared"
+export { SURROUND_DIRECTIONS } from "@nodaro/shared"
 
 /**
  * Reference-photo kind discriminator — the mood-board roles a user can attach
@@ -253,6 +256,44 @@ export interface GenerateLocationAssetInput {
 }
 
 /**
+ * Input for `client.locations.generateSurroundContinuation()` — fires the
+ * `POST /v1/generate-surround-continuation` route. Generates one seamless 360°
+ * ring view as an image-to-image continuation of `referenceImageUrl` (the
+ * previous ring view, or the establishing shot for the first ring).
+ *
+ * The platform owns the whole pipeline: it builds the half-carry composite
+ * server-side (carry the reference's trailing half into the new frame's leading
+ * half per `direction`, gray the rest), paints the gray region, then
+ * color-harmonizes the painted half to the carried half so there is no tonal
+ * seam down the frame's center. The carried half stays pixel-exact, so a
+ * panorama viewer stitching adjacent ring views stays geometrically seamless.
+ *
+ * When the studio path is set (`attachToLocationId` + `attachToColumn` +
+ * `attachName`), the worker appends `{ name: attachName, url: <result> }` to the
+ * location's bucket (studio uses `attachToColumn: "angles"`,
+ * `attachName: "Surround 45°"`).
+ */
+export interface GenerateSurroundContinuationInput {
+  /** The previous ring view to continue from (i2i anchor). */
+  referenceImageUrl: string
+  /** Carry/paint axis: turn right, tilt up, or tilt down. */
+  direction: SurroundDirection
+  /** Ring angle (45, 90, …) — stored on the result as metadata. */
+  degrees?: number
+  /** Fraction of the frame carried from the reference. Default 0.5 (half). */
+  carriedFraction?: number
+  /** Optional free-form scene hint woven into the fill prompt. */
+  userPrompt?: string
+  /** Image model. Studio pins `nano-banana-pro`; default `nano-banana`. */
+  provider?: string
+  /** Studio pins `"16:9"` so every ring view matches the establishing frame. */
+  aspectRatio?: CharacterAspectRatio
+  attachToLocationId?: string
+  attachToColumn?: LocationAttachColumn
+  attachName?: string
+}
+
+/**
  * Input for `client.locations.generateMotion()` — fires the
  * `POST /v1/generate-location-motion` route. Produces a single atmospheric
  * motion clip (drifting fog, snowfall, rolling waves, etc.) animated FROM a
@@ -418,6 +459,17 @@ export class LocationsResource {
    */
   generateAsset(data: GenerateLocationAssetInput): Promise<{ jobId: string }> {
     return this.client.request("POST", "/v1/generate-location-asset", { body: data })
+  }
+
+  /**
+   * Fire `POST /v1/generate-surround-continuation` to produce one seamless 360°
+   * ring view as an i2i continuation of `referenceImageUrl`. The platform builds
+   * the half-carry composite, paints the missing half, and color-harmonizes it
+   * to the carried half (no tonal seam; carried half stays pixel-exact). When the
+   * studio path is set, the worker appends the result to the location's bucket.
+   */
+  generateSurroundContinuation(data: GenerateSurroundContinuationInput): Promise<{ jobId: string }> {
+    return this.client.request("POST", "/v1/generate-surround-continuation", { body: data })
   }
 
   /**
