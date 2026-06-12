@@ -9,26 +9,28 @@
  * per-entity categories Character/Face/Object/Location — both are slotted here.
  */
 export const CATEGORY_ORDER: readonly string[] = [
-  // Popup-only virtual/quick-access categories (Recent/Most Used/Common, #2698)
-  // stay at the top. Keep these strings in sync with VIRTUAL_CATEGORY_IDS in
-  // add-node-popup.tsx. The sidebar has no such categories, so these are no-ops there.
+  // Popup-only virtual/quick-access categories (Recent/Most Used, #2698) stay
+  // at the top. Keep these strings in sync with VIRTUAL_CATEGORY_IDS in
+  // add-node-popup.tsx. The sidebar has no such categories, so these are no-ops
+  // there. ("Common" is no longer a category — it's the popup's Common tab.)
   "Recent",
   "Most Used",
-  "Common",
+  // The All-tab root order (user-specified; pinned by
+  // lib/__tests__/node-category-order.test.ts):
   "Input",
   "Assets",
   "Character",
   "Face",
   "Object",
   "Location",
-  "Pickers",
   "AI",
+  "Pickers",
   "Processing",
-  "Output",
   "Data",
-  "Triggers",
-  "Workflow",
   "Component",
+  "Workflow",
+  "Triggers",
+  "Output",
 ]
 
 export function categoryRank(id: string): number {

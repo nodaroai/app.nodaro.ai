@@ -33,6 +33,7 @@ import { MediaPreviewModal } from "./media-preview-modal"
 import { ZOOM_MIN, ZOOM_MAX, snapZoom } from "@/lib/zoom"
 import { AddNodePopup } from "./add-node-popup"
 import { buildAdjacency, isValidWorkflowConnection } from "@/lib/connection-validation"
+import { nodeRect } from "@/lib/find-free-position"
 import { pickEdgeAccent } from "@/lib/edge-accent"
 import { getEdgeTypeColor } from "@/lib/edge-type-color"
 import { getHandleConnectionLimit } from "@/lib/handle-limits"
@@ -485,6 +486,12 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const [edgeContextMenu, setEdgeContextMenu] = useState<{ edgeId: string; x: number; y: number } | null>(null)
   const [showMiniMap, setShowMiniMap] = useState(true)
   const [addNodePopupOpen, setAddNodePopupOpen] = useState(false)
+  // Mirror for the document keydown closure (its deps don't include this
+  // state). While the popup is open it owns Tab (switches its Common/All
+  // mode) and Escape (returns to its root from an inner menu, closes at
+  // root) — the canvas's capture-phase handler must yield both.
+  const addNodePopupOpenRef = useRef(false)
+  useEffect(() => { addNodePopupOpenRef.current = addNodePopupOpen }, [addNodePopupOpen])
   const [addNodePopupPosition, setAddNodePopupPosition] = useState<{ x: number; y: number } | undefined>(undefined)
   // Pre-selected category for the add-node popup (empty-state upload bar opens it drilled to "Input")
   const [addNodePopupCategory, setAddNodePopupCategory] = useState<string | null>(null)
@@ -1377,6 +1384,42 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     return () => setOpenAddNodePopupForHandleStore(null)
   }, [setOpenAddNodePopupForHandleStore, openAddNodePopupForHandle])
 
+  // Center the viewport on every newly created node at the CURRENT zoom.
+  // Registered into the store's addNode so all entry points (popup, sidebar
+  // toolbar, edge-drop, handle popover) inherit it. React Flow hasn't
+  // measured the node yet on the creation tick, so wait a few frames for the
+  // real footprint (centering from the estimate lands visibly off-center on
+  // small/large nodes), then fall back to the nodeRect estimate.
+  const setOnNodeCreated = useWorkflowStore((s) => s.setOnNodeCreated)
+  useEffect(() => {
+    setOnNodeCreated((nodeId: string) => {
+      let tries = 0
+      const tick = () => {
+        const node = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)
+        if (!node) return
+        if (!node.measured?.width && tries++ < 10) {
+          requestAnimationFrame(tick)
+          return
+        }
+        const { width, height } = nodeRect(node)
+        setCenter(node.position.x + width / 2, node.position.y + height / 2, {
+          zoom: getViewport().zoom,
+          duration: 300,
+        })
+        // Give the node DOM focus so plain Arrow-key nudging works
+        // immediately: RF's nudge handler only fires when the keydown
+        // originates inside its subtree, and after the add-node popup closes
+        // focus otherwise rests on body. Same pattern as the fullscreen-close
+        // restore and the Alt+Arrow neighbor nav above.
+        document
+          .querySelector<HTMLElement>(`.react-flow__node[data-id="${nodeId}"]`)
+          ?.focus({ preventScroll: true })
+      }
+      requestAnimationFrame(tick)
+    })
+    return () => setOnNodeCreated(null)
+  }, [setOnNodeCreated, setCenter, getViewport])
+
   const handleOpenSearch = useCallback(() => setSearchModalOpen(true), [])
   const handleOpenNodeSearch = useCallback(() => setNodeSearchModalOpen(true), [])
   const handleOpenAssetLibrary = useCallback(() => setAssetLibraryOpen(true), [])
@@ -1745,6 +1788,11 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           setFullscreenNodeId(null)
           return
         }
+        if (addNodePopupOpenRef.current) {
+          // The add-node popup owns Escape while open: back to its root from
+          // an inner menu, close at root (its own document listener).
+          return
+        }
         setAddNodePopupOpen(false)
         setCanvasContextMenu(null)
         setNodeContextMenu(null)
@@ -1851,6 +1899,11 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
 
       // Tab - Open Add Node popup at mouse position
       if (matchShortcut(e, SHORTCUTS.addNode)) {
+        if (addNodePopupOpenRef.current) {
+          // Already open: Tab switches the popup's Common/All mode (its own
+          // document listener) — don't re-open/reposition it.
+          return
+        }
         e.preventDefault()
         const pos = lastMousePositionRef.current
         handleOpenAddNodePopup(pos.x !== 0 || pos.y !== 0 ? pos : undefined)

@@ -19,6 +19,7 @@ import { migrateToItems, validateNoNestedGroups, cleanOrphanedItems, isCollectIn
 import type { VariableDisplayMode } from "@/components/editor/config-panels/types"
 import { buildPreviewItemKey, getPreviewItemKey } from "@/lib/preview-items"
 import { ensureNodePositions } from "@/lib/node-position"
+import { findNonOverlappingPosition, nodeRect, DEFAULT_PLACEMENT_SIZE } from "@/lib/find-free-position"
 import { autoExecuteNode } from "@/components/editor/workflow-editor/auto-execute"
 import { orderNodesParentFirst, localToWorld } from "@/components/editor/workflow-editor/group-coords"
 import { MAIN_TEXT_HANDLE, TEXT_PRODUCING_SOURCE_TYPES } from "@/lib/main-text-handle"
@@ -585,6 +586,11 @@ interface WorkflowState {
   readonly setOpenAddNodePopupForHandle: (
     fn: ((args: { nodeId: string; handleId: string; direction: "source" | "target"; nodeType: string; prefillName?: string }) => void) | null,
   ) => void
+  /** Canvas-registered hook invoked after addNode creates a node (sticky
+   *  notes excluded) — the canvas centers the viewport on it at the current
+   *  zoom, so every add-node entry point inherits the behavior. */
+  readonly onNodeCreated: ((nodeId: string) => void) | null
+  readonly setOnNodeCreated: (fn: ((nodeId: string) => void) | null) => void
   /** Edge id currently being hovered in a HandlePopover row — drives the
    *  edge highlight visual via `AnimatedFlowEdge`. Null when no row is
    *  hovered. */
@@ -1268,15 +1274,32 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       }
     }
 
+    // Collision-free placement: land on the closest spot (with a margin of
+    // air) that doesn't overlap an existing node. Sticky notes are background
+    // annotations — they neither dodge nodes nor count as obstacles.
+    const resolvedPosition = type === "sticky-note"
+      ? position
+      : findNonOverlappingPosition(
+          position,
+          {
+            width: definition.width ?? DEFAULT_PLACEMENT_SIZE.width,
+            height: definition.height ?? DEFAULT_PLACEMENT_SIZE.height,
+          },
+          get().nodes.filter((n) => n.type !== "sticky-note" && !n.hidden).map(nodeRect),
+        )
+
     const newNode: WorkflowNode = {
       id,
       type,
-      position,
+      position: resolvedPosition,
       data: nodeData as SceneNodeData,
       ...(definition.width ? { width: definition.width } : {}),
       ...(definition.height ? { height: definition.height } : {}),
       // Sticky notes should appear behind other nodes
       ...(type === "sticky-note" ? { zIndex: -1 } : {}),
+      // New nodes take React Flow focus (blue glow, keyboard target) without
+      // opening the config sidebar (selectedNodeId stays untouched).
+      ...(type !== "sticky-note" ? { selected: true } : {}),
     }
 
     if (type === "teleport-send" || type === "teleport-receive") {
@@ -1289,14 +1312,23 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     }
 
     set((state) => ({
-      nodes: [...state.nodes, newNode],
+      nodes: [
+        ...(newNode.selected
+          ? state.nodes.map((n) => (n.selected ? { ...n, selected: false } : n))
+          : state.nodes),
+        newNode,
+      ],
       newNodeIds: new Set([...state.newNodeIds, id]),
       isDirty: true,
+      ...(newNode.selected ? { focusedNodeId: id } : {}),
     }))
 
     if (type === "teleport-send" || type === "teleport-receive") {
       get().syncTeleporterEdges((newNode.data as TeleportSendData).channel)
     }
+
+    // Let the canvas center the viewport on the new node (current zoom).
+    if (type !== "sticky-note") get().onNodeCreated?.(id)
 
     return id
   },
@@ -2651,6 +2683,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   setRunSelected: (fn) => set({ runSelected: fn }),
   openAddNodePopupForHandle: null,
   setOpenAddNodePopupForHandle: (fn) => set({ openAddNodePopupForHandle: fn }),
+  onNodeCreated: null,
+  setOnNodeCreated: (fn) => set({ onNodeCreated: fn }),
   hoveredEdgeId: null,
   setHoveredEdgeId: (id) => set({ hoveredEdgeId: id }),
   reorderHandleEdges: (nodeId, handleId, direction, fromIndex, toIndex) => {

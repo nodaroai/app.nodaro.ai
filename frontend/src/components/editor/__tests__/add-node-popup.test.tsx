@@ -57,7 +57,15 @@ vi.mock("@/hooks/use-auth", () => ({
 // ---------------------------------------------------------------------------
 // Import the exports under test
 // ---------------------------------------------------------------------------
-import { NODE_OPTIONS, CATEGORIES, VIRTUAL_CATEGORY_IDS } from "../add-node-popup"
+import {
+  NODE_OPTIONS,
+  CATEGORIES,
+  VIRTUAL_CATEGORY_IDS,
+  COMMON_NODE_TYPES,
+  searchNodeOptions,
+  searchNodeOptionsSectioned,
+  mediaTabNodeOptions,
+} from "../add-node-popup"
 import { clusterByGroup } from "@/lib/cluster-by-group"
 
 // ---------------------------------------------------------------------------
@@ -284,6 +292,213 @@ describe("CATEGORIES", () => {
       )
       expect(nodesInCategory.length).toBeGreaterThan(0)
     }
+  })
+})
+
+// ─── Common/All tabs (nodes-menu modes) ───
+//
+// The popup root is split into two tabs: COMMON (the curated common view) and
+// ALL (the root categories). Common is no longer a navigable category — it's a
+// tab — so it must NOT appear in CATEGORIES, and the remaining real categories
+// must follow the requested All-tab order.
+
+describe("Common/All tabs", () => {
+  it("CATEGORIES no longer contains the Common entry (it's a tab now)", () => {
+    expect(CATEGORIES.map((c) => c.id)).not.toContain(VIRTUAL_CATEGORY_IDS.common)
+  })
+
+  it("CATEGORIES (minus opt-in virtuals) follows the requested All-tab order", () => {
+    const virtuals = new Set<string>([
+      VIRTUAL_CATEGORY_IDS.recent,
+      VIRTUAL_CATEGORY_IDS.mostUsed,
+    ])
+    const realIds = CATEGORIES.map((c) => c.id).filter((id) => !virtuals.has(id))
+    expect(realIds).toEqual([
+      "Input",
+      "Assets",
+      "AI",
+      "Pickers",
+      "Processing",
+      "Data",
+      "Component",
+      "Workflow",
+      "Triggers",
+      "Output",
+    ])
+  })
+
+  it("COMMON_NODE_TYPES is non-empty and every member exists in NODE_OPTIONS", () => {
+    expect(COMMON_NODE_TYPES.size).toBeGreaterThan(10)
+    const allTypes = new Set(NODE_OPTIONS.map((o) => o.type))
+    for (const t of COMMON_NODE_TYPES) {
+      expect(allTypes.has(t), `COMMON_NODE_TYPES contains unknown type: ${t}`).toBe(true)
+    }
+  })
+})
+
+// ─── Image / Video / Audio media tabs ───
+//
+// Each media tab lists the nodes whose PRIMARY OUTPUT is that medium, sourced
+// from the platform's producer sets (IMAGE_PRODUCER_TYPES + the shared
+// VIDEO/AUDIO_PRODUCER_TYPES — the same sets driving canvas handle validation
+// and backend output routing). Within a tab, the curated COMMON members come
+// first (in Common-tab order), then the remaining producers in catalog order.
+
+describe("mediaTabNodeOptions", () => {
+  it("image tab: common block first (curated order), producers only", () => {
+    const { common, rest } = mediaTabNodeOptions(NODE_OPTIONS, "image")
+    expect(common.map((o) => o.type)).toEqual([
+      "upload-image",
+      "generate-image",
+      "upscale-image",
+    ])
+    const restTypes = rest.map((o) => o.type)
+    expect(restTypes).toEqual([
+      "modify-image",
+      "remove-background",
+      "generate-mask",
+      "reference-sheet",
+      "extract-frame",
+    ])
+  })
+
+  it("video tab: common block first (curated order)", () => {
+    const { common } = mediaTabNodeOptions(NODE_OPTIONS, "video")
+    expect(common.map((o) => o.type)).toEqual([
+      "upload-video",
+      "generate-video",
+      "extend-video",
+      "motion-transfer",
+      "lip-sync",
+      "combine-videos",
+      "merge-video-audio",
+    ])
+  })
+
+  it("video tab rest: video producers only — no plan-emitting Video Production nodes", () => {
+    const { common, rest } = mediaTabNodeOptions(NODE_OPTIONS, "video")
+    const all = [...common, ...rest].map((o) => o.type)
+    for (const t of ["video-to-video", "youtube-video", "speech-to-video", "face-swap", "render-video"]) {
+      expect(all, `expected video tab to contain ${t}`).toContain(t)
+    }
+    // Plan producers emit "plan-ready" markers, not video URLs.
+    for (const t of ["after-effects", "lottie-overlay", "3d-title", "motion-graphics", "composite", "video-composer", "extract-frame", "generate-image"]) {
+      expect(all, `expected video tab to exclude ${t}`).not.toContain(t)
+    }
+    // Common members never repeat in the rest block.
+    expect(rest.map((o) => o.type)).not.toContain("generate-video")
+  })
+
+  it("audio tab: common block first, then remaining audio producers", () => {
+    const { common, rest } = mediaTabNodeOptions(NODE_OPTIONS, "audio")
+    expect(common.map((o) => o.type)).toEqual([
+      "text-to-speech",
+      "voice-changer",
+      "suno-generate",
+    ])
+    const restTypes = rest.map((o) => o.type)
+    for (const t of ["upload-audio", "text-to-audio", "generate-music", "dubbing", "trim-audio", "extract-audio"]) {
+      expect(restTypes, `expected audio tab rest to contain ${t}`).toContain(t)
+    }
+    for (const t of ["lip-sync", "forced-alignment", "text-prompt", "voice-changer"]) {
+      expect(restTypes, `expected audio tab rest to exclude ${t}`).not.toContain(t)
+    }
+  })
+
+  it("respects the given pool (admin/compat filtering upstream)", () => {
+    const poolWithoutUpload = NODE_OPTIONS.filter((o) => o.type !== "upload-image")
+    const { common } = mediaTabNodeOptions(poolWithoutUpload, "image")
+    expect(common.map((o) => o.type)).toEqual(["generate-image", "upscale-image"])
+  })
+})
+
+describe("searchNodeOptions", () => {
+  it("matches by label, type, category, and keywords", () => {
+    const byLabel = searchNodeOptions(NODE_OPTIONS, "Generate Image")
+    expect(byLabel.map((o) => o.type)).toContain("generate-image")
+
+    const byType = searchNodeOptions(NODE_OPTIONS, "llm-chat")
+    expect(byType.map((o) => o.type)).toContain("llm-chat")
+
+    const byCategory = searchNodeOptions(NODE_OPTIONS, "Triggers")
+    expect(byCategory.map((o) => o.type)).toContain("webhook-trigger")
+
+    const byKeyword = searchNodeOptions(NODE_OPTIONS, "i2v")
+    expect(byKeyword.map((o) => o.type)).toContain("generate-video")
+  })
+
+  it("returns common nodes before non-common ones", () => {
+    const results = searchNodeOptions(NODE_OPTIONS, "video")
+    const buckets = results.map((o) => (COMMON_NODE_TYPES.has(o.type) ? 0 : 1))
+    // Once a non-common result appears, no common result may follow.
+    expect(buckets).toEqual([...buckets].sort((a, b) => a - b))
+    // Sanity: the query actually matched both buckets.
+    expect(buckets).toContain(0)
+    expect(buckets).toContain(1)
+  })
+
+  it("keeps pool order within the common and non-common buckets (stable)", () => {
+    const results = searchNodeOptions(NODE_OPTIONS, "video").map((o) => o.type)
+    // Both are common; generate-video precedes extend-video in NODE_OPTIONS.
+    expect(results.indexOf("generate-video")).toBeLessThan(results.indexOf("extend-video"))
+  })
+
+  it("direct-match tier outranks the common bucket when directTypes is given", () => {
+    const direct = new Set(["video-to-video"] as const) as ReadonlySet<
+      (typeof NODE_OPTIONS)[number]["type"]
+    >
+    const results = searchNodeOptions(NODE_OPTIONS, "video", direct).map((o) => o.type)
+    // video-to-video is NOT common, but as a direct match it must come first.
+    expect(results[0]).toBe("video-to-video")
+    expect(results.indexOf("video-to-video")).toBeLessThan(results.indexOf("generate-video"))
+  })
+
+  it("returns an empty array when nothing matches", () => {
+    expect(searchNodeOptions(NODE_OPTIONS, "zzz-no-such-node")).toEqual([])
+  })
+})
+
+// ─── Tab-aware search sectioning ───
+//
+// While on the Common / Image / Video / Audio tabs, search puts the active
+// tab's own items first and the remaining matches under an "Other" section.
+// The All tab (and the edge-drop compatibility view) stays flat.
+
+describe("searchNodeOptionsSectioned", () => {
+  it("on a media tab, splits matches into own producers first, then other", () => {
+    const { own, other } = searchNodeOptionsSectioned(NODE_OPTIONS, "video", "video")
+    const ownTypes = own.map((o) => o.type)
+    expect(ownTypes).toContain("generate-video")
+    expect(ownTypes).toContain("upload-video")
+    // Common video producers lead the own block
+    expect(own[0].type).toBe("upload-video")
+    const otherTypes = other.map((o) => o.type)
+    expect(otherTypes).toContain("video-composer") // "Compose Video" — plan producer, not a video producer
+    expect(otherTypes).toContain("generative-pipeline") // "Story → Video"
+    expect(otherTypes).not.toContain("generate-video")
+    // No overlap between the sections
+    expect(ownTypes.filter((t) => otherTypes.includes(t))).toEqual([])
+  })
+
+  it("on the common tab, own = common matches, other = the rest", () => {
+    const { own, other } = searchNodeOptionsSectioned(NODE_OPTIONS, "video", "common")
+    expect(own.length).toBeGreaterThan(0)
+    expect(own.every((o) => COMMON_NODE_TYPES.has(o.type))).toBe(true)
+    expect(own.map((o) => o.type)).toContain("generate-video")
+    expect(other.map((o) => o.type)).toContain("video-to-video")
+  })
+
+  it("own may be empty when the query only matches other tabs' nodes", () => {
+    const { own, other } = searchNodeOptionsSectioned(NODE_OPTIONS, "lip sync", "image")
+    expect(own).toEqual([])
+    expect(other.map((o) => o.type)).toContain("lip-sync")
+  })
+
+  it("on the all tab there is no sectioning — everything is own", () => {
+    const { own, other } = searchNodeOptionsSectioned(NODE_OPTIONS, "video", "all")
+    expect(other).toEqual([])
+    expect(own.map((o) => o.type)).toContain("generate-video")
+    expect(own.map((o) => o.type)).toContain("video-composer")
   })
 })
 
