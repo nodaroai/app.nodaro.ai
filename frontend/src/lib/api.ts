@@ -3166,11 +3166,13 @@ export async function voiceChangerApi(audioUrl: string | undefined, voiceId: str
   })
 }
 
-export async function dubbingApi(audioUrl: string, targetLanguage: string, userId?: string, sourceLanguage?: string, numSpeakers?: number): Promise<{ jobId: string }> {
+export async function dubbingApi(audioUrl: string, targetLanguage: string, userId?: string, sourceLanguage?: string, numSpeakers?: number, options?: { disableVoiceCloning?: boolean; dropBackgroundAudio?: boolean }): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { audioUrl, targetLanguage }
   if (userId) body.userId = userId
   if (sourceLanguage) body.sourceLanguage = sourceLanguage
   if (numSpeakers) body.numSpeakers = numSpeakers
+  if (options?.disableVoiceCloning != null) body.disableVoiceCloning = options.disableVoiceCloning
+  if (options?.dropBackgroundAudio != null) body.dropBackgroundAudio = options.dropBackgroundAudio
   return apiJson("/v1/dubbing", {
     body,
     workflowId: true,

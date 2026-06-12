@@ -3216,6 +3216,8 @@ export function buildPayload(
         targetLanguage: data.targetLanguage,
         sourceLanguage: data.sourceLanguage,
         numSpeakers: data.numSpeakers,
+        disableVoiceCloning: data.disableVoiceCloning,
+        dropBackgroundAudio: data.dropBackgroundAudio,
         usageLogId,
       })
 

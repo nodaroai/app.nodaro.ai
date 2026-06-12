@@ -389,16 +389,17 @@ const handleVoiceChanger: HandlerFn = async function handleVoiceChanger(job, ctx
 }
 
 const handleDubbing: HandlerFn = async function handleDubbing(job, ctx) {
-  const { audioUrl, targetLanguage, sourceLanguage, numSpeakers } = job.data as {
+  const { audioUrl, targetLanguage, sourceLanguage, numSpeakers, disableVoiceCloning, dropBackgroundAudio } = job.data as {
     jobId: string; audioUrl: string; targetLanguage: string
     sourceLanguage?: string; numSpeakers?: number
+    disableVoiceCloning?: boolean; dropBackgroundAudio?: boolean
   }
   console.log(`[worker] dubbing ${ctx.jobId} (target: ${targetLanguage})`)
   const dubbingOnTaskCreated = makeOnTaskCreated(ctx.jobId, "elevenlabs-async")
   const { dubbingId } = await startDubbing(
     audioUrl,
     targetLanguage,
-    { sourceLang: sourceLanguage, numSpeakers },
+    { sourceLang: sourceLanguage, numSpeakers, disableVoiceCloning, dropBackgroundAudio },
     { onTaskCreated: dubbingOnTaskCreated },
   )
   await setJobProgress(job, ctx.jobId, 20)

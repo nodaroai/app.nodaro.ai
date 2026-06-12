@@ -2877,6 +2877,7 @@ export function executeNode(
           ctx.userId,
           d.sourceLanguage,
           d.numSpeakers,
+          { disableVoiceCloning: d.disableVoiceCloning, dropBackgroundAudio: d.dropBackgroundAudio },
         ),
       "generatedAudioUrl",
       "Dubbing",
