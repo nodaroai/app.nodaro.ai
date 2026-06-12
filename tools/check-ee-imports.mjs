@@ -161,6 +161,7 @@ const ALLOWLIST = new Set([
   "frontend/src/components/nodes/motion-graphics-node.tsx",
   "frontend/src/components/nodes/motion-transfer-node.tsx",
   "frontend/src/components/nodes/object-node.tsx",
+  "frontend/src/components/nodes/prompt-quick-edit-modal.tsx",
   "frontend/src/components/nodes/qa-check-node.tsx",
   "frontend/src/components/nodes/reference-sheet-node.tsx",
   "frontend/src/components/nodes/remove-audio-node.tsx",

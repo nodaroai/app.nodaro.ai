@@ -2,7 +2,6 @@
 
 import { useState, useMemo } from "react"
 import { Sparkles } from "lucide-react"
-import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { hasCredits } from "@/lib/edition"
 import { isWizardSupported, type ModelChange } from "@nodaro/shared"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -32,7 +31,11 @@ export function PromptHelperButton({
   size = "sm",
 }: PromptHelperButtonProps) {
   const [open, setOpen] = useState(false)
-  const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
+  // Use whichever "active node" is set: sidebar context (selectedNodeId) or
+  // quick-edit modal context (promptEditNodeId). The modal opens openPromptEditor
+  // which only sets promptEditNodeId, so the fallback lets the AI wizard read
+  // the same connected-input context it would have if the sidebar were open.
+  const selectedNodeId = useWorkflowStore((s) => s.promptEditNodeId ?? s.selectedNodeId)
   const allEdges = useWorkflowStore((s) => s.edges)
   const allNodes = useWorkflowStore((s) => s.nodes)
 
@@ -77,24 +80,19 @@ export function PromptHelperButton({
 
   return (
     <>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            onClick={() => setOpen(true)}
-            className={
-              "inline-flex items-center gap-1 justify-center rounded-md border border-[#ff0073]/30 bg-[#ff0073]/5 text-[#ff0073] hover:bg-[#ff0073]/15 hover:border-[#ff0073]/50 transition-colors font-medium whitespace-nowrap " +
-              (size === "md"
-                ? "px-2.5 py-1.5 text-xs"
-                : "px-2 py-0.5 min-h-[32px] sm:min-h-0 text-[10px]")
-            }
-          >
-            <Sparkles className={size === "md" ? "w-3.5 h-3.5" : "w-3 h-3"} />
-            Generate with AI
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="top" className="text-xs">AI Prompt Wizard</TooltipContent>
-      </Tooltip>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className={
+          "inline-flex items-center gap-1 justify-center rounded-md border border-[#ff0073]/30 bg-[#ff0073]/5 text-[#ff0073] hover:bg-[#ff0073]/15 hover:border-[#ff0073]/50 transition-colors font-medium whitespace-nowrap " +
+          (size === "md"
+            ? "px-2.5 py-1.5 text-xs"
+            : "px-2 py-0.5 min-h-[32px] sm:min-h-0 text-[10px]")
+        }
+      >
+        <Sparkles className={size === "md" ? "w-3.5 h-3.5" : "w-3 h-3"} />
+        Generate with AI
+      </button>
       {open && (
         <PromptHelperDialog
           open={open}

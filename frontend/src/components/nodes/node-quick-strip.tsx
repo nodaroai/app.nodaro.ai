@@ -1,7 +1,6 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
-import { Settings2 } from "lucide-react"
 import { RunNodeButton } from "./run-node-button"
 import { PromptEditButton } from "./prompt-edit-button"
 import { QuickConfigSelect, getQuickConfigs } from "./node-quick-configs"
@@ -29,8 +28,6 @@ interface NodeQuickStripProps {
 export function NodeQuickStrip({ nodeId, credits, isRunning, children }: NodeQuickStripProps) {
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const setQuickStripPinned = useWorkflowStore((s) => s.setQuickStripPinned)
-  const selectNode = useWorkflowStore((s) => s.selectNode)
-  const setConfigPanelFullscreen = useWorkflowStore((s) => s.setConfigPanelFullscreen)
   const node = useWorkflowStore((s) => s.nodes.find((n) => n.id === nodeId))
 
   const data = (node?.data ?? {}) as Record<string, unknown>
@@ -82,24 +79,6 @@ export function NodeQuickStrip({ nodeId, credits, isRunning, children }: NodeQui
           onOpenChange={handleOpenChange}
         />
       ))}
-      {/* Fallback "configurations" affordance for nodes without registered
-          quick-configs: opens the node's full settings panel. */}
-      {configs.length === 0 && !children && (
-        <button
-          type="button"
-          aria-label="Settings"
-          title="Open settings"
-          onClick={(e) => {
-            e.stopPropagation()
-            selectNode(nodeId)
-            setConfigPanelFullscreen(true)
-          }}
-          className="flex items-center gap-1 h-6 px-1.5 rounded-md text-[10px] font-medium whitespace-nowrap text-neutral-900/85 hover:bg-black/10 dark:text-white/85 dark:hover:bg-white/10"
-        >
-          <Settings2 className="w-3 h-3 opacity-70" />
-          <span>Settings</span>
-        </button>
-      )}
       {children}
       <RunNodeButton
         nodeId={nodeId}

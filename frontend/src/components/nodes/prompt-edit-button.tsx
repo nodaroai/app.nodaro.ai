@@ -41,8 +41,6 @@ export function PromptEditButton({ nodeId, compact }: PromptEditButtonProps) {
     return (node?.data as AiAvatarData | undefined)?.speechMode
   })
   const openPromptEditor = useWorkflowStore((s) => s.openPromptEditor)
-  const selectNode = useWorkflowStore((s) => s.selectNode)
-  const setConfigPanelFullscreen = useWorkflowStore((s) => s.setConfigPanelFullscreen)
   const hasPrompt = nodeHasPromptField(nodeType)
   const Icon = getPromptIcon(nodeType)
   const isMac = isMacPlatform()
@@ -58,9 +56,6 @@ export function PromptEditButton({ nodeId, compact }: PromptEditButtonProps) {
       setScriptModalOpen(true)
     } else if (hasPrompt) {
       openPromptEditor(nodeId)
-    } else {
-      selectNode(nodeId)
-      setConfigPanelFullscreen(true)
     }
   }
 
@@ -68,7 +63,7 @@ export function PromptEditButton({ nodeId, compact }: PromptEditButtonProps) {
     <>
       <button
         type="button"
-        title={isAiAvatarText ? `Edit script (${sc})` : hasPrompt ? `Edit prompt (${sc})` : "Edit settings"}
+        title={isAiAvatarText ? `Edit script (${sc})` : `Edit prompt (${sc})`}
         aria-label={isAiAvatarText ? "Edit script" : "Edit prompt"}
         onClick={handleClick}
         className="flex items-center gap-1 h-6 px-1.5 rounded-md text-[10px] font-medium whitespace-nowrap text-primary hover:bg-primary/10"

@@ -199,8 +199,8 @@ export const SHORTCUTS = {
     bindings: [{ key: "Enter" }] },
   fullscreenSettings: { id: "fullscreenSettings", category: "Editing", description: "Expand / collapse config panel",
     bindings: [{ code: "KeyI", key: "i", mods: ["mod"] }] },
-  promptEditor: { id: "promptEditor", category: "Editing", description: "Open / close the prompt editor",
-    bindings: [{ code: "KeyE", key: "e", mods: ["mod"] }, { code: "KeyE", key: "e", mods: ["alt"] }] },
+  promptEditor: { id: "promptEditor", category: "Editing", description: "Open / close the prompt editor (node settings if no prompt)",
+    bindings: [{ code: "KeyE", key: "e", mods: ["mod"] }, { code: "KeyE", key: "e", mods: ["alt"] }, { code: "KeyP", key: "p", mods: ["mod"] }, { code: "KeyP", key: "p", mods: ["alt"] }] },
   escape: { id: "escape", category: "Editing", description: "Close overlay / deselect",
     bindings: [{ key: "Escape" }] },
 
@@ -213,6 +213,10 @@ export const SHORTCUTS = {
     bindings: [{ code: ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"], mods: ["ctrl", "alt"] }] },
   sidebar: { id: "sidebar", category: "View", description: "Toggle the sidebar",
     bindings: [{ code: "KeyB", key: "b", mods: ["mod"] }] },
+  configPanelOpen: { id: "configPanelOpen", category: "View", description: "Open the settings panel",
+    bindings: [{ code: "BracketLeft", key: "[", mods: ["alt"] }] },
+  configPanelClose: { id: "configPanelClose", category: "View", description: "Close the settings panel",
+    bindings: [{ code: "BracketRight", key: "]", mods: ["alt"] }] },
   tidyUp: { id: "tidyUp", category: "View", description: "Tidy up (auto-layout)",
     bindings: [{ code: "KeyT", key: "t", mods: ["alt"] }] },
   gridSnap: { id: "gridSnap", category: "View", description: "Toggle grid snap",
@@ -233,8 +237,10 @@ export const SHORTCUTS = {
     bindings: [{ code: "KeyA", key: "a", mods: ["mod"] }] },
   stickyNote: { id: "stickyNote", category: "Selection & Canvas", description: "Add a sticky note",
     bindings: [{ code: "KeyS", key: "s", mods: ["shift"] }] },
-  arrowNav: { id: "arrowNav", category: "Selection & Canvas", description: "Navigate to nearest node",
+  arrowNav: { id: "arrowNav", category: "Selection & Canvas", description: "Navigate to nearest node (panel open)",
     bindings: [{ key: ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"] }] },
+  altArrowNav: { id: "altArrowNav", category: "Selection & Canvas", description: "Focus nearest node in direction + centre it",
+    bindings: [{ key: ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"], mods: ["alt"] }] },
 
   // Picker (fullscreen config) — contextual, display-only
   pickerMove: { id: "pickerMove", category: "Picker (fullscreen config)", description: "Move between options",
