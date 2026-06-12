@@ -18,6 +18,9 @@ import { MappableField } from "./mappable-field"
 import { PromptHelperButton } from "./prompt-helper-button"
 import { SnippetMenuButton } from "./snippet-menu-button"
 import { useSnippetPool } from "@/hooks/queries/use-prompt-snippets-queries"
+import { PromptFieldFinalView, PromptFieldModeToggle } from "./prompt-field-final-view"
+import { useFinalPromptSegments, negativeRoutingCaption } from "./use-final-prompt-segments"
+import { usePromptFieldMode } from "@/hooks/use-prompt-field-mode"
 import type { VideoSfxNodeData } from "@/types/nodes"
 import type { ConfigProps } from "./types"
 
@@ -58,10 +61,27 @@ export function VideoSfxConfig({
   sources,
   fieldMappings,
   onMapField,
-}: ConfigProps<VideoSfxNodeData>) {
+  nodes,
+  edges,
+  nodeId,
+}: ConfigProps<VideoSfxNodeData> & { nodeId?: string }) {
   const [showAdvanced, setShowAdvanced] = useState(false)
   const promptSnippets = useSnippetPool("audio", "prompt")
   const negativeSnippets = useSnippetPool("audio", "negative")
+
+  // Edit⇄Final toggles. Provider-less path (this panel had no preview before);
+  // persistence keys = the real field names.
+  const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
+  const negativeFieldMode = usePromptFieldMode(nodeId ?? "", "negativePrompt")
+  const finalPrompt = useFinalPromptSegments({
+    userPrompt: data.prompt,
+    negativePrompt: data.negativePrompt,
+    consumerNodeId: nodeId,
+    nodes,
+    edges: edges ?? [],
+    snippets: promptSnippets,
+    negativeSnippets,
+  })
 
   const versions = Math.min(Math.max(1, data.versions ?? 1), 4)
   const cfgStrength = data.cfgStrength ?? 4.5
@@ -92,6 +112,7 @@ export function VideoSfxConfig({
         onMapField={onMapField}
         labelAction={
           <span className="inline-flex items-center gap-0.5">
+            <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
             <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="audio" />
             {hasCredits() && (
               <PromptHelperButton
@@ -104,16 +125,27 @@ export function VideoSfxConfig({
           </span>
         }
       >
-        <Textarea
-          rows={3}
-          value={data.prompt ?? ""}
-          onChange={(e) => onUpdate({ prompt: e.target.value })}
-          placeholder='e.g. "footsteps on dry leaves", "rain on a metal roof", "engine revving"'
-          maxLength={2000}
-        />
-        <p className="text-xs text-muted-foreground mt-1">
-          Leave blank for pure foley driven by the video alone.
-        </p>
+        {promptFieldMode.mode === "final" ? (
+          <PromptFieldFinalView
+            segments={finalPrompt.promptSegments}
+            plainText={finalPrompt.promptText}
+            placeholder="Final prompt preview — node has no prompt yet"
+            minHeightRem={3 * 1.5}
+          />
+        ) : (
+          <>
+            <Textarea
+              rows={3}
+              value={data.prompt ?? ""}
+              onChange={(e) => onUpdate({ prompt: e.target.value })}
+              placeholder='e.g. "footsteps on dry leaves", "rain on a metal roof", "engine revving"'
+              maxLength={2000}
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Leave blank for pure foley driven by the video alone.
+            </p>
+          </>
+        )}
       </MappableField>
 
       {/* 3. Negative prompt — surface the default value `"music"` in the
@@ -125,21 +157,34 @@ export function VideoSfxConfig({
         sources={sources}
         fieldMappings={fieldMappings}
         onMapField={onMapField}
-        labelAction={
+        labelAction={<span className="inline-flex items-center gap-0.5">
+          <PromptFieldModeToggle mode={negativeFieldMode.mode} onToggle={negativeFieldMode.toggle} />
           <SnippetMenuButton pool={negativeSnippets} value={data.negativePrompt ?? "music"} onInsert={(v) => onUpdate({ negativePrompt: v })} target="negative" media="audio" />
-        }
+        </span>}
       >
-        <Input
-          type="text"
-          value={data.negativePrompt ?? "music"}
-          onChange={(e) => onUpdate({ negativePrompt: e.target.value })}
-          placeholder="music"
-          maxLength={500}
-        />
-        <p className="text-xs text-muted-foreground mt-1">
-          MMAudio actively suppresses music by default. Clear this field if
-          you want the model to generate music as the "SFX".
-        </p>
+        {negativeFieldMode.mode === "final" ? (
+          <PromptFieldFinalView
+            segments={finalPrompt.negativeSegments}
+            plainText={finalPrompt.negativeText}
+            placeholder="Final negative prompt preview — nothing to avoid yet"
+            routingCaption={negativeRoutingCaption(finalPrompt.negativeRouting)}
+            minHeightRem={2.5}
+          />
+        ) : (
+          <>
+            <Input
+              type="text"
+              value={data.negativePrompt ?? "music"}
+              onChange={(e) => onUpdate({ negativePrompt: e.target.value })}
+              placeholder="music"
+              maxLength={500}
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              MMAudio actively suppresses music by default. Clear this field if
+              you want the model to generate music as the "SFX".
+            </p>
+          </>
+        )}
       </MappableField>
 
       {/* 4. Versions — linear credit multiplier (1-4 takes per run).

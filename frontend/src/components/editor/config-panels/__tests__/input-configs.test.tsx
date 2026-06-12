@@ -136,6 +136,10 @@ vi.mock("lucide-react", () => ({
   Link: () => <span data-testid="link-icon" />,
   GripVertical: () => <span data-testid="grip-icon" />,
   Scissors: () => <span data-testid="scissors-icon" />,
+  // PromptFieldModeToggle (Edit⇄Final) + PromptFieldFinalView copy button icons.
+  Eye: () => <span data-testid="eye-icon" />,
+  Pencil: () => <span data-testid="pencil-icon" />,
+  Copy: () => <span data-testid="copy-icon" />,
 }))
 
 function createDefaultProps(overrides: Record<string, unknown> = {}) {
