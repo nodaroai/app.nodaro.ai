@@ -61,7 +61,7 @@ import { ProviderAudioTagWarning } from "./provider-audio-tag-warning"
 import { ConnectedAudioSources } from "./connected-audio-sources"
 import { FinalAudioPromptPreview } from "./final-audio-prompt-preview"
 import { LIP_SYNC_MODELS, TTS_MODELS, SUNO_MODELS } from "./model-options"
-import { REPLICATE_LIP_SYNC_PROVIDERS, getEffectiveSunoCustomMode, SUNO_ADD_TRACK_MODELS } from "@nodaro/shared"
+import { REPLICATE_LIP_SYNC_PROVIDERS, getEffectiveSunoCustomMode, SUNO_ADD_TRACK_MODELS, SUNO_TEXT_MAX } from "@nodaro/shared"
 import { InjectedReferenceList } from "./injected-reference-list"
 import { SeedanceReferenceTip } from "./seedance-reference-tip"
 import { WaveformAudioPlayer } from "@/components/audio-player"
@@ -342,16 +342,16 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
         <TagTextarea
           rows={3}
           value={data.prompt}
-          onChange={(v) => { if (v.length <= 3000) onUpdate({ prompt: v }) }}
+          onChange={(v) => { if (v.length <= SUNO_TEXT_MAX) onUpdate({ prompt: v }) }}
           placeholder="Describe the song... (type [ or / for tags)"
-          maxLength={3000}
+          maxLength={SUNO_TEXT_MAX}
           tagMode="suno"
           customTags={SUNO_SUGGESTION_ITEMS}
           nodeRefs={nodeRefs}
           displayMode={variableDisplayMode}
           refMap={refMap}
         />
-        <p className="text-xs text-muted-foreground mt-1">{data.prompt.length}/3000</p>
+        <p className="text-xs text-muted-foreground mt-1">{data.prompt.length}/{SUNO_TEXT_MAX}</p>
       </MappableField>
       <MappableField field="model" label="Model" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select value={data.model || "V5_5"} onValueChange={(v) => onUpdate({ model: v as SunoGenerateData["model"] })}>
@@ -371,9 +371,9 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
         <TagTextarea
           rows={4}
           value={data.lyrics ?? ""}
-          onChange={(v) => { if (v.length <= 3000) onUpdate({ lyrics: v }) }}
+          onChange={(v) => { if (v.length <= SUNO_TEXT_MAX) onUpdate({ lyrics: v }) }}
           placeholder="Write custom lyrics... (type [ or / for metatags)"
-          maxLength={3000}
+          maxLength={SUNO_TEXT_MAX}
           tagMode="suno"
           customTags={SUNO_LYRICS_SUGGESTION_ITEMS}
           nodeRefs={nodeRefs}
@@ -463,16 +463,16 @@ export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapF
         <TagTextarea
           rows={3}
           value={data.prompt}
-          onChange={(v) => { if (v.length <= 3000) onUpdate({ prompt: v }) }}
+          onChange={(v) => { if (v.length <= SUNO_TEXT_MAX) onUpdate({ prompt: v }) }}
           placeholder="Describe the cover style... (type [ or / for tags)"
-          maxLength={3000}
+          maxLength={SUNO_TEXT_MAX}
           tagMode="suno"
           customTags={SUNO_SUGGESTION_ITEMS}
           nodeRefs={nodeRefs}
           displayMode={variableDisplayMode}
           refMap={refMap}
         />
-        <p className="text-xs text-muted-foreground mt-1">{data.prompt.length}/3000</p>
+        <p className="text-xs text-muted-foreground mt-1">{data.prompt.length}/{SUNO_TEXT_MAX}</p>
       </MappableField>
       <MappableField field="uploadUrl" label="Source Audio URL" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Input value={data.uploadUrl ?? ""} onChange={(e) => onUpdate({ uploadUrl: e.target.value })} placeholder="URL of the audio to cover (or connect an audio node)" />
@@ -495,9 +495,9 @@ export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapF
         <TagTextarea
           rows={4}
           value={data.lyrics ?? ""}
-          onChange={(v) => { if (v.length <= 3000) onUpdate({ lyrics: v }) }}
+          onChange={(v) => { if (v.length <= SUNO_TEXT_MAX) onUpdate({ lyrics: v }) }}
           placeholder="Write custom lyrics for the cover... (type [ or / for metatags)"
-          maxLength={3000}
+          maxLength={SUNO_TEXT_MAX}
           tagMode="suno"
           customTags={SUNO_LYRICS_SUGGESTION_ITEMS}
           nodeRefs={nodeRefs}
@@ -762,7 +762,7 @@ export function SunoReplaceSectionConfig({ data, onUpdate, sources, fieldMapping
         <Input type="number" min={0} step={1} value={data.infillEndS ?? ""} onChange={(e) => onUpdate({ infillEndS: e.target.value === "" ? undefined : parseFloat(e.target.value) })} placeholder="30" />
       </MappableField>
       <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <TagTextarea rows={3} value={data.prompt ?? ""} onChange={(v) => { if (v.length <= 3000) onUpdate({ prompt: v }) }} placeholder="Describe the replacement..." maxLength={3000} tagMode="suno" customTags={SUNO_SUGGESTION_ITEMS} nodeRefs={nodeRefs} displayMode={variableDisplayMode} refMap={refMap} />
+        <TagTextarea rows={3} value={data.prompt ?? ""} onChange={(v) => { if (v.length <= SUNO_TEXT_MAX) onUpdate({ prompt: v }) }} placeholder="Describe the replacement..." maxLength={SUNO_TEXT_MAX} tagMode="suno" customTags={SUNO_SUGGESTION_ITEMS} nodeRefs={nodeRefs} displayMode={variableDisplayMode} refMap={refMap} />
       </MappableField>
       <MappableField field="tags" label="Tags (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <TagTextarea rows={2} value={data.tags ?? ""} onChange={(v) => { if (v.length <= 500) onUpdate({ tags: v }) }} placeholder="Style tags..." maxLength={500} tagMode="suno" customTags={SUNO_STYLE_SUGGESTION_ITEMS} nodeRefs={nodeRefs} displayMode={variableDisplayMode} refMap={refMap} />
@@ -774,16 +774,14 @@ export function SunoReplaceSectionConfig({ data, onUpdate, sources, fieldMapping
   )
 }
 
-const STYLE_BOOST_MAX = 3000
-
 export function SunoStyleBoostConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<SunoStyleBoostData>) {
   const styleBoostSnippets = useSnippetPool("audio", "prompt")
   return (
     <div className="flex flex-col gap-3">
       <p className="text-xs text-muted-foreground">Enhance and improve style text using Suno AI.</p>
-      <MappableField field="content" label="Content" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<SnippetMenuButton pool={styleBoostSnippets} value={data.content || ""} onInsert={(v) => { if (v.length <= STYLE_BOOST_MAX) onUpdate({ content: v }) }} target="prompt" media="audio" />}>
-        <Textarea rows={4} value={data.content ?? ""} onChange={(e) => { if (e.target.value.length <= STYLE_BOOST_MAX) onUpdate({ content: e.target.value }) }} placeholder="Enter style text to enhance..." maxLength={STYLE_BOOST_MAX} />
-        <p className="text-xs text-muted-foreground mt-1">{(data.content ?? "").length}/{STYLE_BOOST_MAX}</p>
+      <MappableField field="content" label="Content" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<SnippetMenuButton pool={styleBoostSnippets} value={data.content || ""} onInsert={(v) => { if (v.length <= SUNO_TEXT_MAX) onUpdate({ content: v }) }} target="prompt" media="audio" />}>
+        <Textarea rows={4} value={data.content ?? ""} onChange={(e) => { if (e.target.value.length <= SUNO_TEXT_MAX) onUpdate({ content: e.target.value }) }} placeholder="Enter style text to enhance..." maxLength={SUNO_TEXT_MAX} />
+        <p className="text-xs text-muted-foreground mt-1">{(data.content ?? "").length}/{SUNO_TEXT_MAX}</p>
       </MappableField>
       {data.generatedText && (
         <div>
@@ -860,7 +858,7 @@ export function SunoUploadExtendConfig({ data, onUpdate, sources, fieldMappings,
       </MappableField>
       <ModelDescriptionHint modelId={data.model} />
       <MappableField field="prompt" label="Prompt (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <TagTextarea rows={3} value={data.prompt ?? ""} onChange={(v) => { if (v.length <= 3000) onUpdate({ prompt: v }) }} placeholder="Describe the extension..." maxLength={3000} tagMode="suno" customTags={SUNO_SUGGESTION_ITEMS} nodeRefs={nodeRefs} displayMode={variableDisplayMode} refMap={refMap} />
+        <TagTextarea rows={3} value={data.prompt ?? ""} onChange={(v) => { if (v.length <= SUNO_TEXT_MAX) onUpdate({ prompt: v }) }} placeholder="Describe the extension..." maxLength={SUNO_TEXT_MAX} tagMode="suno" customTags={SUNO_SUGGESTION_ITEMS} nodeRefs={nodeRefs} displayMode={variableDisplayMode} refMap={refMap} />
       </MappableField>
       <MappableField field="continueAt" label="Continue At (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Input type="number" min={0} step={1} value={data.continueAt ?? ""} onChange={(e) => onUpdate({ continueAt: e.target.value === "" ? undefined : parseFloat(e.target.value) })} placeholder="0" />

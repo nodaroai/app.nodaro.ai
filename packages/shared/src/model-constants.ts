@@ -21,6 +21,15 @@ export const IMAGE_PROMPT_MAX = 5000
  */
 export const VIDEO_PROMPT_MAX = 8000
 
+/**
+ * Suno text-field cap. Shared by the Suno prompt / lyrics / style-content
+ * fields (Generate, Cover, Replace-Section, Upload-Extend, Style-Boost) across
+ * the route Zod schemas and their editor character counters. Single source of
+ * truth so the backend validation and the frontend `maxLength` / counter never
+ * drift.
+ */
+export const SUNO_TEXT_MAX = 3000
+
 // Models that accept negative_prompt as a native API parameter.
 // All other models get negative prompt appended to the prompt text as "Avoid: ...".
 export const NATIVE_NEGATIVE_PROMPT_MODELS = new Set([
