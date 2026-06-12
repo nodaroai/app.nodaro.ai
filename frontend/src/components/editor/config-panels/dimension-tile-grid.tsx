@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 import type { DimensionEntry } from "./dimension-modal-browser"
 import { MultiPickBadge, useMultiPick, type MultiPickValue } from "./multi-pick-ui"
+import { estimateGridCols, isArrowKey, nextNavIndex } from "./config-keyboard-nav"
 
 /** Multi-pick value: undefined / single id / array of ids (1..maxSelected). */
 export type DimensionPickValue = MultiPickValue
@@ -93,6 +94,56 @@ export function DimensionTileGrid({
     return () => el.removeEventListener("picker-select", handler)
   }, [])
 
+  // Local keyboard handling so the grid is fully keyboard-operable wherever it
+  // renders (side panel, fullscreen config, modal browser): arrows + Home/End
+  // rove focus across tiles; Enter single-selects (and commits — closes the
+  // fullscreen host — when the tile is already selected); Space / "+" adds to
+  // the multi-pick. stopPropagation keeps the canvas shortcut layer and the
+  // panel-level ARIA delegate from double-handling these keys.
+  function handleGridKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return
+    const tile = (e.target as HTMLElement | null)?.closest?.<HTMLButtonElement>("button[data-entry-id]")
+    if (!tile) return
+    const tiles = Array.from(
+      gridRef.current?.querySelectorAll<HTMLButtonElement>("button[data-entry-id]") ?? [],
+    )
+    if (isArrowKey(e.key) || e.key === "Home" || e.key === "End") {
+      const next = nextNavIndex(e.key, tiles.indexOf(tile), tiles.length, estimateGridCols(tiles))
+      if (next === null) return
+      e.preventDefault()
+      e.stopPropagation()
+      tiles[next]?.focus()
+      return
+    }
+    const entryId = tile.dataset.entryId
+    if (!entryId) return
+    if (e.key === "Enter") {
+      e.preventDefault()
+      e.stopPropagation()
+      const wasSelected = tile.getAttribute("aria-checked") === "true"
+      onChange(entryId)
+      if (wasSelected) commitCtx?.commit()
+      return
+    }
+    if (e.key === " " || e.key === "+") {
+      e.preventDefault()
+      e.stopPropagation()
+      handlePick(entryId)
+    }
+  }
+
+  // ArrowDown from the search field drops focus onto the first tile, so the
+  // search → pick flow never needs the mouse.
+  function handleSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key !== "ArrowDown") return
+    const first = gridRef.current?.querySelector<HTMLButtonElement>("button[data-entry-id]")
+    if (first) {
+      e.preventDefault()
+      e.stopPropagation()
+      first.focus()
+    }
+  }
+
   const filtered = useMemo<ReadonlyArray<DimensionEntry>>(() => {
     const q = query.trim().toLowerCase()
     if (!q) return entries
@@ -116,6 +167,7 @@ export function DimensionTileGrid({
           placeholder={searchPlaceholder}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={handleSearchKeyDown}
           className="pl-8 h-9 text-sm"
         />
       </div>
@@ -132,6 +184,7 @@ export function DimensionTileGrid({
           className={gridClassName}
           data-picker-grid="true"
           data-multi={maxSelected > 1 ? "true" : "false"}
+          onKeyDown={handleGridKeyDown}
         >
           {filtered.map((entry) => {
             const selectedIndex = selectedIds.indexOf(entry.id)

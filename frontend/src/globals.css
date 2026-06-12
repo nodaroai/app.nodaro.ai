@@ -1361,3 +1361,17 @@ html, body {
 .react-flow__node--dragging .toggle-row {
   cursor: grabbing;
 }
+
+/* Config-panel keyboard focus indicator. Cyan (sky-400) so the FOCUSED item
+   reads differently from the SELECTED one (brand pink #ff0073): pink ring =
+   chosen, cyan outline = where keyboard focus is. Scoped to the panel body
+   and driven by the shared ARIA roles, so every picker — tile grids, group
+   tabs, radio tiles, present and future — gets the indicator with zero
+   per-picker wiring. :focus-visible keeps it keyboard-only (no mouse noise). */
+[data-config-panel-body] [role="tab"]:focus-visible,
+[data-config-panel-body] [role="radio"]:focus-visible,
+[data-config-panel-body] [role="checkbox"]:focus-visible,
+[data-config-panel-body] [data-picker-grid] button:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 1px;
+}
