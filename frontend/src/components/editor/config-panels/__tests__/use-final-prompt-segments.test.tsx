@@ -339,3 +339,131 @@ describe("useFinalPromptSegments — provider-less tinting (variables + snippets
     // but the segments still reconstruct the text.
   })
 })
+
+describe("useFinalPromptSegments — video-aware negative routing (videoProvider)", () => {
+  // The provider-less path now serves video panels: pass `videoProvider` and the
+  // hook PREDICTS the backend's video negative routing via the SAME shared helper
+  // the pipeline uses (`applyVideoNegativePrompt`). These run against the real
+  // helper (no mocks) — kling = native (Wan/Kling families), veo3 = appended.
+
+  it("native video provider (kling): routing 'native', NO Avoid tail, copy keeps the negative line", () => {
+    const { result } = renderHook(() =>
+      useFinalPromptSegments({
+        userPrompt: "a knight riding",
+        negativePrompt: "blurry, low quality",
+        consumerNodeId: "n1",
+        ...EMPTY_GRAPH,
+        videoProvider: "kling",
+      }),
+    )
+    expect(result.current.negativeRouting).toBe("native")
+    // Kling takes negative_prompt natively → the prompt is NOT modified.
+    expect(result.current.promptText).toBe("a knight riding")
+    expect(result.current.promptText).not.toContain("Avoid:")
+    // Resolved negative is shown in both routings.
+    expect(result.current.negativeText).toBe("blurry, low quality")
+    // No `negative`-origin segment is appended to the prompt on the native path.
+    expect(result.current.promptSegments.find((s) => s.origin === "negative")).toBeUndefined()
+    // copyText keeps the "Negative prompt: …" line convention (native routing).
+    expect(result.current.copyText).toContain("Negative prompt: blurry, low quality")
+    // Join-guard holds.
+    expect(result.current.promptSegments.map((s) => s.text).join("")).toBe(result.current.promptText)
+  })
+
+  it("non-native video provider (veo3): routing 'appended', promptText ends with the Avoid tail + trailing negative segment", () => {
+    const { result } = renderHook(() =>
+      useFinalPromptSegments({
+        userPrompt: "a knight riding",
+        negativePrompt: "blurry, low quality",
+        consumerNodeId: "n1",
+        ...EMPTY_GRAPH,
+        videoProvider: "veo3",
+      }),
+    )
+    expect(result.current.negativeRouting).toBe("appended")
+    // veo3 has no native negative field → folded into the prompt as `\nAvoid: …`.
+    expect(result.current.promptText).toBe("a knight riding\nAvoid: blurry, low quality")
+    expect(result.current.promptText.endsWith("\nAvoid: blurry, low quality")).toBe(true)
+    // The resolved negative is still shown in the negative field's view.
+    expect(result.current.negativeText).toBe("blurry, low quality")
+    // The trailing segment carries ONLY the appended tail, tagged `negative`.
+    const last = result.current.promptSegments[result.current.promptSegments.length - 1]
+    expect(last.origin).toBe("negative")
+    expect(last.text).toBe("\nAvoid: blurry, low quality")
+    // Absolute join invariant on the video path: segments reconstruct promptText.
+    expect(result.current.promptSegments.map((s) => s.text).join("")).toBe(result.current.promptText)
+    // copyText carries the prompt (Avoid folded in) and does NOT re-append the
+    // negative as a separate line (it already rides along in promptText).
+    expect(result.current.copyText).toBe("a knight riding\nAvoid: blurry, low quality")
+  })
+
+  it("no negative → routing null even with a videoProvider set", () => {
+    const { result } = renderHook(() =>
+      useFinalPromptSegments({
+        userPrompt: "a knight riding",
+        consumerNodeId: "n1",
+        ...EMPTY_GRAPH,
+        videoProvider: "veo3",
+      }),
+    )
+    expect(result.current.negativeRouting).toBeNull()
+    expect(result.current.promptText).toBe("a knight riding")
+    expect(result.current.promptText).not.toContain("Avoid:")
+  })
+
+  it("join invariant holds on the appended video path with {variables} + snippets in the prompt", () => {
+    // {Hero} resolves to "a knight" (variable) and an inserted "golden hour"
+    // snippet (snippet); veo3 then folds the negative into the prompt as an
+    // Avoid tail (negative). All three origins coexist and the decomposition
+    // MUST still reconstruct the final promptText (Avoid tail included).
+    const nodes = [
+      { id: "n1", type: "text-to-video", position: { x: 0, y: 0 }, data: {} },
+      { id: "src", type: "text-prompt", position: { x: 0, y: 0 }, data: { label: "Hero", text: "a knight" } },
+    ] as never[]
+    const edges = [{ id: "e", source: "src", target: "n1" }] as never[]
+    const snippets: SnippetPoolItem[] = [
+      { id: "gh", name: "Golden Hour", text: "golden hour", target: "prompt", category: "Lighting", source: "factory" },
+    ]
+    const { result } = renderHook(() =>
+      useFinalPromptSegments({
+        userPrompt: "{Hero} in golden hour",
+        negativePrompt: "blurry",
+        consumerNodeId: "n1",
+        nodes,
+        edges,
+        videoProvider: "veo3",
+        snippets,
+      }),
+    )
+    expect(result.current.negativeRouting).toBe("appended")
+    // Body resolves + tints; Avoid tail appended.
+    expect(result.current.promptText).toBe("a knight in golden hour\nAvoid: blurry")
+    const variableSeg = result.current.promptSegments.find((s) => s.origin === "variable")
+    expect(variableSeg?.text).toBe("a knight")
+    const snippetSeg = result.current.promptSegments.find((s) => s.origin === "snippet")
+    expect(snippetSeg?.text).toBe("golden hour")
+    const negSeg = result.current.promptSegments.find((s) => s.origin === "negative")
+    expect(negSeg?.text).toBe("\nAvoid: blurry")
+    // Absolute join invariant: variable + snippet + negative spans reconstruct it.
+    expect(result.current.promptSegments.map((s) => s.text).join("")).toBe(result.current.promptText)
+  })
+
+  it("ignores videoProvider when the image `provider` is set (image assembly wins)", () => {
+    // gpt-image is an image provider that folds the negative into the prompt via
+    // buildImagePromptSegments. Passing a native VIDEO provider (kling) alongside
+    // must NOT change the routing — the image path owns it.
+    const { result } = renderHook(() =>
+      useFinalPromptSegments({
+        userPrompt: "a knight",
+        negativePrompt: "blurry",
+        consumerNodeId: "n1",
+        ...EMPTY_GRAPH,
+        provider: "gpt-image",
+        videoProvider: "kling",
+      }),
+    )
+    // Image path: gpt-image has no native negative → appended (NOT kling's native).
+    expect(result.current.negativeRouting).toBe("appended")
+    expect(result.current.promptText).toContain("Avoid: blurry")
+  })
+})

@@ -161,7 +161,7 @@ The **legend** lists only the origins actually present (a prompt that is purely
 your own text shows no legend). The negative field on these surfaces gets the
 same variable- and snippet-highlighting.
 
-On **every other node** (most video panels, audio, music, script, the text-input
+On **every other node** (the video panels, audio, music, script, the text-input
 node, and the ⌘E modal for a provider-less node) the final view shows the same
 read-only assembled text with **fewer provenance colors**: your `{variables}`
 resolve to their upstream values (sky blue), inserted snippets are highlighted
@@ -174,6 +174,16 @@ and byte-exact model assembly — both require the per-provider builder that onl
 image generation runs today. Same toggle, same Copy button. (If a piece can't be
 matched back cleanly, the field falls back to plain text rather than mis-tint.)
 
+The **video panels** (Image to Video, Text to Video, Generate Video, Video to
+Video, Motion Transfer, Speech to Video, Extend Video, Video Retake, Kling 3.0
+Studio) go one step further on the **negative**: their final view reports the
+**true negative routing** for the chosen video model. Kling and Wan family models
+accept a real negative parameter, so your negative is sent natively and the prompt
+is left untouched; every other video model has no native negative field, so your
+negative is folded into the prompt as a trailing `Avoid: …` clause (rose-tinted
+inside the prompt view). The routing matches exactly what the model receives at
+generation time.
+
 ### Negative-prompt fields
 
 A negative field's final view shows the **resolved negative** — your text with
@@ -181,10 +191,12 @@ A negative field's final view shows the **resolved negative** — your text with
 for the selected provider, because not every model has a separate negative input:
 
 - **Sent natively as the provider's negative prompt** — the provider takes a
-  real `negative_prompt` parameter (e.g. Imagen 4, Ideogram, Qwen).
+  real `negative_prompt` parameter (e.g. Imagen 4, Ideogram, Qwen for images;
+  the Kling and Wan families for video).
 - **Appended to the prompt as "Avoid: …"** — the provider has no native negative
   field, so the editor folds your negative into the prompt as a trailing
   `Avoid: …` clause (it then also appears, rose-tinted, inside the prompt view).
+  This covers most image models and every non-Kling/Wan video model.
 
 The resolved negative is shown in **both** routings — the caption is what tells
 you where it actually goes.

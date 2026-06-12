@@ -9,6 +9,7 @@ import type { SnippetPoolItem } from "@/lib/snippet-pool"
 import { getStylePromptHint } from "@nodaro/shared"
 import { buildImagePromptSegments, buildIdentityDirectives } from "@nodaro/shared"
 import { collectIdentityLockClause } from "@nodaro/shared"
+import { applyVideoNegativePrompt } from "@nodaro/shared"
 import type {
   CharacterDef,
   ConnectedReference,
@@ -72,9 +73,14 @@ function buildNegativeSegments(
 }
 
 /** Where the resolved negative prompt is routed for this surface:
- *  - `null`    — no negative text (or a provider-less surface, which has no routing concept)
- *  - `native`  — the provider takes `negative_prompt` natively (builder returned `nativeNegativePrompt`)
- *  - `appended`— folded into the prompt as a trailing `Avoid: …` suffix */
+ *  - `null`    — no negative text (or a plain provider-less surface — image
+ *                `provider` unset AND `videoProvider` unset — which has no routing concept)
+ *  - `native`  — the provider takes `negative_prompt` natively. Image path:
+ *                `buildImagePromptSegments` returned `nativeNegativePrompt`.
+ *                Video path: `applyVideoNegativePrompt` returned `nativeNegativePrompt`
+ *                (Kling / Wan families).
+ *  - `appended`— folded into the prompt as a trailing `Avoid: …` suffix (image
+ *                providers without a native field, or non-native video providers) */
 export type NegativeRouting = "native" | "appended" | null
 
 /** One-line caption for a negative field's final-view, explaining how the
@@ -112,6 +118,19 @@ export interface UseFinalPromptSegmentsArgs {
    */
   readonly provider?: string
   /**
+   * Video provider key for the provider-less (video) path. PREDICTS the backend's
+   * video negative-prompt routing via the SAME shared helper the pipeline uses
+   * (`applyVideoNegativePrompt`), so the rendered prompt + routing caption match
+   * what the video provider actually receives. Native-negative video providers
+   * (Kling / Wan families) keep the prompt unchanged and surface the negative as
+   * a native param ("native" routing); all others fold it into the prompt as a
+   * trailing `Avoid: …` clause ("appended"). IGNORED when `provider` (the image
+   * path) is set — image assembly wins, and that path derives its own routing
+   * from `buildImagePromptSegments`. NEVER routes video prompts through
+   * `buildImagePrompt`.
+   */
+  readonly videoProvider?: string
+  /**
    * Connected references in display order. When provided alongside `provider`,
    * per-identity directives appear in the final string, `{image:N:label}` tokens
    * expand to "the {label} from image N", and URLs are sent in this order.
@@ -130,7 +149,9 @@ export interface UseFinalPromptSegmentsArgs {
 }
 
 export interface UseFinalPromptSegmentsResult {
-  /** Origin-tagged prompt segments. `[]` on the provider-less path (flat text). */
+  /** Origin-tagged prompt segments (variables / snippets / picker / mention /
+   *  style / negative). Falls back to `[]` only when a decomposition fails the
+   *  absolute join-guard — the view then renders `promptText` verbatim. */
   readonly promptSegments: DisplaySegment[]
   /** Origin-tagged negative segments. `[]` when no native negative is shown. */
   readonly negativeSegments: DisplaySegment[]
@@ -168,6 +189,7 @@ export function useFinalPromptSegments(args: UseFinalPromptSegmentsArgs): UseFin
     nodes,
     edges,
     provider,
+    videoProvider,
     connectedReferences,
     identityMeta,
     characterDefs,
@@ -356,14 +378,67 @@ export function useFinalPromptSegments(args: UseFinalPromptSegmentsArgs): UseFin
     // the displayed text. On any drift, fall back to `[]` (the view renders
     // plainText) — the same discipline as the provider path's bodySegs invariant
     // and `buildNegativeSegments`.
-    const promptSegments =
+    let promptSegments =
       promptSegmentsFlat.map((s) => s.text).join("") === promptText
         ? promptSegmentsFlat
         : ([] as DisplaySegment[])
 
+    // ── Video-aware negative routing (provider-less, `videoProvider` set) ─────
+    // PREDICT what the video provider receives by calling the SAME shared helper
+    // the backend pipeline uses (`applyVideoNegativePrompt` — kie/video.ts,
+    // payload-builder.ts, extend-video route). Pass-through only: we never
+    // re-derive NATIVE_NEGATIVE_VIDEO_PROVIDERS, and we NEVER route the prompt
+    // through buildImagePrompt.
+    //
+    // Composition point: the helper is applied to the FULLY-ASSEMBLED flat
+    // `promptText` — AFTER the refIntro prefix and the `Style:` suffix — so the
+    // displayed prompt ends with the `Avoid:` tail exactly as the runtime would
+    // present it. The backend applies the negative to its resolved prompt as the
+    // LAST step (after cinematography hints + identity clause); for video panels
+    // (which pass no `style`/`connectedReferences`) this `promptText` equals the
+    // backend's `preBuildPrompt`, so the assembled string is byte-identical to
+    // what the provider sees. Negative always lands last → faithful regardless.
+    let negativeRouting: NegativeRouting = null
+    if (videoProvider && resolvedNeg) {
+      const videoResult = applyVideoNegativePrompt(promptText, resolvedNeg, videoProvider)
+      negativeRouting = videoResult.nativeNegativePrompt ? "native" : "appended"
+      // `appended` → the helper returned `<promptText>\nAvoid: <neg>` (or just
+      // `Avoid: <neg>` when promptText was empty). Adopt the new prompt and tack
+      // a `negative`-origin segment carrying ONLY the appended tail so the
+      // existing spans (still reconstructing the OLD promptText) plus the tail
+      // reconstruct the NEW promptText. `native` → the helper left the prompt
+      // unchanged (negative goes out as a native param), so nothing to append.
+      if (!videoResult.nativeNegativePrompt && videoResult.prompt !== undefined) {
+        const base = promptText
+        const newPrompt = videoResult.prompt
+        promptText = newPrompt
+        // The tail is everything the helper added past the prior promptText.
+        const tail = newPrompt.slice(base.length)
+        if (promptSegments.length > 0) {
+          const candidate: DisplaySegment[] = [...promptSegments, { text: tail, origin: "negative" }]
+          // Re-assert the absolute join-guard against the NEW promptText: keep
+          // the tinted decomposition only if it reconstructs the displayed text,
+          // else collapse to `[]` (the view renders plainText). Same discipline
+          // as everywhere else in this hook.
+          promptSegments =
+            candidate.map((s) => s.text).join("") === promptText
+              ? candidate
+              : ([] as DisplaySegment[])
+        }
+      }
+    }
+
+    // copyText mirrors the field views: the prompt (with the `Avoid:` tail folded
+    // in for the appended routing — it already rides along in `promptText`) plus,
+    // for the native routing, the negative on its own `Negative prompt:` line —
+    // the same convention as the provider (image) path's native branch. On the
+    // pure provider-less path (no videoProvider) keep the legacy shape: prompt +
+    // `Negative prompt:` line whenever a negative exists.
     const copyLines: string[] = []
     if (promptText) copyLines.push(promptText)
-    if (resolvedNeg) copyLines.push(`Negative prompt: ${resolvedNeg}`)
+    if (resolvedNeg && negativeRouting !== "appended") {
+      copyLines.push(`Negative prompt: ${resolvedNeg}`)
+    }
 
     return {
       promptText,
@@ -376,10 +451,15 @@ export function useFinalPromptSegments(args: UseFinalPromptSegmentsArgs): UseFin
       // join-guard inside buildNegativeSegments collapses to a single plain span
       // if the decomposition can't reconstruct `resolvedNeg` (defensive; the
       // node-refs-segments join-invariant test guarantees equality for the
-      // variable layer, and the snippet split only partitions).
+      // variable layer, and the snippet split only partitions). The resolved
+      // negative shows in BOTH video routings (native AND appended) — the caption
+      // explains where it goes — exactly like the provider (image) path.
       negativeSegments: buildNegativeSegments(resolvedNeg, rawNeg, refMap, negSnippets),
-      // Provider-less surfaces have no native/append routing concept.
-      negativeRouting: null,
+      // null when no `videoProvider` / no negative; otherwise the PREDICTED video
+      // routing (pass-through from the shared helper). Plain provider-less
+      // surfaces (text/audio/script/llm-chat/composition) pass no `videoProvider`
+      // → stays null (no native/append routing concept).
+      negativeRouting,
     }
-  }, [userPrompt, style, negativePrompt, consumerNodeId, nodes, edges, provider, connectedReferences, identityMeta, characterDefs, promptSnippets, negSnippets])
+  }, [userPrompt, style, negativePrompt, consumerNodeId, nodes, edges, provider, videoProvider, connectedReferences, identityMeta, characterDefs, promptSnippets, negSnippets])
 }
