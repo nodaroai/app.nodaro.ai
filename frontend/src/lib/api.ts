@@ -4962,6 +4962,10 @@ export interface SharedVoice {
   description: string
   use_case: string
   category: string
+  /** Cheapest v2 TTS provider the voice is verified on (turbo first). */
+  recommendedProvider?: "elevenlabs-turbo" | "elevenlabs-multilingual"
+  /** All v2 TTS providers the voice is verified on; snap only when the current pick isn't in here. */
+  verifiedProviders?: Array<"elevenlabs-turbo" | "elevenlabs-multilingual">
 }
 
 export interface VoiceLibraryParams {

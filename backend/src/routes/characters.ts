@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { PLACEHOLDER_CHARACTER_NAME } from "@nodaro/shared"
+import { PLACEHOLDER_CHARACTER_NAME, TTS_PROVIDERS } from "@nodaro/shared"
 import type { ReferenceSheet } from "@nodaro/shared"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { normalizeImageProvider } from "../lib/image-provider.js"
@@ -100,7 +100,10 @@ export const upsertCharacterBody = z.object({
   // lookup) stay previewable after reload. Client-played only (server never fetches
   // it), so a plain bounded URL — NOT the SSRF-guarded `safeUrlSchema`. Optional +
   // backward-compatible: legacy voices without it simply have no preview.
-  voice: z.object({ voiceId: z.string(), voiceName: z.string(), traits: z.string(), voiceType: z.enum(["premade", "library", "custom"]).optional(), previewUrl: z.string().url().max(2048).optional() }).nullable().optional(),
+  // `ttsProvider` is the voice's recommended TTS provider (from the Voice Library's
+  // verified models — see `deriveRecommendedTtsProvider`); clients send it as the
+  // `provider` on text-to-speech so the voice renders on a model it's verified for.
+  voice: z.object({ voiceId: z.string(), voiceName: z.string(), traits: z.string(), voiceType: z.enum(["premade", "library", "custom"]).optional(), previewUrl: z.string().url().max(2048).optional(), ttsProvider: z.enum(TTS_PROVIDERS).optional() }).nullable().optional(),
   personality: z.object({ mood: z.string(), speechStyle: z.string(), movementStyle: z.string(), behavioralNotes: z.string() }).nullable().optional(),
   // Identity-foundation fields (migration 114). Length caps mirror the DB
   // CHECK constraints so we reject at the boundary with a 400 rather than a
@@ -189,7 +192,7 @@ type CharacterRow = {
   boards: { name: string; url: string }[] | null
   reference_videos_by_variant: Record<string, string[]> | null
   selected_asset_by_variant: Record<string, string> | null
-  voice: { voiceId: string; voiceName: string; traits: string; voiceType?: "premade" | "library" | "custom"; previewUrl?: string } | null
+  voice: { voiceId: string; voiceName: string; traits: string; voiceType?: "premade" | "library" | "custom"; previewUrl?: string; ttsProvider?: string } | null
   personality: { mood: string; speechStyle: string; movementStyle: string; behavioralNotes: string } | null
   canonical_description: string | null
   lora_training_status: string | null
