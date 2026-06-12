@@ -276,12 +276,20 @@ export interface GenerateLocationAssetInput {
 export interface GenerateSurroundContinuationInput {
   /** The previous ring view to continue from (i2i anchor). */
   referenceImageUrl: string
-  /** Carry/paint axis: turn right, tilt up, or tilt down. */
+  /** Carry/paint axis: turn right, turn left, tilt up, or tilt down. Tilts
+   *  render the sky/ground (a thin horizon strip), not a horizontal continuation. */
   direction: SurroundDirection
   /** Ring angle (45, 90, …) — stored on the result as metadata. */
   degrees?: number
-  /** Fraction of the frame carried from the reference. Default 0.5 (half). */
+  /** Fraction of the frame carried from the reference. Omitted ⇒ per-direction
+   *  default (0.5 for a pan, 0.12 thin strip for a tilt). */
   carriedFraction?: number
+  /** Upscale/denoise the result before it's chained as the next reference, to
+   *  slow cumulative softening down a long ring chain. Default false. */
+  refine?: boolean
+  /** Refine model when `refine` is set. `recraft-upscale` (1 cr, default) or
+   *  `topaz-image-upscale` (3 cr). */
+  refineProvider?: "recraft-upscale" | "topaz-image-upscale"
   /** Optional free-form scene hint woven into the fill prompt. */
   userPrompt?: string
   /** Image model. Studio pins `nano-banana-pro`; default `nano-banana`. */

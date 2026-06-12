@@ -53,7 +53,7 @@ vi.mock("../../ee/services/credits.js", () => ({
   },
 }))
 
-import { refundJobCredits, refundLoopTrimAddon, isFinalJobAttempt } from "../shared.js"
+import { refundJobCredits, refundLoopTrimAddon, refundSurroundRefineAddon, isFinalJobAttempt } from "../shared.js"
 import { PostProcessingError, isPostProcessingError, runPostProcessing } from "../../lib/post-processing-error.js"
 
 // Minimal BullMQ Job shape for isFinalJobAttempt.
@@ -254,6 +254,35 @@ function mockUsageLog(reservedCredits: number, metadata: Record<string, unknown>
     update: updateMock,
   }))
 }
+
+describe("refundSurroundRefineAddon", () => {
+  it("no-ops when hasCredits() is false", async () => {
+    hasCreditsState.enabled = false
+    await refundSurroundRefineAddon("job-1", "usage-1", 3)
+    expect(commitCreditsSpy).not.toHaveBeenCalled()
+  })
+
+  it("no-ops when addonCredits is 0 (nothing to refund)", async () => {
+    await refundSurroundRefineAddon("job-1", "usage-1", 0)
+    expect(commitCreditsSpy).not.toHaveBeenCalled()
+  })
+
+  it("commits actual = reserved - addonCredits (6 - 1 = 5) and stamps surround_refine_refunded", async () => {
+    mockUsageLog(6, { keep: "me" })
+    await refundSurroundRefineAddon("job-1", "usage-1", 1)
+    expect(commitCreditsSpy).toHaveBeenCalledWith("usage-1", 5)
+    const updateCalls = supabaseMock.from.mock.results
+      .map((r) => r.value)
+      .flatMap((tableObj) => (tableObj.update as ReturnType<typeof vi.fn>).mock.calls)
+    const usageLogUpdate = updateCalls.find(
+      (call) => (call[0] as Record<string, unknown>).metadata !== undefined,
+    )
+    expect(usageLogUpdate, "expected an update with a metadata field").toBeDefined()
+    const metadata = (usageLogUpdate![0] as Record<string, unknown>).metadata as Record<string, unknown>
+    expect(metadata.surround_refine_refunded).toBe(true)
+    expect(metadata.keep, "existing metadata preserved").toBe("me")
+  })
+})
 
 describe("refundLoopTrimAddon", () => {
   it("no-ops when hasCredits() is false", async () => {

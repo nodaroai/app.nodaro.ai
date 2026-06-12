@@ -157,6 +157,20 @@ describe("POST /v1/generate-surround-continuation", () => {
     expect(prompt.toLowerCase()).toContain("golden hour") // anti-drift negative
   })
 
+  it("builds a tilt-aware prompt for up/down (render sky, NOT a landscape continuation)", async () => {
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-surround-continuation",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { referenceImageUrl: REF_URL, direction: "up" },
+    })
+    const prompt = String((vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>).prompt).toLowerCase()
+    expect(prompt).toContain("tilted straight up")
+    expect(prompt).toContain("sky")
+    expect(prompt).toContain("do not repeat, mirror, or continue the landscape")
+    expect(prompt).not.toContain("seamless continuation of the") // the pan-only phrasing
+  })
+
   it("reserves credits keyed on the image provider", async () => {
     await app.inject({
       method: "POST",
@@ -172,12 +186,71 @@ describe("POST /v1/generate-surround-continuation", () => {
       method: "POST",
       url: "/v1/generate-surround-continuation",
       headers: { "x-user-id": TEST_USER_ID },
-      payload: { referenceImageUrl: REF_URL, direction: "down" },
+      payload: { referenceImageUrl: REF_URL, direction: "right" },
     })
     expect(videoQueue.add).toHaveBeenCalledTimes(1)
     const payload = vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>
-    expect(payload.direction).toBe("down")
-    expect(payload.carriedFraction).toBe(0.5)
+    expect(payload.direction).toBe("right")
+    expect(payload.carriedFraction).toBe(0.5) // pan default
+  })
+
+  it("accepts the new 'left' pan direction", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-surround-continuation",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { referenceImageUrl: REF_URL, direction: "left" },
+    })
+    expect(res.statusCode).toBe(200)
+    const payload = vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>
+    expect(payload.direction).toBe("left")
+    expect(payload.carriedFraction).toBe(0.5) // pan default
+  })
+
+  it("resolves the thin carried fraction (0.12) for tilts when not pinned", async () => {
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-surround-continuation",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { referenceImageUrl: REF_URL, direction: "up" },
+    })
+    const payload = vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>
+    expect(payload.direction).toBe("up")
+    expect(payload.carriedFraction).toBe(0.12)
+  })
+
+  it("forwards refine + refineProvider to the worker (default false / recraft)", async () => {
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-surround-continuation",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { referenceImageUrl: REF_URL, direction: "right", refine: true, refineProvider: "topaz-image-upscale" },
+    })
+    let payload = vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>
+    expect(payload.refine).toBe(true)
+    expect(payload.refineProvider).toBe("topaz-image-upscale")
+
+    vi.mocked(videoQueue.add).mockClear()
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-surround-continuation",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { referenceImageUrl: REF_URL, direction: "right" },
+    })
+    payload = vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>
+    expect(payload.refine).toBe(false)
+    expect(payload.refineProvider).toBe("recraft-upscale")
+  })
+
+  it("rejects an unknown refineProvider", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-surround-continuation",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { referenceImageUrl: REF_URL, direction: "right", refine: true, refineProvider: "topaz" },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
   })
 
   it("404s and does not enqueue when attachToLocationId resolves to no owned row", async () => {
@@ -198,7 +271,7 @@ describe("POST /v1/generate-surround-continuation", () => {
       method: "POST",
       url: "/v1/generate-surround-continuation",
       headers: { "x-user-id": TEST_USER_ID },
-      payload: { referenceImageUrl: REF_URL, direction: "left" },
+      payload: { referenceImageUrl: REF_URL, direction: "forward" },
     })
     expect(res.statusCode).toBe(400)
     expect(res.json().error.code).toBe("validation_error")
