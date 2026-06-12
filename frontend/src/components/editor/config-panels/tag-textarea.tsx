@@ -6,6 +6,7 @@ import type { NodeRefItem } from "@/lib/node-refs"
 import type { VariableDisplayMode } from "./types"
 import { renderNodeRefs } from "@/lib/render-node-refs"
 import { optimizedImageUrl } from "@/lib/image"
+import { computeFlipPosition } from "./prompt-editor/flip-position"
 import { filterSnippets, computeSnippetInsertPrefix, type SnippetPoolItem } from "@/lib/snippet-pool"
 import { USAGE_MODES, DEFAULT_USAGE_MODE, usageModeLabel, type UsageMode } from "@nodaro/shared"
 
@@ -1311,18 +1312,17 @@ export function TagTextarea(props: TagTextareaProps) {
         (() => {
           const { url, anchor } = imagePreview
           const PREVIEW_MAX = 220
-          const MARGIN = 8
-          const vh = window.innerHeight
-          const vw = window.innerWidth
           // Prefer below the thumbnail; flip above if there's more headroom.
-          const spaceBelow = vh - anchor.bottom - MARGIN
-          const spaceAbove = anchor.top - MARGIN
-          const placeBelow = spaceBelow >= PREVIEW_MAX || spaceBelow >= spaceAbove
-          const top = placeBelow
-            ? anchor.bottom + MARGIN
-            : Math.max(MARGIN, anchor.top - PREVIEW_MAX - MARGIN)
-          // Keep within viewport horizontally; align left edge to the thumbnail.
-          const left = Math.min(Math.max(MARGIN, anchor.left), vw - PREVIEW_MAX - MARGIN)
+          // Shares the editor's flip-above-when-cramped math; the preview div's
+          // own maxWidth/maxHeight stay local. Threshold + secondary margin
+          // reproduce the original `spaceBelow >= PREVIEW_MAX || spaceBelow >= (top - 8)`.
+          const { top, left } = computeFlipPosition(anchor, {
+            width: PREVIEW_MAX,
+            estHeight: PREVIEW_MAX,
+            margin: 8,
+            placeBelowThreshold: PREVIEW_MAX,
+            secondaryClauseMargin: 8,
+          })
           return (
             <div
               style={{ position: "fixed", top, left }}

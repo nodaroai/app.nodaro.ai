@@ -48,6 +48,11 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
     nodes,
     edges: edges ?? [],
     snippets: promptSnippets,
+    // Predict the video provider's negative routing via the shared helper —
+    // matches the panel's effective provider (the Model select below defaults
+    // the same way). Kling/Wan families take the negative natively; others fold
+    // it into the prompt as `Avoid: …`.
+    videoProvider: data.provider || "seedance-2-fast",
   })
   const allNodes = useWorkflowStore((s) => s.nodes)
   const [activeTab, setActiveTab] = useState<Kling3Tab>("scene")

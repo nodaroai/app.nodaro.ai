@@ -325,6 +325,9 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
     edges: edges ?? [],
     snippets: promptSnippets,
     negativeSnippets,
+    // Predict the video provider's negative routing (native vs appended Avoid:)
+    // via the shared helper — matches the panel's own effective provider.
+    videoProvider: data.provider || "seedance-2-fast",
   })
   useEffect(() => { prefetchModelCredits(VIDEO_I2V_MODELS.map((m) => m.value)) }, [])
   const [lightboxImage, setLightboxImage] = useState<string | null>(null)
@@ -1143,6 +1146,8 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
     edges: edges ?? [],
     snippets: promptSnippets,
     negativeSnippets,
+    // Video negative-routing prediction — matches this panel's effective provider.
+    videoProvider: data.provider || "wan",
   })
   const provider = data.provider || "wan"
   const isWan = provider === "wan" || provider === "wan-flash"
@@ -1452,6 +1457,8 @@ function MotionTransferConfigImpl({ data, onUpdate, sources, fieldMappings, onMa
     edges: edges ?? [],
     snippets: promptSnippets,
     negativeSnippets,
+    // Video negative-routing prediction — matches this panel's effective provider.
+    videoProvider: data.provider || "kling",
   })
   const provider = data.provider || "kling"
 
@@ -1733,6 +1740,8 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
     edges: edges ?? [],
     snippets: promptSnippets,
     negativeSnippets,
+    // Video negative-routing prediction — matches this panel's effective provider.
+    videoProvider: data.provider || "seedance-2-fast",
   })
   useEffect(() => { prefetchModelCredits(VIDEO_T2V_MODELS.map((m) => m.value)) }, [])
   const currentProvider = data.provider || "seedance-2-fast"
@@ -2153,6 +2162,9 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
     edges: edges ?? [],
     snippets: promptSnippets,
     negativeSnippets,
+    // Video negative-routing prediction — matches this panel's effective provider
+    // (the unified node's `currentProvider`, resolved by image presence at run).
+    videoProvider: (rawData.provider || "seedance-2-fast") as string,
   })
 
   const currentProvider = (rawData.provider || "seedance-2-fast") as string
@@ -3168,6 +3180,9 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
     nodes,
     edges: edges ?? [],
     snippets: promptSnippets,
+    // No extend provider takes a native negative → the helper folds it into the
+    // prompt as `Avoid: …` (matches the /v1/extend-video route + payload-builder).
+    videoProvider: data.provider || "veo-extend",
   })
   const isSeedanceExtend = data.provider === "seedance-2-extend"
   // Levers are catalog-driven (single source of truth shared with the
@@ -3399,6 +3414,10 @@ export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, on
     edges: edges ?? [],
     snippets: promptSnippets,
     negativeSnippets,
+    // Speech-to-video always runs on `wan-s2v`, which takes negative_prompt
+    // natively (backend kie/video.ts::speechToVideo sends it as a native param;
+    // wan-s2v ∈ NATIVE_NEGATIVE_VIDEO_PROVIDERS) → routing is "native", no Avoid.
+    videoProvider: "wan-s2v",
   })
   useEffect(() => { prefetchModelCredits(["speech-to-video", "speech-to-video:580p", "speech-to-video:720p"]) }, [])
   const [showAdvanced, setShowAdvanced] = useState(false)
@@ -3650,6 +3669,11 @@ function VideoRetakeConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
     nodes,
     edges: edges ?? [],
     snippets: promptSnippets,
+    // Video negative-routing prediction. video-retake exposes no negative field,
+    // so this is a no-op today (routing stays null) — wired for consistency so a
+    // future negative field gets truthful routing for free. ltx-2.3-pro has no
+    // native negative → would fold into the prompt as `Avoid: …`.
+    videoProvider: data.provider || "ltx-2.3-pro",
   })
   return (
     <div className="flex flex-col gap-3">

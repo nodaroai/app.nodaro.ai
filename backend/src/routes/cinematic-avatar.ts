@@ -7,7 +7,7 @@ import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.j
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
-import { resolveCinematicCreditId } from "@nodaro/shared"
+import { resolveCinematicCreditId, CINEMATIC_PROMPT_MAX } from "@nodaro/shared"
 
 // HeyGen combined reference caps (see create-video.md): at most 3 videos and 9
 // images across avatar looks + references. Avatar looks are image looks, so
@@ -27,7 +27,7 @@ const cinematicReference = z.object({
 
 const cinematicAvatarBody = z
   .object({
-    prompt: z.string().min(1).max(10000),
+    prompt: z.string().min(1).max(CINEMATIC_PROMPT_MAX),
     avatarLooks: z.array(z.string().min(1)).min(1).max(3),
     duration: z.number().int().min(4).max(15).optional(),
     autoDuration: z.boolean().optional(),
