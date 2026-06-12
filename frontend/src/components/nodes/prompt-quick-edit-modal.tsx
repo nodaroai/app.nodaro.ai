@@ -146,6 +146,16 @@ export function PromptQuickEditModal() {
   const promptValue = typeof data[promptField] === "string" ? (data[promptField] as string) : ""
   const negativeValue = negativeField && typeof data[negativeField] === "string" ? (data[negativeField] as string) : ""
 
+  // Edit mode uses 14 rows; final mode expands to fill the same visual space so
+  // the modal height stays constant when toggling. When the node has a negative
+  // field, the final view absorbs the negative section (neg editor rows + its
+  // label row 1.75rem + space-y-1.5 gap 0.375rem + space-y-3 section gap 0.75rem).
+  const PROMPT_ROWS = 14
+  const NEG_ROWS = 3
+  const finalMinHeightRem = negativeField
+    ? (PROMPT_ROWS + NEG_ROWS) * 1.5 + 2.875  // 2.875 = neg label + gaps overhead
+    : PROMPT_ROWS * 1.5
+
   const typeDef = NODE_DEF_MAP.get(nodeType)
   const typeLabel = typeDef?.label ?? nodeType
   const userLabel = typeof data.label === "string" && data.label ? data.label : undefined
@@ -171,9 +181,9 @@ export function PromptQuickEditModal() {
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) close() }}>
-      <DialogContent className="sm:max-w-[680px]" onKeyDown={onKeyDown}>
+      <DialogContent className="sm:max-w-[680px]" showCloseButton={false} onKeyDown={onKeyDown}>
         {/* Header: node type title + optional gray custom name + EDIT toggle */}
-        <DialogHeader className="pr-8">
+        <DialogHeader>
           <div className="flex items-center justify-between gap-3">
             <DialogTitle className="text-primary flex items-center gap-2">
               <Icon className="w-4 h-4 shrink-0" />
@@ -235,7 +245,7 @@ export function PromptQuickEditModal() {
                 value={promptValue}
                 onChange={(v) => writeField(promptField, v)}
                 placeholder="Describe what you want to generate…  Type @ for references, { for variables"
-                rows={12}
+                rows={PROMPT_ROWS}
                 referenceImages={referenceImages}
                 nodeRefs={nodeRefs}
                 refMap={refMap}
@@ -246,7 +256,7 @@ export function PromptQuickEditModal() {
                 segments={finalPrompt.promptSegments}
                 plainText={finalPrompt.promptText}
                 placeholder="Final prompt preview — node has no prompt yet"
-                minHeightRem={12 * 1.5}
+                minHeightRem={finalMinHeightRem}
               />
             )}
           </div>
