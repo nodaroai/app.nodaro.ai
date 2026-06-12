@@ -191,6 +191,29 @@ duration, background) and **clears any previously generated plan** — so the ol
 under the new prompt. Run the node to author the animation, then tweak its slots. (These presets target
 the Lottie engine; for the Classic/elements engine, describe your look directly in the prompt.)
 
+### Lottie Overlay factory catalog
+
+**Lottie Overlay** ships 13 placement/timing presets across four folders. The **Connected Graphic**
+folder is built for the graphic wired into the node's `lottie` input (typically a Motion Graphics
+node's authored Lottie) — overlay it centered with custom timing, stretch it **full-canvas** (the
+right placement for lower thirds / titles authored on a full transparent canvas), open or close the
+video with it, pin it as a looping **corner bug**, or pop it in like a reaction sticker. The other
+folders drive the **built-in overlay catalog**: *Celebration & FX* (Celebration Moment, Grand Finale,
+Ambient Particles), *Reactions & Social* (Heart Reaction, Hype Combo), and *Emphasis & UI* (Point It
+Out, Success Beat).
+
+Every prompt is written with **`{variable || default}`** slots for its levers — e.g.
+`{start time || 1 second}`, `{corner || bottom-right}`, `{play mode || once at its natural duration}`.
+Three ways to use them:
+
+1. **Run unedited** — each variable falls back to its default.
+2. **Type over a token** — replace `{start time || 1 second}` with `3 seconds`.
+3. **Wire a node whose label matches the variable name** (e.g. a Text node labeled `start time`) —
+   its output fills the slot at run time, so a published app or upstream logic can drive the timing.
+
+Presets deliberately do **not** set the node's Duration — the overlay plan timeline should track your
+source video, so the node's own duration/FPS settings stay untouched when you apply one.
+
 ## Using presets
 
 Every configurable node has a **preset dropdown** in two places:

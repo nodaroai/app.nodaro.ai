@@ -22,7 +22,7 @@ import { resolveFieldMappings, NODE_MAPPABLE_FIELDS } from "./resolve-field-mapp
 
 import { executeCombineText, executeSplitText, executeComposite, executeWebhookOutput, executePreview, executeTeleporterPassthrough, executeRouter, executeExtractField, executeJsonProcess, executeFilterList, executeDeduplicateList, executeMergeLists, executeSortList, executeSelector } from "./inline-executor.js"
 import { executeSubWorkflow } from "./sub-workflow-handler.js"
-import { mergeExposedSettings, applyHandleInputOverride, isHandleInputWired, computeLlmChatFields, computeNodePrompt, SOCIAL_POST_NODE_TYPES } from "@nodaro/shared"
+import { mergeExposedSettings, applyHandleInputOverride, isHandleInputWired, computeLlmChatFields, computeNodePrompt, resolveNodeRefs, SOCIAL_POST_NODE_TYPES } from "@nodaro/shared"
 import type { ComponentMetadata } from "@nodaro/shared"
 import type {
   SimpleNode,
@@ -481,14 +481,16 @@ async function executeSyncHttpNode(
   const port = process.env.BACKEND_PORT || process.env.PORT || "8000"
   const url = `http://localhost:${port}${route}`
 
-  // {Node Label} ref map for typed-primary prompt resolution. Only llm-chat
-  // and social-post nodes consume it in buildSyncHttpBody (via
-  // computeLlmChatFields / computeNodePrompt), so build it lazily for those
-  // types only — every other sync-HTTP node passes the empty-map default
-  // (buildSyncHttpBody defaults `refMap = new Map()`). Empty when the graph
-  // context isn't threaded (direct unit-test entry) — resolvePrompt then skips
-  // ref substitution.
-  const needsRefMap = node.type === "llm-chat" || SOCIAL_POST_NODE_TYPES.has(node.type)
+  // {Node Label} ref map for typed-primary prompt resolution. Only llm-chat,
+  // social-post, and lottie-overlay nodes consume it in buildSyncHttpBody
+  // (via computeLlmChatFields / computeNodePrompt / the lottie-overlay case —
+  // whose factory presets lean on {variable || default} tokens), so build it
+  // lazily for those types only — every other sync-HTTP node passes the
+  // empty-map default (buildSyncHttpBody defaults `refMap = new Map()`).
+  // Empty when the graph context isn't threaded (direct unit-test entry) —
+  // resolvePrompt then skips ref substitution.
+  const needsRefMap =
+    node.type === "llm-chat" || node.type === "lottie-overlay" || SOCIAL_POST_NODE_TYPES.has(node.type)
   const refMap = needsRefMap
     ? buildNodeRefMap(node.id, { nodes: allNodes, edges, nodeStates })
     : new Map<string, string>()
@@ -677,8 +679,12 @@ export function buildSyncHttpBody(
       const lottieAssets =
         resolvedInputs.lottieAssets ??
         (data.lottieAssets as Array<{ url: string; name?: string }> | undefined)
+      // Resolve {Node Label} / {variable || default} refs on the chosen prompt
+      // (factory presets lean on the default-value tokens) — mirrors the
+      // frontend executor; executeSyncHttpNode builds refMap for this type.
+      const loPrompt = (resolvedInputs.prompt || data.overlayPrompt || data.prompt) as string | undefined
       return withUserPrompt({
-        prompt: resolvedInputs.prompt || data.overlayPrompt || data.prompt,
+        prompt: loPrompt && refMap.size > 0 ? resolveNodeRefs(loPrompt, refMap) : loPrompt,
         // Route schema requires `inputVideoUrl`.
         inputVideoUrl: resolvedInputs.videoUrl || data.sourceVideoUrl || data.inputVideoUrl,
         lottieAssets: lottieAssets && lottieAssets.length > 0 ? lottieAssets : undefined,
