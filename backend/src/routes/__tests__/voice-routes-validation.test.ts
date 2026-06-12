@@ -297,6 +297,24 @@ describe("POST /v1/dubbing", () => {
     expect(res.statusCode).not.toBe(400)
   })
 
+  it("accepts disableVoiceCloning + dropBackgroundAudio booleans", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/dubbing",
+      payload: { ...validBody, disableVoiceCloning: true, dropBackgroundAudio: true },
+    })
+    expect(res.statusCode).not.toBe(400)
+  })
+
+  it("rejects non-boolean disableVoiceCloning", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/dubbing",
+      payload: { ...validBody, disableVoiceCloning: "yes" },
+    })
+    expect(res.statusCode).toBe(400)
+  })
+
   it("rejects numSpeakers 21", async () => {
     const res = await app.inject({ method: "POST", url: "/v1/dubbing", payload: { ...validBody, numSpeakers: 21 } })
     expect(res.statusCode).toBe(400)

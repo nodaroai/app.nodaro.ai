@@ -12,6 +12,12 @@ The Dubbing node uses ElevenLabs Dubbing to translate audio from one language to
 | Target Language | `string` | `"es"` | Language code for the desired output language (required) |
 | Source Language | `string` (optional) | auto-detect | Language code of the input audio. Leave empty for automatic detection |
 | Number of Speakers | `number` (1-10, optional) | auto-detect | Number of distinct speakers in the input. Leave empty for automatic detection |
+| Native voice | `boolean` | `false` | By default the dub **clones the original speaker** — they speak the target language with their own voice and accent. Enable to use a similar **native-sounding Voice Library voice** instead (clean target-language accent) |
+| Drop background audio | `boolean` | `false` | Remove background audio from the final dub — improves quality for speech-only sources (speeches, monologues, voiceovers) |
+
+### Voice cloning vs native voice
+
+The default mode preserves speaker identity: a Hebrew speaker dubbed to English sounds like *the same person speaking English*, including their accent. If you want the dub to sound like a native target-language speaker instead, enable **Native voice** — ElevenLabs then picks a similar voice from its Voice Library. Note: library voices used this way count toward the workspace's custom-voice slots; if no slots are free the dub fails with an error.
 
 ## Inputs & Outputs
 

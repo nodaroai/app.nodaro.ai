@@ -1509,8 +1509,19 @@ export function DubbingConfig({ data, onUpdate, nodeRefs }: ConfigProps<DubbingD
           placeholder="Auto-detect"
         />
       </div>
+      <div className="flex items-center gap-2">
+        <Checkbox id="dubbing-native-voice" checked={data.disableVoiceCloning ?? false} onCheckedChange={(v) => onUpdate({ disableVoiceCloning: !!v })} />
+        <Label htmlFor="dubbing-native-voice" className="text-xs">Native voice (don&apos;t clone the original speaker)</Label>
+      </div>
+      <p className="text-xs text-muted-foreground -mt-1">
+        By default the dub CLONES the original speaker — they speak the target language with their own voice and accent. Check this to use a similar native-sounding voice instead.
+      </p>
+      <div className="flex items-center gap-2">
+        <Checkbox id="dubbing-drop-bg" checked={data.dropBackgroundAudio ?? false} onCheckedChange={(v) => onUpdate({ dropBackgroundAudio: !!v })} />
+        <Label htmlFor="dubbing-drop-bg" className="text-xs">Drop background audio (speech-only sources)</Label>
+      </div>
       <p className="text-xs text-muted-foreground">
-        Translates speech to the target language while preserving speaker identity. Connect an audio source to the input.
+        Translates speech to the target language. Connect an audio source to the input.
       </p>
     </div>
   )

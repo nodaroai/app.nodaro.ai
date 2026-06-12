@@ -6,6 +6,21 @@ export interface DubbingOptions {
   sourceLang?: string
   numSpeakers?: number
   watermark?: boolean
+  /**
+   * Use a similar ElevenLabs Voice Library voice instead of CLONING the
+   * original speaker. The clone (the API default) keeps the source speaker's
+   * voice + accent in the target language — for "dub to native-sounding
+   * English" use-cases that reads as a strange voice/accent, so this is the
+   * lever that fixes it. NOTE (API docs): library voices used this way count
+   * toward the workspace's custom-voice slots; with no free slots the dub fails.
+   */
+  disableVoiceCloning?: boolean
+  /**
+   * Drop background audio from the final dub — per the API docs this improves
+   * dub quality when the source is known to be speech-only (speeches,
+   * monologues, voiceovers).
+   */
+  dropBackgroundAudio?: boolean
 }
 
 export interface DubbingStartResult {
@@ -42,6 +57,12 @@ export async function startDubbing(
   }
   if (options?.watermark != null) {
     formData.append("watermark", String(options.watermark))
+  }
+  if (options?.disableVoiceCloning != null) {
+    formData.append("disable_voice_cloning", String(options.disableVoiceCloning))
+  }
+  if (options?.dropBackgroundAudio != null) {
+    formData.append("drop_background_audio", String(options.dropBackgroundAudio))
   }
 
   const response = await fetch(`${ELEVENLABS_BASE_URL}/v1/dubbing`, {

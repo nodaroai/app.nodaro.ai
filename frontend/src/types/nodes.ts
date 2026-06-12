@@ -2642,6 +2642,12 @@ export type DubbingData = {
   targetLanguage: string
   sourceLanguage?: string
   numSpeakers?: number
+  /** Use a similar native Voice Library voice instead of CLONING the original
+   *  speaker — the clone (default) keeps the source accent in the target
+   *  language, which often reads as a strange voice/accent. */
+  disableVoiceCloning?: boolean
+  /** Drop background audio — cleaner dubs for speech-only sources. */
+  dropBackgroundAudio?: boolean
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string

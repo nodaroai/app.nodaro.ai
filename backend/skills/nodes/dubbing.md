@@ -1,7 +1,7 @@
 ---
 node_type: dubbing
-generated_at: 2026-05-18T13:23:37.496Z
-generated_from: cb1e786d
+generated_at: 2026-06-12T00:45:40.444Z
+generated_from: 0931668d0
 ---
 
 # Dubbing
@@ -21,6 +21,8 @@ generated_from: cb1e786d
 **Optional data fields:**
 - `sourceLanguage?: string`
 - `numSpeakers?: number`
+- `disableVoiceCloning?: boolean`
+- `dropBackgroundAudio?: boolean`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
 - `generatedAudioUrl?: string`
@@ -55,6 +57,8 @@ generated_from: cb1e786d
 - `target_language`
 - `source_language`
 - `num_speakers`
+- `disable_voice_cloning`
+- `drop_background_audio`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## Common gotchas
