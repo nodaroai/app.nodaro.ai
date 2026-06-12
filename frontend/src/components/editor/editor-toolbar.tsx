@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
-import { ArrowLeft, Braces, ChevronRight, Save, CheckCircle, Loader2, RefreshCw, Play, Pause, MoreVertical, Download, Upload, Package, FileJson, FileText, ClipboardPaste } from "lucide-react"
+import { ArrowLeft, Braces, ChevronRight, Save, CheckCircle, Loader2, RefreshCw, Play, Pause, MoreVertical, Download, Upload, Package, FileJson, FileText, ClipboardPaste, PanelRight } from "lucide-react"
 import { CreditBalance } from "@/ee/components/credits/CreditBalance"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -101,6 +101,9 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
   const setFlowPromptTemplates = useWorkflowStore((s) => s.setFlowPromptTemplates)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
   const setVideoAutoplay = useWorkflowStore((s) => s.setVideoAutoplay)
+  const focusedNodeId = useWorkflowStore((s) => s.focusedNodeId)
+  const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
+  const selectNode = useWorkflowStore((s) => s.selectNode)
   const variableDisplayMode = useWorkflowStore((s) => s.variableDisplayMode)
   const setVariableDisplayMode = useWorkflowStore((s) => s.setVariableDisplayMode)
   const [flowTemplatesOpen, setFlowTemplatesOpen] = useState(false)
@@ -648,6 +651,25 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
             </DropdownMenu>
           ) : null
         })()}
+
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            if (selectedNodeId) {
+              selectNode(null)
+            } else if (focusedNodeId) {
+              selectNode(focusedNodeId)
+            }
+          }}
+          aria-label={selectedNodeId ? "Close settings panel" : "Open settings panel"}
+          title={selectedNodeId ? "Close settings panel" : focusedNodeId ? "Open settings for selected node" : "Click a node first to open its settings"}
+          className={selectedNodeId ? "text-white hover:opacity-90" : ""}
+          style={selectedNodeId ? { backgroundColor: '#ff0073', borderColor: '#ff0073' } : undefined}
+          disabled={!focusedNodeId && !selectedNodeId}
+        >
+          <PanelRight className="h-4 w-4" />
+        </Button>
 
         <Button
           variant="outline"

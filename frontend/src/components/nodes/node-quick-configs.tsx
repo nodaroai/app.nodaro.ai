@@ -2,7 +2,7 @@
 
 import { useEffect } from "react"
 import type { LucideIcon } from "lucide-react"
-import { Sparkles, Languages, Image as ImageIcon, LayoutGrid, Palette } from "lucide-react"
+import { Sparkles, Languages, Image as ImageIcon, LayoutGrid, Palette, Ratio, Maximize2, Clock } from "lucide-react"
 import {
   Select,
   SelectContent,
@@ -27,6 +27,13 @@ import {
   AI_AVATAR_SOURCE_OPTIONS,
   CINEMATIC_ASPECT_RATIO_OPTIONS,
   CINEMATIC_RESOLUTION_OPTIONS,
+  IMAGE_GEN_MODELS,
+  getAspectRatiosForModel,
+  IMAGE_RESOLUTION_OPTIONS,
+  VIDEO_GEN_MODELS,
+  getAspectRatiosForVideoModel,
+  getDurationsForVideoModel,
+  VIDEO_RESOLUTION_OPTIONS,
 } from "@/components/editor/config-panels/model-options"
 import { LLM_MODELS, SHEET_TYPES, SHEET_SKINS } from "@nodaro/shared"
 import { ALL_LANGUAGES } from "@/lib/audio-tags"
@@ -59,6 +66,11 @@ export interface QuickConfigControl {
     | ((data: Record<string, unknown>) => ReadonlyArray<QuickConfigOption>)
   /** Write the chosen value as a number (option values are strings). */
   readonly numeric?: boolean
+  /** Additional node-data fields to set to `undefined` whenever this control's
+   *  value changes. Use when selecting a new value must invalidate a sibling
+   *  field (e.g. provider change on generate-image must clear `providers` so the
+   *  multi-provider array doesn't override the new single choice). */
+  readonly additionalClear?: readonly string[]
   /** When `true`, returning `[]` from {@link options} HIDES the control WITHOUT
    *  clearing the stored value. Use for fields whose value is preserved across
    *  modes and re-applied when the lever returns (e.g. ai-avatar `engine`: hidden
@@ -213,6 +225,94 @@ const maskThresholdControl: QuickConfigControl = {
 const sheetLabel = (v: string) => v.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
 
 export const NODE_QUICK_CONFIGS: Readonly<Record<string, ReadonlyArray<QuickConfigControl>>> = {
+  // ── Generate Image (bespoke toolbar — model / aspect / resolution) ──
+  "generate-image": [
+    {
+      field: "provider",
+      ariaLabel: "Model",
+      icon: Sparkles,
+      // Clearing `providers` on change collapses multi-provider mode to single.
+      additionalClear: ["providers"],
+      options: toOptions(IMAGE_GEN_MODELS),
+    },
+    {
+      field: "aspectRatio",
+      ariaLabel: "Aspect",
+      icon: Ratio,
+      options: (data) => {
+        const provider = typeof data.provider === "string" ? data.provider : "nano-banana-pro"
+        return getAspectRatiosForModel(provider)
+      },
+    },
+    {
+      field: "resolution",
+      ariaLabel: "Resolution",
+      icon: Maximize2,
+      options: (data) => {
+        const provider = typeof data.provider === "string" ? data.provider : "nano-banana-pro"
+        return IMAGE_RESOLUTION_OPTIONS[provider] ?? []
+      },
+    },
+    {
+      field: "repeatCount",
+      ariaLabel: "Runs",
+      numeric: true,
+      options: [
+        { value: "1", label: "× 1" },
+        { value: "2", label: "× 2" },
+        { value: "3", label: "× 3" },
+        { value: "4", label: "× 4" },
+      ],
+    },
+  ],
+  // ── Generate Video (bespoke toolbar — model / aspect / duration / resolution) ──
+  "generate-video": [
+    {
+      field: "provider",
+      ariaLabel: "Model",
+      icon: Sparkles,
+      options: toOptions(VIDEO_GEN_MODELS),
+    },
+    {
+      field: "aspectRatio",
+      ariaLabel: "Aspect",
+      icon: Ratio,
+      options: (data) => {
+        const provider = typeof data.provider === "string" ? data.provider : "seedance-2-fast"
+        return getAspectRatiosForVideoModel(provider)
+      },
+    },
+    {
+      field: "duration",
+      ariaLabel: "Duration",
+      icon: Clock,
+      numeric: true,
+      options: (data) => {
+        const provider = typeof data.provider === "string" ? data.provider : "seedance-2-fast"
+        return getDurationsForVideoModel(provider).map((o) => ({ value: String(o.value), label: o.label }))
+      },
+    },
+    {
+      field: "resolution",
+      ariaLabel: "Resolution",
+      icon: Maximize2,
+      options: (data) => {
+        const provider = typeof data.provider === "string" ? data.provider : "seedance-2-fast"
+        return VIDEO_RESOLUTION_OPTIONS[provider] ?? []
+      },
+    },
+    {
+      field: "repeatCount",
+      ariaLabel: "Runs",
+      numeric: true,
+      options: [
+        { value: "1", label: "× 1" },
+        { value: "2", label: "× 2" },
+        { value: "3", label: "× 3" },
+        { value: "4", label: "× 4" },
+      ],
+    },
+  ],
   // `edit-image` / `image-to-image` are legacy types folded into `modify-image`
   // (not creatable, never mounted) — no quick-config entry; guard test enforces.
   "modify-image": [providerControl(MODIFY_IMAGE_MODELS)],
@@ -393,13 +493,21 @@ export function QuickConfigSelect({
   return (
     <Select
       value={value || undefined}
-      onValueChange={(v) => updateNodeData(nodeId, { [control.field]: control.numeric ? Number(v) : v })}
+      onValueChange={(v) => {
+        const patch: Record<string, unknown> = { [control.field]: control.numeric ? Number(v) : v }
+        if (control.additionalClear) {
+          for (const f of control.additionalClear) patch[f] = undefined
+        }
+        updateNodeData(nodeId, patch)
+      }}
       onOpenChange={onOpenChange}
       disabled={disabled}
     >
       <SelectTrigger className={ghostTriggerClass} aria-label={control.ariaLabel} title={control.ariaLabel}>
         {Icon && <Icon />}
-        <SelectValue>{current?.label ?? value}</SelectValue>
+        {/* Fall back to the first option label when the field is unset — avoids
+            a blank dropdown when the node was created before this control existed. */}
+        <SelectValue>{current?.label ?? options[0]?.label ?? value}</SelectValue>
       </SelectTrigger>
       <SelectContent className="node-menu-surface">
         {options.map((o) => (

@@ -357,6 +357,11 @@ interface WorkflowState {
   readonly nodes: WorkflowNode[]
   readonly edges: WorkflowEdge[]
   readonly selectedNodeId: string | null
+  /** The node the user last clicked (focused), exposed so the toolbar config-panel
+   *  toggle button can open the config panel for it. Separate from `selectedNodeId`
+   *  (which means the config panel is OPEN); cleared when the panel closes. */
+  readonly focusedNodeId: string | null
+  readonly setFocusedNodeId: (id: string | null) => void
   /** True when the config panel is in fullscreen (modal) mode. UI-only flag —
    *  used to gate workflow keyboard shortcuts and the global Execute button. */
   readonly configPanelFullscreen: boolean
@@ -832,6 +837,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   nodes: [],
   edges: [],
   selectedNodeId: null,
+  focusedNodeId: null,
+  setFocusedNodeId: (id) => set({ focusedNodeId: id }),
   promptEditNodeId: null,
   quickStripPinnedNodeId: null,
   configPanelFullscreen: false,
@@ -1314,10 +1321,10 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   },
 
   openPromptEditor: (nodeId) => {
-    // Select the node first so the inline "Generate with AI" wizard can read
-    // its connected-input context (it keys off selectedNodeId).
-    get().selectNode(nodeId)
-    set({ promptEditNodeId: nodeId })
+    // Only set the prompt modal — don't open the config sidebar.
+    // The AI wizard reads context via promptEditNodeId (prompt-helper-button.tsx
+    // falls back to promptEditNodeId when selectedNodeId is null).
+    set({ promptEditNodeId: nodeId, focusedNodeId: nodeId })
   },
   closePromptEditor: () => set({ promptEditNodeId: null }),
   setQuickStripPinned: (nodeId) => set({ quickStripPinnedNodeId: nodeId }),
@@ -1818,10 +1825,11 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   selectNode: (nodeId) =>
     set((state) => {
       if (nodeId === null) {
-        // Deselect all
+        // Deselect all and clear focused tracking
         const anySelected = state.nodes.some((n) => n.selected)
         return {
           selectedNodeId: null,
+          focusedNodeId: null,
           ...(anySelected ? { nodes: state.nodes.map((n) => n.selected ? { ...n, selected: false } : n) } : {}),
         }
       }
@@ -1838,9 +1846,10 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         // — so when other nodes are still selected, we have to clear them
         // even on the already-selected branch.
         const othersSelected = state.nodes.some((n) => n.id !== nodeId && n.selected)
-        if (!othersSelected) return { selectedNodeId: nodeId }
+        if (!othersSelected) return { selectedNodeId: nodeId, focusedNodeId: nodeId }
         return {
           selectedNodeId: nodeId,
+          focusedNodeId: nodeId,
           nodes: state.nodes.map((n) => (n.id === nodeId ? n : n.selected ? { ...n, selected: false } : n)),
         }
       }
@@ -1848,6 +1857,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       // Target not yet selected (e.g. stopPropagation prevented React Flow) — select it, deselect others
       return {
         selectedNodeId: nodeId,
+        focusedNodeId: nodeId,
         nodes: state.nodes.map((n) => ({
           ...n,
           selected: n.id === nodeId,

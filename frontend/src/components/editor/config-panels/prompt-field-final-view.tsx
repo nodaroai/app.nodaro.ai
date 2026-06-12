@@ -60,6 +60,14 @@ interface PromptFieldFinalViewProps {
    *  tall field doesn't visibly shrink when toggled to final view. Falls back to
    *  the default `4.5rem` (= a 3-row prompt) when absent. */
   readonly minHeightRem?: number
+  /** When true, clamps height to `minHeightRem` and makes the body scroll.
+   *  Use in fixed-height contexts (e.g. the quick-edit modal) to prevent the
+   *  box from growing when long content is pasted. */
+  readonly scrollable?: boolean
+  /** When true, suppresses the colour-origin legend row. Use in fixed-height
+   *  contexts (e.g. the prompt quick-edit modal) where the legend would add
+   *  dynamic height and cause layout shifts between modes. */
+  readonly hideLegend?: boolean
   readonly className?: string
 }
 
@@ -81,6 +89,8 @@ export function PromptFieldFinalView({
   placeholder,
   routingCaption,
   minHeightRem,
+  scrollable = false,
+  hideLegend = false,
   className,
 }: PromptFieldFinalViewProps) {
   const hasContent = plainText.length > 0
@@ -112,7 +122,10 @@ export function PromptFieldFinalView({
           // style below when the caller passes the editor's exact rows*1.5.
           minHeightRem == null && "min-h-[4.5rem]",
         )}
-        style={minHeightRem != null ? { minHeight: `${minHeightRem}rem` } : undefined}
+        style={minHeightRem != null ? {
+          minHeight: `${minHeightRem}rem`,
+          ...(scrollable ? { maxHeight: `${minHeightRem}rem`, overflowY: "auto" } : {}),
+        } : undefined}
       >
         <button
           type="button"
@@ -149,11 +162,11 @@ export function PromptFieldFinalView({
           </p>
         )}
       </div>
-      {legendItems.length > 0 && (
+      {!hideLegend && legendItems.length > 0 && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-0.5 pt-0.5" aria-label="Prompt provenance legend">
           {legendItems.map((l) => (
-            <span key={l.origin} className="flex items-center gap-1 text-[9px] text-muted-foreground">
-              <span className={cn("inline-block size-2 rounded-full", l.dot)} aria-hidden="true" />
+            <span key={l.origin} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <span className={cn("inline-block size-2.5 rounded-full", l.dot)} aria-hidden="true" />
               {l.label}
             </span>
           ))}

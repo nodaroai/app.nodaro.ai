@@ -65,6 +65,9 @@ interface PromptEditorProps {
   readonly placeholder?: string
   readonly rows?: number
   readonly className?: string
+  /** When true, clamps height to `rows * 1.5rem` and makes the content area
+   *  scroll rather than grow. Use in fixed-height modal contexts. */
+  readonly scrollable?: boolean
   readonly referenceImages?: readonly RefImageItem[]
   /** Upstream node references for the `{` typeahead. */
   readonly nodeRefs?: readonly NodeRefItem[]
@@ -341,6 +344,7 @@ export function PromptEditor({
   placeholder,
   rows,
   className,
+  scrollable = false,
   referenceImages,
   nodeRefs,
   refMap,
@@ -815,6 +819,14 @@ export function PromptEditor({
     <div
       className={`prompt-editor rounded-md border border-input bg-transparent text-sm shadow-xs transition-colors ${className ?? ""}`}
       onClick={() => editor?.chain().focus().run()}
+      // Scrollable: cap the outer wrapper (border included). The inner
+      // .prompt-editor__content has 1rem vertical padding; .ProseMirror
+      // inherits `min-height` from its parent so it is always exactly
+      // `rows*1.5rem` tall. Setting maxHeight here (border-box, no padding on
+      // this element) to rows*1.5 + 1.125rem gives a content area of
+      // rows*1.5 + 1rem — exactly ProseMirror's min-height + the 1rem padding,
+      // leaving zero overflow and zero spurious scrollbar.
+      style={scrollable && minHeight ? { maxHeight: `calc(${minHeight} + 1.125rem)`, overflowY: "auto" } : undefined}
     >
       <EditorContent
         editor={editor}
