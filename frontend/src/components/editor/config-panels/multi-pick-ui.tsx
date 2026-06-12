@@ -102,6 +102,9 @@ export function MultiPickBadge({
         type="button"
         title="Activate multi-select"
         aria-label="Activate multi-select"
+        // Mouse-only affordance: keyboard users multi-add with Space/+ on the
+        // tile itself. Skipped by Tab so each grid stays one Tab stop.
+        tabIndex={-1}
         onClick={(e) => {
           e.stopPropagation()
           onActivate()
@@ -125,6 +128,7 @@ export function MultiPickBadge({
       type="button"
       title="Multi-select activated · click to disable"
       aria-label="Multi-select activated, click to disable"
+      tabIndex={-1}
       onClick={(e) => {
         e.stopPropagation()
         onDemote()

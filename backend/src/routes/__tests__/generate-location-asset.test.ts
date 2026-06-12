@@ -456,3 +456,63 @@ describe("POST /v1/generate-location-asset — extended asset types (Task 9)", (
     expect(res.json().error.code).toBe("validation_error")
   })
 })
+
+// ---------------------------------------------------------------------------
+// Credit-affecting quality/resolution levers (mirrors generate-image).
+// The DEBIT identifier (reserveCreditsForJob's 4th arg) comes from the shared
+// resolver — the same function the (mocked no-op here) credit-guard CHECK
+// runs, so asserting the DEBIT pins both sides.
+// ---------------------------------------------------------------------------
+
+describe("POST /v1/generate-location-asset — quality / resolution levers", () => {
+  it("quality=high + gpt-image reserves the composite id and threads levers to the queue", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-location-asset",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        assetType: "timeOfDay",
+        variant: "dusk",
+        name: "Forest Glade",
+        provider: "gpt-image",
+        quality: "high",
+        resolution: "1K",
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(vi.mocked(reserveCreditsForJob)).toHaveBeenCalledWith(
+      expect.anything(), expect.anything(), "job-1", "gpt-image:high",
+    )
+    expect(videoQueue.add).toHaveBeenCalledWith(
+      "generate-location-asset",
+      expect.objectContaining({ quality: "high", resolution: "1K" }),
+    )
+  })
+
+  it("omitting the levers keeps the legacy plain-provider identifier", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-location-asset",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { assetType: "timeOfDay", variant: "dusk", name: "Forest Glade" },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(vi.mocked(reserveCreditsForJob)).toHaveBeenCalledWith(
+      expect.anything(), expect.anything(), "job-1", "nano-banana",
+    )
+  })
+
+  it("a value outside the enum is rejected by Zod (validation_error)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-location-asset",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { assetType: "timeOfDay", variant: "dusk", name: "Forest Glade", resolution: "8K" },
+    })
+
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+  })
+})

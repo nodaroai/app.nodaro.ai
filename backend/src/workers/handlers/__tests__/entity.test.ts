@@ -177,6 +177,39 @@ describe("generate-character handler", () => {
     )
   })
 
+  it("forwards resolution + quality from job.data to generateImage extraParams (credit-affecting levers)", async () => {
+    // The routes price these via the composite credit identifier and thread
+    // them to the queue; the worker MUST hand them to the provider or a 4K
+    // reservation would generate a 1K image. Same param names as the
+    // generate-image worker.
+    const job = makeJob("generate-character", {
+      prompt: "a warrior",
+      aspectRatio: "3:4",
+      resolution: "4K",
+      quality: "high",
+    })
+    await handler(job as never, makeCtx())
+    expect(mocks.mockGenerateImage).toHaveBeenCalledWith(
+      "a warrior",
+      "nano-banana",
+      undefined,
+      { aspect_ratio: "3:4", resolution: "4K", quality: "high" },
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+    )
+  })
+
+  it("quality alone (no aspect ratio) still produces extraParams", async () => {
+    const job = makeJob("generate-character", { prompt: "a warrior", quality: "high" })
+    await handler(job as never, makeCtx())
+    expect(mocks.mockGenerateImage).toHaveBeenCalledWith(
+      "a warrior",
+      "nano-banana",
+      undefined,
+      { quality: "high" },
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+    )
+  })
+
   // Reconciliation wiring (Task 1.11): when generateImage fires
   // onTaskCreated with a taskId, the persistence layer writes provider_kind
   // + provider_task_id + provider_call_started_at on the job row. nano-banana

@@ -4,7 +4,8 @@ import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
-import { extractWorkflowId, extractProvider } from "../lib/request-helpers.js"
+import { extractWorkflowId } from "../lib/request-helpers.js"
+import { resolveEntityImageCreditIdentifier } from "../lib/entity-credit-identifier.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { llmComplete } from "../lib/llm-client.js"
@@ -57,6 +58,11 @@ const generateCharacterAssetBody = z.object({
   // bounded; URLs validated via safeUrlSchema (SSRF gate).
   realLifeRefs: z.array(safeUrlSchema).max(5).optional(),
   provider: z.string().optional().default("nano-banana"),
+  // Credit-affecting output levers (mirrors generate-image). The enums are
+  // PERMISSIVE on purpose — a value the chosen model doesn't support is
+  // ignored by the per-provider param routing / worker fail-safe, never 400d.
+  resolution: z.enum(["1K", "2K", "4K", "0.5 MP", "1 MP", "2 MP", "4 MP"]).optional(),
+  quality: z.enum(["medium", "high", "basic"]).optional(),
   userId: z.string().uuid().optional(),
   // Character Studio auto-attach: when all three are set, the worker appends
   // `{name: attachName, url: <result>}` to the named JSONB array column on the
@@ -199,7 +205,9 @@ function buildVariantPrompt(
 }
 
 export async function generateCharacterAssetRoutes(app: FastifyInstance) {
-  app.post("/v1/generate-character-asset", { preHandler: creditGuard((req) => extractProvider(req.body, "nano-banana")) }, async (req, reply) => {
+  // Quality/resolution-aware identifier via the shared resolver — the SAME
+  // function the handler's DEBIT uses, so CHECK===DEBIT can't drift.
+  app.post("/v1/generate-character-asset", { preHandler: creditGuard((req) => resolveEntityImageCreditIdentifier(req.body)) }, async (req, reply) => {
     // ─────────────────────────────────────────────────────────────────────
     // 1. Authentication
     // ─────────────────────────────────────────────────────────────────────
@@ -302,7 +310,9 @@ export async function generateCharacterAssetRoutes(app: FastifyInstance) {
       }
     }
 
-    const modelIdentifier = parsed.data.provider
+    // Composite identifier (provider[:quality|:resolution|…]) — derived by
+    // the SAME resolver the preHandler ran on the raw body, so CHECK===DEBIT.
+    const modelIdentifier = resolveEntityImageCreditIdentifier(parsed.data)
 
     // Use the character's anchor portrait as the i2i source when the studio
     // path runs, UNLESS the caller passed an explicit sourceImageUrl (their
@@ -380,6 +390,8 @@ export async function generateCharacterAssetRoutes(app: FastifyInstance) {
       description: parsed.data.description,
       realLifeRefs: parsed.data.realLifeRefs,
       aspectRatio,
+      resolution: parsed.data.resolution,
+      quality: parsed.data.quality,
       usageLogId,
     })
 

@@ -78,6 +78,13 @@ interface EntityImageJobData {
   // handler's static `opts.aspectRatio` so each generation can pick a
   // framing that matches its asset type (portrait=3:4, poses=9:16, etc.).
   aspectRatio?: string
+  // Credit-affecting output levers threaded from the generate-character /
+  // generate-location (+ -asset) routes. Forwarded to the provider via
+  // extraParams exactly like the generate-image worker — providers without
+  // the lever ignore the param (the permissive-enum contract: priced at the
+  // route, gated per-provider, never rejected here).
+  resolution?: string
+  quality?: string
 }
 
 function makeEntityImageHandler(
@@ -101,6 +108,8 @@ function makeEntityImageHandler(
       motionDescription,
       realLifeRefs,
       aspectRatio,
+      resolution,
+      quality,
     } = data
     const resolvedProvider = provider ?? "nano-banana"
 
@@ -116,12 +125,19 @@ function makeEntityImageHandler(
     // asset can pick a framing that matches its asset type. Generate-face
     // still pins 1:1 via opts because faces are always square crops.
     const effectiveAspectRatio = aspectRatio ?? opts?.aspectRatio
-    const extraParams = effectiveAspectRatio ? { aspect_ratio: effectiveAspectRatio } : undefined
+    // Same extraParams contract as the generate-image worker: only set keys
+    // ride through; providers that don't support a lever ignore it.
+    const extraParams: Record<string, unknown> = {
+      ...(effectiveAspectRatio && { aspect_ratio: effectiveAspectRatio }),
+      ...(resolution && { resolution }),
+      ...(quality && { quality }),
+    }
+    const hasExtraParams = Object.keys(extraParams).length > 0
     const onTaskCreated = makeOnTaskCreated(
       ctx.jobId,
       providerKindForImageModel(resolvedProvider),
     )
-    const result = await generateImage(prompt, resolvedProvider, referenceImageUrls, extraParams, { onTaskCreated })
+    const result = await generateImage(prompt, resolvedProvider, referenceImageUrls, hasExtraParams ? extraParams : undefined, { onTaskCreated })
     await setJobProgress(job, ctx.jobId, 50)
 
     const r2Url = await uploadImageMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)

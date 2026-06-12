@@ -278,6 +278,19 @@ export interface GenerateCharacterInput {
    * against the per-asset-type default, loses to `aspectRatio`.
    */
   characterNodeAspectRatio?: CharacterAspectRatio
+  /**
+   * Credit-affecting quality tier (e.g. `"high"` for gpt-image). Priced like
+   * generate-image (composite ids such as `gpt-image:high`); values the chosen
+   * model doesn't support are ignored server-side, never rejected.
+   */
+  quality?: string
+  /**
+   * Credit-affecting output resolution (e.g. `"2K"` / `"4K"` / `"2 MP"`).
+   * Priced like generate-image (composite ids such as `nano-banana-pro:4K`);
+   * values the chosen model doesn't support are ignored server-side, never
+   * rejected.
+   */
+  resolution?: string
 }
 
 export interface GenerateCharacterResult {
@@ -325,6 +338,17 @@ export interface GenerateAssetInput {
    * against the per-asset-type default, loses to `aspectRatio`.
    */
   characterNodeAspectRatio?: CharacterAspectRatio
+  /**
+   * Credit-affecting quality tier (e.g. `"high"` for gpt-image). Values the
+   * chosen model doesn't support are ignored server-side, never rejected.
+   */
+  quality?: string
+  /**
+   * Credit-affecting output resolution (e.g. `"2K"` / `"4K"` / `"2 MP"`).
+   * Values the chosen model doesn't support are ignored server-side, never
+   * rejected.
+   */
+  resolution?: string
 }
 
 export interface GenerateMotionInput {

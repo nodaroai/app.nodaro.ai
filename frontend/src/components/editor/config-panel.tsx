@@ -205,6 +205,7 @@ import {
   CinematicAvatarConfig,
 } from "./config-panels"
 import { TileCommitContext } from "./config-panels/dimension-tile-grid"
+import { createRovingTabIndexRef, handleConfigPanelNavKeyDown } from "./config-panels/config-keyboard-nav"
 
 const LIBRARY_VIDEO_TYPES = new Set(["image-to-video", "video-to-video", "text-to-video", "generate-video", "video-upscale", "extend-video", "motion-transfer", "lip-sync", "speech-to-video", "face-swap", "video-sfx", "ai-avatar", "cinematic-avatar"])
 const LIBRARY_AUDIO_TYPES = new Set(["text-to-speech", "generate-music", "text-to-audio", "audio-isolation", "text-to-dialogue", "voice-changer", "dubbing", "voice-remix", "voice-design", "suno-generate", "suno-cover", "suno-extend", "suno-separate", "suno-mashup", "suno-replace-section", "suno-add-instrumental", "suno-add-vocals", "suno-convert-wav", "suno-upload-extend"])
@@ -747,6 +748,14 @@ export function ConfigPanel() {
   const dragStartState = useRef<"peek" | "expanded">("peek")
   const sheetRef = useRef<HTMLDivElement>(null)
 
+  // Roving tabindex across the panel: each picker section (tablist, radiogroup,
+  // tile grid) is ONE Tab stop — Tab jumps between sections, arrows move within.
+  const rovingTabIndexRef = useMemo(() => createRovingTabIndexRef(), [])
+  const panelBodyRef = useCallback((el: HTMLDivElement | null) => {
+    rovingTabIndexRef(el)
+    sheetRef.current = el
+  }, [rovingTabIndexRef])
+
   // Reset to peek when node changes
   useEffect(() => {
     if (isMobile && selectedNodeId) setSheetState("peek")
@@ -991,7 +1000,15 @@ export function ConfigPanel() {
           ? `bg-white dark:bg-[#1E1E1E] rounded-t-2xl shadow-2xl flex flex-col transition-[max-height] duration-300 ease-in-out ${sheetState === "expanded" ? "max-h-[70vh]" : "max-h-[15vh]"} min-h-0`
           : "flex flex-col h-full min-h-0"
       }
-        ref={isMobile ? sheetRef : undefined}
+        ref={panelBodyRef}
+        // Marker consumed by workflow-canvas's document-level shortcut handler:
+        // keydown events originating inside the panel are the panel's to handle
+        // (tile grids, tabs, selects) — the canvas must not hijack them.
+        data-config-panel-body="true"
+        // Delegated ARIA keyboard nav: any picker inside the panel using
+        // role="tablist"/"tab" or role="radiogroup|group" with radio/checkbox
+        // tile buttons gets arrow-key navigation with zero per-picker wiring.
+        onKeyDown={handleConfigPanelNavKeyDown}
         // Delegate dblclick on the fullscreen modal: when the target is a
         // role="radio"/role="checkbox" tile button anywhere inside (custom
         // pickers like Lens, Framing, Animal, Camera Motion, Person,

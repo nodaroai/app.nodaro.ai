@@ -4,7 +4,8 @@ import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
-import { extractWorkflowId, extractForcePrivate, extractProvider } from "../lib/request-helpers.js"
+import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { resolveEntityImageCreditIdentifier } from "../lib/entity-credit-identifier.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { CHARACTER_ASPECT_OPTIONS, LOCATION_ASSET_TYPES, LOCATION_ATTACH_COLUMNS } from "@nodaro/shared"
@@ -54,6 +55,11 @@ const generateLocationAssetBody = z.object({
   style: z.enum(["realistic", "anime", "3d-pixar", "illustration"]).optional(),
   sourceImageUrl: safeUrlSchema.optional(),
   provider: z.string().optional().default("nano-banana"),
+  // Credit-affecting output levers (mirrors generate-image). The enums are
+  // PERMISSIVE on purpose — a value the chosen model doesn't support is
+  // ignored by the per-provider param routing / worker fail-safe, never 400d.
+  resolution: z.enum(["1K", "2K", "4K", "0.5 MP", "1 MP", "2 MP", "4 MP"]).optional(),
+  quality: z.enum(["medium", "high", "basic"]).optional(),
   // Optional framing override (the 4-value enum locations already use for
   // motion). The worker forwards it to the image model; absent = the model's
   // default. The studio's 360° surround path pins 16:9 so every ring view
@@ -167,7 +173,9 @@ function buildVariantPrompt(
 }
 
 export async function generateLocationAssetRoutes(app: FastifyInstance) {
-  app.post("/v1/generate-location-asset", { preHandler: creditGuard((req) => extractProvider(req.body, "nano-banana")) }, async (req, reply) => {
+  // Quality/resolution-aware identifier via the shared resolver — the SAME
+  // function the handler's DEBIT uses, so CHECK===DEBIT can't drift.
+  app.post("/v1/generate-location-asset", { preHandler: creditGuard((req) => resolveEntityImageCreditIdentifier(req.body)) }, async (req, reply) => {
     const parsed = generateLocationAssetBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -231,7 +239,9 @@ export async function generateLocationAssetRoutes(app: FastifyInstance) {
       anchorDescription = (locRow?.canonical_description as string | null) ?? null
     }
 
-    const modelIdentifier = parsed.data.provider
+    // Composite identifier (provider[:quality|:resolution|…]) — derived by
+    // the SAME resolver the preHandler ran on the raw body, so CHECK===DEBIT.
+    const modelIdentifier = resolveEntityImageCreditIdentifier(parsed.data)
 
     // Use the location's anchor image as the i2i source when the studio path
     // runs, UNLESS the caller passed an explicit sourceImageUrl (their choice
@@ -278,6 +288,8 @@ export async function generateLocationAssetRoutes(app: FastifyInstance) {
       variant,
       provider: parsed.data.provider,
       aspectRatio: parsed.data.aspectRatio,
+      resolution: parsed.data.resolution,
+      quality: parsed.data.quality,
       usageLogId,
       attachToLocationId,
       attachToColumn,

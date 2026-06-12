@@ -829,12 +829,22 @@ When `attachToCharacterId` is set, the worker writes the result directly to
 the row's `source_image_url`; for multi-candidate runs, use `approvePortrait()`
 to pick a candidate.
 
+Optional `quality` (`"medium"` / `"high"` / `"basic"`) and `resolution`
+(`"1K"` / `"2K"` / `"4K"` / `"0.5 MP"` / `"1 MP"` / `"2 MP"` / `"4 MP"`)
+select the image model's output tier and are **credit-affecting** — they price
+exactly like Generate Image (composite ids such as `gpt-image:high` /
+`nano-banana-pro:4K`, so a 4K/high run reserves more than the model's base
+cost). A value the chosen model doesn't support is ignored, never rejected.
+`generateAsset()` accepts the same two fields.
+
 ```ts
 const { jobIds } = await client.characters.generate({
   name: "Kira",
   seedPrompt: "kira portrait, warm natural lighting",
   count: 4,
   attachToCharacterId,
+  provider: "gpt-image",
+  quality: "high", // credit-affecting: prices as gpt-image:high
 })
 ```
 
@@ -1052,6 +1062,14 @@ before any is enqueued — mid-batch failures roll back atomically.
 When `attachToLocationId` is set AND `count === 1`, the worker writes the
 result directly to the row's `source_image_url`; otherwise call
 `approveMainImage()` after picking a candidate.
+
+Optional `quality` (`"medium"` / `"high"` / `"basic"`) and `resolution`
+(`"1K"` / `"2K"` / `"4K"` / `"0.5 MP"` / `"1 MP"` / `"2 MP"` / `"4 MP"`)
+select the image model's output tier and are **credit-affecting** — they price
+exactly like Generate Image (composite ids such as `gpt-image:high` /
+`nano-banana-pro:4K`, so a 4K/high run reserves more than the model's base
+cost). A value the chosen model doesn't support is ignored, never rejected.
+`generateAsset()` accepts the same two fields.
 
 ```ts
 // Single candidate — auto-attaches on completion

@@ -426,18 +426,6 @@ interface WorkflowCanvasProps {
   readonly onToggleSidebar: () => void
 }
 
-/** Estimate how many tile-grid buttons fit in the first row by checking Y coords. */
-function estimatePickerGridCols(btns: HTMLButtonElement[]): number {
-  if (btns.length < 2) return 1
-  const firstY = btns[0].getBoundingClientRect().top
-  let cols = 1
-  for (let i = 1; i < btns.length; i++) {
-    if (Math.abs(btns[i].getBoundingClientRect().top - firstY) < 5) cols++
-    else break
-  }
-  return cols
-}
-
 export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanvasProps) {
   const nodes = useWorkflowStore((s) => s.nodes)
   const isReadOnly = useWorkflowStore((s) => s.isReadOnly)
@@ -1777,75 +1765,33 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         return
       }
 
-      // Arrow keys + picker grid navigation while fullscreen settings are open.
-      // Must run BEFORE the overlayOpen guard so we can both block React Flow's
-      // node-nudge (via stopPropagation) and drive tile-grid focus/selection.
+      // Fullscreen settings open: the panel owns its own keyboard handling.
+      // Events originating INSIDE the panel pass through untouched — tile grids
+      // (DimensionTileGrid), role="tablist" tabs and role="radiogroup" tiles all
+      // handle arrows/Enter/Space themselves (config-keyboard-nav.ts + the
+      // panel-body onKeyDown delegate). This handler only steers stray keys:
+      // when focus is OUTSIDE the panel (body/canvas), an arrow press drops
+      // focus into the panel's first tile grid (or first focusable control)
+      // instead of nudging nodes underneath.
       if (useWorkflowStore.getState().configPanelFullscreen) {
+        if ((e.target as HTMLElement | null)?.closest?.("[data-config-panel-body]")) {
+          return
+        }
         const isArrow = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)
-        const isSelect = e.key === "Enter"
-        const isMultiAdd = e.key === " " || e.key === "+"
-        const isInputLike = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
-
-        if (isArrow) {
-          // Left/right inside a text input should still move the cursor.
-          // Up/down from an input jumps focus into the tile grid.
-          if (isInputLike) {
-            if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-              e.preventDefault()
-              e.stopPropagation()
-              const grid = document.querySelector<HTMLElement>("[data-picker-grid]")
-              grid?.querySelector<HTMLButtonElement>("button[type='button']")?.focus()
-            }
-            // Always block node-nudge even when focus is in an input
-            e.stopPropagation()
-            return
-          }
+        if (isArrow || e.key === "Enter" || e.key === " ") {
           e.preventDefault()
           e.stopPropagation()
-          const grid = document.querySelector<HTMLElement>("[data-picker-grid]")
-          if (grid) {
-            const btns = Array.from(grid.querySelectorAll<HTMLButtonElement>("button[type='button']"))
-            const active = document.activeElement as HTMLButtonElement | null
-            const idx = active ? btns.indexOf(active) : -1
-            if (e.key === "ArrowRight") {
-              btns[(Math.max(idx, 0) + 1) % btns.length]?.focus()
-            } else if (e.key === "ArrowLeft") {
-              btns[(idx <= 0 ? btns.length : idx) - 1]?.focus()
-            } else {
-              const cols = estimatePickerGridCols(btns)
-              const delta = e.key === "ArrowDown" ? cols : -cols
-              btns[Math.max(0, Math.min(btns.length - 1, Math.max(idx, 0) + delta))]?.focus()
-            }
+          if (isArrow) {
+            const panel = document.querySelector<HTMLElement>("[data-config-panel-body]")
+            const first =
+              panel?.querySelector<HTMLElement>("[data-picker-grid] button[data-entry-id]") ??
+              panel?.querySelector<HTMLElement>(
+                "button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])",
+              )
+            first?.focus()
           }
           return
         }
-
-        if (!isInputLike && (isSelect || isMultiAdd)) {
-          const grid = document.querySelector<HTMLElement>("[data-picker-grid]")
-          if (grid) {
-            const btns = Array.from(grid.querySelectorAll<HTMLButtonElement>("button[type='button']"))
-            const active = document.activeElement as HTMLButtonElement | null
-            const idx = active ? btns.indexOf(active) : -1
-            if (idx >= 0) {
-              const entryId = btns[idx]?.dataset.entryId
-              if (entryId) {
-                e.preventDefault()
-                e.stopPropagation()
-                // Enter = force single-select; Space/+ = add to multi-select
-                grid.dispatchEvent(new CustomEvent("picker-select", {
-                  detail: { action: isSelect ? "single" : "multi", id: entryId },
-                  bubbles: true,
-                }))
-                // Enter on an already-selected tile confirms and closes fullscreen
-                if (isSelect && btns[idx]?.getAttribute("aria-checked") === "true") {
-                  closeFullscreenSettings()
-                }
-              }
-            }
-          }
-          return
-        }
-
         // All other keys while fullscreen: pass through (typing in inputs, etc.)
         return
       }
@@ -2236,10 +2182,16 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         return
       }
 
-      // Arrow keys — navigate to nearest node when settings panel is open
-      // Read fresh selectedNodeId to handle rapid key presses correctly
+      // Arrow keys — navigate to nearest node when settings panel is open.
+      // Skipped when the event originates inside the panel itself: tile grids,
+      // tabs and radio tiles there own their arrow keys (config-keyboard-nav).
+      // Read fresh selectedNodeId to handle rapid key presses correctly.
       const currentSelectedForArrow = useWorkflowStore.getState().selectedNodeId
-      if (currentSelectedForArrow && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+      if (
+        currentSelectedForArrow &&
+        ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key) &&
+        !(e.target as HTMLElement | null)?.closest?.("[data-config-panel-body]")
+      ) {
         e.preventDefault()
         // Capture-phase + stopPropagation prevents React Flow's built-in
         // keyboard nudge from also firing on the currently-selected node when
