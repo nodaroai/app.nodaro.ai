@@ -7,9 +7,11 @@ import Fastify, { type FastifyInstance } from "fastify"
 
 vi.mock("@/lib/supabase.js", () => {
   const mockFrom = vi.fn()
+  const mockRpc = vi.fn()
   return {
     supabase: {
       from: mockFrom,
+      rpc: mockRpc,
       auth: {
         getUser: vi.fn().mockResolvedValue({
           data: { user: { id: "user-123" } },
@@ -542,6 +544,195 @@ describe("PATCH /v1/workflows/:id", () => {
         edges: newEdges,
       })
     )
+  })
+
+  it("strips transient run-state from incoming nodes (server-side defense)", async () => {
+    const mockSingle = vi.fn().mockResolvedValue({ data: DB_WORKFLOW_FULL, error: null })
+    const mockSelect = vi.fn().mockReturnValue({ maybeSingle: mockSingle })
+    const mockEq2 = vi.fn().mockReturnValue({ select: mockSelect })
+    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
+    const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq1 })
+    vi.mocked(supabase.from).mockReturnValue({ update: mockUpdate } as never)
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        nodes: [{
+          id: "n1",
+          data: {
+            prompt: "a cat",
+            executionStatus: "running",
+            currentJobId: "job-9",
+            currentJobProgress: 50,
+            generatedResults: [{ url: "https://r2/x.png" }],
+          },
+        }],
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    const sent = mockUpdate.mock.calls[0]![0] as { nodes: Array<{ data: Record<string, unknown> }> }
+    expect(sent.nodes[0]!.data.executionStatus).toBeUndefined()
+    expect(sent.nodes[0]!.data.currentJobId).toBeUndefined()
+    expect(sent.nodes[0]!.data.currentJobProgress).toBeUndefined()
+    expect(sent.nodes[0]!.data.prompt).toBe("a cat")
+    expect(sent.nodes[0]!.data.generatedResults).toEqual([{ url: "https://r2/x.png" }])
+  })
+
+  it("expectedVersion match: chains the integer CAS and returns 200", async () => {
+    const mockSingle = vi.fn().mockResolvedValue({ data: DB_WORKFLOW_FULL, error: null })
+    const mockSelect = vi.fn().mockReturnValue({ maybeSingle: mockSingle })
+    const mockEqVersion = vi.fn().mockReturnValue({ select: mockSelect })
+    const mockEq2 = vi.fn().mockReturnValue({ select: mockSelect, eq: mockEqVersion })
+    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
+    const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq1 })
+    vi.mocked(supabase.from).mockReturnValue({ update: mockUpdate } as never)
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { name: "Updated", expectedVersion: 7 },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(mockEqVersion).toHaveBeenCalledWith("version", 7)
+  })
+
+  it("expectedVersion mismatch: 409 workflow_conflict with currentVersion", async () => {
+    // UPDATE matches 0 rows (stale version)
+    const updateMaybeSingle = vi.fn().mockResolvedValue({ data: null, error: null })
+    const updateSelect = vi.fn().mockReturnValue({ maybeSingle: updateMaybeSingle })
+    const mockEqVersion = vi.fn().mockReturnValue({ select: updateSelect })
+    const mockEq2 = vi.fn().mockReturnValue({ select: updateSelect, eq: mockEqVersion })
+    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
+    const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq1 })
+
+    // fallback current-fetch returns the row's real tokens
+    const curMaybeSingle = vi.fn().mockResolvedValue({
+      data: { updated_at: "2026-06-12T00:00:00Z", version: 9 },
+      error: null,
+    })
+    const curEq2 = vi.fn().mockReturnValue({ maybeSingle: curMaybeSingle })
+    const curEq1 = vi.fn().mockReturnValue({ eq: curEq2 })
+    const curSelect = vi.fn().mockReturnValue({ eq: curEq1 })
+
+    vi.mocked(supabase.from)
+      .mockReturnValueOnce({ update: mockUpdate } as never)
+      .mockReturnValueOnce({ select: curSelect } as never)
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { name: "Updated", expectedVersion: 7 },
+    })
+
+    expect(res.statusCode).toBe(409)
+    const body = res.json()
+    expect(body.error.code).toBe("workflow_conflict")
+    expect(body.error.currentVersion).toBe(9)
+    expect(body.error.currentUpdatedAt).toBe("2026-06-12T00:00:00Z")
+  })
+
+  // ── delta saves (P3 — apply_workflow_delta RPC) ──
+
+  it("delta: 400 when mixed with full-body fields", async () => {
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { delta: { baseVersion: 3 }, nodes: [] },
+    })
+    expect(res.statusCode).toBe(400)
+  })
+
+  it("delta: 400 on duplicate upsert ids or delete∩upsert overlap", async () => {
+    const dup = await app.inject({
+      method: "PATCH",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { delta: { baseVersion: 3, upsertNodes: [{ id: "n1" }, { id: "n1" }] } },
+    })
+    expect(dup.statusCode).toBe(400)
+
+    const overlap = await app.inject({
+      method: "PATCH",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { delta: { baseVersion: 3, upsertNodes: [{ id: "n1" }], deleteNodeIds: ["n1"] } },
+    })
+    expect(overlap.statusCode).toBe(400)
+  })
+
+  it("delta: applies via RPC with stripped nodes and returns the new tokens", async () => {
+    vi.mocked(supabase.rpc).mockResolvedValueOnce({
+      data: [{ ok: true, version: 42, updated_at: "2026-06-12T01:00:00Z" }],
+      error: null,
+    } as never)
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        delta: {
+          baseVersion: 41,
+          upsertNodes: [{ id: "n1", data: { prompt: "a cat", executionStatus: "running", currentJobId: "j9" } }],
+          deleteEdgeIds: ["e3"],
+        },
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toMatchObject({ version: 42, updatedAt: "2026-06-12T01:00:00Z" })
+
+    const [fn, args] = vi.mocked(supabase.rpc).mock.calls[0]!
+    expect(fn).toBe("apply_workflow_delta")
+    const rpcArgs = args as Record<string, unknown>
+    expect(rpcArgs.p_workflow_id).toBe(TEST_WORKFLOW_ID)
+    expect(rpcArgs.p_base_version).toBe(41)
+    expect(rpcArgs.p_user_id).toBe(TEST_USER_ID)
+    expect(rpcArgs.p_delete_edge_ids).toEqual(["e3"])
+    const sentNodes = rpcArgs.p_upsert_nodes as Array<{ data: Record<string, unknown> }>
+    expect(sentNodes[0]!.data.prompt).toBe("a cat")
+    expect(sentNodes[0]!.data.executionStatus).toBeUndefined()
+    expect(sentNodes[0]!.data.currentJobId).toBeUndefined()
+  })
+
+  it("delta: CAS conflict → 409 with current tokens", async () => {
+    vi.mocked(supabase.rpc).mockResolvedValueOnce({
+      data: [{ ok: false, version: 44, updated_at: "2026-06-12T01:05:00Z" }],
+      error: null,
+    } as never)
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { delta: { baseVersion: 41, deleteNodeIds: ["n9"] } },
+    })
+
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe("workflow_conflict")
+    expect(res.json().error.currentVersion).toBe(44)
+  })
+
+  it("delta: row missing/not owned → 404", async () => {
+    vi.mocked(supabase.rpc).mockResolvedValueOnce({
+      data: [{ ok: false, version: null, updated_at: null }],
+      error: null,
+    } as never)
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { delta: { baseVersion: 41, deleteNodeIds: ["n9"] } },
+    })
+    expect(res.statusCode).toBe(404)
   })
 
   it("returns 200 on folderId set to null", async () => {

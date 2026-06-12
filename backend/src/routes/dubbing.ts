@@ -13,6 +13,11 @@ const dubbingBody = z.object({
   targetLanguage: z.string().min(2).max(10),
   sourceLanguage: z.string().min(2).max(10).optional(),
   numSpeakers: z.number().int().min(1).max(20).optional(),
+  // Use a similar Voice Library voice instead of cloning the original speaker
+  // (the API default clone keeps the source accent — see provider docs).
+  disableVoiceCloning: z.boolean().optional(),
+  // Drop background audio — cleaner dubs for speech-only sources.
+  dropBackgroundAudio: z.boolean().optional(),
   userId: z.string().uuid().optional(),
 })
 
@@ -27,7 +32,7 @@ export async function dubbingRoutes(app: FastifyInstance) {
       })
     }
 
-    const { audioUrl, targetLanguage, sourceLanguage, numSpeakers } = parsed.data
+    const { audioUrl, targetLanguage, sourceLanguage, numSpeakers, disableVoiceCloning, dropBackgroundAudio } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -64,6 +69,8 @@ export async function dubbingRoutes(app: FastifyInstance) {
       targetLanguage,
       sourceLanguage,
       numSpeakers,
+      disableVoiceCloning,
+      dropBackgroundAudio,
       usageLogId,
     })
 

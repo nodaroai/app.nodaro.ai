@@ -87,6 +87,9 @@ export async function pipelineGenerateNarration(
       provider: modelIdentifier,
       voiceType: "premade",
       usageLogId,
+      // Narration voices are LLM-matched (voice-matcher) — a hallucinated id
+      // should degrade to the default voice, not fail the whole pipeline.
+      allowDefaultVoiceFallback: true,
     }),
     modelIdentifier,
     assetType: "audio",

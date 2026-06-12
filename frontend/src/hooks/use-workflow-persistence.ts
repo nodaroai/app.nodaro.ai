@@ -7,6 +7,7 @@ import { prefetchModelCredits } from "@/ee/hooks/queries/use-credits-queries"
 import { toast } from "sonner"
 import type { WorkflowNode, WorkflowEdge, CharacterDefinition, GeneratedResult, SceneNodeData } from "@/types/nodes"
 import { filterCloneNodes, stripTransientRuntimeData } from "@nodaro/shared"
+import { buildWorkflowDelta, applyDeltaToGraph, findContestedNodes } from "@/lib/workflow-delta"
 import { orderNodesParentFirst } from "@/components/editor/workflow-editor/group-coords"
 import { isStudioWorkflowSettings } from "@/lib/studio"
 import { isValidUuid } from "@/lib/uuid"
@@ -471,6 +472,7 @@ export function useWorkflowPersistence(projectId?: string) {
   const setWorkflowId = useWorkflowStore((s) => s.setWorkflowId)
   const setSaveStatus = useWorkflowStore((s) => s.setSaveStatus)
   const setLoadedUpdatedAt = useWorkflowStore((s) => s.setLoadedUpdatedAt)
+  const setLoadedVersion = useWorkflowStore((s) => s.setLoadedVersion)
   const setRemoteUpdatedAt = useWorkflowStore((s) => s.setRemoteUpdatedAt)
   const applySaveSuccess = useWorkflowStore((s) => s.applySaveSuccess)
 
@@ -478,6 +480,11 @@ export function useWorkflowPersistence(projectId?: string) {
   // toast's "Reload" button can call it without forcing a circular
   // `useCallback` dependency. Updated below right after `load` is defined.
   const loadRef = useRef<((id: string) => Promise<SaveResult>) | null>(null)
+
+  // Latched true when apply_workflow_delta is missing server-side (self-hosted
+  // instance that hasn't applied migration 219) — the session stays on the
+  // full-save path without re-probing on every save.
+  const deltaRpcUnavailableRef = useRef(false)
 
   const save = useCallback(
     async (pid?: string): Promise<SaveResult> => {
@@ -522,6 +529,170 @@ export function useWorkflowPersistence(projectId?: string) {
       try {
         const supabase = createClient()
 
+        const scheduleSavedFade = () => {
+          if (savedFadeTimerRef.current) clearTimeout(savedFadeTimerRef.current)
+          savedFadeTimerRef.current = setTimeout(() => {
+            if (useWorkflowStore.getState().saveStatus === "saved") setSaveStatus("idle")
+          }, SAVED_DISPLAY_DURATION)
+        }
+
+        // ── Delta-save path (P3, flag-gated) ────────────────────────────
+        // Reference-diffs the processed graph against lastSavedSnapshot and
+        // applies an id-keyed delta atomically via apply_workflow_delta
+        // (integer CAS on baseVersion). Falls back to the full-save path on:
+        // flag off, missing snapshot/version, >50% of nodes changed, RPC
+        // missing (latched), or row-gone. One rebase retry on CAS conflict —
+        // disjoint writers merge; contested nodes keep the LOCAL copy with a
+        // toast (spec decision: local wins, never silently).
+        const trySaveViaDelta = async (rebased: boolean): Promise<SaveResult | "fallback"> => {
+          if (import.meta.env.VITE_DELTA_SAVES !== "1") return "fallback"
+          if (!workflowId || deltaRpcUnavailableRef.current) return "fallback"
+          const st = useWorkflowStore.getState()
+          const snapshot = st.lastSavedSnapshot
+          const baseVersion = st.loadedVersion
+          if (!snapshot || baseVersion == null) return "fallback"
+          // Re-process the CURRENT store graph (the rebase setState below
+          // changes it between attempts) exactly like the full path does.
+          const cleanedNow = filterCloneNodes(st.nodes, st.edges, { filterSubWorkflow: true })
+          const nodesNow = orderNodesParentFirst(cleanedNow.nodes)
+          const edgesNow = cleanedNow.edges
+          const delta = buildWorkflowDelta({ nodes: nodesNow, edges: edgesNow }, snapshot)
+          if (delta.nodeChangeRatio > 0.5) return "fallback"
+
+          const setPatch: Record<string, unknown> = {}
+          const settingsPatch: Record<string, unknown> = {}
+          if (st.workflowName !== snapshot.name) setPatch.name = st.workflowName
+          if (st.characterDefinitions !== snapshot.characterDefinitions) {
+            settingsPatch.characterDefinitions = JSON.parse(JSON.stringify(st.characterDefinitions))
+          }
+          if (st.flowPromptTemplates !== snapshot.flowPromptTemplates) {
+            settingsPatch.flowPromptTemplates = JSON.parse(JSON.stringify(st.flowPromptTemplates))
+          }
+          if (st.presentationSettings !== snapshot.presentationSettings) {
+            settingsPatch.presentationSettings = JSON.parse(JSON.stringify(st.presentationSettings))
+          }
+          if (st.savedViewport !== snapshot.savedViewport) settingsPatch.viewport = st.savedViewport
+          if (Object.keys(settingsPatch).length > 0) setPatch.settings = settingsPatch
+
+          if (delta.isEmpty && Object.keys(setPatch).length === 0) {
+            // Dirty flag with no detectable content change — nothing to write.
+            useWorkflowStore.getState().markClean()
+            setSaveStatus("saved")
+            return { success: true }
+          }
+
+          const { data, error } = await supabase
+            .rpc("apply_workflow_delta", {
+              p_workflow_id: workflowId,
+              p_base_version: baseVersion,
+              p_upsert_nodes: JSON.parse(JSON.stringify(stripTransientRuntimeData(delta.upsertNodes))) as never,
+              p_delete_node_ids: delta.deleteNodeIds,
+              p_upsert_edges: JSON.parse(JSON.stringify(delta.upsertEdges)) as never,
+              p_delete_edge_ids: delta.deleteEdgeIds,
+              p_set: (Object.keys(setPatch).length > 0 ? setPatch : null) as never,
+            })
+            .abortSignal(AbortSignal.timeout(SAVE_TIMEOUT_MS))
+          if (error) {
+            const code = (error as { code?: string }).code
+            if (code === "PGRST202" || /apply_workflow_delta/i.test(error.message)) {
+              deltaRpcUnavailableRef.current = true
+              return "fallback"
+            }
+            setSaveStatus("error", error.message)
+            return { success: false, error: error.message }
+          }
+          const row = (Array.isArray(data) ? data[0] : data) as
+            | { ok: boolean; version: number | null; updated_at: string | null }
+            | undefined
+          if (!row) {
+            deltaRpcUnavailableRef.current = true
+            return "fallback"
+          }
+          if (row.ok) {
+            applySaveSuccess(row.updated_at as string, row.version, {
+              nodes: nodesNow,
+              edges: edgesNow,
+              name: st.workflowName,
+              characterDefinitions: st.characterDefinitions,
+              flowPromptTemplates: st.flowPromptTemplates,
+              presentationSettings: st.presentationSettings,
+              savedViewport: st.savedViewport,
+            })
+            return { success: true }
+          }
+          if (row.version == null) return "fallback" // row gone — full path 404s
+
+          if (rebased) {
+            // Second conflict in a row — today's banner flow takes over.
+            setSaveStatus("error", "Workflow was updated on another device")
+            setRemoteUpdatedAt(row.updated_at ?? `conflict:${new Date().toISOString()}`)
+            const reload = loadRef.current
+            toast.error("Workflow was updated on another device", {
+              id: "workflow-remote-conflict",
+              description: "Your unsaved edits are still here. Reload to see the latest version.",
+              action: reload && workflowId
+                ? { label: "Reload", onClick: () => { void reload(workflowId) } }
+                : undefined,
+              duration: 10_000,
+            })
+            return { success: false, error: "remote_conflict" }
+          }
+
+          // Rebase: adopt the fresh remote as the new base, replay local
+          // edits on top, retry once with the fresh version.
+          const { data: fresh } = await supabase
+            .from("workflows")
+            .select("nodes, edges, settings, name, version, updated_at")
+            .eq("id", workflowId)
+            .maybeSingle()
+          if (!fresh) return "fallback"
+          const freshRow = fresh as unknown as {
+            nodes?: WorkflowNode[]; edges?: WorkflowEdge[]
+            settings?: Record<string, unknown>; name?: string
+            version?: number; updated_at?: string
+          }
+          const freshGraph = { nodes: freshRow.nodes ?? [], edges: freshRow.edges ?? [] }
+          const contested = findContestedNodes(delta, snapshot, freshGraph)
+          const merged = applyDeltaToGraph(freshGraph, delta)
+          const freshSettings = freshRow.settings ?? {}
+          useWorkflowStore.setState({
+            nodes: merged.nodes,
+            edges: merged.edges,
+            loadedVersion: freshRow.version ?? null,
+            loadedUpdatedAt: freshRow.updated_at ?? null,
+            remoteUpdatedAt: null,
+            lastSavedSnapshot: {
+              nodes: freshGraph.nodes,
+              edges: freshGraph.edges,
+              name: freshRow.name ?? st.workflowName,
+              characterDefinitions: (freshSettings.characterDefinitions ?? st.characterDefinitions) as typeof st.characterDefinitions,
+              flowPromptTemplates: (freshSettings.flowPromptTemplates ?? st.flowPromptTemplates) as typeof st.flowPromptTemplates,
+              presentationSettings: (freshSettings.presentationSettings ?? st.presentationSettings) as typeof st.presentationSettings,
+              savedViewport: (freshSettings.viewport ?? st.savedViewport) as typeof st.savedViewport,
+            },
+          })
+          if (contested.length > 0) {
+            toast.warning(
+              `Kept your edits to: ${contested
+                .map((n) => ((n.data as Record<string, unknown>).label as string) || n.id)
+                .join(", ")}`,
+              {
+                id: "delta-rebase-contested",
+                description: "These nodes were also changed on another device — your version won.",
+              },
+            )
+          }
+          return trySaveViaDelta(true)
+        }
+
+        if (workflowId) {
+          const deltaResult = await trySaveViaDelta(false)
+          if (deltaResult !== "fallback") {
+            if (deltaResult.success) scheduleSavedFade()
+            return deltaResult
+          }
+        }
+
         const payload = {
           project_id: resolvedProjectId,
           name: workflowName,
@@ -548,12 +719,17 @@ export function useWorkflowPersistence(projectId?: string) {
           // since save() is reached via the editor which always loads
           // first).
           const loadedUpdatedAt = useWorkflowStore.getState().loadedUpdatedAt
+          const loadedVersion = useWorkflowStore.getState().loadedVersion
 
           let query = supabase
             .from("workflows")
             .update(payload)
             .eq("id", workflowId)
-          if (loadedUpdatedAt) query = query.eq("updated_at", loadedUpdatedAt)
+          // Integer CAS on workflows.version (DB-trigger-bumped, migration
+          // 218) when we have it; updated_at string equality only as the
+          // rollout fallback for sessions loaded before the trigger landed.
+          if (loadedVersion != null) query = query.eq("version", loadedVersion)
+          else if (loadedUpdatedAt) query = query.eq("updated_at", loadedUpdatedAt)
 
           // Hard timeout: a hung network call would otherwise pin
           // saveStatus at "saving" forever, and the autosave gate
@@ -562,7 +738,7 @@ export function useWorkflowPersistence(projectId?: string) {
           // status to "error" → the 10s max-timer retries while dirty.
           const { data, error } = await query
             .abortSignal(AbortSignal.timeout(SAVE_TIMEOUT_MS))
-            .select("updated_at")
+            .select("updated_at, version")
             .maybeSingle()
 
           if (error) {
@@ -590,7 +766,7 @@ export function useWorkflowPersistence(projectId?: string) {
             try {
               const { data: cur } = await supabase
                 .from("workflows")
-                .select("updated_at")
+                .select("updated_at, version")
                 .eq("id", workflowId)
                 .maybeSingle()
               if (cur?.updated_at) {
@@ -620,7 +796,12 @@ export function useWorkflowPersistence(projectId?: string) {
           // Advance the optimistic-lock cursor to the new version + mark
           // clean + flip status atomically — see `applySaveSuccess` doc
           // for why these four updates must land in one Zustand set().
-          applySaveSuccess(data.updated_at as string)
+          applySaveSuccess(
+            data.updated_at as string,
+            typeof (data as { version?: unknown }).version === "number"
+              ? ((data as { version: number }).version)
+              : null,
+          )
         } else {
           const { data: { user } } = await supabase.auth.getUser()
           if (!user) {
@@ -632,7 +813,7 @@ export function useWorkflowPersistence(projectId?: string) {
             .from("workflows")
             .insert({ ...payload, user_id: user.id })
             .abortSignal(AbortSignal.timeout(SAVE_TIMEOUT_MS))
-            .select("id, updated_at")
+            .select("id, updated_at, version")
             .single()
 
           if (error) {
@@ -645,20 +826,15 @@ export function useWorkflowPersistence(projectId?: string) {
           // triggered by `workflowId` change in `workflow-canvas.tsx`).
           // The window between insert and re-subscribe is broadcast-safe.
           setWorkflowId(data.id)
-          applySaveSuccess(data.updated_at as string)
+          applySaveSuccess(
+            data.updated_at as string,
+            typeof (data as { version?: unknown }).version === "number"
+              ? ((data as { version: number }).version)
+              : null,
+          )
         }
 
-        // Clear any existing fade timer
-        if (savedFadeTimerRef.current) {
-          clearTimeout(savedFadeTimerRef.current)
-        }
-        savedFadeTimerRef.current = setTimeout(() => {
-          // Only reset if still in "saved" state
-          const current = useWorkflowStore.getState().saveStatus
-          if (current === "saved") {
-            setSaveStatus("idle")
-          }
-        }, SAVED_DISPLAY_DURATION)
+        scheduleSavedFade()
 
         return { success: true }
       } catch (err) {
@@ -683,6 +859,7 @@ export function useWorkflowPersistence(projectId?: string) {
       // (save bails out when nodes.length === 0).
       loadWorkflow(id, "", [], [], [])
       setLoadedUpdatedAt(null)
+      setLoadedVersion(null)
       setRemoteUpdatedAt(null)
 
       try {
@@ -795,6 +972,7 @@ export function useWorkflowPersistence(projectId?: string) {
           savedViewport,
         )
         setLoadedUpdatedAt(data.updated_at as string)
+        setLoadedVersion(typeof (data as { version?: unknown }).version === "number" ? (data as { version: number }).version : null)
 
         // Studio-origin workflows are view-only in the node editor (the Studio
         // app edits them). `settings` was computed above from data.settings.
@@ -845,6 +1023,7 @@ export function useWorkflowPersistence(projectId?: string) {
             toast.error("Failed to save synced nodes")
           } else if (sideSaved?.updated_at) {
             setLoadedUpdatedAt(sideSaved.updated_at as string)
+            setLoadedVersion(typeof (sideSaved as unknown as { version?: unknown }).version === "number" ? (sideSaved as unknown as { version: number }).version : null)
           }
         }
 
@@ -863,7 +1042,7 @@ export function useWorkflowPersistence(projectId?: string) {
         setIsWorkflowLoading(false)
       }
     },
-    [loadWorkflow, projectId, setIsWorkflowLoading, setLoadedUpdatedAt, setRemoteUpdatedAt],
+    [loadWorkflow, projectId, setIsWorkflowLoading, setLoadedUpdatedAt, setLoadedVersion, setRemoteUpdatedAt],
   )
 
   // Refresh the ref pointer on every render — read by the save-on-

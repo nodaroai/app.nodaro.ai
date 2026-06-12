@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto"
+import { isKnownPremadeVoiceRef } from "../../providers/elevenlabs/direct-tts.js"
 
 export type EntityType = "character" | "location" | "object" | "creature"
 
@@ -64,7 +65,9 @@ export const COMMUNITY_ENTITY_ADAPTERS: Record<EntityType, CommunityEntityAdapte
 /**
  * Public-safe snapshot: public text + the COPIED asset URLs (copiedAssets maps
  * field → new community URL/array). Strips everything in stripFields, EXCEPT
- * `voice` survives when voiceType === "premade".
+ * `voice`, which carries by KIND: premade + library voices survive fully
+ * (both are public ElevenLabs data); custom/cloned voices reduce to display
+ * name + sample (never a usable voiceId cross-user — Decision A).
  */
 export function buildSnapshot(
   entityType: EntityType,
@@ -76,16 +79,30 @@ export function buildSnapshot(
   for (const f of a.publicTextFields) if (row[f] !== undefined && row[f] !== null) snap[f] = row[f]
   for (const f of a.assetFields) if (copiedAssets[f] !== undefined) snap[f] = copiedAssets[f]
   const voice = row.voice as
-    | { voiceId?: string; voiceName?: string; voiceType?: string }
+    | { voiceId?: string; voiceName?: string; voiceType?: string; previewUrl?: string }
     | null
     | undefined
   if (entityType === "character" && voice) {
-    if (voice.voiceType === "premade") {
+    // Legacy voices predate `voiceType` and stored a premade catalog name (or
+    // premade UUID) in voiceId — classify them so they aren't reduced away.
+    const isPremade =
+      voice.voiceType === "premade" ||
+      (!voice.voiceType && !!voice.voiceId && isKnownPremadeVoiceRef(voice.voiceId))
+    if (isPremade) {
+      snap.voice = { ...voice, voiceType: "premade" }
+    } else if (voice.voiceType === "library") {
+      // Voice Library ids + previews are public ElevenLabs data — carry fully
+      // so the shared character keeps a usable, previewable voice.
       snap.voice = voice
     } else if (voice.voiceName) {
-      // Custom/cloned: carry the DISPLAY NAME only — never a usable voiceId
-      // cross-user (privacy). Decision A.
-      snap.voice = { voiceName: voice.voiceName, voiceType: voice.voiceType }
+      // Custom/cloned (or unclassifiable legacy): carry the DISPLAY NAME —
+      // never a usable voiceId cross-user (privacy, Decision A). The clone's
+      // existing public sample still carries so the voice stays audible.
+      snap.voice = {
+        voiceName: voice.voiceName,
+        voiceType: voice.voiceType,
+        ...(voice.previewUrl ? { previewUrl: voice.previewUrl } : {}),
+      }
     }
   }
   return snap

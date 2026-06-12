@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify"
+import type { TtsProvider } from "@nodaro/shared"
 import { config } from "../lib/config.js"
 import { registerVoiceLookup } from "../providers/kie/audio.js"
 
@@ -158,6 +159,25 @@ interface SharedVoice {
   description: string
   use_case: string
   category: string
+  recommendedProvider?: TtsProvider
+  verifiedProviders?: TtsProvider[]
+}
+
+/**
+ * Map a Voice Library entry's verified ElevenLabs models to the v2 TTS
+ * providers the voice is actually verified on (turbo first = cheapest).
+ * Library previews are rendered with the voice's verified models — generating
+ * with an unverified model is what makes output drift audibly from the
+ * preview. Clients without a provider picker send `verified[0]` back as the
+ * text-to-speech `provider` (credits then reserve at the correct per-provider
+ * price up front; turbo=2cr, multilingual=3cr); clients with a picker only
+ * snap when the current choice isn't in the set.
+ */
+export function deriveVerifiedTtsProviders(modelIds: readonly string[]): TtsProvider[] {
+  const verified: TtsProvider[] = []
+  if (modelIds.some((m) => m.includes("turbo") || m.includes("flash"))) verified.push("elevenlabs-turbo")
+  if (modelIds.some((m) => m.includes("multilingual_v2"))) verified.push("elevenlabs-multilingual")
+  return verified
 }
 
 interface SharedVoiceCacheEntry {
@@ -250,21 +270,31 @@ export async function voicesRoutes(app: FastifyInstance) {
           description?: string
           use_case?: string
           category?: string
+          verified_languages?: Array<{ model_id?: string }>
         }>
         has_more?: boolean
       }
 
-      const voices: SharedVoice[] = data.voices.map((v) => ({
-        voice_id: v.voice_id,
-        name: v.name,
-        preview_url: v.preview_url ?? "",
-        gender: v.gender ?? "",
-        accent: v.accent ?? "",
-        age: v.age ?? "",
-        description: v.description ?? "",
-        use_case: v.use_case ?? "",
-        category: v.category ?? "",
-      }))
+      const voices: SharedVoice[] = data.voices.map((v) => {
+        const modelIds = (v.verified_languages ?? [])
+          .map((l) => l.model_id)
+          .filter((m): m is string => typeof m === "string")
+        const verifiedProviders = deriveVerifiedTtsProviders(modelIds)
+        return {
+          voice_id: v.voice_id,
+          name: v.name,
+          preview_url: v.preview_url ?? "",
+          gender: v.gender ?? "",
+          accent: v.accent ?? "",
+          age: v.age ?? "",
+          description: v.description ?? "",
+          use_case: v.use_case ?? "",
+          category: v.category ?? "",
+          ...(verifiedProviders.length > 0
+            ? { recommendedProvider: verifiedProviders[0], verifiedProviders }
+            : {}),
+        }
+      })
 
       const result = { voices, hasMore: data.has_more ?? false }
 

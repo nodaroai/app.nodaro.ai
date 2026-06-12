@@ -34,7 +34,7 @@ import { makeOnTaskCreated, markProviderCallStart } from "../../lib/reconcile/pe
 import { providerKindForTtsModel } from "../../lib/reconcile/provider-kind.js"
 
 const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx) {
-  const { text, voice, provider, voiceType, stability, similarityBoost, style, speed, languageCode } = job.data as {
+  const { text, voice, provider, voiceType, stability, similarityBoost, style, speed, languageCode, allowDefaultVoiceFallback } = job.data as {
     jobId: string
     text: string
     voice?: string
@@ -45,6 +45,7 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
     style?: number
     speed?: number
     languageCode?: string
+    allowDefaultVoiceFallback?: boolean
   }
   console.log(`[worker] text-to-speech ${ctx.jobId} (provider: ${provider ?? "elevenlabs-turbo"}, voiceType: ${voiceType ?? "premade"})`)
 
@@ -61,7 +62,10 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
   const processedText = provider === "elevenlabs-v3" ? text : stripAudioTags(text)
 
   if (useDirectApi) {
-    const audioBuffer = await directElevenLabsTTS(processedText, voice ?? "Rachel", provider, hasOptions ? ttsOptions : undefined)
+    const audioBuffer = await directElevenLabsTTS(processedText, voice ?? "Rachel", provider, {
+      ...(hasOptions ? ttsOptions : {}),
+      allowDefaultVoiceFallback: Boolean(allowDefaultVoiceFallback),
+    })
     await setJobProgress(job, ctx.jobId, 50)
 
     // POST-PROVIDER: ElevenLabs already delivered the audio (we were billed) —
@@ -385,16 +389,17 @@ const handleVoiceChanger: HandlerFn = async function handleVoiceChanger(job, ctx
 }
 
 const handleDubbing: HandlerFn = async function handleDubbing(job, ctx) {
-  const { audioUrl, targetLanguage, sourceLanguage, numSpeakers } = job.data as {
+  const { audioUrl, targetLanguage, sourceLanguage, numSpeakers, disableVoiceCloning, dropBackgroundAudio } = job.data as {
     jobId: string; audioUrl: string; targetLanguage: string
     sourceLanguage?: string; numSpeakers?: number
+    disableVoiceCloning?: boolean; dropBackgroundAudio?: boolean
   }
   console.log(`[worker] dubbing ${ctx.jobId} (target: ${targetLanguage})`)
   const dubbingOnTaskCreated = makeOnTaskCreated(ctx.jobId, "elevenlabs-async")
   const { dubbingId } = await startDubbing(
     audioUrl,
     targetLanguage,
-    { sourceLang: sourceLanguage, numSpeakers },
+    { sourceLang: sourceLanguage, numSpeakers, disableVoiceCloning, dropBackgroundAudio },
     { onTaskCreated: dubbingOnTaskCreated },
   )
   await setJobProgress(job, ctx.jobId, 20)

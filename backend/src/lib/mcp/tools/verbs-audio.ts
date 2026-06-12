@@ -409,7 +409,11 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         "audio_url OR audio_asset_id — and a target_language code.\n\n" +
         "Common language codes: en, es, fr, de, it, pt, pl, hi, ja, zh, ko, " +
         "ar, ru, tr, nl, sv, id. Pass num_speakers when the source has " +
-        "multiple distinct voices (improves separation).",
+        "multiple distinct voices (improves separation).\n\n" +
+        "By default the dub CLONES the original speaker — they speak the " +
+        "target language with their own voice/accent. Pass " +
+        "disable_voice_cloning=true for a similar NATIVE-sounding library " +
+        "voice instead (use when the user wants clean target-language speech).",
       inputSchema: {
         audio_url: z.string().url().optional(),
         audio_asset_id: z.string().optional(),
@@ -431,6 +435,14 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
           .max(20)
           .optional()
           .describe("Number of distinct voices in the source (improves separation)."),
+        disable_voice_cloning: z
+          .boolean()
+          .optional()
+          .describe("Use a similar native library voice instead of cloning the original speaker (clean target-language accent)."),
+        drop_background_audio: z
+          .boolean()
+          .optional()
+          .describe("Drop background audio — cleaner dubs for speech-only sources."),
       },
       outputSchema: {
         jobId: z.string(),
@@ -474,6 +486,8 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         targetLanguage: args.target_language,
         sourceLanguage: args.source_language,
         numSpeakers: args.num_speakers,
+        disableVoiceCloning: args.disable_voice_cloning,
+        dropBackgroundAudio: args.drop_background_audio,
         mcp_client: session.clientName,
         userId: session.userId,
       }

@@ -66,6 +66,12 @@ describe("extractPresetData", () => {
     expect(PRESET_EXCLUDED_KEYS.has("__activePresetId")).toBe(true)
   })
 
+  it("excludes the UI-only __promptFinalView field (per-field final-view toggle state)", () => {
+    expect(PRESET_EXCLUDED_KEYS.has("__promptFinalView")).toBe(true)
+    const out = extractPresetData({ prompt: "x", __promptFinalView: ["prompt"] })
+    expect(out).toEqual({ prompt: "x" })
+  })
+
   it("drops graph-topology + DB-reference fields but keeps manual reference urls", () => {
     const out = extractPresetData({
       prompt: "a",
