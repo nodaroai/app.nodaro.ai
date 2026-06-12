@@ -125,6 +125,7 @@ export function buildImageConnectedReferences(params: {
     "character": "wired-character",
     "face": "wired-face",
     "object": "wired-object",
+    "creature": "wired-creature",
     "location": "wired-location",
     "scene": "wired-image",
   }
@@ -220,7 +221,9 @@ export function buildImageConnectedReferences(params: {
       }
       // No source image yet — fall through to generic handling.
     }
-    const url = (nd.generatedImageUrl as string) || (nd.url as string) || (nd.referenceImageUrl as string) || ""
+    // `sourceImageUrl` covers entity nodes (object / creature / face) whose
+    // approved main image lives in that field rather than generatedImageUrl.
+    const url = (nd.generatedImageUrl as string) || (nd.url as string) || (nd.referenceImageUrl as string) || (nd.sourceImageUrl as string) || ""
     if (!url) continue
     map.set(s.id, {
       id: s.id,

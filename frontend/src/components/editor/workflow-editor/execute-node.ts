@@ -692,13 +692,11 @@ const WIRED_SOURCE_TYPE_MAP: Record<string, ReferenceSource> = {
   "character": "wired-character",
   "face": "wired-face",
   "object": "wired-object",
-  // Animal/Creature is an image-emitting entity (creatureRef → imageRef). The
-  // shared `ReferenceSource` enum has no dedicated `wired-creature` member, and
-  // the backend orchestrator treats a wired creature exactly like a wired
-  // object (referenceImageUrls + canonical-description fallback), so we map it
-  // to `wired-object` — keeps it a valid candidate AND inherits the object
-  // canonical-style fallback in the shared prompt-builder. See F-batch-B notes.
-  "creature": "wired-object",
+  // Animal/Creature is an image-emitting entity (creatureRef → imageRef) with
+  // its own `wired-creature` ReferenceSource: it auto-attaches like an object
+  // but the shared prompt-builder emits the creature/animal-subject identity
+  // directive (anatomy/markings/coloration lock) instead of the prop verb.
+  "creature": "wired-creature",
   "location": "wired-location",
 };
 
@@ -1307,10 +1305,9 @@ export function executeNode(
         "character": "wired-character",
         "face": "wired-face",
         "object": "wired-object",
-        // Creature → wired-object (no dedicated ReferenceSource member;
-        // backend resolves creature like object). See the top-level
-        // WIRED_SOURCE_TYPE_MAP note above.
-        "creature": "wired-object",
+        // Creature → wired-creature (creature/animal-subject directive in the
+        // shared prompt-builder). See the top-level WIRED_SOURCE_TYPE_MAP note.
+        "creature": "wired-creature",
         "location": "wired-location",
       };
       const wiredSourceNodes = incomingEdges

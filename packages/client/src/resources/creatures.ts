@@ -1,5 +1,24 @@
-import type { CreatureAttachColumn, ObjectAspectRatio } from "@nodaro/shared"
+import type { CreatureAttachColumn, ObjectAspectRatio, TtsProvider } from "@nodaro/shared"
 import type { NodaroClient } from "../client.js"
+
+/**
+ * Creature voice — IDENTICAL shape + semantics to `Character["voice"]` (the
+ * "talking creature" stack reuses the character voice plumbing verbatim).
+ * Render speech via `client.nodes.run("text-to-speech", { text, voice:
+ * voiceId, provider: ttsProvider, voiceType })`, then feed the audio + the
+ * creature's `sourceImageUrl` to `client.nodes.run("lip-sync", …)` (or
+ * speech-to-video) for a talking-creature clip.
+ */
+export interface CreatureVoice {
+  voiceId: string
+  voiceName: string
+  traits: string
+  voiceType?: "premade" | "library" | "custom"
+  /** Playable preview sample (client-played only). */
+  previewUrl?: string
+  /** Recommended TTS provider — send as `provider` on text-to-speech. */
+  ttsProvider?: TtsProvider
+}
 
 /**
  * Re-export the shared `CreatureAttachColumn` union + its runtime tuple so SDK
@@ -108,6 +127,14 @@ export interface Creature {
   poses: Array<{ name: string; url: string }>
   variations: Array<{ name: string; url: string }>
   motionClips: Array<{ name: string; url: string }>
+  /** Named Creature Boards — dense reference sheets, one per variant/mood
+   *  (the `generate-image/creature-board` factory preset rendered from the
+   *  creature's images). A first-class bucket: community publish snapshots it
+   *  and clone hands the consumer their own copy to extend. Defaults to `[]`. */
+  boards?: Array<{ name: string; url: string }> | null
+  /** The creature's voice (the "talking creature" stack) — same shape and
+   *  flow as `Character["voice"]`. `null` when no voice is selected. */
+  voice?: CreatureVoice | null
   referencePhotos: CreatureReferencePhoto[]
   /** `null` when no caption is set (or the LLM caption sub-failed) — the wire
    *  sends `""`, normalized to `null` in `get()` to match character semantics. */
@@ -165,6 +192,8 @@ export interface CreateCreatureInput {
    *  `"<bucket>:<variant>"` → chosen-URL map; a write REPLACES the whole map.
    *  Keys stored verbatim; soft-capped server-side at 200 keys / 2048-char values. */
   selectedAssetByVariant?: Record<string, string>
+  /** Initial voice selection (see `CreatureVoice`). Omit for a voiceless creature. */
+  voice?: CreatureVoice | null
 }
 
 /**
@@ -199,6 +228,13 @@ export interface UpdateCreatureInput {
    *  (omit to leave untouched). Keys stored verbatim; soft-capped server-side
    *  at 200 keys / 2048-char values. */
   selectedAssetByVariant?: Record<string, string>
+  /** Named Creature Boards (see `Creature.boards`) — whole-array replace,
+   *  USER-owned (unlike the worker-owned buckets it flows through UPDATE).
+   *  Server caps: 24 boards, 200-char names. */
+  boards?: Array<{ name: string; url: string }>
+  /** Voice selection (see `CreatureVoice`) — whole-object replace; pass
+   *  `null` to clear the voice, omit to leave untouched. */
+  voice?: CreatureVoice | null
   expectedUpdatedAt?: string
 }
 

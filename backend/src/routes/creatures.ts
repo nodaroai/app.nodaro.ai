@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { CREATURE_ATTACH_COLUMNS } from "@nodaro/shared"
+import { CREATURE_ATTACH_COLUMNS, TTS_PROVIDERS } from "@nodaro/shared"
 import type { ReferenceSheet } from "@nodaro/shared"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { normalizeImageProvider } from "../lib/image-provider.js"
@@ -53,6 +53,18 @@ const upsertCreatureBody = z.object({
   referencePhotos: z.array(referencePhoto).max(20).optional(),
   canonicalDescription: z.string().max(4000).optional(),
   styleLock: z.boolean().optional(),
+  // Named Creature Boards — dense reference sheets rendered by the Studio's
+  // `generate-image/creature-board` preset, one per variant/mood. USER-owned
+  // (flows through INSERT + UPDATE, unlike the worker-owned buckets above).
+  // Mirrors objects.boards (migration 214) / characters.boards (212); caps
+  // match: 24 boards, 200-char names, SSRF-gated URLs.
+  boards: z.array(z.object({ name: z.string().max(200), url: safeUrlSchema })).max(24).optional(),
+  // Creature voice — IDENTICAL shape + semantics to characters.voice (the
+  // "talking creature" stack reuses the character voice plumbing verbatim:
+  // text-to-speech reads voiceId/ttsProvider/voiceType, lip-sync targets the
+  // creature's main image). See characters.ts for the per-field doc; kept in
+  // lock-step deliberately so Studio can share one voice picker for both.
+  voice: z.object({ voiceId: z.string(), voiceName: z.string(), traits: z.string(), voiceType: z.enum(["premade", "library", "custom"]).optional(), previewUrl: z.string().url().max(2048).optional(), ttsProvider: z.enum(TTS_PROVIDERS).optional() }).nullable().optional(),
   // The user's chosen DEFAULT asset take per variant (Studio version-history
   // "pick this take"). OPAQUE string->string map: key "<bucket>:<variant>",
   // value = the chosen URL. User-owned (flows through INSERT + UPDATE). Validate
@@ -131,7 +143,7 @@ const listCreaturesQuery = z.object({
 
 // Single source of truth for the GET column list — keeps single + list in lock-step.
 const SELECT_COLUMNS =
-  "id, user_id, node_id, project_id, name, description, species, category, style, source_image_url, image_provider, angles, poses, variations, motion_clips, reference_photos, canonical_description, style_lock, selected_asset_by_variant, sheets, detail_closeups, deleted_at, created_at, updated_at"
+  "id, user_id, node_id, project_id, name, description, species, category, style, source_image_url, image_provider, angles, poses, variations, motion_clips, boards, reference_photos, canonical_description, style_lock, selected_asset_by_variant, sheets, detail_closeups, voice, deleted_at, created_at, updated_at"
 
 type CreatureRow = {
   id: string
@@ -149,6 +161,7 @@ type CreatureRow = {
   poses: { name: string; url: string }[] | null
   variations: { name: string; url: string }[] | null
   motion_clips: { name: string; url: string }[] | null
+  boards: { name: string; url: string }[] | null
   reference_photos: { kind: string; url: string }[] | null
   canonical_description: string | null
   style_lock: boolean | null
@@ -156,6 +169,8 @@ type CreatureRow = {
   // Reference-sheet buckets (migration 200 / 206).
   sheets: ReferenceSheet[] | null
   detail_closeups: unknown[] | null
+  // Creature voice (migration 220) — identical shape to characters.voice.
+  voice: { voiceId: string; voiceName: string; traits: string; voiceType?: "premade" | "library" | "custom"; previewUrl?: string; ttsProvider?: string } | null
   deleted_at: string | null
   created_at: string
   updated_at: string
@@ -180,12 +195,14 @@ function toCamel(creature: CreatureRow) {
     poses: creature.poses ?? [],
     variations: creature.variations ?? [],
     motionClips: creature.motion_clips ?? [],
+    boards: creature.boards ?? [],
     referencePhotos: creature.reference_photos ?? [],
     canonicalDescription: creature.canonical_description ?? "",
     styleLock: creature.style_lock ?? true,
     selectedAssetByVariant: creature.selected_asset_by_variant ?? {},
     sheets: creature.sheets ?? [],
     detailCloseups: creature.detail_closeups ?? [],
+    voice: creature.voice,
     deletedAt: creature.deleted_at,
     createdAt: creature.created_at,
     updatedAt: creature.updated_at,
@@ -317,6 +334,8 @@ export async function creatureRoutes(app: FastifyInstance) {
       canonicalDescription,
       styleLock,
       selectedAssetByVariant,
+      boards,
+      voice,
       expectedUpdatedAt,
     } = parsed.data
     const userId = req.userId
@@ -355,6 +374,10 @@ export async function creatureRoutes(app: FastifyInstance) {
       if (referencePhotos !== undefined) updateRow.reference_photos = referencePhotos
       if (styleLock !== undefined) updateRow.style_lock = styleLock
       if (cappedSelectedAssets !== undefined) updateRow.selected_asset_by_variant = cappedSelectedAssets
+      // boards + voice are USER-owned — they flow through UPDATE (unlike the
+      // worker-owned buckets above). `voice: null` explicitly clears the voice.
+      if (boards !== undefined) updateRow.boards = boards
+      if (voice !== undefined) updateRow.voice = voice ?? null
 
       let query = supabase
         .from("creatures")
@@ -423,10 +446,12 @@ export async function creatureRoutes(app: FastifyInstance) {
       poses: poses ?? [],
       variations: variations ?? [],
       motion_clips: motionClips ?? [],
+      boards: boards ?? [],
       reference_photos: referencePhotos ?? [],
       canonical_description: canonicalDescription ?? null,
       style_lock: styleLock ?? true,
       selected_asset_by_variant: cappedSelectedAssets ?? {},
+      voice: voice ?? null,
       updated_at: new Date().toISOString(),
     }
 

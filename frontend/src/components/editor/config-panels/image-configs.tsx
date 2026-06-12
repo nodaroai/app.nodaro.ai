@@ -1001,6 +1001,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
       "character": "wired-character",
       "face": "wired-face",
       "object": "wired-object",
+      "creature": "wired-creature",
       "location": "wired-location",
       "scene": "wired-image",
     }

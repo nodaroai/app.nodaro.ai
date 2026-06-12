@@ -56,6 +56,7 @@ export type ReferenceSource =
   | "wired-character"
   | "wired-face"
   | "wired-object"
+  | "wired-creature"
   | "wired-location"
 
 /** Per-identity user override stored on the consumer node. */
@@ -178,6 +179,10 @@ export const DEFAULT_LABEL_BY_SOURCE: Record<ReferenceSource, string> = {
   "wired-character": "person",
   "wired-face": "face",
   "wired-object": "object",
+  // A bound Creature (animal/beast/monster) — its directive reads as a living
+  // subject ("match anatomy, markings…"), not a prop. See CREATURE_LABELS in
+  // prompt-builder.ts.
+  "wired-creature": "creature",
   "wired-location": "background",
 }
 

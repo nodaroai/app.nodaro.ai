@@ -1174,7 +1174,7 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
   // default — they ONLY contribute URLs + directives via Phase 0 mention
   // resolution above (`referenceImageUrls` and a "Use these characters…"
   // prefix). A wired character with no @-mention in the prompt contributes
-  // zero URLs and zero directives here. Non-character refs (manual,
+  // zero URLs and zero directives here. Non-character refs (manual, wired-creature,
   // wired-image, wired-face, wired-object, wired-location) still auto-
   // attach so unchanged behavior for them.
   // -------------------------------------------------------------------------
@@ -1455,6 +1455,7 @@ const STRICT_DEFAULT_SOURCES: ReadonlySet<ReferenceSource> = new Set([
   "wired-character",
   "wired-face",
   "wired-object",
+  "wired-creature",
   "wired-location",
 ])
 
@@ -1573,6 +1574,16 @@ const PERSON_LABELS: ReadonlySet<string> = new Set([
   "person", "character", "face", "subject", "people",
 ])
 
+/** Labels that mean "a creature / animal subject" — the animal analog of
+ *  PERSON_LABELS. A bound creature is a LIVING subject with its own identity
+ *  (a specific cat, dragon, beast), so the directive locks anatomy, markings,
+ *  coloration, and distinctive features instead of the person face/body
+ *  phrasing — and instead of the generic prop "match exactly" verb a
+ *  `wired-object` gets. */
+const CREATURE_LABELS: ReadonlySet<string> = new Set([
+  "creature", "animal", "pet", "beast", "monster",
+])
+
 function buildIdentityDirective(
   id: ResolvedIdentity,
   suppressedCanonicalLocationIds?: readonly string[],
@@ -1629,6 +1640,13 @@ function buildIdentityDirective(
     return `- ${subject} — match exactly. Maintain perfect likeness (face, body proportions, distinctive features).`
   }
 
+  // Creature/animal labels: the same identity-lock strength as a person, with
+  // animal-subject phrasing — anatomy/markings/coloration are what make THIS
+  // cat this cat. "loose" still opts out to the inspiration form below.
+  if (CREATURE_LABELS.has(lower) && id.fidelity !== "loose") {
+    return `- ${subject} — this is a creature/animal subject: match it exactly. Maintain perfect likeness (anatomy, markings, coloration, distinctive features).`
+  }
+
   switch (id.fidelity) {
     case "strict":
       return `- ${subject} — match exactly. Maintain perfect likeness.`
@@ -1648,12 +1666,13 @@ function buildIdentityDirective(
  *      prompt-mention order, renumbered from their `nonCharacterRefs` index to
  *      the ref's FINAL slot.
  *   2. Canonical-style fallback directives for `wired-location` / `wired-object`
- *      refs that are present but neither `{image:N}`-referenced nor @-mentioned
- *      (@-mentioned locations were already filtered out of connectedReferences
- *      in Phase 0). Mirrors the character canonical fallback so a wired setting
- *      / object gets a directive with zero typing required. Scoped to those two
- *      sources — opaque `manual` / `wired-image` uploads carry no metadata to
- *      describe and keep their (intentional) directive-free behavior.
+ *      / `wired-creature` refs that are present but neither `{image:N}`-referenced
+ *      nor @-mentioned (@-mentioned locations were already filtered out of
+ *      connectedReferences in Phase 0). Mirrors the character canonical fallback
+ *      so a wired setting / object / creature gets a directive with zero typing
+ *      required. Scoped to those three sources — opaque `manual` / `wired-image`
+ *      uploads carry no metadata to describe and keep their (intentional)
+ *      directive-free behavior.
  *
  * Every directive's `Image N` is numbered against `finalIndexByUrl` (the single
  * source of truth for the assembled URL order), so the index always matches the
@@ -1682,7 +1701,7 @@ function buildNonCharacterDirectives(
   }
 
   for (const ref of nonCharacterRefs) {
-    if (ref.source !== "wired-location" && ref.source !== "wired-object") continue
+    if (ref.source !== "wired-location" && ref.source !== "wired-object" && ref.source !== "wired-creature") continue
     if (!ref.url || coveredUrls.has(ref.url)) continue
     const finalIdx = finalIndexByUrl.get(ref.url)
     if (!finalIdx) continue
@@ -1692,9 +1711,14 @@ function buildNonCharacterDirectives(
         imageIndex: finalIdx,
         // A background label routes wired-location through the
         // "use as the background/setting" verb (and folds
-        // locationCanonicalDescription); wired-object falls through to the
-        // strict "match exactly" verb.
-        label: ref.source === "wired-location" ? "location" : "object",
+        // locationCanonicalDescription); wired-creature routes through the
+        // creature/animal-subject identity lock (CREATURE_LABELS);
+        // wired-object falls through to the strict "match exactly" verb.
+        label: ref.source === "wired-location"
+          ? "location"
+          : ref.source === "wired-creature"
+            ? "creature"
+            : "object",
         fidelity: defaultFidelityForSource(ref.source),
         description: ref.description?.trim() || undefined,
         source: ref.source,

@@ -17,6 +17,7 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
   - [`client.characters`](#clientcharacters)
   - [`client.locations`](#clientlocations)
   - [`client.objects`](#clientobjects)
+  - [`client.creatures`](#clientcreatures)
   - [`client.pipelines`](#clientpipelines)
   - [`client.reduce`](#clientreduce)
   - [`client.promptHelper`](#clientprompthelper)
@@ -1510,6 +1511,54 @@ method signature is therefore `recaption(id)` with no second argument.
 ```ts
 const { canonicalDescription } = await client.objects.recaption(objectId)
 ```
+
+---
+
+### `client.creatures`
+
+Creature library CRUD (`/v1/creatures`) — the creature row is a structural
+sibling of objects (angles / poses / variations / motionClips buckets,
+`species` free-text delta) with two creature-specific additions:
+
+- **`boards`** — named Creature Boards (`Array<{ name, url }>`, max 24):
+  dense reference sheets rendered by the `generate-image/creature-board`
+  factory preset, one per variant/mood. USER-owned: flows through create and
+  update (whole-array replace), unlike the worker-owned asset buckets.
+  Community publish snapshots boards and clones hand each consumer their own
+  copy to extend.
+- **`voice`** — the "talking creature" stack (`CreatureVoice | null`),
+  IDENTICAL in shape and flow to `Character["voice"]`:
+  `{ voiceId, voiceName, traits, voiceType?, previewUrl?, ttsProvider? }`.
+  Pass `voice: null` on update to clear. On community publish the voice
+  carries by KIND exactly like characters — premade + library voices carry
+  fully; custom clones reduce to display name + preview sample (never a
+  usable `voiceId` cross-user).
+
+**Making a creature talk** — the speech routes are generic, so no
+creature-specific endpoints exist (or are needed); drive them through the
+node runner exactly like Boards drive generate-image:
+
+```ts
+// 1. Render speech with the creature's voice.
+const speech = await client.nodes.runAndWait("text-to-speech", {
+  text: "I knocked the vase off the shelf. I regret nothing.",
+  voice: creature.voice!.voiceId,
+  provider: creature.voice!.ttsProvider,
+  voiceType: creature.voice!.voiceType,
+})
+// 2. Lip-sync the audio onto the creature's main image.
+const clip = await client.nodes.runAndWait("lip-sync", {
+  imageUrl: creature.sourceImageUrl!,
+  audioUrl: speech.audioUrl,
+  provider: "kling-avatar",
+})
+```
+
+Binding a creature into a shot uses the shared reference contract:
+`toConnectedReference({ kind: "creature", id, name, url, description })`
+(from `@nodaro/shared`) emits a `wired-creature` reference — it auto-attaches
+to generate-image and receives a creature/animal-subject identity directive
+(anatomy, markings, coloration lock) with zero typing.
 
 ---
 

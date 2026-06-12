@@ -38,6 +38,9 @@ const COLUMNS: Record<string, string[]> = {
     "main_image_url","source_image_url","image_provider","angles","poses","variations","custom_variations",
     "motion_clips","reference_photos","sheets","detail_closeups","canonical_description","style_lock",
     "selected_asset_by_variant","deleted_at","created_at","updated_at","user_id",
+    // Creature Boards + the "talking creature" voice (migration 220) —
+    // boards published + cloned like the buckets; voice carried by KIND.
+    "boards","voice",
   ],
 }
 
@@ -100,6 +103,69 @@ describe("creature adapter classifies every column", () => {
     const a = COMMUNITY_ENTITY_ADAPTERS.creature
     expect(a.stripFields).toContain("custom_variations")
     expect(a.assetFields).not.toContain("custom_variations")
+  })
+  it("treats boards as an asset (migration 220 — published + cloned like objects/locations)", () => {
+    const a = COMMUNITY_ENTITY_ADAPTERS.creature
+    expect(a.assetFields).toContain("boards")
+  })
+  it("strip-lists voice like characters (buildSnapshot re-adds it by KIND)", () => {
+    const a = COMMUNITY_ENTITY_ADAPTERS.creature
+    expect(a.stripFields).toContain("voice")
+    expect(a.assetFields).not.toContain("voice")
+    expect(a.publicTextFields).not.toContain("voice")
+  })
+})
+
+// The creature voice carry mirrors the character rules exactly (Decision A):
+// premade + library survive fully; custom/cloned reduce to display name +
+// sample. One test per kind so a regression that re-gates the voice block to
+// `entityType === "character"` only fails loudly here.
+describe("buildSnapshot (creature voice + boards)", () => {
+  const row = {
+    name: "Ember", description: "a small red dragon", species: "dragon",
+    canonical_description: "cd", source_image_url: "u",
+    reference_photos: [{ kind: "side", url: "PII" }],
+  }
+  it("keeps a premade voice fully", () => {
+    const snap = buildSnapshot(
+      "creature",
+      { ...row, voice: { voiceId: "v", voiceType: "premade" } },
+      {},
+    ) as Record<string, unknown>
+    expect(snap.voice).toEqual({ voiceId: "v", voiceType: "premade" })
+  })
+  it("keeps a library voice fully (public ElevenLabs data)", () => {
+    const voice = {
+      voiceId: "V55PLkF0YuZYdHsom49R", voiceName: "Growl", traits: "raspy",
+      voiceType: "library", previewUrl: "https://cdn/p.mp3", ttsProvider: "elevenlabs-turbo",
+    }
+    const snap = buildSnapshot("creature", { ...row, voice }, {}) as Record<string, unknown>
+    expect(snap.voice).toEqual(voice)
+  })
+  it("reduces a custom/cloned voice to display-name + sample (drops voiceId)", () => {
+    const snap = buildSnapshot(
+      "creature",
+      { ...row, voice: { voiceId: "v", voiceName: "My Cat's Voice", traits: "soft", voiceType: "custom", previewUrl: "https://cdn/s.mp3" } },
+      {},
+    ) as Record<string, unknown>
+    expect(snap.voice).toEqual({ voiceName: "My Cat's Voice", voiceType: "custom", previewUrl: "https://cdn/s.mp3" })
+  })
+  it("snapshots COPIED boards and buildCloneRow hands them (+ voice) to the consumer", () => {
+    const boards = [{ name: "Moods", url: "COPIED-BOARD" }]
+    const snap = buildSnapshot(
+      "creature",
+      { ...row, voice: { voiceId: "v", voiceType: "premade" }, boards: [{ name: "Moods", url: "orig" }] },
+      { boards },
+    ) as Record<string, unknown>
+    expect(snap.boards).toEqual(boards)
+    expect(snap.reference_photos).toBeUndefined()
+
+    const clone = buildCloneRow("creature", snap, {
+      userId: "u2", projectId: "p2", name: "Ember Copy", copiedAssets: { boards },
+    }) as Record<string, unknown>
+    expect(clone.boards).toEqual(boards)
+    expect(clone.voice).toEqual({ voiceId: "v", voiceType: "premade" })
+    expect(clone.user_id).toBe("u2")
   })
 })
 
