@@ -478,6 +478,141 @@ describe("POST /v1/generate-character", () => {
   })
 
   // ───────────────────────────────────────────────────────────────────────
+  // Credit-affecting quality/resolution levers (mirrors generate-image).
+  // The DEBIT identifier (reserveCreditsForJob's 4th arg) must be the
+  // composite id from the shared resolver — the same function the (mocked
+  // no-op here) credit-guard CHECK runs, so asserting the DEBIT pins both.
+  // ───────────────────────────────────────────────────────────────────────
+  describe("quality / resolution levers", () => {
+    it("quality=high + gpt-image reserves the composite id and threads levers to the queue", async () => {
+      const { insert } = mockJobsInsertChain()
+      vi.mocked(supabase.from).mockReturnValue({ insert } as never)
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-character",
+        headers: { "x-user-id": TEST_USER_ID },
+        payload: {
+          name: "Kira",
+          seedPrompt: "young woman",
+          provider: "gpt-image",
+          quality: "high",
+        },
+      })
+
+      expect(res.statusCode).toBe(200)
+      expect(vi.mocked(reserveCreditsForJob)).toHaveBeenCalledWith(
+        expect.anything(), expect.anything(), "job-1", "gpt-image:high",
+      )
+      expect(videoQueue.add).toHaveBeenCalledWith(
+        "generate-character",
+        expect.objectContaining({ quality: "high" }),
+      )
+    })
+
+    it("resolution=4K + nano-banana-pro reserves 'nano-banana-pro:4K' and threads resolution", async () => {
+      const { insert } = mockJobsInsertChain()
+      vi.mocked(supabase.from).mockReturnValue({ insert } as never)
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-character",
+        headers: { "x-user-id": TEST_USER_ID },
+        payload: {
+          name: "Kira",
+          seedPrompt: "young woman",
+          provider: "nano-banana-pro",
+          resolution: "4K",
+        },
+      })
+
+      expect(res.statusCode).toBe(200)
+      expect(vi.mocked(reserveCreditsForJob)).toHaveBeenCalledWith(
+        expect.anything(), expect.anything(), "job-1", "nano-banana-pro:4K",
+      )
+      expect(videoQueue.add).toHaveBeenCalledWith(
+        "generate-character",
+        expect.objectContaining({ resolution: "4K" }),
+      )
+    })
+
+    it("a quality the model doesn't support is ignored, not a 400 (nano-banana + high → base id)", async () => {
+      const { insert } = mockJobsInsertChain()
+      vi.mocked(supabase.from).mockReturnValue({ insert } as never)
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-character",
+        headers: { "x-user-id": TEST_USER_ID },
+        payload: {
+          name: "Kira",
+          seedPrompt: "young woman",
+          provider: "nano-banana",
+          quality: "high",
+        },
+      })
+
+      expect(res.statusCode).toBe(200)
+      expect(vi.mocked(reserveCreditsForJob)).toHaveBeenCalledWith(
+        expect.anything(), expect.anything(), "job-1", "nano-banana",
+      )
+    })
+
+    it("omitting the levers keeps the legacy plain-provider identifier (cost unchanged)", async () => {
+      const { insert } = mockJobsInsertChain()
+      vi.mocked(supabase.from).mockReturnValue({ insert } as never)
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-character",
+        headers: { "x-user-id": TEST_USER_ID },
+        payload: { name: "Kira", seedPrompt: "young woman", provider: "nano-banana-pro" },
+      })
+
+      expect(res.statusCode).toBe(200)
+      expect(vi.mocked(reserveCreditsForJob)).toHaveBeenCalledWith(
+        expect.anything(), expect.anything(), "job-1", "nano-banana-pro",
+      )
+    })
+
+    it("a value outside the enum is rejected by Zod (validation_error)", async () => {
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-character",
+        headers: { "x-user-id": TEST_USER_ID },
+        payload: { name: "Kira", seedPrompt: "y w", quality: "ultra" },
+      })
+
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.code).toBe("validation_error")
+    })
+
+    it("count=2 batch — every job reserves with the SAME composite id", async () => {
+      const { insert } = mockJobsInsertChain()
+      vi.mocked(supabase.from).mockReturnValue({ insert } as never)
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-character",
+        headers: { "x-user-id": TEST_USER_ID },
+        payload: {
+          name: "Kira",
+          seedPrompt: "y w",
+          count: 2,
+          provider: "gpt-image",
+          quality: "high",
+        },
+      })
+
+      expect(res.statusCode).toBe(200)
+      expect(vi.mocked(reserveCreditsForJob)).toHaveBeenCalledTimes(2)
+      for (const call of vi.mocked(reserveCreditsForJob).mock.calls) {
+        expect(call[3]).toBe("gpt-image:high")
+      }
+    })
+  })
+
+  // ───────────────────────────────────────────────────────────────────────
   // Per-asset-type aspect-ratio defaults — portrait defaults to 3:4.
   // Spec: explicit > characterNodeAspectRatio > per-asset-type default.
   // ───────────────────────────────────────────────────────────────────────

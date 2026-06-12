@@ -293,6 +293,16 @@ trackable. Pass `attachToCharacterId` to auto-attach the result to the
 character row when the job completes — no separate `approve` step needed
 for single-candidate runs.
 
+The image-generating routes (`/v1/generate-character`,
+`/v1/generate-character-asset`, and the location equivalents
+`/v1/generate-location` / `/v1/generate-location-asset`) also accept optional
+`quality` (`"medium"` / `"high"` / `"basic"`) and `resolution` (`"1K"` /
+`"2K"` / `"4K"` / `"0.5 MP"` / `"1 MP"` / `"2 MP"` / `"4 MP"`). These are
+**credit-affecting** and price exactly like `/v1/generate-image` (composite
+ids such as `gpt-image:high` / `nano-banana-pro:4K`) — a 4K / high run
+reserves more credits than the same model at its base tier. A value the
+chosen model doesn't support is ignored, never a 400.
+
 ### Portrait approval
 
 | Method | Path | Purpose |
