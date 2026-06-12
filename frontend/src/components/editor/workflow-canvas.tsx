@@ -1702,11 +1702,13 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         }
       }
 
-      // Cmd/Ctrl+E, Alt/Option+E, or Cmd/Ctrl+P — toggle the quick-edit Prompt modal
-      // for the focused node. Alt+E is an escape hatch: the "Claude in Chrome" extension
-      // binds ⌘E to its side panel. Alt+E matches on e.code ("KeyE") since macOS
-      // Option+E is a dead key (composes "´"). Cmd+P always prevents the browser print
-      // dialog regardless of whether a prompt-capable node is focused.
+      // Cmd/Ctrl+E, Alt/Option+E, Cmd/Ctrl+P, or Alt/Option+P — toggle the quick-edit
+      // Prompt modal for the focused node; nodes WITHOUT a prompt field toggle their
+      // fullscreen settings instead, so the shortcut is useful on every node type.
+      // Alt+E is an escape hatch: the "Claude in Chrome" extension binds ⌘E to its
+      // side panel. Alt+E/Alt+P match on e.code since macOS Option+E is a dead key
+      // (composes "´") and Option+P composes "π". Cmd+P always prevents the browser
+      // print dialog regardless of whether a node is focused.
       // Runs BEFORE the overlay guard so it can close its own dialog.
       if (matchShortcut(e, SHORTCUTS.promptEditor)) {
         e.preventDefault()
@@ -1716,9 +1718,14 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           return
         }
         const nodeId = state.selectedNodeId ?? state.focusedNodeId ?? state.nodes.find((n) => n.selected)?.id
-        const nodeType = nodeId ? state.nodes.find((n) => n.id === nodeId)?.type : undefined
-        if (nodeId && nodeHasPromptField(nodeType)) {
+        if (!nodeId) return
+        const nodeType = state.nodes.find((n) => n.id === nodeId)?.type
+        if (nodeHasPromptField(nodeType)) {
           state.openPromptEditor(nodeId)
+        } else if (state.configPanelFullscreen) {
+          closeFullscreenSettings()
+        } else {
+          openFullscreenSettings(nodeId)
         }
         return
       }
