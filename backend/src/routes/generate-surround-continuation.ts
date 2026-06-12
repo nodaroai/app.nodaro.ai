@@ -14,10 +14,10 @@ import {
   defaultCarriedFraction,
   buildSurroundFillPrompt,
 } from "@nodaro/shared"
+import { formatZodError } from "../lib/zod-error.js"
 
 /** Image upscale/denoise providers offered for the opt-in `refine` step. */
 const REFINE_PROVIDERS = ["recraft-upscale", "topaz-image-upscale"] as const
-import { formatZodError } from "../lib/zod-error.js"
 
 /**
  * Surround continuation — platform-owned seamless 360° ring-view generation.
