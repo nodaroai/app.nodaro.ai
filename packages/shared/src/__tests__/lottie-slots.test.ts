@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest"
 import {
+  normalizeLottieLayers,
   applySlots,
   describeSlotControl,
   rgbaArrayToHex,
@@ -213,5 +214,32 @@ describe("deriveLottieSlotFields", () => {
     expect(deriveLottieSlotFields(undefined)).toEqual([])
     expect(deriveLottieSlotFields({ planType: "lottie-graphic" })).toEqual([])
     expect(deriveLottieSlotFields({ planType: "lottie-graphic", slots: {} })).toEqual([])
+  })
+})
+
+describe("normalizeLottieLayers", () => {
+  it("defaults st/sr on root and precomp asset layers, preserving authored values", () => {
+    const doc = {
+      layers: [{ ty: 4, ip: 0, op: 150 }, { ty: 5, ip: 0, op: 150, st: 12, sr: 2 }],
+      assets: [{ id: "pre_0", layers: [{ ty: 4, ip: 0, op: 60 }] }, { id: "img", p: "x" }],
+    } as Record<string, unknown>
+    const out = normalizeLottieLayers(doc)
+    expect(out).toBe(doc) // in-place
+    const layers = doc.layers as Array<Record<string, unknown>>
+    expect(layers[0].st).toBe(0)
+    expect(layers[0].sr).toBe(1)
+    expect(layers[1].st).toBe(12)
+    expect(layers[1].sr).toBe(2)
+    const assetLayers = (doc.assets as Array<Record<string, unknown>>)[0].layers as Array<Record<string, unknown>>
+    expect(assetLayers[0].st).toBe(0)
+    expect(assetLayers[0].sr).toBe(1)
+  })
+
+  it("tolerates non-object input and malformed members", () => {
+    expect(normalizeLottieLayers(null)).toBe(null)
+    expect(normalizeLottieLayers("x")).toBe("x")
+    const doc = { layers: [null, "x", { ty: 4 }] } as Record<string, unknown>
+    normalizeLottieLayers(doc)
+    expect((doc.layers as Array<Record<string, unknown> | null | string>)[2]).toMatchObject({ st: 0, sr: 1 })
   })
 })

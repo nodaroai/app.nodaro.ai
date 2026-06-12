@@ -89,6 +89,10 @@ export async function textToSpeechRoutes(app: FastifyInstance) {
       style,
       speed,
       languageCode,
+      // LLM-originated (MCP) requests may carry a hallucinated voice id —
+      // only they get the Rachel voice_not_found fallback. User-picked
+      // voices fail loudly (see directElevenLabsTTS).
+      allowDefaultVoiceFallback: Boolean(mcpClient),
     })
 
     return { jobId: job.id }

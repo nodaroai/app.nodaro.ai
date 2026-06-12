@@ -1,7 +1,7 @@
 import React, { useMemo } from "react"
 import { AbsoluteFill } from "remotion"
 import { Lottie, type LottieAnimationData } from "@remotion/lottie"
-import { applySlots } from "@nodaro/shared"
+import { applySlots, normalizeLottieLayers } from "@nodaro/shared"
 import type { LottieGraphicPlan } from "../plan-types"
 import { useLottieInitWatchdog } from "../lib/lottie-init-watchdog"
 import "../lib/font-registry"
@@ -12,7 +12,7 @@ interface LottieGraphicRendererProps {
 
 export function LottieGraphicRenderer({ plan }: LottieGraphicRendererProps) {
   const animationData = useMemo(
-    () => applySlots(plan.lottie, plan.slots, plan.slotValues) as unknown as LottieAnimationData,
+    () => normalizeLottieLayers(applySlots(plan.lottie, plan.slots, plan.slotValues)) as unknown as LottieAnimationData,
     [plan],
   )
   const onAnimationLoaded = useLottieInitWatchdog("lottie-graphic")

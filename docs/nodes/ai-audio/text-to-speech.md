@@ -15,10 +15,20 @@ The Text to Speech node generates spoken audio from text input using ElevenLabs 
 | Voice | `string` | `"Rachel"` | Voice selection -- premade, custom (cloned), or library voice via VoiceBrowser |
 | Voice Type | `"premade" \| "custom" \| "library"` | `"premade"` | Source of the selected voice |
 | Language | `string` | `"en"` | Target language code, or empty for auto-detect. Available languages depend on provider model (see Language Support below) |
-| Stability | `number` (0-1) | `0.5` | Controls voice consistency. Lower values produce more expressive but variable speech |
-| Similarity Boost | `number` (0-1) | `0.75` | How closely output matches the target voice timbre. v2 models only |
-| Style Exaggeration | `number` (0-1) | `0` | Amplifies the style of the original voice. v2 models only |
-| Speed | `number` (0.7-1.2) | `1` | Playback speed multiplier. v2 models only |
+| Stability | `number` (0-1) | voice's own | Controls voice consistency. Lower values produce more expressive but variable speech |
+| Similarity Boost | `number` (0-1) | voice's own | How closely output matches the target voice timbre. v2 models only |
+| Style Exaggeration | `number` (0-1) | voice's own | Amplifies the style of the original voice. v2 models only |
+| Speed | `number` (0.7-1.2) | voice's own | Playback speed multiplier. v2 models only |
+
+### Voice settings & preview fidelity
+
+When you don't touch the sliders, generation uses the **voice's own stored settings** (including speaker boost) — the same settings its preview was rendered with, so output matches what you heard in the Voice Browser. When you adjust one or more sliders, your values are merged **over** the voice's stored settings rather than resetting the others to generic defaults.
+
+Voice Library voices are verified per model by their creators. The Voice Browser knows each library voice's verified models: selecting a library voice while the node is set to a v2 model the voice is **not** verified for automatically snaps the provider to a verified one (your explicit choice is kept whenever the voice is verified for it; the default v3 renders any voice and is never changed).
+
+### Voice errors
+
+If the selected voice no longer exists on ElevenLabs (e.g. it was removed from the Voice Library or the clone was deleted), the job **fails with a clear error** instead of silently substituting a different voice. The only exception is LLM-originated requests through the MCP `generate_speech` tool, where a hallucinated voice id falls back to the default voice (Rachel) so the agent still gets audio back.
 
 ### Providers
 

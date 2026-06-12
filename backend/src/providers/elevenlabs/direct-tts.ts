@@ -48,6 +48,15 @@ export function resolveDirectVoiceId(voice: string | undefined): string {
  *  premade pass-through from an unknown UUID we shouldn't trust. */
 const KNOWN_PREMADE_UUIDS = new Set(Object.values(PREMADE_VOICE_IDS))
 
+/**
+ * True when the identifier is one of the 21 premade voice names or their
+ * UUIDs. Lets callers (e.g. the community snapshot adapter) classify legacy
+ * voice records that predate `voiceType` without keeping a second voice list.
+ */
+export function isKnownPremadeVoiceRef(voice: string): boolean {
+  return PREMADE_VOICE_IDS[voice] !== undefined || KNOWN_PREMADE_UUIDS.has(voice)
+}
+
 /** Heuristic: ElevenLabs UUIDs are 20 alphanumeric chars. Anything
  *  matching the shape but NOT in our known list is either a custom
  *  voice (might be valid) or LLM hallucination (definitely invalid).
@@ -67,6 +76,56 @@ export interface DirectTTSOptions {
   style?: number
   speed?: number
   languageCode?: string
+  /**
+   * Retry with the default premade voice (Rachel) when ElevenLabs reports
+   * voice_not_found. ONLY for LLM-originated requests (MCP), where the voice
+   * id may be hallucinated and any audio beats a hard error. User-picked
+   * voices must fail loudly — silently substituting a different voice is how
+   * "the voice sounds wrong" bugs hide.
+   */
+  allowDefaultVoiceFallback?: boolean
+}
+
+// ---------------------------------------------------------------------------
+// Stored voice settings (preview fidelity)
+// ---------------------------------------------------------------------------
+// When the caller doesn't override any slider we OMIT voice_settings so
+// ElevenLabs applies the voice's own stored/tuned settings — the ones its
+// Voice Library preview was rendered with (confirmed API semantics: settings
+// in the request "override stored settings for the given voice ... applied
+// only on the given request"). When the caller overrides only SOME sliders we
+// merge them over the stored settings; otherwise one tweaked slider would
+// silently reset the rest (incl. use_speaker_boost) to generic defaults and
+// the output drifts audibly from the preview.
+
+interface StoredVoiceSettings {
+  stability?: number
+  similarity_boost?: number
+  style?: number
+  speed?: number
+  use_speaker_boost?: boolean
+}
+
+const SETTINGS_CACHE_TTL_MS = 5 * 60 * 1000
+const SETTINGS_CACHE_MAX = 500
+const storedSettingsCache = new Map<string, { value: StoredVoiceSettings | null; expiresAt: number }>()
+
+async function fetchStoredVoiceSettings(voiceId: string, apiKey: string): Promise<StoredVoiceSettings | null> {
+  const cached = storedSettingsCache.get(voiceId)
+  if (cached && Date.now() < cached.expiresAt) return cached.value
+  let value: StoredVoiceSettings | null = null
+  try {
+    const res = await fetch(`${ELEVENLABS_BASE_URL}/v1/voices/${voiceId}/settings`, {
+      headers: { "xi-api-key": apiKey },
+    })
+    if (res.ok) value = (await res.json()) as StoredVoiceSettings
+  } catch {
+    // Network failure → fall back to API defaults below; never fail the job
+    // over a fidelity lookup.
+  }
+  if (storedSettingsCache.size >= SETTINGS_CACHE_MAX) storedSettingsCache.clear()
+  storedSettingsCache.set(voiceId, { value, expiresAt: Date.now() + SETTINGS_CACHE_TTL_MS })
+  return value
 }
 
 export async function directElevenLabsTTS(
@@ -81,29 +140,38 @@ export async function directElevenLabsTTS(
   }
 
   const isV3 = provider === "elevenlabs-v3"
-
-  // v3 only supports stability — similarity_boost, style, speed are deprecated
-  const voiceSettings: Record<string, number> = {
-    stability: options?.stability ?? 0.5,
-  }
-  if (!isV3) {
-    voiceSettings.similarity_boost = options?.similarityBoost ?? 0.75
-    voiceSettings.style = options?.style ?? 0
-    if (options?.speed != null) {
-      voiceSettings.speed = options.speed
-    }
-  }
+  const resolvedVoiceId = resolveDirectVoiceId(voiceId)
 
   const body: Record<string, unknown> = {
     text,
     model_id: resolveModel(provider),
-    voice_settings: voiceSettings,
   }
   if (options?.languageCode) {
     body.language_code = options.languageCode
   }
 
-  const resolvedVoiceId = resolveDirectVoiceId(voiceId)
+  const hasExplicitSettings =
+    options?.stability != null || options?.similarityBoost != null ||
+    options?.style != null || options?.speed != null
+
+  // No explicit sliders → omit voice_settings entirely so ElevenLabs applies
+  // the voice's stored/tuned settings (preview fidelity). With sliders, merge
+  // them over the stored settings (API-default fallbacks when unavailable).
+  if (hasExplicitSettings) {
+    const stored = await fetchStoredVoiceSettings(resolvedVoiceId, apiKey)
+    // v3 only supports stability — similarity_boost, style, speed are deprecated
+    const voiceSettings: Record<string, number | boolean> = {
+      stability: options?.stability ?? stored?.stability ?? 0.5,
+    }
+    if (!isV3) {
+      voiceSettings.similarity_boost = options?.similarityBoost ?? stored?.similarity_boost ?? 0.75
+      voiceSettings.style = options?.style ?? stored?.style ?? 0
+      voiceSettings.use_speaker_boost = stored?.use_speaker_boost ?? true
+      const speed = options?.speed ?? stored?.speed
+      if (speed != null) voiceSettings.speed = speed
+    }
+    body.voice_settings = voiceSettings
+  }
 
   async function attempt(vid: string): Promise<Response> {
     return fetch(`${ELEVENLABS_BASE_URL}/v1/text-to-speech/${vid}`, {
@@ -119,12 +187,12 @@ export async function directElevenLabsTTS(
 
   let response = await attempt(resolvedVoiceId)
 
-  // Defensive fallback: LLMs sometimes hallucinate UUIDs that look
-  // valid (20-char alphanumeric) but aren't real voices. If we passed
-  // an unrecognized UUID-shape and ElevenLabs 404'd with
-  // voice_not_found, retry with Rachel (the safe default) so the user
-  // gets audio back instead of a hard error. Logged so we can spot
-  // hallucinations and update the tool description if needed.
+  // voice_not_found on an unrecognized UUID-shape id: for LLM-originated
+  // requests (MCP — the only callers that opt in) the id may be hallucinated,
+  // so retry with Rachel rather than hard-error. Everywhere else the voice
+  // was explicitly picked by a user — fail loudly with an actionable message;
+  // silently substituting a different voice is how "the voice sounds wrong"
+  // bugs hide.
   if (
     response.status === 404 &&
     looksLikeUuid(resolvedVoiceId) &&
@@ -132,12 +200,20 @@ export async function directElevenLabsTTS(
   ) {
     const errPreview = await response.clone().text().catch(() => "")
     if (errPreview.includes("voice_not_found")) {
-      // eslint-disable-next-line no-console
-      console.warn(
-        `[elevenlabs] voice_not_found for "${resolvedVoiceId}" (likely ` +
-          `LLM hallucination); falling back to Rachel`,
-      )
-      response = await attempt(PREMADE_VOICE_IDS.Rachel!)
+      if (options?.allowDefaultVoiceFallback) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[elevenlabs] voice_not_found for "${resolvedVoiceId}" (likely ` +
+            `LLM hallucination); falling back to Rachel`,
+        )
+        response = await attempt(PREMADE_VOICE_IDS.Rachel!)
+      } else {
+        throw new Error(
+          `Voice "${voiceId}" was not found on ElevenLabs — it may have been ` +
+            `removed from the Voice Library or deleted from your clones. ` +
+            `Pick a different voice and try again.`,
+        )
+      }
     }
   }
 

@@ -1,3 +1,5 @@
+import type { TtsProvider } from "./model-constants.js"
+
 /**
  * A premade ElevenLabs voice as returned by `GET /v1/voices`.
  * Field names + types mirror the route verbatim: the route normalizes every
@@ -17,9 +19,27 @@ export interface Voice {
 
 /**
  * A shared/community Voice Library entry (`GET /v1/voices/library`).
- * Identical in shape to {@link Voice} as the route maps it today.
+ * Same shape as {@link Voice} plus the TTS provider the voice is verified on.
  */
-export type SharedVoice = Voice
+export interface SharedVoice extends Voice {
+  /**
+   * The cheapest of our TTS providers whose underlying ElevenLabs model the
+   * voice lists in `verified_languages` (turbo preferred, else multilingual).
+   * Clients without a provider picker should send it as the `provider` on
+   * text-to-speech so generation uses a model the voice is actually verified
+   * for — rendering a voice on an unverified model is what makes output drift
+   * audibly from its preview. Absent when the entry has no model metadata.
+   */
+  recommendedProvider?: TtsProvider
+  /**
+   * Every v2 TTS provider the voice is verified on (subset of
+   * `elevenlabs-turbo` / `elevenlabs-multilingual`, turbo first). Clients WITH
+   * a provider picker should only snap the provider when the current choice is
+   * NOT in this set — most voices verify both, and an explicit user choice
+   * within the set must win. (v3 renders any voice; it's never snapped.)
+   */
+  verifiedProviders?: TtsProvider[]
+}
 
 /** Query params for `GET /v1/voices/library`. All optional; sent as a querystring. */
 export interface VoiceLibraryParams {

@@ -732,6 +732,7 @@ export { getParameterPromptHint } from "./parameter-prompt-hint.js"
 
 export {
   applySlots,
+  normalizeLottieLayers,
   describeSlotControl,
   rgbaArrayToHex,
   hexToRgbaArray,

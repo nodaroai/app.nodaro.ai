@@ -135,9 +135,23 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
         <VoiceBrowser
           value={data.voiceId || "Rachel"}
           valueLabel={data.voiceDisplayName || data.voiceLabel}
-          onSelect={(id, name, voiceType) => {
+          onSelect={(id, name, voiceType, providerMeta) => {
             if (voiceType === "custom" || voiceType === "library") {
-              onUpdate({ voiceId: id, voiceType: voiceType, voiceDisplayName: name, voiceLabel: name })
+              // Preview-fidelity guard: a library voice picked while the node
+              // is on a v2 model the voice ISN'T verified for would render
+              // audibly different from its preview — snap to the voice's
+              // verified provider. Explicit picks WITHIN the verified set are
+              // respected, and v3 (the default) renders any voice unmodified.
+              const current = data.provider === "elevenlabs" ? "elevenlabs-turbo" : data.provider
+              const verified = providerMeta?.verifiedProviders ?? []
+              const snap =
+                voiceType === "library" &&
+                providerMeta?.recommendedProvider &&
+                (current === "elevenlabs-turbo" || current === "elevenlabs-multilingual") &&
+                !verified.includes(current)
+                  ? { provider: providerMeta.recommendedProvider }
+                  : {}
+              onUpdate({ voiceId: id, voiceType: voiceType, voiceDisplayName: name, voiceLabel: name, ...snap })
             } else {
               onUpdate({ voiceId: id, voiceType: "premade", voiceDisplayName: name, voiceLabel: name })
             }

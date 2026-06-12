@@ -25,10 +25,17 @@ import { useVoiceClones, useCreateVoiceClone, useDeleteVoiceClone } from "@/hook
 import { getCachedCredits, prefetchModelCredits } from "@/ee/hooks/use-model-credits"
 import { toast } from "sonner"
 
+/** Library-voice model verification, threaded so the TTS config can snap a
+ *  v2 provider the voice ISN'T verified for (preview-fidelity guard). */
+export interface VoiceProviderMeta {
+  readonly recommendedProvider?: "elevenlabs-turbo" | "elevenlabs-multilingual"
+  readonly verifiedProviders?: Array<"elevenlabs-turbo" | "elevenlabs-multilingual">
+}
+
 interface VoiceBrowserProps {
   readonly value: string              // voice_id UUID or legacy name
   readonly valueLabel?: string        // display name for trigger button
-  readonly onSelect: (voiceId: string, voiceName: string, voiceType?: "premade" | "custom" | "library") => void
+  readonly onSelect: (voiceId: string, voiceName: string, voiceType?: "premade" | "custom" | "library", providerMeta?: VoiceProviderMeta) => void
   readonly compact?: boolean
   readonly showCustomVoices?: boolean  // default false — only TTS node sets this
 }
@@ -232,8 +239,8 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
     setPlayingId(id)
   }, [playingId, handleAudioEnded, handleAudioError])
 
-  const handleSelect = useCallback((voiceId: string, voiceName: string, voiceType?: "premade" | "custom" | "library") => {
-    onSelect(voiceId, voiceName, voiceType)
+  const handleSelect = useCallback((voiceId: string, voiceName: string, voiceType?: "premade" | "custom" | "library", providerMeta?: VoiceProviderMeta) => {
+    onSelect(voiceId, voiceName, voiceType, providerMeta)
     setOpen(false)
     if (audioRef.current) {
       audioRef.current.pause()
@@ -540,11 +547,13 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
                     accent: v.accent,
                     description: v.description || v.use_case,
                     category: v.category,
+                    recommendedProvider: v.recommendedProvider,
+                    verifiedProviders: v.verifiedProviders,
                   }))}
                   selectedValue={value}
                   playingId={playingId}
                   onPlay={handlePlay}
-                  onSelect={(v) => handleSelect(v.id, v.name, "library")}
+                  onSelect={(v) => handleSelect(v.id, v.name, "library", { recommendedProvider: v.recommendedProvider, verifiedProviders: v.verifiedProviders })}
                   showCategory
                 />
                 {libraryData?.hasMore && (
@@ -913,6 +922,9 @@ interface VoiceListItem {
   accent: string
   description: string
   category: string
+  /** Voice Library entries only: v2 providers the voice is verified on. */
+  recommendedProvider?: "elevenlabs-turbo" | "elevenlabs-multilingual"
+  verifiedProviders?: Array<"elevenlabs-turbo" | "elevenlabs-multilingual">
 }
 
 function VoiceList({

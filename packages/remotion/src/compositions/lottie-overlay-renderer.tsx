@@ -8,8 +8,11 @@ import {
   cancelRender,
 } from "remotion"
 import { Lottie, type LottieAnimationData } from "@remotion/lottie"
-import { resolveLottieOverlaySrc } from "@nodaro/shared"
+import { resolveLottieOverlaySrc, normalizeLottieLayers } from "@nodaro/shared"
 import { useLottieInitWatchdog } from "../lib/lottie-init-watchdog"
+// Text overlays (e.g. authored kinetic typography) need the safelisted font
+// families registered in the render page, same as the lottie-graphic comp.
+import "../lib/font-registry"
 import type { LottieOverlayPlan, LottieOverlayItem } from "../plan-types"
 
 interface LottieOverlayRendererProps {
@@ -40,7 +43,7 @@ function LottieOverlayLayer({ overlay }: { readonly overlay: LottieOverlayItem }
       })
       .then((json) => {
         if (!cancelled) {
-          setAnimationData(json)
+          setAnimationData(normalizeLottieLayers(json))
           continueRender(handle)
         }
       })
