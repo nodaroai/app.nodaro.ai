@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useRef } from "react"
 import { createPortal } from "react-dom"
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react"
 import { optimizedImageUrl } from "@/lib/image"
+import { computeFlipPosition } from "./flip-position"
 
 interface ImageRefAttrs {
   imageIndex: number
@@ -155,16 +156,16 @@ export function ImageRefView(props: NodeViewProps) {
       {url && hoverAnchor && createPortal(
         (() => {
           const PREVIEW_MAX = 220
-          const MARGIN = 8
-          const vh = window.innerHeight
-          const vw = window.innerWidth
-          const spaceBelow = vh - hoverAnchor.bottom - MARGIN
-          const spaceAbove = hoverAnchor.top - MARGIN
-          const placeBelow = spaceBelow >= PREVIEW_MAX || spaceBelow >= spaceAbove
-          const top = placeBelow
-            ? hoverAnchor.bottom + MARGIN
-            : Math.max(MARGIN, hoverAnchor.top - PREVIEW_MAX - MARGIN)
-          const left = Math.min(Math.max(MARGIN, hoverAnchor.left), vw - PREVIEW_MAX - MARGIN)
+          // Shares the editor's flip-above-when-cramped math; the preview div's
+          // own maxWidth/maxHeight stay local. Threshold + secondary margin
+          // reproduce the original `spaceBelow >= PREVIEW_MAX || spaceBelow >= (top - 8)`.
+          const { top, left } = computeFlipPosition(hoverAnchor, {
+            width: PREVIEW_MAX,
+            estHeight: PREVIEW_MAX,
+            margin: 8,
+            placeBelowThreshold: PREVIEW_MAX,
+            secondaryClauseMargin: 8,
+          })
           return (
             <div
               style={{ position: "fixed", top, left }}

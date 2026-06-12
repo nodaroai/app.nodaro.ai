@@ -62,6 +62,9 @@ import type { ConfigProps } from "./types"
 import { PromptHelperButton } from "./prompt-helper-button"
 import { SnippetMenuButton } from "./snippet-menu-button"
 import { useSnippetPool } from "@/hooks/queries/use-prompt-snippets-queries"
+import { PromptFieldFinalView, PromptFieldModeToggle } from "./prompt-field-final-view"
+import { useFinalPromptSegments } from "./use-final-prompt-segments"
+import { usePromptFieldMode } from "@/hooks/use-prompt-field-mode"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { resolveEdgeValuesForTableColumn } from "@/components/editor/workflow-editor/node-input-resolver"
 import { SUNO_LYRICS_SUGGESTION_ITEMS } from "@/lib/suno-tags"
@@ -87,10 +90,18 @@ const OUTPUT_TARGETS: readonly { value: "text" | "voice" | "lyrics"; label: stri
   { value: "lyrics", label: "Lyrics", hint: "Suno metatags" },
 ]
 
-export function TextPromptConfig({ data, onUpdate, nodeRefs, refMap, variableDisplayMode }: ConfigProps<TextPromptData>) {
+export function TextPromptConfig({ data, onUpdate, nodeRefs, refMap, variableDisplayMode, nodes, edges, nodeId }: ConfigProps<TextPromptData> & { nodeId?: string }) {
   const outputTarget: "text" | "voice" | "lyrics" =
     data.outputTarget === "voice" || data.outputTarget === "lyrics" ? data.outputTarget : "text"
   const promptSnippets = useSnippetPool("text", "prompt")
+  const promptFieldMode = usePromptFieldMode(nodeId ?? "", "text")
+  const finalPrompt = useFinalPromptSegments({
+    userPrompt: data.text,
+    consumerNodeId: nodeId,
+    nodes,
+    edges: edges ?? [],
+    snippets: promptSnippets,
+  })
 
   return (
     <div className="flex flex-col gap-3">
@@ -119,6 +130,7 @@ export function TextPromptConfig({ data, onUpdate, nodeRefs, refMap, variableDis
         <div className="flex items-center justify-between mb-1">
           <Label>Prompt Text</Label>
           <span className="inline-flex items-center gap-0.5">
+            <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
             <SnippetMenuButton pool={promptSnippets} value={data.text || ""} onInsert={(v) => onUpdate({ text: v })} target="prompt" media="text" />
             <PromptHelperButton
               nodeType="text-prompt"
@@ -127,41 +139,52 @@ export function TextPromptConfig({ data, onUpdate, nodeRefs, refMap, variableDis
             />
           </span>
         </div>
-        {outputTarget === "lyrics" ? (
-          <TagTextarea
-            rows={5}
-            value={data.text}
-            onChange={(value) => onUpdate({ text: value })}
-            placeholder="Write your lyrics... (type [ for metatags)"
-            tagMode="suno"
-            customTags={SUNO_LYRICS_SUGGESTION_ITEMS}
-            nodeRefs={nodeRefs}
-            displayMode={variableDisplayMode}
-            refMap={refMap}
-          />
-        ) : outputTarget === "voice" ? (
-          <TagTextarea
-            rows={5}
-            value={data.text}
-            onChange={(value) => onUpdate({ text: value })}
-            placeholder="Write the spoken text... (type [ for audio tags)"
-            tagMode="audio"
-            nodeRefs={nodeRefs}
-            displayMode={variableDisplayMode}
-            refMap={refMap}
+        {promptFieldMode.mode === "final" ? (
+          <PromptFieldFinalView
+            segments={finalPrompt.promptSegments}
+            plainText={finalPrompt.promptText}
+            placeholder="Final prompt preview — this node has no text yet"
+            minHeightRem={5 * 1.5}
           />
         ) : (
-          <TagTextarea
-            rows={5}
-            value={data.text}
-            onChange={(value) => onUpdate({ text: value })}
-            placeholder="Enter your story prompt..."
-            tagMode="none"
-            nodeRefs={nodeRefs}
-            displayMode={variableDisplayMode}
-            refMap={refMap}
-            snippets={promptSnippets}
-          />
+          <>
+            {outputTarget === "lyrics" ? (
+              <TagTextarea
+                rows={5}
+                value={data.text}
+                onChange={(value) => onUpdate({ text: value })}
+                placeholder="Write your lyrics... (type [ for metatags)"
+                tagMode="suno"
+                customTags={SUNO_LYRICS_SUGGESTION_ITEMS}
+                nodeRefs={nodeRefs}
+                displayMode={variableDisplayMode}
+                refMap={refMap}
+              />
+            ) : outputTarget === "voice" ? (
+              <TagTextarea
+                rows={5}
+                value={data.text}
+                onChange={(value) => onUpdate({ text: value })}
+                placeholder="Write the spoken text... (type [ for audio tags)"
+                tagMode="audio"
+                nodeRefs={nodeRefs}
+                displayMode={variableDisplayMode}
+                refMap={refMap}
+              />
+            ) : (
+              <TagTextarea
+                rows={5}
+                value={data.text}
+                onChange={(value) => onUpdate({ text: value })}
+                placeholder="Enter your story prompt..."
+                tagMode="none"
+                nodeRefs={nodeRefs}
+                displayMode={variableDisplayMode}
+                refMap={refMap}
+                snippets={promptSnippets}
+              />
+            )}
+          </>
         )}
       </div>
       {!!(data as Record<string, unknown>).presentationInput && (

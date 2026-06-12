@@ -19,6 +19,9 @@ import { MappableField } from "./mappable-field"
 import { PromptHelperButton } from "./prompt-helper-button"
 import { SnippetMenuButton } from "./snippet-menu-button"
 import { useSnippetPool } from "@/hooks/queries/use-prompt-snippets-queries"
+import { PromptFieldFinalView, PromptFieldModeToggle } from "./prompt-field-final-view"
+import { useFinalPromptSegments } from "./use-final-prompt-segments"
+import { usePromptFieldMode } from "@/hooks/use-prompt-field-mode"
 import { ConnectedAudioSources } from "./connected-audio-sources"
 import { FinalAudioPromptPreview } from "./final-audio-prompt-preview"
 import type { ConfigProps } from "./types"
@@ -30,6 +33,15 @@ const EMPTY_EDGES: ReadonlyArray<WorkflowEdge> = []
 export function GenerateMusicConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeId }: ConfigProps<GenerateMusicData> & { nodeId?: string }) {
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "error">("idle")
   const promptSnippets = useSnippetPool("audio", "prompt")
+  // Edit⇄Final toggle for the music prompt. Provider-less; key = "prompt".
+  const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
+  const finalPrompt = useFinalPromptSegments({
+    userPrompt: data.prompt,
+    consumerNodeId: nodeId,
+    nodes,
+    edges: edges ?? EMPTY_EDGES,
+    snippets: promptSnippets,
+  })
   const [ytStatus, setYtStatus] = useState<"idle" | "downloading" | "error">("idle")
 
   const connectedRef = sources.find((s) => s.targetHandle === "ref-audio")
@@ -92,16 +104,26 @@ export function GenerateMusicConfig({ data, onUpdate, sources, fieldMappings, on
         </Select>
       </div>
       <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+        <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
         <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="audio" />
         <PromptHelperButton nodeType="generate-music" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />
       </span>}>
-        <Textarea
-          id="music-prompt"
-          value={data.prompt}
-          onChange={(e) => onUpdate({ prompt: e.target.value })}
-          placeholder="Describe the music you want... (use {} to inject input)"
-          rows={3}
-        />
+        {promptFieldMode.mode === "final" ? (
+          <PromptFieldFinalView
+            segments={finalPrompt.promptSegments}
+            plainText={finalPrompt.promptText}
+            placeholder="Final prompt preview — node has no prompt yet"
+            minHeightRem={3 * 1.5}
+          />
+        ) : (
+          <Textarea
+            id="music-prompt"
+            value={data.prompt}
+            onChange={(e) => onUpdate({ prompt: e.target.value })}
+            placeholder="Describe the music you want... (use {} to inject input)"
+            rows={3}
+          />
+        )}
       </MappableField>
       {/* Replicate disabled: was musicgen/lyria/!provider, now just non-minimax */}
       {!isMinimax && (

@@ -100,8 +100,20 @@ vi.mock("@/components/editor/config-panels/connected-media-list", () => ({
   ConnectedMediaList: () => <div />,
   getSourceThumbnail: () => undefined,
 }))
-vi.mock("@/components/editor/config-panels/final-prompt-preview", () => ({
-  FinalPromptPreview: () => <div />,
+// Inline final-view: mock ONLY the assembly hook so the real cinematography
+// walkers aren't pulled in under the partial cinematography-hints mock above.
+// This covers image-configs AND video-configs (both now consume the hook for
+// their inline final-view; the standalone FinalPromptPreview was removed in
+// Task 4). prompt-field-final-view is left UNMOCKED — the toggle (label-row →
+// not mounted via the mocked MappableField) / final-view (edit is the default)
+// never render in these provider-snap cases anyway, so its lucide Pencil import
+// is never exercised.
+vi.mock("@/components/editor/config-panels/use-final-prompt-segments", () => ({
+  useFinalPromptSegments: () => ({
+    promptSegments: [], negativeSegments: [], promptText: "", negativeText: "",
+    copyText: "", negativeRouting: null, cineHints: [], refBlock: "",
+  }),
+  negativeRoutingCaption: () => undefined,
 }))
 vi.mock("@/components/editor/config-panels/connected-cinematography-sources", () => ({
   ConnectedCinematographySources: () => <div />,

@@ -128,7 +128,7 @@ function assertNumberInRange(v: unknown, min: number, max: number, label: string
 
 const CINEMATIC_RESOLUTIONS = new Set(["720p", "1080p"])
 const CINEMATIC_ASPECT_RATIOS = new Set(["16:9", "9:16", "1:1"])
-const CINEMATIC_PROMPT_MAX = 10000
+export const CINEMATIC_PROMPT_MAX = 10000
 
 /** HeyGen combined reference caps: ≤3 videos and ≤9 images across avatar looks + references. */
 export const CINEMATIC_MAX_REFERENCE_VIDEOS = 3

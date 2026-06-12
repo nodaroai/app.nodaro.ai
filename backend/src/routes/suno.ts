@@ -6,7 +6,7 @@ import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { SUNO_MODELS, SUNO_ADD_TRACK_MODELS } from "@nodaro/shared"
+import { SUNO_MODELS, SUNO_ADD_TRACK_MODELS, SUNO_TEXT_MAX } from "@nodaro/shared"
 import {
   sunoStyleBoost,
   sunoVoiceValidate,
@@ -56,10 +56,10 @@ function sunoModelCreditType(model: string | undefined, fallback: string): strin
 const personaModelEnum = z.enum(["voice_persona", "style_persona"])
 
 const sunoGenerateBody = z.object({
-  prompt: z.string().min(1).max(3000),
+  prompt: z.string().min(1).max(SUNO_TEXT_MAX),
   userPrompt: z.string().max(8000).optional(),
   model: sunoModelEnum,
-  lyrics: z.string().max(3000).optional(),
+  lyrics: z.string().max(SUNO_TEXT_MAX).optional(),
   style: z.string().max(500).optional(),
   title: z.string().max(200).optional(),
   negativeStyle: z.string().max(500).optional(),
@@ -75,11 +75,11 @@ const sunoGenerateBody = z.object({
 })
 
 const sunoCoverBody = z.object({
-  prompt: z.string().min(1).max(3000),
+  prompt: z.string().min(1).max(SUNO_TEXT_MAX),
   userPrompt: z.string().max(8000).optional(),
   uploadUrl: safeUrlSchema,
   model: sunoModelEnum,
-  lyrics: z.string().max(3000).optional(),
+  lyrics: z.string().max(SUNO_TEXT_MAX).optional(),
   style: z.string().max(500).optional(),
   title: z.string().max(200).optional(),
   negativeStyle: z.string().max(500).optional(),
@@ -145,7 +145,7 @@ const sunoReplaceSectionBody = z.object({
   audioId: z.string().min(1),
   infillStartS: z.number().min(0),
   infillEndS: z.number().min(6).max(60),
-  prompt: z.string().min(1).max(3000),
+  prompt: z.string().min(1).max(SUNO_TEXT_MAX),
   userPrompt: z.string().max(8000).optional(),
   tags: z.string().max(500),
   title: z.string().max(200).optional(),
@@ -153,7 +153,7 @@ const sunoReplaceSectionBody = z.object({
 })
 
 const sunoStyleBoostBody = z.object({
-  content: z.string().min(1).max(3000),
+  content: z.string().min(1).max(SUNO_TEXT_MAX),
   userPrompt: z.string().max(8000).optional(),
   userId: z.string().uuid().optional(),
 })
