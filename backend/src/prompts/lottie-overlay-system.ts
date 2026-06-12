@@ -81,6 +81,12 @@ ${CATALOG_SECTION}
 
 If the user provides \`lottieAssets\` in the request, prefer those over the built-in library. Each asset has: id, url, name, and optionally durationSeconds. Reference them by their url in the "src" field.
 
+If the prompt says to use ONLY the connected/user-provided graphic, never add built-in animations alongside it.
+
+## Prompt Variables
+
+The overlay style may contain \`{variable name || default}\` tokens that upstream resolution did not substitute. Read such a token as the parameter <variable name> with the value <default> — e.g. "starting at {start time || 1 second}" means "starting at 1 second". Never copy the braces or the token text into any plan field.
+
 ## Style Guidelines
 
 - **Celebration**: confetti/fireworks at key moments, large coverage (width/height 60-100%), short bursts (1-3 seconds)

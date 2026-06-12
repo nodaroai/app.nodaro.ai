@@ -93,6 +93,40 @@ describe("buildSyncHttpBody — field shape matches route Zod schemas", () => {
       )
       expect(body.lottieAssets).toBeUndefined()
     })
+
+    // {variable || default} resolution on the typed prompt — the lottie-overlay
+    // factory presets lean on these tokens (executeSyncHttpNode builds refMap
+    // for this node type; here we pass it directly).
+    it("resolves {variable || default} to a connected node's output via refMap", () => {
+      const body = buildSyncHttpBody(
+        node("lottie-overlay", { overlayPrompt: "start at {start time || 1 second}, play {play mode || once}" }),
+        { videoUrl: "https://v.mp4" },
+        CTX,
+        undefined,
+        new Map([["start time", "3 seconds"]]),
+      )
+      expect(body.prompt).toBe("start at 3 seconds, play once")
+    })
+
+    it("falls back to the token default when no node matches and refMap is non-empty", () => {
+      const body = buildSyncHttpBody(
+        node("lottie-overlay", { overlayPrompt: "start at {start time || 1 second}" }),
+        { videoUrl: "https://v.mp4" },
+        CTX,
+        undefined,
+        new Map([["Video", "https://v.mp4"]]),
+      )
+      expect(body.prompt).toBe("start at 1 second")
+    })
+
+    it("leaves tokens literal with the default empty refMap (no graph context — the planner system prompt reads them as defaults)", () => {
+      const body = buildSyncHttpBody(
+        node("lottie-overlay", { overlayPrompt: "start at {start time || 1 second}" }),
+        { videoUrl: "https://v.mp4" },
+        CTX,
+      )
+      expect(body.prompt).toBe("start at {start time || 1 second}")
+    })
   })
 
   describe("llm-chat (Generate Text)", () => {

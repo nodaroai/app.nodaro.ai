@@ -8,6 +8,7 @@ import { TEXT_TO_AUDIO_PRESETS } from "./sfx.js"
 import { LLM_CHAT_PRESETS, GENERATE_SCRIPT_PRESETS, IMAGE_TO_TEXT_PRESETS } from "./text.js"
 import { VIDEO_TO_VIDEO_PRESETS, ADD_CAPTIONS_PRESETS, COMBINE_VIDEOS_PRESETS } from "./video-edit.js"
 import { MOTION_GRAPHICS_PRESETS } from "./motion-graphics.js"
+import { LOTTIE_OVERLAY_PRESETS } from "./lottie-overlay.js"
 
 export type { FactoryPreset, FactoryPresetGroup } from "./types.js"
 export { groupFactoryPresets } from "./types.js"
@@ -35,6 +36,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
   "add-captions": ADD_CAPTIONS_PRESETS,
   "combine-videos": COMBINE_VIDEOS_PRESETS,
   "motion-graphics": MOTION_GRAPHICS_PRESETS,
+  "lottie-overlay": LOTTIE_OVERLAY_PRESETS,
 }
 
 export function getFactoryPresets(nodeType: string): readonly FactoryPreset[] {

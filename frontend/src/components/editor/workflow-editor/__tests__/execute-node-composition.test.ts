@@ -445,6 +445,60 @@ describe("lottie-overlay", () => {
       }),
     )
   })
+
+  // {variable || default} tokens in the typed overlayPrompt — the lottie-overlay
+  // factory presets lean on these. Resolution comes from resolveTextRefs over
+  // the node's upstream refMap (built from mocked extractNodeOutput).
+  it("resolves {variable || default} from a connected node labeled like the variable", async () => {
+    const videoNode = { id: "vid1", type: "image-to-video", data: { label: "Video" } }
+    const timeNode = { id: "t1", type: "text-prompt", data: { label: "start time" } }
+    mockNodes = [
+      makeNode("lottie-overlay", {
+        overlayPrompt: "start at {start time || 1 second}, play {play mode || once}",
+        fps: 30,
+        durationSeconds: 5,
+      }),
+      videoNode,
+      timeNode,
+    ]
+    mockEdges = [
+      { id: "e1", source: "vid1", target: "n1", targetHandle: "in" },
+      { id: "e2", source: "t1", target: "n1" },
+    ]
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://video.mp4" })
+    mockExtractNodeOutput.mockImplementation((node: { id: string }) =>
+      node.id === "t1" ? "3 seconds" : "http://video.mp4",
+    )
+    mockGenerateLottieOverlay.mockResolvedValue({ jobId: "j2", overlayPlan: { overlays: [] } })
+
+    await executeNode(mockNodes[0], makeCtx())
+
+    expect(mockGenerateLottieOverlay).toHaveBeenCalledWith(
+      expect.objectContaining({ prompt: "start at 3 seconds, play once" }),
+    )
+  })
+
+  it("resolves {variable || default} to the default when no node matches the name", async () => {
+    const videoNode = { id: "vid1", type: "image-to-video", data: { label: "Video" } }
+    mockNodes = [
+      makeNode("lottie-overlay", {
+        overlayPrompt: "start at {start time || 1 second}, play {play mode || once}",
+        fps: 30,
+        durationSeconds: 5,
+      }),
+      videoNode,
+    ]
+    mockEdges = [{ id: "e1", source: "vid1", target: "n1", targetHandle: "in" }]
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://video.mp4" })
+    mockExtractNodeOutput.mockReturnValue("http://video.mp4")
+    mockGenerateLottieOverlay.mockResolvedValue({ jobId: "j2", overlayPlan: { overlays: [] } })
+
+    await executeNode(mockNodes[0], makeCtx())
+
+    expect(mockGenerateLottieOverlay).toHaveBeenCalledWith(
+      expect.objectContaining({ prompt: "start at 1 second, play once" }),
+    )
+  })
 })
 
 // ---------------------------------------------------------------------------

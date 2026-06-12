@@ -937,6 +937,70 @@ describe("motion-graphics factory preset data validity", () => {
   })
 })
 
+describe("lottie-overlay factory preset data validity", () => {
+  const presets = getFactoryPresets("lottie-overlay")
+  // The 4 folders, in catalog order.
+  const GROUP_ORDER = ["Connected Graphic", "Celebration & FX", "Reactions & Social", "Emphasis & UI"]
+
+  it("ships at least 12 presets across the four folders, in order", () => {
+    expect(presets.length).toBeGreaterThanOrEqual(12)
+    const seen: string[] = []
+    for (const p of presets) if (p.group && !seen.includes(p.group)) seen.push(p.group)
+    expect(seen).toEqual(GROUP_ORDER)
+  })
+
+  it("every preset has a non-empty description and group", () => {
+    for (const p of presets) {
+      expect((p.description ?? "").trim().length, `${p.id}: missing description`).toBeGreaterThan(0)
+      expect((p.group ?? "").trim().length, `${p.id}: missing group`).toBeGreaterThan(0)
+    }
+  })
+
+  it("data carries ONLY overlayPrompt (duration must track the source video; fps/llmModel stay the user's)", () => {
+    // durationSeconds in a preset would silently truncate the plan timeline on
+    // longer footage; fps has a node default; llmModel is the user's tier choice.
+    for (const p of presets) {
+      expect(Object.keys(p.data), `${p.id}: unexpected data keys`).toEqual(["overlayPrompt"])
+    }
+  })
+
+  it("respects the route's 2000-char prompt cap and stays substantive", () => {
+    for (const p of presets) {
+      const prompt = p.data.overlayPrompt as string
+      expect(prompt.length, `${p.id}: prompt exceeds the route cap`).toBeLessThanOrEqual(2000)
+      expect(prompt.trim().length, `${p.id}: prompt too thin`).toBeGreaterThanOrEqual(40)
+    }
+  })
+
+  it("uses curly braces ONLY for {variable || default} tokens (Nodaro variable syntax)", () => {
+    for (const p of presets) {
+      const stripped = (p.data.overlayPrompt as string).replace(/\{[^{}]*\|\|[^{}]*\}/g, "")
+      expect(stripped, `${p.id}: stray "{" outside a variable token`).not.toContain("{")
+      expect(stripped, `${p.id}: stray "}" outside a variable token`).not.toContain("}")
+    }
+  })
+
+  it("every prompt exposes at least one {variable || default} token (the catalog's signature feature)", () => {
+    for (const p of presets) {
+      expect(p.data.overlayPrompt as string, `${p.id}: no variable token`).toMatch(/\{[^{}]*\|\|[^{}]*\}/)
+    }
+  })
+
+  it("Connected Graphic presets pin the only-connected-graphic exclusivity clause; the rest name a built-in asset", () => {
+    // Without the clause the planner may substitute catalog animations for the
+    // wired asset; without a named asset the catalog presets drift to whatever
+    // the LLM fancies. Both are the load-bearing lines — guard them.
+    for (const p of presets) {
+      const prompt = p.data.overlayPrompt as string
+      if (p.group === "Connected Graphic") {
+        expect(prompt, `${p.id}: missing the only-connected-graphic clause`).toContain("only the connected graphic")
+      } else {
+        expect(prompt, `${p.id}: must name a built-in catalog asset`).toContain("built-in")
+      }
+    }
+  })
+})
+
 describe("PRESET_APPLY_CLEAR_KEYS", () => {
   it("equals every COMPOSER_PLAN_MAP plan field plus lottieUrl (drift guard)", () => {
     // Deliberately re-derived from COMPOSER_PLAN_MAP (not COMPOSER_PLAN_FIELDS):
@@ -983,6 +1047,7 @@ describe("factory-presets split integrity", () => {
     "text-to-audio", "generate-music", "suno-generate", "llm-chat",
     "generate-script", "image-to-text", "voice-design", "video-to-video",
     "voice-changer", "add-captions", "combine-videos", "motion-graphics",
+    "lottie-overlay",
   ]
 
   it("exposes exactly the expected node-type keys in order", () => {

@@ -33,10 +33,31 @@ Ambient and continuous effects (stars, heart, fire, spinner, arrow, particles, r
 
 **Outputs:**
 - `composition` -- Overlay plan (JSON). Connect to a Render Video node for final output.
+## Factory presets & prompt variables
+
+The node ships a factory preset catalog (see [Node Presets](../presets.md#lottie-overlay-factory-catalog))
+in four folders: **Connected Graphic** (place the wired graphic — overlay it centered, stretch it
+full-canvas for lower thirds/titles, intro/outro stings, looping corner bug, reaction pop),
+**Celebration & FX**, **Reactions & Social**, and **Emphasis & UI** (built-in catalog effects).
+
+Preset prompts use the **`{variable || default}`** reference syntax for their timing and placement
+levers, e.g.:
+
+```
+Overlay the connected graphic {position || centered} over the video, starting at
+{start time || 1 second}. Play it {play mode || once at its natural duration, then remove it}.
+```
+
+Run it unedited and the defaults apply; type your own value over a token; or **connect a node whose
+label matches the variable name** (e.g. a Text node labeled `start time`) and its output fills the
+slot at execution time. Unresolved tokens that reach the planner directly (e.g. via the API) are
+still read as their defaults — the braces never end up in the plan.
+
 ## Best Practices
 - Be specific about where overlays should appear (e.g., "confetti falling from the top during the first 3 seconds").
 - Reference timing relative to your video content to ensure overlays align with key moments.
 - Keep the duration consistent with the source video.
+- A graphic authored on a full transparent canvas (a Motion Graphics lower third or title) is best placed **full-frame** (x 0, y 0, width 100, height 100) so its internal layout decides where content sits — the Full-Canvas Graphic preset does exactly this.
 - Use this node for decorative or informational overlays, not for text-heavy content (use Motion Graphics for that).
 
 ## Common Use Cases

@@ -5942,7 +5942,10 @@ export function executeNode(
 
   if (node.type === "lottie-overlay") {
     const d = node.data as LottieOverlayData;
-    const loPrompt = inputs.prompt || d.overlayPrompt;
+    // Typed prompt resolves {Node Label} / {variable || default} refs (factory
+    // presets lean on the default-value tokens); wired inputs.prompt was
+    // already resolved by the generic pass above.
+    const loPrompt = inputs.prompt || resolveTextRefs(d.overlayPrompt, refMap);
     if (!loPrompt?.trim()) {
       toast.error(`Node "${d.label}": no overlay prompt set`);
       return Promise.reject(new Error("No overlay prompt"));
