@@ -121,6 +121,15 @@ import type { SceneNodeType } from "@/types/nodes";
 import type { ConnectionContext, NodeOption } from "@/lib/node-compatibility";
 import { getCompatibleNodes, resolveTargetHandle, PARAMETER_ACCEPTING_HANDLE_IDS } from "@/lib/node-compatibility";
 import { buildPrefillInitialData } from "@/lib/node-name-field";
+import {
+  readAddNodeMenuTab,
+  persistAddNodeMenuTab,
+  nextAddNodeMenuTab,
+  type AddNodeMenuTab,
+} from "@/lib/add-node-menu-tab";
+import { IMAGE_PRODUCER_TYPES } from "@/lib/generate-image-handles";
+import { AUDIO_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES } from "@nodaro/shared";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAuth } from "@/hooks/use-auth";
 import { useUserSettings } from "@/hooks/queries/use-user-settings-queries";
 import { useNodeSelectionHistoryStore, type HistoryEntry } from "@/hooks/use-node-selection-history-store";
@@ -1396,6 +1405,49 @@ const COMMON_ASSETS_SECTION: CommonSection = {
   title: "Assets",
   types: ["character", "object", "creature", "location"],
 };
+/** Every node type in the curated COMMON tab, flattened in display order
+ *  (lead, titled sections, Common Pickers, Assets). The media tabs use the
+ *  indices to put common members first, in Common-tab order. */
+const COMMON_TYPES_ORDERED: ReadonlyArray<SceneNodeType> = [
+  ...COMMON_LEAD,
+  ...COMMON_SECTIONS.flatMap((s) => s.types),
+  ...COMMON_PICKER_SECTIONS.flatMap((s) => s.types),
+  ...COMMON_ASSETS_SECTION.types,
+];
+const COMMON_TYPE_RANK: ReadonlyMap<SceneNodeType, number> = new Map(
+  COMMON_TYPES_ORDERED.map((t, i) => [t, i]),
+);
+/** Set view of the curated COMMON tab membership. Search ranking puts these
+ *  before non-common matches. */
+export const COMMON_NODE_TYPES: ReadonlySet<SceneNodeType> = new Set(COMMON_TYPES_ORDERED);
+
+/** Producer sets backing the Image / Video / Audio tabs — the platform's
+ *  single sources of truth for "primary output is this medium" (the same sets
+ *  drive canvas handle validation and backend output routing, so the tabs can
+ *  never drift from execution reality). Plan-emitting Video Production nodes
+ *  (after-effects, composite, …) are correctly absent: they output render
+ *  plans, not video URLs. */
+const MEDIA_TAB_PRODUCERS = {
+  image: IMAGE_PRODUCER_TYPES,
+  video: VIDEO_PRODUCER_TYPES,
+  audio: AUDIO_PRODUCER_TYPES,
+} as const;
+export type MediaTab = keyof typeof MEDIA_TAB_PRODUCERS;
+
+/** The nodes for a media tab, split into the curated-common block (ordered as
+ *  on the Common tab) and the remaining producers (catalog order). */
+export function mediaTabNodeOptions(
+  pool: ReadonlyArray<NodeOption>,
+  tab: MediaTab,
+): { common: NodeOption[]; rest: NodeOption[] } {
+  const producers = MEDIA_TAB_PRODUCERS[tab];
+  const matches = pool.filter((n) => producers.has(n.type));
+  const common = matches
+    .filter((n) => COMMON_TYPE_RANK.has(n.type))
+    .sort((a, b) => COMMON_TYPE_RANK.get(a.type)! - COMMON_TYPE_RANK.get(b.type)!);
+  const rest = matches.filter((n) => !COMMON_TYPE_RANK.has(n.type));
+  return { common, rest };
+}
 /** Nav-list sentinel for the "Common Pickers" row. It has `id` but no `type`,
  *  so the popup's keyboard nav treats it like a category — Enter/click opens
  *  the Common Pickers sub-view, and arrows highlight it like any other row. */
@@ -1421,12 +1473,8 @@ export const CATEGORIES = [
     icon: <TrendingUp className="h-4 w-4" />,
     description: "Your most-added nodes",
   },
-  {
-    id: VIRTUAL_CATEGORY_IDS.common,
-    label: "COMMON",
-    icon: <Star className="h-4 w-4" />,
-    description: "Frequently used building blocks",
-  },
+  // "Common" is deliberately NOT a category here — it's the popup's Common
+  // tab (see the tablist above the search box). The All tab shows this list.
   {
     id: "AI",
     label: "AI",
@@ -1518,6 +1566,49 @@ const CATEGORY_COLORS: Record<string, string> = {
   Component: "text-[#A855F7]",
 };
 
+/** Filter a node pool by a search query (label / type / category / keywords)
+ *  and rank the matches: direct-match tier first (edge-drop context), then
+ *  COMMON nodes, then the rest — pool order preserved within each bucket
+ *  (Array.prototype.sort is stable). */
+export function searchNodeOptions(
+  pool: ReadonlyArray<NodeOption>,
+  query: string,
+  directTypes: ReadonlySet<string> = EMPTY_SET,
+): NodeOption[] {
+  const q = query.toLowerCase();
+  const directTier = (n: NodeOption) => (directTypes.has(n.type) ? 0 : 1);
+  const commonTier = (n: NodeOption) => (COMMON_NODE_TYPES.has(n.type) ? 0 : 1);
+  return pool
+    .filter(
+      (node) =>
+        node.label.toLowerCase().includes(q) ||
+        node.type.toLowerCase().includes(q) ||
+        node.category.toLowerCase().includes(q) ||
+        (node.keywords?.some((kw) => kw.toLowerCase().includes(q)) ?? false),
+    )
+    .sort((a, b) => directTier(a) - directTier(b) || commonTier(a) - commonTier(b));
+}
+
+/** Tab-aware search: on the Common / Image / Video / Audio tabs the active
+ *  tab's own items come first and every remaining match lands in `other`
+ *  (rendered under an "Other" section). The All tab stays flat. Both blocks
+ *  keep the searchNodeOptions ranking (direct tier, then common, then pool
+ *  order). */
+export function searchNodeOptionsSectioned(
+  pool: ReadonlyArray<NodeOption>,
+  query: string,
+  tab: AddNodeMenuTab,
+  directTypes: ReadonlySet<string> = EMPTY_SET,
+): { own: NodeOption[]; other: NodeOption[] } {
+  const ranked = searchNodeOptions(pool, query, directTypes);
+  if (tab === "all") return { own: ranked, other: [] };
+  const ownSet: ReadonlySet<string> = tab === "common" ? COMMON_NODE_TYPES : MEDIA_TAB_PRODUCERS[tab];
+  return {
+    own: ranked.filter((n) => ownSet.has(n.type)),
+    other: ranked.filter((n) => !ownSet.has(n.type)),
+  };
+}
+
 interface AddNodePopupProps {
   readonly open: boolean;
   readonly onClose: () => void;
@@ -1550,11 +1641,24 @@ export function AddNodePopup({
   const recordSelection = useNodeSelectionHistoryStore((s) => s.recordSelection);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  // Common/All mode (the tablist above the search box). The last explicit
+  // user choice is remembered across sessions.
+  const [activeTab, setActiveTab] = useState<AddNodeMenuTab>(readAddNodeMenuTab);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [componentBrowserOpen, setComponentBrowserOpen] = useState(false);
   const popupRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Switch Common/All. Refocusing the search input keeps keystrokes flowing
+  // to the popup after mouse interactions — the canvas's capture-phase
+  // shortcut handler skips events only when an editable element has focus.
+  const switchTab = useCallback((tab: AddNodeMenuTab) => {
+    setActiveTab(tab);
+    persistAddNodeMenuTab(tab);
+    setSelectedCategory(null);
+    searchInputRef.current?.focus();
+  }, []);
 
   // The "Parameter" category is currently hidden from the UI. Re-enable by
   // dropping the `n.category !== "Parameter"` clause below.
@@ -1674,33 +1778,38 @@ export function AddNodePopup({
     return map;
   }, [effectivePool]);
 
-  // Filter nodes based on search query
-  const filteredNodes = useMemo(() => {
-    if (!searchQuery.trim()) return [];
-    const query = searchQuery.toLowerCase();
-    return effectivePool.filter(
-      (node) =>
-        node.label.toLowerCase().includes(query) ||
-        node.type.toLowerCase().includes(query) ||
-        node.category.toLowerCase().includes(query) ||
-        (node.keywords?.some((kw) => kw.toLowerCase().includes(query)) ?? false),
+  // Search results, sectioned by the active tab: its own items first, the
+  // rest under "Other". Edge-drop mode has no tabs — flat ranking via "all".
+  const searchSections = useMemo(() => {
+    if (!searchQuery.trim()) return null;
+    return searchNodeOptionsSectioned(
+      effectivePool,
+      searchQuery,
+      isFiltered ? "all" : activeTab,
+      directMatchTypes,
     );
-  }, [searchQuery, effectivePool]);
+  }, [searchQuery, effectivePool, isFiltered, activeTab, directMatchTypes]);
+
+  const filteredNodes = useMemo(
+    () => (searchSections ? [...searchSections.own, ...searchSections.other] : []),
+    [searchSections],
+  );
+
+  // Curated COMMON tab root. Flat nav order matches the COMMON render below:
+  // lead, the Common Pickers nav row (under List), titled sections, then Assets.
+  const commonRootItems = useMemo<Array<NodeOption | CommonPickersNavItem>>(() => {
+    const toOpts = (types: ReadonlyArray<SceneNodeType>) =>
+      types.map((t) => optionByType.get(t)).filter(isNodeOption);
+    return [
+      ...toOpts(COMMON_LEAD),
+      COMMON_PICKERS_NAV_ITEM,
+      ...toOpts(COMMON_SECTIONS.flatMap((s) => s.types)),
+      ...toOpts(COMMON_ASSETS_SECTION.types),
+    ];
+  }, [optionByType]);
 
   const categoryNodes = useMemo<Array<NodeOption | CommonPickersNavItem>>(() => {
     if (!selectedCategory) return [];
-    if (selectedCategory === VIRTUAL_CATEGORY_IDS.common) {
-      // Flat nav order matches the COMMON render below: lead, the Common
-      // Pickers nav row (under List), titled sections, then Assets.
-      const toOpts = (types: ReadonlyArray<SceneNodeType>) =>
-        types.map((t) => optionByType.get(t)).filter(isNodeOption);
-      return [
-        ...toOpts(COMMON_LEAD),
-        COMMON_PICKERS_NAV_ITEM,
-        ...toOpts(COMMON_SECTIONS.flatMap((s) => s.types)),
-        ...toOpts(COMMON_ASSETS_SECTION.types),
-      ];
-    }
     if (selectedCategory === VIRTUAL_CATEGORY_IDS.commonPickers) {
       // Common Pickers sub-view: picker nodes grouped by section. Each node's
       // `group` is overridden to its section title so the generic render below
@@ -1737,19 +1846,32 @@ export function AddNodePopup({
     });
   }, [showRecentNodes, showMostUsedNodes]);
 
-  // Items to display (search results, compatibility tiers, category nodes, or categories)
+  // Image / Video / Audio tab content — null on the non-media tabs.
+  const mediaTabItems = useMemo(() => {
+    if (activeTab === "common" || activeTab === "all") return null;
+    return mediaTabNodeOptions(effectivePool, activeTab);
+  }, [activeTab, effectivePool]);
+
+  // Items to display (search results, compatibility tiers, category nodes,
+  // a media tab, the Common tab root, or the All tab's categories)
   const displayItems = useMemo(() => {
     if (searchQuery.trim()) return filteredNodes;
     if (isFiltered && !selectedCategory) return effectivePool;
     if (selectedCategory) return categoryNodes;
+    if (mediaTabItems) return [...mediaTabItems.common, ...mediaTabItems.rest];
+    if (activeTab === "common") return commonRootItems;
     return visibleCategories;
-  }, [searchQuery, filteredNodes, isFiltered, selectedCategory, effectivePool, categoryNodes, visibleCategories]);
+  }, [searchQuery, filteredNodes, isFiltered, selectedCategory, effectivePool, categoryNodes, mediaTabItems, activeTab, commonRootItems, visibleCategories]);
 
   // Reset state when opening/closing
   useEffect(() => {
     if (open) {
       setSearchQuery("");
       setSelectedCategory(initialCategory ?? null);
+      // An initialCategory drill-down (e.g. the empty-state's "Input") lives
+      // under the All root — display that tab for this open WITHOUT
+      // persisting; only explicit tab switches are remembered.
+      setActiveTab(initialCategory ? "all" : readAddNodeMenuTab());
       setHighlightedIndex(0);
       setTimeout(() => searchInputRef.current?.focus(), 50);
     }
@@ -1774,12 +1896,30 @@ export function AddNodePopup({
     if (!open) return;
 
     function handleKeyDown(e: KeyboardEvent) {
+      // A key another handler already consumed must not be re-processed here.
+      // Concretely: the canvas's capture-phase Tab handler preventDefaults the
+      // Tab that OPENS this popup — React flushes the open synchronously
+      // (discrete event), our listener attaches mid-dispatch, and the same
+      // keystroke would otherwise immediately toggle the Common/All mode.
+      if (e.defaultPrevented) return;
       if (e.key === "Escape") {
         if (selectedCategory && !searchQuery) {
-          setSelectedCategory(selectedCategory === VIRTUAL_CATEGORY_IDS.commonPickers ? VIRTUAL_CATEGORY_IDS.common : null);
+          // Jump straight back to the active tab's root from any inner menu.
+          setSelectedCategory(null);
           setHighlightedIndex(0);
         } else {
           onClose();
+        }
+        return;
+      }
+
+      if (e.key === "Tab") {
+        // Tab cycles the mode forward, Shift+Tab backward. In edge-drop
+        // compatibility mode the tabs are hidden, so let the browser's
+        // default focus move run.
+        if (!isFiltered) {
+          e.preventDefault();
+          switchTab(nextAddNodeMenuTab(activeTab, e.shiftKey ? -1 : 1));
         }
         return;
       }
@@ -1805,7 +1945,8 @@ export function AddNodePopup({
           }
         }
       } else if (e.key === "Backspace" && !searchQuery && selectedCategory) {
-        setSelectedCategory(selectedCategory === VIRTUAL_CATEGORY_IDS.commonPickers ? VIRTUAL_CATEGORY_IDS.common : null);
+        // Inner menus all sit directly under the tab root, so back == root.
+        setSelectedCategory(null);
         setHighlightedIndex(0);
       }
     }
@@ -1818,6 +1959,9 @@ export function AddNodePopup({
     highlightedIndex,
     selectedCategory,
     searchQuery,
+    isFiltered,
+    activeTab,
+    switchTab,
     onClose,
     handleNodeSelect,
   ]);
@@ -1825,7 +1969,7 @@ export function AddNodePopup({
   // Reset highlighted index when items change
   useEffect(() => {
     setHighlightedIndex(0);
-  }, [searchQuery, selectedCategory]);
+  }, [searchQuery, selectedCategory, activeTab]);
 
   // Keep the keyboard-highlighted item scrolled into view (arrow up/down).
   useEffect(() => {
@@ -1836,31 +1980,25 @@ export function AddNodePopup({
 
   if (!open && !componentBrowserOpen) return null;
 
-  // Viewport-aware clamp so the popup's scrollable body is always reachable.
-  // Previously the raw mouse `position` leaked the popup below the viewport
-  // bottom, cutting off the node list at the fold.
-  const POPUP_W = 288 // w-72
-  const POPUP_H_ESTIMATE = 500 // header ≈ 60 + search ≈ 60 + max-h-80 (320) + footer slack
-  const MARGIN = 8
-  const viewportW = typeof window !== "undefined" ? window.innerWidth : 1920
-  const viewportH = typeof window !== "undefined" ? window.innerHeight : 1080
-  const popupStyle = position
-    ? (() => {
-        const desiredLeft = position.x
-        const desiredTop = position.y
-        const left = Math.max(MARGIN, Math.min(desiredLeft, viewportW - POPUP_W - MARGIN))
-        const top = Math.max(MARGIN, Math.min(desiredTop, viewportH - POPUP_H_ESTIMATE - MARGIN))
-        const maxHeight = `${viewportH - top - MARGIN}px`
-        return { left, top, maxHeight }
-      })()
-    : { left: 70, top: "50%", transform: "translateY(-50%)", maxHeight: `${viewportH - 2 * MARGIN}px` };
+  // Always centred in the viewport, regardless of the invocation point (Tab,
+  // sidebar "+", right-click, edge-drop). Only NODE PLACEMENT uses the
+  // invocation `position` — the canvas keeps that in its own state; the
+  // `position` prop here is forwarded to the component marketplace modal.
+  // Fixed 60% page height: every tab renders the same stable modal — long
+  // lists scroll inside, short ones don't shrink it.
+  const popupStyle = {
+    left: "50%",
+    top: "50%",
+    transform: "translate(-50%, -50%)",
+    height: "60vh",
+  };
 
   return (
     <>
     {open && !componentBrowserOpen && <div
       ref={popupRef}
       className={cn(
-        "fixed z-[100] w-72 flex flex-col",
+        "fixed z-[100] w-[30rem] max-w-[calc(100vw-16px)] flex flex-col",
         "bg-white dark:bg-[#1E1E1E]",
         "border border-[#E2E8F0] dark:border-[#2D2D2D]",
         "rounded-xl shadow-xl",
@@ -1873,7 +2011,10 @@ export function AddNodePopup({
         <h3 className="text-base font-semibold text-[#1E293B] dark:text-white">
           {selectedCategory ? (
             <button
-              onClick={() => setSelectedCategory(selectedCategory === VIRTUAL_CATEGORY_IDS.commonPickers ? VIRTUAL_CATEGORY_IDS.common : null)}
+              onClick={() => {
+                setSelectedCategory(null);
+                searchInputRef.current?.focus();
+              }}
               className="flex items-center gap-2 hover:text-[#ff0073] transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -1912,6 +2053,39 @@ export function AddNodePopup({
         </h3>
       </div>
 
+      {/* Mode tabs — hidden in edge-drop compatibility mode where the list is
+          connection-driven, not category-driven. Tab cycles, Shift+Tab reverses. */}
+      {!isFiltered && (
+        <div className="px-3 pt-2" role="tablist" aria-label="Node menu mode">
+          <div className="flex gap-1 rounded-lg bg-[#F1F5F9] dark:bg-[#121212] p-1">
+            {([
+              { id: "common", label: "Common", icon: <Star className="h-3.5 w-3.5" /> },
+              { id: "image", label: "Image", icon: <ImageIcon className="h-3.5 w-3.5" /> },
+              { id: "video", label: "Video", icon: <Film className="h-3.5 w-3.5" /> },
+              { id: "audio", label: "Audio", icon: <Music className="h-3.5 w-3.5" /> },
+              { id: "all", label: "All", icon: <LayoutGrid className="h-3.5 w-3.5" /> },
+            ] as const).map(({ id, label, icon }) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === id}
+                onClick={() => switchTab(id)}
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium transition-colors",
+                  activeTab === id
+                    ? "bg-white dark:bg-[#2D2D2D] text-[#ff0073] shadow-sm"
+                    : "text-[#64748B] dark:text-[#94A3B8] hover:text-[#1E293B] dark:hover:text-white",
+                )}
+              >
+                {icon}
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Search */}
       <div className="px-3 py-2 border-b border-[#E2E8F0] dark:border-[#2D2D2D]">
         <div className="relative">
@@ -1936,48 +2110,76 @@ export function AddNodePopup({
       </div>
 
       {/* Content — flex-1 so it fills whatever space remains within the
-          viewport-clamped outer popup (header + search above are fixed). */}
-      <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto py-2">
+          fixed-height popup (header + tabs + search above are fixed). Radix
+          scroll area (type="auto") keeps the scrollbar visible whenever the
+          list overflows, regardless of the OS overlay-scrollbar setting. */}
+      <ScrollArea type="auto" className="flex-1 min-h-0">
+      <div ref={scrollContainerRef} className="py-2">
         {searchQuery.trim() ? (
-          // Search results
+          // Search results — the active tab's own items first, the remaining
+          // matches under an "Other" section (flat on the All tab/edge-drop).
           filteredNodes.length > 0 ? (
-            filteredNodes.map((node, index) => (
-              <button
-                key={node.type}
-                type="button"
-                onClick={() => handleNodeSelect(node.type)}
-                className={cn(
-                  "w-full flex items-center gap-3 px-4 py-2.5 text-left",
-                  "transition-colors",
-                  index === highlightedIndex
-                    ? "bg-[#F1F5F9] dark:bg-[#2D2D2D]"
-                    : "hover:bg-[#F8FAFC] dark:hover:bg-[#252525]",
-                )}
-                onMouseEnter={() => setHighlightedIndex(index)}
-                data-active={index === highlightedIndex ? "true" : undefined}
-              >
-                <span
-                  className={cn(
-                    "text-[#64748B] dark:text-[#94A3B8]",
-                    CATEGORY_COLORS[node.category],
+            (() => {
+              let nav = 0;
+              const row = (node: NodeOption) => {
+                const index = nav++;
+                return (
+                  <button
+                    key={node.type}
+                    type="button"
+                    onClick={() => handleNodeSelect(node.type)}
+                    className={cn(
+                      "w-full flex items-center gap-3 px-4 py-2.5 text-left",
+                      "transition-colors",
+                      index === highlightedIndex
+                        ? "bg-[#F1F5F9] dark:bg-[#2D2D2D]"
+                        : "hover:bg-[#F8FAFC] dark:hover:bg-[#252525]",
+                    )}
+                    onMouseEnter={() => setHighlightedIndex(index)}
+                    data-active={index === highlightedIndex ? "true" : undefined}
+                  >
+                    <span
+                      className={cn(
+                        "text-[#64748B] dark:text-[#94A3B8]",
+                        CATEGORY_COLORS[node.category],
+                      )}
+                    >
+                      {node.icon}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-base font-medium text-[#1E293B] dark:text-white truncate">
+                        {node.label}
+                      </div>
+                      <div className="text-sm text-[#94A3B8]">{node.category}</div>
+                    </div>
+                    {directMatchTypes.has(node.type) && (
+                      <span className="ml-auto text-[12px] text-[#4ade80] font-medium flex items-center gap-1 shrink-0">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80]" />
+                        direct
+                      </span>
+                    )}
+                  </button>
+                );
+              };
+              const own = searchSections?.own ?? [];
+              const other = searchSections?.other ?? [];
+              return (
+                <>
+                  {own.map(row)}
+                  {other.length > 0 && (
+                    <div key="__search_other_header">
+                      {own.length > 0 && (
+                        <div className="border-t border-muted-foreground/10 mx-3 mt-1" />
+                      )}
+                      <div className="text-[12px] uppercase tracking-wider text-muted-foreground/60 font-medium px-4 pt-2 pb-1">
+                        Other
+                      </div>
+                    </div>
                   )}
-                >
-                  {node.icon}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <div className="text-base font-medium text-[#1E293B] dark:text-white truncate">
-                    {node.label}
-                  </div>
-                  <div className="text-sm text-[#94A3B8]">{node.category}</div>
-                </div>
-                {directMatchTypes.has(node.type) && (
-                  <span className="ml-auto text-[12px] text-[#4ade80] font-medium flex items-center gap-1 shrink-0">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80]" />
-                    direct
-                  </span>
-                )}
-              </button>
-            ))
+                  {other.map(row)}
+                </>
+              );
+            })()
           ) : (
             <div className="px-4 py-8 text-center text-base text-[#94A3B8]">
               No nodes found
@@ -2060,9 +2262,121 @@ export function AddNodePopup({
             <div className="px-4 py-8 text-center text-base text-[#94A3B8]">
               No nodes here yet — they&apos;ll appear as you use them.
             </div>
-          ) : selectedCategory === VIRTUAL_CATEGORY_IDS.common ? (
-            // Curated COMMON tab: titled sections + a collapsible Common
-            // Pickers submenu. `nav` mirrors the categoryNodes flat order so
+          ) : (
+          // Category nodes — with optional group sub-headers
+          (categoryNodes as NodeOption[]).map((node, index, arr) => {
+            const prevGroup =
+              index > 0 ? arr[index - 1].group : undefined;
+            const showGroupHeader =
+              node.group && node.group !== prevGroup;
+            return (
+              <div key={node.type}>
+                {showGroupHeader && (
+                  <>
+                    {index > 0 && (
+                      <div className="border-t border-muted-foreground/10 mx-3 mt-1" />
+                    )}
+                    <div className="text-[12px] uppercase tracking-wider text-muted-foreground/60 font-medium px-4 pt-2 pb-1">
+                      {node.group}
+                    </div>
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={() => handleNodeSelect(node.type)}
+                  className={cn(
+                    "w-full flex items-center gap-3 px-4 py-2.5 text-left",
+                    "transition-colors",
+                    index === highlightedIndex
+                      ? "bg-[#F1F5F9] dark:bg-[#2D2D2D]"
+                      : "hover:bg-[#F8FAFC] dark:hover:bg-[#252525]",
+                  )}
+                  onMouseEnter={() => setHighlightedIndex(index)}
+                data-active={index === highlightedIndex ? "true" : undefined}
+                >
+                  <span
+                    className={cn(
+                      "text-[#64748B] dark:text-[#94A3B8]",
+                      CATEGORY_COLORS[node.category],
+                    )}
+                  >
+                    {node.icon}
+                  </span>
+                  <span className="text-base text-[#1E293B] dark:text-white">
+                    {node.label}
+                  </span>
+                  {directMatchTypes.has(node.type) && (
+                    <span className="ml-auto text-[12px] text-[#4ade80] font-medium flex items-center gap-1 shrink-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80]" />
+                      direct
+                    </span>
+                  )}
+                </button>
+              </div>
+            );
+          })
+          )
+        ) : mediaTabItems ? (
+          // Image / Video / Audio tab: curated-common producers first, the
+          // remaining producers under a "More" divider. Nav order mirrors
+          // displayItems ([...common, ...rest]) so keyboard highlight/Enter
+          // line up with what's rendered.
+          (() => {
+            let nav = 0;
+            const row = (node: NodeOption) => {
+              const i = nav++;
+              return (
+                <button
+                  key={node.type}
+                  type="button"
+                  onClick={() => handleNodeSelect(node.type)}
+                  className={cn(
+                    "w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors",
+                    i === highlightedIndex
+                      ? "bg-[#F1F5F9] dark:bg-[#2D2D2D]"
+                      : "hover:bg-[#F8FAFC] dark:hover:bg-[#252525]",
+                  )}
+                  onMouseEnter={() => setHighlightedIndex(i)}
+                  data-active={i === highlightedIndex ? "true" : undefined}
+                >
+                  <span className={cn("text-[#64748B] dark:text-[#94A3B8]", CATEGORY_COLORS[node.category])}>
+                    {node.icon}
+                  </span>
+                  <span className="text-base text-[#1E293B] dark:text-white">{node.label}</span>
+                  {directMatchTypes.has(node.type) && (
+                    <span className="ml-auto text-[12px] text-[#4ade80] font-medium flex items-center gap-1 shrink-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80]" />
+                      direct
+                    </span>
+                  )}
+                </button>
+              );
+            };
+            return (
+              <>
+                {mediaTabItems.common.map(row)}
+                {mediaTabItems.rest.length > 0 && (
+                  <div key="__media_more">
+                    {mediaTabItems.common.length > 0 && (
+                      <div className="border-t border-muted-foreground/10 mx-3 mt-1" />
+                    )}
+                    <div className="text-[12px] uppercase tracking-wider text-muted-foreground/60 font-medium px-4 pt-2 pb-1">
+                      More
+                    </div>
+                  </div>
+                )}
+                {mediaTabItems.rest.map(row)}
+                {mediaTabItems.common.length === 0 && mediaTabItems.rest.length === 0 && (
+                  <div className="px-4 py-8 text-center text-base text-[#94A3B8]">
+                    No nodes found
+                  </div>
+                )}
+              </>
+            );
+          })()
+        ) : activeTab === "common" ? (
+            // Curated COMMON root: titled sections + a collapsible Common
+            // Pickers submenu. `nav` mirrors the commonRootItems flat order so
             // keyboard highlight/Enter line up with what's rendered.
             (() => {
               const rows: ReactNode[] = [];
@@ -2124,6 +2438,7 @@ export function AddNodePopup({
                     onClick={() => {
                       setSelectedCategory(VIRTUAL_CATEGORY_IDS.commonPickers);
                       setHighlightedIndex(0);
+                      searchInputRef.current?.focus();
                     }}
                     onMouseEnter={() => setHighlightedIndex(i)}
                     data-active={i === highlightedIndex ? "true" : undefined}
@@ -2152,62 +2467,8 @@ export function AddNodePopup({
               });
               return rows;
             })()
-          ) : (
-          // Category nodes — with optional group sub-headers
-          (categoryNodes as NodeOption[]).map((node, index, arr) => {
-            const prevGroup =
-              index > 0 ? arr[index - 1].group : undefined;
-            const showGroupHeader =
-              node.group && node.group !== prevGroup;
-            return (
-              <div key={node.type}>
-                {showGroupHeader && (
-                  <>
-                    {index > 0 && (
-                      <div className="border-t border-muted-foreground/10 mx-3 mt-1" />
-                    )}
-                    <div className="text-[12px] uppercase tracking-wider text-muted-foreground/60 font-medium px-4 pt-2 pb-1">
-                      {node.group}
-                    </div>
-                  </>
-                )}
-                <button
-                  type="button"
-                  onClick={() => handleNodeSelect(node.type)}
-                  className={cn(
-                    "w-full flex items-center gap-3 px-4 py-2.5 text-left",
-                    "transition-colors",
-                    index === highlightedIndex
-                      ? "bg-[#F1F5F9] dark:bg-[#2D2D2D]"
-                      : "hover:bg-[#F8FAFC] dark:hover:bg-[#252525]",
-                  )}
-                  onMouseEnter={() => setHighlightedIndex(index)}
-                data-active={index === highlightedIndex ? "true" : undefined}
-                >
-                  <span
-                    className={cn(
-                      "text-[#64748B] dark:text-[#94A3B8]",
-                      CATEGORY_COLORS[node.category],
-                    )}
-                  >
-                    {node.icon}
-                  </span>
-                  <span className="text-base text-[#1E293B] dark:text-white">
-                    {node.label}
-                  </span>
-                  {directMatchTypes.has(node.type) && (
-                    <span className="ml-auto text-[12px] text-[#4ade80] font-medium flex items-center gap-1 shrink-0">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80]" />
-                      direct
-                    </span>
-                  )}
-                </button>
-              </div>
-            );
-          })
-          )
         ) : (
-          // Categories
+          // Categories (All tab)
           visibleCategories.map((cat, index) => (
             <button
               key={cat.id}
@@ -2215,6 +2476,7 @@ export function AddNodePopup({
               onClick={() => {
                 setSelectedCategory(cat.id);
                 setHighlightedIndex(0);
+                searchInputRef.current?.focus();
               }}
               className={cn(
                 "w-full flex items-center gap-3 px-4 py-3 text-left",
@@ -2245,6 +2507,7 @@ export function AddNodePopup({
           ))
         )}
       </div>
+      </ScrollArea>
 
       {/* Footer hint */}
       <div className="px-4 py-2 border-t border-[#E2E8F0] dark:border-[#2D2D2D] bg-[#F8FAFC] dark:bg-[#121212]">
@@ -2261,6 +2524,14 @@ export function AddNodePopup({
             </kbd>
             Select
           </span>
+          {!isFiltered && (
+            <span className="flex items-center gap-1">
+              <kbd className="px-1 py-0.5 bg-white dark:bg-[#2D2D2D] rounded border border-[#E2E8F0] dark:border-[#3D3D3D]">
+                ⇥
+              </kbd>
+              Tabs
+            </span>
+          )}
           <span className="flex items-center gap-1">
             <kbd className="px-1 py-0.5 bg-white dark:bg-[#2D2D2D] rounded border border-[#E2E8F0] dark:border-[#3D3D3D]">
               Esc
