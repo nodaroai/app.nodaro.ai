@@ -85,9 +85,11 @@ const DB_CREATURE = {
   poses: [],
   variations: [],
   motion_clips: [],
+  boards: [],
   reference_photos: [],
   canonical_description: null,
   style_lock: true,
+  voice: null,
   deleted_at: null,
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",
@@ -108,12 +110,14 @@ const CAMEL_CREATURE = {
   poses: [],
   variations: [],
   motionClips: [],
+  boards: [],
   referencePhotos: [],
   canonicalDescription: "", // coerced from null
   styleLock: true,
   selectedAssetByVariant: {},
   sheets: [],
   detailCloseups: [],
+  voice: null,
   deletedAt: null,
   createdAt: "2026-01-01T00:00:00Z",
   updatedAt: "2026-01-01T00:00:00Z",
@@ -185,6 +189,9 @@ describe("creatures SELECT_COLUMNS read projection", () => {
       "selected_asset_by_variant",
       "sheets",
       "detail_closeups",
+      // migration 220 — Creature Boards + the "talking creature" voice.
+      "boards",
+      "voice",
     ]) {
       expect(cols).toContain(c)
     }
@@ -863,6 +870,142 @@ describe("POST /v1/creatures", () => {
 
     expect(res.statusCode).toBe(500)
     expect(res.json().error.code).toBe("internal_error")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// boards + voice (migration 220) — USER-owned: flow through INSERT and UPDATE
+// (unlike the worker-owned buckets), mirroring objects.boards / characters.voice.
+// ---------------------------------------------------------------------------
+
+describe("POST /v1/creatures — boards + voice (migration 220)", () => {
+  function insertChain() {
+    const mockSingle = vi.fn().mockResolvedValue({ data: { id: TEST_CREATURE_ID }, error: null })
+    const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
+    const mockInsert = vi.fn().mockReturnValue({ select: mockSelect })
+    vi.mocked(supabase.from).mockReturnValue({ insert: mockInsert } as never)
+    return mockInsert
+  }
+  function updateChain() {
+    const mockSingle = vi.fn().mockResolvedValue({
+      data: { id: TEST_CREATURE_ID, updated_at: "2026-06-12T00:00:00.000Z" },
+      error: null,
+    })
+    const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
+    const eq2 = vi.fn().mockReturnValue({ select: mockSelect })
+    const eq1 = vi.fn().mockReturnValue({ eq: eq2 })
+    const mockUpdate = vi.fn().mockReturnValue({ eq: eq1 })
+    vi.mocked(supabase.from).mockReturnValue({ update: mockUpdate } as never)
+    return mockUpdate
+  }
+
+  const VOICE = {
+    voiceId: "V55PLkF0YuZYdHsom49R",
+    voiceName: "Growl",
+    traits: "deep, raspy",
+    voiceType: "library" as const,
+    previewUrl: "https://cdn.example.com/preview.mp3",
+  }
+
+  it("INSERT persists boards + voice; both default when omitted ([] / null)", async () => {
+    const mockInsert = insertChain()
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/creatures",
+      payload: {
+        name: "Ember", nodeId: "node-9", userId: TEST_USER_ID,
+        boards: [{ name: "Moods", url: "https://example.com/board.png" }],
+        voice: VOICE,
+      },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(mockInsert).toHaveBeenCalledWith(expect.objectContaining({
+      boards: [{ name: "Moods", url: "https://example.com/board.png" }],
+      voice: VOICE,
+    }))
+
+    const mockInsert2 = insertChain()
+    await app.inject({
+      method: "POST",
+      url: "/v1/creatures",
+      payload: { name: "Ember", nodeId: "node-9", userId: TEST_USER_ID },
+    })
+    expect(mockInsert2).toHaveBeenCalledWith(expect.objectContaining({ boards: [], voice: null }))
+  })
+
+  it("UPDATE writes boards + voice (USER-owned), omitted fields stay untouched", async () => {
+    const mockUpdate = updateChain()
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/creatures",
+      payload: {
+        id: TEST_CREATURE_ID, userId: TEST_USER_ID,
+        boards: [{ name: "Poses", url: "https://example.com/b2.png" }],
+        voice: VOICE,
+      },
+    })
+    expect(res.statusCode).toBe(200)
+    const updateRow = mockUpdate.mock.calls[0][0] as Record<string, unknown>
+    expect(updateRow.boards).toEqual([{ name: "Poses", url: "https://example.com/b2.png" }])
+    expect(updateRow.voice).toEqual(VOICE)
+
+    // Omitting both leaves the columns untouched (partial-update contract).
+    const mockUpdate2 = updateChain()
+    await app.inject({
+      method: "POST",
+      url: "/v1/creatures",
+      payload: { id: TEST_CREATURE_ID, userId: TEST_USER_ID, name: "Renamed" },
+    })
+    const updateRow2 = mockUpdate2.mock.calls[0][0] as Record<string, unknown>
+    expect("boards" in updateRow2).toBe(false)
+    expect("voice" in updateRow2).toBe(false)
+  })
+
+  it("UPDATE with voice: null explicitly clears the voice", async () => {
+    const mockUpdate = updateChain()
+    await app.inject({
+      method: "POST",
+      url: "/v1/creatures",
+      payload: { id: TEST_CREATURE_ID, userId: TEST_USER_ID, voice: null },
+    })
+    const updateRow = mockUpdate.mock.calls[0][0] as Record<string, unknown>
+    expect(updateRow.voice).toBeNull()
+  })
+
+  it("rejects malformed boards (missing url) and over-cap arrays with 400", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/creatures",
+      payload: {
+        name: "Ember", nodeId: "node-9", userId: TEST_USER_ID,
+        boards: [{ name: "no-url" }],
+      },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+
+    const res2 = await app.inject({
+      method: "POST",
+      url: "/v1/creatures",
+      payload: {
+        name: "Ember", nodeId: "node-9", userId: TEST_USER_ID,
+        boards: Array.from({ length: 25 }, (_, i) => ({ name: `b${i}`, url: "https://example.com/b.png" })),
+      },
+    })
+    expect(res2.statusCode).toBe(400)
+  })
+
+  it("rejects a voice missing required fields with 400", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/creatures",
+      payload: {
+        name: "Ember", nodeId: "node-9", userId: TEST_USER_ID,
+        voice: { voiceId: "v" }, // voiceName + traits missing
+      },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
   })
 })
 

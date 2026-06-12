@@ -1454,6 +1454,91 @@ describe("buildImagePrompt — location canonical-description injection", () => 
 })
 
 // ---------------------------------------------------------------------------
+// wired-creature — a bound Creature (animal/beast/monster) auto-attaches like
+// an object but its directive reads as a LIVING subject: the creature/animal
+// identity lock (anatomy, markings, coloration) instead of the prop verb.
+// ---------------------------------------------------------------------------
+
+describe("buildImagePrompt — wired-creature refs", () => {
+  it("auto-attaches a wired creature with a creature-labeled fallback directive (zero typing)", () => {
+    const result = buildImagePrompt({
+      prompt: "A knight rides through the forest",
+      provider: "nano-banana",
+      connectedReferences: [
+        {
+          id: "cre_1",
+          defaultName: "Ember",
+          source: "wired-creature",
+          url: "https://r2/ember-dragon.png",
+        },
+      ],
+    })
+    expect(result.referenceImageUrls).toContain("https://r2/ember-dragon.png")
+    expect(result.prompt).toContain("Image 1 (creature)")
+    expect(result.prompt).toContain("creature/animal subject")
+    expect(result.prompt).toContain("anatomy, markings, coloration")
+  })
+
+  it("folds the creature's description into the directive subject", () => {
+    const result = buildImagePrompt({
+      prompt: "A knight rides through the forest",
+      provider: "nano-banana",
+      connectedReferences: [
+        {
+          id: "cre_1",
+          defaultName: "Ember",
+          source: "wired-creature",
+          description: "a small red dragon with golden eyes",
+          url: "https://r2/ember-dragon.png",
+        },
+      ],
+    })
+    expect(result.prompt).toContain("Image 1 (creature — a small red dragon with golden eyes)")
+    expect(result.prompt).toContain("creature/animal subject")
+  })
+
+  it("{image:N:creature} token routes through the creature identity lock", () => {
+    const result = buildImagePrompt({
+      prompt: "A portrait of {image:1:creature} sleeping by the fire",
+      provider: "nano-banana",
+      connectedReferences: [
+        {
+          id: "cre_1",
+          defaultName: "Whiskers",
+          source: "wired-creature",
+          url: "https://r2/whiskers-cat.png",
+        },
+      ],
+    })
+    expect(result.prompt).toContain("Image 1 (creature)")
+    expect(result.prompt).toContain("creature/animal subject")
+    expect(result.prompt).toContain("Maintain perfect likeness (anatomy, markings, coloration, distinctive features)")
+  })
+
+  it("an 'animal' label from the user also hits the creature lock; 'loose' opts out", () => {
+    const locked = buildImagePrompt({
+      prompt: "Show {image:1:animal} running",
+      provider: "nano-banana",
+      connectedReferences: [
+        { id: "c1", defaultName: "Rex", source: "wired-creature", url: "https://r2/rex.png" },
+      ],
+    })
+    expect(locked.prompt).toContain("creature/animal subject")
+
+    const loose = buildImagePrompt({
+      prompt: "Show {image:1:creature} running",
+      provider: "nano-banana",
+      connectedReferences: [
+        { id: "c1", defaultName: "Rex", source: "wired-creature", url: "https://r2/rex.png" },
+      ],
+      identityMeta: [{ imageIndex: 1, label: "creature", fidelity: "loose" }],
+    })
+    expect(loose.prompt).toContain("use loosely as inspiration")
+    expect(loose.prompt).not.toContain("creature/animal subject")
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Phase 2 #2 (slice 2b): @location:1:variant mention syntax resolution. The
 // resolver matches tokens against pre-expanded canonical + per-variant
 // `wired-location` ConnectedReferences, emits a "Use these locations:" header

@@ -36,6 +36,7 @@ const SOURCE_TYPE_MAP: Record<string, ReferenceSource> = {
   "character": "wired-character",
   "face": "wired-face",
   "object": "wired-object",
+  "creature": "wired-creature",
   "location": "wired-location",
 }
 

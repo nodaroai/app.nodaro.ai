@@ -93,6 +93,7 @@ const VIDEO_REF_SOURCE_BY_TYPE: Record<string, ReferenceSource> = {
   "character": "wired-character",
   "face": "wired-face",
   "object": "wired-object",
+  "creature": "wired-creature",
   "location": "wired-location",
 }
 

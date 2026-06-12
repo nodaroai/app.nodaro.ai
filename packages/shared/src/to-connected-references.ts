@@ -12,19 +12,25 @@ import { locationMentionSlug } from "./location-mention-slug.js"
 export interface EntityReferenceInput {
   /** The entity row id. */
   readonly id: string
-  readonly kind: "character" | "location"
+  readonly kind: "character" | "location" | "creature"
   /** Display name — the slug is derived from this. */
   readonly name: string
   /** Resolved thumbnail/source URL; null/undefined → "" (placeholder-safe). */
   readonly url?: string | null
   /** Variant slug (e.g. "smile", "rain"); undefined = canonical/default. */
   readonly variant?: string
+  /** Optional free-text descriptor (creature bindings: species/appearance) —
+   *  folded into the auto-generated directive subject by the prompt builder. */
+  readonly description?: string | null
 }
 
 /**
  * Map ONE bound entity to its `ConnectedReference`. character → `wired-character`
  * (slug via `characterMentionSlug`), location → `wired-location` (slug via
- * `locationMentionSlug`). Canonical-description fields are null here (a binding
+ * `locationMentionSlug`), creature → `wired-creature` (no mention-slug machinery
+ * — like `wired-object`, a bound creature AUTO-ATTACHES and gets a canonical-style
+ * creature/animal-subject directive with zero typing; `{image:N:creature}` tokens
+ * also resolve against it). Canonical-description fields are null here (a binding
  * captures only name+variant; the picker/full-row path supplies descriptions).
  */
 export function toConnectedReference(entity: EntityReferenceInput): ConnectedReference {
@@ -39,6 +45,15 @@ export function toConnectedReference(entity: EntityReferenceInput): ConnectedRef
       characterCanonicalDescription: null,
       variantDescription: null,
       variantDisplayName: entity.variant ?? "canonical",
+    }
+  }
+  if (entity.kind === "creature") {
+    return {
+      id: entity.id,
+      defaultName: entity.name,
+      source: "wired-creature",
+      url: entity.url ?? "",
+      ...(entity.description ? { description: entity.description } : {}),
     }
   }
   return {
