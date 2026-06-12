@@ -77,6 +77,38 @@ describe("toConnectedReference", () => {
     expect(ref.locationVariantDisplayName).toBe("rain")
   })
 
+  it("maps a creature binding to a wired-creature reference (auto-attach, no slug machinery)", () => {
+    expect(
+      toConnectedReference({
+        id: "cre-1",
+        kind: "creature",
+        name: "Ember",
+        url: "https://r2.example/ember.png",
+      }),
+    ).toEqual({
+      id: "cre-1",
+      defaultName: "Ember",
+      source: "wired-creature",
+      url: "https://r2.example/ember.png",
+    })
+  })
+
+  it("folds a creature description into the reference (drives the directive subject)", () => {
+    const ref = toConnectedReference({
+      id: "cre-1",
+      kind: "creature",
+      name: "Ember",
+      url: "https://r2.example/ember.png",
+      description: "a small red dragon with golden eyes",
+    })
+    expect(ref.source).toBe("wired-creature")
+    expect(ref.description).toBe("a small red dragon with golden eyes")
+    // Empty/missing description must NOT add the key (exact wire-shape pin).
+    expect(
+      "description" in toConnectedReference({ id: "cre-2", kind: "creature", name: "Rex" }),
+    ).toBe(false)
+  })
+
   it("falls back to a placeholder-safe empty url when the entity has no thumbnail", () => {
     expect(
       toConnectedReference({

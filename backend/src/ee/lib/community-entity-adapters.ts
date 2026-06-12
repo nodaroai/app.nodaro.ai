@@ -43,22 +43,27 @@ export const COMMUNITY_ENTITY_ADAPTERS: Record<EntityType, CommunityEntityAdapte
     stripFields: ["reference_photos", "custom_variations"],
   },
   // Creature mirrors the object adapter for the shared column set (D10 — the
-  // creatures table is a structural clone of objects), with three deltas:
+  // creatures table is a structural clone of objects), with these deltas:
   //   • species → publicTextFields (creature-specific column)
   //   • poses   → assetFields      (the renamed objects.materials slot)
+  //   • voice   → stripFields with the SAME kind-aware carry as characters
+  //     (buildSnapshot below: premade/library carry fully, custom reduces to
+  //     display name + sample — Decision A; migration 220)
+  //   • boards  → assetFields (migration 220, mirrors objects/locations 214)
   //   • the four columns the object adapter omits (pre-existing drift) are
   //     classified here: sheets/detail_closeups → assetFields (R2-backed
   //     {name,url} arrays); image_provider/selected_asset_by_variant are
   //     system/derived and live in the test's ALWAYS_IGNORED set.
-  // Every column in 206_creatures.sql is classified — see COLUMNS.creatures in
-  // the classification test.
+  // Every column in 206_creatures.sql + 220_creature_boards_voice.sql is
+  // classified — see COLUMNS.creatures in the classification test.
   creature: {
     table: "creatures",
     publicTextFields: ["name", "description", "species", "category", "style", "canonical_description", "style_lock"],
-    assetFields: ["main_image_url", "source_image_url", "angles", "poses", "variations", "motion_clips", "sheets", "detail_closeups"],
+    assetFields: ["main_image_url", "source_image_url", "angles", "poses", "variations", "motion_clips", "sheets", "detail_closeups", "boards"],
     // custom_variations is STRIPPED (mirrors object/location): user-authored private
     // variation content must not be R2-copied into the public snapshot on share.
-    stripFields: ["reference_photos", "custom_variations"],
+    // voice is strip-listed like characters' — buildSnapshot re-adds it by KIND.
+    stripFields: ["reference_photos", "custom_variations", "voice"],
   },
 }
 
@@ -82,7 +87,9 @@ export function buildSnapshot(
     | { voiceId?: string; voiceName?: string; voiceType?: string; previewUrl?: string }
     | null
     | undefined
-  if (entityType === "character" && voice) {
+  // Creatures carry voice with the SAME kind-aware rules as characters
+  // (migration 220 gives creatures the identical voice column).
+  if ((entityType === "character" || entityType === "creature") && voice) {
     // Legacy voices predate `voiceType` and stored a premade catalog name (or
     // premade UUID) in voiceId — classify them so they aren't reduced away.
     const isPremade =
