@@ -200,7 +200,7 @@ export const SHORTCUTS = {
   fullscreenSettings: { id: "fullscreenSettings", category: "Editing", description: "Expand / collapse config panel",
     bindings: [{ code: "KeyI", key: "i", mods: ["mod"] }] },
   promptEditor: { id: "promptEditor", category: "Editing", description: "Open / close the prompt editor",
-    bindings: [{ code: "KeyE", key: "e", mods: ["mod"] }, { code: "KeyE", key: "e", mods: ["alt"] }] },
+    bindings: [{ code: "KeyE", key: "e", mods: ["mod"] }, { code: "KeyE", key: "e", mods: ["alt"] }, { code: "KeyP", key: "p", mods: ["mod"] }] },
   escape: { id: "escape", category: "Editing", description: "Close overlay / deselect",
     bindings: [{ key: "Escape" }] },
 

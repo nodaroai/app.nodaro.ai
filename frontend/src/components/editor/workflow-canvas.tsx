@@ -459,6 +459,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const openFullscreenSettings = useWorkflowStore((s) => s.openFullscreenSettings)
   const closeFullscreenSettings = useWorkflowStore((s) => s.closeFullscreenSettings)
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
+  const promptEditNodeId = useWorkflowStore((s) => s.promptEditNodeId)
   const duplicateNodes = useWorkflowStore((s) => s.duplicateNodes)
   const deleteNode = useWorkflowStore((s) => s.deleteNode)
   const addNode = useWorkflowStore((s) => s.addNode)
@@ -601,6 +602,21 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       })
     }
   }, [configPanelFullscreen])
+
+  // When the prompt quick-edit modal closes, restore DOM focus to the node so
+  // plain Arrow-key nudging works immediately (same reason as the fullscreen handler above).
+  const prevPromptEditNodeIdRef = useRef(promptEditNodeId)
+  useEffect(() => {
+    const prev = prevPromptEditNodeIdRef.current
+    prevPromptEditNodeIdRef.current = promptEditNodeId
+    if (prev && !promptEditNodeId) {
+      requestAnimationFrame(() => {
+        const targetId = useWorkflowStore.getState().focusedNodeId ?? prev
+        document.querySelector<HTMLElement>(`.react-flow__node[data-id="${targetId}"]`)
+          ?.focus({ preventScroll: true })
+      })
+    }
+  }, [promptEditNodeId])
 
   // Viewport saved just before the panel opens, restored when it closes.
   const prePanelViewportRef = useRef<{ x: number; y: number; zoom: number } | null>(null)
@@ -1130,25 +1146,45 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   // null = normal viewport (Mode 1); set = zoomed in on that node (Mode 2).
   // Independent of selectedNodeId (sidebar) — the sidebar has its own logic.
   const zoomedNodeIdRef = useRef<string | null>(null)
-  // Viewport saved just before entering Mode 2 so we can restore it exactly on exit.
+  // Viewport saved just before entering Mode 2 so we can restore it exactly on exit,
+  // plus the node Mode 2 was ENTERED on (Alt+Arrow can move zoomedNodeIdRef elsewhere).
   const preZoomViewportRef = useRef<{ x: number; y: number; zoom: number } | null>(null)
+  const preZoomNodeIdRef = useRef<string | null>(null)
+
+  // Mode 2 → Mode 1. Exiting on the node Mode 2 was entered on restores the exact
+  // saved viewport; exiting on a DIFFERENT node (after Alt+Arrow navigation) keeps
+  // the saved zoom level but centres the current node — restoring the stale viewport
+  // would fly the camera back to the original node's area.
+  const exitZoomFn = useCallback((exitNodeId: string | null) => {
+    const enteredOn = preZoomNodeIdRef.current
+    const saved = preZoomViewportRef.current
+    zoomedNodeIdRef.current = null
+    preZoomViewportRef.current = null
+    preZoomNodeIdRef.current = null
+    setFocusMode(false)
+    if (!saved) {
+      fitView({ maxZoom: 1, minZoom: 0.3, padding: 0.2, duration: 300 })
+      return
+    }
+    const exitNode = exitNodeId && exitNodeId !== enteredOn ? getNode(exitNodeId) : null
+    if (exitNode) {
+      const w = exitNode.measured?.width ?? 200
+      const h = exitNode.measured?.height ?? 100
+      setCenter(exitNode.position.x + w / 2, exitNode.position.y + h / 2, { zoom: saved.zoom, duration: 300 })
+    } else {
+      setViewport(saved, { duration: 300 })
+    }
+  }, [getNode, setCenter, setViewport, fitView])
 
   const handleZoomToggleFn = useCallback((nodeId: string) => {
     if (zoomedNodeIdRef.current === nodeId) {
-      // Mode 2 → Mode 1: restore exact viewport from before the zoom
-      zoomedNodeIdRef.current = null
-      setFocusMode(false)
-      if (preZoomViewportRef.current) {
-        setViewport(preZoomViewportRef.current, { duration: 300 })
-        preZoomViewportRef.current = null
-      } else {
-        fitView({ maxZoom: 1, minZoom: 0.3, padding: 0.2, duration: 300 })
-      }
+      exitZoomFn(nodeId)
     } else {
       // Mode 1 → Mode 2: save current viewport on the FIRST zoom-in only
       // (switching to a different node while already in Mode 2 keeps the original saved viewport)
       if (!zoomedNodeIdRef.current) {
         preZoomViewportRef.current = getViewport()
+        preZoomNodeIdRef.current = nodeId
       }
       const n = getNode(nodeId)
       if (!n) return
@@ -1169,11 +1205,36 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       zoomedNodeIdRef.current = nodeId
       setTimeout(() => { focusAnimatingRef.current = false }, 350)
     }
-  }, [getNode, getViewport, setCenter, setViewport, fitView, isMobile])
+  }, [exitZoomFn, getNode, getViewport, setCenter, isMobile])
 
   // Stable ref so the keyboard handler (inside a useEffect) always calls the latest version
   const handleZoomToggleRef = useRef(handleZoomToggleFn)
   useEffect(() => { handleZoomToggleRef.current = handleZoomToggleFn }, [handleZoomToggleFn])
+
+  // Enter Mode 2 for a specific node without toggling — used by Alt+Arrow navigation
+  // so moving between nodes in Mode 2 re-zooms each target rather than just panning.
+  const enterZoomNodeFn = useCallback((nodeId: string) => {
+    const n = getNode(nodeId)
+    if (!n) return
+    const nodeW = n.measured?.width ?? 200
+    const nodeH = n.measured?.height ?? 100
+    const nodeCenterX = n.position.x + nodeW / 2
+    const nodeCenterY = n.position.y + nodeH / 2
+    const panelW = isMobile ? 0 : (useWorkflowStore.getState().selectedNodeId ? 384 : 0)
+    const visibleW = window.innerWidth - panelW
+    const visibleH = window.innerHeight
+    const sheetOffset = isMobile ? visibleH * 0.15 : 0
+    const zoomToFit = Math.min((visibleW * 0.6) / nodeW, (visibleH * 0.6) / nodeH)
+    const zoomClamped = Math.max(0.5, Math.min(2.5, zoomToFit))
+    const panelOffsetX = panelW / (2 * zoomClamped)
+    focusAnimatingRef.current = true
+    setCenter(nodeCenterX + panelOffsetX, nodeCenterY - sheetOffset, { zoom: zoomClamped, duration: 300 })
+    if (isMobile) setFocusMode(true)
+    zoomedNodeIdRef.current = nodeId
+    setTimeout(() => { focusAnimatingRef.current = false }, 350)
+  }, [getNode, setCenter, isMobile])
+  const enterZoomNodeRef = useRef(enterZoomNodeFn)
+  useEffect(() => { enterZoomNodeRef.current = enterZoomNodeFn }, [enterZoomNodeFn])
 
   const handleNodeDoubleClick: NodeMouseHandler = useCallback(
     (_event, node) => {
@@ -1186,14 +1247,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const handlePaneClick = useCallback(() => {
     selectNode(null)
     if (zoomedNodeIdRef.current) {
-      zoomedNodeIdRef.current = null
-      setFocusMode(false)
-      if (preZoomViewportRef.current) {
-        setViewport(preZoomViewportRef.current, { duration: 300 })
-        preZoomViewportRef.current = null
-      } else {
-        fitView({ maxZoom: 1, minZoom: 0.3, padding: 0.2, duration: 300 })
-      }
+      exitZoomFn(zoomedNodeIdRef.current)
     }
     setNodeContextMenu(null)
     setCanvasContextMenu(null)
@@ -1201,7 +1255,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     // Don't close the popup if it was just opened by an edge drop
     if (!edgeDropRef.current) setAddNodePopupOpen(false)
     setConnectingFromType(null)
-  }, [selectNode, setViewport, fitView])
+  }, [selectNode, exitZoomFn])
 
   const handlePaneContextMenu = useCallback(
     (event: MouseEvent | React.MouseEvent) => {
@@ -1648,22 +1702,22 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         }
       }
 
-      // Cmd/Ctrl+E (or Alt/Option+E) — toggle the quick-edit Prompt modal for the
-      // selected node (runs BEFORE the overlay guard so it can close its own
-      // dialog). Alt+E is the escape hatch: the "Claude in Chrome" extension binds
-      // ⌘E to its side panel, swallowing it before the page sees it. Alt+E matches
-      // on e.code ("KeyE") since macOS Option+E is a dead key (composes "´").
+      // Cmd/Ctrl+E, Alt/Option+E, or Cmd/Ctrl+P — toggle the quick-edit Prompt modal
+      // for the focused node. Alt+E is an escape hatch: the "Claude in Chrome" extension
+      // binds ⌘E to its side panel. Alt+E matches on e.code ("KeyE") since macOS
+      // Option+E is a dead key (composes "´"). Cmd+P always prevents the browser print
+      // dialog regardless of whether a prompt-capable node is focused.
+      // Runs BEFORE the overlay guard so it can close its own dialog.
       if (matchShortcut(e, SHORTCUTS.promptEditor)) {
+        e.preventDefault()
         const state = useWorkflowStore.getState()
         if (state.promptEditNodeId) {
-          e.preventDefault()
           state.closePromptEditor()
           return
         }
-        const nodeId = state.selectedNodeId ?? state.nodes.find((n) => n.selected)?.id
+        const nodeId = state.selectedNodeId ?? state.focusedNodeId ?? state.nodes.find((n) => n.selected)?.id
         const nodeType = nodeId ? state.nodes.find((n) => n.id === nodeId)?.type : undefined
         if (nodeId && nodeHasPromptField(nodeType)) {
-          e.preventDefault()
           state.openPromptEditor(nodeId)
         }
         return
@@ -1686,11 +1740,11 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         return
       }
 
-      // Escape — close fullscreen first, then two-step deselect (must run BEFORE overlayOpen guard)
+      // Escape — close the topmost overlay; never deselects a focused node.
+      // Pane click is the natural deselect gesture.
       if (e.key === "Escape") {
         // The Alt+F result lightbox is the topmost overlay — dismiss just it and
-        // keep the node selected underneath (this capture handler runs before the
-        // modal's own Escape, so without this it would also deselect the node).
+        // keep the node selected underneath.
         if (fullscreenNodeIdRef.current) {
           e.stopPropagation()
           setFullscreenNodeId(null)
@@ -1702,20 +1756,16 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         setEdgeContextMenu(null)
         const state = useWorkflowStore.getState()
         if (state.configPanelFullscreen) {
-          // stopPropagation: prevent React Flow's own Escape handler from also
-          // deselecting the node (which would clear node.selected and remove the glow).
           e.stopPropagation()
           closeFullscreenSettings()
         } else if (state.selectedNodeId) {
           // Closing the sidebar keeps the node RF-focused (blue glow, no settings).
-          // stopPropagation prevents React Flow from also firing deselection.
           e.stopPropagation()
           useWorkflowStore.setState({ selectedNodeId: null })
-        } else {
-          // Node is RF-selected only: deselect fully. selectNode(null) already
-          // clears node.selected so no need for React Flow's handler either.
+        } else if (state.nodes.some((n) => n.selected)) {
+          // Node is RF-selected but no overlay is open — block React Flow's own
+          // Escape handler which would deselect it. Pane click is the deselect gesture.
           e.stopPropagation()
-          selectNode(null)
         }
         return
       }
@@ -2144,19 +2194,37 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           if (dist < bestDist) { bestDist = dist; bestId = n.id }
         }
         if (!bestId) return
-        setFocusedNodeId(bestId)
         if (state.selectedNodeId) {
-          // Panel open: selectNode triggers the selectedNodeId effect which centres
-          // the node accounting for the 384 px panel offset.
+          // Panel open: selectNode sets focusedNodeId + node.selected + selectedNodeId,
+          // then the selectedNodeId effect centres the node accounting for the panel offset.
+          // If Mode 2 is active, keep its tracked node in sync so Enter toggles out correctly.
+          if (zoomedNodeIdRef.current) zoomedNodeIdRef.current = bestId
           selectNode(bestId)
         } else {
-          // Panel closed: centre the focused node at current zoom level.
-          const tgt = getNode(bestId)
-          if (tgt) {
-            const nw = tgt.measured?.width ?? 200
-            const nh = tgt.measured?.height ?? 100
-            setCenter(tgt.position.x + nw / 2, tgt.position.y + nh / 2, { zoom: getViewport().zoom, duration: 250 })
+          // Panel closed: update focusedNodeId + RF selection (node.selected) without
+          // setting selectedNodeId (which would open the panel).
+          useWorkflowStore.setState((s) => ({
+            focusedNodeId: bestId,
+            nodes: s.nodes.map((n) => ({ ...n, selected: n.id === bestId })),
+          }))
+          if (zoomedNodeIdRef.current) {
+            // In Mode 2: re-apply the Mode 2 zoom calculation for the new node so it
+            // fills the view at the correct zoom level (not just a pan at stale zoom).
+            enterZoomNodeRef.current(bestId)
+          } else {
+            const tgt = getNode(bestId)
+            if (tgt) {
+              const nw = tgt.measured?.width ?? 200
+              const nh = tgt.measured?.height ?? 100
+              setCenter(tgt.position.x + nw / 2, tgt.position.y + nh / 2, { zoom: getViewport().zoom, duration: 250 })
+            }
           }
+          // Focus the node DOM element so plain Arrow-key nudging works immediately.
+          // RF's nudge handler only fires when the event originates inside its subtree.
+          requestAnimationFrame(() => {
+            document.querySelector<HTMLElement>(`.react-flow__node[data-id="${bestId}"]`)
+              ?.focus({ preventScroll: true })
+          })
         }
         return
       }
@@ -2612,6 +2680,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           minZoom={ZOOM_MIN}
           maxZoom={ZOOM_MAX}
           proOptions={{ hideAttribution: true }}
+          autoPanOnNodeFocus={false}
         >
           {!isMobile && showMiniMap && (
             <MiniMap
