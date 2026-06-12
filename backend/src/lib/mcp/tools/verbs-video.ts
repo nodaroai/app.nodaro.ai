@@ -459,13 +459,20 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
     {
       title: "Extend Video",
       description:
-        "Extend a previously-generated VEO or Runway video. Requires the kie_task_id from the prior video generation job (NOT the URL).",
+        "Extend a video. veo-extend / runway-extend continue a previously-generated VEO or Runway video and require the kie_task_id from that job (NOT the URL). " +
+        "seedance-2-extend extends ANY video by URL (or asset id) — it generates what happens next (audio included) and trim-stitches it into one seamless clip; " +
+        "describe only the continuation content in `prompt` (plain action description — no 'reference video' phrasing needed).",
       inputSchema: {
         prompt: z.string().min(1).max(8000),
-        kie_task_id: z.string().min(1).describe("KIE task id from prior video generation"),
-        model: z.enum(["veo-extend", "runway-extend"]),
+        kie_task_id: z.string().min(1).optional().describe("KIE task id from prior video generation (veo-extend / runway-extend only)"),
+        video_url: z.string().url().optional().describe("Source video URL (seedance-2-extend only)"),
+        video_asset_id: z.string().optional().describe("Nodaro job/upload asset id whose output is a video (seedance-2-extend only)"),
+        model: z.enum(["veo-extend", "runway-extend", "seedance-2-extend"]),
         veo_quality: z.enum(["fast", "quality"]).optional(),
         runway_resolution: z.enum(["720p", "1080p"]).optional(),
+        duration: z.number().int().min(4).max(15).optional().describe("Seconds to add (seedance-2-extend, default 8)"),
+        resolution: z.enum(["480p", "720p", "1080p"]).optional().describe("Extension resolution (seedance-2-extend, default 720p — match the source for the cleanest seam)"),
+        generate_audio: z.boolean().optional().describe("Continue the soundtrack into the extension (seedance-2-extend, default true)"),
         seed: z.number().int().min(10000).max(99999).optional(),
       },
               outputSchema: {
@@ -491,6 +498,53 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
     },
     },
     async (args) => {
+      if (args.model === "seedance-2-extend") {
+        const videoUrl =
+          args.video_url ??
+          (args.video_asset_id
+            ? await resolveAssetId({
+                assetId: args.video_asset_id,
+                userId: session.userId,
+                expectedKind: "video",
+              })
+            : null)
+        if (!videoUrl) {
+          return {
+            content: [
+              { type: "text", text: "seedance-2-extend requires video_url or video_asset_id" },
+            ],
+            isError: true,
+          }
+        }
+        return dispatchJob(fastify, session, {
+          url: "/v1/extend-video",
+          payload: {
+            videoUrl,
+            prompt: args.prompt,
+            provider: args.model,
+            duration: args.duration,
+            resolution: args.resolution,
+            generateAudio: args.generate_audio,
+            mcp_client: session.clientName,
+            userId: session.userId,
+          },
+          label: "video extend",
+          widgetKind: "video",
+          widgetData: {
+            prompt: args.prompt,
+            model: args.model,
+          },
+        })
+      }
+
+      if (!args.kie_task_id) {
+        return {
+          content: [
+            { type: "text", text: `${args.model} requires kie_task_id from the prior video generation job` },
+          ],
+          isError: true,
+        }
+      }
       const payload = {
         kieTaskId: args.kie_task_id,
         prompt: args.prompt,

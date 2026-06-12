@@ -95,6 +95,38 @@ export function applySlots(
   return walk(lottie, slots ?? {}, overrides ?? {}) as JsonRecord
 }
 
+// ── Playback normalization ───────────────────────────────────────────────────
+//
+// lottie-web computes a layer's local time as `frame - layer.st` and gates the
+// layer on `local >= ip && local < op`. A layer missing `st` yields NaN, fails
+// the gate, and stays `display:none` forever — the document "loads" (DOMLoaded
+// fires) but every frame renders blank (prod incident 2026-06-12: all authored
+// lottie renders came out as empty frames in headless Chrome). `st` and `sr`
+// are spec-optional with defaults, so documents routinely omit them; complete
+// them at the playback boundary so any source — authored plan, baked export,
+// catalog asset, external URL — renders. Mutates `doc` in place and returns it
+// (callers pass freshly fetched or freshly copied documents).
+
+export function normalizeLottieLayers<T>(doc: T): T {
+  if (!isPlainObject(doc)) return doc
+  const fix = (layers: unknown): void => {
+    if (!Array.isArray(layers)) return
+    for (const layer of layers) {
+      if (!isPlainObject(layer)) continue
+      if (typeof layer.st !== "number") layer.st = 0
+      if (typeof layer.sr !== "number") layer.sr = 1
+    }
+  }
+  fix((doc as JsonRecord).layers)
+  const assets = (doc as JsonRecord).assets
+  if (Array.isArray(assets)) {
+    for (const asset of assets) {
+      if (isPlainObject(asset)) fix(asset.layers)
+    }
+  }
+  return doc
+}
+
 // ── Slot control descriptors (Phase 2 — UI mapping) ──────────────────────────
 //
 // A slot manifest entry is `{ p: <whatever belongs at the reference position> }`

@@ -102,6 +102,23 @@ vi.mock("@/utils/watermark.js", () => ({
   applyVideoWatermark: vi.fn(),
 }))
 
+// Recompress path: sharp is mocked so the unit stays hermetic (no native
+// codec work); the output buffer is swappable per test via sharpOutput.
+const sharpState = vi.hoisted(() => ({ output: Buffer.from("webp-bytes") }))
+vi.mock("sharp", () => ({
+  default: vi.fn(() => ({
+    webp: vi.fn(() => ({
+      toBuffer: vi.fn(async () => sharpState.output),
+    })),
+  })),
+}))
+
+// Small deterministic cap so the recompressed-still-too-big branch is testable
+// without multi-MB buffers.
+vi.mock("@/utils/file-validation.js", () => ({
+  getSizeLimit: vi.fn(() => 1000),
+}))
+
 vi.mock("@/utils/thumbnail.js", () => ({
   generateThumbnailFromUrl: mocks.mockGenerateThumbnailFromUrl,
 }))
@@ -439,6 +456,56 @@ describe("uploadImageMaybeWatermark", () => {
       "user-1",
     )
     expect(url).toBe("https://r2.example.com/images/test-wm.png")
+  })
+
+  // ── oversized-output recompress (4K PNGs > image cap; prod jobs
+  //    85359bd4 / 900e6402 died here via reconcile_exhausted) ──
+
+  it("recompresses oversized images to WebP instead of failing", async () => {
+    sharpState.output = Buffer.from("webp-bytes")
+    mocks.mockUploadToR2.mockRejectedValueOnce(
+      new Error("upload-size-exceeded: Content-Length 33239469 > cap 26214400"),
+    )
+    const { safeFetch } = await import("../../lib/safe-fetch.js")
+    vi.mocked(safeFetch).mockResolvedValue({
+      ok: true,
+      arrayBuffer: () => Promise.resolve(new ArrayBuffer(64)),
+    } as unknown as Response)
+
+    const url = await uploadImageMaybeWatermark("https://source.com/big.png", "job-1", "user-1", false)
+
+    expect(mocks.mockUploadBufferToR2).toHaveBeenCalledWith(
+      sharpState.output,
+      "images/job-1.png",
+      "image/webp",
+      "user-1",
+    )
+    expect(url).toBe("https://r2.example.com/images/test-wm.png")
+  })
+
+  it("does NOT recompress on non-size upload errors", async () => {
+    mocks.mockUploadToR2.mockRejectedValueOnce(new Error("R2 500: internal"))
+    await expect(
+      uploadImageMaybeWatermark("https://source.com/img.png", "job-1", "user-1", false),
+    ).rejects.toThrow("R2 500")
+    expect(mocks.mockUploadBufferToR2).not.toHaveBeenCalled()
+  })
+
+  it("rethrows upload-size-exceeded when even the recompressed WebP exceeds the cap", async () => {
+    sharpState.output = Buffer.alloc(5000) // > mocked 1000-byte cap
+    mocks.mockUploadToR2.mockRejectedValueOnce(
+      new Error("upload-size-exceeded: Content-Length 33239469 > cap 26214400"),
+    )
+    const { safeFetch } = await import("../../lib/safe-fetch.js")
+    vi.mocked(safeFetch).mockResolvedValue({
+      ok: true,
+      arrayBuffer: () => Promise.resolve(new ArrayBuffer(64)),
+    } as unknown as Response)
+
+    await expect(
+      uploadImageMaybeWatermark("https://source.com/big.png", "job-1", "user-1", false),
+    ).rejects.toThrow(/upload-size-exceeded/)
+    expect(mocks.mockUploadBufferToR2).not.toHaveBeenCalled()
   })
 })
 

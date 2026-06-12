@@ -170,10 +170,14 @@ export function buildVideoCreditModelIdentifier(
     if (hasVideoRef) identifier += "-ref"
   }
 
-  // Grok Imagine Video 1.5 family: per-second billing split 480p/720p, no video-ref.
-  // KIE supports only 480p/720p here, so anything non-720p collapses to 480p (the default).
-  if (RESOLUTION_DURATION_PRICING.has(effectiveProvider)) {
-    identifier += resolution === "720p" ? ":720p" : ":480p"
+  // Duration × resolution pricing without a -ref dimension. Resolutions
+  // outside the provider's priced tiers (or undefined) collapse to the first
+  // (default) tier so the emitted composite is always seeded — the hard-fail
+  // guard fuzzes the whole resolution space.
+  const resTiers = RESOLUTION_DURATION_PRICING[effectiveProvider]
+  if (resTiers) {
+    const res = resolution && resTiers.includes(resolution) ? resolution : resTiers[0]!
+    identifier += `:${res}`
   }
 
   return identifier

@@ -18,7 +18,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { EXTEND_VIDEO_PROVIDERS, VIDEO_PROMPT_MAX, applyVideoNegativePrompt } from "@nodaro/shared"
+import { EXTEND_VIDEO_PROVIDERS, VIDEO_PROMPT_MAX, applyVideoNegativePrompt, buildVideoCreditModelIdentifier } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 
 // KIE providers (veo-extend, runway-extend) need a kieTaskId from the upstream
@@ -36,7 +36,9 @@ const extendVideoBody = z.object({
   seeds: z.number().int().min(10000).max(99999).optional(), // VEO only
   quality: z.enum(["720p", "1080p"]).optional(), // Runway only
   extendMode: z.enum(["start", "end"]).optional(), // LTX 2.3 Pro only
-  duration: z.number().int().min(1).max(20).optional(), // LTX 2.3 Pro only — seconds to add
+  duration: z.number().int().min(1).max(20).optional(), // Seconds to add — LTX 1-20; seedance-2-extend snaps to 4-15 in the worker
+  resolution: z.enum(["480p", "720p", "1080p"]).optional(), // seedance-2-extend only
+  generateAudio: z.boolean().optional(), // seedance-2-extend only (default true)
 })
 
 // Resolve the credit identifier used by both the preHandler check and the
@@ -47,6 +49,19 @@ function resolveExtendVideoIdentifier(body: Record<string, unknown> | undefined)
   const provider = (body?.provider as string) ?? "veo-extend"
   if (provider === "veo-extend" && body?.model === "quality") {
     return "veo-extend:quality"
+  }
+  if (provider === "seedance-2-extend") {
+    // Duration tier × resolution composites (rows include stitch overhead).
+    // Same builder the ee credits resolver uses, so guard + reserve + node
+    // cost display can never diverge.
+    return buildVideoCreditModelIdentifier(
+      provider,
+      (body?.duration as number) ?? 8,
+      undefined,
+      undefined,
+      undefined,
+      (body?.resolution as string) ?? "720p",
+    )
   }
   return provider
 }
@@ -85,6 +100,20 @@ export async function extendVideoRoutes(app: FastifyInstance) {
       if (!videoUrl) {
         return reply.status(400).send({
           error: { code: "validation_error", message: "videoUrl is required for ltx-2.3-pro" },
+        })
+      }
+    } else if (provider === "seedance-2-extend") {
+      // URL-based like LTX, but the continuation CONTENT is required — the
+      // worker wraps it in the spike-proven bare template ("Generate the
+      // content after Video 1: …"); an empty continuation has nothing to say.
+      if (!videoUrl) {
+        return reply.status(400).send({
+          error: { code: "validation_error", message: "videoUrl is required for seedance-2-extend" },
+        })
+      }
+      if (!prompt) {
+        return reply.status(400).send({
+          error: { code: "validation_error", message: "prompt (what happens next) is required for seedance-2-extend" },
         })
       }
     } else {
@@ -146,6 +175,19 @@ export async function extendVideoRoutes(app: FastifyInstance) {
             video: videoUrl,
             duration,
             extend_mode: extendMode ?? "end",
+            usageLogId,
+          }
+        : provider === "seedance-2-extend"
+        ? {
+            jobId: job.id,
+            provider,
+            video: videoUrl,
+            // effectivePrompt carries any negative as in-prompt "Avoid: …" —
+            // the seedance-correct constraint placement (no native param).
+            prompt: effectivePrompt,
+            duration,
+            resolution: parsed.data.resolution,
+            generateAudio: parsed.data.generateAudio,
             usageLogId,
           }
         : {

@@ -325,8 +325,16 @@ update(id: string, input: UpdateWorkflowInput): Promise<{ data: Workflow }>
 
 PATCHes a workflow. Any subset of fields is allowed.
 
+Optimistic concurrency: pass `expectedVersion` (the integer `version` from a
+prior read — bumped by the database on every content change) to make the
+update conditional; on a mismatch the API returns `409 workflow_conflict`
+with `currentVersion` and `currentUpdatedAt` so you can refetch and retry.
+`expectedUpdatedAt` (string token) remains supported. Transient run-state
+keys on node `data` (`executionStatus`, `currentJobId`, progress counters)
+are stripped server-side and never persist.
+
 ```ts
-await client.workflows.update(id, { name: "Renamed" })
+await client.workflows.update(id, { name: "Renamed", expectedVersion: 7 })
 ```
 
 #### `delete(id)`
@@ -2072,8 +2080,27 @@ params are optional and forwarded as a querystring; `undefined` / `null` /
 empty-string values are omitted so server defaults apply. `hasMore` in the
 response drives "load more" pagination.
 
+Each returned voice may carry model-verification hints derived from the
+library's `verified_languages` metadata:
+
+- `recommendedProvider` — the cheapest v2 TTS provider the voice is verified
+  on (`elevenlabs-turbo` preferred, else `elevenlabs-multilingual`). Apps
+  without a provider picker should send it as the `provider` when generating
+  speech with this voice, so the voice renders on a model it's verified for
+  (that's what keeps generation sounding like the library preview).
+- `verifiedProviders` — every v2 provider the voice is verified on (turbo
+  first). Apps WITH a provider picker should only override the user's choice
+  when it is **not** in this set.
+
 ```ts
 const { voices, hasMore } = await client.voices.searchLibrary({ search: "deep", language: "en" })
+const v = voices[0]
+await client.nodes.run("text-to-speech", {
+  text: "Hello!",
+  voice: v.voice_id,
+  voiceType: "library",
+  ...(v.recommendedProvider ? { provider: v.recommendedProvider } : {}),
+})
 ```
 
 #### `listClones()`

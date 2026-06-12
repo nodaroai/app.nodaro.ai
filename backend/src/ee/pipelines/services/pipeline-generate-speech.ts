@@ -104,6 +104,9 @@ export async function pipelineGenerateSpeech(
       speed,
       languageCode,
       usageLogId,
+      // Pipeline voices are LLM-matched (voice-matcher) — a hallucinated id
+      // should degrade to the default voice, not fail the whole pipeline.
+      allowDefaultVoiceFallback: true,
     }),
     modelIdentifier,
     assetType: "audio",

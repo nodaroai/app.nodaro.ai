@@ -103,8 +103,8 @@ describe("NODE_CREDIT_COSTS", () => {
     expect(NODE_CREDIT_COSTS["3d-title"]).toBe(15)
   })
 
-  it("has motion-graphics at 10 credits", () => {
-    expect(NODE_CREDIT_COSTS["motion-graphics"]).toBe(10)
+  it("has motion-graphics at 5 credits (lottie engine standard tier — the default)", () => {
+    expect(NODE_CREDIT_COSTS["motion-graphics"]).toBe(5)
   })
 
   it("has composite at 0 credits", () => {

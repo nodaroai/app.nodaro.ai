@@ -698,6 +698,46 @@ describe("buildPayload", () => {
       expect(result.payload.model).toBe("fast")
     })
 
+    it("extend-video seedance-2-extend — URL payload + duration×resolution composite", () => {
+      const n = node("n1", "extend-video", {
+        provider: "seedance-2-extend",
+        prompt: "the ball keeps rolling",
+        duration: 12,
+        resolution: "1080p",
+        generateAudio: false,
+      })
+      const inputs: ResolvedInputs = { videoUrl: "https://cdn.example.com/source.mp4" }
+      const result = buildPayload(n, jobId, inputs)
+      expect(result.jobName).toBe("extend-video")
+      expect(result.modelIdentifier).toBe("seedance-2-extend:12s:1080p")
+      expect(result.payload).toMatchObject({
+        provider: "seedance-2-extend",
+        video: "https://cdn.example.com/source.mp4",
+        prompt: "the ball keeps rolling",
+        duration: 12,
+        resolution: "1080p",
+        generateAudio: false,
+      })
+      expect(result.payload.kieTaskId).toBeUndefined()
+    })
+
+    it("extend-video seedance-2-extend defaults reserve at the 8s/720p tier", () => {
+      const n = node("n1", "extend-video", { provider: "seedance-2-extend", prompt: "keep going" })
+      const result = buildPayload(n, jobId, { videoUrl: "https://v.mp4" })
+      expect(result.modelIdentifier).toBe("seedance-2-extend:8s:720p")
+    })
+
+    it("extend-video seedance-2-extend injects negative as in-prompt Avoid", () => {
+      const n = node("n1", "extend-video", {
+        provider: "seedance-2-extend",
+        prompt: "she walks away",
+        negativePrompt: "blur",
+      })
+      const result = buildPayload(n, jobId, { videoUrl: "https://v.mp4" })
+      expect(result.payload.prompt).toContain("she walks away")
+      expect(result.payload.prompt).toContain("Avoid: blur")
+    })
+
     it("transcribe", () => {
       const n = node("n1", "transcribe", { provider: "elevenlabs-stt" })
       const inputs: ResolvedInputs = { audioUrl: "https://audio.mp3" }

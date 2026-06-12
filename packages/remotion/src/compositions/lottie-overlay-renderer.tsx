@@ -8,7 +8,11 @@ import {
   cancelRender,
 } from "remotion"
 import { Lottie, type LottieAnimationData } from "@remotion/lottie"
-import { resolveLottieOverlaySrc } from "@nodaro/shared"
+import { resolveLottieOverlaySrc, normalizeLottieLayers } from "@nodaro/shared"
+import { useLottieInitWatchdog } from "../lib/lottie-init-watchdog"
+// Text overlays (e.g. authored kinetic typography) need the safelisted font
+// families registered in the render page, same as the lottie-graphic comp.
+import "../lib/font-registry"
 import type { LottieOverlayPlan, LottieOverlayItem } from "../plan-types"
 
 interface LottieOverlayRendererProps {
@@ -18,6 +22,8 @@ interface LottieOverlayRendererProps {
 function LottieOverlayLayer({ overlay }: { readonly overlay: LottieOverlayItem }) {
   const [handle] = useState(() => delayRender(`Loading Lottie: ${overlay.id}`))
   const [animationData, setAnimationData] = useState<LottieAnimationData | null>(null)
+  // Armed only once the fetch has delivered data — the fetch has its own 30s budget.
+  const onAnimationLoaded = useLottieInitWatchdog(overlay.id, animationData !== null)
 
   useEffect(() => {
     let cancelled = false
@@ -37,7 +43,7 @@ function LottieOverlayLayer({ overlay }: { readonly overlay: LottieOverlayItem }
       })
       .then((json) => {
         if (!cancelled) {
-          setAnimationData(json)
+          setAnimationData(normalizeLottieLayers(json))
           continueRender(handle)
         }
       })
@@ -77,6 +83,7 @@ function LottieOverlayLayer({ overlay }: { readonly overlay: LottieOverlayItem }
         loop={overlay.loop}
         playbackRate={overlay.playbackRate}
         renderer={overlay.renderer}
+        onAnimationLoaded={onAnimationLoaded}
         style={{ width: "100%", height: "100%" }}
       />
     </div>

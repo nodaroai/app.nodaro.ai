@@ -23,8 +23,10 @@ import {
   runLtxRetake,
 } from "../../providers/replicate/ltx-video.js"
 import { config } from "../../lib/config.js"
-import { REPLICATE_LIP_SYNC_PROVIDERS, SEEDANCE_LIP_SYNC_PROVIDERS, estimateLoopTrimAddonCredits, isVeoProvider } from "@nodaro/shared"
+import { REPLICATE_LIP_SYNC_PROVIDERS, SEEDANCE_2_EXTEND_STITCH, SEEDANCE_LIP_SYNC_PROVIDERS, estimateLoopTrimAddonCredits, isVeoProvider } from "@nodaro/shared"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
+import { combineVideos } from "../../providers/video/combine-videos.js"
+import { resolveSourceMatchedAspect } from "../../providers/video/source-matched-aspect.js"
 import {
   cleanupWorkDir,
   createWorkDir,
@@ -33,7 +35,7 @@ import {
 } from "../../providers/video/ffmpeg-utils.js"
 import { applySmartLoopCutToR2Url } from "../../providers/video/apply-smart-loop-cut.js"
 import { join } from "node:path"
-import { readFile } from "node:fs/promises"
+import { readFile, rm } from "node:fs/promises"
 import { uploadBufferToR2 } from "../../lib/storage.js"
 import { runPostProcessing } from "../../lib/post-processing-error.js"
 
@@ -872,7 +874,7 @@ const handleVideoUpscale: HandlerFn = async function handleVideoUpscale(job, ctx
 
 const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) {
   const d = job.data as Record<string, unknown>
-  const provider = d.provider as "veo-extend" | "runway-extend" | "ltx-2.3-pro"
+  const provider = d.provider as "veo-extend" | "runway-extend" | "ltx-2.3-pro" | "seedance-2-extend"
 
   // ─── LTX 2.3 Pro extend ────────────────────────────────────────────────
   // Synchronous `replicate.wait()` — the prediction id is persisted on the
@@ -922,6 +924,102 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
     if (ltxExtendOk) {
       console.log(
         `[worker] Job ${ctx.jobId} completed: ${ltxExtendR2Url} (provider: ltx-2.3-pro, cost: $${ltxExtendResult.cost?.toFixed(6) ?? "N/A"})`,
+      )
+    }
+    return
+  }
+
+  // ─── Seedance 2 trim-stitch extend ─────────────────────────────────────
+  // Extends ANY video by URL: generate the continuation through the
+  // seedance-2 reference-video transport with the bare temporal template,
+  // then trim-stitch source+extension into one seamless clip. The template
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  // keywords / meta-instructions re-stage the scene; dropping 4 source-tail
+  // + 3 extension-head frames removes the duplicated boundary).
+  if (provider === "seedance-2-extend") {
+    const { video: sourceUrl, prompt: userPrompt, duration, resolution, generateAudio } = job.data as {
+      jobId: string
+      video: string
+      prompt: string
+      duration?: number
+      resolution?: "480p" | "720p" | "1080p"
+      generateAudio?: boolean
+    }
+    console.log(`[worker] extend-video ${ctx.jobId} (provider: seedance-2-extend)`)
+
+    // Snap into seedance-2's native 4–15s window; the 8s default mirrors the
+    // credit reservation's default tier so reserve and generation can't diverge.
+    const extSeconds = Math.min(15, Math.max(4, Math.round(duration ?? 8)))
+
+    // The extension must match the SOURCE's shape or the stitch letterboxes.
+    // seedance-2 natively accepts aspect_ratio "adaptive" (adopts the
+    // reference video's ratio — live-verified: 720×1280 ref → 496×864 out),
+    // so this resolves without a probe round-trip; providers without a
+    // native token would ffprobe + snap to the closest catalog ratio.
+    const aspectRatio = await resolveSourceMatchedAspect("seedance-2", sourceUrl)
+
+    const kiePrompt = `Generate the content after Video 1: ${String(userPrompt ?? "").trim()}`
+
+    await setJobProgress(job, ctx.jobId, 5)
+    const seedanceRamp = startProgressRamp(job, ctx.jobId, { start: 5, cap: 75 })
+    let gen
+    try {
+      // NO onTaskCreated on purpose: the KIE task's result is the raw
+      // extension clip, NOT the deliverable. Persisting it would let the
+      // reconcile cron finalize this extend-video job with the unstitched
+      // extension (silent wrong output). If the worker dies mid-wait,
+      // BullMQ's stalled-job recovery re-runs the whole handler instead.
+      gen = await textToVideo(kiePrompt, "seedance-2", extSeconds, aspectRatio, {
+        resolution: resolution ?? "720p",
+        generateAudio: generateAudio ?? true,
+        referenceVideoUrls: [sourceUrl],
+      })
+    } finally {
+      seedanceRamp.stop()
+    }
+
+    // Trim-stitch (SEEDANCE_2_EXTEND_STITCH): combineVideos trims only at
+    // clip BOUNDARIES, so trimEndFrames hits the source's tail and
+    // trimStartFrames the extension's head; hard cut + timeline-anchored
+    // audio fades keep A/V sample-locked. A stitch failure fails the job
+    // (full refund) — never deliver the bare extension as the result.
+    const stitchedPath = await combineVideos({
+      videoUrls: [sourceUrl, gen.url],
+      transition: "cut",
+      transitionDuration: SEEDANCE_2_EXTEND_STITCH.audioFadeSec,
+      audioMode: "crossfade",
+      audioCrossfadeCurve: "equal-power",
+      trimStartFrames: SEEDANCE_2_EXTEND_STITCH.trimHeadFrames,
+      trimEndFrames: SEEDANCE_2_EXTEND_STITCH.trimTailFrames,
+    })
+    await setJobProgress(job, ctx.jobId, 85)
+
+    const stitchedR2Url = await watermarkLocalVideoAndUpload(
+      stitchedPath,
+      ctx.jobId,
+      ctx.jobUserId,
+      ctx.shouldWatermark,
+    )
+    // combineVideos manages its own temp dir (not cleanupWorkDir-compatible)
+    await rm(dirname(stitchedPath), { recursive: true, force: true }).catch(() => {})
+    await setJobProgress(job, ctx.jobId, 100)
+
+    const stitchedThumbUrl = await generateAndUploadThumbnail(stitchedR2Url, ctx.jobId, ctx.jobUserId)
+    const { ok: seedanceOk } = await finalizeJobWithMedia({
+      jobId: ctx.jobId,
+      jobType: "extend-video",
+      result: { url: stitchedR2Url, cost: gen.cost ?? null, providerUsed: "seedance-2-extend" },
+      mediaUrl: stitchedR2Url,
+      extraOutputData: {
+        thumbnailUrl: stitchedThumbUrl,
+        // Raw (unstitched) extension clip — provenance/debug only.
+        rawExtensionUrl: gen.url,
+      },
+    })
+    if (seedanceOk) {
+      console.log(
+        `[worker] Job ${ctx.jobId} completed: ${stitchedR2Url} (provider: seedance-2-extend, cost: $${gen.cost?.toFixed(6) ?? "N/A"})`,
       )
     }
     return

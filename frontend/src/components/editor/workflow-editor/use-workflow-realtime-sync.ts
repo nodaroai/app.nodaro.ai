@@ -80,6 +80,8 @@ interface RealtimeWorkflowRow {
   readonly nodes: readonly Node[] | null
   readonly edges: readonly Edge[] | null
   readonly updated_at: string | null
+  /** Monotonic content version (workflows.version, trigger-bumped). */
+  readonly version?: number | null
   /**
    * The full JSONB settings column: `{ characterDefinitions,
    * flowPromptTemplates, presentationSettings, viewport }`. Forwarded
@@ -136,6 +138,9 @@ export interface UseWorkflowRealtimeSyncParams {
     readonly nodes: Node[]
     readonly edges: Edge[]
     readonly updatedAt: string
+    /** Monotonic content version (workflows.version) when present on the
+     *  broadcast row — advances the store's CAS token on clean snaps. */
+    readonly version?: number | null
     readonly settings: Record<string, unknown> | null
   }) => void
   /**
@@ -259,6 +264,7 @@ export function useWorkflowRealtimeSync(
               nodes: incomingNodes,
               edges: incomingEdges,
               updatedAt: incomingUpdatedAt,
+              version: typeof next.version === "number" ? next.version : null,
               settings: incomingSettings,
             })
             return

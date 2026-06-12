@@ -53,6 +53,8 @@ vi.mock("@/lib/request-helpers.js", () => ({
 // ---------------------------------------------------------------------------
 
 import { extendVideoRoutes } from "../extend-video.js"
+import { videoQueue } from "@/lib/queue.js"
+import { reserveCreditsForJob } from "@/middleware/credit-guard.js"
 import { videoUpscaleRoutes } from "../video-upscale.js"
 import { motionTransferRoutes } from "../motion-transfer.js"
 import { lipSyncRoutes } from "../lip-sync.js"
@@ -135,6 +137,79 @@ describe("POST /v1/extend-video — Zod validation", () => {
   it("accepts optional quality '720p'", async () => {
     const res = await app.inject({ method: "POST", url: "/v1/extend-video", payload: { ...validBody, quality: "720p" } })
     expect(res.statusCode).not.toBe(400)
+  })
+
+  // — seedance-2-extend: URL-based trim-stitch extend —
+
+  const seedanceBody = {
+    videoUrl: "https://example.com/source.mp4",
+    prompt: "the ball keeps rolling until it hits a cup",
+    provider: "seedance-2-extend",
+    userId: "user-123",
+  }
+
+  it("accepts a valid seedance-2-extend body (videoUrl + prompt, no kieTaskId)", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/extend-video", payload: seedanceBody })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().jobId).toBe("job-1")
+  })
+
+  it("rejects seedance-2-extend without videoUrl", async () => {
+    const { videoUrl: _, ...body } = seedanceBody
+    const res = await app.inject({ method: "POST", url: "/v1/extend-video", payload: body })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.message).toMatch(/videoUrl/)
+  })
+
+  it("rejects seedance-2-extend without prompt (continuation content is required)", async () => {
+    const { prompt: _, ...body } = seedanceBody
+    const res = await app.inject({ method: "POST", url: "/v1/extend-video", payload: body })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.message).toMatch(/prompt/)
+  })
+
+  it("accepts seedance resolutions 480p/720p/1080p, rejects 4K", async () => {
+    for (const resolution of ["480p", "720p", "1080p"]) {
+      const res = await app.inject({ method: "POST", url: "/v1/extend-video", payload: { ...seedanceBody, resolution } })
+      expect(res.statusCode).not.toBe(400)
+    }
+    const bad = await app.inject({ method: "POST", url: "/v1/extend-video", payload: { ...seedanceBody, resolution: "4K" } })
+    expect(bad.statusCode).toBe(400)
+  })
+
+  it("rejects non-boolean generateAudio", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/extend-video", payload: { ...seedanceBody, generateAudio: "yes" } })
+    expect(res.statusCode).toBe(400)
+  })
+
+  it("queues the URL-shaped seedance payload (video/prompt/duration/resolution/generateAudio)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/extend-video",
+      payload: { ...seedanceBody, duration: 12, resolution: "1080p", generateAudio: false },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(vi.mocked(videoQueue.add)).toHaveBeenCalledWith("extend-video", expect.objectContaining({
+      jobId: "job-1",
+      provider: "seedance-2-extend",
+      video: seedanceBody.videoUrl,
+      prompt: seedanceBody.prompt,
+      duration: 12,
+      resolution: "1080p",
+      generateAudio: false,
+      usageLogId: "u-1",
+    }))
+    const payload = vi.mocked(videoQueue.add).mock.calls[0]![1] as Record<string, unknown>
+    expect(payload.kieTaskId).toBeUndefined()
+  })
+
+  it("reserves credits at the duration×resolution composite (default 8s/720p)", async () => {
+    await app.inject({ method: "POST", url: "/v1/extend-video", payload: seedanceBody })
+    expect(vi.mocked(reserveCreditsForJob).mock.calls[0]![3]).toBe("seedance-2-extend:8s:720p")
+
+    vi.clearAllMocks()
+    await app.inject({ method: "POST", url: "/v1/extend-video", payload: { ...seedanceBody, duration: 12, resolution: "1080p" } })
+    expect(vi.mocked(reserveCreditsForJob).mock.calls[0]![3]).toBe("seedance-2-extend:12s:1080p")
   })
 })
 

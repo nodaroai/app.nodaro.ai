@@ -125,13 +125,40 @@ describe("buildSnapshot (character)", () => {
     expect(snap.voice).toEqual({ voiceId: "v", voiceType: "premade" })
   })
 
-  it("reduces a custom voice to display-name-only (drops voiceId)", () => {
+  it("keeps a library voice fully (public ElevenLabs data — id + preview + provider)", () => {
+    const voice = {
+      voiceId: "V55PLkF0YuZYdHsom49R", voiceName: "Mike", traits: "deep",
+      voiceType: "library", previewUrl: "https://cdn/p.mp3", ttsProvider: "elevenlabs-turbo",
+    }
+    const snap = buildSnapshot("character", { ...row, voice }, {}) as Record<string, unknown>
+    expect(snap.voice).toEqual(voice)
+  })
+
+  it("classifies a legacy untyped premade-name voice as premade and carries it", () => {
     const snap = buildSnapshot(
       "character",
-      { ...row, voice: { voiceId: "v", voiceName: "My Clone", traits: "warm", voiceType: "custom" } },
+      { ...row, voice: { voiceId: "Rachel", voiceName: "Rachel", traits: "calm" } },
       {},
     ) as Record<string, unknown>
-    expect(snap.voice).toEqual({ voiceName: "My Clone", voiceType: "custom" })
+    expect(snap.voice).toEqual({ voiceId: "Rachel", voiceName: "Rachel", traits: "calm", voiceType: "premade" })
+  })
+
+  it("reduces a custom voice to display-name + sample (drops voiceId)", () => {
+    const snap = buildSnapshot(
+      "character",
+      { ...row, voice: { voiceId: "v", voiceName: "My Clone", traits: "warm", voiceType: "custom", previewUrl: "https://cdn/clone-sample.mp3" } },
+      {},
+    ) as Record<string, unknown>
+    expect(snap.voice).toEqual({ voiceName: "My Clone", voiceType: "custom", previewUrl: "https://cdn/clone-sample.mp3" })
+  })
+
+  it("reduces a legacy untyped voice with an unrecognized id to name-only (could be a clone)", () => {
+    const snap = buildSnapshot(
+      "character",
+      { ...row, voice: { voiceId: "aB3dE5fG7hI9kL1mN0pQ", voiceName: "Old Voice" } },
+      {},
+    ) as Record<string, unknown>
+    expect(snap.voice).toEqual({ voiceName: "Old Voice", voiceType: undefined })
   })
 
   it("carries reference_videos_by_variant from copiedAssets", () => {

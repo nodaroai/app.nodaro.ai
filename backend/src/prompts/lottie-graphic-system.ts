@@ -52,8 +52,19 @@ For a SEAMLESS LOOP, repeat the first keyframe's value as the last keyframe at t
 ## Layer discipline
 
 - Use \`"ty": 4\` shape layers for vector content. Add \`"ty": 3\` null layers as animation parents when you need shared motion, and \`"ty": 0\` precomp layers (with a matching \`assets\` precomp entry) only for genuine nesting.
-- Every layer needs a \`"ks"\` transform object (\`o\`, \`r\`, \`p\`, \`a\`, \`s\`), an \`"ip"\` and \`"op"\` BOTH within \`[0, op]\`, and a UNIQUE integer \`"ind"\`.
+- Every layer needs a \`"ks"\` transform object (\`o\`, \`r\`, \`p\`, \`a\`, \`s\`), an \`"ip"\` and \`"op"\` BOTH within \`[0, op]\`, \`"st": 0\` and \`"sr": 1\` (REQUIRED — lottie-web treats a missing \`st\` as NaN and renders the layer blank), and a UNIQUE integer \`"ind"\`.
 - Keep it tight: ≤12 layers is typical; the HARD MAXIMUM is 50 layers. Keep the entire serialized JSON well under 100 KB.
+- LAYER ORDER = STACKING ORDER (top of the \`layers\` array = FRONT). \`layers[0]\` renders on top of everything; the LAST array entry renders at the back. Author foreground content first (text, hero shapes), supporting elements next, and any full-frame backdrop as the FINAL entry — a backdrop placed first paints over the whole composition and hides every other layer.
+
+## Repeaters
+
+A repeater (\`"ty": "rp"\`) is the right tool for confetti, particles, tick marks and ray bursts — author ONE shape and multiply it instead of hand-writing dozens of layers. Two hard rules:
+
+- ORDER: the repeater goes AFTER the shapes and fills it duplicates inside the same group's \`it\` array, just before the group's closing \`"tr"\` — a repeater placed first duplicates nothing.
+- COMPLETE \`"tr"\`: every repeater MUST carry its own full transform with per-copy offsets and start/end opacity — lottie-web crashes on a repeater missing \`tr\`/\`so\`/\`eo\`:
+  \`"tr": { "a": {"a":0,"k":[0,0]}, "p": {"a":0,"k":[<dx per copy>,<dy per copy>]}, "r": {"a":0,"k":<degrees per copy>}, "s": {"a":0,"k":[100,100]}, "so": {"a":0,"k":100}, "eo": {"a":0,"k":100} }\`
+
+Put real offsets in the repeater's \`tr\` (\`p\`, \`r\`, and a slight \`s\` falloff) so the copies fan out instead of stacking on one spot.
 
 ## MANDATORY SLOTS — the editable surface
 
@@ -140,32 +151,7 @@ EXAMPLE OUTPUT (lower third):
   },
   "layers": [
     {
-      "ddd": 0, "ind": 1, "ty": 4, "nm": "accent-bar",
-      "ks": {
-        "o": { "a": 1, "k": [
-          { "t": 0, "s": [100], "i": {"x":[0.4],"y":[1]}, "o": {"x":[0.2],"y":[0]} },
-          { "t": 120, "s": [100], "i": {"x":[0.4],"y":[1]}, "o": {"x":[0.2],"y":[0]} },
-          { "t": 140, "s": [0] }
-        ] },
-        "r": { "a": 0, "k": 0 },
-        "p": { "a": 1, "k": [
-          { "t": 0, "s": [40, 880], "i": {"x":[0.2],"y":[1]}, "o": {"x":[0.3],"y":[0]} },
-          { "t": 20, "s": [120, 880] }
-        ] },
-        "a": { "a": 0, "k": [0, 0] },
-        "s": { "a": 0, "k": [100, 100] }
-      },
-      "ip": 0, "op": 150,
-      "shapes": [
-        { "ty": "gr", "it": [
-          { "ty": "rc", "d": 1, "s": { "a": 0, "k": [360, 6] }, "p": { "a": 0, "k": [0, 0] }, "r": { "a": 0, "k": 0 } },
-          { "ty": "fl", "c": { "a": 0, "k": [1, 0, 0.451, 1], "sid": "primaryColor" }, "o": { "a": 0, "k": 100 } },
-          { "ty": "tr", "p": { "a": 0, "k": [0, 0] }, "a": { "a": 0, "k": [0, 0] }, "s": { "a": 0, "k": [100, 100] }, "r": { "a": 0, "k": 0 }, "o": { "a": 0, "k": 100 } }
-        ] }
-      ]
-    },
-    {
-      "ddd": 0, "ind": 2, "ty": 5, "nm": "name-text",
+      "ddd": 0, "ind": 1, "st": 0, "sr": 1, "ty": 5, "nm": "name-text",
       "ks": {
         "o": { "a": 1, "k": [
           { "t": 10, "s": [0], "i": {"x":[0.4],"y":[1]}, "o": {"x":[0.2],"y":[0]} },
@@ -192,7 +178,7 @@ EXAMPLE OUTPUT (lower third):
       }
     },
     {
-      "ddd": 0, "ind": 3, "ty": 5, "nm": "role-text",
+      "ddd": 0, "ind": 2, "st": 0, "sr": 1, "ty": 5, "nm": "role-text",
       "ks": {
         "o": { "a": 1, "k": [
           { "t": 16, "s": [0], "i": {"x":[0.4],"y":[1]}, "o": {"x":[0.2],"y":[0]} },
@@ -217,6 +203,31 @@ EXAMPLE OUTPUT (lower third):
         "m": { "g": 1, "a": { "a": 0, "k": [0, 0] } },
         "a": []
       }
+    },
+    {
+      "ddd": 0, "ind": 3, "st": 0, "sr": 1, "ty": 4, "nm": "accent-bar",
+      "ks": {
+        "o": { "a": 1, "k": [
+          { "t": 0, "s": [100], "i": {"x":[0.4],"y":[1]}, "o": {"x":[0.2],"y":[0]} },
+          { "t": 120, "s": [100], "i": {"x":[0.4],"y":[1]}, "o": {"x":[0.2],"y":[0]} },
+          { "t": 140, "s": [0] }
+        ] },
+        "r": { "a": 0, "k": 0 },
+        "p": { "a": 1, "k": [
+          { "t": 0, "s": [40, 880], "i": {"x":[0.2],"y":[1]}, "o": {"x":[0.3],"y":[0]} },
+          { "t": 20, "s": [120, 880] }
+        ] },
+        "a": { "a": 0, "k": [0, 0] },
+        "s": { "a": 0, "k": [100, 100] }
+      },
+      "ip": 0, "op": 150,
+      "shapes": [
+        { "ty": "gr", "it": [
+          { "ty": "rc", "d": 1, "s": { "a": 0, "k": [360, 6] }, "p": { "a": 0, "k": [0, 0] }, "r": { "a": 0, "k": 0 } },
+          { "ty": "fl", "c": { "a": 0, "k": [1, 0, 0.451, 1], "sid": "primaryColor" }, "o": { "a": 0, "k": 100 } },
+          { "ty": "tr", "p": { "a": 0, "k": [0, 0] }, "a": { "a": 0, "k": [0, 0] }, "s": { "a": 0, "k": [100, 100] }, "r": { "a": 0, "k": 0 }, "o": { "a": 0, "k": 100 } }
+        ] }
+      ]
     }
   ]
 }

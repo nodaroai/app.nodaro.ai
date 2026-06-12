@@ -1,4 +1,4 @@
-import type { CharacterAspectRatio, CharacterAttachColumn, EntityStyle } from "@nodaro/shared"
+import type { CharacterAspectRatio, CharacterAttachColumn, EntityStyle, TtsProvider } from "@nodaro/shared"
 import type { NodaroClient } from "../client.js"
 
 /**
@@ -84,9 +84,12 @@ export interface Character {
    *  `previewUrl` is a playable audio sample (the voice's `preview_url` / clone
    *  sample) the studio plays in an `<audio>` element — persisted so Voice Library
    *  voices (which have no by-id lookup) stay previewable after reload. Client-
-   *  played only; the server never fetches it. Both optional — a character may
-   *  have no voice, or a legacy voice predating these fields. */
-  voice: { voiceId: string; voiceName: string; traits: string; voiceType?: "premade" | "library" | "custom"; previewUrl?: string } | null
+   *  played only; the server never fetches it. `ttsProvider` is the library
+   *  voice's verified TTS provider (see `SharedVoice.recommendedProvider`) —
+   *  send it as the text-to-speech `provider` so the voice renders on a model
+   *  it's verified for. All optional — a character may have no voice, or a
+   *  legacy voice predating these fields. */
+  voice: { voiceId: string; voiceName: string; traits: string; voiceType?: "premade" | "library" | "custom"; previewUrl?: string; ttsProvider?: TtsProvider } | null
   personality: {
     mood: string
     speechStyle: string
@@ -180,9 +183,10 @@ export interface UpsertCharacterInput {
    *  like the asset buckets. Server caps: 24 boards, 200-char names. */
   boards?: Array<{ name: string; url: string }>
   /** See `Character.voice` — persisted alongside the voice so TTS can resolve a
-   *  library/custom voice by id, and `previewUrl` keeps the sample playable after
-   *  reload. Both optional. */
-  voice?: { voiceId: string; voiceName: string; traits: string; voiceType?: "premade" | "library" | "custom"; previewUrl?: string } | null
+   *  library/custom voice by id, `previewUrl` keeps the sample playable after
+   *  reload, and `ttsProvider` keeps generation on a model the voice is
+   *  verified for. All optional. */
+  voice?: { voiceId: string; voiceName: string; traits: string; voiceType?: "premade" | "library" | "custom"; previewUrl?: string; ttsProvider?: TtsProvider } | null
   personality?: {
     mood: string
     speechStyle: string

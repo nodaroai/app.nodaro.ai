@@ -1847,20 +1847,21 @@ export async function kieExtendVideoVEO(
 }
 
 /**
- * Seedance 2 video extension — UNSUPPORTED.
+ * Seedance 2 video extension via THIS wrapper — unsupported (kept as the
+ * Shot List Critic's planning-time gate for pipeline video_continuation).
  *
- * As of 2026-05, KIE's Seedance 2 endpoint exposes `reference_video_urls` but
- * the parameter is a multi-video STYLE reference, not a continuation primitive
- * (per https://docs.kie.ai/market/bytedance/seedance-2). The model has no
- * `video_reference_url` / `extend` / `continuation` knob.
+ * NOTE (2026-06 spike): Seedance 2 DOES continue videos through
+ * `reference_video_urls` + the bare temporal template ("Generate the content
+ * after Video 1: ..."), returning extension-only output with continued audio
+ * — validated end-to-end in
+ ***REDACTED-OSS-SCRUB***
+ * ships that as the `seedance-2-extend` provider on the extend-video node
+ * (worker-side template + trim-stitch in workers/handlers/video-ai.ts);
+ * route pipeline work there instead of through this single-call wrapper.
  *
- * Throws `provider_not_available:seedance-2-extend` so the Shot List Critic
- * (Section H) flags any shot that requests Seedance-based video_continuation
- * at planning time. Update this wrapper if/when ByteDance ships a true
- * extension primitive.
- *
- * TODO(1C.3 Section H): Add Shot List Critic eligibility rule rejecting
- *   `shot_input_mode='video_continuation'` with `video_model='seedance-2'`.
+ * Still throws `provider_not_available:seedance-2-extend` so the Shot List
+ * Critic (Section H) flags shots requesting Seedance-based video_continuation
+ * until the pipeline is wired to the extend-video flow.
  */
 export async function kieExtendVideoSeedance(
   _args: KieExtendVideoArgs,

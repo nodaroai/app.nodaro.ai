@@ -466,6 +466,21 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // LTX extend + retake (Pro only, 1080p): per-second × duration at credit-guard time.
   // 5 cr/sec matches Pro:1080p rate (extend output is at the input's resolution; retake is locked 1080p).
   "ltx-2.3-pro-extend:per-second": 4,
+  // ── Seedance 2 Extend — trim-stitch continuation of ANY video (rates =
+  //    seedance-2 -ref matrix + 3cr ffmpeg stitch; spike findings 2026-06-11) ──
+  "seedance-2-extend": 53,             // default 8s 720p
+  "seedance-2-extend:4s:480p": 15,
+  "seedance-2-extend:8s:480p": 26,
+  "seedance-2-extend:12s:480p": 38,
+  "seedance-2-extend:15s:480p": 47,
+  "seedance-2-extend:4s:720p": 28,
+  "seedance-2-extend:8s:720p": 53,
+  "seedance-2-extend:12s:720p": 78,
+  "seedance-2-extend:15s:720p": 97,
+  "seedance-2-extend:4s:1080p": 41,
+  "seedance-2-extend:8s:1080p": 78,
+  "seedance-2-extend:12s:1080p": 116,
+  "seedance-2-extend:15s:1080p": 144,
   "ltx-2.3-pro-retake:per-second": 4,
   ***REDACTED-OSS-SCRUB***
   // ── Video Extend ──
@@ -1976,6 +1991,19 @@ function getNodeModelIdentifier(node: { type: string; data?: Record<string, unkn
   // Extend-video: VEO quality costs more than fast
   if (nodeType === "extend-video" && provider === "veo-extend" && data.model === "quality") {
     return "veo-extend:quality"
+  }
+
+  // Extend-video: seedance trim-stitch extend prices by duration tier ×
+  // resolution (rows already include the ffmpeg stitch overhead).
+  if (nodeType === "extend-video" && provider === "seedance-2-extend") {
+    return buildVideoCreditModelIdentifier(
+      provider,
+      (data.duration as number) ?? 8,
+      undefined,
+      undefined,
+      undefined,
+      (data.resolution as string) ?? "720p",
+    )
   }
 
   // Motion transfer: duration-tiered pricing

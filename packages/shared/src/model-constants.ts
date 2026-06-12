@@ -544,6 +544,7 @@ export const EXTEND_VIDEO_PROVIDERS = [
   "veo-extend",
   "runway-extend",
   "ltx-2.3-pro",
+  "seedance-2-extend",
 ] as const
 export type ExtendVideoProvider = typeof EXTEND_VIDEO_PROVIDERS[number]
 
@@ -777,6 +778,7 @@ export const GUIDANCE_SCALE_SUPPORT: Record<string, { min: number; max: number; 
  * TODO: Run verification script and update costs after confirming actual KIE pricing.
  */
 export const DURATION_PRICED_PROVIDERS = new Set([
+  "seedance-2-extend",
   "kling-3.0",
   "kling-3-omni",
   "kling",
@@ -825,6 +827,24 @@ export const SEEDANCE_2_REF_LIMITS = {
   images: 9,
   videos: 3,
   audio: 3,
+} as const
+
+/**
+ * Trim-stitch parameters for the seedance-2-extend provider (spike-validated
+ ***REDACTED-OSS-SCRUB***
+ * the model's extension output wobbles for its first ~3 frames and the source
+ * tail's last ~4 frames lead into it; dropping both and butt-joining yields a
+ * seam SMOOTHER than ordinary in-clip motion (PSNR 34.4dB vs 30.6dB
+ * adjacent-frame baseline). The 0.15s timeline-anchored audio fades kill
+ * boundary clicks without shifting sync (combineVideos cut+crossfade path).
+ */
+export const SEEDANCE_2_EXTEND_STITCH = {
+  /** Frames dropped from the END of the source clip. */
+  trimTailFrames: 4,
+  /** Frames dropped from the START of the generated extension. */
+  trimHeadFrames: 3,
+  /** Boundary audio fade length (seconds), timeline-preserving. */
+  audioFadeSec: 0.15,
 } as const
 
 /**
@@ -899,13 +919,40 @@ export const RESOLUTION_VIDEO_REF_PRICING = SEEDANCE_2_PROVIDERS
 
 /**
  * Video models priced by (duration × resolution) WITHOUT a video-ref dimension.
- * Identifier suffix: `:{resolution}` (480p / 720p), appended after the duration
- * tier. Distinct from RESOLUTION_VIDEO_REF_PRICING (Seedance), which also adds
- * the `-ref` variant. Grok Imagine Video 1.5 is the first member.
+ * Identifier suffix: `:{resolution}`, appended after the duration tier; value =
+ * the provider's PRICED resolution tiers. Any resolution outside the list
+ * (or undefined) collapses to the FIRST entry — the provider's default tier —
+ * so the builder can never emit an unpriced composite (the hard-fail guard
+ * fuzzes the full resolution space). Distinct from
+ * RESOLUTION_VIDEO_REF_PRICING (Seedance gen), which also adds `-ref` variants.
  */
-export const RESOLUTION_DURATION_PRICING = new Set<string>([
-  "grok-imagine-video-1.5",
-])
+export const RESOLUTION_DURATION_PRICING: Record<string, readonly string[]> = {
+  // KIE supports only 480p/720p here; 480p is the default.
+  "grok-imagine-video-1.5": ["480p", "720p"],
+  // seedance-2-extend always uses a video ref, so pricing has no -ref
+  // dimension — duration tier + ":res" only (rates = seedance-2 -ref + stitch).
+  "seedance-2-extend": ["480p", "720p", "1080p"],
+}
+
+/**
+ * Video generation models whose provider API natively accepts a "match the
+ * visual input's aspect" token, mapped to that provider's EXACT token.
+ * Consumed by the backend's `resolveSourceMatchedAspect`: members get the
+ * native token (no probe round-trip, exact match even for off-catalog ratios
+ * like 4:5); everyone else falls back to ffprobe + closest catalog ratio.
+ *
+ * Only add entries whose match-the-input semantics are verified against the
+ * provider's docs AND a live job — e.g. grok-imagine-video-1.5 accepts
+ * "auto", but that means "provider default", NOT "match input", so it does
+ * not belong here.
+ *
+ * seedance-2 family: `adaptive` per docs.kie.ai/market/bytedance/seedance-2
+ * + seedance-2-fast (enum'd alongside the fixed ratios; default 16:9).
+ */
+export const NATIVE_ADAPTIVE_ASPECT: Record<string, string> = {
+  "seedance-2": "adaptive",
+  "seedance-2-fast": "adaptive",
+}
 
 /**
  * Video providers that REQUIRE an input image (image-to-video only) even though
@@ -1143,6 +1190,12 @@ export const VIDEO_DURATION_TIERS: Record<string, Array<{ maxSeconds: number; su
     { maxSeconds: 12, suffix: "12s" },
   ],
   "seedance-2": [
+    { maxSeconds: 4, suffix: "4s" },
+    { maxSeconds: 8, suffix: "8s" },
+    { maxSeconds: 12, suffix: "12s" },
+    { maxSeconds: 15, suffix: "15s" },
+  ],
+  "seedance-2-extend": [
     { maxSeconds: 4, suffix: "4s" },
     { maxSeconds: 8, suffix: "8s" },
     { maxSeconds: 12, suffix: "12s" },

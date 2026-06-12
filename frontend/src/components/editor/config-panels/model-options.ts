@@ -174,6 +174,7 @@ export const EXTEND_VIDEO_MODELS = [
   { value: "runway-extend", label: "Runway Extend" },
   { value: "veo-extend", label: "VEO Extend" },
   { value: "ltx-2.3-pro", label: "LTX 2.3 Pro" },
+  { value: "seedance-2-extend", label: "Seedance 2 Extend" },
 ] as const
 
 export const V2V_DURATION_OPTIONS = [
