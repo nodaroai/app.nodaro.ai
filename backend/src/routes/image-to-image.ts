@@ -8,7 +8,7 @@ import { extractWorkflowId, extractForcePrivate, extractProvider } from "../lib/
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { llmComplete } from "../lib/llm-client.js"
-import { IMAGE_I2I_PROVIDERS, IMAGE_PROMPT_MAX } from "@nodaro/shared"
+import { IMAGE_I2I_PROVIDERS, IMAGE_PROMPT_MAX, PROMPT_HARD_CEILING } from "@nodaro/shared"
 import { buildCreditModelIdentifier } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 import {
@@ -19,7 +19,8 @@ import {
 
 const imageToImageBody = z.object({
   imageUrl: safeUrlSchema,
-  prompt: z.string().min(1).max(IMAGE_PROMPT_MAX),
+  // Generous ceiling; per-model truncation happens in the assembler (warn-don't-block).
+  prompt: z.string().min(1).max(PROMPT_HARD_CEILING),
   userPrompt: z.string().max(8000).optional(),
   provider: z.enum(IMAGE_I2I_PROVIDERS).optional(),
   referenceImageUrls: z.array(safeUrlSchema).max(13).optional(),

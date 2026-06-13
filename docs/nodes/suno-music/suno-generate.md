@@ -9,11 +9,11 @@ Suno Generate creates complete songs from text prompts. It supports multiple Sun
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| Prompt | string (max 3000) | `""` | Main text prompt describing the song. Supports Suno metatag autocomplete. |
+| Prompt | string | `""` | Main text prompt describing the song (in custom mode, the lyrics). Supports Suno metatag autocomplete. Max length is per-version: **5000** for V4.5 / V4.5PLUS / V4.5ALL / V5 / V5.5, **3000** for V4; **500** in non-custom (inspiration) mode. Over-long input is truncated to the model's limit — the editor warns first so you can switch model or shorten. |
 | Model | enum | `"V5"` | Suno model version: `V5`, `V4_5ALL`, `V4_5PLUS`, `V4_5`, `V4`. |
-| Title | string (max 200) | `""` | Title for the generated song. |
-| Lyrics | string (max 3000) | `""` | Song lyrics with metatag support (`[Verse]`, `[Chorus]`, `[Bridge]`, etc.). |
-| Style | string (max 500) | `""` | Genre and style tags (e.g., "pop rock, upbeat, energetic"). |
+| Title | string (max 80) | `""` | Title for the generated song (Suno caps titles at 80 characters). |
+| Lyrics | string | `""` | Song lyrics with metatag support (`[Verse]`, `[Chorus]`, `[Bridge]`, etc.). Same per-version max as Prompt (5000 for V4.5+/V5, 3000 for V4). |
+| Style | string (max 1000) | `""` | Genre and style tags (e.g., "pop rock, upbeat, energetic"). Max **1000** for V4.5+/V5, **200** for V4. |
 | Negative Style | string (max 500) | `""` | Styles to avoid in generation. |
 | Vocal Gender | enum | auto | `"male"`, `"female"`, or unset for automatic selection. |
 | Style Weight | number | `0.5` | Influence of style tags on output (0.0 to 1.0). |

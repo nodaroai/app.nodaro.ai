@@ -579,15 +579,38 @@ describe("generate-image", () => {
     )
   })
 
-  it("truncates prompt longer than 2000 chars", async () => {
+  it("does NOT truncate a 2500-char prompt for a 5000-cap provider (not the old 2000)", async () => {
+    // Regression (2026-06-13): the old hardcoded 2000 cut severed the appended
+    // cinematography/picker hints + negative on long prompts. The assembler now
+    // caps at the PER-PROVIDER max (flux = 5000), so 2500 passes untouched.
     const longPrompt = "x".repeat(2500)
     mockResolveNodeInputs.mockReturnValue({ prompt: longPrompt })
     mockRunImageGeneration.mockResolvedValue(undefined)
     mockCollectAncestorRefs.mockReturnValue([])
-    await executeNode(makeNode("generate-image", {}), makeCtx())
+    await executeNode(makeNode("generate-image", { provider: "flux" }), makeCtx())
     const calledPrompt = mockRunImageGeneration.mock.calls[0][1] as string
-    expect(calledPrompt.length).toBe(2000)
+    expect(calledPrompt).toBe(longPrompt)
+  })
+
+  it("truncates to the per-provider cap (flux = 5000)", async () => {
+    const huge = "x".repeat(6000)
+    mockResolveNodeInputs.mockReturnValue({ prompt: huge })
+    mockRunImageGeneration.mockResolvedValue(undefined)
+    mockCollectAncestorRefs.mockReturnValue([])
+    await executeNode(makeNode("generate-image", { provider: "flux" }), makeCtx())
+    const calledPrompt = mockRunImageGeneration.mock.calls[0][1] as string
+    expect(calledPrompt.length).toBe(5000)
     expect(calledPrompt.endsWith("...")).toBe(true)
+  })
+
+  it("respects a higher per-provider cap (nano-banana-2 = 20000)", async () => {
+    const huge = "x".repeat(6000)
+    mockResolveNodeInputs.mockReturnValue({ prompt: huge })
+    mockRunImageGeneration.mockResolvedValue(undefined)
+    mockCollectAncestorRefs.mockReturnValue([])
+    await executeNode(makeNode("generate-image", { provider: "nano-banana-2" }), makeCtx())
+    const calledPrompt = mockRunImageGeneration.mock.calls[0][1] as string
+    expect(calledPrompt).toBe(huge) // 6000 < 20000 → untruncated
   })
 
   it("resolves @character:N:variant mentions when a Character is wired upstream", async () => {

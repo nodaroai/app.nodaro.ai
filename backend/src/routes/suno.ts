@@ -6,7 +6,7 @@ import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { SUNO_MODELS, SUNO_ADD_TRACK_MODELS, SUNO_TEXT_MAX } from "@nodaro/shared"
+import { SUNO_MODELS, SUNO_ADD_TRACK_MODELS, SUNO_TEXT_MAX, SUNO_TITLE_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars } from "@nodaro/shared"
 import {
   sunoStyleBoost,
   sunoVoiceValidate,
@@ -60,8 +60,8 @@ const sunoGenerateBody = z.object({
   userPrompt: z.string().max(8000).optional(),
   model: sunoModelEnum,
   lyrics: z.string().max(SUNO_TEXT_MAX).optional(),
-  style: z.string().max(500).optional(),
-  title: z.string().max(200).optional(),
+  style: z.string().max(1000).optional(),
+  title: z.string().max(SUNO_TITLE_MAX).optional(),
   negativeStyle: z.string().max(500).optional(),
   vocalGender: z.enum(["male", "female"]).optional(),
   styleWeight: z.number().min(0).max(1).optional(),
@@ -80,8 +80,8 @@ const sunoCoverBody = z.object({
   uploadUrl: safeUrlSchema,
   model: sunoModelEnum,
   lyrics: z.string().max(SUNO_TEXT_MAX).optional(),
-  style: z.string().max(500).optional(),
-  title: z.string().max(200).optional(),
+  style: z.string().max(1000).optional(),
+  title: z.string().max(SUNO_TITLE_MAX).optional(),
   negativeStyle: z.string().max(500).optional(),
   vocalGender: z.enum(["male", "female"]).optional(),
   customMode: z.boolean().optional().default(false),
@@ -133,8 +133,8 @@ const sunoMashupBody = z.object({
   uploadUrlList: z.tuple([safeUrlSchema, safeUrlSchema]),
   model: sunoModelEnum,
   customMode: z.boolean().optional().default(false),
-  style: z.string().max(500).optional(),
-  title: z.string().max(200).optional(),
+  style: z.string().max(1000).optional(),
+  title: z.string().max(SUNO_TITLE_MAX).optional(),
   negativeStyle: z.string().max(500).optional(),
   vocalGender: z.enum(["male", "female"]).optional(),
   userId: z.string().uuid().optional(),
@@ -148,7 +148,7 @@ const sunoReplaceSectionBody = z.object({
   prompt: z.string().min(1).max(SUNO_TEXT_MAX),
   userPrompt: z.string().max(8000).optional(),
   tags: z.string().max(500),
-  title: z.string().max(200).optional(),
+  title: z.string().max(SUNO_TITLE_MAX).optional(),
   userId: z.string().uuid().optional(),
 })
 
@@ -213,7 +213,7 @@ const sunoVoiceGenerateBody = z.object({
   verifyUrl: safeUrlSchema,
   voiceName: z.string().max(200).optional(),
   description: z.string().max(500).optional(),
-  style: z.string().max(500).optional(),
+  style: z.string().max(1000).optional(),
   singerSkillLevel: sunoVoiceSkillLevelEnum.optional(),
   userId: z.string().uuid().optional(),
 })
@@ -223,8 +223,8 @@ const sunoUploadExtendBody = z.object({
   continueAt: z.number().min(0),
   defaultParamFlag: z.boolean().optional().default(false),
   model: sunoModelEnum,
-  style: z.string().max(500).optional(),
-  title: z.string().max(200).optional(),
+  style: z.string().max(1000).optional(),
+  title: z.string().max(SUNO_TITLE_MAX).optional(),
   negativeStyle: z.string().max(500).optional(),
   vocalGender: z.enum(["male", "female"]).optional(),
   userId: z.string().uuid().optional(),
@@ -246,6 +246,18 @@ export async function sunoRoutes(app: FastifyInstance) {
         return reply.status(400).send({
           error: { code: "validation_error", ...formatZodError(parsed.error) },
         })
+      }
+
+      // Clamp text to each Suno version's verified caps before the job is built
+      // (warn-don't-block: the editor warns first; this is the graceful net).
+      // prompt/lyrics: 5000 for V4.5+/V5, 3000 for V4, 500 non-custom; style:
+      // 1000 for V4.5+, 200 for V4. (title is already Zod-capped at SUNO_TITLE_MAX.)
+      {
+        const promptCap = getMaxSunoPromptChars(parsed.data.model, parsed.data.customMode ?? false)
+        const styleCap = getMaxSunoStyleChars(parsed.data.model)
+        if (parsed.data.prompt) parsed.data.prompt = parsed.data.prompt.slice(0, promptCap)
+        if (parsed.data.lyrics) parsed.data.lyrics = parsed.data.lyrics.slice(0, promptCap)
+        if (parsed.data.style) parsed.data.style = parsed.data.style.slice(0, styleCap)
       }
 
       const {

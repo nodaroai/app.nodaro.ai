@@ -128,8 +128,12 @@ describe("POST /v1/text-to-speech", () => {
     expect(body.error.code).toBe("validation_error")
   })
 
-  it("returns 400 when text exceeds 5000 characters", async () => {
-    const longText = "a".repeat(5001)
+  // Per-model TTS caps replaced the old flat 5000 reject: turbo accepts 40000,
+  // multilingual 10000, v3 3000. The route now uses a generous 40000 ceiling and
+  // clamps to the model cap in the handler (warn-don't-block); only past the
+  // ceiling is it a hard validation reject.
+  it("returns 400 when text exceeds the 40000 ceiling", async () => {
+    const longText = "a".repeat(40001)
 
     const res = await app.inject({
       method: "POST",

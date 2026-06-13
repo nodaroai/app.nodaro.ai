@@ -6,11 +6,13 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { TTS_PROVIDERS } from "@nodaro/shared"
+import { TTS_PROVIDERS, getMaxTtsChars } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 
 export const textToSpeechBody = z.object({
-  text: z.string().min(1).max(5000),
+  // Generous ceiling (eleven_turbo_v2.5 accepts 40000); the per-model cap is
+  // clamped in the handler and the editor warns first (warn-don't-block).
+  text: z.string().min(1).max(40000),
   userPrompt: z.string().max(8000).optional(),
   voice: z.string().optional(),
   provider: z.enum(TTS_PROVIDERS).optional(),
@@ -51,6 +53,11 @@ export async function textToSpeechRoutes(app: FastifyInstance) {
     // Map legacy "elevenlabs" to "elevenlabs-turbo" for credit check
     const resolvedProvider = provider === "elevenlabs" ? "elevenlabs-turbo" : (provider ?? "elevenlabs-turbo")
     const modelIdentifier = resolvedProvider
+
+    // Clamp to the model's verified per-request character cap (turbo 40000 /
+    // multilingual 10000 / v3 3000) so an over-long request can't be rejected by
+    // the provider. input_data is built from parsed.data below, so mutate it here.
+    parsed.data.text = parsed.data.text.slice(0, getMaxTtsChars(resolvedProvider))
 
     const mcpClient = extractMcpClient(req.body)
     const { data: job, error } = await supabase

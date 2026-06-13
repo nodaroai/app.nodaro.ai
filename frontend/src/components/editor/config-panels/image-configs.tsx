@@ -51,7 +51,8 @@ import type { RefImageItem } from "./tag-textarea"
 import { PromptEditor } from "./prompt-editor"
 import { ReferenceSupportWarning } from "./reference-support-warning"
 import type { ConnectedReference, ReferenceSource } from "@nodaro/shared"
-import { DEFAULT_LABEL_BY_SOURCE, characterMentionSlug, locationMentionSlug, expandExtraRefsToConnectedReferences } from "@nodaro/shared"
+import { DEFAULT_LABEL_BY_SOURCE, characterMentionSlug, locationMentionSlug, expandExtraRefsToConnectedReferences, getMaxImagePromptChars } from "@nodaro/shared"
+import { PromptLengthCounter } from "./prompt-length-counter"
 import { buildImageConnectedReferences, connectedReferencesToRefImages } from "./connected-references"
 import { ConnectedMediaList } from "./connected-media-list"
 import { PromptFieldFinalView, PromptFieldModeToggle } from "./prompt-field-final-view"
@@ -423,16 +424,19 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
             minHeightRem={3 * 1.5}
           />
         ) : (
-          <PromptEditor
-            rows={3}
-            value={data.prompt}
-            onChange={(v) => onUpdate({ prompt: v })}
-            placeholder="Describe the image to generate..."
-            referenceImages={refImagesForAutocomplete}
-            nodeRefs={nodeRefs}
-            refMap={refMap}
-            snippets={promptSnippets}
-          />
+          <>
+            <PromptEditor
+              rows={3}
+              value={data.prompt}
+              onChange={(v) => onUpdate({ prompt: v })}
+              placeholder="Describe the image to generate..."
+              referenceImages={refImagesForAutocomplete}
+              nodeRefs={nodeRefs}
+              refMap={refMap}
+              snippets={promptSnippets}
+            />
+            <PromptLengthCounter value={data.prompt} max={getMaxImagePromptChars(currentProvider)} modelLabel={currentProvider} />
+          </>
         )}
       </MappableField>
       <MappableField field="style" label="Style" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>

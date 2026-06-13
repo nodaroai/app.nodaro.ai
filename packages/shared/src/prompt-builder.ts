@@ -1,11 +1,11 @@
 /**
  * Image prompt assembly logic shared between frontend and backend.
  * Handles character description expansion, style appending, negative prompt routing,
- * 2000-char truncation, and reference image filtering by model support.
+ * provider-aware prompt truncation (default 5000 chars), and reference image filtering by model support.
  */
 
 import { resolveTemplate, applyTemplate } from "./prompt-templates.js"
-import { NATIVE_NEGATIVE_PROMPT_MODELS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT } from "./model-constants.js"
+import { NATIVE_NEGATIVE_PROMPT_MODELS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, getMaxImagePromptChars, getMaxNegativePromptChars } from "./model-constants.js"
 import { getStylePromptHint } from "./style.js"
 import { findCharacterMentionTokens, type CharacterMentionTokenInfo } from "./character-mention-slug.js"
 import { usageModeDirective, DEFAULT_USAGE_MODE, type UsageMode } from "./character-usage-mode.js"
@@ -1267,34 +1267,46 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
       }
     }
 
-    // Body span = everything after the captured directive prefix (empty in the
-    // Phase-0 consolidation branch, so `bodyBeforeSuffixes` becomes the whole
-    // consolidated string → it won't equal the caller's bodySegments join and
-    // collapses via the fallback, the documented degradation).
-    if (marks) marks.bodyBeforeSuffixes = prompt.slice(marks.directivesPrefix.length)
-
     const styleText = style?.trim()
-    if (styleText) {
-      const richHint = getStylePromptHint(styleText)
-      const styleSuffix = `\nStyle: ${richHint || styleText}`
-      if (marks) marks.styleSuffix = styleSuffix
-      prompt += styleSuffix
-    }
+    const styleSuffix = styleText ? `\nStyle: ${getStylePromptHint(styleText) || styleText}` : ""
 
     const negPrompt = negativePrompt?.trim()
     let nativeNegativePrompt: string | undefined
+    let avoidSuffix = ""
     if (negPrompt) {
       if (NATIVE_NEGATIVE_PROMPT_MODELS.has(provider)) {
-        nativeNegativePrompt = negPrompt
+        // Clamp native negatives to the provider's verified cap (e.g. ideogram /
+        // qwen = 500) so an over-long negative can't trigger a provider reject.
+        nativeNegativePrompt = negPrompt.slice(0, getMaxNegativePromptChars(provider))
       } else {
-        const avoidSuffix = `\nAvoid: ${negPrompt}`
-        if (marks) marks.avoidSuffix = avoidSuffix
-        prompt += avoidSuffix
+        avoidSuffix = `\nAvoid: ${negPrompt}`
       }
     }
+    if (marks) {
+      marks.styleSuffix = styleSuffix
+      marks.avoidSuffix = avoidSuffix
+    }
 
-    if (prompt.length > 2000) {
-      prompt = prompt.slice(0, 1997) + "..."
+    // Cap the assembled prompt at the PROVIDER's max (default IMAGE_PROMPT_MAX =
+    // 5000, what the image routes already accept) — never the old hardcoded
+    // 2000, which silently severed the appended cinematography/picker hints +
+    // the `Avoid:` negative whenever the body was long. The style/avoid suffixes
+    // are RESERVED first so a long body can never drop them (the control text is
+    // the most important to keep). Truncate the BODY, THEN append the suffixes.
+    const maxLen = getMaxImagePromptChars(provider)
+    const reserved = styleSuffix.length + avoidSuffix.length
+    if (prompt.length + reserved > maxLen) {
+      prompt = prompt.slice(0, Math.max(0, maxLen - reserved - 3)) + "..."
+    }
+    // Body span = everything after the captured directive prefix, taken from the
+    // possibly-truncated body so the segment join still reconstructs (empty in the
+    // Phase-0 consolidation branch → collapses via the fallback, the documented
+    // degradation).
+    if (marks) marks.bodyBeforeSuffixes = prompt.slice(marks.directivesPrefix.length)
+    prompt = prompt + styleSuffix + avoidSuffix
+    // Safety clamp for a pathological native-less negative that alone overflows.
+    if (prompt.length > maxLen) {
+      prompt = prompt.slice(0, maxLen - 3) + "..."
     }
 
     // Resolve `{image:N:label}` → "Image <finalSlot> (label)". The token's N
@@ -1359,37 +1371,44 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
     })
   }
 
-  // Legacy path has no directive prefix; the body is the char-desc-wrapped
-  // prompt as it stands right before the style/avoid suffixes are appended.
-  if (marks) marks.bodyBeforeSuffixes = prompt
-
   // Append style — if the inline `style` is a known STYLES catalog id, inject
   // the richer promptHint; otherwise fall back to the raw text (covers custom
   // free-text styles that don't match a preset).
   const styleText = style?.trim()
-  if (styleText) {
-    const richHint = getStylePromptHint(styleText)
-    const styleSuffix = `\nStyle: ${richHint || styleText}`
-    if (marks) marks.styleSuffix = styleSuffix
-    prompt += styleSuffix
-  }
+  const styleSuffix = styleText ? `\nStyle: ${getStylePromptHint(styleText) || styleText}` : ""
 
   // Handle negative prompt: native support vs prompt-appended
   const negPrompt = negativePrompt?.trim()
   let nativeNegativePrompt: string | undefined
+  let avoidSuffix = ""
   if (negPrompt) {
     if (NATIVE_NEGATIVE_PROMPT_MODELS.has(provider)) {
-      nativeNegativePrompt = negPrompt
+      nativeNegativePrompt = negPrompt.slice(0, getMaxNegativePromptChars(provider))
     } else {
-      const avoidSuffix = `\nAvoid: ${negPrompt}`
-      if (marks) marks.avoidSuffix = avoidSuffix
-      prompt += avoidSuffix
+      avoidSuffix = `\nAvoid: ${negPrompt}`
     }
   }
+  if (marks) {
+    marks.styleSuffix = styleSuffix
+    marks.avoidSuffix = avoidSuffix
+  }
 
-  // Truncate
-  if (prompt.length > 2000) {
-    prompt = prompt.slice(0, 1997) + "..."
+  // Cap at the provider max (default IMAGE_PROMPT_MAX = 5000), reserving the
+  // style/avoid suffixes so a long body never severs the appended control text
+  // (was a hardcoded 2000 tail-cut that dropped the negative). Truncate the
+  // BODY, THEN append the suffixes.
+  const maxLen = getMaxImagePromptChars(provider)
+  const reserved = styleSuffix.length + avoidSuffix.length
+  if (prompt.length + reserved > maxLen) {
+    prompt = prompt.slice(0, Math.max(0, maxLen - reserved - 3)) + "..."
+  }
+  // Legacy path has no directive prefix; the body is the char-desc-wrapped
+  // (possibly-truncated) prompt right before the style/avoid suffixes.
+  if (marks) marks.bodyBeforeSuffixes = prompt
+  prompt = prompt + styleSuffix + avoidSuffix
+  // Safety clamp for a pathological native-less negative that alone overflows.
+  if (prompt.length > maxLen) {
+    prompt = prompt.slice(0, maxLen - 3) + "..."
   }
 
   // Merge reference images: direct refs first, then ancestor fallback

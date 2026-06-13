@@ -14,6 +14,56 @@ export const CREDIT_BASE_USD = 0.02
 export const IMAGE_PROMPT_MAX = 5000
 
 /**
+ * Per-provider maximum ASSEMBLED image-prompt length (chars), VERIFIED against
+ * each model's official docs.kie.ai schema (2026-06). Providers absent here use
+ * {@link IMAGE_PROMPT_MAX} (the documented KIE "standard" of 5000). Read via
+ * {@link getMaxImagePromptChars} by the prompt assembler's truncation AND the
+ * frontend over-limit warning — the data-driven replacement for the old
+ * hardcoded 2000 that silently severed appended cinematography hints + the
+ * `Avoid:` negative on long prompts.
+ *
+ * Both directions matter: some models accept FAR MORE than 5000 (nano-banana-2 /
+ * gpt-image-2-i2i = 20000) and some FAR LESS (seedream-5-lite = 1000) — sending
+ * 5000 to a 1000-char model is a provider-side rejection. Only list a value you
+ * can quote from the official schema; the t2i / i2i / edit siblings of one family
+ * genuinely differ (verified: qwen t2i 3000 vs qwen-i2i 5000 vs qwen-edit 2000),
+ * so never copy a sibling's number.
+ *
+ * Truncation is a graceful safety net, never a hard reject — the editor warns the
+ * user BEFORE submit (switch model / trim) and the assembler truncates if they
+ * proceed. So the image routes stay generous (a single high ceiling) and the
+ * per-model enforcement lives here.
+ */
+export const MAX_IMAGE_PROMPT_CHARS_BY_PROVIDER: Record<string, number> = {
+  // ── higher than the 5000 default ──
+  "nano-banana-2": 20000,      // docs.kie.ai/market/google/nano-banana-2
+  "nano-banana-pro": 20000,    // docs.kie.ai/market/google/pro-image-to-image
+  "gpt-image-2-i2i": 20000,    // docs.kie.ai/market/gpt/gpt-image-2-image-to-image
+  // ── lower than the 5000 default (over-send risk if left at default) ──
+  "seedream": 3000,            // docs.kie.ai/market/seedream/4-5-text-to-image
+  "seedream-edit": 3000,       // docs.kie.ai/market/seedream/4-5-edit
+  "seedream-5-lite": 1000,     // docs.kie.ai/market/seedream/5-lite-text-to-image
+  "seedream-5-lite-i2i": 3000, // docs.kie.ai/market/seedream-5-lite-image-to-image (NB: t2i sibling is 1000)
+  "qwen": 3000,                // docs.kie.ai/market/qwen/text-to-image
+  "qwen-edit": 2000,           // docs.kie.ai/market/qwen/image-edit
+  // verified == 5000 default (no entry needed): imagen4(-fast/-ultra), nano-banana,
+  //   nano-banana-edit, flux, flux-flex, gpt-image-2, ideogram-v3/-edit/-remix,
+  //   z-image, grok, qwen-i2i.
+  // grok-i2i: doc states 390000 (78× its t2i sibling) — treated as a KIE schema
+  //   typo and left at the 5000 default per the sanity-cap decision.
+  ***REDACTED-OSS-SCRUB***
+  //   gpt-image, gpt-image-i2i, flux-i2i, flux-pro-i2i, ideogram-reframe.
+}
+
+/** Max assembled image-prompt length (chars) for a provider: its verified
+ *  override from {@link MAX_IMAGE_PROMPT_CHARS_BY_PROVIDER}, else the
+ *  {@link IMAGE_PROMPT_MAX} default. Single source of truth shared by the prompt
+ *  assembler, the over-limit warning, and the image-route ceiling. */
+export function getMaxImagePromptChars(provider: string | undefined): number {
+  return (provider && MAX_IMAGE_PROMPT_CHARS_BY_PROVIDER[provider]) || IMAGE_PROMPT_MAX
+}
+
+/**
  * Video prompt/negative cap shared by routes + editor (MCP verbs already use
  * 8000). Providers allow far more (KIE seedance-2: 20k chars) — the old
  * per-route 2500 was a false-positive blocker for legitimate multi-shot
@@ -22,13 +72,156 @@ export const IMAGE_PROMPT_MAX = 5000
 export const VIDEO_PROMPT_MAX = 8000
 
 /**
- * Suno text-field cap. Shared by the Suno prompt / lyrics / style-content
- * fields (Generate, Cover, Replace-Section, Upload-Extend, Style-Boost) across
- * the route Zod schemas and their editor character counters. Single source of
- * truth so the backend validation and the frontend `maxLength` / counter never
- * drift.
+ * Suno prompt / lyrics / content ceiling — the LARGEST any Suno version accepts
+ * in custom mode (V4.5 / V4.5PLUS / V4.5ALL / V5 / V5.5 = 5000). The route Zod
+ * uses this as a generous ceiling; the handler clamps to the per-version cap via
+ * {@link getMaxSunoPromptChars} (V4/V3.5 = 3000, non-custom = 500). Shared with
+ * the editor `maxLength` / counter (warn-don't-block at the per-version cap).
+ * `style` and `title` have their own caps ({@link getMaxSunoStyleChars} /
+ * {@link SUNO_TITLE_MAX}).
  */
-export const SUNO_TEXT_MAX = 3000
+export const SUNO_TEXT_MAX = 5000
+
+/**
+ * Absolute ceiling for the `prompt` / `negativePrompt` fields on the image and
+ * video routes' Zod schemas. The PER-MODEL limits below (and the editor warning)
+ * do the real work; the routes stay generous so they never hard-reject a legit
+ * long prompt — the assembler/payload truncates to the model cap as a graceful
+ * safety net (warn-don't-block). 20000 = the largest verified per-model image/
+ * video limit (seedance-2 / nano-banana-2 / gemini-omni). Anything past this is
+ * abuse, not a real prompt.
+ */
+export const PROMPT_HARD_CEILING = 20000
+
+/**
+ * Per-provider maximum VIDEO prompt length (chars), VERIFIED against each model's
+ * official docs.kie.ai schema (2026-06). Absent → {@link VIDEO_PROMPT_MAX} (8000)
+ * default (used for models whose schema states NO limit: veo3 family, kling-3.0,
+ * kling-3-omni, runway-aleph). Read via {@link getMaxVideoPromptChars}.
+ *
+ * Most video models cap WELL BELOW the old flat 8000 (kling 2.6 = 1000!), so the
+ * 8000 route value was over-sending to nearly every provider. A few accept much
+ * more (seedance-2 = 20000). Mode note: where a model's t2v and i2v schemas
+ * differ, the SMALLER is used so neither mode over-sends (hailuo-2.3-pro: t2v
+ * 1500 / i2v 5000 → 1500).
+ */
+export const MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER: Record<string, number> = {
+  // Kling family — our `kling`→kling-2.6 (1000), `kling-turbo`→v2.5-turbo-pro (2500)
+  "kling": 1000,
+  "kling-turbo": 2500,
+  "kling-master": 5000,
+  // higher than the 8000 default
+  "seedance-2": 20000,
+  "seedance-2-fast": 20000,
+  "seedance-2-extend": 20000,
+  "gemini-omni-video": 20000,
+  "bytedance-lite": 10000,
+  "bytedance-pro": 10000,
+  "bytedance-pro-fast": 10000,
+  // lower than the 8000 default
+  "minimax": 1500,
+  "hailuo-standard": 1500,
+  "hailuo-2.3-pro": 1500, // t2v 1500 / i2v 5000 → smaller, safe for both modes
+  "hailuo-2.3": 5000,
+  "seedance": 2500,       // Seedance 1.5 Pro
+  "wan": 5000,
+  "wan-i2v": 5000,
+  "wan-turbo": 5000,
+  "wan-flash": 1500,
+  "wan-videoedit": 5000,
+  "wan-2.7-i2v": 5000,
+  "wan-2.7-t2v": 5000,
+  "grok-i2v": 5000,
+  "grok-imagine-video-1.5": 4096,
+  "happyhorse": 5000,
+  "happyhorse-i2v": 5000,
+  "happyhorse-ref2v": 5000,
+  "happyhorse-edit": 5000,
+  "runway-kie": 1800,
+  // NB: `wan-2.7` / `wan-2.7-pro` are IMAGE models (see the image registry), not
+  //   video. The motion-transfer route's prompt is capped at the motion-control
+  //   limit (2500) inside the route itself — its provider values are the shared
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  //   kling-3.0, kling-3-omni, runway-aleph.
+}
+
+/** Max video-prompt length (chars) for a provider: verified override, else
+ *  {@link VIDEO_PROMPT_MAX}. Shared by the video routes/payload truncation and
+ *  the editor over-limit warning. */
+export function getMaxVideoPromptChars(provider: string | undefined): number {
+  return (provider && MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER[provider]) || VIDEO_PROMPT_MAX
+}
+
+/** Default negative-prompt cap when a provider has no specific verified limit. */
+export const NEGATIVE_PROMPT_MAX = 5000
+
+/**
+ * Per-provider native `negative_prompt` cap (chars), VERIFIED from docs.kie.ai.
+ * Only matters for providers that send the negative as a NATIVE param
+ * ({@link NATIVE_NEGATIVE_PROMPT_MODELS} / {@link NATIVE_NEGATIVE_VIDEO_PROVIDERS});
+ * everywhere else the negative is folded into the prompt as `Avoid: …` and rides
+ * the prompt cap. Absent → {@link NEGATIVE_PROMPT_MAX}.
+ */
+export const MAX_NEGATIVE_PROMPT_CHARS_BY_PROVIDER: Record<string, number> = {
+  // image
+  "imagen4": 5000, "imagen4-fast": 5000, "imagen4-ultra": 5000,
+  "ideogram-v3": 500, "ideogram-remix": 5000,
+  "qwen": 500, "qwen-i2i": 500, "qwen-edit": 500,
+  // video (native-negative families)
+  "kling-master": 500,
+  "kling-turbo": 500,      // i2v 500 / t2v 2500 → smaller, safe for both modes
+  "wan-2.7-i2v": 500, "wan-2.7-t2v": 500, "wan-videoedit": 500,
+}
+
+/** Max native negative-prompt length (chars) for a provider. */
+export function getMaxNegativePromptChars(provider: string | undefined): number {
+  return (provider && MAX_NEGATIVE_PROMPT_CHARS_BY_PROVIDER[provider]) || NEGATIVE_PROMPT_MAX
+}
+
+/** Default TTS text cap (legacy `elevenlabs`) when no per-model override. */
+export const TTS_TEXT_MAX = 5000
+
+/**
+ * Per-model Text-to-Speech character cap (PER REQUEST), from official ElevenLabs
+ * docs. turbo/multilingual accept FAR more than the old flat 5000; v3 uses the
+ * conservative 3000 (official pages say 5000 but the API is widely reported to
+ * hard-limit v3 at 3000 — conservative avoids prod rejections). Absent →
+ * {@link TTS_TEXT_MAX}.
+ */
+export const MAX_TTS_CHARS_BY_PROVIDER: Record<string, number> = {
+  "elevenlabs-turbo": 40000,        // == eleven_flash_v2_5 (functionally equivalent)
+  "elevenlabs-multilingual": 10000, // eleven_multilingual_v2
+  "elevenlabs-v3": 3000,            // conservative (official 5000 / API-reported 3000)
+  "elevenlabs-dialogue": 2000,      // text-to-dialogue recommended per-request max
+}
+
+/** Max TTS text length (chars) for a provider: verified override, else {@link TTS_TEXT_MAX}. */
+export function getMaxTtsChars(provider: string | undefined): number {
+  return (provider && MAX_TTS_CHARS_BY_PROVIDER[provider]) || TTS_TEXT_MAX
+}
+
+/**
+ * Suno per-version field caps (from docs.kie.ai/suno-api/generate-music). The old
+ * flat {@link SUNO_TEXT_MAX} (3000) was simultaneously too low for V4.5+/V5
+ * prompts (5000) and too high for `style` (1000) and `title` (80).
+ *   - prompt / lyrics: 500 in non-custom mode (all versions); in custom mode
+ *     3000 for V4/V3.5 and 5000 for V4.5 / V4.5PLUS / V4.5ALL / V5 / V5.5.
+ *   - style: 200 for V4/V3.5, 1000 for V4.5+.
+ *   - title: 80 (all versions).
+ */
+export const SUNO_TITLE_MAX = 80
+
+/** Max Suno `prompt` (= lyrics in custom mode) length for a model version. */
+export function getMaxSunoPromptChars(model: string | undefined, customMode: boolean): number {
+  if (!customMode) return 500
+  return model === "V4" || model === "V3_5" ? 3000 : 5000
+}
+
+/** Max Suno `style` length for a model version. */
+export function getMaxSunoStyleChars(model: string | undefined): number {
+  return model === "V4" || model === "V3_5" ? 200 : 1000
+}
 
 // Models that accept negative_prompt as a native API parameter.
 // All other models get negative prompt appended to the prompt text as "Avoid: ...".
@@ -87,14 +280,29 @@ export function applyVideoNegativePrompt(
   negativePrompt: string | undefined,
   provider: string,
 ): { prompt: string | undefined; nativeNegativePrompt: string | undefined } {
+  // This is the universal "finalize the video prompt for the provider" chokepoint
+  // (every KIE video method, the extend route, the orchestrator, and the editor
+  // preview route through it). So it ALSO clamps to the model's verified caps —
+  // a graceful safety net (the editor warns the user first; warn-don't-block).
+  // Under-cap prompts (the common case) pass through byte-identical.
+  const promptMax = getMaxVideoPromptChars(provider)
+  const clamp = (p: string | undefined): string | undefined =>
+    p != null && p.length > promptMax ? p.slice(0, promptMax) : p
+
   const neg = negativePrompt?.trim()
-  if (!neg) return { prompt, nativeNegativePrompt: undefined }
+  if (!neg) return { prompt: clamp(prompt), nativeNegativePrompt: undefined }
   if (NATIVE_NEGATIVE_VIDEO_PROVIDERS.has(provider)) {
-    return { prompt, nativeNegativePrompt: neg }
+    // Native negative rides its own param → clamp each independently.
+    return { prompt: clamp(prompt), nativeNegativePrompt: neg.slice(0, getMaxNegativePromptChars(provider)) }
   }
-  const injected = prompt && prompt.trim().length > 0
-    ? `${prompt}\nAvoid: ${neg}`
-    : `Avoid: ${neg}`
+  // Non-native: fold the negative into the prompt as "Avoid: …". Reserve room for
+  // the suffix so a long base prompt can't sever the negative (mirror the image
+  // assembler), then clamp the whole to the model cap.
+  const base = prompt && prompt.trim().length > 0 ? prompt : ""
+  if (!base) return { prompt: `Avoid: ${neg}`.slice(0, promptMax), nativeNegativePrompt: undefined }
+  const avoid = `\nAvoid: ${neg}`
+  const room = Math.max(0, promptMax - avoid.length)
+  const injected = `${base.slice(0, room)}${avoid}`.slice(0, promptMax)
   return { prompt: injected, nativeNegativePrompt: undefined }
 }
 
