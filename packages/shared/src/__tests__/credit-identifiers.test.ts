@@ -243,6 +243,20 @@ describe("buildVideoCreditModelIdentifier", () => {
       expect(buildVideoCreditModelIdentifier("veo3", 10)).toBe("veo3")
     })
 
+    it("VEO 4K → :4k composite for all three tiers (incl. Quality)", () => {
+      // resolution is the 6th positional arg (provider, duration, sound, nodeType, mode, resolution)
+      expect(buildVideoCreditModelIdentifier("veo3", 8, undefined, undefined, undefined, "4k")).toBe("veo3:4k")
+      expect(buildVideoCreditModelIdentifier("veo3.1", 8, undefined, undefined, undefined, "4k")).toBe("veo3.1:4k")
+      expect(buildVideoCreditModelIdentifier("veo3_lite", 8, undefined, undefined, undefined, "4k")).toBe("veo3_lite:4k")
+    })
+
+    it("VEO keeps 720p base / 1080p tier behavior alongside 4k", () => {
+      expect(buildVideoCreditModelIdentifier("veo3.1", 8, undefined, undefined, undefined, "1080p")).toBe("veo3.1:1080p")
+      expect(buildVideoCreditModelIdentifier("veo3.1", 8, undefined, undefined, undefined, "720p")).toBe("veo3.1")
+      // Quality has no 1080p tier in our table → 720p/1080p both map to base, but 4k is distinct
+      expect(buildVideoCreditModelIdentifier("veo3", 8, undefined, undefined, undefined, "1080p")).toBe("veo3")
+    })
+
     it("runway-kie returns plain provider", () => {
       expect(buildVideoCreditModelIdentifier("runway-kie", 5)).toBe("runway-kie")
     })

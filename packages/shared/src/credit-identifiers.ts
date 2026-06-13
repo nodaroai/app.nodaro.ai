@@ -16,6 +16,7 @@ import {
   VEO_RESOLUTION_TIERED_PROVIDERS,
   VIDEO_DURATION_TIERS,
   MOTION_DURATION_TIERS,
+  isVeoProvider,
 } from "./model-constants.js"
 import { isFlux2Model } from "./flux2-pricing.js"
 
@@ -117,11 +118,16 @@ export function buildVideoCreditModelIdentifier(
     }
   }
 
-  // VEO 3.x with resolution-tiered pricing: 720p is the base (no suffix),
-  // 1080p gets ":1080p". Duration is fixed at 8s for VEO so the
-  // duration-tier path below does not apply.
-  if (VEO_RESOLUTION_TIERED_PROVIDERS.has(effectiveProvider)) {
-    return resolution === "1080p" ? `${effectiveProvider}:1080p` : effectiveProvider
+  // VEO 3.x resolution-tiered pricing: 720p is the base (no suffix), 1080p gets
+  // ":1080p" (Fast/Lite only), and 4K gets ":4k" for ALL three tiers — direct-4K
+  // generation chains KIE's get-4k-video off the base generation (the base runs
+  // at 1080p). Duration is fixed at 8s for VEO so the duration-tier path below
+  // does not apply.
+  if (isVeoProvider(effectiveProvider)) {
+    if (resolution === "4k") return `${effectiveProvider}:4k`
+    // 1080p tier is Fast/Lite only (Quality has no 1080p surcharge).
+    if (resolution === "1080p" && VEO_RESOLUTION_TIERED_PROVIDERS.has(effectiveProvider)) return `${effectiveProvider}:1080p`
+    return effectiveProvider
   }
 
   // Gemini Omni Video: priced by (resolution-band × duration), with a flat

@@ -259,6 +259,11 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
+  // Direct-4K generation (base 1080p → chained get-4k-video). Base cost, NO markup
+  // (admin panel applies markup). KIE: ceil(KIE_cr/4). docs.kie.ai VEO 3.1 4K.
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
   // Kling 2.6 duration-tiered pricing (5s/10s, audio doubles cost)
   ***REDACTED-OSS-SCRUB***

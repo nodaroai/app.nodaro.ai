@@ -855,11 +855,13 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     features: ["end-frame", "audio", "reference-image"],
     durations: [4, 6, 8],
     aspectRatios: VIDEO_RATIOS_HV,
-    // 720p (default) + 1080p inline. 4K requires KIE's separate
-    // /api/v1/veo/get-4k-video endpoint and is exposed via a dedicated
-    // upgrade node, not this picker.
-    resolutions: ["720p", "1080p"],
-    pricing: [{ identifier: "veo3", credits: 63, note: "4/6/8s with audio (flat per-generation)" }],
+    // 720p (default) + 1080p inline. 4K generates the base at 1080p then chains
+    // KIE's /api/v1/veo/get-4k-video endpoint (worker handleImageToVideo / handleTextToVideo).
+    resolutions: ["720p", "1080p", "4k"],
+    pricing: [
+      { identifier: "veo3", credits: 63, note: "4/6/8s with audio (flat per-generation)" },
+      { identifier: "veo3:4k", credits: 93, note: "4K (base 1080p → get-4k-video)" },
+    ],
     featured: true,
   },
   "veo3.1": {
@@ -873,10 +875,11 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     features: ["end-frame", "audio", "reference-image"],
     durations: [4, 6, 8],
     aspectRatios: VIDEO_RATIOS_HV,
-    resolutions: ["720p", "1080p"],
+    resolutions: ["720p", "1080p", "4k"],
     pricing: [
       { identifier: "veo3.1", credits: 15, note: "4/6/8s with audio @ 720p (flat)" },
       { identifier: "veo3.1:1080p", credits: 17, note: "4/6/8s with audio @ 1080p (flat)" },
+      { identifier: "veo3.1:4k", credits: 45, note: "4K (base 1080p → get-4k-video)" },
     ],
     featured: true,
   },
@@ -891,10 +894,11 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     features: ["end-frame", "audio", "reference-image"],
     durations: [4, 6, 8],
     aspectRatios: VIDEO_RATIOS_HV,
-    resolutions: ["720p", "1080p"],
+    resolutions: ["720p", "1080p", "4k"],
     pricing: [
       { identifier: "veo3_lite", credits: 8, note: "4/6/8s with audio @ 720p (flat)" },
       { identifier: "veo3_lite:1080p", credits: 9, note: "4/6/8s with audio @ 1080p (flat)" },
+      { identifier: "veo3_lite:4k", credits: 38, note: "4K (base 1080p → get-4k-video)" },
     ],
     featured: false,
   },

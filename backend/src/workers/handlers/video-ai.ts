@@ -192,6 +192,38 @@ async function dispatchLtxIfRequested(
   return true
 }
 
+/** VEO direct-4K generates the base at 1080p, then chains get-4k-video (see
+ *  {@link chainVeoBaseTo4k}). KIE's generate endpoint has no "4k" resolution. */
+const VEO_4K_BASE_RESOLUTION = "1080p"
+
+/**
+ * Chain a completed VEO base generation into KIE's get-4k-video (`runVeo4kTask`)
+ * and return the 4K URL. Shared by the i2v + t2v handlers when the user picks 4K:
+ * the base runs at {@link VEO_4K_BASE_RESOLUTION}, then upscales here within the
+ * same job (reserved at the `<model>:4k` composite price).
+ *
+ * Crash-window note: on a worker crash BETWEEN the base generation and this call,
+ * reconcile finalizes the 1080p base (graceful degradation), not the 4K —
+ * acceptable for the rare window; the alternative is full 4K-aware reconcile.
+ */
+async function chainVeoBaseTo4k(
+  result: { url: string; kieTaskId?: string },
+  job: { updateProgress: (p: number) => Promise<void> },
+  jobId: string,
+): Promise<string> {
+  if (!result.kieTaskId) {
+    throw new Error("VEO 4K requested but the base generation returned no KIE task id")
+  }
+  console.log(`[worker] VEO 4K — upscaling base task ${result.kieTaskId} for job ${jobId}`)
+  await setJobProgress(job, jobId, 50)
+  const { resultJson } = await runVeo4kTask(result.kieTaskId, 0, {
+    onTaskCreated: makeOnTaskCreated(jobId, "kie-veo"),
+  })
+  const url = resultJson.resultUrls?.[0]
+  if (!url) throw new Error("VEO 4K succeeded but no URL found")
+  return url
+}
+
 const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx) {
   const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, generationType, loopTrim, enableTranslation, videoTrimStart, videoTrimEnd } = job.data as {
     jobId: string
@@ -270,9 +302,13 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
     ctx.jobId,
     providerKindForVideoModel(resolvedI2vProvider),
   )
+  // VEO direct-4K: KIE's generate endpoint has no "4k" — 4K is produced by
+  // chaining get-4k-video off the base task (see chainVeoBaseTo4k below).
+  const wantsVeo4k = resolution === "4k" && isVeoProvider(provider)
+  const baseResolution = wantsVeo4k ? VEO_4K_BASE_RESOLUTION : resolution
   let result
   try {
-    result = await imageToVideo(imageUrl, resolvedI2vProvider, prompt, duration, endFrameUrl, { onProgress, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShots: multiShot, multiPrompt, klingElements, resolution, grokMode, seed, cameraFixed, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, generationType, enableTranslation, videoTrimStart, videoTrimEnd }, { onTaskCreated })
+    result = await imageToVideo(imageUrl, resolvedI2vProvider, prompt, duration, endFrameUrl, { onProgress, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShots: multiShot, multiPrompt, klingElements, resolution: baseResolution, grokMode, seed, cameraFixed, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, generationType, enableTranslation, videoTrimStart, videoTrimEnd }, { onTaskCreated })
   } finally {
     ramp.stop()
   }
@@ -282,6 +318,9 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
   // The upload milestone below (90%) advances past whatever was reported.
 
   let providerOutputUrl = result.url
+
+  // VEO direct-4K: chain the base task into get-4k-video, swapping in the 4K result.
+  if (wantsVeo4k) providerOutputUrl = await chainVeoBaseTo4k(result, job, ctx.jobId)
 
   // Generic smart-loop-cut post-process. Runs for any provider when
   // loopTrim.enabled. Failures are non-fatal: keep the un-trimmed output
@@ -496,9 +535,12 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
     ctx.jobId,
     providerKindForVideoModel(resolvedT2vProvider),
   )
+  // VEO direct-4K: run the base at VEO_4K_BASE_RESOLUTION, then chain get-4k-video below.
+  const wantsVeo4k = resolution === "4k" && isVeoProvider(provider)
+  const baseResolution = wantsVeo4k ? VEO_4K_BASE_RESOLUTION : resolution
   let result
   try {
-    result = await textToVideo(prompt, resolvedT2vProvider, duration, aspectRatio, { mode, sound, negativePrompt, cfgScale, multiShots: multiShot, multiPrompt, klingElements, seed, resolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, enableTranslation }, { onTaskCreated: t2vOnTaskCreated })
+    result = await textToVideo(prompt, resolvedT2vProvider, duration, aspectRatio, { mode, sound, negativePrompt, cfgScale, multiShots: multiShot, multiPrompt, klingElements, seed, resolution: baseResolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, enableTranslation }, { onTaskCreated: t2vOnTaskCreated })
   } finally {
     t2vRamp.stop()
   }
@@ -509,11 +551,16 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
   // VEO3 / VEO3.1: KIE has no native audio toggle, so honour `sound: false`
   // by stripping the audio track post-generation (cheap stream copy).
   let providerOutputUrl = result.url
+
+  // VEO direct-4K: chain into 4K BEFORE the sound-strip below, so stripping
+  // operates on the 4K output (reserved at the `<model>:4k` composite).
+  if (wantsVeo4k) providerOutputUrl = await chainVeoBaseTo4k(result, job, ctx.jobId)
+
   if (sound === false && isVeoProvider(provider)) {
     console.log(
       `[worker] VEO sound=false — stripping audio from t2v output for job ${ctx.jobId}`,
     )
-    providerOutputUrl = await stripAudioFromR2Url(result.url, ctx.jobId)
+    providerOutputUrl = await stripAudioFromR2Url(providerOutputUrl, ctx.jobId)
   }
 
   const r2Url = await uploadVideoMaybeWatermark(providerOutputUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
