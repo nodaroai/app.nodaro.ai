@@ -143,10 +143,12 @@ export type {
   RecaptionResult,
   CharacterAspectRatio,
   PersonValue,
+  EntityStyle,
 } from "./resources/characters.js"
 export {
   CHARACTER_ASPECT_OPTIONS,
   CHARACTER_ASPECT_DEFAULTS,
+  CHARACTER_STYLES,
   buildPersonSeedPrompt,
   buildPersonHints,
   PEOPLE,
