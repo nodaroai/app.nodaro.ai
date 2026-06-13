@@ -423,7 +423,7 @@ a user's behalf via OAuth. It is gated behind `MCP_ENABLED` (default
 4. **Add the connector** in your MCP client. In Claude.ai: Settings →
    Connectors → Add custom connector → URL `https://mcp.your-domain.com/mcp`.
 
-The MCP server is fully shipped with 122+ tools across ~20 tool files,
+The MCP server is fully shipped with 123+ tools across ~20 tool files,
 covering all generation verbs (image, video, audio, character, location,
 object), gallery, workflows, apps, saved components, characters, locations,
 objects, pipelines, models, and more. Authentication is via OAuth

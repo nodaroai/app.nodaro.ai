@@ -23,6 +23,9 @@
  *   composite suffix like `:4K` or `:high`).
  * - Costs are sourced from `STATIC_CREDIT_COSTS` (see backend
  *   `src/billing/credits.ts`). Keep them in sync if the table changes.
+ * - After editing `MODEL_CATALOG` or `MODEL_RECOMMENDATIONS`, run
+ *   `npm run gen:skills` (from `backend/`) to refresh the public
+ *   `docs/choosing-models.md` guide. CI (`gen:skills:check`) fails on drift.
  */
 
 export type ModelKind = "image" | "video" | "audio"

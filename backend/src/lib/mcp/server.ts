@@ -4,6 +4,7 @@ import { newSession, type McpSession } from "./session.js"
 import { passesGate, type ToolGate } from "./tool-schemas.js"
 import { registerVerbs } from "./tools/verbs.js"
 import { registerJobs } from "./tools/jobs.js"
+import { registerDiagnose } from "./tools/diagnose.js"
 import { registerWorkflows } from "./tools/workflows.js"
 import { registerProjectTools } from "./tools/projects.js"
 import { registerComponents } from "./tools/components.js"
@@ -110,6 +111,7 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
   registerPing(server, session)
   registerVerbs({ server, session, fastify: opts.fastify })
   registerJobs({ server, session, fastify: opts.fastify })
+  registerDiagnose({ server, session, fastify: opts.fastify })
   registerWorkflows({ server, session, fastify: opts.fastify })
   registerProjectTools(server, session)
   registerComponents({ server, session, fastify: opts.fastify })

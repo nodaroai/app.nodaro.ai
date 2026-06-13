@@ -1,6 +1,6 @@
 # MCP Tool Reference
 
-Complete reference for the 122 tools exposed by the Nodaro MCP server.
+Complete reference for the 123 tools exposed by the Nodaro MCP server.
 
 ## Scopes
 
@@ -13,7 +13,7 @@ authorizing the connector; missing scopes cause tools to be omitted entirely
 | `workflows:read` | `list_projects`, `get_project`, `list_workflows`, `get_workflow`, `get_workflow_json`, `export_workflow`, `list_components`, `get_component_inputs` |
 | `workflows:write` | `create_workflow`, `delete_workflow`, `update_workflow_json`, `import_workflow` |
 | `workflows:execute` | `run_workflow`, all generation verbs (image/video/audio/Suno/character/location/object), `run_component`, `run_app`, `delete_app_run`, `analyze_prompt`, `generate_prompt`, `enhance_prompt`, `reduce` |
-| `jobs:read` | `list_jobs`, `get_job` |
+| `jobs:read` | `list_jobs`, `get_job`, `diagnose_run` |
 | `assets:read` | `browse_gallery`, `browse_uploads`, `list_favorites`, `get_asset`, `display_asset`, `get_app_run`, `list_characters`, `get_character`, `list_locations`, `get_location` |
 | `assets:write` | `favorite_asset`, `create_character`, `update_character`, `approve_portrait`, `recaption_character`, `create_location`, `update_location`, `approve_main_image`, `recaption_location`, `approve_object_main_image`, `recaption_object`, `upload_image_widget`, `upload_audio_widget`, `upload_video_widget`, `request_image_upload`, `request_audio_upload`, `request_video_upload`, `prepare_image_upload`, `prepare_audio_upload`, `prepare_video_upload` |
 | `credits:read` | `check_balance`, `credit_transactions` |
@@ -800,6 +800,25 @@ Fetch full metadata for a single job by id, including `output_url`,
 `status`, `progress`, `provider`, and `output_data`.
 
 **Input:** `{ job_id: uuid }`
+
+---
+
+### `diagnose_run`
+
+**Scope:** `jobs:read`
+
+Diagnose why a workflow run or single job failed. Pass a **workflow execution
+id** or a **job id**; the tool tries the execution first and falls back to the
+job. For an execution it walks `node_states`, surfacing each failed node with
+its error message, provider, and the credits actually charged. Each failure
+gets a best-effort **class** — `content_policy`, `validation`, `rate_limited`,
+`timeout`, `post_processing`, `provider_error`, or `unknown` — and a
+remediation hint. Classes are heuristic (derived from the stored error string,
+not the error type), so treat them as guidance. Reserved credits are
+auto-refunded except for `post_processing` (post-delivery) failures; check
+`creditsActual` per node.
+
+**Input:** `{ id: string }` (a workflow execution id or a job id)
 
 ---
 
