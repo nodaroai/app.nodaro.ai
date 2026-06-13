@@ -678,6 +678,14 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     keywords: ["sheet", "reference", "turnaround", "character sheet", "model sheet"],
   },
   {
+    type: "reference-board",
+    label: "Reference Board",
+    icon: <LayoutGrid className="h-4 w-4" />,
+    category: "AI",
+    group: "Image",
+    keywords: ["board", "reference", "palette", "hero", "panels", "reference board"],
+  },
+  {
     type: "image-to-text",
     label: "Describe Image",
     icon: <Eye className="h-4 w-4" />,

@@ -264,6 +264,7 @@ export const EXECUTABLE_TYPES = new Set([
   "generative-pipeline",
   "reduce",
   "reference-sheet",
+  "reference-board",
 ]);
 
 /** Frontend mirror of backend's FAN_IN_NODE_TYPES.

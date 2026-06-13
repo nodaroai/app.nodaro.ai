@@ -289,7 +289,7 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     }
     return active?.imageUrl ?? (data.generatedImageUrl as string | undefined);
   }
-  if (type === "generate-image") {
+  if (type === "generate-image" || type === "reference-board") {
     const results =
       (data.generatedResults as GeneratedResult[] | undefined) ?? [];
     const activeIndex = (data.activeResultIndex as number | undefined) ?? 0;
@@ -854,6 +854,7 @@ export function collapseExpandedClones(): {
 
 export const IMAGE_SOURCE_TYPES = new Set([
   "generate-image",
+  "reference-board",
   "upload-image",
   "edit-image",
   "image-to-image",

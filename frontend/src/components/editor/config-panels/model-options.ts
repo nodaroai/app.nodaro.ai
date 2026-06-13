@@ -630,6 +630,22 @@ export const CINEMATIC_RESOLUTION_OPTIONS: ReadonlyArray<{ value: string; label:
   { value: "1080p", label: "1080p" },
 ]
 
+// =============================================================================
+// REFERENCE-BOARD provider options — subset of IMAGE_GEN_MODELS that render
+// legible in-image text and accept reference conditioning. Single source of
+// truth for the config panel dropdown; fail-safe useEffect re-uses
+// IMAGE_ASPECT_RATIOS / IMAGE_RESOLUTION_OPTIONS / IMAGE_QUALITY_OPTIONS
+// which already cover both providers.
+// =============================================================================
+
+/** Labeled provider options for the Reference Board config panel. Values must
+ *  match the `REFERENCE_BOARD_PROVIDERS` constant exported from @nodaro/shared
+ *  and the Zod enum in backend/src/routes/reference-board.ts. */
+export const REFERENCE_BOARD_PROVIDER_OPTIONS: ReadonlyArray<{ value: string; label: string; desc: string }> = [
+  { value: "nano-banana-pro", label: "Nano Banana Pro", desc: "Higher detail, production-ready images" },
+  { value: "gpt-image-2",     label: "GPT Image 2",     desc: "Sharper text + photorealism, up to 4K" },
+]
+
 /** Flat lookup of model ID to description, built from all model arrays */
 export const MODEL_DESCRIPTIONS: Record<string, string> = Object.fromEntries([
   ...IMAGE_GEN_MODELS,

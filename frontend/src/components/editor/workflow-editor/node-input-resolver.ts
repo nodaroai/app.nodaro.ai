@@ -585,7 +585,7 @@ const SUNO_TRACK_NODE_TYPES = new Set([
 /** Node types whose primary output is an image URL — used to route media into
  *  llm-chat reference arrays. Names must match SceneNodeType in types/nodes.ts. */
 const LLM_REF_IMAGE_NODE_TYPES = new Set<string>([
-  "generate-image", "modify-image", "upscale-image", "remove-background",
+  "generate-image", "reference-board", "modify-image", "upscale-image", "remove-background",
   "upload-image", "extract-frame", "generate-mask",
 ]);
 /** Node types whose primary output is a video URL. (Disjoint from
@@ -1130,6 +1130,7 @@ export function resolveNodeInputs(
       // `sheet` (or any non-panels handle) — the composited sheet image.
       if (
         node.type === "generate-image" ||
+        node.type === "reference-board" ||
         (node.type as string) === "edit-image" ||
         (node.type as string) === "image-to-image" ||
         node.type === "modify-image" ||
@@ -1307,7 +1308,7 @@ export function resolveNodeInputs(
       const handleType = compMeta?.outputs?.find((o) => o.id === handleId)?.type
 
       if (handleType === "image") {
-        if (node.type === "generate-image" || (node.type as string) === "edit-image" || (node.type as string) === "image-to-image" || node.type === "modify-image") {
+        if (node.type === "generate-image" || node.type === "reference-board" || (node.type as string) === "edit-image" || (node.type as string) === "image-to-image" || node.type === "modify-image") {
           inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
         } else if (node.type === "manual-edit") {
           appendManualEditAsset(inputs, src.id, output, "image")
@@ -1414,7 +1415,7 @@ export function resolveNodeInputs(
       if (colType === "image-url") {
         if (isCarouselTarget) {
           inputs.mediaItems = [...(inputs.mediaItems ?? []), { type: "photo", url: output }];
-        } else if (node.type === "generate-image" || (node.type as string) === "edit-image" || (node.type as string) === "image-to-image" || node.type === "modify-image") {
+        } else if (node.type === "generate-image" || node.type === "reference-board" || (node.type as string) === "edit-image" || (node.type as string) === "image-to-image" || node.type === "modify-image") {
           inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output];
         } else if (node.type === "manual-edit") {
           appendManualEditAsset(inputs, src.id, output, "image");
@@ -1447,6 +1448,7 @@ export function resolveNodeInputs(
     } else if (src.type === "upload-image") {
       if (
         node.type === "generate-image" ||
+        node.type === "reference-board" ||
         (node.type as string) === "edit-image" ||
         (node.type as string) === "image-to-image" ||
         node.type === "modify-image" ||
@@ -1574,9 +1576,10 @@ export function resolveNodeInputs(
       } else {
         inputs.videoUrl = output;
       }
-    } else if (src.type === "generate-image") {
+    } else if (src.type === "generate-image" || src.type === "reference-board") {
       if (
         node.type === "generate-image" ||
+        node.type === "reference-board" ||
         (node.type as string) === "edit-image" ||
         (node.type as string) === "image-to-image" ||
         node.type === "modify-image" ||
@@ -1603,6 +1606,7 @@ export function resolveNodeInputs(
       // is a regular image source — route same as generate-image.
       if (
         node.type === "generate-image" ||
+        node.type === "reference-board" ||
         (node.type as string) === "edit-image" ||
         (node.type as string) === "image-to-image" ||
         node.type === "modify-image" ||
@@ -1620,6 +1624,7 @@ export function resolveNodeInputs(
     } else if ((src.type as string) === "edit-image" || src.type === "modify-image" || src.type === "upscale-image" || src.type === "remove-background") {
       if (
         node.type === "generate-image" ||
+        node.type === "reference-board" ||
         (node.type as string) === "edit-image" ||
         (node.type as string) === "image-to-image" ||
         node.type === "modify-image" ||
@@ -1637,6 +1642,7 @@ export function resolveNodeInputs(
     } else if ((src.type as string) === "image-to-image") {
       if (
         node.type === "generate-image" ||
+        node.type === "reference-board" ||
         (node.type as string) === "edit-image" ||
         (node.type as string) === "image-to-image" ||
         node.type === "modify-image" ||
@@ -1654,6 +1660,7 @@ export function resolveNodeInputs(
     } else if (src.type === "extract-frame") {
       if (
         node.type === "generate-image" ||
+        node.type === "reference-board" ||
         (node.type as string) === "edit-image" ||
         (node.type as string) === "image-to-image" ||
         node.type === "modify-image" ||
@@ -1738,6 +1745,7 @@ export function resolveNodeInputs(
         // Treat as an image source — mirror upload-image routing below.
         if (
           node.type === "generate-image" ||
+          node.type === "reference-board" ||
           (node.type as string) === "edit-image" ||
           (node.type as string) === "image-to-image" ||
           node.type === "modify-image" ||
@@ -2119,7 +2127,7 @@ export function resolveNodeInputs(
 
       // Route by media type, respecting target node expectations
       if (mediaType === "image") {
-        if (node.type === "generate-image" || (node.type as string) === "edit-image" || (node.type as string) === "image-to-image" || node.type === "modify-image") {
+        if (node.type === "generate-image" || node.type === "reference-board" || (node.type as string) === "edit-image" || (node.type as string) === "image-to-image" || node.type === "modify-image") {
           inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output];
         } else if (node.type === "manual-edit") {
           appendManualEditAsset(inputs, src.id, output, "image");

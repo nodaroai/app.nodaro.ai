@@ -778,6 +778,7 @@ function getFirstSceneImagePrompt(data: Record<string, unknown>): { text?: strin
 /** Image-generating node types that store results in generatedImageUrl / generatedResults */
 const IMAGE_RESULT_TYPES = new Set([
   "generate-image",
+  "reference-board",
   "edit-image",
   "image-to-image",
   "modify-image",

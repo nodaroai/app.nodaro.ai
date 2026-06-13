@@ -114,6 +114,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "remove-background", label: "Remove Background", icon: <Eraser className="h-4 w-4" />, category: "AI", group: "Image" },
   { type: "generate-mask", label: "Generate Mask", icon: <VenetianMask className="h-4 w-4" />, category: "AI", group: "Image" },
   { type: "reference-sheet", label: "Reference Sheet", icon: <LayoutGrid className="h-4 w-4" />, category: "AI", group: "Image", keywords: ["sheet", "reference", "turnaround", "character sheet", "model sheet"] },
+  { type: "reference-board", label: "Reference Board", icon: <LayoutGrid className="h-4 w-4" />, category: "AI", group: "Image", keywords: ["board", "reference", "palette", "hero", "panels", "reference board"] },
   { type: "image-to-text", label: "Describe Image", icon: <Eye className="h-4 w-4" />, category: "AI", group: "Image" },
   // AI — Video
   { type: "generate-video", label: "Generate Video", icon: <Clapperboard className="h-4 w-4" />, category: "AI", group: "Video", keywords: ["image-to-video", "text-to-video", "i2v", "t2v", "video"] },

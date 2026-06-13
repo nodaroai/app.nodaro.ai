@@ -219,6 +219,20 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
     inputSchema: { fields: [{ key: "entityRef", type: "image-url", required: true }] },
   },
   {
+    type: "reference-board",
+    label: "Reference Board",
+    category: "ai-image",
+    description:
+      "Generate a dense reference board (hero + metadata + panels + 6-HEX palette) in one AI pass from reference image(s); refine globally, with a mask, or re-roll. Output is one cohesive board image for downstream consistency.",
+    outputType: "image",
+    creditCost: 6,
+    providers: ["nano-banana-pro", "gpt-image-2"],
+    inputSchema: { fields: [
+      { key: "referenceImageUrls", type: "image-url" },
+      { key: "boardTemplate", type: "text", required: true },
+    ] },
+  },
+  {
     type: "text-to-speech",
     label: "Text to Speech",
     category: "ai-audio",
