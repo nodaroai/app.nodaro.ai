@@ -634,7 +634,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
                   </SelectContent>
                 </Select>
                 <p className="text-[10px] text-muted-foreground mt-1">
-                  4K is available via the dedicated VEO upgrade node — it runs after the base 720p/1080p generation completes.
+                  4K generates the base at 1080p, then upscales to 4K automatically in the same run (billed at the 4K rate).
                 </p>
               </div>
             ) : null
@@ -1943,7 +1943,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
                   </SelectContent>
                 </Select>
                 <p className="text-[10px] text-muted-foreground mt-1">
-                  4K is available via the dedicated VEO upgrade node — it runs after the base 720p/1080p generation completes.
+                  4K generates the base at 1080p, then upscales to 4K automatically in the same run (billed at the 4K rate).
                 </p>
               </div>
             ) : null
@@ -2594,7 +2594,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
                   </SelectContent>
                 </Select>
                 <p className="text-[10px] text-muted-foreground mt-1">
-                  4K is available via the dedicated VEO upgrade node — it runs after the base 720p/1080p generation completes.
+                  4K generates the base at 1080p, then upscales to 4K automatically in the same run (billed at the 4K rate).
                 </p>
               </div>
             ) : null
