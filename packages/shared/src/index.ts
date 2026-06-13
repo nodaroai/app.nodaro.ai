@@ -14,6 +14,20 @@ export { DEFAULT_LABEL_BY_SOURCE } from "./types.js"
 export {
   CREDIT_BASE_USD,
   IMAGE_PROMPT_MAX,
+  MAX_IMAGE_PROMPT_CHARS_BY_PROVIDER,
+  getMaxImagePromptChars,
+  PROMPT_HARD_CEILING,
+  MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER,
+  getMaxVideoPromptChars,
+  NEGATIVE_PROMPT_MAX,
+  MAX_NEGATIVE_PROMPT_CHARS_BY_PROVIDER,
+  getMaxNegativePromptChars,
+  TTS_TEXT_MAX,
+  MAX_TTS_CHARS_BY_PROVIDER,
+  getMaxTtsChars,
+  SUNO_TITLE_MAX,
+  getMaxSunoPromptChars,
+  getMaxSunoStyleChars,
   VIDEO_PROMPT_MAX,
   SUNO_TEXT_MAX,
   NATIVE_NEGATIVE_PROMPT_MODELS,
@@ -872,6 +886,7 @@ export {
   getPersonLabel,
   getPersonPromptHint,
   buildPersonHints,
+  migratePersonValue,
 } from "./person.js"
 export type { Person, PersonDimension, PersonDimensionSection, PersonValue } from "./person.js"
 

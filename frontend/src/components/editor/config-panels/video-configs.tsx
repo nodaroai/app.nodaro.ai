@@ -35,7 +35,8 @@ import type {
   CharacterNodeData,
 } from "@/types/nodes"
 import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, VIDEO_GEN_MODELS, MOTION_TRANSFER_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, VIDEO_DURATION_OPTIONS, VIDEO_FPS_OPTIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, EXTEND_VIDEO_MODELS, getVideoResolutionOptions, getAspectRatiosForVideoModel, getVideoModelCapabilitiesTooltip } from "./model-options"
-import { isSeedance2Provider, MODEL_CATALOG, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, buildVideoCreditModelIdentifier, characterMentionSlug, DEFAULT_LABEL_BY_SOURCE, locationMentionSlug } from "@nodaro/shared"
+import { isSeedance2Provider, MODEL_CATALOG, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, buildVideoCreditModelIdentifier, characterMentionSlug, DEFAULT_LABEL_BY_SOURCE, locationMentionSlug } from "@nodaro/shared"
+import { PromptLengthCounter } from "./prompt-length-counter"
 import type { ReferenceSource } from "@nodaro/shared"
 import { ModelSearchSelect } from "./model-search-select"
 import { ModelDescriptionHint } from "./model-description-hint"
@@ -2469,16 +2470,19 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
             minHeightRem={3 * 1.5}
           />
         ) : (
-          <PromptEditor
-            rows={3}
-            value={data.prompt || ""}
-            onChange={(v) => onUpdate({ prompt: v })}
-            placeholder={connectedImages.length > 0 ? "Describe the motion or animation you want..." : "Describe the video to generate..."}
-            referenceImages={refImagesForAutocomplete}
-            nodeRefs={nodeRefs}
-            refMap={refMap}
-            snippets={promptSnippets}
-          />
+          <>
+            <PromptEditor
+              rows={3}
+              value={data.prompt || ""}
+              onChange={(v) => onUpdate({ prompt: v })}
+              placeholder={connectedImages.length > 0 ? "Describe the motion or animation you want..." : "Describe the video to generate..."}
+              referenceImages={refImagesForAutocomplete}
+              nodeRefs={nodeRefs}
+              refMap={refMap}
+              snippets={promptSnippets}
+            />
+            <PromptLengthCounter value={data.prompt || ""} max={getMaxVideoPromptChars(currentProvider)} modelLabel={currentProvider} />
+          </>
         )}
       </MappableField>
 
@@ -2498,12 +2502,15 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
             minHeightRem={2 * 1.5}
           />
         ) : (
-          <Textarea
-            rows={2}
-            value={(data as Record<string, unknown>).negativePrompt as string || ""}
-            onChange={(e) => onUpdate({ negativePrompt: e.target.value })}
-            placeholder="Things to avoid..."
-          />
+          <>
+            <Textarea
+              rows={2}
+              value={(data as Record<string, unknown>).negativePrompt as string || ""}
+              onChange={(e) => onUpdate({ negativePrompt: e.target.value })}
+              placeholder="Things to avoid..."
+            />
+            <PromptLengthCounter value={(data as Record<string, unknown>).negativePrompt as string || ""} max={getMaxNegativePromptChars(currentProvider)} modelLabel={currentProvider} noun="negative prompt" />
+          </>
         )}
       </MappableField>
 

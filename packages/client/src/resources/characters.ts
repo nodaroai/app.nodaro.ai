@@ -1,4 +1,5 @@
 import type { CharacterAspectRatio, CharacterAttachColumn, EntityStyle, TtsProvider } from "@nodaro/shared"
+import { buildPersonHints, PEOPLE, PERSON_DIMENSION_ORDER, PERSON_DIMENSION_LABELS, type PersonValue } from "@nodaro/shared"
 import type { NodaroClient } from "../client.js"
 
 /**
@@ -17,6 +18,24 @@ export { CHARACTER_STYLES } from "@nodaro/shared"
  */
 export type { CharacterAspectRatio } from "@nodaro/shared"
 export { CHARACTER_ASPECT_OPTIONS, CHARACTER_ASPECT_DEFAULTS } from "@nodaro/shared"
+
+/**
+ * Structured Person composer, re-exported from `@nodaro/shared` so SDK
+ * consumers can build a detailed person description — Identity, Body, and the
+ * Face facial-geometry layer (cheekbones, canthal tilt, eyelid type, lip
+ * fullness/shape, nose tip, etc.) — and feed it as `seedPrompt` / `description`
+ * to `generate()` / `upsert()` without adding `@nodaro/shared` as a second dep.
+ *
+ * `buildPersonSeedPrompt` collapses a `PersonValue` into the same comma-joined
+ * fragment the editor's Person picker produces (e.g. "almond-shaped eyes,
+ * sharply sculpted high cheekbones, full plump lips"). Returns "" when empty.
+ */
+export { buildPersonHints, PEOPLE, PERSON_DIMENSION_ORDER, PERSON_DIMENSION_LABELS }
+export type { PersonValue }
+
+export function buildPersonSeedPrompt(value: PersonValue): string {
+  return buildPersonHints(value as Record<string, unknown> & PersonValue).join(", ")
+}
 
 /**
  * A character record returned by Nodaro's REST API. Mirrors the camelCase

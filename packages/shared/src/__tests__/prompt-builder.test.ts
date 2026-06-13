@@ -388,38 +388,61 @@ describe("buildImagePrompt", () => {
   })
 
   describe("truncation", () => {
-    it("truncates prompt exceeding 2000 chars to 1997 + '...'", () => {
+    // The assembled-prompt cap is the PROVIDER's max (default 5000 =
+    // IMAGE_PROMPT_MAX, the documented KIE standard + what the image routes
+    // already accept), NOT the old hardcoded 2000. The person/cinematography
+    // hints + the `Avoid:` negative are appended at the END of the assembled
+    // prompt, so a 2000-char tail-cut silently severed exactly those whenever
+    // the user's prose was long. Regression for the 2026-06-13 report.
+    it("does NOT truncate a 2500-char prompt (cap is 5000, not 2000)", () => {
       const longPrompt = "x".repeat(2500)
       const result = buildImagePrompt({ prompt: longPrompt, provider: "flux" })
-      expect(result.prompt.length).toBe(2000)
-      expect(result.prompt.endsWith("...")).toBe(true)
-      expect(result.prompt.slice(0, 1997)).toBe("x".repeat(1997))
+      expect(result.prompt).toBe(longPrompt)
     })
 
-    it("does not truncate prompt at exactly 2000 chars", () => {
-      const exactPrompt = "y".repeat(2000)
-      const result = buildImagePrompt({ prompt: exactPrompt, provider: "flux" })
-      expect(result.prompt.length).toBe(2000)
-      expect(result.prompt).toBe(exactPrompt)
-    })
-
-    it("does not truncate prompt under 2000 chars", () => {
-      const shortPrompt = "z".repeat(1999)
-      const result = buildImagePrompt({ prompt: shortPrompt, provider: "flux" })
-      expect(result.prompt).toBe(shortPrompt)
-    })
-
-    it("truncates after style and negative prompt are appended", () => {
-      // Build a prompt that is under 2000 but goes over with style + avoid
-      const basePrompt = "a".repeat(1980)
+    it("keeps appended style + negative on a long (2500-char) prompt", () => {
+      // 2500 prose + style + avoid is well past the OLD 2000 cap but under
+      // 5000 → the picker/style/negative tail must survive untouched.
+      const basePrompt = "a".repeat(2500)
       const result = buildImagePrompt({
         prompt: basePrompt,
+        provider: "flux", // non-native negative → "Avoid:" appended to prompt
+        style: "cinematic",
+        negativePrompt: "blurry",
+      })
+      expect(result.prompt.startsWith("a".repeat(2500))).toBe(true)
+      expect(result.prompt).toContain("Style:")
+      expect(result.prompt).toContain("Avoid: blurry")
+      expect(result.prompt.endsWith("...")).toBe(false)
+    })
+
+    it("truncates a prompt that exceeds the 5000 cap", () => {
+      const huge = "y".repeat(6000)
+      const result = buildImagePrompt({ prompt: huge, provider: "flux" })
+      expect(result.prompt.length).toBe(5000)
+      expect(result.prompt.endsWith("...")).toBe(true)
+    })
+
+    it("preserves Style/Avoid even when the body must be truncated past the cap", () => {
+      // The control suffixes are reserved first, so even a body that alone blows
+      // past the cap can never sever the negative — the exact failure the old
+      // 2000 tail-cut caused.
+      const huge = "a".repeat(6000)
+      const result = buildImagePrompt({
+        prompt: huge,
         provider: "flux",
         style: "cinematic",
         negativePrompt: "blurry",
       })
-      expect(result.prompt.length).toBe(2000)
-      expect(result.prompt.endsWith("...")).toBe(true)
+      expect(result.prompt.length).toBeLessThanOrEqual(5000)
+      expect(result.prompt).toContain("Style:")
+      expect(result.prompt).toContain("Avoid: blurry")
+    })
+
+    it("does not truncate a prompt under the cap", () => {
+      const shortPrompt = "z".repeat(4999)
+      const result = buildImagePrompt({ prompt: shortPrompt, provider: "flux" })
+      expect(result.prompt).toBe(shortPrompt)
     })
   })
 

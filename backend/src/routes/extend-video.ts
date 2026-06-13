@@ -18,7 +18,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { EXTEND_VIDEO_PROVIDERS, VIDEO_PROMPT_MAX, applyVideoNegativePrompt, buildVideoCreditModelIdentifier } from "@nodaro/shared"
+import { EXTEND_VIDEO_PROVIDERS, PROMPT_HARD_CEILING, applyVideoNegativePrompt, buildVideoCreditModelIdentifier } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 
 // KIE providers (veo-extend, runway-extend) need a kieTaskId from the upstream
@@ -28,8 +28,8 @@ import { formatZodError } from "../lib/zod-error.js"
 const extendVideoBody = z.object({
   kieTaskId: z.string().min(1).optional(), // Required for veo-extend / runway-extend
   videoUrl: safeUrlSchema.optional(),       // Required for ltx-2.3-pro
-  prompt: z.string().min(1).optional(),    // Required for veo-extend / runway-extend; optional for LTX
-  negativePrompt: z.string().max(VIDEO_PROMPT_MAX).optional(), // Always optional — injected into prompt as "Avoid: …" for non-native providers
+  prompt: z.string().min(1).max(PROMPT_HARD_CEILING).optional(),    // Required for veo-extend / runway-extend; optional for LTX
+  negativePrompt: z.string().max(PROMPT_HARD_CEILING).optional(), // Always optional — injected into prompt as "Avoid: …" for non-native providers
   userPrompt: z.string().max(8000).optional(),
   provider: z.enum(EXTEND_VIDEO_PROVIDERS),
   model: z.enum(["fast", "quality"]).optional(), // VEO only

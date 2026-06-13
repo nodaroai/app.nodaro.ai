@@ -591,7 +591,9 @@ const FRAMING_FIELDS = ["shotSize", "angle", "coverage", "composition", "vantage
 const LIGHTING_FIELDS = ["timeOfDay", "lightingStyle", "lightingDirection"] as const
 const PERSON_FIELDS = [
   "type", "age", "ethnicity", "build", "bodyProportions",
-  "faceShape", "jawline", "eyeShape", "nose", "lips", "lipState",
+  "faceShape", "jawline", "cheekbones", "facialFullness",
+  "eyeShape", "eyelidType", "canthalTilt", "eyeSpacing", "eyeSetBrow",
+  "nose", "noseTip", "lipFullness", "lipShape", "lipState",
   "hairColor", "hairBase", "eyebrows", "skinTone", "skinTexture",
   "eyeColor", "eyeState", "facialHair", "distinctiveFeature",
 ] as const

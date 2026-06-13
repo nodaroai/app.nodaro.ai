@@ -101,10 +101,15 @@ describe("generateImageBody aspectRatio enum", () => {
 })
 
 describe("generateImageBody prompt length cap", () => {
-  it("accepts a prompt up to 5000 chars and rejects 5001", () => {
-    // 5000 = IMAGE_PROMPT_MAX (raised from the legacy 2000 day-one cap)
-    expect(generateImageBody.safeParse({ prompt: "a".repeat(5000) }).success).toBe(true)
-    expect(generateImageBody.safeParse({ prompt: "a".repeat(5001) }).success).toBe(false)
+  it("accepts up to the PROMPT_HARD_CEILING and rejects past it", () => {
+    // The route is a GENEROUS ceiling (PROMPT_HARD_CEILING = 20000), NOT a
+    // per-model reject — the prompt assembler truncates to the provider's
+    // verified cap (getMaxImagePromptChars; e.g. seedream 3000, nano-banana-2
+    // 20000) and the editor warns first (warn-don't-block). So a 5001-char
+    // prompt for a 20000-capable model must NOT be rejected at the route.
+    expect(generateImageBody.safeParse({ prompt: "a".repeat(5001) }).success).toBe(true)
+    expect(generateImageBody.safeParse({ prompt: "a".repeat(20000) }).success).toBe(true)
+    expect(generateImageBody.safeParse({ prompt: "a".repeat(20001) }).success).toBe(false)
   })
 })
 

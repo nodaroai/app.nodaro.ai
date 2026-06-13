@@ -3,20 +3,18 @@
  *
  * Multi-dimension parameter node. Unlike Setting / Style / Camera-Motion
  * (single pick) or Framing (5 dims, all shot composition), Person describes
- * *who the subject is*. Each of the 10 dimensions is mutually exclusive
- * within itself (pick one Type, one Age, one Hair Color, etc.) and all are
- * independently optional.
+ * *who the subject is*. Each dimension is mutually exclusive within itself
+ * (pick one Type, one Age, one Cheekbones, etc.) and all are independently
+ * optional. Dimensions are grouped into six sections (PERSON_DIMENSION_SECTIONS):
+ * Identity, Body, Face, Hair, Skin & Eyes, Features.
  *
- *   1.  type                 — primary descriptor (Man, Beautiful Woman, Rugged Man…)
- *   2.  age                  — age range (baby, 30s, 40s, teen, elderly…)
- *   3.  ethnicity            — cultural / demographic background
- *   4.  build                — body silhouette + size (slim, athletic, curvy, tall-lean…)
- *   5.  hair-color           — natural / dyed color
- *   6.  hair-style           — length + texture combo (short, long wavy, braids…)
- *   7.  skin-tone            — skin color
- *   8.  eye-color            — iris color
- *   9.  facial-hair          — beard / mustache style
- *   10. distinctive-features — glasses, freckles, tattoos, scar, dimples, piercing
+ * The Face section carries a dedicated facial-geometry layer — cheekbones,
+ * facial fullness, eyelid type, canthal tilt, eye spacing, eye-to-brow set,
+ * nose tip, and split lip fullness / lip shape — so the structured pickers
+ * (not a single "supermodel" Type token) drive the feature geometry and ratios
+ * that actually define a face's look. Neutral options (Average / Neutral /
+ * Standard / Natural) carry an empty promptHint, so enabling a dimension
+ * injects nothing until a real value is picked.
  *
  * Non-empty selections from each dimension are joined as a compound hint and
  * injected as cinematography context into downstream image/video prompts:
@@ -41,9 +39,17 @@ export type PersonDimension =
   | "body-proportions"
   | "face-shape"
   | "jawline"
+  | "cheekbones"
+  | "facial-fullness"
   | "eye-shape"
+  | "eyelid-type"
+  | "canthal-tilt"
+  | "eye-spacing"
+  | "eye-set-brow"
   | "nose"
-  | "lips"
+  | "nose-tip"
+  | "lip-fullness"
+  | "lip-shape"
   | "lip-state"
   | "hair-color"
   | "hair-base"
@@ -412,20 +418,54 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "jaw-wide",    label: "Wide",    dimension: "jawline", description: "Wide, broad jaw",            promptHint: "a wide broad jaw" },
   { id: "jaw-double",  label: "Double Chin", dimension: "jawline", description: "Visible double chin",    promptHint: "a visible double chin" },
 
-  // -------------------- Eye Shape --------------------
-  { id: "eye-almond",      label: "Almond",     dimension: "eye-shape", description: "Almond-shaped, slightly upturned",  promptHint: "almond-shaped eyes" },
-  { id: "eye-round",       label: "Round",      dimension: "eye-shape", description: "Wide, round eyes",                  promptHint: "wide round eyes" },
-  { id: "eye-hooded",      label: "Hooded",     dimension: "eye-shape", description: "Upper lid partially covers crease", promptHint: "hooded eyes with the upper lid partially covering the crease" },
-  { id: "eye-monolid",     label: "Monolid",    dimension: "eye-shape", description: "No visible crease, smooth lid",     promptHint: "monolid eyes with no visible crease" },
-  { id: "eye-double-eyelid", label: "Double Eyelid", dimension: "eye-shape", description: "Defined upper-eyelid crease",  promptHint: "double-eyelid eyes with a clearly defined upper crease" },
-  { id: "eye-deep-set",    label: "Deep-set",   dimension: "eye-shape", description: "Set deeper into the socket",        promptHint: "deep-set eyes" },
-  { id: "eye-downturned",  label: "Downturned", dimension: "eye-shape", description: "Outer corners angle down",          promptHint: "downturned eyes with outer corners angled down" },
-  { id: "eye-upturned",    label: "Upturned",   dimension: "eye-shape", description: "Outer corners lift up",             promptHint: "upturned eyes with outer corners lifted" },
-  { id: "eye-wide-set",    label: "Wide-set",   dimension: "eye-shape", description: "Eyes spaced widely apart",          promptHint: "wide-set eyes" },
-  { id: "eye-close-set",   label: "Close-set",  dimension: "eye-shape", description: "Eyes set close together",           promptHint: "close-set eyes" },
-  { id: "eye-droopy",      label: "Droopy",     dimension: "eye-shape", description: "Lids sit low — soft, sleepy / sad gaze (lid position, not corner angle)", promptHint: "droopy eyes with lids sitting low for a soft, sleepy gaze" },
+  // -------------------- Cheekbones --------------------
+  // Neutral-first: "Average" carries an empty promptHint so enabling the
+  // dimension injects nothing until a non-neutral value is picked.
+  { id: "cheekbones-average",      label: "Average",        dimension: "cheekbones", description: "Average cheekbone projection (no emphasis)", promptHint: "" },
+  { id: "cheekbones-low",          label: "Low",            dimension: "cheekbones", description: "Low, flat cheekbones",                      promptHint: "low, flat cheekbones" },
+  { id: "cheekbones-high-defined", label: "High & Defined", dimension: "cheekbones", description: "High, clearly defined cheekbones",          promptHint: "high, defined cheekbones" },
+  { id: "cheekbones-sculpted",     label: "Sculpted-High",  dimension: "cheekbones", description: "Sharply sculpted high cheekbones",          promptHint: "sharply sculpted high cheekbones with strong cheekbone projection" },
+  { id: "cheekbones-wide",         label: "Wide",           dimension: "cheekbones", description: "Wide, prominent cheekbones",                promptHint: "wide, prominent cheekbones" },
 
-  // -------------------- Nose --------------------
+  // -------------------- Facial Fullness (face leanness, independent of body Build) --------------------
+  { id: "facial-fullness-average", label: "Average", dimension: "facial-fullness", description: "Average facial fullness",                         promptHint: "" },
+  { id: "facial-fullness-gaunt",   label: "Gaunt",   dimension: "facial-fullness", description: "Hollow cheeks, very low facial fat",             promptHint: "a gaunt face with hollow cheeks and very low facial fat" },
+  { id: "facial-fullness-lean",    label: "Lean",    dimension: "facial-fullness", description: "Low facial fat, subtle hollowing under cheekbones", promptHint: "a lean face with low facial fat and subtle hollowing beneath the cheekbones" },
+  { id: "facial-fullness-full",    label: "Full",    dimension: "facial-fullness", description: "Soft, well-padded cheeks",                       promptHint: "a full face with soft, well-padded cheeks" },
+  { id: "facial-fullness-round",   label: "Round",   dimension: "facial-fullness", description: "Round face, soft rounded cheeks",                promptHint: "a round face with soft, rounded cheeks" },
+
+  // -------------------- Eye Shape (anatomical shape only — lid/tilt/spacing/set split out below) --------------------
+  { id: "eye-almond",        label: "Almond",        dimension: "eye-shape", description: "Almond-shaped eyes",            promptHint: "almond-shaped eyes" },
+  { id: "eye-round",         label: "Round",         dimension: "eye-shape", description: "Wide, round eyes",              promptHint: "wide round eyes" },
+  { id: "eye-monolid",       label: "Monolid",       dimension: "eye-shape", description: "No visible crease, smooth lid", promptHint: "monolid eyes with no visible crease" },
+  { id: "eye-double-eyelid", label: "Double Eyelid", dimension: "eye-shape", description: "Defined upper-eyelid crease",   promptHint: "double-eyelid eyes with a clearly defined upper crease" },
+  { id: "eye-wide",          label: "Wide",          dimension: "eye-shape", description: "Wide, large eyes",              promptHint: "wide, large eyes" },
+  { id: "eye-narrow",        label: "Narrow",        dimension: "eye-shape", description: "Narrow, elongated eyes",        promptHint: "narrow, elongated eyes" },
+
+  // -------------------- Eyelid Type (upper-lid trait) --------------------
+  // `eye-hooded` / `eye-droopy` / `eye-deep-set` keep their original ids
+  // (moved out of eye-shape) so legacy data still resolves the same hint.
+  { id: "eyelid-standard", label: "Standard", dimension: "eyelid-type", description: "Standard upper eyelid",                  promptHint: "" },
+  { id: "eye-hooded",      label: "Hooded",   dimension: "eyelid-type", description: "Upper lid partially covers the crease", promptHint: "hooded eyes with the upper lid partially covering the crease" },
+  { id: "eye-droopy",      label: "Droopy",   dimension: "eyelid-type", description: "Upper lids sit low — soft, sleepy gaze", promptHint: "droopy eyes with the upper lids sitting low for a soft, sleepy gaze" },
+  { id: "eye-deep-set",    label: "Deep-set", dimension: "eyelid-type", description: "Set deeper into the socket",            promptHint: "deep-set eyes" },
+
+  // -------------------- Canthal Tilt (outer-corner angle) --------------------
+  { id: "canthal-neutral", label: "Neutral",    dimension: "canthal-tilt", description: "Neutral canthal tilt",            promptHint: "" },
+  { id: "eye-upturned",    label: "Upturned",   dimension: "canthal-tilt", description: "Outer corners lift up (positive tilt)", promptHint: "upturned eyes with the outer corners lifted, positive canthal tilt" },
+  { id: "eye-downturned",  label: "Downturned", dimension: "canthal-tilt", description: "Outer corners angle down (negative tilt)", promptHint: "downturned eyes with the outer corners angled down, negative canthal tilt" },
+
+  // -------------------- Eye Spacing (horizontal distance between eyes) --------------------
+  { id: "eye-spacing-average", label: "Average",   dimension: "eye-spacing", description: "Average eye spacing",      promptHint: "" },
+  { id: "eye-close-set",       label: "Close-set", dimension: "eye-spacing", description: "Eyes set close together",  promptHint: "close-set eyes set close together" },
+  { id: "eye-wide-set",        label: "Wide-set",  dimension: "eye-spacing", description: "Eyes spaced widely apart", promptHint: "wide-set eyes spaced widely apart" },
+
+  // -------------------- Eye Set / Brow Distance (vertical brow-to-eye gap) --------------------
+  { id: "eyeset-average", label: "Average",  dimension: "eye-set-brow", description: "Average brow-to-eye distance",            promptHint: "" },
+  { id: "eyeset-low",     label: "Low-set",  dimension: "eye-set-brow", description: "Little brow-to-eye distance (hunter eyes)", promptHint: "eyes set close beneath the brow with little brow-to-eye distance, hunter eyes" },
+  { id: "eyeset-high",    label: "High-set", dimension: "eye-set-brow", description: "Generous brow-to-eye distance (doe eyes)",  promptHint: "eyes set well below the brow with generous brow-to-eye distance, doe eyes" },
+
+  // -------------------- Nose (bridge) --------------------
   { id: "nose-straight",  label: "Straight",  dimension: "nose", description: "Straight bridge",                 promptHint: "a straight nose" },
   { id: "nose-aquiline",  label: "Aquiline",  dimension: "nose", description: "Curved hooked bridge",            promptHint: "an aquiline nose with a curved bridge" },
   { id: "nose-roman",     label: "Roman",     dimension: "nose", description: "Prominent bridge with slight bump", promptHint: "a Roman nose with a prominent bridge" },
@@ -435,13 +475,27 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "nose-narrow",    label: "Narrow",    dimension: "nose", description: "Thin, narrow",                    promptHint: "a narrow thin nose" },
   { id: "nose-hooked",    label: "Hooked",    dimension: "nose", description: "Strongly curved hooked tip",      promptHint: "a hooked nose with a strongly curved tip" },
 
-  // -------------------- Lips --------------------
-  { id: "lips-thin",       label: "Thin",        dimension: "lips", description: "Thin lips",                         promptHint: "thin lips" },
-  { id: "lips-medium",     label: "Medium",      dimension: "lips", description: "Average fullness",                  promptHint: "medium lips of average fullness" },
-  { id: "lips-full",       label: "Full",        dimension: "lips", description: "Full plump lips",                   promptHint: "full plump lips" },
-  { id: "lips-wide",       label: "Wide",        dimension: "lips", description: "Wide mouth shape",                  promptHint: "a wide mouth" },
-  { id: "lips-cupids-bow", label: "Cupid's Bow", dimension: "lips", description: "Pronounced cupid's bow on upper lip", promptHint: "a pronounced cupid's bow on the upper lip" },
-  { id: "lips-small",      label: "Small",       dimension: "lips", description: "Petite mouth",                      promptHint: "a small petite mouth" },
+  // -------------------- Nose Tip (rotation / shape of the tip) --------------------
+  { id: "nose-tip-natural",  label: "Natural",  dimension: "nose-tip", description: "Natural nose tip (no emphasis)", promptHint: "" },
+  { id: "nose-tip-refined",  label: "Refined",  dimension: "nose-tip", description: "Refined, narrow tip",            promptHint: "a refined, narrow nose tip" },
+  { id: "nose-tip-upturned", label: "Upturned", dimension: "nose-tip", description: "Slightly upturned tip",          promptHint: "a slightly upturned nose tip" },
+  { id: "nose-tip-rounded",  label: "Rounded",  dimension: "nose-tip", description: "Soft, rounded tip",             promptHint: "a soft, rounded nose tip" },
+  { id: "nose-tip-drooping", label: "Drooping", dimension: "nose-tip", description: "Slightly drooping, downward tip", promptHint: "a slightly drooping, downward-pointing nose tip" },
+
+  // -------------------- Lip Fullness --------------------
+  // `lips-thin` / `lips-medium` / `lips-full` keep their original ids (moved
+  // out of the old combined `lips` dimension) so legacy data resolves the same.
+  { id: "lips-thin",       label: "Thin",           dimension: "lip-fullness", description: "Thin lips",                          promptHint: "thin lips" },
+  { id: "lips-medium",     label: "Medium",         dimension: "lip-fullness", description: "Average fullness",                   promptHint: "medium lips of average fullness" },
+  { id: "lips-full",       label: "Full",           dimension: "lip-fullness", description: "Full plump lips",                    promptHint: "full plump lips" },
+  { id: "lips-full-lower", label: "Full Lower Lip", dimension: "lip-fullness", description: "Full lips with a fuller lower lip",  promptHint: "full lips with a noticeably fuller lower lip" },
+
+  // -------------------- Lip Shape --------------------
+  { id: "lips-natural",    label: "Natural",     dimension: "lip-shape", description: "Natural lip shape",                     promptHint: "" },
+  { id: "lips-cupids-bow", label: "Cupid's Bow", dimension: "lip-shape", description: "Pronounced cupid's bow on the upper lip", promptHint: "a pronounced cupid's bow on the upper lip" },
+  { id: "lips-wide",       label: "Wide",        dimension: "lip-shape", description: "Wide mouth shape",                      promptHint: "a wide mouth" },
+  { id: "lips-heart",      label: "Heart",       dimension: "lip-shape", description: "Heart-shaped lips with a defined cupid's bow", promptHint: "heart-shaped lips with a defined cupid's bow" },
+  { id: "lips-small",      label: "Small",       dimension: "lip-shape", description: "Petite mouth",                          promptHint: "a small petite mouth" },
 
   // -------------------- Lip State (what the lips are doing / wearing) --------------------
   { id: "lip-state-chapped",   label: "Chapped",   dimension: "lip-state", description: "Cracked, dry, weather-worn lips", promptHint: "with chapped, cracked, weather-worn dry lips" },
@@ -774,9 +828,17 @@ export const PERSON_DIMENSION_ORDER: ReadonlyArray<PersonDimension> = [
   // Face structure
   "face-shape",
   "jawline",
+  "cheekbones",
+  "facial-fullness",
   "eye-shape",
+  "eyelid-type",
+  "canthal-tilt",
+  "eye-spacing",
+  "eye-set-brow",
   "nose",
-  "lips",
+  "nose-tip",
+  "lip-fullness",
+  "lip-shape",
   "lip-state",
   // Hair
   "hair-base",
@@ -800,9 +862,17 @@ export const PERSON_DIMENSION_LABELS: Readonly<Record<PersonDimension, string>> 
   "body-proportions": "Body Proportions",
   "face-shape": "Face Shape",
   jawline: "Jawline",
+  cheekbones: "Cheekbones",
+  "facial-fullness": "Facial Fullness",
   "eye-shape": "Eye Shape",
+  "eyelid-type": "Eyelid Type",
+  "canthal-tilt": "Canthal Tilt",
+  "eye-spacing": "Eye Spacing",
+  "eye-set-brow": "Eye Set / Brow Distance",
   nose: "Nose",
-  lips: "Lips",
+  "nose-tip": "Nose Tip",
+  "lip-fullness": "Lip Fullness",
+  "lip-shape": "Lip Shape",
   "lip-state": "Lip State",
   "hair-color": "Hair Color",
   "hair-base": "Hair (Texture & Length)",
@@ -832,7 +902,7 @@ export interface PersonDimensionSection {
 export const PERSON_DIMENSION_SECTIONS: ReadonlyArray<PersonDimensionSection> = [
   { label: "Identity",    dimensions: ["type", "age", "ethnicity", "regional-aesthetic"] },
   { label: "Body",        dimensions: ["build", "body-proportions"] },
-  { label: "Face",        dimensions: ["face-shape", "jawline", "eye-shape", "nose", "lips", "lip-state"] },
+  { label: "Face",        dimensions: ["face-shape", "jawline", "cheekbones", "facial-fullness", "eye-shape", "eyelid-type", "canthal-tilt", "eye-spacing", "eye-set-brow", "nose", "nose-tip", "lip-fullness", "lip-shape", "lip-state"] },
   { label: "Hair",        dimensions: ["hair-base", "hair-color", "eyebrows"] },
   { label: "Skin & Eyes", dimensions: ["skin-tone", "skin-texture", "eye-color", "eye-state"] },
   { label: "Features",    dimensions: ["facial-hair", "distinctive-features"] },
@@ -846,7 +916,9 @@ export const PERSON_DIMENSION_SECTIONS: ReadonlyArray<PersonDimensionSection> = 
 export const PERSON_FIELD_BY_DIMENSION: Record<
   PersonDimension,
   | "type" | "age" | "ethnicity" | "regionalAesthetic" | "build" | "bodyProportions"
-  | "faceShape" | "jawline" | "eyeShape" | "nose" | "lips" | "lipState"
+  | "faceShape" | "jawline" | "cheekbones" | "facialFullness"
+  | "eyeShape" | "eyelidType" | "canthalTilt" | "eyeSpacing" | "eyeSetBrow"
+  | "nose" | "noseTip" | "lipFullness" | "lipShape" | "lipState"
   | "hairColor" | "hairBase" | "eyebrows"
   | "skinTone" | "skinTexture" | "eyeColor" | "eyeState" | "facialHair" | "distinctiveFeature"
 > = {
@@ -858,9 +930,17 @@ export const PERSON_FIELD_BY_DIMENSION: Record<
   "body-proportions": "bodyProportions",
   "face-shape": "faceShape",
   jawline: "jawline",
+  cheekbones: "cheekbones",
+  "facial-fullness": "facialFullness",
   "eye-shape": "eyeShape",
+  "eyelid-type": "eyelidType",
+  "canthal-tilt": "canthalTilt",
+  "eye-spacing": "eyeSpacing",
+  "eye-set-brow": "eyeSetBrow",
   nose: "nose",
-  lips: "lips",
+  "nose-tip": "noseTip",
+  "lip-fullness": "lipFullness",
+  "lip-shape": "lipShape",
   "lip-state": "lipState",
   "hair-color": "hairColor",
   "hair-base": "hairBase",
@@ -902,11 +982,34 @@ export interface PersonValue {
   faceShape?: string
   /** Jaw shape (strong, soft, pointed, wide). */
   jawline?: string
-  /** Eye shape (almond, hooded, monolid, deep-set…). */
+  /** Cheekbone projection / height (low, average, high-defined, sculpted-high, wide). */
+  cheekbones?: string
+  /** Face-specific leanness, independent of body `build` (gaunt, lean, average, full, round). */
+  facialFullness?: string
+  /** Eye shape — anatomical shape only (almond, round, monolid, double-eyelid,
+   *  wide, narrow). Lid type, canthal tilt, spacing and brow-set are separate. */
   eyeShape?: string
-  /** Nose shape (straight, aquiline, snub, broad…). */
+  /** Upper-eyelid trait (standard, hooded, droopy, deep-set). */
+  eyelidType?: string
+  /** Canthal tilt — outer-corner angle (neutral, upturned, downturned). */
+  canthalTilt?: string
+  /** Horizontal eye spacing (close-set, average, wide-set). */
+  eyeSpacing?: string
+  /** Brow-to-eye distance / eye set (low-set "hunter", average, high-set "doe"). */
+  eyeSetBrow?: string
+  /** Nose bridge shape (straight, aquiline, snub, broad…). */
   nose?: string
-  /** Lip fullness / shape (thin, full, wide, cupid's bow…). */
+  /** Nose tip rotation / shape (natural, refined, upturned, rounded, drooping). */
+  noseTip?: string
+  /** Lip fullness (thin, medium, full, full-lower). Replaces the legacy
+   *  combined `lips` field together with `lipShape`. */
+  lipFullness?: string
+  /** Lip shape (natural, cupid's bow, wide, heart, small). Replaces the legacy
+   *  combined `lips` field together with `lipFullness`. */
+  lipShape?: string
+  /** @deprecated Split into `lipFullness` + `lipShape`. Retained so legacy
+   *  workflow data keeps resolving — `buildPersonHints` reads it as a fallback
+   *  and `migratePersonValue` relocates it onto the new fields. */
   lips?: string
   /** Lip state — what the lips are doing right now (chapped, glossy,
    *  parted, biting, pursed, bold-red…). Distinct from `lips` which is
@@ -1129,8 +1232,73 @@ export function buildPersonHints(
     if (hint) hints.push(hint)
   }
 
+  // Legacy fallback: the old combined `lips` dimension was split into
+  // `lip-fullness` + `lip-shape`. Saved workflow data may still carry a single
+  // `data.lips` id; emit its hint, but ONLY when neither new field is set so we
+  // never double-count after a migration. (The relocated lip ids remain in the
+  // catalog, so `getPersonPromptHint` resolves them identically.)
+  if (
+    typeof data.lips === "string" &&
+    data.lips.length > 0 &&
+    !data.lipFullness &&
+    !data.lipShape
+  ) {
+    const legacyLips = getPersonPromptHint(data.lips)
+    if (legacyLips) hints.push(legacyLips)
+  }
+
   const post = typeof data.postText === "string" ? data.postText.trim() : ""
   if (post) hints.push(post)
 
   return hints
+}
+
+// Legacy → new field relocation tables for `migratePersonValue`. The old
+// single `eye-shape` dimension crammed shape + lid + tilt + spacing into one
+// pick, and `lips` crammed fullness + shape; both were split. Ids were kept
+// stable so prompt output is identical either way — this only moves a stored
+// value onto the field the picker now renders it under.
+const PERSON_EYELID_RELOCATE: ReadonlySet<string> = new Set(["eye-hooded", "eye-droopy", "eye-deep-set"])
+const PERSON_CANTHAL_RELOCATE: ReadonlySet<string> = new Set(["eye-upturned", "eye-downturned"])
+const PERSON_SPACING_RELOCATE: ReadonlySet<string> = new Set(["eye-close-set", "eye-wide-set"])
+const PERSON_LIP_FULLNESS_RELOCATE: ReadonlySet<string> = new Set(["lips-thin", "lips-medium", "lips-full"])
+const PERSON_LIP_SHAPE_RELOCATE: ReadonlySet<string> = new Set(["lips-wide", "lips-cupids-bow", "lips-small"])
+
+/**
+ * Relocate legacy single-field Person values onto the post-split fields so the
+ * picker UI shows them in their new home:
+ *
+ *  - `eyeShape` ∈ {hooded, droopy, deep-set}  → `eyelidType`
+ *  - `eyeShape` ∈ {upturned, downturned}      → `canthalTilt`
+ *  - `eyeShape` ∈ {wide-set, close-set}       → `eyeSpacing`
+ *  - `lips`     ∈ {thin, medium, full}        → `lipFullness`
+ *  - `lips`     ∈ {wide, cupids-bow, small}   → `lipShape`
+ *
+ * PROMPT OUTPUT IS UNAFFECTED either way — `getPersonPromptHint` resolves the
+ * ids regardless of dimension and `buildPersonHints` has a `lips` fallback;
+ * this is UI hygiene + clean re-saves only. Immutable + idempotent: returns the
+ * same reference when nothing moves, never overwrites an already-set target,
+ * clears the legacy source once relocated, and preserves every other key (node
+ * data carries non-Person fields too).
+ */
+export function migratePersonValue<T extends Record<string, unknown>>(data: T): T {
+  let next: Record<string, unknown> | undefined
+  const relocate = (from: "eyeShape" | "lips", to: string, value: string) => {
+    next = { ...(next ?? data), [to]: value, [from]: undefined }
+  }
+
+  const eyeShape = data.eyeShape
+  if (typeof eyeShape === "string" && eyeShape.length > 0) {
+    if (PERSON_EYELID_RELOCATE.has(eyeShape) && !data.eyelidType) relocate("eyeShape", "eyelidType", eyeShape)
+    else if (PERSON_CANTHAL_RELOCATE.has(eyeShape) && !data.canthalTilt) relocate("eyeShape", "canthalTilt", eyeShape)
+    else if (PERSON_SPACING_RELOCATE.has(eyeShape) && !data.eyeSpacing) relocate("eyeShape", "eyeSpacing", eyeShape)
+  }
+
+  const lips = data.lips
+  if (typeof lips === "string" && lips.length > 0) {
+    if (PERSON_LIP_FULLNESS_RELOCATE.has(lips) && !data.lipFullness) relocate("lips", "lipFullness", lips)
+    else if (PERSON_LIP_SHAPE_RELOCATE.has(lips) && !data.lipShape) relocate("lips", "lipShape", lips)
+  }
+
+  return (next ?? data) as T
 }

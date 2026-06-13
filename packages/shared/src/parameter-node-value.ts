@@ -164,8 +164,17 @@ export function getParameterValue(
         trim(data.bodyProportions) ??
         trim(data.faceShape) ??
         trim(data.jawline) ??
+        trim(data.cheekbones) ??
+        trim(data.facialFullness) ??
         trim(data.eyeShape) ??
+        trim(data.eyelidType) ??
+        trim(data.canthalTilt) ??
+        trim(data.eyeSpacing) ??
+        trim(data.eyeSetBrow) ??
         trim(data.nose) ??
+        trim(data.noseTip) ??
+        trim(data.lipFullness) ??
+        trim(data.lipShape) ??
         trim(data.lips) ??
         trim(data.hairColor) ??
         trim(data.hairBase) ??

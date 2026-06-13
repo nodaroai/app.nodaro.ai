@@ -32,6 +32,7 @@ import type { GenerateTextTemplate } from "@/lib/generate-text-templates"
 import { migrateGenerateImageHandles } from "@/lib/generate-image-handle-migration"
 import { migrateGenerateVideoNodes } from "@/lib/generate-video-handle-migration"
 import { migrateListLoopNodes } from "@/lib/list-loop-migration"
+import { migratePersonNodes } from "@/lib/person-value-migration"
 import { migratePickerSourceHandle, isTileGridPickerType } from "@/lib/picker-handles"
 
 /**
@@ -895,12 +896,10 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       // Single pass: detect content changes and collect selection info
       let hasContentChange = false
       let hasSelectionChange = false
-      let lastSelectedId: string | null = null
       const resizedNodeIds: string[] = []
       for (const c of changes) {
         if (c.type === "select") {
           hasSelectionChange = true
-          if (c.selected) lastSelectedId = c.id
         } else if (c.type === "dimensions") {
           // User-initiated resize (NodeResizer) sets resizing flag — treat as content change
           // so the resized dimensions get auto-saved. Auto-measurement events don't have resizing.
@@ -2131,6 +2130,11 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       migratedNodes = result.nodes
       migratedEdges = result.edges
     }
+
+    // Relocate legacy Person values onto the post-split facial-geometry fields
+    // (eyeShape → eyelidType/canthalTilt/eyeSpacing; lips → lipFullness/lipShape).
+    // UI hygiene only — prompt output is identical pre/post (id-based hints).
+    migratedNodes = migratePersonNodes(migratedNodes)
 
     // Migrate legacy audio/text output handle ids to the normalized
     // single-word form, AND rewrite target ids for audio nodes whose
