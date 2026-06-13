@@ -27,6 +27,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
+import { MODEL_CATALOG, MODEL_RECOMMENDATIONS } from "@nodaro/shared"
+
 import { captureMcpToolSchemas, type CapturedSchema } from "./lib/gen-skills/capture-mcp-schemas.js"
 import { rewriteBlock } from "./lib/gen-skills/marker-blocks.js"
 import {
@@ -42,6 +44,10 @@ import {
   renderProviderPromptingBlock,
   renderWorkflowEditorCatalog,
 } from "./lib/gen-skills/render-skill.js"
+import {
+  renderModelTable,
+  renderRecommendations,
+} from "./lib/gen-skills/render-model-guide.js"
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = resolve(HERE, "..", "..")
@@ -49,6 +55,7 @@ const FRONTEND_NODES = join(REPO_ROOT, "frontend", "src", "types", "nodes.ts")
 const SKILLS_DIR = join(REPO_ROOT, "backend", "skills")
 const NODES_DIR = join(SKILLS_DIR, "nodes")
 const WORKFLOW_EDITOR_FILE = join(SKILLS_DIR, "workflow-editor.md")
+const CHOOSING_MODELS_FILE = join(REPO_ROOT, "docs", "choosing-models.md")
 
 const CHECK_MODE = process.argv.includes("--check")
 
@@ -230,6 +237,25 @@ async function main(): Promise<void> {
     writeFileSync(WORKFLOW_EDITOR_FILE, editorFinal)
   }
 
+  // docs/choosing-models.md — public model-selection guide. Hand-written prose
+  // wraps AUTO-GEN blocks rendered from the MODEL_CATALOG single source of
+  // truth. No internal frontmatter (it's a Jekyll page); only the blocks are
+  // rewritten so the narrative is preserved.
+  console.log("[gen-skills] rewriting docs/choosing-models.md model blocks")
+  const guideSource = readFileSync(CHOOSING_MODELS_FILE, "utf-8")
+  let guide = guideSource
+  guide = rewriteBlock(
+    guide,
+    "model-recommendations",
+    renderRecommendations(MODEL_RECOMMENDATIONS, MODEL_CATALOG),
+  )
+  guide = rewriteBlock(guide, "model-table-image", renderModelTable(MODEL_CATALOG, "image"))
+  guide = rewriteBlock(guide, "model-table-video", renderModelTable(MODEL_CATALOG, "video"))
+  guide = rewriteBlock(guide, "model-table-audio", renderModelTable(MODEL_CATALOG, "audio"))
+  if (guide !== guideSource) {
+    writeFileSync(CHOOSING_MODELS_FILE, guide)
+  }
+
   if (!existsSync(NODES_DIR)) mkdirSync(NODES_DIR, { recursive: true })
 
   // Per-node files.
@@ -290,11 +316,17 @@ async function main(): Promise<void> {
 
   if (CHECK_MODE) {
     try {
-      execFileSync("git", ["diff", "--exit-code", "backend/skills/"], {
-        stdio: "inherit",
-        cwd: REPO_ROOT,
-      })
-      console.log("[gen-skills] no drift — backend/skills/ is up to date")
+      execFileSync(
+        "git",
+        ["diff", "--exit-code", "backend/skills/", "docs/choosing-models.md"],
+        {
+          stdio: "inherit",
+          cwd: REPO_ROOT,
+        },
+      )
+      console.log(
+        "[gen-skills] no drift — backend/skills/ and docs/choosing-models.md are up to date",
+      )
     } catch {
       console.error(
         "\n[gen-skills] DRIFT DETECTED — run `npm run gen:skills` from backend/ and commit the changes",
