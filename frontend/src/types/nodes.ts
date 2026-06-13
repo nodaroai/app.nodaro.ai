@@ -25,7 +25,7 @@ import type { SceneNodeData as SharedSceneNodeData } from "@nodaro/shared"
 import type { PipelineState } from "@nodaro/shared"
 import type { ReferenceSheet } from "@nodaro/shared"
 import type { SheetType, SheetSkin, SheetFlavour, EntityKind } from "@nodaro/shared"
-import { MODIFY_IMAGE_PROVIDERS, UPSCALE_IMAGE_PROVIDERS } from "@nodaro/shared"
+import { MODIFY_IMAGE_PROVIDERS } from "@nodaro/shared"
 import {
   MUSIC_GENRE_DEFAULT_DATA,
   MUSIC_MOOD_DEFAULT_DATA,
@@ -720,11 +720,32 @@ export interface PersonData {
   faceShape?: string
   /** Jaw shape (strong, soft, pointed, wide, double-chin). */
   jawline?: string
-  /** Eye shape (almond, hooded, monolid, deep-set, downturned, upturned…). */
+  /** Cheekbone projection / height (low, average, high-defined, sculpted-high, wide). */
+  cheekbones?: string
+  /** Face-specific leanness, independent of body `build` (gaunt, lean, average, full, round). */
+  facialFullness?: string
+  /** Eye shape — anatomical shape only (almond, round, monolid, double-eyelid, wide, narrow). */
   eyeShape?: string
-  /** Nose shape (straight, aquiline, snub, broad, narrow, hooked…). */
+  /** Upper-eyelid trait (standard, hooded, droopy, deep-set). */
+  eyelidType?: string
+  /** Canthal tilt — outer-corner angle (neutral, upturned, downturned). */
+  canthalTilt?: string
+  /** Horizontal eye spacing (close-set, average, wide-set). */
+  eyeSpacing?: string
+  /** Brow-to-eye distance / eye set (low-set "hunter", average, high-set "doe"). */
+  eyeSetBrow?: string
+  /** Nose bridge shape (straight, aquiline, snub, broad, narrow, hooked…). */
   nose?: string
-  /** Lip shape (thin, medium, full, wide, cupid's bow, small). */
+  /** Nose tip rotation / shape (natural, refined, upturned, rounded, drooping). */
+  noseTip?: string
+  /** Lip fullness (thin, medium, full, full-lower). Replaces the legacy
+   *  combined `lips` field together with `lipShape`. */
+  lipFullness?: string
+  /** Lip shape (natural, cupid's bow, wide, heart, small). Replaces the legacy
+   *  combined `lips` field together with `lipFullness`. */
+  lipShape?: string
+  /** @deprecated Split into `lipFullness` + `lipShape`; retained for legacy
+   *  workflow data (resolved via buildPersonHints fallback + migratePersonValue). */
   lips?: string
   /** Lip state — what the lips are doing (chapped, glossy, parted, biting,
    *  pursed, bold-red). Distinct from `lips` (anatomical shape). Single id

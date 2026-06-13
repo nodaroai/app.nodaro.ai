@@ -886,6 +886,7 @@ export {
   getPersonLabel,
   getPersonPromptHint,
   buildPersonHints,
+  migratePersonValue,
 } from "./person.js"
 export type { Person, PersonDimension, PersonDimensionSection, PersonValue } from "./person.js"
 
