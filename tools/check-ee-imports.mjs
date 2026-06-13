@@ -101,7 +101,7 @@ const ALLOWLIST = new Set([
   "frontend/src/app/pricing/page.tsx",
   "frontend/src/components/app-runner/mobile-app-header.tsx",
   "frontend/src/components/app-runner/mobile-app-shell.tsx",
-  "frontend/src/components/editor/character-studio/appearance-tab.tsx",
+  "frontend/src/components/editor/character-studio/pages/profile-page.tsx",
   "frontend/src/components/editor/character-studio/asset-card.tsx",
   "frontend/src/components/editor/character-studio/generation-bar.tsx",
   "frontend/src/components/editor/config-panel.tsx",

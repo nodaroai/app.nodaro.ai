@@ -24,6 +24,7 @@ import type {
 import type { SceneNodeData as SharedSceneNodeData } from "@nodaro/shared"
 import type { PipelineState } from "@nodaro/shared"
 import type { ReferenceSheet } from "@nodaro/shared"
+import type { PersonValue, WardrobeValue } from "@nodaro/shared"
 import type { SheetType, SheetSkin, SheetFlavour, EntityKind } from "@nodaro/shared"
 import { MODIFY_IMAGE_PROVIDERS } from "@nodaro/shared"
 import {
@@ -3413,6 +3414,9 @@ export interface CharacterVoice {
   voiceId: string      // ElevenLabs voice ID
   voiceName: string    // display name (e.g. "Rachel")
   traits: string       // free-form descriptive traits ("deep, calm, British accent")
+  voiceType?: "premade" | "library" | "custom"  // how TTS resolves the voice (by-name vs by-id)
+  previewUrl?: string  // playable audio sample (client-played only; backend never fetches it)
+  ttsProvider?: TtsProvider  // recommended TTS provider for this voice (sent as `provider` on TTS)
 }
 
 export interface CharacterPersonality {
@@ -3496,6 +3500,11 @@ export type CharacterNodeData = {
   // Voice + personality (Phase 1: stored only; Phase 2: auto-injected downstream)
   voice: CharacterVoice | null
   personality: CharacterPersonality | null
+  // Structured Person + Wardrobe selections (Character Studio redesign). Stored
+  // on the row; derived into generation prompts server-side (buildPersonHints /
+  // buildWardrobeHints). Optional — characters without picker selections omit them.
+  person?: PersonValue
+  wardrobe?: WardrobeValue
   // Real-life reference photos uploaded by the user (face, body, outfit, etc.) — routed
   // per-asset-target via `routePhotosForAsset` in `@/lib/reference-photo-routing`.
   readonly referencePhotos?: ReadonlyArray<{ url: string; kind: ReferencePhotoKind }>

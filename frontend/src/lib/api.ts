@@ -3,6 +3,7 @@ import { nodaroClient } from "@/lib/nodaro-client"
 import type { SubWorkflowRouteSnapshot, SocialConnection } from "@/types/nodes"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import type { ReduceMeta, ImageCriticMode, WorkflowExport, ReferenceSheet } from "@nodaro/shared"
+import type { PersonValue, WardrobeValue } from "@nodaro/shared"
 import type { SheetType, SheetSkin, SheetFlavour, EntityKind } from "@nodaro/shared"
 import type { CharacterAttachColumn, ObjectAttachColumn, CreatureAttachColumn, LocationAttachColumn } from "@nodaro/shared"
 import type { CommunityCard, CommunitySort } from "@nodaro/shared"
@@ -764,7 +765,9 @@ export async function saveCharacter(data: {
   angles?:      { name: string; url: string }[]
   bodyAngles?:  { name: string; url: string }[]
   motions?:     { name: string; url: string }[]
-  voice?:       { voiceId: string; voiceName: string; traits: string } | null
+  voice?:       { voiceId: string; voiceName: string; traits: string; voiceType?: "premade" | "library" | "custom"; previewUrl?: string; ttsProvider?: string } | null
+  person?:      PersonValue | null
+  wardrobe?:    WardrobeValue | null
   personality?: { mood: string; speechStyle: string; movementStyle: string; behavioralNotes: string } | null
   referencePhotos?: ReadonlyArray<{ url: string; kind: ReferencePhotoKind }>
   seedPrompt?: string
@@ -807,7 +810,9 @@ export async function getCharacter(id: string): Promise<{
   sheets?: ReferenceSheet[]
   detailCloseups?: unknown[]
   outfitVariations?: unknown[]
-  voice: { voiceId: string; voiceName: string; traits: string } | null
+  voice: { voiceId: string; voiceName: string; traits: string; voiceType?: "premade" | "library" | "custom"; previewUrl?: string; ttsProvider?: string } | null
+  person?: Record<string, unknown> | null
+  wardrobe?: Record<string, unknown> | null
   personality: { mood: string; speechStyle: string; movementStyle: string; behavioralNotes: string } | null
   referencePhotos?: ReadonlyArray<{ url: string; kind: ReferencePhotoKind }>
   seedPrompt?: string
@@ -922,13 +927,21 @@ export interface TrainingStatus {
  * Returns 202 with `{ jobId, trainingId, triggerWord }` on success.
  * 409 `already_training_or_not_found` if a training is already in flight.
  * 400 `insufficient_training_images` if < 4 photos.
+ *
+ * `selectedImageUrls` (optional): curate which candidate images the trainer
+ * uses. Omitted/empty → train on every eligible image (backward-compatible).
  */
 export async function startCharacterTraining(
   characterId: string,
+  selectedImageUrls?: readonly string[],
 ): Promise<{ readonly jobId: string; readonly trainingId: string; readonly triggerWord: string }> {
+  const body =
+    selectedImageUrls && selectedImageUrls.length > 0
+      ? { selectedImageUrls: [...selectedImageUrls] }
+      : {}
   return apiJson(
     `/v1/characters/${encodeURIComponent(characterId)}/train`,
-    { body: {}, label: "Failed to start character training" },
+    { body, label: "Failed to start character training" },
   )
 }
 

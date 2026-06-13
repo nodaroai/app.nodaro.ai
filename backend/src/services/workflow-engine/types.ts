@@ -283,6 +283,14 @@ export interface ResolvedInputs {
    *  are kept for parity / future routing rather than consumed by routeOutput. */
   entityKind?: "character" | "object" | "location"
   entityDbId?: string
+  /** TTS voice auto-wired from an upstream Character node's stored voice
+   *  (input-resolver). `voice` is the ElevenLabs voice id/name the TTS route's
+   *  Zod reads as `voice`; `voiceType` mirrors the character's resolution mode;
+   *  `provider` is the recommended TTS provider. Consumed by payload-builder's
+   *  text-to-speech case (data fields still win when explicitly set on the node). */
+  voice?: string
+  voiceType?: "premade" | "library" | "custom"
+  provider?: string
 }
 
 // ---------------------------------------------------------------------------

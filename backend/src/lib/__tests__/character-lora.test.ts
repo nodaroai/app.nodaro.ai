@@ -218,6 +218,73 @@ describe("collectTrainingImages", () => {
       "expr_angry",
     ])
   })
+
+  // ── Curated subset (selectedUrls) ────────────────────────────────────────
+  const SEVEN_BUCKET_ROW = {
+    source_image_url: "https://r2/source.jpg",
+    reference_photos: [{ url: "https://r2/ref-front.jpg", kind: "frontFace" }],
+    expressions: [{ url: "https://r2/expr-smile.jpg", name: "smile" }],
+    poses: [{ url: "https://r2/pose-standing.jpg", name: "standing" }],
+    angles: [{ url: "https://r2/angle-front.jpg", name: "front" }],
+    body_angles: [{ url: "https://r2/body-front.jpg", name: "front" }],
+    lighting_variations: [{ url: "https://r2/light-noir.jpg", name: "noir" }],
+  }
+
+  it("trains on only the selected subset when selectedUrls is provided", () => {
+    const selected = [
+      "https://r2/source.jpg",
+      "https://r2/ref-front.jpg",
+      "https://r2/expr-smile.jpg",
+      "https://r2/pose-standing.jpg",
+    ]
+    const images = collectTrainingImages(SEVEN_BUCKET_ROW, selected)
+    expect(images.map((i) => i.url)).toEqual(selected)
+    // The 3 un-selected buckets (angle/body/light) are excluded.
+    expect(images.map((i) => i.url)).not.toContain("https://r2/angle-front.jpg")
+  })
+
+  it("preserves canonical bucket order regardless of selection order", () => {
+    const images = collectTrainingImages(SEVEN_BUCKET_ROW, [
+      "https://r2/pose-standing.jpg",
+      "https://r2/source.jpg",
+      "https://r2/angle-front.jpg",
+      "https://r2/ref-front.jpg",
+    ])
+    expect(images.map((i) => i.url)).toEqual([
+      "https://r2/source.jpg",
+      "https://r2/ref-front.jpg",
+      "https://r2/pose-standing.jpg",
+      "https://r2/angle-front.jpg",
+    ])
+  })
+
+  it("throws the same min-4 error when fewer than 4 are selected", () => {
+    expect(() =>
+      collectTrainingImages(SEVEN_BUCKET_ROW, [
+        "https://r2/source.jpg",
+        "https://r2/ref-front.jpg",
+      ]),
+    ).toThrow(InsufficientImagesError)
+  })
+
+  it("ignores selected URLs that aren't among the eligible images", () => {
+    const images = collectTrainingImages(SEVEN_BUCKET_ROW, [
+      "https://r2/source.jpg",
+      "https://r2/ref-front.jpg",
+      "https://r2/expr-smile.jpg",
+      "https://r2/pose-standing.jpg",
+      "https://r2/not-a-real-image.jpg",
+    ])
+    expect(images).toHaveLength(4)
+    expect(images.map((i) => i.url)).not.toContain("https://r2/not-a-real-image.jpg")
+  })
+
+  it("is identical to the no-arg path when selection is empty or absent", () => {
+    const all = collectTrainingImages(SEVEN_BUCKET_ROW)
+    const emptyArr = collectTrainingImages(SEVEN_BUCKET_ROW, [])
+    expect(emptyArr.map((i) => i.url)).toEqual(all.map((i) => i.url))
+    expect(all).toHaveLength(7)
+  })
 })
 
 describe("deleteCharacterLora (Bearer header regression net)", () => {

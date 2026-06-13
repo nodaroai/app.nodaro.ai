@@ -889,6 +889,11 @@ export {
   migratePersonValue,
 } from "./person.js"
 export type { Person, PersonDimension, PersonDimensionSection, PersonValue } from "./person.js"
+export {
+  WARDROBE, WARDROBE_DIMENSION_ORDER, WARDROBE_CATEGORY_LABELS, WARDROBE_FIELD_BY_DIMENSION,
+  buildWardrobeHints, getWardrobePromptHint, getWardrobeEntry, getWardrobeEntriesByDimension,
+} from "./wardrobe.js"
+export type { WardrobeValue, WardrobeEntry, WardrobeDimension } from "./wardrobe.js"
 
 export {
   PHOTO_GENRES,

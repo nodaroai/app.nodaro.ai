@@ -42,7 +42,9 @@ The `characters` table stores one row per character. Highlights:
 | `real_life_refs_by_variant` | jsonb | Per-variant reference URL arrays (e.g. `{ smile: [url1, url2] }`). |
 | `reference_videos_by_variant` | jsonb | Per-label user-uploaded reference VIDEO URL arrays (e.g. `{ angry: [url1] }`). Mirrors `real_life_refs_by_variant` for clips; read off the row to drive generate-video's `referenceVideoUrls`. Max 20 keys, 5 URLs each. |
 | `selected_asset_by_variant` | jsonb | The user's chosen DEFAULT take per variant (Studio version history). OPAQUE map: key `"<bucket>:<variant>"` (e.g. `bodyAngles:front`, `expressions:smile`) → the chosen asset URL (one already in that bucket). Keys stored **verbatim** (not normalized); soft-capped at 200 keys / 2048-char values, overflow dropped silently. A separate column — a selection never rewrites an asset bucket. |
-| `voice` / `personality` | jsonb | Optional voice + personality blocks for audio nodes. |
+| `person` | jsonb | Structured appearance attributes (hair, eyes, build, age, ethnicity, …) from the Person picker. Auto-injected into portrait + asset generation prompts server-side (see [Structured attributes + wardrobe](#structured-attributes--wardrobe-person--wardrobe)). |
+| `wardrobe` | jsonb | Structured wardrobe selections (archetype, top, bottom, outerwear, footwear, headwear, accessories, color palette, material, era). Auto-injected into portrait + asset generation prompts server-side. |
+| `voice` / `personality` | jsonb | Optional voice + personality blocks for audio nodes. `voice` auto-fills a connected text-to-speech node at run time (see [Voice auto-wire](#voice-auto-wire)). |
 | `deleted_at` | timestamptz | Non-null = soft-deleted (archived). |
 | `created_at` / `updated_at` | timestamptz | Timestamps. |
 
@@ -109,6 +111,46 @@ Caps:
 Pass the map via `realLifeRefsByVariant` on the upsert body. When the worker
 runs `generate-character-asset` for a specific `variant`, it picks up the
 matching key's URL list automatically.
+
+## Structured attributes + wardrobe (`person` + `wardrobe`)
+
+Beyond freeform `description`, a character can carry two **structured** blocks
+that the Character Studio's **Pickers** page populates:
+
+- **`person`** — appearance attributes (hair, eyes, build, age, ethnicity,
+  skin, face, …). Same shape as the Person parameter picker's value.
+- **`wardrobe`** — archetype, top, bottom, outerwear, footwear, headwear,
+  accessories, color palette, material, and era.
+
+Both are stored on the row and **auto-injected into the character's own
+portrait and asset generation prompts server-side** — when
+`POST /v1/generate-character` (portrait) or `POST /v1/generate-character-asset`
+runs, the backend derives a descriptive clause from `person` + `wardrobe` and
+appends it to the prompt. Empty or unknown selections contribute nothing.
+There is no extra wiring: set the fields via `upsert()` / `update()` (or the
+studio Pickers page) and they take effect on the next generation.
+
+The clause is built with the same picker prompt-hint logic shipped in
+[`@nodaro/shared`](https://www.npmjs.com/package/@nodaro/shared) — see
+[Parameter Picker Catalogs](./picker-catalogs.md) if you want to reproduce the
+exact clauses client-side. These blocks affect only the character's **own**
+generations; they are not consumed by unrelated downstream nodes.
+
+## Voice auto-wire
+
+The character's `voice` block (an ElevenLabs voice id + voice type +
+recommended provider, plus freeform traits) **auto-fills a connected
+text-to-speech node** when a workflow runs. The orchestrator's input resolver
+routes `voice.voiceId → voice`, `voice.voiceType → voiceType`, and the
+recommended provider → `provider` on any `text-to-speech` node wired
+downstream of the character — no portrait required. Per-node values still win:
+anything explicitly set on the TTS node overrides the character's voice.
+
+The voice is **not** injected into lip-sync (or other) nodes — only
+text-to-speech. Lip-sync still resolves its image input from the character's
+portrait as before. (The studio's **Talk → Speak + lip-sync portrait** preview
+is a convenience that renders a talking clip in-studio; it is credit-metered at
+the standard lip-sync rate.)
 
 ## The portrait approval flow
 

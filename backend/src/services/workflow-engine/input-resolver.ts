@@ -332,6 +332,27 @@ export function resolveNodeInputs(
   // produces the same results.
   resolveSelectedNodeFallbacks(targetNode, inputs, allNodes, nodeStates, triggerData)
 
+  // Character voice → text-to-speech auto-fill. Read the upstream character's
+  // stored voice DIRECTLY (NOT output-gated — a voice has no rendered output, so
+  // routeOutput above never runs for a voice-only character: the edge is skipped
+  // at `if (!output) continue`). Override-safe: skip if a voice was already
+  // resolved from another edge. lip-sync is intentionally excluded (no voice
+  // input; its `provider` is a different, cross-enum field). Extend the source
+  // type set for creature/location later.
+  if (targetNode.type === "text-to-speech" && !inputs.voice) {
+    for (const e of incomingEdges) {
+      const src = nodeById.get(e.source)
+      if (src?.type !== "character") continue
+      const voice = (src.data as { voice?: { voiceId?: string; voiceType?: "premade" | "library" | "custom"; ttsProvider?: string } }).voice
+      if (voice?.voiceId) {
+        inputs.voice = voice.voiceId
+        inputs.voiceType = voice.voiceType ?? "premade"
+        if (voice.ttsProvider) inputs.provider = voice.ttsProvider
+        break
+      }
+    }
+  }
+
   return inputs
 }
 

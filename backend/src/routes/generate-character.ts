@@ -140,10 +140,34 @@ export async function generateCharacterRoutes(app: FastifyInstance) {
       // the SAME resolver the preHandler ran on the raw body, so CHECK===DEBIT.
       const modelIdentifier = resolveEntityImageCreditIdentifier(data)
 
+      // Structured Person + Wardrobe selections live on the character row (this
+      // route builds the portrait prompt from the request body and otherwise
+      // never reads the row). When attaching to an existing character, fetch
+      // them so the derived hints get folded into the seed clause server-side.
+      let characterPerson: Record<string, unknown> | null = null
+      let characterWardrobe: Record<string, unknown> | null = null
+      if (data.attachToCharacterId) {
+        const { data: char } = await supabase
+          .from("characters")
+          .select("person, wardrobe")
+          .eq("id", data.attachToCharacterId)
+          .eq("user_id", userId)
+          .is("deleted_at", null)
+          .single()
+        if (char) {
+          characterPerson = (char.person as Record<string, unknown> | null) ?? null
+          characterWardrobe = (char.wardrobe as Record<string, unknown> | null) ?? null
+        }
+      }
+
       // Build portrait prompt — v2 path prefers seedPrompt with studio scaffolding;
       // legacy path falls back to userPrompt → description → name.
       const promptText = data.seedPrompt
-        ? buildPortraitPrompt({ seedPrompt: data.seedPrompt })
+        ? buildPortraitPrompt({
+            seedPrompt: data.seedPrompt,
+            person: characterPerson ?? undefined,
+            wardrobe: characterWardrobe ?? undefined,
+          })
         : (data.userPrompt ?? data.description ?? data.name)
 
       const mcpClient = extractMcpClient(req.body)

@@ -53,6 +53,14 @@ interface CharacterRowForTraining {
  * → body_angles → lighting_variations. De-duped by URL, capped at 20.
  * Throws InsufficientImagesError if < 4.
  *
+ * Optional `selectedUrls`: when provided AND non-empty, the deduped derived set
+ * is filtered down to only the URLs present in that selection (curated training
+ * — the user un-checked some candidate thumbnails in the LoRA page). Order, dedup
+ * and the min-4 / cap-20 invariants are applied AFTER filtering, so a curated
+ * subset of <4 throws the same InsufficientImagesError. An absent/empty selection
+ * is identical to training on every eligible image (backward-compatible: the
+ * `train` route sends no body today).
+ *
  * Excluded:
  *  - `motions` — video frames don't help image LoRA training.
  *  - `character_sheet` — its 4-view composite (`frontView/sideView/backView/
@@ -62,6 +70,7 @@ interface CharacterRowForTraining {
  */
 export function collectTrainingImages(
   c: CharacterRowForTraining,
+  selectedUrls?: ReadonlyArray<string>,
 ): readonly TrainingImageSource[] {
   const out: TrainingImageSource[] = []
   if (c.source_image_url) out.push({ url: c.source_image_url, label: "source" })
@@ -84,8 +93,17 @@ export function collectTrainingImages(
     if (a.url) out.push({ url: a.url, label: `light_${a.name ?? "x"}` })
   }
 
+  // Curated subset: keep only selected URLs (when a non-empty selection is given).
+  // Filtering BEFORE dedup/cap keeps every invariant (order, dedup, min-4, cap-20)
+  // applied to the final set the trainer actually receives.
+  const selectionSet =
+    selectedUrls && selectedUrls.length > 0 ? new Set(selectedUrls) : null
+  const candidates = selectionSet
+    ? out.filter((x) => selectionSet.has(x.url))
+    : out
+
   const seen = new Set<string>()
-  const deduped = out.filter((x) => {
+  const deduped = candidates.filter((x) => {
     if (seen.has(x.url)) return false
     seen.add(x.url)
     return true

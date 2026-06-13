@@ -7,6 +7,8 @@
  ***REDACTED-OSS-SCRUB***
  */
 
+import { buildPersonHints, buildWardrobeHints, type PersonValue, type WardrobeValue } from "@nodaro/shared"
+
 export const PORTRAIT_SCAFFOLDING =
   "4k portrait, plain background, studio lighting, neutral expression unless described otherwise, no text, no labels, no watermarks"
 
@@ -45,8 +47,21 @@ function stripTrailingPeriod(s: string): string {
   return s.replace(/\.+$/, "")
 }
 
-export function buildPortraitPrompt(args: { seedPrompt: string }): string {
-  const seed = stripTrailingPeriod(args.seedPrompt.trim())
+/**
+ * Derive the combined Person + Wardrobe prompt-hint fragments. Empty/unknown
+ * ids produce no hint. Shared by `buildPortraitPrompt` here and
+ * `buildVariantPrompt` in the asset route so the two can't drift.
+ */
+export function buildEntityHints(person?: PersonValue, wardrobe?: WardrobeValue): string[] {
+  return [
+    ...(person ? buildPersonHints(person as Record<string, unknown> & PersonValue) : []),
+    ...(wardrobe ? buildWardrobeHints(wardrobe as Record<string, unknown> & WardrobeValue) : []),
+  ]
+}
+
+export function buildPortraitPrompt(args: { seedPrompt: string; person?: PersonValue; wardrobe?: WardrobeValue }): string {
+  const hints = buildEntityHints(args.person, args.wardrobe).join(", ")
+  const seed = [stripTrailingPeriod(args.seedPrompt.trim()), hints].filter(Boolean).join(", ")
   return `${seed}. ${PORTRAIT_SCAFFOLDING}.`
 }
 
