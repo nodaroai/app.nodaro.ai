@@ -104,6 +104,14 @@ export const upsertCharacterBody = z.object({
   // verified models — see `deriveRecommendedTtsProvider`); clients send it as the
   // `provider` on text-to-speech so the voice renders on a model it's verified for.
   voice: z.object({ voiceId: z.string(), voiceName: z.string(), traits: z.string(), voiceType: z.enum(["premade", "library", "custom"]).optional(), previewUrl: z.string().url().max(2048).optional(), ttsProvider: z.enum(TTS_PROVIDERS).optional() }).nullable().optional(),
+  // Structured Person + Wardrobe selections (migration 221). Loose record blobs
+  // by design: the `@nodaro/shared` person/wardrobe catalogs are the source of
+  // truth and unknown ids simply produce no prompt hint — so we don't
+  // hard-enumerate every id in Zod. Derived into generation prompts server-side.
+  person: z.record(z.string(), z.unknown()).nullable().optional()
+    .refine((v) => !v || Object.keys(v).length <= 40, "person: too many keys"),
+  wardrobe: z.record(z.string(), z.unknown()).nullable().optional()
+    .refine((v) => !v || Object.keys(v).length <= 40, "wardrobe: too many keys"),
   personality: z.object({ mood: z.string(), speechStyle: z.string(), movementStyle: z.string(), behavioralNotes: z.string() }).nullable().optional(),
   // Identity-foundation fields (migration 114). Length caps mirror the DB
   // CHECK constraints so we reject at the boundary with a 400 rather than a
@@ -169,7 +177,7 @@ const listCharactersQuery = z.object({
 })
 
 const SELECT_COLUMNS =
-  "id, user_id, node_id, project_id, name, description, gender, style, base_outfit, source_image_url, image_provider, expressions, poses, lighting_variations, angles, body_angles, motions, boards, reference_videos_by_variant, selected_asset_by_variant, voice, personality, canonical_description, lora_training_status, lora_replicate_version, lora_trigger_word, lora_trained_at, sheets, detail_closeups, outfit_variations, deleted_at, created_at, updated_at"
+  "id, user_id, node_id, project_id, name, description, gender, style, base_outfit, source_image_url, image_provider, expressions, poses, lighting_variations, angles, body_angles, motions, boards, reference_videos_by_variant, selected_asset_by_variant, voice, person, wardrobe, personality, canonical_description, lora_training_status, lora_replicate_version, lora_trigger_word, lora_trained_at, sheets, detail_closeups, outfit_variations, deleted_at, created_at, updated_at"
 
 type CharacterRow = {
   id: string
@@ -193,6 +201,8 @@ type CharacterRow = {
   reference_videos_by_variant: Record<string, string[]> | null
   selected_asset_by_variant: Record<string, string> | null
   voice: { voiceId: string; voiceName: string; traits: string; voiceType?: "premade" | "library" | "custom"; previewUrl?: string; ttsProvider?: string } | null
+  person: Record<string, unknown> | null
+  wardrobe: Record<string, unknown> | null
   personality: { mood: string; speechStyle: string; movementStyle: string; behavioralNotes: string } | null
   canonical_description: string | null
   lora_training_status: string | null
@@ -234,6 +244,8 @@ function toCamel(c: CharacterRow) {
     referenceVideosByVariant: c.reference_videos_by_variant ?? {},
     selectedAssetByVariant: c.selected_asset_by_variant ?? {},
     voice: c.voice,
+    person: c.person,
+    wardrobe: c.wardrobe,
     personality: c.personality,
     canonicalDescription: c.canonical_description,
     loraTrainingStatus: c.lora_training_status,
@@ -513,7 +525,7 @@ export async function characterRoutes(app: FastifyInstance) {
       })
     }
 
-    const { id, nodeId, workflowId, projectId, name, description, gender, style, baseOutfit, sourceImageUrl, expressions, poses, lightingVariations, angles, bodyAngles, motions, boards, voice, personality, seedPrompt, canonicalDescription, referencePhotos, realLifeRefsByVariant, referenceVideosByVariant, selectedAssetByVariant, imageProvider } = parsed.data
+    const { id, nodeId, workflowId, projectId, name, description, gender, style, baseOutfit, sourceImageUrl, expressions, poses, lightingVariations, angles, bodyAngles, motions, boards, voice, person, wardrobe, personality, seedPrompt, canonicalDescription, referencePhotos, realLifeRefsByVariant, referenceVideosByVariant, selectedAssetByVariant, imageProvider } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -553,6 +565,8 @@ export async function characterRoutes(app: FastifyInstance) {
       if (motions !== undefined) patch.motions = motions
       if (boards !== undefined) patch.boards = boards
       if (voice !== undefined) patch.voice = voice ?? null
+      if (person !== undefined) patch.person = person ?? null
+      if (wardrobe !== undefined) patch.wardrobe = wardrobe ?? null
       if (personality !== undefined) patch.personality = personality ?? null
       if (seedPrompt !== undefined) patch.seed_prompt = seedPrompt ?? null
       if (canonicalDescription !== undefined) patch.canonical_description = canonicalDescription ?? null
@@ -608,6 +622,8 @@ export async function characterRoutes(app: FastifyInstance) {
       motions: motions ?? [],
       boards: boards ?? [],
       voice: voice ?? null,
+      person: person ?? null,
+      wardrobe: wardrobe ?? null,
       personality: personality ?? null,
       seed_prompt: seedPrompt ?? null,
       canonical_description: canonicalDescription ?? null,

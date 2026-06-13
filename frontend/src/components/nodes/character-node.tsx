@@ -2,7 +2,7 @@
 
 import { memo, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { UserCircle, Loader2, Type } from "lucide-react"
+import { UserCircle, Loader2, Type, ImageIcon } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
@@ -151,6 +151,7 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
       handles={[
         { id: "in",           type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
         { id: "characterRef", type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
+        { id: "image",        type: "source", position: Position.Right, customStyle: { top: '56px',              right: '-29px' }, external: true },
       ]}
     >
       {/* Header */}
@@ -352,6 +353,7 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
 
     <HandleWithPopover nodeId={id} nodeType="character" handleId="in"           type="target" position={Position.Left}  label="Prompt"    color={HANDLE_COLORS.text} icon={<Type />}       side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_PROMPT} />
     <HandleWithPopover nodeId={id} nodeType="character" handleId="characterRef" type="source" position={Position.Right} label="Character" color={HANDLE_COLORS.identity} icon={<UserCircle />} side="right" top="24px" />
+    <HandleWithPopover nodeId={id} nodeType="character" handleId="image"        type="source" position={Position.Right} label="Image"     color={HANDLE_COLORS.image}    icon={<ImageIcon />}  side="right" top="56px" />
     </div>
   )
 }

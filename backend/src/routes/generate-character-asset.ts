@@ -17,7 +17,10 @@ import {
   CHARACTER_ATTACH_COLUMNS,
   resolveCharacterAspectRatio,
   type CharacterAssetTypeForAspect,
+  type PersonValue,
+  type WardrobeValue,
 } from "@nodaro/shared"
+import { buildEntityHints } from "../lib/character-prompts.js"
 import { formatZodError } from "../lib/zod-error.js"
 import {
   ASSET_DESCRIPTION_SYSTEM_PROMPT,
@@ -106,7 +109,23 @@ function buildVariantPrompt(
   style: string | undefined,
   baseOutfit: string | undefined,
   userPrompt?: string,
+  person?: PersonValue,
+  wardrobe?: WardrobeValue,
 ): string {
+  // Derive structured Person + Wardrobe hints once and fold them into the
+  // assembled prompt for EVERY asset-type branch (the inner buildBase covers
+  // all return paths). Empty/unknown ids produce no hint.
+  const hints = buildEntityHints(person, wardrobe).join(", ")
+  const base = buildBase()
+  if (!hints) return base
+  // Insert the hints just before the trailing scaffolding sentence (the last
+  // ". " boundary) so they read as part of the subject clause; fall back to a
+  // simple append if there's no period to anchor on.
+  const lastPeriod = base.lastIndexOf(". ")
+  if (lastPeriod === -1) return `${base.replace(/\.+$/, "")}, ${hints}.`
+  return `${base.slice(0, lastPeriod)}, ${hints}${base.slice(lastPeriod)}`
+
+  function buildBase(): string {
   const genderDesc = gender ?? "character"
   const outfitPart = baseOutfit ? `, wearing ${baseOutfit}` : ""
   const descPart = description ? `, ${description}` : ""
@@ -202,6 +221,7 @@ function buildVariantPrompt(
   const light = lightMap[variant] ?? `${variant} lighting`
   const subject = namePart ? namePart.trim() : "the character"
   return `Full body view of ${subject}, same neutral standing pose. ${light}. FULL BODY visible. ${base}`
+  }
 }
 
 export async function generateCharacterAssetRoutes(app: FastifyInstance) {
@@ -252,10 +272,12 @@ export async function generateCharacterAssetRoutes(app: FastifyInstance) {
     // ─────────────────────────────────────────────────────────────────────
     let canonicalDescription: string | null = null
     let portraitImageUrl: string | null = null
+    let characterPerson: Record<string, unknown> | null = null
+    let characterWardrobe: Record<string, unknown> | null = null
     if (parsed.data.attachToCharacterId) {
       const { data: char, error: charErr } = await supabase
         .from("characters")
-        .select("source_image_url, canonical_description")
+        .select("source_image_url, canonical_description, person, wardrobe")
         .eq("id", parsed.data.attachToCharacterId)
         .eq("user_id", userId)
         .is("deleted_at", null)
@@ -273,6 +295,8 @@ export async function generateCharacterAssetRoutes(app: FastifyInstance) {
       }
       canonicalDescription = (char.canonical_description as string | null) ?? null
       portraitImageUrl = char.source_image_url as string
+      characterPerson = (char.person as Record<string, unknown> | null) ?? null
+      characterWardrobe = (char.wardrobe as Record<string, unknown> | null) ?? null
 
       // ───────────────────────────────────────────────────────────────────
       // 4. Studio-gated LLM draft of `description` (when caller omitted it).
@@ -328,6 +352,8 @@ export async function generateCharacterAssetRoutes(app: FastifyInstance) {
       style,
       baseOutfit,
       parsed.data.userPrompt,
+      characterPerson ?? undefined,
+      characterWardrobe ?? undefined,
     )
 
     // ─────────────────────────────────────────────────────────────────────

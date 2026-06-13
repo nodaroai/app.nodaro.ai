@@ -1,7 +1,7 @@
 ---
 node_type: character
-generated_at: 2026-06-07T18:49:01.935Z
-generated_from: db2337ab
+generated_at: 2026-06-13T22:11:21.302Z
+generated_from: 1f4bd1bb
 ---
 
 # Character
@@ -59,6 +59,8 @@ generated_from: db2337ab
 - `sheets?: ReferenceSheet[]`
 - `detailCloseups?: CharacterAssetItem[]`
 - `outfitVariations?: CharacterAssetItem[]`
+- `person?: PersonValue`
+- `wardrobe?: WardrobeValue`
 - `referencePhotos?: ReadonlyArray<{ url: string; kind: ReferencePhotoKind }>`
 - `seedPrompt?: string`
 - `canonicalDescription?: string`

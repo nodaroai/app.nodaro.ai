@@ -33,7 +33,7 @@ const AUTOSAVE_DEBOUNCE_MS = 600
  *  writes them, so they live here alongside the identity fields. */
 const ALWAYS_PATCH_FIELDS = [
   "characterName", "description", "gender", "style", "baseOutfit", "voice", "personality",
-  "referencePhotos", "seedPrompt",
+  "referencePhotos", "seedPrompt", "person", "wardrobe",
 ] as const
 
 /** Fields that the WORKER can also write to. The frontend sends them on
@@ -122,6 +122,8 @@ function buildInsertPayload(nodeId: string, d: CharacterNodeData) {
     bodyAngles: d.bodyAngles,
     motions: d.motions,
     voice: d.voice,
+    person: d.person,
+    wardrobe: d.wardrobe,
     personality: d.personality,
     referencePhotos: d.referencePhotos,
     seedPrompt: d.seedPrompt,
@@ -144,6 +146,8 @@ function buildUpdatePayload(nodeId: string, d: CharacterNodeData, dirty: Set<Dir
     style: d.style,
     baseOutfit: d.baseOutfit,
     voice: d.voice,
+    person: d.person,
+    wardrobe: d.wardrobe,
     personality: d.personality,
     referencePhotos: d.referencePhotos,
     seedPrompt: d.seedPrompt,
@@ -228,8 +232,10 @@ export function useCharacterStudio(nodeId: string): CharacterStudioState | null 
               (fresh.detailCloseups as CharacterNodeData["detailCloseups"]) ?? prev.detailCloseups,
             outfitVariations:
               (fresh.outfitVariations as CharacterNodeData["outfitVariations"]) ?? prev.outfitVariations,
-            voice: fresh.voice ?? prev.voice,
+            voice: (fresh.voice as CharacterNodeData["voice"]) ?? prev.voice,
             personality: fresh.personality ?? prev.personality,
+            person: (fresh.person as CharacterNodeData["person"]) ?? prev.person,
+            wardrobe: (fresh.wardrobe as CharacterNodeData["wardrobe"]) ?? prev.wardrobe,
             referencePhotos: fresh.referencePhotos ?? prev.referencePhotos,
             seedPrompt: fresh.seedPrompt ?? prev.seedPrompt,
             canonicalDescription: fresh.canonicalDescription ?? prev.canonicalDescription,

@@ -251,7 +251,9 @@ export function resolveSheetEntity(
   for (const e of incoming) {
     const up = nodeById.get(e.source)
     if (!up) continue
-    if (up.type === "character" || up.type === "object" || up.type === "location") {
+    // The character node's "image" handle is a PLAIN image, not an entity ref —
+    // never treat it as the sheet's entity source.
+    if (e.sourceHandle !== "image" && (up.type === "character" || up.type === "object" || up.type === "location")) {
       const d = up.data as Record<string, unknown>
       const idField =
         up.type === "character" ? "characterDbId" : up.type === "object" ? "objectDbId" : "locationDbId"
@@ -3142,7 +3144,10 @@ export function buildPayload(
 
     // --- Audio ---
     case "text-to-speech": {
-      const provider = (data.provider as string) ?? "elevenlabs-v3"
+      // An upstream Character node's voice (resolvedInputs.voice/.provider/.voiceType,
+      // auto-wired in input-resolver) wins over the node's own config when present —
+      // the character is the source of truth for "this character's voice".
+      const provider = (resolvedInputs.provider as string | undefined) || (data.provider as string) || "elevenlabs-v3"
       // Frontend reads text from directText field when textSource is "direct"
       const ttsText = promptFor("text-to-speech")
       return {
@@ -3152,9 +3157,9 @@ export function buildPayload(
         payload: {
           jobId,
           text: ttsText,
-          voice: data.voiceId || data.voice,
+          voice: resolvedInputs.voice || data.voiceId || data.voice,
           provider,
-          voiceType: data.voiceType || "premade",
+          voiceType: resolvedInputs.voiceType || data.voiceType || "premade",
           stability: data.stability,
           similarityBoost: data.similarityBoost,
           style: data.style,

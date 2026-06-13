@@ -664,33 +664,12 @@ export function PersonConfig({ data, onUpdate }: ConfigProps<PersonData>) {
         />
       </div>
       <Label>Person</Label>
-      <PersonPicker
-        value={{
-          type: data.type,
-          age: data.age,
-          customAge: data.customAge,
-          ethnicity: data.ethnicity,
-          regionalAesthetic: data.regionalAesthetic,
-          build: data.build,
-          bodyProportions: data.bodyProportions,
-          faceShape: data.faceShape,
-          jawline: data.jawline,
-          eyeShape: data.eyeShape,
-          nose: data.nose,
-          lips: data.lips,
-          lipState: data.lipState,
-          hairColor: data.hairColor,
-          hairBase: data.hairBase,
-          eyebrows: data.eyebrows,
-          skinTone: data.skinTone,
-          skinTexture: data.skinTexture,
-          eyeColor: data.eyeColor,
-          eyeState: data.eyeState,
-          facialHair: data.facialHair,
-          distinctiveFeature: data.distinctiveFeature,
-        }}
-        onChange={(patch) => onUpdate(patch)}
-      />
+      {/* PersonData is a superset of PersonValue (every dimension field, plus
+          node-only extras like preText/maxItemsPerRow that the picker ignores),
+          so forward it whole. A hand-listed subset silently drops any newly-added
+          dimension's field — that drift caused the facial-geometry fields
+          (eye-spacing, cheekbones, …) to persist but never read back as selected. */}
+      <PersonPicker value={data} onChange={(patch) => onUpdate(patch)} />
       <div className="flex items-center justify-between gap-2 pt-1">
         <Label htmlFor="person-max-items-per-row" className="text-xs text-muted-foreground">
           Items per row (node card)

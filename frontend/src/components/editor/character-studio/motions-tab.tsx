@@ -241,7 +241,7 @@ export function MotionsTab({
           onClick={onSwitchToAppearance}
           className="text-[10px] bg-[#3b82f6] text-white rounded px-3 py-1.5"
         >
-          Open Appearance tab
+          Open Profile
         </button>
       </div>
     )

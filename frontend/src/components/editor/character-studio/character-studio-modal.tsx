@@ -1,15 +1,11 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react"
 import { Upload } from "lucide-react"
-import { useCharacterStudio, type SaveStatus } from "./use-character-studio"
-import { useCharacterStudioJobs, type StudioAssetType } from "./use-character-studio-jobs"
-import { AppearanceTab } from "./appearance-tab"
-import { ExpressionsTab } from "./expressions-tab"
-import { PosesTab } from "./poses-tab"
-import { MotionsTab } from "./motions-tab"
-import { VoiceTab } from "./voice-tab"
-import { PersonalityTab } from "./personality-tab"
-import { ReferenceSheetTab } from "../reference-sheet/reference-sheet-tab"
-import { SHEET_TAB_ADAPTERS } from "../reference-sheet/sheet-tab-adapter"
+import { useCharacterStudio, type CharacterStudioState, type SaveStatus } from "./use-character-studio"
+import { useCharacterStudioJobs, type CharacterStudioJobs, type StudioAssetType } from "./use-character-studio-jobs"
+import { StudioShell } from "../studio-shell/studio-shell"
+import { CHARACTER_STUDIO_NAV } from "./character-nav-config"
+import { usePortraitCandidates } from "./use-portrait-candidates"
+import { PortraitCandidatesContext } from "./portrait-candidates-context"
 import { Button } from "@/components/ui/button"
 import {
   Tooltip,
@@ -18,15 +14,13 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { useAuth } from "@/hooks/use-auth"
-import { isMultiUser } from "@/lib/edition"
+import { hasCredits, isMultiUser } from "@/lib/edition"
 import type { CharacterNodeData } from "@/types/nodes"
 
 // Lazy dynamic import keeps this core file off the ee/ static-import graph
 // (check-ee-imports.mjs only flags top-level `import ... from "@/ee/..."`,
 // not `import()` call expressions — same pattern as router.tsx).
 const PublishDialog = lazy(() => import("@/ee/components/community/publish-dialog"))
-
-type TabKey = "appearance" | "expressions" | "poses" | "motions" | "sheet" | "voice" | "personality"
 
 const ASSET_FIELD: Record<StudioAssetType, keyof CharacterNodeData> = {
   expressions: "expressions",
@@ -39,10 +33,7 @@ const ASSET_FIELD: Record<StudioAssetType, keyof CharacterNodeData> = {
 
 export function CharacterStudioModal({ nodeId, onClose }: { nodeId: string; onClose: () => void }) {
   const studio = useCharacterStudio(nodeId)
-  const { isAdmin } = useAuth()
-  const [tab, setTab] = useState<TabKey>("appearance")
   const [errored, setErrored] = useState<Set<string>>(new Set())
-  const [showPublish, setShowPublish] = useState(false)
 
   const onResolved = useCallback(
     (a: { assetType: StudioAssetType; name: string; url: string }) => {
@@ -81,39 +72,37 @@ export function CharacterStudioModal({ nodeId, onClose }: { nodeId: string; onCl
 
   if (!studio) return null
 
+  return <StudioModalBody studio={studio} jobs={jobs} errored={errored} onClose={onClose} />
+}
+
+/**
+ * Modal body — mounted only once the studio state has loaded (non-null). Owning
+ * the portrait candidate state HERE (not inside ProfilePage) is what makes
+ * in-flight candidate spinners + their poll intervals survive Profile↔Appearance
+ * page switches: those pages are separate mounts, but this body persists for the
+ * whole modal session, so `usePortraitCandidates`'s cleanup fires on modal close
+ * rather than on every navigation.
+ */
+function StudioModalBody({
+  studio,
+  jobs,
+  errored,
+  onClose,
+}: {
+  studio: CharacterStudioState
+  jobs: CharacterStudioJobs
+  errored: Set<string>
+  onClose: () => void
+}) {
+  const { isAdmin } = useAuth()
+  const [showPublish, setShowPublish] = useState(false)
+  const portrait = usePortraitCandidates(studio)
+
   const counts = {
     expr: studio.staged.expressions.length,
     poses: studio.staged.poses.length,
     motions: studio.staged.motions.length,
-    sheets: studio.staged.sheets?.length ?? 0,
   }
-  const switchToAppearance = () => setTab("appearance")
-  const tabBody = {
-    appearance: <AppearanceTab state={studio} jobs={jobs} />,
-    expressions: <ExpressionsTab state={studio} jobs={jobs} onSwitchToAppearance={switchToAppearance} />,
-    poses: <PosesTab state={studio} jobs={jobs} onSwitchToAppearance={switchToAppearance} />,
-    motions: <MotionsTab state={studio} jobs={jobs} onSwitchToAppearance={switchToAppearance} />,
-    sheet: (
-      <div className="flex-1 overflow-y-auto p-4">
-        <ReferenceSheetTab adapter={SHEET_TAB_ADAPTERS.character} studio={studio} jobs={jobs} accent="#3b82f6" />
-      </div>
-    ),
-    voice: <VoiceTab state={studio} />,
-    personality: <PersonalityTab state={studio} />,
-  }[tab]
-
-  const SideBtn = ({ k, icon, label, badge }: { k: TabKey; icon: string; label: string; badge?: string | number }) => (
-    <button
-      onClick={() => setTab(k)}
-      className={`px-3.5 py-1.5 text-[11px] flex items-center gap-1.5 ${
-        tab === k ? "text-[#3b82f6] bg-[#1a2744] border-r-2 border-[#3b82f6]" : "text-slate-500 hover:text-slate-300"
-      }`}
-    >
-      <span className="w-4 text-center">{icon}</span>
-      {label}
-      {badge !== undefined && <span className="ml-auto text-[9px] bg-[#1e293b] rounded-full px-1.5">{badge}</span>}
-    </button>
-  )
 
   return (
     <div className="fixed inset-0 z-[100] bg-[#0d1017] flex flex-col">
@@ -184,28 +173,15 @@ export function CharacterStudioModal({ nodeId, onClose }: { nodeId: string; onCl
           />
         </Suspense>
       )}
-      {/* body */}
-      <div className="flex flex-1 overflow-hidden">
-        <div className="w-[140px] bg-[#090c12] border-r border-[#1e293b] flex flex-col py-3 shrink-0">
-          <div className="px-3.5 pb-1.5 pt-1 text-[9px] uppercase tracking-widest text-slate-700 font-semibold">
-            Identity
-          </div>
-          <SideBtn k="appearance" icon="🖼" label="Appearance" />
-          <div className="px-3.5 pb-1.5 pt-2.5 text-[9px] uppercase tracking-widest text-slate-700 font-semibold">
-            Visuals
-          </div>
-          <SideBtn k="expressions" icon="😄" label="Expressions" badge={counts.expr} />
-          <SideBtn k="poses" icon="🧍" label="Poses" badge={counts.poses} />
-          <SideBtn k="motions" icon="🏃" label="Motions" badge={counts.motions} />
-          <SideBtn k="sheet" icon="📋" label="Sheet" badge={counts.sheets || undefined} />
-          <div className="px-3.5 pb-1.5 pt-2.5 text-[9px] uppercase tracking-widest text-slate-700 font-semibold">
-            Character
-          </div>
-          <SideBtn k="voice" icon="🎤" label="Voice" badge={studio.staged.voice ? "✓" : undefined} />
-          <SideBtn k="personality" icon="🧠" label="Personality" badge={studio.staged.personality ? "✓" : undefined} />
-        </div>
-        <div className="flex-1 flex flex-col overflow-hidden">{tabBody}</div>
-      </div>
+      <PortraitCandidatesContext.Provider value={portrait}>
+        <StudioShell
+          config={CHARACTER_STUDIO_NAV}
+          state={studio}
+          jobs={jobs}
+          hasCredits={hasCredits()}
+          defaultActiveKey="profile"
+        />
+      </PortraitCandidatesContext.Provider>
     </div>
   )
 }

@@ -36,6 +36,12 @@ import {
 } from "../providers/replicate/training.js"
 
 const idParams = z.object({ id: z.string().uuid() })
+// Optional curation body: the LoRA page sends the subset of candidate image URLs
+// the user chose to include. Empty/absent body → train on every eligible image
+// (backward-compatible: the legacy training-section sends `{}`).
+const trainBody = z
+  .object({ selectedImageUrls: z.array(z.string().url()).max(200).optional() })
+  .optional()
 // Credit identifier === job type. One shared constant covers both.
 const TRAINING_CREDIT_ID = CHARACTER_LORA_TRAINING_JOB_TYPE
 
@@ -69,6 +75,14 @@ export async function characterTrainingRoutes(app: FastifyInstance): Promise<voi
         return
       }
       const characterId = params.data.id
+
+      // Optional curated-image selection. Absent/empty → all images (unchanged).
+      const body = trainBody.safeParse(req.body)
+      if (!body.success) {
+        reply.code(400).send(formatZodError(body.error))
+        return
+      }
+      const selectedImageUrls = body.data?.selectedImageUrls
 
       // Step 0 — atomic CAS slot claim. `.or()` because Supabase JS `.in()`
       // does NOT match NULL values; we need both "never trained" and
@@ -120,8 +134,8 @@ export async function characterTrainingRoutes(app: FastifyInstance): Promise<voi
       let jobId: string | null = null
 
       try {
-        // Step 2 — aggregate training images.
-        const images = collectTrainingImages(character)
+        // Step 2 — aggregate training images (optionally curated to a subset).
+        const images = collectTrainingImages(character, selectedImageUrls)
         const imageCount = images.length
 
         // Step 3 — zip + upload (returns public R2 URL; no signing needed).

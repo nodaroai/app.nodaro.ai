@@ -129,6 +129,23 @@ afterEach(async () => {
  * `from()` value carries both `.insert(...)` and `.delete()` shapes, which
  * mirrors how Supabase chains work in the real client.
  */
+/**
+ * `from("characters").select("person, wardrobe").eq().eq().is().single()` shape
+ * used by the route's optional structured-fields fetch when `attachToCharacterId`
+ * is present. Resolves to `{ data: null }` by default (no person/wardrobe), which
+ * the route handles gracefully (hints stay empty). Merge onto the `from()` mock
+ * object alongside `insert` so both the characters-select and jobs-insert chains
+ * resolve off the same returned value.
+ */
+function charSelectChain() {
+  const single = vi.fn().mockResolvedValue({ data: null, error: null })
+  const is = vi.fn().mockReturnValue({ single })
+  const eq2 = vi.fn().mockReturnValue({ is })
+  const eq1 = vi.fn().mockReturnValue({ eq: eq2 })
+  const select = vi.fn().mockReturnValue({ eq: eq1 })
+  return { select }
+}
+
 function mockJobsInsertChain() {
   // N-agnostic: yields job-1, job-2, … on each successive `.single()` call so
   // the helper supports any `count` (1–10) without enumerating fixed ids.
@@ -152,7 +169,7 @@ function mockJobsInsertChain() {
 describe("POST /v1/generate-character", () => {
   it("count=1 (default) returns { jobId, jobIds } dual shape — jobIds has length 1", async () => {
     const { insert } = mockJobsInsertChain()
-    vi.mocked(supabase.from).mockReturnValue({ insert } as never)
+    vi.mocked(supabase.from).mockReturnValue({ insert, ...charSelectChain() } as never)
 
     const res = await app.inject({
       method: "POST",
@@ -175,7 +192,7 @@ describe("POST /v1/generate-character", () => {
 
   it("count=4 inserts 4 jobs and returns { jobId, jobIds } with length 4", async () => {
     const { insert } = mockJobsInsertChain()
-    vi.mocked(supabase.from).mockReturnValue({ insert } as never)
+    vi.mocked(supabase.from).mockReturnValue({ insert, ...charSelectChain() } as never)
 
     const res = await app.inject({
       method: "POST",
@@ -199,7 +216,7 @@ describe("POST /v1/generate-character", () => {
 
   it("count=10 (new max) inserts 10 jobs and reserves 10 — cap raised 4→10 (WI-3)", async () => {
     const { insert } = mockJobsInsertChain()
-    vi.mocked(supabase.from).mockReturnValue({ insert } as never)
+    vi.mocked(supabase.from).mockReturnValue({ insert, ...charSelectChain() } as never)
 
     const res = await app.inject({
       method: "POST",
@@ -222,7 +239,7 @@ describe("POST /v1/generate-character", () => {
 
   it("count=2 returns jobIds length 2", async () => {
     const { insert } = mockJobsInsertChain()
-    vi.mocked(supabase.from).mockReturnValue({ insert } as never)
+    vi.mocked(supabase.from).mockReturnValue({ insert, ...charSelectChain() } as never)
 
     const res = await app.inject({
       method: "POST",
@@ -238,7 +255,7 @@ describe("POST /v1/generate-character", () => {
 
   it("force_private: true on every inserted job (ignores body forcePrivate=false)", async () => {
     const { insert } = mockJobsInsertChain()
-    vi.mocked(supabase.from).mockReturnValue({ insert } as never)
+    vi.mocked(supabase.from).mockReturnValue({ insert, ...charSelectChain() } as never)
 
     await app.inject({
       method: "POST",
@@ -297,7 +314,7 @@ describe("POST /v1/generate-character", () => {
 
   it("accepts referencePhotos (legacy seedPrompt absent)", async () => {
     const { insert } = mockJobsInsertChain()
-    vi.mocked(supabase.from).mockReturnValue({ insert } as never)
+    vi.mocked(supabase.from).mockReturnValue({ insert, ...charSelectChain() } as never)
 
     const res = await app.inject({
       method: "POST",
@@ -317,7 +334,7 @@ describe("POST /v1/generate-character", () => {
 
   it("accepts legacy description-only payload", async () => {
     const { insert } = mockJobsInsertChain()
-    vi.mocked(supabase.from).mockReturnValue({ insert } as never)
+    vi.mocked(supabase.from).mockReturnValue({ insert, ...charSelectChain() } as never)
 
     const res = await app.inject({
       method: "POST",
@@ -343,7 +360,7 @@ describe("POST /v1/generate-character", () => {
 
   it("seedPrompt produces a portrait prompt with studio scaffolding", async () => {
     const { insert } = mockJobsInsertChain()
-    vi.mocked(supabase.from).mockReturnValue({ insert } as never)
+    vi.mocked(supabase.from).mockReturnValue({ insert, ...charSelectChain() } as never)
 
     await app.inject({
       method: "POST",
@@ -363,7 +380,7 @@ describe("POST /v1/generate-character", () => {
     const single = vi.fn().mockResolvedValueOnce({ data: null, error: { message: "DB down" } })
     const select = vi.fn().mockReturnValue({ single })
     const insert = vi.fn().mockReturnValue({ select })
-    vi.mocked(supabase.from).mockReturnValue({ insert } as never)
+    vi.mocked(supabase.from).mockReturnValue({ insert, ...charSelectChain() } as never)
 
     const res = await app.inject({
       method: "POST",
@@ -452,7 +469,7 @@ describe("POST /v1/generate-character", () => {
 
   it("enqueues videoQueue with provider, prompt, attachToCharacterId, usageLogId", async () => {
     const { insert } = mockJobsInsertChain()
-    vi.mocked(supabase.from).mockReturnValue({ insert } as never)
+    vi.mocked(supabase.from).mockReturnValue({ insert, ...charSelectChain() } as never)
 
     await app.inject({
       method: "POST",
@@ -486,7 +503,7 @@ describe("POST /v1/generate-character", () => {
   describe("quality / resolution levers", () => {
     it("quality=high + gpt-image reserves the composite id and threads levers to the queue", async () => {
       const { insert } = mockJobsInsertChain()
-      vi.mocked(supabase.from).mockReturnValue({ insert } as never)
+      vi.mocked(supabase.from).mockReturnValue({ insert, ...charSelectChain() } as never)
 
       const res = await app.inject({
         method: "POST",
@@ -512,7 +529,7 @@ describe("POST /v1/generate-character", () => {
 
     it("resolution=4K + nano-banana-pro reserves 'nano-banana-pro:4K' and threads resolution", async () => {
       const { insert } = mockJobsInsertChain()
-      vi.mocked(supabase.from).mockReturnValue({ insert } as never)
+      vi.mocked(supabase.from).mockReturnValue({ insert, ...charSelectChain() } as never)
 
       const res = await app.inject({
         method: "POST",
@@ -538,7 +555,7 @@ describe("POST /v1/generate-character", () => {
 
     it("a quality the model doesn't support is ignored, not a 400 (nano-banana + high → base id)", async () => {
       const { insert } = mockJobsInsertChain()
-      vi.mocked(supabase.from).mockReturnValue({ insert } as never)
+      vi.mocked(supabase.from).mockReturnValue({ insert, ...charSelectChain() } as never)
 
       const res = await app.inject({
         method: "POST",
@@ -560,7 +577,7 @@ describe("POST /v1/generate-character", () => {
 
     it("omitting the levers keeps the legacy plain-provider identifier (cost unchanged)", async () => {
       const { insert } = mockJobsInsertChain()
-      vi.mocked(supabase.from).mockReturnValue({ insert } as never)
+      vi.mocked(supabase.from).mockReturnValue({ insert, ...charSelectChain() } as never)
 
       const res = await app.inject({
         method: "POST",
@@ -589,7 +606,7 @@ describe("POST /v1/generate-character", () => {
 
     it("count=2 batch — every job reserves with the SAME composite id", async () => {
       const { insert } = mockJobsInsertChain()
-      vi.mocked(supabase.from).mockReturnValue({ insert } as never)
+      vi.mocked(supabase.from).mockReturnValue({ insert, ...charSelectChain() } as never)
 
       const res = await app.inject({
         method: "POST",
@@ -624,7 +641,7 @@ describe("POST /v1/generate-character", () => {
 
     it("portrait defaults to 3:4 when nothing is set", async () => {
       const { insert } = mockJobsInsertChain()
-      vi.mocked(supabase.from).mockReturnValue({ insert } as never)
+      vi.mocked(supabase.from).mockReturnValue({ insert, ...charSelectChain() } as never)
       await app.inject({
         method: "POST",
         url: "/v1/generate-character",
@@ -636,7 +653,7 @@ describe("POST /v1/generate-character", () => {
 
     it("characterNodeAspectRatio overrides the portrait default", async () => {
       const { insert } = mockJobsInsertChain()
-      vi.mocked(supabase.from).mockReturnValue({ insert } as never)
+      vi.mocked(supabase.from).mockReturnValue({ insert, ...charSelectChain() } as never)
       await app.inject({
         method: "POST",
         url: "/v1/generate-character",
@@ -648,7 +665,7 @@ describe("POST /v1/generate-character", () => {
 
     it("explicit aspectRatio beats characterNodeAspectRatio and the portrait default", async () => {
       const { insert } = mockJobsInsertChain()
-      vi.mocked(supabase.from).mockReturnValue({ insert } as never)
+      vi.mocked(supabase.from).mockReturnValue({ insert, ...charSelectChain() } as never)
       await app.inject({
         method: "POST",
         url: "/v1/generate-character",
@@ -665,7 +682,7 @@ describe("POST /v1/generate-character", () => {
 
     it("invalid aspectRatio is rejected by Zod (validation_error)", async () => {
       const { insert } = mockJobsInsertChain()
-      vi.mocked(supabase.from).mockReturnValue({ insert } as never)
+      vi.mocked(supabase.from).mockReturnValue({ insert, ...charSelectChain() } as never)
       const res = await app.inject({
         method: "POST",
         url: "/v1/generate-character",
@@ -678,7 +695,7 @@ describe("POST /v1/generate-character", () => {
 
     it("count=2 batch — all jobs in the batch share the same resolved aspectRatio", async () => {
       const { insert } = mockJobsInsertChain()
-      vi.mocked(supabase.from).mockReturnValue({ insert } as never)
+      vi.mocked(supabase.from).mockReturnValue({ insert, ...charSelectChain() } as never)
       await app.inject({
         method: "POST",
         url: "/v1/generate-character",
@@ -775,7 +792,7 @@ describe("POST /v1/generate-character", () => {
 
     it("count=10: every reservation sees the per-job override, not the batch total", async () => {
       const { insert } = mockJobsInsertChain()
-      vi.mocked(supabase.from).mockReturnValue({ insert } as never)
+      vi.mocked(supabase.from).mockReturnValue({ insert, ...charSelectChain() } as never)
 
       const res = await perJobApp.inject({
         method: "POST",
@@ -796,7 +813,7 @@ describe("POST /v1/generate-character", () => {
 
     it("count=1: the single reservation also sees the per-job override", async () => {
       const { insert } = mockJobsInsertChain()
-      vi.mocked(supabase.from).mockReturnValue({ insert } as never)
+      vi.mocked(supabase.from).mockReturnValue({ insert, ...charSelectChain() } as never)
 
       const res = await perJobApp.inject({
         method: "POST",

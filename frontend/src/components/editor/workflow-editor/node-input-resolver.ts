@@ -1475,6 +1475,9 @@ export function resolveNodeInputs(
       src.type === "object" ||
       src.type === "creature"
     ) {
+      // The character node's "image" handle emits a PLAIN portrait — no entity
+      // id and no identity injection. Both guards below skip it.
+      const isPlainImageHandle = srcEdge?.sourceHandle === "image";
       if (node.type === "lip-sync" || node.type === "speech-to-video" || node.type === "motion-transfer" || node.type === "ai-avatar") {
         inputs.imageUrl = output;
       } else {
@@ -1487,7 +1490,7 @@ export function resolveNodeInputs(
       // composes from the entity's stored panels, so the executor needs the id,
       // not (only) the wired image URL. `face` has no panel buckets and is
       // excluded by the input-handle predicate, so guard it here too.
-      if (node.type === "reference-sheet" && (src.type === "character" || src.type === "object")) {
+      if (!isPlainImageHandle && node.type === "reference-sheet" && (src.type === "character" || src.type === "object")) {
         const d = src.data as Record<string, unknown>;
         const dbId = (d.characterDbId ?? d.objectDbId) as string | undefined;
         if (typeof dbId === "string" && dbId.length > 0) {
@@ -1502,7 +1505,7 @@ export function resolveNodeInputs(
       // generate-image, image-to-image, modify-image, image-to-video, and
       // text-to-video targets — the executor reads these fields and
       // forwards them only on those API calls.
-      if (src.type === "character") {
+      if (!isPlainImageHandle && src.type === "character") {
         const charData = src.data as Record<string, unknown>;
         const dbId = typeof charData.characterDbId === "string" ? charData.characterDbId : "";
         if (dbId.length > 0) {
