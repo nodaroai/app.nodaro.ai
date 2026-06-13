@@ -201,7 +201,7 @@ describe("CharacterNode", () => {
     expect(screen.getByTestId("base-node")).toHaveAttribute("data-category", "character")
   })
 
-  it("has correct handles (in + characterRef)", () => {
+  it("has correct handles (in + characterRef + image)", () => {
     renderCharacterNode()
     const inHandle = screen.getByTestId("handle-target-in")
     expect(inHandle).toHaveAttribute("data-type", "target")
@@ -210,6 +210,11 @@ describe("CharacterNode", () => {
     const refHandle = screen.getByTestId("handle-source-characterRef")
     expect(refHandle).toHaveAttribute("data-type", "source")
     expect(refHandle).toHaveAttribute("data-position", "right")
+
+    // Plain-image output handle (in addition to the identity Character handle)
+    const imageHandle = screen.getByTestId("handle-source-image")
+    expect(imageHandle).toHaveAttribute("data-type", "source")
+    expect(imageHandle).toHaveAttribute("data-position", "right")
   })
 
   it("shows portrait placeholder with border-dashed element when no sourceImageUrl", () => {

@@ -251,7 +251,9 @@ export function resolveSheetEntity(
   for (const e of incoming) {
     const up = nodeById.get(e.source)
     if (!up) continue
-    if (up.type === "character" || up.type === "object" || up.type === "location") {
+    // The character node's "image" handle is a PLAIN image, not an entity ref —
+    // never treat it as the sheet's entity source.
+    if (e.sourceHandle !== "image" && (up.type === "character" || up.type === "object" || up.type === "location")) {
       const d = up.data as Record<string, unknown>
       const idField =
         up.type === "character" ? "characterDbId" : up.type === "object" ? "objectDbId" : "locationDbId"

@@ -83,6 +83,35 @@ describe("resolveNodeInputs", () => {
     expect(inputs.referenceImageUrls).toContain("http://char.png")
   })
 
+  it("character 'image' handle is a PLAIN image — provides the portrait but no identity", () => {
+    const char = makeNode("c1", "character", {
+      sourceImageUrl: "http://char.png",
+      characterDbId: "db-1",
+      injectIdentityInPrompts: true, // even with injection ON, the image handle stays plain
+    })
+    const target = makeNode("t1", "generate-image")
+    const edges = [{ id: "c1->t1", source: "c1", target: "t1", sourceHandle: "image" }]
+
+    const inputs = resolveNodeInputs(target, [char, target], edges as never)
+    expect(inputs.referenceImageUrls).toContain("http://char.png") // the image still flows
+    expect(inputs.attachToCharacterId).toBeUndefined() // no identity attach
+    expect(inputs.injectCharacterContext).toBeUndefined() // no identity injection
+  })
+
+  it("character 'characterRef' handle still carries identity (regression)", () => {
+    const char = makeNode("c1", "character", {
+      sourceImageUrl: "http://char.png",
+      characterDbId: "db-1",
+      injectIdentityInPrompts: true,
+    })
+    const target = makeNode("t1", "generate-image")
+    const edges = [{ id: "c1->t1", source: "c1", target: "t1", sourceHandle: "characterRef" }]
+
+    const inputs = resolveNodeInputs(target, [char, target], edges as never)
+    expect(inputs.attachToCharacterId).toBe("db-1")
+    expect(inputs.injectCharacterContext).toBe(true)
+  })
+
   // Identity injection (inject canonical_description into the prompt) and the
   // reference-video auto-attach (save the clip back to the character) are
   // SEPARATE opt-ins. The resolver carries `attachToCharacterId` whenever a
