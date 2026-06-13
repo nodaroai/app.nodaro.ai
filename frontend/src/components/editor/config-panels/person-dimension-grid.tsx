@@ -69,9 +69,15 @@ export function renderEntryIcon(dimension: PersonDimension, entry: Person): JSX.
   if (dimension === "facial-hair") return <FacialHairIcon facialHairId={entry.id} className="size-6" />
   if (dimension === "face-shape") return <FaceShapeIcon id={entry.id} className="size-6" />
   if (dimension === "jawline") return <JawlineIcon id={entry.id} className="size-6" />
-  if (dimension === "eye-shape") return <EyeShapeIcon id={entry.id} className="size-6" />
-  if (dimension === "nose") return <NoseIcon id={entry.id} className="size-6" />
-  if (dimension === "lips") return <LipsIcon id={entry.id} className="size-6" />
+  if (
+    dimension === "eye-shape" ||
+    dimension === "eyelid-type" ||
+    dimension === "canthal-tilt" ||
+    dimension === "eye-spacing"
+  )
+    return <EyeShapeIcon id={entry.id} className="size-6" />
+  if (dimension === "nose" || dimension === "nose-tip") return <NoseIcon id={entry.id} className="size-6" />
+  if (dimension === "lip-fullness" || dimension === "lip-shape") return <LipsIcon id={entry.id} className="size-6" />
   if (dimension === "body-proportions") return <BodyProportionsIcon id={entry.id} className="size-6" />
   return null
 }

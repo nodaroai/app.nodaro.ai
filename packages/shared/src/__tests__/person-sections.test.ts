@@ -8,6 +8,9 @@ describe("PERSON_DIMENSION_SECTIONS", () => {
     expect(new Set(inSections).size).toBe(inSections.length)
   })
   it("has 6 sections with the expected counts", () => {
-    expect(PERSON_DIMENSION_SECTIONS.map((s) => s.dimensions.length)).toEqual([4, 2, 6, 3, 4, 2])
+    // Face = 14: face-shape, jawline, cheekbones, facial-fullness, eye-shape,
+    // eyelid-type, canthal-tilt, eye-spacing, eye-set-brow, nose, nose-tip,
+    // lip-fullness, lip-shape, lip-state (facial-geometry layer).
+    expect(PERSON_DIMENSION_SECTIONS.map((s) => s.dimensions.length)).toEqual([4, 2, 14, 3, 4, 2])
   })
 })

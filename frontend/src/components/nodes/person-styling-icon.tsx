@@ -33,9 +33,14 @@ export function getPersonEntryIcon(dimension: PersonDimension, entryId: string):
     case "facial-hair":       return <FacialHairIcon facialHairId={entryId} className={ICON_CN} />
     case "face-shape":        return <FaceShapeIcon id={entryId} className={ICON_CN} />
     case "jawline":           return <JawlineIcon id={entryId} className={ICON_CN} />
-    case "eye-shape":         return <EyeShapeIcon id={entryId} className={ICON_CN} />
-    case "nose":              return <NoseIcon id={entryId} className={ICON_CN} />
-    case "lips":              return <LipsIcon id={entryId} className={ICON_CN} />
+    case "eye-shape":
+    case "eyelid-type":
+    case "canthal-tilt":
+    case "eye-spacing":       return <EyeShapeIcon id={entryId} className={ICON_CN} />
+    case "nose":
+    case "nose-tip":          return <NoseIcon id={entryId} className={ICON_CN} />
+    case "lip-fullness":
+    case "lip-shape":         return <LipsIcon id={entryId} className={ICON_CN} />
     case "body-proportions":  return <BodyProportionsIcon id={entryId} className={ICON_CN} />
     case "hair-color":
     case "skin-tone":

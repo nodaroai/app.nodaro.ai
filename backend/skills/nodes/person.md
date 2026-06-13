@@ -26,8 +26,17 @@ generated_from: cb1e786d
 - `bodyProportions?: string`
 - `faceShape?: string`
 - `jawline?: string`
+- `cheekbones?: string`
+- `facialFullness?: string`
 - `eyeShape?: string`
+- `eyelidType?: string`
+- `canthalTilt?: string`
+- `eyeSpacing?: string`
+- `eyeSetBrow?: string`
 - `nose?: string`
+- `noseTip?: string`
+- `lipFullness?: string`
+- `lipShape?: string`
 - `lips?: string`
 - `lipState?: string | ReadonlyArray<string>`
 - `hairColor?: string | ReadonlyArray<string>`
