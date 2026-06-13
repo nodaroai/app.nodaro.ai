@@ -142,10 +142,16 @@ export type {
   ApprovePortraitResult,
   RecaptionResult,
   CharacterAspectRatio,
+  PersonValue,
 } from "./resources/characters.js"
 export {
   CHARACTER_ASPECT_OPTIONS,
   CHARACTER_ASPECT_DEFAULTS,
+  buildPersonSeedPrompt,
+  buildPersonHints,
+  PEOPLE,
+  PERSON_DIMENSION_ORDER,
+  PERSON_DIMENSION_LABELS,
 } from "./resources/characters.js"
 
 export type {
