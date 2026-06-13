@@ -316,4 +316,5 @@ export const imageAIHandlers: Record<string, HandlerFn> = {
   "generate-image": handleGenerateImage,
   "edit-image": handleEditImage,
   "image-to-image": handleImageToImage,
+  "reference-board": handleGenerateImage, // board = single-pass image gen; same processing
 }

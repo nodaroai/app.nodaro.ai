@@ -203,6 +203,7 @@ import {
   ResultsGallery,
   AiAvatarConfig,
   CinematicAvatarConfig,
+  ReferenceBoardConfig,
 } from "./config-panels"
 import { TileCommitContext } from "./config-panels/dimension-tile-grid"
 import { createRovingTabIndexRef, handleConfigPanelNavKeyDown } from "./config-panels/config-keyboard-nav"
@@ -339,6 +340,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "sort-list": "Sort List",
   "selector": "Selector",
   "reference-sheet": "Reference Sheet",
+  "reference-board": "Reference Board",
   "preview": "Preview",
   "save-to-storage": "Save to Storage",
   "webhook-output": "Webhook Output",
@@ -375,7 +377,7 @@ export function getNodeTypeDisplayName(type: string): string {
 }
 
 export const GENERATE_BUTTON_TYPES = new Set([
-  "generate-script", "generate-image", "modify-image", "upscale-image", "remove-background", "generate-mask", "reference-sheet",
+  "generate-script", "generate-image", "modify-image", "upscale-image", "remove-background", "generate-mask", "reference-sheet", "reference-board",
   "image-to-video", "video-to-video", "text-to-video", "generate-video", "text-to-speech",
   "text-to-audio", "audio-isolation", "text-to-dialogue", "voice-changer", "dubbing", "voice-remix", "voice-design", "forced-alignment", "generate-music", "motion-transfer", "lip-sync", "speech-to-video",
   "video-upscale", "extend-video", "video-retake", "face-swap", "video-sfx", "ai-avatar", "cinematic-avatar", "suno-generate", "suno-cover", "suno-extend",
@@ -612,6 +614,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "sort-list": return <SortListConfig {...configProps} />
     case "selector": return <SelectorConfig {...configProps} />
     case "reference-sheet": return <ReferenceSheetConfig {...configProps} nodeId={selectedNodeId} />
+    case "reference-board": return <ReferenceBoardConfig {...configProps} nodeId={selectedNodeId} />
     case "preview": return <PreviewConfig {...configProps} />
     case "teleport-send": case "teleport-receive": return <TeleporterConfig {...configProps} nodeType={nodeType} />
     case "router": return <RouterConfig {...configProps} />

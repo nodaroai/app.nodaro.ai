@@ -112,6 +112,8 @@ const ALLOWLIST = new Set([
   "frontend/src/components/editor/config-panels/model-search-select.tsx",
   "frontend/src/components/editor/config-panels/model-select-option.tsx",
   "frontend/src/components/editor/config-panels/prompt-helper-dialog.tsx",
+  // reference-board mirrors generate-image (image-configs) — same deferred ee/ credit-hook coupling (Phase 3.5/4.5)
+  "frontend/src/components/editor/config-panels/reference-board-config.tsx",
   "frontend/src/components/editor/config-panels/video-configs.tsx",
   "frontend/src/components/editor/config-panels/voice-browser.tsx",
   "frontend/src/components/editor/editor-toolbar.tsx",
@@ -163,6 +165,8 @@ const ALLOWLIST = new Set([
   "frontend/src/components/nodes/object-node.tsx",
   "frontend/src/components/nodes/prompt-quick-edit-modal.tsx",
   "frontend/src/components/nodes/qa-check-node.tsx",
+  // reference-board mirrors generate-image-node — same deferred ee/ credit-hook coupling (Phase 3.5/4.5)
+  "frontend/src/components/nodes/reference-board-node.tsx",
   "frontend/src/components/nodes/reference-sheet-node.tsx",
   "frontend/src/components/nodes/remove-audio-node.tsx",
   "frontend/src/components/nodes/remove-background-node.tsx",

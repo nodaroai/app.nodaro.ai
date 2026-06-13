@@ -1267,3 +1267,6 @@ export {
 
 // --- Reference Sheet (catalog, types, planner) ---
 export * from "./reference-sheet/index.js"
+
+// --- Reference Board (templates + provider constant) ---
+export * from "./reference-board-templates.js"

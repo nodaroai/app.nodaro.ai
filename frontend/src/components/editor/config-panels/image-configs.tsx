@@ -51,7 +51,7 @@ import type { RefImageItem } from "./tag-textarea"
 import { PromptEditor } from "./prompt-editor"
 import { ReferenceSupportWarning } from "./reference-support-warning"
 import type { ConnectedReference, ReferenceSource } from "@nodaro/shared"
-import { DEFAULT_LABEL_BY_SOURCE, characterMentionSlug, locationMentionSlug, expandExtraRefsToConnectedReferences, getMaxImagePromptChars } from "@nodaro/shared"
+import { DEFAULT_LABEL_BY_SOURCE, characterMentionSlug, locationMentionSlug, expandExtraRefsToConnectedReferences, getMaxImagePromptChars, getMaxNegativePromptChars } from "@nodaro/shared"
 import { PromptLengthCounter } from "./prompt-length-counter"
 import { buildImageConnectedReferences, connectedReferencesToRefImages } from "./connected-references"
 import { ConnectedMediaList } from "./connected-media-list"
@@ -504,6 +504,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
               refMap={refMap}
               snippets={negativeSnippets}
             />
+            <PromptLengthCounter value={data.negativePrompt} max={getMaxNegativePromptChars(currentProvider)} modelLabel={currentProvider} noun="negative prompt" />
             <p className="text-[10px] text-muted-foreground mt-0.5">Appended to prompt as exclusion guidance</p>
           </>
         )}
@@ -1328,16 +1329,19 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
             minHeightRem={3 * 1.5}
           />
         ) : (
-          <PromptEditor
-            rows={3}
-            value={data.prompt}
-            onChange={(v) => onUpdate({ prompt: v })}
-            placeholder={isNanoBananaEdit ? "Describe how to edit the image..." : "Describe how to transform the input image..."}
-            referenceImages={refImagesForAutocomplete}
-            nodeRefs={nodeRefs}
-            refMap={refMap}
-            snippets={promptSnippets}
-          />
+          <>
+            <PromptEditor
+              rows={3}
+              value={data.prompt}
+              onChange={(v) => onUpdate({ prompt: v })}
+              placeholder={isNanoBananaEdit ? "Describe how to edit the image..." : "Describe how to transform the input image..."}
+              referenceImages={refImagesForAutocomplete}
+              nodeRefs={nodeRefs}
+              refMap={refMap}
+              snippets={promptSnippets}
+            />
+            <PromptLengthCounter value={data.prompt} max={getMaxImagePromptChars(currentProvider)} modelLabel={currentProvider} />
+          </>
         )}
       </MappableField>
       <MappableField field="style" label="Style" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -1405,6 +1409,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
               refMap={refMap}
               snippets={negativeSnippets}
             />
+            <PromptLengthCounter value={data.negativePrompt ?? ""} max={getMaxNegativePromptChars(currentProvider)} modelLabel={currentProvider} noun="negative prompt" />
             <p className="text-[10px] text-muted-foreground mt-0.5">Appended to prompt as exclusion guidance</p>
           </>
         )}

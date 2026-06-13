@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-06-08T20:18:25.825Z
-generated_from: 365d4ab0
+generated_at: 2026-06-13T21:18:49.205Z
+generated_from: 328d4a1b
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -153,6 +153,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `qa-check` — QA Check
 - `reduce` — Reduce
 - `reference-audio` — Reference Audio
+- `reference-board` — Reference Board
 - `reference-sheet` — Reference Sheet
 - `remove-audio` — Remove Audio
 - `remove-background` — Remove Background

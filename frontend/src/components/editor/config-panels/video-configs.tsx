@@ -525,16 +525,19 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
             minHeightRem={3 * 1.5}
           />
         ) : (
-          <PromptEditor
-            rows={3}
-            value={data.prompt || ""}
-            onChange={(v) => onUpdate({ prompt: v })}
-            placeholder="Describe the motion or animation you want..."
-            referenceImages={refImagesForAutocomplete}
-            nodeRefs={nodeRefs}
-            refMap={refMap}
-            snippets={promptSnippets}
-          />
+          <>
+            <PromptEditor
+              rows={3}
+              value={data.prompt || ""}
+              onChange={(v) => onUpdate({ prompt: v })}
+              placeholder="Describe the motion or animation you want..."
+              referenceImages={refImagesForAutocomplete}
+              nodeRefs={nodeRefs}
+              refMap={refMap}
+              snippets={promptSnippets}
+            />
+            <PromptLengthCounter value={data.prompt || ""} max={getMaxVideoPromptChars(currentI2VProvider)} modelLabel={currentI2VProvider} />
+          </>
         )}
       </MappableField>
 
@@ -554,12 +557,15 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
             minHeightRem={2 * 1.5}
           />
         ) : (
-          <Textarea
-            rows={2}
-            value={(data as Record<string, unknown>).negativePrompt as string || ""}
-            onChange={(e) => onUpdate({ negativePrompt: e.target.value })}
-            placeholder="Things to avoid..."
-          />
+          <>
+            <Textarea
+              rows={2}
+              value={(data as Record<string, unknown>).negativePrompt as string || ""}
+              onChange={(e) => onUpdate({ negativePrompt: e.target.value })}
+              placeholder="Things to avoid..."
+            />
+            <PromptLengthCounter value={(data as Record<string, unknown>).negativePrompt as string || ""} max={getMaxNegativePromptChars(currentI2VProvider)} modelLabel={currentI2VProvider} noun="negative prompt" />
+          </>
         )}
       </MappableField>
 
@@ -1221,16 +1227,19 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
             minHeightRem={3 * 1.5}
           />
         ) : (
-          <PromptEditor
-            rows={3}
-            value={data.prompt}
-            onChange={(v) => onUpdate({ prompt: v })}
-            placeholder="Describe what to change or continue..."
-            referenceImages={refImagesForAutocomplete}
-            nodeRefs={nodeRefs}
-            refMap={refMap}
-            snippets={promptSnippets}
-          />
+          <>
+            <PromptEditor
+              rows={3}
+              value={data.prompt}
+              onChange={(v) => onUpdate({ prompt: v })}
+              placeholder="Describe what to change or continue..."
+              referenceImages={refImagesForAutocomplete}
+              nodeRefs={nodeRefs}
+              refMap={refMap}
+              snippets={promptSnippets}
+            />
+            <PromptLengthCounter value={data.prompt} max={getMaxVideoPromptChars(provider)} modelLabel={provider} />
+          </>
         )}
       </MappableField>
 
@@ -1250,17 +1259,20 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
             minHeightRem={2 * 1.5}
           />
         ) : (
-          <TagTextarea
-            value={data.negativePrompt || ""}
-            onChange={(v) => onUpdate({ negativePrompt: v || undefined })}
-            placeholder="What to avoid..."
-            rows={2}
-            nodeRefs={nodeRefs}
-            referenceImages={refImagesForAutocomplete}
-            displayMode={variableDisplayMode}
-            refMap={refMap}
-            snippets={negativeSnippets}
-          />
+          <>
+            <TagTextarea
+              value={data.negativePrompt || ""}
+              onChange={(v) => onUpdate({ negativePrompt: v || undefined })}
+              placeholder="What to avoid..."
+              rows={2}
+              nodeRefs={nodeRefs}
+              referenceImages={refImagesForAutocomplete}
+              displayMode={variableDisplayMode}
+              refMap={refMap}
+              snippets={negativeSnippets}
+            />
+            <PromptLengthCounter value={data.negativePrompt || ""} max={getMaxNegativePromptChars(provider)} modelLabel={provider} noun="negative prompt" />
+          </>
         )}
       </MappableField>
 
@@ -1554,7 +1566,7 @@ function MotionTransferConfigImpl({ data, onUpdate, sources, fieldMappings, onMa
               refMap={refMap}
               snippets={promptSnippets}
             />
-            <span className="text-xs text-muted-foreground">{data.prompt?.length || 0}/{VIDEO_PROMPT_MAX}</span>
+            <PromptLengthCounter value={data.prompt} max={getMaxVideoPromptChars(provider)} modelLabel={provider} />
           </>
         )}
       </MappableField>
@@ -1585,7 +1597,7 @@ function MotionTransferConfigImpl({ data, onUpdate, sources, fieldMappings, onMa
               refMap={refMap}
               snippets={negativeSnippets}
             />
-            <span className="text-xs text-muted-foreground">{data.negativePrompt?.length || 0}/{VIDEO_PROMPT_MAX}</span>
+            <PromptLengthCounter value={data.negativePrompt} max={getMaxNegativePromptChars(provider)} modelLabel={provider} noun="negative prompt" />
           </>
         )}
       </MappableField>
@@ -1836,16 +1848,19 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
             minHeightRem={3 * 1.5}
           />
         ) : (
-          <PromptEditor
-            rows={3}
-            value={data.prompt}
-            onChange={(v) => onUpdate({ prompt: v })}
-            placeholder="Describe the video to generate..."
-            referenceImages={refImagesForAutocomplete}
-            nodeRefs={nodeRefs}
-            refMap={refMap}
-            snippets={promptSnippets}
-          />
+          <>
+            <PromptEditor
+              rows={3}
+              value={data.prompt}
+              onChange={(v) => onUpdate({ prompt: v })}
+              placeholder="Describe the video to generate..."
+              referenceImages={refImagesForAutocomplete}
+              nodeRefs={nodeRefs}
+              refMap={refMap}
+              snippets={promptSnippets}
+            />
+            <PromptLengthCounter value={data.prompt} max={getMaxVideoPromptChars(currentProvider)} modelLabel={currentProvider} />
+          </>
         )}
       </MappableField>
       <ExtraRefsSection
@@ -2094,17 +2109,20 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
             minHeightRem={2 * 1.5}
           />
         ) : (
-          <TagTextarea
-            rows={2}
-            value={data.negativePrompt}
-            onChange={(v) => onUpdate({ negativePrompt: v })}
-            placeholder="Things to avoid..."
-            nodeRefs={nodeRefs}
-            referenceImages={refImagesForAutocomplete}
-            displayMode={variableDisplayMode}
-            refMap={refMap}
-            snippets={negativeSnippets}
-          />
+          <>
+            <TagTextarea
+              rows={2}
+              value={data.negativePrompt}
+              onChange={(v) => onUpdate({ negativePrompt: v })}
+              placeholder="Things to avoid..."
+              nodeRefs={nodeRefs}
+              referenceImages={refImagesForAutocomplete}
+              displayMode={variableDisplayMode}
+              refMap={refMap}
+              snippets={negativeSnippets}
+            />
+            <PromptLengthCounter value={data.negativePrompt} max={getMaxNegativePromptChars(currentProvider)} modelLabel={currentProvider} noun="negative prompt" />
+          </>
         )}
       </MappableField>
 
@@ -3251,16 +3269,19 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
             minHeightRem={3 * 1.5}
           />
         ) : (
-          <TagTextarea
-            value={data.prompt || ""}
-            onChange={(v) => onUpdate({ prompt: v })}
-            placeholder={isSeedanceExtend ? "What happens next? e.g. the ball keeps rolling until it hits a cup" : "Describe how the video should continue..."}
-            rows={3}
-            nodeRefs={nodeRefs}
-            displayMode={variableDisplayMode}
-            refMap={refMap}
-            snippets={promptSnippets}
-          />
+          <>
+            <TagTextarea
+              value={data.prompt || ""}
+              onChange={(v) => onUpdate({ prompt: v })}
+              placeholder={isSeedanceExtend ? "What happens next? e.g. the ball keeps rolling until it hits a cup" : "Describe how the video should continue..."}
+              rows={3}
+              nodeRefs={nodeRefs}
+              displayMode={variableDisplayMode}
+              refMap={refMap}
+              snippets={promptSnippets}
+            />
+            <PromptLengthCounter value={data.prompt || ""} max={getMaxVideoPromptChars(data.provider || "veo-extend")} modelLabel={data.provider || "veo-extend"} />
+          </>
         )}
       </MappableField>
 
@@ -3470,12 +3491,15 @@ export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, on
             minHeightRem={80 / 16}
           />
         ) : (
-          <Textarea
-            value={data.prompt || ""}
-            onChange={(e) => onUpdate({ prompt: e.target.value })}
-            placeholder="Describe the speaking scene..."
-            className="min-h-[80px] text-sm"
-          />
+          <>
+            <Textarea
+              value={data.prompt || ""}
+              onChange={(e) => onUpdate({ prompt: e.target.value })}
+              placeholder="Describe the speaking scene..."
+              className="min-h-[80px] text-sm"
+            />
+            <PromptLengthCounter value={data.prompt || ""} max={getMaxVideoPromptChars(data.provider as string | undefined)} modelLabel={(data.provider as string | undefined) || "wan-s2v"} />
+          </>
         )}
       </div>
 
@@ -3518,12 +3542,15 @@ export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, on
             minHeightRem={60 / 16}
           />
         ) : (
-          <Textarea
-            value={data.negativePrompt || ""}
-            onChange={(e) => onUpdate({ negativePrompt: e.target.value || undefined })}
-            placeholder="What to avoid..."
-            className="min-h-[60px] text-sm"
-          />
+          <>
+            <Textarea
+              value={data.negativePrompt || ""}
+              onChange={(e) => onUpdate({ negativePrompt: e.target.value || undefined })}
+              placeholder="What to avoid..."
+              className="min-h-[60px] text-sm"
+            />
+            <PromptLengthCounter value={data.negativePrompt || ""} max={getMaxNegativePromptChars(data.provider as string | undefined)} modelLabel={(data.provider as string | undefined) || "wan-s2v"} noun="negative prompt" />
+          </>
         )}
       </MappableField>
 
@@ -3713,16 +3740,19 @@ function VideoRetakeConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
             minHeightRem={3 * 1.5}
           />
         ) : (
-          <TagTextarea
-            value={data.prompt || ""}
-            onChange={(v) => onUpdate({ prompt: v })}
-            placeholder="Describe what should change in the selected range..."
-            rows={3}
-            nodeRefs={nodeRefs}
-            displayMode={variableDisplayMode}
-            refMap={refMap}
-            snippets={promptSnippets}
-          />
+          <>
+            <TagTextarea
+              value={data.prompt || ""}
+              onChange={(v) => onUpdate({ prompt: v })}
+              placeholder="Describe what should change in the selected range..."
+              rows={3}
+              nodeRefs={nodeRefs}
+              displayMode={variableDisplayMode}
+              refMap={refMap}
+              snippets={promptSnippets}
+            />
+            <PromptLengthCounter value={data.prompt || ""} max={getMaxVideoPromptChars(data.provider || "ltx-2.3-pro")} modelLabel={data.provider || "ltx-2.3-pro"} />
+          </>
         )}
       </MappableField>
 

@@ -1664,6 +1664,49 @@ export function buildPayload(
       }
     }
 
+    // --- Reference board: single-pass image generation (same flow as generate-image) ---
+    case "reference-board": {
+      const provider = (data.provider as string) ?? "nano-banana-pro"
+      const rawPrompt = promptFor("reference-board")
+
+      // Collect manual reference images
+      const refUrls: string[] = []
+      const manualRefs = data.referenceImageUrls as Array<{ id: string; url: string }> | undefined
+      if (manualRefs?.length) {
+        for (const img of manualRefs) refUrls.push(img.url)
+      }
+      const chainRefs = resolvedInputs.referenceImageUrls
+        ?? (resolvedInputs.imageUrl ? [resolvedInputs.imageUrl] : undefined)
+      if (chainRefs) {
+        for (const url of chainRefs) refUrls.push(url)
+      }
+
+      return {
+        jobName: "reference-board",
+        queueName: "video-generation",
+        modelIdentifier: buildCreditModelIdentifier(
+          provider,
+          data.quality as string | undefined,
+          data.resolution as string | undefined,
+        ),
+        payload: {
+          jobId,
+          prompt: rawPrompt,
+          referenceImageUrls: refUrls,
+          provider,
+          aspectRatio: data.aspectRatio,
+          resolution: data.resolution,
+          quality: data.quality,
+          negativePrompt: data.negativePrompt,
+          seed: data.seed,
+          boardTemplate: data.boardTemplate,
+          entityName: data.entityName,
+          entityDescription: data.entityDescription,
+          usageLogId,
+        },
+      }
+    }
+
     case "edit-image": {
       const provider = (data.provider as string) ?? "recraft-upscale"
 

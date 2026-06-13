@@ -93,6 +93,25 @@ export function pollJobToCompletion(
 }
 
 /**
+ * Build the canonical single-URL `GeneratedResult` object. Extracted so the
+ * DAG completion path and the in-component refine poller (`pollImageRefineToNode`)
+ * produce byte-identical version objects — no drift between the two paths.
+ */
+function buildSingleResult(
+  url: string,
+  jobId: string,
+  extra?: { thumbnailUrl?: string; extraFields?: Record<string, unknown> },
+): GeneratedResult {
+  return {
+    url,
+    thumbnailUrl: extra?.thumbnailUrl,
+    timestamp: new Date().toISOString(),
+    jobId,
+    ...(extra?.extraFields ?? {}),
+  };
+}
+
+/**
  * Handle a completed job: extract URL, build result, update store.
  * Shared between the normal completion path and the error-recovery path.
  * Returns true if the completion was handled, false if no URL was found.
@@ -138,7 +157,7 @@ function handleJobCompleted(
   const newResults: GeneratedResult[] =
     variantUrls.length > 1
       ? buildVariantResults(variantUrls, jobId, { thumbnailUrl, extraFields })
-      : [{ url: url as string, thumbnailUrl, timestamp: new Date().toISOString(), jobId, ...extraFields }];
+      : [buildSingleResult(url as string, jobId, { thumbnailUrl, extraFields })];
 
   updateNodeData(nodeId, {
     executionStatus: "completed",
@@ -330,6 +349,125 @@ export function pollJobWithNodeUpdate(
             description: err instanceof Error ? err.message : "Unknown error",
           });
         }
+        reject(err);
+      });
+  });
+}
+
+/**
+ * Self-contained image-job poller for in-component "refine" actions (the
+ * reference-board refine bar: global / masked edits + re-roll).
+ *
+ * Unlike `pollJobWithNodeUpdate`, this does NOT need an `ExecutionContext` —
+ * it owns a plain `setInterval` and writes directly to the workflow store. It
+ * starts an image API call (image-to-image or reference-board generation),
+ * polls to completion, and **prepends** a new version to `generatedResults`
+ * with `activeResultIndex: 0`, exactly like the DAG completion path
+ * (`handleJobCompleted` → `buildSingleResult`), so refined versions land in the
+ * board's version strip identically.
+ *
+ * Resolves with the new image URL on success, or "" if it was abandoned;
+ * rejects on failure (the node already shows the failed state via the store).
+ */
+export function pollImageRefineToNode(
+  nodeId: string,
+  apiCall: () => Promise<{ jobId: string }>,
+  label: string,
+): Promise<string> {
+  const { updateNodeData } = useWorkflowStore.getState();
+  updateNodeData(nodeId, {
+    executionStatus: "running",
+    errorMessage: undefined,
+    currentJobId: undefined,
+    currentJobProgress: 0,
+  });
+
+  return new Promise<string>((resolve, reject) => {
+    apiCall()
+      .then(({ jobId }) => {
+        guardedToast.info(`${label} started`, { description: `Job ID: ${jobId}` });
+        updateNodeData(nodeId, { currentJobId: jobId });
+
+        let pollFailures = 0;
+
+        const poll = setInterval(async () => {
+          try {
+            const job = await getJobStatusLean(jobId);
+            pollFailures = 0;
+
+            if (job.status === "processing" && job.progress != null) {
+              updateProgressIfChanged(nodeId, job.progress, updateNodeData);
+              return;
+            }
+
+            if (job.status === "completed") {
+              clearInterval(poll);
+              const url = job.output_data?.imageUrl as string | undefined;
+              if (!url) {
+                const errMsg = "No output URL returned from job";
+                updateNodeData(nodeId, {
+                  executionStatus: "failed",
+                  errorMessage: errMsg,
+                  currentJobId: undefined,
+                  currentJobProgress: undefined,
+                });
+                guardedToast.error(`${label} failed`, { description: errMsg });
+                reject(new Error(errMsg));
+                return;
+              }
+              const existing =
+                ((useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)?.data as
+                  Record<string, unknown>)?.generatedResults as
+                  readonly GeneratedResult[] | undefined) ?? [];
+              updateNodeData(nodeId, {
+                executionStatus: "completed",
+                generatedImageUrl: url,
+                generatedResults: [buildSingleResult(url, jobId), ...existing],
+                activeResultIndex: 0,
+                currentJobId: undefined,
+                currentJobProgress: undefined,
+              });
+              guardedToast.success(`${label} complete`);
+              resolve(url);
+              return;
+            }
+
+            if (job.status === "failed") {
+              clearInterval(poll);
+              const errMsg = job.error_message ?? "Unknown error";
+              updateNodeData(nodeId, {
+                executionStatus: "failed",
+                errorMessage: errMsg,
+                currentJobId: undefined,
+                currentJobProgress: undefined,
+              });
+              guardedToast.error(`${label} failed`, { description: errMsg });
+              reject(new Error(errMsg));
+            }
+          } catch (err) {
+            pollFailures++;
+            if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+              clearInterval(poll);
+              updateNodeData(nodeId, {
+                executionStatus: "failed",
+                currentJobId: undefined,
+                currentJobProgress: undefined,
+              });
+              guardedToast.error(`Failed to check ${label} status`);
+              reject(err);
+            }
+          }
+        }, 2000);
+      })
+      .catch((err) => {
+        updateNodeData(nodeId, {
+          executionStatus: "failed",
+          currentJobId: undefined,
+          currentJobProgress: undefined,
+        });
+        guardedToast.error(`Failed to start ${label}`, {
+          description: err instanceof Error ? err.message : "Unknown error",
+        });
         reject(err);
       });
   });

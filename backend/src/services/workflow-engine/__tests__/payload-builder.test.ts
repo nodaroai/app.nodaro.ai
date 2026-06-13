@@ -1232,3 +1232,34 @@ describe("expandWiredLocationRefs — smart variant selection (Phase 2 #1)", () 
     expect(canonical?.url).toBe("https://r2/dusk.png")
   })
 })
+
+// ---------------------------------------------------------------------------
+// reference-board (image-generation parity)
+// ---------------------------------------------------------------------------
+
+describe("reference-board payload", () => {
+  it("builds a reference-board payload routed as image gen", () => {
+    const n = node("rb1", "reference-board", {
+      provider: "nano-banana-pro",
+      boardTemplate: "character/full-board",
+      prompt: "x",
+    })
+    const result = buildPayload(n, "job-rb", {})
+    expect(result.jobName).toBe("reference-board")
+    expect(result.queueName).toBe("video-generation")
+    expect(result.payload.jobId).toBe("job-rb")
+    expect(result.payload.provider).toBe("nano-banana-pro")
+  })
+
+  it("reference-board passes prompt and resolution through", () => {
+    const n = node("rb2", "reference-board", {
+      provider: "gpt-image-2",
+      boardTemplate: "location/full-board",
+      prompt: "make a board",
+      resolution: "4K",
+    })
+    const result = buildPayload(n, "job-rb2", {})
+    expect(result.payload.prompt).toBe("make a board")
+    expect(result.payload.resolution).toBe("4K")
+  })
+})

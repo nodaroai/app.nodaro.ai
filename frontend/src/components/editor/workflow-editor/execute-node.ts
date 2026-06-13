@@ -63,6 +63,7 @@ import {
   mixAudioApi,
   combineAudioApi,
   generateImage,
+  createReferenceBoard,
   getJobStatusLean,
   llmChatStream,
   setForcePrivate,
@@ -121,6 +122,7 @@ import type {
   FaceSwapData,
   VideoSfxNodeData,
   GenerateMaskData,
+  ReferenceBoardData,
   ReferenceSheetData,
   VideoComposerData,
   AfterEffectsData,
@@ -1669,6 +1671,46 @@ export function executeNode(
       internalLora,
       idempotencyKey,
       inpaint,
+    );
+  }
+
+  if (node.type === "reference-board") {
+    const boardData = node.data as ReferenceBoardData;
+    const providerKey = boardData.provider || "nano-banana-pro";
+
+    // Collect wired reference image URLs (entity images or uploaded references).
+    const chainRefs = inputs.referenceImageUrls ?? (inputs.imageUrl ? [inputs.imageUrl] : undefined);
+    const manualImgs = boardData.referenceImageUrls ?? [];
+    const manualUrls = manualImgs.map((img) => img.url).filter(Boolean);
+    const allRefUrls = [...manualUrls, ...(chainRefs ?? [])];
+
+    // Prompt: manual field wins; fall back to template-seeded value from config panel.
+    const prompt = promptOf("generate-image") || boardData.prompt?.trim() || undefined;
+
+    if (!prompt && !boardData.boardTemplate) {
+      toast.error(`Node "${boardData.label}": no prompt and no board template selected`);
+      return Promise.reject(new Error("No prompt or template"));
+    }
+
+    setUserPromptTemplate(boardData.prompt?.trim() || undefined);
+    return pollJobWithNodeUpdate(
+      node.id,
+      () =>
+        createReferenceBoard({
+          provider: providerKey,
+          boardTemplate: boardData.boardTemplate || "character/full-board",
+          prompt: prompt || undefined,
+          negativePrompt: boardData.negativePrompt || undefined,
+          aspectRatio: boardData.aspectRatio || undefined,
+          resolution: boardData.resolution || undefined,
+          quality: boardData.quality || undefined,
+          seed: boardData.seed,
+          referenceImageUrls: allRefUrls.length > 0 ? allRefUrls : undefined,
+          idempotencyKey,
+        }),
+      "generatedImageUrl",
+      "Reference board generation",
+      ctx,
     );
   }
 

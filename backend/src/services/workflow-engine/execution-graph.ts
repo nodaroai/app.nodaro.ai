@@ -295,6 +295,7 @@ export function getUploadDescendantIds(
 
 export const IMAGE_SOURCE_TYPES = new Set([
   "generate-image",
+  "reference-board",
   "upload-image",
   "edit-image",
   "image-to-image",

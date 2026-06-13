@@ -973,7 +973,7 @@ const AUDIO_OUTPUT_NODE_TYPES = new Set(
 )
 
 const IMAGE_SOURCE_NODE_TYPES = new Set([
-  "generate-image", "edit-image", "image-to-image", "modify-image",
+  "generate-image", "reference-board", "edit-image", "image-to-image", "modify-image",
   "upscale-image", "remove-background", "upload-image", "extract-frame",
 ])
 
@@ -1085,6 +1085,7 @@ function routeOutput(
     // `sheet` (or any non-panels handle) — the composited sheet image.
     if (
       targetType === "generate-image" ||
+      targetType === "reference-board" ||
       targetType === "edit-image" ||
       targetType === "image-to-image" ||
       targetType === "modify-image" ||
@@ -1234,7 +1235,7 @@ function routeOutput(
     if (colType === "image-url") {
       if (isCarouselTarget) {
         inputs.mediaItems = [...(inputs.mediaItems ?? []), { type: "photo", url: output }]
-      } else if (targetType === "generate-image" || targetType === "edit-image" || targetType === "image-to-image" || targetType === "modify-image") {
+      } else if (targetType === "generate-image" || targetType === "reference-board" || targetType === "edit-image" || targetType === "image-to-image" || targetType === "modify-image") {
         inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
       } else {
         inputs.imageUrl = output
@@ -1412,7 +1413,7 @@ function routeOutput(
 
   // --- Upload image ---
   if (srcType === "upload-image") {
-    if (targetType === "generate-image" || targetType === "video-to-video") {
+    if (targetType === "generate-image" || targetType === "reference-board" || targetType === "video-to-video") {
       inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
     } else {
       inputs.imageUrl = output
@@ -1441,9 +1442,9 @@ function routeOutput(
     return
   }
 
-  // --- Generate image → depends on target ---
-  if (srcType === "generate-image") {
-    if (targetType === "generate-image" || targetType === "video-to-video") {
+  // --- Generate image / Reference board → depends on target ---
+  if (srcType === "generate-image" || srcType === "reference-board") {
+    if (targetType === "generate-image" || targetType === "reference-board" || targetType === "video-to-video") {
       inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
     } else if (targetType === "text-to-audio") {
       inputs.prompt = (src.data.prompt as string) ?? ""
@@ -1457,6 +1458,7 @@ function routeOutput(
   if (srcType === "extract-frame") {
     if (
       targetType === "generate-image" ||
+      targetType === "reference-board" ||
       targetType === "edit-image" ||
       targetType === "image-to-image" ||
       targetType === "modify-image" ||
@@ -1473,6 +1475,7 @@ function routeOutput(
   if (srcType === "edit-image" || srcType === "image-to-image" || srcType === "modify-image" || srcType === "upscale-image" || srcType === "remove-background") {
     if (
       targetType === "generate-image" ||
+      targetType === "reference-board" ||
       targetType === "edit-image" ||
       targetType === "image-to-image" ||
       targetType === "modify-image" ||
@@ -1589,7 +1592,7 @@ function routeOutput(
   if (srcType === "scene") {
     const state = nodeStates[src.id]
     if (state?.output?.imageUrl) {
-      if (targetType === "generate-image" || targetType === "video-to-video") {
+      if (targetType === "generate-image" || targetType === "reference-board" || targetType === "video-to-video") {
         inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), state.output.imageUrl]
       } else {
         inputs.imageUrl = state.output.imageUrl
@@ -1677,7 +1680,7 @@ function routeOutput(
     }
 
     if (mediaType === "image") {
-      if (targetType === "generate-image" || targetType === "edit-image" || targetType === "image-to-image" || targetType === "modify-image") {
+      if (targetType === "generate-image" || targetType === "reference-board" || targetType === "edit-image" || targetType === "image-to-image" || targetType === "modify-image") {
         inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
       } else {
         inputs.imageUrl = output

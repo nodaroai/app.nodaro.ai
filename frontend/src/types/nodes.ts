@@ -1484,6 +1484,31 @@ export type GenerateImageData = {
   characterDefinitionIds?: readonly string[]
 }
 
+export type ReferenceBoardData = {
+  [key: string]: unknown
+  label: string
+  sourceMode: "entity" | "image"
+  boardTemplate: string                 // "<entityKind>/<slug>"
+  provider: ImageProvider
+  prompt: string
+  negativePrompt: string
+  aspectRatio: string
+  resolution?: string
+  quality?: string
+  seed?: number
+  referenceImageUrls?: readonly ManualReferenceImage[]
+  referenceImageOrder?: readonly string[]
+  fieldMappings: FieldMappings
+  // result/version state — mirror GenerateImageData exactly (same field names):
+  generatedResults?: GenerateImageData["generatedResults"]
+  activeResultIndex?: number
+  generatedImageUrl?: string
+  currentJobId?: string
+  currentJobProgress?: number
+  executionStatus?: GenerateImageData["executionStatus"]
+  errorMessage?: string
+}
+
 // Edit Image providers (KIE.ai only)
 export type EditImageProvider = ImageEditProvider
 
@@ -4573,6 +4598,7 @@ export type SceneNodeData =
   | PostProcessEffectsData
   | GenerateScriptData
   | GenerateImageData
+  | ReferenceBoardData
   | ModifyImageData
   | UpscaleImageData
   | RemoveBackgroundData
@@ -4862,6 +4888,7 @@ export type SceneNodeType =
   | "voice-delivery"
   | "generative-pipeline"
   | "reference-sheet"
+  | "reference-board"
 
 export type WorkflowNode = Node<SceneNodeData, SceneNodeType>
 export type WorkflowEdge = Edge
@@ -7044,6 +7071,27 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       skin: "studio",
       flavour: { outputFormat: "still", withText: true, showLabels: true, aspect: "landscape", background: "grey" },
     } as ReferenceSheetData,
+  },
+  {
+    type: "reference-board",
+    label: "Reference Board",
+    category: "ai",
+    creditCost: 6,
+    inputs: ["prompt", "references"],
+    outputs: ["image"],
+    width: 220,
+    defaultData: {
+      label: "Reference Board",
+      sourceMode: "image",
+      boardTemplate: "character/full-board",
+      provider: "nano-banana-pro",
+      prompt: "",
+      negativePrompt: "",
+      aspectRatio: "2:3",
+      resolution: "4K",
+      fieldMappings: {},
+    } as ReferenceBoardData,
+    exposableOutputs: [{ key: "result", label: "Result", outputType: "image" as const }],
   },
   {
     type: "preview",

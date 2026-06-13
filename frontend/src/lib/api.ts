@@ -408,6 +408,31 @@ export async function generateImage(
   })
 }
 
+// --- Reference Board ---
+
+export async function createReferenceBoard(body: {
+  provider: string
+  boardTemplate: string
+  prompt?: string
+  negativePrompt?: string
+  aspectRatio?: string
+  resolution?: string
+  quality?: string
+  seed?: number
+  referenceImageUrls?: string[]
+  entityName?: string
+  entityDescription?: string
+  idempotencyKey?: string
+}): Promise<{ jobId: string }> {
+  const { idempotencyKey, ...rest } = body
+  return apiJson("/v1/reference-board", {
+    body: rest,
+    workflowId: true,
+    idempotencyKey,
+    label: "Failed to start reference board generation",
+  })
+}
+
 // --- Edit Image (KIE.ai only) ---
 
 export async function editImage(

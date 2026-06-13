@@ -164,6 +164,7 @@ import { GroupNode } from "./group-node";
 import { CollectNode } from "./collect-node";
 import { SelectorNode } from "./selector-node";
 import { ReferenceSheetNode } from "./reference-sheet-node";
+import { ReferenceBoardNode } from "./reference-board-node";
 import type { SceneNodeType } from "@/types/nodes";
 
 export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
@@ -334,6 +335,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "sort-list": SortListNode,
   "selector": SelectorNode,
   "reference-sheet": ReferenceSheetNode,
+  "reference-board": ReferenceBoardNode,
   "preview": PreviewNode,
   "sticky-note": StickyNoteNode,
   "router": RouterNode,
