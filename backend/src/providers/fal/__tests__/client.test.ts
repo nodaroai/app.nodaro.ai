@@ -132,6 +132,28 @@ describe("runFalRequest", () => {
       runFalRequest({ endpoint: "ep", input: {}, label: "[fal:x]", pollIntervalMs: 0 }),
     ).rejects.toThrow("fal request failed (req-boom): 422 Unprocessable Entity")
   })
+
+  it("surfaces fal ApiError status + body.detail when the message is empty", async () => {
+    // fal's ApiError frequently throws with an EMPTY .message and the real
+    // cause carried only in .status + .body.detail. Reading .message alone
+    // produced a useless "fal request failed (id): " (observed live).
+    mockSubmit.mockResolvedValue({ request_id: "req-sparse" })
+    mockStatus.mockResolvedValue({ status: "COMPLETED" })
+    mockResult.mockRejectedValue(
+      Object.assign(new Error(""), {
+        status: 422,
+        body: { detail: "video_url could not be fetched" },
+      }),
+    )
+
+    // Reason must NOT be empty after the colon — it must carry the HTTP status
+    // and the body detail (the regex requires content after the colon).
+    await expect(
+      runFalRequest({ endpoint: "ep", input: {}, label: "[fal:x]", pollIntervalMs: 0 }),
+    ).rejects.toThrow(
+      /fal request failed \(req-sparse\): HTTP 422: .*video_url could not be fetched/,
+    )
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -191,6 +213,20 @@ describe("fetchFalRequestStatus", () => {
 
     expect(res.status).toBe("ERROR")
     expect(res.error).toContain("422")
+  })
+
+  it("COMPLETED but result() throws a sparse ApiError → error carries status + detail", async () => {
+    mockStatus.mockResolvedValue({ status: "COMPLETED" })
+    mockResult.mockRejectedValue(
+      Object.assign(new Error(""), { status: 500, body: { detail: "internal model error" } }),
+    )
+
+    const res = await fetchFalRequestStatus("ep", "rid-sparse")
+
+    expect(res.status).toBe("ERROR")
+    expect(res.error).toBeTruthy()
+    expect(res.error).toContain("500")
+    expect(res.error).toContain("internal model error")
   })
 })
 

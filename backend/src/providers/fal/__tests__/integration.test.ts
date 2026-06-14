@@ -9,16 +9,15 @@ import { describe, it, expect } from "vitest"
  * test that actually exercises the fal queue end-to-end (submit → poll →
  * result) — the rest of the suite mocks `@fal-ai/client`.
  *
- * Sample inputs are short public clips; swap for current fal example assets if
- * these 404 (the assertion only cares that a video URL + a positive cost come
- * back).
+ * Sample inputs are fal's own published example assets for fal-ai/sync-lipsync/v3
+ * (from its OpenAPI schema) — guaranteed-fetchable by fal's downloader. The
+ * assertion only cares that a video URL + a positive cost come back.
  */
 const RUN = !!process.env.FAL_KEY
 
 const SAMPLE_VIDEO =
-  "https://storage.googleapis.com/falserverless/example_inputs/sync-lipsync-input.mp4"
-const SAMPLE_AUDIO =
-  "https://storage.googleapis.com/falserverless/example_inputs/sync-lipsync-audio.mp3"
+  "https://v3.fal.media/files/tiger/IugLCDJRIoGqvqTa-EJTr_3wg74vCqyNuQ-IiBd77MM_output.mp4"
+const SAMPLE_AUDIO = "https://fal.media/files/lion/vyFWygmZsIZlUO4s0nr2n.wav"
 
 describe.runIf(RUN)("fal sync-lipsync v3 (live)", () => {
   it(
