@@ -155,6 +155,10 @@ export function useCreatureStudio(nodeId: string): CreatureStudioState {
         motionClips: fresh.motionClips ?? current.motionClips,
         referencePhotos:
           (fresh.referencePhotos as CreatureNodeData["referencePhotos"]) ?? current.referencePhotos,
+        // Creature voice (migration 220) — adopt the canonical row's voice on a
+        // 409 refetch. Mirrors how the character studio re-stages `voice`
+        // (`fresh.voice ?? prev.voice`).
+        voice: (fresh.voice as CreatureNodeData["voice"]) ?? current.voice,
         // Reference-sheet buckets — hydrate so a sheet generated in a prior
         // session is reflected if/when the Sheet tab ships. No UI consumes
         // these this phase, but keeping them in sync mirrors object-studio
@@ -211,6 +215,11 @@ export function useCreatureStudio(nodeId: string): CreatureStudioState {
         variations: current.variations,
         motionClips: current.motionClips,
         referencePhotos: current.referencePhotos,
+        // Creature voice (migration 220) — user-owned, persists like character's.
+        // The JSON-equality dirty diff already flags a voice change; this just
+        // carries it on the save. `null` clears it (backend honors `undefined`
+        // vs explicit `null` distinctly).
+        voice: current.voice,
         canonicalDescription: current.canonicalDescription,
         styleLock: current.styleLock,
         expectedUpdatedAt: current.updatedAt,

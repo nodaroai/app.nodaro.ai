@@ -1522,6 +1522,12 @@ export function resolveNodeInputs(
         }
       }
     } else if (src.type === "location") {
+      // The location node's "image" handle emits a PLAIN portrait — no entity
+      // id, no variant field-mapping, no identity injection. It routes as a
+      // plain reference image, mirroring the character/object/creature branch
+      // above (Phase 1). The richer location reference model below fires only
+      // for the identity `locationRef` handle.
+      const isPlainImageHandle = srcEdge?.sourceHandle === "image";
       // Locations have a richer reference model than character/face/object —
       // beyond the canonical `sourceImageUrl`, they expose 6 variant buckets
       // (timeOfDay/weather/seasons/angles/lighting/atmosphereMotions). The
@@ -1530,14 +1536,16 @@ export function resolveNodeInputs(
       // the anchor image. See `injectLocationContext` above for details.
       if (node.type === "lip-sync" || node.type === "speech-to-video" || node.type === "motion-transfer" || node.type === "ai-avatar") {
         inputs.imageUrl = output;
+      } else if (isPlainImageHandle) {
+        inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output];
       } else {
         const consumerFieldMappings = (node.data as Record<string, unknown> | undefined)?.fieldMappings as Readonly<Record<string, unknown>> | undefined;
         injectLocationContext(inputs, src, consumerFieldMappings, "locationRef");
       }
       // Reference Sheet — carry the connected location's (kind, DB id), parallel
       // to the character/object branch above. The sheet composes from the
-      // location's stored panel buckets.
-      if (node.type === "reference-sheet") {
+      // location's stored panel buckets. Skipped for the plain `image` handle.
+      if (!isPlainImageHandle && node.type === "reference-sheet") {
         const d = src.data as Record<string, unknown>;
         const dbId = d.locationDbId as string | undefined;
         if (typeof dbId === "string" && dbId.length > 0) {

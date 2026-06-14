@@ -198,6 +198,31 @@ describe("resolveNodeInputs", () => {
     expect(inputs.referenceImageUrls).toEqual(["http://dusk.png"])
   })
 
+  // Phase 1 (entity-studios-parity §3): the location `image` source handle is a
+  // PLAIN portrait — it routes the canonical image as a plain reference and
+  // IGNORES the locationRef variant field-mapping (which is identity-only).
+  it("location `image` handle → plain portrait ref, ignoring the locationRef bucket field-mapping", () => {
+    const locNode = makeNode("loc1", "location", {
+      sourceImageUrl: "http://loc-main.png",
+      lighting: [
+        { name: "noon", url: "http://noon.png" },
+        { name: "dusk", url: "http://dusk.png" },
+      ],
+    })
+    const target = makeNode("t1", "generate-image", {
+      // Same field-mapping as the identity test above — but the plain `image`
+      // handle must NOT honor it (no variant injection from the image handle).
+      fieldMappings: { locationRef: "lighting[1]" },
+    })
+    // Wire via the plain `image` source handle, NOT the identity locationRef.
+    const edges = [{ id: "loc1->t1", source: "loc1", target: "t1", sourceHandle: "image" }]
+
+    const inputs = resolveNodeInputs(target, [locNode, target], edges)
+    // Canonical portrait, NOT the dusk variant the locationRef mapping would pick.
+    expect(inputs.referenceImageUrls).toEqual(["http://loc-main.png"])
+    expect(inputs.referenceImageUrls).not.toContain("http://dusk.png")
+  })
+
   it("resolves multiple upload-video sources into videoUrls for combine-videos", () => {
     const vid1 = makeNode("v1", "upload-video", { url: "http://v1.mp4" })
     const vid2 = makeNode("v2", "upload-video", { url: "http://v2.mp4" })

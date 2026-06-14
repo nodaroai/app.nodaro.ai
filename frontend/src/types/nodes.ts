@@ -3736,6 +3736,12 @@ export type CreatureNodeData = {
   // to the active result then `sourceImageUrl`. Never sent to saveCreature.
   readonly defaultAssetUrl?: string
   readonly defaultAssetName?: string
+  // Creature voice (migration 220) — IDENTICAL shape + semantics to
+  // characters.voice. The "talking creature" stack reuses the character voice
+  // plumbing verbatim (text-to-speech reads voiceId/ttsProvider/voiceType;
+  // lip-sync targets the creature's main image), so the Studio shares one
+  // VoiceResource and the orchestrator TTS auto-wire reads `data.voice`.
+  voice: CharacterVoice | null
   // LLM-authored canonical description (set on approve-main-image; coerced
   // from DB null → "" in API response).
   canonicalDescription: string
@@ -6828,6 +6834,9 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       motionClips: [],
       motionStatus: "idle",
       referencePhotos: [],
+      // Creature voice (migration 220) — null until the user picks one in
+      // Studio. Mirrors the character default.
+      voice: null,
       canonicalDescription: "",
       styleLock: true,
       // updatedAt omitted — set on first save

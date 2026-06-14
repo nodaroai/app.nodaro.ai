@@ -94,6 +94,21 @@ const MEDIA_ONLY_HANDLES: ReadonlySet<string> = new Set([
   "ref-audio",
 ])
 
+/**
+ * Entity node types that expose a plain `image` source handle (emitting the
+ * portrait URL) in addition to their identity `*Ref` handle. When the drag
+ * leaves the `image` handle, the entity is treated as a plain image PRODUCER
+ * (substituted to "upload-image" below) so it reaches image inputs while the
+ * `*Ref` handle stays identity. PR #3369 (character) generalized to all four
+ * in Phase 1 (entity-studios-parity §3).
+ */
+const ENTITY_IMAGE_HANDLE_TYPES: ReadonlySet<string> = new Set([
+  "character",
+  "location",
+  "object",
+  "creature",
+])
+
 export interface ConnectionShape {
   readonly source?: string | null
   readonly target?: string | null
@@ -193,16 +208,19 @@ export function isValidWorkflowConnection(
   // Generate Image v2.1 — enforce typed-handle compatibility.
   const targetType = typeOf(connection.target)
 
-  // PR #3369: a character node's `image` source handle emits the plain portrait
-  // URL — from that handle it behaves as a plain image PRODUCER (valid into image
-  // inputs: generate-image `references`, image-to-image, lip-sync image, etc.) and
-  // NOT as an identity ref. The image-consumer validators below use this resolved
-  // type so the `image` handle reaches image inputs while `characterRef` (and the
-  // bare handle) stay identity. For every other source it equals the raw type, so
-  // existing connections are unaffected.
+  // PR #3369 + Phase 1 (entity-studios-parity §3): every entity node
+  // (character / location / object / creature) exposes a plain `image` source
+  // handle alongside its identity `*Ref` handle. From the `image` handle the
+  // entity emits the plain portrait URL — behaving as a plain image PRODUCER
+  // (valid into image inputs: generate-image `references`, image-to-image,
+  // lip-sync image, etc.) and NOT as an identity ref. The image-consumer
+  // validators below use this resolved type so the `image` handle reaches image
+  // inputs while `characterRef`/`locationRef`/`objectRef`/`creatureRef` (and the
+  // bare handle) stay identity. For every other source it equals the raw type,
+  // so existing connections are unaffected.
   const rawSourceType = typeOf(connection.source)
   const imageSourceType =
-    connection.sourceHandle === "image" && rawSourceType === "character"
+    connection.sourceHandle === "image" && ENTITY_IMAGE_HANDLE_TYPES.has(rawSourceType ?? "")
       ? "upload-image"
       : rawSourceType ?? ""
 

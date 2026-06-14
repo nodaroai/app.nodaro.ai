@@ -47,29 +47,46 @@ vi.mock("../use-location-studio", () => ({
   useLocationStudio: () => mockStudioState,
 }))
 
-// Stub the 7 tab modules so the test doesn't depend on their internals.
-// Each renders a uniquely-id'd marker we can assert on to confirm body
-// switching.
-vi.mock("../appearance-tab", () => ({
-  AppearanceTab: () => <div data-testid="appearance-tab-mounted">appearance-tab</div>,
+// The modal-level jobs hook is only consumed by the Sheet page (stubbed below);
+// stub it inert so the realtime subscription effect never runs in tests.
+vi.mock("../use-location-studio-jobs", () => ({
+  useLocationStudioJobs: () => ({
+    tracked: [],
+    trackJob: vi.fn(),
+    onResolved: vi.fn(),
+    onFailed: vi.fn(),
+  }),
 }))
-vi.mock("../time-of-day-tab", () => ({
-  TimeOfDayTab: () => <div data-testid="time-of-day-tab-mounted">time-of-day-tab</div>,
+
+// Stub the page modules so the test doesn't depend on their internals. Each
+// renders a uniquely-id'd marker we can assert on to confirm body switching
+// through the shared StudioShell.
+vi.mock("../pages/references-page", () => ({
+  ReferencesPage: () => <div data-testid="references-page-mounted">references-page</div>,
 }))
-vi.mock("../weather-tab", () => ({
-  WeatherTab: () => <div data-testid="weather-tab-mounted">weather-tab</div>,
+vi.mock("../pages/appearance-page", () => ({
+  AppearancePage: () => <div data-testid="appearance-page-mounted">appearance-page</div>,
 }))
-vi.mock("../seasons-tab", () => ({
-  SeasonsTab: () => <div data-testid="seasons-tab-mounted">seasons-tab</div>,
+vi.mock("../pages/time-of-day-page", () => ({
+  TimeOfDayPage: () => <div data-testid="time-of-day-page-mounted">time-of-day-page</div>,
 }))
-vi.mock("../angles-tab", () => ({
-  AnglesTab: () => <div data-testid="angles-tab-mounted">angles-tab</div>,
+vi.mock("../pages/weather-page", () => ({
+  WeatherPage: () => <div data-testid="weather-page-mounted">weather-page</div>,
 }))
-vi.mock("../lighting-tab", () => ({
-  LightingTab: () => <div data-testid="lighting-tab-mounted">lighting-tab</div>,
+vi.mock("../pages/seasons-page", () => ({
+  SeasonsPage: () => <div data-testid="seasons-page-mounted">seasons-page</div>,
 }))
-vi.mock("../motion-tab", () => ({
-  MotionTab: () => <div data-testid="motion-tab-mounted">motion-tab</div>,
+vi.mock("../pages/angles-page", () => ({
+  AnglesPage: () => <div data-testid="angles-page-mounted">angles-page</div>,
+}))
+vi.mock("../pages/lighting-page", () => ({
+  LightingPage: () => <div data-testid="lighting-page-mounted">lighting-page</div>,
+}))
+vi.mock("../pages/motion-page", () => ({
+  MotionPage: () => <div data-testid="motion-page-mounted">motion-page</div>,
+}))
+vi.mock("../pages/sheet-page", () => ({
+  SheetPage: () => <div data-testid="sheet-page-mounted">sheet-page</div>,
 }))
 
 // The modal calls useAuth() (which internally calls useNavigate). These tests
@@ -81,19 +98,6 @@ vi.mock("@/hooks/use-auth", () => ({
   useAuth: () => ({ isAdmin: false }),
   getCachedUserId: () => "user-1",
 }))
-
-// The modal mounts a studio-jobs hook whose realtime path calls
-// createClient() → channel().on().subscribe(). With getCachedUserId() stubbed
-// truthy above, that effect fires on mount; the real client construction reads
-// VITE_SUPABASE_URL (unset in tests) and throws "supabaseUrl is required". Stub
-// an inert client — this modal-shell test doesn't exercise realtime, which is
-// covered in use-jobs-realtime-sync.test.tsx.
-vi.mock("@/lib/supabase", () => {
-  const channel = { on: () => channel, subscribe: () => channel }
-  return {
-    createClient: () => ({ channel: () => channel, removeChannel: () => {} }),
-  }
-})
 
 import { LocationStudioModal } from "../location-studio-modal"
 
@@ -142,10 +146,10 @@ describe("LocationStudioModal", () => {
     vi.restoreAllMocks()
   })
 
-  it("renders the header title from stagedData and mounts the Appearance tab", () => {
+  it("renders the header title from stagedData and opens on the Appearance page", () => {
     render(<LocationStudioModal nodeId="loc-1" onClose={() => {}} />)
     expect(screen.getByRole("heading", { name: /cafe roma/i })).toBeInTheDocument()
-    expect(screen.getByTestId("appearance-tab-mounted")).toBeInTheDocument()
+    expect(screen.getByTestId("appearance-page-mounted")).toBeInTheDocument()
     expect(screen.getByRole("dialog")).toHaveAttribute("aria-modal", "true")
   })
 
@@ -153,7 +157,7 @@ describe("LocationStudioModal", () => {
     mockStudioState.stagedData = null
     render(<LocationStudioModal nodeId="loc-1" onClose={() => {}} />)
     expect(screen.getByText(/loading location/i)).toBeInTheDocument()
-    expect(screen.queryByTestId("appearance-tab-mounted")).not.toBeInTheDocument()
+    expect(screen.queryByTestId("appearance-page-mounted")).not.toBeInTheDocument()
   })
 
   it("Escape closes when not dirty (no confirm)", () => {
@@ -198,74 +202,84 @@ describe("LocationStudioModal", () => {
     expect(mockStudioState.patch).toHaveBeenCalledWith({ styleLock: true })
   })
 
-  it("renders all 7 sidebar tab buttons (Appearance, Time of Day, Weather, Seasons, Angles, Lighting, Motion)", () => {
+  it("renders all 9 sidebar page buttons (References + Appearance + 5 environmental/composition + Motion + Sheet)", () => {
     render(<LocationStudioModal nodeId="loc-1" onClose={() => {}} />)
-    expect(screen.getByRole("button", { name: /appearance/i })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: /time of day/i })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: /weather/i })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: /seasons/i })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: /angles/i })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: /lighting/i })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: /motion/i })).toBeInTheDocument()
+    for (const label of [
+      "References",
+      "Appearance",
+      "Time of Day",
+      "Weather",
+      "Seasons",
+      "Angles",
+      "Lighting",
+      "Motion",
+      "Sheet",
+    ]) {
+      expect(screen.getByRole("button", { name: new RegExp(label, "i") })).toBeInTheDocument()
+    }
   })
 
-  it("renders all 4 sidebar section headers (Identity / Environment / Composition / Atmosphere)", () => {
+  it("renders all 6 sidebar group headers (Resources / Identity / Environment / Composition / Atmosphere / Sheet)", () => {
     render(<LocationStudioModal nodeId="loc-1" onClose={() => {}} />)
-    expect(screen.getByText(/^identity$/i)).toBeInTheDocument()
-    expect(screen.getByText(/^environment$/i)).toBeInTheDocument()
-    expect(screen.getByText(/^composition$/i)).toBeInTheDocument()
-    expect(screen.getByText(/^atmosphere$/i)).toBeInTheDocument()
+    // First 5 group labels are unique. "Sheet" is shared by the group header
+    // AND its single page button, so assert presence (≥1) instead of uniqueness.
+    for (const label of ["Resources", "Identity", "Environment", "Composition", "Atmosphere"]) {
+      expect(screen.getByText(new RegExp(`^${label}$`, "i"))).toBeInTheDocument()
+    }
+    expect(screen.getAllByText(/^Sheet$/i).length).toBeGreaterThanOrEqual(1)
   })
 
-  it("no longer shows the PR-1 'More tabs in PR-2' placeholder", () => {
+  it("promotes References to a first-class page and switches the body to it", () => {
     render(<LocationStudioModal nodeId="loc-1" onClose={() => {}} />)
-    expect(screen.queryByText(/more tabs in pr-2/i)).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: /references/i }))
+    expect(screen.getByTestId("references-page-mounted")).toBeInTheDocument()
+    expect(screen.queryByTestId("appearance-page-mounted")).not.toBeInTheDocument()
   })
 
-  it("defaults to the Appearance tab body", () => {
-    render(<LocationStudioModal nodeId="loc-1" onClose={() => {}} />)
-    expect(screen.getByTestId("appearance-tab-mounted")).toBeInTheDocument()
-    expect(screen.queryByTestId("time-of-day-tab-mounted")).not.toBeInTheDocument()
-  })
-
-  it("clicking Time of Day swaps the body to the Time of Day tab", () => {
+  it("clicking Time of Day swaps the body to the Time of Day page", () => {
     render(<LocationStudioModal nodeId="loc-1" onClose={() => {}} />)
     fireEvent.click(screen.getByRole("button", { name: /time of day/i }))
-    expect(screen.getByTestId("time-of-day-tab-mounted")).toBeInTheDocument()
-    expect(screen.queryByTestId("appearance-tab-mounted")).not.toBeInTheDocument()
+    expect(screen.getByTestId("time-of-day-page-mounted")).toBeInTheDocument()
+    expect(screen.queryByTestId("appearance-page-mounted")).not.toBeInTheDocument()
   })
 
-  it("clicking Weather swaps the body to the Weather tab", () => {
+  it("clicking Weather swaps the body to the Weather page", () => {
     render(<LocationStudioModal nodeId="loc-1" onClose={() => {}} />)
     fireEvent.click(screen.getByRole("button", { name: /weather/i }))
-    expect(screen.getByTestId("weather-tab-mounted")).toBeInTheDocument()
+    expect(screen.getByTestId("weather-page-mounted")).toBeInTheDocument()
   })
 
-  it("clicking Seasons swaps the body to the Seasons tab", () => {
+  it("clicking Seasons swaps the body to the Seasons page", () => {
     render(<LocationStudioModal nodeId="loc-1" onClose={() => {}} />)
     fireEvent.click(screen.getByRole("button", { name: /seasons/i }))
-    expect(screen.getByTestId("seasons-tab-mounted")).toBeInTheDocument()
+    expect(screen.getByTestId("seasons-page-mounted")).toBeInTheDocument()
   })
 
-  it("clicking Angles swaps the body to the Angles tab", () => {
+  it("clicking Angles swaps the body to the Angles page", () => {
     render(<LocationStudioModal nodeId="loc-1" onClose={() => {}} />)
     fireEvent.click(screen.getByRole("button", { name: /angles/i }))
-    expect(screen.getByTestId("angles-tab-mounted")).toBeInTheDocument()
+    expect(screen.getByTestId("angles-page-mounted")).toBeInTheDocument()
   })
 
-  it("clicking Lighting swaps the body to the Lighting tab", () => {
+  it("clicking Lighting swaps the body to the Lighting page", () => {
     render(<LocationStudioModal nodeId="loc-1" onClose={() => {}} />)
     fireEvent.click(screen.getByRole("button", { name: /lighting/i }))
-    expect(screen.getByTestId("lighting-tab-mounted")).toBeInTheDocument()
+    expect(screen.getByTestId("lighting-page-mounted")).toBeInTheDocument()
   })
 
-  it("clicking Motion swaps the body to the Motion tab", () => {
+  it("clicking Motion swaps the body to the Motion page", () => {
     render(<LocationStudioModal nodeId="loc-1" onClose={() => {}} />)
     fireEvent.click(screen.getByRole("button", { name: /motion/i }))
-    expect(screen.getByTestId("motion-tab-mounted")).toBeInTheDocument()
+    expect(screen.getByTestId("motion-page-mounted")).toBeInTheDocument()
   })
 
-  it("shows count badges next to tabs when the corresponding bucket has assets", () => {
+  it("clicking Sheet swaps the body to the Sheet page", () => {
+    render(<LocationStudioModal nodeId="loc-1" onClose={() => {}} />)
+    fireEvent.click(screen.getByRole("button", { name: /sheet/i }))
+    expect(screen.getByTestId("sheet-page-mounted")).toBeInTheDocument()
+  })
+
+  it("shows count badges next to pages when the corresponding bucket has assets", () => {
     const data = mockStudioState.stagedData as Record<string, unknown>
     data.timeOfDay = [
       { id: "t1", url: "https://r2/t1.png", variant: "dawn" },
@@ -283,16 +297,16 @@ describe("LocationStudioModal", () => {
 
     render(<LocationStudioModal nodeId="loc-1" onClose={() => {}} />)
 
-    // Counts render in-line with the tab label.
-    expect(screen.getByRole("button", { name: /time of day.*\(2\)/i })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: /weather.*\(1\)/i })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: /angles.*\(3\)/i })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: /motion.*\(1\)/i })).toBeInTheDocument()
+    // Counts render as the shell's pill badge appended to the page label.
+    expect(screen.getByRole("button", { name: /time of day.*2/i })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /weather.*1/i })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /angles.*3/i })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /motion.*1/i })).toBeInTheDocument()
 
-    // Zero-count tabs omit the parenthetical entirely.
-    expect(screen.getByRole("button", { name: /seasons/i }).textContent).not.toMatch(/\(/)
-    expect(screen.getByRole("button", { name: /lighting/i }).textContent).not.toMatch(/\(/)
-    // Appearance never shows a count (it's the identity tab, not a list bucket).
-    expect(screen.getByRole("button", { name: /appearance/i }).textContent).not.toMatch(/\(/)
+    // Zero-count pages omit the badge digit entirely.
+    expect(screen.getByRole("button", { name: /seasons/i }).textContent).not.toMatch(/\d/)
+    expect(screen.getByRole("button", { name: /lighting/i }).textContent).not.toMatch(/\d/)
+    // Appearance never shows a count (it's the identity page, not a list bucket).
+    expect(screen.getByRole("button", { name: /appearance/i }).textContent).not.toMatch(/\d/)
   })
 })

@@ -982,6 +982,46 @@ describe("expandWiredLocationRefs — reference photos (Phase 2 #3)", () => {
     })
   }
 
+  // Phase 1 (entity-studios-parity §3): the location node's `image` source
+  // handle is a PLAIN portrait, not an identity ref — never expand it into
+  // location refs (canonical-description bullets, variant @-mentions, or
+  // reference-photo entries). Mirrors the character `image`-handle guard
+  // (PR #3369). An edge via the identity `locationRef`/no-handle path still
+  // expands as before.
+  it("does NOT expand a location wired via the `image` handle — plain portrait, no identity injection (Phase 1)", () => {
+    const loc = locationNode("loc-1", {
+      referencePhotos: [
+        { kind: "wide", url: "https://r2/wide.png" },
+        { kind: "interior", url: "https://r2/interior.png" },
+      ],
+    })
+    const consumer = node("gen-1", "generate-image")
+    // Wire via the plain `image` source handle, NOT the identity handle.
+    const refs = expandWiredLocationRefs("gen-1", {
+      nodes: [loc, consumer],
+      edges: [edge("loc-1", "gen-1", "image")],
+      nodeStates: {},
+    })
+    // No identity expansion at all — the image handle routes the portrait as a
+    // plain reference elsewhere (resolvedInputs.referenceImageUrls), not here.
+    expect(refs).toHaveLength(0)
+  })
+
+  it("DOES expand a location wired via the identity `locationRef` handle (UNCHANGED)", () => {
+    const loc = locationNode("loc-1", {
+      referencePhotos: [{ kind: "wide", url: "https://r2/wide.png" }],
+    })
+    const consumer = node("gen-1", "generate-image")
+    const refs = expandWiredLocationRefs("gen-1", {
+      nodes: [loc, consumer],
+      edges: [edge("loc-1", "gen-1", "locationRef")],
+      nodeStates: {},
+    })
+    // 1 canonical + 1 reference photo — identity expansion fires for the ref handle.
+    expect(refs).toHaveLength(2)
+    expect(refs.some((r) => r.locationReferencePhotoKind === "wide")).toBe(true)
+  })
+
   it("returns only the canonical entry when referencePhotos is empty", () => {
     const loc = locationNode("loc-1", { referencePhotos: [] })
     const consumer = node("gen-1", "generate-image")

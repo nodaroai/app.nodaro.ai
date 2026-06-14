@@ -332,17 +332,21 @@ export function resolveNodeInputs(
   // produces the same results.
   resolveSelectedNodeFallbacks(targetNode, inputs, allNodes, nodeStates, triggerData)
 
-  // Character voice → text-to-speech auto-fill. Read the upstream character's
-  // stored voice DIRECTLY (NOT output-gated — a voice has no rendered output, so
-  // routeOutput above never runs for a voice-only character: the edge is skipped
+  // Entity voice → text-to-speech auto-fill. Read the upstream entity's stored
+  // voice DIRECTLY (NOT output-gated — a voice has no rendered output, so
+  // routeOutput above never runs for a voice-only entity: the edge is skipped
   // at `if (!output) continue`). Override-safe: skip if a voice was already
   // resolved from another edge. lip-sync is intentionally excluded (no voice
-  // input; its `provider` is a different, cross-enum field). Extend the source
-  // type set for creature/location later.
+  // input; its `provider` is a different, cross-enum field).
+  //
+  // Fires for any entity in VOICE_SOURCE_NODE_TYPES — character AND creature
+  // ("talking creature", migration 220) carry the IDENTICAL `data.voice` shape,
+  // so the same read works for both. Data-driven over a hardcoded single type so
+  // a future voice-carrying entity only needs adding to the set.
   if (targetNode.type === "text-to-speech" && !inputs.voice) {
     for (const e of incomingEdges) {
       const src = nodeById.get(e.source)
-      if (src?.type !== "character") continue
+      if (!src || !VOICE_SOURCE_NODE_TYPES.has(src.type)) continue
       const voice = (src.data as { voice?: { voiceId?: string; voiceType?: "premade" | "library" | "custom"; ttsProvider?: string } }).voice
       if (voice?.voiceId) {
         inputs.voice = voice.voiceId
@@ -971,6 +975,12 @@ const REFERENCE_HANDLE_MAP: Record<string, "referenceImageUrls" | "referenceVide
 }
 
 const ENTITY_NODE_TYPES = new Set(["character", "face", "object", "creature", "location"])
+
+// Entity node types that carry a stored `data.voice` (the character voice
+// shape) which auto-fills a connected text-to-speech node. character + creature
+// share the identical column/shape (migration 220 "talking creature"); object /
+// location / face have no voice. Single source for the TTS auto-wire above.
+const VOICE_SOURCE_NODE_TYPES = new Set(["character", "creature"])
 
 // Derived from the shared VIDEO_PRODUCER_TYPES single source of truth, minus the
 // two pure-source types (upload-video / youtube-video) which routeOutput handles

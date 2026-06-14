@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase"
 import { nodaroClient } from "@/lib/nodaro-client"
-import type { SubWorkflowRouteSnapshot, SocialConnection } from "@/types/nodes"
+import type { SubWorkflowRouteSnapshot, SocialConnection, CharacterVoice } from "@/types/nodes"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import type { ReduceMeta, ImageCriticMode, WorkflowExport, ReferenceSheet } from "@nodaro/shared"
 import type { PersonValue, WardrobeValue } from "@nodaro/shared"
@@ -1911,6 +1911,10 @@ export async function saveCreature(data: {
   // atomic append-RPC writes).
   motionClips?: { name: string; url: string }[]
   referencePhotos?: { kind: string; url: string }[]
+  // Creature voice (migration 220) — user-owned, flows through INSERT + UPDATE
+  // exactly like characters.voice. `null` explicitly clears the voice. Backend
+  // Zod + column already accept it.
+  voice?: CharacterVoice | null
   canonicalDescription?: string
   styleLock?: boolean
   /**
@@ -2025,6 +2029,9 @@ export interface DbCreature {
   referencePhotos: { kind: string; url: string }[]
   canonicalDescription: string
   styleLock: boolean
+  // Creature voice (migration 220) — IDENTICAL shape to characters.voice. The
+  // GET route's toCamel returns it; the studio surfaces it via VoiceResource.
+  voice: CharacterVoice | null
   // Reference-sheet buckets — carried for forward-compat with the GET routes'
   // shape (Sheet tab DEFERRED this phase). Mirrors DbObject.
   sheets?: ReferenceSheet[]
