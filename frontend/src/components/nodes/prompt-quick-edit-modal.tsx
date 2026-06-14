@@ -200,6 +200,7 @@ export function PromptQuickEditModal() {
   )
 
   const snippetMedia = getSnippetMedia(nodeType)
+  const providerStr = typeof data.provider === "string" ? data.provider : undefined
   const promptSnippets = useSnippetPool(snippetMedia, "prompt")
   const negativeSnippets = useSnippetPool(snippetMedia, "negative")
 
@@ -222,8 +223,8 @@ export function PromptQuickEditModal() {
     // Passing `provider` (the image path) for EVERY node was the bug — it
     // rendered an image-composition prompt for video nodes that the video
     // backend never produces.
-    provider: snippetMedia === "image" ? (typeof data.provider === "string" ? data.provider : undefined) : undefined,
-    videoProvider: snippetMedia === "video" ? (typeof data.provider === "string" ? data.provider : undefined) : undefined,
+    provider: snippetMedia === "image" ? providerStr : undefined,
+    videoProvider: snippetMedia === "video" ? providerStr : undefined,
     connectedReferences: snippetMedia === "image" ? connectedReferences : undefined,
     snippets: promptSnippets,
     negativeSnippets,
@@ -373,7 +374,7 @@ export function PromptQuickEditModal() {
                   size="md"
                   nodeType={nodeType}
                   currentPrompt={promptValue}
-                  provider={typeof data.provider === "string" ? data.provider : undefined}
+                  provider={providerStr}
                   aspectRatio={typeof data.aspectRatio === "string" ? data.aspectRatio : undefined}
                   duration={typeof data.duration === "number" ? data.duration : undefined}
                   onAccept={(text, mc) => {
