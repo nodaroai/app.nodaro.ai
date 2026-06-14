@@ -4,11 +4,11 @@
  * to the focused node: a handle option (both directions), a text-`{variable}`
  * shortcut (auto-names the node), or "Don't connect".
  *
- * Styled like add-node-popup (fixed z-[100] panel, not a Radix Dialog), Esc to
- * cancel, no focus trap. Keyboard: ↑/↓ move the highlight across the combined
- * list, Enter confirms, Esc cancels.
+ * Styled like add-node-popup (fixed z-[100] panel, not a Radix Dialog), Esc or
+ * an outside click to cancel, no focus trap. Keyboard: ↑/↓ move the highlight
+ * across the combined list, Enter confirms, Esc cancels.
  */
-import { useCallback, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Link2, Unlink } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { ConnectionOption, ConnectionOptions } from "@/lib/enumerate-connection-options"
@@ -44,6 +44,21 @@ export function ConnectNodeDialog({ focusedLabel, newLabel, options, onConfirm, 
 
   const [name, setName] = useState(newLabel)
   const [highlight, setHighlight] = useState(options.handles.length > 0 ? 0 : rows.length - 1)
+
+  // Dismiss on outside click — mirrors add-node-popup. The dialog mounts in
+  // response to the node-pick click; that click's mousedown already fired
+  // before this listener attaches (effects flush after commit), so it can't
+  // self-close.
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (dialogRef.current && !dialogRef.current.contains(e.target as Node)) {
+        onCancel()
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [onCancel])
 
   const select = useCallback(
     (i: number) => {
@@ -93,6 +108,7 @@ export function ConnectNodeDialog({ focusedLabel, newLabel, options, onConfirm, 
 
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-label={`Connect ${newLabel} to ${focusedLabel}`}
       onKeyDown={onKeyDown}

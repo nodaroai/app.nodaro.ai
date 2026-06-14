@@ -63,6 +63,18 @@ describe("ConnectNodeDialog", () => {
     expect(onCancel).toHaveBeenCalledTimes(1)
   })
 
+  it("mousedown outside the dialog calls onCancel", () => {
+    const { onCancel } = renderDialog(baseOptions)
+    fireEvent.mouseDown(document.body)
+    expect(onCancel).toHaveBeenCalledTimes(1)
+  })
+
+  it("mousedown inside the dialog does NOT call onCancel", () => {
+    const { onCancel } = renderDialog(baseOptions)
+    fireEvent.mouseDown(screen.getByText("Prompt"))
+    expect(onCancel).not.toHaveBeenCalled()
+  })
+
   it("Don't connect confirms with a null option", () => {
     const { onConfirm } = renderDialog(baseOptions)
     fireEvent.click(screen.getByText("Don’t connect (just add)"))
