@@ -41,6 +41,8 @@ vi.mock("lucide-react", () => {
     ListTree: I,
     LayoutGrid: I,
     Link2: I,
+    // ModelsTab (rendered when the "Models" tab is active) imports these.
+    Folder: I, Image: I,
   }
 })
 
@@ -116,13 +118,14 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("AddNodePopup tabs", () => {
-  it("renders the five tabs in order with Common active by default", () => {
+  it("renders the six tabs in order with Common active by default", () => {
     renderPopup()
     expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual([
       "Common",
       "Image",
       "Video",
       "Audio",
+      "Models",
       "All",
     ])
     expect(tab("Common")).toHaveAttribute("aria-selected", "true")
@@ -188,6 +191,8 @@ describe("AddNodePopup tabs", () => {
     expect(tab("Video")).toHaveAttribute("aria-selected", "true")
     fireEvent.keyDown(document, { key: "Tab" })
     fireEvent.keyDown(document, { key: "Tab" })
+    expect(tab("Models")).toHaveAttribute("aria-selected", "true")
+    fireEvent.keyDown(document, { key: "Tab" })
     expect(tab("All")).toHaveAttribute("aria-selected", "true")
     fireEvent.keyDown(document, { key: "Tab" })
     expect(tab("Common")).toHaveAttribute("aria-selected", "true")
@@ -198,7 +203,7 @@ describe("AddNodePopup tabs", () => {
     fireEvent.keyDown(document, { key: "Tab", shiftKey: true })
     expect(tab("All")).toHaveAttribute("aria-selected", "true")
     fireEvent.keyDown(document, { key: "Tab", shiftKey: true })
-    expect(tab("Audio")).toHaveAttribute("aria-selected", "true")
+    expect(tab("Models")).toHaveAttribute("aria-selected", "true")
   })
 
   it("Escape returns to root from an inner category, then closes at root", () => {
