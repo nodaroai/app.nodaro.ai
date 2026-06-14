@@ -89,6 +89,13 @@ export interface ModelCatalogEntry {
    * `@nodaro/shared` (model-tree.test.ts) fails if one is missing.
    */
   series?: string
+  /**
+   * The value written into the creating node's data field when this model is
+   * picked from the Models tab, for models whose catalog id differs from the
+   * stored value. Only `suno-generate` diverges today (id `suno-v5` → `data.model`
+   * "V5"). Omit when the id IS the stored value (the common case).
+   */
+  dataValue?: string
   /** One-liner. Visible to Claude in MCP `list_models` output. */
   description: string
   /** Short tags Claude matches against user intent. */
@@ -1656,6 +1663,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     modes: ["lip-sync"] as const,
     family: "Sync",
     label: "Sync Lipsync v3",
+    series: "Sync",
     description: "Dub existing footage — re-syncs lips to a new audio track. Video input, billed per second.",
     useCases: ["lip-sync", "dubbing", "video-to-video"],
     pricing: [
@@ -1821,6 +1829,7 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
     family: "Suno",
     label: "Suno v4",
     series: "Suno",
+    dataValue: "V4",
     description: "Suno v4 music generation — full songs with vocals, multiple genres.",
     useCases: ["music", "song", "vocals"],
     pricing: [{ identifier: "suno", credits: 3, note: "per generation" }],
@@ -1832,6 +1841,7 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
     family: "Suno",
     label: "Suno v5",
     series: "Suno",
+    dataValue: "V5",
     description: "Newer Suno v5 — better vocal quality, more genres. Same price as v4.",
     useCases: ["music", "song", "vocals", "premium"],
     pricing: [{ identifier: "suno-v5", credits: 3, note: "per generation" }],
@@ -1843,6 +1853,7 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
     family: "Suno",
     label: "Suno v5.5",
     series: "Suno",
+    dataValue: "V5_5",
     description: "Suno v5.5 — latest model with improved audio quality and expressiveness.",
     useCases: ["music", "song", "vocals", "premium"],
     pricing: [{ identifier: "suno-v5_5", credits: 3, note: "per generation" }],

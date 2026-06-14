@@ -6,9 +6,10 @@ describe("modelToNodeTarget", () => {
   it("maps an enum image model to generate-image with a provider preset", () => {
     expect(modelToNodeTarget("nano-banana")).toEqual({ nodeType: "generate-image", field: "provider", value: "nano-banana" })
   })
-  it("maps suno ids to suno-generate via the model field with the V-code", () => {
+  it("maps suno ids to suno-generate via the model field with the catalog dataValue", () => {
     expect(modelToNodeTarget("suno")).toEqual({ nodeType: "suno-generate", field: "model", value: "V4" })
     expect(modelToNodeTarget("suno-v5")).toEqual({ nodeType: "suno-generate", field: "model", value: "V5" })
+    expect(modelToNodeTarget("suno-v5_5")).toEqual({ nodeType: "suno-generate", field: "model", value: "V5_5" })
   })
   // `elevenlabs-dubbing` is a single-provider utility whose id is NOT in any
   // provider-enum array, so it exercises the modes fallback → bare node, no preset.
@@ -25,6 +26,15 @@ describe("modelToNodeTarget", () => {
   it("returns null when there is no node (voice-clone) or unknown id", () => {
     expect(modelToNodeTarget("voice-clone")).toBeNull()
     expect(modelToNodeTarget("totally-unknown")).toBeNull()
+  })
+  it("never targets suno-generate without a model value (every music model carries dataValue)", () => {
+    const bare = Object.values(MODEL_CATALOG)
+      .filter((m) => {
+        const t = modelToNodeTarget(m.id)
+        return t?.nodeType === "suno-generate" && t.value == null
+      })
+      .map((m) => m.id)
+    expect(bare).toEqual([])
   })
 })
 

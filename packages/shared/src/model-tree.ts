@@ -64,22 +64,20 @@ const MODE_TO_NODE: Readonly<Partial<Record<ModelMode, string>>> = {
   "isolation": "audio-isolation", "dubbing": "dubbing", "forced-alignment": "forced-alignment", "stt": "transcribe",
 }
 
-// Suno catalog ids map to suno-generate `data.model` enum values (not the id).
-const SUNO_MODEL_VALUE: Readonly<Record<string, string>> = { "suno": "V4", "suno-v5": "V5" }
-
 export function modelToNodeTarget(modelId: string): ModelNodeTarget | null {
   const entry = MODEL_CATALOG[modelId]
   if (!entry) return null
-  const sunoValue = SUNO_MODEL_VALUE[modelId]
-  if (sunoValue) return { nodeType: "suno-generate", field: "model", value: sunoValue }
-  for (const [providers, nodeType] of ENUM_TARGETS) {
-    if (providers.includes(modelId)) return { nodeType, field: "provider", value: modelId }
+  // Resolve the target node: a valid provider-enum value wins, else the catalog's modes.
+  const enumMatch = ENUM_TARGETS.find(([providers]) => providers.includes(modelId))
+  const nodeType = enumMatch?.[1] ?? entry.modes.map((m) => MODE_TO_NODE[m]).find(Boolean)
+  if (!nodeType) return null
+  // suno-generate stores its model in `data.model` (a V-code carried on the catalog
+  // entry as `dataValue`), not as a `provider` id. Every other node takes a `provider`
+  // preset when the id is a valid enum value, and a bare node otherwise.
+  if (nodeType === "suno-generate") {
+    return entry.dataValue ? { nodeType, field: "model", value: entry.dataValue } : { nodeType }
   }
-  for (const mode of entry.modes) {
-    const nodeType = MODE_TO_NODE[mode]
-    if (nodeType) return { nodeType }
-  }
-  return null
+  return enumMatch ? { nodeType, field: "provider", value: modelId } : { nodeType }
 }
 
 export function buildModelTree(): ModelTreeLine[] {
