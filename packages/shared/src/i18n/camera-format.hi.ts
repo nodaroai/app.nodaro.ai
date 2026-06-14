@@ -9,6 +9,10 @@ const map: LocaleCatalogMap = {
   "anamorphic-scope": { description: "2.39:1 widescreen cinema look" },
   // Modern digital
   "arri-alexa": { description: "Premium digital cinema" },
+  "alexa-65": { description: "Large-format 65mm IMAX-class cinema" },
+  "sony-venice": { description: "Full-frame dual-base-ISO cinema" },
+  "blackmagic-pocket-6k": { description: "Indie RAW cinema camera" },
+  "red-komodo": { description: "कॉम्पैक्ट 6K action cinema camera" },
   "dslr": { description: "Crisp video-DSLR look" },
   "mirrorless-a7iii": { description: "आधुनिक hybrid mirrorless" },
   "canon-r5": { description: "उच्च-resolution fashion-editorial mirrorless" },

@@ -10,6 +10,10 @@ const map: LocaleCatalogMap = {
 
   // Modern digital — camera body brands kept as-is
   "arri-alexa": { description: "Cinema digital premium" },
+  "alexa-65": { description: "Cinema de grande formato 65mm de classe IMAX" },
+  "sony-venice": { description: "Cinema full-frame com ISO de base dupla" },
+  "blackmagic-pocket-6k": { description: "Câmera de cinema indie em RAW" },
+  "red-komodo": { description: "Câmera de cinema de ação 6K compacta" },
   "dslr": { description: "Visual nítido de DSLR em vídeo" },
   "mirrorless-a7iii": { description: "Mirrorless híbrida moderna" },
   "canon-r5": { description: "Mirrorless de alta resolução para moda editorial" },

@@ -13,6 +13,7 @@ import {
 } from "@nodaro/shared"
 import { pickIds, togglePick } from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
+import { Switch } from "@/components/ui/switch"
 import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"
 import { HairCutBrowser } from "./hair-cut-browser"
@@ -196,36 +197,44 @@ function DimensionSection({
   const label = multi ? `${baseLabel} (pick up to ${maxSelected})` : baseLabel
   const isHairCut = dimension === "hair-cut"
   const hairCutCurrent = selectedIds[0]
+  const switchId = `${id}-${field}`
   return (
     <div className="flex flex-col gap-1.5 border-t-[3px] border-border/40">
       <div className="flex items-center justify-between gap-2 px-0.5 mt-5">
+        <label
+          htmlFor={switchId}
+          className={cn(
+            "text-[18px] font-semibold uppercase tracking-wide select-none cursor-pointer transition-colors",
+            checked ? "text-[#ff0073]" : "text-muted-foreground/60",
+          )}
+        >
+          {baseLabel}
+          {multi && checked && (
+            <span className="ml-2 text-[10px] font-normal normal-case tracking-normal text-muted-foreground">
+              pick up to {maxSelected}
+            </span>
+          )}
+        </label>
         <div className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            id={`${id}-${field}`}
+          {/* Hair Cut has 45 entries — even as a chip grid it's a lot. The
+              "Pick by look" pill opens the modal with silhouettes so users
+              can browse visually without losing the inline chip list. */}
+          {isHairCut && (
+            <HairCutBrowser
+              variant="compact"
+              value={checked ? hairCutCurrent : undefined}
+              onChange={(id) => {
+                if (id) onPick(id)
+              }}
+            />
+          )}
+          <Switch
+            id={switchId}
             checked={checked}
-            onChange={(e) => onToggle(e.target.checked)}
-            className="rounded border-muted-foreground/40"
+            onCheckedChange={onToggle}
+            aria-label={`Enable ${baseLabel}`}
           />
-          <label
-            htmlFor={`${id}-${field}`}
-            className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground select-none cursor-pointer"
-          >
-            {label}
-          </label>
         </div>
-        {/* Hair Cut has 45 entries — even as a chip grid it's a lot. The
-            "Pick by look" pill opens the modal with silhouettes so users
-            can browse visually without losing the inline chip list. */}
-        {isHairCut && (
-          <HairCutBrowser
-            variant="compact"
-            value={checked ? hairCutCurrent : undefined}
-            onChange={(id) => {
-              if (id) onPick(id)
-            }}
-          />
-        )}
       </div>
       <div
         role={multi ? "group" : "radiogroup"}

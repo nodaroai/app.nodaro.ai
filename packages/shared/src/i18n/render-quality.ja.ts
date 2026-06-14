@@ -7,6 +7,10 @@ const map: LocaleCatalogMap = {
   "octane-render": { description: "GPU スペクトル・パストレーシング" },
   "redshift": { description: "プロダクション GPU バイアスト・レンダラー" },
   "houdini-mantra": { description: "VFX グレードの物理ベース・レンダリング" },
+  "arnold-render": { description: "業界標準の VFX パストレーサー" },
+  "corona-renderer": { description: "フォトリアルな不偏 archviz レンダラー" },
+  "vray": { description: "業界標準の製品 / archviz / VFX プロダクション・レンダラー" },
+  "aces": { description: "シネマグレードの ACES カラーマネジメント" },
 
   // Render-quality keywords
   "raytracing": { label: "レイトレーシング", description: "正確な反射と影" },

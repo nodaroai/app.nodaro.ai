@@ -6,6 +6,10 @@ const map: LocaleCatalogMap = {
   "octane-render": { description: "Path Tracing طيفي على GPU" },
   "redshift": { description: "محرك إنتاج GPU منحاز" },
   "houdini-mantra": { description: "إنتاج فيزيائي بمستوى VFX" },
+  "arnold-render": { description: "متتبع أشعة VFX بمعيار الصناعة" },
+  "corona-renderer": { description: "محرك archviz غير منحاز واقعي فوتوغرافيا" },
+  "vray": { description: "محرك إنتاج للمنتجات / archviz / VFX بمعيار الصناعة" },
+  "aces": { description: "إدارة ألوان ACES بمستوى سينمائي" },
 
   "raytracing": { label: "تتبع الأشعة", description: "انعكاسات + ظلال دقيقة" },
   "physically-based-rendering": { label: "PBR", description: "مواد فيزيائية" },

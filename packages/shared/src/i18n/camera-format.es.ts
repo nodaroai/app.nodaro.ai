@@ -8,6 +8,10 @@ const map: LocaleCatalogMap = {
   "anamorphic-scope": { label: "Anamórfico Scope", description: "Look de cine widescreen 2.39:1" },
 
   "arri-alexa": { description: "Cine digital premium" },
+  "alexa-65": { description: "Cine de gran formato 65mm de clase IMAX" },
+  "sony-venice": { description: "Cine de fotograma completo con doble ISO nativo" },
+  "blackmagic-pocket-6k": { description: "Cámara de cine indie en RAW" },
+  "red-komodo": { description: "Cámara de cine de acción 6K compacta" },
   "dslr": { label: "DSLR", description: "Look de video DSLR nítido" },
   "mirrorless-a7iii": { description: "Look híbrido moderno mirrorless" },
   "canon-r5": { description: "Mirrorless de moda editorial de alta resolución" },

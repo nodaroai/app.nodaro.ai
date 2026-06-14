@@ -8,6 +8,10 @@ const map: LocaleCatalogMap = {
   "anamorphic-scope": { label: "Anamorphic Scope", description: "مظهر سينما عريض 2.39:1" },
 
   "arri-alexa": { label: "Arri Alexa", description: "سينما رقمية متميزة" },
+  "alexa-65": { description: "سينما كبيرة الصيغة 65mm بمستوى IMAX" },
+  "sony-venice": { description: "سينما كاملة الإطار بـ ISO مزدوج أساسي" },
+  "blackmagic-pocket-6k": { description: "كاميرا سينما إنديه بتسجيل RAW" },
+  "red-komodo": { description: "كاميرا سينما حركة 6K مدمجة" },
   "dslr": { label: "DSLR", description: "مظهر فيديو DSLR واضح" },
   "mirrorless-a7iii": { description: "كاميرا Mirrorless هجينة حديثة" },
   "canon-r5": { description: "Mirrorless تحريرية فاخرة بدقة عالية" },
