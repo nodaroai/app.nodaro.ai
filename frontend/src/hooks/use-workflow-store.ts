@@ -710,10 +710,30 @@ function getNextChannel(nodes: WorkflowNode[], forType?: "teleport-send" | "tele
 
 let nextNodeId = 1
 
-function generateNodeId(): string {
-  const id = `node_${nextNodeId}`
-  nextNodeId += 1
-  return id
+/**
+ * Self-correcting node-id mint. Always returns an id strictly above BOTH the
+ * prior counter AND the max `node_<n>` suffix actually present in the live
+ * node set passed in. This makes id generation drift-proof: the four
+ * node-set-replacement paths still reseed `nextNodeId` (loadWorkflow,
+ * clearWorkflow, restoreSnapshot, batchAddNodesAndEdges), but the realtime
+ * paths that adopt a remote graph WITHOUT reseeding (reconcileFromRemote,
+ * onAppendNodes) can no longer cause a duplicate id — the mint re-derives the
+ * floor from the actual ids every call. Behavior is unchanged in the normal
+ * (no-drift) case: with the counter synced, this mints the same sequential
+ * `node_<n>` it did before.
+ */
+function generateNodeId(existingIds: Iterable<string>): string {
+  let maxSuffix = nextNodeId - 1
+  for (const id of existingIds) {
+    const m = /^node_(\d+)$/.exec(id)
+    if (m) {
+      const n = Number(m[1])
+      if (Number.isFinite(n) && n > maxSuffix) maxSuffix = n
+    }
+  }
+  const next = maxSuffix + 1
+  nextNodeId = next + 1
+  return `node_${next}`
 }
 
 /**
@@ -1229,7 +1249,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     const definition = NODE_DEFINITIONS.find((d) => d.type === type)
     if (!definition) return undefined
 
-    const id = generateNodeId()
+    const id = generateNodeId(get().nodes.map((n) => n.id))
 
     // Three-layer default resolution: factory ← admin DB ← user localStorage.
     // No-op for node types not in NODE_DEFAULT_TYPES.
@@ -1570,7 +1590,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
       // Spread the full source node (preserves measured, style, width, height,
       // className — same as copy+paste) then override id, position, data.
-      const newId = generateNodeId()
+      const newId = generateNodeId(state.nodes.map((n) => n.id))
 
       // If the source node is a child of a group (has parentId) and the parent
       // is NOT also being duplicated, drop parentId and convert local→world
@@ -1622,7 +1642,12 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       // connectedSourceId can be re-pointed even when its source appears later
       // in the selection than the loop node.
       const idMap: Record<string, string> = {}
-      for (const source of sources) idMap[source.id] = generateNodeId()
+      // Pass the live ids each call. The mint also advances the module
+      // counter, so consecutive calls in this loop produce strictly
+      // increasing, distinct ids — each above the live max — even though
+      // `state.nodes` doesn't yet contain the not-yet-committed clones.
+      const liveIds = state.nodes.map((n) => n.id)
+      for (const source of sources) idMap[source.id] = generateNodeId(liveIds)
       const handleMap: Record<string, string> = {}
       const clones: WorkflowNode[] = sources.map((source) => ({
         ...source,
@@ -3122,8 +3147,11 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       if (!sourceNode || !targetNode) return state
 
       const { channel, channelColor } = getNextChannel(state.nodes)
-      const sendId = generateNodeId()
-      const recvId = generateNodeId()
+      // Two consecutive mints: the first advances the module counter, so the
+      // second is guaranteed above the first (and both above the live max).
+      const liveIds = state.nodes.map((n) => n.id)
+      const sendId = generateNodeId(liveIds)
+      const recvId = generateNodeId(liveIds)
 
       const sendNode: WorkflowNode = {
         id: sendId,
