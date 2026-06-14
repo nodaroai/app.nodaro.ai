@@ -242,6 +242,9 @@ describe("video worker processor", () => {
       provider_task_id: "t-existing",
       reconcile_attempts: 0,
       job_type: "suno-generate",
+      // input_data is now carried through so the fal inline path can recover its
+      // endpoint; absent on this record → null.
+      input_data: null,
     })
   })
 

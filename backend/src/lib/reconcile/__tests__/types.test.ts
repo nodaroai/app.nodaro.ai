@@ -7,12 +7,13 @@ import {
   KIE_RECOVER_KINDS,
   REPLICATE_RECOVER_KINDS,
   ELEVENLABS_RECOVER_KINDS,
+  FAL_RECOVER_KINDS,
   ASYNC_RECOVERABLE_KINDS,
   isReconcileRecoverable,
 } from "../types.js"
 
 describe("ProviderKind registry", () => {
-  it("exposes spec-listed kinds at runtime (14 base + 2 suno-voice in P5.2 + 3 reconcile blind-spot fixes + heygen stall-retry guard)", () => {
+  it("exposes spec-listed kinds at runtime (14 base + 2 suno-voice in P5.2 + 3 reconcile blind-spot fixes + heygen stall-retry guard + fal-request)", () => {
     expect(PROVIDER_KIND_VALUES).toEqual([
       "kie-standard", "kie-veo", "kie-veo-1080p", "kie-suno",
       "kie-suno-voice-create", "kie-suno-voice-validate",
@@ -21,6 +22,7 @@ describe("ProviderKind registry", () => {
       "replicate-prediction", "replicate-training",
       "elevenlabs-async", "elevenlabs-sync", "anthropic-sync",
       "heygen",
+      "fal-request",
       "pre-task",
     ])
   })
@@ -39,6 +41,10 @@ describe("ProviderKind registry", () => {
     expect(isSyncKind("kie-suno-voice-validate")).toBe(true)
     expect(isSyncKind("pre-task")).toBe(true)
     expect(isSyncKind("heygen")).toBe(true)
+    // fal-request: Phase C reclassified it to async — reconcileFalJob recovers it
+    // (or exhausts→refund), so it is NOT a sync-sweep kind.
+    expect(isSyncKind("fal-request")).toBe(false)
+    expect(ASYNC_RECOVERABLE_KINDS.has("fal-request")).toBe(true)
     expect(isSyncKind("kie-standard")).toBe(false)
     expect(isSyncKind("kie-aleph")).toBe(false)
     expect(isSyncKind("kie-veo-1080p")).toBe(false)
@@ -53,11 +59,16 @@ describe("ProviderKind registry", () => {
 })
 
 describe("recoverable-kind sets (single source of truth — audit M5)", () => {
+  it("FAL_RECOVER_KINDS holds exactly the fal-request kind", () => {
+    expect(new Set(FAL_RECOVER_KINDS)).toEqual(new Set(["fal-request"]))
+  })
+
   it("ASYNC_RECOVERABLE_KINDS is exactly the union of the per-provider dispatch sets", () => {
     const union = new Set([
       ...KIE_RECOVER_KINDS,
       ...REPLICATE_RECOVER_KINDS,
       ...ELEVENLABS_RECOVER_KINDS,
+      ...FAL_RECOVER_KINDS,
     ])
     expect(new Set(ASYNC_RECOVERABLE_KINDS)).toEqual(union)
   })

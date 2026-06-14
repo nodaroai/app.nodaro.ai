@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => {
   const mockLipSync = vi.fn()
   const mockMotionTransfer = vi.fn()
   const mockVideoUpscale = vi.fn()
+  const mockFalLipSync = vi.fn()
 
   const mockSpeechToVideo = vi.fn()
 
@@ -43,6 +44,7 @@ const mocks = vi.hoisted(() => {
     mockLipSync,
     mockMotionTransfer,
     mockVideoUpscale,
+    mockFalLipSync,
     mockSpeechToVideo,
     mockUploadToR2,
     mockMergeVideoAudio,
@@ -76,6 +78,10 @@ vi.mock("@/providers/index.js", () => ({
   lipSync: mocks.mockLipSync,
   motionTransfer: mocks.mockMotionTransfer,
   videoUpscale: mocks.mockVideoUpscale,
+}))
+
+vi.mock("../../../providers/fal/lip-sync.js", () => ({
+  falLipSync: mocks.mockFalLipSync,
 }))
 
 vi.mock("@/providers/video/merge-video-audio.js", () => ({
@@ -163,6 +169,7 @@ beforeEach(() => {
   mocks.mockTextToVideo.mockResolvedValue(VIDEO_RESULT)
   mocks.mockVideoToVideo.mockResolvedValue(VIDEO_RESULT)
   mocks.mockLipSync.mockResolvedValue(VIDEO_RESULT)
+  mocks.mockFalLipSync.mockResolvedValue({ videoUrl: "https://fal.media/out.mp4", cost: 8.0 })
   mocks.mockMotionTransfer.mockResolvedValue(VIDEO_RESULT)
   mocks.mockVideoUpscale.mockResolvedValue(VIDEO_RESULT)
   mocks.mockSpeechToVideo.mockResolvedValue(S2V_RESULT)
@@ -497,6 +504,60 @@ describe("lip-sync handler", () => {
       "https://face.png", "https://speech.mp3", "hailuo-avatar", "talking", "1080p", undefined,
       expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
+  })
+
+  // --- fal branch (sync-lipsync-v3) -------------------------------------------
+  it("routes sync-lipsync-v3 to the fal branch (falLipSync), NOT the KIE lipSync", async () => {
+    const job = makeJob("lip-sync", {
+      provider: "sync-lipsync-v3",
+      videoUrl: "https://clip.mp4",
+      audioUrl: "https://speech.mp3",
+      syncMode: "loop",
+      audioDurationSec: 30,
+    })
+    await handler(job as never, makeCtx())
+
+    // faceUrl = videoUrl || imageUrl → the video clip here.
+    expect(mocks.mockFalLipSync).toHaveBeenCalledWith(
+      "sync-lipsync-v3",
+      "https://clip.mp4",
+      "https://speech.mp3",
+      { syncMode: "loop", audioDurationSec: 30 },
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+    )
+    // The KIE path must NOT run for a fal provider.
+    expect(mocks.mockLipSync).not.toHaveBeenCalled()
+    expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalled()
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalled()
+  })
+
+  it("fal branch falls back to imageUrl when no videoUrl is provided", async () => {
+    const job = makeJob("lip-sync", {
+      provider: "sync-lipsync-v3",
+      imageUrl: "https://portrait.png",
+      audioUrl: "https://speech.mp3",
+    })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockFalLipSync).toHaveBeenCalledWith(
+      "sync-lipsync-v3",
+      "https://portrait.png",
+      "https://speech.mp3",
+      { syncMode: undefined, audioDurationSec: undefined },
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+    )
+    expect(mocks.mockLipSync).not.toHaveBeenCalled()
+  })
+
+  it("fal branch throws when neither video nor image input is provided", async () => {
+    const job = makeJob("lip-sync", {
+      provider: "sync-lipsync-v3",
+      audioUrl: "https://speech.mp3",
+    })
+    await expect(handler(job as never, makeCtx())).rejects.toThrow(
+      "Lip-sync requires a video or image input",
+    )
+    expect(mocks.mockFalLipSync).not.toHaveBeenCalled()
   })
 })
 

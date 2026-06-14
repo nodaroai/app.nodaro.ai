@@ -605,6 +605,16 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  // bucketed via buildLipSyncCreditId. At-cost (0% markup): credits =
+  ***REDACTED-OSS-SCRUB***
+  // reserved bucket is committed verbatim as the charge.
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
   // ── Replicate MMAudio (video-sfx node) ──
   // BASE credits (pre-markup). creditGuard applies cost_markup_percent at request time.
   ***REDACTED-OSS-SCRUB***

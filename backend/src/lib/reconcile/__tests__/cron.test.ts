@@ -80,11 +80,16 @@ vi.mock("../elevenlabs.js", () => ({
   reconcileElevenLabsJob: vi.fn().mockResolvedValue(undefined),
 }))
 
+vi.mock("../fal.js", () => ({
+  reconcileFalJob: vi.fn().mockResolvedValue(undefined),
+}))
+
 import { reconcileInflightJobs } from "../cron.js"
 import { sweepStaleSyncJob } from "../sync-sweep.js"
 import { reconcileKieJob } from "../kie.js"
 import { reconcileReplicateJob } from "../replicate.js"
 import { reconcileElevenLabsJob } from "../elevenlabs.js"
+import { reconcileFalJob } from "../fal.js"
 
 describe("reconcileInflightJobs", () => {
   beforeEach(() => {
@@ -102,6 +107,7 @@ describe("reconcileInflightJobs", () => {
     ;(reconcileKieJob as ReturnType<typeof vi.fn>).mockClear()
     ;(reconcileReplicateJob as ReturnType<typeof vi.fn>).mockClear()
     ;(reconcileElevenLabsJob as ReturnType<typeof vi.fn>).mockClear()
+    ;(reconcileFalJob as ReturnType<typeof vi.fn>).mockClear()
   })
 
   it("dispatches sync kinds (anthropic-sync) to sweepStaleSyncJob", async () => {
@@ -176,6 +182,28 @@ describe("reconcileInflightJobs", () => {
     expect(sweepStaleSyncJob).not.toHaveBeenCalled()
     expect(reconcileKieJob).toHaveBeenCalledTimes(2)
     expect(result.recovered).toBe(2)
+  })
+
+  it("dispatches fal-request to reconcileFalJob (POSITIVE dispatch, not the sync sweep)", async () => {
+    // audit S4: the catch-all `else` silently sweeps any kind missing a branch
+    // (fail+refund), and the async-parity test won't catch a missing dispatch —
+    // so this MUST assert reconcileFalJob is positively called.
+    // fal-request threshold is 5 min; make the row comfortably past it.
+    const stale = new Date(Date.now() - 10 * 60 * 1000).toISOString()
+    mocks.rows.push({
+      id: "j-fal",
+      status: "processing",
+      provider_kind: "fal-request",
+      provider_task_id: "req-1",
+      provider_call_started_at: stale,
+      reconcile_attempts: 0,
+      job_type: "lip-sync",
+      input_data: { provider: "sync-lipsync-v3" },
+    })
+    const result = await reconcileInflightJobs()
+    expect(reconcileFalJob).toHaveBeenCalledWith(expect.objectContaining({ id: "j-fal" }))
+    expect(sweepStaleSyncJob).not.toHaveBeenCalled()
+    expect(result.recovered).toBe(1)
   })
 
   it("dispatches the pre-task sentinel to sweepStaleSyncJob (mark failed + refund)", async () => {

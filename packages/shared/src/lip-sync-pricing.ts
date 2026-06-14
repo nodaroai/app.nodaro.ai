@@ -36,6 +36,8 @@ export const LIP_SYNC_MAX_AUDIO_SECONDS: Record<string, number> = {
   // 15s bucket and silently under-charge long clips.
   "heygen-lipsync-precision": 300,
   "lipsync-2-pro": 300,
+  // Sync Lipsync v3 (fal.ai) — per-second dubbing, 5-min ceiling for bucketing.
+  "sync-lipsync-v3": 300,
 }
 
 export function getLipSyncMaxAudioSeconds(provider: string): number {
@@ -48,6 +50,8 @@ const PER_SECOND_LIP_SYNC_PROVIDERS = new Set([
   "kling-avatar-pro",
   "heygen-lipsync-precision",
   "lipsync-2-pro",
+  ***REDACTED-OSS-SCRUB***
+  "sync-lipsync-v3",
 ])
 
 export function isPerSecondLipSyncProvider(provider: string): boolean {

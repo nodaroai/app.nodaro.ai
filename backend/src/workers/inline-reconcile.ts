@@ -24,6 +24,10 @@ interface InlineReconcileRow {
   provider_task_id: string
   reconcile_attempts: number
   job_type: string | null
+  /** The user-submitted request config. Only the fal path reads it (to recover
+   *  the fal endpoint from `input_data.provider`); other handlers ignore it.
+   *  Optional so legacy callers / narrow test rows keep working. */
+  input_data?: Record<string, unknown> | null
 }
 
 // Dispatch sets live in lib/reconcile/types.ts (single source of truth,
@@ -33,6 +37,7 @@ import {
   KIE_RECOVER_KINDS as KIE_KINDS,
   REPLICATE_RECOVER_KINDS as REPLICATE_KINDS,
   ELEVENLABS_RECOVER_KINDS as ELEVENLABS_KINDS,
+  FAL_RECOVER_KINDS as FAL_KINDS,
 } from "../lib/reconcile/types.js"
 
 export async function tryInlineReconcile(row: InlineReconcileRow): Promise<void> {
@@ -75,6 +80,17 @@ export async function tryInlineReconcile(row: InlineReconcileRow): Promise<void>
       // ElevenLabs handler accepts a wider row shape (includes input_data) but
       // ignores fields it doesn't read; passing the narrow row is safe.
       await reconcileElevenLabsJob({ ...row, input_data: null }, { claimant: "worker" })
+      return
+    }
+    if (FAL_KINDS.has(kind)) {
+      const { reconcileFalJob } = await import("../lib/reconcile/fal.js")
+      console.log(
+        `[worker:inline-reconcile] Stall-retry recovery for job ${row.id} ` +
+        `(kind=${kind}, task=${row.provider_task_id}) — running reconcileFalJob inline`,
+      )
+      // reconcileFalJob recovers the fal endpoint from input_data.provider, so
+      // the row must carry it (the worker's stall-retry SELECT includes input_data).
+      await reconcileFalJob({ ...row, input_data: row.input_data ?? null }, { claimant: "worker" })
       return
     }
     // Unknown async kind — leave to the cron's catch-all sync sweep.

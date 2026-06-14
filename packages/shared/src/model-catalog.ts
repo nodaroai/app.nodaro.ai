@@ -1555,6 +1555,23 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["lip-sync", "talking-head"],
     pricing: [{ identifier: "hailuo-avatar", credits: 19 }],
   },
+  "sync-lipsync-v3": {
+    id: "sync-lipsync-v3",
+    kind: "video",
+    modes: ["lip-sync"] as const,
+    family: "Sync",
+    label: "Sync Lipsync v3",
+    description: "Dub existing footage — re-syncs lips to a new audio track. Video input, billed per second.",
+    useCases: ["lip-sync", "dubbing", "video-to-video"],
+    pricing: [
+      { identifier: "sync-lipsync-v3", credits: 2000, note: "5-min ceiling (no duration given)" },
+      { identifier: "sync-lipsync-v3:15s", credits: 100 },
+      { identifier: "sync-lipsync-v3:30s", credits: 200 },
+      { identifier: "sync-lipsync-v3:60s", credits: 400 },
+      { identifier: "sync-lipsync-v3:120s", credits: 800 },
+      { identifier: "sync-lipsync-v3:300s", credits: 2000, note: "5-min ceiling" },
+    ],
+  },
 }
 
 // =============================================================================

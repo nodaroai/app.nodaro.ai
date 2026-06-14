@@ -6,7 +6,7 @@
 
 The Lip Sync node takes a portrait image and an audio track (speech/voiceover) and generates a video where the character's lips move in sync with the audio. Supports optional motion prompts for head and expression movements.
 
-It can also **dub an existing video**: HeyGen Lipsync Precision and Sync Lipsync 2 Pro take a source video plus a replacement audio track and re-animate the lips to match the new speech, billed per second of output.
+It can also **dub an existing video**: HeyGen Lipsync Precision, Sync Lipsync 2 Pro, and Sync Lipsync v3 take a source video plus a replacement audio track and re-animate the lips to match the new speech, billed per second of output.
 
 ## Configuration
 
@@ -32,17 +32,25 @@ It can also **dub an existing video**: HeyGen Lipsync Precision and Sync Lipsync
 | Temperature | Slider 0–1 | 0.5 | How expressive the lip sync can be |
 | Active Speaker Detection | Toggle | Off | Lip-sync whoever is speaking in the clip |
 
+### Sync Lipsync v3 options
+
+`sync-lipsync-v3` is the fal.ai-hosted sync.so v3 model. It exposes only the sync-mode lever.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| Sync Mode | Select | loop | Behavior when audio/video durations differ: `loop`, `bounce`, `cut_off`, `silence`, `remap` |
+
 ## Inputs & Outputs
 
 **Inputs:**
 - Portrait Image (required for most providers) — clear face photo
-- Video (required for HeyGen Lipsync Precision and Sync Lipsync 2 Pro) — the source clip to dub
+- Video (required for HeyGen Lipsync Precision, Sync Lipsync 2 Pro, and Sync Lipsync v3) — the source clip to dub
 - Audio (required) — speech or voiceover track
 
 **Outputs:**
 - Lip-synced video
 
-> HeyGen Lipsync Precision and Sync Lipsync 2 Pro replace the audio on a **video** input (not a portrait image).
+> HeyGen Lipsync Precision, Sync Lipsync 2 Pro, and Sync Lipsync v3 replace the audio on a **video** input (not a portrait image).
 
 ## Audio Length Limits
 
@@ -53,10 +61,11 @@ It can also **dub an existing video**: HeyGen Lipsync Precision and Sync Lipsync
 | `infinitalk` | 15 seconds |
 | `heygen-lipsync-precision` | 5 minutes* |
 | `lipsync-2-pro` | 5 minutes* |
+| `sync-lipsync-v3` | 5 minutes* |
 
 For the KIE providers (`kling-avatar(-pro)`, `infinitalk`), audio longer than the cap is auto-trimmed before the upstream call. Long-audio runs on `kling-avatar(-pro)` can take tens of minutes — the editor polls for up to ~1 hour before timing out.
 
-\* For HeyGen Lipsync Precision and Sync Lipsync 2 Pro the 5-minute figure is the **per-second credit-reservation ceiling**, not a hard trim — longer clips reserve at the 5-minute tier.
+\* For HeyGen Lipsync Precision, Sync Lipsync 2 Pro, and Sync Lipsync v3 the 5-minute figure is the **per-second credit-reservation ceiling**, not a hard trim — longer clips reserve at the 5-minute tier.
 
 ## Credit Cost
 
@@ -67,14 +76,17 @@ Kling AI Avatar bills per-second. Credit reservation buckets to the next support
 | `kling-avatar` (720p) | 2 CR/s | 30 | 60 | 120 | 240 | 600 |
 | `kling-avatar-pro` (1080p) | 4 CR/s | 60 | 120 | 240 | 480 | 1,200 |
 
-HeyGen Lipsync Precision and Sync Lipsync 2 Pro also bill per second of output (priced at cost), bucketed to the same 15s / 30s / 1min / 2min / 5min tiers:
+HeyGen Lipsync Precision, Sync Lipsync 2 Pro, and Sync Lipsync v3 also bill per second of output (priced at cost), bucketed to the same 15s / 30s / 1min / 2min / 5min tiers:
 
 | Provider | Provider cost | 15s | 30s | 1min | 2min | 5min |
 |----------|--------------:|----:|----:|-----:|-----:|-----:|
 | `heygen-lipsync-precision` | $0.0667/s | 51 | 101 | 201 | 401 | 1,001 |
 | `lipsync-2-pro` | $0.08325/s | 63 | 125 | 250 | 500 | 1,249 |
+| `sync-lipsync-v3` | $0.13333/s ($8/min) | 100 | 200 | 400 | 800 | 2,000 |
 
 The credit chip updates once the audio is wired (the node probes its duration). When the duration is unknown, the 5-minute tier is reserved.
+
+> **Supply `audioDurationSec` for accurate pricing.** When calling `sync-lipsync-v3` via API/SDK, pass the output duration in seconds so the reservation buckets to the correct tier. If it is absent, the request is billed at the **5-minute ceiling (2,000 CR)** and there is **no refund** — fal does not return a usable per-second meter to reconcile against.
 
 InfiniTalk and Hailuo Avatar use flat per-call pricing (see admin → Models).
 
