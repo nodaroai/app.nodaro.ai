@@ -1,7 +1,7 @@
 ---
 node_type: generate-video
-generated_at: 2026-06-11T18:52:24.856Z
-generated_from: 36d155ff
+generated_at: 2026-06-14T18:37:58.564Z
+generated_from: 1034359e5
 ---
 
 # Generate Video
@@ -72,6 +72,7 @@ generated_from: 36d155ff
 {
   "label": "Generate Video",
   "provider": "seedance-2-fast",
+  "seedance2InputMode": "references",
   "duration": 5,
   "prompt": "",
   "negativePrompt": "",
@@ -117,6 +118,7 @@ generated_from: 36d155ff
   "data": {
     "label": "Generate Video",
     "provider": "seedance-2-fast",
+    "seedance2InputMode": "references",
     "duration": 5,
     "prompt": "",
     "negativePrompt": "",
