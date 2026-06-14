@@ -14,6 +14,17 @@ export interface StudioBadge {
   showZero?: boolean
 }
 
+/** Count-badge selector for entity studios whose state exposes a nullable
+ *  `stagedData` (location/object/creature). `stagedData` is null on cold-load;
+ *  the shell only mounts the nav once a body exists, but guard anyway so a badge
+ *  selector never throws. Returns the picked array's length, or 0. */
+export function stagedLen<S extends { stagedData: unknown }>(
+  s: S,
+  pick: (d: NonNullable<S["stagedData"]>) => { length: number } | undefined,
+): number {
+  return s.stagedData ? (pick(s.stagedData as NonNullable<S["stagedData"]>)?.length ?? 0) : 0
+}
+
 export interface StudioPageDef<S = unknown, J = unknown> {
   key: string
   label: string

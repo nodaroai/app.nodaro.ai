@@ -98,6 +98,7 @@ function CreatureNodeComponent({ id, data, selected }: NodeProps) {
         { id: "in",          type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
         { id: "type",        type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 56px)', left: '-29px' }, external: true },
         { id: "creatureRef", type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
+        { id: "image",       type: "source", position: Position.Right, customStyle: { top: '56px',              right: '-29px' }, external: true },
       ]}
     >
       <div className="flex flex-col gap-1.5">
@@ -301,6 +302,7 @@ function CreatureNodeComponent({ id, data, selected }: NodeProps) {
     <HandleWithPopover nodeId={id} nodeType="creature" handleId="in"          type="target" position={Position.Left}  label="Prompt"        color={HANDLE_COLORS.text} icon={<Type />}    side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_PROMPT} />
     <HandleWithPopover nodeId={id} nodeType="creature" handleId="type"        type="target" position={Position.Left}  label="Creature type" color={HANDLE_COLORS.imageRef} icon={<PawPrint />} side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_TYPE} />
     <HandleWithPopover nodeId={id} nodeType="creature" handleId="creatureRef" type="source" position={Position.Right} label="Animal/Creature" color={HANDLE_COLORS.imageRef} icon={<PawPrint />} side="right" top="24px" />
+    <HandleWithPopover nodeId={id} nodeType="creature" handleId="image"       type="source" position={Position.Right} label="Image"         color={HANDLE_COLORS.image} icon={<ImageIcon />} side="right" top="56px" />
 
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}

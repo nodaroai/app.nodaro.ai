@@ -6,7 +6,7 @@ The Animal/Creature node creates a persistent creature asset with a base image a
 
 Unlike the [Object](./object.md) node, the creature's `Category` / `Species` field is **free text** (not a fixed enum) — so mythical and hybrid creatures (e.g. "griffin", "dragon") are not locked to the built-in animal catalog. A 126-entry animal catalog powers autocomplete suggestions, but any value is accepted.
 
-The full editing experience lives in the **Creature Studio**, a five-tab full-screen modal opened from the node's config panel (appearance, assets, motion, reference photos, and identity).
+The full editing experience lives in the **Creature Studio**, a full-screen modal (opened from the node's config panel) organized into a config-driven sidebar: **Resources** (References) · **Identity** (Appearance) · **Composition** (Angles, Poses) · **Variants** (Variations) · **Motion** · **Character** (Voice). The **Voice** page lets you browse, clone, or design a voice and preview it with a Talk panel; the chosen voice auto-fills a connected Text to Speech node (talking creatures). The creature node also exposes a plain **image** output handle (alongside the identity Creature handle) that connects to any image/reference input downstream.
 
 ## Configuration
 
@@ -37,7 +37,8 @@ A canonical, LLM-authored description is set when the main image is approved; it
 - `in` — Optional text or image input for additional context.
 
 **Outputs:**
-- `creatureRef` — Creature reference for use in scenes and compositions.
+- `creatureRef` — Creature reference (identity) for use in scenes and compositions.
+- `image` — The creature's image as a **plain image**. Connect this anywhere a Generate Image output can go (image References, Image-to-Image, Generate Video image input, etc.). Unlike `creatureRef`, it carries no identity injection — it is just the picture.
 
 ## Credits
 

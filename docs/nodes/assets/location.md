@@ -71,26 +71,27 @@ The Location Studio is a full-screen modal where you build and manage everything
 
 The studio **auto-saves** as you work. Identity fields (name, description, category, style, canonical description, style lock, reference photos) are persisted via a debounced PATCH back to `/v1/locations/:id` — with optimistic-concurrency tokens (`expectedUpdatedAt`) so a stale tab can't clobber a fresher save. Generated assets are persisted by the **backend itself** at completion — every Generate call passes the location's DB id plus the target column along with the request, and the worker appends the result directly to the location row's JSONB column on job completion via the `append_location_asset` RPC. That means **if you close the tab or refresh mid-generation, the asset still lands on the location** the next time you open the studio. A small "Saving… / Saved" indicator in the header reflects the current state. There is no Save button for assets, only for identity fields.
 
-The studio organizes everything into a 7-tab vertical sidebar grouped into four sections:
+The studio organizes everything into a config-driven vertical sidebar grouped into six sections (reference photos are now a first-class **References** page under Resources):
 
 | Section | Tab | What it Does |
 |---------|-----|--------------|
-| **Identity** | 🏞 Appearance | Main image generation + approval, identity form (name, description, category, style), canonical description editor, reference photos mood-board, style lock toggle. |
+| **Resources** | 📷 References | Drag-and-drop / paste reference-photo mood-board (cap 20) with per-tile kind labels — the visual references the location is built from. |
+| **Identity** | 🏞 Appearance | Main image generation + approval, identity form (name, description, category, style), canonical description editor, style lock toggle. |
 | **Environment** | 🌅 Time of Day | Generate dawn / morning / noon / afternoon / golden hour / dusk / blue hour / night / midnight variants of the approved main image. |
 | **Environment** | 🌧 Weather | Generate clear / cloudy / light rain / heavy rain / storm / snow / blizzard / fog / mist variants. |
 | **Environment** | 🍁 Seasons | Generate spring / summer / autumn / winter variants. |
 | **Composition** | 📐 Angles | Generate wide / medium / closeup / aerial / low-angle / eye-level / bird's-eye / dutch tilt camera-angle variants. |
 | **Composition** | 💡 Lighting | Generate soft natural / harsh sunlight / golden / blue hour / neon / candlelit / cinematic / dramatic chiaroscuro lighting variants. |
 | **Atmosphere** | 🎬 Motion | Generate atmospheric motion clips via image-to-video — looping camera moves and ambient world motion. |
+| **Sheet** | 📋 Sheet | Composite reference-sheet boards (turnaround / variation / detail) generated from the location's assets. |
 
 ### Identity → Appearance
 
-Identity controls for the location itself: name, description, category, style, and a **Generate** button to produce candidate main images. Below the form sit four sub-sections:
+Identity controls for the location itself: name, description, category, style, and a **Generate** button to produce candidate main images. Below the form sit three sub-sections (reference photos now live on the **References** page under Resources):
 
 - **Main image** — Preview of the approved establishing shot. Empty placeholder until the first approval.
 - **Candidates grid** — When a multi-candidate generation finishes, completed candidates appear here with **Approve** / **Discard** buttons per card.
 - **Canonical description** — Live textarea showing the LLM-authored description. Edit freely; saves are debounced. A **Retry caption** button calls `POST /v1/locations/:id/llm-caption` to re-run Claude Sonnet vision against the current main image (502s on LLM failure; 400 `no_source_image` when no main image is set).
-- **Reference Photos** — Drag-and-drop or paste URLs to build the mood-board (cap 20). Per-tile kind label dropdown (`wide` / `interior` / `exterior` / `detail` / `moodBoard` / `other`) and remove control.
 
 ### Approval Flow
 
@@ -332,7 +333,8 @@ Pass `--json` to any command for machine-readable output and `--watch` to comman
 - `in` — Optional text or image input for additional context (also drives `{locationName}` field mappings).
 
 **Outputs:**
-- `locationRef` — Location reference that can be connected to scene nodes, image generation, image-to-video, and any other node that accepts location references. Carries the canonical description, main image URL, and active style-lock state.
+- `locationRef` — Location reference (identity) that can be connected to scene nodes, image generation, image-to-video, and any other node that accepts location references. Carries the canonical description, main image URL, and active style-lock state.
+- `image` — The location's establishing shot as a **plain image**. Connect this anywhere a Generate Image output can go (image References, Image-to-Image, Generate Video image input, etc.). Unlike `locationRef`, it carries no canonical-description / variant injection — it is just the picture.
 
 ## Best Practices
 

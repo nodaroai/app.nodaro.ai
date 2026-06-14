@@ -122,6 +122,7 @@ function LocationNodeComponent({ id, data, selected }: NodeProps) {
         { id: "in",             type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
         { id: "cinematography", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 56px)', left: '-29px' }, external: true },
         { id: "locationRef",    type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
+        { id: "image",          type: "source", position: Position.Right, customStyle: { top: '56px',              right: '-29px' }, external: true },
       ]}
     >
       <div className="flex flex-col gap-1.5">
@@ -323,6 +324,7 @@ function LocationNodeComponent({ id, data, selected }: NodeProps) {
     <HandleWithPopover nodeId={id} nodeType="location" handleId="in"             type="target" position={Position.Left}  label="Prompt"         color={HANDLE_COLORS.text} icon={<Type />}     side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_PROMPT} />
     <HandleWithPopover nodeId={id} nodeType="location" handleId="cinematography" type="target" position={Position.Left}  label="Cinematography" color={HANDLE_COLORS.look} icon={<Aperture />} side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_CINEMATOGRAPHY} />
     <HandleWithPopover nodeId={id} nodeType="location" handleId="locationRef"    type="source" position={Position.Right} label="Location"       color={HANDLE_COLORS.image} icon={<MapPin />}   side="right" top="24px" />
+    <HandleWithPopover nodeId={id} nodeType="location" handleId="image"          type="source" position={Position.Right} label="Image"          color={HANDLE_COLORS.image} icon={<ImageIcon />} side="right" top="56px" />
 
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}

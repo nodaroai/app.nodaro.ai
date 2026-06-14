@@ -20,9 +20,19 @@ vi.mock("sonner", () => ({
   },
 }))
 
-import { AppearanceTab } from "../appearance-tab"
+import { AppearancePage } from "../appearance-page"
 import { approveLocationMainImage, generateLocation } from "@/lib/api"
-import type { LocationStudioState } from "../use-location-studio"
+import type { LocationStudioState } from "../../use-location-studio"
+import type { LocationStudioJobs } from "../../use-location-studio-jobs"
+
+// The page owns its own candidate-tracking jobs hook; the shell-supplied `jobs`
+// is an inert stub here (the Sheet page is the only consumer of that one).
+const stubJobs: LocationStudioJobs = {
+  tracked: [],
+  trackJob: vi.fn(),
+  onResolved: vi.fn(),
+  onFailed: vi.fn(),
+}
 
 function makeStudio(overrides: Partial<LocationStudioState> = {}): LocationStudioState {
   return {
@@ -72,7 +82,10 @@ function makeStudio(overrides: Partial<LocationStudioState> = {}): LocationStudi
   }
 }
 
-describe("AppearanceTab", () => {
+const renderPage = (studio: LocationStudioState) =>
+  render(<AppearancePage state={studio} jobs={stubJobs} />)
+
+describe("AppearancePage", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     toastError.mockClear()
@@ -81,7 +94,7 @@ describe("AppearanceTab", () => {
   })
 
   it("renders the identity form with name + description pre-populated from staged data", () => {
-    render(<AppearanceTab studio={makeStudio()} />)
+    renderPage(makeStudio())
     expect((screen.getByPlaceholderText(/cafe roma/i) as HTMLInputElement).value).toBe("Cafe Roma")
     expect((screen.getByPlaceholderText(/describe atmosphere/i) as HTMLTextAreaElement).value).toBe(
       "Cozy interior",
@@ -91,7 +104,7 @@ describe("AppearanceTab", () => {
   it("Generate calls generateLocation with the selected count", async () => {
     vi.mocked(generateLocation).mockResolvedValueOnce({ jobIds: ["a", "b", "c", "d"] })
     const studio = makeStudio()
-    render(<AppearanceTab studio={studio} />)
+    renderPage(studio)
     // Switch to count=4.
     await userEvent.click(screen.getByRole("button", { name: "4" }))
     await userEvent.click(screen.getByRole("button", { name: /^generate$/i }))
@@ -107,7 +120,7 @@ describe("AppearanceTab", () => {
   it("Generate with count=1 passes attachToLocationId (Q-8 attach-on-completion)", async () => {
     vi.mocked(generateLocation).mockResolvedValueOnce({ jobId: "job-1" })
     const studio = makeStudio()
-    render(<AppearanceTab studio={studio} />)
+    renderPage(studio)
     await userEvent.click(screen.getByRole("button", { name: /^generate$/i }))
     expect(studio.ensureSavedBeforeGen).toHaveBeenCalledTimes(1)
     expect(generateLocation).toHaveBeenCalledWith(
@@ -128,7 +141,7 @@ describe("AppearanceTab", () => {
         locationDbId: "",
       } as unknown as LocationStudioState["stagedData"],
     })
-    render(<AppearanceTab studio={studio} />)
+    renderPage(studio)
     await userEvent.click(screen.getByRole("button", { name: /^generate$/i }))
     expect(ensureSavedBeforeGen).toHaveBeenCalledTimes(1)
     expect(generateLocation).toHaveBeenCalledWith(
@@ -138,7 +151,7 @@ describe("AppearanceTab", () => {
 
   it("Generate is disabled when isApprovingMainImage is true", () => {
     const studio = makeStudio({ isApprovingMainImage: true })
-    render(<AppearanceTab studio={studio} />)
+    renderPage(studio)
     expect(screen.getByRole("button", { name: /^generate$/i })).toBeDisabled()
   })
 
@@ -149,17 +162,17 @@ describe("AppearanceTab", () => {
         locationName: "",
       } as unknown as LocationStudioState["stagedData"],
     })
-    render(<AppearanceTab studio={studio} />)
+    renderPage(studio)
     expect(screen.getByRole("button", { name: /^generate$/i })).toBeDisabled()
   })
 
   it("Approve calls studio.approveMainImage with the candidate id (hook owns API + 409 recovery)", async () => {
     const studio = makeStudio()
     // The hook's approveMainImage now wraps the API call; the appearance
-    // tab no longer talks to approveLocationMainImage directly. The mock
+    // page no longer talks to approveLocationMainImage directly. The mock
     // resolves so the success branch fires (toast + clearing candidates).
 
-    const { rerender } = render(<AppearanceTab studio={studio} />)
+    const { rerender } = renderPage(studio)
 
     vi.mocked(generateLocation).mockResolvedValueOnce({ jobId: "candidate-1" })
     const { getJobStatusBatch } = await import("@/lib/api")
@@ -183,7 +196,7 @@ describe("AppearanceTab", () => {
       await new Promise((r) => setTimeout(r, 10500))
     })
 
-    rerender(<AppearanceTab studio={studio} />)
+    rerender(<AppearancePage state={studio} jobs={stubJobs} />)
 
     const approveBtn = await screen.findByRole("button", { name: /^approve$/i })
     fireEvent.click(approveBtn)
@@ -192,7 +205,7 @@ describe("AppearanceTab", () => {
       await Promise.resolve()
     })
 
-    // The appearance tab now delegates to the hook — the raw API mock is no
+    // The appearance page now delegates to the hook — the raw API mock is no
     // longer called directly. The hook would call it (covered by the hook's
     // own test); here we only assert the wiring.
     expect(approveLocationMainImage).not.toHaveBeenCalled()
@@ -202,7 +215,7 @@ describe("AppearanceTab", () => {
   }, 20000)
 
   it("Approve + Discard are disabled when a main-image generation job is in flight (Phase 2 #9)", async () => {
-    // Drive the appearance tab through a generate() so a tracked job exists
+    // Drive the appearance page through a generate() so a tracked job exists
     // for assetType="main". Then assert the Approve + Discard buttons on a
     // sibling candidate card are disabled even before the job resolves.
     vi.mocked(generateLocation).mockResolvedValueOnce({ jobIds: ["cand-a", "cand-b"] })
@@ -221,7 +234,7 @@ describe("AppearanceTab", () => {
     })
 
     const studio = makeStudio()
-    render(<AppearanceTab studio={studio} />)
+    renderPage(studio)
 
     // count=2 so we kick off two tracked main jobs.
     await userEvent.click(screen.getByRole("button", { name: "2" }))
@@ -245,13 +258,13 @@ describe("AppearanceTab", () => {
         canonicalDescription: "A canonical paragraph about the location.",
       } as unknown as LocationStudioState["stagedData"],
     })
-    render(<AppearanceTab studio={studio} />)
+    renderPage(studio)
     expect(screen.getByText(/canonical paragraph about the location/i)).toBeInTheDocument()
     expect(screen.getByText(/^Canonical description$/i)).toBeInTheDocument()
   })
 
-  it("mounts the ReferencePhotosSection", () => {
-    render(<AppearanceTab studio={makeStudio()} />)
-    expect(screen.getByTestId("reference-photos-section")).toBeInTheDocument()
+  it("does NOT render the ReferencePhotosSection (now on the References page)", () => {
+    renderPage(makeStudio())
+    expect(screen.queryByTestId("reference-photos-section")).not.toBeInTheDocument()
   })
 })

@@ -28,7 +28,8 @@ The Object node creates a persistent object asset with a base image and multiple
 - `in` -- Optional text or image input for additional context.
 
 **Outputs:**
-- `objectRef` -- Object reference for use in scenes and compositions.
+- `objectRef` -- Object reference (identity) for use in scenes and compositions.
+- `image` -- The object's image as a **plain image**. Connect this anywhere a Generate Image output can go (image References, Image-to-Image, Generate Video image input, etc.). Unlike `objectRef`, it carries no identity injection — it is just the picture.
 ## Best Practices
 - Include specific material and texture descriptions (e.g., "brushed stainless steel coffee mug with a matte black handle").
 - Choose the appropriate category to help the AI understand the object's context and typical usage.

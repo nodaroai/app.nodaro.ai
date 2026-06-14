@@ -308,3 +308,66 @@ describe("character image source handle → image inputs (PR #3369)", () => {
     expect(ok).toBe(true)
   })
 })
+
+// Phase 1 (entity-studios-parity §3): generalize the plain `image` source handle
+// from character to ALL four entities (location / object / creature). Each entity
+// node now exposes its identity `*Ref` handle PLUS a plain `image` handle that
+// emits the portrait URL — behaving as a plain image PRODUCER (valid into image
+// inputs, NOT identity). The identity `*Ref` handle stays identity-only,
+// UNCHANGED. Mirrors the character block above for each entity.
+describe.each([
+  { entity: "location", refHandle: "locationRef" },
+  { entity: "object", refHandle: "objectRef" },
+  { entity: "creature", refHandle: "creatureRef" },
+])("$entity image source handle → image inputs (Phase 1)", ({ entity, refHandle }) => {
+  const getNodeType = (id: string) =>
+    ({ e: entity, g: "generate-image", v: "generate-video", i: "image-to-image" } as Record<string, string>)[id] ?? id
+
+  it(`${entity} \`image\` handle → generate-image \`references\` is valid (plain image)`, () => {
+    const ok = isValidWorkflowConnection(
+      { source: "e", target: "g", sourceHandle: "image", targetHandle: "references" },
+      getNodeType,
+    )
+    expect(ok).toBe(true)
+  })
+
+  it(`${entity} \`image\` handle → generate-image \`assets\` is rejected (plain image is not identity)`, () => {
+    const ok = isValidWorkflowConnection(
+      { source: "e", target: "g", sourceHandle: "image", targetHandle: "assets" },
+      getNodeType,
+    )
+    expect(ok).toBe(false)
+  })
+
+  it(`${entity} \`image\` handle → image-to-image \`image\` input is valid`, () => {
+    const ok = isValidWorkflowConnection(
+      { source: "e", target: "i", sourceHandle: "image", targetHandle: "image" },
+      getNodeType,
+    )
+    expect(ok).toBe(true)
+  })
+
+  it(`${entity} \`image\` handle → generate-video \`imageReferences\` is valid`, () => {
+    const ok = isValidWorkflowConnection(
+      { source: "e", target: "v", sourceHandle: "image", targetHandle: "imageReferences" },
+      getNodeType,
+    )
+    expect(ok).toBe(true)
+  })
+
+  it(`${entity} \`${refHandle}\` identity handle → generate-image \`assets\` stays valid (identity UNCHANGED)`, () => {
+    const ok = isValidWorkflowConnection(
+      { source: "e", target: "g", sourceHandle: refHandle, targetHandle: "assets" },
+      getNodeType,
+    )
+    expect(ok).toBe(true)
+  })
+
+  it(`${entity} \`${refHandle}\` identity handle → generate-image \`references\` is rejected (identity is not a plain image)`, () => {
+    const ok = isValidWorkflowConnection(
+      { source: "e", target: "g", sourceHandle: refHandle, targetHandle: "references" },
+      getNodeType,
+    )
+    expect(ok).toBe(false)
+  })
+})

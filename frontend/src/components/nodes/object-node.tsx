@@ -124,6 +124,7 @@ function ObjectNodeComponent({ id, data, selected }: NodeProps) {
         { id: "in",        type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
         { id: "type",      type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 56px)', left: '-29px' }, external: true },
         { id: "objectRef", type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
+        { id: "image",     type: "source", position: Position.Right, customStyle: { top: '56px',              right: '-29px' }, external: true },
       ]}
     >
       <div className="flex flex-col gap-1.5">
@@ -327,6 +328,7 @@ function ObjectNodeComponent({ id, data, selected }: NodeProps) {
     <HandleWithPopover nodeId={id} nodeType="object" handleId="in"        type="target" position={Position.Left}  label="Prompt"      color={HANDLE_COLORS.text} icon={<Type />}    side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_PROMPT} />
     <HandleWithPopover nodeId={id} nodeType="object" handleId="type"      type="target" position={Position.Left}  label="Object type" color={HANDLE_COLORS.imageRef} icon={<Package />} side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_TYPE} />
     <HandleWithPopover nodeId={id} nodeType="object" handleId="objectRef" type="source" position={Position.Right} label="Object/Props" color={HANDLE_COLORS.imageRef} icon={<Package />} side="right" top="24px" />
+    <HandleWithPopover nodeId={id} nodeType="object" handleId="image"     type="source" position={Position.Right} label="Image"        color={HANDLE_COLORS.image} icon={<ImageIcon />} side="right" top="56px" />
 
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}

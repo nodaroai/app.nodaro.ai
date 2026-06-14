@@ -1,7 +1,7 @@
 ---
 node_type: creature
-generated_at: 2026-06-08T17:01:14.843Z
-generated_from: bacc5721
+generated_at: 2026-06-14T10:25:02.074Z
+generated_from: 750ccb23
 ---
 
 # Animal/Creature
@@ -37,6 +37,7 @@ generated_from: bacc5721
 - `motionClips: ObjectAssetItem[]`
 - `motionStatus: AssetStatus`
 - `referencePhotos: ObjectReferencePhoto[]`
+- `voice: CharacterVoice | null`
 - `canonicalDescription: string`
 - `styleLock: boolean`
 
@@ -83,6 +84,7 @@ generated_from: bacc5721
   "motionClips": [],
   "motionStatus": "idle",
   "referencePhotos": [],
+  "voice": null,
   "canonicalDescription": "",
   "styleLock": true
 }
@@ -136,6 +138,7 @@ generated_from: bacc5721
     "motionClips": [],
     "motionStatus": "idle",
     "referencePhotos": [],
+    "voice": null,
     "canonicalDescription": "",
     "styleLock": true
   }

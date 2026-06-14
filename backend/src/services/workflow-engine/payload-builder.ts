@@ -483,6 +483,11 @@ export function expandWiredLocationRefs(
     (consumer?.data?.motionPrompt as string | undefined) ??
     undefined
   for (const e of incoming) {
+    // The location node's "image" handle is a PLAIN image (Phase 1, mirroring
+    // PR #3369), not an identity ref — never treat it as a wired location
+    // (mirrors resolveSheetEntity + expandWiredCharacterRefs). The portrait
+    // routes as a plain reference via resolvedInputs.referenceImageUrls instead.
+    if (e.sourceHandle === "image") continue
     const upstream = nodeById.get(e.source)
     if (!upstream || upstream.type !== "location") continue
     const locData = upstream.data
