@@ -16,12 +16,66 @@ interface ImageUploadCardProps {
   onUpdateInput: (nodeId: string, key: string, value: unknown) => void
   readOnly?: boolean
   onOpenMedia?: (nodeId: string) => void
+  /** "composer" renders a compact thumbnail + drop button for the chat composer. */
+  variant?: "composer"
 }
 
-export function ImageUploadCard({ label, url, nodeId, isFullscreen, inputValues, onUpdateInput, readOnly, onOpenMedia }: ImageUploadCardProps) {
+export function ImageUploadCard({ label, url, nodeId, isFullscreen, inputValues, onUpdateInput, readOnly, onOpenMedia, variant }: ImageUploadCardProps) {
   const media = useMediaUpload({ mimePrefix: "image/", nodeId, isFullscreen, inputValues, onUpdateInput, url })
 
   const handleOpen = () => onOpenMedia?.(nodeId)
+
+  if (variant === "composer") {
+    return (
+      <>
+        <div className="flex flex-col gap-1">
+          <span className="block text-[10px] font-medium uppercase tracking-wide text-muted-foreground truncate">{label}</span>
+          {media.effectiveUrl ? (
+            <div className="relative w-fit">
+              <CachedImage
+                src={media.effectiveUrl}
+                alt={label}
+                thumbnail
+                thumbnailWidth={128}
+                className="h-16 w-16 rounded-md object-cover bg-black/20 cursor-pointer"
+                onClick={handleOpen}
+              />
+              {!readOnly && (
+                <button
+                  type="button"
+                  onClick={media.handleRemove}
+                  aria-label="Remove image"
+                  className="absolute -right-1.5 -top-1.5 rounded-full bg-background p-0.5 text-muted-foreground ring-1 ring-border hover:text-foreground"
+                >
+                  <X className="size-3" />
+                </button>
+              )}
+            </div>
+          ) : readOnly ? (
+            <span className="text-xs text-muted-foreground">No image</span>
+          ) : (
+            <FileDropZone
+              isDragOver={media.isDragOver}
+              setIsDragOver={media.setIsDragOver}
+              onDrop={media.handleDrop}
+              onClick={() => media.fileInputRef.current?.click()}
+              isUploading={media.isUploading}
+              accept="image/*"
+              fileInputRef={media.fileInputRef}
+              onFileChange={media.handleFile}
+              label="Add image"
+              height="h-16"
+              onShowUrl={() => media.setShowUrlInput(true)}
+            />
+          )}
+          {media.showUrlInput && !media.effectiveUrl && (
+            <UrlInputRow urlValue={media.urlValue} onChange={media.setUrlValue} onSubmit={media.handleUrlSubmit} />
+          )}
+        </div>
+        <MediaEditorModal editor={media.mediaEditor} />
+      </>
+    )
+  }
 
   return (
     <>

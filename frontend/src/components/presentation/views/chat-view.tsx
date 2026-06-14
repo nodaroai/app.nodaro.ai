@@ -22,7 +22,7 @@ export interface ChatRunSlotsApi {
 interface ChatViewProps {
   orderedInputNodes: WorkflowNode[]
   orderedOutputNodes: WorkflowNode[]
-  renderInputCard: (node: WorkflowNode) => ReactNode
+  renderInputCard: (node: WorkflowNode, variant?: "composer") => ReactNode
   onOpenMedia?: (nodeId: string) => void
   runSlots?: ChatRunSlotsApi
   appName?: string
@@ -172,7 +172,7 @@ export function ChatView({
                 className={`flex flex-col gap-2 overflow-y-auto ${expanded ? "max-h-[45vh]" : "max-h-[150px]"} ${isRunning ? "pointer-events-none opacity-60" : ""}`}
               >
                 {orderedInputNodes.map((node) => (
-                  <div key={node.id}>{renderInputCard(node)}</div>
+                  <div key={node.id}>{renderInputCard(node, "composer")}</div>
                 ))}
               </div>
             )}

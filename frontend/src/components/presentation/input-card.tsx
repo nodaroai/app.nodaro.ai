@@ -56,6 +56,8 @@ export interface InputCardProps {
   minLines?: number
   nodes?: Array<{ id: string; type?: string; data: Record<string, unknown> }>
   edges?: Array<{ source: string; target: string }>
+  /** "composer" renders compact card variants for the chat-mode bottom composer. */
+  variant?: "composer"
 }
 
 /** Renders the appropriate input card based on node type */
@@ -73,6 +75,7 @@ function InputCardInner({
   minLines,
   nodes,
   edges,
+  variant,
 }: InputCardProps) {
   const label = getNodeLabel(node)
   const data = node.data as Record<string, unknown>
@@ -138,6 +141,7 @@ function InputCardInner({
           onUpdateInput={onUpdateInput}
           readOnly={readOnly}
           onOpenMedia={onOpenMedia}
+          variant={variant}
         />
       )
 
@@ -151,6 +155,7 @@ function InputCardInner({
           inputValues={inputValues}
           onUpdateInput={onUpdateInput}
           readOnly={readOnly}
+          variant={variant}
         />
       )
 
@@ -164,6 +169,7 @@ function InputCardInner({
           inputValues={inputValues}
           onUpdateInput={onUpdateInput}
           readOnly={readOnly}
+          variant={variant}
         />
       )
 
@@ -237,7 +243,7 @@ function InputCardInner({
               inputValues={inputValues}
               onUpdateInput={onUpdateInput}
               readOnly={readOnly}
-              displayMode={cardMeta?.pickerMode ?? "inline"}
+              displayMode={variant === "composer" ? (cardMeta?.pickerMode === "modal" ? "modal" : "compact") : (cardMeta?.pickerMode ?? "inline")}
               allowedValues={cardMeta?.pickerAllowedValues}
             />
           </Suspense>

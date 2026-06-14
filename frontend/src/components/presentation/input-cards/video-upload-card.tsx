@@ -16,11 +16,65 @@ interface VideoUploadCardProps {
   inputValues: Record<string, Record<string, unknown>>
   onUpdateInput: (nodeId: string, key: string, value: unknown) => void
   readOnly?: boolean
+  /** "composer" renders a compact thumbnail + drop button for the chat composer. */
+  variant?: "composer"
 }
 
-export function VideoUploadCard({ label, url, nodeId, isFullscreen, inputValues, onUpdateInput, readOnly }: VideoUploadCardProps) {
+export function VideoUploadCard({ label, url, nodeId, isFullscreen, inputValues, onUpdateInput, readOnly, variant }: VideoUploadCardProps) {
   const media = useMediaUpload({ mimePrefix: "video/", nodeId, isFullscreen, inputValues, onUpdateInput, url })
   const [previewOpen, setPreviewOpen] = useState(false)
+
+  if (variant === "composer") {
+    return (
+      <>
+        <div className="flex flex-col gap-1">
+          <span className="block text-[10px] font-medium uppercase tracking-wide text-muted-foreground truncate">{label}</span>
+          {media.effectiveUrl ? (
+            // eslint-disable-next-line jsx-a11y/click-events-have-key-events,jsx-a11y/no-static-element-interactions
+            <div className="relative w-fit cursor-pointer" onClick={() => setPreviewOpen(true)}>
+              <video src={media.effectiveUrl} className="h-16 w-16 rounded-md object-cover bg-black/20" muted playsInline />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Play className="h-5 w-5 text-white drop-shadow" fill="white" />
+              </div>
+              {!readOnly && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); media.handleRemove() }}
+                  aria-label="Remove video"
+                  className="absolute -right-1.5 -top-1.5 rounded-full bg-background p-0.5 text-muted-foreground ring-1 ring-border hover:text-foreground"
+                >
+                  <X className="size-3" />
+                </button>
+              )}
+            </div>
+          ) : readOnly ? (
+            <span className="text-xs text-muted-foreground">No video</span>
+          ) : (
+            <FileDropZone
+              isDragOver={media.isDragOver}
+              setIsDragOver={media.setIsDragOver}
+              onDrop={media.handleDrop}
+              onClick={() => media.fileInputRef.current?.click()}
+              isUploading={media.isUploading}
+              accept="video/*"
+              fileInputRef={media.fileInputRef}
+              onFileChange={media.handleFile}
+              label="Add video"
+              height="h-16"
+              onShowUrl={() => media.setShowUrlInput(true)}
+            />
+          )}
+          {media.showUrlInput && !media.effectiveUrl && (
+            <UrlInputRow urlValue={media.urlValue} onChange={media.setUrlValue} onSubmit={media.handleUrlSubmit} />
+          )}
+        </div>
+        {media.effectiveUrl && (
+          <MediaPreviewModal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} type="video" url={media.effectiveUrl} />
+        )}
+        <MediaEditorModal editor={media.mediaEditor} />
+      </>
+    )
+  }
 
   return (
     <>

@@ -988,11 +988,12 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   }, [settings.cardMeta])
 
   // Render helpers for input/output cards
-  const renderInputCard = useCallback((node: WorkflowNode) => {
+  const renderInputCard = useCallback((node: WorkflowNode, variant?: "composer") => {
     const meta = settings.cardMeta?.[node.id]
     return (
       <InputCard
         node={node}
+        variant={variant}
         nodes={nodes}
         edges={edges}
         isFullscreen={isFullscreen}

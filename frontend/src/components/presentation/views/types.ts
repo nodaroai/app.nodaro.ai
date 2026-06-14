@@ -28,7 +28,7 @@ export interface EditableViewProps extends ViewProps {
   settings: PresentationSettings
   updateCardMeta: (nodeId: string, field: string, value: unknown) => void
   setPickerSection: (section: "inputs" | "outputs") => void
-  renderInputCard: (node: WorkflowNode) => React.ReactNode
+  renderInputCard: (node: WorkflowNode, variant?: "composer") => React.ReactNode
   renderOutputCard: (node: WorkflowNode) => React.ReactNode
   getNodeColumns?: (nodeId: string) => number
   /** Rich items lists (groups, fields, richtext alongside nodes) — null when legacy mode */
