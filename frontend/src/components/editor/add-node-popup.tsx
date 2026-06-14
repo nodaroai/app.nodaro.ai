@@ -2066,7 +2066,7 @@ export function AddNodePopup({
     {open && !componentBrowserOpen && <div
       ref={popupRef}
       className={cn(
-        "fixed z-[100] w-[30rem] max-w-[calc(100vw-16px)] flex flex-col",
+        "fixed z-[100] w-[660px] max-w-[calc(100vw-16px)] flex flex-col",
         "bg-white dark:bg-[#1E1E1E]",
         "border border-[#E2E8F0] dark:border-[#2D2D2D]",
         "rounded-xl shadow-xl",

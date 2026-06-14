@@ -678,6 +678,75 @@ describe("useWorkflowStore advanced", () => {
   })
 
   // ---------------------------------------------------------------
+  // 8b. Node-id generation is collision-proof against counter drift
+  //     (realtime reconcile / onAppendNodes adopt a remote graph
+  //      WITHOUT reseeding the module-level counter)
+  // ---------------------------------------------------------------
+  describe("generateNodeId collision-proofing (counter drift)", () => {
+    it("does not mint a duplicate id after reconcileFromRemote adopts a high-id remote graph", () => {
+      // 1. Seed a small local graph so the counter is low (~2-3).
+      useWorkflowStore.getState().addNode("text-prompt", { x: 0, y: 0 })
+      useWorkflowStore.getState().addNode("generate-image", { x: 200, y: 0 })
+
+      // 2. A realtime reconcile adopts a remote snapshot containing a HIGH id
+      //    (node_8). reconcileFromRemote replaces the node set via set({nodes})
+      //    but — unlike loadWorkflow/clearWorkflow/restoreSnapshot/batchAdd —
+      //    does NOT reseed the module-level nextNodeId counter. So the counter
+      //    is now stale/low relative to the live max suffix (8).
+      useWorkflowStore.getState().reconcileFromRemote({
+        nodes: [
+          { id: "node_3", type: "text-prompt", position: { x: 0, y: 0 }, data: { label: "Remote A" } },
+          { id: "node_8", type: "generate-image", position: { x: 200, y: 0 }, data: { label: "Remote B" } },
+        ] as any[],
+        edges: [] as any[],
+        updatedAt: new Date().toISOString(),
+      })
+
+      const idsBefore = useWorkflowStore.getState().nodes.map((n) => n.id)
+      expect(idsBefore).toContain("node_8")
+
+      // 3. Add a node — the mint must self-correct above the live max (8),
+      //    NOT collide with the reconciled node_8.
+      useWorkflowStore.getState().addNode("text-prompt", { x: 400, y: 0 })
+
+      const nodes = useWorkflowStore.getState().nodes
+      const ids = nodes.map((n) => n.id)
+
+      // No duplicate ids anywhere in the graph.
+      expect(new Set(ids).size).toBe(nodes.length)
+
+      // The newly added node is the one not present before, and its suffix is > 8.
+      const newId = ids.find((id) => !idsBefore.includes(id))!
+      expect(newId).toBeDefined()
+      const newNum = parseInt(newId.replace("node_", ""), 10)
+      expect(newNum).toBeGreaterThan(8)
+    })
+
+    it("mints an id above the live max even when the module counter is stale (direct set drift)", () => {
+      // Drive the counter low by clearing (resets nextNodeId = 1).
+      useWorkflowStore.getState().clearWorkflow()
+
+      // Inject a high-id node directly via setState (mirrors onAppendNodes'
+      // raw setNodes append — another path that never reseeds the counter).
+      useWorkflowStore.setState({
+        nodes: [
+          { id: "node_42", type: "text-prompt", position: { x: 0, y: 0 }, data: { label: "Stale" } },
+        ] as any[],
+      })
+
+      useWorkflowStore.getState().addNode("text-prompt", { x: 100, y: 100 })
+
+      const nodes = useWorkflowStore.getState().nodes
+      const ids = nodes.map((n) => n.id)
+      expect(new Set(ids).size).toBe(nodes.length)
+
+      const newId = ids.find((id) => id !== "node_42")!
+      const newNum = parseInt(newId.replace("node_", ""), 10)
+      expect(newNum).toBeGreaterThan(42)
+    })
+  })
+
+  // ---------------------------------------------------------------
   // 9. Character CRUD
   // ---------------------------------------------------------------
   describe("addCharacterDefinition", () => {

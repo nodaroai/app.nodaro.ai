@@ -842,9 +842,10 @@ export function MobileAppShell({
   const bottomPadding = showStickyAction ? "calc(112px + var(--safe-area-bottom, 0px))" : "calc(56px + var(--safe-area-bottom, 0px))"
 
   // Input-card renderer for the chat composer (the shell otherwise inlines InputCard).
-  const renderChatInputCard = useCallback((node: WorkflowNode) => (
+  const renderChatInputCard = useCallback((node: WorkflowNode, variant?: "composer") => (
     <InputCard
       node={node}
+      variant={variant}
       isFullscreen
       inputValues={getInputSliceMap(node.id)}
       onUpdateInput={presUpdateInput}
