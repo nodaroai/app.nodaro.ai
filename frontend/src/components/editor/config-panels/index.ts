@@ -1,6 +1,6 @@
 export { TextPromptConfig, ListConfig, LoopConfig, UploadImageConfig, UploadVideoConfig, UploadAudioConfig, RSSFeedConfig, YouTubeVideoConfig, ReferenceAudioConfig } from "./input-configs"
 export { ToneConfig, StyleGuideConfig, ProviderConfig, SceneCountConfig, DurationConfig, AspectRatioConfig, MotionConfig, CameraMotionConfig, FramingConfig, LensConfig, CameraFormatConfig, LightingConfig, ColorLookConfig, AtmosphereConfig, ActionFxConfig, StyleConfig, SettingConfig, LoopSubjectConfig, PersonConfig, MoodConfig, PhotographerConfig, AestheticConfig, EraConfig, PoseConfig, StylingConfig, MaterialConfig, AnimalConfig, VehicleConfig, WeaponConfig, PhotoGenreConfig, BackdropConfig, HeldPropConfig, TemporalConfig, ExposureSettingsConfig, RenderQualityConfig, CompositionEffectsConfig, PostProcessEffectsConfig, TransitionConfig, CharacterFxConfig } from "./parameter-configs"
-export { GenerateScriptConfig, QACheckConfig, ImageToTextConfig, ImageCriticConfig } from "./script-configs"
+export { GenerateScriptConfig, QACheckConfig, ImageToTextConfig, ImageCriticConfig, DescribeToPickerConfig } from "./script-configs"
 export { GenerateImageConfig, ModifyImageConfig, UpscaleImageConfig, RemoveBackgroundConfig, GenerateMaskConfig } from "./image-configs"
 export { ImageToVideoConfig, VideoToVideoConfig, MotionTransferConfig, VideoUpscaleConfig, TextToVideoConfig, GenerateVideoConfig, ExtendVideoConfig, SpeechToVideoConfig, FaceSwapConfig, VideoRetakeConfig } from "./video-configs"
 export { VideoSfxConfig } from "./video-sfx-config"

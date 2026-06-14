@@ -52,6 +52,12 @@ export function getHandleConnectionLimit(
     return { limit: 1, providerLabel: "Retake", isMultiProviderMin: false }
   }
 
+  // person's `picker-json` target accepts exactly one image→picker analysis
+  // result — the consumer applies a single JSON into its dimension fields.
+  if (node.type === "person" && handleId === "picker-json") {
+    return { limit: 1, providerLabel: "Picker", isMultiProviderMin: false }
+  }
+
   if (node.type === "generate-image" && handleId === "references") {
     const data = node.data as { provider?: string; providers?: readonly string[] } | undefined
     const providers: readonly string[] =

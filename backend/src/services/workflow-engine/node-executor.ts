@@ -50,6 +50,7 @@ const SYNC_HTTP_NODES = new Set([
   "3d-title",
   "motion-graphics",
   "image-to-text",
+  "describe-to-picker",
   "suno-style-boost",
   "instagram-post",
   "tiktok-post",
@@ -78,6 +79,7 @@ export const SYNC_HTTP_ROUTES: Record<string, string> = {
   "3d-title": "/v1/3d-title/generate",
   "motion-graphics": "/v1/motion-graphics/generate",
   "image-to-text": "/v1/image-to-text/describe",
+  "describe-to-picker": "/v1/describe-to-picker",
   "suno-style-boost": "/v1/suno/style-boost",
   "qa-check": "/v1/qa-check",
   "image-critic": "/v1/image-critic",
@@ -732,6 +734,15 @@ export function buildSyncHttpBody(
         llmModel: data.llmModel,
         userId: ctx.userId,
       })
+
+    case "describe-to-picker":
+      return {
+        imageUrl: resolvedInputs.imageUrl || data.imageUrl,
+        targetPicker: data.targetPicker || "person",
+        instructions: data.instructions,
+        llmModel: data.llmModel,
+        userId: ctx.userId,
+      }
 
     case "suno-style-boost":
       return withUserPrompt({

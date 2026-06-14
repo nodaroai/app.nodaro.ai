@@ -1,7 +1,7 @@
 ---
 node_type: person
-generated_at: 2026-05-18T13:23:37.209Z
-generated_from: cb1e786d
+generated_at: 2026-06-14T16:49:25.468Z
+generated_from: c25bcd94b
 ---
 
 # Person
@@ -10,7 +10,7 @@ generated_from: cb1e786d
 **Type:** `person`
 **Category:** parameter
 **Credit cost:** 0
-**Inputs (target handles):** `in`
+**Inputs (target handles):** `picker-json`
 **Outputs (source handles):** `out`
 
 **Required data fields:**
@@ -48,6 +48,9 @@ generated_from: cb1e786d
 - `eyeState?: string | ReadonlyArray<string>`
 - `facialHair?: string`
 - `distinctiveFeature?: string | ReadonlyArray<string>`
+- `applyMode?: "override" | "overwrite-detected" | "fill-empty"`
+- `autoApplyInjected?: boolean`
+- `lastAppliedPickerJson?: Record<string, unknown>`
 - `preText?: string`
 - `postText?: string`
 - `maxItemsPerRow?: number`

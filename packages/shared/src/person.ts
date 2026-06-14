@@ -953,6 +953,28 @@ export const PERSON_FIELD_BY_DIMENSION: Record<
   "distinctive-features": "distinctiveFeature",
 }
 
+/** Per-dimension multi-select cap (single source of truth for the picker UI,
+ *  the image-analyzer tool schema, and the Zod validator).
+ *  - ethnicity / regional-aesthetic / hair-color / eye-color / lip-state /
+ *    eye-state / skin-texture: 2
+ *  - distinctive-features: 3
+ *  All other dims are single-select (absent → treated as 1). */
+export const MAX_SELECTED_BY_DIMENSION: Partial<Record<PersonDimension, number>> = {
+  ethnicity: 2,
+  "regional-aesthetic": 2,
+  "hair-color": 2,
+  "eye-color": 2,
+  "distinctive-features": 3,
+  "lip-state": 2,
+  "eye-state": 2,
+  "skin-texture": 2,
+}
+
+/** Selection limit for a dimension (1 when not multi-select). */
+export function getPersonDimensionLimit(dimension: PersonDimension): number {
+  return MAX_SELECTED_BY_DIMENSION[dimension] ?? 1
+}
+
 /**
  * Shape of the per-dimension person fields. All optional — user may set
  * zero, one, or all ten dimensions.

@@ -20,6 +20,7 @@ import {
   sunoUploadExtendApi,
   transcribeApi,
   imageToTextApi,
+  describeToPickerApi,
   voiceChangerApi,
   dubbingApi,
   voiceRemixApi,
@@ -112,6 +113,7 @@ import type {
   SunoUploadExtendData,
   TranscribeData,
   ImageToTextData,
+  DescribeToPickerData,
   LLMChatData,
   LipSyncData,
   SpeechToVideoData,
@@ -3924,6 +3926,47 @@ export function executeNode(
           errorMessage: errMsg,
         });
         guardedToast.error("Image description failed", { description: errMsg });
+        throw err;
+      });
+  }
+
+  if (node.type === "describe-to-picker") {
+    const imageUrl = inputs.imageUrl;
+    if (!imageUrl) {
+      toast.error(
+        `Node "${(node.data as DescribeToPickerData).label}": no image input found`,
+      );
+      return Promise.reject(new Error("No image input"));
+    }
+    const dpData = node.data as DescribeToPickerData;
+    const { updateNodeData } = useWorkflowStore.getState();
+    updateNodeData(node.id, {
+      executionStatus: "running",
+      errorMessage: undefined,
+    });
+    return describeToPickerApi(
+      imageUrl,
+      dpData.targetPicker || "person",
+      ctx.userId,
+      dpData.llmModel,
+      dpData.instructions,
+    )
+      .then((result) => {
+        updateNodeData(node.id, {
+          executionStatus: "completed",
+          generatedPickerJson: result.pickerJson,
+          errorMessage: undefined,
+        });
+        guardedToast.success("Image analyzed");
+        return JSON.stringify(result.pickerJson);
+      })
+      .catch((err) => {
+        const errMsg = err instanceof Error ? err.message : "Unknown error";
+        updateNodeData(node.id, {
+          executionStatus: "failed",
+          errorMessage: errMsg,
+        });
+        guardedToast.error("Image analysis failed", { description: errMsg });
         throw err;
       });
   }

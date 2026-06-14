@@ -91,6 +91,7 @@ const NON_BUILDPAYLOAD_NODES: ReadonlySet<string> = new Set([
   "3d-title",
   "motion-graphics",
   "image-to-text",
+  "describe-to-picker",
   "suno-style-boost",
   "image-critic",
   "instagram-post",

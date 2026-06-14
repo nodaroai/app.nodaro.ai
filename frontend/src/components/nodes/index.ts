@@ -95,6 +95,7 @@ import { VoiceRemixNode } from "./voice-remix-node"
 import { VoiceDesignNode } from "./voice-design-node"
 import { ForcedAlignmentNode } from "./forced-alignment-node"
 import { ImageToTextNode } from "./image-to-text-node";
+import { DescribeToPickerNode } from "./describe-to-picker-node";
 import { LLMChatNode } from "./llm-chat-node";
 import { CombineVideosNode } from "./combine-videos-node";
 import { MergeVideoAudioNode } from "./merge-video-audio-node";
@@ -271,6 +272,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "motion-transfer": MotionTransferNode,
   transcribe: TranscribeNode,
   "image-to-text": ImageToTextNode,
+  "describe-to-picker": DescribeToPickerNode,
   "audio-isolation": AudioIsolationNode,
   "text-to-dialogue": TextToDialogueNode,
   "voice-changer": VoiceChangerNode,

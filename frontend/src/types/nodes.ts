@@ -778,6 +778,12 @@ export interface PersonData {
   /** Distinctive feature (glasses, freckles, tattoos, scar, dimples, piercing).
    *  Single id or up to 3 ids for combined features. */
   distinctiveFeature?: string | ReadonlyArray<string>
+  /** How injected picker JSON is applied. Default "override". */
+  applyMode?: "override" | "overwrite-detected" | "fill-empty"
+  /** When true, applies injected JSON automatically on upstream change. */
+  autoApplyInjected?: boolean
+  /** The picker JSON last applied — basis for change detection. */
+  lastAppliedPickerJson?: Record<string, unknown>
   /** Free-text prepended before the dimension compound. */
   preText?: string
   /** Free-text appended after the dimension compound. */
@@ -2790,6 +2796,22 @@ export type ImageToTextData = {
   activeResultIndex?: number
 }
 
+export type DescribeToPickerData = {
+  [key: string]: unknown
+  label: string
+  /** Which picker the JSON targets. v1: person only. */
+  targetPicker: "person"
+  /** Anthropic vision model id; default claude-sonnet-4.6. */
+  llmModel?: string
+  /** Optional extra guidance appended to the analyzer system prompt. */
+  instructions?: string
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  currentJobProgress?: number
+  errorMessage?: string
+  /** Latest emitted picker JSON (the active result; consumed by picker nodes). */
+  generatedPickerJson?: Record<string, unknown>
+}
+
 // --- Processing Node Data ---
 
 export type CombineVideosData = {
@@ -4644,6 +4666,7 @@ export type SceneNodeData =
   | SunoUploadExtendData
   | TranscribeData
   | ImageToTextData
+  | DescribeToPickerData
   | AudioIsolationData
   | TextToDialogueData
   | VoiceChangerData
@@ -4814,6 +4837,7 @@ export type SceneNodeType =
   | "suno-upload-extend"
   | "transcribe"
   | "image-to-text"
+  | "describe-to-picker"
   | "audio-isolation"
   | "text-to-dialogue"
   | "voice-changer"
@@ -5268,7 +5292,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Person",
     category: "parameter",
     creditCost: 0,
-    inputs: ["in"],
+    inputs: ["picker-json"],
     outputs: ["out"],
     defaultData: { label: "Person", type: "stylish-influencer", age: "age-early-20s", maxItemsPerRow: 2 },
   },
@@ -5970,6 +5994,15 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["image"],
     outputs: ["text"],
     defaultData: { label: "Describe Image", detailLevel: "detailed", customPrompt: "", fieldMappings: {} } as ImageToTextData,
+  },
+  {
+    type: "describe-to-picker",
+    label: "Describe to Picker",
+    category: "ai",
+    creditCost: 1,
+    inputs: ["image"],
+    outputs: ["picker-json"],
+    defaultData: { label: "Describe to Picker", targetPicker: "person" } as DescribeToPickerData,
   },
   {
     type: "audio-isolation",

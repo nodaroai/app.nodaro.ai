@@ -1,6 +1,6 @@
 import { Select, SelectContent, SelectTrigger, SelectValue, SelectItemWithMeta } from "@/components/ui/select"
 import { LLM_MODELS, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
-import type { LlmTier, LlmFeature } from "@nodaro/shared"
+import type { LlmTier, LlmFeature, LlmModelDef } from "@nodaro/shared"
 import { ModelDescriptionHint } from "./model-description-hint"
 
 const TIER_LABELS: Record<LlmTier, string> = {
@@ -13,11 +13,16 @@ interface LlmModelSelectProps {
   feature: LlmFeature
   value?: string
   onChange: (modelId: string) => void
+  /** Optional predicate to restrict the offered models (default: all models).
+   *  e.g. describe-to-picker passes `(m) => m.vendor === "anthropic"` because
+   *  its forced tool-use only works on Anthropic-direct. */
+  filter?: (model: LlmModelDef) => boolean
 }
 
-export function LlmModelSelect({ feature, value, onChange }: LlmModelSelectProps) {
+export function LlmModelSelect({ feature, value, onChange, filter }: LlmModelSelectProps) {
   const defaultModel = LLM_FEATURE_DEFAULTS[feature]
   const currentValue = value || defaultModel
+  const models = filter ? LLM_MODELS.filter(filter) : LLM_MODELS
 
   return (
     <div className="space-y-1">
@@ -27,7 +32,7 @@ export function LlmModelSelect({ feature, value, onChange }: LlmModelSelectProps
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          {LLM_MODELS.map((model) => (
+          {models.map((model) => (
             <SelectItemWithMeta
               key={model.id}
               value={model.id}

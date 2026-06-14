@@ -28,8 +28,12 @@ import type {
   QACheckData,
   ImageToTextData,
   ImageCriticData,
+  DescribeToPickerData,
 } from "@/types/nodes"
-import { IMAGE_CRITIC_MODES, type ImageCriticMode } from "@nodaro/shared"
+import {
+  IMAGE_CRITIC_MODES,
+  type ImageCriticMode,
+} from "@nodaro/shared"
 import { LlmModelSelect } from "./llm-model-select"
 import { MappableField } from "./mappable-field"
 import { SnippetMenuButton } from "./snippet-menu-button"
@@ -512,6 +516,45 @@ export function ImageToTextConfig({ data, onUpdate, sources, fieldMappings, onMa
             {imageToTextData.generatedText}
           </div>
         </div>
+      )}
+    </div>
+  )
+}
+
+export function DescribeToPickerConfig({ data, onUpdate }: ConfigProps<DescribeToPickerData>) {
+  const d = data as DescribeToPickerData
+  const detected = d.generatedPickerJson ? Object.keys(d.generatedPickerJson).length : 0
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <Label>Target picker</Label>
+        <Select value={d.targetPicker ?? "person"} onValueChange={(v) => onUpdate({ targetPicker: v as "person" })}>
+          <SelectTrigger aria-label="Target picker"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="person">Person</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      {/* Anthropic-only: the analyzer uses forced tool-use (Anthropic-direct only). */}
+      <LlmModelSelect
+        feature="describe-to-picker"
+        value={d.llmModel}
+        onChange={(v) => onUpdate({ llmModel: v })}
+        filter={(m) => m.vendor === "anthropic"}
+      />
+      <div>
+        <Label>Extra guidance (optional)</Label>
+        <Textarea
+          value={d.instructions ?? ""}
+          onChange={(e) => onUpdate({ instructions: e.target.value })}
+          placeholder="e.g. focus on the foreground subject"
+          rows={2}
+          maxLength={2000}
+          className="text-xs resize-none"
+        />
+      </div>
+      {detected > 0 && (
+        <p className="text-xs text-muted-foreground">Last run detected {detected} traits. Connect this node's output to a Person picker.</p>
       )}
     </div>
   )

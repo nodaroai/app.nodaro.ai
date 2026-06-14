@@ -55,6 +55,7 @@ const NODE_TYPE_LABELS: Record<string, string> = {
   "llm-chat": "LLM Chat",
   "generate-script": "Generate Script",
   "image-to-text": "Image to Text",
+  "describe-to-picker": "Describe to Picker",
   "transcribe": "Transcribe",
   "text-prompt": "Text",
   "character": "Character",

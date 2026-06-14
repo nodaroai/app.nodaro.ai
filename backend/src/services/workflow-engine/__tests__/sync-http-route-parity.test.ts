@@ -24,6 +24,7 @@ const NODE_TYPE_TO_ROUTE_FILE: Record<string, string> = {
   "3d-title": "backend/src/routes/three-d-title-ai.ts",
   "motion-graphics": "backend/src/routes/motion-graphics-ai.ts",
   "image-to-text": "backend/src/routes/image-to-text.ts",
+  "describe-to-picker": "backend/src/routes/describe-to-picker.ts",
   "suno-style-boost": "backend/src/routes/suno.ts",
   "qa-check": "backend/src/routes/qa-check.ts",
   "image-critic": "backend/src/routes/image-critic.ts",

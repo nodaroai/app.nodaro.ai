@@ -177,6 +177,16 @@ export const ACCEPTS_ENTITY_REF = (sourceType: string): boolean =>
  */
 export const ACCEPTS_LOTTIE_ASSET = (sourceType: string): boolean => sourceType === "motion-graphics"
 
+/**
+ * The Person picker's `picker-json` target accepts ONLY the describe-to-picker
+ * producer — the single node that emits catalog-valid picker JSON (from a
+ * vision-LLM image analysis) on its `picker-json` source handle. The Person
+ * consumer subscribes to that JSON and applies it to its 29 dimension fields.
+ * Symmetric to the source-side rule in connection-validation.ts
+ * (`picker-json` source → person `picker-json` target).
+ */
+export const ACCEPTS_PICKER_JSON = (sourceType: string): boolean => sourceType === "describe-to-picker"
+
 /** Friendly labels for Generate Image's six input handles, used by the
  *  candidate-row chip in source-direction popovers. */
 const GENERATE_IMAGE_HANDLE_LABELS: Record<string, string> = {
@@ -225,6 +235,15 @@ export const TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEnt
   // nothing.
   "character-fx": [
     { handleId: "target", label: "Target subject", accepts: ACCEPTS_CHARACTER_REF },
+  ],
+
+  // Person picker — `picker-json` accepts ONLY the describe-to-picker producer
+  // (catalog-valid picker JSON from a vision-LLM image analysis). Lets a
+  // describe-to-picker source pip's popover surface "→ Picker JSON" as a
+  // candidate; the canvas validator's source rule + this accepts predicate
+  // stay in agreement.
+  "person": [
+    { handleId: "picker-json", label: "Picker JSON", accepts: ACCEPTS_PICKER_JSON },
   ],
 
   // Reference Sheet takes ONE entity ref on its `in` handle (character / object /

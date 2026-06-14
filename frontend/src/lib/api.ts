@@ -3701,6 +3701,24 @@ export async function imageToTextApi(
   })
 }
 
+export async function describeToPickerApi(
+  imageUrl: string,
+  targetPicker: "person",
+  userId?: string,
+  llmModel?: string,
+  instructions?: string,
+): Promise<{ jobId: string; pickerJson: Record<string, unknown> }> {
+  const body: Record<string, unknown> = { imageUrl, targetPicker }
+  if (userId) body.userId = userId
+  if (llmModel) body.llmModel = llmModel
+  if (instructions) body.instructions = instructions
+  return apiJson("/v1/describe-to-picker", {
+    body,
+    workflowId: true,
+    label: "Failed to analyze image",
+  })
+}
+
 export async function speechToVideoApi(opts: {
   imageUrl: string
   audioUrl: string

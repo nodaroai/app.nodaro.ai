@@ -127,6 +127,7 @@ import {
   SunoUploadExtendConfig,
   TranscribeConfig,
   ImageToTextConfig,
+  DescribeToPickerConfig,
   LipSyncConfig,
   GenerateMusicConfig,
   CombineVideosConfig,
@@ -302,6 +303,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "suno-upload-extend": "Suno Upload Extend",
   "transcribe": "Transcribe",
   "image-to-text": "Describe Image",
+  "describe-to-picker": "Describe to Picker",
   "llm-chat": "Generate Text",
   "combine-videos": "Combine Videos",
   "merge-video-audio": "Merge Video & Audio",
@@ -385,7 +387,7 @@ export const GENERATE_BUTTON_TYPES = new Set([
   "suno-mashup", "suno-replace-section", "suno-style-boost", "suno-add-instrumental", "suno-add-vocals", "suno-convert-wav", "suno-upload-extend",
   "llm-chat", "web-scrape",
   "video-composer", "after-effects", "lottie-overlay", "3d-title", "motion-graphics",
-  "image-to-text", "qa-check", "transcribe",
+  "image-to-text", "qa-check", "transcribe", "describe-to-picker",
   "render-video",
   "instagram-post", "tiktok-post", "youtube-upload", "linkedin-post", "x-post", "facebook-post", "telegram-post",
   "component",
@@ -418,7 +420,8 @@ const RESULT_PRODUCING_TYPES = new Set([
   t !== "preview" && t !== "sub-workflow" &&
   t !== "instagram-post" && t !== "tiktok-post" && t !== "youtube-upload" &&
   t !== "linkedin-post" && t !== "x-post" && t !== "facebook-post" && t !== "telegram-post" &&
-  t !== "image-to-text" && t !== "qa-check" && t !== "transcribe" && t !== "llm-chat"
+  t !== "image-to-text" && t !== "qa-check" && t !== "transcribe" && t !== "llm-chat" &&
+  t !== "describe-to-picker"
 ))
 
 /** Extracted to isolate type checking scope — TS JSX children inference limit */
@@ -572,6 +575,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "motion-transfer": return <MotionTransferConfig {...configProps} nodeId={selectedNodeId} />
     case "transcribe": return <TranscribeConfig {...configProps} />
     case "image-to-text": return <ImageToTextConfig {...configProps} nodeId={selectedNodeId} />
+    case "describe-to-picker": return <DescribeToPickerConfig {...configProps} />
     case "llm-chat": return <LLMChatConfig {...configProps} nodeId={selectedNodeId} />
     case "video-upscale": return <VideoUpscaleConfig {...configProps} />
     case "extend-video": return <ExtendVideoConfig {...configProps} nodeId={selectedNodeId} />

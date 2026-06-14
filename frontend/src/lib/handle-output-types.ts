@@ -41,6 +41,7 @@ export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleCo
   "combine-videos": { video: "video" },
   "composite": { composition: "control" },
   "deduplicate": { out: "list" },
+  "describe-to-picker": { "picker-json": "pickerJson" },
   "dubbing": { audio: "audio" },
   "edit-image": { image: "image" },
   "extend-video": { video: "video" },
