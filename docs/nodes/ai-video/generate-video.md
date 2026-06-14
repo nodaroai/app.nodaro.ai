@@ -82,6 +82,8 @@ Providers that accept a paired last frame: `veo3`, `veo3.1`, `veo3_lite` (`image
 
 Seedance 2 (`seedance-2` / `seedance-2-fast`) accepts up to 9 image refs, 3 video refs, and 3 audio refs in a single call. **`seedance-2-fast` requires each reference audio clip to be ≤ 15.2 seconds** (audio-driven r2v mode) — longer clips are rejected before the job is created with an `audio_too_long` error. HappyHorse Ref2V accepts 1–9 image refs. VEO 3.1 (`veo3.1`) supports `REFERENCE_2_VIDEO` mode when image references are wired without a start frame. Gemini Omni (`gemini-omni-video`) accepts up to 7 image refs in both modes — with a start frame (i2v) or without one (reference-conditioned t2v).
 
+**Seedance 2 mode toggle (Frames ⇄ References).** Unlike other providers (where mode is inferred from wiring), Seedance 2 has an explicit **Frames vs References** toggle because KIE makes the two mutually exclusive: *Frames* uses `startFrame` (+ optional `endFrame`); *References* uses `imageReferences` / `videoReferences` / `audioReferences`. The inactive set's handles are disabled (greyed) in each mode, and edges wired to them are ignored at execution. **New Generate Video nodes default to References mode.** Note `audio` (a post-merge soundtrack) is distinct from `audioReferences` (generation-conditioning audio) — `audio` works in both modes; `audioReferences` is References-mode only.
+
 Reference arrays are forwarded to the backend for **every** provider in both dispatch modes; models that don't support them ignore them. (Earlier editor builds dropped reference images on the text-to-video path for all providers except Kling and Seedance 2.)
 
 ### LTX 2.3 — auto-dispatch by wired inputs

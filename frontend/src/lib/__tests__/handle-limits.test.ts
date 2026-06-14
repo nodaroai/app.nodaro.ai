@@ -42,12 +42,38 @@ describe("getHandleConnectionLimit (generate-video)", () => {
     expect(getHandleConnectionLimit(node, "audio")?.limit).toBe(1)
   })
 
-  it("returns audioReferences cap from VIDEO_REF_LIMITS_BY_PROVIDER for seedance-2-fast", () => {
+  it("returns audioReferences cap from VIDEO_REF_LIMITS_BY_PROVIDER for seedance-2-fast in references mode", () => {
     const node = {
       id: "n",
       type: "generate-video",
-      data: { provider: "seedance-2-fast" },
+      data: { provider: "seedance-2-fast", seedance2InputMode: "references" },
     } as unknown as WorkflowNode
+    expect(getHandleConnectionLimit(node, "audioReferences")?.limit).toBeGreaterThan(0)
+  })
+
+  // Reference video + audio are multimodal-reference inputs, mutually exclusive
+  // with start/end frames on Seedance 2 (KIE schema) — and the runtime strips
+  // them in frames mode. The handle caps must match so the pips read as
+  // inactive (and edges gray out) in frames mode, the same way imageReferences
+  // already does. Otherwise users wire reference audio in frames mode and it's
+  // silently dropped.
+  it("seedance-2 frames mode disables videoReferences + audioReferences", () => {
+    const node = {
+      id: "n",
+      type: "generate-video",
+      data: { provider: "seedance-2-fast", seedance2InputMode: "frames" },
+    } as unknown as WorkflowNode
+    expect(getHandleConnectionLimit(node, "audioReferences")?.limit).toBe(0)
+    expect(getHandleConnectionLimit(node, "videoReferences")?.limit).toBe(0)
+  })
+
+  it("seedance-2 references mode enables videoReferences + audioReferences", () => {
+    const node = {
+      id: "n",
+      type: "generate-video",
+      data: { provider: "seedance-2-fast", seedance2InputMode: "references" },
+    } as unknown as WorkflowNode
+    expect(getHandleConnectionLimit(node, "videoReferences")?.limit).toBeGreaterThan(0)
     expect(getHandleConnectionLimit(node, "audioReferences")?.limit).toBeGreaterThan(0)
   })
 

@@ -5621,7 +5621,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     width: 220,
     inputs: ["startFrame", "endFrame", "audio"],
     outputs: ["video"],
-    defaultData: { label: "Generate Video", provider: "seedance-2-fast", duration: 5, prompt: "", negativePrompt: "", fieldMappings: {} },
+    defaultData: { label: "Generate Video", provider: "seedance-2-fast", seedance2InputMode: "references", duration: 5, prompt: "", negativePrompt: "", fieldMappings: {} },
     exposableOutputs: [{ key: "result", label: "Result", outputType: "video" as const }],
     exposableFields: [
       {

@@ -214,8 +214,17 @@ export function PromptQuickEditModal() {
     consumerNodeId: nodeId ?? undefined,
     nodes,
     edges,
-    provider: typeof data.provider === "string" ? data.provider : undefined,
-    connectedReferences,
+    // Route by media so the preview matches what the runtime actually sends:
+    //  - image nodes assemble via buildImagePrompt (reference composition);
+    //  - video nodes predict the video provider's routing with NO image
+    //    "Use these references…/Compose them into a single image" wrapper;
+    //  - audio / text fall through to the provider-less path.
+    // Passing `provider` (the image path) for EVERY node was the bug — it
+    // rendered an image-composition prompt for video nodes that the video
+    // backend never produces.
+    provider: snippetMedia === "image" ? (typeof data.provider === "string" ? data.provider : undefined) : undefined,
+    videoProvider: snippetMedia === "video" ? (typeof data.provider === "string" ? data.provider : undefined) : undefined,
+    connectedReferences: snippetMedia === "image" ? connectedReferences : undefined,
     snippets: promptSnippets,
     negativeSnippets,
   })
