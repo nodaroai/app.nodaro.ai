@@ -40,6 +40,7 @@ vi.mock("lucide-react", () => {
     TrendingUp: I, Star: I,
     ListTree: I,
     LayoutGrid: I,
+    Link2: I,
   }
 })
 
@@ -283,5 +284,29 @@ describe("AddNodePopup tabs", () => {
     expect(generateVideo).toBeGreaterThanOrEqual(0)
     expect(videoToVideo).toBeGreaterThanOrEqual(0)
     expect(generateVideo).toBeLessThan(videoToVideo)
+  })
+})
+
+describe("AddNodePopup auto-connect", () => {
+  it("renders the Auto toggle and persists toggling", () => {
+    renderPopup()
+    const sw = screen.getByRole("switch")
+    expect(sw).toBeInTheDocument()
+    fireEvent.click(sw)
+    expect(localStorage.getItem("nodaro:autoConnect")).toBe("0")
+  })
+
+  it("hands off to onPickType (not onAddNode) when picking in auto-connect mode", () => {
+    const onPickType = vi.fn()
+    const { onAddNode } = renderPopup({
+      autoConnectCtx: { nodeId: "n1", nodeType: "text-prompt", sourceHandles: ["prompt"], targetHandles: ["in"] },
+      onPickType,
+    })
+    fireEvent.change(screen.getByPlaceholderText("Search nodes..."), { target: { value: "generate image" } })
+    const row = screen.getAllByRole("button").find((b) => (b.textContent ?? "").startsWith("Generate Image"))
+    expect(row).toBeTruthy()
+    fireEvent.click(row!)
+    expect(onPickType).toHaveBeenCalledWith("generate-image")
+    expect(onAddNode).not.toHaveBeenCalled()
   })
 })
