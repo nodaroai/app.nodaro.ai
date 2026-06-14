@@ -928,6 +928,25 @@ describe("generate-object-motion handler", () => {
     )
   })
 
+  it("forwards a set duration to imageToVideo as the positional duration arg", async () => {
+    const job = makeJob("generate-object-motion", {
+      prompt: "Hover the item",
+      sourceImageUrl: "https://x/obj4.png",
+      provider: "kling",
+      duration: 10,
+    })
+    await handler(job as never, makeCtx())
+    expect(mocks.mockImageToVideo).toHaveBeenCalledWith(
+      "https://x/obj4.png",
+      "kling",
+      "Hover the item",
+      10, // duration → 4th positional arg (NOT options)
+      undefined,
+      undefined,
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+    )
+  })
+
   it("routes to videoToVideo when refineFromVideoUrl is set", async () => {
     const job = makeJob("generate-object-motion", {
       prompt: "Refine the rotation timing",

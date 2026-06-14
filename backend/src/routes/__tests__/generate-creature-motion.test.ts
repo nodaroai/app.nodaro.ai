@@ -198,6 +198,42 @@ describe("POST /v1/generate-creature-motion", () => {
     )
   })
 
+  it("passes a valid per-model duration through to the video job (bare provider preserved)", async () => {
+    setupSupabaseMock({ creatureRow: { id: TEST_CREATURE_ID } })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-creature-motion",
+      headers: { "x-user-id": TEST_USER_ID },
+      // kling supports 5/10s — 10 is valid and non-default.
+      payload: basePayload({ provider: "kling", duration: 10 }),
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(videoQueue.add).toHaveBeenCalledWith(
+      "generate-creature-motion",
+      // The worker must receive the BARE provider (never a credit composite)
+      // plus the duration lever.
+      expect.objectContaining({ provider: "kling", duration: 10 }),
+    )
+  })
+
+  it("returns 400 validation_error for a duration the chosen model does not allow", async () => {
+    setupSupabaseMock({ creatureRow: { id: TEST_CREATURE_ID } })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-creature-motion",
+      headers: { "x-user-id": TEST_USER_ID },
+      // kling supports 5/10s only — 7 is off-tier and must be rejected.
+      payload: basePayload({ provider: "kling", duration: 7 }),
+    })
+
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+    expect(videoQueue.add).not.toHaveBeenCalled()
+  })
+
   it("returns 401 when unauthenticated", async () => {
     setupSupabaseMock({ creatureRow: { id: TEST_CREATURE_ID } })
 
