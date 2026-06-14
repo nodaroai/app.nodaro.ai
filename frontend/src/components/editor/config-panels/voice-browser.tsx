@@ -40,6 +40,16 @@ interface VoiceBrowserProps {
   readonly showCustomVoices?: boolean  // default false — only TTS node sets this
 }
 
+// ── Stacking order for the Browse Voices dialog and its filter dropdowns ──
+// The dialog content + overlay are lifted above the Character Studio modal
+// (z-[100], see #3378). The filter Selects portal their menus to <body>, so
+// they must sit ABOVE the dialog or they open behind it and can't be clicked.
+// One place for both values; the ordering invariant is guarded by
+// `__tests__/voice-browser-zindex.test.ts`. Tailwind JIT picks up the literal
+// `z-[NNN]` strings here. Keep both below the toast/critical tier (z-[1000]+).
+export const BROWSE_DIALOG_Z = "z-[110]"
+export const FILTER_SELECT_Z = "z-[120]"
+
 const GENDER_FILTERS = ["All", "Female", "Male", "Other"] as const
 type GenderFilter = (typeof GENDER_FILTERS)[number]
 
@@ -276,10 +286,11 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
           <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
         </button>
       </DialogTrigger>
-      {/* z-[110] lifts content + overlay above hosts like the Character Studio
-          modal (z-[100]); without it the portaled dialog opens behind the modal
-          and looks like nothing happens. */}
-      <DialogContent className="sm:max-w-md max-h-[80vh] flex flex-col gap-3 p-4 z-[110]" overlayClassName="z-[110]">
+      {/* BROWSE_DIALOG_Z lifts content + overlay above hosts like the Character
+          Studio modal (z-[100]); without it the portaled dialog opens behind the
+          modal and looks like nothing happens. The filter Selects below use the
+          higher FILTER_SELECT_Z so their menus clear THIS dialog in turn. */}
+      <DialogContent className={`sm:max-w-md max-h-[80vh] flex flex-col gap-3 p-4 ${BROWSE_DIALOG_Z}`} overlayClassName={BROWSE_DIALOG_Z}>
         <DialogHeader>
           <DialogTitle>Browse Voices</DialogTitle>
         </DialogHeader>
@@ -339,7 +350,7 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
                   <SelectTrigger className="h-7 w-[120px] text-xs">
                     <SelectValue placeholder="Accent" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className={FILTER_SELECT_Z}>
                     <SelectItem value="All">All accents</SelectItem>
                     {premadeAccents.map((a) => (
                       <SelectItem key={a} value={a}>{a}</SelectItem>
@@ -438,7 +449,7 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
                 <SelectTrigger className="h-7 w-[120px] text-xs">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className={FILTER_SELECT_Z}>
                   {SORT_OPTIONS.map((opt) => (
                     <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                   ))}
@@ -477,7 +488,7 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
                     <SelectTrigger className="h-7 text-xs flex-1">
                       <SelectValue placeholder="Accent" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className={FILTER_SELECT_Z}>
                       <SelectItem value="All">All accents</SelectItem>
                       {ACCENT_OPTIONS.map((a) => (
                         <SelectItem key={a} value={a}>{capitalize(a)}</SelectItem>
@@ -488,7 +499,7 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
                     <SelectTrigger className="h-7 text-xs flex-1">
                       <SelectValue placeholder="Age" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className={FILTER_SELECT_Z}>
                       <SelectItem value="All">All ages</SelectItem>
                       {AGE_OPTIONS.map((a) => (
                         <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>
@@ -499,7 +510,7 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
                     <SelectTrigger className="h-7 text-xs flex-1">
                       <SelectValue placeholder="Language" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className={FILTER_SELECT_Z}>
                       <SelectItem value="All">All languages</SelectItem>
                       {ALL_LANGUAGES.map((l) => (
                         <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
@@ -512,7 +523,7 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
                     <SelectTrigger className="h-7 text-xs flex-1">
                       <SelectValue placeholder="Use case" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className={FILTER_SELECT_Z}>
                       <SelectItem value="All">All use cases</SelectItem>
                       {USE_CASE_OPTIONS.map((uc) => (
                         <SelectItem key={uc.value} value={uc.value}>{uc.label}</SelectItem>
@@ -523,7 +534,7 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
                     <SelectTrigger className="h-7 text-xs flex-1">
                       <SelectValue placeholder="Tone" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className={FILTER_SELECT_Z}>
                       <SelectItem value="All">All tones</SelectItem>
                       {TONE_OPTIONS.map((d) => (
                         <SelectItem key={d} value={d}>{capitalize(d)}</SelectItem>
