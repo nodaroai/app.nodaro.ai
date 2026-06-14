@@ -1,4 +1,4 @@
-import { Columns, Rows, LayoutGrid, Maximize, GitCompareArrows } from "lucide-react"
+import { Columns, Rows, LayoutGrid, Maximize, GitCompareArrows, MessageSquare } from "lucide-react"
 import type { PresentationViewMode } from "@/hooks/use-workflow-store"
 
 export const VIEW_MODES: { mode: PresentationViewMode; icon: typeof Columns; label: string }[] = [
@@ -7,6 +7,7 @@ export const VIEW_MODES: { mode: PresentationViewMode; icon: typeof Columns; lab
   { mode: "gallery", icon: LayoutGrid, label: "Gallery grid" },
   { mode: "fullscreen", icon: Maximize, label: "Fullscreen slideshow" },
   { mode: "compare", icon: GitCompareArrows, label: "Compare side-by-side" },
+  { mode: "chat", icon: MessageSquare, label: "Chat" },
 ]
 
 /** All view mode values, derived from VIEW_MODES */

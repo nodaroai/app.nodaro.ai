@@ -197,6 +197,7 @@ export default function AppRunnerPage() {
           mode="fullscreen"
           isOwner={false}
           onCancel={cancel}
+          runSlots={runSlots}
           onNewRun={user ? runSlots.handleHeaderAction : undefined}
           newRunLabel={runSlots.newRunLabel}
           inputsReadOnly={runSlots.inputsReadOnlyValue}
