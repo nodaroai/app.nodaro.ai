@@ -22,6 +22,7 @@ import type {
   LoopNodeData,
   SelectorNodeData,
   WebScrapeNodeData,
+  DescribeToPickerData,
 } from "@/types/nodes";
 
 export function buildExecutionLevels(
@@ -628,6 +629,15 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     // d.generatedJson directly (bypasses extractNodeOutput).
     if (sourceHandle === "json" || !sourceHandle) {
       return d.generatedJson === undefined ? undefined : JSON.stringify(d.generatedJson);
+    }
+    return undefined;
+  }
+  if (type === "describe-to-picker") {
+    const d = node.data as DescribeToPickerData;
+    // Single picker-json handle — stringify for any consumer; the person picker
+    // reads d.generatedPickerJson directly (bypasses extractNodeOutput).
+    if (sourceHandle === "picker-json" || !sourceHandle) {
+      return d.generatedPickerJson === undefined ? undefined : JSON.stringify(d.generatedPickerJson);
     }
     return undefined;
   }

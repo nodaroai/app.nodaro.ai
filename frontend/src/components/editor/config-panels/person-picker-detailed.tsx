@@ -6,6 +6,7 @@ import {
   PEOPLE,
   PERSON_DIMENSION_ORDER,
   PERSON_FIELD_BY_DIMENSION,
+  getPersonDimensionLimit,
   pickIds,
   type Person,
   type PersonDimension,
@@ -14,10 +15,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
-import {
-  PersonDimensionGrid,
-  MAX_SELECTED_BY_DIMENSION,
-} from "./person-dimension-grid"
+import { PersonDimensionGrid } from "./person-dimension-grid"
 
 interface PersonPickerDetailedProps {
   readonly value: PersonValue
@@ -90,7 +88,7 @@ export const PersonPickerDetailed = memo(function PersonPickerDetailed({
       {grouped.map(({ dimension, entries }) => {
         const field = PERSON_FIELD_BY_DIMENSION[dimension]
         const selectedIds = pickIds(value[field])
-        const maxSelected = MAX_SELECTED_BY_DIMENSION[dimension] ?? 1
+        const maxSelected = getPersonDimensionLimit(dimension)
         const isMultiCapable = maxSelected > 1
         const checked = isMultiCapable
           ? enabledMulti.has(dimension) || selectedIds.length > 0

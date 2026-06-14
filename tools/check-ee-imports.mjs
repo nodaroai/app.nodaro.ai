@@ -133,6 +133,8 @@ const ALLOWLIST = new Set([
   "frontend/src/components/nodes/combine-audio-node.tsx",
   "frontend/src/components/nodes/combine-videos-node.tsx",
   "frontend/src/components/nodes/creature-node.tsx",
+  // describe-to-picker mirrors image-to-text-node — same deferred ee/ credit-hook coupling (useModelCredits, Phase 4.5)
+  "frontend/src/components/nodes/describe-to-picker-node.tsx",
   "frontend/src/components/nodes/dubbing-node.tsx",
   "frontend/src/components/nodes/edit-image-node.tsx",
   "frontend/src/components/nodes/extend-video-node.tsx",

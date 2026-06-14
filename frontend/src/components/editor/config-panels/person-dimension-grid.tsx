@@ -5,6 +5,7 @@ import {
   PEOPLE,
   PERSON_DIMENSION_LABELS,
   PERSON_FIELD_BY_DIMENSION,
+  getPersonDimensionLimit,
   pickIds,
   togglePick,
   type Person,
@@ -42,27 +43,6 @@ export const COMPACT_GROUP_LABELS: Record<string, string> = {
   "Professions / Roles": "Professions",
 }
 const compactGroupLabel = (g: string): string => COMPACT_GROUP_LABELS[g] ?? g
-
-/** Per-dimension multi-select cap.
- *  - ethnicity: 2 (mixed heritage)
- *  - regional-aesthetic: 2 (hybrid look — e.g. nyc-fashion + parisienne)
- *  - hair-color: 2 (two-tone, ombre, highlights, balayage)
- *  - eye-color: 2 (heterochromia)
- *  - distinctive-features: 3 (combined features — freckles + glasses + tattoo)
- *  - lip-state: 2 (glossy + parted, bitten + bold-red, …)
- *  - eye-state: 2 (half-lidded + glassy, gazing-away + glassy, …)
- *  - skin-texture: 2 (porcelain + freckled, sun-kissed + dewy, …)
- *  All other dims are single-select. */
-export const MAX_SELECTED_BY_DIMENSION: Partial<Record<PersonDimension, number>> = {
-  ethnicity: 2,
-  "regional-aesthetic": 2,
-  "hair-color": 2,
-  "eye-color": 2,
-  "distinctive-features": 3,
-  "lip-state": 2,
-  "eye-state": 2,
-  "skin-texture": 2,
-}
 
 export function renderEntryIcon(dimension: PersonDimension, entry: Person): JSX.Element | null {
   if (dimension === "build") return <BuildIcon buildId={entry.id} className="size-6" />
@@ -358,7 +338,7 @@ export function usePersonDimension(
   const field = PERSON_FIELD_BY_DIMENSION[dimension]
   const raw = value[field]
   const selectedIds = pickIds(raw)
-  const maxSelected = MAX_SELECTED_BY_DIMENSION[dimension] ?? 1
+  const maxSelected = getPersonDimensionLimit(dimension)
   const multi = maxSelected > 1
   const isMultiData = Array.isArray(raw)
   const isAge = dimension === "age"

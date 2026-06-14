@@ -128,6 +128,12 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
 
 export const LLM_MODEL_IDS = LLM_MODELS.map((m) => m.id)
 
+/** Anthropic-vendor LLM models. The describe-to-picker analyzer uses forced
+ *  tool-use, which only Anthropic-direct supports, so its model pickers must
+ *  offer Anthropic vision models exclusively. Single-sourced here so the quick
+ *  strip and the config panel can't drift. */
+export const ANTHROPIC_VISION_MODELS = LLM_MODELS.filter((m) => m.vendor === "anthropic")
+
 /** Calculate provider cost in USD from token usage and model pricing. */
 export function calculateLlmCost(
   modelOrId: string | LlmModelDef,
@@ -149,6 +155,7 @@ export type LlmFeature =
   | "lottie-overlay"
   | "3d-title"
   | "image-to-text"
+  | "describe-to-picker"
   | "qa-check"
   | "generate-script"
   | "translate"
@@ -171,6 +178,7 @@ export const LLM_FEATURE_DEFAULTS: Record<LlmFeature, string> = {
   "lottie-overlay": "claude-sonnet-4.6",
   "3d-title": "claude-sonnet-4.6",
   "image-to-text": "claude-sonnet-4.6",
+  "describe-to-picker": "claude-sonnet-4.6",
   "qa-check": "claude-sonnet-4.6",
   "generate-script": "gemini-3-flash",
   "translate": "gemini-3-flash",

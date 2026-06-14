@@ -400,14 +400,15 @@ describe("LLM_FEATURE_DEFAULTS", () => {
     "lottie-overlay",
     "3d-title",
     "image-to-text",
+    "describe-to-picker",
     "qa-check",
     "generate-script",
     "translate",
     "image-critic",
   ]
 
-  it("has entries for all 14 features", () => {
-    expect(Object.keys(LLM_FEATURE_DEFAULTS)).toHaveLength(14)
+  it("has entries for all 15 features", () => {
+    expect(Object.keys(LLM_FEATURE_DEFAULTS)).toHaveLength(15)
     for (const feature of ALL_FEATURES) {
       expect(LLM_FEATURE_DEFAULTS).toHaveProperty(feature)
     }

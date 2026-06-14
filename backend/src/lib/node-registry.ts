@@ -332,6 +332,14 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
     // Flat 1cr across LLM tiers (image-to-text / :economy / :premium all = 1) — auto-filled from STATIC_CREDIT_COSTS.
   },
   {
+    type: "describe-to-picker",
+    label: "Describe to Picker",
+    category: "ai-text",
+    description: "Analyze an image with a vision LLM and emit catalog-valid picker JSON (Person) to auto-fill a parameter picker.",
+    outputType: "data",
+    // Flat 1cr across LLM tiers (describe-to-picker / :economy / :premium all = 1) — auto-filled from STATIC_CREDIT_COSTS.
+  },
+  {
     type: "transcribe",
     label: "Transcribe",
     category: "ai-text",

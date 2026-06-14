@@ -2,6 +2,7 @@
 
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import {
   Select,
@@ -637,6 +638,36 @@ export function PersonConfig({ data, onUpdate }: ConfigProps<PersonData>) {
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
       <PromptInjectionPreview hints={buildPersonHints(data)} />
+      <div className="flex flex-col gap-2 rounded-md border border-border/60 p-2">
+        <div className="flex items-center justify-between gap-2">
+          <Label htmlFor="person-apply-mode" className="text-xs text-muted-foreground">
+            When image JSON is injected
+          </Label>
+        </div>
+        <Select
+          value={data.applyMode ?? "override"}
+          onValueChange={(v) => onUpdate({ applyMode: v as PersonData["applyMode"] })}
+        >
+          <SelectTrigger id="person-apply-mode" aria-label="Apply mode">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="override">Full override (clear undetected)</SelectItem>
+            <SelectItem value="overwrite-detected">Overwrite detected (keep rest)</SelectItem>
+            <SelectItem value="fill-empty">Fill empty only</SelectItem>
+          </SelectContent>
+        </Select>
+        <div className="flex items-center justify-between gap-2">
+          <Label htmlFor="person-auto-apply" className="text-xs text-muted-foreground">
+            Auto-apply on change
+          </Label>
+          <Switch
+            id="person-auto-apply"
+            checked={data.autoApplyInjected ?? false}
+            onCheckedChange={(c) => onUpdate({ autoApplyInjected: c })}
+          />
+        </div>
+      </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="person-pre-text" className="text-xs text-muted-foreground">
           Custom text (before)

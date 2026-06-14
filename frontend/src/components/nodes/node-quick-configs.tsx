@@ -35,7 +35,7 @@ import {
   getDurationsForVideoModel,
   VIDEO_RESOLUTION_OPTIONS,
 } from "@/components/editor/config-panels/model-options"
-import { LLM_MODELS, SHEET_TYPES, SHEET_SKINS } from "@nodaro/shared"
+import { LLM_MODELS, ANTHROPIC_VISION_MODELS, SHEET_TYPES, SHEET_SKINS } from "@nodaro/shared"
 import { ALL_LANGUAGES } from "@/lib/audio-tags"
 
 /**
@@ -119,6 +119,16 @@ const llmModelControl: QuickConfigControl = {
   ariaLabel: "Model",
   icon: Sparkles,
   options: LLM_MODELS.map((m) => ({ value: m.id, label: m.displayName })),
+}
+
+/** Anthropic-only LLM model dropdown (writes `data.llmModel`). The
+ *  describe-to-picker route uses forced tool-use, which only Anthropic-direct
+ *  supports, so the quick strip must offer Anthropic vision models exclusively. */
+const anthropicModelControl: QuickConfigControl = {
+  field: "llmModel",
+  ariaLabel: "Model",
+  icon: Sparkles,
+  options: ANTHROPIC_VISION_MODELS.map((m) => ({ value: m.id, label: m.displayName })),
 }
 
 // NOTE: the lists below mirror INLINE `<SelectItem>`s in the referenced config
@@ -340,6 +350,7 @@ export const NODE_QUICK_CONFIGS: Readonly<Record<string, ReadonlyArray<QuickConf
   "generate-script": [llmModelControl],
   "qa-check": [llmModelControl],
   "image-to-text": [llmModelControl],
+  "describe-to-picker": [anthropicModelControl],
   "image-critic": [llmModelControl],
   "forced-alignment": [llmModelControl],
   "motion-graphics": [llmModelControl],

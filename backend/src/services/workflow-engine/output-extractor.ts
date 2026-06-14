@@ -612,6 +612,14 @@ export function getPrimaryOutput(
     return output.json === undefined ? undefined : JSON.stringify(output.json)
   }
 
+  // Describe-to-picker: single `picker-json` output (a structured catalog JSON
+  // object). Stringify for generic text consumers; Extract Field / the picker
+  // consumer read state.output.json directly (bypassing getPrimaryOutput).
+  // Mirrors the web-scrape `json` branch — it is a data/JSON producer, not text.
+  if (sourceType === "describe-to-picker") {
+    return output.json === undefined ? undefined : JSON.stringify(output.json)
+  }
+
   // Extract Field: single `text` output.
   if (sourceType === "extract-field") {
     return output.extractedText
@@ -1062,6 +1070,15 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
   // Web-scrape: single `json` output (object/array from the actor).
   if (type === "web-scrape") {
     const json = data.generatedJson
+    return json === undefined ? undefined : { json }
+  }
+
+  // Describe-to-picker: single `json` output (the emitted catalog picker JSON,
+  // persisted on data.generatedPickerJson). Mirrors web-scrape's json branch so
+  // a skipped / "Run from here" describe-to-picker hydrates the picker-json
+  // handle from saved node data without re-running.
+  if (type === "describe-to-picker") {
+    const json = data.generatedPickerJson
     return json === undefined ? undefined : { json }
   }
 

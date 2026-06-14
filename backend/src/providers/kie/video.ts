@@ -66,10 +66,18 @@ const GROK_VIDEO_15_ASPECT_RATIOS = new Set<string>([
 
 /**
  * Merge Seedance 2.0 options into the KIE payload (I2V + T2V).
- * Returns whether multimodal reference mode is active (video/audio refs present),
- * which is mutually exclusive with first/last frame mode per KIE's schema.
+ * Returns whether REFERENCE-VIDEO mode is active — mutually exclusive with
+ * first/last frame mode per KIE's schema, so the i2v caller deletes
+ * first_frame_url/last_frame_url when this is true.
+ *
+ * Audio is DELIBERATELY excluded from the gate: `reference_audio_urls` is
+ * compatible with a `first_frame_url` (KIE's audio-driven lip-sync — a face
+ * image + a voice line), so audio must NOT force the first-frame deletion. The
+ * generate-video NODE never sends frame+audio together (its route strips
+ * reference audio in frames mode), so excluding audio here only matters for the
+ * lip-sync path, which intentionally pairs a first frame with reference audio.
  */
-function applySeedance2Params(
+export function applySeedance2Params(
   input: Record<string, unknown>,
   options: ProviderOptions | undefined,
 ): { hasMultimodalRef: boolean } {
@@ -85,7 +93,9 @@ function applySeedance2Params(
   if (options?.aspectRatio) input.aspect_ratio = options.aspectRatio
   if (options?.resolution) input.resolution = options.resolution
   if (input.duration !== undefined) input.duration = Number(input.duration)
-  return { hasMultimodalRef: refVideos.length > 0 || refAudios.length > 0 }
+  // Audio is intentionally NOT part of this gate — see the doc comment above:
+  // reference audio coexists with a first frame (audio-driven lip-sync).
+  return { hasMultimodalRef: refVideos.length > 0 }
 }
 
 // Audio-duration cap per lip-sync provider (seconds).
@@ -835,7 +845,7 @@ export class KieVideoProvider
       if (hasMultimodalRef) {
         if (endFrameUrl) {
           throw createSanitizedError(
-            "Seedance 2.0: reference videos/audio cannot be combined with start+end frame. Disconnect one mode before running.",
+            "Seedance 2.0: reference videos cannot be combined with start+end frame. Disconnect one mode before running.",
             "Video generation",
           )
         }

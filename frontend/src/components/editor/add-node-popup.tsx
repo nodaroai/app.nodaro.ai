@@ -698,6 +698,13 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     category: "AI",
     group: "Image",
   },
+  {
+    type: "describe-to-picker",
+    label: "Describe to Picker",
+    icon: <ScanFace className="h-4 w-4" />,
+    category: "AI",
+    group: "Image",
+  },
   // AI — Video
   {
     type: "generate-video",
@@ -1404,7 +1411,7 @@ const COMMON_LEAD: ReadonlyArray<SceneNodeType> = [
   "list",
 ];
 const COMMON_SECTIONS: ReadonlyArray<CommonSection> = [
-  { title: "Image", types: ["generate-image", "upscale-image", "image-to-text", "image-critic"] },
+  { title: "Image", types: ["generate-image", "upscale-image", "image-to-text", "describe-to-picker", "image-critic"] },
   { title: "Video", types: ["generate-video", "extend-video", "motion-transfer", "lip-sync", "combine-videos", "merge-video-audio"] },
   { title: "Voice & Music", types: ["text-to-speech", "voice-changer", "suno-generate"] },
 ];

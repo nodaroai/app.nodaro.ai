@@ -395,3 +395,21 @@ describe("resolveViewMode", () => {
     expect(resolveViewMode({ columns: [colNoType] })).toBe("list")
   })
 })
+
+// ---------------------------------------------------------------------------
+// Generate Video default mode (product decision: new seedance-2 nodes start in
+// "references" mode, not "frames"). Set on defaultData so only NEW nodes get
+// it — legacy nodes loaded from the DB keep their saved value / the "frames"
+// runtime fallback.
+// ---------------------------------------------------------------------------
+
+describe("generate-video defaultData", () => {
+  const def = NODE_DEFINITIONS.find((d) => d.type === "generate-video")
+
+  it("defaults a new node to seedance-2-fast in references mode", () => {
+    expect(def).toBeDefined()
+    const data = def!.defaultData as Record<string, unknown>
+    expect(data.provider).toBe("seedance-2-fast")
+    expect(data.seedance2InputMode).toBe("references")
+  })
+})

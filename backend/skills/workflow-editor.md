@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-06-13T21:18:49.205Z
-generated_from: 328d4a1b
+generated_at: 2026-06-14T16:32:34.857Z
+generated_from: c7e81348f
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -90,6 +90,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `composition-effects` — Composition Effects
 - `creature` — Animal/Creature
 - `deduplicate` — Remove Duplicates
+- `describe-to-picker` — Describe to Picker
 - `dubbing` — Dubbing
 - `duration` — Duration
 - `era` — Era / Period

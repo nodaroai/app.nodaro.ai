@@ -52,6 +52,12 @@ export function getHandleConnectionLimit(
     return { limit: 1, providerLabel: "Retake", isMultiProviderMin: false }
   }
 
+  // person's `picker-json` target accepts exactly one image→picker analysis
+  // result — the consumer applies a single JSON into its dimension fields.
+  if (node.type === "person" && handleId === "picker-json") {
+    return { limit: 1, providerLabel: "Picker", isMultiProviderMin: false }
+  }
+
   if (node.type === "generate-image" && handleId === "references") {
     const data = node.data as { provider?: string; providers?: readonly string[] } | undefined
     const providers: readonly string[] =
@@ -118,17 +124,27 @@ export function getHandleConnectionLimit(
           ? { limit: caps?.images ?? 1, providerLabel, isMultiProviderMin: false }
           : { limit: 0, providerLabel, isMultiProviderMin: false }
       case "videoReferences": {
+        // Multimodal reference input — mutually exclusive with frames on
+        // Seedance 2, so disable it in frames mode (mirrors imageReferences
+        // above + the runtime stripping in execute-node/generate-video).
+        if (s2ReferencesDisabled) return { limit: 0, providerLabel, isMultiProviderMin: false }
         const cap = caps?.videos
         return cap != null
           ? { limit: cap, providerLabel, isMultiProviderMin: false }
           : { limit: 0, providerLabel, isMultiProviderMin: false }
       }
       case "audio":
+        // NOTE: `audio` (a post-gen soundtrack/overlay) is NOT a multimodal
+        // reference and is available in BOTH Seedance 2 modes — do not gate it.
         if (provider === "ltx-2.3-fast") {
           return { limit: 0, providerLabel, isMultiProviderMin: false }
         }
         return { limit: 1, providerLabel, isMultiProviderMin: false }
       case "audioReferences": {
+        // Multimodal reference input — mutually exclusive with frames on
+        // Seedance 2 (distinct from the `audio` overlay above). Disable in
+        // frames mode so the pip can't be wired and then silently dropped.
+        if (s2ReferencesDisabled) return { limit: 0, providerLabel, isMultiProviderMin: false }
         const cap = caps?.audio
         return cap != null
           ? { limit: cap, providerLabel, isMultiProviderMin: false }

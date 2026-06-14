@@ -280,6 +280,7 @@ export {
 export {
   LLM_MODELS,
   LLM_MODEL_IDS,
+  ANTHROPIC_VISION_MODELS,
   LLM_FEATURE_DEFAULTS,
   LLM_MODALITY_CAPS,
   getLlmModel,
@@ -883,6 +884,8 @@ export {
   PERSON_DIMENSION_LABELS,
   PERSON_DIMENSION_SECTIONS,
   PERSON_FIELD_BY_DIMENSION,
+  MAX_SELECTED_BY_DIMENSION,
+  getPersonDimensionLimit,
   getPerson,
   getPersonLabel,
   getPersonPromptHint,
@@ -890,6 +893,20 @@ export {
   migratePersonValue,
 } from "./person.js"
 export type { Person, PersonDimension, PersonDimensionSection, PersonValue } from "./person.js"
+export {
+  buildPickerAnalyzerSpec,
+  buildPickerZodSchema,
+  buildPickerLegend,
+  getPickerAnalyzer,
+  applyPickerJson,
+} from "./picker-analyzer-registry.js"
+export type {
+  PickerType,
+  PickerAnalyzerSpec,
+  PickerDimensionSpec,
+  PickerApplyMode,
+  PickerAnalyzer,
+} from "./picker-analyzer-registry.js"
 export {
   WARDROBE, WARDROBE_DIMENSION_ORDER, WARDROBE_CATEGORY_LABELS, WARDROBE_FIELD_BY_DIMENSION,
   buildWardrobeHints, getWardrobePromptHint, getWardrobeEntry, getWardrobeEntriesByDimension,

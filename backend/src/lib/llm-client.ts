@@ -7,6 +7,7 @@
  * - responses (GPT-5.4): POST /api/v1/responses
  */
 
+import type Anthropic from "@anthropic-ai/sdk"
 import { config } from "./config.js"
 import { getLlmModel, LLM_FEATURE_DEFAULTS, calculateLlmCost } from "@nodaro/shared"
 import type { LlmModelDef, LlmFeature } from "@nodaro/shared"
@@ -196,22 +197,30 @@ function buildResponsesInput(req: LlmRequest): Array<Record<string, unknown>> {
   return input
 }
 
+/**
+ * Map a single {@link LlmContentBlock} → Anthropic content block (text + image
+ * only; Anthropic vision rejects video/audio). Shared by {@link buildAnthropicMessages}
+ * and structured-llm's `toAnthropicContent` so the per-block mapping lives once.
+ */
+export function llmBlockToAnthropic(b: LlmContentBlock): Anthropic.Messages.ContentBlockParam {
+  if (b.type === "text") return { type: "text", text: b.text }
+  if (b.type === "image_base64") {
+    return { type: "image", source: { type: "base64", media_type: b.mediaType as "image/png" | "image/jpeg" | "image/webp" | "image/gif", data: b.data } }
+  }
+  if (b.type === "image") return { type: "image", source: { type: "url", url: b.url } }
+  if (b.type === "video" || b.type === "audio") {
+    throw new Error(`Anthropic does not support ${b.type} input — pick a Gemini model for video/audio refs.`)
+  }
+  const _exhaustive: never = b
+  return _exhaustive
+}
+
 function buildAnthropicMessages(req: LlmRequest) {
   return req.messages.map((m) => {
     if (typeof m.content === "string") {
       return { role: m.role as "user" | "assistant", content: m.content }
     }
-    const blocks = m.content.map((b) => {
-      if (b.type === "text") return { type: "text" as const, text: b.text }
-      if (b.type === "image_base64") return { type: "image" as const, source: { type: "base64" as const, media_type: b.mediaType as "image/png" | "image/jpeg" | "image/webp" | "image/gif", data: b.data } }
-      if (b.type === "image") return { type: "image" as const, source: { type: "url" as const, url: b.url } }
-      if (b.type === "video" || b.type === "audio") {
-        throw new Error(`Anthropic SDK does not support ${b.type} input — pick a Gemini model for video/audio refs.`)
-      }
-      const _exhaustive: never = b
-      return _exhaustive
-    })
-    return { role: m.role as "user" | "assistant", content: blocks }
+    return { role: m.role as "user" | "assistant", content: m.content.map(llmBlockToAnthropic) }
   })
 }
 
