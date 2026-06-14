@@ -627,6 +627,33 @@ const map: LocaleCatalogMap = {
   "feature-under-eye-circles": { label: "עיגולים מתחת לעיניים", description: "עיגולים כהים עדינים מתחת לעיניים (שונה משקיות נפוחות)" },
   "feature-fangs": { label: "ניבים", description: "ניבים גלויים (ערפד / ארכיטיפ דמות)" },
 
+  // ----- גאומטריית הפנים: עצמות לחיים / מילוי / עיניים / קצה האף / שפתיים -----
+  "cheekbones-average": { label: "ממוצעות", description: "בליטת עצמות לחיים ממוצעת (ללא הדגשה)" },
+  "cheekbones-low": { label: "נמוכות", description: "עצמות לחיים נמוכות ושטוחות" },
+  "cheekbones-high-defined": { label: "גבוהות ומוגדרות", description: "עצמות לחיים גבוהות ומוגדרות בבירור" },
+  "cheekbones-sculpted": { label: "גבוהות ומפוסלות", description: "עצמות לחיים גבוהות מפוסלות בחדות" },
+  "cheekbones-wide": { label: "רחבות", description: "עצמות לחיים רחבות ובולטות" },
+  "facial-fullness-average": { label: "ממוצע", description: "מילוי פנים ממוצע" },
+  "facial-fullness-gaunt": { label: "כחוש", description: "לחיים שקועות, מעט מאוד שומן בפנים" },
+  "facial-fullness-lean": { label: "רזה", description: "מעט שומן בפנים, שקיעה עדינה מתחת לעצמות הלחיים" },
+  "facial-fullness-full": { label: "מלא", description: "לחיים רכות וממולאות היטב" },
+  "facial-fullness-round": { label: "עגול", description: "פנים עגולות, לחיים רכות ועגולות" },
+  "eye-wide": { label: "רחבות", description: "עיניים רחבות וגדולות" },
+  "eye-narrow": { label: "צרות", description: "עיניים צרות ומוארכות" },
+  "eyelid-standard": { label: "סטנדרטי", description: "עפעף עליון סטנדרטי" },
+  "canthal-neutral": { label: "ניטרלי", description: "הטיית זווית עין ניטרלית" },
+  "eye-spacing-average": { label: "ממוצע", description: "מרווח עיניים ממוצע" },
+  "eyeset-average": { label: "ממוצע", description: "מרחק ממוצע בין הגבה לעין" },
+  "eyeset-low": { label: "מיקום נמוך", description: "מרחק קטן בין הגבה לעין (hunter eyes)" },
+  "eyeset-high": { label: "מיקום גבוה", description: "מרחק נדיב בין הגבה לעין (doe eyes)" },
+  "nose-tip-natural": { label: "טבעי", description: "קצה אף טבעי (ללא הדגשה)" },
+  "nose-tip-refined": { label: "מעודן", description: "קצה מעודן וצר" },
+  "nose-tip-upturned": { label: "סולד", description: "קצה מעט סולד כלפי מעלה" },
+  "nose-tip-rounded": { label: "מעוגל", description: "קצה רך ומעוגל" },
+  "nose-tip-drooping": { label: "צונח", description: "קצה צונח מעט כלפי מטה" },
+  "lips-full-lower": { label: "שפה תחתונה מלאה", description: "שפתיים מלאות עם שפה תחתונה מלאה יותר" },
+  "lips-natural": { label: "טבעי", description: "צורת שפתיים טבעית" },
+  "lips-heart": { label: "לב", description: "שפתיים בצורת לב עם קשת קופידון מוגדרת" },
 }
 
 export default map

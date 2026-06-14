@@ -7,6 +7,10 @@ const map: LocaleCatalogMap = {
   "octane-render": { description: "Path tracing spectral GPU" },
   "redshift": { description: "Moteur de production GPU biaisé" },
   "houdini-mantra": { description: "Rendu physique de qualité VFX" },
+  "arnold-render": { description: "Path tracer VFX standard de l'industrie" },
+  "corona-renderer": { description: "Moteur non biaisé photoréaliste pour l'archi-viz" },
+  "vray": { description: "Moteur de production produit / archi-viz / VFX standard de l'industrie" },
+  "aces": { description: "Gestion des couleurs ACES de qualité cinéma" },
   // Render-quality keywords
   "raytracing": { label: "Ray tracing", description: "Reflets et ombres précis" },
   "physically-based-rendering": { label: "PBR", description: "Matériaux physiquement réalistes" },

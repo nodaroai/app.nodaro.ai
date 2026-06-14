@@ -13,6 +13,7 @@ import {
 } from "@nodaro/shared"
 import { pickIds, togglePick } from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
+import { Switch } from "@/components/ui/switch"
 import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"
 import { FramingPreview } from "./framing-preview"
@@ -192,22 +193,30 @@ function CategorySection({
   const baseLabel = FRAMING_CATEGORY_LABELS[category]
   const multi = maxSelected > 1
   const label = multi ? `${baseLabel} (pick up to ${maxSelected})` : baseLabel
+  const switchId = `${id}-${field}`
   return (
     <div className="flex flex-col gap-1.5 border-t-[3px] border-border/40">
-      <div className="flex items-center gap-2 px-0.5 mt-5">
-        <input
-          type="checkbox"
-          id={`${id}-${field}`}
-          checked={checked}
-          onChange={(e) => onToggle(e.target.checked)}
-          className="rounded border-muted-foreground/40"
-        />
+      <div className="flex items-center justify-between gap-2 px-0.5 mt-5">
         <label
-          htmlFor={`${id}-${field}`}
-          className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground select-none cursor-pointer"
+          htmlFor={switchId}
+          className={cn(
+            "text-[18px] font-semibold uppercase tracking-wide select-none cursor-pointer transition-colors",
+            checked ? "text-[#ff0073]" : "text-muted-foreground/60",
+          )}
         >
-          {label}
+          {baseLabel}
+          {multi && checked && (
+            <span className="ml-2 text-[10px] font-normal normal-case tracking-normal text-muted-foreground">
+              pick up to {maxSelected}
+            </span>
+          )}
         </label>
+        <Switch
+          id={switchId}
+          checked={checked}
+          onCheckedChange={onToggle}
+          aria-label={`Enable ${baseLabel}`}
+        />
       </div>
       <div role={multi ? "group" : "radiogroup"} aria-label={label} className={cn("grid grid-cols-3 gap-1.5 transition-opacity", !checked && "opacity-40")}>
         {framings.map((framing) => {

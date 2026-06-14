@@ -49,6 +49,8 @@ const FACIAL_HAIR: Record<string, JSX.Element> = {
   "face-goatee":       <g>{FACE_BASE}{p("M10 16 Q12 20 14 16 L14 20 Q12 22 10 20 Z")}</g>,
   "face-short-beard":  <g>{FACE_BASE}{p("M6 14 Q12 19 18 14 L17 19 Q12 21 7 19 Z")}</g>,
   "face-full-beard":   <g>{FACE_BASE}{p("M5 13 Q12 21 19 13 L18 22 Q12 24 6 22 Z")}</g>,
+  // Denser than stubble (more dots, lower on the jaw) but lighter than a beard.
+  "face-five-oclock-shadow": <g>{FACE_BASE}{ps("M6 15 L6.5 15.5 M8 16 L8.5 16.5 M10 17 L10.5 17.5 M12 17.5 L12 17.5 M14 17 L14.5 17.5 M16 16 L16.5 16.5 M18 15 L18.5 15.5 M7 17 L7.5 17.5 M9 18 L9.5 18.5 M13 18 L13.5 18.5 M15 18 L15.5 18.5 M17 17 L17.5 17.5")}</g>,
 }
 
 // ---------------------------------------------------------------------------
@@ -109,15 +111,26 @@ const JAWLINE: Record<string, JSX.Element> = {
 // Eye Shape — single eye drawing; corners + lid shape vary.
 // ---------------------------------------------------------------------------
 const EYE_SHAPE: Record<string, JSX.Element> = {
-  "eye-almond":     <g>{ps("M3 12 Q12 6 21 12 Q12 18 3 12 Z")}{c(12, 12, 2.5)}</g>,
-  "eye-round":      <g>{cs(12, 12, 6)}{c(12, 12, 2.5)}</g>,
-  "eye-hooded":     <g>{ps("M3 12 Q12 7 21 12 Q12 17 3 12 Z")}{ps("M3 12 Q12 4 21 12")}{c(12, 13, 2)}</g>,
-  "eye-monolid":    <g>{ps("M3 11 Q12 8 21 11 Q12 15 3 11 Z")}{c(12, 11, 2)}</g>,
-  "eye-deep-set":   <g>{ps("M5 9 Q12 7 19 9")}{ps("M3 13 Q12 9 21 13 Q12 17 3 13 Z")}{c(12, 13, 2)}</g>,
-  "eye-downturned": <g>{ps("M3 9 Q12 7 21 13 Q12 19 3 9 Z")}{c(11, 12, 2.5)}</g>,
-  "eye-upturned":   <g>{ps("M3 13 Q12 19 21 9 Q12 7 3 13 Z")}{c(13, 12, 2.5)}</g>,
-  "eye-wide-set":   <g>{ps("M1 12 Q5 9 9 12 Q5 15 1 12 Z")}{ps("M15 12 Q19 9 23 12 Q19 15 15 12 Z")}{c(5, 12, 1.5)}{c(19, 12, 1.5)}</g>,
-  "eye-close-set":  <g>{ps("M5 12 Q9 9 13 12 Q9 15 5 12 Z")}{ps("M11 12 Q15 9 19 12 Q15 15 11 12 Z")}{c(9, 12, 1.5)}{c(15, 12, 1.5)}</g>,
+  "eye-almond":         <g>{ps("M3 12 Q12 6 21 12 Q12 18 3 12 Z")}{c(12, 12, 2.5)}</g>,
+  "eye-round":          <g>{cs(12, 12, 6)}{c(12, 12, 2.5)}</g>,
+  "eye-hooded":         <g>{ps("M3 12 Q12 7 21 12 Q12 17 3 12 Z")}{ps("M3 12 Q12 4 21 12")}{c(12, 13, 2)}</g>,
+  "eye-monolid":        <g>{ps("M3 11 Q12 8 21 11 Q12 15 3 11 Z")}{c(12, 11, 2)}</g>,
+  "eye-deep-set":       <g>{ps("M5 9 Q12 7 19 9")}{ps("M3 13 Q12 9 21 13 Q12 17 3 13 Z")}{c(12, 13, 2)}</g>,
+  "eye-downturned":     <g>{ps("M3 9 Q12 7 21 13 Q12 19 3 9 Z")}{c(11, 12, 2.5)}</g>,
+  "eye-upturned":       <g>{ps("M3 13 Q12 19 21 9 Q12 7 3 13 Z")}{c(13, 12, 2.5)}</g>,
+  "eye-wide-set":       <g>{ps("M1 12 Q5 9 9 12 Q5 15 1 12 Z")}{ps("M15 12 Q19 9 23 12 Q19 15 15 12 Z")}{c(5, 12, 1.5)}{c(19, 12, 1.5)}</g>,
+  "eye-close-set":      <g>{ps("M5 12 Q9 9 13 12 Q9 15 5 12 Z")}{ps("M11 12 Q15 9 19 12 Q15 15 11 12 Z")}{c(9, 12, 1.5)}{c(15, 12, 1.5)}</g>,
+  // eyelid-type
+  "eyelid-standard":    <g>{ps("M3 12 Q12 6 21 12 Q12 18 3 12 Z")}{ps("M5 10 Q12 6 19 10")}{c(12, 12, 2.5)}</g>,
+  "eye-droopy":         <g>{ps("M3 11 Q12 9 21 11 Q14 18 3 14 Z")}{ps("M3 11 Q12 6 21 11")}{c(11, 13, 2)}</g>,
+  // canthal-tilt
+  "canthal-neutral":    <g>{ps("M3 12 L7 9 Q12 7 17 9 L21 12 L17 15 Q12 17 7 15 Z")}{c(12, 12, 2.5)}</g>,
+  // eye-shape (additional)
+  "eye-double-eyelid":  <g>{ps("M3 12 Q12 7 21 12 Q12 17 3 12 Z")}{ps("M4 9 Q12 5 20 9")}{c(12, 12, 2.5)}</g>,
+  "eye-wide":           <g>{ps("M2 12 Q12 3 22 12 Q12 21 2 12 Z")}{c(12, 12, 3.5)}</g>,
+  "eye-narrow":         <g>{ps("M2 12 Q12 9 22 12 Q12 15 2 12 Z")}{c(12, 12, 1.8)}</g>,
+  // eye-spacing
+  "eye-spacing-average":<g>{ps("M2 12 Q5 10 8 12 Q5 14 2 12 Z")}{ps("M16 12 Q19 10 22 12 Q19 14 16 12 Z")}{c(5, 12, 1.5)}{c(19, 12, 1.5)}</g>,
 }
 
 // ---------------------------------------------------------------------------
@@ -132,6 +145,12 @@ const NOSE: Record<string, JSX.Element> = {
   "nose-broad":    ps("M10 4 L8 14 Q8 18 12 18 Q16 18 16 14 L14 4"),
   "nose-narrow":   ps("M12 4 L11 16 L13 16 Z M10 18 L14 18"),
   "nose-hooked":   ps("M11 4 Q14 7 14 12 Q14 16 9 18"),
+  // nose-tip — bridge held constant, the TIP shape (bottom ~6px) varies.
+  "nose-tip-natural":  ps("M12 4 L12 15 M9 18 Q12 19 15 18"),
+  "nose-tip-refined":  ps("M12 4 L12 13 L11 17 L13 17 Z M10 19 Q12 20 14 19"),
+  "nose-tip-upturned": ps("M12 4 L12 14 Q12 18 9 17 M12 14 Q12 18 15 17"),
+  "nose-tip-rounded":  <g>{ps("M12 4 L12 13")}{cs(12, 16, 3)}</g>,
+  "nose-tip-drooping": ps("M12 4 L12 13 Q12 18 14 20 L13 16 M9 18 Q11 19 13 18"),
 }
 
 // ---------------------------------------------------------------------------
@@ -144,6 +163,11 @@ const LIPS: Record<string, JSX.Element> = {
   "lips-wide":       p("M1 11 Q12 8 23 11 Q23 14 12 16 Q1 14 1 11 Z"),
   "lips-cupids-bow": p("M3 10 Q7 8 9 12 L12 8 L15 12 Q17 8 21 10 Q21 14 12 16 Q3 14 3 10 Z"),
   "lips-small":      p("M7 10 Q12 8 17 10 Q17 13 12 14 Q7 13 7 10 Z"),
+  // lip-shape / lip-fullness (additional) — natural is the clean default mouth,
+  // full-lower exaggerates the bottom lip, heart adds a strong cupid's-bow peak.
+  "lips-natural":    p("M5 10 Q12 8 19 10 Q19 13 12 15 Q5 13 5 10 Z"),
+  "lips-full-lower": p("M4 10 Q12 8 20 10 Q19 12 12 12 Q5 12 4 10 Z M4 12 Q12 20 20 12 Q12 14 4 12 Z"),
+  "lips-heart":      p("M3 11 Q7 7 9 11 Q11 7 12 9 Q13 7 15 11 Q17 7 21 11 Q21 15 12 19 Q3 15 3 11 Z"),
 }
 
 // ---------------------------------------------------------------------------
@@ -158,6 +182,8 @@ const BODY_PROPORTIONS: Record<string, JSX.Element> = {
   "proportions-pear":         <g>{c(12, 4, 2)}{p("M10 6 L9 12 L7 14 L9 22 M14 6 L15 12 L17 14 L15 22")}</g>,
   "proportions-apple":        <g>{c(12, 4, 2)}{p("M9 6 L7 12 L9 14 L9 22 M15 6 L17 12 L15 14 L15 22")}</g>,
   "proportions-inverted":     <g>{c(12, 4, 2)}{p("M7 6 L10 12 L10 14 L9 22 M17 6 L14 12 L14 14 L15 22")}</g>,
+  // Broad-shouldered V-taper to a narrow waist, plus flexed arms = muscle.
+  "proportions-athletic-muscular": <g>{c(12, 4, 2)}{p("M8 7 L10 12 L9 15 L8 22 M16 7 L14 12 L15 15 L16 22 M9 7 L5 10 L8 13 M15 7 L19 10 L16 13")}</g>,
 }
 
 function Svg({ children, className }: { children: JSX.Element; className?: string }) {

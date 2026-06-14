@@ -12,6 +12,7 @@ import {
   type TemporalValue,
 } from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
+import { Switch } from "@/components/ui/switch"
 import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"
 import { TemporalPreview } from "./temporal-preview"
@@ -135,22 +136,25 @@ function CategorySection({
 }: CategorySectionProps) {
   const id = useId()
   const label = TEMPORAL_CATEGORY_LABELS[category]
+  const switchId = `${id}-${field}`
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-center gap-2 px-0.5">
-        <input
-          type="checkbox"
-          id={`${id}-${field}`}
-          checked={checked}
-          onChange={(e) => onToggle(e.target.checked)}
-          className="rounded border-muted-foreground/40"
-        />
+    <div className="flex flex-col gap-1.5 border-t-[3px] border-border/40">
+      <div className="flex items-center justify-between gap-2 px-0.5 mt-5">
         <label
-          htmlFor={`${id}-${field}`}
-          className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground select-none cursor-pointer"
+          htmlFor={switchId}
+          className={cn(
+            "text-[18px] font-semibold uppercase tracking-wide select-none cursor-pointer transition-colors",
+            checked ? "text-[#ff0073]" : "text-muted-foreground/60",
+          )}
         >
           {label}
         </label>
+        <Switch
+          id={switchId}
+          checked={checked}
+          onCheckedChange={onToggle}
+          aria-label={`Enable ${label}`}
+        />
       </div>
       <div role="radiogroup" aria-label={label} className={cn("grid grid-cols-3 gap-1.5 transition-opacity", !checked && "opacity-40")}>
         {temporals.map((temporal) => {

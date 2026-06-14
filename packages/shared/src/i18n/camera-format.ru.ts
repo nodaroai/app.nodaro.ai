@@ -9,6 +9,10 @@ const map: LocaleCatalogMap = {
   "anamorphic-scope": { description: "Широкоэкранный кинолук 2.39:1" },
   // Modern digital — brand names kept
   "arri-alexa": { description: "Премиальная цифровая киносъёмка" },
+  "alexa-65": { description: "Крупноформатная 65-мм киносъёмка класса IMAX" },
+  "sony-venice": { description: "Полнокадровая киносъёмка с двойным базовым ISO" },
+  "blackmagic-pocket-6k": { description: "Инди-кинокамера с записью в RAW" },
+  "red-komodo": { description: "Компактная экшн-кинокамера 6K" },
   "dslr": { description: "Чёткий вид с зеркальной камеры" },
   "mirrorless-a7iii": { description: "Современный гибридный беззеркальный" },
   "canon-r5": { description: "Беззеркальный с высоким разрешением для модной редакции" },

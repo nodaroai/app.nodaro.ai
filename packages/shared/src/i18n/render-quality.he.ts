@@ -6,6 +6,10 @@ const map: LocaleCatalogMap = {
   "octane-render": { description: "GPU spectral path tracing" },
   "redshift": { description: "Renderer מוטה GPU להפקה" },
   "houdini-mantra": { description: "רנדור פיזי ברמת VFX" },
+  "arnold-render": { description: "Path tracer ל-VFX בתקן התעשייה" },
+  "corona-renderer": { description: "Renderer לא מוטה פוטוריאליסטי ל-archviz" },
+  "vray": { description: "Renderer הפקה למוצר / archviz / VFX בתקן התעשייה" },
+  "aces": { description: "ניהול צבע ACES ברמה קולנועית" },
 
   "raytracing": { label: "Ray Tracing", description: "השתקפויות וצללים מדויקים" },
   "physically-based-rendering": { label: "PBR", description: "חומרים מבוססי-פיזיקה" },

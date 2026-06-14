@@ -9,6 +9,10 @@ const map: LocaleCatalogMap = {
   "anamorphic-scope": { description: "2.39:1 宽屏电影感" },
   // Modern digital
   "arri-alexa":             { description: "顶级数字电影机" },
+  "alexa-65":               { description: "IMAX 级 65mm 大画幅电影机" },
+  "sony-venice":            { description: "双原生 ISO 全画幅电影机" },
+  "blackmagic-pocket-6k":   { description: "RAW 录制的独立电影机" },
+  "red-komodo":             { description: "紧凑型 6K 运动电影机" },
   "dslr":                   { label: "数码单反",   description: "锐利的视频单反质感" },
   "mirrorless-a7iii":       { description: "现代混合无反相机" },
   "canon-r5":               { description: "高分辨率时尚大片无反" },

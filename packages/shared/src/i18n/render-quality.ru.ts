@@ -7,6 +7,10 @@ const map: LocaleCatalogMap = {
   "octane-render": { description: "GPU-спектральный path tracing" },
   "redshift": { description: "Продакшн GPU смещённый рендерер" },
   "houdini-mantra": { description: "Физический рендеринг VFX-уровня" },
+  "arnold-render": { description: "Отраслевой стандарт path-tracer для VFX" },
+  "corona-renderer": { description: "Несмещённый фотореалистичный рендерер для archviz" },
+  "vray": { description: "Отраслевой стандарт продакшн-рендерера для продукта / archviz / VFX" },
+  "aces": { description: "Управление цветом ACES кинематографического уровня" },
 
   // ---------------------------- Render-quality keywords ----------------------------
   "raytracing": { label: "Трассировка лучей", description: "Точные отражения и тени" },

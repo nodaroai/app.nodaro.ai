@@ -7,6 +7,10 @@ const map: LocaleCatalogMap = {
   "octane-render": { description: "GPU 스펙트럼 패스 트레이싱입니다" },
   "redshift": { description: "프로덕션급 GPU 편향 렌더러입니다" },
   "houdini-mantra": { description: "VFX급 물리 기반 렌더링입니다" },
+  "arnold-render": { description: "업계 표준 VFX 패스 트레이서입니다" },
+  "corona-renderer": { description: "포토리얼리스틱 비편향 archviz 렌더러입니다" },
+  "vray": { description: "업계 표준 제품 / archviz / VFX 프로덕션 렌더러입니다" },
+  "aces": { description: "시네마급 ACES 컬러 관리입니다" },
 
   // Render-quality keywords
   "raytracing": { label: "레이 트레이싱", description: "정확한 반사와 그림자 처리입니다" },

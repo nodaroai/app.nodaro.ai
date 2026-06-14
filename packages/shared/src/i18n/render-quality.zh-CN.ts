@@ -7,6 +7,10 @@ const map: LocaleCatalogMap = {
   "octane-render":    { description: "GPU 光谱路径追踪" },
   "redshift":         { description: "生产级 GPU 偏置渲染器" },
   "houdini-mantra":   { description: "VFX 级物理渲染" },
+  "arnold-render":    { description: "行业标准的 VFX 路径追踪渲染器" },
+  "corona-renderer":  { description: "照片级真实的无偏 archviz 渲染器" },
+  "vray":             { description: "行业标准的产品 / archviz / VFX 生产渲染器" },
+  "aces":             { description: "电影级 ACES 色彩管理" },
 
   // Render-quality keywords
   "raytracing":                 { label: "光线追踪",     description: "精准的反射与阴影" },

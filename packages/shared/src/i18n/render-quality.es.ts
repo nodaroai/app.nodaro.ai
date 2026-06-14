@@ -6,6 +6,10 @@ const map: LocaleCatalogMap = {
   "octane-render": { description: "Trazado espectral de rayos en GPU" },
   "redshift": { description: "Renderizador GPU con sesgo de producción" },
   "houdini-mantra": { description: "Renderizado físico con calidad VFX" },
+  "arnold-render": { description: "Trazador de rayos VFX estándar de la industria" },
+  "corona-renderer": { description: "Renderizador sin sesgo fotorrealista para archviz" },
+  "vray": { description: "Renderizador de producción de producto / archviz / VFX estándar de la industria" },
+  "aces": { description: "Gestión de color ACES con calidad de cine" },
 
   "raytracing": { label: "Trazado de Rayos", description: "Reflejos + sombras precisas" },
   "physically-based-rendering": { label: "PBR", description: "Materiales físicamente basados" },
