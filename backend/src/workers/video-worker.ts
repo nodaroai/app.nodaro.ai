@@ -55,7 +55,7 @@ export function createVideoWorker() {
       // recover the row via the same handler the reconcile cron uses.
       const { data: jobRecord } = await supabase
         .from("jobs")
-        .select("usage_log_id, user_id, should_watermark, force_private, mcp_client, workflow_execution_id, provider_task_id, provider_kind, reconcile_attempts, job_type, profiles!user_id(public_outputs)")
+        .select("usage_log_id, user_id, should_watermark, force_private, mcp_client, workflow_execution_id, provider_task_id, provider_kind, reconcile_attempts, job_type, input_data, profiles!user_id(public_outputs)")
         .eq("id", jobId)
         .single()
 
@@ -82,6 +82,7 @@ export function createVideoWorker() {
           provider_task_id: jobRecord.provider_task_id as string,
           reconcile_attempts: (jobRecord.reconcile_attempts as number | null) ?? 0,
           job_type: (jobRecord.job_type as string | null) ?? null,
+          input_data: (jobRecord.input_data as Record<string, unknown> | null) ?? null,
         })
         return
       }

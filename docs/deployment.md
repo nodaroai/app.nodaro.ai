@@ -30,6 +30,9 @@ You need:
   - [Anthropic](https://www.anthropic.com) — LLM fallback.
   - [ElevenLabs](https://elevenlabs.io) — voice features (TTS, dubbing,
     voice clone, voice changer, forced alignment).
+  - [fal.ai](https://fal.ai) — optional; enables fal-hosted models (e.g.
+    the Sync Lipsync v3 lip-sync model). Without `FAL_KEY` those models
+    are inert and the rest of the app is unaffected.
 
 Optional:
 
@@ -62,6 +65,10 @@ KIE_API_KEY=
 REPLICATE_API_TOKEN=
 ANTHROPIC_API_KEY=
 ELEVENLABS_API_KEY=
+
+# Optional — enables fal.ai-hosted models (e.g. Sync Lipsync v3).
+# Without it, fal models are inert; the rest of the app is unaffected.
+FAL_KEY=
 
 # Required in Cloud edition for character LoRA training callbacks.
 # Get from `replicate.webhooks.default.secret` or the Replicate dashboard.
@@ -365,8 +372,8 @@ nothing runs. Confirm `REDIS_URL` is correct and Redis is healthy
 
 **A specific node type 500s with `Missing API key`.** That node calls
 a provider whose env var is unset. Add `KIE_API_KEY` /
-`REPLICATE_API_TOKEN` / `ANTHROPIC_API_KEY` / `ELEVENLABS_API_KEY` per
-your needs and restart.
+`REPLICATE_API_TOKEN` / `ANTHROPIC_API_KEY` / `ELEVENLABS_API_KEY` /
+`FAL_KEY` per your needs and restart.
 
 **Film Director pipelines (Cloud) stall at "running" and never
 resume.** A pipeline's orchestration job can be lost — a re-drive that

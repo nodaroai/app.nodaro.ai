@@ -64,7 +64,7 @@ import { ProviderAudioTagWarning } from "./provider-audio-tag-warning"
 import { ConnectedAudioSources } from "./connected-audio-sources"
 import { FinalAudioPromptPreview } from "./final-audio-prompt-preview"
 import { LIP_SYNC_MODELS, TTS_MODELS, SUNO_MODELS } from "./model-options"
-import { REPLICATE_LIP_SYNC_PROVIDERS, getEffectiveSunoCustomMode, SUNO_ADD_TRACK_MODELS, SUNO_TEXT_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars, getMaxTtsChars } from "@nodaro/shared"
+import { REPLICATE_LIP_SYNC_PROVIDERS, FAL_LIP_SYNC_PROVIDERS, getEffectiveSunoCustomMode, SUNO_ADD_TRACK_MODELS, SUNO_TEXT_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars, getMaxTtsChars } from "@nodaro/shared"
 import { PromptLengthCounter } from "./prompt-length-counter"
 import { InjectedReferenceList } from "./injected-reference-list"
 import { SeedanceReferenceTip } from "./seedance-reference-tip"
@@ -1198,14 +1198,20 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
     snippets: promptSnippets,
   })
   const provider = data.provider || "kling-avatar"
-  const isKie = !REPLICATE_LIP_SYNC_PROVIDERS.has(provider as never)
+  // KIE providers (Kling Avatar / InfiniTalk / Seedance) expose the resolution
+  // lever. Replicate AND fal providers do NOT — both must be excluded here so a
+  // fal provider (sync-lipsync-v3) doesn't wrongly render the KIE resolution
+  // dropdown and write a stale `data.resolution` the route's Zod enum rejects.
+  const isKie =
+    !REPLICATE_LIP_SYNC_PROVIDERS.has(provider as never) &&
+    !FAL_LIP_SYNC_PROVIDERS.has(provider as never)
   // Seedance 2 / 2 Fast support 1080p (cinematic tier); other KIE providers
   // cap at 720p. Toggling between them adds/removes the 1080p option.
   const supports1080p = provider === "seedance-2" || provider === "seedance-2-fast"
 
   // Fail-safe: only KIE providers expose the resolution lever. When the user
-  // switches to a Replicate provider (or the cached resolution isn't in the
-  // current provider's valid set), clear/snap so the lip-sync route's Zod
+  // switches to a Replicate or fal provider (or the cached resolution isn't in
+  // the current provider's valid set), clear/snap so the lip-sync route's Zod
   // enum doesn't see a stale value.
   useEffect(() => {
     if (!isKie) {
@@ -1403,23 +1409,30 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
         </>
       )}
 
-      {/* Sync Lipsync 2 Pro params */}
+      {/* Sync Mode — sync.so family (Lipsync 2 Pro on Replicate + Sync Lipsync
+          v3 on fal). Both accept the same 5-value enum and bind data.syncMode. */}
+      {(provider === "lipsync-2-pro" || provider === "sync-lipsync-v3") && (
+        <div>
+          <Label>Sync Mode</Label>
+          {/* Default to each model's native API default: cut_off for fal's
+              sync v3, loop for sync.so Lipsync 2 Pro (Replicate). */}
+          <Select value={data.syncMode ?? (provider === "sync-lipsync-v3" ? "cut_off" : "loop")} onValueChange={(v) => onUpdate({ syncMode: v as LipSyncData["syncMode"] })}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="loop">Loop</SelectItem>
+              <SelectItem value="bounce">Bounce</SelectItem>
+              <SelectItem value="cut_off">Cut off</SelectItem>
+              <SelectItem value="silence">Silence</SelectItem>
+              <SelectItem value="remap">Remap</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground mt-1">Behavior when audio and video durations differ</p>
+        </div>
+      )}
+
+      {/* Lipsync 2 Pro-only params (fal's Sync Lipsync v3 only takes sync_mode) */}
       {provider === "lipsync-2-pro" && (
         <>
-          <div>
-            <Label>Sync Mode</Label>
-            <Select value={data.syncMode ?? "loop"} onValueChange={(v) => onUpdate({ syncMode: v as LipSyncData["syncMode"] })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="loop">Loop</SelectItem>
-                <SelectItem value="bounce">Bounce</SelectItem>
-                <SelectItem value="cut_off">Cut off</SelectItem>
-                <SelectItem value="silence">Silence</SelectItem>
-                <SelectItem value="remap">Remap</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground mt-1">Behavior when audio and video durations differ</p>
-          </div>
           <div>
             <Label>Temperature ({(data.temperature ?? 0.5).toFixed(1)})</Label>
             <Slider min={0} max={1} step={0.1} value={[data.temperature ?? 0.5]} onValueChange={(vals) => onUpdate({ temperature: vals[0] })} />
@@ -1469,6 +1482,11 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
       {provider === "lipsync-2-pro" && (
         <p className="text-xs text-muted-foreground">
           Connect a video (.mp4) and an audio track (.wav) for studio-grade lip sync. Billed per second of output.
+        </p>
+      )}
+      {provider === "sync-lipsync-v3" && (
+        <p className="text-xs text-muted-foreground">
+          Connect a video and an audio track to dub the footage with sync.so v3 (fal.ai). Billed per second of output.
         </p>
       )}
     </div>

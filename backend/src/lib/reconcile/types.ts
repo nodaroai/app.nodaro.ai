@@ -22,6 +22,11 @@ export const PROVIDER_KIND_VALUES = [
   "elevenlabs-sync",
   "anthropic-sync",
   "heygen",
+  // fal.ai queue jobs (sync-lipsync-v3 etc.). The fal branch persists the
+  // request_id via onTaskCreated; reconcileFalJob (Phase C) re-fetches the queue
+  // result and finalizes (or exhausts→refund). Classified async — see
+  // FAL_RECOVER_KINDS + the cron/inline dispatch branches.
+  "fal-request",
   "pre-task",
 ] as const
 
@@ -76,6 +81,11 @@ export const STALE_THRESHOLD_MS: Record<ProviderKind, number> = {
   // — HeyGen's own MAX_POLL_DURATION bounds a run well under 30 min, so this
   // never fails a still-rendering job (same effective threshold pre-task gave it).
   "heygen":                   30 * MIN,
+  // fal.ai queue jobs (sync-lipsync-v3): per-second media jobs that can run
+  // several minutes. 5-min threshold (= the existing global min) keeps
+  // MIN_STALE_THRESHOLD_MS unchanged while giving a live worker headroom before
+  // reconcileFalJob (the async recover handler) re-fetches a stalled row.
+  "fal-request":               5 * MIN,
   // Sentinel kind written when the worker transitions to `processing` BEFORE
   // any upstream provider call. If the handler crashes before firing
   // `onTaskCreated` (or `markProviderCallStart` for sync ops), the row would
@@ -169,12 +179,21 @@ export const ELEVENLABS_RECOVER_KINDS: ReadonlySet<string> = new Set([
   "elevenlabs-async",
 ])
 
+/** Kinds recovered via reconcileFalJob (fal.ai queue jobs — sync-lipsync-v3 etc.).
+ *  The fal request_id is persisted via onTaskCreated; reconcileFalJob re-fetches
+ *  the queue result from it (endpoint resolved off the job's input_data.provider)
+ *  and finalizes, or exhausts→refund after MAX_ATTEMPTS. */
+export const FAL_RECOVER_KINDS: ReadonlySet<string> = new Set([
+  "fal-request",
+])
+
 /** Every kind with an async recover handler — the provider result can be
  *  re-fetched from the persisted provider_task_id and the job completed. */
 export const ASYNC_RECOVERABLE_KINDS: ReadonlySet<string> = new Set([
   ...KIE_RECOVER_KINDS,
   ...REPLICATE_RECOVER_KINDS,
   ...ELEVENLABS_RECOVER_KINDS,
+  ...FAL_RECOVER_KINDS,
 ])
 
 /**

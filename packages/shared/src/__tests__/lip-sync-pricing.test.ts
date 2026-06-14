@@ -47,6 +47,10 @@ describe("getLipSyncMaxAudioSeconds", () => {
     expect(getLipSyncMaxAudioSeconds("lipsync-2-pro")).toBe(300)
   })
 
+  it("reports 5min for the fal sync-lipsync-v3 model (NOT the 15s default)", () => {
+    expect(getLipSyncMaxAudioSeconds("sync-lipsync-v3")).toBe(300)
+  })
+
   it("defaults unknown providers to 15s", () => {
     expect(getLipSyncMaxAudioSeconds("nope")).toBe(15)
   })
@@ -61,6 +65,10 @@ describe("isPerSecondLipSyncProvider", () => {
   it("flags the Replicate per-second dubbing models", () => {
     expect(isPerSecondLipSyncProvider("heygen-lipsync-precision")).toBe(true)
     expect(isPerSecondLipSyncProvider("lipsync-2-pro")).toBe(true)
+  })
+
+  it("flags the fal sync-lipsync-v3 model", () => {
+    expect(isPerSecondLipSyncProvider("sync-lipsync-v3")).toBe(true)
   })
 
   it("returns false for everything else", () => {
@@ -90,6 +98,12 @@ describe("buildLipSyncCreditId", () => {
     expect(buildLipSyncCreditId("heygen-lipsync-precision", 45)).toBe("heygen-lipsync-precision:60s")
     expect(buildLipSyncCreditId("lipsync-2-pro", 200)).toBe("lipsync-2-pro:300s")
     expect(buildLipSyncCreditId("lipsync-2-pro", undefined)).toBe("lipsync-2-pro:300s")
+  })
+
+  it("emits composite IDs for the fal sync-lipsync-v3 model", () => {
+    expect(buildLipSyncCreditId("sync-lipsync-v3", 12)).toBe("sync-lipsync-v3:15s")
+    expect(buildLipSyncCreditId("sync-lipsync-v3", 200)).toBe("sync-lipsync-v3:300s")
+    expect(buildLipSyncCreditId("sync-lipsync-v3", undefined)).toBe("sync-lipsync-v3:300s")
   })
 
   it("returns the bare provider for non-per-second models", () => {

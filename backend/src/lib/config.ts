@@ -32,6 +32,8 @@ const envSchema = z.object({
     .string()
     .default("true")
     .transform((s) => s.toLowerCase() !== "false" && s !== "0"),
+  /** fal.ai API key (https://fal.ai/dashboard/keys). Empty by default — fal provider is gated behind `falEnabled()`. */
+  FAL_KEY: z.string().default(""),
   KIE_API_KEY: z.string().default(""),
   ANTHROPIC_API_KEY: z.string().default(""),
   ELEVENLABS_API_KEY: z.string().default(""),

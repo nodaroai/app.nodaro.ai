@@ -6,6 +6,7 @@ import {
   KIE_RECOVER_KINDS,
   REPLICATE_RECOVER_KINDS,
   ELEVENLABS_RECOVER_KINDS,
+  FAL_RECOVER_KINDS,
   isSyncKind,
   type ProviderKind,
 } from "./types.js"
@@ -48,6 +49,7 @@ interface CandidateRow {
 const KIE_KINDS = KIE_RECOVER_KINDS
 const REPLICATE_KINDS = REPLICATE_RECOVER_KINDS
 const ELEVENLABS_KINDS = ELEVENLABS_RECOVER_KINDS
+const FAL_KINDS = FAL_RECOVER_KINDS
 
 function sqlCutoff(): string {
   return new Date(Date.now() - SQL_PREFILTER_BUFFER_MS).toISOString()
@@ -83,6 +85,7 @@ function hasFreshFinalizeClaim(row: CandidateRow): boolean {
  *   - kie-* → reconcileKieJob
  *   - replicate-* → reconcileReplicateJob
  *   - elevenlabs-async → reconcileElevenLabsJob
+ *   - fal-request → reconcileFalJob
  *
  * Async per-provider handlers either complete the job (via finalizeJobWithMedia),
  * fail it (markFailed + refund), or bump reconcile_attempts and try next tick.
@@ -178,6 +181,17 @@ export async function reconcileInflightJobs(): Promise<ReconcileResult> {
       } else if (ELEVENLABS_KINDS.has(kind)) {
         const { reconcileElevenLabsJob } = await import("./elevenlabs.js")
         await reconcileElevenLabsJob({
+          id: row.id,
+          provider_kind: row.provider_kind,
+          provider_task_id: row.provider_task_id,
+          reconcile_attempts: row.reconcile_attempts,
+          job_type: row.job_type,
+          input_data: row.input_data,
+        })
+        result.recovered++
+      } else if (FAL_KINDS.has(kind)) {
+        const { reconcileFalJob } = await import("./fal.js")
+        await reconcileFalJob({
           id: row.id,
           provider_kind: row.provider_kind,
           provider_task_id: row.provider_task_id,

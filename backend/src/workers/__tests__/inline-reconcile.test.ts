@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   reconcileKieJob: vi.fn().mockResolvedValue(undefined),
   reconcileReplicateJob: vi.fn().mockResolvedValue(undefined),
   reconcileElevenLabsJob: vi.fn().mockResolvedValue(undefined),
+  reconcileFalJob: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock("../../lib/reconcile/kie.js", () => ({
@@ -16,6 +17,10 @@ vi.mock("../../lib/reconcile/replicate.js", () => ({
 
 vi.mock("../../lib/reconcile/elevenlabs.js", () => ({
   reconcileElevenLabsJob: mocks.reconcileElevenLabsJob,
+}))
+
+vi.mock("../../lib/reconcile/fal.js", () => ({
+  reconcileFalJob: mocks.reconcileFalJob,
 }))
 
 import { tryInlineReconcile } from "../inline-reconcile.js"
@@ -76,6 +81,23 @@ describe("tryInlineReconcile", () => {
       expect.objectContaining({ provider_kind: "elevenlabs-async", input_data: null }),
       { claimant: "worker" },
     )
+  })
+
+  it("dispatches fal-request to reconcileFalJob (POSITIVE dispatch — catch-all would swallow a missing branch)", async () => {
+    await tryInlineReconcile({
+      id: "j-fal",
+      provider_kind: "fal-request",
+      provider_task_id: "req-fal",
+      reconcile_attempts: 0,
+      job_type: "lip-sync",
+    })
+    expect(mocks.reconcileFalJob).toHaveBeenCalledTimes(1)
+    expect(mocks.reconcileFalJob).toHaveBeenCalledWith(
+      expect.objectContaining({ provider_kind: "fal-request" }),
+      { claimant: "worker" },
+    )
+    expect(mocks.reconcileKieJob).not.toHaveBeenCalled()
+    expect(mocks.reconcileReplicateJob).not.toHaveBeenCalled()
   })
 
   it("no-op when provider_kind is null (cron handles legacy rows)", async () => {

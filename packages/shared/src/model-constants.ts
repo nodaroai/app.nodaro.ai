@@ -779,6 +779,10 @@ export const LIP_SYNC_PROVIDERS = [
   // priced per-second via buildLipSyncCreditId (see lip-sync-pricing.ts).
   "heygen-lipsync-precision",
   "lipsync-2-pro",
+  // Sync Lipsync v3 — fal.ai-hosted, video-input dubbing model billed per
+  ***REDACTED-OSS-SCRUB***
+  // branch); priced per-second via buildLipSyncCreditId (see lip-sync-pricing.ts).
+  "sync-lipsync-v3",
   // Seedance 2 / 2 Fast — not "lip-sync models" per se, but ByteDance's
   // multimodal video models do native phoneme-level lip sync in 8+
   // languages when fed `reference_audio_urls` alongside a `first_frame_url`.
@@ -806,12 +810,19 @@ export const REPLICATE_LIP_SYNC_PROVIDERS = new Set([
   "lipsync-2-pro",
 ] as const)
 
+/** fal.ai-based lip-sync providers (video+audio → video via the fal queue API).
+ *  Routed through `falLipSync` in the worker's `handleLipSync` fal branch. */
+export const FAL_LIP_SYNC_PROVIDERS = new Set([
+  "sync-lipsync-v3",
+] as const)
+
 /** Lip-sync providers that require video input (not image) */
 export const VIDEO_INPUT_LIP_SYNC_PROVIDERS = new Set([
   "latentsync",
   "video-retalking",
   "heygen-lipsync-precision",
   "lipsync-2-pro",
+  "sync-lipsync-v3",
 ] as const)
 
 /** Lip-sync providers that accept either video or image input */

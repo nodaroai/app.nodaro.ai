@@ -701,6 +701,16 @@ describe("LipSyncConfig — provider-snap useEffect", () => {
     expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ resolution: undefined }))
   })
 
+  it("clears resolution for a fal provider — sync-lipsync-v3 is NOT KIE (audit fix)", () => {
+    // sync-lipsync-v3 is fal; without the FAL_LIP_SYNC_PROVIDERS exclusion in
+    // isKie it would render the KIE resolution dropdown + persist a stale
+    // data.resolution the lip-sync route's Zod enum rejects.
+    const onUpdate = vi.fn()
+    const data = baseLipSyncData({ provider: "sync-lipsync-v3", resolution: "720p" })
+    render(<LipSyncConfig {...commonProps(onUpdate, data)} />)
+    expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ resolution: undefined }))
+  })
+
   it("snaps 1080p to 720p for non-seedance KIE provider", () => {
     // kling-avatar (KIE, no 1080p support) — 1080p invalid, must snap.
     const onUpdate = vi.fn()

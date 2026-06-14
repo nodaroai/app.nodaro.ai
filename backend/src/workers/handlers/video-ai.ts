@@ -13,6 +13,7 @@ import { runVeoExtendTask, runVeo1080pTask, runVeo4kTask } from "../../providers
 
 import { runRunwayExtendTask } from "../../providers/kie/runway-client.js"
 import { replicateLipSync } from "../../providers/replicate/lip-sync.js"
+import { falLipSync } from "../../providers/fal/lip-sync.js"
 import { replicateFaceSwap } from "../../providers/replicate/face-swap.js"
 import { runGroundedSam } from "../../providers/replicate/grounded-sam.js"
 import {
@@ -23,7 +24,7 @@ import {
   runLtxRetake,
 } from "../../providers/replicate/ltx-video.js"
 import { config } from "../../lib/config.js"
-import { REPLICATE_LIP_SYNC_PROVIDERS, SEEDANCE_2_EXTEND_STITCH, SEEDANCE_LIP_SYNC_PROVIDERS, estimateLoopTrimAddonCredits, isVeoProvider } from "@nodaro/shared"
+import { FAL_LIP_SYNC_PROVIDERS, REPLICATE_LIP_SYNC_PROVIDERS, SEEDANCE_2_EXTEND_STITCH, SEEDANCE_LIP_SYNC_PROVIDERS, estimateLoopTrimAddonCredits, isVeoProvider } from "@nodaro/shared"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
 import { combineVideos } from "../../providers/video/combine-videos.js"
 import { resolveSourceMatchedAspect } from "../../providers/video/source-matched-aspect.js"
@@ -641,6 +642,10 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
   let lipSyncKind: ProviderKind
   if (REPLICATE_LIP_SYNC_PROVIDERS.has(resolvedProvider as never)) {
     lipSyncKind = "replicate-prediction"
+  } else if (FAL_LIP_SYNC_PROVIDERS.has(resolvedProvider as never)) {
+    // fal queue jobs reconcile via the "fal-request" kind (tags the row so the
+    // reconcile cron can recover/refund a crashed mid-poll fal job).
+    lipSyncKind = "fal-request"
   } else if (SEEDANCE_LIP_SYNC_PROVIDERS.has(resolvedProvider as never)) {
     lipSyncKind = providerKindForVideoModel(resolvedProvider)
   } else {
@@ -694,6 +699,24 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
     resultDisplayCost = result.displayCost
     resultProviderUsed = result.providerUsed
     resultMeta = result
+  } else if (FAL_LIP_SYNC_PROVIDERS.has(resolvedProvider as never)) {
+    // fal.ai path (sync-lipsync-v3) — video+audio → video dubbing via the fal
+    // queue API. faceUrl can be a video OR an image; the worker already accepts
+    // both. audioDurationSec drives per-second credit bucketing (reserved at the
+    // route); here it only feeds the anomaly/display cost.
+    const faceUrl = videoUrl || imageUrl
+    if (!faceUrl) throw new Error("Lip-sync requires a video or image input")
+    const out = await falLipSync(
+      resolvedProvider,
+      faceUrl,
+      audioUrl,
+      { syncMode, audioDurationSec },
+      { onTaskCreated: lipSyncOnTaskCreated },
+    )
+    resultUrl = out.videoUrl
+    resultCost = out.cost
+    resultDisplayCost = out.cost
+    resultProviderUsed = "fal"
   } else {
     // KIE path (existing) — audioDurationSec drives per-second pricing for
     // kling-avatar(-pro) and selects the longer poll budget for >30s runs.
