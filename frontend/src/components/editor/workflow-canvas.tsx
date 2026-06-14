@@ -518,6 +518,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     focusedLabel: string
     newType: SceneNodeType
     newLabel: string
+    initialData?: Record<string, unknown>
   } | null>(null)
   const [searchModalOpen, setSearchModalOpen] = useState(false)
   const [nodeSearchModalOpen, setNodeSearchModalOpen] = useState(false)
@@ -1465,7 +1466,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
 
   // Auto-connect: a node type was picked → open the Connect dialog for naming + wiring.
   const handlePickType = useCallback(
-    (type: SceneNodeType) => {
+    (type: SceneNodeType, initialData?: Record<string, unknown>) => {
       const ctx = autoConnectCtx
       if (!ctx) return
       const fnode = getNode(ctx.nodeId)
@@ -1473,7 +1474,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       const def = NODE_DEF_MAP.get(type)
       const newLabel =
         ((def?.defaultData as Record<string, unknown> | undefined)?.label as string) || def?.label || type
-      setPendingConnect({ focusedId: ctx.nodeId, focusedType: ctx.nodeType, focusedLabel, newType: type, newLabel })
+      setPendingConnect({ focusedId: ctx.nodeId, focusedType: ctx.nodeType, focusedLabel, newType: type, newLabel, initialData })
       // Hide the popup but KEEP autoConnectCtx so the dialog's Esc can reopen
       // this node list (back navigation). Cleared on confirm / popup close.
       setAddNodePopupOpen(false)
@@ -1511,7 +1512,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       const position = fnode
         ? connectedNodePosition(nodeRect(fnode), dir)
         : screenToFlowPosition(lastMousePositionRef.current)
-      const id = addNode(pc.newType, position)
+      const id = addNode(pc.newType, position, pc.initialData)
       if (id) {
         if (choice.name) useWorkflowStore.getState().updateNodeData(id, { label: choice.name })
         // Only wire if the focused node still exists — it may have been deleted

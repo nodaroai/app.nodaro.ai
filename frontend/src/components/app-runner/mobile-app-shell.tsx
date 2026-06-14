@@ -53,6 +53,7 @@ import {
   GalleryView,
   FullscreenView,
   CompareView,
+  ChatView,
 } from "@/components/presentation/views"
 
 // ---------------------------------------------------------------------------
@@ -227,7 +228,7 @@ export function MobileAppShell({
   const viewMode: PresentationViewMode = (urlViewMode && VALID_VIEW_MODES.has(urlViewMode) && allowedSet.has(urlViewMode)
     ? urlViewMode : null) ?? effectiveDefault
   // Non-standard views (gallery/fullscreen/compare) override the tab content
-  const isViewOverride = viewMode === "gallery" || viewMode === "fullscreen" || viewMode === "compare"
+  const isViewOverride = viewMode === "gallery" || viewMode === "fullscreen" || viewMode === "compare" || viewMode === "chat"
 
   const handleViewModeChange = useCallback((newMode: PresentationViewMode) => {
     setSearchParams((prev) => {
@@ -840,6 +841,22 @@ export function MobileAppShell({
   const showStickyAction = activeTab === "inputs" && !inputsReadOnly && !isViewOverride
   const bottomPadding = showStickyAction ? "calc(112px + var(--safe-area-bottom, 0px))" : "calc(56px + var(--safe-area-bottom, 0px))"
 
+  // Input-card renderer for the chat composer (the shell otherwise inlines InputCard).
+  const renderChatInputCard = useCallback((node: WorkflowNode) => (
+    <InputCard
+      node={node}
+      isFullscreen
+      inputValues={getInputSliceMap(node.id)}
+      onUpdateInput={presUpdateInput}
+      readOnly={inputsReadOnly || isRunning}
+      onOpenMedia={handleOpenMedia}
+      onOpenConfig={setConfigNode}
+      display={getMergedDisplay(node)}
+      nodes={presNodes}
+      edges={presEdges}
+    />
+  ), [getInputSliceMap, presUpdateInput, inputsReadOnly, isRunning, handleOpenMedia, setConfigNode, getMergedDisplay, presNodes, presEdges])
+
   return (
     <div className="h-[100dvh] flex flex-col bg-background text-foreground">
       {/* Header */}
@@ -910,6 +927,13 @@ export function MobileAppShell({
               {...viewProps}
               initialLeft={settings.compareLeft}
               initialRight={settings.compareRight}
+            />
+          ) : viewMode === "chat" ? (
+            <ChatView
+              {...viewProps}
+              renderInputCard={renderChatInputCard}
+              runSlots={runSlots}
+              appName={app.name}
             />
           ) : null
         ) : activeTab === "inputs" ? (

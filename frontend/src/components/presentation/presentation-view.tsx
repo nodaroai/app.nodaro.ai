@@ -84,6 +84,8 @@ import {
   GalleryView,
   FullscreenView,
   CompareView,
+  ChatView,
+  type ChatRunSlotsApi,
 } from "./views"
 
 const FreeCutEditorModal = lazy(() =>
@@ -153,9 +155,11 @@ interface PresentationViewProps {
   onHiddenNodesChange?: (nodeIds: string[]) => void
   /** Called when node states change due to media edits (for external persistence -- e.g., app runner) */
   onNodeStatesChange?: (nodeStates: Record<string, unknown>) => void
+  /** Run-history slots for chat view mode (app runner only); omitted in editor tab mode. */
+  runSlots?: ChatRunSlotsApi
 }
 
-export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCancel, onNewRun, newRunLabel, inputsReadOnly, suppressOutputFallback, isRunning: externalIsRunning, showFullscreenToggle, headerLeft, headerActions, onHiddenNodesChange, onNodeStatesChange }: PresentationViewProps) {
+export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCancel, onNewRun, newRunLabel, inputsReadOnly, suppressOutputFallback, isRunning: externalIsRunning, showFullscreenToggle, headerLeft, headerActions, onHiddenNodesChange, onNodeStatesChange, runSlots }: PresentationViewProps) {
   const { user, signOut: globalSignOut } = useAuth()
   const navigate = useNavigate()
   const [isEditMode, setIsEditMode] = useState(false)
@@ -1934,6 +1938,9 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
           initialRight={settings.compareRight}
           onSelectionChange={handleCompareSelectionChange}
         />
+      )}
+      {viewMode === "chat" && (
+        <ChatView {...editableProps} runSlots={runSlots} appName={workflowName} />
       )}
 
       {/* Node picker dialog */}

@@ -12,8 +12,8 @@ describe("add-node-menu-tab preference", () => {
     localStorage.clear()
   })
 
-  it("defines the five tabs in display order", () => {
-    expect(ADD_NODE_MENU_TABS).toEqual(["common", "image", "video", "audio", "all"])
+  it("defines the six tabs in display order", () => {
+    expect(ADD_NODE_MENU_TABS).toEqual(["common", "image", "video", "audio", "models", "all"])
   })
 
   it("defaults to 'common' when nothing is stored", () => {
@@ -36,13 +36,15 @@ describe("add-node-menu-tab preference", () => {
     expect(nextAddNodeMenuTab("common")).toBe("image")
     expect(nextAddNodeMenuTab("image")).toBe("video")
     expect(nextAddNodeMenuTab("video")).toBe("audio")
-    expect(nextAddNodeMenuTab("audio")).toBe("all")
+    expect(nextAddNodeMenuTab("audio")).toBe("models")
+    expect(nextAddNodeMenuTab("models")).toBe("all")
     expect(nextAddNodeMenuTab("all")).toBe("common")
   })
 
   it("nextAddNodeMenuTab cycles backward with dir=-1 and wraps", () => {
     expect(nextAddNodeMenuTab("common", -1)).toBe("all")
-    expect(nextAddNodeMenuTab("all", -1)).toBe("audio")
+    expect(nextAddNodeMenuTab("all", -1)).toBe("models")
+    expect(nextAddNodeMenuTab("models", -1)).toBe("audio")
     expect(nextAddNodeMenuTab("video", -1)).toBe("image")
   })
 })

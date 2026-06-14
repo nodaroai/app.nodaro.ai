@@ -327,7 +327,7 @@ function getNodeOutputForPreview(
 
 export type SaveStatus = "idle" | "saving" | "saved" | "error"
 
-export type PresentationViewMode = "horizontal" | "vertical" | "gallery" | "fullscreen" | "compare"
+export type PresentationViewMode = "horizontal" | "vertical" | "gallery" | "fullscreen" | "compare" | "chat"
 
 export interface PresentationSettings {
   runTarget: "workflow" | "sub-workflow" | "route"

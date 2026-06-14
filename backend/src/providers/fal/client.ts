@@ -51,13 +51,46 @@ const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms))
 
 /**
- * Normalize a fal queue error payload into a single reason string. The REST
- * queue's `error` field is sometimes a plain string and sometimes a structured
- * object; fall back to the terminal `status` when it's absent. Shared by both
- * the live poll loop and the reconcile status check so the two stay in lockstep.
+ * Normalize ANY fal failure signal into a single non-empty, informative reason
+ * string. Handles all three shapes the failure can arrive as:
+ *   - a plain string (`error` field on the REST queue payload),
+ *   - a thrown `ApiError` from `result()` — fal frequently throws these with an
+ *     EMPTY `.message` and the real cause carried only in `.status` + `.body`
+ *     (usually `{ detail }`), so reading `.message` alone yielded a useless
+ *     "fal request failed (id): " with nothing after the colon (observed live),
+ *   - a bare/absent value → falls back to the supplied terminal status.
+ * Shared by the live poll loop and the reconcile status check so the two stay
+ * in lockstep.
  */
-function falFailureReason(error: unknown, status: string): string {
-  return typeof error === "string" ? error : JSON.stringify(error ?? status)
+function falFailureReason(error: unknown, fallback: string): string {
+  if (typeof error === "string") return error.trim() || fallback
+
+  if (error && typeof error === "object") {
+    const e = error as Record<string, unknown>
+    const parts: string[] = []
+
+    // HTTP status (ApiError.status) — e.g. 422, 500.
+    if (typeof e.status === "number") parts.push(`HTTP ${e.status}`)
+
+    // Structured detail: ApiError.body is usually { detail: string | object }.
+    const body = e.body
+    const detail =
+      body && typeof body === "object" ? (body as Record<string, unknown>).detail : body
+    if (detail !== undefined && detail !== null) {
+      parts.push(typeof detail === "string" ? detail : JSON.stringify(detail))
+    }
+
+    // Error message last (often empty for fal ApiError, but include if present).
+    if (typeof e.message === "string" && e.message.trim()) parts.push(e.message)
+
+    if (parts.length) return parts.join(": ")
+
+    // Object with no recognized fields — stringify rather than emit "{}".
+    const json = JSON.stringify(error)
+    if (json && json !== "{}") return json
+  }
+
+  return fallback
 }
 
 /**
@@ -99,8 +132,9 @@ export async function runFalRequest(opts: {
         }
         return { output: result.data, requestId }
       } catch (err) {
-        const reason = err instanceof Error ? err.message : String(err)
-        throw new Error(`fal request failed (${requestId}): ${reason}`)
+        throw new Error(
+          `fal request failed (${requestId}): ${falFailureReason(err, "result fetch failed")}`,
+        )
       }
     }
 
@@ -165,7 +199,7 @@ export async function fetchFalRequestStatus(
     } catch (err) {
       // Terminal: fal reported COMPLETED but the result is unfetchable. Treat
       // as a failure (fail+refund) rather than bumping toward exhaustion.
-      return { status: "ERROR", error: err instanceof Error ? err.message : String(err) }
+      return { status: "ERROR", error: falFailureReason(err, "result fetch failed") }
     }
   }
 

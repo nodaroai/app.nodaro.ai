@@ -142,6 +142,7 @@ import { getAutoConnectPref, setAutoConnectPref } from "@/lib/auto-connect-pref"
 
 const ComponentMarketplaceModal = lazy(() => import("./component-marketplace-modal").then(m => ({ default: m.ComponentMarketplaceModal })));
 import type { ComponentSelection } from "./component-marketplace-modal";
+import { ModelsTab, type ModelSelection } from "./models-tab";
 
 const EMPTY_SET = new Set<string>();
 
@@ -1614,7 +1615,9 @@ export function searchNodeOptionsSectioned(
   directTypes: ReadonlySet<string> = EMPTY_SET,
 ): { own: NodeOption[]; other: NodeOption[] } {
   const ranked = searchNodeOptions(pool, query, directTypes);
-  if (tab === "all") return { own: ranked, other: [] };
+  // "all" stays flat; "models" never renders this node-list search (the Models
+  // tab drives its own model-tree search), so treat it as flat too.
+  if (tab === "all" || tab === "models") return { own: ranked, other: [] };
   const ownSet: ReadonlySet<string> = tab === "common" ? COMMON_NODE_TYPES : MEDIA_TAB_PRODUCERS[tab];
   return {
     own: ranked.filter((n) => ownSet.has(n.type)),
@@ -1643,7 +1646,7 @@ interface AddNodePopupProps {
     readonly sourceHandles: readonly string[];
     readonly targetHandles: readonly string[];
   } | null;
-  readonly onPickType?: (type: SceneNodeType) => void;
+  readonly onPickType?: (type: SceneNodeType, initialData?: Record<string, unknown>) => void;
 }
 
 export function AddNodePopup({
@@ -1796,6 +1799,19 @@ export function AddNodePopup({
     [onAddNode, onClose],
   );
 
+  // Models tab: a model variant was picked. Seed the node it runs on with the
+  // chosen provider/model field, then create it — deferring to the auto-connect
+  // Connect dialog when that flow is active (same handoff as handleNodeSelect).
+  const handleSelectModel = useCallback(
+    (sel: ModelSelection) => {
+      const initialData = sel.field ? ({ [sel.field]: sel.value } as Record<string, unknown>) : undefined;
+      if (autoConnect && autoConnectCtx && onPickType) onPickType(sel.nodeType as SceneNodeType, initialData);
+      else onAddNode(sel.nodeType as SceneNodeType, initialData);
+      onClose();
+    },
+    [autoConnect, autoConnectCtx, onPickType, onAddNode, onClose],
+  );
+
   // Effective node pool: filtered by compatibility when edge-dropping, otherwise all visible
   const effectivePool = useMemo(() => {
     if (!isFiltered || !compatibilityNodes) return visibleNodes;
@@ -1905,7 +1921,7 @@ export function AddNodePopup({
 
   // Image / Video / Audio tab content — null on the non-media tabs.
   const mediaTabItems = useMemo(() => {
-    if (activeTab === "common" || activeTab === "all") return null;
+    if (activeTab === "common" || activeTab === "all" || activeTab === "models") return null;
     return mediaTabNodeOptions(effectivePool, activeTab);
   }, [activeTab, effectivePool]);
 
@@ -1969,6 +1985,12 @@ export function AddNodePopup({
         }
         return;
       }
+
+      // On the Models tab the model-tree browser owns Arrow/Enter (and the
+      // node-list back-nav Backspace has no meaning there). Bail before those
+      // branches so we never navigate/select the underlying NODE list — but
+      // AFTER Escape (still closes) and Tab/Shift+Tab (still cycles tabs).
+      if (activeTab === "models") return;
 
       if (e.key === "ArrowDown") {
         e.preventDefault();
@@ -2109,6 +2131,7 @@ export function AddNodePopup({
               { id: "image", label: "Image", icon: <ImageIcon className="h-3.5 w-3.5" /> },
               { id: "video", label: "Video", icon: <Film className="h-3.5 w-3.5" /> },
               { id: "audio", label: "Audio", icon: <Music className="h-3.5 w-3.5" /> },
+              { id: "models", label: "Models", icon: <Layers className="h-3.5 w-3.5" /> },
               { id: "all", label: "All", icon: <LayoutGrid className="h-3.5 w-3.5" /> },
             ] as const).map(({ id, label, icon }) => (
               <button
@@ -2140,7 +2163,7 @@ export function AddNodePopup({
             <input
               ref={searchInputRef}
               type="text"
-              placeholder="Search nodes..."
+              placeholder={activeTab === "models" ? "Search models..." : "Search nodes..."}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className={cn(
@@ -2182,7 +2205,12 @@ export function AddNodePopup({
           list overflows, regardless of the OS overlay-scrollbar setting. */}
       <ScrollArea type="auto" className="flex-1 min-h-0">
       <div ref={scrollContainerRef} className="py-2">
-        {searchQuery.trim() ? (
+        {activeTab === "models" ? (
+          // Models tab: the model-tree browser drives its own search (filters
+          // model variants, not nodes), so it must precede the node-list
+          // search/category/media branches below.
+          <ModelsTab searchQuery={searchQuery} onSelectModel={handleSelectModel} />
+        ) : searchQuery.trim() ? (
           // Search results — the active tab's own items first, the remaining
           // matches under an "Other" section (flat on the All tab/edge-drop).
           filteredNodes.length > 0 ? (

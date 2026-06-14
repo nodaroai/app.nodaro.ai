@@ -2,10 +2,11 @@
  * Add Node menu mode (the tabs above the popup's search box):
  *  - "common"             — the curated COMMON view (lead nodes, titled sections, Common Pickers)
  *  - "image"/"video"/"audio" — nodes whose primary output is that medium (common members first)
+ *  - "models"             — the model-tree browser (drills series → variants, creates the node that runs it)
  *  - "all"                — the root category list
  * The last explicit user choice is remembered across sessions.
  */
-export const ADD_NODE_MENU_TABS = ["common", "image", "video", "audio", "all"] as const
+export const ADD_NODE_MENU_TABS = ["common", "image", "video", "audio", "models", "all"] as const
 export type AddNodeMenuTab = (typeof ADD_NODE_MENU_TABS)[number]
 
 export const ADD_NODE_MENU_TAB_KEY = "nodaro:addNodeMenuTab"
