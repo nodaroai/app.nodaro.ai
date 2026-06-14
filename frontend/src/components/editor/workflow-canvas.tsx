@@ -1482,8 +1482,9 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       const newLabel =
         ((def?.defaultData as Record<string, unknown> | undefined)?.label as string) || def?.label || type
       setPendingConnect({ focusedId: ctx.nodeId, focusedType: ctx.nodeType, focusedLabel, newType: type, newLabel })
+      // Hide the popup but KEEP autoConnectCtx so the dialog's Esc can reopen
+      // this node list (back navigation). Cleared on confirm / popup close.
       setAddNodePopupOpen(false)
-      setAutoConnectCtx(null)
     },
     [autoConnectCtx, getNode],
   )
@@ -1534,6 +1535,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         }
       }
       setPendingConnect(null)
+      setAutoConnectCtx(null)
     },
     [pendingConnect, getNode, addNode, onConnect, screenToFlowPosition],
   )
@@ -2637,7 +2639,12 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           newLabel={pendingConnect.newLabel}
           options={connectOptions}
           onConfirm={handleConnectConfirm}
-          onCancel={() => setPendingConnect(null)}
+          onCancel={() => {
+            // Esc / cancel returns to the add-node list (autoConnectCtx is still
+            // set from the original Tab), rather than discarding the whole flow.
+            setPendingConnect(null)
+            setAddNodePopupOpen(true)
+          }}
         />
       )}
 

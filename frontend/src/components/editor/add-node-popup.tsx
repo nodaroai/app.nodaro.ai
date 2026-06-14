@@ -1775,8 +1775,9 @@ export function AddNodePopup({
         onClose();
       } else if (autoConnect && autoConnectCtx && onPickType) {
         // Tab-auto-connect: defer creation to the Connect dialog (name + handle).
+        // Do NOT onClose() here — the canvas hides the popup but keeps
+        // autoConnectCtx so Esc in the dialog can reopen this list.
         onPickType(type);
-        onClose();
       } else {
         onAddNode(type);
         onClose();
@@ -2144,7 +2145,7 @@ export function AddNodePopup({
       {/* Search */}
       <div className="px-3 py-2 border-b border-[#E2E8F0] dark:border-[#2D2D2D]">
         <div className="flex items-center gap-2">
-          <div className="relative flex-1">
+          <div className={cn("relative", isFiltered ? "flex-1" : "w-[300px] max-w-full")}>
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#94A3B8]" />
             <input
               ref={searchInputRef}
@@ -2165,11 +2166,11 @@ export function AddNodePopup({
           </div>
           {!isFiltered && (
             <label
-              className="flex items-center gap-1.5 shrink-0 cursor-pointer select-none"
+              className="flex items-center gap-1.5 shrink-0 ml-auto cursor-pointer select-none"
               title="Auto-connect the new node to the focused node"
             >
               <Link2 className="w-3.5 h-3.5 text-[#ff0073]" />
-              <span className="text-[11px] font-semibold text-[#475569] dark:text-[#cbd5e1]">Auto</span>
+              <span className="text-[11px] font-semibold text-[#475569] dark:text-[#cbd5e1] whitespace-nowrap">Auto Connect</span>
               <Switch
                 size="sm"
                 checked={autoConnect}

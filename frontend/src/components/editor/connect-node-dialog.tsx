@@ -215,7 +215,7 @@ export function ConnectNodeDialog({ focusedLabel, newLabel, options, onConfirm, 
           <b className="text-[#64748B] dark:text-[#cbd5e1]">↵</b> confirm
         </span>
         <span>
-          <b className="text-[#64748B] dark:text-[#cbd5e1]">esc</b> cancel
+          <b className="text-[#64748B] dark:text-[#cbd5e1]">esc</b> back
         </span>
       </div>
     </div>

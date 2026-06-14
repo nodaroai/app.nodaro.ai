@@ -3,20 +3,25 @@
  * NEW node type, list the valid connection options (both directions) plus any
  * text-`{variable}` shortcuts.
  *
- * It REUSES the exact primitives edge-drop uses so it can never diverge:
- *   - `getCompatibleNodes` — is the new type a valid producer/consumer for a
- *     given handle (typed predicates + HANDLE_COMPATIBILITY fallback)?
- *   - `resolveTargetHandle` — which handle on the NEW node carries the wire.
- *   - `isValidWorkflowConnection` — final canonical gate (parity with a manual
- *     drag). The new node isn't in the graph yet, so no cycle can form; we pass
- *     no adjacency and the gate reduces to its type/handle rules.
- *   - `getEdgeTypeColor` — canonical dot color for the option (a hex).
+ * Correctness model (why we enumerate the CONSUMER's input handles):
+ * a connection is `producer → consumer.handle`. The authoritative check is the
+ * canonical `isValidWorkflowConnection`, which dispatches on the CONSUMER type +
+ * handle (e.g. generate-image's `elements` accepts pickers, `prompt` accepts
+ * text/pickers). So for each direction we iterate the consumer's input handles
+ * and gate every candidate through that validator — this is exactly what a manual
+ * drag would allow.
  *
- * The FOCUSED node's handle ids are passed in by the caller (sourced from React
- * Flow `handleBounds` ground truth — `NODE_DEF_MAP` is drifted). `staticInput/
- * OutputHandles` are a fallback union for when handleBounds is unavailable.
+ * Untyped consumers (e.g. a picker's freeform text `in`) have no validator and
+ * fall through to `isValidWorkflowConnection`'s permissive `return true`, which
+ * would offer nonsense like `image → person.in`. We exclude those with a
+ * DISCRIMINATION test: a handle is only offered if it REJECTS an impossible
+ * sentinel producer. Typed handles reject the sentinel (they check real type
+ * sets); permissive handles accept it and are skipped. No maintained type list.
+ *
+ * The focused node's handle ids come from the caller (React Flow `handleBounds`
+ * ground truth). The new node's input handles come from `staticInputHandles`
+ * (it isn't rendered yet).
  */
-import { getCompatibleNodes, resolveTargetHandle, type NodeOption } from "./node-compatibility"
 import { isValidWorkflowConnection } from "./connection-validation"
 import { getEdgeTypeColor } from "./edge-type-color"
 import { HANDLE_COLORS } from "./handle-colors"
@@ -43,14 +48,10 @@ export interface ConnectionOptions {
 
 const FOCUSED = "__autoconnect_focused__"
 const NEW = "__autoconnect_new__"
+const SENTINEL = "__autoconnect_sentinel__"
+/** A node type no validator's accept-set contains → typed handles reject it. */
+const SENTINEL_TYPE = "__autoconnect_sentinel_type__"
 const TEXT_HANDLE_PRIORITY = ["prompt", "in", "text", "userInput"]
-
-/** getCompatibleNodes/resolveTargetHandle only read `.type`; a minimal option
- *  avoids importing NODE_OPTIONS (which would create an import cycle with
- *  add-node-popup). */
-function optionOf(type: string): NodeOption {
-  return { type: type as SceneNodeType, label: type, icon: null, category: "" } as unknown as NodeOption
-}
 
 function prettify(id: string): string {
   return id.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
@@ -58,15 +59,6 @@ function prettify(id: string): string {
 
 function handleLabel(consumerType: string, handleId: string): string {
   return TARGET_HANDLE_ACCEPTS[consumerType]?.find((e) => e.handleId === handleId)?.label ?? prettify(handleId)
-}
-
-function matchTier(
-  res: { directTypes: ReadonlySet<string>; compatible: ReadonlyArray<NodeOption> },
-  type: string,
-): "direct" | "compatible" | null {
-  if (res.directTypes.has(type as SceneNodeType)) return "direct"
-  if (res.compatible.some((o) => o.type === type)) return "compatible"
-  return null
 }
 
 export function enumerateConnectionOptionsCore(args: {
@@ -77,41 +69,45 @@ export function enumerateConnectionOptionsCore(args: {
   missingRefNames: readonly string[]
 }): ConnectionOptions {
   const { focusedType, newType } = args
-  const optN = optionOf(newType)
-  const idToType = (id: string): string | undefined =>
-    id === FOCUSED ? focusedType : id === NEW ? newType : undefined
-  const seen = new Set<string>()
+  const typeOf = (id: string): string | undefined =>
+    id === FOCUSED ? focusedType : id === NEW ? newType : id === SENTINEL ? SENTINEL_TYPE : undefined
+
   const handles: ConnectionOption[] = []
-
-  // Focused PRODUCES → new node CONSUMES.
-  for (const h of args.focusedSourceHandles) {
-    const tier = matchTier(getCompatibleNodes(h, "source", [optN], focusedType), newType)
-    if (!tier) continue
-    const nHandle = resolveTargetHandle(newType as SceneNodeType, h, "source")
-    if (!isValidWorkflowConnection({ source: FOCUSED, sourceHandle: h, target: NEW, targetHandle: nHandle }, idToType)) continue
-    const key = `source|${h}|${nHandle}`
-    if (seen.has(key)) continue
+  const seen = new Set<string>()
+  const push = (o: ConnectionOption) => {
+    const key = `${o.direction}|${o.fHandle}|${o.nHandle}`
+    if (seen.has(key)) return
     seen.add(key)
-    handles.push({ kind: "handle", direction: "source", fHandle: h, nHandle, tier, label: handleLabel(newType, nHandle), color: getEdgeTypeColor(focusedType, h) })
+    handles.push(o)
   }
 
-  // New node PRODUCES → focused CONSUMES.
-  for (const h of args.focusedTargetHandles) {
-    const tier = matchTier(getCompatibleNodes(h, "target", [optN], focusedType), newType)
-    if (!tier) continue
-    const nHandle = resolveTargetHandle(newType as SceneNodeType, h, "target")
-    if (!isValidWorkflowConnection({ source: NEW, sourceHandle: nHandle, target: FOCUSED, targetHandle: h }, idToType)) continue
-    const key = `target|${h}|${nHandle}`
-    if (seen.has(key)) continue
-    seen.add(key)
-    handles.push({ kind: "handle", direction: "target", fHandle: h, nHandle, tier, label: handleLabel(focusedType, h), color: getEdgeTypeColor(newType, nHandle) })
+  /** A consumer handle is meaningful only if it rejects an impossible producer;
+   *  permissive (untyped) handles accept the sentinel and are skipped. */
+  const discriminates = (consumerId: string, handle: string): boolean =>
+    !isValidWorkflowConnection({ source: SENTINEL, target: consumerId, targetHandle: handle }, typeOf)
+
+  // Focused PRODUCES → new node CONSUMES (iterate the new node's input handles).
+  const fOut = args.focusedSourceHandles[0]
+  if (fOut !== undefined) {
+    for (const h of staticInputHandles(newType)) {
+      if (!discriminates(NEW, h)) continue
+      if (!isValidWorkflowConnection({ source: FOCUSED, sourceHandle: fOut, target: NEW, targetHandle: h }, typeOf)) continue
+      push({ kind: "handle", direction: "source", fHandle: fOut, nHandle: h, tier: "direct", label: handleLabel(newType, h), color: getEdgeTypeColor(focusedType, fOut) })
+    }
   }
 
-  handles.sort((a, b) => (a.tier === b.tier ? 0 : a.tier === "direct" ? -1 : 1))
+  // New node PRODUCES → focused CONSUMES (iterate the focused node's input handles).
+  const nOut = staticOutputHandles(newType)[0]
+  if (nOut !== undefined) {
+    for (const h of args.focusedTargetHandles) {
+      if (!discriminates(FOCUSED, h)) continue
+      if (!isValidWorkflowConnection({ source: NEW, sourceHandle: nOut, target: FOCUSED, targetHandle: h }, typeOf)) continue
+      push({ kind: "handle", direction: "target", fHandle: h, nHandle: nOut, tier: "direct", label: handleLabel(focusedType, h), color: getEdgeTypeColor(newType, nOut) })
+    }
+  }
 
   // Variable rows: ONLY when the new node feeds a TEXT input of the focused node
-  // (so `{Label}` resolves to text, not a URL). The handle's accept rules already
-  // gate this; we additionally require the producer's output color to be text.
+  // (so `{Label}` resolves to text, not a URL).
   const textOpts = handles.filter(
     (o) => o.direction === "target" && getEdgeTypeColor(newType, o.nHandle) === HANDLE_COLORS.text,
   )
@@ -127,9 +123,9 @@ export function enumerateConnectionOptionsCore(args: {
   return { handles, variables }
 }
 
-/** Fallback ONLY — handleBounds (ground truth) is the primary source for the
- *  focused node's handles. Union of the (drifted) def list with the typed
- *  registries so coverage is as wide as possible when handleBounds is absent. */
+/** A node's input handle ids for enumeration. The focused (rendered) node uses
+ *  React Flow handleBounds; the NEW node isn't rendered, so we union its declared
+ *  inputs with the typed-handle registry. */
 export function staticInputHandles(type: string): string[] {
   const s = new Set<string>(NODE_DEF_MAP.get(type as SceneNodeType)?.inputs ?? [])
   for (const e of TARGET_HANDLE_ACCEPTS[type] ?? []) s.add(e.handleId)
@@ -150,8 +146,7 @@ type HandleBoundsLike = {
 
 /** Resolve a focused node's connectable handle ids from React Flow's live
  *  `handleBounds` (ground truth), falling back to the static union when the
- *  node isn't measured. Shared by the Tab guard and the Connect dialog so the
- *  two can't read handles differently. */
+ *  node isn't measured. Shared by the Tab guard and the Connect dialog. */
 export function handleIdsFromBounds(
   handleBounds: HandleBoundsLike | undefined,
   nodeType: string,
