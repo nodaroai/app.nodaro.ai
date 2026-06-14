@@ -108,12 +108,13 @@ export async function describeToPickerRoutes(app: FastifyInstance) {
             output_data: { json: output, targetPicker, usage: { inputTokens, outputTokens } },
           })
           .eq("id", job.id)
+          .eq("user_id", userId)
         await commitReservedCreditsForJob(job.id)
 
         return reply.send({ jobId: job.id, pickerJson: output })
       } catch (err) {
         const message = err instanceof Error ? err.message : "Picker analysis failed"
-        await supabase.from("jobs").update({ status: "failed", output_data: { error: message } }).eq("id", job.id)
+        await supabase.from("jobs").update({ status: "failed", output_data: { error: message } }).eq("id", job.id).eq("user_id", userId)
         await refundReservedCreditsForJob(job.id)
         return reply.status(502).send({ error: { code: "llm_error", message } })
       }
