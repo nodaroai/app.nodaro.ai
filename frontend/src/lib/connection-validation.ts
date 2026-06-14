@@ -192,14 +192,24 @@ export function isValidWorkflowConnection(
 
   // Generate Image v2.1 — enforce typed-handle compatibility.
   const targetType = typeOf(connection.target)
+
+  // PR #3369: a character node's `image` source handle emits the plain portrait
+  // URL — from that handle it behaves as a plain image PRODUCER (valid into image
+  // inputs: generate-image `references`, image-to-image, lip-sync image, etc.) and
+  // NOT as an identity ref. The image-consumer validators below use this resolved
+  // type so the `image` handle reaches image inputs while `characterRef` (and the
+  // bare handle) stay identity. For every other source it equals the raw type, so
+  // existing connections are unaffected.
+  const rawSourceType = typeOf(connection.source)
+  const imageSourceType =
+    connection.sourceHandle === "image" && rawSourceType === "character"
+      ? "upload-image"
+      : rawSourceType ?? ""
+
   if (targetType === "generate-image" && connection.targetHandle) {
-    const sourceType = typeOf(connection.source)
-    // Use `?? ""` and let the predicate's switch reject unknown source
-    // types — safer than `if (sourceType) ... else fall through to true`,
-    // which silently allows malformed connections with an undefined source.
     return isValidGenerateImageConnection(
       connection.targetHandle,
-      sourceType ?? "",
+      imageSourceType,
       isVisualPickerType,
     )
   }
@@ -245,11 +255,10 @@ export function isValidWorkflowConnection(
 
   // Generate Video — enforce typed-handle compatibility.
   if (targetType === "generate-video" && connection.targetHandle) {
-    const sourceType = typeOf(connection.source)
-    if (sourceType) {
+    if (imageSourceType) {
       return isValidGenerateVideoConnection(
         connection.targetHandle,
-        sourceType,
+        imageSourceType,
         isVisualPickerType,
       )
     }
@@ -285,7 +294,7 @@ export function isValidWorkflowConnection(
     if (validator) {
       return validator(
         connection.targetHandle,
-        typeOf(connection.source) ?? "",
+        imageSourceType,
         isVisualPickerType,
       )
     }
@@ -298,7 +307,7 @@ export function isValidWorkflowConnection(
     if (validator) {
       return validator(
         connection.targetHandle,
-        typeOf(connection.source) ?? "",
+        imageSourceType,
         isVisualPickerType,
       )
     }

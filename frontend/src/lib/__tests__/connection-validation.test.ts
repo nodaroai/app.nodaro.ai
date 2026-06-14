@@ -241,3 +241,70 @@ describe("motion-graphics lottie source handle connectivity", () => {
     expect(directTypes.has("motion-graphics")).toBe(true)
   })
 })
+
+// PR #3369: the Character node exposes a plain `image` source handle (the
+// portrait URL) alongside the `characterRef` identity handle. From the `image`
+// handle the character behaves as a plain image PRODUCER — valid into image
+// inputs (generate-image `references`, image-to-image `image`, etc.) and NOT as
+// an identity ref (must not reach `assets`). The `characterRef` handle (and the
+// no-sourceHandle legacy case) stay identity-only — UNCHANGED.
+describe("character image source handle → image inputs (PR #3369)", () => {
+  const getNodeType = (id: string) =>
+    ({ c: "character", g: "generate-image", v: "generate-video", i: "image-to-image" } as Record<string, string>)[id] ?? id
+
+  it("character `image` handle → generate-image `references` is valid (the fix)", () => {
+    const ok = isValidWorkflowConnection(
+      { source: "c", target: "g", sourceHandle: "image", targetHandle: "references" },
+      getNodeType,
+    )
+    expect(ok).toBe(true)
+  })
+
+  it("character `image` handle → generate-image `assets` is rejected (plain image is not identity)", () => {
+    const ok = isValidWorkflowConnection(
+      { source: "c", target: "g", sourceHandle: "image", targetHandle: "assets" },
+      getNodeType,
+    )
+    expect(ok).toBe(false)
+  })
+
+  it("character `characterRef` handle → generate-image `assets` stays valid (identity UNCHANGED)", () => {
+    const ok = isValidWorkflowConnection(
+      { source: "c", target: "g", sourceHandle: "characterRef", targetHandle: "assets" },
+      getNodeType,
+    )
+    expect(ok).toBe(true)
+  })
+
+  it("character with NO sourceHandle → generate-image `assets` stays valid (identity UNCHANGED)", () => {
+    const ok = isValidWorkflowConnection(
+      { source: "c", target: "g", targetHandle: "assets" },
+      getNodeType,
+    )
+    expect(ok).toBe(true)
+  })
+
+  it("character `characterRef` handle → generate-image `references` is rejected (identity is not a plain image, UNCHANGED)", () => {
+    const ok = isValidWorkflowConnection(
+      { source: "c", target: "g", sourceHandle: "characterRef", targetHandle: "references" },
+      getNodeType,
+    )
+    expect(ok).toBe(false)
+  })
+
+  it("character `image` handle → image-to-image `image` input is valid", () => {
+    const ok = isValidWorkflowConnection(
+      { source: "c", target: "i", sourceHandle: "image", targetHandle: "image" },
+      getNodeType,
+    )
+    expect(ok).toBe(true)
+  })
+
+  it("character `image` handle → generate-video `imageReferences` is valid (plain image into a video image input)", () => {
+    const ok = isValidWorkflowConnection(
+      { source: "c", target: "v", sourceHandle: "image", targetHandle: "imageReferences" },
+      getNodeType,
+    )
+    expect(ok).toBe(true)
+  })
+})
