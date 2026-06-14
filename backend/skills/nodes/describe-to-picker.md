@@ -1,7 +1,7 @@
 ---
 node_type: describe-to-picker
-generated_at: 2026-06-14T16:32:35.556Z
-generated_from: c7e81348f
+generated_at: 2026-06-14T18:37:58.786Z
+generated_from: 1034359e5
 ---
 
 # Describe to Picker
@@ -24,8 +24,6 @@ generated_from: c7e81348f
 - `currentJobProgress?: number`
 - `errorMessage?: string`
 - `generatedPickerJson?: Record<string, unknown>`
-- `generatedResults?: Array<{ pickerJson: Record<string, unknown>; jobId: string; timestamp: string }>`
-- `activeResultIndex?: number`
 
 **Default data:**
 ```json
