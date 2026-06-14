@@ -220,4 +220,33 @@ describe("payload-builder: character @-mention expansion", () => {
     expect(refs).toBeDefined()
     expect(refs).toContain("https://r2/kira-smile.png")
   })
+
+  it("does NOT expand a character wired via the `image` handle — plain portrait, no identity injection (PR #3369)", () => {
+    const character = charNode("char-1")
+    const generateImage = node("gen-1", "generate-image", {
+      // Same prompt as the identity-handle test above, which DOES inject
+      // "Image 1 (Kira)" + the smile variant. Via the plain `image` handle the
+      // character must NOT be expanded, so neither happens.
+      prompt: "make her dance, @kira:1:smile",
+      provider: "nano-banana-pro",
+    })
+    const nodes = [character, generateImage]
+    // Wire via the plain `image` source handle (PR #3369), NOT the identity handle.
+    const edges = [edge("char-1", "gen-1", "image")]
+    const inputs: ResolvedInputs = {
+      referenceImageUrls: ["https://r2/kira-portrait.png"],
+    }
+
+    const result = buildPayload(generateImage, jobId, inputs, undefined, { nodes, edges, nodeStates: {} })
+
+    expect(result.jobName).toBe("generate-image")
+    const refs = result.payload.referenceImageUrls as string[] | undefined
+    expect(refs).toBeDefined()
+    // The plain portrait flows through as a normal reference image.
+    expect(refs).toContain("https://r2/kira-portrait.png")
+    // NOT expanded as identity: no asset-variant pulled in, and no "@kira"
+    // identity directive injected into the prompt (contrast the first test).
+    expect(refs).not.toContain("https://r2/kira-smile.png")
+    expect(result.payload.prompt as string).not.toContain("Image 1 (Kira)")
+  })
 })

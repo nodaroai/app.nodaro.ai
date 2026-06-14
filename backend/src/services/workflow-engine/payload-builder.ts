@@ -274,6 +274,9 @@ function expandWiredCharacterRefs(
   const nodeById = new Map(buildCtx.nodes.map((n) => [n.id, n] as const))
   const incoming = buildCtx.edges.filter((e) => e.target === consumerNodeId)
   for (const e of incoming) {
+    // The character node's "image" handle is a PLAIN image (PR #3369), not an
+    // identity ref — never treat it as a wired character (mirrors resolveSheetEntity).
+    if (e.sourceHandle === "image") continue
     const upstream = nodeById.get(e.source)
     if (!upstream || upstream.type !== "character") continue
     const charData = upstream.data
@@ -582,6 +585,9 @@ function buildExtraRefCharacterContextLookup(
   const nodeById = new Map(buildCtx.nodes.map((n) => [n.id, n] as const))
   const incoming = buildCtx.edges.filter((e) => e.target === consumerNodeId)
   for (const e of incoming) {
+    // The character node's "image" handle is a PLAIN image (PR #3369), not an
+    // identity ref — never treat it as a wired character (mirrors resolveSheetEntity).
+    if (e.sourceHandle === "image") continue
     const upstream = nodeById.get(e.source)
     if (!upstream || upstream.type !== "character") continue
     const charData = upstream.data

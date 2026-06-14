@@ -276,7 +276,10 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
           <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
         </button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md max-h-[80vh] flex flex-col gap-3 p-4">
+      {/* z-[110] lifts content + overlay above hosts like the Character Studio
+          modal (z-[100]); without it the portaled dialog opens behind the modal
+          and looks like nothing happens. */}
+      <DialogContent className="sm:max-w-md max-h-[80vh] flex flex-col gap-3 p-4 z-[110]" overlayClassName="z-[110]">
         <DialogHeader>
           <DialogTitle>Browse Voices</DialogTitle>
         </DialogHeader>

@@ -68,6 +68,21 @@ describe("enumerateConnectionOptionsCore", () => {
     expect(handles.filter((h) => h.fHandle === "prompt" && h.direction === "target").length).toBe(1)
   })
 
+  it("person(focused) + generate-image(new): offers GI elements + prompt, never image→person.in", () => {
+    const { handles } = enumerateConnectionOptionsCore({
+      focusedType: "person",
+      newType: "generate-image",
+      focusedSourceHandles: ["out"],
+      focusedTargetHandles: ["in"],
+      missingRefNames: [],
+    })
+    const nHandles = handles.filter((h) => h.direction === "source").map((h) => h.nHandle)
+    expect(nHandles).toContain("elements")
+    expect(nHandles).toContain("prompt")
+    // person's untyped "in" is permissive → must NOT be offered as a target.
+    expect(handles.some((h) => h.direction === "target")).toBe(false)
+  })
+
   it("every option carries a concrete nHandle", () => {
     const { handles } = enumerateConnectionOptionsCore({
       focusedType: "generate-image",
