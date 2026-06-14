@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Search, Folder, GitBranch, X, ExternalLink } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useClickOutside } from "@/hooks/use-click-outside"
 import { createClient } from "@/lib/supabase"
 import { queryKeys } from "@/lib/query-keys"
 
@@ -94,18 +95,7 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
   }, [open])
 
   // Handle click outside
-  useEffect(() => {
-    if (!open) return
-
-    function handleClickOutside(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        onClose()
-      }
-    }
-
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
-  }, [open, onClose])
+  useClickOutside(containerRef, onClose, open)
 
   // Calculate all results for keyboard navigation
   const allResults = useMemo(() => [

@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils"
 import { CachedImage } from "@/components/ui/cached-image"
 import { getNodeThumbnailUrl, getNodeVideoUrl, getNodePickerVisual } from "@/lib/node-thumbnail"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useClickOutside } from "@/hooks/use-click-outside"
 import { NODE_DEF_MAP, type WorkflowNode } from "@/types/nodes"
 import { RatioIcon } from "./config-panels/aspect-ratio-selector"
 
@@ -162,16 +163,7 @@ export function NodeSearchModal({ open, onClose }: NodeSearchModalProps) {
     return () => document.removeEventListener("mousemove", onMove, { capture: true })
   }, [open])
 
-  useEffect(() => {
-    if (!open) return
-    const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        onClose()
-      }
-    }
-    document.addEventListener("mousedown", handler)
-    return () => document.removeEventListener("mousedown", handler)
-  }, [open, onClose])
+  useClickOutside(containerRef, onClose, open)
 
   const tokens = useMemo(
     () => query.trim().toLowerCase().split(/\s+/).filter((t) => t.length > 0),

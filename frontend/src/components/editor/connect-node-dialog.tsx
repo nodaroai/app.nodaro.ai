@@ -8,9 +8,10 @@
  * an outside click to cancel, no focus trap. Keyboard: ↑/↓ move the highlight
  * across the combined list, Enter confirms, Esc cancels.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useMemo, useRef, useState } from "react"
 import { Link2, Unlink } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useClickOutside } from "@/hooks/use-click-outside"
 import type { ConnectionOption, ConnectionOptions } from "@/lib/enumerate-connection-options"
 
 export interface ConnectNodeChoice {
@@ -45,20 +46,8 @@ export function ConnectNodeDialog({ focusedLabel, newLabel, options, onConfirm, 
   const [name, setName] = useState(newLabel)
   const [highlight, setHighlight] = useState(options.handles.length > 0 ? 0 : rows.length - 1)
 
-  // Dismiss on outside click — mirrors add-node-popup. The dialog mounts in
-  // response to the node-pick click; that click's mousedown already fired
-  // before this listener attaches (effects flush after commit), so it can't
-  // self-close.
   const dialogRef = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (dialogRef.current && !dialogRef.current.contains(e.target as Node)) {
-        onCancel()
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
-  }, [onCancel])
+  useClickOutside(dialogRef, onCancel)
 
   const select = useCallback(
     (i: number) => {

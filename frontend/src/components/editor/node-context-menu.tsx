@@ -1,10 +1,11 @@
 "use client"
 
-import { useEffect, useRef, useMemo, useState } from "react"
+import { useRef, useMemo, useState } from "react"
 import { Play, FastForward, ListChecks, Copy, Trash2, CircleSlash, CircleCheck, ImageIcon, ZoomIn, Maximize2, UserPlus } from "lucide-react"
 import { toast } from "sonner"
 import { useReactFlow } from "@xyflow/react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useClickOutside } from "@/hooks/use-click-outside"
 import { NODE_DEFINITIONS, type CharacterNodeData } from "@/types/nodes"
 import { duplicateCharacter } from "@/lib/api"
 import { useQueryClient } from "@tanstack/react-query"
@@ -93,15 +94,7 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
     return def?.category === "parameter"
   }, [nodeId, nodes])
 
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        onClose()
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
-  }, [onClose])
+  useClickOutside(ref, onClose)
 
   function handleRun() {
     runSingleNode?.(nodeId)

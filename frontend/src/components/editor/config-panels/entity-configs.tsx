@@ -19,6 +19,7 @@ import { useMediaEditor, MediaEditorModal } from "@/components/editor/media-edit
 import { CachedImage } from "@/components/ui/cached-image"
 import { useCharacters } from "@/hooks/queries/use-assets-queries"
 import { useAuth } from "@/hooks/use-auth"
+import { useClickOutside } from "@/hooks/use-click-outside"
 import type { DbCharacter } from "@/lib/api"
 import type {
   CharacterNodeData,
@@ -183,14 +184,7 @@ function ReplaceCharacterPicker({
   const [filter, setFilter] = useState("")
   const containerRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    if (!open) return
-    function onDown(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener("mousedown", onDown)
-    return () => document.removeEventListener("mousedown", onDown)
-  }, [open])
+  useClickOutside(containerRef, () => setOpen(false), open)
 
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase()

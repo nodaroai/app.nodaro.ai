@@ -5,6 +5,7 @@ import { BaseEdge, EdgeLabelRenderer, getBezierPath, getSmoothStepPath, useStore
 import { X, ChevronDown } from "lucide-react"
 import * as TooltipPrimitive from "@radix-ui/react-tooltip"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useClickOutside } from "@/hooks/use-click-outside"
 import { parseListExpression, describeEdgeBehavior, type SelectorMode } from "@nodaro/shared"
 import type { CSSProperties } from "react"
 import { useEdgeInsertAnimation } from "./workflow-editor/use-edge-insert-animation"
@@ -123,22 +124,14 @@ function AnimatedFlowEdgeComponent({
   }, [selected, showModeMenu])
 
   // Close menu on outside click or Escape
+  useClickOutside(menuRef, () => setShowModeMenu(false), showModeMenu)
   useEffect(() => {
     if (!showModeMenu) return
-    const handleClick = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setShowModeMenu(false)
-      }
-    }
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") setShowModeMenu(false)
     }
-    document.addEventListener("mousedown", handleClick)
     document.addEventListener("keydown", handleKeyDown)
-    return () => {
-      document.removeEventListener("mousedown", handleClick)
-      document.removeEventListener("keydown", handleKeyDown)
-    }
+    return () => document.removeEventListener("keydown", handleKeyDown)
   }, [showModeMenu])
 
   const handleModeSelect = useCallback((mode: string) => {
