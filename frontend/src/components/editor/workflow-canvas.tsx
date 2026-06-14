@@ -37,7 +37,7 @@ import { enumerateConnectionOptionsCore, handleIdsFromBounds } from "@/lib/enume
 import { getAutoConnectPref } from "@/lib/auto-connect-pref"
 import { computeMissingPromptRefs } from "@/lib/missing-prompt-refs"
 import { buildAdjacency, isValidWorkflowConnection } from "@/lib/connection-validation"
-import { nodeRect } from "@/lib/find-free-position"
+import { nodeRect, connectedNodePosition } from "@/lib/find-free-position"
 import { pickEdgeAccent } from "@/lib/edge-accent"
 import { getEdgeTypeColor } from "@/lib/edge-type-color"
 import { getHandleConnectionLimit } from "@/lib/handle-limits"
@@ -1360,20 +1360,12 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     ({ nodeId, handleId, direction, nodeType, prefillName }: { nodeId: string; handleId: string; direction: "source" | "target"; nodeType: string; prefillName?: string }) => {
       const node = getNode(nodeId)
       if (!node) return
-      const w = (node.measured?.width ?? 220) as number
-      const h = (node.measured?.height ?? 150) as number
-      // Place the new node with a comfortable gap from the current node.
+      // Place the new node a Tidy-Up-consistent gap from the current node.
       // The two sides are NOT symmetric: a target-side (input) handle wants
-      // an upstream node to the LEFT, so we have to budget for the new
-      // node's own width before the gap; a source-side (output) handle
-      // only needs the gap past the current node's right edge.
-      const NEW_NODE_EST_WIDTH = 280
-      const GAP = 80
-      const offsetX = direction === "target"
-        ? -(NEW_NODE_EST_WIDTH + GAP)
-        : w + GAP
-      const flowX = node.position.x + offsetX
-      const flowY = node.position.y + h / 2
+      // an upstream node to the LEFT, so we budget for the new node's own
+      // width before the gap; a source-side (output) handle only needs the
+      // gap past the current node's right edge. See connectedNodePosition.
+      const { x: flowX, y: flowY } = connectedNodePosition(nodeRect(node), direction)
       // Convert flow coordinates to screen for setAddNodePopupPosition,
       // which expects screen-space.
       const { x: vx, y: vy, zoom } = getViewport()
@@ -1514,11 +1506,10 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       const fnode = getNode(pc.focusedId)
       const opt = choice.option
       const dir = opt?.direction ?? "source"
-      const w = (fnode?.measured?.width as number | undefined) ?? 220
-      const h = (fnode?.measured?.height as number | undefined) ?? 150
-      const offsetX = dir === "target" ? -(280 + 80) : w + 80
+      // Place the new node a Tidy-Up-consistent gap from the focused node so it
+      // doesn't hug its source (and doesn't jump when Tidy Up runs later).
       const position = fnode
-        ? { x: fnode.position.x + offsetX, y: fnode.position.y + h / 2 }
+        ? connectedNodePosition(nodeRect(fnode), dir)
         : screenToFlowPosition(lastMousePositionRef.current)
       const id = addNode(pc.newType, position)
       if (id) {
