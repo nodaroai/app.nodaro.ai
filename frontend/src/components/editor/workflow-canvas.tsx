@@ -32,6 +32,10 @@ import { CanvasControls } from "./canvas-controls"
 import { MediaPreviewModal } from "./media-preview-modal"
 import { ZOOM_MIN, ZOOM_MAX, snapZoom } from "@/lib/zoom"
 import { AddNodePopup } from "./add-node-popup"
+import { ConnectNodeDialog, type ConnectNodeChoice } from "./connect-node-dialog"
+import { enumerateConnectionOptionsCore, handleIdsFromBounds } from "@/lib/enumerate-connection-options"
+import { getAutoConnectPref } from "@/lib/auto-connect-pref"
+import { computeMissingPromptRefs } from "@/lib/missing-prompt-refs"
 import { buildAdjacency, isValidWorkflowConnection } from "@/lib/connection-validation"
 import { nodeRect } from "@/lib/find-free-position"
 import { pickEdgeAccent } from "@/lib/edge-accent"
@@ -74,7 +78,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase"
-import { TELEPORTER_PAN_EVENT, type WorkflowNode, type WorkflowEdge, type SceneNodeType } from "@/types/nodes"
+import { TELEPORTER_PAN_EVENT, NODE_DEF_MAP, type WorkflowNode, type WorkflowEdge, type SceneNodeType } from "@/types/nodes"
 import type { ConnectionContext } from "@/lib/node-compatibility"
 import type { LibraryAsset } from "@/lib/api"
 
@@ -455,7 +459,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const addNodeAndOpenPicker = useWorkflowStore((s) => s.addNodeAndOpenPicker)
   const updateEdgeData = useWorkflowStore((s) => s.updateEdgeData)
   const replaceEdgeWithTeleporter = useWorkflowStore((s) => s.replaceEdgeWithTeleporter)
-  const { screenToFlowPosition, setNodes, setEdges, getNode, getNodes, getEdges, setCenter, fitView, getViewport, setViewport, zoomTo } = useReactFlow()
+  const { screenToFlowPosition, setNodes, setEdges, getNode, getNodes, getEdges, setCenter, fitView, getViewport, setViewport, zoomTo, getInternalNode } = useReactFlow()
   const updateNodeInternals = useUpdateNodeInternals()
   const savedViewport = useWorkflowStore((s) => s.savedViewport)
 
@@ -499,6 +503,22 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const [templatesModalOpen, setTemplatesModalOpen] = useState(false)
   const [tutorialsModalOpen, setTutorialsModalOpen] = useState(false)
   const [connectionContext, setConnectionContext] = useState<ConnectionContext | null>(null)
+  // Tab-auto-connect: the focused node the popup should wire the new node to,
+  // with its rendered handle ids (React Flow handleBounds ground truth).
+  const [autoConnectCtx, setAutoConnectCtx] = useState<{
+    nodeId: string
+    nodeType: string
+    sourceHandles: string[]
+    targetHandles: string[]
+  } | null>(null)
+  // Set once a node type is picked in auto-connect mode → opens the Connect dialog.
+  const [pendingConnect, setPendingConnect] = useState<{
+    focusedId: string
+    focusedType: string
+    focusedLabel: string
+    newType: SceneNodeType
+    newLabel: string
+  } | null>(null)
   const [searchModalOpen, setSearchModalOpen] = useState(false)
   const [nodeSearchModalOpen, setNodeSearchModalOpen] = useState(false)
   const [shortcutsHelpOpen, setShortcutsHelpOpen] = useState(false)
@@ -1447,8 +1467,76 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     setAddNodePopupPosition(undefined)
     setAddNodePopupCategory(null)
     setConnectionContext(null)
+    setAutoConnectCtx(null)
     pendingEdgeDataRef.current = null
   }, [])
+
+  // Auto-connect: a node type was picked → open the Connect dialog for naming + wiring.
+  const handlePickType = useCallback(
+    (type: SceneNodeType) => {
+      const ctx = autoConnectCtx
+      if (!ctx) return
+      const fnode = getNode(ctx.nodeId)
+      const focusedLabel = ((fnode?.data as Record<string, unknown> | undefined)?.label as string) || ctx.nodeType
+      const def = NODE_DEF_MAP.get(type)
+      const newLabel =
+        ((def?.defaultData as Record<string, unknown> | undefined)?.label as string) || def?.label || type
+      setPendingConnect({ focusedId: ctx.nodeId, focusedType: ctx.nodeType, focusedLabel, newType: type, newLabel })
+      setAddNodePopupOpen(false)
+      setAutoConnectCtx(null)
+    },
+    [autoConnectCtx, getNode],
+  )
+
+  // Options for the Connect dialog: focused handle ids from handleBounds (ground
+  // truth; static fallback), missing text refs, run through the shared enumerator.
+  const connectOptions = useMemo(() => {
+    if (!pendingConnect) return null
+    const { sourceHandles, targetHandles } = handleIdsFromBounds(
+      getInternalNode(pendingConnect.focusedId)?.internals.handleBounds,
+      pendingConnect.focusedType,
+    )
+    const missing = computeMissingPromptRefs(nodes, edges, pendingConnect.focusedId).map((m) => m.name)
+    return enumerateConnectionOptionsCore({
+      focusedType: pendingConnect.focusedType,
+      newType: pendingConnect.newType,
+      focusedSourceHandles: sourceHandles,
+      focusedTargetHandles: targetHandles,
+      missingRefNames: missing,
+    })
+  }, [pendingConnect, nodes, edges, getInternalNode])
+
+  const handleConnectConfirm = useCallback(
+    (choice: ConnectNodeChoice) => {
+      const pc = pendingConnect
+      if (!pc) return
+      const fnode = getNode(pc.focusedId)
+      const opt = choice.option
+      const dir = opt?.direction ?? "source"
+      const w = (fnode?.measured?.width as number | undefined) ?? 220
+      const h = (fnode?.measured?.height as number | undefined) ?? 150
+      const offsetX = dir === "target" ? -(280 + 80) : w + 80
+      const position = fnode
+        ? { x: fnode.position.x + offsetX, y: fnode.position.y + h / 2 }
+        : screenToFlowPosition(lastMousePositionRef.current)
+      const id = addNode(pc.newType, position)
+      if (id) {
+        if (choice.name) useWorkflowStore.getState().updateNodeData(id, { label: choice.name })
+        // Only wire if the focused node still exists — it may have been deleted
+        // (undo / realtime sync) while the dialog was open; wiring to a missing
+        // node would leave an orphan edge (onConnect doesn't validate).
+        if (opt && fnode) {
+          const connection =
+            opt.direction === "source"
+              ? { source: pc.focusedId, sourceHandle: opt.fHandle, target: id, targetHandle: opt.nHandle }
+              : { source: id, sourceHandle: opt.nHandle, target: pc.focusedId, targetHandle: opt.fHandle }
+          onConnect(connection)
+        }
+      }
+      setPendingConnect(null)
+    },
+    [pendingConnect, getNode, addNode, onConnect, screenToFlowPosition],
+  )
   const handleToggleSnap = useCallback(() => {
     setSnapEnabled((prev) => {
       const next = !prev
@@ -1897,7 +1985,8 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         return
       }
 
-      // Tab - Open Add Node popup at mouse position
+      // Tab - Open Add Node popup. With a connectable node focused (and the Auto
+      // pref on), open in auto-connect mode bound to it; otherwise at the mouse.
       if (matchShortcut(e, SHORTCUTS.addNode)) {
         if (addNodePopupOpenRef.current) {
           // Already open: Tab switches the popup's Common/All mode (its own
@@ -1905,6 +1994,29 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           return
         }
         e.preventDefault()
+        const fid = useWorkflowStore.getState().focusedNodeId
+        const fnode = fid ? getNode(fid) : undefined
+        const isClone =
+          !!fnode && (!!(fnode.data as Record<string, unknown> | undefined)?.__expandedClone || /_iter_\d+$/.test(fnode.id))
+        const { sourceHandles: srcH, targetHandles: tgtH } =
+          fnode && fnode.type
+            ? handleIdsFromBounds(getInternalNode(fnode.id)?.internals.handleBounds, fnode.type)
+            : { sourceHandles: [], targetHandles: [] }
+        if (
+          getAutoConnectPref() &&
+          !useWorkflowStore.getState().isReadOnly &&
+          fnode &&
+          fnode.type &&
+          !isClone &&
+          srcH.length + tgtH.length > 0
+        ) {
+          setConnectionContext(null)
+          setAddNodePopupCategory(null)
+          setAddNodePopupPosition(undefined)
+          setAutoConnectCtx({ nodeId: fnode.id, nodeType: fnode.type, sourceHandles: srcH, targetHandles: tgtH })
+          setAddNodePopupOpen(true)
+          return
+        }
         const pos = lastMousePositionRef.current
         handleOpenAddNodePopup(pos.x !== 0 || pos.y !== 0 ? pos : undefined)
         return
@@ -2513,7 +2625,21 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
             pendingEdgeDataRef.current = null
           }
         }, [onConnect, updateEdgeData])}
+        autoConnectCtx={autoConnectCtx}
+        onPickType={handlePickType}
       />
+
+      {/* Connect dialog (Tab-auto-connect: name + handle/variable picker) */}
+      {pendingConnect && connectOptions && (
+        <ConnectNodeDialog
+          key={`${pendingConnect.focusedId}:${pendingConnect.newType}`}
+          focusedLabel={pendingConnect.focusedLabel}
+          newLabel={pendingConnect.newLabel}
+          options={connectOptions}
+          onConfirm={handleConnectConfirm}
+          onCancel={() => setPendingConnect(null)}
+        />
+      )}
 
       {/* Search Modal */}
       {searchModalOpen && (

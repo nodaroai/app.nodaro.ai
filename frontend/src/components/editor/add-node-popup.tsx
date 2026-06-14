@@ -112,6 +112,7 @@ import {
   TrendingUp,
   Star,
   LayoutGrid,
+  Link2,
 } from "lucide-react";
 import type { Connection } from "@xyflow/react";
 import { cn } from "@/lib/utils";
@@ -134,6 +135,9 @@ import { useAuth } from "@/hooks/use-auth";
 import { useUserSettings } from "@/hooks/queries/use-user-settings-queries";
 import { useNodeSelectionHistoryStore, type HistoryEntry } from "@/hooks/use-node-selection-history-store";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
+import { Switch } from "@/components/ui/switch";
+import { enumerateConnectionOptionsCore } from "@/lib/enumerate-connection-options";
+import { getAutoConnectPref, setAutoConnectPref } from "@/lib/auto-connect-pref";
 
 const ComponentMarketplaceModal = lazy(() => import("./component-marketplace-modal").then(m => ({ default: m.ComponentMarketplaceModal })));
 import type { ComponentSelection } from "./component-marketplace-modal";
@@ -1628,6 +1632,17 @@ interface AddNodePopupProps {
   /** Pre-select a category drill-down on open (e.g. "Input") instead of the
    *  top-level category list. Used by the editor empty-state's upload bar. */
   readonly initialCategory?: string | null;
+  /** Tab-auto-connect mode: the focused node to wire the new node to, with its
+   *  rendered handle ids (sourced from React Flow `handleBounds` by the caller).
+   *  When set + the Auto toggle is on, selecting a node hands off to the Connect
+   *  dialog via `onPickType` instead of creating immediately. */
+  readonly autoConnectCtx?: {
+    readonly nodeId: string;
+    readonly nodeType: string;
+    readonly sourceHandles: readonly string[];
+    readonly targetHandles: readonly string[];
+  } | null;
+  readonly onPickType?: (type: SceneNodeType) => void;
 }
 
 export function AddNodePopup({
@@ -1639,6 +1654,8 @@ export function AddNodePopup({
   storeAddNode,
   storeOnConnect,
   initialCategory,
+  autoConnectCtx,
+  onPickType,
 }: AddNodePopupProps) {
   const { isAdmin, user } = useAuth();
   const { data: userSettings } = useUserSettings(user?.id);
@@ -1654,6 +1671,9 @@ export function AddNodePopup({
   const [activeTab, setActiveTab] = useState<AddNodeMenuTab>(readAddNodeMenuTab);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [componentBrowserOpen, setComponentBrowserOpen] = useState(false);
+  // Auto-connect toggle (Tab-from-focused-node). Seeded from localStorage; the
+  // live value lets the user flip it within the open popup.
+  const [autoConnect, setAutoConnect] = useState(getAutoConnectPref);
   const popupRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -1753,12 +1773,16 @@ export function AddNodePopup({
         storeOnConnect(connection);
         openPickerForNode(newNodeId, type);
         onClose();
+      } else if (autoConnect && autoConnectCtx && onPickType) {
+        // Tab-auto-connect: defer creation to the Connect dialog (name + handle).
+        onPickType(type);
+        onClose();
       } else {
         onAddNode(type);
         onClose();
       }
     },
-    [connectionContext, storeAddNode, storeOnConnect, onAddNode, onClose, recordSelection, openPickerForNode],
+    [connectionContext, storeAddNode, storeOnConnect, onAddNode, onClose, recordSelection, openPickerForNode, autoConnect, autoConnectCtx, onPickType],
   );
 
   // Handle component selected from marketplace modal
@@ -1776,9 +1800,32 @@ export function AddNodePopup({
     return [...compatibilityNodes.direct, ...compatibilityNodes.compatible];
   }, [visibleNodes, isFiltered, compatibilityNodes]);
 
+  // Auto-connect marking: node types that have ≥1 valid connection option with
+  // the focused node. Reuses the same enumerator as the Connect dialog so the
+  // mark and the dialog can't disagree.
+  const autoConnectActive = autoConnect && !!autoConnectCtx;
+  const autoConnectMatchTypes = useMemo(() => {
+    if (!autoConnectActive || !autoConnectCtx) return EMPTY_SET;
+    const matched = new Set<SceneNodeType>();
+    for (const node of visibleNodes) {
+      if (node.type === autoConnectCtx.nodeType) continue;
+      const { handles } = enumerateConnectionOptionsCore({
+        focusedType: autoConnectCtx.nodeType,
+        newType: node.type,
+        focusedSourceHandles: autoConnectCtx.sourceHandles,
+        focusedTargetHandles: autoConnectCtx.targetHandles,
+        missingRefNames: [],
+      });
+      if (handles.length > 0) matched.add(node.type);
+    }
+    return matched;
+  }, [autoConnectActive, autoConnectCtx, visibleNodes]);
+
   const directMatchTypes = isFiltered && compatibilityNodes
     ? compatibilityNodes.directTypes
-    : EMPTY_SET;
+    : autoConnectActive
+      ? autoConnectMatchTypes
+      : EMPTY_SET;
 
   const optionByType = useMemo(() => {
     const map = new Map<SceneNodeType, NodeOption>();
@@ -2096,24 +2143,45 @@ export function AddNodePopup({
 
       {/* Search */}
       <div className="px-3 py-2 border-b border-[#E2E8F0] dark:border-[#2D2D2D]">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#94A3B8]" />
-          <input
-            ref={searchInputRef}
-            type="text"
-            placeholder="Search nodes..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className={cn(
-              "w-full pl-9 pr-3 py-2 text-base",
-              "bg-[#F8FAFC] dark:bg-[#121212]",
-              "border border-[#E2E8F0] dark:border-[#2D2D2D]",
-              "rounded-lg",
-              "text-[#1E293B] dark:text-white",
-              "placeholder:text-[#94A3B8]",
-              "focus:outline-none focus:ring-2 focus:ring-[#ff0073]/50 focus:border-[#ff0073]",
-            )}
-          />
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#94A3B8]" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              placeholder="Search nodes..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className={cn(
+                "w-full pl-9 pr-3 py-2 text-base",
+                "bg-[#F8FAFC] dark:bg-[#121212]",
+                "border border-[#E2E8F0] dark:border-[#2D2D2D]",
+                "rounded-lg",
+                "text-[#1E293B] dark:text-white",
+                "placeholder:text-[#94A3B8]",
+                "focus:outline-none focus:ring-2 focus:ring-[#ff0073]/50 focus:border-[#ff0073]",
+              )}
+            />
+          </div>
+          {!isFiltered && (
+            <label
+              className="flex items-center gap-1.5 shrink-0 cursor-pointer select-none"
+              title="Auto-connect the new node to the focused node"
+            >
+              <Link2 className="w-3.5 h-3.5 text-[#ff0073]" />
+              <span className="text-[11px] font-semibold text-[#475569] dark:text-[#cbd5e1]">Auto</span>
+              <Switch
+                size="sm"
+                checked={autoConnect}
+                onCheckedChange={(v) => {
+                  setAutoConnect(v)
+                  setAutoConnectPref(v)
+                }}
+                aria-label="Auto-connect"
+                className="data-[state=checked]:bg-[#ff0073]"
+              />
+            </label>
+          )}
         </div>
       </div>
 
