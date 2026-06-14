@@ -3,6 +3,7 @@
 import { useEffect } from "react"
 import type { ELK as ElkInstance, ElkNode } from "elkjs/lib/elk.bundled.js"
 import { useReactFlow } from "@xyflow/react"
+import { CONNECTED_NODE_GAP_X } from "@/lib/find-free-position"
 
 // Lazily-instantiated single ELK instance, shared for the lifetime of the
 // module — `ELK` is purely stateless across `layout()` calls and reusing the
@@ -33,8 +34,11 @@ export const ELK_LAYOUT_OPTIONS = {
   // Airy gaps — nodes here are large media cards (~200–650px), so small
   // spacings read as cramped. Vertical gap between stacked siblings, horizontal
   // gap between columns, and the gap between disconnected sub-graphs.
+  // The between-layers (column) gap is the single source of truth for manual
+  // auto-connect placement too — see CONNECTED_NODE_GAP_X — so a freshly wired
+  // node lands exactly where Tidy Up would put it.
   "elk.spacing.nodeNode": "140",
-  "elk.layered.spacing.nodeNodeBetweenLayers": "200",
+  "elk.layered.spacing.nodeNodeBetweenLayers": String(CONNECTED_NODE_GAP_X),
   "elk.edgeRouting": "ORTHOGONAL",
   "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
   "elk.separateConnectedComponents": "true",

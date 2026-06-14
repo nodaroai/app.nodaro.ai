@@ -38,6 +38,43 @@ export function nodeRect(node: {
   }
 }
 
+/**
+ * Horizontal gap (px) between a node and a node directly wired to it. Kept
+ * EQUAL to ELK's layered between-layers spacing (`use-elk-layout` derives its
+ * `elk.layered.spacing.nodeNodeBetweenLayers` option from THIS constant) so a
+ * node placed by Tab auto-connect or the handle "Add new" popover lands exactly
+ * where Tidy Up would put it — no jump when the user presses Tidy Up afterwards,
+ * and none of the cramped 80px spacing that made fresh nodes hug their source
+ * (the media cards here are 200–650px wide, so a small gap reads as overlapping).
+ */
+export const CONNECTED_NODE_GAP_X = 200
+
+/**
+ * Flow-space position for a NEW node being wired to a `focused` node.
+ * `direction` is the focused node's handle direction relative to the new node:
+ *  - `"source"`: the focused node is the SOURCE, so the new node is DOWNSTREAM
+ *    and sits to the RIGHT — a {@link CONNECTED_NODE_GAP_X} gap past the focused
+ *    node's right edge.
+ *  - `"target"`: the focused node is the TARGET, so the new node is UPSTREAM and
+ *    sits to the LEFT — we budget the new (not-yet-measured) node's own width
+ *    ({@link DEFAULT_PLACEMENT_SIZE}) before the gap.
+ *
+ * Vertical position is anchored at the focused node's mid-height.
+ */
+export function connectedNodePosition(
+  focused: PlacementRect,
+  direction: "source" | "target",
+): { x: number; y: number } {
+  const offsetX =
+    direction === "target"
+      ? -(DEFAULT_PLACEMENT_SIZE.width + CONNECTED_NODE_GAP_X)
+      : focused.width + CONNECTED_NODE_GAP_X
+  return {
+    x: focused.x + offsetX,
+    y: focused.y + focused.height / 2,
+  }
+}
+
 interface PlacementOptions {
   /** Minimum air between the new node and every existing one. */
   readonly margin?: number
