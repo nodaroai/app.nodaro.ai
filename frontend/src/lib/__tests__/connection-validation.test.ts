@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
-import { isValidWorkflowConnection } from "../connection-validation"
+import { isValidWorkflowConnection, resolveEffectiveSourceType } from "../connection-validation"
 import { resolveTargetHandle, getCompatibleNodes } from "../node-compatibility"
+import { getTargetHandlesAccepting } from "../target-handle-registry"
 import { NODE_DEFINITIONS } from "@/types/nodes"
 
 describe("isValidWorkflowConnection (generate-video dispatch)", () => {
@@ -369,5 +370,75 @@ describe.each([
       getNodeType,
     )
     expect(ok).toBe(false)
+  })
+})
+
+// Bug (#bugs session): an entity's plain `image` source handle was wired to
+// image inputs by the DROP validator (isValidWorkflowConnection — the tests
+// above), but the two DISCOVERY surfaces that tell the user "what can I
+// connect this to" both keyed off the source NODE TYPE ("character") instead
+// of the handle's emitted type, so:
+//   - the drag-glow (`isValidCandidate`) never lit up image-input pips, and
+//   - the source-direction popover candidate list never enumerated them.
+// `resolveEffectiveSourceType` is the single source of truth for the remap
+// (image handle on an entity emits "upload-image"); all three surfaces now
+// route through it so discovery agrees with the drop validator.
+describe("resolveEffectiveSourceType (entity image handle → upload-image)", () => {
+  const ENTITIES = ["character", "location", "object", "creature"] as const
+
+  it.each(ENTITIES)("%s `image` handle resolves to the plain image producer", (entity) => {
+    expect(resolveEffectiveSourceType(entity, "image")).toBe("upload-image")
+  })
+
+  it.each(ENTITIES)("%s identity ref handle is left UNCHANGED", (entity) => {
+    const refHandle = `${entity === "character" ? "character" : entity}Ref`
+    expect(resolveEffectiveSourceType(entity, refHandle)).toBe(entity)
+  })
+
+  it("a missing source handle leaves the type unchanged (legacy edges)", () => {
+    expect(resolveEffectiveSourceType("character", undefined)).toBe("character")
+    expect(resolveEffectiveSourceType("character", null)).toBe("character")
+  })
+
+  it("a NON-entity node's `image` handle is left unchanged (only entities remap)", () => {
+    expect(resolveEffectiveSourceType("generate-image", "image")).toBe("generate-image")
+    expect(resolveEffectiveSourceType("upload-image", "image")).toBe("upload-image")
+  })
+
+  it("an unknown / undefined source type stays falsy-safe", () => {
+    expect(resolveEffectiveSourceType(undefined, "image")).toBe("")
+  })
+})
+
+// The discovery surfaces enumerate candidates via getTargetHandlesAccepting.
+// After the fix they call it with the REMAPPED type for the entity `image`
+// handle — so image inputs surface, and identity-only consumers do not.
+describe("entity image handle is discoverable as an image producer", () => {
+  const has = (sourceType: string, nodeType: string, handleId: string) =>
+    getTargetHandlesAccepting(sourceType).some(
+      (m) => m.nodeType === nodeType && m.handleId === handleId,
+    )
+
+  it.each(["character", "location", "object", "creature"] as const)(
+    "%s `image` handle surfaces image-input targets (the fix)",
+    (entity) => {
+      const effective = resolveEffectiveSourceType(entity, "image")
+      expect(has(effective, "image-to-image", "image")).toBe(true)
+      expect(has(effective, "generate-image", "references")).toBe(true)
+      expect(has(effective, "lip-sync", "image")).toBe(true)
+    },
+  )
+
+  it("the entity `image` handle does NOT offer identity-only consumers", () => {
+    const effective = resolveEffectiveSourceType("character", "image")
+    expect(has(effective, "character-fx", "target")).toBe(false)
+    expect(has(effective, "reference-sheet", "in")).toBe(false)
+  })
+
+  it("the raw identity type still offers identity consumers (characterRef path UNCHANGED)", () => {
+    // characterRef resolves to the raw "character" type — identity behavior.
+    expect(resolveEffectiveSourceType("character", "characterRef")).toBe("character")
+    expect(has("character", "character-fx", "target")).toBe(true)
+    expect(has("character", "reference-sheet", "in")).toBe(true)
   })
 })

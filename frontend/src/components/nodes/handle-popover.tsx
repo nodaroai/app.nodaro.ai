@@ -23,7 +23,7 @@ import { CSS } from "@dnd-kit/utilities"
 import { useHandleConnections, type HandleConnection } from "@/hooks/use-handle-connections"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { getNodeThumbnailUrl, getNodeVideoUrl, getNodePickerVisual } from "@/lib/node-thumbnail"
-import { buildAdjacency, collectDescendants, isValidWorkflowConnection } from "@/lib/connection-validation"
+import { buildAdjacency, collectDescendants, isValidWorkflowConnection, resolveEffectiveSourceType } from "@/lib/connection-validation"
 import { optimizedImageUrl } from "@/lib/image"
 import { getHandleConnectionLimit } from "@/lib/handle-limits"
 import { TARGET_HANDLE_ACCEPTS, getTargetHandlesAccepting } from "@/lib/target-handle-registry"
@@ -231,7 +231,14 @@ export function HandlePopover({
       if (!sourceType) {
         return { candidates: [] as CandidateNode[], hasDynamicOutputCandidates: false }
       }
-      const matches = getTargetHandlesAccepting(sourceType)
+      // Enumerate candidates by the handle's EFFECTIVE output type, not the raw
+      // node type: an entity's `image` handle emits a plain image producer
+      // ("upload-image"), so it must surface image-input consumers — the same
+      // remap the drop validator + drag-glow use. The per-candidate
+      // isValidWorkflowConnection check below re-validates with the real
+      // sourceHandle, so enumeration and drop stay consistent.
+      const effectiveSourceType = resolveEffectiveSourceType(sourceType, handleId)
+      const matches = getTargetHandlesAccepting(effectiveSourceType)
       if (matches.length === 0) {
         return { candidates: [] as CandidateNode[], hasDynamicOutputCandidates: false }
       }

@@ -9,7 +9,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { lazyWithRetry } from "@/lib/lazy-with-retry"
 import { TARGET_HANDLE_ACCEPTS } from "@/lib/target-handle-registry"
 import { HANDLE_COLORS } from "@/lib/handle-colors"
-import { getDragAncestorSet } from "@/lib/connection-validation"
+import { getDragAncestorSet, resolveEffectiveSourceType } from "@/lib/connection-validation"
 import { NODE_VISUAL_SCALE_FLOOR } from "@/lib/zoom-floor"
 import { useNodeVisuallyCompact } from "@/lib/node-visual-compact"
 
@@ -190,7 +190,12 @@ export function HandleWithPopover({
     // target pip if our own accepts predicate accepts the drag's source type,
     // AND the resulting edge wouldn't close a directed cycle.
     if (type === "target" && from.type === "source") {
-      if (!accepts || !accepts(fromType)) return false
+      // Use the drag's EFFECTIVE source type: an entity's `image` pip emits a
+      // plain image producer ("upload-image"), not its identity type, so it
+      // must light up image-input pips. resolveEffectiveSourceType keeps this
+      // glow in lockstep with the drop validator (connection-validation.ts).
+      const effectiveFromType = resolveEffectiveSourceType(fromType, from.id)
+      if (!accepts || !accepts(effectiveFromType)) return false
       // Cycle check: would-be edge is (from.nodeId → nodeId). Cycle iff
       // nodeId is already an ancestor of from.nodeId.
       const ancestors = getDragAncestorSet(edges, from.nodeId)
@@ -203,7 +208,11 @@ export function HandleWithPopover({
     if (type === "source" && from.type === "target") {
       const entries = TARGET_HANDLE_ACCEPTS[fromType] ?? []
       const entry = entries.find((e) => e.handleId === from.id)
-      if (!entry?.accepts(nodeType)) return false
+      // This pip's EFFECTIVE output type — an entity's `image` pip is a plain
+      // image producer, so it lights up when the user drags back from an image
+      // input. Mirrors the target-direction branch + the drop validator.
+      const effectiveType = resolveEffectiveSourceType(nodeType, handleId)
+      if (!entry?.accepts(effectiveType)) return false
       // Would-be edge is (nodeId → from.nodeId). Cycle iff from.nodeId is
       // already an ancestor of nodeId.
       const ancestors = getDragAncestorSet(edges, nodeId)
