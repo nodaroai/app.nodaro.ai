@@ -14,6 +14,7 @@ import {
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
+import { useClickOutside } from "@/hooks/use-click-outside"
 import { optimizedImageUrl } from "@/lib/image"
 import { toast } from "sonner"
 import { getMyApps, updateApp, deactivateApp, getMonetizationDefaults } from "@/lib/api"
@@ -241,16 +242,7 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
   }, [open, previewCard, onOpenChange])
 
   // Click outside (popup variant only)
-  useEffect(() => {
-    if (!open || isFullscreen) return
-    function handleClickOutside(e: MouseEvent) {
-      if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
-        onOpenChange(false)
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
-  }, [open, isFullscreen, onOpenChange])
+  useClickOutside(popupRef, () => onOpenChange(false), open && !isFullscreen)
 
   const browseParams: AppBrowseParams = useMemo(() => ({
     search: debouncedSearch || undefined,

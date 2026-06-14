@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react"
 import { Plus, StickyNote, Wand2, MousePointer2, XCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useClickOutside } from "@/hooks/use-click-outside"
 import { SHORTCUTS, formatBindingCaps, isMacPlatform } from "@/lib/shortcuts"
 import { Kbd } from "@/components/ui/kbd"
 
@@ -70,26 +71,13 @@ export function CanvasContextMenu({
   const menuRef = useRef<HTMLDivElement>(null)
   const isMac = isMacPlatform()
 
-  // Handle click outside
+  // Close on outside click, or on any scroll (the menu is position-anchored).
+  useClickOutside(menuRef, onClose, open)
   useEffect(() => {
     if (!open) return
-
-    function handleClickOutside(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        onClose()
-      }
-    }
-
-    function handleScroll() {
-      onClose()
-    }
-
-    document.addEventListener("mousedown", handleClickOutside)
+    const handleScroll = () => onClose()
     document.addEventListener("scroll", handleScroll, true)
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside)
-      document.removeEventListener("scroll", handleScroll, true)
-    }
+    return () => document.removeEventListener("scroll", handleScroll, true)
   }, [open, onClose])
 
   // Handle escape key

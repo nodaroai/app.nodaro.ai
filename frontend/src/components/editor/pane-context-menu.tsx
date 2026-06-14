@@ -1,8 +1,9 @@
 "use client"
 
-import { useEffect, useRef } from "react"
+import { useRef } from "react"
 import { StickyNote } from "lucide-react"
 import { SHORTCUTS, formatBinding, isMacPlatform } from "@/lib/shortcuts"
+import { useClickOutside } from "@/hooks/use-click-outside"
 
 interface PaneContextMenuProps {
   readonly x: number
@@ -15,15 +16,7 @@ export function PaneContextMenu({ x, y, onClose, onAddStickyNote }: PaneContextM
   const ref = useRef<HTMLDivElement>(null)
   const isMac = isMacPlatform()
 
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        onClose()
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
-  }, [onClose])
+  useClickOutside(ref, onClose)
 
   function handleAddStickyNote() {
     onAddStickyNote()

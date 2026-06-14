@@ -9,6 +9,7 @@ import {
 } from "lucide-react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAuth } from "@/hooks/use-auth"
+import { useClickOutside } from "@/hooks/use-click-outside"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { uploadFile } from "@/lib/api"
 import { optimizedImageUrl } from "@/lib/image"
@@ -247,16 +248,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
   }, [nodes, IMAGE_NODE_TYPES])
 
   // Close workflow dropdown on outside click
-  useEffect(() => {
-    if (workflowDropdownIndex === null) return
-    const handleClickOutside = (e: MouseEvent) => {
-      if (workflowDropdownRef.current && !workflowDropdownRef.current.contains(e.target as Node)) {
-        setWorkflowDropdownIndex(null)
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
-  }, [workflowDropdownIndex])
+  useClickOutside(workflowDropdownRef, () => setWorkflowDropdownIndex(null), workflowDropdownIndex !== null)
 
   if (!isOpen || !data) return null
 

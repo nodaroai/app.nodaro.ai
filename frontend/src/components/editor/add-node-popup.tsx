@@ -116,6 +116,7 @@ import {
 } from "lucide-react";
 import type { Connection } from "@xyflow/react";
 import { cn } from "@/lib/utils";
+import { useClickOutside } from "@/hooks/use-click-outside";
 import { clusterByGroup } from "@/lib/cluster-by-group";
 import { categoryRank } from "@/lib/node-category-order";
 import type { SceneNodeType } from "@/types/nodes";
@@ -1934,18 +1935,7 @@ export function AddNodePopup({
   }, [open, initialCategory]);
 
   // Handle click outside
-  useEffect(() => {
-    if (!open) return;
-
-    function handleClickOutside(e: MouseEvent) {
-      if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    }
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [open, onClose]);
+  useClickOutside(popupRef, onClose, open);
 
   // Handle keyboard navigation
   useEffect(() => {

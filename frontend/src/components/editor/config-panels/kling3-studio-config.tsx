@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/select"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAuth } from "@/hooks/use-auth"
+import { useClickOutside } from "@/hooks/use-click-outside"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { prefetchModelCredits } from "@/ee/hooks/use-model-credits"
 import { toast } from "sonner"
@@ -203,16 +204,7 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
     setWorkflowDropdownIndex(null)
   }, [elements, onUpdate])
 
-  useEffect(() => {
-    if (workflowDropdownIndex === null) return
-    function handleClickOutside(e: MouseEvent) {
-      if (workflowDropdownRef.current && !workflowDropdownRef.current.contains(e.target as Node)) {
-        setWorkflowDropdownIndex(null)
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
-  }, [workflowDropdownIndex])
+  useClickOutside(workflowDropdownRef, () => setWorkflowDropdownIndex(null), workflowDropdownIndex !== null)
 
   useEffect(() => {
     const lastIdx = elements.length - 1
