@@ -23,7 +23,7 @@ import { CSS } from "@dnd-kit/utilities"
 import { useHandleConnections, type HandleConnection } from "@/hooks/use-handle-connections"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { getNodeThumbnailUrl, getNodeVideoUrl, getNodePickerVisual } from "@/lib/node-thumbnail"
-import { buildAdjacency, collectDescendants, isValidWorkflowConnection, resolveEffectiveSourceType } from "@/lib/connection-validation"
+import { collectTargetCandidates, isValidWorkflowConnection, resolveEffectiveSourceType } from "@/lib/connection-validation"
 import { optimizedImageUrl } from "@/lib/image"
 import { getHandleConnectionLimit } from "@/lib/handle-limits"
 import { TARGET_HANDLE_ACCEPTS, getTargetHandlesAccepting } from "@/lib/target-handle-registry"
@@ -358,66 +358,42 @@ export function HandlePopover({
       return { candidates: rendered, hasDynamicOutputCandidates: false }
     }
 
-    // Target-direction (existing behavior).
+    // Target-direction: enumerate the upstream producer candidates for this
+    // input handle. collectTargetCandidates owns the rules (cycle + dedup +
+    // per-output-handle accept scan, including the entity `image` passthrough
+    // that isn't declared in NODE_DEFINITIONS.outputs); here we only enrich each
+    // resolved candidate with its node's thumbnail / picker visual for the row.
     if (!accepts) {
       return { candidates: [] as CandidateNode[], hasDynamicOutputCandidates: false }
     }
     const connectedIds = new Set(connections.map((c) => c.otherNodeId))
-    // Single O(V+E) descendant pass to filter every cycle-inducing
-    // candidate at once — instead of running an N-element cycle BFS
-    // inside isValidWorkflowConnection per candidate. Any node already
-    // downstream of the consumer (`nodeId`) would close a cycle if used
-    // as the source for a new edge into this handle.
-    const adj = buildAdjacency(edges)
-    const cycleInducingIds = collectDescendants(adj, nodeId)
-
-    const rendered: CandidateNode[] = []
-    let dynamicOutputs = false
-    for (let i = nodes.length - 1; i >= 0; i--) {
-      const n = nodes[i]
-      if (n.id === nodeId) continue                       // skip the consumer itself
-      if (connectedIds.has(n.id)) continue                // already connected
-      if (cycleInducingIds.has(n.id)) continue            // would create a cycle
-      const t = (n.type ?? "") as string
-      if (!t || !accepts(t)) continue                     // type-incompatible
-      const def = NODE_DEF_MAP.get(t as never)
-      // Dynamic-output types (list/loop, outputs:[]) don't have a static
-      // handle id the Connect button can wire to — drag-to-connect handles
-      // them natively via runtime col_<uuid> handles. Flag that they EXIST
-      // so the hint can mention them, but don't render a row.
-      const outputHandle = def?.outputs?.[0]
-      if (!outputHandle) {
-        if (def && (!def.outputs || def.outputs.length === 0)) dynamicOutputs = true
-        continue
-      }
-      // GLOBAL connection rules (json→media, composition→render-video) —
-      // `accepts` is per-handle; this is what workflow-canvas runs during
-      // drag-to-connect. Without this, a future HandleWithPopover with a
-      // looser `accepts` predicate could silently wire an invalid edge.
-      // Pass `undefined` for the graph since cycle filtering already
-      // happened above — re-running per candidate would be O(N×(V+E)).
-      const wouldBeConnection = {
-        source: n.id,
-        sourceHandle: outputHandle,
-        target: nodeId,
-        targetHandle: handleId,
-      }
-      if (!isValidWorkflowConnection(wouldBeConnection, nodeTypeById)) continue
-      rendered.push({
-        nodeId: n.id,
-        nodeLabel: ((n.data as { label?: string } | undefined)?.label ?? t) as string,
-        nodeType: t,
+    const { candidates: coreCandidates, hasDynamicOutputCandidates } = collectTargetCandidates({
+      nodes,
+      edges,
+      consumerId: nodeId,
+      consumerHandleId: handleId,
+      alreadyConnectedIds: connectedIds,
+      accepts,
+      nodeTypeById,
+      outputsOf: (t) => NODE_DEF_MAP.get(t as never)?.outputs,
+    })
+    const rendered: CandidateNode[] = coreCandidates.map((c) => {
+      const n = nodesById.get(c.nodeId)
+      return {
+        nodeId: c.nodeId,
+        nodeLabel: ((n?.data as { label?: string } | undefined)?.label ?? c.nodeType) as string,
+        nodeType: c.nodeType,
         thumbnailUrl: getNodeThumbnailUrl(n),
         videoUrl: getNodeVideoUrl(n),
         pickerVisual: getNodePickerVisual(n),
-        source: n.id,
-        sourceHandle: outputHandle,
+        source: c.nodeId,
+        sourceHandle: c.sourceHandle,
         target: nodeId,
         targetHandle: handleId,
-      })
-    }
-    return { candidates: rendered, hasDynamicOutputCandidates: dynamicOutputs }
-  }, [accepts, connections, edges, nodes, nodeId, handleId, direction])
+      }
+    })
+    return { candidates: rendered, hasDynamicOutputCandidates }
+  }, [accepts, connections, edges, nodes, nodesById, nodeId, handleId, direction])
 
   const handleJump = useCallback(
     (otherNodeId: string) => {

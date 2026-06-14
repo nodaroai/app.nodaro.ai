@@ -141,6 +141,26 @@ export function resolveEffectiveSourceType(
   return rawSourceType ?? ""
 }
 
+/**
+ * The SOURCE handle ids a node can be wired FROM, for reverse (target-
+ * direction) candidate enumeration. Entity nodes render an `image` passthrough
+ * source handle that is intentionally NOT declared in `NODE_DEFINITIONS.outputs`
+ * — their declared output is the `*Ref` identity handle, which drives execution
+ * and ref resolution. We surface the `image` handle HERE so an image input's
+ * popover can offer the entity wired to its plain-image output. Sourced from the
+ * SAME `ENTITY_IMAGE_HANDLE_TYPES` set as `resolveEffectiveSourceType`, so the
+ * two can't drift; non-entity nodes get their declared outputs verbatim.
+ */
+export function enumerableSourceHandles(
+  nodeType: string,
+  declaredOutputs: readonly string[],
+): string[] {
+  if (ENTITY_IMAGE_HANDLE_TYPES.has(nodeType) && !declaredOutputs.includes("image")) {
+    return [...declaredOutputs, "image"]
+  }
+  return [...declaredOutputs]
+}
+
 export interface ConnectionShape {
   readonly source?: string | null
   readonly target?: string | null
@@ -676,4 +696,99 @@ export function getDragAncestorSet(
   cachedAncestorsFromId = fromNodeId
   cachedAncestorsResult = result
   return result
+}
+
+export interface TargetCandidate {
+  readonly nodeId: string
+  readonly nodeType: string
+  readonly sourceHandle: string
+}
+
+export interface CollectTargetCandidatesParams {
+  readonly nodes: ReadonlyArray<{ readonly id: string; readonly type?: string }>
+  readonly edges: readonly EdgeShape[]
+  /** The consumer (input) node whose handle the popover was opened on. */
+  readonly consumerId: string
+  readonly consumerHandleId: string
+  /** Source-node ids already wired to (consumerId, consumerHandleId) — skipped. */
+  readonly alreadyConnectedIds: ReadonlySet<string>
+  /** The input handle's predicate, called with a producer's EFFECTIVE output type. */
+  readonly accepts: (effectiveSourceType: string) => boolean
+  readonly nodeTypeById: (id: string) => string | undefined
+  /** Declared output handles for a node type (`NODE_DEFINITIONS.outputs`), or
+   *  undefined when the type has no descriptor. */
+  readonly outputsOf: (nodeType: string) => readonly string[] | undefined
+}
+
+/**
+ * Enumerate producer candidates for a target (input) handle's popover — the
+ * upstream nodes that can be wired INTO (consumerId, consumerHandleId).
+ *
+ * For each in-graph node (newest first), pick the FIRST of its source handles
+ * (`enumerableSourceHandles`) whose effective output type the input `accepts`
+ * AND that passes the global validator, and emit a candidate wired to that
+ * handle. "First match wins" keeps single-output nodes identical to the legacy
+ * `outputs[0]` behavior, while letting an entity resolve to its `image` handle
+ * for image inputs and its `*Ref` handle for identity inputs.
+ *
+ * `hasDynamicOutputCandidates` flags accepted dynamic-output nodes (list/loop)
+ * that have no static handle to wire — the popover shows a "drag for column
+ * outputs" hint instead of a row, matching the legacy gate (accepted type +
+ * empty declared outputs).
+ */
+export function collectTargetCandidates(
+  params: CollectTargetCandidatesParams,
+): { candidates: TargetCandidate[]; hasDynamicOutputCandidates: boolean } {
+  const {
+    nodes,
+    edges,
+    consumerId,
+    consumerHandleId,
+    alreadyConnectedIds,
+    accepts,
+    nodeTypeById,
+    outputsOf,
+  } = params
+  // Any node already downstream of the consumer would close a cycle if wired as
+  // a new source into it — filter them all with one O(V+E) descendant pass.
+  const cycleInducingIds = collectDescendants(buildAdjacency(edges), consumerId)
+  const candidates: TargetCandidate[] = []
+  let hasDynamicOutputCandidates = false
+  // Reverse iteration: newest nodes (appended last) surface first.
+  for (let i = nodes.length - 1; i >= 0; i--) {
+    const n = nodes[i]
+    if (n.id === consumerId) continue // skip the consumer itself
+    if (alreadyConnectedIds.has(n.id)) continue // already wired on this handle
+    if (cycleInducingIds.has(n.id)) continue // would create a cycle
+    const t = n.type ?? ""
+    if (!t) continue
+    const declared = outputsOf(t)
+    if (declared === undefined) continue // unknown type / no descriptor
+    const handles = enumerableSourceHandles(t, declared)
+    if (handles.length === 0) {
+      // Dynamic-output node (list/loop): no static handle to wire. Flag it
+      // exactly where the legacy code did — when its node type is accepted.
+      if (accepts(t)) hasDynamicOutputCandidates = true
+      continue
+    }
+    let chosen: string | undefined
+    for (const handle of handles) {
+      if (!accepts(resolveEffectiveSourceType(t, handle))) continue
+      // Global rules (json→media, composition→render-video, …). Cycle filtering
+      // already happened above, so the graph arg is omitted.
+      if (
+        !isValidWorkflowConnection(
+          { source: n.id, sourceHandle: handle, target: consumerId, targetHandle: consumerHandleId },
+          nodeTypeById,
+        )
+      ) {
+        continue
+      }
+      chosen = handle
+      break
+    }
+    if (!chosen) continue
+    candidates.push({ nodeId: n.id, nodeType: t, sourceHandle: chosen })
+  }
+  return { candidates, hasDynamicOutputCandidates }
 }

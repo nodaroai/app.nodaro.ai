@@ -1,8 +1,16 @@
 import { describe, expect, it } from "vitest"
-import { isValidWorkflowConnection, resolveEffectiveSourceType } from "../connection-validation"
+import {
+  isValidWorkflowConnection,
+  resolveEffectiveSourceType,
+  enumerableSourceHandles,
+  collectTargetCandidates,
+} from "../connection-validation"
 import { resolveTargetHandle, getCompatibleNodes } from "../node-compatibility"
 import { getTargetHandlesAccepting } from "../target-handle-registry"
-import { NODE_DEFINITIONS } from "@/types/nodes"
+import { isValidImageToImageConnection } from "../image-producer-handles"
+import { isValidGenerateImageConnection } from "../generate-image-handles"
+import { isVisualPickerType } from "../parameter-picker-types"
+import { NODE_DEFINITIONS, NODE_DEF_MAP } from "@/types/nodes"
 
 describe("isValidWorkflowConnection (generate-video dispatch)", () => {
   it("dispatches to generate-video validator for generate-video target", () => {
@@ -440,5 +448,119 @@ describe("entity image handle is discoverable as an image producer", () => {
     expect(resolveEffectiveSourceType("character", "characterRef")).toBe("character")
     expect(has("character", "character-fx", "target")).toBe(true)
     expect(has("character", "reference-sheet", "in")).toBe(true)
+  })
+})
+
+// Reverse direction (the second half of the fix): the target-direction popover
+// — opened by clicking an image INPUT pip — enumerates upstream producer
+// candidates. The entity `image` output is NOT declared in NODE_DEFINITIONS
+// (its declared output is the `*Ref` handle), so the old "node-type + outputs[0]"
+// scan never offered it. enumerableSourceHandles augments the declared outputs
+// with the entity `image` passthrough (sourced from the same SSOT as the remap).
+describe("enumerableSourceHandles (entity image passthrough)", () => {
+  it.each([
+    ["character", "characterRef"],
+    ["location", "locationRef"],
+    ["object", "objectRef"],
+    ["creature", "creatureRef"],
+  ])("%s adds the `image` passthrough handle to its declared outputs", (entity, ref) => {
+    expect(enumerableSourceHandles(entity, [ref])).toEqual([ref, "image"])
+  })
+
+  it("does not duplicate `image` when it is already declared", () => {
+    expect(enumerableSourceHandles("character", ["characterRef", "image"])).toEqual([
+      "characterRef",
+      "image",
+    ])
+  })
+
+  it("leaves non-entity outputs unchanged (face has no image output)", () => {
+    expect(enumerableSourceHandles("generate-image", ["image"])).toEqual(["image"])
+    expect(enumerableSourceHandles("face", ["faceRef"])).toEqual(["faceRef"])
+  })
+})
+
+describe("collectTargetCandidates (image input lists entity image output)", () => {
+  const outputsOf = (t: string) => NODE_DEF_MAP.get(t as never)?.outputs
+  const mkNodes = (...defs: ReadonlyArray<readonly [string, string]>) =>
+    defs.map(([id, type]) => ({ id, type }))
+  const typeById = (nodes: ReadonlyArray<{ id: string; type?: string }>) => (id: string) =>
+    nodes.find((n) => n.id === id)?.type
+  const acceptsImageInput = (t: string) =>
+    isValidImageToImageConnection("image", t, isVisualPickerType)
+  const acceptsIdentityInput = (t: string) =>
+    isValidGenerateImageConnection("assets", t, isVisualPickerType)
+
+  it.each(["character", "location", "object", "creature"])(
+    "an image input lists %s wired to its `image` output (the fix)",
+    (entity) => {
+      const nodes = mkNodes(["e1", entity], ["i2i", "image-to-image"])
+      const { candidates } = collectTargetCandidates({
+        nodes,
+        edges: [],
+        consumerId: "i2i",
+        consumerHandleId: "image",
+        alreadyConnectedIds: new Set(),
+        accepts: acceptsImageInput,
+        nodeTypeById: typeById(nodes),
+        outputsOf,
+      })
+      expect(candidates).toContainEqual({ nodeId: "e1", nodeType: entity, sourceHandle: "image" })
+    },
+  )
+
+  it("an identity input lists character wired to `characterRef`, NOT image (UNCHANGED)", () => {
+    const nodes = mkNodes(["c1", "character"], ["gi", "generate-image"])
+    const { candidates } = collectTargetCandidates({
+      nodes,
+      edges: [],
+      consumerId: "gi",
+      consumerHandleId: "assets",
+      alreadyConnectedIds: new Set(),
+      accepts: acceptsIdentityInput,
+      nodeTypeById: typeById(nodes),
+      outputsOf,
+    })
+    const forChar = candidates.filter((c) => c.nodeId === "c1")
+    expect(forChar).toEqual([{ nodeId: "c1", nodeType: "character", sourceHandle: "characterRef" }])
+  })
+
+  it("a plain image producer is still listed wired to its `image` output (UNCHANGED)", () => {
+    const nodes = mkNodes(["gi", "generate-image"], ["i2i", "image-to-image"])
+    const { candidates } = collectTargetCandidates({
+      nodes,
+      edges: [],
+      consumerId: "i2i",
+      consumerHandleId: "image",
+      alreadyConnectedIds: new Set(),
+      accepts: acceptsImageInput,
+      nodeTypeById: typeById(nodes),
+      outputsOf,
+    })
+    expect(candidates).toContainEqual({ nodeId: "gi", nodeType: "generate-image", sourceHandle: "image" })
+  })
+
+  it("excludes already-connected and cycle-inducing candidates", () => {
+    const nodes = mkNodes(["c1", "character"], ["i2i", "image-to-image"])
+    const base = {
+      nodes,
+      consumerId: "i2i",
+      consumerHandleId: "image",
+      accepts: acceptsImageInput,
+      nodeTypeById: typeById(nodes),
+      outputsOf,
+    }
+    // Already wired on this handle → not re-offered.
+    expect(
+      collectTargetCandidates({ ...base, edges: [], alreadyConnectedIds: new Set(["c1"]) }).candidates,
+    ).toHaveLength(0)
+    // c1 is downstream of the consumer (i2i → c1), so wiring c1 → i2i closes a cycle.
+    expect(
+      collectTargetCandidates({
+        ...base,
+        edges: [{ source: "i2i", target: "c1" }],
+        alreadyConnectedIds: new Set(),
+      }).candidates,
+    ).toHaveLength(0)
   })
 })
