@@ -14,6 +14,8 @@ import {
   resolveObjectAspectRatio,
   CHARACTER_STYLES,
   OBJECT_ASPECT_OPTIONS,
+  getDurationsForModel,
+  buildVideoCreditModelIdentifier,
 } from "@nodaro/shared"
 
 /**
@@ -54,12 +56,53 @@ export const generateObjectMotionBody = z.object({
   // `resolveObjectAspectRatio({ assetType: "motion" })` — objects are
   // product-showcase framing. Uses the canonical OBJECT_ASPECT_OPTIONS.
   aspectRatio: z.enum(OBJECT_ASPECT_OPTIONS).optional(),
+  // Optional clip duration (seconds), mirroring generate-video's per-model i2v
+  // duration lever. Validated below against the chosen provider's allowed
+  // durations; omitted → the model's own default (no behavior change for
+  // current callers).
+  duration: z.number().int().positive().optional(),
 })
+  .superRefine((val, ctx) => {
+    if (val.duration === undefined) return
+    const allowed = getDurationsForModel(val.provider)
+    if (!allowed) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["duration"],
+        message: `Model "${val.provider}" does not support a duration lever — omit it.`,
+      })
+      return
+    }
+    if (!allowed.includes(val.duration)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["duration"],
+        message: `Model "${val.provider}" does not support duration ${val.duration}s. Supported: ${allowed.join(", ")}s.`,
+      })
+    }
+  })
 
 export async function generateObjectMotionRoutes(app: FastifyInstance) {
   app.post(
     "/v1/generate-object-motion",
-    { preHandler: creditGuard((req) => extractProvider(req.body, "kling-turbo")) },
+    {
+      preHandler: creditGuard((req) => {
+        const b = req.body as Record<string, unknown>
+        const provider = extractProvider(req.body, "kling-turbo")
+        const duration = typeof b.duration === "number" ? b.duration : undefined
+        // Duration-aware pre-gate estimate — but only for a duration the model
+        // actually supports, so an invalid value falls back to the bare
+        // provider and yields a clean 400 from Zod rather than a 503 from an
+        // unseeded composite price id.
+        if (duration === undefined || !getDurationsForModel(provider)?.includes(duration)) {
+          return provider
+        }
+        return buildVideoCreditModelIdentifier(
+          provider, duration, undefined, "image-to-video", undefined, undefined,
+          Boolean(b.refineFromVideoUrl),
+        )
+      }),
+    },
     async (req, reply) => {
       // ───────────────────────────────────────────────────────────────────
       // 1. Authentication
@@ -110,7 +153,18 @@ export async function generateObjectMotionRoutes(app: FastifyInstance) {
         }
       }
 
-      const modelIdentifier = parsed.data.provider
+      const provider = parsed.data.provider
+      // Credit identifier: duration-aware composite ONLY when a duration is set
+      // (so longer clips on duration-priced models — kling, kling-3.0, wan-i2v,
+      // seedance, … — reserve the correct amount). Omitted → bare provider =
+      // exact current behavior. The worker always receives the BARE provider.
+      const creditModelIdentifier =
+        parsed.data.duration === undefined
+          ? provider
+          : buildVideoCreditModelIdentifier(
+              provider, parsed.data.duration, undefined, "image-to-video",
+              undefined, undefined, Boolean(parsed.data.refineFromVideoUrl),
+            )
 
       const prompt = buildObjectMotionPrompt({
         name: parsed.data.name,
@@ -161,7 +215,7 @@ export async function generateObjectMotionRoutes(app: FastifyInstance) {
       // ───────────────────────────────────────────────────────────────────
       // 5. Reserve credits
       // ───────────────────────────────────────────────────────────────────
-      const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
+      const reservation = await reserveCreditsForJob(req, reply, job.id, creditModelIdentifier)
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
 
@@ -175,7 +229,8 @@ export async function generateObjectMotionRoutes(app: FastifyInstance) {
         prompt,
         sourceImageUrl: parsed.data.sourceImageUrl,
         refineFromVideoUrl: parsed.data.refineFromVideoUrl,
-        provider: modelIdentifier,
+        provider,
+        duration: parsed.data.duration,
         aspectRatio,
         usageLogId,
         attachToObjectId: parsed.data.attachToObjectId,

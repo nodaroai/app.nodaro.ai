@@ -389,6 +389,13 @@ export interface GenerateCreatureMotionInput {
    * creature route reuses the object aspect enum.
    */
   aspectRatio?: ObjectAspectRatio
+  /**
+   * Optional clip duration in seconds. Validated server-side against the chosen
+   * provider's allowed durations (e.g. kling 5/10, wan-i2v 5/10/15); omitted →
+   * the model's own default (no behavior change). Mirrors generate-video's
+   * per-model i2v duration lever.
+   */
+  duration?: number
 }
 
 export interface GenerateCreatureMotionResult {

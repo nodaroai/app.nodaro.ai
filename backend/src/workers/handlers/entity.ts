@@ -489,6 +489,7 @@ const handleGenerateObjectMotion: HandlerFn = async function handleGenerateObjec
     sourceImageUrl,
     refineFromVideoUrl,
     provider,
+    duration,
     aspectRatio,
     attachToObjectId,
     attachToColumn,
@@ -501,6 +502,9 @@ const handleGenerateObjectMotion: HandlerFn = async function handleGenerateObjec
      *  image-to-video from sourceImageUrl. */
     refineFromVideoUrl?: string
     provider?: string
+    /** Per-model clip duration (seconds), route-validated against the
+     *  provider's allowed durations. Undefined → model default. */
+    duration?: number
     aspectRatio?: string
     attachToObjectId?: string
     attachToColumn?: string
@@ -515,19 +519,24 @@ const handleGenerateObjectMotion: HandlerFn = async function handleGenerateObjec
     providerKindForVideoModel(resolvedProvider),
   )
 
+  // Per-model clip duration (route-validated against the provider's allowed
+  // durations). i2v takes it as the positional `duration` arg; v2v takes it via
+  // ProviderOptions.duration (string). Undefined → the model's own default.
   const result = refineFromVideoUrl
     ? await videoToVideo(
         refineFromVideoUrl,
         resolvedProvider,
         prompt,
-        aspectRatio ? { aspectRatio } : undefined,
+        aspectRatio || duration !== undefined
+          ? { ...(aspectRatio ? { aspectRatio } : {}), ...(duration !== undefined ? { duration: String(duration) } : {}) }
+          : undefined,
         { onTaskCreated },
       )
     : await imageToVideo(
         sourceImageUrl,
         resolvedProvider,
         prompt,
-        undefined,
+        duration,
         undefined,
         aspectRatio ? { aspectRatio } : undefined,
         { onTaskCreated },
@@ -589,6 +598,7 @@ const handleGenerateCreatureMotion: HandlerFn = async function handleGenerateCre
     sourceImageUrl,
     refineFromVideoUrl,
     provider,
+    duration,
     aspectRatio,
     attachToCreatureId,
     attachToColumn,
@@ -601,6 +611,9 @@ const handleGenerateCreatureMotion: HandlerFn = async function handleGenerateCre
      *  image-to-video from sourceImageUrl. */
     refineFromVideoUrl?: string
     provider?: string
+    /** Per-model clip duration (seconds), route-validated against the
+     *  provider's allowed durations. Undefined → model default. */
+    duration?: number
     aspectRatio?: string
     attachToCreatureId?: string
     attachToColumn?: string
@@ -615,19 +628,24 @@ const handleGenerateCreatureMotion: HandlerFn = async function handleGenerateCre
     providerKindForVideoModel(resolvedProvider),
   )
 
+  // Per-model clip duration (route-validated against the provider's allowed
+  // durations). i2v takes it as the positional `duration` arg; v2v takes it via
+  // ProviderOptions.duration (string). Undefined → the model's own default.
   const result = refineFromVideoUrl
     ? await videoToVideo(
         refineFromVideoUrl,
         resolvedProvider,
         prompt,
-        aspectRatio ? { aspectRatio } : undefined,
+        aspectRatio || duration !== undefined
+          ? { ...(aspectRatio ? { aspectRatio } : {}), ...(duration !== undefined ? { duration: String(duration) } : {}) }
+          : undefined,
         { onTaskCreated },
       )
     : await imageToVideo(
         sourceImageUrl,
         resolvedProvider,
         prompt,
-        undefined,
+        duration,
         undefined,
         aspectRatio ? { aspectRatio } : undefined,
         { onTaskCreated },
