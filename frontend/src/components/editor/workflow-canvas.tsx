@@ -33,8 +33,8 @@ import { MediaPreviewModal } from "./media-preview-modal"
 import { ZOOM_MIN, ZOOM_MAX, snapZoom } from "@/lib/zoom"
 import { AddNodePopup } from "./add-node-popup"
 import { ConnectNodeDialog, type ConnectNodeChoice } from "./connect-node-dialog"
-import { enumerateConnectionOptionsCore, handleIdsFromBounds } from "@/lib/enumerate-connection-options"
-import { getAutoConnectPref } from "@/lib/auto-connect-pref"
+import { enumerateConnectionOptionsCore, chooseSmartConnection, handleIdsFromBounds } from "@/lib/enumerate-connection-options"
+import { getSmartConnectPref } from "@/lib/auto-connect-pref"
 import { computeMissingPromptRefs } from "@/lib/missing-prompt-refs"
 import { buildAdjacency, isValidWorkflowConnection } from "@/lib/connection-validation"
 import { nodeRect, connectedNodePosition } from "@/lib/find-free-position"
@@ -510,6 +510,9 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     nodeType: string
     sourceHandles: string[]
     targetHandles: string[]
+    /** Directional add (§7): Tab/right "+" = downstream, Shift+Tab/left "+" =
+     *  upstream. Undefined for the legacy non-directional generic add. */
+    direction?: "upstream" | "downstream"
   } | null>(null)
   // Set once a node type is picked in auto-connect mode → opens the Connect dialog.
   const [pendingConnect, setPendingConnect] = useState<{
@@ -1397,6 +1400,31 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     return () => setOpenAddNodePopupForHandleStore(null)
   }, [setOpenAddNodePopupForHandleStore, openAddNodePopupForHandle])
 
+  // On-canvas left/right "+" buttons (§7): open the popup in directional mode
+  // bound to the focused node — same context Tab/Shift+Tab build, so picking a
+  // node flows through the identical Auto Connect / Smart resolution.
+  const openDirectionalAdd = useCallback(
+    ({ nodeId, direction }: { nodeId: string; direction: "upstream" | "downstream" }) => {
+      const node = getNode(nodeId)
+      if (!node || !node.type || useWorkflowStore.getState().isReadOnly) return
+      const { sourceHandles, targetHandles } = handleIdsFromBounds(getInternalNode(nodeId)?.internals.handleBounds, node.type)
+      if (sourceHandles.length + targetHandles.length === 0) return
+      setConnectionContext(null)
+      setAddNodePopupCategory(null)
+      setAddNodePopupPosition(undefined)
+      setAutoConnectCtx({ nodeId, nodeType: node.type, sourceHandles, targetHandles, direction })
+      setAddNodePopupOpen(true)
+      setCanvasContextMenu(null)
+      setNodeContextMenu(null)
+    },
+    [getNode, getInternalNode],
+  )
+  const setOpenDirectionalAddStore = useWorkflowStore((s) => s.setOpenDirectionalAdd)
+  useEffect(() => {
+    setOpenDirectionalAddStore(openDirectionalAdd)
+    return () => setOpenDirectionalAddStore(null)
+  }, [setOpenDirectionalAddStore, openDirectionalAdd])
+
   // Center the viewport on every newly created node at the CURRENT zoom.
   // Registered into the store's addNode so all entry points (popup, sidebar
   // toolbar, edge-drop, handle popover) inherit it. React Flow hasn't
@@ -1465,45 +1493,33 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   }, [])
 
   // Auto-connect: a node type was picked → open the Connect dialog for naming + wiring.
-  const handlePickType = useCallback(
-    (type: SceneNodeType, initialData?: Record<string, unknown>) => {
-      const ctx = autoConnectCtx
-      if (!ctx) return
-      const fnode = getNode(ctx.nodeId)
-      const focusedLabel = ((fnode?.data as Record<string, unknown> | undefined)?.label as string) || ctx.nodeType
-      const def = NODE_DEF_MAP.get(type)
-      const newLabel =
-        ((def?.defaultData as Record<string, unknown> | undefined)?.label as string) || def?.label || type
-      setPendingConnect({ focusedId: ctx.nodeId, focusedType: ctx.nodeType, focusedLabel, newType: type, newLabel, initialData })
-      // Hide the popup but KEEP autoConnectCtx so the dialog's Esc can reopen
-      // this node list (back navigation). Cleared on confirm / popup close.
-      setAddNodePopupOpen(false)
+  // Enumerator options for a focused→new pair — shared by the Connect dialog
+  // (memo below) and Smart Connect. Reads handleBounds + missing refs live.
+  const computeConnectOptions = useCallback(
+    (focusedId: string, focusedType: string, newType: SceneNodeType) => {
+      // Snapshot the graph at call time (only invoked on pick / dialog-open), so
+      // this callback doesn't recreate on every nodes/edges change or poll tick.
+      const { nodes, edges } = useWorkflowStore.getState()
+      const { sourceHandles, targetHandles } = handleIdsFromBounds(
+        getInternalNode(focusedId)?.internals.handleBounds,
+        focusedType,
+      )
+      const missing = computeMissingPromptRefs(nodes, edges, focusedId).map((m) => m.name)
+      return enumerateConnectionOptionsCore({
+        focusedType,
+        newType,
+        focusedSourceHandles: sourceHandles,
+        focusedTargetHandles: targetHandles,
+        missingRefNames: missing,
+      })
     },
-    [autoConnectCtx, getNode],
+    [getInternalNode],
   )
 
-  // Options for the Connect dialog: focused handle ids from handleBounds (ground
-  // truth; static fallback), missing text refs, run through the shared enumerator.
-  const connectOptions = useMemo(() => {
-    if (!pendingConnect) return null
-    const { sourceHandles, targetHandles } = handleIdsFromBounds(
-      getInternalNode(pendingConnect.focusedId)?.internals.handleBounds,
-      pendingConnect.focusedType,
-    )
-    const missing = computeMissingPromptRefs(nodes, edges, pendingConnect.focusedId).map((m) => m.name)
-    return enumerateConnectionOptionsCore({
-      focusedType: pendingConnect.focusedType,
-      newType: pendingConnect.newType,
-      focusedSourceHandles: sourceHandles,
-      focusedTargetHandles: targetHandles,
-      missingRefNames: missing,
-    })
-  }, [pendingConnect, nodes, edges, getInternalNode])
-
-  const handleConnectConfirm = useCallback(
-    (choice: ConnectNodeChoice) => {
-      const pc = pendingConnect
-      if (!pc) return
+  // Create the new node, name it, and wire the chosen edge. Shared by the
+  // Connect dialog confirm and Smart Connect so both build the graph identically.
+  const applyConnectChoice = useCallback(
+    (pc: { focusedId: string; newType: SceneNodeType; initialData?: Record<string, unknown> }, choice: ConnectNodeChoice) => {
       const fnode = getNode(pc.focusedId)
       const opt = choice.option
       const dir = opt?.direction ?? "source"
@@ -1513,23 +1529,75 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         ? connectedNodePosition(nodeRect(fnode), dir)
         : screenToFlowPosition(lastMousePositionRef.current)
       const id = addNode(pc.newType, position, pc.initialData)
-      if (id) {
-        if (choice.name) useWorkflowStore.getState().updateNodeData(id, { label: choice.name })
-        // Only wire if the focused node still exists — it may have been deleted
-        // (undo / realtime sync) while the dialog was open; wiring to a missing
-        // node would leave an orphan edge (onConnect doesn't validate).
-        if (opt && fnode) {
-          const connection =
-            opt.direction === "source"
-              ? { source: pc.focusedId, sourceHandle: opt.fHandle, target: id, targetHandle: opt.nHandle }
-              : { source: id, sourceHandle: opt.nHandle, target: pc.focusedId, targetHandle: opt.fHandle }
-          onConnect(connection)
-        }
+      if (!id) return
+      if (choice.name) useWorkflowStore.getState().updateNodeData(id, { label: choice.name })
+      // Only wire if the focused node still exists — it may have been deleted
+      // (undo / realtime sync) while the dialog was open; wiring to a missing
+      // node would leave an orphan edge (onConnect doesn't validate).
+      if (opt && fnode) {
+        const connection =
+          opt.direction === "source"
+            ? { source: pc.focusedId, sourceHandle: opt.fHandle, target: id, targetHandle: opt.nHandle }
+            : { source: id, sourceHandle: opt.nHandle, target: pc.focusedId, targetHandle: opt.fHandle }
+        onConnect(connection)
       }
+    },
+    [getNode, addNode, onConnect, screenToFlowPosition],
+  )
+
+  // Auto-connect: a node type was picked. Smart Connect (default) skips the
+  // dialog — auto-pick the handle + name within the entry direction and wire
+  // immediately; otherwise open the Connect dialog for manual naming + wiring.
+  // (Only reached when Auto Connect is on — the popup gates onPickType on it.)
+  const handlePickType = useCallback(
+    (type: SceneNodeType, initialData?: Record<string, unknown>) => {
+      const ctx = autoConnectCtx
+      if (!ctx) return
+      const fnode = getNode(ctx.nodeId)
+      const focusedLabel = ((fnode?.data as Record<string, unknown> | undefined)?.label as string) || ctx.nodeType
+      const def = NODE_DEF_MAP.get(type)
+      const newLabel =
+        ((def?.defaultData as Record<string, unknown> | undefined)?.label as string) || def?.label || type
+      if (getSmartConnectPref()) {
+        const options = computeConnectOptions(ctx.nodeId, ctx.nodeType, type)
+        const { edges } = useWorkflowStore.getState()
+        const connectedTargetHandles = new Set(
+          edges.filter((ed) => ed.target === ctx.nodeId && ed.targetHandle).map((ed) => ed.targetHandle as string),
+        )
+        const choice = chooseSmartConnection({
+          direction: ctx.direction ?? null,
+          options,
+          focusedType: ctx.nodeType,
+          connectedTargetHandles,
+          defaultName: newLabel,
+        })
+        applyConnectChoice({ focusedId: ctx.nodeId, newType: type, initialData }, choice)
+        setAutoConnectCtx(null)
+        setAddNodePopupOpen(false)
+        return
+      }
+      setPendingConnect({ focusedId: ctx.nodeId, focusedType: ctx.nodeType, focusedLabel, newType: type, newLabel, initialData })
+      // Hide the popup but KEEP autoConnectCtx so the dialog's Esc can reopen
+      // this node list (back navigation). Cleared on confirm / popup close.
+      setAddNodePopupOpen(false)
+    },
+    [autoConnectCtx, getNode, computeConnectOptions, applyConnectChoice],
+  )
+
+  // Options for the Connect dialog (non-Smart path).
+  const connectOptions = useMemo(
+    () => (pendingConnect ? computeConnectOptions(pendingConnect.focusedId, pendingConnect.focusedType, pendingConnect.newType) : null),
+    [pendingConnect, computeConnectOptions],
+  )
+
+  const handleConnectConfirm = useCallback(
+    (choice: ConnectNodeChoice) => {
+      if (!pendingConnect) return
+      applyConnectChoice(pendingConnect, choice)
       setPendingConnect(null)
       setAutoConnectCtx(null)
     },
-    [pendingConnect, getNode, addNode, onConnect, screenToFlowPosition],
+    [pendingConnect, applyConnectChoice],
   )
   const handleToggleSnap = useCallback(() => {
     setSnapEnabled((prev) => {
@@ -1979,15 +2047,19 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         return
       }
 
-      // Tab - Open Add Node popup. With a connectable node focused (and the Auto
-      // pref on), open in auto-connect mode bound to it; otherwise at the mouse.
-      if (matchShortcut(e, SHORTCUTS.addNode)) {
+      // Tab / Shift+Tab — Add Node popup. With a connectable node focused, open
+      // in DIRECTIONAL mode (§7): Tab → downstream (consumers of its output),
+      // Shift+Tab → upstream (producers for its inputs). The popup filters to
+      // compatible nodes; the Auto Connect / Smart toggles decide the wiring (so
+      // the filter applies even with Auto off). With no focused node, plain Tab
+      // opens the generic popup at the cursor (as before) and Shift+Tab is a no-op.
+      const isAddNodeTab = matchShortcut(e, SHORTCUTS.addNode)
+      const isAddNodeShiftTab = e.key === "Tab" && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey
+      if (isAddNodeTab || isAddNodeShiftTab) {
         if (addNodePopupOpenRef.current) {
-          // Already open: Tab switches the popup's Common/All mode (its own
-          // document listener) — don't re-open/reposition it.
+          // Already open: Tab cycles the popup's tabs (its own document listener).
           return
         }
-        e.preventDefault()
         const fid = useWorkflowStore.getState().focusedNodeId
         const fnode = fid ? getNode(fid) : undefined
         const isClone =
@@ -1996,21 +2068,27 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           fnode && fnode.type
             ? handleIdsFromBounds(getInternalNode(fnode.id)?.internals.handleBounds, fnode.type)
             : { sourceHandles: [], targetHandles: [] }
-        if (
-          getAutoConnectPref() &&
-          !useWorkflowStore.getState().isReadOnly &&
-          fnode &&
-          fnode.type &&
-          !isClone &&
-          srcH.length + tgtH.length > 0
-        ) {
+        const connectable =
+          !useWorkflowStore.getState().isReadOnly && !!fnode && !!fnode.type && !isClone && srcH.length + tgtH.length > 0
+        if (connectable && fnode && fnode.type) {
+          e.preventDefault()
           setConnectionContext(null)
           setAddNodePopupCategory(null)
           setAddNodePopupPosition(undefined)
-          setAutoConnectCtx({ nodeId: fnode.id, nodeType: fnode.type, sourceHandles: srcH, targetHandles: tgtH })
+          setAutoConnectCtx({
+            nodeId: fnode.id,
+            nodeType: fnode.type,
+            sourceHandles: srcH,
+            targetHandles: tgtH,
+            direction: isAddNodeShiftTab ? "upstream" : "downstream",
+          })
           setAddNodePopupOpen(true)
           return
         }
+        // No connectable focused node: plain Tab opens the generic popup at the
+        // cursor (today's behavior); Shift+Tab does nothing.
+        if (isAddNodeShiftTab) return
+        e.preventDefault()
         const pos = lastMousePositionRef.current
         handleOpenAddNodePopup(pos.x !== 0 || pos.y !== 0 ? pos : undefined)
         return

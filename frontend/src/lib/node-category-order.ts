@@ -31,6 +31,10 @@ export const CATEGORY_ORDER: readonly string[] = [
   "Workflow",
   "Triggers",
   "Output",
+  // Models is a popup-only virtual root (the All tab's last category, opening the
+  // model browser). No node carries category "Models", so the sidebar — which
+  // derives its categories from NODE_OPTIONS — never shows it.
+  "Models",
 ]
 
 export function categoryRank(id: string): number {

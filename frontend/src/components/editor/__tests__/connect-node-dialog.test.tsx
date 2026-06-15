@@ -36,6 +36,20 @@ describe("ConnectNodeDialog", () => {
     expect(screen.getByText("Don’t connect (just add)")).toBeInTheDocument()
   })
 
+  it("badges a source option INPUT and a target option OUTPUT (new node's perspective)", () => {
+    renderDialog({
+      handles: [
+        handle({ label: "Elements", fHandle: "image", nHandle: "elements", direction: "source" }),
+        handle({ label: "Prompt", fHandle: "prompt", nHandle: "out", direction: "target" }),
+      ],
+      variables: [],
+    })
+    expect(screen.getByText("INPUT")).toBeInTheDocument()
+    expect(screen.getByText("OUTPUT")).toBeInTheDocument()
+    expect(screen.getByText("from Hero Shot")).toBeInTheDocument()
+    expect(screen.getByText("to Hero Shot")).toBeInTheDocument()
+  })
+
   it("navigating to a variable row fills the name input with the variable name", () => {
     renderDialog({
       handles: baseOptions.handles,

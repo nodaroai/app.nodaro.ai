@@ -15,6 +15,7 @@ const REQUESTED_ROOT_ORDER = [
   "Workflow",
   "Triggers",
   "Output",
+  "Models",
 ] as const
 
 describe("CATEGORY_ORDER", () => {

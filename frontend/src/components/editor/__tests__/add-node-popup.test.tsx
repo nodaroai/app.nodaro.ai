@@ -324,6 +324,8 @@ describe("Common/All tabs", () => {
       "Workflow",
       "Triggers",
       "Output",
+      // Models is the All tab's last root category — opens the model browser.
+      "Models",
     ])
   })
 

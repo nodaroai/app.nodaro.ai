@@ -662,3 +662,32 @@ export function resolveTargetHandle(
     return def.outputs.find((h) => compatible.includes(h)) ?? def.outputs[0] ?? "out"
   }
 }
+
+/**
+ * Node-level directional compatibility for the on-canvas "+" buttons and
+ * Tab/Shift+Tab (§7). Unions {@link getCompatibleNodes} across ALL of the focused
+ * node's handles in one direction, so the popup shows every node that could
+ * validly connect:
+ *   - "downstream" (right "+" / Tab): nodes that consume any focused OUTPUT
+ *   - "upstream"   (left "+" / Shift+Tab): nodes whose output feeds any focused INPUT
+ * A node that is `direct` via any handle stays `direct`; results keep pool order.
+ */
+export function getCompatibleNodesForNode(
+  focusedType: string,
+  handles: { readonly sourceHandles: readonly string[]; readonly targetHandles: readonly string[] },
+  direction: "downstream" | "upstream",
+  nodeOptions: readonly NodeOption[],
+): CompatibleNodes {
+  const dir = direction === "downstream" ? "source" : "target"
+  const handleIds = direction === "downstream" ? handles.sourceHandles : handles.targetHandles
+  const directTypes = new Set<SceneNodeType>()
+  const compatibleTypes = new Set<SceneNodeType>()
+  for (const h of handleIds) {
+    const r = getCompatibleNodes(h, dir, nodeOptions, focusedType)
+    for (const n of r.direct) directTypes.add(n.type)
+    for (const n of r.compatible) compatibleTypes.add(n.type)
+  }
+  const direct = nodeOptions.filter((n) => directTypes.has(n.type))
+  const compatible = nodeOptions.filter((n) => compatibleTypes.has(n.type) && !directTypes.has(n.type))
+  return { direct, compatible, directTypes }
+}
