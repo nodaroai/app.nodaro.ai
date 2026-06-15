@@ -48,7 +48,7 @@ import { GetCreditsModal } from "@/ee/components/credits/GetCreditsModal"
 import { PlatformPreview, PLATFORM_COLORS } from "@/components/nodes/platform-preview"
 import { PLATFORM_LABELS } from "@/lib/social-media-specs"
 import { StatusBadge } from "@/components/presentation/output-cards/shared"
-import { ALL_VIEW_MODES } from "@/components/presentation/view-mode-selector"
+import { resolveAllowedModes, resolveViewMode } from "@/components/presentation/resolve-view-mode"
 import {
   GalleryView,
   FullscreenView,
@@ -61,8 +61,6 @@ import {
 // ---------------------------------------------------------------------------
 
 // orderNodesByIds, getNodeResultWithInputFallback, areAllInputsFilled — imported from helpers
-
-const VALID_VIEW_MODES = new Set<PresentationViewMode>(ALL_VIEW_MODES)
 
 // ---------------------------------------------------------------------------
 // Props
@@ -220,13 +218,8 @@ export function MobileAppShell({
 
   // ---- View mode (URL-synced) ----
   const urlViewMode = searchParams.get("view") as PresentationViewMode | null
-  const allowedModes = settings.shareAllowedModes ?? ALL_VIEW_MODES
-  const allowedSet = useMemo(() => new Set(allowedModes), [allowedModes])
-  const effectiveDefault = (settings.shareDefaultMode && allowedSet.has(settings.shareDefaultMode))
-    ? settings.shareDefaultMode
-    : (allowedModes[0] ?? "horizontal")
-  const viewMode: PresentationViewMode = (urlViewMode && VALID_VIEW_MODES.has(urlViewMode) && allowedSet.has(urlViewMode)
-    ? urlViewMode : null) ?? effectiveDefault
+  const allowedModes = resolveAllowedModes(settings, true)
+  const viewMode: PresentationViewMode = resolveViewMode(settings, urlViewMode, true)
   // Non-standard views (gallery/fullscreen/compare) override the tab content
   const isViewOverride = viewMode === "gallery" || viewMode === "fullscreen" || viewMode === "compare" || viewMode === "chat"
 
