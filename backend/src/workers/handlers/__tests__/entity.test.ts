@@ -177,6 +177,27 @@ describe("generate-character handler", () => {
     )
   })
 
+  it("clamps the aspect ratio to the provider's supported set before calling generateImage (Grok: 3:4 → 2:3)", async () => {
+    // The route's resolveCharacterAspectRatio picks portrait → "3:4" WITHOUT
+    // knowing the model. Grok supports ["1:1","16:9","9:16","3:2","2:3"] and
+    // has no "3:4", so the handler must clamp to the catalog-nearest ("2:3")
+    // before the provider call — an un-clamped "3:4" is silently dropped by KIE.
+    // Data-driven via MODEL_CATALOG, so this holds for any model, not just Grok.
+    const job = makeJob("generate-character", {
+      prompt: "a warrior",
+      provider: "grok",
+      aspectRatio: "3:4",
+    })
+    await handler(job as never, makeCtx())
+    expect(mocks.mockGenerateImage).toHaveBeenCalledWith(
+      "a warrior",
+      "grok",
+      undefined,
+      { aspect_ratio: "2:3" },
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+    )
+  })
+
   it("forwards resolution + quality from job.data to generateImage extraParams (credit-affecting levers)", async () => {
     // The routes price these via the composite credit identifier and thread
     // them to the queue; the worker MUST hand them to the provider or a 4K

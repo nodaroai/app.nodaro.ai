@@ -25,6 +25,7 @@ import {
 import { autoAttachLocationAsset } from "../../lib/location-auto-attach.js"
 import { autoAttachObjectAsset, setObjectMainImage } from "../../lib/object-auto-attach.js"
 import { autoAttachCreatureAsset, setCreatureMainImage } from "../../lib/creature-auto-attach.js"
+import { clampAspectRatioToModel } from "../../lib/aspect-ratio.js"
 
 interface EntityImageJobData {
   jobId: string
@@ -124,7 +125,16 @@ function makeEntityImageHandler(
     // wins over the handler's static `opts.aspectRatio` so each character
     // asset can pick a framing that matches its asset type. Generate-face
     // still pins 1:1 via opts because faces are always square crops.
-    const effectiveAspectRatio = aspectRatio ?? opts?.aspectRatio
+    //
+    // The smart-default ratio is chosen WITHOUT knowing the model (portrait →
+    // 3:4), but not every model supports every ratio — Grok has no 3:4. Clamp
+    // to the catalog-nearest ratio the chosen model actually supports so KIE
+    // doesn't silently drop the lever. Data-driven (MODEL_CATALOG), so it's
+    // correct for any current/future model without a per-provider table.
+    const effectiveAspectRatio = clampAspectRatioToModel(
+      aspectRatio ?? opts?.aspectRatio,
+      resolvedProvider,
+    )
     // Same extraParams contract as the generate-image worker: only set keys
     // ride through; providers that don't support a lever ignore it.
     const extraParams: Record<string, unknown> = {
