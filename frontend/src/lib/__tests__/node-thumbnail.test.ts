@@ -9,6 +9,7 @@ import {
   type SingleDimParameterPickerMeta,
   type MultiDimParameterPickerMeta,
 } from "../parameter-picker-registry"
+import { STYLINGS, STYLING_FIELD_BY_DIMENSION } from "@nodaro/shared"
 import type { WorkflowNode } from "@/types/nodes"
 
 function node(type: string, data: Record<string, unknown>): WorkflowNode {
@@ -84,6 +85,26 @@ describe("getNodeConfigSummary — picker selected values", () => {
   it("returns an empty summary for an unconfigured picker", () => {
     expect(getNodeConfigSummary(node("mood", {}))).toEqual([])
   })
+
+  it("surfaces a multi-picker dimension the registry `fields` list has drifted behind", () => {
+    // styling stores ~17 dimensions but the registry hand-lists only 9, so
+    // fields like `outfit`/`top`/`bottom` are NOT declared. The summary must
+    // still resolve them via the flattened catalog (the drift safety net).
+    const meta = getParameterPickerMeta("styling") as MultiDimParameterPickerMeta
+    const declared = new Set<string>(meta.fields)
+    const drifted = STYLINGS.find((s) => !declared.has(STYLING_FIELD_BY_DIMENSION[s.dimension]))
+    // If the registry is ever completed there's no drift left to exercise — the
+    // declared path already covers everything, so there's nothing to assert.
+    if (!drifted) return
+    const field = STYLING_FIELD_BY_DIMENSION[drifted.dimension]
+    const values = getNodeConfigSummary(node("styling", { [field]: drifted.id })).map((c) => c.value)
+    expect(values).toContain(drifted.label)
+  })
+
+  it("ignores a free-text field whose value is not a catalog id", () => {
+    // A custom node label must NOT leak into the styling chips.
+    expect(getNodeConfigSummary(node("styling", { label: "My Styling Node" }))).toEqual([])
+  })
 })
 
 describe("getNodeConfigSummary — generator + simple-param config", () => {
@@ -116,5 +137,34 @@ describe("getNodeConfigSummary — generator + simple-param config", () => {
 
   it("returns an empty summary when a node has no recognizable config", () => {
     expect(getNodeConfigSummary(node("sticky-note", {}))).toEqual([])
+  })
+
+  it("treats an LLM node's `llmModel` as its model chip", () => {
+    expect(getNodeConfigSummary(node("llm-chat", { llmModel: "claude-opus-4-8" })).map((c) => c.value)).toContain(
+      "claude-opus-4-8",
+    )
+  })
+
+  it("recognizes `durationSeconds` (composition nodes) as a duration", () => {
+    expect(getNodeConfigSummary(node("render-video", { durationSeconds: 12 })).map((c) => c.value)).toContain("12s")
+  })
+
+  it("summarizes a suno node's style and a social node's platform", () => {
+    expect(getNodeConfigSummary(node("suno-generate", { style: "lofi hip hop" })).map((c) => c.value)).toContain(
+      "lofi hip hop",
+    )
+    expect(getNodeConfigSummary(node("instagram-post", { platform: "instagram" })).map((c) => c.value)).toContain(
+      "instagram",
+    )
+  })
+
+  it("shows a versions count only when >1", () => {
+    expect(getNodeConfigSummary(node("video-sfx", { versions: 3 })).map((c) => c.value)).toContain("3 versions")
+    expect(getNodeConfigSummary(node("video-sfx", { versions: 1 }))).toEqual([])
+  })
+
+  it("covers utility nodes via the per-type fallback (separator, strategy)", () => {
+    expect(getNodeConfigSummary(node("split-text", { separator: "," })).map((c) => c.value)).toEqual([","])
+    expect(getNodeConfigSummary(node("reduce", { strategyId: "concat" })).map((c) => c.value)).toEqual(["concat"])
   })
 })
