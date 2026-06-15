@@ -148,22 +148,21 @@ export function ConnectNodeDialog({ focusedLabel, newLabel, options, onConfirm, 
                 {i === highlight && <span className="absolute left-0 top-1 bottom-1 w-[2.5px] rounded bg-[#ff0073]" />}
                 <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: row.opt.color ?? "#94A3B8" }} />
                 <span className="flex-1 text-sm font-medium text-[#1E293B] dark:text-[#e8eaed]">{row.opt.label}</span>
-                {/* IN/OUT from the NEW node's perspective: a `source` option wires
-                    into the new node's input; a `target` option sends its output. */}
+                {/* Direction relative to the focused node, shown as a highlighted
+                    to/from rather than INPUT/OUTPUT jargon: a `source` option feeds
+                    FROM the focused node into the new one; a `target` option sends
+                    the new node's output TO the focused node. */}
                 {(() => {
                   const isInput = row.opt.direction === "source"
                   return (
-                    <span className="flex items-center gap-1.5 shrink-0">
-                      <span
-                        className={cn(
-                          "flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wide",
-                          isInput ? "bg-[#3B82F6]/15 text-[#3B82F6]" : "bg-[#22C55E]/15 text-[#22C55E]",
-                        )}
-                      >
-                        {isInput ? <ArrowDownToLine className="w-3 h-3" /> : <ArrowUpFromLine className="w-3 h-3" />}
-                        {isInput ? "INPUT" : "OUTPUT"}
-                      </span>
-                      <span className="text-xs text-[#94A3B8]">{isInput ? `from ${focusedLabel}` : `to ${focusedLabel}`}</span>
+                    <span
+                      className={cn(
+                        "flex items-center gap-1 shrink-0 text-xs font-semibold",
+                        isInput ? "text-[#3B82F6]" : "text-[#22C55E]",
+                      )}
+                    >
+                      {isInput ? <ArrowDownToLine className="w-3.5 h-3.5" /> : <ArrowUpFromLine className="w-3.5 h-3.5" />}
+                      {isInput ? `from ${focusedLabel}` : `to ${focusedLabel}`}
                     </span>
                   )
                 })()}
@@ -220,7 +219,7 @@ export function ConnectNodeDialog({ focusedLabel, newLabel, options, onConfirm, 
           <b className="text-[#64748B] dark:text-[#cbd5e1]">↵</b> confirm
         </span>
         <span>
-          <b className="text-[#64748B] dark:text-[#cbd5e1]">esc</b> back
+          <b className="text-[#64748B] dark:text-[#cbd5e1]">esc</b> cancel
         </span>
       </div>
     </div>

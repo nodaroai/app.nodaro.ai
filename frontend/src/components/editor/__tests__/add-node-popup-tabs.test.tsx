@@ -46,13 +46,8 @@ vi.mock("lucide-react", () => {
   }
 })
 
-// Mutable holder so a test can stub the directional-filter result.
-const compatMock = vi.hoisted(() => ({
-  forNode: { direct: [] as Array<{ type: string; label: string; icon: null; category: string }>, compatible: [] as Array<{ type: string; label: string; icon: null; category: string }>, directTypes: new Set<string>() },
-}))
 vi.mock("@/lib/node-compatibility", () => ({
   getCompatibleNodes: () => ({ direct: [], compatible: [], directTypes: new Set() }),
-  getCompatibleNodesForNode: () => compatMock.forNode,
   resolveTargetHandle: () => undefined,
   PARAMETER_ACCEPTING_HANDLE_IDS: new Set(),
 }))
@@ -110,7 +105,6 @@ const tab = (name: string) => screen.getByRole("tab", { name })
 
 beforeEach(() => {
   localStorage.clear()
-  compatMock.forNode = { direct: [], compatible: [], directTypes: new Set() }
   // jsdom doesn't implement scrollIntoView (the popup's highlight-scroll effect)
   Element.prototype.scrollIntoView = vi.fn()
 })
@@ -299,7 +293,13 @@ describe("AddNodePopup tabs", () => {
 })
 
 describe("AddNodePopup auto-connect", () => {
-  const focusedCtx = { nodeId: "n1", nodeType: "text-prompt", sourceHandles: ["prompt"], targetHandles: ["in"] }
+  const focusedCtx = { nodeId: "n1", nodeType: "text-prompt", focusedLabel: "Hero Prompt", sourceHandles: ["prompt"], targetHandles: ["in"] }
+
+  it("titles the header with the focused node it will connect to", () => {
+    renderPopup({ autoConnectCtx: focusedCtx, onPickType: vi.fn() })
+    expect(screen.getByText("Connecting new node to")).toBeInTheDocument()
+    expect(screen.getByText("Hero Prompt")).toBeInTheDocument()
+  })
 
   it("renders the Auto + Smart toggles (focused node) and persists toggling Auto", () => {
     renderPopup({ autoConnectCtx: focusedCtx, onPickType: vi.fn() })
@@ -354,7 +354,7 @@ describe("AddNodePopup auto-connect (cont.)", () => {
   it("hands off to onPickType (not onAddNode) when picking in auto-connect mode", () => {
     const onPickType = vi.fn()
     const { onAddNode } = renderPopup({
-      autoConnectCtx: { nodeId: "n1", nodeType: "text-prompt", sourceHandles: ["prompt"], targetHandles: ["in"] },
+      autoConnectCtx: { nodeId: "n1", nodeType: "text-prompt", focusedLabel: "Hero Prompt", sourceHandles: ["prompt"], targetHandles: ["in"] },
       onPickType,
     })
     fireEvent.change(screen.getByPlaceholderText("Search nodes..."), { target: { value: "generate image" } })
@@ -363,35 +363,5 @@ describe("AddNodePopup auto-connect (cont.)", () => {
     fireEvent.click(row!)
     expect(onPickType).toHaveBeenCalledWith("generate-image")
     expect(onAddNode).not.toHaveBeenCalled()
-  })
-})
-
-describe("AddNodePopup directional add (§7)", () => {
-  const ctx = (direction: "upstream" | "downstream") => ({
-    nodeId: "n1",
-    nodeType: "text-prompt",
-    sourceHandles: ["prompt"],
-    targetHandles: ["in"],
-    direction,
-  })
-  const oneCompatible = {
-    direct: [{ type: "generate-image", label: "Generate Image", icon: null, category: "AI" }],
-    compatible: [],
-    directTypes: new Set(["generate-image"]),
-  }
-
-  it("downstream filters to compatible nodes, hides the tabs, shows the directional header", () => {
-    compatMock.forNode = oneCompatible
-    renderPopup({ autoConnectCtx: ctx("downstream"), onPickType: vi.fn() })
-    expect(screen.queryByRole("tab")).toBeNull() // tabs hidden in filtered mode
-    expect(screen.getByText("Add a node after this →")).toBeInTheDocument()
-    expect(screen.getByText("Generate Image")).toBeInTheDocument()
-    expect(screen.queryByText("Upscale Image")).toBeNull() // not in the compatible set
-  })
-
-  it("upstream shows the upstream header", () => {
-    compatMock.forNode = oneCompatible
-    renderPopup({ autoConnectCtx: ctx("upstream"), onPickType: vi.fn() })
-    expect(screen.getByText("← Add a node before this")).toBeInTheDocument()
   })
 })
