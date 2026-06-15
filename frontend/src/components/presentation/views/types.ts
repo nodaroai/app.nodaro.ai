@@ -4,6 +4,16 @@ import type { WorkflowNode } from "@/types/nodes"
 import type { PresentationItem } from "@nodaro/shared"
 import type { OutputStatus } from "../output-cards/shared"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
+import type { RunSlot } from "@/components/app-runner/types"
+
+/** Run-slot navigation surface shared by views that page through runs (chat, fullscreen). */
+export interface RunSlotsApi {
+  slots: RunSlot[]
+  activeSlotId: string | null
+  handleCreateNew: () => void
+  handleDuplicateSlot: (slotId: string) => void
+  handleSelectSlot: (slotId: string) => void
+}
 
 export interface ViewProps {
   orderedInputNodes: WorkflowNode[]
@@ -15,6 +25,8 @@ export interface ViewProps {
   onOpenMedia?: (nodeId: string) => void
   /** Open config modal for config-type nodes */
   onOpenConfig?: (node: WorkflowNode) => void
+  /** Run-history navigation (app runner) — present for chat + fullscreen. */
+  runSlots?: RunSlotsApi
 }
 
 export interface EditableViewProps extends ViewProps {

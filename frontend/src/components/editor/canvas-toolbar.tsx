@@ -1,6 +1,6 @@
 "use client"
 
-import { Plus, Search, ScanSearch, Package, Film, StickyNote, Wand2, PanelLeft, Undo2, Redo2, ChevronLeft, Puzzle, Keyboard } from "lucide-react"
+import { Plus, Search, ScanSearch, Package, Film, StickyNote, Wand2, PanelLeft, Undo2, Redo2, ChevronLeft, Puzzle, Keyboard, History } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import { cn } from "@/lib/utils"
 import { SHORTCUTS, formatBinding, isMacPlatform } from "@/lib/shortcuts"
@@ -19,6 +19,8 @@ interface CanvasToolbarProps {
   readonly onSearch: () => void
   /** Open the "find inside this workflow" node-search modal (Ctrl+F). */
   readonly onFindInWorkflow: () => void
+  /** Toggle focus between the last two focused nodes (Alt+B). */
+  readonly onPreviousFocus: () => void
   readonly onAssetLibrary: () => void
   readonly onMediaLibrary: () => void
   readonly onAddStickyNote: () => void
@@ -125,6 +127,7 @@ export function CanvasToolbar({
   onComponents,
   onSearch,
   onFindInWorkflow,
+  onPreviousFocus,
   onAssetLibrary,
   onMediaLibrary,
   onAddStickyNote,
@@ -256,6 +259,13 @@ export function CanvasToolbar({
           label="Find in workflow"
           shortcut={formatBinding(SHORTCUTS.findNode.bindings[0], isMac)}
           onClick={onFindInWorkflow}
+        />
+
+        <ToolbarButton
+          icon={<History className="w-5 h-5" />}
+          label="Previous focus"
+          shortcut={formatBinding(SHORTCUTS.previousFocus.bindings[0], isMac)}
+          onClick={onPreviousFocus}
         />
 
         <ToolbarButton

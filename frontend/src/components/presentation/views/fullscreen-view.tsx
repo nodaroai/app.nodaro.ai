@@ -3,17 +3,14 @@ import { WaveformAudioPlayer } from "@/components/audio-player"
 import { ChevronLeft, ChevronRight, FileText } from "lucide-react"
 import { CachedImage } from "@/components/ui/cached-image"
 import { getOutputType } from "@/lib/presentation-utils"
-import { isVideoUrl } from "@/lib/media-type"
+import { isAudioUrl, isVideoUrl } from "@/lib/media-type"
 import { GlassCard } from "../output-cards/shared"
 import { WaveformBars } from "../input-cards/shared"
 import type { WorkflowNode } from "@/types/nodes"
 import type { ViewProps } from "./types"
-import type { ChatRunSlotsApi } from "./chat-view"
 
 interface FullscreenViewProps extends ViewProps {
   onBack: () => void
-  /** When present, ↑/↓ navigate to the previous/next run. */
-  runSlots?: ChatRunSlotsApi
 }
 
 type MediaType = "image" | "video" | "audio" | "text"
@@ -30,7 +27,7 @@ interface FsItem {
 function mediaTypeFor(node: WorkflowNode, result: { url?: string; text?: string }): MediaType {
   const ot = getOutputType(node.type)
   if (ot === "image" || ot === "video" || ot === "audio") return ot
-  if (result.url) return node.type === "upload-audio" ? "audio" : isVideoUrl(result.url) ? "video" : "image"
+  if (result.url) return isAudioUrl(result.url) ? "audio" : isVideoUrl(result.url) ? "video" : "image"
   return "text"
 }
 
@@ -65,13 +62,17 @@ export function FullscreenView({
     return [...build(orderedInputNodes, "input"), ...build(orderedOutputNodes, "output")]
   }, [orderedInputNodes, orderedOutputNodes, getResult, getCardTitle])
 
+  // `currentIndex` can momentarily exceed range when `items` shrinks (e.g. a run
+  // switch); `safeIndex` is the single source of truth for the current position.
+  const safeIndex = items.length > 0 ? Math.min(currentIndex, items.length - 1) : 0
+
   const goNext = useCallback(() => {
-    setCurrentIndex((i) => Math.min(i + 1, items.length - 1))
-  }, [items.length])
+    setCurrentIndex(Math.min(safeIndex + 1, items.length - 1))
+  }, [safeIndex, items.length])
 
   const goPrev = useCallback(() => {
-    setCurrentIndex((i) => Math.max(i - 1, 0))
-  }, [])
+    setCurrentIndex(Math.max(safeIndex - 1, 0))
+  }, [safeIndex])
 
   // ↑/↓ navigate to the previous/next run (fullscreen only).
   const runNav = useCallback(
@@ -121,13 +122,6 @@ export function FullscreenView({
     touchStartRef.current = null
   }, [goNext, goPrev])
 
-  // Clamp index if items shrink
-  useEffect(() => {
-    if (currentIndex >= items.length && items.length > 0) {
-      setCurrentIndex(items.length - 1)
-    }
-  }, [currentIndex, items.length])
-
   if (items.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground gap-3 p-6">
@@ -137,7 +131,6 @@ export function FullscreenView({
     )
   }
 
-  const safeIndex = Math.min(currentIndex, items.length - 1)
   const current = items[safeIndex]
   const hasRunNav = !!runSlots && (runSlots.slots?.length ?? 0) > 1
 

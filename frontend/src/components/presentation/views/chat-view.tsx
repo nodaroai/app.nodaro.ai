@@ -12,21 +12,13 @@ import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import type { OutputStatus } from "../output-cards/shared"
 import { OutputCard } from "../output-card"
 import { buildStepChips, getThreadMessages, shouldExpandComposer, type StepChip } from "./chat-view-helpers"
-
-/** Minimal slice of the useRunSlots API that ChatView consumes. */
-export interface ChatRunSlotsApi {
-  slots: RunSlot[]
-  activeSlotId: string | null
-  handleCreateNew: () => void
-  handleDuplicateSlot: (slotId: string) => void
-  handleSelectSlot: (slotId: string) => void
-}
+import type { RunSlotsApi } from "./types"
 
 interface ChatViewProps {
   orderedInputNodes: WorkflowNode[]
   orderedOutputNodes: WorkflowNode[]
   renderInputCard: (node: WorkflowNode, variant?: "composer") => ReactNode
-  runSlots?: ChatRunSlotsApi
+  runSlots?: RunSlotsApi
   appName?: string
   appDescription?: string
 }
@@ -422,6 +414,8 @@ function ChatMessage({
     return undefined
   })()
 
+  const openMedia = (url?: string) => (url ? () => onOpenLightbox(url, isVideoUrl(url)) : undefined)
+
   return (
     <div className="rounded-xl border border-border bg-card p-3 sm:p-4">
       <div className="flex flex-col gap-3 md:flex-row md:gap-5">
@@ -482,7 +476,7 @@ function ChatMessage({
                   status={toOutputStatus(st?.status, slot.executionStatus)}
                   url={u}
                   text={out?.text as string | undefined}
-                  onOpenMedia={u ? () => onOpenLightbox(u, isVideoUrl(u)) : undefined}
+                  onOpenMedia={openMedia(u)}
                   progress={isRunning ? combinedProgress[node.id] : undefined}
                 />
               )
@@ -533,7 +527,7 @@ function ChatMessage({
                     status={toOutputStatus(c.status, slot.executionStatus)}
                     url={u}
                     text={out?.text as string | undefined}
-                    onOpenMedia={u ? () => onOpenLightbox(u, isVideoUrl(u)) : undefined}
+                    onOpenMedia={openMedia(u)}
                   />
                 )
               })}

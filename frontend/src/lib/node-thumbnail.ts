@@ -154,7 +154,9 @@ function asIdArray(value: unknown): string[] {
   return []
 }
 
-function snippet(text: string, max = 48): string {
+/** Collapse whitespace and truncate to `max` chars with an ellipsis. Shared by
+ *  the config summary and the search-modal row description. */
+export function snippet(text: string, max = 48): string {
   const trimmed = text.trim().replace(/\s+/g, " ")
   return trimmed.length > max ? `${trimmed.slice(0, max - 1)}…` : trimmed
 }

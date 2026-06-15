@@ -217,6 +217,8 @@ export const SHORTCUTS = {
     bindings: [{ code: "BracketLeft", key: "[", mods: ["alt"] }] },
   configPanelClose: { id: "configPanelClose", category: "View", description: "Close the settings panel",
     bindings: [{ code: "BracketRight", key: "]", mods: ["alt"] }] },
+  previousFocus: { id: "previousFocus", category: "View", description: "Jump to the previously focused node (toggle)",
+    bindings: [{ code: "KeyB", key: "b", mods: ["alt"] }] },
   tidyUp: { id: "tidyUp", category: "View", description: "Tidy up (auto-layout)",
     bindings: [{ code: "KeyT", key: "t", mods: ["alt"] }] },
   gridSnap: { id: "gridSnap", category: "View", description: "Toggle grid snap",

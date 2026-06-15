@@ -5,11 +5,28 @@ import { useReactFlow } from "@xyflow/react"
 import { Search, X, Cpu, MapPin } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { CachedImage } from "@/components/ui/cached-image"
-import { getNodeThumbnailUrl, getNodeVideoUrl, getNodePickerVisual, getNodeConfigSummary } from "@/lib/node-thumbnail"
+import { getNodeThumbnailUrl, getNodeVideoUrl, getNodePickerVisual, getNodeConfigSummary, snippet } from "@/lib/node-thumbnail"
+import { getNodeConnectors, focusedNodeHandles, type NodeConnector } from "@/lib/node-connectors"
+import { nearestNodeInDirection } from "@/lib/node-spatial-nav"
+import { focusNodeInViewport } from "@/lib/focus-node-in-viewport"
+import { optimizedImageUrl } from "@/lib/image"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useClickOutside } from "@/hooks/use-click-outside"
-import { NODE_DEF_MAP, type WorkflowNode } from "@/types/nodes"
+import { type WorkflowNode } from "@/types/nodes"
 import { RatioIcon } from "./config-panels/aspect-ratio-selector"
+
+/** Short single-line snippet of a node's prompt/text content for the row's
+ *  description (alongside the config chips). */
+function nodeSnippet(node: WorkflowNode): string | undefined {
+  const data = (node.data ?? {}) as Record<string, unknown>
+  const raw =
+    (typeof data.prompt === "string" && data.prompt) ||
+    (typeof data.text === "string" && data.text) ||
+    (typeof data.userInput === "string" && data.userInput) ||
+    (typeof data.systemPrompt === "string" && data.systemPrompt) ||
+    ""
+  return snippet(raw, 90) || undefined
+}
 
 interface NodeSearchModalProps {
   readonly open: boolean
@@ -24,7 +41,11 @@ interface NodeSearchHit {
   readonly label: string
   readonly typeLabel: string
   readonly prompt: string | undefined
+  readonly snippet: string | undefined
   readonly metaChips: ReadonlyArray<{ key: string; value: string; icon?: "ratio" }>
+  /** Valid connectors between the focused canvas node and this row's node
+   *  (empty when no node is focused or none connect). */
+  readonly connectors: ReadonlyArray<NodeConnector>
 }
 
 const NODE_TYPE_LABELS: Record<string, string> = {
@@ -111,24 +132,29 @@ export function NodeSearchModal({ open, onClose }: NodeSearchModalProps) {
   const mouseHasMovedRef = useRef(false)
 
   const nodes = useWorkflowStore((s) => s.nodes)
+  const edges = useWorkflowStore((s) => s.edges)
   const selectNode = useWorkflowStore((s) => s.selectNode)
-  // "Currently focused" = either the settings-panel-open node OR React
-  // Flow's selected node (single click without opening settings). Both
-  // states represent "user is looking at this node right now" from the
-  // user's POV, so the "Here" badge should fire on either. Selector
-  // returns a string|null primitive, so Zustand's default Object.is
-  // equality only triggers a re-render when the actual focused id
-  // changes — not on every nodes-array mutation.
-  const currentlyFocusedNodeId = useWorkflowStore((s) => {
-    if (s.selectedNodeId) return s.selectedNodeId
-    return s.nodes.find((n) => n.selected)?.id ?? null
-  })
+  const focusNodeOnCanvas = useWorkflowStore((s) => s.focusNodeOnCanvas)
+  const onConnect = useWorkflowStore((s) => s.onConnect)
+  const deleteEdge = useWorkflowStore((s) => s.deleteEdge)
+  // "Currently focused" = the canonical `focusedNodeId` (kept in sync with the
+  // canvas selection by the store). Falls back to selection state for safety.
+  // Drives the "Here" badge AND which node the connector strips target. Returns
+  // a string|null primitive so Zustand's Object.is equality only re-renders on
+  // an actual focus change, not on every nodes-array mutation.
+  const currentlyFocusedNodeId = useWorkflowStore(
+    (s) => s.focusedNodeId ?? s.selectedNodeId ?? s.nodes.find((n) => n.selected)?.id ?? null,
+  )
+  // Keyboard "connector mode": null = browsing the list; a number = the focused
+  // connector index within the selected row's strip (Tab dives in, Esc/↑↓ exit).
+  const [connectorIndex, setConnectorIndex] = useState<number | null>(null)
   const { setCenter, getNode } = useReactFlow()
 
   useEffect(() => {
     if (!open) return
     setQuery("")
     setSelectedIndex(0)
+    setConnectorIndex(null)
     mouseHasMovedRef.current = false
     requestAnimationFrame(() => inputRef.current?.focus())
     // Mouse-driven selection only activates after the user actually
@@ -151,12 +177,16 @@ export function NodeSearchModal({ open, onClose }: NodeSearchModalProps) {
 
   const hits = useMemo<NodeSearchHit[]>(() => {
     if (!open) return []
+    const focusedNode = currentlyFocusedNodeId
+      ? (nodes as WorkflowNode[]).find((n) => n.id === currentlyFocusedNodeId)
+      : undefined
+    // Hoist the focused node's handle sets out of the per-row loop — they depend
+    // only on its type, and `hits` re-runs on every connect/disconnect.
+    const focusedHandles = focusedNode ? focusedNodeHandles(focusedNode.type) : undefined
     const list: NodeSearchHit[] = []
     for (const n of nodes as WorkflowNode[]) {
       if (!n.type) continue
       if (n.type === "sticky-note") continue
-      const def = NODE_DEF_MAP.get(n.type as never)
-      void def
 
       if (tokens.length > 0) {
         const haystack = buildSearchHaystack(n)
@@ -177,41 +207,53 @@ export function NodeSearchModal({ open, onClose }: NodeSearchModalProps) {
         label,
         typeLabel: typeLabel(n.type),
         prompt: typeof data.prompt === "string" ? data.prompt : undefined,
+        snippet: nodeSnippet(n),
         metaChips: getNodeConfigSummary(n),
+        connectors:
+          focusedNode && focusedNode.id !== n.id
+            ? getNodeConnectors(
+                { id: focusedNode.id, type: focusedNode.type },
+                { id: n.id, type: n.type },
+                edges,
+                { focusedHandles },
+              )
+            : [],
       })
     }
-    // Place the currently-focused node at the top of an empty query so
-    // the user can quickly see "where am I" — it's marked with a badge
-    // in the row, but ordering reinforces that.
-    if (tokens.length === 0 && currentlyFocusedNodeId) {
-      const idx = list.findIndex((h) => h.node.id === currentlyFocusedNodeId)
-      if (idx > 0) {
-        const [pinned] = list.splice(idx, 1)
-        list.unshift(pinned)
-      }
-    }
+    // Connectable rows (≥1 valid connector to the focused node) float to the
+    // top. V8's sort is stable, so search ranking is preserved within each
+    // group; the focused node itself has no self-connectors and sorts down.
+    list.sort((a, b) => (b.connectors.length > 0 ? 1 : 0) - (a.connectors.length > 0 ? 1 : 0))
     return list.slice(0, 50)
-  }, [open, nodes, tokens, currentlyFocusedNodeId])
+  }, [open, nodes, edges, tokens, currentlyFocusedNodeId])
 
   useEffect(() => {
     if (selectedIndex >= hits.length) setSelectedIndex(Math.max(0, hits.length - 1))
   }, [hits.length, selectedIndex])
 
-  // Focus a node on the canvas — pan + zoom + select. `keepOpen=true` is
-  // used by ArrowRight to peek-navigate without dismissing the modal so
-  // the user can keep browsing.
+  // Jump to a node on the canvas (pan + zoom + select) and dismiss the modal.
   const focusNode = useCallback(
-    (nodeId: string, keepOpen = false) => {
-      const target = getNode(nodeId)
-      if (!target) return
-      const w = (target.measured?.width ?? 200) as number
-      const h = (target.measured?.height ?? 150) as number
-      setCenter(target.position.x + w / 2, target.position.y + h / 2, { zoom: 1, duration: 400 })
-      selectNode(nodeId)
-      if (!keepOpen) onClose()
+    (nodeId: string) => {
+      focusNodeInViewport(getNode, setCenter, selectNode, nodeId)
+      onClose()
     },
     [getNode, setCenter, selectNode, onClose],
   )
+
+  // Connect / disconnect the edge a connector represents — live on the canvas,
+  // modal stays open so the user can keep wiring.
+  const toggleConnector = useCallback(
+    (c: NodeConnector) => {
+      if (c.connected && c.edgeId) deleteEdge(c.edgeId)
+      else onConnect({ source: c.source, sourceHandle: c.sourceHandle, target: c.target, targetHandle: c.targetHandle })
+    },
+    [deleteEdge, onConnect],
+  )
+
+  // Leaving a row exits its connector strip.
+  useEffect(() => {
+    setConnectorIndex(null)
+  }, [selectedIndex])
 
   // Window capture-phase keydown listener — fires BEFORE document-capture
   // listeners (workflow-canvas's neighbor-navigation + React Flow's
@@ -223,44 +265,67 @@ export function NodeSearchModal({ open, onClose }: NodeSearchModalProps) {
     if (!open) return
     const handler = (e: KeyboardEvent) => {
       const key = e.key
+      // Alt+Left / Alt+Right — re-target the focused node on the canvas (which
+      // re-points the connector strips) WITHOUT panning. Other Alt combos pass
+      // through untouched.
+      if (e.altKey && !e.ctrlKey && !e.metaKey && (key === "ArrowLeft" || key === "ArrowRight")) {
+        e.preventDefault()
+        e.stopPropagation()
+        e.stopImmediatePropagation()
+        if (currentlyFocusedNodeId) {
+          const neighbor = nearestNodeInDirection(
+            nodes,
+            currentlyFocusedNodeId,
+            key === "ArrowLeft" ? "ArrowLeft" : "ArrowRight",
+          )
+          if (neighbor) focusNodeOnCanvas(neighbor)
+        }
+        return
+      }
+
       const interesting =
-        key === "Escape" ||
-        key === "ArrowDown" ||
-        key === "ArrowUp" ||
-        key === "ArrowRight" ||
-        key === "ArrowLeft" ||
-        key === "Enter"
+        key === "Escape" || key === "ArrowDown" || key === "ArrowUp" ||
+        key === "ArrowRight" || key === "ArrowLeft" || key === "Enter" || key === "Tab"
       if (!interesting) return
+      // Consume so arrow / Tab never leak to the canvas behind (no stray pan or
+      // selection move) — the modal owns these keys while it's open. This also
+      // removes the old ArrowRight "peek" that panned the canvas.
       e.preventDefault()
       e.stopPropagation()
       e.stopImmediatePropagation()
+
+      const hit = hits[selectedIndex]
+      const connectors = hit?.connectors ?? []
+      const inConnectorMode = connectorIndex !== null
+      const cycle = (delta: number) =>
+        setConnectorIndex((ci) => (ci === null ? ci : (ci + delta + connectors.length) % connectors.length))
+
       if (key === "Escape") {
-        onClose()
+        if (inConnectorMode) setConnectorIndex(null)
+        else onClose()
       } else if (key === "ArrowDown") {
+        setConnectorIndex(null)
         setSelectedIndex((i) => Math.min(i + 1, hits.length - 1))
       } else if (key === "ArrowUp") {
+        setConnectorIndex(null)
         setSelectedIndex((i) => Math.max(i - 1, 0))
-      } else if (key === "ArrowRight") {
-        // Peek-navigate: focus the canvas without closing.
-        const hit = hits[selectedIndex]
-        if (hit) {
-          focusNode(hit.node.id, true)
-          // Empty-query mode pins the focused node to index 0 in the
-          // next render — snap our cursor there so a subsequent
-          // ArrowDown moves to the next item instead of pointing at
-          // whatever just shifted into the old selectedIndex slot.
-          if (tokens.length === 0) setSelectedIndex(0)
-        }
+      } else if (key === "Tab") {
+        if (connectors.length === 0) return
+        if (!inConnectorMode) setConnectorIndex(0)
+        else cycle(e.shiftKey ? -1 : 1)
       } else if (key === "Enter") {
-        const hit = hits[selectedIndex]
-        if (hit) focusNode(hit.node.id, false)
+        if (connectorIndex !== null && connectors[connectorIndex]) toggleConnector(connectors[connectorIndex])
+        else if (hit) focusNode(hit.node.id)
+      } else if (key === "ArrowLeft" || key === "ArrowRight") {
+        // In connector mode, plain left/right move between connectors;
+        // otherwise a deliberate no-op. Consumed above either way, so they
+        // never reach the canvas (fixes the left/right-pans-canvas bug).
+        if (inConnectorMode && connectors.length > 0) cycle(key === "ArrowRight" ? 1 : -1)
       }
-      // ArrowLeft is consumed (preventDefault above) but has no action —
-      // reserved for a future "back" gesture.
     }
     window.addEventListener("keydown", handler, { capture: true })
     return () => window.removeEventListener("keydown", handler, { capture: true })
-  }, [open, hits, selectedIndex, focusNode, onClose])
+  }, [open, hits, selectedIndex, focusNode, onClose, connectorIndex, toggleConnector, nodes, currentlyFocusedNodeId, focusNodeOnCanvas])
 
   // Scroll the active row into view when arrow keys cross it.
   useEffect(() => {
@@ -328,35 +393,31 @@ export function NodeSearchModal({ open, onClose }: NodeSearchModalProps) {
                 const isActive = i === selectedIndex
                 const isCanvasFocused = hit.node.id === currentlyFocusedNodeId
                 return (
-                  <button
+                  <div
                     key={hit.node.id}
                     data-row-index={i}
-                    type="button"
                     onMouseEnter={() => {
-                      // Skip the mount-time synthetic mouseenter; only
-                      // respect hover after the user has actually
-                      // moved the cursor.
+                      // Skip the mount-time synthetic mouseenter; only respect
+                      // hover after the user has actually moved the cursor.
                       if (mouseHasMovedRef.current) setSelectedIndex(i)
                     }}
-                    onClick={() => focusNode(hit.node.id, false)}
                     className={cn(
-                      "w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors",
-                      // Mouse hover already moves selection via
-                      // onMouseEnter (line below), so the `isActive`
-                      // background IS the hover visual. Keep no
-                      // separate `hover:bg-...` rule — otherwise
-                      // arrow-keying away from a row the mouse is
-                      // resting on shows TWO highlighted rows (the
-                      // keyboard-selected one via isActive AND the
-                      // mouse-rest one via CSS :hover).
+                      "w-full flex items-center gap-2 px-4 py-2.5 transition-colors",
+                      // onMouseEnter moves selection, so `isActive` IS the hover
+                      // visual — no separate hover:bg (avoids double-highlight).
                       isActive && "bg-[#F1F5F9] dark:bg-[#2D2D2D]",
                     )}
                   >
+                    <button
+                      type="button"
+                      onClick={() => focusNode(hit.node.id)}
+                      className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                    >
                     <div className="w-12 h-12 rounded-md bg-muted/40 flex items-center justify-center shrink-0 overflow-hidden">
                       {hit.videoUrl ? (
                         <video
                           src={hit.videoUrl}
-                          poster={hit.thumbnailUrl}
+                          poster={optimizedImageUrl(hit.thumbnailUrl, { width: 96 })}
                           className="w-full h-full object-cover"
                           autoPlay
                           loop
@@ -400,8 +461,8 @@ export function NodeSearchModal({ open, onClose }: NodeSearchModalProps) {
                       </div>
                       {hit.metaChips.length > 0 && (
                         <div className="mt-1 flex items-center gap-2 text-[11px] text-[#64748B] dark:text-[#94A3B8] flex-wrap">
-                          {hit.metaChips.map((chip, ci) => (
-                            <span key={`${chip.key}-${ci}`} className="flex items-center gap-1">
+                          {hit.metaChips.map((chip, mi) => (
+                            <span key={`${chip.key}-${mi}`} className="flex items-center gap-1">
                               {chip.icon === "ratio" && (
                                 <span className="text-[#94A3B8]">
                                   <RatioIcon value={chip.value} label={chip.value} />
@@ -412,8 +473,53 @@ export function NodeSearchModal({ open, onClose }: NodeSearchModalProps) {
                           ))}
                         </div>
                       )}
+                      {hit.snippet && (
+                        <div className="mt-0.5 text-[11px] text-[#94A3B8] dark:text-[#64748B] truncate">
+                          {hit.snippet}
+                        </div>
+                      )}
                     </div>
-                  </button>
+                    </button>
+                    {hit.connectors.length > 0 && (
+                      <div className="flex items-center gap-1 shrink-0 pl-1 flex-wrap justify-end max-w-[46%]">
+                        {hit.connectors.map((c, ci) => {
+                          const isConnFocused = isActive && ci === connectorIndex
+                          return (
+                            <button
+                              key={c.key}
+                              type="button"
+                              title={`${c.connected ? "Disconnect" : "Connect"} ${c.label}`}
+                              aria-pressed={c.connected}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setSelectedIndex(i)
+                                setConnectorIndex(ci)
+                                toggleConnector(c)
+                              }}
+                              className={cn(
+                                "flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10.5px] border transition-colors max-w-[120px]",
+                                c.connected
+                                  ? "bg-[#ff0073]/12 border-[#ff0073]/40 text-[#ff0073]"
+                                  : "border-[#E2E8F0] dark:border-[#3D3D3D] text-[#64748B] dark:text-[#94A3B8] hover:border-[#94A3B8]",
+                                isConnFocused && "ring-2 ring-[#ff0073]/70",
+                              )}
+                            >
+                              <span
+                                aria-hidden
+                                className="w-2 h-2 rounded-full shrink-0"
+                                style={
+                                  c.connected
+                                    ? { backgroundColor: c.color ?? "#ff0073" }
+                                    : { border: `1.5px solid ${c.color ?? "#94A3B8"}` }
+                                }
+                              />
+                              <span className="truncate">{c.label}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
                 )
               })
             )}
@@ -429,8 +535,9 @@ export function NodeSearchModal({ open, onClose }: NodeSearchModalProps) {
         <div className="flex items-center justify-between px-4 py-2 border-t border-[#E2E8F0] dark:border-[#2D2D2D] bg-[#F8FAFC] dark:bg-[#1A1A1A]">
           <div className="flex items-center gap-4 text-[10px] text-[#94A3B8] flex-wrap">
             <KbdHint keys={["↑", "↓"]} label="Navigate" />
-            <KbdHint keys={["→"]} label="Peek (keep open)" />
-            <KbdHint keys={["Enter"]} label="Focus & close" />
+            <KbdHint keys={["Tab"]} label="Connectors" />
+            <KbdHint keys={["Enter"]} label="Focus / toggle" />
+            <KbdHint keys={["⌥", "←→"]} label="Move focus" />
             <KbdHint keys={["Esc"]} label="Close" />
           </div>
         </div>
@@ -449,7 +556,7 @@ function PreviewPane({ hit }: { hit: NodeSearchHit }) {
         {hit.videoUrl ? (
           <video
             src={hit.videoUrl}
-            poster={hit.thumbnailUrl}
+            poster={optimizedImageUrl(hit.thumbnailUrl, { width: 640 })}
             className="w-full h-full object-contain"
             autoPlay
             loop
@@ -458,10 +565,14 @@ function PreviewPane({ hit }: { hit: NodeSearchHit }) {
             preload="auto"
           />
         ) : hit.thumbnailUrl ? (
+          // Preview box is ≤260px tall; a 640px variant is retina-crisp without
+          // pulling the 2048px FULL_VIEW_OPTS original on every row selection.
           <CachedImage
             src={hit.thumbnailUrl}
             alt={hit.label}
             className="w-full h-full object-contain"
+            thumbnail
+            thumbnailWidth={640}
           />
         ) : hit.pickerVisual ? (
           <div className="w-full h-full flex items-center justify-center [&>*]:max-w-full [&>*]:max-h-full">
