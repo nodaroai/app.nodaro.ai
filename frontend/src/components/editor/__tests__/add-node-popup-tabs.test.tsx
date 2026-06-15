@@ -321,6 +321,14 @@ describe("AddNodePopup auto-connect", () => {
     // VariantRow renders "creates <Node>" — proves models are merged into search.
     expect(screen.getAllByText(/^creates /i).length).toBeGreaterThan(0)
   })
+
+  it("media-tab search includes OTHER-kind models too (ordered, never filtered out)", () => {
+    renderPopup()
+    fireEvent.click(tab("Image"))
+    // "suno" is an audio model — it must still appear on the Image tab.
+    fireEvent.change(screen.getByPlaceholderText(/Search/), { target: { value: "suno" } })
+    expect(screen.getAllByText(/^creates /i).length).toBeGreaterThan(0)
+  })
 })
 
 describe("SEARCH_BLOCK_ORDER invariant", () => {

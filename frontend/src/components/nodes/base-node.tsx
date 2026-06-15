@@ -306,7 +306,9 @@ function BaseNodeComponent({
   const newNodeIds = useWorkflowStore((s) => s.newNodeIds)
   const clearNewNode = useWorkflowStore((s) => s.clearNewNode)
   const isEditing = useWorkflowStore((s) => s.selectedNodeId === id)
-  // On-canvas directional "+" buttons (§7): shown on the single focused node.
+  // On-canvas directional "+" buttons (§7): shown on hover OR on the single
+  // focused node. Gated on `focusedNodeId === id` (NOT the `selected` prop) so a
+  // box-select doesn't render the buttons on every selected node at once.
   const isFocusedNode = useWorkflowStore((s) => s.focusedNodeId === id)
   const isReadOnly = useWorkflowStore((s) => s.isReadOnly)
   const openDirectionalAdd = useWorkflowStore((s) => s.openDirectionalAdd)
@@ -677,7 +679,7 @@ function BaseNodeComponent({
           left (upstream — feeds this node) and right (downstream — uses this
           node's output) edges. Open the popup filtered to compatible nodes —
           the same entry as Shift+Tab / Tab. */}
-      {isFocusedNode && !isReadOnly && !isMobile && openDirectionalAdd &&
+      {(isHovered || isFocusedNode) && !isReadOnly && !isMobile && openDirectionalAdd &&
         (["upstream", "downstream"] as const).map((dir) => (
           <button
             key={dir}
@@ -690,11 +692,15 @@ function BaseNodeComponent({
               openDirectionalAdd({ nodeId: id, direction: dir })
             }}
             className={cn(
-              "nodrag absolute top-1/2 -translate-y-1/2 z-40 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] text-white shadow-md hover:bg-[#e0006a] transition-colors",
-              dir === "upstream" ? "-left-9" : "-right-9",
+              // Neutral card-colored circle (not the brand accent), sized + offset
+              // clear of the 28px handle hit-area so it doesn't override the handles.
+              "nodrag absolute top-1/2 -translate-y-1/2 z-40 flex items-center justify-center w-9 h-9 rounded-full",
+              "bg-card border border-border text-muted-foreground shadow-sm",
+              "hover:bg-accent hover:text-foreground transition-colors",
+              dir === "upstream" ? "-left-14" : "-right-14",
             )}
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-[18px] h-[18px]" />
           </button>
         ))}
       {/* Bottom-corner controls. Parameter nodes (cinematography) and any

@@ -2101,7 +2101,16 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           // Already open: Tab cycles the popup's tabs (its own document listener).
           return
         }
-        const fid = useWorkflowStore.getState().focusedNodeId
+        // Resolve the current node from live selection state (matches the
+        // `selectedNodeId ?? nodes.find(selected)` pattern other shortcuts use).
+        // Deliberately NOT `focusedNodeId`: it's only synced when exactly one node
+        // is selected (store onNodesChange), so it goes stale on deselect and would
+        // wrongly open a directional popup. Require a SINGLE selected node — a
+        // box-select (length ≠ 1) falls through to the generic popup, which is the
+        // right behavior when "the focused node" is ambiguous.
+        const st = useWorkflowStore.getState()
+        const selectedNodes = st.nodes.filter((n) => n.selected)
+        const fid = st.selectedNodeId ?? (selectedNodes.length === 1 ? selectedNodes[0].id : undefined)
         const fnode = fid ? getNode(fid) : undefined
         const isClone =
           !!fnode && (!!(fnode.data as Record<string, unknown> | undefined)?.__expandedClone || /_iter_\d+$/.test(fnode.id))
@@ -2110,9 +2119,10 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
             ? handleIdsFromBounds(getInternalNode(fnode.id)?.internals.handleBounds, fnode.type)
             : { sourceHandles: [], targetHandles: [] }
         const connectable =
-          !useWorkflowStore.getState().isReadOnly && !!fnode && !!fnode.type && !isClone && srcH.length + tgtH.length > 0
+          !st.isReadOnly && !!fnode && !!fnode.type && !isClone && srcH.length + tgtH.length > 0
         if (connectable && fnode && fnode.type) {
           e.preventDefault()
+          e.stopPropagation()
           setConnectionContext(null)
           setAddNodePopupCategory(null)
           setAddNodePopupPosition(undefined)

@@ -1660,7 +1660,8 @@ export const SEARCH_BLOCK_ORDER: Record<AddNodeMenuTab, readonly SearchBlock[]> 
 
 const SEARCH_BLOCK_HEADER: Record<SearchBlock, string> = { nodeOwn: "Nodes", models: "Models", nodeOther: "Other" };
 
-/** The model kind a media tab narrows to in search; undefined = all kinds. */
+/** The model kind a media tab PRIORITIZES in search (sorts first, never filters);
+ *  undefined = no kind preference (Models/All/Common show every model in order). */
 const TAB_MODEL_KIND: Partial<Record<AddNodeMenuTab, ModelKind>> = { image: "image", video: "video", audio: "audio" };
 
 /** A labeled pink Switch — the Auto Connect / Smart toggles in the search bar. */
@@ -1959,11 +1960,14 @@ export function AddNodePopup({
     return searchNodeOptionsSectioned(effectivePool, searchQuery, searchTab, directMatchTypes);
   }, [searchActive, effectivePool, searchQuery, searchTab, directMatchTypes]);
 
-  // Model matches for this tab (that-kind on media tabs, all kinds elsewhere).
-  // Suppressed in edge-drop/directional add — those are connection-driven.
+  // ALL matching models (never filtered by tab) — just ordered so the active
+  // media tab's own kind leads. Suppressed in edge-drop/directional add (those
+  // are connection-driven).
   const modelHits = useMemo<ModelTreeVariant[]>(() => {
     if (!searchActive || isFiltered) return [];
-    return searchModelVariants(searchQuery, TAB_MODEL_KIND[searchTab]);
+    const all = searchModelVariants(searchQuery);
+    const kind = TAB_MODEL_KIND[searchTab];
+    return kind ? [...all].sort((a, b) => Number(a.kind !== kind) - Number(b.kind !== kind)) : all;
   }, [searchActive, isFiltered, searchQuery, searchTab]);
 
   // Non-empty blocks in this tab's order — drives both render and keyboard nav.
