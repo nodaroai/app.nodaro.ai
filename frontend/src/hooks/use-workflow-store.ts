@@ -597,11 +597,6 @@ interface WorkflowState {
   readonly setOpenAddNodePopupForHandle: (
     fn: ((args: { nodeId: string; handleId: string; direction: "source" | "target"; nodeType: string; prefillName?: string }) => void) | null,
   ) => void
-  /** Canvas-registered opener for the on-canvas left/right "+" buttons (§7):
-   *  opens the add-node popup filtered to nodes connectable upstream (left) or
-   *  downstream (right) of the focused node. Null when the canvas isn't mounted. */
-  readonly openDirectionalAdd: ((args: { nodeId: string; direction: "upstream" | "downstream" }) => void) | null
-  readonly setOpenDirectionalAdd: (fn: ((args: { nodeId: string; direction: "upstream" | "downstream" }) => void) | null) => void
   /** Canvas-registered hook invoked after addNode creates a node (sticky
    *  notes excluded) — the canvas centers the viewport on it at the current
    *  zoom, so every add-node entry point inherits the behavior. */
@@ -2769,8 +2764,6 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   setRunSelected: (fn) => set({ runSelected: fn }),
   openAddNodePopupForHandle: null,
   setOpenAddNodePopupForHandle: (fn) => set({ openAddNodePopupForHandle: fn }),
-  openDirectionalAdd: null,
-  setOpenDirectionalAdd: (fn) => set({ openDirectionalAdd: fn }),
   onNodeCreated: null,
   setOnNodeCreated: (fn) => set({ onNodeCreated: fn }),
   hoveredEdgeId: null,

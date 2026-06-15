@@ -1411,31 +1411,6 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     return () => setOpenAddNodePopupForHandleStore(null)
   }, [setOpenAddNodePopupForHandleStore, openAddNodePopupForHandle])
 
-  // On-canvas left/right "+" buttons (§7): open the popup in directional mode
-  // bound to the focused node — same context Tab/Shift+Tab build, so picking a
-  // node flows through the identical Auto Connect / Smart resolution.
-  const openDirectionalAdd = useCallback(
-    ({ nodeId, direction }: { nodeId: string; direction: "upstream" | "downstream" }) => {
-      const node = getNode(nodeId)
-      if (!node || !node.type || useWorkflowStore.getState().isReadOnly) return
-      const { sourceHandles, targetHandles } = handleIdsFromBounds(getInternalNode(nodeId)?.internals.handleBounds, node.type)
-      if (sourceHandles.length + targetHandles.length === 0) return
-      setConnectionContext(null)
-      setAddNodePopupCategory(null)
-      setAddNodePopupPosition(undefined)
-      setAutoConnectCtx({ nodeId, nodeType: node.type, sourceHandles, targetHandles, direction })
-      setAddNodePopupOpen(true)
-      setCanvasContextMenu(null)
-      setNodeContextMenu(null)
-    },
-    [getNode, getInternalNode],
-  )
-  const setOpenDirectionalAddStore = useWorkflowStore((s) => s.setOpenDirectionalAdd)
-  useEffect(() => {
-    setOpenDirectionalAddStore(openDirectionalAdd)
-    return () => setOpenDirectionalAddStore(null)
-  }, [setOpenDirectionalAddStore, openDirectionalAdd])
-
   // Center the viewport on every newly created node at the CURRENT zoom.
   // Registered into the store's addNode so all entry points (popup, sidebar
   // toolbar, edge-drop, handle popover) inherit it. React Flow hasn't
@@ -2088,26 +2063,19 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         return
       }
 
-      // Tab / Shift+Tab — Add Node popup. With a connectable node focused, open
-      // in DIRECTIONAL mode (§7): Tab → downstream (consumers of its output),
-      // Shift+Tab → upstream (producers for its inputs). The popup filters to
-      // compatible nodes; the Auto Connect / Smart toggles decide the wiring (so
-      // the filter applies even with Auto off). With no focused node, plain Tab
-      // opens the generic popup at the cursor (as before) and Shift+Tab is a no-op.
-      const isAddNodeTab = matchShortcut(e, SHORTCUTS.addNode)
-      const isAddNodeShiftTab = e.key === "Tab" && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey
-      if (isAddNodeTab || isAddNodeShiftTab) {
+      // Tab — Add Node popup. Opens the SAME generic popup whether or not a node
+      // is focused. With a connectable node focused, it's bound to that node for
+      // auto-connect (the Auto Connect / Smart toggles decide wiring on pick); with
+      // no focused node, it opens at the cursor. No directional / Shift+Tab mode.
+      if (matchShortcut(e, SHORTCUTS.addNode)) {
         if (addNodePopupOpenRef.current) {
           // Already open: Tab cycles the popup's tabs (its own document listener).
           return
         }
         // Resolve the current node from live selection state (matches the
         // `selectedNodeId ?? nodes.find(selected)` pattern other shortcuts use).
-        // Deliberately NOT `focusedNodeId`: it's only synced when exactly one node
-        // is selected (store onNodesChange), so it goes stale on deselect and would
-        // wrongly open a directional popup. Require a SINGLE selected node — a
-        // box-select (length ≠ 1) falls through to the generic popup, which is the
-        // right behavior when "the focused node" is ambiguous.
+        // Require a SINGLE selected node; a box-select (length ≠ 1) or no
+        // selection falls through to the generic popup.
         const st = useWorkflowStore.getState()
         const selectedNodes = st.nodes.filter((n) => n.selected)
         const fid = st.selectedNodeId ?? (selectedNodes.length === 1 ? selectedNodes[0].id : undefined)
@@ -2120,26 +2088,16 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
             : { sourceHandles: [], targetHandles: [] }
         const connectable =
           !st.isReadOnly && !!fnode && !!fnode.type && !isClone && srcH.length + tgtH.length > 0
+        e.preventDefault()
         if (connectable && fnode && fnode.type) {
-          e.preventDefault()
           e.stopPropagation()
           setConnectionContext(null)
           setAddNodePopupCategory(null)
           setAddNodePopupPosition(undefined)
-          setAutoConnectCtx({
-            nodeId: fnode.id,
-            nodeType: fnode.type,
-            sourceHandles: srcH,
-            targetHandles: tgtH,
-            direction: isAddNodeShiftTab ? "upstream" : "downstream",
-          })
+          setAutoConnectCtx({ nodeId: fnode.id, nodeType: fnode.type, sourceHandles: srcH, targetHandles: tgtH })
           setAddNodePopupOpen(true)
           return
         }
-        // No connectable focused node: plain Tab opens the generic popup at the
-        // cursor (today's behavior); Shift+Tab does nothing.
-        if (isAddNodeShiftTab) return
-        e.preventDefault()
         const pos = lastMousePositionRef.current
         handleOpenAddNodePopup(pos.x !== 0 || pos.y !== 0 ? pos : undefined)
         return

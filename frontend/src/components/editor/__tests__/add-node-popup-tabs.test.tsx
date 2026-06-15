@@ -299,8 +299,10 @@ describe("AddNodePopup tabs", () => {
 })
 
 describe("AddNodePopup auto-connect", () => {
-  it("renders the Auto + Smart toggles and persists toggling Auto", () => {
-    renderPopup()
+  const focusedCtx = { nodeId: "n1", nodeType: "text-prompt", sourceHandles: ["prompt"], targetHandles: ["in"] }
+
+  it("renders the Auto + Smart toggles (focused node) and persists toggling Auto", () => {
+    renderPopup({ autoConnectCtx: focusedCtx, onPickType: vi.fn() })
     const auto = screen.getByRole("switch", { name: "Auto-connect" })
     expect(auto).toBeInTheDocument()
     // Smart shows while Auto is on (default).
@@ -310,8 +312,14 @@ describe("AddNodePopup auto-connect", () => {
   })
 
   it("hides the Smart toggle when Auto Connect is off", () => {
-    renderPopup()
+    renderPopup({ autoConnectCtx: focusedCtx, onPickType: vi.fn() })
     fireEvent.click(screen.getByRole("switch", { name: "Auto-connect" }))
+    expect(screen.queryByRole("switch", { name: "Smart connect" })).toBeNull()
+  })
+
+  it("hides BOTH toggles when nothing is focused (no autoConnectCtx)", () => {
+    renderPopup() // generic Tab / sidebar add — no node to connect to
+    expect(screen.queryByRole("switch", { name: "Auto-connect" })).toBeNull()
     expect(screen.queryByRole("switch", { name: "Smart connect" })).toBeNull()
   })
 
