@@ -22,8 +22,12 @@ generated_from: 90fa6b6ee
 - `customAge?: number`
 - `ethnicity?: string | ReadonlyArray<string>`
 - `regionalAesthetic?: string | ReadonlyArray<string>`
-- `build?: string`
-- `bodyProportions?: string`
+- `frame?: string`
+- `bodyMass?: string`
+- `bust?: string`
+- `waist?: string`
+- `hips?: string`
+- `silhouette?: string`
 - `faceShape?: string`
 - `jawline?: string`
 - `cheekbones?: string`

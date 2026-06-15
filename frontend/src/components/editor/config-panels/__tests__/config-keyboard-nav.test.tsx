@@ -327,14 +327,14 @@ describe("delegated nav against real picker markup", () => {
     const onChange = vi.fn()
     render(
       <div data-config-panel-body="true" onKeyDown={handleConfigPanelNavKeyDown}>
-        <PersonPickerDetailed value={{ build: "athletic" }} onChange={onChange} />
+        <PersonPickerDetailed value={{ frame: "frame-slim" }} onChange={onChange} />
       </div>,
     )
-    // Build is an ungrouped single-pick dimension → role="radio" tiles.
-    const athletic = screen.getByRole("radio", { name: /^Athletic$/i })
-    athletic.focus()
-    fireEvent.keyDown(athletic, { key: "ArrowRight" })
-    expect(document.activeElement).not.toBe(athletic)
+    // Frame is an ungrouped single-pick dimension → role="radio" tiles.
+    const slim = screen.getByRole("radio", { name: /^Slim$/i })
+    slim.focus()
+    fireEvent.keyDown(slim, { key: "ArrowRight" })
+    expect(document.activeElement).not.toBe(slim)
     expect(document.activeElement?.getAttribute("role")).toBe("radio")
     expect(onChange).not.toHaveBeenCalled()
   })

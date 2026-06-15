@@ -3,7 +3,7 @@
 /**
  * Small inline silhouette icons for chip-level Person/Styling dimensions.
  *
- * Build / Facial Hair / Eyewear / Headwear each have fewer than ~15 entries,
+ * Facial Hair / Eyewear / Headwear each have fewer than ~15 entries,
  * so they don't need a modal browser — a ~20×20 icon inside the existing
  * chip layout is enough. Each icon is a minimal pictogram drawn in
  * `currentColor` so it matches the chip's selection tint.
@@ -15,27 +15,6 @@ const p = (d: string) => <path d={d} fill="currentColor" />
 const ps = (d: string) => <path d={d} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
 const c = (cx: number, cy: number, r: number) => <circle cx={cx} cy={cy} r={r} fill="currentColor" />
 const cs = (cx: number, cy: number, r: number) => <circle cx={cx} cy={cy} r={r} fill="none" stroke="currentColor" strokeWidth={2} />
-
-// ---------------------------------------------------------------------------
-// Build (body silhouettes) — head + torso + arms + legs with varied shapes.
-// ---------------------------------------------------------------------------
-const BUILD: Record<string, JSX.Element> = {
-  "petite":        <g>{c(12, 5, 2)}{p("M10 7 L10 14 L9 22 M14 7 L14 14 L15 22 M11 7 L11 13 L9 13 M13 7 L13 13 L15 13")}</g>,
-  "slim":          <g>{c(12, 4, 2)}{p("M10 6 L10 14 L9 22 M14 6 L14 14 L15 22 M11 6 L9 12 M13 6 L15 12")}</g>,
-  "average-build": <g>{c(12, 4, 2)}{p("M9 6 L9 14 L8 22 M15 6 L15 14 L16 22 M10 6 L7 12 M14 6 L17 12")}</g>,
-  "athletic":      <g>{c(12, 4, 2)}{p("M8 7 L9 13 L8 22 M16 7 L15 13 L16 22 M10 7 L6 12 M14 7 L18 12")}</g>,
-  "muscular":      <g>{c(12, 4, 2)}{p("M7 7 L9 13 L8 22 M17 7 L15 13 L16 22 M10 7 L4 12 M14 7 L20 12")}</g>,
-  "curvy":         <g>{c(12, 4, 2)}{p("M9 7 L7 14 L9 22 M15 7 L17 14 L15 22 M10 7 L7 12 M14 7 L17 12")}</g>,
-  "heavy-set":     <g>{c(12, 4, 2)}{p("M7 7 L6 15 L9 22 M17 7 L18 15 L15 22 M9 7 L5 13 M15 7 L19 13")}</g>,
-  "tall-lean":     <g>{c(12, 3, 2)}{p("M10 5 L10 16 L9 24 M14 5 L14 16 L15 24 M11 5 L9 13 M13 5 L15 13")}</g>,
-  "voluptuous":    <g>{c(12, 4, 2)}{p("M9 6 L7 12 L9 16 L8 22 M15 6 L17 12 L15 16 L16 22 M10 6 L7 11 M14 6 L17 11")}</g>,
-  "hourglass":     <g>{c(12, 4, 2)}{p("M8 6 L9 11 L7 16 L8 22 M16 6 L15 11 L17 16 L16 22 M9 6 L6 11 M15 6 L18 11")}</g>,
-  "pear-build":    <g>{c(12, 4, 2)}{p("M10 6 L9 12 L7 16 L8 22 M14 6 L15 12 L17 16 L16 22 M10 6 L8 11 M14 6 L16 11")}</g>,
-  "apple-build":   <g>{c(12, 4, 2)}{p("M9 6 L7 13 L10 16 L10 22 M15 6 L17 13 L14 16 L14 22 M10 6 L7 11 M14 6 L17 11")}</g>,
-  "rectangular":   <g>{c(12, 4, 2)}{p("M9 6 L9 16 L9 22 M15 6 L15 16 L15 22 M10 6 L8 12 M14 6 L16 12")}</g>,
-  "plus-size":     <g>{c(12, 4, 2)}{p("M6 7 L5 14 L8 22 M18 7 L19 14 L16 22 M9 7 L4 12 M15 7 L20 12")}</g>,
-  "lanky":         <g>{c(12, 3, 1.8)}{p("M10 5 L10 17 L9 24 M14 5 L14 17 L15 24 M11 5 L8 14 M13 5 L16 14")}</g>,
-}
 
 // ---------------------------------------------------------------------------
 // Facial Hair — small face outline + beard / mustache shape on top.
@@ -170,34 +149,12 @@ const LIPS: Record<string, JSX.Element> = {
   "lips-heart":      p("M3 11 Q7 7 9 11 Q11 7 12 9 Q13 7 15 11 Q17 7 21 11 Q21 15 12 19 Q3 15 3 11 Z"),
 }
 
-// ---------------------------------------------------------------------------
-// Body Proportions — body silhouette emphasising leg/torso ratio.
-// ---------------------------------------------------------------------------
-const BODY_PROPORTIONS: Record<string, JSX.Element> = {
-  "proportions-balanced":     <g>{c(12, 4, 2)}{p("M9 6 L9 14 L8 22 M15 6 L15 14 L16 22")}</g>,
-  "proportions-long-legged":  <g>{c(12, 3, 2)}{p("M10 5 L10 12 L8 22 M14 5 L14 12 L16 22")}</g>,
-  "proportions-short-legged": <g>{c(12, 5, 2)}{p("M9 7 L9 17 L8 22 M15 7 L15 17 L16 22")}</g>,
-  "proportions-long-torso":   <g>{c(12, 3, 2)}{p("M10 5 L10 17 L9 22 M14 5 L14 17 L15 22")}</g>,
-  "proportions-hourglass":    <g>{c(12, 4, 2)}{p("M8 6 L10 11 L8 14 L9 22 M16 6 L14 11 L16 14 L15 22")}</g>,
-  "proportions-pear":         <g>{c(12, 4, 2)}{p("M10 6 L9 12 L7 14 L9 22 M14 6 L15 12 L17 14 L15 22")}</g>,
-  "proportions-apple":        <g>{c(12, 4, 2)}{p("M9 6 L7 12 L9 14 L9 22 M15 6 L17 12 L15 14 L15 22")}</g>,
-  "proportions-inverted":     <g>{c(12, 4, 2)}{p("M7 6 L10 12 L10 14 L9 22 M17 6 L14 12 L14 14 L15 22")}</g>,
-  // Broad-shouldered V-taper to a narrow waist, plus flexed arms = muscle.
-  "proportions-athletic-muscular": <g>{c(12, 4, 2)}{p("M8 7 L10 12 L9 15 L8 22 M16 7 L14 12 L15 15 L16 22 M9 7 L5 10 L8 13 M15 7 L19 10 L16 13")}</g>,
-}
-
 function Svg({ children, className }: { children: JSX.Element; className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} aria-hidden role="img" style={{ pointerEvents: "none" }}>
       {children}
     </svg>
   )
-}
-
-export function BuildIcon({ buildId, className }: { readonly buildId: string; readonly className?: string }) {
-  const shape = BUILD[buildId]
-  if (!shape) return null
-  return <Svg className={className}>{shape}</Svg>
 }
 
 export function FacialHairIcon({ facialHairId, className }: { readonly facialHairId: string; readonly className?: string }) {
@@ -244,12 +201,6 @@ export function NoseIcon({ id, className }: { readonly id: string; readonly clas
 
 export function LipsIcon({ id, className }: { readonly id: string; readonly className?: string }) {
   const shape = LIPS[id]
-  if (!shape) return null
-  return <Svg className={className}>{shape}</Svg>
-}
-
-export function BodyProportionsIcon({ id, className }: { readonly id: string; readonly className?: string }) {
-  const shape = BODY_PROPORTIONS[id]
   if (!shape) return null
   return <Svg className={className}>{shape}</Svg>
 }

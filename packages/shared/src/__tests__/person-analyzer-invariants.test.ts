@@ -20,7 +20,7 @@ describe("person analyzer invariants", () => {
       expect(PERSON_FIELD_BY_DIMENSION[dim]).toBeTruthy()
       expect(getPersonDimensionLimit(dim)).toBeGreaterThanOrEqual(1)
     }
-    expect(PERSON_DIMENSION_ORDER).toHaveLength(29)
+    expect(PERSON_DIMENSION_ORDER).toHaveLength(33)
   })
 
   it("cardinality bijection: limit>1 ⇔ field is array-capable", () => {

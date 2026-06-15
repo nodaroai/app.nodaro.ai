@@ -590,7 +590,8 @@ const SINGLE_CATALOGS: readonly PickerCatalog[] = [
 const FRAMING_FIELDS = ["shotSize", "angle", "coverage", "composition", "vantage"] as const
 const LIGHTING_FIELDS = ["timeOfDay", "lightingStyle", "lightingDirection"] as const
 const PERSON_FIELDS = [
-  "type", "age", "ethnicity", "build", "bodyProportions",
+  "type", "age", "ethnicity",
+  "frame", "bodyMass", "bust", "waist", "hips", "silhouette",
   "faceShape", "jawline", "cheekbones", "facialFullness",
   "eyeShape", "eyelidType", "canthalTilt", "eyeSpacing", "eyeSetBrow",
   "nose", "noseTip", "lipFullness", "lipShape", "lipState",

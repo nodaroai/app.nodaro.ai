@@ -160,8 +160,12 @@ export function getParameterValue(
         trim(data.age) ??
         trim(data.ethnicity) ??
         trim(data.regionalAesthetic) ??
-        trim(data.build) ??
-        trim(data.bodyProportions) ??
+        trim(data.frame) ??
+        trim(data.bodyMass) ??
+        trim(data.bust) ??
+        trim(data.waist) ??
+        trim(data.hips) ??
+        trim(data.silhouette) ??
         trim(data.faceShape) ??
         trim(data.jawline) ??
         trim(data.cheekbones) ??
