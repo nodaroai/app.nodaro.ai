@@ -638,23 +638,25 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     }
   }, [promptEditNodeId])
 
-  // Viewport saved just before the panel opens, restored when it closes.
-  const prePanelViewportRef = useRef<{ x: number; y: number; zoom: number } | null>(null)
-
   // Center viewport on selected node and zoom to fit 60% of visible area
   useEffect(() => {
     if (!selectedNodeId) {
       setFocusMode(false)
-      // Restore the viewport that was active before the panel opened (Mode 1 or Mode 2)
-      if (prePanelViewportRef.current) {
-        setViewport(prePanelViewportRef.current, { duration: 300 })
-        prePanelViewportRef.current = null
+      // Closing the panel: stay on the node the user was just configuring (the
+      // current focus), re-centered now that the 384px panel is gone — rather
+      // than snapping the viewport back to where it was BEFORE the panel opened,
+      // which jumped to a previously-focused node. focusedNodeId survives the
+      // close (the X/Escape handlers only clear selectedNodeId), so it points at
+      // the node the user expects to keep looking at. Pane-click close clears
+      // focusedNodeId too, so there's nothing to re-center on → leave as is.
+      const stayId = useWorkflowStore.getState().focusedNodeId
+      const stay = stayId ? getNode(stayId) : undefined
+      if (stay) {
+        const w = stay.measured?.width ?? 200
+        const h = stay.measured?.height ?? 100
+        setCenter(stay.position.x + w / 2, stay.position.y + h / 2, { zoom: getViewport().zoom, duration: 300 })
       }
       return
-    }
-    // Save viewport on first open only — not when switching nodes while panel is already open
-    if (!prePanelViewportRef.current) {
-      prePanelViewportRef.current = getViewport()
     }
     // One-shot skip: set by openFullscreenSettings (icon click) so the node
     // stays in place instead of zooming to fill the screen.
@@ -696,7 +698,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     // Allow the animation to finish before listening for user moves
     const timer = setTimeout(() => { focusAnimatingRef.current = false }, 350)
     return () => clearTimeout(timer)
-  }, [isMobile, selectedNodeId, getViewport, setViewport, setCenter, getNode])
+  }, [isMobile, selectedNodeId, getViewport, setCenter, getNode])
 
   // Restore saved viewport or fitView on workflow load
   const viewportRestoredRef = useRef<string | null>(null)
