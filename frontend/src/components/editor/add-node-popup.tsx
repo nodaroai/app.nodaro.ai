@@ -1967,7 +1967,8 @@ export function AddNodePopup({
     if (!searchActive || isFiltered) return [];
     const all = searchModelVariants(searchQuery);
     const kind = TAB_MODEL_KIND[searchTab];
-    return kind ? [...all].sort((a, b) => Number(a.kind !== kind) - Number(b.kind !== kind)) : all;
+    // Show every model, the active media tab's own kind first (stable partition).
+    return kind ? [...all.filter((m) => m.kind === kind), ...all.filter((m) => m.kind !== kind)] : all;
   }, [searchActive, isFiltered, searchQuery, searchTab]);
 
   // Non-empty blocks in this tab's order — drives both render and keyboard nav.
