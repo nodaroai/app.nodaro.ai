@@ -35,8 +35,12 @@ export type PersonDimension =
   | "age"
   | "ethnicity"
   | "regional-aesthetic"
-  | "build"
-  | "body-proportions"
+  | "frame"
+  | "body-mass"
+  | "bust"
+  | "waist"
+  | "hips"
+  | "silhouette"
   | "face-shape"
   | "jawline"
   | "cheekbones"
@@ -374,33 +378,48 @@ export const PEOPLE: ReadonlyArray<Person> = [
   // Other
   { id: "mixed",              label: "Mixed",              group: "Other", dimension: "ethnicity", description: "Mixed heritage",                    promptHint: "of mixed heritage" },
 
-  // -------------------- Build (silhouette + height) --------------------
-  { id: "petite",        label: "Petite",         dimension: "build", description: "Short and small-framed", promptHint: "petite" },
-  { id: "slim",          label: "Slim",           dimension: "build", description: "Thin, slender build",    promptHint: "slim build" },
-  { id: "average-build", label: "Average",        dimension: "build", description: "Average build",          promptHint: "of average build" },
-  { id: "athletic",      label: "Athletic",       dimension: "build", description: "Toned, athletic",        promptHint: "athletic build" },
-  { id: "muscular",      label: "Muscular",       dimension: "build", description: "Muscular, powerful",     promptHint: "muscular build" },
-  { id: "curvy",         label: "Curvy",          dimension: "build", description: "Curvy figure",           promptHint: "curvy figure" },
-  { id: "heavy-set",     label: "Heavy-set",      dimension: "build", description: "Large, heavy-set",       promptHint: "heavy-set build" },
-  { id: "tall-lean",     label: "Tall & Lean",    dimension: "build", description: "Tall, lean frame",       promptHint: "tall and lean" },
-  { id: "voluptuous",    label: "Voluptuous",     dimension: "build", description: "Full-figured, curvy",    promptHint: "voluptuous, full-figured curvy build" },
-  { id: "hourglass",     label: "Hourglass",      dimension: "build", description: "Narrow waist, full bust + hips", promptHint: "an hourglass build with a narrow waist and full hips and bust" },
-  { id: "pear-build",    label: "Pear",           dimension: "build", description: "Narrower upper body, fuller hips", promptHint: "a pear-shaped build with a narrower upper body and fuller hips" },
-  { id: "apple-build",   label: "Apple",          dimension: "build", description: "Fuller midsection, slimmer legs", promptHint: "an apple-shaped build with a fuller midsection and slimmer legs" },
-  { id: "rectangular",   label: "Rectangular / Boyish", dimension: "build", description: "Straight up-and-down silhouette", promptHint: "a rectangular boyish build with a straight up-and-down silhouette" },
-  { id: "plus-size",     label: "Plus-size",      dimension: "build", description: "Plus-size body type",    promptHint: "a plus-size build" },
-  { id: "lanky",         label: "Lanky",          dimension: "build", description: "Tall and thin, long limbs", promptHint: "a lanky build, tall and thin with long limbs" },
+  // -------------------- Body — six independent proportion axes --------------------
+  // Frame / Body Mass / Bust / Waist / Hips / Silhouette replace the old single
+  // Build + Body Proportions pickers, so otherwise-inexpressible bodies (e.g.
+  // "slim frame + full bust") become representable. Neutral values (Average /
+  // Balanced) carry an empty promptHint — selecting them injects nothing.
+  // ORDER MATTERS: hints compose by comma-join in PERSON_DIMENSION_ORDER, so
+  // Frame:Slim ("slim") + Body Mass:Lean ("lean build") → "slim, lean build".
 
-  // -------------------- Body Proportions (ratio, distinct from Build's silhouette+size) --------------------
-  { id: "proportions-balanced",     label: "Balanced",       dimension: "body-proportions", description: "Even legs-to-torso ratio",   promptHint: "balanced body proportions, even legs-to-torso ratio" },
-  { id: "proportions-long-legged",  label: "Long-Legged",    dimension: "body-proportions", description: "Notably long legs",           promptHint: "long legs in proportion to a shorter torso" },
-  { id: "proportions-short-legged", label: "Short-Legged",   dimension: "body-proportions", description: "Shorter legs, longer torso",  promptHint: "shorter legs in proportion to a longer torso" },
-  { id: "proportions-long-torso",   label: "Long Torso",     dimension: "body-proportions", description: "Notably long torso",          promptHint: "a notably long torso" },
-  { id: "proportions-hourglass",    label: "Hourglass",      dimension: "body-proportions", description: "Defined waist, balanced bust + hips", promptHint: "an hourglass figure with a defined waist and balanced bust and hips" },
-  { id: "proportions-pear",         label: "Pear",           dimension: "body-proportions", description: "Wider hips than shoulders",   promptHint: "a pear-shaped figure with hips wider than shoulders" },
-  { id: "proportions-apple",        label: "Apple",          dimension: "body-proportions", description: "Fuller midsection",           promptHint: "an apple-shaped figure carrying weight in the midsection" },
-  { id: "proportions-inverted",     label: "Inverted Triangle", dimension: "body-proportions", description: "Broad shoulders, narrow hips", promptHint: "an inverted triangle figure with broad shoulders and narrow hips" },
-  { id: "proportions-athletic-muscular", label: "Athletic / Muscular", dimension: "body-proportions", description: "Lean muscle, broad shoulders, narrow waist (athlete's V-taper)", promptHint: "an athletic muscular figure with a lean V-taper, broad shoulders, narrow waist, and visible muscle definition" },
+  // ----- Frame (skeletal width / height) -----
+  { id: "frame-petite",  label: "Petite",  dimension: "frame", description: "Small, short-statured frame",  promptHint: "petite" },
+  { id: "frame-slim",    label: "Slim",    dimension: "frame", description: "Narrow, slender frame",        promptHint: "slim" },
+  { id: "frame-average", label: "Average", dimension: "frame", description: "Average frame",                promptHint: "" },
+  { id: "frame-broad",   label: "Broad",   dimension: "frame", description: "Wide, broad-shouldered frame", promptHint: "broad-framed" },
+
+  // ----- Body Mass (leanness / weight, independent of Frame) -----
+  { id: "mass-lean",    label: "Lean",    dimension: "body-mass", description: "Lean, low body mass",      promptHint: "lean build" },
+  { id: "mass-average", label: "Average", dimension: "body-mass", description: "Average body mass",        promptHint: "" },
+  { id: "mass-full",    label: "Full",    dimension: "body-mass", description: "Full-figured",             promptHint: "full-figured" },
+  { id: "mass-heavy",   label: "Heavy",   dimension: "body-mass", description: "Heavy-set, large build",   promptHint: "heavy-set build" },
+
+  // ----- Bust (applicable subjects; ungated like Facial Hair, neutral = no-op) -----
+  { id: "bust-small",     label: "Small",     dimension: "bust", description: "Small bust",     promptHint: "small bust" },
+  { id: "bust-average",   label: "Average",   dimension: "bust", description: "Average bust",   promptHint: "" },
+  { id: "bust-full",      label: "Full",      dimension: "bust", description: "Full bust",      promptHint: "full bust" },
+  { id: "bust-very-full", label: "Very Full", dimension: "bust", description: "Very full bust", promptHint: "very full bust" },
+
+  // ----- Waist -----
+  { id: "waist-defined",  label: "Defined",  dimension: "waist", description: "Defined, cinched waist",    promptHint: "defined waist" },
+  { id: "waist-average",  label: "Average",  dimension: "waist", description: "Average waist",             promptHint: "" },
+  { id: "waist-straight", label: "Straight", dimension: "waist", description: "Straight, undefined waist", promptHint: "straight waistline" },
+
+  // ----- Hips -----
+  { id: "hips-narrow",   label: "Narrow",   dimension: "hips", description: "Narrow hips",   promptHint: "narrow hips" },
+  { id: "hips-balanced", label: "Balanced", dimension: "hips", description: "Balanced hips", promptHint: "" },
+  { id: "hips-wide",     label: "Wide",     dimension: "hips", description: "Wide hips",     promptHint: "wide hips" },
+
+  // ----- Silhouette (overall body shape; optional, no neutral) -----
+  { id: "silhouette-hourglass",   label: "Hourglass",         dimension: "silhouette", description: "Balanced bust + hips, defined waist", promptHint: "hourglass silhouette" },
+  { id: "silhouette-rectangular", label: "Rectangular",       dimension: "silhouette", description: "Straight up-and-down silhouette",      promptHint: "rectangular silhouette" },
+  { id: "silhouette-pear",        label: "Pear",              dimension: "silhouette", description: "Hips wider than shoulders",            promptHint: "pear-shaped silhouette" },
+  { id: "silhouette-inverted",    label: "Inverted Triangle", dimension: "silhouette", description: "Broad shoulders, narrow hips",         promptHint: "inverted-triangle silhouette" },
+  { id: "silhouette-athletic",    label: "Athletic",          dimension: "silhouette", description: "Lean, toned, V-taper",                 promptHint: "athletic silhouette" },
 
   // -------------------- Face Shape --------------------
   { id: "face-oval",       label: "Oval",       dimension: "face-shape", description: "Slightly longer than wide, soft curves",     promptHint: "an oval face shape" },
@@ -823,8 +842,12 @@ export const PERSON_DIMENSION_ORDER: ReadonlyArray<PersonDimension> = [
   "ethnicity",
   "regional-aesthetic",
   // Body
-  "build",
-  "body-proportions",
+  "frame",
+  "body-mass",
+  "bust",
+  "waist",
+  "hips",
+  "silhouette",
   // Face structure
   "face-shape",
   "jawline",
@@ -858,8 +881,12 @@ export const PERSON_DIMENSION_LABELS: Readonly<Record<PersonDimension, string>> 
   age: "Age",
   ethnicity: "Ethnicity",
   "regional-aesthetic": "Regional Aesthetic",
-  build: "Build",
-  "body-proportions": "Body Proportions",
+  frame: "Frame",
+  "body-mass": "Body Mass",
+  bust: "Bust",
+  waist: "Waist",
+  hips: "Hips",
+  silhouette: "Silhouette",
   "face-shape": "Face Shape",
   jawline: "Jawline",
   cheekbones: "Cheekbones",
@@ -901,7 +928,7 @@ export interface PersonDimensionSection {
 
 export const PERSON_DIMENSION_SECTIONS: ReadonlyArray<PersonDimensionSection> = [
   { label: "Identity",    dimensions: ["type", "age", "ethnicity", "regional-aesthetic"] },
-  { label: "Body",        dimensions: ["build", "body-proportions"] },
+  { label: "Body",        dimensions: ["frame", "body-mass", "bust", "waist", "hips", "silhouette"] },
   { label: "Face",        dimensions: ["face-shape", "jawline", "cheekbones", "facial-fullness", "eye-shape", "eyelid-type", "canthal-tilt", "eye-spacing", "eye-set-brow", "nose", "nose-tip", "lip-fullness", "lip-shape", "lip-state"] },
   { label: "Hair",        dimensions: ["hair-base", "hair-color", "eyebrows"] },
   { label: "Skin & Eyes", dimensions: ["skin-tone", "skin-texture", "eye-color", "eye-state"] },
@@ -915,7 +942,8 @@ export const PERSON_DIMENSION_SECTIONS: ReadonlyArray<PersonDimensionSection> = 
  */
 export const PERSON_FIELD_BY_DIMENSION: Record<
   PersonDimension,
-  | "type" | "age" | "ethnicity" | "regionalAesthetic" | "build" | "bodyProportions"
+  | "type" | "age" | "ethnicity" | "regionalAesthetic"
+  | "frame" | "bodyMass" | "bust" | "waist" | "hips" | "silhouette"
   | "faceShape" | "jawline" | "cheekbones" | "facialFullness"
   | "eyeShape" | "eyelidType" | "canthalTilt" | "eyeSpacing" | "eyeSetBrow"
   | "nose" | "noseTip" | "lipFullness" | "lipShape" | "lipState"
@@ -926,8 +954,12 @@ export const PERSON_FIELD_BY_DIMENSION: Record<
   age: "age",
   ethnicity: "ethnicity",
   "regional-aesthetic": "regionalAesthetic",
-  build: "build",
-  "body-proportions": "bodyProportions",
+  frame: "frame",
+  "body-mass": "bodyMass",
+  bust: "bust",
+  waist: "waist",
+  hips: "hips",
+  silhouette: "silhouette",
   "face-shape": "faceShape",
   jawline: "jawline",
   cheekbones: "cheekbones",
@@ -996,17 +1028,27 @@ export interface PersonValue {
    *  the visuals those other dimensions own. Single id or up to 2 ids for
    *  hybrid looks (e.g. ["nyc-fashion","parisienne"]). */
   regionalAesthetic?: string | ReadonlyArray<string>
-  build?: string
-  /** Body shape ratio (long-legged, hourglass, pear…). Independent from
-   *  Build, which describes silhouette + size. */
-  bodyProportions?: string
+  /** Skeletal frame width / height (petite, slim, average, broad). Independent
+   *  of body mass — "slim frame + full bust" is expressible. */
+  frame?: string
+  /** Body mass / leanness (lean, average, full, heavy). Independent of frame. */
+  bodyMass?: string
+  /** Bust size (small, average, full, very full) — applicable subjects. */
+  bust?: string
+  /** Waist definition (defined, average, straight). */
+  waist?: string
+  /** Hip width (narrow, balanced, wide). */
+  hips?: string
+  /** Overall body silhouette (hourglass, rectangular, pear, inverted-triangle,
+   *  athletic). Optional — only emits when picked. */
+  silhouette?: string
   /** Face silhouette (oval, round, square, heart…). */
   faceShape?: string
   /** Jaw shape (strong, soft, pointed, wide). */
   jawline?: string
   /** Cheekbone projection / height (low, average, high-defined, sculpted-high, wide). */
   cheekbones?: string
-  /** Face-specific leanness, independent of body `build` (gaunt, lean, average, full, round). */
+  /** Face-specific leanness, independent of body mass (gaunt, lean, average, full, round). */
   facialFullness?: string
   /** Eye shape — anatomical shape only (almond, round, monolid, double-eyelid,
    *  wide, narrow). Lid type, canthal tilt, spacing and brow-set are separate. */

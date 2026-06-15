@@ -2309,10 +2309,11 @@ export function AddNodePopup({
               )}
             />
           </div>
-          {/* Auto Connect + Smart toggles: shown for any focused-node add
-              (generic Tab or directional +/Tab), hidden only for edge-drop
+          {/* Auto Connect + Smart toggles: only meaningful when there's a focused
+              node to wire to (Tab on a node sets autoConnectCtx). Hidden when
+              nothing is focused (generic Tab / sidebar add) and for edge-drop
               (which direct-wires the dragged handle). Smart is gated under Auto. */}
-          {!connectionContext && (
+          {autoConnectCtx && (
             <div className="flex items-center gap-3 shrink-0 ml-auto">
               <ToggleLabel
                 icon={<Link2 className="w-3.5 h-3.5 text-[#ff0073]" />}

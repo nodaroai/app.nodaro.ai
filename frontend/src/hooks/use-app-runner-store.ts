@@ -32,6 +32,37 @@ interface NodeState {
   error?: string
 }
 
+/**
+ * Per-run execution state. Multiple runs of the same app can be in flight at
+ * once (chat mode), so every execution-scoped field is keyed by runId here
+ * rather than held as a single top-level value. `combinedProgress` is keyed by
+ * output-node-id, which collides across concurrent same-app runs unless it
+ * lives per-run — that collision is the core reason this map exists.
+ */
+export interface RunRuntime {
+  executionId: string | null
+  status: AppRunnerStatus
+  nodeStates: Record<string, NodeState>
+  completedNodes: number
+  totalNodes: number
+  errorMessage: string | null
+  insufficientCredits: boolean
+  progressSegments: Record<string, ProgressSegment[]>
+  combinedProgress: Record<string, number>
+}
+
+const EMPTY_RUNTIME: RunRuntime = {
+  executionId: null,
+  status: "idle",
+  nodeStates: {},
+  completedNodes: 0,
+  totalNodes: 0,
+  errorMessage: null,
+  insufficientCredits: false,
+  progressSegments: {},
+  combinedProgress: {},
+}
+
 interface AppRunnerState {
   // App data
   app: PublishedApp | null
@@ -46,7 +77,12 @@ interface AppRunnerState {
   runsLoading: boolean
   activeRunId: string | null
 
-  // Current execution
+  // Per-run execution state (concurrent runs). Read live status for a specific
+  // run via getRunState(runId); the flat fields below mirror runtimes[activeRunId].
+  runtimes: Record<string, RunRuntime>
+
+  // Active-execution mirror (back-compat: a projection of runtimes[activeRunId]
+  // maintained centrally by patchRuntime). Non-chat consumers read these.
   executionId: string | null
   executionStatus: AppRunnerStatus
   nodeStates: Record<string, NodeState>
@@ -64,21 +100,67 @@ interface AppRunnerState {
   selectRun: (runId: string) => void
   newRun: () => void
   run: (runId?: string) => Promise<void>
-  cancel: () => Promise<void>
+  cancel: (runId?: string) => Promise<void>
   deleteRun: (runId: string) => Promise<void>
   updateInputValue: (nodeId: string, key: string, value: unknown) => void
-  resumeExecution: (executionId: string) => void
+  resumeExecution: (executionId: string, runId?: string) => void
   setSelectedVersion: (version: number | null) => void
+  getRunState: (runId: string) => RunRuntime
   reset: () => void
 }
 
-let pollTimeoutId: ReturnType<typeof setTimeout> | null = null
+// One poller per in-flight execution, keyed by executionId so concurrent runs
+// don't clobber each other's timeouts (the single-timeout model could only ever
+// poll one run at a time).
+const pollers = new Map<string, ReturnType<typeof setTimeout>>()
 
-function clearPollTimeout() {
-  if (pollTimeoutId !== null) {
-    clearTimeout(pollTimeoutId)
-    pollTimeoutId = null
+function clearPoller(executionId: string | null | undefined) {
+  if (!executionId) return
+  const t = pollers.get(executionId)
+  if (t !== undefined) {
+    clearTimeout(t)
+    pollers.delete(executionId)
   }
+}
+
+function clearAllPollers() {
+  for (const t of pollers.values()) clearTimeout(t)
+  pollers.clear()
+}
+
+/** Project a runtime onto the flat active-mirror fields. */
+function runtimeToFlat(r: RunRuntime): Partial<AppRunnerState> {
+  return {
+    executionId: r.executionId,
+    executionStatus: r.status,
+    nodeStates: r.nodeStates,
+    completedNodes: r.completedNodes,
+    totalNodes: r.totalNodes,
+    errorMessage: r.errorMessage,
+    insufficientCredits: r.insufficientCredits,
+    progressSegments: r.progressSegments,
+    combinedProgress: r.combinedProgress,
+  }
+}
+
+/**
+ * Single writer for per-run execution state: merges `patch` into
+ * `runtimes[runId]` and, when that run is the active one, mirrors it onto the
+ * flat fields. Centralising the projection here is what keeps the mirror from
+ * drifting out of sync with the runtimes map.
+ */
+function patchRuntime(
+  set: (partial: Partial<AppRunnerState>) => void,
+  get: () => AppRunnerState,
+  runId: string,
+  patch: Partial<RunRuntime>,
+) {
+  const { runtimes, activeRunId } = get()
+  const next: RunRuntime = { ...(runtimes[runId] ?? EMPTY_RUNTIME), ...patch }
+  set({
+    runtimes: { ...runtimes, [runId]: next },
+    ...(runId === activeRunId ? runtimeToFlat(next) : {}),
+  })
 }
 
 export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
@@ -89,6 +171,7 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
   runs: [],
   runsLoading: false,
   activeRunId: null,
+  runtimes: {},
   executionId: null,
   executionStatus: "idle",
   nodeStates: {},
@@ -99,6 +182,8 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
   insufficientCredits: false,
   progressSegments: {},
   combinedProgress: {},
+
+  getRunState: (runId: string) => get().runtimes[runId] ?? EMPTY_RUNTIME,
 
   loadApp: async (slug: string) => {
     if (get().loading) return
@@ -142,32 +227,34 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
     const run = runs.find((r) => r.id === runId)
     if (!run?.execution) return
 
-    clearPollTimeout()
-
     const nodeStates = (run.execution.nodeStates ?? {}) as Record<string, NodeState>
     const isTerminal = run.execution.status === "completed" || run.execution.status === "failed" || run.execution.status === "cancelled"
+    const status: AppRunnerStatus = isTerminal
+      ? (run.execution.status === "completed" ? "completed" : "failed")
+      : "running"
 
-    set({
-      activeRunId: runId,
+    // Just re-point the active run + hydrate its runtime; do NOT stop other
+    // runs' pollers (a concurrent run keeps streaming into its own runtime).
+    set({ activeRunId: runId })
+    patchRuntime(set, get, runId, {
       executionId: run.executionId,
+      status,
       nodeStates,
       completedNodes: run.execution.completedNodes,
       totalNodes: run.execution.totalNodes,
-      executionStatus: isTerminal
-        ? (run.execution.status === "completed" ? "completed" : "failed")
-        : "running",
       errorMessage: run.execution.errorMessage ?? null,
     })
 
-    // If still running, resume polling
-    if (!isTerminal) {
-      startPolling(set, get)
-      computeProgressSegments(set, get).catch(() => {})
+    // Resume polling only if this run is live and not already being polled.
+    if (!isTerminal && run.executionId && !pollers.has(run.executionId)) {
+      startPolling(set, get, runId)
+      computeProgressSegments(set, get, runId).catch(() => {})
     }
   },
 
   newRun: () => {
-    clearPollTimeout()
+    // Reset the active pointer + flat mirror to idle. Other in-flight runs'
+    // runtimes + pollers are intentionally left running (concurrency).
     set({
       activeRunId: null,
       executionId: null,
@@ -187,16 +274,26 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
     const { slug, inputValues, selectedVersion, app } = get()
     if (!slug) return
 
-    clearPollTimeout()
-    set({
-      executionStatus: "running",
-      errorMessage: null,
-      insufficientCredits: false,
-      nodeStates: {},
-      completedNodes: 0,
-      progressSegments: {},
-      combinedProgress: {},
-    })
+    // When the runId is known up front (chat launch), seed its runtime and make
+    // it active immediately; otherwise the flat mirror covers the loading gap
+    // until runPublishedApp assigns a runId.
+    if (existingRunId) {
+      // Re-firing a slot (Retry / re-run): drop the previous execution's poller
+      // so its dead map entry can't linger, then reseed the runtime fresh.
+      clearPoller(get().runtimes[existingRunId]?.executionId)
+      set({ activeRunId: existingRunId })
+      patchRuntime(set, get, existingRunId, { ...EMPTY_RUNTIME, status: "running" })
+    } else {
+      set({
+        executionStatus: "running",
+        errorMessage: null,
+        insufficientCredits: false,
+        nodeStates: {},
+        completedNodes: 0,
+        progressSegments: {},
+        combinedProgress: {},
+      })
+    }
 
     try {
       // Fold lottie slot edits into a full-plan motionPlan override per node
@@ -220,24 +317,35 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
         existingRunId,
         selectedVersion ?? undefined,
       )
-      set({ executionId, activeRunId: runId })
-      startPolling(set, get)
-      computeProgressSegments(set, get).catch(() => {})
+      set({ activeRunId: runId })
+      patchRuntime(set, get, runId, { executionId, status: "running" })
+      startPolling(set, get, runId)
+      computeProgressSegments(set, get, runId).catch(() => {})
     } catch (err) {
       const isInsufficientCredits = err instanceof InsufficientCreditsError
-      set({
-        executionStatus: "failed",
-        errorMessage: err instanceof Error ? err.message : "Failed to run app",
-        insufficientCredits: isInsufficientCredits,
-      })
+      const message = err instanceof Error ? err.message : "Failed to run app"
+      const runId = existingRunId ?? get().activeRunId
+      if (runId) {
+        patchRuntime(set, get, runId, { status: "failed", errorMessage: message, insufficientCredits: isInsufficientCredits })
+      } else {
+        set({ executionStatus: "failed", errorMessage: message, insufficientCredits: isInsufficientCredits })
+      }
     }
   },
 
-  cancel: async () => {
-    const { executionId } = get()
+  cancel: async (runId?: string) => {
+    // Tolerate a bare onClick={cancel} (React passes the event): only a string
+    // is a real runId, otherwise fall back to the active run.
+    const rid = typeof runId === "string" ? runId : undefined
+    const targetRunId = rid ?? get().activeRunId
+    const executionId = targetRunId ? get().runtimes[targetRunId]?.executionId ?? null : get().executionId
     if (!executionId) return
-    clearPollTimeout()
-    set({ executionStatus: "failed", errorMessage: "Cancelled" })
+    clearPoller(executionId)
+    if (targetRunId) {
+      patchRuntime(set, get, targetRunId, { status: "failed", errorMessage: "Cancelled" })
+    } else {
+      set({ executionStatus: "failed", errorMessage: "Cancelled" })
+    }
     try {
       await cancelWorkflowExecution(executionId)
     } catch {
@@ -246,11 +354,14 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
   },
 
   deleteRun: async (runId: string) => {
-    const { slug, runs, activeRunId } = get()
+    const { slug, runs, activeRunId, runtimes } = get()
     if (!slug) return
     try {
       await deleteAppRun(slug, runId)
-      set({ runs: runs.filter((r) => r.id !== runId) })
+      clearPoller(runtimes[runId]?.executionId)
+      const nextRuntimes = { ...runtimes }
+      delete nextRuntimes[runId]
+      set({ runs: runs.filter((r) => r.id !== runId), runtimes: nextRuntimes })
       if (activeRunId === runId) {
         get().newRun()
       }
@@ -259,11 +370,16 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
     }
   },
 
-  resumeExecution: (executionId: string) => {
-    clearPollTimeout()
-    set({ executionId, executionStatus: "running", errorMessage: null })
-    startPolling(set, get)
-    computeProgressSegments(set, get).catch(() => {})
+  resumeExecution: (executionId: string, runId?: string) => {
+    const targetRunId = runId ?? get().activeRunId
+    if (!targetRunId) return
+    // Re-point the active run + project its runtime onto the flat mirror FIRST,
+    // so selecting an already-polling concurrent run still updates split-view.
+    if (runId) set({ activeRunId: runId })
+    patchRuntime(set, get, targetRunId, { executionId, status: "running", errorMessage: null })
+    if (pollers.has(executionId)) return // already polling — just re-pointed + mirrored
+    startPolling(set, get, targetRunId)
+    computeProgressSegments(set, get, targetRunId).catch(() => {})
   },
 
   setSelectedVersion: (version: number | null) => {
@@ -281,7 +397,7 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
   },
 
   reset: () => {
-    clearPollTimeout()
+    clearAllPollers()
     set({
       app: null,
       slug: null,
@@ -290,6 +406,7 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
       runs: [],
       runsLoading: false,
       activeRunId: null,
+      runtimes: {},
       executionId: null,
       executionStatus: "idle",
       nodeStates: {},
@@ -347,44 +464,54 @@ export function createBridgedRun(
   }
 }
 
+/**
+ * Poll one run's execution to completion, writing into runtimes[runId]. The
+ * timeout is registered in `pollers` keyed by executionId so concurrent runs
+ * each keep their own poll loop. The runId→executionId binding is re-checked on
+ * every tick so a stale response (run replaced/re-fired) is discarded.
+ */
 function startPolling(
   set: (partial: Partial<AppRunnerState>) => void,
   get: () => AppRunnerState,
+  runId: string,
 ) {
+  const executionId = get().runtimes[runId]?.executionId
+  if (!executionId) return
+
   const poll = async () => {
-    const { executionId, executionStatus } = get()
-    if (!executionId || executionStatus !== "running") return
+    const rt = get().runtimes[runId]
+    if (!rt || rt.executionId !== executionId || rt.status !== "running") return
 
     try {
       const status = await getAppExecutionStatus(executionId)
 
-      // Guard: if the execution changed while the request was in flight, discard
-      if (get().executionId !== executionId) return
+      // Guard: discard if this run's execution changed while in flight.
+      if (get().runtimes[runId]?.executionId !== executionId) return
 
       const nodeStates = (status.node_states ?? {}) as Record<string, NodeState>
-
-      set({
+      patchRuntime(set, get, runId, {
         nodeStates,
         completedNodes: status.completed_nodes,
         totalNodes: status.total_nodes,
       })
 
-      // Calculate combined progress for each visible output node
-      const { progressSegments } = get()
-      if (Object.keys(progressSegments).length > 0) {
+      // Combined progress from THIS run's segments (per-run avoids the
+      // output-node-id collision between concurrent same-app runs).
+      const segs = get().runtimes[runId]?.progressSegments ?? {}
+      if (Object.keys(segs).length > 0) {
         const combined: Record<string, number> = {}
-        for (const [visibleId, segs] of Object.entries(progressSegments)) {
+        for (const [visibleId, s] of Object.entries(segs)) {
           combined[visibleId] = calculateCombinedProgress(
-            segs,
+            s,
             nodeStates as Record<string, { status: "pending" | "running" | "completed" | "failed" | "skipped"; startedAt?: string }>,
           )
         }
-        set({ combinedProgress: combined })
+        patchRuntime(set, get, runId, { combinedProgress: combined })
       }
 
       if (status.status === "completed") {
-        set({ executionStatus: "completed" })
-        // Refresh runs list
+        patchRuntime(set, get, runId, { status: "completed" })
+        clearPoller(executionId)
         const { slug } = get()
         if (slug) {
           getAppRuns(slug).then(({ data }) => set({ runs: data })).catch(() => {})
@@ -392,30 +519,33 @@ function startPolling(
         return
       }
       if (status.status === "failed" || status.status === "cancelled") {
-        set({
-          executionStatus: "failed",
+        patchRuntime(set, get, runId, {
+          status: "failed",
           errorMessage: status.error_message ?? "Execution failed",
         })
+        clearPoller(executionId)
         return
       }
 
-      pollTimeoutId = setTimeout(poll, 2000)
+      pollers.set(executionId, setTimeout(poll, 2000))
     } catch (err) {
-      // Guard: if the execution changed, don't report error for stale request
-      if (get().executionId !== executionId) return
-      set({
-        executionStatus: "failed",
+      // Guard: discard error for a stale/replaced execution.
+      if (get().runtimes[runId]?.executionId !== executionId) return
+      patchRuntime(set, get, runId, {
+        status: "failed",
         errorMessage: err instanceof Error ? err.message : "Connection lost",
       })
+      clearPoller(executionId)
     }
   }
 
-  pollTimeoutId = setTimeout(poll, 1000)
+  pollers.set(executionId, setTimeout(poll, 1000))
 }
 
 async function computeProgressSegments(
   set: (partial: Partial<AppRunnerState>) => void,
   get: () => AppRunnerState,
+  runId: string,
 ) {
   const { app } = get()
   if (!app) return
@@ -476,7 +606,7 @@ async function computeProgressSegments(
     return out
   }
 
-  set({ progressSegments: buildSegments({}) })
+  patchRuntime(set, get, runId, { progressSegments: buildSegments({}) })
 
   const nodeMap = new Map(nodes.map(n => [n.id, n]))
   const estimateRequests = Array.from(allAncestorIds).map(nodeId => {
@@ -492,5 +622,7 @@ async function computeProgressSegments(
   })
 
   const estimates = await batchExecutionEstimates(estimateRequests)
-  set({ progressSegments: buildSegments(estimates) })
+  // Discard if the run was replaced/cleared while estimates were in flight.
+  if (!get().runtimes[runId]) return
+  patchRuntime(set, get, runId, { progressSegments: buildSegments(estimates) })
 }

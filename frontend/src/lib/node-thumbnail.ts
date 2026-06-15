@@ -135,9 +135,11 @@ export interface NodeConfigChip {
 /** Max picker value chips shown before collapsing the rest into a `+N` chip. */
 const MAX_PICKER_CHIPS = 4
 
-/** Value field map for the handful of simple parameter nodes that are NOT in
- *  the picker registry (no catalog) — their single meaningful scalar. Keeps
- *  the summary deterministic rather than guessing field names. */
+/** Per-type fallback: a node whose ONLY meaningful config is a single field
+ *  with an ambiguous name we don't want to scan globally (`mode`, `field`,
+ *  `separator`, `type`, …) — so it's keyed by node type instead. Fires only
+ *  when the global field scan produced nothing. Keeps the summary deterministic
+ *  rather than guessing field names. */
 const SIMPLE_PARAM_FIELDS: Readonly<
   Record<string, { readonly field: string; readonly prefix?: string; readonly suffix?: string; readonly snippet?: boolean }>
 > = {
@@ -146,6 +148,71 @@ const SIMPLE_PARAM_FIELDS: Readonly<
   motion: { field: "motion" },
   "style-guide": { field: "text", snippet: true },
   "text-prompt": { field: "text", snippet: true },
+  // Utility / control-flow nodes — their lone config field has a generic name,
+  // so it's scoped here per-type rather than scanned across every node.
+  "combine-text": { field: "separator" },
+  "split-text": { field: "separator" },
+  "extract-field": { field: "field" },
+  "json-process": { field: "mode" },
+  "suno-separate": { field: "type" },
+  "image-to-text": { field: "detailLevel" },
+  "manual-edit": { field: "mode" },
+  "merge-lists": { field: "mode" },
+  "sort-list": { field: "field" },
+  deduplicate: { field: "field" },
+  reduce: { field: "strategyId" },
+  "web-scrape": { field: "url", snippet: true },
+  "rss-feed": { field: "feedUrl", snippet: true },
+  "upload-audio": { field: "filename", snippet: true },
+  "extract-frame": { field: "timestamp", suffix: "s" },
+}
+
+/** A well-known config field scanned across every non-picker node, in display
+ *  order. The first present field in `fields` yields one chip; `render` shapes
+ *  the value (and may return undefined to skip — e.g. a count of 1). ONE entry
+ *  here covers that field for every node type that uses the name, so new nodes
+ *  reusing these conventional fields are summarized with no per-type code. */
+interface ConfigFieldSpec {
+  readonly key: string
+  readonly fields: readonly string[]
+  readonly icon?: "ratio"
+  readonly render?: (value: string | number) => string | undefined
+}
+
+const CONFIG_FIELDS: readonly ConfigFieldSpec[] = [
+  // Aspect ratio: generator `aspectRatio`, aspect-ratio node `ratio`, resize `targetAspect`.
+  { key: "aspect", fields: ["aspectRatio", "ratio", "targetAspect"], icon: "ratio" },
+  { key: "resolution", fields: ["resolution", "quality"] },
+  { key: "upscale", fields: ["upscaleFactor"], render: (v) => `${v}×` },
+  // Duration in seconds — duration node (`seconds`), video generators (`duration`),
+  // composition/FX nodes (`durationSeconds`), split-media (`chunkDuration`).
+  {
+    key: "duration",
+    fields: ["seconds", "duration", "durationSeconds", "chunkDuration"],
+    render: (v) => (typeof v === "number" && v > 0 ? `${v}s` : undefined),
+  },
+  { key: "fps", fields: ["fps"], render: (v) => (typeof v === "number" && v > 0 ? `${v} fps` : undefined) },
+  { key: "voice", fields: ["voiceName", "voiceId", "voiceLabel"] },
+  { key: "language", fields: ["language", "targetLanguage"] },
+  { key: "style", fields: ["style"], render: (v) => (typeof v === "string" ? snippet(v, 24) : undefined) },
+  { key: "voiceDesc", fields: ["voiceDescription"], render: (v) => (typeof v === "string" ? snippet(v, 28) : undefined) },
+  { key: "platform", fields: ["platform"] },
+  { key: "format", fields: ["format", "codec"] },
+  { key: "versions", fields: ["versions"], render: (v) => (typeof v === "number" && v > 1 ? `${v} versions` : undefined) },
+  { key: "repeat", fields: ["repeatCount"], render: (v) => (typeof v === "number" && v > 1 ? `× ${v}` : undefined) },
+]
+
+/** First field in `fields` whose value is a non-empty string or finite number. */
+function firstFieldValue(
+  data: Record<string, unknown>,
+  fields: readonly string[],
+): string | number | undefined {
+  for (const f of fields) {
+    const v = data[f]
+    if (typeof v === "string" && v.trim().length > 0) return v
+    if (typeof v === "number" && Number.isFinite(v)) return v
+  }
+  return undefined
 }
 
 function asIdArray(value: unknown): string[] {
@@ -161,17 +228,33 @@ export function snippet(text: string, max = 48): string {
   return trimmed.length > max ? `${trimmed.slice(0, max - 1)}…` : trimmed
 }
 
+/** Build the capped catalog-label chips for a picker's selected ids, collapsing
+ *  the overflow into a `+N` chip. Shared by the single- and multi-dim branches. */
+function pickerChips(ids: readonly string[], labels: ReadonlyMap<string, string>): NodeConfigChip[] {
+  const chips: NodeConfigChip[] = ids
+    .slice(0, MAX_PICKER_CHIPS)
+    .map((id, i) => ({ key: `pick-${i}`, value: labels.get(id) ?? id }))
+  if (ids.length > MAX_PICKER_CHIPS) {
+    chips.push({ key: "more", value: `+${ids.length - MAX_PICKER_CHIPS}` })
+  }
+  return chips
+}
+
 /**
  * Resolves a node's meaningful configuration into compact chips, shared by the
  * canvas search modal and the handle (connect) popover so both surfaces show
  * the same data.
  *
  * - Parameter pickers: selected id(s) → catalog labels, resolved through the
- *   picker registry's OWN catalog (single source of truth — new pickers work
- *   automatically). Handles `string | string[]`, caps at `MAX_PICKER_CHIPS`.
- * - Generators / media: provider (or "N models"), model, aspect ratio,
- *   resolution/quality, duration, voice, repeat count.
- * - Simple param nodes (scene-count, tone, …): their single scalar value.
+ *   picker registry's OWN catalog (single source of truth — new pickers AND
+ *   drifted multi-picker dimensions work automatically). `string | string[]`,
+ *   capped at `MAX_PICKER_CHIPS`.
+ * - Generators / media / everything else: provider (or "N models") / model, then
+ *   the `CONFIG_FIELDS` registry (aspect, resolution, duration, fps, voice,
+ *   language, style, platform, format, …) — one ordered list scanned for every
+ *   node, so coverage is data-driven rather than per-type.
+ * - Per-type fallback (`SIMPLE_PARAM_FIELDS`): a node whose only config is one
+ *   ambiguously-named field (scene-count, tone, separator, mode, …).
  */
 export function getNodeConfigSummary(node: WorkflowNode | undefined): NodeConfigChip[] {
   if (!node?.type) return []
@@ -180,68 +263,63 @@ export function getNodeConfigSummary(node: WorkflowNode | undefined): NodeConfig
   // ── Parameter pickers: resolve selected ids → labels via the catalog ──
   const meta = getParameterPickerMeta(node.type)
   if (meta) {
-    const labels = new Map<string, string>()
     if (meta.kind === "single") {
-      for (const e of meta.entries) labels.set(e.id, e.label)
-    } else {
-      for (const e of meta.catalogEntries) labels.set(e.id, e.label)
+      const labels = new Map(meta.entries.map((e) => [e.id, e.label] as const))
+      return pickerChips(asIdArray(data[meta.valueField]), labels)
     }
+    // Multi-dim picker. The flattened catalog is the single source of truth for
+    // "this id is a configured dimension", so resolve selected values through it
+    // rather than trusting the registry's hand-listed `fields` to be complete:
+    // read the declared fields first (stable, intended order), THEN any OTHER
+    // data key whose value resolves to a catalog label. That second pass picks
+    // up dimensions the `fields` array has drifted behind (styling's
+    // outfit/top/bottom, lighting's colorTemperature, …) with zero per-picker
+    // maintenance.
+    const labels = new Map(meta.catalogEntries.map((e) => [e.id, e.label] as const))
     const ids: string[] = []
-    if (meta.kind === "single") {
-      ids.push(...asIdArray(data[meta.valueField]))
-    } else {
-      for (const field of meta.fields) ids.push(...asIdArray(data[field]))
+    const seen = new Set<string>()
+    const add = (raw: unknown, gated: boolean) => {
+      for (const id of asIdArray(raw)) {
+        if (seen.has(id) || (gated && !labels.has(id))) continue
+        seen.add(id)
+        ids.push(id)
+      }
     }
-    const chips: NodeConfigChip[] = ids
-      .slice(0, MAX_PICKER_CHIPS)
-      .map((id, i) => ({ key: `pick-${i}`, value: labels.get(id) ?? id }))
-    if (ids.length > MAX_PICKER_CHIPS) {
-      chips.push({ key: "more", value: `+${ids.length - MAX_PICKER_CHIPS}` })
-    }
-    return chips
+    const declared = new Set(meta.fields)
+    for (const field of meta.fields) add(data[field], false)
+    for (const key of Object.keys(data)) if (!declared.has(key)) add(data[key], true)
+    return pickerChips(ids, labels)
   }
 
   // ── Generators / media / simple params ──
   const out: NodeConfigChip[] = []
 
+  // Provider/model: bespoke "N models" collapse for multi-provider nodes; else
+  // the single provider; else a model id (`model`, or the LLM nodes' `llmModel`).
   const provider = typeof data.provider === "string" ? data.provider : undefined
   const providers = Array.isArray(data.providers) ? (data.providers as string[]) : undefined
+  const model =
+    (typeof data.model === "string" && data.model) ||
+    (typeof data.llmModel === "string" && data.llmModel) ||
+    undefined
   if (providers && providers.length > 1) {
     out.push({ key: "provider", value: `${providers.length} models` })
   } else if (provider) {
     out.push({ key: "provider", value: provider })
-  } else if (typeof data.model === "string" && data.model) {
-    out.push({ key: "model", value: data.model })
+  } else if (model) {
+    out.push({ key: "model", value: model })
   }
 
-  // Aspect ratio: generator `aspectRatio`, or the aspect-ratio node's `ratio`.
-  const aspect =
-    (typeof data.aspectRatio === "string" && data.aspectRatio) ||
-    (typeof data.ratio === "string" && data.ratio) ||
-    undefined
-  if (aspect) out.push({ key: "aspect", value: aspect, icon: "ratio" })
-
-  if (typeof data.resolution === "string" && data.resolution) {
-    out.push({ key: "resolution", value: data.resolution })
-  } else if (typeof data.quality === "string" && data.quality) {
-    out.push({ key: "quality", value: data.quality })
+  // Well-known config fields, scanned in display order (single source of truth
+  // for which fields surface, across all node types — see CONFIG_FIELDS).
+  for (const spec of CONFIG_FIELDS) {
+    const v = firstFieldValue(data, spec.fields)
+    if (v === undefined) continue
+    const value = spec.render ? spec.render(v) : String(v)
+    if (value) out.push({ key: spec.key, value, icon: spec.icon })
   }
 
-  // Duration: a `seconds`/`duration` number (duration node + video generators).
-  const seconds =
-    typeof data.seconds === "number" ? data.seconds : typeof data.duration === "number" ? data.duration : undefined
-  if (typeof seconds === "number" && seconds > 0) out.push({ key: "duration", value: `${seconds}s` })
-
-  const voice =
-    (typeof data.voiceName === "string" && data.voiceName) ||
-    (typeof data.voiceId === "string" && data.voiceId) ||
-    undefined
-  if (voice) out.push({ key: "voice", value: voice })
-
-  const repeat = data.repeatCount as number | undefined
-  if (typeof repeat === "number" && repeat > 1) out.push({ key: "repeat", value: `× ${repeat}` })
-
-  // Simple single-value param nodes not covered above.
+  // Per-type fallback for ambiguous single-field nodes, only if nothing matched.
   if (out.length === 0) {
     const simple = SIMPLE_PARAM_FIELDS[node.type]
     if (simple) {

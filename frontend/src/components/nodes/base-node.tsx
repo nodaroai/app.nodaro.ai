@@ -2,7 +2,7 @@
 
 import { memo, useState, useEffect, useRef, useCallback, type ReactNode, type MouseEvent, type PointerEvent as ReactPointerEvent } from "react"
 import { Handle, Position, NodeToolbar, useUpdateNodeInternals, NodeResizeControl } from "@xyflow/react"
-import { Plus } from "lucide-react"
+import { Settings } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { NODE_TITLE_TYPOGRAPHY } from "@/lib/node-title-style"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -306,12 +306,10 @@ function BaseNodeComponent({
   const newNodeIds = useWorkflowStore((s) => s.newNodeIds)
   const clearNewNode = useWorkflowStore((s) => s.clearNewNode)
   const isEditing = useWorkflowStore((s) => s.selectedNodeId === id)
-  // On-canvas directional "+" buttons (§7): shown on hover OR on the single
-  // focused node. Gated on `focusedNodeId === id` (NOT the `selected` prop) so a
-  // box-select doesn't render the buttons on every selected node at once.
+  // On-canvas settings button (right of the node): toggles this node's config
+  // panel. Shown on hover / when this is the single focused node / while open.
   const isFocusedNode = useWorkflowStore((s) => s.focusedNodeId === id)
-  const isReadOnly = useWorkflowStore((s) => s.isReadOnly)
-  const openDirectionalAdd = useWorkflowStore((s) => s.openDirectionalAdd)
+  const selectNode = useWorkflowStore((s) => s.selectNode)
   const logicalW = visualW != null ? visualW / zoom : undefined
   const logicalH = visualH != null ? visualH / zoom : undefined
   const isNew = newNodeIds.has(id)
@@ -675,34 +673,29 @@ function BaseNodeComponent({
       ))}
 
       </div>
-      {/* Directional add "+" buttons (§7): on the focused node, just outside its
-          left (upstream — feeds this node) and right (downstream — uses this
-          node's output) edges. Open the popup filtered to compatible nodes —
-          the same entry as Shift+Tab / Tab. */}
-      {(isHovered || isFocusedNode) && !isReadOnly && !isMobile && openDirectionalAdd &&
-        (["upstream", "downstream"] as const).map((dir) => (
-          <button
-            key={dir}
-            type="button"
-            aria-label={dir === "upstream" ? "Add a node that feeds this one" : "Add a node that uses this one's output"}
-            title={dir === "upstream" ? "Add an upstream node (Shift+Tab)" : "Add a downstream node (Tab)"}
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation()
-              openDirectionalAdd({ nodeId: id, direction: dir })
-            }}
-            className={cn(
-              // Neutral card-colored circle (not the brand accent), sized + offset
-              // clear of the 28px handle hit-area so it doesn't override the handles.
-              "nodrag absolute top-1/2 -translate-y-1/2 z-40 flex items-center justify-center w-9 h-9 rounded-full",
-              "bg-card border border-border text-muted-foreground shadow-sm",
-              "hover:bg-accent hover:text-foreground transition-colors",
-              dir === "upstream" ? "-left-14" : "-right-14",
-            )}
-          >
-            <Plus className="w-[18px] h-[18px]" />
-          </button>
-        ))}
+      {/* Settings button (right of the node): toggles this node's config-panel
+          sidebar. Brand pink while open, neutral card while closed — mirrors the
+          editor toolbar's settings toggle. */}
+      {(isHovered || isFocusedNode || isEditing) && !isMobile && (
+        <button
+          type="button"
+          aria-label={isEditing ? "Close settings" : "Open settings"}
+          title={isEditing ? "Close settings" : "Open settings"}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation()
+            selectNode(isEditing ? null : id)
+          }}
+          className={cn(
+            "nodrag absolute top-1/2 -translate-y-1/2 -right-14 z-40 flex items-center justify-center w-9 h-9 rounded-full border shadow-sm transition-colors",
+            isEditing
+              ? "bg-[#ff0073] border-[#ff0073] text-white hover:bg-[#e0006a]"
+              : "bg-card border-border text-muted-foreground hover:bg-accent hover:text-foreground",
+          )}
+        >
+          <Settings className="w-[18px] h-[18px]" />
+        </button>
+      )}
       {/* Bottom-corner controls. Parameter nodes (cinematography) and any
           node that opts in via `enableZoomHandle` get the zoom magnifier on
           one corner + a single resize dot on the other (Alt-swappable). All

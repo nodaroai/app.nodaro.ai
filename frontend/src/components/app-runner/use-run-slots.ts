@@ -38,6 +38,26 @@ function applySlotToPresentation(slot: Pick<RunSlot, "inputValues" | "nodeStates
   }
 }
 
+/** First completed-output media URL for a run's nodeStates (prefer thumbnailNodeId, else first media). */
+function extractSlotThumbnail(
+  nodeStates: Record<string, { output?: Record<string, unknown> }>,
+  thumbNodeId: string | null | undefined,
+): string | null {
+  const extractUrl = (output: Record<string, unknown> | undefined): string | null => {
+    const url = (output?.url ?? output?.imageUrl ?? output?.videoUrl ?? output?.audioUrl ?? output?.resultUrl) as string | undefined
+    return url && isMediaUrl(url) ? url : null
+  }
+  if (thumbNodeId && nodeStates[thumbNodeId]) {
+    const u = extractUrl(nodeStates[thumbNodeId].output)
+    if (u) return u
+  }
+  for (const state of Object.values(nodeStates)) {
+    const u = extractUrl(state.output)
+    if (u) return u
+  }
+  return null
+}
+
 interface UseRunSlotsOptions {
   slug: string | undefined
   user: { id: string } | null
@@ -60,12 +80,14 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
   // activeSlot is computed after allSlots is built (below)
   const [deleteConfirmSlotId, setDeleteConfirmSlotId] = useState<string | null>(null)
 
-  // App runner store
+  // App runner store. The flat fields mirror the ACTIVE run (→ presentation
+  // store for split-view); `runtimes` carries EVERY concurrent run's live state
+  // and is fanned out onto its slot below.
   const executionStatus = useAppRunnerStore((s) => s.executionStatus)
   const nodeStates = useAppRunnerStore((s) => s.nodeStates)
   const completedNodes = useAppRunnerStore((s) => s.completedNodes)
   const totalNodes = useAppRunnerStore((s) => s.totalNodes)
-  const storeExecutionId = useAppRunnerStore((s) => s.executionId)
+  const runtimes = useAppRunnerStore((s) => s.runtimes)
   const appRun = useAppRunnerStore((s) => s.run)
   const newRun = useAppRunnerStore((s) => s.newRun)
   const app = useAppRunnerStore((s) => s.app)
@@ -247,49 +269,47 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
   }, [app, user, slug, runsLoaded, persistRuns]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync execution state: app runner store -> presentation store + active slot
-  // Guard: skip entirely when Original slot is active — its data is static snapshot
+  // Mirror the ACTIVE run's execution state onto the presentation store so the
+  // split-view modes (horizontal / vertical / fullscreen) keep rendering it.
   useEffect(() => {
     if (activeSlotId === ORIGINAL_SLOT_ID) return
-
     usePresentationStore.setState({ executionStatus, nodeStates, completedNodes, totalNodes })
-
-    if (activeSlotId) {
-      const mapped = toSlotStatus(executionStatus)
-      // Extract thumbnail when execution completes — prefer thumbnailNodeId, fall back to first media
-      let thumbnailUrl: string | null = null
-      if (mapped === "completed" && nodeStates) {
-        const thumbNodeId = app?.thumbnailNodeId
-        const extractUrl = (output: Record<string, unknown> | undefined): string | null => {
-          const url = (output?.url ?? output?.imageUrl ?? output?.videoUrl ?? output?.audioUrl ?? output?.resultUrl) as string | undefined
-          return url && isMediaUrl(url) ? url : null
-        }
-        if (thumbNodeId && nodeStates[thumbNodeId]) {
-          thumbnailUrl = extractUrl(nodeStates[thumbNodeId].output)
-        }
-        if (!thumbnailUrl) {
-          for (const state of Object.values(nodeStates)) {
-            thumbnailUrl = extractUrl(state.output)
-            if (thumbnailUrl) break
-          }
-        }
-      }
-      setSlots((prev) => prev.map((s) => {
-        if (s.id !== activeSlotId) return s
-        // Skip update when nothing changed to avoid unnecessary re-renders
-        if (s.nodeStates === nodeStates && s.executionStatus === mapped && s.completedNodes === completedNodes && s.totalNodes === totalNodes && !thumbnailUrl) return s
-        return { ...s, nodeStates: nodeStates as Record<string, RunSlotNodeState>, executionStatus: mapped, completedNodes, totalNodes, ...(thumbnailUrl ? { thumbnailUrl } : {}) }
-      }))
-    }
   }, [executionStatus, nodeStates, completedNodes, totalNodes, activeSlotId])
 
-  // Sync executionId to active slot (guard: skip Original)
+  // Fan out EVERY in-flight run's runtime onto its slot, so concurrent runs each
+  // update their own thread message. A slot with no runtime (a terminal run
+  // loaded from the DB) is left untouched — never clobbered with empty state.
   useEffect(() => {
-    if (activeSlotId && activeSlotId !== ORIGINAL_SLOT_ID && storeExecutionId) {
-      setSlots((prev) => prev.map((s) =>
-        s.id === activeSlotId ? { ...s, executionId: storeExecutionId } : s,
-      ))
-    }
-  }, [storeExecutionId, activeSlotId])
+    if (Object.keys(runtimes).length === 0) return
+    const thumbNodeId = app?.thumbnailNodeId
+    setSlots((prev) => prev.map((slot) => {
+      if (slot.id === ORIGINAL_SLOT_ID) return slot
+      const rt = runtimes[slot.id]
+      if (!rt) return slot
+      const mapped = toSlotStatus(rt.status)
+      // Thumbnail is write-once — skip the per-tick media scan once a slot has one
+      // (also keeps the identity guard below armed for a completed run).
+      const thumbnailUrl = mapped === "completed" && !slot.thumbnailUrl ? extractSlotThumbnail(rt.nodeStates, thumbNodeId) : null
+      const execId = rt.executionId ?? slot.executionId
+      if (
+        slot.nodeStates === rt.nodeStates &&
+        slot.executionStatus === mapped &&
+        slot.completedNodes === rt.completedNodes &&
+        slot.totalNodes === rt.totalNodes &&
+        slot.executionId === execId &&
+        !thumbnailUrl
+      ) return slot
+      return {
+        ...slot,
+        nodeStates: rt.nodeStates as Record<string, RunSlotNodeState>,
+        executionStatus: mapped,
+        completedNodes: rt.completedNodes,
+        totalNodes: rt.totalNodes,
+        executionId: execId,
+        ...(thumbnailUrl ? { thumbnailUrl } : {}),
+      }
+    }))
+  }, [runtimes, app?.thumbnailNodeId])
 
   // Wire run action — saves slot inputs before running, passes runId to backend
   const activeSlotIdRef = useRef(activeSlotId)
@@ -464,7 +484,7 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
     // Set app runner store — changing executionId causes poll guard to
     // discard any in-flight responses from a previous execution
     if (slot.executionId && slot.executionStatus === "running") {
-      useAppRunnerStore.getState().resumeExecution(slot.executionId)
+      useAppRunnerStore.getState().resumeExecution(slot.executionId, slot.id)
     } else {
       useAppRunnerStore.setState({
         activeRunId: slotId,

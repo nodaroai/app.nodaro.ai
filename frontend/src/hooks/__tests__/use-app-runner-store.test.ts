@@ -9,16 +9,24 @@ vi.mock("@/lib/api", async (importOriginal) => {
     getAppRuns: vi.fn(),
     getAppExecutionStatus: vi.fn(),
     deleteAppRun: vi.fn(),
+    cancelWorkflowExecution: vi.fn(),
   }
 })
 
-import { useAppRunnerStore } from "../use-app-runner-store"
+import { useAppRunnerStore, type RunRuntime } from "../use-app-runner-store"
 import {
   getPublishedApp,
   runPublishedApp,
   getAppRuns,
+  getAppExecutionStatus,
   deleteAppRun,
+  cancelWorkflowExecution,
 } from "@/lib/api"
+
+const runtimeFixture = (over: Partial<RunRuntime> = {}): RunRuntime => ({
+  executionId: null, status: "idle", nodeStates: {}, completedNodes: 0, totalNodes: 0,
+  errorMessage: null, insufficientCredits: false, progressSegments: {}, combinedProgress: {}, ...over,
+})
 
 afterEach(() => {
   useAppRunnerStore.getState().reset()
@@ -448,6 +456,131 @@ describe("useAppRunnerStore", () => {
       const state = useAppRunnerStore.getState()
       expect(state.inputValues.node_1).toEqual({ prompt: "hello" })
       expect(state.inputValues.node_2).toEqual({ text: "world" })
+    })
+  })
+
+  describe("concurrent runs", () => {
+    it("keeps two in-flight runs isolated — launching B does not stop A", async () => {
+      vi.mocked(runPublishedApp)
+        .mockResolvedValueOnce({ executionId: "exA", runId: "rA" } as never)
+        .mockResolvedValueOnce({ executionId: "exB", runId: "rB" } as never)
+      vi.mocked(getAppExecutionStatus).mockResolvedValue(
+        { status: "running", node_states: {}, completed_nodes: 0, total_nodes: 2 } as never,
+      )
+      useAppRunnerStore.setState({ slug: "my-app" })
+
+      await useAppRunnerStore.getState().run("rA")
+      await useAppRunnerStore.getState().run("rB")
+
+      const s = useAppRunnerStore.getState()
+      // Both runs are still live, each bound to its own execution.
+      expect(s.getRunState("rA").status).toBe("running")
+      expect(s.getRunState("rB").status).toBe("running")
+      expect(s.getRunState("rA").executionId).toBe("exA")
+      expect(s.getRunState("rB").executionId).toBe("exB")
+      // The flat mirror reflects the most-recently-launched (active) run.
+      expect(s.activeRunId).toBe("rB")
+      expect(s.executionId).toBe("exB")
+    })
+
+    it("per-run combinedProgress does not collide on a shared output-node id", () => {
+      useAppRunnerStore.setState({
+        activeRunId: "rB",
+        runtimes: {
+          rA: runtimeFixture({ status: "running", combinedProgress: { out1: 25 } }),
+          rB: runtimeFixture({ status: "running", combinedProgress: { out1: 80 } }),
+        },
+      })
+      // Same output-node id, independent values — the whole reason for per-run maps.
+      expect(useAppRunnerStore.getState().getRunState("rA").combinedProgress.out1).toBe(25)
+      expect(useAppRunnerStore.getState().getRunState("rB").combinedProgress.out1).toBe(80)
+    })
+
+    it("getRunState returns an empty runtime for an unknown run", () => {
+      expect(useAppRunnerStore.getState().getRunState("nope").status).toBe("idle")
+    })
+  })
+
+  describe("cancel", () => {
+    it("cancels ONLY the targeted run, leaving a concurrent run untouched", async () => {
+      vi.mocked(cancelWorkflowExecution).mockResolvedValue(undefined as never)
+      useAppRunnerStore.setState({
+        activeRunId: "rB",
+        runtimes: {
+          rA: runtimeFixture({ status: "running", executionId: "exA" }),
+          rB: runtimeFixture({ status: "running", executionId: "exB" }),
+        },
+      })
+
+      await useAppRunnerStore.getState().cancel("rA")
+
+      const s = useAppRunnerStore.getState()
+      expect(s.getRunState("rA").status).toBe("failed")
+      expect(s.getRunState("rA").errorMessage).toBe("Cancelled")
+      expect(s.getRunState("rB").status).toBe("running") // untouched
+      expect(cancelWorkflowExecution).toHaveBeenCalledWith("exA")
+      expect(cancelWorkflowExecution).toHaveBeenCalledTimes(1)
+    })
+
+    it("falls back to the active run when handed a bare onClick event (regression)", async () => {
+      vi.mocked(cancelWorkflowExecution).mockResolvedValue(undefined as never)
+      useAppRunnerStore.setState({
+        activeRunId: "rB",
+        runtimes: { rB: runtimeFixture({ status: "running", executionId: "exB" }) },
+      })
+
+      // React passes the SyntheticEvent as the first arg of onClick={cancel}.
+      await useAppRunnerStore.getState().cancel({ type: "click" } as never)
+
+      expect(cancelWorkflowExecution).toHaveBeenCalledWith("exB")
+      expect(useAppRunnerStore.getState().getRunState("rB").status).toBe("failed")
+    })
+  })
+
+  describe("polling lifecycle", () => {
+    afterEach(() => vi.useRealTimers())
+
+    it("clears a run's poller when it completes — no leaked timer", async () => {
+      vi.useFakeTimers()
+      vi.mocked(runPublishedApp).mockResolvedValue({ executionId: "ex1", runId: "r1" } as never)
+      vi.mocked(getAppRuns).mockResolvedValue({ data: [] } as never)
+      vi.mocked(getAppExecutionStatus).mockResolvedValue(
+        { status: "completed", node_states: {}, completed_nodes: 1, total_nodes: 1 } as never,
+      )
+      useAppRunnerStore.setState({ slug: "my-app" })
+
+      await useAppRunnerStore.getState().run("r1")
+      await vi.advanceTimersByTimeAsync(1100) // first poll → completed → clearPoller
+      expect(useAppRunnerStore.getState().getRunState("r1").status).toBe("completed")
+
+      const callsAfterComplete = vi.mocked(getAppExecutionStatus).mock.calls.length
+      await vi.advanceTimersByTimeAsync(5000) // no further polls should fire
+      expect(vi.mocked(getAppExecutionStatus).mock.calls.length).toBe(callsAfterComplete)
+    })
+
+    it("discards a stale poll after the run is re-fired with a new execution", async () => {
+      vi.useFakeTimers()
+      vi.mocked(getAppRuns).mockResolvedValue({ data: [] } as never)
+      // First poll for ex1 is slow; resolve it AFTER the run is re-fired to ex2.
+      let resolveSlow: (v: unknown) => void = () => {}
+      vi.mocked(getAppExecutionStatus).mockImplementationOnce(
+        () => new Promise((r) => { resolveSlow = r }) as never,
+      )
+      vi.mocked(runPublishedApp).mockResolvedValue({ executionId: "ex1", runId: "r1" } as never)
+      useAppRunnerStore.setState({ slug: "my-app" })
+
+      await useAppRunnerStore.getState().run("r1")
+      await vi.advanceTimersByTimeAsync(1100) // fires the slow poll for ex1 (pending)
+
+      // Re-fire r1 with a new execution before the slow poll resolves.
+      useAppRunnerStore.setState((s) => ({
+        runtimes: { ...s.runtimes, r1: { ...s.runtimes.r1, executionId: "ex2" } },
+      }) as never)
+
+      // The slow ex1 poll now resolves with bogus progress — must be DISCARDED.
+      resolveSlow({ status: "running", node_states: {}, completed_nodes: 99, total_nodes: 99 })
+      await Promise.resolve()
+      expect(useAppRunnerStore.getState().getRunState("r1").completedNodes).not.toBe(99)
     })
   })
 

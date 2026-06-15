@@ -41,9 +41,9 @@ describe("ComposerBar", () => {
     expect(screen.getByRole("button", { name: /Launch/ })).toBeDisabled()
   })
 
-  it("shows Running… and disables Launch while a run is in flight", () => {
+  it("shows Launching… and disables Launch while a launch is being set up", () => {
     setup({ isRunning: true })
-    const btn = screen.getByRole("button", { name: /Running/ })
+    const btn = screen.getByRole("button", { name: /Launching/ })
     expect(btn).toBeDisabled()
   })
 

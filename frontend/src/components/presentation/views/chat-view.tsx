@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
-import { ChevronDown, ChevronUp, Download, Loader2, Music, RotateCcw } from "lucide-react"
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { ChevronDown, ChevronUp, Download, Loader2, Music, RotateCcw, Square } from "lucide-react"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useAppRunnerStore } from "@/hooks/use-app-runner-store"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
@@ -36,6 +36,9 @@ interface ChatViewProps {
   allInputsFilled?: boolean
 }
 
+/** Stable empty progress map for runs with no live runtime (avoids a new {} per render). */
+const EMPTY_PROGRESS: Record<string, number> = {}
+
 function toOutputStatus(nodeStatus: RunSlotNodeState["status"] | undefined, slotStatus: RunSlot["executionStatus"]): OutputStatus {
   switch (nodeStatus) {
     case "completed": return "completed"
@@ -68,25 +71,27 @@ export function ChatView({
   needsMoreCredits,
   allInputsFilled,
 }: ChatViewProps) {
-  const execStatus = useAppRunnerStore((s) => s.executionStatus)
-  const combinedProgress = useAppRunnerStore((s) => s.combinedProgress)
+  // Per-run live execution state — each thread message reads its OWN run's
+  // progress, so concurrent runs don't share a single (colliding) progress map.
+  const runtimes = useAppRunnerStore((s) => s.runtimes)
+  const cancel = useAppRunnerStore((s) => s.cancel)
   const run = usePresentationStore((s) => s.run)
   const nodes = usePresentationStore((s) => s.nodes)
   const edges = usePresentationStore((s) => s.edges)
   const inputValues = usePresentationStore((s) => s.inputValues)
 
-  const isRunning = execStatus === "running" || execStatus === "loading"
   const slots = runSlots?.slots ?? []
   const messages = getThreadMessages(slots)
 
   // The result viewer (a frozen run + the clicked node). Opened from a message.
   const [viewer, setViewer] = useState<{ slot: RunSlot; nodeId: string } | null>(null)
 
-  // Auto-scroll to the newest message.
+  // Auto-scroll when a NEW run message appears (not on every progress tick —
+  // that would fight a user who scrolled up to read an earlier run mid-stream).
   const bottomRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     bottomRef.current?.scrollIntoView?.({ behavior: "smooth" })
-  }, [messages.length, execStatus])
+  }, [messages.length])
 
   const [expandedSteps, setExpandedSteps] = useState<Set<string>>(new Set())
   const toggleSteps = (id: string) => {
@@ -98,9 +103,22 @@ export function ChatView({
     })
   }
 
-  const handleLaunch = () => {
-    if (isRunning) return
-    ;(launch ?? run)()
+  // Concurrent runs: Launch is NOT blocked by in-flight runs — `launching` is a
+  // transient guard against double-firing the SAME draft while its run is set up.
+  // The ref makes the guard synchronous (a stale `launching` closure would let a
+  // rapid second click through and double-charge the run).
+  const launchingRef = useRef(false)
+  const [launching, setLaunching] = useState(false)
+  const handleLaunch = async () => {
+    if (launchingRef.current) return
+    launchingRef.current = true
+    setLaunching(true)
+    try {
+      await (launch ?? run)()
+    } finally {
+      launchingRef.current = false
+      setLaunching(false)
+    }
   }
 
   // Stable across renders so OutputCard's memo holds for terminal messages
@@ -146,8 +164,9 @@ export function ChatView({
                 outputNodes={orderedOutputNodes}
                 nodes={nodes}
                 edges={edges}
-                combinedProgress={combinedProgress}
+                combinedProgress={runtimes[slot.id]?.combinedProgress ?? EMPTY_PROGRESS}
                 onOpenResult={openResult}
+                onStop={() => cancel(slot.id)}
                 onReuse={() => runSlots?.handleDuplicateSlot(slot.id)}
                 stepsExpanded={expandedSteps.has(slot.id)}
                 onToggleSteps={() => toggleSteps(slot.id)}
@@ -165,7 +184,7 @@ export function ChatView({
             inputNodes={orderedInputNodes}
             inputValues={inputValues}
             renderInputCard={renderInputCard}
-            isRunning={isRunning}
+            isRunning={launching}
             costLabel={costLabel ?? ""}
             allInputsFilled={allInputsFilled ?? true}
             needsMoreCredits={needsMoreCredits ?? false}
@@ -200,6 +219,7 @@ interface ChatMessageProps {
   edges: WorkflowEdge[]
   combinedProgress: Record<string, number>
   onOpenResult: (slot: RunSlot, nodeId: string) => void
+  onStop: () => void
   onReuse: () => void
   stepsExpanded: boolean
   onToggleSteps: () => void
@@ -213,11 +233,17 @@ function ChatMessage({
   edges,
   combinedProgress,
   onOpenResult,
+  onStop,
   onReuse,
   stepsExpanded,
   onToggleSteps,
 }: ChatMessageProps) {
-  const chips = buildStepChips(nodes, edges, outputNodes.map((n) => n.id), slot.nodeStates)
+  // Memoized: the graph is stable and slot.nodeStates keeps its identity for a
+  // terminal message (fan-out skip-guard), so only the running message recomputes.
+  const chips = useMemo(
+    () => buildStepChips(nodes, edges, outputNodes.map((n) => n.id), slot.nodeStates),
+    [nodes, edges, outputNodes, slot.nodeStates],
+  )
   const isRunning = slot.executionStatus === "running"
   const isDone = slot.executionStatus === "completed"
 
@@ -328,6 +354,11 @@ function ChatMessage({
           )}
 
           <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+            {isRunning && (
+              <button type="button" onClick={onStop} className="inline-flex items-center gap-1 text-red-600 hover:text-red-700">
+                <Square className="h-3 w-3" fill="currentColor" /> Stop
+              </button>
+            )}
             <button type="button" onClick={onReuse} className="inline-flex items-center gap-1 hover:text-foreground">
               <RotateCcw className="h-3 w-3" /> Re-use inputs
             </button>

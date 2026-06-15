@@ -5,7 +5,7 @@ describe("buildPortraitPrompt person/wardrobe injection", () => {
   it("appends derived person + wardrobe hints into the seed clause", () => {
     const out = buildPortraitPrompt({
       seedPrompt: "cinematic headshot",
-      person: { build: "athletic" },          // real bare id from person.ts:378
+      person: { frame: "frame-slim" },         // real bare id from person.ts (Frame: Slim)
       wardrobe: { archetype: "wd-formal" },
     })
     expect(out).toContain("cinematic headshot")

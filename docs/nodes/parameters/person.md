@@ -1,23 +1,23 @@
 # Person
 
-> Multi-dim picker for 21 person attributes (type, age, ethnicity, regional aesthetic, build, face shape, hair, eyes, skin, features, ...) totaling 547 catalog options. Emits a detailed person-description prompt fragment.
+> Multi-dim picker for 25 person attributes (type, age, ethnicity, regional aesthetic, body — frame, mass, bust, waist, hips, silhouette — face shape, hair, eyes, skin, features, ...) totaling 546 catalog options. Emits a detailed person-description prompt fragment.
 
 ## Overview
 
-The Person parameter node composes a full person description by combining up to 21 independent attribute dimensions. This is the deepest picker in the registry — built for generating recurring characters, casting briefs, or detailed portraiture. Wired to an AI image/video node's `cinematography` handle. Each sub-field is optional; empty fields are dropped silently.
+The Person parameter node composes a full person description by combining up to 25 independent attribute dimensions. This is the deepest picker in the registry — built for generating recurring characters, casting briefs, or detailed portraiture. Wired to an AI image/video node's `cinematography` handle. Each sub-field is optional; empty fields are dropped silently.
 
 ## Compact vs Detailed view
 
-The picker opens in **Compact** view by default: the 21 dimensions collapse into six labelled sections — **Identity**, **Body**, **Face**, **Hair**, **Skin & Eyes**, **Features** — each rendered as a row of grouped pills. Clicking a pill opens a popover with the rich option tiles for that dimension. A header toggle switches to **Detailed** view, which is the full inline tile-grid (one section per dimension, every option visible at once). The toggle is available everywhere the picker appears: the config side-panel, the config full-screen, and a published app's input card.
+The picker opens in **Compact** view by default: the 25 dimensions collapse into six labelled sections — **Identity**, **Body**, **Face**, **Hair**, **Skin & Eyes**, **Features** — each rendered as a row of grouped pills. Clicking a pill opens a popover with the rich option tiles for that dimension. A header toggle switches to **Detailed** view, which is the full inline tile-grid (one section per dimension, every option visible at once). The toggle is available everywhere the picker appears: the config side-panel, the config full-screen, and a published app's input card.
 
 The chosen mode is a **per-device preference** (persisted in `localStorage`, default Compact) — it changes only how the picker renders. It does **not** affect the saved value or the emitted prompt fragment: Compact and Detailed write the exact same `PersonValue` and compose the identical clause.
 
-## Configuration (21 sub-fields)
+## Configuration (25 sub-fields)
 
 | Group | Sub-fields |
 |---|---|
 | **Identity** | `type`, `age`, `ethnicity`, `regionalAesthetic` |
-| **Body** | `build`, `bodyProportions` |
+| **Body** | `frame`, `bodyMass`, `bust`, `waist`, `hips`, `silhouette` |
 | **Face structure** | `faceShape`, `jawline` |
 | **Eyes** | `eyeShape`, `eyeColor`, `eyeState` |
 | **Nose / Lips** | `nose`, `lips`, `lipState` |
@@ -36,7 +36,7 @@ Each sub-field has its own catalog of options. Example values:
 
 ## Catalog
 
-547 catalog options distributed across the 21 fields. The picker UI splits each dimension into its own tab/section for navigation.
+546 catalog options distributed across the 25 fields. The picker UI splits each dimension into its own tab/section for navigation.
 
 ## Inputs & Outputs
 

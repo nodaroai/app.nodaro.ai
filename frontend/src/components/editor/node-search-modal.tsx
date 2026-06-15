@@ -176,22 +176,23 @@ export function NodeSearchModal({ open, onClose }: NodeSearchModalProps) {
     // Hoist the focused node's handle sets out of the per-row loop — they depend
     // only on its type, and `hits` re-runs on every connect/disconnect.
     const focusedHandles = focusedNode ? focusedNodeHandles(focusedNode.type) : undefined
-    const list: NodeSearchHit[] = []
-    for (const n of nodes as WorkflowNode[]) {
-      if (!n.type) continue
-      if (n.type === "sticky-note") continue
-
-      if (tokens.length > 0) {
-        const haystack = buildSearchHaystack(n)
-        if (!tokens.every((t) => haystack.includes(t))) continue
+    // Node ids with a LIVE edge to/from the focused node — the ground truth for
+    // "already connected" (independent of connector enumeration). Drives the
+    // top-of-list ranking so wired neighbours surface first.
+    const connectedIds = new Set<string>()
+    if (focusedNode) {
+      for (const e of edges) {
+        if (e.source === focusedNode.id) connectedIds.add(e.target)
+        else if (e.target === focusedNode.id) connectedIds.add(e.source)
       }
+    }
 
+    const makeHit = (n: WorkflowNode): NodeSearchHit => {
       const data = (n.data ?? {}) as Record<string, unknown>
       const label =
         (typeof data.label === "string" && data.label.trim().length > 0
           ? data.label
           : typeLabel(n.type)) as string
-
       const connectors =
         focusedNode && focusedNode.id !== n.id
           ? getNodeConnectors(
@@ -206,8 +207,7 @@ export function NodeSearchModal({ open, onClose }: NodeSearchModalProps) {
       // Partition into From/To ONCE here (memoized), so the render path reads
       // hit.from / hit.to instead of re-splitting on every keystroke/selection.
       const { from, to } = partitionConnectors(connectors)
-
-      list.push({
+      return {
         node: n,
         thumbnailUrl: getNodeThumbnailUrl(n),
         videoUrl: getNodeVideoUrl(n),
@@ -219,20 +219,40 @@ export function NodeSearchModal({ open, onClose }: NodeSearchModalProps) {
         connectors,
         from,
         to,
-      })
+      }
     }
-    // Connectable rows (≥1 valid connector to the focused node) float to the
-    // top. V8's sort is stable, so search ranking is preserved within each
-    // group; the focused node itself has no self-connectors and sorts down.
-    list.sort((a, b) => (b.connectors.length > 0 ? 1 : 0) - (a.connectors.length > 0 ? 1 : 0))
-    // Then pin the currently-focused node to the very top (with its "Here"
-    // badge) so the user always sees where they are — overrides the
-    // connectable-first ordering above for that one row.
-    if (currentlyFocusedNodeId) {
-      const idx = list.findIndex((h) => h.node.id === currentlyFocusedNodeId)
+
+    const list: NodeSearchHit[] = []
+    for (const n of nodes as WorkflowNode[]) {
+      if (!n.type) continue
+      if (n.type === "sticky-note") continue
+      if (tokens.length > 0) {
+        const haystack = buildSearchHaystack(n)
+        if (!tokens.every((t) => haystack.includes(t))) continue
+      }
+      list.push(makeHit(n))
+    }
+
+    // Rank rows: already-connected to the focused node first, then connectable
+    // (a valid wire exists), then the rest. V8's sort is stable, so search
+    // ranking is preserved within each tier. The focused node itself has no
+    // self-connectors and isn't in connectedIds, so it sorts down here — then
+    // gets pinned to the very top below.
+    const rank = (h: NodeSearchHit) =>
+      connectedIds.has(h.node.id) ? 2 : h.connectors.length > 0 ? 1 : 0
+    list.sort((a, b) => rank(b) - rank(a))
+
+    // Keep the currently-focused node ("Here") pinned to the very top and always
+    // present as the connector anchor — even when the active query filters it
+    // out (inject it back). The render marks this row sticky so it stays visible
+    // while the rest of the list scrolls underneath.
+    if (focusedNode) {
+      const idx = list.findIndex((h) => h.node.id === focusedNode.id)
       if (idx > 0) {
         const [pinned] = list.splice(idx, 1)
         list.unshift(pinned)
+      } else if (idx === -1) {
+        list.unshift(makeHit(focusedNode))
       }
     }
     return list.slice(0, 50)
@@ -450,9 +470,18 @@ export function NodeSearchModal({ open, onClose }: NodeSearchModalProps) {
                     }}
                     className={cn(
                       "w-full flex items-center gap-2 px-4 py-2.5 transition-colors",
+                      // The focused "Here" row stays pinned + visible at the top
+                      // while the rest of the list scrolls underneath. It needs an
+                      // opaque background so scrolled rows don't bleed through.
+                      isCanvasFocused &&
+                        "sticky top-0 z-20 border-b border-[#E2E8F0] dark:border-[#2D2D2D]",
                       // onMouseEnter moves selection, so `isActive` IS the hover
                       // visual — no separate hover:bg (avoids double-highlight).
-                      isActive && "bg-[#F1F5F9] dark:bg-[#2D2D2D]",
+                      // active bg and the focused row's opaque base are mutually
+                      // exclusive so the two `bg-*` utilities never conflict.
+                      isActive
+                        ? "bg-[#F1F5F9] dark:bg-[#2D2D2D]"
+                        : isCanvasFocused && "bg-white dark:bg-[#1E1E1E]",
                     )}
                   >
                     <button

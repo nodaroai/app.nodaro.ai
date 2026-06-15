@@ -17,8 +17,8 @@ import { STYLINGS, FRAMINGS, LENSES, CAMERA_FORMATS } from "../index.js"
 describe("buildPickerAnalyzerSpec(person)", () => {
   const spec = buildPickerAnalyzerSpec("person")
 
-  it("covers all 29 dimensions with the correct field + limit", () => {
-    expect(spec.dimensions).toHaveLength(29)
+  it("covers all 33 dimensions with the correct field + limit", () => {
+    expect(spec.dimensions).toHaveLength(33)
     for (const d of spec.dimensions) {
       expect(PERSON_FIELD_BY_DIMENSION[d.dimension]).toBe(d.field)
       expect(d.limit).toBe(getPersonDimensionLimit(d.dimension))
