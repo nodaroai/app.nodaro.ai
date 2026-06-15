@@ -1653,7 +1653,8 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
               </button>
             )}
 
-            {isRunning ? (
+            {/* In chat, the composer's Launch + per-message Stop replace the header Run/Stop. */}
+            {viewMode !== "chat" && (isRunning ? (
               <button
                 type="button"
                 onClick={onCancel}
@@ -1694,7 +1695,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                   </>
                 )
               )
-            )}
+            ))}
 
             {/* Remix: create editable copy (only when app creator enabled it) */}
             {appSupportsRemix && (
@@ -2036,7 +2037,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
             </button>
           )}
 
-          {isRunning ? (
+          {viewMode !== "chat" && (isRunning ? (
             <button
               type="button"
               onClick={onCancel}
@@ -2072,7 +2073,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                 </button>
               )
             )
-          )}
+          ))}
 
           {appSupportsRemix && (
             <button

@@ -4,7 +4,7 @@ import type { RunSlot } from "@/components/app-runner/types"
 import type { WorkflowNode } from "@/types/nodes"
 
 const state = vi.hoisted(() => ({
-  appRunner: { executionStatus: "idle" as string, combinedProgress: {} as Record<string, number> },
+  appRunner: { runtimes: {} as Record<string, { combinedProgress: Record<string, number> }>, cancel: vi.fn() },
   presentation: {
     run: vi.fn(),
     nodes: [] as unknown[],
@@ -48,7 +48,7 @@ const baseProps: any = {
 }
 
 beforeEach(() => {
-  state.appRunner = { executionStatus: "idle", combinedProgress: {} }
+  state.appRunner = { runtimes: {}, cancel: vi.fn() }
   state.presentation = { run: vi.fn(), nodes: [], edges: [], inputValues: {}, updateInputValue: vi.fn() }
 })
 
@@ -68,11 +68,35 @@ describe("ChatView", () => {
     expect(state.presentation.run).toHaveBeenCalledTimes(1)
   })
 
-  it("locks the composer (disabled Launch → Running) while a run is in flight", () => {
-    state.appRunner = { executionStatus: "running", combinedProgress: {} }
+  it("shows a per-message Stop on a running run and cancels THAT run", () => {
+    const cancel = vi.fn()
+    state.appRunner = { runtimes: { r1: { combinedProgress: {} } }, cancel }
+    const runSlots = {
+      slots: [slot({ id: "r1", executionStatus: "running", inputValues: { t: { text: "go" } } })],
+      activeSlotId: "r1", handleCreateNew: vi.fn(), handleDuplicateSlot: vi.fn(), handleSelectSlot: vi.fn(),
+    }
+    render(<ChatView {...baseProps} runSlots={runSlots} />)
+    fireEvent.click(screen.getByRole("button", { name: /stop/i }))
+    expect(cancel).toHaveBeenCalledWith("r1")
+  })
+
+  it("ignores a second Launch click while the first is still being set up (no double-charge)", () => {
+    let resolveLaunch = () => {}
+    const launch = vi.fn(() => new Promise<void>((r) => { resolveLaunch = r }))
+    render(<ChatView {...baseProps} launch={launch} />)
+    const btn = screen.getByRole("button", { name: /launch/i })
+    fireEvent.click(btn)
+    fireEvent.click(btn) // second click during the in-flight setup window
+    expect(launch).toHaveBeenCalledTimes(1)
+    resolveLaunch()
+  })
+
+  it("keeps the composer enabled while runs are in flight (concurrent launches)", () => {
+    // A run for "r1" is live in the runtimes map; the composer must NOT lock —
+    // the user can launch another run concurrently.
+    state.appRunner = { runtimes: { r1: { combinedProgress: { out: 40 } } }, cancel: vi.fn() }
     render(<ChatView {...baseProps} />)
-    const btn = screen.getByRole("button", { name: /running/i })
-    expect(btn).toBeDisabled()
+    expect(screen.getByRole("button", { name: /launch/i })).toBeEnabled()
   })
 
   it("renders a thread message for a launched slot", () => {
@@ -91,11 +115,9 @@ describe("ChatView", () => {
       slots: [slot({ id: "r1", executionStatus: "running" })],
       activeSlotId: "r1", handleCreateNew: vi.fn(), handleDuplicateSlot: vi.fn(), handleSelectSlot: vi.fn(),
     }
-    // A terminal transition must NOT auto-duplicate the slot anymore.
-    state.appRunner = { executionStatus: "running", combinedProgress: {} }
-    const { rerender } = render(<ChatView {...baseProps} runSlots={runSlots} launch={launch} />)
-    state.appRunner = { executionStatus: "completed", combinedProgress: {} }
-    rerender(<ChatView {...baseProps} runSlots={runSlots} launch={launch} />)
+    state.appRunner = { runtimes: { r1: { combinedProgress: {} } }, cancel: vi.fn() }
+    render(<ChatView {...baseProps} runSlots={runSlots} launch={launch} />)
+    // A live run must NOT auto-duplicate the slot anymore.
     expect(runSlots.handleDuplicateSlot).not.toHaveBeenCalled()
     // Launch routes to launch(), not run().
     fireEvent.click(screen.getByRole("button", { name: /launch/i }))

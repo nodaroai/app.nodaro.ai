@@ -17,8 +17,9 @@ interface ComposerBarProps {
 
 /**
  * The chat composer: a wrapping row of input chips + a Launch button that shows
- * the credit cost. Launch is disabled while a run is in flight (single-run) or
- * when required inputs are missing.
+ * the credit cost. `isRunning` is a transient "this launch is being set up" flag
+ * (guards a double-fire of the same draft) — NOT "a run is executing", since runs
+ * are concurrent. Launch is disabled during that window or when inputs are missing.
  */
 export function ComposerBar({
   inputNodes,
@@ -53,7 +54,7 @@ export function ComposerBar({
         >
           {isRunning ? (
             <>
-              <Loader2 className="h-4 w-4 animate-spin" /> Running…
+              <Loader2 className="h-4 w-4 animate-spin" /> Launching…
             </>
           ) : (
             <>
