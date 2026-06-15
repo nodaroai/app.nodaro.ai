@@ -560,30 +560,8 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
     }
   }, [slug, persistRuns])
 
-  // Navigate between runs with up/down arrow keys (global)
-  useEffect(() => {
-    if (allSlots.length === 0) return
-    const handler = (e: KeyboardEvent) => {
-      // Don't capture when typing in an input/textarea/select
-      const tag = (e.target as HTMLElement)?.tagName
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return
-      if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return
-
-      e.preventDefault()
-      const currentIndex = activeSlotId ? allSlots.findIndex((s) => s.id === activeSlotId) : -1
-
-      let nextIndex: number
-      if (e.key === "ArrowDown") {
-        nextIndex = currentIndex < allSlots.length - 1 ? currentIndex + 1 : 0
-      } else {
-        nextIndex = currentIndex > 0 ? currentIndex - 1 : allSlots.length - 1
-      }
-
-      handleSelectSlot(allSlots[nextIndex].id)
-    }
-    document.addEventListener("keydown", handler)
-    return () => document.removeEventListener("keydown", handler)
-  }, [allSlots, activeSlotId, handleSelectSlot])
+  // (Run navigation via up/down arrows lives in FullscreenView only — see
+  // fullscreen-view.tsx. A global handler here hijacked the chat composer.)
 
   // Smart close: desktop=collapse, mobile=hide
   const handleCloseSidebar = useCallback(() => {
