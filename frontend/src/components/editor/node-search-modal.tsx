@@ -5,7 +5,7 @@ import { useReactFlow } from "@xyflow/react"
 import { Search, X, Cpu, MapPin } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { CachedImage } from "@/components/ui/cached-image"
-import { getNodeThumbnailUrl, getNodeVideoUrl, getNodePickerVisual } from "@/lib/node-thumbnail"
+import { getNodeThumbnailUrl, getNodeVideoUrl, getNodePickerVisual, getNodeConfigSummary } from "@/lib/node-thumbnail"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useClickOutside } from "@/hooks/use-click-outside"
 import { NODE_DEF_MAP, type WorkflowNode } from "@/types/nodes"
@@ -91,33 +91,11 @@ function buildSearchHaystack(node: WorkflowNode): string {
     typeof data.style === "string" ? data.style : undefined,
     typeof data.value === "string" ? data.value : undefined,
     typeof data.text === "string" ? data.text : undefined,
+    // Selected picker values (resolved to catalog labels) so a node is
+    // findable by what it holds — e.g. typing "calm" finds the Mood node.
+    getNodeConfigSummary(node).map((c) => c.value).join(" "),
   ]
   return parts.filter((p): p is string => !!p && p.length > 0).join("  ").toLowerCase()
-}
-
-function buildMetaChips(node: WorkflowNode): NodeSearchHit["metaChips"] {
-  const data = (node.data ?? {}) as Record<string, unknown>
-  const out: Array<{ key: string; value: string; icon?: "ratio" }> = []
-  const provider = typeof data.provider === "string" ? data.provider : undefined
-  const providers = Array.isArray(data.providers) ? (data.providers as string[]) : undefined
-  if (providers && providers.length > 1) {
-    out.push({ key: "provider", value: `${providers.length} models` })
-  } else if (provider) {
-    out.push({ key: "provider", value: provider })
-  } else if (typeof data.model === "string") {
-    out.push({ key: "model", value: data.model })
-  }
-  if (typeof data.aspectRatio === "string" && data.aspectRatio) {
-    out.push({ key: "aspect", value: data.aspectRatio, icon: "ratio" })
-  }
-  if (typeof data.resolution === "string" && data.resolution) {
-    out.push({ key: "resolution", value: data.resolution })
-  }
-  const repeat = data.repeatCount as number | undefined
-  if (typeof repeat === "number" && repeat > 1) {
-    out.push({ key: "repeat", value: `× ${repeat}` })
-  }
-  return out
 }
 
 /** Workflow-scoped node search modal. Cmd/Ctrl+F opens it. */
@@ -199,7 +177,7 @@ export function NodeSearchModal({ open, onClose }: NodeSearchModalProps) {
         label,
         typeLabel: typeLabel(n.type),
         prompt: typeof data.prompt === "string" ? data.prompt : undefined,
-        metaChips: buildMetaChips(n),
+        metaChips: getNodeConfigSummary(n),
       })
     }
     // Place the currently-focused node at the top of an empty query so
