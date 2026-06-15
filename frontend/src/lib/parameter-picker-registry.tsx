@@ -44,9 +44,9 @@ import { LOOP_SUBJECTS, LOOP_SUBJECT_CATEGORY_LABELS, LOOP_SUBJECT_CATEGORY_ORDE
 import { TRANSITIONS, TRANSITION_CATEGORY_LABELS, TRANSITION_CATEGORY_ORDER } from "@nodaro/shared"
 import { CHARACTER_FX, CHARACTER_FX_CATEGORY_LABELS, CHARACTER_FX_CATEGORY_ORDER } from "@nodaro/shared"
 import { FRAMINGS } from "@nodaro/shared"
-import { LIGHTINGS } from "@nodaro/shared"
-import { PEOPLE } from "@nodaro/shared"
-import { STYLINGS } from "@nodaro/shared"
+import { LIGHTINGS, LIGHTING_CATEGORY_ORDER, LIGHTING_FIELD_BY_CATEGORY } from "@nodaro/shared"
+import { PEOPLE, PERSON_DIMENSION_ORDER, PERSON_FIELD_BY_DIMENSION } from "@nodaro/shared"
+import { STYLINGS, STYLING_DIMENSION_ORDER, STYLING_FIELD_BY_DIMENSION } from "@nodaro/shared"
 import { TEMPORALS } from "@nodaro/shared"
 import { EXPOSURE_SETTINGS } from "@nodaro/shared"
 import {
@@ -463,6 +463,17 @@ const erase = <T,>(C: ComponentType<{ value: T; onChange: (patch: Partial<T>) =>
     className?: string
   }>
 
+// Derived from the canonical dimension/category order + field map (same source
+// the StylingPicker/LightingPicker/PersonPicker components and the
+// describe-to-picker analyzer use). Deriving (not hand-listing) means these can
+// never drift from the node-data shape — the published-app input card reads/
+// writes EXACTLY these fields, so a missing one silently drops that dimension.
+// Mirrors the shared picker-catalogs.ts derivation; `picker-catalogs-sync`
+// guards the two stay equal.
+const STYLING_FIELDS = STYLING_DIMENSION_ORDER.map((d) => STYLING_FIELD_BY_DIMENSION[d])
+const PERSON_FIELDS = PERSON_DIMENSION_ORDER.map((d) => PERSON_FIELD_BY_DIMENSION[d])
+const LIGHTING_FIELDS = LIGHTING_CATEGORY_ORDER.map((c) => LIGHTING_FIELD_BY_CATEGORY[c])
+
 export const MULTI_PICKERS: ReadonlyArray<MultiDimParameterPickerMeta> = [
   {
     kind: "multi",
@@ -477,7 +488,7 @@ export const MULTI_PICKERS: ReadonlyArray<MultiDimParameterPickerMeta> = [
     kind: "multi",
     nodeType: "lighting",
     label: "Lighting",
-    fields: ["timeOfDay", "lightingStyle", "lightingDirection"],
+    fields: LIGHTING_FIELDS,
     catalogId: "lighting",
     catalogEntries: flatCat(LIGHTINGS),
     Picker: erase(LightingPicker),
@@ -486,15 +497,7 @@ export const MULTI_PICKERS: ReadonlyArray<MultiDimParameterPickerMeta> = [
     kind: "multi",
     nodeType: "person",
     label: "Person",
-    fields: [
-      "type", "age", "ethnicity",
-      "frame", "bodyMass", "bust", "waist", "hips", "silhouette",
-      "faceShape", "jawline", "cheekbones", "facialFullness",
-      "eyeShape", "eyelidType", "canthalTilt", "eyeSpacing", "eyeSetBrow",
-      "nose", "noseTip", "lipFullness", "lipShape", "lipState",
-      "hairColor", "hairBase", "eyebrows", "skinTone", "skinTexture",
-      "eyeColor", "eyeState", "facialHair", "distinctiveFeature",
-    ],
+    fields: PERSON_FIELDS,
     catalogId: "person",
     catalogEntries: flatCat(PEOPLE),
     Picker: erase(PersonPicker),
@@ -503,10 +506,7 @@ export const MULTI_PICKERS: ReadonlyArray<MultiDimParameterPickerMeta> = [
     kind: "multi",
     nodeType: "styling",
     label: "Styling",
-    fields: [
-      "makeup", "eyewear", "headwear", "hairCut", "hairTreatment",
-      "jewelry", "nails", "facePaint", "fabric",
-    ],
+    fields: STYLING_FIELDS,
     catalogId: "styling",
     catalogEntries: flatCat(STYLINGS),
     Picker: erase(StylingPicker),

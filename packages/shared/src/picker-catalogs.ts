@@ -61,11 +61,11 @@ import { WEAPONS, WEAPON_SUBCATEGORY_LABELS, WEAPON_SUBCATEGORY_ORDER } from "./
 import { FURNITURE, FURNITURE_SUBCATEGORY_LABELS, FURNITURE_SUBCATEGORY_ORDER } from "./furniture.js"
 import { HELD_PROPS, HELD_PROP_CATEGORY_LABELS, HELD_PROP_CATEGORY_ORDER } from "./held-prop.js"
 import { FRAMINGS, FRAMING_FIELD_BY_CATEGORY, FRAMING_CATEGORY_LABELS } from "./framing.js"
-import { LIGHTINGS, LIGHTING_FIELD_BY_CATEGORY, LIGHTING_CATEGORY_LABELS } from "./lighting.js"
+import { LIGHTINGS, LIGHTING_FIELD_BY_CATEGORY, LIGHTING_CATEGORY_ORDER, LIGHTING_CATEGORY_LABELS } from "./lighting.js"
 import { TEMPORALS, TEMPORAL_FIELD_BY_CATEGORY, TEMPORAL_CATEGORY_LABELS } from "./temporal.js"
 import { EXPOSURE_SETTINGS, EXPOSURE_FIELD_BY_CATEGORY, EXPOSURE_CATEGORY_LABELS } from "./exposure-settings.js"
-import { PEOPLE, PERSON_FIELD_BY_DIMENSION, PERSON_DIMENSION_LABELS } from "./person.js"
-import { STYLINGS, STYLING_FIELD_BY_DIMENSION, STYLING_DIMENSION_LABELS } from "./styling.js"
+import { PEOPLE, PERSON_FIELD_BY_DIMENSION, PERSON_DIMENSION_ORDER, PERSON_DIMENSION_LABELS } from "./person.js"
+import { STYLINGS, STYLING_FIELD_BY_DIMENSION, STYLING_DIMENSION_ORDER, STYLING_DIMENSION_LABELS } from "./styling.js"
 import { MUSIC_GENRES, MUSIC_ERAS } from "./music-genre.js"
 import { MUSIC_ENERGIES, MUSIC_EMOTIONS, MUSIC_VIBES } from "./music-mood.js"
 import { INSTRUMENTS, PRODUCTION_STYLES, VOCAL_PRESENCE, SINGING_STYLES } from "./instrumentation.js"
@@ -588,20 +588,18 @@ const SINGLE_CATALOGS: readonly PickerCatalog[] = [
 // `frontend/src/lib/parameter-picker-registry.tsx`). Declared once and reused
 // for both `fields` and the `dimensions` builder so the two can never drift.
 const FRAMING_FIELDS = ["shotSize", "angle", "coverage", "composition", "vantage"] as const
-const LIGHTING_FIELDS = ["timeOfDay", "lightingStyle", "lightingDirection"] as const
-const PERSON_FIELDS = [
-  "type", "age", "ethnicity",
-  "frame", "bodyMass", "bust", "waist", "hips", "silhouette",
-  "faceShape", "jawline", "cheekbones", "facialFullness",
-  "eyeShape", "eyelidType", "canthalTilt", "eyeSpacing", "eyeSetBrow",
-  "nose", "noseTip", "lipFullness", "lipShape", "lipState",
-  "hairColor", "hairBase", "eyebrows", "skinTone", "skinTexture",
-  "eyeColor", "eyeState", "facialHair", "distinctiveFeature",
-] as const
-const STYLING_FIELDS = [
-  "makeup", "eyewear", "headwear", "hairCut", "hairTreatment",
-  "jewelry", "nails", "facePaint", "fabric",
-] as const
+// LIGHTING / PERSON / STYLING fields are DERIVED from the canonical
+// dimension/category order + field map — the SAME source the picker components
+// and the describe-to-picker analyzer already use. Deriving (not hand-listing)
+// means the app-input `fields`, the `dimensions` builder, and the mirrored
+// frontend registry can't drift from the actual node-data shape: a new
+// dimension in the catalog flows through automatically. (As hand-lists these
+// HAD drifted — styling omitted outfit/top/bottom/outerwear/legwear/footwear/
+// hairState/wardrobeState; lighting omitted lightingRatio/colorTemperature;
+// person omitted regionalAesthetic — so app-input cards silently dropped them.)
+const LIGHTING_FIELDS: ReadonlyArray<string> = LIGHTING_CATEGORY_ORDER.map((c) => LIGHTING_FIELD_BY_CATEGORY[c])
+const PERSON_FIELDS: ReadonlyArray<string> = PERSON_DIMENSION_ORDER.map((d) => PERSON_FIELD_BY_DIMENSION[d])
+const STYLING_FIELDS: ReadonlyArray<string> = STYLING_DIMENSION_ORDER.map((d) => STYLING_FIELD_BY_DIMENSION[d])
 const TEMPORAL_FIELDS = ["temporalSpeed", "temporalFreeze", "temporalDirection", "temporalShutter"] as const
 const EXPOSURE_FIELDS = ["aperture", "shutterSpeed", "isoValue"] as const
 const MUSIC_GENRE_FIELDS = ["genre", "subgenre", "era"] as const
