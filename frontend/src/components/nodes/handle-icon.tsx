@@ -3,9 +3,9 @@
 import { memo } from "react"
 import type { ReactNode } from "react"
 import { Handle, Position } from "@xyflow/react"
-import { Type, Image as ImageIcon, Film, Music } from "lucide-react"
 import type { AggregateableType } from "@nodaro/shared"
 import { AGGREGATE_HANDLE_COLORS } from "./handle-colors"
+import { handleTypeIcon } from "@/lib/handle-type-icon"
 
 const COLOR_MAP = {
   cyan: { bg: "bg-[#38BDF8]", shadow: "shadow-sky-500/30" },
@@ -66,21 +66,13 @@ interface AggregateHandleIconProps {
   readonly top: string
 }
 
-// Icon per aggregate type, resolved at render time (not module scope) so that
-// the lucide-react bindings are only dereferenced when this component actually
-// renders — partial lucide mocks in unrelated node tests transitively import
-// this module and would otherwise throw on missing icon exports.
+// Icon per aggregate type — delegates to the shared `handleTypeIcon` (the
+// single source of truth for connection-type icons) so the aggregate handle pip
+// and the in-search connector pill can't diverge. `handleTypeIcon` also defers
+// its lucide derefs to call time, preserving the render-time-deref property
+// that keeps partial lucide mocks in unrelated node tests from throwing.
 function aggregateIcon(type: AggregateableType): ReactNode {
-  switch (type) {
-    case "text":
-      return <Type />
-    case "image":
-      return <ImageIcon />
-    case "video":
-      return <Film />
-    case "audio":
-      return <Music />
-  }
+  return handleTypeIcon(type)
 }
 
 interface AggregateHandleVisualProps {

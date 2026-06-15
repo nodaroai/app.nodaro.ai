@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { useReactFlow } from "@xyflow/react"
-import { Search, X, Cpu, MapPin } from "lucide-react"
+import { Search, X, Cpu, MapPin, ArrowLeft, ArrowRight, ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { CachedImage } from "@/components/ui/cached-image"
-import { getNodeThumbnailUrl, getNodeVideoUrl, getNodePickerVisual, getNodeConfigSummary, snippet } from "@/lib/node-thumbnail"
-import { getNodeConnectors, focusedNodeHandles, type NodeConnector } from "@/lib/node-connectors"
+import { getNodeThumbnailUrl, getNodeVideoUrl, getNodePickerVisual, getNodeConfigSummary } from "@/lib/node-thumbnail"
+import { getNodeConnectors, focusedNodeHandles, partitionConnectors, type NodeConnector } from "@/lib/node-connectors"
+import { handleTypeIcon } from "@/lib/handle-type-icon"
 import { nearestNodeInDirection } from "@/lib/node-spatial-nav"
 import { focusNodeInViewport } from "@/lib/focus-node-in-viewport"
 import { optimizedImageUrl } from "@/lib/image"
@@ -14,19 +15,6 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useClickOutside } from "@/hooks/use-click-outside"
 import { type WorkflowNode } from "@/types/nodes"
 import { RatioIcon } from "./config-panels/aspect-ratio-selector"
-
-/** Short single-line snippet of a node's prompt/text content for the row's
- *  description (alongside the config chips). */
-function nodeSnippet(node: WorkflowNode): string | undefined {
-  const data = (node.data ?? {}) as Record<string, unknown>
-  const raw =
-    (typeof data.prompt === "string" && data.prompt) ||
-    (typeof data.text === "string" && data.text) ||
-    (typeof data.userInput === "string" && data.userInput) ||
-    (typeof data.systemPrompt === "string" && data.systemPrompt) ||
-    ""
-  return snippet(raw, 90) || undefined
-}
 
 interface NodeSearchModalProps {
   readonly open: boolean
@@ -41,11 +29,13 @@ interface NodeSearchHit {
   readonly label: string
   readonly typeLabel: string
   readonly prompt: string | undefined
-  readonly snippet: string | undefined
   readonly metaChips: ReadonlyArray<{ key: string; value: string; icon?: "ratio" }>
   /** Valid connectors between the focused canvas node and this row's node
-   *  (empty when no node is focused or none connect). */
+   *  (empty when no node is focused or none connect). `connectors` is the flat
+   *  From-first list (keyboard Tab order); `from`/`to` are the memoized split. */
   readonly connectors: ReadonlyArray<NodeConnector>
+  readonly from: ReadonlyArray<NodeConnector>
+  readonly to: ReadonlyArray<NodeConnector>
 }
 
 const NODE_TYPE_LABELS: Record<string, string> = {
@@ -148,6 +138,8 @@ export function NodeSearchModal({ open, onClose }: NodeSearchModalProps) {
   // Keyboard "connector mode": null = browsing the list; a number = the focused
   // connector index within the selected row's strip (Tab dives in, Esc/↑↓ exit).
   const [connectorIndex, setConnectorIndex] = useState<number | null>(null)
+  // Which multi-handle From/To group is mouse-expanded, as `${nodeId}:from|to`.
+  const [expandedDir, setExpandedDir] = useState<string | null>(null)
   const { setCenter, getNode } = useReactFlow()
 
   useEffect(() => {
@@ -155,6 +147,7 @@ export function NodeSearchModal({ open, onClose }: NodeSearchModalProps) {
     setQuery("")
     setSelectedIndex(0)
     setConnectorIndex(null)
+    setExpandedDir(null)
     mouseHasMovedRef.current = false
     requestAnimationFrame(() => inputRef.current?.focus())
     // Mouse-driven selection only activates after the user actually
@@ -199,6 +192,21 @@ export function NodeSearchModal({ open, onClose }: NodeSearchModalProps) {
           ? data.label
           : typeLabel(n.type)) as string
 
+      const connectors =
+        focusedNode && focusedNode.id !== n.id
+          ? getNodeConnectors(
+              { id: focusedNode.id, type: focusedNode.type },
+              { id: n.id, type: n.type },
+              edges,
+              // From/To buttons collapse handles, so allow more than the old
+              // compact-chip cap — the expanded list shows them all.
+              { focusedHandles, max: 8 },
+            )
+          : []
+      // Partition into From/To ONCE here (memoized), so the render path reads
+      // hit.from / hit.to instead of re-splitting on every keystroke/selection.
+      const { from, to } = partitionConnectors(connectors)
+
       list.push({
         node: n,
         thumbnailUrl: getNodeThumbnailUrl(n),
@@ -207,23 +215,26 @@ export function NodeSearchModal({ open, onClose }: NodeSearchModalProps) {
         label,
         typeLabel: typeLabel(n.type),
         prompt: typeof data.prompt === "string" ? data.prompt : undefined,
-        snippet: nodeSnippet(n),
         metaChips: getNodeConfigSummary(n),
-        connectors:
-          focusedNode && focusedNode.id !== n.id
-            ? getNodeConnectors(
-                { id: focusedNode.id, type: focusedNode.type },
-                { id: n.id, type: n.type },
-                edges,
-                { focusedHandles },
-              )
-            : [],
+        connectors,
+        from,
+        to,
       })
     }
     // Connectable rows (≥1 valid connector to the focused node) float to the
     // top. V8's sort is stable, so search ranking is preserved within each
     // group; the focused node itself has no self-connectors and sorts down.
     list.sort((a, b) => (b.connectors.length > 0 ? 1 : 0) - (a.connectors.length > 0 ? 1 : 0))
+    // Then pin the currently-focused node to the very top (with its "Here"
+    // badge) so the user always sees where they are — overrides the
+    // connectable-first ordering above for that one row.
+    if (currentlyFocusedNodeId) {
+      const idx = list.findIndex((h) => h.node.id === currentlyFocusedNodeId)
+      if (idx > 0) {
+        const [pinned] = list.splice(idx, 1)
+        list.unshift(pinned)
+      }
+    }
     return list.slice(0, 50)
   }, [open, nodes, edges, tokens, currentlyFocusedNodeId])
 
@@ -250,10 +261,21 @@ export function NodeSearchModal({ open, onClose }: NodeSearchModalProps) {
     [deleteEdge, onConnect],
   )
 
-  // Leaving a row exits its connector strip.
+  // Leaving a row exits its keyboard connector focus. `expandedDir` is keyed by
+  // node id AND gated on the active row at render, so a stale value can't expand
+  // the wrong row — leave it (clicking a connector also moves selectedIndex, and
+  // clearing it here would collapse the group the click just opened).
   useEffect(() => {
     setConnectorIndex(null)
   }, [selectedIndex])
+
+  // Re-targeting the focused node (Alt+←/→) recomputes every row's connectors,
+  // so a stale keyboard connector cursor (or mouse expansion) would point at the
+  // wrong connector / out of bounds. Reset both when the focused node changes.
+  useEffect(() => {
+    setConnectorIndex(null)
+    setExpandedDir(null)
+  }, [currentlyFocusedNodeId])
 
   // Window capture-phase keydown listener — fires BEFORE document-capture
   // listeners (workflow-canvas's neighbor-navigation + React Flow's
@@ -287,6 +309,13 @@ export function NodeSearchModal({ open, onClose }: NodeSearchModalProps) {
         key === "Escape" || key === "ArrowDown" || key === "ArrowUp" ||
         key === "ArrowRight" || key === "ArrowLeft" || key === "Enter" || key === "Tab"
       if (!interesting) return
+
+      const hit = hits[selectedIndex]
+      const connectors = hit?.connectors ?? []
+      // Tab with nothing to dive into: let it pass (don't trap focus / dead-end
+      // it) — return BEFORE consuming so default focus movement still works.
+      if (key === "Tab" && connectors.length === 0) return
+
       // Consume so arrow / Tab never leak to the canvas behind (no stray pan or
       // selection move) — the modal owns these keys while it's open. This also
       // removes the old ArrowRight "peek" that panned the canvas.
@@ -294,8 +323,6 @@ export function NodeSearchModal({ open, onClose }: NodeSearchModalProps) {
       e.stopPropagation()
       e.stopImmediatePropagation()
 
-      const hit = hits[selectedIndex]
-      const connectors = hit?.connectors ?? []
       const inConnectorMode = connectorIndex !== null
       const cycle = (delta: number) =>
         setConnectorIndex((ci) => (ci === null ? ci : (ci + delta + connectors.length) % connectors.length))
@@ -310,7 +337,6 @@ export function NodeSearchModal({ open, onClose }: NodeSearchModalProps) {
         setConnectorIndex(null)
         setSelectedIndex((i) => Math.max(i - 1, 0))
       } else if (key === "Tab") {
-        if (connectors.length === 0) return
         if (!inConnectorMode) setConnectorIndex(0)
         else cycle(e.shiftKey ? -1 : 1)
       } else if (key === "Enter") {
@@ -392,6 +418,27 @@ export function NodeSearchModal({ open, onClose }: NodeSearchModalProps) {
               hits.map((hit, i) => {
                 const isActive = i === selectedIndex
                 const isCanvasFocused = hit.node.id === currentlyFocusedNodeId
+                // From = result → focused (an INPUT of the focused node);
+                // To = focused → result (an OUTPUT of the focused node).
+                const fromGroup = hit.from
+                const toGroup = hit.to
+                const focusedConn = isActive && connectorIndex !== null ? hit.connectors[connectorIndex] : null
+                const focusedKey = focusedConn?.key ?? null
+                const fromKey = `${hit.node.id}:from`
+                const toKey = `${hit.node.id}:to`
+                // A group expands only on the ACTIVE row (no stale expansion left
+                // on inactive rows), via mouse (expandedDir) OR keyboard focus.
+                const groupExpanded = (group: ReadonlyArray<NodeConnector>, key: string) =>
+                  isActive &&
+                  group.length > 1 &&
+                  (expandedDir === key || (focusedConn != null && group.some((c) => c.key === focusedConn.key)))
+                const fromExpanded = groupExpanded(fromGroup, fromKey)
+                const toExpanded = groupExpanded(toGroup, toKey)
+                const onToggleConn = (c: NodeConnector) => {
+                  setSelectedIndex(i)
+                  setConnectorIndex(hit.connectors.findIndex((x) => x.key === c.key))
+                  toggleConnector(c)
+                }
                 return (
                   <div
                     key={hit.node.id}
@@ -473,50 +520,36 @@ export function NodeSearchModal({ open, onClose }: NodeSearchModalProps) {
                           ))}
                         </div>
                       )}
-                      {hit.snippet && (
-                        <div className="mt-0.5 text-[11px] text-[#94A3B8] dark:text-[#64748B] truncate">
-                          {hit.snippet}
-                        </div>
-                      )}
                     </div>
                     </button>
                     {hit.connectors.length > 0 && (
-                      <div className="flex items-center gap-1 shrink-0 pl-1 flex-wrap justify-end max-w-[46%]">
-                        {hit.connectors.map((c, ci) => {
-                          const isConnFocused = isActive && ci === connectorIndex
-                          return (
-                            <button
-                              key={c.key}
-                              type="button"
-                              title={`${c.connected ? "Disconnect" : "Connect"} ${c.label}`}
-                              aria-pressed={c.connected}
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setSelectedIndex(i)
-                                setConnectorIndex(ci)
-                                toggleConnector(c)
-                              }}
-                              className={cn(
-                                "flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10.5px] border transition-colors max-w-[120px]",
-                                c.connected
-                                  ? "bg-[#ff0073]/12 border-[#ff0073]/40 text-[#ff0073]"
-                                  : "border-[#E2E8F0] dark:border-[#3D3D3D] text-[#64748B] dark:text-[#94A3B8] hover:border-[#94A3B8]",
-                                isConnFocused && "ring-2 ring-[#ff0073]/70",
-                              )}
-                            >
-                              <span
-                                aria-hidden
-                                className="w-2 h-2 rounded-full shrink-0"
-                                style={
-                                  c.connected
-                                    ? { backgroundColor: c.color ?? "#ff0073" }
-                                    : { border: `1.5px solid ${c.color ?? "#94A3B8"}` }
-                                }
-                              />
-                              <span className="truncate">{c.label}</span>
-                            </button>
-                          )
-                        })}
+                      <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end max-w-[58%]">
+                        {fromGroup.length > 0 && (
+                          <ConnectorGroup
+                            dir="from"
+                            group={fromGroup}
+                            expanded={fromExpanded}
+                            focusedKey={focusedKey}
+                            onToggle={onToggleConn}
+                            onExpandToggle={() => {
+                              setSelectedIndex(i)
+                              setExpandedDir((p) => (p === fromKey ? null : fromKey))
+                            }}
+                          />
+                        )}
+                        {toGroup.length > 0 && (
+                          <ConnectorGroup
+                            dir="to"
+                            group={toGroup}
+                            expanded={toExpanded}
+                            focusedKey={focusedKey}
+                            onToggle={onToggleConn}
+                            onExpandToggle={() => {
+                              setSelectedIndex(i)
+                              setExpandedDir((p) => (p === toKey ? null : toKey))
+                            }}
+                          />
+                        )}
                       </div>
                     )}
                   </div>
@@ -625,6 +658,142 @@ function KbdHint({ keys, label }: { keys: string[]; label: string }) {
         </kbd>
       ))}
       {label}
+    </span>
+  )
+}
+
+/** From/To connector control for ONE direction of a result row (relative to the
+ *  focused node): `from` = wire that node INTO the focused node (its input),
+ *  `to` = wire the focused node's output INTO that node. A single handle toggles
+ *  directly; multiple handles collapse to a summary button that expands to a
+ *  per-handle toggle list. Arrow shows direction; the type icon + color mirror
+ *  the handle pip of the connection's type. */
+function ConnectorGroup({
+  dir,
+  group,
+  expanded,
+  focusedKey,
+  onToggle,
+  onExpandToggle,
+}: {
+  readonly dir: "from" | "to"
+  readonly group: ReadonlyArray<NodeConnector>
+  readonly expanded: boolean
+  readonly focusedKey: string | null
+  readonly onToggle: (c: NodeConnector) => void
+  readonly onExpandToggle: () => void
+}) {
+  const Arrow = dir === "from" ? ArrowLeft : ArrowRight
+  const dirLabel = dir === "from" ? "From" : "To"
+  const tip = dir === "from" ? "input from this node" : "output to this node"
+  const color = group[0]?.color
+  const typeIcon = handleTypeIcon(group[0]?.type)
+
+  const pill = (
+    key: string,
+    opts: {
+      connected: boolean
+      focused: boolean
+      label: string
+      title: string
+      // Distinct accessible name per pill — visible label is just "From"/"To"
+      // or a handle name, so without this every row's pill reads identically.
+      ariaLabel: string
+      onClick: () => void
+      leading: ReactNode
+      caret?: boolean
+      // A multi-handle summary is an expander, not a toggle, so it omits
+      // aria-pressed (its "any connected" state was misleading). Direct toggles
+      // (single handle / expanded chip) leave this false and get aria-pressed.
+      isExpander?: boolean
+    },
+  ) => (
+    <button
+      key={key}
+      type="button"
+      {...(opts.isExpander ? {} : { "aria-pressed": opts.connected })}
+      aria-label={opts.ariaLabel}
+      title={opts.title}
+      onClick={(e) => {
+        e.stopPropagation()
+        opts.onClick()
+      }}
+      className={cn(
+        "flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10.5px] border transition-colors max-w-[140px]",
+        opts.connected
+          ? "bg-[#ff0073]/12 border-[#ff0073]/45 text-[#ff0073]"
+          : "border-[#E2E8F0] dark:border-[#3D3D3D] text-[#64748B] dark:text-[#94A3B8] hover:border-[#94A3B8]",
+        opts.focused && "ring-2 ring-[#ff0073]/70",
+      )}
+    >
+      {opts.leading}
+      <span className="truncate" aria-hidden>{opts.label}</span>
+      {opts.caret && <ChevronDown className="w-3 h-3 shrink-0 opacity-70" />}
+    </button>
+  )
+
+  const dirGlyphs = (
+    <>
+      <Arrow className="w-3 h-3 shrink-0" />
+      <span aria-hidden className="shrink-0 flex items-center [&>svg]:w-3 [&>svg]:h-3" style={color ? { color } : undefined}>
+        {typeIcon}
+      </span>
+    </>
+  )
+
+  if (group.length === 1) {
+    const c = group[0]
+    return pill(c.key, {
+      connected: c.connected,
+      focused: focusedKey === c.key,
+      label: dirLabel,
+      title: `${c.connected ? "Disconnect" : "Connect"} — ${dirLabel.toLowerCase()} (${c.label}), ${tip}`,
+      ariaLabel: `${dirLabel} ${c.label}: ${c.connected ? "connected" : "not connected"}`,
+      onClick: () => onToggle(c),
+      leading: dirGlyphs,
+    })
+  }
+
+  if (!expanded) {
+    const connCount = group.filter((c) => c.connected).length
+    return pill(`${dir}-summary`, {
+      connected: connCount > 0,
+      focused: group.some((c) => c.key === focusedKey),
+      label: connCount > 0 ? `${dirLabel} · ${connCount}` : dirLabel,
+      title: `${dirLabel} — ${group.length} options (${tip})`,
+      ariaLabel: `${dirLabel}: ${group.length} connection options${connCount > 0 ? `, ${connCount} connected` : ""}`,
+      isExpander: true,
+      onClick: onExpandToggle,
+      caret: true,
+      leading: dirGlyphs,
+    })
+  }
+
+  return (
+    <span className="flex items-center gap-1 flex-wrap rounded-full bg-black/[0.03] dark:bg-white/[0.04] pl-1.5 pr-0.5 py-0.5">
+      <span className="flex items-center gap-1 text-[10px] text-muted-foreground/80">
+        {dirGlyphs}
+        {dirLabel}
+      </span>
+      {group.map((c) =>
+        pill(c.key, {
+          connected: c.connected,
+          focused: focusedKey === c.key,
+          label: c.label,
+          title: `${c.connected ? "Disconnect" : "Connect"} ${c.label} (${tip})`,
+          ariaLabel: `${c.connected ? "Disconnect" : "Connect"} ${c.label}, ${dirLabel.toLowerCase()} ${tip}`,
+          onClick: () => onToggle(c),
+          leading: (
+            // Per-handle color (not the group header's) so a future mixed-type
+            // group stays correct.
+            <span
+              aria-hidden
+              className="w-2 h-2 rounded-full shrink-0"
+              style={c.connected ? { backgroundColor: "#ff0073" } : { border: `1.5px solid ${c.color ?? "#94A3B8"}` }}
+            />
+          ),
+        }),
+      )}
     </span>
   )
 }
