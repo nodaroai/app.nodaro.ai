@@ -289,6 +289,16 @@ export function FilerobotEditorModal({
         (popper < modal < popup). @scaleflex is used only by Filerobot here, so these
         global rules are scoped to the editor in practice. Re-verify these class names
         if react-filerobot-image-editor is upgraded.
+
+        Two more theme/clipping fixes below:
+        • The pen/shape/text option popups (.FIE_annotation-option-popup) inherit the
+          generic Menu's `overflow: hidden auto`, which clips the stroke/opacity/shadow
+          slider's value tooltip (the "60 px" bubble that pops above the thumb). The
+          popups hold tiny fixed content, so `overflow: visible` is safe and lets the
+          tooltip show.
+        • Filerobot's filter carousel scroll-arrows hardcode a white fade gradient
+          (Carousel.styled.js). It matches the strip in light mode but shows as a white
+          smudge over the dark strip, so override it to the dark strip colour when dark.
       */}
       <style>{`
         .FIE_buttons-close-btn { display: none !important; }
@@ -297,6 +307,11 @@ export function FilerobotEditorModal({
         .SfxDrawer-temporary { z-index: 10000 !important; }
         .SfxModal-Wrapper { z-index: 10001 !important; }
         .SfxPopup-root { z-index: 10002 !important; }
+        .FIE_annotation-option-popup { overflow: visible !important; }
+        ${isDark ? `
+        .FIE_carousel-prev-button { background: linear-gradient(90deg, #1E1E1E 1.56%, rgba(30,30,30,0.89) 52.4%, rgba(30,30,30,0.53) 76.04%, rgba(30,30,30,0) 100%) !important; }
+        .FIE_carousel-next-button { background: linear-gradient(270deg, #1E1E1E 1.56%, rgba(30,30,30,0.89) 52.4%, rgba(30,30,30,0.53) 76.04%, rgba(30,30,30,0) 100%) !important; }
+        ` : ""}
       `}</style>
 
       <div className="flex-1 min-h-0 overflow-hidden">
