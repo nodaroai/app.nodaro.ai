@@ -23,6 +23,7 @@ import { CSS } from "@dnd-kit/utilities"
 import { useHandleConnections, type HandleConnection } from "@/hooks/use-handle-connections"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { getNodeThumbnailUrl, getNodeVideoUrl, getNodePickerVisual, getNodeConfigSummary, type NodeConfigChip } from "@/lib/node-thumbnail"
+import { focusNodeInViewport } from "@/lib/focus-node-in-viewport"
 import { collectTargetCandidates, isValidWorkflowConnection, resolveEffectiveSourceType } from "@/lib/connection-validation"
 import { optimizedImageUrl } from "@/lib/image"
 import { getHandleConnectionLimit } from "@/lib/handle-limits"
@@ -402,12 +403,7 @@ export function HandlePopover({
 
   const handleJump = useCallback(
     (otherNodeId: string) => {
-      const target = getNode(otherNodeId)
-      if (!target) return
-      const w = (target.measured?.width ?? 200) as number
-      const h = (target.measured?.height ?? 150) as number
-      setCenter(target.position.x + w / 2, target.position.y + h / 2, { zoom: 1, duration: 400 })
-      selectNode(otherNodeId)
+      focusNodeInViewport(getNode, setCenter, selectNode, otherNodeId)
       onClose?.()
     },
     [getNode, setCenter, selectNode, onClose],

@@ -360,11 +360,15 @@ interface WorkflowState {
   readonly nodes: WorkflowNode[]
   readonly edges: WorkflowEdge[]
   readonly selectedNodeId: string | null
-  /** The node the user last clicked (focused), exposed so the toolbar config-panel
-   *  toggle button can open the config panel for it. Separate from `selectedNodeId`
-   *  (which means the config panel is OPEN); cleared when the panel closes. */
+  /** The node the user last focused — kept in sync with the canvas's primary
+   *  selection (see `onNodesChange` + `focusPatch`) so Enter / Alt+Arrow / Alt+B
+   *  never act on a stale node. Separate from `selectedNodeId` (which means the
+   *  config panel is OPEN for that node). */
   readonly focusedNodeId: string | null
   readonly setFocusedNodeId: (id: string | null) => void
+  /** The node focused immediately BEFORE `focusedNodeId`; drives the Alt+B
+   *  toggle-back. Maintained by `focusPatch` on every focus change. */
+  readonly previousFocusedNodeId: string | null
   /** True when the config panel is in fullscreen (modal) mode. UI-only flag —
    *  used to gate workflow keyboard shortcuts and the global Execute button. */
   readonly configPanelFullscreen: boolean
@@ -511,6 +515,11 @@ interface WorkflowState {
   readonly duplicateNode: (nodeId: string, position?: { x: number; y: number }) => void
   readonly duplicateNodes: (ids: string[]) => void
   readonly selectNode: (nodeId: string | null) => void
+  /** Focus a node ON THE CANVAS (set `focusedNodeId` + RF `node.selected`,
+   *  deselecting others) WITHOUT opening the config panel. Used by Alt+Arrow
+   *  neighbour-nav and the node-search modal's Alt+Arrow re-target so focus
+   *  moves without a panel popping over the canvas. */
+  readonly focusNodeOnCanvas: (nodeId: string) => void
   /** Node id whose quick-edit Prompt modal is open, or null. Set by any prompt
    *  entry point (per-node button, ⌘/Ctrl+E, prompt-handle popover). */
   readonly promptEditNodeId: string | null
@@ -863,6 +872,21 @@ export function buildDuplicatedNodeData(
   return clonedData
 }
 
+/**
+ * Single source of truth for the "previous focus" rule: move `focusedNodeId` to
+ * `next`, recording the prior focus in `previousFocusedNodeId` whenever it
+ * actually changes. Every focus writer spreads this so `focusedNodeId` never
+ * drifts from intent and Alt+B can toggle between the last two focused nodes.
+ */
+export function focusPatch(
+  state: Pick<WorkflowState, "focusedNodeId" | "previousFocusedNodeId">,
+  next: string | null,
+): { focusedNodeId: string | null; previousFocusedNodeId: string | null } {
+  return next === state.focusedNodeId
+    ? { focusedNodeId: next, previousFocusedNodeId: state.previousFocusedNodeId }
+    : { focusedNodeId: next, previousFocusedNodeId: state.focusedNodeId }
+}
+
 export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   workflowId: null,
   projectId: null,
@@ -871,7 +895,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   edges: [],
   selectedNodeId: null,
   focusedNodeId: null,
-  setFocusedNodeId: (id) => set({ focusedNodeId: id }),
+  previousFocusedNodeId: null,
+  setFocusedNodeId: (id) => set((s) => focusPatch(s, id)),
   promptEditNodeId: null,
   quickStripPinnedNodeId: null,
   configPanelFullscreen: false,
@@ -973,10 +998,24 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         }
       }
 
+      // Keep `focusedNodeId` tracking the canvas's primary selection so Enter /
+      // Alt+Arrow / Alt+B never act on a stale node — the root of the recurring
+      // dual-focus desync. Sync only when exactly one node is selected;
+      // multi-select and full deselect persist the last single focus so the
+      // panel-reopen / Alt+B targets stay meaningful.
+      let focusFields: { focusedNodeId: string | null; previousFocusedNodeId: string | null } | undefined
+      if (hasSelectionChange) {
+        const selectedNow = newNodes.filter((n) => n.selected)
+        if (selectedNow.length === 1 && selectedNow[0].id !== state.focusedNodeId) {
+          focusFields = focusPatch(state, selectedNow[0].id)
+        }
+      }
+
       return {
         nodes: newNodes,
         ...(hasContentChange ? { isDirty: true } : {}),
         ...(selectedNodeId !== state.selectedNodeId ? { selectedNodeId } : {}),
+        ...focusFields,
       }
     }),
 
@@ -1345,7 +1384,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       ],
       newNodeIds: new Set([...state.newNodeIds, id]),
       isDirty: true,
-      ...(newNode.selected ? { focusedNodeId: id } : {}),
+      ...(newNode.selected ? focusPatch(state, id) : {}),
     }))
 
     if (type === "teleport-send" || type === "teleport-receive") {
@@ -1381,7 +1420,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     // Only set the prompt modal — don't open the config sidebar.
     // The AI wizard reads context via promptEditNodeId (prompt-helper-button.tsx
     // falls back to promptEditNodeId when selectedNodeId is null).
-    set({ promptEditNodeId: nodeId, focusedNodeId: nodeId })
+    set((s) => ({ promptEditNodeId: nodeId, ...focusPatch(s, nodeId) }))
   },
   closePromptEditor: () => set({ promptEditNodeId: null }),
   setQuickStripPinned: (nodeId) => set({ quickStripPinnedNodeId: nodeId }),
@@ -1398,6 +1437,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     set((state) => ({
       selectedNodeId: nodeId,
       configPanelFullscreen: true,
+      ...focusPatch(state, nodeId),
       nodes: state.nodes.map((n) => ({ ...n, selected: n.id === nodeId })),
     }))
   },
@@ -1891,7 +1931,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         const anySelected = state.nodes.some((n) => n.selected)
         return {
           selectedNodeId: null,
-          focusedNodeId: null,
+          ...focusPatch(state, null),
           ...(anySelected ? { nodes: state.nodes.map((n) => n.selected ? { ...n, selected: false } : n) } : {}),
         }
       }
@@ -1908,10 +1948,10 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         // — so when other nodes are still selected, we have to clear them
         // even on the already-selected branch.
         const othersSelected = state.nodes.some((n) => n.id !== nodeId && n.selected)
-        if (!othersSelected) return { selectedNodeId: nodeId, focusedNodeId: nodeId }
+        if (!othersSelected) return { selectedNodeId: nodeId, ...focusPatch(state, nodeId) }
         return {
           selectedNodeId: nodeId,
-          focusedNodeId: nodeId,
+          ...focusPatch(state, nodeId),
           nodes: state.nodes.map((n) => (n.id === nodeId ? n : n.selected ? { ...n, selected: false } : n)),
         }
       }
@@ -1919,13 +1959,21 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       // Target not yet selected (e.g. stopPropagation prevented React Flow) — select it, deselect others
       return {
         selectedNodeId: nodeId,
-        focusedNodeId: nodeId,
+        ...focusPatch(state, nodeId),
         nodes: state.nodes.map((n) => ({
           ...n,
           selected: n.id === nodeId,
         })),
       }
     }),
+
+  focusNodeOnCanvas: (nodeId) =>
+    set((state) => ({
+      ...focusPatch(state, nodeId),
+      nodes: state.nodes.map((n) =>
+        n.selected === (n.id === nodeId) ? n : { ...n, selected: n.id === nodeId },
+      ),
+    })),
 
   setUserPromptTemplates: (templates) => set({ userPromptTemplates: templates }),
 

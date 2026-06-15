@@ -34,6 +34,7 @@ import { ZOOM_MIN, ZOOM_MAX, snapZoom } from "@/lib/zoom"
 import { AddNodePopup } from "./add-node-popup"
 import { ConnectNodeDialog, type ConnectNodeChoice } from "./connect-node-dialog"
 import { enumerateConnectionOptionsCore, chooseSmartConnection, handleIdsFromBounds } from "@/lib/enumerate-connection-options"
+import { nearestNodeInDirection, type ArrowDirection } from "@/lib/node-spatial-nav"
 import { getSmartConnectPref } from "@/lib/auto-connect-pref"
 import { computeMissingPromptRefs } from "@/lib/missing-prompt-refs"
 import { buildAdjacency, isValidWorkflowConnection } from "@/lib/connection-validation"
@@ -1255,6 +1256,16 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const enterZoomNodeRef = useRef(enterZoomNodeFn)
   useEffect(() => { enterZoomNodeRef.current = enterZoomNodeFn }, [enterZoomNodeFn])
 
+  // Panel-aware focus-jump handler, assigned inside the keyboard effect (so it
+  // closes over the live selectNode/getNode/setCenter) and reused by the
+  // left-toolbar "previous focus" button. Ref indirection mirrors
+  // `handleZoomToggleRef` / `enterZoomNodeRef`.
+  const focusNodeByIdRef = useRef<(id: string) => void>(() => {})
+  const handlePreviousFocus = useCallback(() => {
+    const prev = useWorkflowStore.getState().previousFocusedNodeId
+    if (prev) focusNodeByIdRef.current(prev)
+  }, [])
+
   const handleNodeDoubleClick: NodeMouseHandler = useCallback(
     (_event, node) => {
       setFocusedNodeId(node.id)
@@ -1827,6 +1838,36 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
 
   // Keyboard shortcuts
   useEffect(() => {
+    // Panel-aware focus jump shared by Alt+Arrow, Alt+B and the toolbar
+    // previous-focus button. When the config panel is open, selectNode keeps it
+    // open on the new node; when closed, move focus + RF selection WITHOUT
+    // opening the panel. `focusPatch` keeps focusedNodeId/previousFocusedNodeId
+    // consistent so Alt+B toggles cleanly.
+    const focusNodeById = (targetId: string) => {
+      const st = useWorkflowStore.getState()
+      if (!st.nodes.some((n) => n.id === targetId)) return
+      if (st.selectedNodeId) {
+        if (zoomedNodeIdRef.current) zoomedNodeIdRef.current = targetId
+        selectNode(targetId)
+      } else {
+        useWorkflowStore.getState().focusNodeOnCanvas(targetId)
+        if (zoomedNodeIdRef.current) {
+          enterZoomNodeRef.current(targetId)
+        } else {
+          const tgt = getNode(targetId)
+          if (tgt) {
+            const nw = tgt.measured?.width ?? 200
+            const nh = tgt.measured?.height ?? 100
+            setCenter(tgt.position.x + nw / 2, tgt.position.y + nh / 2, { zoom: getViewport().zoom, duration: 250 })
+          }
+        }
+        requestAnimationFrame(() => {
+          document.querySelector<HTMLElement>(`.react-flow__node[data-id="${targetId}"]`)?.focus({ preventScroll: true })
+        })
+      }
+    }
+    focusNodeByIdRef.current = focusNodeById
+
     function handleKeyDown(e: KeyboardEvent) {
       // Don't trigger shortcuts when typing in inputs/textareas/contenteditable
       const target = e.target as HTMLElement
@@ -2360,62 +2401,18 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         const state = useWorkflowStore.getState()
         const currentId = state.focusedNodeId ?? state.nodes.find((n) => n.selected)?.id
         if (!currentId) return
-        const current = getNode(currentId)
-        if (!current) return
-        const cx = current.position.x + (current.measured?.width ?? 200) / 2
-        const cy = current.position.y + (current.measured?.height ?? 100) / 2
-        let bestId: string | null = null
-        let bestDist = Infinity
-        for (const n of state.nodes) {
-          if (n.id === currentId || n.hidden) continue
-          const nw = n.measured?.width ?? 200
-          const nh = n.measured?.height ?? 100
-          const nx = n.position.x + nw / 2
-          const ny = n.position.y + nh / 2
-          const dx = nx - cx
-          const dy = ny - cy
-          const ok =
-            (e.key === "ArrowRight" && dx > 20) ||
-            (e.key === "ArrowLeft" && dx < -20) ||
-            (e.key === "ArrowDown" && dy > 20) ||
-            (e.key === "ArrowUp" && dy < -20)
-          if (!ok) continue
-          const dist = Math.sqrt(dx * dx + dy * dy)
-          if (dist < bestDist) { bestDist = dist; bestId = n.id }
-        }
+        const bestId = nearestNodeInDirection(state.nodes, currentId, e.key as ArrowDirection)
         if (!bestId) return
-        if (state.selectedNodeId) {
-          // Panel open: selectNode sets focusedNodeId + node.selected + selectedNodeId,
-          // then the selectedNodeId effect centres the node accounting for the panel offset.
-          // If Mode 2 is active, keep its tracked node in sync so Enter toggles out correctly.
-          if (zoomedNodeIdRef.current) zoomedNodeIdRef.current = bestId
-          selectNode(bestId)
-        } else {
-          // Panel closed: update focusedNodeId + RF selection (node.selected) without
-          // setting selectedNodeId (which would open the panel).
-          useWorkflowStore.setState((s) => ({
-            focusedNodeId: bestId,
-            nodes: s.nodes.map((n) => ({ ...n, selected: n.id === bestId })),
-          }))
-          if (zoomedNodeIdRef.current) {
-            // In Mode 2: re-apply the Mode 2 zoom calculation for the new node so it
-            // fills the view at the correct zoom level (not just a pan at stale zoom).
-            enterZoomNodeRef.current(bestId)
-          } else {
-            const tgt = getNode(bestId)
-            if (tgt) {
-              const nw = tgt.measured?.width ?? 200
-              const nh = tgt.measured?.height ?? 100
-              setCenter(tgt.position.x + nw / 2, tgt.position.y + nh / 2, { zoom: getViewport().zoom, duration: 250 })
-            }
-          }
-          // Focus the node DOM element so plain Arrow-key nudging works immediately.
-          // RF's nudge handler only fires when the event originates inside its subtree.
-          requestAnimationFrame(() => {
-            document.querySelector<HTMLElement>(`.react-flow__node[data-id="${bestId}"]`)
-              ?.focus({ preventScroll: true })
-          })
-        }
+        focusNodeById(bestId)
+        return
+      }
+
+      // Alt+B — toggle focus between the last two focused nodes.
+      if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.code === "KeyB") {
+        e.preventDefault()
+        e.stopPropagation()
+        const prev = useWorkflowStore.getState().previousFocusedNodeId
+        if (prev) focusNodeById(prev)
         return
       }
 
@@ -2434,32 +2431,12 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         // keyboard nudge from also firing on the currently-selected node when
         // we're using arrows to navigate to the neighbor instead of moving.
         e.stopPropagation()
-        const current = getNode(currentSelectedForArrow)
-        if (current) {
-          const cx = current.position.x + (current.measured?.width ?? 200) / 2
-          const cy = current.position.y + (current.measured?.height ?? 100) / 2
-          let bestId: string | null = null
-          let bestDist = Infinity
-          for (const n of useWorkflowStore.getState().nodes) {
-            if (n.id === currentSelectedForArrow || n.hidden) continue
-            const nx = n.position.x + ((n.measured?.width ?? 200) / 2)
-            const ny = n.position.y + ((n.measured?.height ?? 100) / 2)
-            const dx = nx - cx
-            const dy = ny - cy
-            const ok =
-              (e.key === "ArrowRight" && dx > 20) ||
-              (e.key === "ArrowLeft" && dx < -20) ||
-              (e.key === "ArrowDown" && dy > 20) ||
-              (e.key === "ArrowUp" && dy < -20)
-            if (!ok) continue
-            const dist = Math.sqrt(dx * dx + dy * dy)
-            if (dist < bestDist) {
-              bestDist = dist
-              bestId = n.id
-            }
-          }
-          if (bestId) selectNode(bestId)
-        }
+        const bestId = nearestNodeInDirection(
+          useWorkflowStore.getState().nodes,
+          currentSelectedForArrow,
+          e.key as ArrowDirection,
+        )
+        if (bestId) selectNode(bestId)
         return
       }
 
@@ -2649,6 +2626,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         onComponents={handleOpenComponentMarketplace}
         onSearch={handleOpenSearch}
         onFindInWorkflow={handleOpenNodeSearch}
+        onPreviousFocus={handlePreviousFocus}
         onAssetLibrary={handleOpenAssetLibrary}
         onMediaLibrary={handleOpenMediaLibrary}
         onAddStickyNote={handleAddStickyNote}
