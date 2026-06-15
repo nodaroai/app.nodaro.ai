@@ -223,6 +223,8 @@ export const queryKeys = {
       ["admin", "credit-anomalies", "list", offset, status, anomalyType, model] as const,
     creditAnomaliesSummary: () =>
       ["admin", "credit-anomalies", "summary"] as const,
+    pickerGaps: (offset: number, picker: string, gapType: string, status: string) =>
+      ["admin", "picker-gaps", "list", offset, picker, gapType, status] as const,
     kieCredits: (days: number) =>
       ["admin", "kie-credits", days] as const,
     llmModels: () => ["admin", "llm-models"] as const,

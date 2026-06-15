@@ -7,6 +7,7 @@ import {
   STYLING_DIMENSION_ORDER,
   STYLING_DIMENSION_LABELS,
   STYLING_FIELD_BY_DIMENSION,
+  MAX_SELECTED_BY_STYLING_DIMENSION,
   type Styling,
   type StylingDimension,
   type StylingValue,
@@ -20,16 +21,6 @@ import { HairCutBrowser } from "./hair-cut-browser"
 import { EyewearIcon, HeadwearIcon } from "./small-silhouette-icons"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 import { MultiPickBadge } from "./multi-pick-ui"
-
-/** Per-dimension multi-select cap.
- *  - jewelry: 3 (necklace + earrings + rings stacked)
- *  - wardrobe-state: 3 (oversized + wet + ripped composes)
- *  - hair-state: 2 (wet + windswept, messy + voluminous) */
-const MAX_SELECTED_BY_STYLING_DIMENSION: Partial<Record<StylingDimension, number>> = {
-  jewelry: 3,
-  "wardrobe-state": 3,
-  "hair-state": 2,
-}
 
 interface StylingPickerProps {
   readonly value: StylingValue

@@ -23,8 +23,8 @@ const TYPED_SOURCE_NODE_TYPES: ReadonlySet<string> = new Set([
   "list", "web-scrape", "extract-field", "filter-list",
   "deduplicate", "merge-lists", "sort-list",
   // describe-to-picker emits picker JSON on its `picker-json` source handle;
-  // its source-direction popover must consult TARGET_HANDLE_ACCEPTS (where
-  // person's `picker-json` target is registered) so it surfaces person.
+  // its source-direction popover must consult TARGET_HANDLE_ACCEPTS (where the
+  // analyzable pickers' `picker-json` targets are registered) so it surfaces them.
   "describe-to-picker",
 ])
 
@@ -173,9 +173,9 @@ export const TYPED_HANDLE_IDS: ReadonlySet<string> = new Set([
   // lottie-overlay `lottie` target — accepts the motion-graphics lottie engine's
   // authored-animation asset (Phase 4). Typed (not a Parameter-category gate).
   "lottie",
-  // person `picker-json` target — accepts the describe-to-picker producer's
-  // catalog-valid picker JSON (image→picker analysis). Typed (not a
-  // Parameter-category gate); mirrors TARGET_HANDLE_ACCEPTS["person"].
+  // analyzable pickers' `picker-json` target — accepts the describe-to-picker
+  // producer's catalog-valid picker JSON (image→picker analysis). Typed (not a
+  // Parameter-category gate); set-driven via TARGET_HANDLE_ACCEPTS.
   "picker-json",
 ])
 /** Subset that requires consumer-type dispatch — the dev-time warning in
@@ -520,9 +520,9 @@ export function getCompatibleNodes(
     return { direct, compatible: [], directTypes }
   }
 
-  // `picker-json` (person's injected-JSON input) accepts ONLY the
-  // describe-to-picker producer. Mirrors the canvas validator's
-  // `targetType === "person"` branch + ACCEPTS_PICKER_JSON.
+  // `picker-json` (any analyzable picker's injected-JSON input) accepts ONLY
+  // the describe-to-picker producer. Mirrors the canvas validator's
+  // `isAnalyzablePicker(targetType)` branch + ACCEPTS_PICKER_JSON.
   if (direction === "target" && handleId === "picker-json") {
     const direct: NodeOption[] = []
     const directTypes = new Set<SceneNodeType>()

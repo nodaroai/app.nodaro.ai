@@ -13,6 +13,8 @@ import {
 } from "@nodaro/shared"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import { getStylingEntryIcon } from "./person-styling-icon"
+import { usePickerJsonConsumer } from "./use-picker-json-consumer"
+import { PICKER_CONSUMER_INPUT_HANDLES, PickerJsonHandleIcon, PickerUpdateButton } from "./picker-json-handle"
 import type { StylingData } from "@/types/nodes"
 
 interface EnabledEntry {
@@ -38,6 +40,8 @@ function StylingNodeComponent({ id, data, selected }: NodeProps) {
   const maxItemsPerRow = Math.max(1, Math.min(4, nodeData.maxItemsPerRow ?? 2))
   const gridColumns = Math.max(1, Math.min(maxItemsPerRow, enabled.length))
 
+  const { isConnected, hasPending, apply } = usePickerJsonConsumer("styling", id, nodeData)
+
   return (
     <ParameterNodeShell
       id={id}
@@ -46,6 +50,9 @@ function StylingNodeComponent({ id, data, selected }: NodeProps) {
       handleId="out"
       selected={selected}
       fluidWidth
+      inputHandles={PICKER_CONSUMER_INPUT_HANDLES}
+      extraHandleIcons={<PickerJsonHandleIcon nodeId={id} nodeType="styling" />}
+      headerSlot={isConnected && !nodeData.autoApplyInjected ? <PickerUpdateButton hasPending={hasPending} onApply={apply} /> : null}
     >
       {enabled.length > 0 ? (
         <div

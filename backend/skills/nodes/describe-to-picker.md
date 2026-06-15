@@ -1,7 +1,7 @@
 ---
 node_type: describe-to-picker
-generated_at: 2026-06-14T18:37:58.786Z
-generated_from: 1034359e5
+generated_at: 2026-06-14T23:30:29.182Z
+generated_from: 90fa6b6ee
 ---
 
 # Describe to Picker
@@ -15,7 +15,6 @@ generated_from: 1034359e5
 
 **Required data fields:**
 - `label: string`
-- `targetPicker: "person"`
 
 **Optional data fields:**
 - `llmModel?: string`
@@ -24,12 +23,12 @@ generated_from: 1034359e5
 - `currentJobProgress?: number`
 - `errorMessage?: string`
 - `generatedPickerJson?: Record<string, unknown>`
+- `generatedGaps?: PickerGaps`
 
 **Default data:**
 ```json
 {
-  "label": "Describe to Picker",
-  "targetPicker": "person"
+  "label": "Describe to Picker"
 }
 ```
 <!-- AUTO-GEN:END node-data-shape -->
@@ -57,8 +56,7 @@ generated_from: 1034359e5
     "y": 0
   },
   "data": {
-    "label": "Describe to Picker",
-    "targetPicker": "person"
+    "label": "Describe to Picker"
   }
 }
 ```

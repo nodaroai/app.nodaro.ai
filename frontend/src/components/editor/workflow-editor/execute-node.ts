@@ -77,6 +77,8 @@ import {
 } from "@/lib/api";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
 import { ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, MODEL_CATALOG, splitGeneratedItems, LLM_FEATURE_DEFAULTS, resolveVideoProviderForMode } from "@nodaro/shared";
+import { pickerFanoutTargets } from "@nodaro/shared";
+import { ANALYZABLE_PICKER_HINT } from "@/lib/picker-labels";
 import { getGenerateTextTemplate } from "@/lib/generate-text-templates";
 import { buildScenePrompt } from "@/lib/prompt-builder";
 import type {
@@ -3933,28 +3935,25 @@ export function executeNode(
   if (node.type === "describe-to-picker") {
     const imageUrl = inputs.imageUrl;
     if (!imageUrl) {
-      toast.error(
-        `Node "${(node.data as DescribeToPickerData).label}": no image input found`,
-      );
+      toast.error(`Node "${(node.data as DescribeToPickerData).label}": no image input found`);
       return Promise.reject(new Error("No image input"));
+    }
+    const targetPickers = pickerFanoutTargets(node.id, edges, nodes);
+    if (targetPickers.length === 0) {
+      toast.error(
+        `Node "${(node.data as DescribeToPickerData).label}": connect a picker node (${ANALYZABLE_PICKER_HINT}) to its output`,
+      );
+      return Promise.reject(new Error("No picker connected"));
     }
     const dpData = node.data as DescribeToPickerData;
     const { updateNodeData } = useWorkflowStore.getState();
-    updateNodeData(node.id, {
-      executionStatus: "running",
-      errorMessage: undefined,
-    });
-    return describeToPickerApi(
-      imageUrl,
-      dpData.targetPicker || "person",
-      ctx.userId,
-      dpData.llmModel,
-      dpData.instructions,
-    )
+    updateNodeData(node.id, { executionStatus: "running", errorMessage: undefined });
+    return describeToPickerApi(imageUrl, targetPickers, ctx.userId, dpData.llmModel, dpData.instructions)
       .then((result) => {
         updateNodeData(node.id, {
           executionStatus: "completed",
           generatedPickerJson: result.pickerJson,
+          generatedGaps: result.gaps,
           errorMessage: undefined,
         });
         guardedToast.success("Image analyzed");
@@ -3962,10 +3961,7 @@ export function executeNode(
       })
       .catch((err) => {
         const errMsg = err instanceof Error ? err.message : "Unknown error";
-        updateNodeData(node.id, {
-          executionStatus: "failed",
-          errorMessage: errMsg,
-        });
+        updateNodeData(node.id, { executionStatus: "failed", errorMessage: errMsg });
         guardedToast.error("Image analysis failed", { description: errMsg });
         throw err;
       });

@@ -1,7 +1,7 @@
 ---
 node_type: camera-format
-generated_at: 2026-05-18T13:23:37.132Z
-generated_from: cb1e786d
+generated_at: 2026-06-14T23:30:28.708Z
+generated_from: 90fa6b6ee
 ---
 
 # Camera / Film Stock
@@ -10,7 +10,7 @@ generated_from: cb1e786d
 **Type:** `camera-format`
 **Category:** parameter
 **Credit cost:** 0
-**Inputs (target handles):** `in`
+**Inputs (target handles):** `in`, `picker-json`
 **Outputs (source handles):** `out`
 
 **Required data fields:**

@@ -22,7 +22,7 @@ import { resolveFieldMappings, NODE_MAPPABLE_FIELDS } from "./resolve-field-mapp
 
 import { executeCombineText, executeSplitText, executeComposite, executeWebhookOutput, executePreview, executeTeleporterPassthrough, executeRouter, executeExtractField, executeJsonProcess, executeFilterList, executeDeduplicateList, executeMergeLists, executeSortList, executeSelector } from "./inline-executor.js"
 import { executeSubWorkflow } from "./sub-workflow-handler.js"
-import { mergeExposedSettings, applyHandleInputOverride, isHandleInputWired, computeLlmChatFields, computeNodePrompt, resolveNodeRefs, SOCIAL_POST_NODE_TYPES } from "@nodaro/shared"
+import { mergeExposedSettings, applyHandleInputOverride, isHandleInputWired, computeLlmChatFields, computeNodePrompt, resolveNodeRefs, SOCIAL_POST_NODE_TYPES, pickerFanoutTargets } from "@nodaro/shared"
 import type { ComponentMetadata } from "@nodaro/shared"
 import type {
   SimpleNode,
@@ -497,8 +497,16 @@ async function executeSyncHttpNode(
     ? buildNodeRefMap(node.id, { nodes: allNodes, edges, nodeStates })
     : new Map<string, string>()
 
+  // describe-to-picker fans its analyzed JSON out to the picker node types wired
+  // to its `picker-json` output — derived identically to the frontend execute
+  // path via the SHARED helper so the headless run analyzes the same set.
+  const downstreamPickerTypes =
+    node.type === "describe-to-picker" && edges && allNodes
+      ? pickerFanoutTargets(node.id, edges, allNodes)
+      : []
+
   // Build request body from node data + resolved inputs
-  const body = buildSyncHttpBody(node, resolvedInputs, ctx, userPromptTemplate, refMap)
+  const body = buildSyncHttpBody(node, resolvedInputs, ctx, userPromptTemplate, refMap, downstreamPickerTypes)
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -583,6 +591,7 @@ export function buildSyncHttpBody(
   ctx: OrchestratorContext,
   userPromptTemplate?: string,
   refMap: ReadonlyMap<string, string> = new Map(),
+  downstreamPickerTypes: ReadonlyArray<string> = [],
 ): Record<string, unknown> {
   const data = node.data
   // UNRESOLVED user-typed prompt template — passed through to the internal
@@ -738,7 +747,7 @@ export function buildSyncHttpBody(
     case "describe-to-picker":
       return {
         imageUrl: resolvedInputs.imageUrl || data.imageUrl,
-        targetPicker: data.targetPicker || "person",
+        targetPickers: downstreamPickerTypes,
         instructions: data.instructions,
         llmModel: data.llmModel,
         userId: ctx.userId,
