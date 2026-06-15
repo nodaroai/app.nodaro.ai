@@ -2101,7 +2101,11 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           // Already open: Tab cycles the popup's tabs (its own document listener).
           return
         }
-        const fid = useWorkflowStore.getState().focusedNodeId
+        // Resolve the current node the SAME robust way as every other shortcut
+        // (selection state), not the click-only `focusedNodeId` — which is unset
+        // after box-select/handle-click and is what made Tab ignore the focus.
+        const st = useWorkflowStore.getState()
+        const fid = st.selectedNodeId ?? st.nodes.find((n) => n.selected)?.id ?? st.focusedNodeId
         const fnode = fid ? getNode(fid) : undefined
         const isClone =
           !!fnode && (!!(fnode.data as Record<string, unknown> | undefined)?.__expandedClone || /_iter_\d+$/.test(fnode.id))
@@ -2110,9 +2114,10 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
             ? handleIdsFromBounds(getInternalNode(fnode.id)?.internals.handleBounds, fnode.type)
             : { sourceHandles: [], targetHandles: [] }
         const connectable =
-          !useWorkflowStore.getState().isReadOnly && !!fnode && !!fnode.type && !isClone && srcH.length + tgtH.length > 0
+          !st.isReadOnly && !!fnode && !!fnode.type && !isClone && srcH.length + tgtH.length > 0
         if (connectable && fnode && fnode.type) {
           e.preventDefault()
+          e.stopPropagation()
           setConnectionContext(null)
           setAddNodePopupCategory(null)
           setAddNodePopupPosition(undefined)
