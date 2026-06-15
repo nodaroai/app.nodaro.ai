@@ -334,8 +334,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         updateNodeData(nodeId, {
           executionStatus: "completed",
           generatedVideoUrl: url,
-          generatedResults: [...prev, newResult],
-          activeResultIndex: prev.length,
+          generatedResults: [newResult, ...prev],
+          activeResultIndex: 0,
           ...(isManualEdit ? { isEditorOpen: false } : {}),
         });
         if (isManualEdit) resolveManualEdit(nodeId);
@@ -437,8 +437,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         updateNodeData(nodeId, {
           executionStatus: "completed",
           [legacyUrlField]: url,
-          generatedResults: [...prev, newResult],
-          activeResultIndex: prev.length,
+          generatedResults: [newResult, ...prev],
+          activeResultIndex: 0,
         });
 
         closeImageEdit();
