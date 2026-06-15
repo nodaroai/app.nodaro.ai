@@ -269,9 +269,34 @@ export function FilerobotEditorModal({
       </button>
 
       {/* Hide Filerobot's broken close button + fix hardcoded white spinner overlay */}
+      {/*
+        Lift every Filerobot popup/dropdown/modal above this overlay.
+
+        Filerobot renders its floating UI through @scaleflex/ui, which portals each
+        layer to <body> at a low z-index:
+          • Popper  (.SfxPopper-wrapper, z 1300) — pen/shape/text option popups
+            (opacity/stroke/shadow), AND every <Select> dropdown (e.g. text font family,
+            since Select renders through Menu → Popper)
+          • Modal   (.SfxModal-Wrapper, z 1200/1301) — color picker (stroke + text color),
+            confirmation/save dialogs
+          • Popup   (.SfxPopup-root, z 1400) — editor feedback/error messages
+          • Drawer  (.SfxDrawer-temporary, z 1200) — tabs panel on narrow screens
+
+        This editor is an opaque z-[9999] overlay also portaled to <body>, so all of the
+        above open *behind* it and look dead — clicking an option icon does nothing, and
+        pen/text color + size (which live inside those popups) can't be changed. Raise
+        each portaled layer above the overlay, preserving their relative order
+        (popper < modal < popup). @scaleflex is used only by Filerobot here, so these
+        global rules are scoped to the editor in practice. Re-verify these class names
+        if react-filerobot-image-editor is upgraded.
+      */}
       <style>{`
         .FIE_buttons-close-btn { display: none !important; }
         .sc-m42fbk-0 { background: ${isDark ? "rgba(18,18,18,0.85)" : "rgba(248,250,252,0.85)"} !important; }
+        .SfxPopper-wrapper { z-index: 10000 !important; }
+        .SfxDrawer-temporary { z-index: 10000 !important; }
+        .SfxModal-Wrapper { z-index: 10001 !important; }
+        .SfxPopup-root { z-index: 10002 !important; }
       `}</style>
 
       <div className="flex-1 min-h-0 overflow-hidden">
