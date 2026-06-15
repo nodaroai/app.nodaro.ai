@@ -306,7 +306,10 @@ function BaseNodeComponent({
   const newNodeIds = useWorkflowStore((s) => s.newNodeIds)
   const clearNewNode = useWorkflowStore((s) => s.clearNewNode)
   const isEditing = useWorkflowStore((s) => s.selectedNodeId === id)
-  // On-canvas directional "+" buttons (§7): shown on hover OR when selected.
+  // On-canvas directional "+" buttons (§7): shown on hover OR on the single
+  // focused node. Gated on `focusedNodeId === id` (NOT the `selected` prop) so a
+  // box-select doesn't render the buttons on every selected node at once.
+  const isFocusedNode = useWorkflowStore((s) => s.focusedNodeId === id)
   const isReadOnly = useWorkflowStore((s) => s.isReadOnly)
   const openDirectionalAdd = useWorkflowStore((s) => s.openDirectionalAdd)
   const logicalW = visualW != null ? visualW / zoom : undefined
@@ -676,7 +679,7 @@ function BaseNodeComponent({
           left (upstream — feeds this node) and right (downstream — uses this
           node's output) edges. Open the popup filtered to compatible nodes —
           the same entry as Shift+Tab / Tab. */}
-      {(isHovered || selected) && !isReadOnly && !isMobile && openDirectionalAdd &&
+      {(isHovered || isFocusedNode) && !isReadOnly && !isMobile && openDirectionalAdd &&
         (["upstream", "downstream"] as const).map((dir) => (
           <button
             key={dir}

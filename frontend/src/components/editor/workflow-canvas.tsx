@@ -2101,11 +2101,16 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           // Already open: Tab cycles the popup's tabs (its own document listener).
           return
         }
-        // Resolve the current node the SAME robust way as every other shortcut
-        // (selection state), not the click-only `focusedNodeId` — which is unset
-        // after box-select/handle-click and is what made Tab ignore the focus.
+        // Resolve the current node from live selection state (matches the
+        // `selectedNodeId ?? nodes.find(selected)` pattern other shortcuts use).
+        // Deliberately NOT `focusedNodeId`: it's only synced when exactly one node
+        // is selected (store onNodesChange), so it goes stale on deselect and would
+        // wrongly open a directional popup. Require a SINGLE selected node — a
+        // box-select (length ≠ 1) falls through to the generic popup, which is the
+        // right behavior when "the focused node" is ambiguous.
         const st = useWorkflowStore.getState()
-        const fid = st.selectedNodeId ?? st.nodes.find((n) => n.selected)?.id ?? st.focusedNodeId
+        const selectedNodes = st.nodes.filter((n) => n.selected)
+        const fid = st.selectedNodeId ?? (selectedNodes.length === 1 ? selectedNodes[0].id : undefined)
         const fnode = fid ? getNode(fid) : undefined
         const isClone =
           !!fnode && (!!(fnode.data as Record<string, unknown> | undefined)?.__expandedClone || /_iter_\d+$/.test(fnode.id))
