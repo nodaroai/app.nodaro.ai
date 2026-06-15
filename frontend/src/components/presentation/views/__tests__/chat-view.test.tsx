@@ -5,7 +5,13 @@ import type { WorkflowNode } from "@/types/nodes"
 
 const state = vi.hoisted(() => ({
   appRunner: { executionStatus: "idle" as string, combinedProgress: {} as Record<string, number> },
-  presentation: { run: vi.fn(), nodes: [] as unknown[], edges: [] as unknown[] },
+  presentation: {
+    run: vi.fn(),
+    nodes: [] as unknown[],
+    edges: [] as unknown[],
+    inputValues: {} as Record<string, Record<string, unknown>>,
+    updateInputValue: vi.fn(),
+  },
 }))
 vi.mock("@/hooks/use-app-runner-store", () => ({ useAppRunnerStore: (sel: (s: unknown) => unknown) => sel(state.appRunner) }))
 vi.mock("@/hooks/use-presentation-store", () => ({ usePresentationStore: (sel: (s: unknown) => unknown) => sel(state.presentation) }))
@@ -43,7 +49,7 @@ const baseProps: any = {
 
 beforeEach(() => {
   state.appRunner = { executionStatus: "idle", combinedProgress: {} }
-  state.presentation = { run: vi.fn(), nodes: [], edges: [] }
+  state.presentation = { run: vi.fn(), nodes: [], edges: [], inputValues: {}, updateInputValue: vi.fn() }
 })
 
 describe("ChatView", () => {

@@ -22,7 +22,7 @@ import {
 import { CSS } from "@dnd-kit/utilities"
 import { useHandleConnections, type HandleConnection } from "@/hooks/use-handle-connections"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { getNodeThumbnailUrl, getNodeVideoUrl, getNodePickerVisual } from "@/lib/node-thumbnail"
+import { getNodeThumbnailUrl, getNodeVideoUrl, getNodePickerVisual, getNodeConfigSummary, type NodeConfigChip } from "@/lib/node-thumbnail"
 import { collectTargetCandidates, isValidWorkflowConnection, resolveEffectiveSourceType } from "@/lib/connection-validation"
 import { optimizedImageUrl } from "@/lib/image"
 import { getHandleConnectionLimit } from "@/lib/handle-limits"
@@ -56,6 +56,7 @@ interface EnrichedConnection extends HandleConnection {
   readonly thumbnailUrl: string | undefined
   readonly videoUrl: string | undefined
   readonly pickerVisual: ReactNode | undefined
+  readonly configSummary: ReadonlyArray<NodeConfigChip>
 }
 
 interface CandidateNode {
@@ -69,6 +70,7 @@ interface CandidateNode {
   readonly thumbnailUrl: string | undefined
   readonly videoUrl: string | undefined
   readonly pickerVisual: ReactNode | undefined
+  readonly configSummary: ReadonlyArray<NodeConfigChip>
   /** Human-readable chip label for source-direction rows — e.g. "Start state"
    *  rather than the raw handleId "startState". Falls back to the raw
    *  `targetHandle` in the UI when undefined (kept optional so target-
@@ -187,6 +189,7 @@ export function HandlePopover({
         pickerVisual: consumerIsTileGridPicker
           ? <Workflow className="w-4 h-4 text-muted-foreground" aria-hidden />
           : getNodePickerVisual(n),
+        configSummary: getNodeConfigSummary(n),
       }
     })
   }, [connections, nodesById, direction])
@@ -347,6 +350,7 @@ export function HandlePopover({
             thumbnailUrl: candidateIsTileGridPicker ? undefined : getNodeThumbnailUrl(n),
             videoUrl: candidateIsTileGridPicker ? undefined : getNodeVideoUrl(n),
             pickerVisual,
+            configSummary: getNodeConfigSummary(n),
             targetHandleLabel: labelByHandle.get(`${t}:${targetHandleId}`),
             source: nodeId,
             sourceHandle: handleId,
@@ -386,6 +390,7 @@ export function HandlePopover({
         thumbnailUrl: getNodeThumbnailUrl(n),
         videoUrl: getNodeVideoUrl(n),
         pickerVisual: getNodePickerVisual(n),
+        configSummary: getNodeConfigSummary(n),
         source: c.nodeId,
         sourceHandle: c.sourceHandle,
         target: nodeId,
@@ -609,6 +614,26 @@ export function HandlePopover({
 
 // ─── Row components ─────────────────────────────────────────────────────────
 
+/** The compact secondary line under a row's label: the node type, plus its
+ *  config summary (picker selected values, provider/model, aspect, …) joined
+ *  with `·`. Same data the canvas search modal shows — rendered as one muted
+ *  truncating line to keep the menu rows compact. */
+export function NodeMetaLine({
+  nodeType,
+  configSummary,
+}: {
+  readonly nodeType: string
+  readonly configSummary: ReadonlyArray<NodeConfigChip>
+}) {
+  const summary = configSummary.map((c) => c.value).join(" · ")
+  return (
+    <div className="text-[12px] text-muted-foreground truncate" title={summary ? `${nodeType} · ${summary}` : nodeType}>
+      {nodeType}
+      {summary ? ` · ${summary}` : ""}
+    </div>
+  )
+}
+
 interface ConnectionRowProps {
   readonly connection: EnrichedConnection
   readonly onJump: () => void
@@ -650,7 +675,7 @@ function ConnectionRow({ connection, onJump, onDisconnect, onHoverEdge, dragHand
         <div className="truncate text-foreground" title={connection.otherNodeLabel}>
           {connection.otherNodeLabel}
         </div>
-        <div className="text-[12px] text-muted-foreground truncate">{connection.otherNodeType}</div>
+        <NodeMetaLine nodeType={connection.otherNodeType} configSummary={connection.configSummary} />
       </div>
       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
         <button
@@ -783,7 +808,7 @@ function CandidateRow({ candidate, direction, onJump, onConnect }: CandidateRowP
             </span>
           )}
         </div>
-        <div className="text-[12px] text-muted-foreground truncate">{candidate.nodeType}</div>
+        <NodeMetaLine nodeType={candidate.nodeType} configSummary={candidate.configSummary} />
       </div>
       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
         <button

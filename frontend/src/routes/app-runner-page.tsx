@@ -25,6 +25,7 @@ import { DEFAULT_PRESENTATION_SETTINGS, type PresentationSettings } from "@/hook
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { useRunSlots, AppRunnerLayout, RunsSidebar, MobileAppShell, ORIGINAL_SLOT_ID } from "@/components/app-runner"
 import { updateAppRunInputs } from "@/lib/api"
+import { resolveViewMode } from "@/components/presentation/resolve-view-mode"
 
 export default function AppRunnerPage() {
   const { slug } = useParams<{ slug: string }>()
@@ -125,6 +126,11 @@ export default function AppRunnerPage() {
     )
   }
 
+  // In chat mode the thread IS the run history, so the runs sidebar is redundant.
+  const appSnapshotSettings = (app.snapshotSettings ?? {}) as Record<string, unknown>
+  const appPresentationSettings = (appSnapshotSettings.presentationSettings ?? DEFAULT_PRESENTATION_SETTINGS) as PresentationSettings
+  const isChatMode = resolveViewMode(appPresentationSettings, searchParams.get("view"), true) === "chat"
+
   const deleteDialog = (
     <Dialog open={runSlots.deleteConfirmSlotId !== null} onOpenChange={(open) => { if (!open) runSlots.setDeleteConfirmSlotId(null) }}>
       <DialogContent className="sm:max-w-sm">
@@ -163,10 +169,10 @@ export default function AppRunnerPage() {
 
   return (
     <AppRunnerLayout
-      showHistory={runSlots.showHistory && !!user}
+      showHistory={runSlots.showHistory && !!user && !isChatMode}
       collapsed={runSlots.sidebarCollapsed}
       onCloseHistory={() => runSlots.setShowHistory(false)}
-      sidebar={user ? (
+      sidebar={user && !isChatMode ? (
         <RunsSidebar
           slots={runSlots.slots}
           activeSlotId={runSlots.activeSlotId}
@@ -206,7 +212,7 @@ export default function AppRunnerPage() {
           onHiddenNodesChange={handleHiddenNodesChange}
           onNodeStatesChange={handleNodeStatesChange}
           headerLeft={
-            user && !runSlots.showHistory ? (
+            user && !runSlots.showHistory && !isChatMode ? (
               <Button
                 variant="outline"
                 size="sm"

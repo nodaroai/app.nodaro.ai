@@ -69,7 +69,8 @@ import { HiddenNodesPill } from "./hidden-nodes-pill"
 import { getCardTitle as getCardTitleHelper, orderNodesByIds, getNodeResultWithInputFallback, getLoopFirstMedia, areAllInputsFilled, resolveInputItems, resolveOutputItems, findExposableField } from "./helpers"
 import { buildNodeRefMap } from "@/lib/node-refs"
 import { RunTargetSelector } from "./run-target-selector"
-import { ViewModeSelector, ALL_VIEW_MODES } from "./view-mode-selector"
+import { ViewModeSelector } from "./view-mode-selector"
+import { resolveAllowedModes, resolveViewMode } from "./resolve-view-mode"
 import { InputCard } from "./input-card"
 import { OutputCard, type FieldBadgeEntry } from "./output-card"
 import { ConfigFieldRenderer } from "./config-field-renderer"
@@ -99,7 +100,6 @@ const AudiomassEditorModal = lazy(() =>
 )
 
 const POINTER_ACTIVATION = { activationConstraint: { distance: 5 } } as const
-const VALID_VIEW_MODES = new Set<PresentationViewMode>(ALL_VIEW_MODES)
 const EDITOR_META: Record<string, { filename: string; mime: string; outputKey: string }> = {
   video: { filename: "edited-video.mp4", mime: "video/mp4", outputKey: "videoUrl" },
   image: { filename: "edited-image.png", mime: "image/png", outputKey: "imageUrl" },
@@ -250,13 +250,9 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   const [searchParams, setSearchParams] = useSearchParams()
   const urlViewMode = searchParams.get("view") as PresentationViewMode | null
 
-  // Shared viewers get constrained to allowed modes; owner/tab mode gets all modes
-  const allowedModes = isFullscreen ? (settings.shareAllowedModes ?? ALL_VIEW_MODES) : ALL_VIEW_MODES
-  const allowedSet = new Set(allowedModes)
-  const effectiveDefault = (settings.shareDefaultMode && allowedSet.has(settings.shareDefaultMode))
-    ? settings.shareDefaultMode : (isFullscreen ? (allowedModes[0] ?? "horizontal") : (settings.viewMode ?? "horizontal"))
-  const viewMode: PresentationViewMode = (urlViewMode && VALID_VIEW_MODES.has(urlViewMode) && allowedSet.has(urlViewMode)
-    ? urlViewMode : null) ?? effectiveDefault
+  // Shared viewers get constrained to allowed modes; chat is always offered (universal).
+  const allowedModes = resolveAllowedModes(settings, isFullscreen)
+  const viewMode: PresentationViewMode = resolveViewMode(settings, urlViewMode, isFullscreen)
   const canEdit = viewMode === "horizontal" || viewMode === "vertical"
   const isEditing = isEditMode && mode === "tab" && canEdit
 
