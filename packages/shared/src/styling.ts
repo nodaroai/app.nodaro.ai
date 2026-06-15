@@ -473,6 +473,21 @@ export const STYLING_FIELD_BY_DIMENSION: Record<
   "wardrobe-state": "wardrobeState",
 }
 
+/** Per-dimension multi-select cap — single source of truth for the picker UI,
+ *  the image-analyzer tool schema, and the Zod validator. jewelry: 3
+ *  (necklace + earrings + rings), wardrobe-state: 3 (oversized + wet + ripped),
+ *  hair-state: 2 (wet + windswept). All others single-select (absent → 1). */
+export const MAX_SELECTED_BY_STYLING_DIMENSION: Partial<Record<StylingDimension, number>> = {
+  jewelry: 3,
+  "wardrobe-state": 3,
+  "hair-state": 2,
+}
+
+/** Selection limit for a styling dimension (1 when not multi-select). */
+export function getStylingDimensionLimit(dimension: StylingDimension): number {
+  return MAX_SELECTED_BY_STYLING_DIMENSION[dimension] ?? 1
+}
+
 export interface StylingValue {
   makeup?: string
   eyewear?: string

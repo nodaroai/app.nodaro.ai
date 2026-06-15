@@ -73,6 +73,7 @@ import {
   isValidCreatureConnection,
   isValidLocationConnection,
 } from "./identity-handles"
+import { isAnalyzablePicker } from "@nodaro/shared"
 import { isVisualPickerType } from "./parameter-picker-types"
 import { ACCEPTS_CHARACTER_REF, ACCEPTS_ENTITY_REF, ACCEPTS_LOTTIE_ASSET, ACCEPTS_PARAMETER_PICKER, ACCEPTS_PICKER_JSON } from "./target-handle-registry"
 
@@ -252,12 +253,14 @@ export function isValidWorkflowConnection(
   }
 
   // describe-to-picker `picker-json` source (catalog-valid picker JSON from a
-  // vision-LLM image analysis) may ONLY feed a person `picker-json` target —
-  // the single consumer that applies the JSON to its dimension fields.
-  // Symmetric to the `composition` / `lottie` source rules above; keeps the
-  // source pip from lighting up arbitrary targets during a drag.
+  // vision-LLM image analysis) may ONLY feed an analyzable picker's
+  // `picker-json` target — the consumers that apply the JSON to their fields.
+  // Set-driven via `isAnalyzablePicker` (@nodaro/shared) so registering a new
+  // analyzable picker auto-extends this rule. Symmetric to the `composition` /
+  // `lottie` source rules above; keeps the source pip from lighting up
+  // arbitrary targets during a drag.
   if (connection.sourceHandle === "picker-json") {
-    return typeOf(connection.target) === "person" && connection.targetHandle === "picker-json"
+    return isAnalyzablePicker(typeOf(connection.target) ?? "") && connection.targetHandle === "picker-json"
   }
 
   // JSON output cannot feed media-only inputs.
@@ -320,12 +323,15 @@ export function isValidWorkflowConnection(
     return ACCEPTS_CHARACTER_REF(typeOf(connection.source) ?? "")
   }
 
-  // Person picker — `picker-json` accepts ONLY the describe-to-picker producer
-  // (catalog-valid picker JSON). Other handles on the person node aren't typed
-  // here. Mirrors the source-side `picker-json` rule above so the canvas
-  // validator and the target pip's accepts predicate agree.
-  if (targetType === "person" && connection.targetHandle) {
-    if (connection.targetHandle !== "picker-json") return true
+  // Any analyzable picker's `picker-json` target accepts ONLY the
+  // describe-to-picker producer (catalog-valid picker JSON). Set-driven via
+  // `isAnalyzablePicker` (@nodaro/shared). Scoped to the `picker-json` handle
+  // ONLY — the pickers' other handles (e.g. the default `in`) deliberately
+  // fall through to their own rules / the default-allow below. (Person has
+  // only a `picker-json` input, so there is nothing to fall through for it.)
+  // Mirrors the source-side `picker-json` rule above so the canvas validator
+  // and the target pip's accepts predicate agree.
+  if (isAnalyzablePicker(targetType ?? "") && connection.targetHandle === "picker-json") {
     return ACCEPTS_PICKER_JSON(typeOf(connection.source) ?? "")
   }
 

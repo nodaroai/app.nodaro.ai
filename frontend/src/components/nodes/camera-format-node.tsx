@@ -5,6 +5,8 @@ import type { NodeProps } from "@xyflow/react"
 import { Film } from "lucide-react"
 import { getCameraFormat, getCameraFormatLabel } from "@nodaro/shared"
 import { ParameterNodeShell } from "./parameter-node-shell"
+import { usePickerJsonConsumer } from "./use-picker-json-consumer"
+import { PICKER_CONSUMER_INPUT_HANDLES, PickerJsonHandleIcon, PickerUpdateButton } from "./picker-json-handle"
 import { CameraFormatPreview } from "@/components/editor/config-panels/camera-format-preview"
 import type { CameraFormatData } from "@/types/nodes"
 
@@ -13,8 +15,20 @@ function CameraFormatNodeComponent({ id, data, selected }: NodeProps) {
   const cameraFormatId = nodeData.cameraFormat || "35mm-film"
   const description = getCameraFormat(cameraFormatId)?.description
 
+  const { isConnected, hasPending, apply } = usePickerJsonConsumer("camera-format", id, nodeData)
+
   return (
-    <ParameterNodeShell id={id} label={nodeData.label} icon={<Film />} handleId="out" selected={selected} fluidWidth>
+    <ParameterNodeShell
+      id={id}
+      label={nodeData.label}
+      icon={<Film />}
+      handleId="out"
+      selected={selected}
+      fluidWidth
+      inputHandles={PICKER_CONSUMER_INPUT_HANDLES}
+      extraHandleIcons={<PickerJsonHandleIcon nodeId={id} nodeType="camera-format" />}
+      headerSlot={isConnected && !nodeData.autoApplyInjected ? <PickerUpdateButton hasPending={hasPending} onApply={apply} /> : null}
+    >
       <p className="text-foreground text-sm font-medium">
         {getCameraFormatLabel(cameraFormatId)}
       </p>

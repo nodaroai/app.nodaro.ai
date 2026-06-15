@@ -26,6 +26,7 @@ import type { PipelineState } from "@nodaro/shared"
 import type { ReferenceSheet } from "@nodaro/shared"
 import type { PersonValue, WardrobeValue } from "@nodaro/shared"
 import type { SheetType, SheetSkin, SheetFlavour, EntityKind } from "@nodaro/shared"
+import type { PickerApplyMode, PickerGaps } from "@nodaro/shared"
 import { MODIFY_IMAGE_PROVIDERS } from "@nodaro/shared"
 import {
   MUSIC_GENRE_DEFAULT_DATA,
@@ -43,6 +44,17 @@ import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
 import { IMAGE_STYLE_PRESETS } from "@/components/editor/config-panels/model-options"
 
 export type NodeCategory = "input" | "parameter" | "ai" | "processing" | "output" | "scene" | "character" | "face" | "object" | "creature" | "location" | "utility"
+
+/** Fields shared by every parameter picker that consumes describe-to-picker
+ *  JSON through its `picker-json` input handle. */
+export interface PickerConsumerData {
+  /** How injected picker JSON is applied. Default "override". */
+  applyMode?: PickerApplyMode
+  /** When true, applies injected JSON automatically on upstream change. */
+  autoApplyInjected?: boolean
+  /** The picker JSON last applied — basis for change detection. */
+  lastAppliedPickerJson?: Record<string, unknown>
+}
 
 export interface FieldMapping {
   readonly sourceNodeId: string
@@ -467,10 +479,10 @@ export type FramingData = {
   preText?: string
   /** Free-text appended after the structured hint. */
   postText?: string
-}
+} & PickerConsumerData
 
 /** Standalone Lens parameter node data. */
-export interface LensData {
+export interface LensData extends PickerConsumerData {
   [key: string]: unknown
   label: string
   /** Lens id from LENSES catalog (packages/shared/src/lens.ts). */
@@ -482,7 +494,7 @@ export interface LensData {
 }
 
 /** Standalone Camera / Film Stock parameter node data. */
-export interface CameraFormatData {
+export interface CameraFormatData extends PickerConsumerData {
   [key: string]: unknown
   label: string
   /** Camera-format id from CAMERA_FORMATS catalog (packages/shared/src/camera-format.ts). */
@@ -694,7 +706,7 @@ export type VoiceDeliveryData = {
  * ("a beautiful woman, in their 30s, East Asian, Parisienne aesthetic, slim
  * build, long wavy hair, brown hair, fair skin, green eyes"). Applies to
  * both image and video consumers. See `packages/shared/src/person.ts`. */
-export interface PersonData {
+export interface PersonData extends PickerConsumerData {
   [key: string]: unknown
   label: string
   /** Primary subject descriptor (Man, Beautiful Woman, Rugged Man, etc.). */
@@ -778,12 +790,6 @@ export interface PersonData {
   /** Distinctive feature (glasses, freckles, tattoos, scar, dimples, piercing).
    *  Single id or up to 3 ids for combined features. */
   distinctiveFeature?: string | ReadonlyArray<string>
-  /** How injected picker JSON is applied. Default "override". */
-  applyMode?: "override" | "overwrite-detected" | "fill-empty"
-  /** When true, applies injected JSON automatically on upstream change. */
-  autoApplyInjected?: boolean
-  /** The picker JSON last applied — basis for change detection. */
-  lastAppliedPickerJson?: Record<string, unknown>
   /** Free-text prepended before the dimension compound. */
   preText?: string
   /** Free-text appended after the dimension compound. */
@@ -799,7 +805,7 @@ export interface PersonData {
  * paint, outfit (complete-look override), top, bottom, outerwear, legwear,
  * footwear, fabric, and wardrobe-state. Applies to both image and video
  * consumers. See `packages/shared/src/styling.ts`. */
-export interface StylingData {
+export interface StylingData extends PickerConsumerData {
   [key: string]: unknown
   label: string
   makeup?: string
@@ -2799,8 +2805,6 @@ export type ImageToTextData = {
 export type DescribeToPickerData = {
   [key: string]: unknown
   label: string
-  /** Which picker the JSON targets. v1: person only. */
-  targetPicker: "person"
   /** Anthropic vision model id; default claude-sonnet-4.6. */
   llmModel?: string
   /** Optional extra guidance appended to the analyzer system prompt. */
@@ -2808,8 +2812,11 @@ export type DescribeToPickerData = {
   executionStatus?: "idle" | "running" | "completed" | "failed"
   currentJobProgress?: number
   errorMessage?: string
-  /** Latest emitted picker JSON (the active result; consumed by picker nodes). */
+  /** Latest emitted multi-section picker JSON `{ person:{…}, styling:{…} }`
+   *  (consumed by the wired picker nodes; each reads its own section). */
   generatedPickerJson?: Record<string, unknown>
+  /** Latest catalog-gap feedback from the analyzer (display only). */
+  generatedGaps?: PickerGaps
 }
 
 // --- Processing Node Data ---
@@ -5157,7 +5164,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Framing",
     category: "parameter",
     creditCost: 0,
-    inputs: ["in"],
+    inputs: ["in", "picker-json"],
     outputs: ["out"],
     defaultData: { label: "Framing", shotSize: "wide-shot" },
   },
@@ -5166,7 +5173,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Lens",
     category: "parameter",
     creditCost: 0,
-    inputs: ["in"],
+    inputs: ["in", "picker-json"],
     outputs: ["out"],
     defaultData: { label: "Lens", lens: "normal-50mm" },
   },
@@ -5175,7 +5182,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Camera / Film Stock",
     category: "parameter",
     creditCost: 0,
-    inputs: ["in"],
+    inputs: ["in", "picker-json"],
     outputs: ["out"],
     defaultData: { label: "Camera / Film Stock", cameraFormat: "35mm-film" },
   },
@@ -5346,7 +5353,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Styling",
     category: "parameter",
     creditCost: 0,
-    inputs: ["in"],
+    inputs: ["in", "picker-json"],
     outputs: ["out"],
     defaultData: { label: "Styling", makeup: "makeup-natural", maxItemsPerRow: 2 },
   },
@@ -6002,7 +6009,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 1,
     inputs: ["image"],
     outputs: ["picker-json"],
-    defaultData: { label: "Describe to Picker", targetPicker: "person" } as DescribeToPickerData,
+    defaultData: { label: "Describe to Picker" } as DescribeToPickerData,
   },
   {
     type: "audio-isolation",

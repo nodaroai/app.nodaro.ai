@@ -1,9 +1,8 @@
 "use client"
 
-import { memo, useEffect, useMemo } from "react"
-import { Position, type NodeProps } from "@xyflow/react"
-import { useShallow } from "zustand/react/shallow"
-import { UserRound, ScanFace } from "lucide-react"
+import { memo } from "react"
+import { type NodeProps } from "@xyflow/react"
+import { UserRound } from "lucide-react"
 import {
   PERSON_DIMENSION_LABELS,
   PERSON_DIMENSION_ORDER,
@@ -13,24 +12,11 @@ import {
   pickIds,
   type PersonDimension,
 } from "@nodaro/shared"
-import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { ParameterNodeShell } from "./parameter-node-shell"
-import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { getPersonEntryIcon } from "./person-styling-icon"
-import { ACCEPTS_PICKER_JSON } from "@/lib/target-handle-registry"
-import { pickerJsonKey, computeInjectionPatch } from "./person-injection"
-import type { HandleConfig } from "./base-node"
-import type { PersonData, DescribeToPickerData } from "@/types/nodes"
-
-const PICKER_JSON_TOP = "calc(100% - 25px)"
-
-// Hoisted so React Flow's reference equality on handles holds across renders.
-// `external: true` — BaseNode counts this for sizing but doesn't render it; the
-// typed pip is owned by <HandleWithPopover> below (mirrors character-fx-node +
-// camera-motion-node). `left`/`top` match the HandleConfig and the popover.
-const INPUT_HANDLES: ReadonlyArray<HandleConfig> = [
-  { id: "picker-json", type: "target", position: Position.Left, customStyle: { top: PICKER_JSON_TOP, left: "-29px" }, hideHandle: true, external: true },
-]
+import { usePickerJsonConsumer } from "./use-picker-json-consumer"
+import { PICKER_JSON_INPUT_HANDLES, PickerJsonHandleIcon, PickerUpdateButton } from "./picker-json-handle"
+import type { PersonData } from "@/types/nodes"
 
 interface EnabledEntry {
   readonly dimension: PersonDimension
@@ -53,58 +39,11 @@ function collectEnabled(data: PersonData): EnabledEntry[] {
 
 function PersonNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as PersonData
-  const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const enabled = collectEnabled(nodeData)
   const maxItemsPerRow = Math.max(1, Math.min(4, nodeData.maxItemsPerRow ?? 2))
   const gridColumns = Math.max(1, Math.min(maxItemsPerRow, enabled.length))
 
-  // Narrow subscription: a primitive fingerprint of the `picker-json`-handle
-  // source (id + full data). Mirrors video-retake-node — serialize the one
-  // connected source's data wholesale so the `injected` memo re-runs (and the
-  // pending flag re-derives) when the upstream describe-to-picker result
-  // changes, while avoiding a whole-array `s.nodes` / `s.edges` subscription
-  // that would re-render every person node on any graph mutation.
-  const fingerprint = useWorkflowStore(
-    useShallow((s) => {
-      const edge = s.edges.find((e) => e.target === id && e.targetHandle === "picker-json")
-      if (!edge) return ""
-      const src = s.nodes.find((n) => n.id === edge.source)
-      if (!src) return `${edge.id}\x01${edge.source}`
-      return `${edge.id}\x01${src.id}\x01${JSON.stringify(src.data ?? {})}`
-    }),
-  )
-
-  // Read the upstream describe-to-picker's generatedPickerJson via live state,
-  // keyed on the fingerprint so it stays current without a whole-array sub.
-  const injected = useMemo<Record<string, unknown> | undefined>(() => {
-    const { nodes, edges } = useWorkflowStore.getState()
-    const edge = edges.find((e) => e.target === id && e.targetHandle === "picker-json")
-    if (!edge) return undefined
-    const src = nodes.find((n) => n.id === edge.source)
-    const d = src?.data as DescribeToPickerData | undefined
-    return d?.generatedPickerJson
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, fingerprint])
-
-  // `fingerprint` is "" exactly when there's no picker-json edge (see the
-  // selector above), so connection state derives from it — no extra subscription.
-  const isConnected = fingerprint !== ""
-  const hasPending = !!injected && pickerJsonKey(injected) !== pickerJsonKey(nodeData.lastAppliedPickerJson)
-  const mode = nodeData.applyMode ?? "override"
-
-  const apply = () => {
-    if (!injected) return
-    updateNodeData(id, computeInjectionPatch(nodeData, injected, mode))
-  }
-
-  // Auto-apply on upstream change. After applying, lastAppliedPickerJson is set
-  // to `injected` → on the next render hasPending becomes false, so this effect
-  // re-runs but short-circuits at the guard — no apply loop.
-  useEffect(() => {
-    if (!nodeData.autoApplyInjected || !injected || !hasPending) return
-    updateNodeData(id, computeInjectionPatch(nodeData, injected, mode))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [injected, hasPending, nodeData.autoApplyInjected, mode, id])
+  const { isConnected, hasPending, apply } = usePickerJsonConsumer("person", id, nodeData)
 
   return (
     <ParameterNodeShell
@@ -114,40 +53,14 @@ function PersonNodeComponent({ id, data, selected }: NodeProps) {
       handleId="out"
       selected={selected}
       fluidWidth
-      inputHandles={INPUT_HANDLES}
-      extraHandleIcons={
-        <HandleWithPopover
-          nodeId={id}
-          handleId="picker-json"
-          nodeType="person"
-          type="target"
-          position={Position.Left}
-          label="Picker JSON"
-          color={HANDLE_COLORS.pickerJson}
-          icon={<ScanFace className="w-3.5 h-3.5" />}
-          accepts={ACCEPTS_PICKER_JSON}
-          side="left"
-          top={PICKER_JSON_TOP}
-          // Single ambiguous input pip — pin the label visible so it's clear
-          // this accepts an image→picker analysis result, not arbitrary output.
-          alwaysShowLabel
-        />
+      inputHandles={PICKER_JSON_INPUT_HANDLES}
+      extraHandleIcons={<PickerJsonHandleIcon nodeId={id} nodeType="person" />}
+      headerSlot={
+        isConnected && !nodeData.autoApplyInjected ? (
+          <PickerUpdateButton hasPending={hasPending} onApply={apply} />
+        ) : null
       }
     >
-      {isConnected && !nodeData.autoApplyInjected && (
-        <button
-          type="button"
-          disabled={!hasPending}
-          onClick={apply}
-          className={`mb-2 w-full rounded-md px-2 py-1 text-xs font-medium ${
-            hasPending
-              ? "bg-[#ff0073] text-white hover:bg-[#ff0073]/90"
-              : "bg-muted text-muted-foreground cursor-not-allowed"
-          }`}
-        >
-          {hasPending ? "⚡ Update from injected" : "Up to date"}
-        </button>
-      )}
       {enabled.length > 0 ? (
         <div
           style={{

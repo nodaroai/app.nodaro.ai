@@ -1,3 +1,4 @@
+import { ANALYZABLE_PICKER_TYPES } from "@nodaro/shared"
 import { GENERATE_IMAGE_INPUT_HANDLES, IDENTITY_TYPES, isValidGenerateImageConnection } from "./generate-image-handles"
 import { ACCEPTS_VIDEO, ACCEPTS_AUDIO, ACCEPTS_MEDIA } from "./ffmpeg-handles"
 import {
@@ -199,13 +200,12 @@ const GENERATE_IMAGE_HANDLE_LABELS: Record<string, string> = {
 }
 
 /**
- * Per-node-type list of target handles + their accept predicates.
- * Source-direction popovers walk this map to find candidate consumers.
- *
- * As more nodes adopt typed handles (Edit Image, I2V, etc. — separate
- * playbook migration), they each register here too.
+ * Hand-authored base of per-node-type target handles + accept predicates.
+ * The exported `TARGET_HANDLE_ACCEPTS` (below) is this PLUS a generated
+ * picker-json entry per analyzable picker, so picker-json membership stays
+ * set-driven. Add non-picker-json typed handles here.
  */
-export const TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry>> = {
+const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry>> = {
   // Generate Image uses the VISUAL-picker predicate (audio pickers like
   // music-genre / voice-* never feed a still-image target). This matches
   // connection-validation.ts:71 so the pip's "valid candidate" highlight
@@ -235,15 +235,6 @@ export const TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEnt
   // nothing.
   "character-fx": [
     { handleId: "target", label: "Target subject", accepts: ACCEPTS_CHARACTER_REF },
-  ],
-
-  // Person picker — `picker-json` accepts ONLY the describe-to-picker producer
-  // (catalog-valid picker JSON from a vision-LLM image analysis). Lets a
-  // describe-to-picker source pip's popover surface "→ Picker JSON" as a
-  // candidate; the canvas validator's source rule + this accepts predicate
-  // stay in agreement.
-  "person": [
-    { handleId: "picker-json", label: "Picker JSON", accepts: ACCEPTS_PICKER_JSON },
   ],
 
   // Reference Sheet takes ONE entity ref on its `in` handle (character / object /
@@ -535,6 +526,36 @@ export const TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEnt
     { handleId: "cinematography", label: IDENTITY_HANDLE_LABELS["location"].cinematography, accepts: (s) => isValidLocationConnection("cinematography", s, isVisualPickerType) },
   ],
 }
+
+/** picker-json target entry, shared by every analyzable picker (catalog-valid
+ *  JSON from the describe-to-picker producer). */
+const PICKER_JSON_TARGET_ENTRY: TargetHandleEntry = {
+  handleId: "picker-json",
+  label: "Picker JSON",
+  accepts: ACCEPTS_PICKER_JSON,
+}
+
+/**
+ * Per-node-type list of target handles + their accept predicates.
+ * Source-direction popovers walk this map to find candidate consumers.
+ *
+ * As more nodes adopt typed handles (Edit Image, I2V, etc. — separate
+ * playbook migration), they each register here too.
+ *
+ * Built from BASE plus a generated picker-json entry per analyzable picker
+ * (`ANALYZABLE_PICKER_TYPES` from @nodaro/shared) — registering a new picker
+ * auto-registers its picker-json target, so this membership can never drift
+ * from a hand-maintained list of 5. A picker that already has a BASE entry
+ * (e.g. its `in` handle) keeps it and gets picker-json appended; person had
+ * NO BASE entry (its old hardcoded picker-json entry was removed), so the
+ * loop is what re-adds person's single picker-json entry.
+ */
+export const TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry>> = (() => {
+  const map: Record<string, TargetHandleEntry[]> = {}
+  for (const [k, v] of Object.entries(BASE_TARGET_HANDLE_ACCEPTS)) map[k] = [...v]
+  for (const t of ANALYZABLE_PICKER_TYPES) (map[t] ??= []).push(PICKER_JSON_TARGET_ENTRY)
+  return map
+})()
 
 export interface TargetCandidateMatch {
   readonly nodeType: string

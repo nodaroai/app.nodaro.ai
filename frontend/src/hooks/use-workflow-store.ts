@@ -33,6 +33,7 @@ import { migrateGenerateImageHandles } from "@/lib/generate-image-handle-migrati
 import { migrateGenerateVideoNodes } from "@/lib/generate-video-handle-migration"
 import { migrateListLoopNodes } from "@/lib/list-loop-migration"
 import { migratePersonNodes } from "@/lib/person-value-migration"
+import { migrateDescribeToPickerNodes } from "@/lib/describe-to-picker-migration"
 import { migratePickerSourceHandle, isTileGridPickerType } from "@/lib/picker-handles"
 
 /**
@@ -2160,6 +2161,9 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     // (eyeShape → eyelidType/canthalTilt/eyeSpacing; lips → lipFullness/lipShape).
     // UI hygiene only — prompt output is identical pre/post (id-based hints).
     migratedNodes = migratePersonNodes(migratedNodes)
+
+    // Multi-picker era: flat person JSON → { person: … }; drop dead targetPicker.
+    migratedNodes = migrateDescribeToPickerNodes(migratedNodes)
 
     // Migrate legacy audio/text output handle ids to the normalized
     // single-word form, AND rewrite target ids for audio nodes whose

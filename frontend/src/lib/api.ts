@@ -3703,12 +3703,12 @@ export async function imageToTextApi(
 
 export async function describeToPickerApi(
   imageUrl: string,
-  targetPicker: "person",
+  targetPickers: string[],
   userId?: string,
   llmModel?: string,
   instructions?: string,
-): Promise<{ jobId: string; pickerJson: Record<string, unknown> }> {
-  const body: Record<string, unknown> = { imageUrl, targetPicker }
+): Promise<{ jobId: string; pickerJson: Record<string, unknown>; gaps?: import("@nodaro/shared").PickerGaps }> {
+  const body: Record<string, unknown> = { imageUrl, targetPickers }
   if (userId) body.userId = userId
   if (llmModel) body.llmModel = llmModel
   if (instructions) body.instructions = instructions

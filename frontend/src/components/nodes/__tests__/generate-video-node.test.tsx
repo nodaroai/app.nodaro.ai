@@ -133,7 +133,14 @@ vi.mock("@/hooks/use-result-aspect-ratio", () => ({
   useResultAspectRatio: () => ({ aspectRatio: undefined, onLoadDimensions: vi.fn() }),
 }))
 
-vi.mock("@nodaro/shared", () => ({
+// Spread the REAL @nodaro/shared so any symbol the (non-mocked) component
+// import graph needs at module-eval time is present — e.g. target-handle-
+// registry's ANALYZABLE_PICKER_TYPES, loaded transitively via the real
+// handle-with-popover above. Only buildVideoCreditModelIdentifier is
+// overridden (the one symbol this test pins). The heavy catalog chain the
+// node doesn't care about is short-circuited at @/lib/handle-limits below.
+vi.mock("@nodaro/shared", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   buildVideoCreditModelIdentifier: vi.fn(() => "kling"),
 }))
 

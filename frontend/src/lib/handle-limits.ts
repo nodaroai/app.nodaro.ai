@@ -5,6 +5,7 @@ import {
   VIDEO_REF_LIMITS_BY_PROVIDER,
   getModel,
   isSeedance2Provider,
+  isAnalyzablePicker,
 } from "@nodaro/shared"
 import {
   PROVIDERS_WITH_END_FRAME,
@@ -52,9 +53,11 @@ export function getHandleConnectionLimit(
     return { limit: 1, providerLabel: "Retake", isMultiProviderMin: false }
   }
 
-  // person's `picker-json` target accepts exactly one image→picker analysis
-  // result — the consumer applies a single JSON into its dimension fields.
-  if (node.type === "person" && handleId === "picker-json") {
+  // Every analyzable picker's `picker-json` target accepts exactly one
+  // image→picker analysis result — the consumer applies a single JSON into
+  // its fields. Set-driven via `isAnalyzablePicker` (@nodaro/shared) so a new
+  // analyzable picker inherits the cap without editing this list.
+  if (isAnalyzablePicker(node.type) && handleId === "picker-json") {
     return { limit: 1, providerLabel: "Picker", isMultiProviderMin: false }
   }
 

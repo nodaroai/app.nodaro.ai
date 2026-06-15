@@ -1,7 +1,7 @@
 ---
 node_type: person
-generated_at: 2026-06-14T16:49:25.468Z
-generated_from: c25bcd94b
+generated_at: 2026-06-14T23:30:28.802Z
+generated_from: 90fa6b6ee
 ---
 
 # Person
@@ -48,9 +48,6 @@ generated_from: c25bcd94b
 - `eyeState?: string | ReadonlyArray<string>`
 - `facialHair?: string`
 - `distinctiveFeature?: string | ReadonlyArray<string>`
-- `applyMode?: "override" | "overwrite-detected" | "fill-empty"`
-- `autoApplyInjected?: boolean`
-- `lastAppliedPickerJson?: Record<string, unknown>`
 - `preText?: string`
 - `postText?: string`
 - `maxItemsPerRow?: number`

@@ -561,6 +561,18 @@ export const FRAMING_FIELD_BY_CATEGORY: Record<
   vantage: "vantage",
 }
 
+/** Per-category multi-select cap. composition supports 2 picks
+ *  (rule-of-thirds + leading-lines, centered + negative-space). All other
+ *  categories single-select (absent → 1). */
+export const MAX_SELECTED_BY_FRAMING_CATEGORY: Partial<Record<FramingCategory, number>> = {
+  composition: 2,
+}
+
+/** Selection limit for a framing category (1 when not multi-select). */
+export function getFramingCategoryLimit(category: FramingCategory): number {
+  return MAX_SELECTED_BY_FRAMING_CATEGORY[category] ?? 1
+}
+
 /**
  * Shape of the per-category framing fields on FramingData and all 9 consumer
  * data types. All fields optional — user may set zero, one, or all categories.

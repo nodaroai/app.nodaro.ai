@@ -7,6 +7,7 @@ import {
   FRAMING_CATEGORY_ORDER,
   FRAMING_CATEGORY_LABELS,
   FRAMING_FIELD_BY_CATEGORY,
+  MAX_SELECTED_BY_FRAMING_CATEGORY,
   type Framing,
   type FramingCategory,
   type FramingValue,
@@ -19,12 +20,6 @@ import { cn } from "@/lib/utils"
 import { FramingPreview } from "./framing-preview"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 import { MultiPickBadge } from "./multi-pick-ui"
-
-/** Per-category multi-select cap. composition supports 2 picks
- *  (rule-of-thirds + leading-lines, centered + negative-space). */
-const MAX_SELECTED_BY_FRAMING_CATEGORY: Partial<Record<FramingCategory, number>> = {
-  composition: 2,
-}
 
 interface FramingPickerProps {
   readonly value: FramingValue

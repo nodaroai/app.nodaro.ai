@@ -521,6 +521,8 @@ export {
   FRAMING_CATEGORY_ORDER,
   FRAMING_CATEGORY_LABELS,
   FRAMING_FIELD_BY_CATEGORY,
+  MAX_SELECTED_BY_FRAMING_CATEGORY,
+  getFramingCategoryLimit,
   getFraming,
   getFramingLabel,
   getFramingPromptHint,
@@ -899,6 +901,13 @@ export {
   buildPickerLegend,
   getPickerAnalyzer,
   applyPickerJson,
+  PICKER_ANALYZER_REGISTRY,
+  PICKER_TYPES,
+  ANALYZABLE_PICKER_TYPES,
+  isAnalyzablePicker,
+  GAPS_SCHEMA,
+  buildMultiPickerAnalyzerSpec,
+  pickerFanoutTargets,
 } from "./picker-analyzer-registry.js"
 export type {
   PickerType,
@@ -906,6 +915,9 @@ export type {
   PickerDimensionSpec,
   PickerApplyMode,
   PickerAnalyzer,
+  PickerAnalyzerDescriptor,
+  PickerGaps,
+  MultiPickerAnalyzerSpec,
 } from "./picker-analyzer-registry.js"
 export {
   WARDROBE, WARDROBE_DIMENSION_ORDER, WARDROBE_CATEGORY_LABELS, WARDROBE_FIELD_BY_DIMENSION,
@@ -969,6 +981,8 @@ export {
   STYLING_DIMENSION_LABELS,
   STYLING_DIMENSION_ORDER,
   STYLING_FIELD_BY_DIMENSION,
+  MAX_SELECTED_BY_STYLING_DIMENSION,
+  getStylingDimensionLimit,
   getStyling,
   getStylingLabel,
   getStylingPromptHint,

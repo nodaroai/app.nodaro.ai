@@ -13,6 +13,8 @@ import {
 } from "@nodaro/shared"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import { FramingPreview } from "@/components/editor/config-panels/framing-preview"
+import { usePickerJsonConsumer } from "./use-picker-json-consumer"
+import { PICKER_CONSUMER_INPUT_HANDLES, PickerJsonHandleIcon, PickerUpdateButton } from "./picker-json-handle"
 import type { FramingData } from "@/types/nodes"
 
 interface EnabledEntry {
@@ -40,6 +42,8 @@ function FramingNodeComponent({ id, data, selected }: NodeProps) {
   // selection fills the row instead of sitting at half-width.
   const gridColumns = Math.max(1, Math.min(maxItemsPerRow, enabled.length))
 
+  const { isConnected, hasPending, apply } = usePickerJsonConsumer("framing", id, nodeData)
+
   return (
     <ParameterNodeShell
       id={id}
@@ -48,6 +52,9 @@ function FramingNodeComponent({ id, data, selected }: NodeProps) {
       handleId="out"
       selected={selected}
       fluidWidth
+      inputHandles={PICKER_CONSUMER_INPUT_HANDLES}
+      extraHandleIcons={<PickerJsonHandleIcon nodeId={id} nodeType="framing" />}
+      headerSlot={isConnected && !nodeData.autoApplyInjected ? <PickerUpdateButton hasPending={hasPending} onApply={apply} /> : null}
     >
       {enabled.length > 0 ? (
         <div

@@ -31,14 +31,17 @@ interface ParameterNodeShellProps {
   readonly inputHandles?: ReadonlyArray<HandleConfig>
   /** Floating HandleIcon labels rendered outside the node frame. */
   readonly extraHandleIcons?: ReactNode
+  /** Content rendered above the (display-mode-toggled) children and kept
+   *  visible in all display modes — e.g. the picker-json "Update" button. */
+  readonly headerSlot?: ReactNode
 }
 
-const DEFAULT_INPUT_HANDLES: ReadonlyArray<HandleConfig> = [
+export const PARAMETER_DEFAULT_INPUT_HANDLES: ReadonlyArray<HandleConfig> = [
   { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 24px)', left: '-6px' }, hideHandle: true },
 ]
 
 const makeHandles = (handleId: string, sourceIsExternal: boolean, inputHandles?: ReadonlyArray<HandleConfig>): ReadonlyArray<HandleConfig> => [
-  ...(inputHandles ?? DEFAULT_INPUT_HANDLES),
+  ...(inputHandles ?? PARAMETER_DEFAULT_INPUT_HANDLES),
   // external: when the node type is a registered picker, BaseNode counts the
   // entry for sizing but skips rendering — the pip is rendered by
   // <HandleWithPopover> below for typed-color + popover UX. For non-picker
@@ -49,7 +52,7 @@ const makeHandles = (handleId: string, sourceIsExternal: boolean, inputHandles?:
   { id: handleId, type: "source", position: Position.Right, customStyle: { top: '24px', right: '-29px' }, hideHandle: true, external: sourceIsExternal },
 ]
 
-export function ParameterNodeShell({ id, label, icon, handleId, selected, children, fluidWidth, inputHandles, extraHandleIcons }: ParameterNodeShellProps) {
+export function ParameterNodeShell({ id, label, icon, handleId, selected, children, fluidWidth, inputHandles, extraHandleIcons, headerSlot }: ParameterNodeShellProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const updateNode = useWorkflowStore((s) => s.updateNode)
   const runFromHere = useWorkflowStore((s) => s.runFromHere)
@@ -269,6 +272,7 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
               participates in width calculation, so toggling modes never
               changes the node's horizontal size. */}
           <div ref={naturalContentRef}>
+            {headerSlot}
             <div
               className={cn(
                 displayMode === "prompt" &&

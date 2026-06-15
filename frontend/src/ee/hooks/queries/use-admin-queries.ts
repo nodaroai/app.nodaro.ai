@@ -832,6 +832,53 @@ export function useDeleteCreditAnomalyMutation() {
   })
 }
 
+// --- Picker Catalog Gaps ---
+export interface PickerGap {
+  readonly id: string
+  readonly picker_type: string
+  readonly gap_type: "item" | "category"
+  readonly dimension: string
+  readonly observed: string
+  readonly chosen_id: string | null
+  readonly count: number
+  readonly status: "new" | "reviewed" | "added" | "dismissed"
+  readonly first_seen: string
+  readonly last_seen: string
+}
+
+export function useAdminPickerGaps(offset: number, picker: string, gapType: string, status: string) {
+  return useQuery({
+    queryKey: queryKeys.admin.pickerGaps(offset, picker, gapType, status),
+    queryFn: async (): Promise<{ data: PickerGap[]; total: number }> => {
+      const params = new URLSearchParams({ offset: String(offset), limit: "50" })
+      if (picker !== "all") params.set("picker", picker)
+      if (gapType !== "all") params.set("gapType", gapType)
+      if (status !== "all") params.set("status", status)
+      const res = await fetch(`/v1/admin/picker-gaps?${params}`, { headers: await getAuthHeaders() })
+      if (!res.ok) throw new Error("Failed to fetch picker gaps")
+      return res.json()
+    },
+    enabled: hasAdmin(),
+    staleTime: 15_000,
+  })
+}
+
+export function usePatchPickerGapMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: PickerGap["status"] }) => {
+      const res = await fetch(`/v1/admin/picker-gaps/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...(await getAuthHeaders()) },
+        body: JSON.stringify({ status }),
+      })
+      if (!res.ok) throw new Error("Failed to update gap")
+      return res.json()
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "picker-gaps"] }),
+  })
+}
+
 // --- LLM Models ---
 
 export interface AdminLlmModel {

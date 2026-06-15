@@ -104,6 +104,7 @@ import { meRoutes } from "./routes/me.js"
 import { adminGalleryReportsRoutes } from "./ee/routes/admin-gallery-reports.js"
 import { adminCreditAuditRoutes } from "./ee/routes/admin-credit-audit.js"
 import { adminCreditAnomalyRoutes } from "./ee/routes/admin-credit-anomalies.js"
+import { adminPickerGapsRoutes } from "./ee/routes/admin-picker-gaps.js"
 import { adminKieCreditsRoutes } from "./ee/routes/admin-kie-credits.js"
 import { adminStuckPipelinesRoutes } from "./ee/routes/admin-stuck-pipelines.js"
 import { adminSubscriptionHealthRoutes } from "./ee/routes/admin-subscription-health.js"
@@ -385,6 +386,7 @@ export async function buildApp() {
   if (hasAdmin()) await app.register(adminGalleryReportsRoutes)
   if (hasAdmin()) await app.register(adminCreditAuditRoutes)
   if (hasAdmin()) await app.register(adminCreditAnomalyRoutes)
+  if (hasAdmin()) await app.register(adminPickerGapsRoutes)
   if (hasAdmin()) await app.register(adminKieCreditsRoutes)
   if (hasAdmin()) await app.register(adminStuckPipelinesRoutes)
   if (hasCredits()) await app.register(adminSubscriptionHealthRoutes)  // getStripe + TIER_CREDITS
