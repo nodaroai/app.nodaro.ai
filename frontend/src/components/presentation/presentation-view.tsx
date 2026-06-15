@@ -1636,7 +1636,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
         {/* App runner: action buttons — desktop only in header, mobile uses fixed bottom bar */}
         {isAppRunner && (
           <div className="hidden md:flex items-center gap-2 md:absolute md:left-1/2 md:-translate-x-1/2">
-            {user && (
+            {user && viewMode !== "chat" && (
               <button
                 type="button"
                 onClick={onNewRun}
@@ -1937,7 +1937,15 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
         />
       )}
       {viewMode === "chat" && (
-        <ChatView {...editableProps} runSlots={runSlots} appName={workflowName} />
+        <ChatView
+          {...editableProps}
+          runSlots={runSlots}
+          appName={workflowName}
+          launch={runSlots?.launch}
+          costLabel={costLabel}
+          needsMoreCredits={needsMoreCredits}
+          allInputsFilled={allInputsFilled}
+        />
       )}
 
       {/* Node picker dialog */}
@@ -2011,7 +2019,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
       {/* Mobile fixed bottom action bar for app runner — stays above keyboard */}
       {isAppRunner && (
         <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex items-center justify-center gap-2 px-3 py-2 bg-card/95 backdrop-blur-lg border-t border-border" style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}>
-          {user && (
+          {user && viewMode !== "chat" && (
             <button
               type="button"
               onClick={onNewRun}

@@ -50,3 +50,57 @@ describe("FullscreenView keyboard nav", () => {
     expect(baseProps.onBack).toHaveBeenCalled()
   })
 })
+
+describe("FullscreenView overlay (chat result viewer)", () => {
+  it("uses resolveResult to build items and seeds to initialNodeId", () => {
+    const resolveResult = (id: string) =>
+      id === "in1" ? { url: "https://frozen/in.png" } : id === "out1" ? { url: "https://frozen/out.png" } : {}
+    render(
+      <FullscreenView
+        {...baseProps}
+        asOverlay
+        resolveResult={resolveResult}
+        initialNodeId="out1"
+      />,
+    )
+    // Seeded directly onto the output (index 1), not the first input.
+    expect(screen.getByText("output")).toBeInTheDocument()
+    expect(screen.getByText("Result")).toBeInTheDocument()
+  })
+
+  it("ArrowDown calls onRunChange instead of runSlots when provided", () => {
+    const onRunChange = vi.fn()
+    const runSlots = {
+      slots: [{ id: "a" }, { id: "b" }],
+      activeSlotId: "a",
+      handleCreateNew: vi.fn(),
+      handleDuplicateSlot: vi.fn(),
+      handleSelectSlot: vi.fn(),
+    }
+    render(<FullscreenView {...baseProps} asOverlay runSlots={runSlots} onRunChange={onRunChange} />)
+    fireEvent.keyDown(document, { key: "ArrowDown" })
+    expect(onRunChange).toHaveBeenCalledWith(1)
+    expect(runSlots.handleSelectSlot).not.toHaveBeenCalled()
+  })
+
+  it("renders a Close button in overlay mode", () => {
+    render(<FullscreenView {...baseProps} asOverlay />)
+    expect(screen.getByRole("button", { name: /close/i })).toBeInTheDocument()
+  })
+
+  it("re-points to the same node when a run switch reorders the item list", () => {
+    // Run A: only the output resolves → items = [Result] (out1 at index 0).
+    const onlyOutput = (id: string) => (id === "out1" ? { url: "https://a/out.png" } : {})
+    const { rerender } = render(
+      <FullscreenView {...baseProps} asOverlay resolveResult={onlyOutput} initialNodeId="out1" />,
+    )
+    expect(screen.getByText("Result")).toBeInTheDocument()
+    // Run B: BOTH input and output resolve → items = [Source, Result]; out1 moves to index 1.
+    const both = (id: string) =>
+      id === "in1" ? { url: "https://b/in.png" } : id === "out1" ? { url: "https://b/out.png" } : {}
+    rerender(<FullscreenView {...baseProps} asOverlay resolveResult={both} initialNodeId="out1" />)
+    // Still showing the OUTPUT (out1), not the newly-prepended input — the seed re-pointed.
+    expect(screen.getByText("output")).toBeInTheDocument()
+    expect(screen.getByText("Result")).toBeInTheDocument()
+  })
+})

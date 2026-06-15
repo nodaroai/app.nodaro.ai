@@ -13,6 +13,8 @@ export interface RunSlotsApi {
   handleCreateNew: () => void
   handleDuplicateSlot: (slotId: string) => void
   handleSelectSlot: (slotId: string) => void
+  /** Chat composer: snapshot the persistent draft into a new run and execute it. */
+  launch?: () => void
 }
 
 export interface ViewProps {

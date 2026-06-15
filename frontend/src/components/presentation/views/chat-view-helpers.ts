@@ -1,8 +1,76 @@
+import { getParameterValue } from "@nodaro/shared"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { ORIGINAL_SLOT_ID, type RunSlot, type RunSlotNodeState } from "@/components/app-runner/types"
 import { isExecutableNode } from "@/components/editor/workflow-editor/types"
 import { getNodeLabel } from "@/lib/presentation-utils"
-import { isParameterPickerNode } from "@/lib/parameter-picker-types"
+import { isMultiColumnList } from "@/lib/list-loop-migration"
+import { deriveSingleColumnListItems } from "../helpers"
+
+const UPLOAD_TYPES = new Set(["upload-image", "upload-video", "upload-audio"])
+export const isUploadNode = (type?: string) => UPLOAD_TYPES.has(type ?? "")
+
+/** First media/result URL on an output payload (covers every provider's field name). */
+export function outputUrl(out: Record<string, unknown> | undefined): string | undefined {
+  if (!out) return undefined
+  return (out.imageUrl ?? out.videoUrl ?? out.audioUrl ?? out.url ?? out.resultUrl) as string | undefined
+}
+
+/** First non-empty string field of an input-value bag (fallback chip label). */
+export function firstStringValue(v: Record<string, unknown> | undefined): string | undefined {
+  if (!v) return undefined
+  for (const val of Object.values(v)) {
+    if (typeof val === "string" && val.trim()) return val.trim()
+  }
+  return undefined
+}
+
+/** Count of populated rows/items for a list node (shares the single-column
+ * derivation with areAllInputsFilled — see deriveSingleColumnListItems). */
+function countListItems(data: Record<string, unknown>, inputVals: Record<string, unknown> | undefined): number {
+  if (isMultiColumnList(data)) {
+    const rows = (inputVals?.rows as string[][] | undefined) ?? (data.rows as string[][]) ?? []
+    return rows.length
+  }
+  return deriveSingleColumnListItems(data, inputVals).length
+}
+
+/**
+ * Short display string for a composer chip — `undefined` means "empty / show
+ * the bare label". Uploads return undefined (the chip renders a thumbnail from
+ * `inputValues[id].url` itself); lists summarise as "N items"; parameter nodes
+ * resolve through the typed `getParameterValue` (with a first-string fallback).
+ */
+export function getChipValue(
+  node: WorkflowNode,
+  inputValues: Record<string, Record<string, unknown>>,
+): string | undefined {
+  const type = node.type ?? ""
+  const inputVals = inputValues[node.id]
+  const data = (node.data ?? {}) as Record<string, unknown>
+
+  if (type === "text-prompt") {
+    return (((inputVals?.text as string) ?? (data.text as string) ?? "").trim()) || undefined
+  }
+  if (isUploadNode(type)) return undefined
+  if (type === "list") {
+    const n = countListItems(data, inputVals)
+    return n > 0 ? `${n} item${n === 1 ? "" : "s"}` : undefined
+  }
+  const merged = { ...data, ...(inputVals ?? {}) }
+  return getParameterValue(merged, type)?.trim() || firstStringValue(inputVals) || undefined
+}
+
+/**
+ * Resolve a node's media/text for a FROZEN run slot (used by the chat result
+ * viewer). Outputs win over inputs: a completed output payload, else the run's
+ * submitted input value.
+ */
+export function resolveSlotResult(slot: RunSlot, nodeId: string): { url?: string; text?: string } {
+  const out = slot.nodeStates[nodeId]?.output
+  if (out) return { url: outputUrl(out), text: out.text as string | undefined }
+  const iv = slot.inputValues[nodeId]
+  return { url: iv?.url as string | undefined, text: iv?.text as string | undefined }
+}
 
 export interface ThreadMessage {
   slot: RunSlot
@@ -108,34 +176,3 @@ export function buildStepChips(
   }))
 }
 
-const TALL_INPUT_TYPES = new Set(["list", "ai-avatar", "cinematic-avatar"])
-
-/**
- * Adaptive composer default (design decision B): start expanded when the app has
- * any tall/multi-field input (loop table, parameter picker, avatar) or more than
- * two curated inputs; otherwise start collapsed (compact bar).
- */
-export function shouldExpandComposer(inputNodes: WorkflowNode[]): boolean {
-  if (inputNodes.length > 2) return true
-  return inputNodes.some((n) => TALL_INPUT_TYPES.has(n.type ?? "") || isParameterPickerNode(n.type))
-}
-
-export interface MessageSummary {
-  label: string
-  inputCount: number
-  creditsUsed: number
-}
-
-/** Left-side summary for a message: first non-empty text input as the label. */
-export function getMessageSummary(slot: RunSlot, inputNodes: WorkflowNode[]): MessageSummary {
-  let label = ""
-  for (const n of inputNodes) {
-    const text = (slot.inputValues[n.id]?.text as string) ?? ""
-    if (text.trim()) {
-      label = text.trim()
-      break
-    }
-  }
-  if (!label) label = slot.name?.trim() || "Run"
-  return { label, inputCount: inputNodes.length, creditsUsed: slot.creditsUsed }
-}
