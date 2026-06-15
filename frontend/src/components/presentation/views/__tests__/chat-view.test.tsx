@@ -53,11 +53,12 @@ beforeEach(() => {
 })
 
 describe("ChatView", () => {
-  it("shows the empty-state hero + composer when there are no runs", () => {
+  it("shows the empty-state hero + composer chip bar when there are no runs", () => {
     render(<ChatView {...baseProps} appName="Ads Localizer" appDescription="Localize one ad." />)
     expect(screen.getByText("Ads Localizer")).toBeInTheDocument()
     expect(screen.getByText("Localize one ad.")).toBeInTheDocument()
-    expect(screen.getByTestId("input-t")).toBeInTheDocument()
+    // The text input renders as a collapsed chip (its card opens in a popover).
+    expect(screen.getByText("t")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: /launch/i })).toBeInTheDocument()
   })
 
@@ -84,17 +85,21 @@ describe("ChatView", () => {
     expect(screen.getByText(/re-use inputs/i)).toBeInTheDocument()
   })
 
-  it("mints the next draft when the active run reaches a terminal state", () => {
+  it("prefers launch() over run() on Launch, and preserves the draft (no auto-mint)", () => {
+    const launch = vi.fn()
     const runSlots = {
       slots: [slot({ id: "r1", executionStatus: "running" })],
       activeSlotId: "r1", handleCreateNew: vi.fn(), handleDuplicateSlot: vi.fn(), handleSelectSlot: vi.fn(),
     }
+    // A terminal transition must NOT auto-duplicate the slot anymore.
     state.appRunner = { executionStatus: "running", combinedProgress: {} }
-    const { rerender } = render(<ChatView {...baseProps} runSlots={runSlots} />)
-    expect(runSlots.handleDuplicateSlot).not.toHaveBeenCalled()
-    // transition running → completed
+    const { rerender } = render(<ChatView {...baseProps} runSlots={runSlots} launch={launch} />)
     state.appRunner = { executionStatus: "completed", combinedProgress: {} }
-    rerender(<ChatView {...baseProps} runSlots={runSlots} />)
-    expect(runSlots.handleDuplicateSlot).toHaveBeenCalledWith("r1")
+    rerender(<ChatView {...baseProps} runSlots={runSlots} launch={launch} />)
+    expect(runSlots.handleDuplicateSlot).not.toHaveBeenCalled()
+    // Launch routes to launch(), not run().
+    fireEvent.click(screen.getByRole("button", { name: /launch/i }))
+    expect(launch).toHaveBeenCalledTimes(1)
+    expect(state.presentation.run).not.toHaveBeenCalled()
   })
 })

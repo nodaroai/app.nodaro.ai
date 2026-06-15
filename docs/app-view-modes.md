@@ -28,11 +28,19 @@ A few things to know:
 
 - **Enable it per app.** Chat is opt-in. A viewer only sees it if the creator
   added *Chat* to the app's allowed view modes (or set it as the default).
+- **The composer is a chip bar.** Each input is a compact pill: click it to edit
+  the value in a small popover (text and option pickers) or a dialog (lists,
+  avatars). Uploads keep their label and show a thumbnail once you add a file.
+  The composer always holds the inputs for your **next** run — there's no
+  separate "New Run" button; **Launch** creates the run for you, and your values
+  stay in the composer so you can tweak and fire again.
+- **Launch shows the cost.** When an app charges credits, the **Launch** button
+  shows the credit cost for the run.
 - **One run at a time.** While a run is in progress the composer is locked; it
   re-opens when the run finishes, ready for your next message.
-- **Composer sizing.** Apps with a single short input show a compact composer;
-  apps with several inputs (or a table/picker input) open expanded — you can
-  toggle this with the chevron.
+- **Tap a result to open it full-screen.** From there, **←/→** step through that
+  run's items (inputs, then outputs) and **↑/↓** move to the previous/next run.
+  Press **Esc** to close.
 
 Chat mode works on both desktop and mobile.
 

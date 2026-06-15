@@ -1,17 +1,24 @@
-import { useEffect, useRef, useState, type ReactNode } from "react"
-import { ArrowUp, ChevronDown, ChevronUp, Download, ImagePlus, Loader2, Music, Play, RotateCcw, Video, X } from "lucide-react"
-import { toast } from "sonner"
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
+import { ChevronDown, ChevronUp, Download, Loader2, Music, RotateCcw } from "lucide-react"
 import { CachedImage } from "@/components/ui/cached-image"
-import { useFileUpload } from "@/hooks/use-file-upload"
 import { useAppRunnerStore } from "@/hooks/use-app-runner-store"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
 import { getNodeLabel, getOutputType } from "@/lib/presentation-utils"
-import { isVideoUrl } from "@/lib/media-type"
-import { ORIGINAL_SLOT_ID, type RunSlot, type RunSlotNodeState } from "@/components/app-runner/types"
+import { type RunSlot, type RunSlotNodeState } from "@/components/app-runner/types"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import type { OutputStatus } from "../output-cards/shared"
 import { OutputCard } from "../output-card"
-import { buildStepChips, getThreadMessages, shouldExpandComposer, type StepChip } from "./chat-view-helpers"
+import {
+  buildStepChips,
+  getThreadMessages,
+  isUploadNode,
+  outputUrl,
+  firstStringValue,
+  resolveSlotResult,
+  type StepChip,
+} from "./chat-view-helpers"
+import { ComposerBar } from "./composer-bar"
+import { FullscreenView } from "./fullscreen-view"
 import type { RunSlotsApi } from "./types"
 
 interface ChatViewProps {
@@ -21,16 +28,12 @@ interface ChatViewProps {
   runSlots?: RunSlotsApi
   appName?: string
   appDescription?: string
-}
-
-const UPLOAD_TYPES = new Set(["upload-image", "upload-video", "upload-audio"])
-const isUploadNode = (type?: string) => UPLOAD_TYPES.has(type ?? "")
-const uploadAccept = (type?: string) =>
-  type === "upload-video" ? "video/*" : type === "upload-audio" ? "audio/*" : "image/*"
-
-function outputUrl(out: Record<string, unknown> | undefined): string | undefined {
-  if (!out) return undefined
-  return (out.imageUrl ?? out.videoUrl ?? out.audioUrl ?? out.url ?? out.resultUrl) as string | undefined
+  /** Snapshot the draft into a new run and execute it (no draft reset). Falls back to `run`. */
+  launch?: () => void
+  /** Monetized credit cost label, e.g. " (12 CR)". */
+  costLabel?: string
+  needsMoreCredits?: boolean
+  allInputsFilled?: boolean
 }
 
 function toOutputStatus(nodeStatus: RunSlotNodeState["status"] | undefined, slotStatus: RunSlot["executionStatus"]): OutputStatus {
@@ -53,14 +56,6 @@ function chipClass(s: StepChip["status"]): string {
   }
 }
 
-function firstStringValue(v: Record<string, unknown> | undefined): string | undefined {
-  if (!v) return undefined
-  for (const val of Object.values(v)) {
-    if (typeof val === "string" && val.trim()) return val.trim()
-  }
-  return undefined
-}
-
 export function ChatView({
   orderedInputNodes,
   orderedOutputNodes,
@@ -68,6 +63,10 @@ export function ChatView({
   runSlots,
   appName,
   appDescription,
+  launch,
+  costLabel,
+  needsMoreCredits,
+  allInputsFilled,
 }: ChatViewProps) {
   const execStatus = useAppRunnerStore((s) => s.executionStatus)
   const combinedProgress = useAppRunnerStore((s) => s.combinedProgress)
@@ -75,48 +74,13 @@ export function ChatView({
   const nodes = usePresentationStore((s) => s.nodes)
   const edges = usePresentationStore((s) => s.edges)
   const inputValues = usePresentationStore((s) => s.inputValues)
-  const updateInputValue = usePresentationStore((s) => s.updateInputValue)
 
   const isRunning = execStatus === "running" || execStatus === "loading"
   const slots = runSlots?.slots ?? []
   const messages = getThreadMessages(slots)
 
-  // Uploads get bespoke composer treatment (thumbnail strip + footer add buttons);
-  // everything else (text, pickers) renders as a compact input card.
-  const uploadNodes = orderedInputNodes.filter((n) => isUploadNode(n.type))
-  const otherNodes = orderedInputNodes.filter((n) => !isUploadNode(n.type))
-  const attachments = uploadNodes
-    .map((node) => ({ node, url: inputValues[node.id]?.url as string | undefined }))
-    .filter((a) => !!a.url)
-
-  const [lightbox, setLightbox] = useState<{ url: string; isVideo: boolean } | null>(null)
-
-  // Adaptive composer expand for the non-upload card stack, session-persisted.
-  const storageKey = `chat-composer-expanded:${appName ?? "app"}`
-  const [expanded, setExpanded] = useState<boolean>(() => {
-    try {
-      const saved = sessionStorage.getItem(storageKey)
-      if (saved != null) return saved === "1"
-    } catch { /* ignore */ }
-    return shouldExpandComposer(otherNodes)
-  })
-  const toggleExpanded = () => {
-    setExpanded((e) => {
-      const next = !e
-      try { sessionStorage.setItem(storageKey, next ? "1" : "0") } catch { /* ignore */ }
-      return next
-    })
-  }
-
-  // One run at a time (Option A): on terminal, mint the next draft (seeded) so users can iterate.
-  const wasRunning = useRef(false)
-  useEffect(() => {
-    if (wasRunning.current && !isRunning && (execStatus === "completed" || execStatus === "failed")) {
-      const active = runSlots?.activeSlotId
-      if (active && active !== ORIGINAL_SLOT_ID) runSlots?.handleDuplicateSlot(active)
-    }
-    wasRunning.current = isRunning
-  }, [isRunning, execStatus, runSlots])
+  // The result viewer (a frozen run + the clicked node). Opened from a message.
+  const [viewer, setViewer] = useState<{ slot: RunSlot; nodeId: string } | null>(null)
 
   // Auto-scroll to the newest message.
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -134,14 +98,38 @@ export function ChatView({
     })
   }
 
-  const handleLaunch = async () => {
+  const handleLaunch = () => {
     if (isRunning) return
-    await run()
+    ;(launch ?? run)()
+  }
+
+  // Stable across renders so OutputCard's memo holds for terminal messages
+  // during a run's 2s progress poll (each message re-binds it to its own slot).
+  const openResult = useCallback((slot: RunSlot, nodeId: string) => setViewer({ slot, nodeId }), [])
+
+  // ↑/↓ in the viewer walks the THREAD (oldest→newest), keeping the same node
+  // when the target run has a result for it, else its first available output.
+  const handleViewerRunChange = (dir: 1 | -1) => {
+    setViewer((v) => {
+      if (!v) return v
+      const idx = messages.findIndex((m) => m.slot.id === v.slot.id)
+      if (idx < 0) return v
+      const nextIdx = idx + dir
+      if (nextIdx < 0 || nextIdx >= messages.length) return v
+      const nextSlot = messages[nextIdx].slot
+      const same = resolveSlotResult(nextSlot, v.nodeId)
+      if (same.url || same.text) return { slot: nextSlot, nodeId: v.nodeId }
+      const firstOut = orderedOutputNodes.find((n) => {
+        const r = resolveSlotResult(nextSlot, n.id)
+        return r.url || r.text
+      })
+      return { slot: nextSlot, nodeId: firstOut?.id ?? v.nodeId }
+    })
   }
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      {/* Thread — intentionally WIDER than the composer */}
+      {/* Thread */}
       <div className="flex-1 overflow-y-auto px-3 sm:px-6 py-4" style={{ paddingBottom: "max(0.5rem, var(--safe-area-bottom))" }}>
         <div className="max-w-5xl mx-auto flex flex-col gap-3">
           {messages.length === 0 ? (
@@ -159,7 +147,7 @@ export function ChatView({
                 nodes={nodes}
                 edges={edges}
                 combinedProgress={combinedProgress}
-                onOpenLightbox={(url, isVideo) => setLightbox({ url, isVideo })}
+                onOpenResult={openResult}
                 onReuse={() => runSlots?.handleDuplicateSlot(slot.id)}
                 stepsExpanded={expandedSteps.has(slot.id)}
                 onToggleSteps={() => toggleSteps(slot.id)}
@@ -170,193 +158,35 @@ export function ChatView({
         </div>
       </div>
 
-      {/* Composer — narrower, centered bottom bar */}
-      <div className="border-t border-border bg-card/40 px-3 sm:px-6 py-3 shrink-0">
-        <div className="max-w-2xl mx-auto">
-          <div className="relative rounded-2xl border border-border bg-background p-3">
-            {otherNodes.length > 1 && (
-              <button
-                type="button"
-                onClick={toggleExpanded}
-                title={expanded ? "Collapse" : "Expand inputs"}
-                className="absolute -top-3 right-4 h-6 w-6 rounded-full border border-border bg-card flex items-center justify-center text-muted-foreground hover:text-foreground shadow-sm"
-              >
-                {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
-              </button>
-            )}
-
-            {/* Attachment thumbnail strip (above the input) */}
-            {attachments.length > 0 && (
-              <div className="mb-2 flex flex-wrap gap-2">
-                {attachments.map(({ node, url }) => (
-                  <ComposerThumb
-                    key={node.id}
-                    url={url!}
-                    type={node.type}
-                    disabled={isRunning}
-                    onRemove={() => updateInputValue(node.id, "url", "")}
-                    onOpen={() => setLightbox({ url: url!, isVideo: node.type === "upload-video" })}
-                  />
-                ))}
-              </div>
-            )}
-
-            {/* Non-upload inputs (text, pickers) */}
-            {otherNodes.length > 0 && (
-              <div
-                className={`flex flex-col gap-2 overflow-y-auto ${expanded ? "max-h-[40vh]" : "max-h-[140px]"} ${isRunning ? "pointer-events-none opacity-60" : ""}`}
-              >
-                {otherNodes.map((node) => (
-                  <div key={node.id}>{renderInputCard(node, "composer")}</div>
-                ))}
-              </div>
-            )}
-
-            {/* Footer: add-attachment buttons (per empty upload) + Launch */}
-            <div className="mt-2 flex items-center justify-between gap-2">
-              <div className="flex flex-wrap items-center gap-1.5">
-                {uploadNodes
-                  .filter((n) => !inputValues[n.id]?.url)
-                  .map((node) => (
-                    <ComposerUploadButton
-                      key={node.id}
-                      node={node}
-                      disabled={isRunning}
-                      onUploaded={(url) => updateInputValue(node.id, "url", url)}
-                    />
-                  ))}
-              </div>
-              <button
-                type="button"
-                onClick={handleLaunch}
-                disabled={isRunning}
-                className="flex items-center gap-1.5 rounded-xl bg-[#ff0073] text-white px-4 py-2 text-sm font-semibold transition-opacity hover:opacity-90 disabled:opacity-60"
-              >
-                {isRunning ? (
-                  <><Loader2 className="h-4 w-4 animate-spin" /> Running…</>
-                ) : (
-                  <>Launch <ArrowUp className="h-3.5 w-3.5" /></>
-                )}
-              </button>
-            </div>
-          </div>
+      {/* Composer — compact chip bar */}
+      <div className="border-t border-border bg-card/40 px-3 sm:px-6 py-3 shrink-0" style={{ paddingBottom: "max(0.75rem, var(--safe-area-bottom))" }}>
+        <div className="mx-auto max-w-5xl">
+          <ComposerBar
+            inputNodes={orderedInputNodes}
+            inputValues={inputValues}
+            renderInputCard={renderInputCard}
+            isRunning={isRunning}
+            costLabel={costLabel ?? ""}
+            allInputsFilled={allInputsFilled ?? true}
+            needsMoreCredits={needsMoreCredits ?? false}
+            onLaunch={handleLaunch}
+          />
         </div>
       </div>
 
-      {lightbox && (
-        <Lightbox url={lightbox.url} isVideo={lightbox.isVideo} onClose={() => setLightbox(null)} />
-      )}
-    </div>
-  )
-}
-
-/** A composer attachment thumbnail: click → fullscreen, hover → × to remove. */
-function ComposerThumb({
-  url,
-  type,
-  onRemove,
-  onOpen,
-  disabled,
-}: {
-  url: string
-  type?: string
-  onRemove: () => void
-  onOpen: () => void
-  disabled?: boolean
-}) {
-  const isVideo = type === "upload-video"
-  const isAudio = type === "upload-audio"
-  return (
-    <div className="group relative">
-      <button
-        type="button"
-        onClick={onOpen}
-        className="block h-16 w-16 overflow-hidden rounded-lg bg-muted/40"
-        title="View"
-      >
-        {isAudio ? (
-          <span className="flex h-full w-full items-center justify-center"><Music className="h-6 w-6 text-muted-foreground" /></span>
-        ) : isVideo ? (
-          <span className="relative block h-full w-full">
-            <video src={url} className="h-full w-full object-cover" muted playsInline />
-            <span className="absolute inset-0 flex items-center justify-center"><Play className="h-4 w-4 text-white drop-shadow" fill="white" /></span>
-          </span>
-        ) : (
-          <CachedImage src={url} alt="" thumbnail thumbnailWidth={128} className="h-full w-full object-cover" />
-        )}
-      </button>
-      {!disabled && (
-        <button
-          type="button"
-          onClick={onRemove}
-          aria-label="Remove attachment"
-          className="absolute -right-1.5 -top-1.5 rounded-full bg-background p-0.5 text-muted-foreground ring-1 ring-border opacity-0 transition-opacity group-hover:opacity-100 hover:text-foreground"
-        >
-          <X className="h-3 w-3" />
-        </button>
-      )}
-    </div>
-  )
-}
-
-/** A footer "add attachment" button: opens a file picker, uploads, hands back the URL. */
-function ComposerUploadButton({
-  node,
-  onUploaded,
-  disabled,
-}: {
-  node: WorkflowNode
-  onUploaded: (url: string) => void
-  disabled?: boolean
-}) {
-  const { upload, isUploading } = useFileUpload()
-  const inputRef = useRef<HTMLInputElement>(null)
-  const Icon = node.type === "upload-video" ? Video : node.type === "upload-audio" ? Music : ImagePlus
-
-  const handleFile = async (file?: File) => {
-    if (!file) return
-    try {
-      const res = await upload(file)
-      onUploaded(res.url)
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Upload failed")
-    }
-  }
-
-  return (
-    <>
-      <input
-        ref={inputRef}
-        type="file"
-        accept={uploadAccept(node.type)}
-        className="hidden"
-        onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; void handleFile(f) }}
-      />
-      <button
-        type="button"
-        disabled={disabled || isUploading}
-        onClick={() => inputRef.current?.click()}
-        className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground disabled:opacity-50"
-      >
-        {isUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Icon className="h-3.5 w-3.5" />}
-        {getNodeLabel(node)}
-      </button>
-    </>
-  )
-}
-
-/** Click-to-fullscreen overlay for an attachment. */
-function Lightbox({ url, isVideo, onClose }: { url: string; isVideo: boolean; onClose: () => void }) {
-  return (
-    // eslint-disable-next-line jsx-a11y/click-events-have-key-events,jsx-a11y/no-static-element-interactions
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 p-6 backdrop-blur-sm" onClick={onClose}>
-      <button type="button" onClick={onClose} aria-label="Close" className="absolute right-4 top-4 text-white/80 hover:text-white">
-        <X className="h-6 w-6" />
-      </button>
-      {isVideo ? (
-        <video src={url} controls autoPlay className="max-h-[90vh] max-w-[90vw] rounded-lg" onClick={(e) => e.stopPropagation()} />
-      ) : (
-        <img src={url} alt="" className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain" onClick={(e) => e.stopPropagation()} />
+      {viewer && (
+        <FullscreenView
+          asOverlay
+          orderedInputNodes={orderedInputNodes}
+          orderedOutputNodes={orderedOutputNodes}
+          getNodeStatus={() => "completed"}
+          getResult={() => ({})}
+          getCardTitle={getNodeLabel}
+          resolveResult={(nodeId) => resolveSlotResult(viewer.slot, nodeId)}
+          initialNodeId={viewer.nodeId}
+          onRunChange={handleViewerRunChange}
+          onBack={() => setViewer(null)}
+        />
       )}
     </div>
   )
@@ -369,7 +199,7 @@ interface ChatMessageProps {
   nodes: WorkflowNode[]
   edges: WorkflowEdge[]
   combinedProgress: Record<string, number>
-  onOpenLightbox: (url: string, isVideo: boolean) => void
+  onOpenResult: (slot: RunSlot, nodeId: string) => void
   onReuse: () => void
   stepsExpanded: boolean
   onToggleSteps: () => void
@@ -382,7 +212,7 @@ function ChatMessage({
   nodes,
   edges,
   combinedProgress,
-  onOpenLightbox,
+  onOpenResult,
   onReuse,
   stepsExpanded,
   onToggleSteps,
@@ -390,6 +220,10 @@ function ChatMessage({
   const chips = buildStepChips(nodes, edges, outputNodes.map((n) => n.id), slot.nodeStates)
   const isRunning = slot.executionStatus === "running"
   const isDone = slot.executionStatus === "completed"
+
+  // Bound to this message's slot; stable across the run's progress poll so the
+  // memoized OutputCards below don't reconcile on every tick.
+  const openResult = useCallback((nodeId: string) => onOpenResult(slot, nodeId), [onOpenResult, slot])
 
   // The submitted inputs for this run (the left section).
   const promptTexts = inputNodes
@@ -414,8 +248,6 @@ function ChatMessage({
     return undefined
   })()
 
-  const openMedia = (url?: string) => (url ? () => onOpenLightbox(url, isVideoUrl(url)) : undefined)
-
   return (
     <div className="rounded-xl border border-border bg-card p-3 sm:p-4">
       <div className="flex flex-col gap-3 md:flex-row md:gap-5">
@@ -431,7 +263,7 @@ function ChatMessage({
                 <button
                   key={node.id}
                   type="button"
-                  onClick={() => onOpenLightbox(url!, node.type === "upload-video")}
+                  onClick={() => openResult(node.id)}
                   className="h-14 w-14 overflow-hidden rounded-md bg-muted/40"
                   title="View"
                 >
@@ -476,7 +308,7 @@ function ChatMessage({
                   status={toOutputStatus(st?.status, slot.executionStatus)}
                   url={u}
                   text={out?.text as string | undefined}
-                  onOpenMedia={openMedia(u)}
+                  onOpenMedia={u ? openResult : undefined}
                   progress={isRunning ? combinedProgress[node.id] : undefined}
                 />
               )
@@ -527,7 +359,7 @@ function ChatMessage({
                     status={toOutputStatus(c.status, slot.executionStatus)}
                     url={u}
                     text={out?.text as string | undefined}
-                    onOpenMedia={openMedia(u)}
+                    onOpenMedia={u ? openResult : undefined}
                   />
                 )
               })}

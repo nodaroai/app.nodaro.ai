@@ -164,8 +164,8 @@ export function MobileAppHeader({
           )}
         </div>
 
-        {/* Right actions */}
-        {onNewRun && (
+        {/* Right actions — New Run is hidden in chat (Launch auto-creates the run) */}
+        {onNewRun && viewMode !== "chat" && (
           <button
             type="button"
             onClick={onNewRun}

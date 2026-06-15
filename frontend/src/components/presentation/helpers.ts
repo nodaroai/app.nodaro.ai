@@ -119,6 +119,24 @@ export function getLoopFirstMedia(
 }
 
 /** Check if all required inputs are filled (text-prompt needs text, upload nodes need URL) */
+/**
+ * Resolve a single-column list node's items: modern `inputValues.items` wins,
+ * then `columns`+`rows` (first column), then the legacy newline-delimited
+ * `data.items` string. Single source for both the run-enable gate
+ * (`areAllInputsFilled`) and the chat composer's "N items" chip count.
+ */
+export function deriveSingleColumnListItems(
+  data: Record<string, unknown>,
+  inputVals: Record<string, unknown> | undefined,
+): string[] {
+  if (inputVals?.items) return inputVals.items as string[]
+  if (data.columns) {
+    const rows = (data.rows as string[][] | undefined) ?? []
+    return rows.map((r) => r[0]?.trim() ?? "").filter(Boolean)
+  }
+  return ((data.items as string) || "").split("\n").map((s: string) => s.trim()).filter(Boolean)
+}
+
 export function areAllInputsFilled(
   inputNodes: WorkflowNode[],
   inputValues: Record<string, Record<string, unknown>>,
@@ -148,18 +166,10 @@ export function areAllInputsFilled(
           }
         }
       } else {
-        // Modern format (columns+rows) wins, legacy items string is fallback.
-        // Otherwise modern lists with populated rows were reported as "empty"
+        // Modern format (columns+rows) wins, legacy items string is fallback —
+        // otherwise modern lists with populated rows were reported as "empty"
         // and the run button stayed disabled.
-        let items: string[]
-        if (inputVals?.items) {
-          items = inputVals.items as string[]
-        } else if (data.columns) {
-          const rows = (data.rows as string[][] | undefined) ?? []
-          items = rows.map((r) => r[0]?.trim() ?? "").filter(Boolean)
-        } else {
-          items = ((data.items as string) || "").split("\n").map((s: string) => s.trim()).filter(Boolean)
-        }
+        const items = deriveSingleColumnListItems(data, inputVals)
         if (!Array.isArray(items) || items.length === 0 || items.every((s: string) => !String(s).trim())) return false
       }
     }

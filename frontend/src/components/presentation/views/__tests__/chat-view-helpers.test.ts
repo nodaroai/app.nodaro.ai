@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { getThreadMessages, buildStepChips, shouldExpandComposer, getMessageSummary } from "../chat-view-helpers"
+import { getThreadMessages, buildStepChips, getChipValue, resolveSlotResult } from "../chat-view-helpers"
 import { ORIGINAL_SLOT_ID, type RunSlot } from "@/components/app-runner/types"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 
@@ -9,8 +9,8 @@ const slot = (over: Partial<RunSlot>): RunSlot => ({
   createdAt: 0, version: null, thumbnailUrl: null, ...over,
 })
 
-const node = (id: string, type: string): WorkflowNode =>
-  ({ id, type, position: { x: 0, y: 0 }, data: { label: id } }) as WorkflowNode
+const node = (id: string, type: string, data: Record<string, unknown> = { label: id }): WorkflowNode =>
+  ({ id, type, position: { x: 0, y: 0 }, data }) as WorkflowNode
 
 describe("getThreadMessages", () => {
   it("keeps original first, then launched user slots oldest→newest; drops idle drafts", () => {
@@ -51,29 +51,37 @@ describe("buildStepChips", () => {
   })
 })
 
-describe("shouldExpandComposer", () => {
-  it("collapses for a single simple input", () => {
-    expect(shouldExpandComposer([node("t", "text-prompt")])).toBe(false)
+describe("getChipValue", () => {
+  it("returns trimmed text for text-prompt", () => {
+    expect(getChipValue(node("a", "text-prompt"), { a: { text: "  hi  " } })).toBe("hi")
   })
-  it("expands for a tall input (list / picker / avatar)", () => {
-    expect(shouldExpandComposer([node("l", "list")])).toBe(true)
-    expect(shouldExpandComposer([node("s", "setting")])).toBe(true)
+  it("summarises a single-column list as N items (pluralised)", () => {
+    expect(getChipValue(node("l", "list"), { l: { items: ["x", "y"] } })).toBe("2 items")
+    expect(getChipValue(node("l", "list"), { l: { items: ["x"] } })).toBe("1 item")
   })
-  it("expands when more than 2 inputs", () => {
-    expect(shouldExpandComposer([node("a", "text-prompt"), node("b", "upload-image"), node("c", "upload-image")])).toBe(true)
+  it("reads a parameter value via the node-data + input merge", () => {
+    expect(getChipValue(node("m", "mood"), { m: { mood: "Joyful" } })).toBe("Joyful")
+  })
+  it("falls back to the first string field for generic parameter cards", () => {
+    expect(getChipValue(node("p", "provider"), { p: { provider: "kie" } })).toBe("kie")
+  })
+  it("returns undefined for an empty upload and an empty text", () => {
+    expect(getChipValue(node("u", "upload-image"), {})).toBeUndefined()
+    expect(getChipValue(node("a", "text-prompt"), { a: { text: "   " } })).toBeUndefined()
   })
 })
 
-describe("getMessageSummary", () => {
-  it("uses the first non-empty text input as the label and counts inputs + credits", () => {
-    const s = slot({ inputValues: { t: { text: "hebrew" } }, creditsUsed: 15 })
-    const sum = getMessageSummary(s, [node("t", "text-prompt"), node("u", "upload-image")])
-    expect(sum.label).toBe("hebrew")
-    expect(sum.inputCount).toBe(2)
-    expect(sum.creditsUsed).toBe(15)
+describe("resolveSlotResult", () => {
+  const s = slot({
+    inputValues: { in1: { url: "https://x/in.png" }, t: { text: "hello" } },
+    nodeStates: { out1: { status: "completed", output: { imageUrl: "https://x/out.png" } } },
   })
-  it("falls back to the run name when no text input", () => {
-    const s = slot({ name: "Run 3", inputValues: { u: { url: "x" } } })
-    expect(getMessageSummary(s, [node("u", "upload-image")]).label).toBe("Run 3")
+  it("resolves an output url first", () => {
+    expect(resolveSlotResult(s, "out1").url).toBe("https://x/out.png")
+  })
+  it("falls back to an input url / text", () => {
+    expect(resolveSlotResult(s, "in1").url).toBe("https://x/in.png")
+    expect(resolveSlotResult(s, "t").text).toBe("hello")
   })
 })
+

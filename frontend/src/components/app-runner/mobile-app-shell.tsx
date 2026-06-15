@@ -928,6 +928,10 @@ export function MobileAppShell({
               renderInputCard={renderChatInputCard}
               runSlots={runSlots}
               appName={app.name}
+              launch={runSlots.launch}
+              costLabel={costLabel}
+              needsMoreCredits={needsMoreCredits}
+              allInputsFilled={allInputsFilled}
             />
           ) : null
         ) : activeTab === "inputs" ? (

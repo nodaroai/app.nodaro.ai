@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react"
 import { WaveformAudioPlayer } from "@/components/audio-player"
-import { ChevronLeft, ChevronRight, FileText } from "lucide-react"
+import { ChevronLeft, ChevronRight, FileText, X } from "lucide-react"
 import { CachedImage } from "@/components/ui/cached-image"
 import { getOutputType } from "@/lib/presentation-utils"
 import { isAudioUrl, isVideoUrl } from "@/lib/media-type"
@@ -11,6 +11,14 @@ import type { ViewProps } from "./types"
 
 interface FullscreenViewProps extends ViewProps {
   onBack: () => void
+  /** Render as a fixed-inset modal overlay (chat result viewer) instead of an inline pane. */
+  asOverlay?: boolean
+  /** Override item media/text resolution — used to show a FROZEN run slot's result. */
+  resolveResult?: (nodeId: string) => { url?: string; text?: string }
+  /** Seed the viewer to a specific node's position when opened / when it changes. */
+  initialNodeId?: string
+  /** Override ↑/↓ run navigation (chat threads its own ordered run list). */
+  onRunChange?: (dir: 1 | -1) => void
 }
 
 type MediaType = "image" | "video" | "audio" | "text"
@@ -38,16 +46,22 @@ export function FullscreenView({
   getCardTitle,
   onBack,
   runSlots,
+  asOverlay,
+  resolveResult,
+  initialNodeId,
+  onRunChange,
 }: FullscreenViewProps) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const touchStartRef = useRef<number | null>(null)
 
-  // ←/→ navigate a single list of INPUTS then OUTPUTS.
+  // ←/→ navigate a single list of INPUTS then OUTPUTS. `resolveResult` (when
+  // provided) overrides `getResult` so the viewer can show a FROZEN run slot.
   const items: FsItem[] = useMemo(() => {
+    const resolve = resolveResult ?? getResult
     const build = (nodes: WorkflowNode[], kind: "input" | "output"): FsItem[] =>
       nodes
         .map((node): FsItem | null => {
-          const result = getResult(node.id)
+          const result = resolve(node.id)
           if (!result.url && !result.text) return null
           return {
             nodeId: node.id,
@@ -60,7 +74,19 @@ export function FullscreenView({
         })
         .filter((i): i is FsItem => i !== null)
     return [...build(orderedInputNodes, "input"), ...build(orderedOutputNodes, "output")]
-  }, [orderedInputNodes, orderedOutputNodes, getResult, getCardTitle])
+  }, [orderedInputNodes, orderedOutputNodes, resolveResult, getResult, getCardTitle])
+
+  // Seed to the requested node's CURRENT position. Keyed on the resolved index
+  // (not the raw id) so it re-points when a run switch moves the node within
+  // `items`, while staying constant during in-viewer ←/→ (which changes neither
+  // `items` nor `initialNodeId`, so this effect won't fire and reset position).
+  const seededIndex = useMemo(
+    () => (initialNodeId ? items.findIndex((it) => it.nodeId === initialNodeId) : -1),
+    [initialNodeId, items],
+  )
+  useEffect(() => {
+    if (seededIndex >= 0) setCurrentIndex(seededIndex)
+  }, [seededIndex])
 
   // `currentIndex` can momentarily exceed range when `items` shrinks (e.g. a run
   // switch); `safeIndex` is the single source of truth for the current position.
@@ -74,9 +100,15 @@ export function FullscreenView({
     setCurrentIndex(Math.max(safeIndex - 1, 0))
   }, [safeIndex])
 
-  // ↑/↓ navigate to the previous/next run (fullscreen only).
+  // ↑/↓ navigate to the previous/next run. Chat threads its own ordered run
+  // list via `onRunChange` (keeps the same node position); otherwise page the
+  // run slots (fullscreen viewMode).
   const runNav = useCallback(
     (dir: 1 | -1) => {
+      if (onRunChange) {
+        onRunChange(dir)
+        return
+      }
       const slots = runSlots?.slots
       if (!slots || slots.length === 0) return
       const idx = slots.findIndex((s) => s.id === runSlots?.activeSlotId)
@@ -87,7 +119,7 @@ export function FullscreenView({
       runSlots?.handleSelectSlot(slots[next].id)
       setCurrentIndex(0)
     },
-    [runSlots],
+    [onRunChange, runSlots],
   )
 
   // Keyboard navigation
@@ -122,9 +154,24 @@ export function FullscreenView({
     touchStartRef.current = null
   }, [goNext, goPrev])
 
+  const rootClass = asOverlay
+    ? "fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-background/95 backdrop-blur-sm select-none"
+    : "flex-1 flex flex-col items-center justify-center relative select-none"
+  const closeButton = asOverlay ? (
+    <button
+      type="button"
+      onClick={onBack}
+      aria-label="Close"
+      className="absolute top-4 right-14 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-muted/80 text-foreground hover:bg-muted"
+    >
+      <X className="h-5 w-5" />
+    </button>
+  ) : null
+
   if (items.length === 0) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground gap-3 p-6">
+      <div className={`${rootClass} text-muted-foreground gap-3 p-6`}>
+        {closeButton}
         <FileText className="w-12 h-12 text-muted-foreground/30" />
         <p className="text-sm">Run the workflow to see inputs &amp; outputs</p>
       </div>
@@ -132,14 +179,15 @@ export function FullscreenView({
   }
 
   const current = items[safeIndex]
-  const hasRunNav = !!runSlots && (runSlots.slots?.length ?? 0) > 1
+  const hasRunNav = !!onRunChange || (!!runSlots && (runSlots.slots?.length ?? 0) > 1)
 
   return (
     <div
-      className="flex-1 flex flex-col items-center justify-center relative select-none"
+      className={rootClass}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
+      {closeButton}
       {/* Corner badge: Input / Output + node name */}
       <div className="absolute top-4 left-4 flex items-center gap-2 z-10">
         <span

@@ -3,7 +3,6 @@ import { useAppRunnerStore, createBridgedRun } from "@/hooks/use-app-runner-stor
 import { usePresentationStore } from "@/hooks/use-presentation-store"
 import { getInputNodes, getOutputNodes } from "@/lib/presentation-utils"
 import { createAppRun, updateAppRunInputs, getAppRuns, deleteAppRun } from "@/lib/api"
-import type { WorkflowNode } from "@/types/nodes"
 import type { RunSlot, RunSlotNodeState } from "./types"
 import { ORIGINAL_SLOT_ID, makeEmptyInputs, makeSnapshotInputs, makeSnapshotNodeStates, toSlotStatus, dbStatusToSlotStatus } from "./types"
 import { isMediaUrl } from "./types"
@@ -328,67 +327,51 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
     }
   }, [activeSlotId, slug, persistRuns])
 
-  // Create New — create a new empty slot (persisted to DB if authenticated)
+  // Create a fresh idle draft slot (DB-persisted when authenticated, else
+  // local-only) seeded with the given inputs. Prepends it and returns it.
+  const createDraftSlot = useCallback(
+    async (inputValues: Record<string, Record<string, unknown>>): Promise<RunSlot> => {
+      const runVersion = selectedVersion ?? undefined
+      if (slug && user && persistRuns) {
+        try {
+          const dbRun = await createAppRun(slug, inputValues, runVersion)
+          const newSlot: RunSlot = {
+            id: dbRun.id, name: null, inputValues: { ...inputValues }, nodeStates: {},
+            executionId: null, executionStatus: "idle", completedNodes: 0, totalNodes: 0,
+            creditsUsed: 0, createdAt: new Date(dbRun.createdAt).getTime(),
+            version: selectedVersion ?? latestVersion, thumbnailUrl: null,
+          }
+          setSlots((prev) => [newSlot, ...prev])
+          return newSlot
+        } catch {
+          // fall through to a local-only slot
+        }
+      }
+      const newSlot: RunSlot = {
+        id: crypto.randomUUID(), name: null, inputValues: { ...inputValues }, nodeStates: {},
+        executionId: null, executionStatus: "idle", completedNodes: 0, totalNodes: 0,
+        creditsUsed: 0, createdAt: Date.now(),
+        version: selectedVersion ?? latestVersion, thumbnailUrl: null,
+      }
+      setSlots((prev) => [newSlot, ...prev])
+      return newSlot
+    },
+    [slug, user, persistRuns, selectedVersion, latestVersion],
+  )
+
+  // Create New — create a new empty draft slot and make it the active draft.
   const handleCreateNew = useCallback(async () => {
     saveCurrentSlotInputs()
     const emptyInputs = makeEmptyInputs(inputNodes)
-
-    const runVersion = selectedVersion ?? undefined
-
-    if (slug && user && persistRuns) {
-      try {
-        const dbRun = await createAppRun(slug, emptyInputs, runVersion)
-        const slot: RunSlot = {
-          id: dbRun.id,
-          name: null,
-          inputValues: emptyInputs,
-          nodeStates: {},
-          executionId: null,
-          executionStatus: "idle",
-          completedNodes: 0,
-          totalNodes: 0,
-          creditsUsed: 0,
-          createdAt: new Date(dbRun.createdAt).getTime(),
-          version: selectedVersion ?? latestVersion,
-          thumbnailUrl: null,
-        }
-        setSlots((prev) => [slot, ...prev])
-        setActiveSlotId(slot.id)
-        newRun()
-        resetPresentationToIdle(emptyInputs)
-        // Update URL for deep-linking on refresh
-        const url = new URL(window.location.href)
-        url.searchParams.set("run", slot.id)
-        window.history.replaceState({}, "", url.toString())
-        return
-      } catch {
-        // Fallback to local slot
-      }
-    }
-
-    // Local-only slot (unauthenticated or DB fail)
-    const slot: RunSlot = {
-      id: crypto.randomUUID(),
-      name: null,
-      inputValues: emptyInputs,
-      nodeStates: {},
-      executionId: null,
-      executionStatus: "idle",
-      completedNodes: 0,
-      totalNodes: 0,
-      creditsUsed: 0,
-      createdAt: Date.now(),
-      version: selectedVersion ?? latestVersion,
-      thumbnailUrl: null,
-    }
-    setSlots((prev) => [slot, ...prev])
+    const slot = await createDraftSlot(emptyInputs)
     setActiveSlotId(slot.id)
     newRun()
     resetPresentationToIdle(emptyInputs)
+    // Update URL for deep-linking on refresh
     const url = new URL(window.location.href)
     url.searchParams.set("run", slot.id)
     window.history.replaceState({}, "", url.toString())
-  }, [saveCurrentSlotInputs, inputNodes, newRun, slug, user, selectedVersion, latestVersion, persistRuns])
+  }, [saveCurrentSlotInputs, inputNodes, createDraftSlot, newRun])
 
   // Clear — reset current slot's inputs
   const handleClear = useCallback(() => {
@@ -419,60 +402,36 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
     resetPresentationToIdle(activeSlot?.inputValues ?? {})
   }, [activeSlotId, activeSlot?.inputValues, newRun])
 
-  // Duplicate — create a new draft with same inputs as given slot
+  // Duplicate — create a new draft with same inputs as given slot, made active.
   const handleDuplicateSlot = useCallback(async (slotId: string) => {
     const slot = allSlots.find((s) => s.id === slotId)
     if (!slot) return
-
-    const runVersion = selectedVersion ?? undefined
-
-    if (slug && user && persistRuns) {
-      try {
-        const dbRun = await createAppRun(slug, slot.inputValues, runVersion)
-        const newSlot: RunSlot = {
-          id: dbRun.id,
-          name: null,
-          inputValues: { ...slot.inputValues },
-          nodeStates: {},
-          executionId: null,
-          executionStatus: "idle",
-          completedNodes: 0,
-          totalNodes: 0,
-          creditsUsed: 0,
-          createdAt: new Date(dbRun.createdAt).getTime(),
-          version: selectedVersion ?? latestVersion,
-          thumbnailUrl: null,
-        }
-        setSlots((prev) => [newSlot, ...prev])
-        setActiveSlotId(newSlot.id)
-        newRun()
-        resetPresentationToIdle(newSlot.inputValues)
-        return
-      } catch {
-        // silently fail
-      }
-    }
-
-    // Local-only fallback
-    const newSlot: RunSlot = {
-      id: crypto.randomUUID(),
-      name: null,
-      inputValues: { ...slot.inputValues },
-      nodeStates: {},
-      executionId: null,
-      executionStatus: "idle",
-      completedNodes: 0,
-      totalNodes: 0,
-      creditsUsed: 0,
-      createdAt: Date.now(),
-      version: selectedVersion ?? latestVersion,
-      thumbnailUrl: null,
-    }
-    setSlots((prev) => [newSlot, ...prev])
+    const newSlot = await createDraftSlot(slot.inputValues)
     setActiveSlotId(newSlot.id)
     newRun()
     resetPresentationToIdle(newSlot.inputValues)
-  }, [allSlots, slug, user, newRun, selectedVersion, latestVersion, persistRuns])
+  }, [allSlots, createDraftSlot, newRun])
+
+  // Launch (chat composer) — snapshot the persistent draft (presentation-store
+  // inputValues) into a NEW run slot and execute it WITHOUT clearing the draft,
+  // so the user can tweak and fire again immediately. The new slot becomes
+  // active so the single live execution mirrors onto its thread message.
+  const launch = useCallback(async () => {
+    const snapshot = usePresentationStore.getState().inputValues
+    const newSlot = await createDraftSlot(snapshot)
+    setActiveSlotId(newSlot.id)
+    // Deep-link parity with the other slot actions.
+    const url = new URL(window.location.href)
+    url.searchParams.set("run", newSlot.id)
+    window.history.replaceState({}, "", url.toString())
+    // Run the new slot, merging the draft inputs into the runner store. The
+    // runId is threaded explicitly (not via activeSlotIdRef), and the
+    // presentation store is NOT reset — the draft persists for the next run.
+    await createBridgedRun(
+      () => usePresentationStore.getState().inputValues,
+      () => newSlot.id,
+    )()
+  }, [createDraftSlot])
 
   // Header button: "Clear" when idle, "Retry" when failed, "Create New" otherwise
   // Original slot always shows "New Run" (can't clear/retry a snapshot)
@@ -604,6 +563,7 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
     handleClear,
     handleRetry,
     handleDuplicateSlot,
+    launch,
     handleHeaderAction,
     handleSelectSlot,
     handleRequestDelete,
