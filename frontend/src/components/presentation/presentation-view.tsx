@@ -1926,7 +1926,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
       {viewMode === "vertical" && <VerticalView {...editableProps} />}
       {viewMode === "gallery" && <GalleryView {...viewProps} />}
       {viewMode === "fullscreen" && (
-        <FullscreenView {...viewProps} onBack={handleExitFullscreenView} />
+        <FullscreenView {...viewProps} onBack={handleExitFullscreenView} runSlots={runSlots} />
       )}
       {viewMode === "compare" && (
         <CompareView

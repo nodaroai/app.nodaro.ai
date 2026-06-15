@@ -914,7 +914,7 @@ export function MobileAppShell({
             <GalleryView {...viewProps} />
           ) : viewMode === "fullscreen" ? (
             <div onTouchStart={handleOutputTouchStart} onTouchEnd={handleOutputTouchEnd}>
-              <FullscreenView {...viewProps} onBack={handleExitViewOverride} />
+              <FullscreenView {...viewProps} onBack={handleExitViewOverride} runSlots={runSlots} />
             </div>
           ) : viewMode === "compare" ? (
             <CompareView

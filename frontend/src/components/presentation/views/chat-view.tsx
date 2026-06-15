@@ -6,6 +6,7 @@ import { useFileUpload } from "@/hooks/use-file-upload"
 import { useAppRunnerStore } from "@/hooks/use-app-runner-store"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
 import { getNodeLabel, getOutputType } from "@/lib/presentation-utils"
+import { isVideoUrl } from "@/lib/media-type"
 import { ORIGINAL_SLOT_ID, type RunSlot, type RunSlotNodeState } from "@/components/app-runner/types"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import type { OutputStatus } from "../output-cards/shared"
@@ -25,7 +26,6 @@ interface ChatViewProps {
   orderedInputNodes: WorkflowNode[]
   orderedOutputNodes: WorkflowNode[]
   renderInputCard: (node: WorkflowNode, variant?: "composer") => ReactNode
-  onOpenMedia?: (nodeId: string) => void
   runSlots?: ChatRunSlotsApi
   appName?: string
   appDescription?: string
@@ -73,7 +73,6 @@ export function ChatView({
   orderedInputNodes,
   orderedOutputNodes,
   renderInputCard,
-  onOpenMedia,
   runSlots,
   appName,
   appDescription,
@@ -168,7 +167,6 @@ export function ChatView({
                 nodes={nodes}
                 edges={edges}
                 combinedProgress={combinedProgress}
-                onOpenMedia={onOpenMedia}
                 onOpenLightbox={(url, isVideo) => setLightbox({ url, isVideo })}
                 onReuse={() => runSlots?.handleDuplicateSlot(slot.id)}
                 stepsExpanded={expandedSteps.has(slot.id)}
@@ -379,7 +377,6 @@ interface ChatMessageProps {
   nodes: WorkflowNode[]
   edges: WorkflowEdge[]
   combinedProgress: Record<string, number>
-  onOpenMedia?: (nodeId: string) => void
   onOpenLightbox: (url: string, isVideo: boolean) => void
   onReuse: () => void
   stepsExpanded: boolean
@@ -393,7 +390,6 @@ function ChatMessage({
   nodes,
   edges,
   combinedProgress,
-  onOpenMedia,
   onOpenLightbox,
   onReuse,
   stepsExpanded,
@@ -476,6 +472,7 @@ function ChatMessage({
             {outputNodes.map((node) => {
               const st = slot.nodeStates[node.id]
               const out = st?.output
+              const u = outputUrl(out)
               return (
                 <OutputCard
                   key={node.id}
@@ -483,9 +480,9 @@ function ChatMessage({
                   label={getNodeLabel(node)}
                   outputType={getOutputType(node.type)}
                   status={toOutputStatus(st?.status, slot.executionStatus)}
-                  url={outputUrl(out)}
+                  url={u}
                   text={out?.text as string | undefined}
-                  onOpenMedia={onOpenMedia}
+                  onOpenMedia={u ? () => onOpenLightbox(u, isVideoUrl(u)) : undefined}
                   progress={isRunning ? combinedProgress[node.id] : undefined}
                 />
               )
@@ -526,6 +523,7 @@ function ChatMessage({
               {chips.map((c) => {
                 const node = nodes.find((n) => n.id === c.nodeId)
                 const out = slot.nodeStates[c.nodeId]?.output
+                const u = outputUrl(out)
                 return (
                   <OutputCard
                     key={c.nodeId}
@@ -533,9 +531,9 @@ function ChatMessage({
                     label={c.label}
                     outputType={node ? getOutputType(node.type) : "text"}
                     status={toOutputStatus(c.status, slot.executionStatus)}
-                    url={outputUrl(out)}
+                    url={u}
                     text={out?.text as string | undefined}
-                    onOpenMedia={onOpenMedia}
+                    onOpenMedia={u ? () => onOpenLightbox(u, isVideoUrl(u)) : undefined}
                   />
                 )
               })}
