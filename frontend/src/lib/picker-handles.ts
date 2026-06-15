@@ -1,17 +1,28 @@
-import { HANDLE_COLORS } from "./handle-colors"
+import { HANDLE_COLORS, type HandleColorType } from "./handle-colors"
 
 export type PickerFamily = "look" | "elements" | "asset" | "text" | "audio" | "motion"
 
-// Picker output-pip families derive from the canonical HANDLE_COLORS map
-// (single source of truth) — these are picker-facing aliases of those types.
-export const PICKER_FAMILY_COLORS: Record<PickerFamily, string> = {
-  look: HANDLE_COLORS.look,
-  elements: HANDLE_COLORS.look,
-  asset: HANDLE_COLORS.identity,
-  text: HANDLE_COLORS.text,
-  audio: HANDLE_COLORS.audio,
-  motion: HANDLE_COLORS.video,
+// A picker output FAMILY → its canonical `HandleColorType`. Single source of
+// truth for the family→type relationship: the pip COLOR derives from it
+// (PICKER_FAMILY_COLORS below) AND the edge/connector type resolver reads it
+// (getEdgeType), so a picker's type, pip color, and connector icon can't drift.
+// Typed as Record<PickerFamily> so a new family is a compile error, not a
+// silent fallthrough.
+export const PICKER_FAMILY_TYPES: Record<PickerFamily, HandleColorType> = {
+  look: "look",
+  elements: "look",
+  asset: "identity",
+  text: "text",
+  audio: "audio",
+  motion: "video",
 }
+
+// Derived from PICKER_FAMILY_TYPES so the color can never diverge from the type.
+export const PICKER_FAMILY_COLORS = Object.fromEntries(
+  (Object.entries(PICKER_FAMILY_TYPES) as ReadonlyArray<[PickerFamily, HandleColorType]>).map(
+    ([family, type]) => [family, HANDLE_COLORS[type]],
+  ),
+) as Record<PickerFamily, string>
 
 /**
  * Output-pip metadata for a parameter picker node TYPE.

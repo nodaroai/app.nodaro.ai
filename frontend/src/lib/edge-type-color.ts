@@ -13,29 +13,46 @@
  * or unknown (sub-workflow ports, router routes, list columns, …); the canvas
  * then falls back to the default neutral stroke.
  */
-import { HANDLE_COLORS } from "./handle-colors"
+import { HANDLE_COLORS, type HandleColorType } from "./handle-colors"
 import { HANDLE_OUTPUT_TYPES } from "./handle-output-types"
-import { getPickerOutputMeta } from "./picker-handles"
+import { getPickerOutputMeta, PICKER_FAMILY_TYPES } from "./picker-handles"
 import { TEXT_PRODUCER_TYPES, IMAGE_PRODUCER_TYPES } from "./generate-image-handles"
 import { VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES } from "@nodaro/shared"
+
+/**
+ * Resolve the canonical `HandleColorType` of a source handle's output — the
+ * type counterpart to `getEdgeTypeColor`, derived from the same sources of
+ * truth (picker registry → per-node output registry → producer-type sets).
+ * Returns `undefined` for genuinely runtime-typed / unknown outputs.
+ */
+export function getEdgeType(
+  sourceNodeType: string | undefined,
+  sourceHandle: string | null | undefined,
+): HandleColorType | undefined {
+  if (!sourceNodeType) return undefined
+  const picker = getPickerOutputMeta(sourceNodeType)
+  if (picker) return PICKER_FAMILY_TYPES[picker.family]
+  const byHandle = sourceHandle ? HANDLE_OUTPUT_TYPES[sourceNodeType]?.[sourceHandle] : undefined
+  if (byHandle) return byHandle
+  if (TEXT_PRODUCER_TYPES.has(sourceNodeType)) return "text"
+  if (IMAGE_PRODUCER_TYPES.has(sourceNodeType)) return "image"
+  if (VIDEO_PRODUCER_TYPES.has(sourceNodeType)) return "video"
+  if (AUDIO_PRODUCER_TYPES.has(sourceNodeType)) return "audio"
+  return undefined
+}
 
 export function getEdgeTypeColor(
   sourceNodeType: string | undefined,
   sourceHandle: string | null | undefined,
 ): string | undefined {
   if (!sourceNodeType) return undefined
-  // Pickers: the family color is the canonical output color.
+  // Pickers keep their canonical per-FAMILY color (not HANDLE_COLORS[mapped
+  // type]), so this branch stays ahead of the shared `getEdgeType` resolver.
   const picker = getPickerOutputMeta(sourceNodeType)
   if (picker) return picker.color
-  // Authoritative per-node output-handle registry (single source of truth,
-  // kept in sync with the pips by the handle-color drift guard).
-  const byHandle = sourceHandle ? HANDLE_OUTPUT_TYPES[sourceNodeType]?.[sourceHandle] : undefined
-  if (byHandle) return HANDLE_COLORS[byHandle]
-  // Safety net for single-output nodes not (yet) in the registry: classify by
-  // producer-type set. The registry wins above, so this never overrides it.
-  if (TEXT_PRODUCER_TYPES.has(sourceNodeType)) return HANDLE_COLORS.text
-  if (IMAGE_PRODUCER_TYPES.has(sourceNodeType)) return HANDLE_COLORS.image
-  if (VIDEO_PRODUCER_TYPES.has(sourceNodeType)) return HANDLE_COLORS.video
-  if (AUDIO_PRODUCER_TYPES.has(sourceNodeType)) return HANDLE_COLORS.audio
-  return undefined
+  // Everything else: derive the type via the shared resolver (single source of
+  // truth — registry → producer-set order lives ONLY in `getEdgeType`) and map
+  // it to its color, so the edge color and the connector icon can never drift.
+  const type = getEdgeType(sourceNodeType, sourceHandle)
+  return type ? HANDLE_COLORS[type] : undefined
 }

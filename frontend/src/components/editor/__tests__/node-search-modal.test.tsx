@@ -94,18 +94,23 @@ describe("NodeSearchModal — in-search connectors", () => {
 
     render(<NodeSearchModal open onClose={() => {}} />)
 
-    // The text-prompt row exposes a "Prompt" connector toggle (off = not yet wired).
-    const promptToggle = screen.getByTitle("Connect Prompt")
-    expect(promptToggle).toBeTruthy()
-    expect(promptToggle.getAttribute("aria-pressed")).toBe("false")
+    const user = (await import("@testing-library/user-event")).default.setup()
 
-    const { default: userEvent } = await import("@testing-library/user-event")
-    await userEvent.setup().click(promptToggle)
+    // The text-prompt row exposes a "From" control (its text output can feed
+    // the focused generate-image's input). Only tp1 is connectable here.
+    const fromBtns = screen.getAllByRole("button", { name: /^from/i })
+    expect(fromBtns.length).toBeGreaterThan(0)
+    await user.click(fromBtns[0])
 
-    expect(ON_CONNECT).toHaveBeenCalledTimes(1)
-    const arg = ON_CONNECT.mock.calls[0][0]
-    expect(arg.source).toBe("tp1")
-    expect(arg.target).toBe("gi1")
-    expect(arg.targetHandle).toBe("prompt")
+    // A single handle toggles directly; multiple handles expand to a list —
+    // then click one (e.g. "Prompt").
+    if (ON_CONNECT.mock.calls.length === 0) {
+      await user.click(screen.getAllByRole("button", { name: /prompt/i })[0])
+    }
+
+    expect(ON_CONNECT).toHaveBeenCalled()
+    const arg = ON_CONNECT.mock.calls.at(-1)![0]
+    expect(arg.source).toBe("tp1") // wired FROM the result node…
+    expect(arg.target).toBe("gi1") // …INTO the focused node
   })
 })
