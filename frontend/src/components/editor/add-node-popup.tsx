@@ -121,7 +121,7 @@ import { clusterByGroup } from "@/lib/cluster-by-group";
 import { categoryRank } from "@/lib/node-category-order";
 import type { SceneNodeType } from "@/types/nodes";
 import type { ConnectionContext, NodeOption } from "@/lib/node-compatibility";
-import { getCompatibleNodes, getCompatibleNodesForNode, resolveTargetHandle, PARAMETER_ACCEPTING_HANDLE_IDS } from "@/lib/node-compatibility";
+import { getCompatibleNodes, resolveTargetHandle, PARAMETER_ACCEPTING_HANDLE_IDS } from "@/lib/node-compatibility";
 import { buildPrefillInitialData } from "@/lib/node-name-field";
 import {
   readAddNodeMenuTab,
@@ -137,7 +137,7 @@ import { useUserSettings } from "@/hooks/queries/use-user-settings-queries";
 import { useNodeSelectionHistoryStore, type HistoryEntry } from "@/hooks/use-node-selection-history-store";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { Switch } from "@/components/ui/switch";
-import { enumerateConnectionOptionsCore, type SmartDirection } from "@/lib/enumerate-connection-options";
+import { enumerateConnectionOptionsCore } from "@/lib/enumerate-connection-options";
 import { getAutoConnectPref, setAutoConnectPref, getSmartConnectPref, setSmartConnectPref } from "@/lib/auto-connect-pref";
 
 const ComponentMarketplaceModal = lazy(() => import("./component-marketplace-modal").then(m => ({ default: m.ComponentMarketplaceModal })));
@@ -1689,6 +1689,17 @@ function ToggleLabel({
   );
 }
 
+/** Green badge marking a node that can wire to the focused node:
+ *  "connects" in Tab-auto-connect, "direct" in edge-drop. */
+function MatchBadge({ label, className }: { label: string; className?: string }) {
+  return (
+    <span className={cn("text-[12px] text-[#4ade80] font-medium flex items-center gap-1 shrink-0", className)}>
+      <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80]" />
+      {label}
+    </span>
+  );
+}
+
 interface AddNodePopupProps {
   readonly open: boolean;
   readonly onClose: () => void;
@@ -1707,12 +1718,9 @@ interface AddNodePopupProps {
   readonly autoConnectCtx?: {
     readonly nodeId: string;
     readonly nodeType: string;
+    readonly focusedLabel: string;
     readonly sourceHandles: readonly string[];
     readonly targetHandles: readonly string[];
-    /** Directional add (§7): "downstream" = right "+"/Tab (consumers of this
-     *  node's output), "upstream" = left "+"/Shift+Tab (producers for its
-     *  inputs). When set, the popup filters the list to compatible nodes. */
-    readonly direction?: SmartDirection;
   } | null;
   readonly onPickType?: (type: SceneNodeType, initialData?: Record<string, unknown>) => void;
 }
@@ -1790,10 +1798,9 @@ export function AddNodePopup({
     [isAdmin],
   );
 
-  // Compatibility filtering: per-handle edge-drop (connectionContext) OR
-  // node-level directional add (autoConnectCtx.direction, §7). Both render the
-  // Direct/Compatible tiers + hide the tabs. The directional filter applies
-  // regardless of the Auto Connect toggle (it's a "what fits here" view).
+  // Compatibility filtering for per-handle edge-drop (connectionContext): render
+  // the Direct/Compatible tiers + hide the tabs. (Tab-auto-connect is NOT filtered
+  // — it shows the full list and just marks connectable nodes; see directMatchTypes.)
   const { compatibilityNodes, isFiltered } = useMemo(() => {
     if (connectionContext) {
       const usesTypedPool =
@@ -1806,21 +1813,9 @@ export function AddNodePopup({
       }
       return { compatibilityNodes: result, isFiltered: true };
     }
-    if (autoConnectCtx?.direction) {
-      const result = getCompatibleNodesForNode(
-        autoConnectCtx.nodeType,
-        { sourceHandles: autoConnectCtx.sourceHandles, targetHandles: autoConnectCtx.targetHandles },
-        autoConnectCtx.direction,
-        visibleNodes,
-      );
-      if (result.direct.length === 0 && result.compatible.length === 0) {
-        return { compatibilityNodes: null, isFiltered: false };
-      }
-      return { compatibilityNodes: result, isFiltered: true };
-    }
     return { compatibilityNodes: null, isFiltered: false };
     // PARAMETER_ACCEPTING_HANDLE_IDS is a stable module-level const.
-  }, [connectionContext, autoConnectCtx, visibleNodes, typedHandlePool]);
+  }, [connectionContext, visibleNodes, typedHandlePool]);
 
   // Handle node selection — auto-connects edge when connectionContext is present
   const handleNodeSelect = useCallback(
@@ -1866,8 +1861,8 @@ export function AddNodePopup({
         onClose();
       } else if (autoConnect && autoConnectCtx && onPickType) {
         // Tab-auto-connect: defer creation to the Connect dialog (name + handle).
-        // Do NOT onClose() here — the canvas hides the popup but keeps
-        // autoConnectCtx so Esc in the dialog can reopen this list.
+        // Do NOT onClose() here — the canvas hides the popup and hands off to the
+        // Connect dialog (or wires immediately when Smart Connect is on).
         onPickType(type);
       } else {
         onAddNode(type);
@@ -1894,8 +1889,8 @@ export function AddNodePopup({
       const initialData = sel.field ? ({ [sel.field]: sel.value } as Record<string, unknown>) : undefined;
       if (autoConnect && autoConnectCtx && onPickType) {
         // Hand off to the canvas (Smart Connect or the Connect dialog). Do NOT
-        // onClose() — mirrors handleNodeSelect: the canvas hides the popup but
-        // keeps autoConnectCtx so the dialog's Esc can reopen this filtered list.
+        // onClose() — mirrors handleNodeSelect: the canvas hides the popup and the
+        // Connect dialog (or immediate wiring) takes over.
         onPickType(sel.nodeType as SceneNodeType, initialData);
         return;
       }
@@ -1913,8 +1908,8 @@ export function AddNodePopup({
 
   // Auto-connect marking: node types that have ≥1 valid connection option with
   // the focused node. Reuses the same enumerator as the Connect dialog so the
-  // mark and the dialog can't disagree. Skipped while `isFiltered` — directional
-  // add already supplies the badge set via compatibilityNodes.directTypes, so the
+  // mark and the dialog can't disagree. Skipped while `isFiltered` — edge-drop
+  // already supplies the badge set via compatibilityNodes.directTypes, so the
   // ~150 enumerations here would be computed and thrown away every render.
   const autoConnectActive = autoConnect && !!autoConnectCtx;
   const autoConnectMatchTypes = useMemo(() => {
@@ -1939,6 +1934,10 @@ export function AddNodePopup({
     : autoConnectActive
       ? autoConnectMatchTypes
       : EMPTY_SET;
+  // Edge-drop has a real two-tier vocabulary (a "Direct Match" section vs
+  // "Compatible"); Tab-auto-connect instead marks every node that can wire to the
+  // focused node in EITHER direction, which reads better as "connects" than "direct".
+  const matchLabel = isFiltered ? "direct" : "connects";
 
   const optionByType = useMemo(() => {
     const map = new Map<SceneNodeType, NodeOption>();
@@ -1950,8 +1949,8 @@ export function AddNodePopup({
   // The Models tab AND the All-tab "Models" category share one view: the model
   // browser when idle, the models-first unified search when typing.
   const inModelsView = activeTab === "models" || selectedCategory === VIRTUAL_CATEGORY_IDS.models;
-  // The tab whose affinity drives search layout. Edge-drop/directional add is
-  // flat ("all"); the Models view ranks models first regardless of activeTab.
+  // The tab whose affinity drives search layout. Edge-drop is flat ("all"); the
+  // Models view ranks models first regardless of activeTab.
   const searchTab: AddNodeMenuTab = isFiltered ? "all" : inModelsView ? "models" : activeTab;
 
   // Node matches, sectioned (own first, then "other"); flat on all/models.
@@ -1961,8 +1960,7 @@ export function AddNodePopup({
   }, [searchActive, effectivePool, searchQuery, searchTab, directMatchTypes]);
 
   // ALL matching models (never filtered by tab) — just ordered so the active
-  // media tab's own kind leads. Suppressed in edge-drop/directional add (those
-  // are connection-driven).
+  // media tab's own kind leads. Suppressed in edge-drop (connection-driven).
   const modelHits = useMemo<ModelTreeVariant[]>(() => {
     if (!searchActive || isFiltered) return [];
     const all = searchModelVariants(searchQuery);
@@ -2245,8 +2243,11 @@ export function AddNodePopup({
                 )
               })()}
             </div>
-          ) : autoConnectCtx?.direction ? (
-            autoConnectCtx.direction === "downstream" ? "Add a node after this →" : "← Add a node before this"
+          ) : autoConnectCtx ? (
+            <span className="flex items-center gap-1.5">
+              <span>Connecting new node to</span>
+              <span className="text-[#ff0073]">{autoConnectCtx.focusedLabel}</span>
+            </span>
           ) : (
             "What do you want to create?"
           )}
@@ -2382,10 +2383,7 @@ export function AddNodePopup({
                       <div className="text-sm text-[#94A3B8]">{node.category}</div>
                     </div>
                     {directMatchTypes.has(node.type) && (
-                      <span className="ml-auto text-[12px] text-[#4ade80] font-medium flex items-center gap-1 shrink-0">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80]" />
-                        direct
-                      </span>
+                      <MatchBadge label={matchLabel} className="ml-auto" />
                     )}
                   </button>
                 );
@@ -2453,10 +2451,7 @@ export function AddNodePopup({
                       <div className="text-base font-medium text-[#1E293B] dark:text-white truncate">{node.label}</div>
                       <div className="text-sm text-[#94A3B8]">{node.category}</div>
                     </div>
-                    <span className="text-[12px] text-[#4ade80] font-medium flex items-center gap-1 shrink-0">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80]" />
-                      direct
-                    </span>
+                    <MatchBadge label={matchLabel} />
                   </button>
                 ))}
               </>
@@ -2544,10 +2539,7 @@ export function AddNodePopup({
                     {node.label}
                   </span>
                   {directMatchTypes.has(node.type) && (
-                    <span className="ml-auto text-[12px] text-[#4ade80] font-medium flex items-center gap-1 shrink-0">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80]" />
-                      direct
-                    </span>
+                    <MatchBadge label={matchLabel} className="ml-auto" />
                   )}
                 </button>
               </div>
@@ -2582,10 +2574,7 @@ export function AddNodePopup({
                   </span>
                   <span className="text-base text-[#1E293B] dark:text-white">{node.label}</span>
                   {directMatchTypes.has(node.type) && (
-                    <span className="ml-auto text-[12px] text-[#4ade80] font-medium flex items-center gap-1 shrink-0">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80]" />
-                      direct
-                    </span>
+                    <MatchBadge label={matchLabel} className="ml-auto" />
                   )}
                 </button>
               );
@@ -2651,10 +2640,7 @@ export function AddNodePopup({
                       </span>
                       <span className="text-base text-[#1E293B] dark:text-white">{node.label}</span>
                       {directMatchTypes.has(node.type) && (
-                        <span className="ml-auto text-[12px] text-[#4ade80] font-medium flex items-center gap-1 shrink-0">
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80]" />
-                          direct
-                        </span>
+                        <MatchBadge label={matchLabel} className="ml-auto" />
                       )}
                     </button>
                   </div>,

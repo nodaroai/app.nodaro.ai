@@ -509,11 +509,9 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const [autoConnectCtx, setAutoConnectCtx] = useState<{
     nodeId: string
     nodeType: string
+    focusedLabel: string
     sourceHandles: string[]
     targetHandles: string[]
-    /** Directional add (§7): Tab/right "+" = downstream, Shift+Tab/left "+" =
-     *  upstream. Undefined for the legacy non-directional generic add. */
-    direction?: "upstream" | "downstream"
   } | null>(null)
   // Set once a node type is picked in auto-connect mode → opens the Connect dialog.
   const [pendingConnect, setPendingConnect] = useState<{
@@ -524,6 +522,10 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     newLabel: string
     initialData?: Record<string, unknown>
   } | null>(null)
+  // Mirror for the capture-phase document keydown closure (its deps exclude this
+  // state) so the Escape handler can tell the Connect dialog is open.
+  const pendingConnectRef = useRef(false)
+  useEffect(() => { pendingConnectRef.current = pendingConnect !== null }, [pendingConnect])
   const [searchModalOpen, setSearchModalOpen] = useState(false)
   const [nodeSearchModalOpen, setNodeSearchModalOpen] = useState(false)
   const [shortcutsHelpOpen, setShortcutsHelpOpen] = useState(false)
@@ -1541,8 +1543,6 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     (type: SceneNodeType, initialData?: Record<string, unknown>) => {
       const ctx = autoConnectCtx
       if (!ctx) return
-      const fnode = getNode(ctx.nodeId)
-      const focusedLabel = ((fnode?.data as Record<string, unknown> | undefined)?.label as string) || ctx.nodeType
       const def = NODE_DEF_MAP.get(type)
       const newLabel =
         ((def?.defaultData as Record<string, unknown> | undefined)?.label as string) || def?.label || type
@@ -1553,7 +1553,8 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           edges.filter((ed) => ed.target === ctx.nodeId && ed.targetHandle).map((ed) => ed.targetHandle as string),
         )
         const choice = chooseSmartConnection({
-          direction: ctx.direction ?? null,
+          // Non-directional add: let Smart Connect try downstream, then upstream.
+          direction: null,
           options,
           focusedType: ctx.nodeType,
           connectedTargetHandles,
@@ -1564,12 +1565,12 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         setAddNodePopupOpen(false)
         return
       }
-      setPendingConnect({ focusedId: ctx.nodeId, focusedType: ctx.nodeType, focusedLabel, newType: type, newLabel, initialData })
-      // Hide the popup but KEEP autoConnectCtx so the dialog's Esc can reopen
-      // this node list (back navigation). Cleared on confirm / popup close.
+      setPendingConnect({ focusedId: ctx.nodeId, focusedType: ctx.nodeType, focusedLabel: ctx.focusedLabel, newType: type, newLabel, initialData })
+      // Hide the popup; the Connect dialog drives the rest. autoConnectCtx is
+      // cleared when the dialog confirms or is dismissed (Esc / outside-click).
       setAddNodePopupOpen(false)
     },
-    [autoConnectCtx, getNode, computeConnectOptions, applyConnectChoice],
+    [autoConnectCtx, computeConnectOptions, applyConnectChoice],
   )
 
   // Options for the Connect dialog (non-Smart path).
@@ -1578,14 +1579,19 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     [pendingConnect, computeConnectOptions],
   )
 
+  // Shared teardown that ends the auto-connect flow (pending pick + focused-node
+  // context). Used by confirm, the dialog's cancel, and the Esc guard.
+  const dismissPendingConnect = useCallback(() => {
+    setPendingConnect(null)
+    setAutoConnectCtx(null)
+  }, [])
   const handleConnectConfirm = useCallback(
     (choice: ConnectNodeChoice) => {
       if (!pendingConnect) return
       applyConnectChoice(pendingConnect, choice)
-      setPendingConnect(null)
-      setAutoConnectCtx(null)
+      dismissPendingConnect()
     },
-    [pendingConnect, applyConnectChoice],
+    [pendingConnect, applyConnectChoice, dismissPendingConnect],
   )
   const handleToggleSnap = useCallback(() => {
     setSnapEnabled((prev) => {
@@ -1956,6 +1962,14 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           setFullscreenNodeId(null)
           return
         }
+        if (pendingConnectRef.current) {
+          // The Connect dialog's own onKeyDown handles Esc while its name input is
+          // focused; if focus moved onto a row button, this capture-phase handler
+          // runs first — dismiss the flow here so Esc closes it regardless of focus.
+          e.stopPropagation()
+          dismissPendingConnect()
+          return
+        }
         if (addNodePopupOpenRef.current) {
           // The add-node popup owns Escape while open: back to its root from
           // an inner menu, close at root (its own document listener).
@@ -2093,10 +2107,14 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         e.preventDefault()
         if (connectable && fnode && fnode.type) {
           e.stopPropagation()
+          const focusedLabel =
+            ((fnode.data as Record<string, unknown> | undefined)?.label as string) ||
+            NODE_DEF_MAP.get(fnode.type as SceneNodeType)?.label ||
+            fnode.type
           setConnectionContext(null)
           setAddNodePopupCategory(null)
           setAddNodePopupPosition(undefined)
-          setAutoConnectCtx({ nodeId: fnode.id, nodeType: fnode.type, sourceHandles: srcH, targetHandles: tgtH })
+          setAutoConnectCtx({ nodeId: fnode.id, nodeType: fnode.type, focusedLabel, sourceHandles: srcH, targetHandles: tgtH })
           setAddNodePopupOpen(true)
           return
         }
@@ -2437,7 +2455,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     // selection jumps to the neighbor.
     document.addEventListener("keydown", handleKeyDown, true)
     return () => document.removeEventListener("keydown", handleKeyDown, true)
-  }, [selectedNodeId, duplicateNodes, deleteNode, handleAddStickyNote, handleTidyUp, handleSelectAll, handleOpenAddNodePopup, onToggleSidebar, undo, redo, handleToggleSnap, handleToggleAlignment, alignmentEnabled, computeGuides, getNode, openFullscreenSettings, closeFullscreenSettings])
+  }, [selectedNodeId, duplicateNodes, deleteNode, handleAddStickyNote, handleTidyUp, handleSelectAll, handleOpenAddNodePopup, onToggleSidebar, undo, redo, handleToggleSnap, handleToggleAlignment, alignmentEnabled, computeGuides, getNode, openFullscreenSettings, closeFullscreenSettings, dismissPendingConnect])
 
   // Listen for pan-to events dispatched from teleporter config panel "Pan to" buttons
   useEffect(() => {
@@ -2657,12 +2675,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           newLabel={pendingConnect.newLabel}
           options={connectOptions}
           onConfirm={handleConnectConfirm}
-          onCancel={() => {
-            // Esc / cancel returns to the add-node list (autoConnectCtx is still
-            // set from the original Tab), rather than discarding the whole flow.
-            setPendingConnect(null)
-            setAddNodePopupOpen(true)
-          }}
+          onCancel={dismissPendingConnect}
         />
       )}
 
