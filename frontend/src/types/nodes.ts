@@ -725,17 +725,25 @@ export interface PersonData extends PickerConsumerData {
    *  visuals). Single id or up to 2 ids for hybrid looks (e.g.
    *  ["nyc-fashion","parisienne"]). */
   regionalAesthetic?: string | ReadonlyArray<string>
-  /** Body silhouette + height combined (slim, athletic, tall-lean). */
-  build?: string
-  /** Body shape ratio (long-legged, hourglass, pear). Independent from Build. */
-  bodyProportions?: string
+  /** Skeletal frame width / height (petite, slim, average, broad). */
+  frame?: string
+  /** Body mass / leanness (lean, average, full, heavy). Independent of frame. */
+  bodyMass?: string
+  /** Bust size (small, average, full, very full) — applicable subjects. */
+  bust?: string
+  /** Waist definition (defined, average, straight). */
+  waist?: string
+  /** Hip width (narrow, balanced, wide). */
+  hips?: string
+  /** Overall body silhouette (hourglass, rectangular, pear, inverted-triangle, athletic). */
+  silhouette?: string
   /** Face silhouette (oval, round, square, heart, diamond, oblong, triangular). */
   faceShape?: string
   /** Jaw shape (strong, soft, pointed, wide, double-chin). */
   jawline?: string
   /** Cheekbone projection / height (low, average, high-defined, sculpted-high, wide). */
   cheekbones?: string
-  /** Face-specific leanness, independent of body `build` (gaunt, lean, average, full, round). */
+  /** Face-specific leanness, independent of body mass (gaunt, lean, average, full, round). */
   facialFullness?: string
   /** Eye shape — anatomical shape only (almond, round, monolid, double-eyelid, wide, narrow). */
   eyeShape?: string

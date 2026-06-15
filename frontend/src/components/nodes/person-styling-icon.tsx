@@ -8,14 +8,12 @@
 
 import type { ReactNode } from "react"
 import {
-  BuildIcon,
   FacialHairIcon,
   FaceShapeIcon,
   JawlineIcon,
   EyeShapeIcon,
   NoseIcon,
   LipsIcon,
-  BodyProportionsIcon,
   EyewearIcon,
   HeadwearIcon,
 } from "@/components/editor/config-panels/small-silhouette-icons"
@@ -29,7 +27,6 @@ const ICON_CN = "size-7 text-gray-600 dark:text-[#94A3B8]"
 
 export function getPersonEntryIcon(dimension: PersonDimension, entryId: string): ReactNode {
   switch (dimension) {
-    case "build":             return <BuildIcon buildId={entryId} className={ICON_CN} />
     case "facial-hair":       return <FacialHairIcon facialHairId={entryId} className={ICON_CN} />
     case "face-shape":        return <FaceShapeIcon id={entryId} className={ICON_CN} />
     case "jawline":           return <JawlineIcon id={entryId} className={ICON_CN} />
@@ -41,7 +38,6 @@ export function getPersonEntryIcon(dimension: PersonDimension, entryId: string):
     case "nose-tip":          return <NoseIcon id={entryId} className={ICON_CN} />
     case "lip-fullness":
     case "lip-shape":         return <LipsIcon id={entryId} className={ICON_CN} />
-    case "body-proportions":  return <BodyProportionsIcon id={entryId} className={ICON_CN} />
     case "hair-color":
     case "skin-tone":
     case "eye-color": {

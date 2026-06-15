@@ -20,14 +20,12 @@ import { ColorSwatch } from "./color-swatch"
 import { getPersonSwatch } from "./color-swatches"
 import { MultiPickBadge } from "./multi-pick-ui"
 import {
-  BuildIcon,
   FacialHairIcon,
   FaceShapeIcon,
   JawlineIcon,
   EyeShapeIcon,
   NoseIcon,
   LipsIcon,
-  BodyProportionsIcon,
 } from "./small-silhouette-icons"
 
 /** Compact group labels for the tab row. The catalog uses descriptive names
@@ -45,7 +43,6 @@ export const COMPACT_GROUP_LABELS: Record<string, string> = {
 const compactGroupLabel = (g: string): string => COMPACT_GROUP_LABELS[g] ?? g
 
 export function renderEntryIcon(dimension: PersonDimension, entry: Person): JSX.Element | null {
-  if (dimension === "build") return <BuildIcon buildId={entry.id} className="size-6" />
   if (dimension === "facial-hair") return <FacialHairIcon facialHairId={entry.id} className="size-6" />
   if (dimension === "face-shape") return <FaceShapeIcon id={entry.id} className="size-6" />
   if (dimension === "jawline") return <JawlineIcon id={entry.id} className="size-6" />
@@ -58,7 +55,6 @@ export function renderEntryIcon(dimension: PersonDimension, entry: Person): JSX.
     return <EyeShapeIcon id={entry.id} className="size-6" />
   if (dimension === "nose" || dimension === "nose-tip") return <NoseIcon id={entry.id} className="size-6" />
   if (dimension === "lip-fullness" || dimension === "lip-shape") return <LipsIcon id={entry.id} className="size-6" />
-  if (dimension === "body-proportions") return <BodyProportionsIcon id={entry.id} className="size-6" />
   return null
 }
 

@@ -24,9 +24,9 @@ describe("applyPickerJson", () => {
 
   it("fill-empty: only fills currently-empty fields", () => {
     const current = { type: "man" }
-    const patch = applyPickerJson(current, { type: "woman", build: "slim" }, "fill-empty", spec)
+    const patch = applyPickerJson(current, { type: "woman", frame: "frame-slim" }, "fill-empty", spec)
     expect("type" in patch).toBe(false) // already set
-    expect(patch.build).toBe("slim")
+    expect(patch.frame).toBe("frame-slim")
   })
 
   it("coerces multi-limit dims to arrays and single to scalars", () => {

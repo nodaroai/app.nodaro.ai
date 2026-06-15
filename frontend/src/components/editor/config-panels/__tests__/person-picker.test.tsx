@@ -34,7 +34,7 @@ describe("PersonPickerDetailed (characterization)", () => {
   it("renders dimension section labels", () => {
     render(<PersonPickerDetailed value={{}} onChange={() => {}} />)
     // Section headline labels (the Switch row <label>) for a few dimensions.
-    expect(screen.getByText("Build")).toBeInTheDocument()
+    expect(screen.getByText("Frame")).toBeInTheDocument()
     expect(screen.getByText("Age")).toBeInTheDocument()
     expect(screen.getByText("Ethnicity")).toBeInTheDocument()
     expect(screen.getByText("Eye Color")).toBeInTheDocument()
@@ -42,20 +42,21 @@ describe("PersonPickerDetailed (characterization)", () => {
 
   it("renders known options for flat single-pick dimensions", () => {
     render(<PersonPickerDetailed value={{}} onChange={() => {}} />)
-    // Build options (flat radiogroup). Exact-match anchors avoid colliding with
-    // body-proportions' "Athletic / Muscular".
+    // Frame options (flat radiogroup). "Petite"/"Slim" are globally-unique labels
+    // (avoid "Broad"→nose-broad, "Average"/"Full"/"Wide"/etc. which collide across
+    // the face dimensions rendered in the same detailed view).
     expect(screen.getByRole("radio", { name: /^Petite$/i })).toBeInTheDocument()
-    expect(screen.getByRole("radio", { name: /^Athletic$/i })).toBeInTheDocument()
+    expect(screen.getByRole("radio", { name: /^Slim$/i })).toBeInTheDocument()
     // Skin-tone options (flat single-pick; "Olive" is unique to this dim).
     expect(screen.getByRole("radio", { name: /^Olive$/i })).toBeInTheDocument()
   })
 
-  it("single-pick: clicking a Build option calls onChange with the scalar field", () => {
+  it("single-pick: clicking a Frame option calls onChange with the scalar field", () => {
     const onChange = vi.fn()
     render(<PersonPickerDetailed value={{}} onChange={onChange} />)
-    fireEvent.click(screen.getByRole("radio", { name: /^Athletic$/i }))
+    fireEvent.click(screen.getByRole("radio", { name: /^Slim$/i }))
     expect(onChange).toHaveBeenCalledTimes(1)
-    expect(onChange).toHaveBeenCalledWith({ build: "athletic" })
+    expect(onChange).toHaveBeenCalledWith({ frame: "frame-slim" })
   })
 
   // NUANCE: a TRUE single-pick dim (maxSelected <= 1) does NOT toggle off — the
@@ -63,10 +64,10 @@ describe("PersonPickerDetailed (characterization)", () => {
   // exists for multi-capable dims currently held as a scalar (see next test).
   it("single-pick: clicking the already-selected option re-commits the same id (no toggle-off)", () => {
     const onChange = vi.fn()
-    render(<PersonPickerDetailed value={{ build: "athletic" }} onChange={onChange} />)
-    fireEvent.click(screen.getByRole("radio", { name: /^Athletic$/i }))
+    render(<PersonPickerDetailed value={{ frame: "frame-slim" }} onChange={onChange} />)
+    fireEvent.click(screen.getByRole("radio", { name: /^Slim$/i }))
     expect(onChange).toHaveBeenCalledTimes(1)
-    expect(onChange).toHaveBeenCalledWith({ build: "athletic" })
+    expect(onChange).toHaveBeenCalledWith({ frame: "frame-slim" })
   })
 
   // Multi-capable dim (ethnicity, cap 2) currently stored as a scalar string:
@@ -144,7 +145,7 @@ describe("PersonPickerDetailed (characterization)", () => {
     const search = screen.getByLabelText("Search person")
     fireEvent.change(search, { target: { value: "athletic" } })
 
-    // After search: the "Athletic" build matches; "Petite" no longer shown.
+    // After search: the "Athletic" silhouette matches; "Petite" no longer shown.
     expect(screen.getByRole("radio", { name: /^Athletic$/i })).toBeInTheDocument()
     expect(screen.queryByRole("radio", { name: /^Petite$/i })).not.toBeInTheDocument()
     const totalAfter = screen.getAllByRole("radio").length
@@ -178,17 +179,17 @@ describe("PersonPickerDetailed (characterization)", () => {
     expect(onChange).not.toHaveBeenCalled()
   })
 
-  it("enable Switch on a single dim (build) toggles ON with the first catalog id", () => {
+  it("enable Switch on a single dim (frame) toggles ON with the first catalog id", () => {
     const onChange = vi.fn()
     render(<PersonPickerDetailed value={{}} onChange={onChange} />)
-    const buildSwitch = screen.getByRole("switch", { name: /Enable Build/i })
-    fireEvent.click(buildSwitch)
-    // First Build catalog entry is "petite".
-    expect(onChange).toHaveBeenCalledWith({ build: "petite" })
+    const frameSwitch = screen.getByRole("switch", { name: /Enable Frame/i })
+    fireEvent.click(frameSwitch)
+    // First Frame catalog entry is "frame-petite".
+    expect(onChange).toHaveBeenCalledWith({ frame: "frame-petite" })
   })
 
   it("does not mutate the passed value object", () => {
-    const value: PersonValue = { build: "athletic", ethnicity: ["chinese"] }
+    const value: PersonValue = { frame: "frame-petite", ethnicity: ["chinese"] }
     const snapshot = JSON.stringify(value)
     const onChange = vi.fn()
     render(<PersonPickerDetailed value={value} onChange={onChange} />)
@@ -315,18 +316,18 @@ describe("PersonPickerCompact (smoke)", () => {
   })
 
   it("shows a selected pill (field + value) and a clear control when a value is set", () => {
-    render(<PersonPickerCompact value={{ build: "athletic" }} onChange={() => {}} />)
-    // The Body section auto-opens because it holds a value; its Build pill shows
+    render(<PersonPickerCompact value={{ frame: "frame-petite" }} onChange={() => {}} />)
+    // The Body section auto-opens because it holds a value; its Frame pill shows
     // the field + resolved value as its accessible name.
-    expect(screen.getByRole("button", { name: /Build:\s*Athletic/i })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: /Clear Build/i })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /Frame:\s*Petite/i })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /Clear Frame/i })).toBeInTheDocument()
   })
 
   it("clear ✕ clears the dimension without opening the popover", () => {
     const onChange = vi.fn()
-    render(<PersonPickerCompact value={{ build: "athletic" }} onChange={onChange} />)
-    fireEvent.click(screen.getByRole("button", { name: /Clear Build/i }))
-    expect(onChange).toHaveBeenCalledWith({ build: undefined })
+    render(<PersonPickerCompact value={{ frame: "frame-petite" }} onChange={onChange} />)
+    fireEvent.click(screen.getByRole("button", { name: /Clear Frame/i }))
+    expect(onChange).toHaveBeenCalledWith({ frame: undefined })
   })
 
   it("custom-age: typing in the number input keeps the popover open (regression — must not commit-close)", () => {
@@ -361,35 +362,35 @@ describe("PersonPickerCompact (popover behaviors)", () => {
     await user.click(screen.getByRole("button", { name: new RegExp(`^Choose ${label}$`, "i") }))
   }
 
-  it("1. popover pick writes the dimension field (single-cap Build)", async () => {
+  it("1. popover pick writes the dimension field (single-cap Frame)", async () => {
     const user = userEvent.setup()
     const onChange = vi.fn()
     render(<PersonPickerCompact value={{}} onChange={onChange} />)
     // Body section auto-opens (first section is Identity; Body is opened lazily
-    // only if it holds a value, so expand-all first to surface the Build pill).
+    // only if it holds a value, so expand-all first to surface the Frame pill).
     await user.click(screen.getByRole("button", { name: /Expand all sections/i }))
-    await openChoosePill(user, "Build")
-    // The popover body is the shared grid — Build is flat single-pick → radios.
-    const tile = await screen.findByRole("radio", { name: /^Athletic$/i })
+    await openChoosePill(user, "Frame")
+    // The popover body is the shared grid — Frame is flat single-pick → radios.
+    const tile = await screen.findByRole("radio", { name: /^Petite$/i })
     fireEvent.click(tile)
     expect(onChange).toHaveBeenCalledTimes(1)
-    expect(onChange).toHaveBeenCalledWith({ build: "athletic" })
+    expect(onChange).toHaveBeenCalledWith({ frame: "frame-petite" })
   })
 
-  it("2. single-pick commits & CLOSES the popover (Build)", async () => {
+  it("2. single-pick commits & CLOSES the popover (Frame)", async () => {
     const user = userEvent.setup()
     const onChange = vi.fn()
     render(<PersonPickerCompact value={{}} onChange={onChange} />)
     await user.click(screen.getByRole("button", { name: /Expand all sections/i }))
-    await openChoosePill(user, "Build")
-    // Popover open: its per-dimension search input ("Search build…") is present.
-    expect(await screen.findByLabelText(/Search build/i)).toBeInTheDocument()
-    fireEvent.click(screen.getByRole("radio", { name: /^Athletic$/i }))
+    await openChoosePill(user, "Frame")
+    // Popover open: its per-dimension search input ("Search frame…") is present.
+    expect(await screen.findByLabelText(/Search frame/i)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("radio", { name: /^Petite$/i }))
     // A single-cap (non-age) pick must commit AND close — the popover content
     // (its search input + option tiles) unmounts synchronously with the pick
     // (handleGridChange → onRequestClose → setOpen(false), flushed by act()).
-    expect(screen.queryByLabelText(/Search build/i)).not.toBeInTheDocument()
-    expect(screen.queryByRole("radio", { name: /^Athletic$/i })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/Search frame/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole("radio", { name: /^Petite$/i })).not.toBeInTheDocument()
   })
 
   it("3. multi-pick stays OPEN + respects the cap (eye-color, cap 2)", async () => {
@@ -431,26 +432,26 @@ describe("PersonPickerCompact (popover behaviors)", () => {
     const user = userEvent.setup()
     render(<PersonPickerCompact value={{}} onChange={() => {}} />)
     await user.click(screen.getByRole("button", { name: /Expand all sections/i }))
-    await openChoosePill(user, "Build")
-    // Real Build option labels resolved through useLocalizedCatalog("person")
+    await openChoosePill(user, "Frame")
+    // Real Frame option labels resolved through useLocalizedCatalog("person")
     // (locale defaults to "en" → canonical English) prove PersonDimensionGrid +
     // the resolvers are threaded into the popover body, not a placeholder.
     expect(await screen.findByRole("radio", { name: /^Petite$/i })).toBeInTheDocument()
-    expect(screen.getByRole("radio", { name: /^Athletic$/i })).toBeInTheDocument()
-    expect(screen.getByRole("radio", { name: /^Muscular$/i })).toBeInTheDocument()
+    expect(screen.getByRole("radio", { name: /^Slim$/i })).toBeInTheDocument()
+    expect(screen.getByRole("radio", { name: /^Broad$/i })).toBeInTheDocument()
     // The popover container carries its accessible "<Dimension> options" name.
-    expect(screen.getByLabelText(/Build options/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/Frame options/i)).toBeInTheDocument()
   })
 
   it("4b. the popover's own search filters that dimension's options (independent of any global search)", async () => {
     const user = userEvent.setup()
     render(<PersonPickerCompact value={{}} onChange={() => {}} />)
     await user.click(screen.getByRole("button", { name: /Expand all sections/i }))
-    await openChoosePill(user, "Build")
-    const search = await screen.findByLabelText(/Search build/i)
+    await openChoosePill(user, "Frame")
+    const search = await screen.findByLabelText(/Search frame/i)
     expect(screen.getByRole("radio", { name: /^Petite$/i })).toBeInTheDocument()
-    fireEvent.change(search, { target: { value: "athletic" } })
-    expect(screen.getByRole("radio", { name: /^Athletic$/i })).toBeInTheDocument()
+    fireEvent.change(search, { target: { value: "broad" } })
+    expect(screen.getByRole("radio", { name: /^Broad$/i })).toBeInTheDocument()
     expect(screen.queryByRole("radio", { name: /^Petite$/i })).not.toBeInTheDocument()
   })
 
@@ -470,10 +471,10 @@ describe("PersonPickerCompact (popover behaviors)", () => {
     })
 
     it("a selected pill exposes field + value as its accessible name; the clear ✕ has an aria-label", () => {
-      render(<PersonPickerCompact value={{ build: "athletic" }} onChange={() => {}} />)
-      expect(screen.getByRole("button", { name: /Build:\s*Athletic/i })).toBeInTheDocument()
+      render(<PersonPickerCompact value={{ frame: "frame-petite" }} onChange={() => {}} />)
+      expect(screen.getByRole("button", { name: /Frame:\s*Petite/i })).toBeInTheDocument()
       // Clear control is a separate role=button with its own aria-label.
-      expect(screen.getByRole("button", { name: /^Clear Build$/i })).toBeInTheDocument()
+      expect(screen.getByRole("button", { name: /^Clear Frame$/i })).toBeInTheDocument()
     })
 
     it("an unselected pill exposes a 'Choose <Dimension>' accessible name", () => {

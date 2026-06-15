@@ -487,7 +487,8 @@ export const MULTI_PICKERS: ReadonlyArray<MultiDimParameterPickerMeta> = [
     nodeType: "person",
     label: "Person",
     fields: [
-      "type", "age", "ethnicity", "build", "bodyProportions",
+      "type", "age", "ethnicity",
+      "frame", "bodyMass", "bust", "waist", "hips", "silhouette",
       "faceShape", "jawline", "cheekbones", "facialFullness",
       "eyeShape", "eyelidType", "canthalTilt", "eyeSpacing", "eyeSetBrow",
       "nose", "noseTip", "lipFullness", "lipShape", "lipState",
