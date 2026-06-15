@@ -9,7 +9,7 @@
  * across the combined list, Enter confirms, Esc cancels.
  */
 import { useCallback, useMemo, useRef, useState } from "react"
-import { Link2, Unlink } from "lucide-react"
+import { Link2, Unlink, ArrowDownToLine, ArrowUpFromLine } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useClickOutside } from "@/hooks/use-click-outside"
 import type { ConnectionOption, ConnectionOptions } from "@/lib/enumerate-connection-options"
@@ -148,9 +148,25 @@ export function ConnectNodeDialog({ focusedLabel, newLabel, options, onConfirm, 
                 {i === highlight && <span className="absolute left-0 top-1 bottom-1 w-[2.5px] rounded bg-[#ff0073]" />}
                 <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: row.opt.color ?? "#94A3B8" }} />
                 <span className="flex-1 text-sm font-medium text-[#1E293B] dark:text-[#e8eaed]">{row.opt.label}</span>
-                <span className="text-xs text-[#94A3B8]">
-                  {row.opt.direction === "source" ? `${focusedLabel} → ${newLabel}` : `${newLabel} → ${focusedLabel}`}
-                </span>
+                {/* IN/OUT from the NEW node's perspective: a `source` option wires
+                    into the new node's input; a `target` option sends its output. */}
+                {(() => {
+                  const isInput = row.opt.direction === "source"
+                  return (
+                    <span className="flex items-center gap-1.5 shrink-0">
+                      <span
+                        className={cn(
+                          "flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wide",
+                          isInput ? "bg-[#3B82F6]/15 text-[#3B82F6]" : "bg-[#22C55E]/15 text-[#22C55E]",
+                        )}
+                      >
+                        {isInput ? <ArrowDownToLine className="w-3 h-3" /> : <ArrowUpFromLine className="w-3 h-3" />}
+                        {isInput ? "INPUT" : "OUTPUT"}
+                      </span>
+                      <span className="text-xs text-[#94A3B8]">{isInput ? `from ${focusedLabel}` : `to ${focusedLabel}`}</span>
+                    </span>
+                  )
+                })()}
               </button>
             )
           }

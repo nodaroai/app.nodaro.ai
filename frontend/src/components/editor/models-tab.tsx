@@ -11,31 +11,36 @@ export interface ModelSelection {
   label: string
 }
 
+/** Map a model-tree variant to the node-creation selection (provider/model preset). */
+export const variantToSelection = (v: ModelTreeVariant): ModelSelection => ({
+  nodeType: v.nodeType,
+  field: v.field,
+  value: v.value,
+  label: v.label,
+})
+
 const kindIcon = (k: string) =>
   k === "video" ? <Film className="h-[19px] w-[19px]" /> : k === "audio" ? <Music className="h-[19px] w-[19px]" /> : <ImageIcon className="h-[19px] w-[19px]" />
 const kindColor = (k: string) => (k === "video" ? "text-[#818CF8]" : k === "audio" ? "text-[#34D399]" : "text-[#ff0073]")
 const rowCn = (active: boolean) =>
   cn("w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors", active ? "bg-[#F1F5F9] dark:bg-[#2D2D2D]" : "hover:bg-[#F8FAFC] dark:hover:bg-[#252525]")
 
-export function ModelsTab({ searchQuery, onSelectModel }: { searchQuery: string; onSelectModel: (s: ModelSelection) => void }) {
+// Pure series → variants browser. Model SEARCH lives in the add-node popup now
+// (it unifies model hits with node hits per tab); this component only renders the
+// no-query browse view and is unmounted while a search is active.
+export function ModelsTab({ onSelectModel }: { onSelectModel: (s: ModelSelection) => void }) {
   const tree = useMemo(() => buildModelTree(), [])
   const [openSeries, setOpenSeries] = useState<string | null>(null)
   const [highlighted, setHighlighted] = useState(0)
-  const q = searchQuery.trim().toLowerCase()
 
   const line = openSeries ? tree.find((l) => l.series === openSeries) ?? null : null
-  const hits = useMemo(
-    () => (q ? tree.flatMap((l) => l.models).filter((m) => m.label.toLowerCase().includes(q) || m.id.toLowerCase().includes(q)) : []),
-    [q, tree],
-  )
-
-  const mode: "search" | "variants" | "lines" = q ? "search" : openSeries ? "variants" : "lines"
-  const variants = mode === "search" ? hits : mode === "variants" ? line?.models ?? [] : []
+  const mode: "variants" | "lines" = openSeries ? "variants" : "lines"
+  const variants = mode === "variants" ? line?.models ?? [] : []
   const count = mode === "lines" ? tree.length : variants.length
 
-  useEffect(() => setHighlighted(0), [mode, q, openSeries])
+  useEffect(() => setHighlighted(0), [mode, openSeries])
 
-  const pick = (v: ModelTreeVariant) => onSelectModel({ nodeType: v.nodeType, field: v.field, value: v.value, label: v.label })
+  const pick = (v: ModelTreeVariant) => onSelectModel(variantToSelection(v))
 
   // Own the keyboard while the Models tab is mounted. Capture phase + stopPropagation
   // so the popup's node-list Arrow/Enter handler does not also fire. Escape is left
@@ -50,13 +55,13 @@ export function ModelsTab({ searchQuery, onSelectModel }: { searchQuery: string;
         e.preventDefault(); e.stopPropagation()
         if (mode === "lines") { const l = tree[highlighted]; if (l) setOpenSeries(l.series) }
         else { const v = variants[highlighted]; if (v) pick(v) }
-      } else if (e.key === "ArrowLeft" && openSeries && !q) {
+      } else if (e.key === "ArrowLeft" && openSeries) {
         e.preventDefault(); e.stopPropagation(); setOpenSeries(null)
       }
     }
     document.addEventListener("keydown", onKey, true)
     return () => document.removeEventListener("keydown", onKey, true)
-  }, [mode, count, highlighted, openSeries, q, tree, variants])
+  }, [mode, count, highlighted, openSeries, tree, variants])
 
   if (mode !== "lines") {
     return (
@@ -96,9 +101,11 @@ export function ModelsTab({ searchQuery, onSelectModel }: { searchQuery: string;
   )
 }
 
-function VariantRow({ v, active, onHover, onPick }: { v: ModelTreeVariant; active?: boolean; onHover?: () => void; onPick: (v: ModelTreeVariant) => void }) {
+/** One model variant row. Exported so the popup's unified search renders model
+ *  hits identically to the browse view (no drift between the two surfaces). */
+export function VariantRow({ v, active, onHover, onPick }: { v: ModelTreeVariant; active?: boolean; onHover?: () => void; onPick: (v: ModelTreeVariant) => void }) {
   return (
-    <button type="button" onClick={() => onPick(v)} onMouseEnter={onHover} className={rowCn(!!active)}>
+    <button type="button" onClick={() => onPick(v)} onMouseEnter={onHover} data-active={active ? "true" : undefined} className={rowCn(!!active)}>
       <span className={cn("flex", kindColor(v.kind))}>{kindIcon(v.kind)}</span>
       <div className="flex-1 min-w-0">
         <div className="text-base font-medium text-[#1E293B] dark:text-white truncate">{v.label}</div>

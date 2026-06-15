@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { MODEL_CATALOG } from "../model-catalog.js"
-import { modelToNodeTarget, buildModelTree } from "../model-tree.js"
+import { modelToNodeTarget, buildModelTree, searchModelVariants } from "../model-tree.js"
 
 describe("modelToNodeTarget", () => {
   it("maps an enum image model to generate-image with a provider preset", () => {
@@ -57,5 +57,30 @@ describe("buildModelTree", () => {
     const flux = tree.find((l) => l.series === "Flux")
     expect(flux?.models.some((m) => m.label.toLowerCase().includes("kontext"))).toBe(true)
     expect(tree.some((l) => l.series.toLowerCase().includes("kontext"))).toBe(false)
+  })
+})
+
+describe("searchModelVariants", () => {
+  const treeIds = new Set(buildModelTree().flatMap((l) => l.models).map((m) => m.id))
+
+  it("returns [] for a blank query", () => {
+    expect(searchModelVariants("")).toEqual([])
+    expect(searchModelVariants("   ")).toEqual([])
+  })
+  it("matches by label or id, case-insensitive", () => {
+    const hits = searchModelVariants("FLUX")
+    expect(hits.length).toBeGreaterThan(0)
+    expect(hits.every((m) => m.label.toLowerCase().includes("flux") || m.id.toLowerCase().includes("flux"))).toBe(true)
+  })
+  it("narrows to a single kind when given one", () => {
+    const broad = searchModelVariants("a")
+    const imageOnly = searchModelVariants("a", "image")
+    expect(broad.length).toBeGreaterThan(0)
+    expect(imageOnly.length).toBeGreaterThan(0)
+    expect(imageOnly.every((m) => m.kind === "image")).toBe(true)
+    expect(imageOnly.length).toBeLessThanOrEqual(broad.length)
+  })
+  it("only returns node-creatable variants (subset of buildModelTree)", () => {
+    expect(searchModelVariants("a").every((m) => treeIds.has(m.id))).toBe(true)
   })
 })

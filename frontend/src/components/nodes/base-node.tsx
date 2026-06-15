@@ -2,6 +2,7 @@
 
 import { memo, useState, useEffect, useRef, useCallback, type ReactNode, type MouseEvent, type PointerEvent as ReactPointerEvent } from "react"
 import { Handle, Position, NodeToolbar, useUpdateNodeInternals, NodeResizeControl } from "@xyflow/react"
+import { Plus } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { NODE_TITLE_TYPOGRAPHY } from "@/lib/node-title-style"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -305,6 +306,10 @@ function BaseNodeComponent({
   const newNodeIds = useWorkflowStore((s) => s.newNodeIds)
   const clearNewNode = useWorkflowStore((s) => s.clearNewNode)
   const isEditing = useWorkflowStore((s) => s.selectedNodeId === id)
+  // On-canvas directional "+" buttons (§7): shown on the single focused node.
+  const isFocusedNode = useWorkflowStore((s) => s.focusedNodeId === id)
+  const isReadOnly = useWorkflowStore((s) => s.isReadOnly)
+  const openDirectionalAdd = useWorkflowStore((s) => s.openDirectionalAdd)
   const logicalW = visualW != null ? visualW / zoom : undefined
   const logicalH = visualH != null ? visualH / zoom : undefined
   const isNew = newNodeIds.has(id)
@@ -668,6 +673,30 @@ function BaseNodeComponent({
       ))}
 
       </div>
+      {/* Directional add "+" buttons (§7): on the focused node, just outside its
+          left (upstream — feeds this node) and right (downstream — uses this
+          node's output) edges. Open the popup filtered to compatible nodes —
+          the same entry as Shift+Tab / Tab. */}
+      {isFocusedNode && !isReadOnly && !isMobile && openDirectionalAdd &&
+        (["upstream", "downstream"] as const).map((dir) => (
+          <button
+            key={dir}
+            type="button"
+            aria-label={dir === "upstream" ? "Add a node that feeds this one" : "Add a node that uses this one's output"}
+            title={dir === "upstream" ? "Add an upstream node (Shift+Tab)" : "Add a downstream node (Tab)"}
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation()
+              openDirectionalAdd({ nodeId: id, direction: dir })
+            }}
+            className={cn(
+              "nodrag absolute top-1/2 -translate-y-1/2 z-40 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] text-white shadow-md hover:bg-[#e0006a] transition-colors",
+              dir === "upstream" ? "-left-9" : "-right-9",
+            )}
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+        ))}
       {/* Bottom-corner controls. Parameter nodes (cinematography) and any
           node that opts in via `enableZoomHandle` get the zoom magnifier on
           one corner + a single resize dot on the other (Alt-swappable). All

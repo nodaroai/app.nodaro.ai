@@ -80,6 +80,29 @@ export function modelToNodeTarget(modelId: string): ModelNodeTarget | null {
   return enumMatch ? { nodeType, field: "provider", value: modelId } : { nodeType }
 }
 
+/**
+ * Flat, query-filtered model variants for the add-node search. The single source
+ * of truth shared by the Models tab/category browser and every tab's search
+ * (image/video/audio narrow by `kind`; models/all/common pass no kind). Filters
+ * by label/id substring; a blank query returns `[]`. Derived from
+ * `buildModelTree`, so only node-creatable models appear and new catalog entries
+ * flow through automatically.
+ */
+// MODEL_CATALOG + the provider enums are static module constants, so the tree
+// never changes at runtime — build it once and reuse for every search keystroke.
+let _modelTree: ModelTreeLine[] | null = null
+function getModelTree(): ModelTreeLine[] {
+  return (_modelTree ??= buildModelTree())
+}
+
+export function searchModelVariants(query: string, kind?: ModelKind): ModelTreeVariant[] {
+  const q = query.trim().toLowerCase()
+  if (!q) return []
+  return getModelTree()
+    .flatMap((l) => l.models)
+    .filter((m) => (!kind || m.kind === kind) && (m.label.toLowerCase().includes(q) || m.id.toLowerCase().includes(q)))
+}
+
 export function buildModelTree(): ModelTreeLine[] {
   const bySeries = new Map<string, ModelTreeLine>()
   for (const entry of Object.values(MODEL_CATALOG)) {

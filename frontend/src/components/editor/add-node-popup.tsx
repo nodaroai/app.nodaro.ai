@@ -121,7 +121,7 @@ import { clusterByGroup } from "@/lib/cluster-by-group";
 import { categoryRank } from "@/lib/node-category-order";
 import type { SceneNodeType } from "@/types/nodes";
 import type { ConnectionContext, NodeOption } from "@/lib/node-compatibility";
-import { getCompatibleNodes, resolveTargetHandle, PARAMETER_ACCEPTING_HANDLE_IDS } from "@/lib/node-compatibility";
+import { getCompatibleNodes, getCompatibleNodesForNode, resolveTargetHandle, PARAMETER_ACCEPTING_HANDLE_IDS } from "@/lib/node-compatibility";
 import { buildPrefillInitialData } from "@/lib/node-name-field";
 import {
   readAddNodeMenuTab,
@@ -130,19 +130,19 @@ import {
   type AddNodeMenuTab,
 } from "@/lib/add-node-menu-tab";
 import { IMAGE_PRODUCER_TYPES } from "@/lib/generate-image-handles";
-import { AUDIO_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES } from "@nodaro/shared";
+import { AUDIO_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES, searchModelVariants, type ModelKind, type ModelTreeVariant } from "@nodaro/shared";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAuth } from "@/hooks/use-auth";
 import { useUserSettings } from "@/hooks/queries/use-user-settings-queries";
 import { useNodeSelectionHistoryStore, type HistoryEntry } from "@/hooks/use-node-selection-history-store";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { Switch } from "@/components/ui/switch";
-import { enumerateConnectionOptionsCore } from "@/lib/enumerate-connection-options";
-import { getAutoConnectPref, setAutoConnectPref } from "@/lib/auto-connect-pref";
+import { enumerateConnectionOptionsCore, type SmartDirection } from "@/lib/enumerate-connection-options";
+import { getAutoConnectPref, setAutoConnectPref, getSmartConnectPref, setSmartConnectPref } from "@/lib/auto-connect-pref";
 
 const ComponentMarketplaceModal = lazy(() => import("./component-marketplace-modal").then(m => ({ default: m.ComponentMarketplaceModal })));
 import type { ComponentSelection } from "./component-marketplace-modal";
-import { ModelsTab, type ModelSelection } from "./models-tab";
+import { ModelsTab, VariantRow, variantToSelection, type ModelSelection } from "./models-tab";
 
 const EMPTY_SET = new Set<string>();
 
@@ -1379,6 +1379,7 @@ export const VIRTUAL_CATEGORY_IDS = {
   mostUsed: "Most Used",
   common: "Common",
   commonPickers: "Common Pickers",
+  models: "Models",
 } as const;
 
 const isNodeOption = (n: NodeOption | undefined): n is NodeOption => Boolean(n);
@@ -1566,6 +1567,14 @@ export const CATEGORIES = [
     icon: <Puzzle className="h-4 w-4" />,
     description: "Reusable Components",
   },
+  // Models is a popup-only virtual root: it opens the series → variants model
+  // browser (same as the Models tab). categoryRank pins it last in the All tab.
+  {
+    id: VIRTUAL_CATEGORY_IDS.models,
+    label: "MODELS",
+    icon: <Layers className="h-4 w-4" />,
+    description: "Image, Video & Audio models",
+  },
 ].sort((a, b) => categoryRank(a.id) - categoryRank(b.id));
 
 // Category icon colors
@@ -1622,14 +1631,61 @@ export function searchNodeOptionsSectioned(
   directTypes: ReadonlySet<string> = EMPTY_SET,
 ): { own: NodeOption[]; other: NodeOption[] } {
   const ranked = searchNodeOptions(pool, query, directTypes);
-  // "all" stays flat; "models" never renders this node-list search (the Models
-  // tab drives its own model-tree search), so treat it as flat too.
+  // "all"/"models" are flat at the node level (all matches in `own`); the popup
+  // interleaves model hits around them per SEARCH_BLOCK_ORDER below.
   if (tab === "all" || tab === "models") return { own: ranked, other: [] };
   const ownSet: ReadonlySet<string> = tab === "common" ? COMMON_NODE_TYPES : MEDIA_TAB_PRODUCERS[tab];
   return {
     own: ranked.filter((n) => ownSet.has(n.type)),
     other: ranked.filter((n) => !ownSet.has(n.type)),
   };
+}
+
+/** A row in the unified node+model search list (drives render AND keyboard nav). */
+type SearchRow = { kind: "node"; node: NodeOption } | { kind: "model"; model: ModelTreeVariant };
+export type SearchBlock = "nodeOwn" | "models" | "nodeOther";
+
+/** Per-tab order of the three search blocks (§4/§5). Image/Video/Audio surface
+ *  that-kind models right after their media nodes; Models leads with all models;
+ *  All appends all models after the nodes; Common appends all models last. Each
+ *  value is a permutation of the three blocks (guarded by a test). */
+export const SEARCH_BLOCK_ORDER: Record<AddNodeMenuTab, readonly SearchBlock[]> = {
+  image: ["nodeOwn", "models", "nodeOther"],
+  video: ["nodeOwn", "models", "nodeOther"],
+  audio: ["nodeOwn", "models", "nodeOther"],
+  models: ["models", "nodeOwn", "nodeOther"],
+  all: ["nodeOwn", "models", "nodeOther"],
+  common: ["nodeOwn", "nodeOther", "models"],
+};
+
+const SEARCH_BLOCK_HEADER: Record<SearchBlock, string> = { nodeOwn: "Nodes", models: "Models", nodeOther: "Other" };
+
+/** The model kind a media tab narrows to in search; undefined = all kinds. */
+const TAB_MODEL_KIND: Partial<Record<AddNodeMenuTab, ModelKind>> = { image: "image", video: "video", audio: "audio" };
+
+/** A labeled pink Switch — the Auto Connect / Smart toggles in the search bar. */
+function ToggleLabel({
+  icon,
+  label,
+  checked,
+  onChange,
+  ariaLabel,
+  title,
+}: {
+  readonly icon: ReactNode;
+  readonly label: string;
+  readonly checked: boolean;
+  readonly onChange: (v: boolean) => void;
+  readonly ariaLabel: string;
+  readonly title: string;
+}) {
+  return (
+    <label className="flex items-center gap-1.5 cursor-pointer select-none" title={title}>
+      {icon}
+      <span className="text-[11px] font-semibold text-[#475569] dark:text-[#cbd5e1] whitespace-nowrap">{label}</span>
+      <Switch size="sm" checked={checked} onCheckedChange={onChange} aria-label={ariaLabel} className="data-[state=checked]:bg-[#ff0073]" />
+    </label>
+  );
 }
 
 interface AddNodePopupProps {
@@ -1652,6 +1708,10 @@ interface AddNodePopupProps {
     readonly nodeType: string;
     readonly sourceHandles: readonly string[];
     readonly targetHandles: readonly string[];
+    /** Directional add (§7): "downstream" = right "+"/Tab (consumers of this
+     *  node's output), "upstream" = left "+"/Shift+Tab (producers for its
+     *  inputs). When set, the popup filters the list to compatible nodes. */
+    readonly direction?: SmartDirection;
   } | null;
   readonly onPickType?: (type: SceneNodeType, initialData?: Record<string, unknown>) => void;
 }
@@ -1685,6 +1745,10 @@ export function AddNodePopup({
   // Auto-connect toggle (Tab-from-focused-node). Seeded from localStorage; the
   // live value lets the user flip it within the open popup.
   const [autoConnect, setAutoConnect] = useState(getAutoConnectPref);
+  // Smart Connect: skip the Connect dialog, auto-pick handle + name (§6). Only
+  // meaningful while Auto Connect is on. The canvas re-reads the pref at pick
+  // time; this state is just the live toggle UI.
+  const [smartConnect, setSmartConnect] = useState(getSmartConnectPref);
   const popupRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -1725,22 +1789,37 @@ export function AddNodePopup({
     [isAdmin],
   );
 
-  // Compatibility filtering for smart edge-drop
+  // Compatibility filtering: per-handle edge-drop (connectionContext) OR
+  // node-level directional add (autoConnectCtx.direction, §7). Both render the
+  // Direct/Compatible tiers + hide the tabs. The directional filter applies
+  // regardless of the Auto Connect toggle (it's a "what fits here" view).
   const { compatibilityNodes, isFiltered } = useMemo(() => {
-    if (!connectionContext) return { compatibilityNodes: null, isFiltered: false };
-    const usesTypedPool =
-      connectionContext.direction === "target" &&
-      PARAMETER_ACCEPTING_HANDLE_IDS.has(connectionContext.handleId);
-    const pool = usesTypedPool ? typedHandlePool : visibleNodes;
-    const result = getCompatibleNodes(connectionContext.handleId, connectionContext.direction, pool, connectionContext.nodeType);
-    if (result.direct.length === 0 && result.compatible.length === 0) {
-      return { compatibilityNodes: null, isFiltered: false };
+    if (connectionContext) {
+      const usesTypedPool =
+        connectionContext.direction === "target" &&
+        PARAMETER_ACCEPTING_HANDLE_IDS.has(connectionContext.handleId);
+      const pool = usesTypedPool ? typedHandlePool : visibleNodes;
+      const result = getCompatibleNodes(connectionContext.handleId, connectionContext.direction, pool, connectionContext.nodeType);
+      if (result.direct.length === 0 && result.compatible.length === 0) {
+        return { compatibilityNodes: null, isFiltered: false };
+      }
+      return { compatibilityNodes: result, isFiltered: true };
     }
-    return { compatibilityNodes: result, isFiltered: true };
-    // TYPED_HANDLE_IDS is a module-level const (imported from
-    // node-compatibility); referenced inside the memo but stable across
-    // renders so it doesn't need to be in the deps list.
-  }, [connectionContext, visibleNodes, typedHandlePool]);
+    if (autoConnectCtx?.direction) {
+      const result = getCompatibleNodesForNode(
+        autoConnectCtx.nodeType,
+        { sourceHandles: autoConnectCtx.sourceHandles, targetHandles: autoConnectCtx.targetHandles },
+        autoConnectCtx.direction,
+        visibleNodes,
+      );
+      if (result.direct.length === 0 && result.compatible.length === 0) {
+        return { compatibilityNodes: null, isFiltered: false };
+      }
+      return { compatibilityNodes: result, isFiltered: true };
+    }
+    return { compatibilityNodes: null, isFiltered: false };
+    // PARAMETER_ACCEPTING_HANDLE_IDS is a stable module-level const.
+  }, [connectionContext, autoConnectCtx, visibleNodes, typedHandlePool]);
 
   // Handle node selection — auto-connects edge when connectionContext is present
   const handleNodeSelect = useCallback(
@@ -1812,8 +1891,14 @@ export function AddNodePopup({
   const handleSelectModel = useCallback(
     (sel: ModelSelection) => {
       const initialData = sel.field ? ({ [sel.field]: sel.value } as Record<string, unknown>) : undefined;
-      if (autoConnect && autoConnectCtx && onPickType) onPickType(sel.nodeType as SceneNodeType, initialData);
-      else onAddNode(sel.nodeType as SceneNodeType, initialData);
+      if (autoConnect && autoConnectCtx && onPickType) {
+        // Hand off to the canvas (Smart Connect or the Connect dialog). Do NOT
+        // onClose() — mirrors handleNodeSelect: the canvas hides the popup but
+        // keeps autoConnectCtx so the dialog's Esc can reopen this filtered list.
+        onPickType(sel.nodeType as SceneNodeType, initialData);
+        return;
+      }
+      onAddNode(sel.nodeType as SceneNodeType, initialData);
       onClose();
     },
     [autoConnect, autoConnectCtx, onPickType, onAddNode, onClose],
@@ -1827,10 +1912,12 @@ export function AddNodePopup({
 
   // Auto-connect marking: node types that have ≥1 valid connection option with
   // the focused node. Reuses the same enumerator as the Connect dialog so the
-  // mark and the dialog can't disagree.
+  // mark and the dialog can't disagree. Skipped while `isFiltered` — directional
+  // add already supplies the badge set via compatibilityNodes.directTypes, so the
+  // ~150 enumerations here would be computed and thrown away every render.
   const autoConnectActive = autoConnect && !!autoConnectCtx;
   const autoConnectMatchTypes = useMemo(() => {
-    if (!autoConnectActive || !autoConnectCtx) return EMPTY_SET;
+    if (!autoConnectActive || !autoConnectCtx || isFiltered) return EMPTY_SET;
     const matched = new Set<SceneNodeType>();
     for (const node of visibleNodes) {
       if (node.type === autoConnectCtx.nodeType) continue;
@@ -1844,7 +1931,7 @@ export function AddNodePopup({
       if (handles.length > 0) matched.add(node.type);
     }
     return matched;
-  }, [autoConnectActive, autoConnectCtx, visibleNodes]);
+  }, [autoConnectActive, autoConnectCtx, visibleNodes, isFiltered]);
 
   const directMatchTypes = isFiltered && compatibilityNodes
     ? compatibilityNodes.directTypes
@@ -1858,22 +1945,41 @@ export function AddNodePopup({
     return map;
   }, [effectivePool]);
 
-  // Search results, sectioned by the active tab: its own items first, the
-  // rest under "Other". Edge-drop mode has no tabs — flat ranking via "all".
-  const searchSections = useMemo(() => {
-    if (!searchQuery.trim()) return null;
-    return searchNodeOptionsSectioned(
-      effectivePool,
-      searchQuery,
-      isFiltered ? "all" : activeTab,
-      directMatchTypes,
-    );
-  }, [searchQuery, effectivePool, isFiltered, activeTab, directMatchTypes]);
+  const searchActive = !!searchQuery.trim();
+  // The Models tab AND the All-tab "Models" category share one view: the model
+  // browser when idle, the models-first unified search when typing.
+  const inModelsView = activeTab === "models" || selectedCategory === VIRTUAL_CATEGORY_IDS.models;
+  // The tab whose affinity drives search layout. Edge-drop/directional add is
+  // flat ("all"); the Models view ranks models first regardless of activeTab.
+  const searchTab: AddNodeMenuTab = isFiltered ? "all" : inModelsView ? "models" : activeTab;
 
-  const filteredNodes = useMemo(
-    () => (searchSections ? [...searchSections.own, ...searchSections.other] : []),
-    [searchSections],
-  );
+  // Node matches, sectioned (own first, then "other"); flat on all/models.
+  const searchSections = useMemo(() => {
+    if (!searchActive) return null;
+    return searchNodeOptionsSectioned(effectivePool, searchQuery, searchTab, directMatchTypes);
+  }, [searchActive, effectivePool, searchQuery, searchTab, directMatchTypes]);
+
+  // Model matches for this tab (that-kind on media tabs, all kinds elsewhere).
+  // Suppressed in edge-drop/directional add — those are connection-driven.
+  const modelHits = useMemo<ModelTreeVariant[]>(() => {
+    if (!searchActive || isFiltered) return [];
+    return searchModelVariants(searchQuery, TAB_MODEL_KIND[searchTab]);
+  }, [searchActive, isFiltered, searchQuery, searchTab]);
+
+  // Non-empty blocks in this tab's order — drives both render and keyboard nav.
+  const searchBlocks = useMemo(() => {
+    if (!searchActive) return null;
+    const own = searchSections?.own ?? [];
+    const other = searchSections?.other ?? [];
+    const byBlock: Record<SearchBlock, SearchRow[]> = {
+      nodeOwn: own.map((node): SearchRow => ({ kind: "node", node })),
+      nodeOther: other.map((node): SearchRow => ({ kind: "node", node })),
+      models: modelHits.map((model): SearchRow => ({ kind: "model", model })),
+    };
+    return SEARCH_BLOCK_ORDER[searchTab].map((block) => ({ block, rows: byBlock[block] })).filter((b) => b.rows.length > 0);
+  }, [searchActive, searchSections, modelHits, searchTab]);
+
+  const searchRows = useMemo<SearchRow[]>(() => (searchBlocks ? searchBlocks.flatMap((b) => b.rows) : []), [searchBlocks]);
 
   // Curated COMMON tab root. Flat nav order matches the COMMON render below:
   // lead, the Common Pickers nav row (under List), titled sections, then Assets.
@@ -1935,13 +2041,15 @@ export function AddNodePopup({
   // Items to display (search results, compatibility tiers, category nodes,
   // a media tab, the Common tab root, or the All tab's categories)
   const displayItems = useMemo(() => {
-    if (searchQuery.trim()) return filteredNodes;
+    // Search nav is driven by searchRows; displayItems only needs the node slice
+    // here for the non-search branches + the scroll-into-view effect.
+    if (searchActive) return searchSections ? [...searchSections.own, ...searchSections.other] : [];
     if (isFiltered && !selectedCategory) return effectivePool;
     if (selectedCategory) return categoryNodes;
     if (mediaTabItems) return [...mediaTabItems.common, ...mediaTabItems.rest];
     if (activeTab === "common") return commonRootItems;
     return visibleCategories;
-  }, [searchQuery, filteredNodes, isFiltered, selectedCategory, effectivePool, categoryNodes, mediaTabItems, activeTab, commonRootItems, visibleCategories]);
+  }, [searchActive, searchSections, isFiltered, selectedCategory, effectivePool, categoryNodes, mediaTabItems, activeTab, commonRootItems, visibleCategories]);
 
   // Reset state when opening/closing
   useEffect(() => {
@@ -1993,30 +2101,36 @@ export function AddNodePopup({
         return;
       }
 
-      // On the Models tab the model-tree browser owns Arrow/Enter (and the
-      // node-list back-nav Backspace has no meaning there). Bail before those
-      // branches so we never navigate/select the underlying NODE list — but
-      // AFTER Escape (still closes) and Tab/Shift+Tab (still cycles tabs).
-      if (activeTab === "models") return;
+      // In the Models browse view the model-tree owns Arrow/Enter. Bail before
+      // those branches — but AFTER Escape (closes) and Tab (cycles tabs), and
+      // only while NOT searching (search is the popup's own unified list).
+      if (inModelsView && !searchActive) return;
 
+      // During search the unified node+model rows drive nav; otherwise the
+      // category/media/common/all displayItems do.
+      const navLen = searchActive ? searchRows.length : displayItems.length;
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        setHighlightedIndex((prev) =>
-          Math.min(prev + 1, displayItems.length - 1),
-        );
+        setHighlightedIndex((prev) => Math.min(prev + 1, navLen - 1));
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
         setHighlightedIndex((prev) => Math.max(prev - 1, 0));
       } else if (e.key === "Enter") {
         e.preventDefault();
-        const item = displayItems[highlightedIndex];
-        if (item) {
-          if ("type" in item) {
-            handleNodeSelect(item.type);
-          } else {
-            // It's a category
-            setSelectedCategory(item.id);
-            setHighlightedIndex(0);
+        if (searchActive) {
+          const row = searchRows[highlightedIndex];
+          if (row?.kind === "node") handleNodeSelect(row.node.type);
+          else if (row?.kind === "model") handleSelectModel(variantToSelection(row.model));
+        } else {
+          const item = displayItems[highlightedIndex];
+          if (item) {
+            if ("type" in item) {
+              handleNodeSelect(item.type);
+            } else {
+              // It's a category
+              setSelectedCategory(item.id);
+              setHighlightedIndex(0);
+            }
           }
         }
       } else if (e.key === "Backspace" && !searchQuery && selectedCategory) {
@@ -2031,6 +2145,9 @@ export function AddNodePopup({
   }, [
     open,
     displayItems,
+    searchRows,
+    searchActive,
+    inModelsView,
     highlightedIndex,
     selectedCategory,
     searchQuery,
@@ -2039,6 +2156,7 @@ export function AddNodePopup({
     switchTab,
     onClose,
     handleNodeSelect,
+    handleSelectModel,
   ]);
 
   // Reset highlighted index when items change
@@ -2122,6 +2240,8 @@ export function AddNodePopup({
                 )
               })()}
             </div>
+          ) : autoConnectCtx?.direction ? (
+            autoConnectCtx.direction === "downstream" ? "Add a node after this →" : "← Add a node before this"
           ) : (
             "What do you want to create?"
           )}
@@ -2170,7 +2290,7 @@ export function AddNodePopup({
             <input
               ref={searchInputRef}
               type="text"
-              placeholder={activeTab === "models" ? "Search models..." : "Search nodes..."}
+              placeholder={inModelsView ? "Search models & nodes..." : "Search nodes..."}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className={cn(
@@ -2184,24 +2304,36 @@ export function AddNodePopup({
               )}
             />
           </div>
-          {!isFiltered && (
-            <label
-              className="flex items-center gap-1.5 shrink-0 ml-auto cursor-pointer select-none"
-              title="Auto-connect the new node to the focused node"
-            >
-              <Link2 className="w-3.5 h-3.5 text-[#ff0073]" />
-              <span className="text-[11px] font-semibold text-[#475569] dark:text-[#cbd5e1] whitespace-nowrap">Auto Connect</span>
-              <Switch
-                size="sm"
+          {/* Auto Connect + Smart toggles: shown for any focused-node add
+              (generic Tab or directional +/Tab), hidden only for edge-drop
+              (which direct-wires the dragged handle). Smart is gated under Auto. */}
+          {!connectionContext && (
+            <div className="flex items-center gap-3 shrink-0 ml-auto">
+              <ToggleLabel
+                icon={<Link2 className="w-3.5 h-3.5 text-[#ff0073]" />}
+                label="Auto Connect"
                 checked={autoConnect}
-                onCheckedChange={(v) => {
+                onChange={(v) => {
                   setAutoConnect(v)
                   setAutoConnectPref(v)
                 }}
-                aria-label="Auto-connect"
-                className="data-[state=checked]:bg-[#ff0073]"
+                ariaLabel="Auto-connect"
+                title="Auto-connect the new node to the focused node"
               />
-            </label>
+              {autoConnect && (
+                <ToggleLabel
+                  icon={<Zap className="w-3.5 h-3.5 text-[#ff0073]" />}
+                  label="Smart"
+                  checked={smartConnect}
+                  onChange={(v) => {
+                    setSmartConnect(v)
+                    setSmartConnectPref(v)
+                  }}
+                  ariaLabel="Smart connect"
+                  title="Smart Connect: skip the dialog — auto-pick the handle and name"
+                />
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -2212,46 +2344,35 @@ export function AddNodePopup({
           list overflows, regardless of the OS overlay-scrollbar setting. */}
       <ScrollArea type="auto" className="flex-1 min-h-0">
       <div ref={scrollContainerRef} className="py-2">
-        {activeTab === "models" ? (
-          // Models tab: the model-tree browser drives its own search (filters
-          // model variants, not nodes), so it must precede the node-list
-          // search/category/media branches below.
-          <ModelsTab searchQuery={searchQuery} onSelectModel={handleSelectModel} />
-        ) : searchQuery.trim() ? (
-          // Search results — the active tab's own items first, the remaining
-          // matches under an "Other" section (flat on the All tab/edge-drop).
-          filteredNodes.length > 0 ? (
+        {inModelsView && !searchActive ? (
+          // Models browse view (the Models tab or the All-tab "Models"
+          // category): series → variants. Search is handled by the unified
+          // branch below, so this only renders when idle.
+          <ModelsTab onSelectModel={handleSelectModel} />
+        ) : searchActive ? (
+          // Unified node + model search: blocks ordered per SEARCH_BLOCK_ORDER,
+          // a divider + header before every non-first block. One running nav
+          // index across all rows so keyboard highlight/Enter line up.
+          searchBlocks && searchBlocks.length > 0 ? (
             (() => {
               let nav = 0;
-              const row = (node: NodeOption) => {
+              const nodeRow = (node: NodeOption) => {
                 const index = nav++;
                 return (
                   <button
-                    key={node.type}
+                    key={`n-${node.type}`}
                     type="button"
                     onClick={() => handleNodeSelect(node.type)}
                     className={cn(
-                      "w-full flex items-center gap-3 px-4 py-2.5 text-left",
-                      "transition-colors",
-                      index === highlightedIndex
-                        ? "bg-[#F1F5F9] dark:bg-[#2D2D2D]"
-                        : "hover:bg-[#F8FAFC] dark:hover:bg-[#252525]",
+                      "w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors",
+                      index === highlightedIndex ? "bg-[#F1F5F9] dark:bg-[#2D2D2D]" : "hover:bg-[#F8FAFC] dark:hover:bg-[#252525]",
                     )}
                     onMouseEnter={() => setHighlightedIndex(index)}
                     data-active={index === highlightedIndex ? "true" : undefined}
                   >
-                    <span
-                      className={cn(
-                        "text-[#64748B] dark:text-[#94A3B8]",
-                        CATEGORY_COLORS[node.category],
-                      )}
-                    >
-                      {node.icon}
-                    </span>
+                    <span className={cn("text-[#64748B] dark:text-[#94A3B8]", CATEGORY_COLORS[node.category])}>{node.icon}</span>
                     <div className="flex-1 min-w-0">
-                      <div className="text-base font-medium text-[#1E293B] dark:text-white truncate">
-                        {node.label}
-                      </div>
+                      <div className="text-base font-medium text-[#1E293B] dark:text-white truncate">{node.label}</div>
                       <div className="text-sm text-[#94A3B8]">{node.category}</div>
                     </div>
                     {directMatchTypes.has(node.type) && (
@@ -2263,29 +2384,38 @@ export function AddNodePopup({
                   </button>
                 );
               };
-              const own = searchSections?.own ?? [];
-              const other = searchSections?.other ?? [];
+              const modelRow = (model: ModelTreeVariant) => {
+                const index = nav++;
+                return (
+                  <VariantRow
+                    key={`m-${model.id}`}
+                    v={model}
+                    active={index === highlightedIndex}
+                    onHover={() => setHighlightedIndex(index)}
+                    onPick={(v) => handleSelectModel(variantToSelection(v))}
+                  />
+                );
+              };
               return (
                 <>
-                  {own.map(row)}
-                  {other.length > 0 && (
-                    <div key="__search_other_header">
-                      {own.length > 0 && (
-                        <div className="border-t border-muted-foreground/10 mx-3 mt-1" />
+                  {searchBlocks.map(({ block, rows }, bi) => (
+                    <div key={block}>
+                      {bi > 0 && (
+                        <>
+                          <div className="border-t border-muted-foreground/10 mx-3 mt-1" />
+                          <div className="text-[12px] uppercase tracking-wider text-muted-foreground/60 font-medium px-4 pt-2 pb-1">
+                            {SEARCH_BLOCK_HEADER[block]}
+                          </div>
+                        </>
                       )}
-                      <div className="text-[12px] uppercase tracking-wider text-muted-foreground/60 font-medium px-4 pt-2 pb-1">
-                        Other
-                      </div>
+                      {rows.map((r) => (r.kind === "node" ? nodeRow(r.node) : modelRow(r.model)))}
                     </div>
-                  )}
-                  {other.map(row)}
+                  ))}
                 </>
               );
             })()
           ) : (
-            <div className="px-4 py-8 text-center text-base text-[#94A3B8]">
-              No nodes found
-            </div>
+            <div className="px-4 py-8 text-center text-base text-[#94A3B8]">No results found</div>
           )
         ) : isFiltered && compatibilityNodes && !selectedCategory ? (
           // Smart edge-drop: show direct matches then compatible

@@ -51,6 +51,9 @@ const NEW = "__autoconnect_new__"
 const SENTINEL = "__autoconnect_sentinel__"
 /** A node type no validator's accept-set contains → typed handles reject it. */
 const SENTINEL_TYPE = "__autoconnect_sentinel_type__"
+// Variable-row preference among a focused node's text inputs. Sibling to
+// `TEXT_INPUT_HANDLE_IDS` below (the role-rank text set) — add new text handle
+// ids to both when introducing one (e.g. "caption", "script").
 const TEXT_HANDLE_PRIORITY = ["prompt", "in", "text", "userInput"]
 
 function prettify(id: string): string {
@@ -59,6 +62,31 @@ function prettify(id: string): string {
 
 function handleLabel(consumerType: string, handleId: string): string {
   return TARGET_HANDLE_ACCEPTS[consumerType]?.find((e) => e.handleId === handleId)?.label ?? prettify(handleId)
+}
+
+/**
+ * Canonical text/prompt INPUT handle ids — the dials a user types into. Mirrors
+ * (and extends) `TEXT_HANDLE_PRIORITY`. Handle ids are a small, stable platform
+ * vocabulary (unlike provider names), so an id set is the right source of truth
+ * here; `getEdgeTypeColor` can't help — for an input handle it falls through to
+ * the node's *producer* color, returning the same color for `prompt` and `elements`.
+ */
+const TEXT_INPUT_HANDLE_IDS: ReadonlySet<string> = new Set([
+  "prompt", "text", "userInput", "systemPrompt", "dialogue", "lyrics", "instructions",
+])
+
+/**
+ * Display/selection priority of a connection option, read from its CONSUMER-side
+ * input handle (source → the new node's input `nHandle`; target → the focused
+ * node's input `fHandle`): media/reference inputs (0) rank above prompt/text (1),
+ * which ranks above the negative prompt (2). A pure-text node (only prompt +
+ * negative) thus leads with prompt. Shared by the Connect dialog ordering and
+ * Smart Connect so the two can't disagree.
+ */
+function consumerRoleRank(o: ConnectionOption): number {
+  const handleId = o.direction === "source" ? o.nHandle : o.fHandle
+  if (/negativ/i.test(handleId)) return 2
+  return TEXT_INPUT_HANDLE_IDS.has(handleId) ? 1 : 0
 }
 
 export function enumerateConnectionOptionsCore(args: {
@@ -106,6 +134,13 @@ export function enumerateConnectionOptionsCore(args: {
     }
   }
 
+  // Order options for the dialog + Smart Connect: keep each direction grouped
+  // ("into the new node" first), then media/reference inputs before prompt before
+  // negative within a direction. Stable sort preserves declared handle order
+  // within a rank (so e.g. startFrame stays before endFrame).
+  const dirRank = (d: ConnectionOption["direction"]): number => (d === "source" ? 0 : 1)
+  handles.sort((a, b) => dirRank(a.direction) - dirRank(b.direction) || consumerRoleRank(a) - consumerRoleRank(b))
+
   // Variable rows: ONLY when the new node feeds a TEXT input of the focused node
   // (so `{Label}` resolves to text, not a URL).
   const textOpts = handles.filter(
@@ -121,6 +156,57 @@ export function enumerateConnectionOptionsCore(args: {
     : []
 
   return { handles, variables }
+}
+
+/** Direction of a directional add entry, relative to the focused node. */
+export type SmartDirection = "downstream" | "upstream" | null
+
+/** A resolved Smart-Connect choice — the option to wire (null = add unconnected)
+ *  and the auto-name for the new node. Structurally the dialog's `ConnectNodeChoice`. */
+export interface SmartChoice {
+  readonly option: ConnectionOption | null
+  readonly name: string
+}
+
+/**
+ * Smart Connect: pick the single best connection + auto-name, with no dialog.
+ * Pure and data-driven — it only reads the already-role-sorted enumerator output
+ * (§1), the entry `direction`, and the focused node's already-connected input
+ * handles. No node type or handle id is hardcoded.
+ *
+ * - downstream (Tab / right "+"): the new node consumes the focused node's primary
+ *   output → its best input (`source[0]`); keep the default name.
+ * - upstream (Shift+Tab / left "+"): the new node feeds the focused node's best
+ *   FREE input — a missing `{variable}` (named after the ref) first, else the
+ *   highest-priority unconnected input (named after it, e.g. Prompt / Negative /
+ *   Start Frame). All relevant inputs taken → add unconnected.
+ * - null (edge-drop parity): try downstream, then upstream.
+ */
+export function chooseSmartConnection(args: {
+  direction: SmartDirection
+  options: ConnectionOptions
+  focusedType: string
+  connectedTargetHandles: ReadonlySet<string>
+  defaultName: string
+}): SmartChoice {
+  const { direction, options, focusedType, connectedTargetHandles, defaultName } = args
+  const source = options.handles.filter((o) => o.direction === "source")
+  const freeTarget = options.handles.filter((o) => o.direction === "target" && !connectedTargetHandles.has(o.fHandle))
+
+  const downstream = (): SmartChoice =>
+    source[0] ? { option: source[0], name: defaultName } : { option: null, name: defaultName }
+
+  const upstream = (): SmartChoice => {
+    const v = options.variables[0]
+    if (v) return { option: v, name: v.variableName ?? defaultName }
+    const t = freeTarget[0]
+    return t ? { option: t, name: handleLabel(focusedType, t.fHandle) } : { option: null, name: defaultName }
+  }
+
+  if (direction === "downstream") return downstream()
+  if (direction === "upstream") return upstream()
+  const d = downstream()
+  return d.option ? d : upstream()
 }
 
 /** A node's input handle ids for enumeration. The focused (rendered) node uses

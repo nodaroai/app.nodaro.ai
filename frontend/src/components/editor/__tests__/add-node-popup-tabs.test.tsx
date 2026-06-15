@@ -46,8 +46,13 @@ vi.mock("lucide-react", () => {
   }
 })
 
+// Mutable holder so a test can stub the directional-filter result.
+const compatMock = vi.hoisted(() => ({
+  forNode: { direct: [] as Array<{ type: string; label: string; icon: null; category: string }>, compatible: [] as Array<{ type: string; label: string; icon: null; category: string }>, directTypes: new Set<string>() },
+}))
 vi.mock("@/lib/node-compatibility", () => ({
   getCompatibleNodes: () => ({ direct: [], compatible: [], directTypes: new Set() }),
+  getCompatibleNodesForNode: () => compatMock.forNode,
   resolveTargetHandle: () => undefined,
   PARAMETER_ACCEPTING_HANDLE_IDS: new Set(),
 }))
@@ -78,8 +83,8 @@ vi.mock("../component-marketplace-modal", () => ({
   ComponentMarketplaceModal: () => null,
 }))
 
-import { AddNodePopup } from "../add-node-popup"
-import { ADD_NODE_MENU_TAB_KEY } from "@/lib/add-node-menu-tab"
+import { AddNodePopup, SEARCH_BLOCK_ORDER, type SearchBlock } from "../add-node-popup"
+import { ADD_NODE_MENU_TAB_KEY, ADD_NODE_MENU_TABS } from "@/lib/add-node-menu-tab"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -105,6 +110,7 @@ const tab = (name: string) => screen.getByRole("tab", { name })
 
 beforeEach(() => {
   localStorage.clear()
+  compatMock.forNode = { direct: [], compatible: [], directTypes: new Set() }
   // jsdom doesn't implement scrollIntoView (the popup's highlight-scroll effect)
   Element.prototype.scrollIntoView = vi.fn()
 })
@@ -293,14 +299,42 @@ describe("AddNodePopup tabs", () => {
 })
 
 describe("AddNodePopup auto-connect", () => {
-  it("renders the Auto toggle and persists toggling", () => {
+  it("renders the Auto + Smart toggles and persists toggling Auto", () => {
     renderPopup()
-    const sw = screen.getByRole("switch")
-    expect(sw).toBeInTheDocument()
-    fireEvent.click(sw)
+    const auto = screen.getByRole("switch", { name: "Auto-connect" })
+    expect(auto).toBeInTheDocument()
+    // Smart shows while Auto is on (default).
+    expect(screen.getByRole("switch", { name: "Smart connect" })).toBeInTheDocument()
+    fireEvent.click(auto)
     expect(localStorage.getItem("nodaro:autoConnect")).toBe("0")
   })
 
+  it("hides the Smart toggle when Auto Connect is off", () => {
+    renderPopup()
+    fireEvent.click(screen.getByRole("switch", { name: "Auto-connect" }))
+    expect(screen.queryByRole("switch", { name: "Smart connect" })).toBeNull()
+  })
+
+  it("surfaces model hits in search (e.g. a Flux variant 'creates …')", () => {
+    renderPopup()
+    fireEvent.change(screen.getByPlaceholderText(/Search/), { target: { value: "flux" } })
+    // VariantRow renders "creates <Node>" — proves models are merged into search.
+    expect(screen.getAllByText(/^creates /i).length).toBeGreaterThan(0)
+  })
+})
+
+describe("SEARCH_BLOCK_ORDER invariant", () => {
+  it("covers every tab with a permutation of the three blocks", () => {
+    const blocks: SearchBlock[] = ["nodeOwn", "models", "nodeOther"]
+    for (const t of ADD_NODE_MENU_TABS) {
+      const order = SEARCH_BLOCK_ORDER[t]
+      expect(order, `missing order for tab ${t}`).toBeTruthy()
+      expect([...order].sort()).toEqual([...blocks].sort())
+    }
+  })
+})
+
+describe("AddNodePopup auto-connect (cont.)", () => {
   it("hands off to onPickType (not onAddNode) when picking in auto-connect mode", () => {
     const onPickType = vi.fn()
     const { onAddNode } = renderPopup({
@@ -313,5 +347,35 @@ describe("AddNodePopup auto-connect", () => {
     fireEvent.click(row!)
     expect(onPickType).toHaveBeenCalledWith("generate-image")
     expect(onAddNode).not.toHaveBeenCalled()
+  })
+})
+
+describe("AddNodePopup directional add (§7)", () => {
+  const ctx = (direction: "upstream" | "downstream") => ({
+    nodeId: "n1",
+    nodeType: "text-prompt",
+    sourceHandles: ["prompt"],
+    targetHandles: ["in"],
+    direction,
+  })
+  const oneCompatible = {
+    direct: [{ type: "generate-image", label: "Generate Image", icon: null, category: "AI" }],
+    compatible: [],
+    directTypes: new Set(["generate-image"]),
+  }
+
+  it("downstream filters to compatible nodes, hides the tabs, shows the directional header", () => {
+    compatMock.forNode = oneCompatible
+    renderPopup({ autoConnectCtx: ctx("downstream"), onPickType: vi.fn() })
+    expect(screen.queryByRole("tab")).toBeNull() // tabs hidden in filtered mode
+    expect(screen.getByText("Add a node after this →")).toBeInTheDocument()
+    expect(screen.getByText("Generate Image")).toBeInTheDocument()
+    expect(screen.queryByText("Upscale Image")).toBeNull() // not in the compatible set
+  })
+
+  it("upstream shows the upstream header", () => {
+    compatMock.forNode = oneCompatible
+    renderPopup({ autoConnectCtx: ctx("upstream"), onPickType: vi.fn() })
+    expect(screen.getByText("← Add a node before this")).toBeInTheDocument()
   })
 })

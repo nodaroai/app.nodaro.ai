@@ -7,7 +7,7 @@ import { ModelsTab } from "../models-tab"
 describe("ModelsTab", () => {
   it("lists lines, drills into variants, and emits the node target on select", () => {
     const onSelect = vi.fn()
-    render(<ModelsTab searchQuery="" onSelectModel={onSelect} />)
+    render(<ModelsTab onSelectModel={onSelect} />)
     const nb = screen.getByText("Nano Banana")
     fireEvent.click(nb)
     const variant = screen.getAllByRole("button").find((b) => /creates/i.test(b.textContent ?? ""))
@@ -17,14 +17,8 @@ describe("ModelsTab", () => {
     expect(onSelect.mock.calls[0][0]).toEqual(expect.objectContaining({ nodeType: expect.any(String), label: expect.any(String) }))
   })
 
-  it("search flattens to matching variants across lines", () => {
-    render(<ModelsTab searchQuery="kontext" onSelectModel={vi.fn()} />)
-    const hits = screen.getAllByText(/Kontext/i)
-    expect(hits.length).toBeGreaterThan(0)
-  })
-
   it("renders no empty folder (every line has >=1 model)", () => {
-    render(<ModelsTab searchQuery="" onSelectModel={vi.fn()} />)
+    render(<ModelsTab onSelectModel={vi.fn()} />)
     for (const el of screen.getAllByText(/· \d+ models/)) {
       const n = Number((el.textContent ?? "").match(/· (\d+) models/)?.[1])
       expect(n).toBeGreaterThan(0)
@@ -37,7 +31,7 @@ describe("ModelsTab", () => {
 
   it("keyboard: ArrowDown + Enter drills into the first line, then selects the first variant", () => {
     const onSelect = vi.fn()
-    render(<ModelsTab searchQuery="" onSelectModel={onSelect} />)
+    render(<ModelsTab onSelectModel={onSelect} />)
     // first line is highlighted by default; Enter drills in
     fireEvent.keyDown(document, { key: "Enter" })
     // now on a variant list; Enter selects the highlighted (first) variant
