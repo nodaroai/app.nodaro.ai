@@ -86,7 +86,7 @@ import {
   FullscreenView,
   CompareView,
   ChatView,
-  type ChatRunSlotsApi,
+  type RunSlotsApi,
 } from "./views"
 
 const FreeCutEditorModal = lazy(() =>
@@ -155,8 +155,8 @@ interface PresentationViewProps {
   onHiddenNodesChange?: (nodeIds: string[]) => void
   /** Called when node states change due to media edits (for external persistence -- e.g., app runner) */
   onNodeStatesChange?: (nodeStates: Record<string, unknown>) => void
-  /** Run-history slots for chat view mode (app runner only); omitted in editor tab mode. */
-  runSlots?: ChatRunSlotsApi
+  /** Run-history slots (app runner only); omitted in editor tab mode. */
+  runSlots?: RunSlotsApi
 }
 
 export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCancel, onNewRun, newRunLabel, inputsReadOnly, suppressOutputFallback, isRunning: externalIsRunning, showFullscreenToggle, headerLeft, headerActions, onHiddenNodesChange, onNodeStatesChange, runSlots }: PresentationViewProps) {
