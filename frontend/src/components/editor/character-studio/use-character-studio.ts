@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { PLACEHOLDER_CHARACTER_NAME } from "@nodaro/shared"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { CharacterNameTakenError, getCharacter, saveCharacter } from "@/lib/api"
+import { CharacterNameTakenError, getCharacter, getCharacters, saveCharacter } from "@/lib/api"
 import { mergeCharacterDetailIntoNodeData } from "@/lib/character-node-data"
 import type { CharacterNodeData } from "@/types/nodes"
 
@@ -202,18 +202,32 @@ export function useCharacterStudio(nodeId: string): CharacterStudioState | null 
     if (!node || staged !== null) return
     const initial = JSON.parse(JSON.stringify(node.data)) as CharacterNodeData
     setStaged(initial)
-    const dbId = initial.characterDbId
-    if (!dbId) return
     let cancelled = false
     void (async () => {
       try {
+        let dbId = initial.characterDbId
+        if (!dbId) {
+          // Unlinked node: if its name matches an existing character (names are
+          // unique per user), ADOPT that character so its assets load — instead
+          // of showing an empty new character that also can't be saved (the
+          // name is taken). A no-op for genuinely-new (placeholder/blank) names.
+          const nm = initial.characterName?.trim()
+          if (!nm || nm === PLACEHOLDER_CHARACTER_NAME) return
+          const { characters } = await getCharacters()
+          if (cancelled) return
+          const match = characters.find((c) => (c.name ?? "").trim().toLowerCase() === nm.toLowerCase())
+          if (!match) return
+          dbId = match.id
+          updateNodeData(nodeId, { characterDbId: dbId })
+        }
         const fresh = await getCharacter(dbId)
         if (cancelled) return
         setStaged((prev) => {
           if (!prev) return prev
           // Single source of truth for the DETAIL→node-data mapping — shared
           // with every library→canvas load site (see character-node-data.ts).
-          const merged = mergeCharacterDetailIntoNodeData(prev, fresh)
+          // Stamp characterDbId so an adopted (was-unlinked) node is now linked.
+          const merged = { ...mergeCharacterDetailIntoNodeData(prev, fresh), characterDbId: dbId }
           updateNodeData(nodeId, merged)
           return merged
         })
@@ -326,6 +340,27 @@ export function useCharacterStudio(nodeId: string): CharacterStudioState | null 
     [nodeId, updateNodeData, scheduleSave],
   )
 
+  /** Link this (unlinked) node to an EXISTING character row and load its assets.
+   *  Used when a name collision (or open-time name match) reveals the character
+   *  already exists — names are unique per user, so the collision IS the row.
+   *  Clears the dirty set: the merged data is the DB's, not pending user edits. */
+  const adoptCharacter = useCallback(async (dbId: string): Promise<string> => {
+    updateNodeData(nodeId, { characterDbId: dbId })
+    const fresh = await getCharacter(dbId)
+    dirtyRef.current = new Set()
+    setStaged((prev) => {
+      if (!prev) return prev
+      const merged = { ...mergeCharacterDetailIntoNodeData(prev, fresh), characterDbId: dbId }
+      updateNodeData(nodeId, merged)
+      return merged
+    })
+    setInitialPendingJobs(fresh.pendingJobs ?? [])
+    setInitialPortraitCandidates(fresh.portraitCandidates ?? [])
+    setInitialPreviousCandidates(fresh.previousCandidates ?? [])
+    setSaveStatus("saved")
+    return dbId
+  }, [nodeId, updateNodeData])
+
   const ensureSaved = useCallback(async (): Promise<string> => {
     const current = stagedRef.current
     if (!current) throw new Error("Studio state not ready.")
@@ -373,11 +408,18 @@ export function useCharacterStudio(nodeId: string): CharacterStudioState | null 
     try {
       return await op
     } catch (e) {
-      // If the very first insert collides on name (the user typed something
-      // already in use before clicking Generate), the auto-numbered placeholder
-      // path wouldn't be taken — only a user-supplied name reaches this branch.
-      // Surface and rethrow so the calling Generate handler can bail.
+      // The insert collided on name (the user typed a name they already own
+      // before clicking Generate). Names are unique per user, so this IS their
+      // existing character — ADOPT it (link the node + load its assets) and
+      // return its id so the in-flight generation proceeds against it, instead
+      // of dead-ending on "pick a different name".
       if (e instanceof CharacterNameTakenError) {
+        if (e.existingId) {
+          const adoptedName = stagedRef.current?.characterName?.trim()
+          const dbId = await adoptCharacter(e.existingId)
+          toast.success(adoptedName ? `Loaded your existing "${adoptedName}".` : "Loaded your existing character.")
+          return dbId
+        }
         toast.error(e.message)
         setSaveStatus("error")
       }
@@ -385,7 +427,7 @@ export function useCharacterStudio(nodeId: string): CharacterStudioState | null 
     } finally {
       ensureInFlightRef.current = null
     }
-  }, [nodeId, updateNodeData, flushSave])
+  }, [nodeId, updateNodeData, flushSave, adoptCharacter])
 
   if (!staged) return null
   return {

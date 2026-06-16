@@ -121,7 +121,10 @@ function throwApiError(errJson: Record<string, unknown> | null, fallback: string
     )
   }
   if (errObj?.code === "name_taken") {
-    throw new CharacterNameTakenError((errObj.message as string) ?? "Name already in use.")
+    throw new CharacterNameTakenError(
+      (errObj.message as string) ?? "Name already in use.",
+      errObj.existingId as string | undefined,
+    )
   }
   if (errObj?.code === "portrait_required") {
     throw new PortraitRequiredError(
@@ -1109,9 +1112,14 @@ export async function listArchivedCharacters(projectId?: string): Promise<{ char
  * rename. Subclasses Error so it can be caught with `e instanceof CharacterNameTakenError`.
  */
 export class CharacterNameTakenError extends Error {
-  constructor(message: string) {
+  /** The caller's EXISTING active character id with this name (unique per user),
+   *  when the backend could resolve it — lets the studio adopt it instead of
+   *  forcing a rename. Undefined on the rename path / lookup miss. */
+  readonly existingId?: string
+  constructor(message: string, existingId?: string) {
     super(message)
     this.name = "CharacterNameTakenError"
+    this.existingId = existingId
   }
 }
 

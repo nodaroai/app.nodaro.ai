@@ -1076,6 +1076,27 @@ describe("POST /v1/characters", () => {
     )
   })
 
+  it("returns 409 name_taken WITH the existing character id on a name collision (adopt affordance)", async () => {
+    // INSERT collides on the unique-per-user name → 23505; the handler then
+    // resolves the caller's existing row id by name and returns it so the studio
+    // can ADOPT the existing character instead of forcing a rename.
+    const chain = {
+      insert: () => ({ select: () => ({ single: () => Promise.resolve({ data: null, error: { code: "23505" } }) }) }),
+      select: () => ({ eq: () => ({ ilike: () => ({ is: () => ({ limit: () => ({ maybeSingle: () => Promise.resolve({ data: { id: "existing-1" }, error: null }) }) }) }) }) }),
+    }
+    vi.mocked(supabase.from).mockReturnValue(chain as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: { name: "Hero", nodeId: "node-1", userId: TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe("name_taken")
+    expect(res.json().error.existingId).toBe("existing-1")
+  })
+
   it("returns 200 on update (id in body) and scopes by user_id", async () => {
     const mockSingle = vi.fn().mockResolvedValue({ data: { id: TEST_CHARACTER_ID }, error: null })
     const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
