@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { getCompatibleNodes, TYPED_HANDLE_IDS, type NodeOption } from "../node-compatibility"
+import { getCompatibleNodes, resolveTargetHandle, TYPED_HANDLE_IDS, type NodeOption } from "../node-compatibility"
 import { TARGET_HANDLE_ACCEPTS } from "../target-handle-registry"
 import type { SceneNodeType } from "@/types/nodes"
 
@@ -151,6 +151,28 @@ describe("getCompatibleNodes — typed-handle branches (camera-motion, transitio
 // validator and source-direction popovers). If a new typed handle is
 // added to the registry without being added to TYPED_HANDLE_IDS, the
 // add-node popup silently hides Parameter-category candidates on it.
+// Edge-drop path (drag FROM an output handle onto empty canvas → Add Node).
+// getCompatibleNodes/resolveTargetHandle tier + wire via def.inputs ∩
+// HANDLE_COMPATIBILITY[sourceHandle]. Two pre-existing breakages for video nodes:
+//   - video-retake's stale inputs:["in"] made resolveTargetHandle pick "in", a
+//     handle the node never renders → orphan edge (fixed by correcting .inputs).
+//   - generate-video's only video input is `videoReferences`, absent from
+//     HANDLE_COMPATIBILITY["video"] → the node was dropped from the popup
+//     entirely for a video source (fixed by adding videoReferences to the map).
+describe("getCompatibleNodes / resolveTargetHandle — video-source edge-drop reaches video nodes", () => {
+  it("offers generate-video and video-retake as direct matches for a video source", () => {
+    const pool = [opt("generate-video"), opt("video-retake"), opt("text-prompt"), opt("upload-image")]
+    const direct = new Set(getCompatibleNodes("video", "source", pool).direct.map((o) => o.type))
+    expect(direct.has("generate-video")).toBe(true)
+    expect(direct.has("video-retake")).toBe(true)
+  })
+
+  it("resolves a real rendered target handle (never the phantom 'in')", () => {
+    expect(resolveTargetHandle("generate-video", "video", "source")).toBe("videoReferences")
+    expect(resolveTargetHandle("video-retake", "video", "source")).toBe("video")
+  })
+})
+
 describe("TYPED_HANDLE_IDS contract", () => {
   it("matches every typed-pool-gating handle in TARGET_HANDLE_ACCEPTS", () => {
     // Node types whose registry entries describe DATA-producer inputs (not

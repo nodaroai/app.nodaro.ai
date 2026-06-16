@@ -1,7 +1,7 @@
 ---
 node_type: video-retake
-generated_at: 2026-06-11T18:52:24.885Z
-generated_from: 36d155ff
+generated_at: 2026-06-16T07:25:41.348Z
+generated_from: 286cae6f4
 ---
 
 # Retake Video
@@ -10,7 +10,7 @@ generated_from: 36d155ff
 **Type:** `video-retake`
 **Category:** ai
 **Credit cost:** 25
-**Inputs (target handles):** `in`
+**Inputs (target handles):** `video`, `prompt`, `look`
 **Outputs (source handles):** `video`
 
 **Required data fields:**

@@ -138,7 +138,7 @@ import { useNodeSelectionHistoryStore, type HistoryEntry } from "@/hooks/use-nod
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { Switch } from "@/components/ui/switch";
 import { enumerateConnectionOptionsCore } from "@/lib/enumerate-connection-options";
-import { getAutoConnectPref, setAutoConnectPref, getSmartConnectPref, setSmartConnectPref } from "@/lib/auto-connect-pref";
+import { getAutoConnectPref, setAutoConnectPref } from "@/lib/auto-connect-pref";
 
 const ComponentMarketplaceModal = lazy(() => import("./component-marketplace-modal").then(m => ({ default: m.ComponentMarketplaceModal })));
 import type { ComponentSelection } from "./component-marketplace-modal";
@@ -1754,10 +1754,8 @@ export function AddNodePopup({
   // Auto-connect toggle (Tab-from-focused-node). Seeded from localStorage; the
   // live value lets the user flip it within the open popup.
   const [autoConnect, setAutoConnect] = useState(getAutoConnectPref);
-  // Smart Connect: skip the Connect dialog, auto-pick handle + name (§6). Only
-  // meaningful while Auto Connect is on. The canvas re-reads the pref at pick
-  // time; this state is just the live toggle UI.
-  const [smartConnect, setSmartConnect] = useState(getSmartConnectPref);
+  // Smart Connect's toggle is intentionally hidden (the feature is force-OFF in
+  // auto-connect-pref.ts, so picking a node always opens the Connect dialog).
   const popupRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -2310,10 +2308,12 @@ export function AddNodePopup({
               )}
             />
           </div>
-          {/* Auto Connect + Smart toggles: only meaningful when there's a focused
-              node to wire to (Tab on a node sets autoConnectCtx). Hidden when
-              nothing is focused (generic Tab / sidebar add) and for edge-drop
-              (which direct-wires the dragged handle). Smart is gated under Auto. */}
+          {/* Auto Connect toggle: only meaningful when there's a focused node to
+              wire to (Tab on a node sets autoConnectCtx). Hidden when nothing is
+              focused (generic Tab / sidebar add) and for edge-drop (which
+              direct-wires the dragged handle). The Smart Connect toggle that used
+              to sit beside it is intentionally hidden — Smart is force-OFF in
+              auto-connect-pref.ts so picking a node always opens the dialog. */}
           {autoConnectCtx && (
             <div className="flex items-center gap-3 shrink-0 ml-auto">
               <ToggleLabel
@@ -2327,19 +2327,6 @@ export function AddNodePopup({
                 ariaLabel="Auto-connect"
                 title="Auto-connect the new node to the focused node"
               />
-              {autoConnect && (
-                <ToggleLabel
-                  icon={<Zap className="w-3.5 h-3.5 text-[#ff0073]" />}
-                  label="Smart"
-                  checked={smartConnect}
-                  onChange={(v) => {
-                    setSmartConnect(v)
-                    setSmartConnectPref(v)
-                  }}
-                  ariaLabel="Smart connect"
-                  title="Smart Connect: skip the dialog — auto-pick the handle and name"
-                />
-              )}
             </div>
           )}
         </div>

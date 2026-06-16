@@ -5658,7 +5658,10 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "ai",
     creditCost: 20,
     width: 220,
-    inputs: ["startFrame", "endFrame", "audio"],
+    // Mirrors GENERATE_VIDEO_INPUT_HANDLES (the handle set the node renders) so
+    // every input is offered as a connection candidate; kept in lockstep by the
+    // drift test in enumerate-connection-options.test.ts.
+    inputs: ["prompt", "negative", "startFrame", "endFrame", "imageReferences", "videoReferences", "audio", "audioReferences", "assets", "elements", "look"],
     outputs: ["video"],
     defaultData: { label: "Generate Video", provider: "seedance-2-fast", seedance2InputMode: "references", duration: 5, prompt: "", negativePrompt: "", fieldMappings: {} },
     exposableOutputs: [{ key: "result", label: "Result", outputType: "video" as const }],
@@ -5729,7 +5732,9 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Retake Video",
     category: "ai",
     creditCost: 25,
-    inputs: ["in"],
+    // Mirrors VIDEO_RETAKE_HANDLE_IDS (the handles the node renders); the prior
+    // ["in"] was stale and made edge-drop wire to a non-existent "in" handle.
+    inputs: ["video", "prompt", "look"],
     outputs: ["video"],
     defaultData: {
       label: "Retake Video",

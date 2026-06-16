@@ -8,6 +8,9 @@ import {
   type ConnectionOption,
   type ConnectionOptions,
 } from "../enumerate-connection-options"
+import { GENERATE_VIDEO_INPUT_HANDLES } from "../generate-video-handles"
+import { GENERATE_IMAGE_INPUT_HANDLES } from "../generate-image-handles"
+import { VIDEO_RETAKE_HANDLE_IDS } from "../video-retake-handles"
 
 const GI_INPUTS = ["prompt", "negative", "references", "assets", "elements", "look"]
 const GI_OUTPUTS = ["image"]
@@ -123,6 +126,42 @@ describe("enumerateConnectionOptionsCore", () => {
     })
     const tgt = handles.filter((h) => h.direction === "target").map((h) => h.fHandle)
     expect(tgt.indexOf("prompt")).toBeLessThan(tgt.indexOf("negative"))
+  })
+
+  // Regression: adding generate-video while focused on generate-video must offer
+  // BOTH directions on the shared `videoReferences` handle. The source direction
+  // (current → new) reads the NEW node's static inputs via staticInputHandles →
+  // NODE_DEFINITIONS["generate-video"].inputs; it broke when that field was a
+  // stale subset omitting videoReferences. Guarded here + by the .inputs drift
+  // test below.
+  it("generate-video → generate-video: offers BOTH directions on videoReferences", () => {
+    const { handles } = enumerateConnectionOptionsCore({
+      focusedType: "generate-video",
+      newType: "generate-video",
+      focusedSourceHandles: ["video"],
+      focusedTargetHandles: [...GENERATE_VIDEO_INPUT_HANDLES],
+      missingRefNames: [],
+    })
+    // new node's output → current node's videoReferences input ("Before")
+    expect(handles.some((h) => h.direction === "target" && h.fHandle === "videoReferences")).toBe(true)
+    // current node's output → new node's videoReferences input ("After") — the bug
+    expect(handles.some((h) => h.direction === "source" && h.nHandle === "videoReferences")).toBe(true)
+  })
+})
+
+// Drift guard: NODE_DEFINITIONS.inputs for the custom-handle nodes (which render
+// from their own *_INPUT_HANDLES constant) must list every handle the node
+// actually renders, so staticInputHandles can offer each as a connection
+// candidate. Fails if NODE_DEFINITIONS.inputs ever regresses to a stale subset.
+describe("staticInputHandles covers every rendered input handle (NODE_DEFINITIONS.inputs not stale)", () => {
+  it.each([
+    ["generate-video", [...GENERATE_VIDEO_INPUT_HANDLES]],
+    ["generate-image", [...GENERATE_IMAGE_INPUT_HANDLES]],
+    ["video-retake", [...VIDEO_RETAKE_HANDLE_IDS]],
+    ["video-sfx", ["prompt", "negative", "video"]],
+  ] as const)("%s exposes every rendered input handle", (type, constHandles) => {
+    const inputs = staticInputHandles(type)
+    for (const h of constHandles) expect(inputs).toContain(h)
   })
 })
 
