@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react"
 import { CodeXml, ChevronLeft, ChevronRight } from "lucide-react"
+import { BODY_MENU_CLASS } from "./body-menu-class"
 import { computeFlipPosition } from "./flip-position"
 import type { SnippetPillAttrs } from "./snippet-pill-extension"
 
@@ -144,7 +145,7 @@ export function SnippetPillView(props: NodeViewProps) {
             <div
               ref={menuRef}
               style={{ position: "fixed", top, left, width: MENU_W, maxHeight: 320, overflowY: "auto" }}
-              className="z-[10000] rounded-lg border border-border bg-popover shadow-lg py-1"
+              className={BODY_MENU_CLASS}
               role="menu"
               onMouseDown={(e) => e.stopPropagation()}
               onClick={(e) => e.stopPropagation()}

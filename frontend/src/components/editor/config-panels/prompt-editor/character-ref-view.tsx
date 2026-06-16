@@ -9,6 +9,7 @@ import {
   type UsageMode,
 } from "@nodaro/shared"
 import { optimizedImageUrl } from "@/lib/image"
+import { BODY_MENU_CLASS } from "./body-menu-class"
 import { computeFlipPosition } from "./flip-position"
 import type { CharacterRefAttrs } from "./character-ref-extension"
 
@@ -243,7 +244,7 @@ export function CharacterRefView(props: NodeViewProps) {
             <div
               ref={menuRef}
               style={{ position: "fixed", top, left, width: MENU_W, maxHeight, overflowY: "auto" }}
-              className="z-[10000] rounded-lg border border-border bg-popover shadow-lg py-1"
+              className={BODY_MENU_CLASS}
               role="menu"
               // Stop the document-level outside-click listener from seeing
               // clicks inside the menu (containment-checks can race with

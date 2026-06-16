@@ -9,6 +9,7 @@ import {
   type LocationUsageMode,
 } from "@nodaro/shared"
 import { optimizedImageUrl } from "@/lib/image"
+import { BODY_MENU_CLASS } from "./body-menu-class"
 import { computeFlipPosition } from "./flip-position"
 import type { LocationRefAttrs } from "./location-ref-extension"
 
@@ -251,7 +252,7 @@ export function LocationRefView(props: NodeViewProps) {
             <div
               ref={menuRef}
               style={{ position: "fixed", top, left, width: MENU_W, maxHeight, overflowY: "auto" }}
-              className="z-[10000] rounded-lg border border-border bg-popover shadow-lg py-1"
+              className={BODY_MENU_CLASS}
               role="menu"
               data-testid="location-ref-mode-menu"
               // Stop the document-level outside-click listener from seeing
