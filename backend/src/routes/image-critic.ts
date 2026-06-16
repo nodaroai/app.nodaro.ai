@@ -15,7 +15,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { llmComplete, type LlmContentBlock } from "../lib/llm-client.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { prefetchAsBase64 } from "../lib/anthropic-image.js"
-import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { markProviderCallStart } from "../lib/reconcile/persistence.js"
@@ -144,6 +144,7 @@ export async function imageCriticRoutes(app: FastifyInstance) {
         .from("jobs")
         .insert({
           workflow_id: extractWorkflowId(req.body),
+          node_id: extractNodeId(req.body),
           force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",

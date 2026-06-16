@@ -11,6 +11,7 @@ import { buildWorkflowDelta, applyDeltaToGraph, findContestedNodes } from "@/lib
 import { orderNodesParentFirst } from "@/components/editor/workflow-editor/group-coords"
 import { isStudioWorkflowSettings } from "@/lib/studio"
 import { isValidUuid } from "@/lib/uuid"
+import { collectRestorableSingleNodeJobs, applySingleNodeJobRestore } from "@/lib/single-node-restore"
 
 interface StillRunningJob {
   readonly nodeId: string
@@ -910,43 +911,63 @@ export function useWorkflowPersistence(projectId?: string) {
         // IDs merged into the list could 404 on detail) and showing loud 404s
         // in the console on every workflow refresh.
         let activeBackendExecution: ActiveBackendExecution | undefined
+        let restoredSingleNodeJobs: StillRunningJob[] = []
         try {
-          // First check for an active execution (editor-triggered only — exclude
-          // app-runner and component executions which share the same workflow_id)
-          const { data: activeExecs } = await listWorkflowExecutions(id, {
-            limit: 1,
+          // One call returns BOTH the active orchestrator execution AND active
+          // standalone single-node jobs (per-node Run), merged + source=editor
+          // (excludes app-runner / component / mcp). limit>1 so several
+          // concurrently-running single nodes all come back.
+          const { data: activeItems } = await listWorkflowExecutions(id, {
+            limit: 25,
             status: "pending,running,stopping",
             source: "editor",
           })
-          if (activeExecs.length > 0) {
-            const exec = activeExecs[0]
-            const nodeStates = (exec.nodeStates ?? {}) as Record<string, NodeExecutionState>
+
+          // --- Active orchestrator (whole-workflow) execution — at most one. ---
+          const orchestrator = activeItems.find((e) => e.triggerType === "manual")
+          if (orchestrator) {
+            const nodeStates = (orchestrator.nodeStates ?? {}) as Record<string, NodeExecutionState>
             // Status from list is a point-in-time snapshot — the subsequent
             // poll (once restored) will fetch fresh state and correct any
             // drift (e.g. execution completed between load and render).
-            const stillActive = exec.status === "pending" || exec.status === "running" || exec.status === "stopping"
+            const stillActive = orchestrator.status === "pending" || orchestrator.status === "running" || orchestrator.status === "stopping"
             if (stillActive && Object.keys(nodeStates).length > 0) {
               nodes = applyBackendExecutionState(nodes, nodeStates)
               nodesChanged = true
-              activeBackendExecution = { executionId: exec.id, nodeStates }
+              activeBackendExecution = { executionId: orchestrator.id, nodeStates }
             } else if (Object.keys(nodeStates).length > 0) {
               // Execution already finished — apply results like a completed execution
               nodes = applyCompletedExecutionResults(nodes, nodeStates)
               nodesChanged = true
             }
-          } else {
-            // No active execution — check the most recent completed one.
-            // This handles the case where the execution ran while the
-            // frontend was closed, so results were never applied to nodes.
-            // Use source=editor to exclude app-runner/component executions.
+          }
+
+          // --- Active standalone single-node jobs (per-node Run, Gap 3). ---
+          // Re-hydrate each running node's transient run-state (executionStatus
+          // + currentJobId + currentJobProgress) IN MEMORY so the canvas shows
+          // it running and `restorePollingForRunningJobs` (driven off the
+          // returned stillRunningJobs) resumes the per-node poll. Transient-only
+          // → deliberately NO `nodesChanged` (no gratuitous side-save /
+          // updated_at bump → multi-tab safe). The side-save also strips
+          // transient keys, so even a same-load orchestrator-driven save can't
+          // persist currentJobId (the autosave-freeze trigger).
+          const restorable = collectRestorableSingleNodeJobs(activeItems, nodes, Date.now())
+          if (restorable.length > 0) {
+            nodes = applySingleNodeJobRestore(nodes, restorable)
+            restoredSingleNodeJobs = restorable.map((j) => ({ nodeId: j.nodeId, jobId: j.jobId, nodeType: j.nodeType }))
+          }
+
+          // --- Nothing active → apply the most recent COMPLETED execution's
+          // results to nodes still missing outputs (execution ran while the
+          // editor was closed). Use source=editor to exclude app-runner/component. ---
+          if (!orchestrator && restorable.length === 0) {
             const { data: completedExecs } = await listWorkflowExecutions(id, {
               limit: 1,
               status: "completed",
               source: "editor",
             })
             if (completedExecs.length > 0) {
-              const exec = completedExecs[0]
-              const nodeStates = (exec.nodeStates ?? {}) as Record<string, NodeExecutionState>
+              const nodeStates = (completedExecs[0].nodeStates ?? {}) as Record<string, NodeExecutionState>
               if (Object.keys(nodeStates).length > 0) {
                 // Only apply outputs to nodes that don't already have results
                 const before = JSON.stringify(nodes)
@@ -1012,9 +1033,15 @@ export function useWorkflowPersistence(projectId?: string) {
         // was set from `settings` just above; the Studio app owns writes via
         // the same backend route, so even a benign node-heal must not persist.
         if (nodesChanged && projectId && !useWorkflowStore.getState().isReadOnly) {
+          // Strip transient run-state before persisting — same sanitizer the
+          // main save (and delta save) use. Without this, a node carrying a
+          // restored `currentJobId`/`executionStatus` (orchestrator restore or
+          // single-node Gap-3 restore) would persist it here, re-introducing the
+          // autosave-freeze bug those keys are stripped to avoid. Results
+          // (generatedResults, …) are NOT transient and still persist.
           const { data: sideSaved, error: saveError } = await supabase
             .from("workflows")
-            .update({ nodes: JSON.parse(JSON.stringify(orderNodesParentFirst(nodes))) })
+            .update({ nodes: JSON.parse(JSON.stringify(stripTransientRuntimeData(orderNodesParentFirst(nodes)))) })
             .eq("id", id)
             .select("updated_at")
             .maybeSingle()
@@ -1027,9 +1054,17 @@ export function useWorkflowPersistence(projectId?: string) {
           }
         }
 
+        // Merge the persisted-node sync jobs with the Gap-3 single-node restores,
+        // deduping by nodeId (one poll per node; in the reload case syncResult is
+        // empty because the transient run-state was stripped on save).
+        const mergedRunning = [...syncResult.stillRunningJobs, ...restoredSingleNodeJobs]
+        const stillRunningJobs = mergedRunning.filter(
+          (j, i) => mergedRunning.findIndex((k) => k.nodeId === j.nodeId) === i,
+        )
+
         return {
           success: true,
-          stillRunningJobs: syncResult.stillRunningJobs,
+          stillRunningJobs,
           activeBackendExecution,
         }
       } catch (err) {

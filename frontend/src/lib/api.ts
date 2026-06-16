@@ -200,6 +200,7 @@ export async function withDedupRaceRetry<T>(fn: () => Promise<T>): Promise<T> {
 let _currentWorkflowId: string | null = null
 let _forcePrivate = false
 let _userPromptTemplate: string | undefined = undefined
+let _pendingNodeId: string | null = null
 
 /** Call from WorkflowEditor on mount/change to set the active workflow. */
 export function setCurrentWorkflowId(id: string | null) {
@@ -209,6 +210,13 @@ export function setCurrentWorkflowId(id: string | null) {
 /** Set forcePrivate flag for the next API call (auto-resets after use). */
 export function setForcePrivate(value: boolean) {
   _forcePrivate = value
+}
+
+/** Tag the NEXT job-creating API call with the canvas node id (auto-resets after
+ *  use, like forcePrivate). Persisted to jobs.node_id so a single-node run's
+ *  in-flight progress can be restored after a page reload (Gap 3). */
+export function setCurrentNodeId(id: string | null) {
+  _pendingNodeId = id
 }
 
 /**
@@ -235,6 +243,10 @@ function withWorkflowId<T extends Record<string, unknown>>(body: T): T {
   if (_userPromptTemplate !== undefined) {
     result = { ...result, userPrompt: _userPromptTemplate }
     _userPromptTemplate = undefined // auto-reset after use
+  }
+  if (_pendingNodeId) {
+    result = { ...result, nodeId: _pendingNodeId }
+    _pendingNodeId = null // auto-reset after use
   }
   return result
 }

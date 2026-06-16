@@ -141,7 +141,7 @@ const renderSceneGraphBody = z.object({
 // ── Generic plan render schema ────────────────────────────────────────
 
 import { PLAN_TYPES, validatePlanByType } from "../lib/plan-schemas.js"
-import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 
 const renderPlanBody = z.object({
@@ -176,6 +176,7 @@ export async function renderVideoRoutes(app: FastifyInstance) {
       .from("jobs")
       .insert({
         workflow_id: extractWorkflowId(req.body),
+        node_id: extractNodeId(req.body),
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
@@ -243,6 +244,7 @@ export async function renderVideoRoutes(app: FastifyInstance) {
       .from("jobs")
       .insert({
         workflow_id: extractWorkflowId(req.body),
+        node_id: extractNodeId(req.body),
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
@@ -307,6 +309,7 @@ export async function renderVideoRoutes(app: FastifyInstance) {
       .from("jobs")
       .insert({
         workflow_id: extractWorkflowId(req.body),
+        node_id: extractNodeId(req.body),
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",

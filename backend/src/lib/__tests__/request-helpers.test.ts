@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest"
 import {
   ACTIVE_EXECUTION_STATUSES,
   extractWorkflowId,
+  extractNodeId,
   extractForcePrivate,
   extractProvider,
 } from "../request-helpers.js"
@@ -16,6 +17,20 @@ describe("request-helpers", () => {
       expect(ACTIVE_EXECUTION_STATUSES).toContain("pending")
       expect(ACTIVE_EXECUTION_STATUSES).toContain("running")
       expect(ACTIVE_EXECUTION_STATUSES).toContain("stopping")
+    })
+  })
+
+  describe("extractNodeId", () => {
+    it("returns the nodeId when present and a non-empty string", () => {
+      expect(extractNodeId({ nodeId: "node_7" })).toBe("node_7")
+    })
+    it("returns null for empty string / non-string / missing / nullish / non-object", () => {
+      expect(extractNodeId({ nodeId: "" })).toBeNull()
+      expect(extractNodeId({ nodeId: 123 })).toBeNull()
+      expect(extractNodeId({})).toBeNull()
+      expect(extractNodeId(null)).toBeNull()
+      expect(extractNodeId(undefined)).toBeNull()
+      expect(extractNodeId("string")).toBeNull()
     })
   })
 

@@ -6,6 +6,7 @@ import { renderHook, act } from "@testing-library/react"
 // ---------------------------------------------------------------------------
 
 const mockGetBatchJobStatus = vi.fn()
+const mockListWorkflowExecutions = vi.fn()
 const mockSupabaseFrom = vi.fn()
 const mockLoadWorkflow = vi.fn()
 const mockSetWorkflowId = vi.fn()
@@ -28,6 +29,7 @@ vi.mock("@/ee/hooks/queries/use-credits-queries", () => ({
 
 vi.mock("@/lib/api", () => ({
   getBatchJobStatus: (...args: unknown[]) => mockGetBatchJobStatus(...args),
+  listWorkflowExecutions: (...args: unknown[]) => mockListWorkflowExecutions(...args),
 }))
 
 vi.mock("@/lib/supabase", () => ({
@@ -1028,5 +1030,133 @@ describe("useWorkflowPersistence — syncNodeResultsFromDB (via load)", () => {
 
     expect(loadResult!.success).toBe(false)
     expect(loadResult!.error).toBe("Not found")
+  })
+})
+
+// ===========================================================================
+// Single-node restore via load() (Gap 3)
+//
+// After a page reload a per-node Run's transient run-state (executionStatus /
+// currentJobId / currentJobProgress) is gone (stripped on save). load() refetches
+// it from the jobs table via the merged executions list and re-hydrates the
+// canvas — proven here end-to-end (the pure decision logic is unit-tested in
+// lib/__tests__/single-node-restore.test.ts).
+// ===========================================================================
+
+describe("useWorkflowPersistence — single-node restore via load (Gap 3)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockGetBatchJobStatus.mockResolvedValue([])
+  })
+
+  function singleNodeJob(opts: { jobId: string; nodeId: string; progress?: number; nodeType?: string }) {
+    return {
+      id: opts.jobId,
+      triggerType: "single-node",
+      status: "running",
+      createdAt: new Date().toISOString(),
+      nodeStates: {
+        [opts.nodeId]: {
+          nodeId: opts.nodeId,
+          jobId: opts.jobId,
+          status: "running",
+          progress: opts.progress ?? 0,
+          nodeType: opts.nodeType ?? "generate-image",
+        },
+      },
+    }
+  }
+
+  // active list returns `items`; a `completed`-status query returns nothing.
+  function mockActive(items: unknown[]) {
+    mockListWorkflowExecutions.mockImplementation((_id: string, opts: { status?: string }) =>
+      Promise.resolve({ data: opts?.status?.includes("completed") ? [] : items }),
+    )
+  }
+
+  it("restores a running single-node job onto its canvas node (run-state + stillRunningJobs)", async () => {
+    setupSupabaseLoad({
+      id: "w1",
+      name: "WF",
+      nodes: [makeNode({ id: "n1", data: { label: "Img", executionStatus: "idle" } })],
+      edges: [],
+    })
+    mockActive([singleNodeJob({ jobId: VALID_UUID, nodeId: "n1", progress: 55 })])
+
+    let loadResult: Awaited<ReturnType<ReturnType<typeof useWorkflowPersistence>["load"]>> | undefined
+    const { result } = renderHook(() => useWorkflowPersistence("p1"))
+    await act(async () => {
+      loadResult = await result.current.load("w1")
+    })
+
+    // Feeds restorePollingForRunningJobs in the editor.
+    expect(loadResult!.stillRunningJobs).toEqual([
+      { nodeId: "n1", jobId: VALID_UUID, nodeType: "generate-image" },
+    ])
+    // Canvas node re-hydrated so it shows running AND the restored poll's abandon
+    // guard (data.currentJobId === jobId) holds.
+    const n1 = getSyncedNodes().find((n) => (n as { id: string }).id === "n1") as { data: Record<string, unknown> }
+    expect(n1.data.executionStatus).toBe("running")
+    expect(n1.data.currentJobId).toBe(VALID_UUID)
+    expect(n1.data.currentJobProgress).toBe(55)
+  })
+
+  it("does NOT restore a fan-out (list) node — stays idle, no poll", async () => {
+    setupSupabaseLoad({
+      id: "w1",
+      name: "WF",
+      nodes: [makeNode({ id: "n1", type: "list", data: { label: "List", executionStatus: "idle" } })],
+      edges: [],
+    })
+    mockActive([singleNodeJob({ jobId: VALID_UUID, nodeId: "n1" })])
+
+    let loadResult: Awaited<ReturnType<ReturnType<typeof useWorkflowPersistence>["load"]>> | undefined
+    const { result } = renderHook(() => useWorkflowPersistence("p1"))
+    await act(async () => {
+      loadResult = await result.current.load("w1")
+    })
+
+    expect(loadResult!.stillRunningJobs).toEqual([])
+    const n1 = getSyncedNodes().find((n) => (n as { id: string }).id === "n1") as { data: Record<string, unknown> }
+    expect(n1.data.executionStatus).toBe("idle")
+    expect(n1.data.currentJobId).toBeUndefined()
+  })
+
+  it("MULTI-TAB: the side-save never persists restored transient run-state", async () => {
+    // Capture the side-save payload. An active orchestrator execution forces
+    // nodesChanged=true (so the side-save fires), alongside a single-node restore.
+    const captured: { nodes?: Array<{ data?: Record<string, unknown> }> } = {}
+    mockSupabaseFrom.mockReturnValue({
+      select: () => ({ eq: () => ({ single: async () => ({ data: { updated_at: "2026-01-01T00:00:00Z", id: "w1", name: "WF", nodes: [makeNode({ id: "n0", data: { executionStatus: "idle" } }), makeNode({ id: "n1", data: { executionStatus: "idle" } })], edges: [] }, error: null }) }) }),
+      update: (payload: { nodes?: Array<{ data?: Record<string, unknown> }> }) => {
+        if (payload?.nodes) captured.nodes = payload.nodes
+        return {
+          eq: () => ({
+            error: null,
+            select: () => ({ maybeSingle: async () => ({ data: { updated_at: "2026-01-02T00:00:00Z" }, error: null }) }),
+            eq: () => ({ select: () => ({ maybeSingle: async () => ({ data: { updated_at: "2026-01-02T00:00:00Z" }, error: null }) }) }),
+          }),
+        }
+      },
+    })
+    mockActive([
+      { id: "exec-1", triggerType: "manual", status: "running", createdAt: new Date().toISOString(), nodeStates: { n0: { status: "running" } } },
+      singleNodeJob({ jobId: VALID_UUID, nodeId: "n1" }),
+    ])
+
+    const { result } = renderHook(() => useWorkflowPersistence("p1"))
+    await act(async () => {
+      await result.current.load("w1")
+    })
+
+    // The side-save ran (orchestrator → nodesChanged), but every transient
+    // run-state key must have been stripped — no currentJobId / executionStatus
+    // reaches the persisted graph (the autosave-freeze / cross-tab-dirty guard).
+    expect(captured.nodes).toBeDefined()
+    for (const n of captured.nodes!) {
+      expect(n.data).not.toHaveProperty("currentJobId")
+      expect(n.data).not.toHaveProperty("currentJobProgress")
+      expect(n.data).not.toHaveProperty("executionStatus")
+    }
   })
 })

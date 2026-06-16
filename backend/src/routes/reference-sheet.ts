@@ -4,7 +4,7 @@ import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { referenceSheetBody } from "./reference-sheet.schema.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { referenceSheetCreditId } from "@nodaro/shared"
@@ -48,6 +48,7 @@ export async function referenceSheetRoutes(app: FastifyInstance): Promise<void> 
         .from("jobs")
         .insert({
           workflow_id: extractWorkflowId(req.body),
+          node_id: extractNodeId(req.body),
           force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           job_type: "reference-sheet",

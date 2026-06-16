@@ -4,7 +4,7 @@ import { config } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
 import { llmComplete } from "../lib/llm-client.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
-import { extractWorkflowId } from "../lib/request-helpers.js"
+import { extractWorkflowId, extractNodeId } from "../lib/request-helpers.js"
 import { formatZodError } from "../lib/zod-error.js"
 import {
   ASSET_DESCRIPTION_SYSTEM_PROMPT,
@@ -115,6 +115,7 @@ export async function llmSuggestDescriptionRoutes(app: FastifyInstance) {
         .from("jobs")
         .insert({
           workflow_id: extractWorkflowId(req.body),
+          node_id: extractNodeId(req.body),
           user_id: userId,
           status: "pending",
           input_data: { type: "llm-suggest-description", kind: parsed.data.kind },

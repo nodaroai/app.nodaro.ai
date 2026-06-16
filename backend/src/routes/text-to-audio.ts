@@ -3,7 +3,7 @@ import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
-import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { TEXT_TO_AUDIO_PROVIDERS } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
@@ -43,6 +43,7 @@ export async function textToAudioRoutes(app: FastifyInstance) {
       .from("jobs")
       .insert({
         workflow_id: extractWorkflowId(req.body),
+        node_id: extractNodeId(req.body),
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",

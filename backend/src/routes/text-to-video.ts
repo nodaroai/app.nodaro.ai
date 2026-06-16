@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { shotsSchema, elementsSchema } from "../lib/video-schemas.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
-import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
@@ -110,6 +110,7 @@ export async function textToVideoRoutes(app: FastifyInstance) {
         "jobs",
         {
           workflow_id: extractWorkflowId(req.body),
+          node_id: extractNodeId(req.body),
           force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           job_type: "text-to-video",
