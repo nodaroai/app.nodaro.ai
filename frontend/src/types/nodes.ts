@@ -3534,6 +3534,9 @@ export type CharacterNodeData = {
   // regenerating every time. `{ name, url }` shape (same as the other buckets).
   readonly detailCloseups?: CharacterAssetItem[]
   readonly outfitVariations?: CharacterAssetItem[]
+  // Named composite reference boards (the `boards` JSONB column, migration 212) —
+  // distinct from `sheets`. Hydrated from the GET route; rendered in the Board tab.
+  readonly boards?: ReadonlyArray<{ readonly name: string; readonly url: string }>
   // Voice + personality (Phase 1: stored only; Phase 2: auto-injected downstream)
   voice: CharacterVoice | null
   personality: CharacterPersonality | null

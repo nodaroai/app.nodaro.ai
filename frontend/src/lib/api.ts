@@ -824,6 +824,8 @@ export async function getCharacter(id: string): Promise<{
   outfitVariations?: unknown[]
   // Uploaded reference videos keyed by emotion/variant (Record<variant, urls[]>).
   referenceVideosByVariant?: Record<string, string[]>
+  // Named composite reference boards (the `boards` JSONB column, migration 212).
+  boards?: { name: string; url: string }[]
   voice: { voiceId: string; voiceName: string; traits: string; voiceType?: "premade" | "library" | "custom"; previewUrl?: string; ttsProvider?: string } | null
   person?: Record<string, unknown> | null
   wardrobe?: Record<string, unknown> | null

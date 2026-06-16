@@ -1,7 +1,7 @@
 ---
 node_type: character
-generated_at: 2026-06-16T15:46:28.452Z
-generated_from: e0ca71f6a
+generated_at: 2026-06-16T20:47:38.911Z
+generated_from: 01851d2dc
 ---
 
 # Character
@@ -59,6 +59,7 @@ generated_from: e0ca71f6a
 - `sheets?: ReferenceSheet[]`
 - `detailCloseups?: CharacterAssetItem[]`
 - `outfitVariations?: CharacterAssetItem[]`
+- `boards?: ReadonlyArray<{ readonly name: string; readonly url: string }>`
 - `person?: PersonValue`
 - `wardrobe?: WardrobeValue`
 - `referencePhotos?: ReadonlyArray<{ url: string; kind: ReferencePhotoKind }>`
