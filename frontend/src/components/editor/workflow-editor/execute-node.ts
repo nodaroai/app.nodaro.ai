@@ -68,6 +68,7 @@ import {
   getJobStatusLean,
   llmChatStream,
   setForcePrivate,
+  setCurrentNodeId,
   setUserPromptTemplate,
   qaCheckApi,
   imageCriticApi,
@@ -1208,6 +1209,11 @@ export function executeNode(
   // below that awaits before its API call must re-apply this (see transcribe).
   const forcePrivate = hasUploadAncestor(node.id, nodes, edges);
   setForcePrivate(forcePrivate);
+  // Tag the job this run creates with its canvas node id (persisted to
+  // jobs.node_id) so its in-flight progress can be restored after a page
+  // reload. Module-global + auto-reset, same sync-path mechanism as
+  // forcePrivate; await-before-call branches re-apply it (see transcribe).
+  setCurrentNodeId(node.id);
 
   // Build label→output map for resolving {Node Label} references in text fields
   const refMap = buildNodeRefMap(node.id, nodes, edges);
@@ -3733,6 +3739,7 @@ export function executeNode(
           // Re-apply sync so transcribeApi's body build consumes the flag
           // before another parallel executeNode can clobber it.
           setForcePrivate(forcePrivate);
+          setCurrentNodeId(node.id);
           setUserPromptTemplate(undefined);
           return transcribeApi(
             audioUrl,

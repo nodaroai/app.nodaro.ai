@@ -4,7 +4,7 @@ import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
-import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { SUNO_MODELS, SUNO_ADD_TRACK_MODELS, SUNO_TEXT_MAX, SUNO_TITLE_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars } from "@nodaro/shared"
 import {
@@ -278,6 +278,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         .from("jobs")
         .insert({
           workflow_id: extractWorkflowId(req.body),
+          node_id: extractNodeId(req.body),
         force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
@@ -354,6 +355,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         .from("jobs")
         .insert({
           workflow_id: extractWorkflowId(req.body),
+          node_id: extractNodeId(req.body),
         force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
@@ -429,6 +431,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         .from("jobs")
         .insert({
           workflow_id: extractWorkflowId(req.body),
+          node_id: extractNodeId(req.body),
         force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
@@ -498,6 +501,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         .from("jobs")
         .insert({
           workflow_id: extractWorkflowId(req.body),
+          node_id: extractNodeId(req.body),
         force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
@@ -556,6 +560,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         .from("jobs")
         .insert({
           workflow_id: extractWorkflowId(req.body),
+          node_id: extractNodeId(req.body),
         force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
@@ -614,6 +619,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         .from("jobs")
         .insert({
           workflow_id: extractWorkflowId(req.body),
+          node_id: extractNodeId(req.body),
         force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
@@ -673,6 +679,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         .from("jobs")
         .insert({
           workflow_id: extractWorkflowId(req.body),
+          node_id: extractNodeId(req.body),
           force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
@@ -734,6 +741,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         .from("jobs")
         .insert({
           workflow_id: extractWorkflowId(req.body),
+          node_id: extractNodeId(req.body),
           force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
@@ -796,6 +804,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         .from("jobs")
         .insert({
           workflow_id: extractWorkflowId(req.body),
+          node_id: extractNodeId(req.body),
           force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
@@ -878,6 +887,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         .from("jobs")
         .insert({
           workflow_id: extractWorkflowId(req.body),
+          node_id: extractNodeId(req.body),
           force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
@@ -935,6 +945,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         .from("jobs")
         .insert({
           workflow_id: extractWorkflowId(req.body),
+          node_id: extractNodeId(req.body),
           force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
@@ -992,6 +1003,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         .from("jobs")
         .insert({
           workflow_id: extractWorkflowId(req.body),
+          node_id: extractNodeId(req.body),
           force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
@@ -1051,6 +1063,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         .from("jobs")
         .insert({
           workflow_id: extractWorkflowId(req.body),
+          node_id: extractNodeId(req.body),
           force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
@@ -1263,6 +1276,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         .from("jobs")
         .insert({
           workflow_id: extractWorkflowId(req.body),
+          node_id: extractNodeId(req.body),
           force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",

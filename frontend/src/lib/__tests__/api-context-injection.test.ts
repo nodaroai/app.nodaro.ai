@@ -21,6 +21,7 @@ import {
   uploadFile,
   setCurrentWorkflowId,
   setForcePrivate,
+  setCurrentNodeId,
   setUserPromptTemplate,
 } from "../api"
 
@@ -60,6 +61,7 @@ beforeEach(() => {
   // Reset all module-level injection state so cases don't leak into each other.
   setCurrentWorkflowId(null)
   setForcePrivate(false)
+  setCurrentNodeId(null)
   setUserPromptTemplate(undefined)
 })
 
@@ -143,6 +145,54 @@ describe("setForcePrivate (one-shot)", () => {
     await textToVideo("clip")
 
     expect(parseBody(mock)).not.toHaveProperty("forcePrivate")
+  })
+})
+
+// ===========================================================================
+// setCurrentNodeId — one-shot nodeId injection (single-node restore, Gap 3)
+// ===========================================================================
+
+describe("setCurrentNodeId (one-shot)", () => {
+  it("injects nodeId into the NEXT call's body", async () => {
+    const mock = mockFetchJson({ jobId: "j1" })
+    vi.stubGlobal("fetch", mock)
+
+    setCurrentNodeId("node-42")
+    await textToVideo("clip")
+
+    expect(parseBody(mock).nodeId).toBe("node-42")
+  })
+
+  it("auto-resets: the call AFTER omits nodeId", async () => {
+    const mock = mockFetchJson({ jobId: "j1" })
+    vi.stubGlobal("fetch", mock)
+
+    setCurrentNodeId("node-42")
+    await textToVideo("first") // consumes the nodeId
+    await textToVideo("second") // nodeId already reset
+
+    expect(parseBody(mock, 0).nodeId).toBe("node-42")
+    expect(parseBody(mock, 1)).not.toHaveProperty("nodeId")
+  })
+
+  it("does not inject nodeId when never set", async () => {
+    const mock = mockFetchJson({ jobId: "j1" })
+    vi.stubGlobal("fetch", mock)
+
+    await textToVideo("clip")
+
+    expect(parseBody(mock)).not.toHaveProperty("nodeId")
+  })
+
+  it("does not inject nodeId when cleared (set to null) before the call", async () => {
+    const mock = mockFetchJson({ jobId: "j1" })
+    vi.stubGlobal("fetch", mock)
+
+    setCurrentNodeId("node-42")
+    setCurrentNodeId(null)
+    await textToVideo("clip")
+
+    expect(parseBody(mock)).not.toHaveProperty("nodeId")
   })
 })
 

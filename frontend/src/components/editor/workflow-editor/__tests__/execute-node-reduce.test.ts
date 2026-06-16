@@ -104,6 +104,7 @@ vi.mock("@/lib/api", () => ({
   qaCheckApi: vi.fn(),
   webScrape: vi.fn(),
   setForcePrivate: vi.fn(),
+  setCurrentNodeId: vi.fn(),
   setUserPromptTemplate: vi.fn(),
 }))
 

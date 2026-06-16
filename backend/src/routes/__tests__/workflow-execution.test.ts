@@ -95,7 +95,7 @@ vi.mock("@/ee/routes/credits.js", () => ({
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
-import { workflowExecutionRoutes, toExecutionSummary } from "../workflow-execution.js"
+import { workflowExecutionRoutes, toExecutionSummary, jobToExecutionSummary } from "../workflow-execution.js"
 import { supabase } from "../../lib/supabase.js"
 
 // ---------------------------------------------------------------------------
@@ -153,6 +153,32 @@ function authedGet(url: string) {
     url,
     headers: { "x-user-id": TEST_USER_ID },
   })
+}
+
+/**
+ * A chainable + awaitable Supabase-query-builder stand-in that RECORDS every
+ * method call (`.eq`, `.is`, `.order`, ...) so a test can assert which filters
+ * a query applied — robust to chain ORDER (the route appends `.eq`/`.in`/`.lt`
+ * filters AFTER `.limit()`). Awaiting the proxy resolves to `result`.
+ */
+function makeRecorder(result: { data: unknown; error: unknown }) {
+  const calls: Array<{ method: string; args: unknown[] }> = []
+  const proxy: unknown = new Proxy(
+    {},
+    {
+      get(_t, prop) {
+        if (prop === "then") {
+          return (onF: (v: unknown) => unknown, onR?: (e: unknown) => unknown) =>
+            Promise.resolve(result).then(onF, onR)
+        }
+        return (...args: unknown[]) => {
+          calls.push({ method: String(prop), args })
+          return proxy
+        }
+      },
+    },
+  )
+  return { proxy, calls }
 }
 
 // ==========================================================================
@@ -1602,5 +1628,104 @@ describe("toExecutionSummary — strips debug inputs from list node_states", () 
     expect(summary.nodeStates.n1.startedAt).toBe("t0")
     expect(summary.nodeStates.n1.completedAt).toBe("t1")
     expect(summary.nodeStates.n2).toEqual({ status: "running" })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// jobToExecutionSummary — key nodeStates by the CANVAS node id (Gap 3)
+//
+// A single-node job's nodeStates map must be keyed by `jobs.node_id` (the canvas
+// node) — not the job UUID — so the editor's applyBackendExecutionState (which
+// looks up `nodeStates[node.id]`) can re-hydrate the running node after a page
+// reload. Falls back to the job id for jobs with no node_id (SDK/legacy rows).
+// ---------------------------------------------------------------------------
+
+describe("jobToExecutionSummary — keys nodeStates by canvas node_id", () => {
+  const baseRow = {
+    id: "job-uuid-1",
+    status: "processing",
+    provider: "kie",
+    input_data: { type: "generate-image" },
+    progress: 42,
+    credits: 4,
+    error_message: null,
+    started_at: "t0",
+    completed_at: null,
+    created_at: "t-1",
+  }
+
+  it("keys the nodeStates map by node_id when the job carries one", () => {
+    const summary = jobToExecutionSummary({ ...baseRow, node_id: "canvas-node-7" }) as {
+      nodeStates: Record<string, Record<string, unknown>>
+    }
+    // Keyed by the CANVAS node id, NOT the job uuid → nodeStates[node.id] resolves.
+    expect(Object.keys(summary.nodeStates)).toEqual(["canvas-node-7"])
+    const state = summary.nodeStates["canvas-node-7"]
+    expect(state.nodeId).toBe("canvas-node-7")
+    expect(state.jobId).toBe("job-uuid-1")
+    expect(state.status).toBe("running") // processing → running
+    expect(state.progress).toBe(42)
+  })
+
+  it("falls back to the job id when node_id is absent (SDK/legacy rows)", () => {
+    const summary = jobToExecutionSummary(baseRow) as {
+      nodeStates: Record<string, Record<string, unknown>>
+    }
+    expect(Object.keys(summary.nodeStates)).toEqual(["job-uuid-1"])
+    expect(summary.nodeStates["job-uuid-1"].nodeId).toBeNull()
+    expect(summary.nodeStates["job-uuid-1"].jobId).toBe("job-uuid-1")
+  })
+
+  it("defaults progress to 0 when the row has none", () => {
+    const summary = jobToExecutionSummary({ ...baseRow, progress: undefined, node_id: "n1" }) as {
+      nodeStates: Record<string, Record<string, unknown>>
+    }
+    expect(summary.nodeStates["n1"].progress).toBe(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// GET /v1/workflows/:id/executions — editor-source jobs exclusion (Gap 3)
+//
+// app-runner / component / sub-workflow jobs always carry a workflow_execution_id
+// (already excluded by `.is("workflow_execution_id", null)`). The only NON-editor
+// jobs that share a workflow_id with execution_id NULL are MCP single-node runs
+// (mcp_client set) — and those have no canvas node_id, so they can't restore.
+// When the editor calls with `source=editor`, exclude them.
+// ---------------------------------------------------------------------------
+
+describe("GET /v1/workflows/:id/executions — editor-source jobs exclusion", () => {
+  function isCalls(rec: ReturnType<typeof makeRecorder>) {
+    return rec.calls.filter((c) => c.method === "is")
+  }
+
+  it("source=editor excludes MCP single-node jobs (mcp_client IS NULL filter)", async () => {
+    const jobsRec = makeRecorder({ data: [], error: null })
+    const execRec = makeRecorder({ data: [], error: null })
+    vi.mocked(supabase.from).mockImplementation(
+      ((table: string) => (table === "jobs" ? jobsRec.proxy : execRec.proxy)) as never,
+    )
+
+    const res = await authedGet(`/v1/workflows/${TEST_WORKFLOW_ID}/executions?source=editor`)
+    expect(res.statusCode).toBe(200)
+
+    expect(isCalls(jobsRec)).toContainEqual({ method: "is", args: ["workflow_execution_id", null] })
+    expect(isCalls(jobsRec)).toContainEqual({ method: "is", args: ["mcp_client", null] })
+    // user_id scoping (IDOR control) preserved.
+    expect(jobsRec.calls).toContainEqual({ method: "eq", args: ["user_id", TEST_USER_ID] })
+  })
+
+  it("without source=editor, MCP jobs are NOT excluded (no mcp_client filter)", async () => {
+    const jobsRec = makeRecorder({ data: [], error: null })
+    const execRec = makeRecorder({ data: [], error: null })
+    vi.mocked(supabase.from).mockImplementation(
+      ((table: string) => (table === "jobs" ? jobsRec.proxy : execRec.proxy)) as never,
+    )
+
+    const res = await authedGet(`/v1/workflows/${TEST_WORKFLOW_ID}/executions`)
+    expect(res.statusCode).toBe(200)
+
+    expect(isCalls(jobsRec)).toContainEqual({ method: "is", args: ["workflow_execution_id", null] })
+    expect(isCalls(jobsRec)).not.toContainEqual({ method: "is", args: ["mcp_client", null] })
   })
 })

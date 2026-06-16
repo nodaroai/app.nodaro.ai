@@ -21,6 +21,21 @@ export function extractWorkflowId(body: unknown): string | null {
 }
 
 /**
+ * Extracts an optional nodeId from the raw request body. Like workflowId, this
+ * is NOT part of any Zod schema — the frontend injects it (via withWorkflowId)
+ * so a single-node job can be tied back to its canvas node and its in-flight
+ ***REDACTED-OSS-SCRUB***
+ ***REDACTED-OSS-SCRUB***
+ */
+export function extractNodeId(body: unknown): string | null {
+  if (body && typeof body === "object" && "nodeId" in body) {
+    const val = (body as Record<string, unknown>).nodeId
+    if (typeof val === "string" && val.length > 0) return val
+  }
+  return null
+}
+
+/**
  * Extracts an optional forcePrivate flag from the raw request body.
  * Like workflowId, this is NOT part of Zod schemas — it's injected by the
  * frontend/orchestrator when the node uses uploaded/private input content.

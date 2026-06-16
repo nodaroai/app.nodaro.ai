@@ -3,7 +3,7 @@ import { z } from "zod"
 import { safeUrlSchema, isAllowedSocialVideoUrl, YOUTUBE_HOSTS } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
-import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
@@ -39,6 +39,7 @@ export async function extractYouTubeAudioRoutes(app: FastifyInstance) {
       .from("jobs")
       .insert({
         workflow_id: extractWorkflowId(req.body),
+        node_id: extractNodeId(req.body),
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",

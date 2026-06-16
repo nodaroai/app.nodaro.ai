@@ -56,6 +56,7 @@ vi.mock("../../ee/services/credits.js", () => ({
 
 vi.mock("../../lib/request-helpers.js", () => ({
   extractWorkflowId: vi.fn().mockReturnValue(undefined),
+  extractNodeId: vi.fn().mockReturnValue(null),
   extractForcePrivate: vi.fn().mockReturnValue(false),
 }))
 

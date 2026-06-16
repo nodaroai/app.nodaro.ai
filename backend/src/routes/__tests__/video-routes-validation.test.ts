@@ -43,6 +43,7 @@ vi.mock("@/lib/url-validator.js", async () => {
 
 vi.mock("@/lib/request-helpers.js", () => ({
   extractWorkflowId: vi.fn().mockReturnValue(null),
+  extractNodeId: vi.fn().mockReturnValue(null),
   extractForcePrivate: vi.fn().mockReturnValue(false),
   extractProvider: vi.fn((body: any, fallback: string) => body?.provider ?? fallback),
   ACTIVE_EXECUTION_STATUSES: ["pending", "running", "stopping"],

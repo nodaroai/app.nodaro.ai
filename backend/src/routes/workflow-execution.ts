@@ -410,7 +410,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     // lookup needs the same fallback so a list row's `id` works uniformly.
     const { data: job, error: jobError } = await supabase
       .from("jobs")
-      .select("id, workflow_id, user_id, workflow_execution_id, status, provider, mcp_client, input_data, credits, error_message, started_at, completed_at, created_at, updated_at")
+      .select("id, node_id, workflow_id, user_id, workflow_execution_id, status, progress, provider, mcp_client, input_data, credits, error_message, started_at, completed_at, created_at, updated_at")
       .eq("id", parsed.data.id)
       .eq("user_id", req.userId)
       .is("workflow_execution_id", null)
@@ -467,7 +467,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       // live updates from here.
       const { data: job, error: jobError } = await supabase
         .from("jobs")
-        .select("id, workflow_id, user_id, workflow_execution_id, status, provider, mcp_client, input_data, credits, error_message, started_at, completed_at, created_at, updated_at")
+        .select("id, node_id, workflow_id, user_id, workflow_execution_id, status, progress, provider, mcp_client, input_data, credits, error_message, started_at, completed_at, created_at, updated_at")
         .eq("id", execId)
         .eq("user_id", req.userId)
         .is("workflow_execution_id", null)
@@ -787,12 +787,20 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     // --- Source 2: standalone jobs (single-node runs with no execution record) ---
     let jobsQuery = supabase
       .from("jobs")
-      .select("id, status, provider, mcp_client, input_data, credits, error_message, started_at, completed_at, created_at")
+      .select("id, node_id, status, progress, provider, mcp_client, input_data, credits, error_message, started_at, completed_at, created_at")
       .eq("workflow_id", workflowId)
       .eq("user_id", req.userId)
       .is("workflow_execution_id", null)
       .order("created_at", { ascending: false })
       .limit(limit + 1)
+
+    // source=editor: exclude MCP single-node jobs (they carry no canvas node_id
+    // and have their own surface). app-runner / component / sub-workflow jobs
+    // always carry a workflow_execution_id → already excluded by the `.is(null)`
+    // above. Mirrors the exec query's editor-source filter (line ~780).
+    if (source === "editor") {
+      jobsQuery = jobsQuery.is("mcp_client", null)
+    }
 
     // Map execution status filter to job statuses
     if (statusFilter.length > 0) {
@@ -907,7 +915,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     // --- Source 2: standalone jobs (single-node runs) ---
     let jobsQuery = supabase
       .from("jobs")
-      .select("id, workflow_id, user_id, status, mcp_client, input_data, credits, error_message, started_at, completed_at, created_at")
+      .select("id, node_id, workflow_id, user_id, status, progress, mcp_client, input_data, credits, error_message, started_at, completed_at, created_at")
       .is("workflow_execution_id", null)
       .not("workflow_id", "is", null)
       .order("created_at", { ascending: false })
@@ -1097,7 +1105,7 @@ const JOB_STATUS_MAP: Record<string, string> = {
   cancelled: "cancelled",
 }
 
-function jobToExecutionSummary(row: Record<string, unknown>) {
+export function jobToExecutionSummary(row: Record<string, unknown>) {
   const inputData = (row.input_data ?? {}) as Record<string, unknown>
   const provider = row.provider as string | undefined
   // Component jobs: show the component name as the node type label
@@ -1106,6 +1114,13 @@ function jobToExecutionSummary(row: Record<string, unknown>) {
     : (inputData.type as string) ?? (provider ?? "unknown")
   const mappedStatus = JOB_STATUS_MAP[row.status as string] ?? (row.status as string)
   const mcpClient = (row.mcp_client as string | null | undefined) ?? null
+  // Key the (single-entry) nodeStates map by the CANVAS node id when the job
+  // carries one (editor single-node Run → jobs.node_id, Gap 3) so the editor's
+  // applyBackendExecutionState — which looks up `nodeStates[node.id]` — can
+  // re-hydrate the running node after a page reload. Falls back to the job id
+  // for jobs with no node_id (SDK / pre-migration rows).
+  const nodeId = (row.node_id as string | null | undefined) ?? null
+  const stateKey = nodeId ?? (row.id as string)
 
   return {
     id: row.id,
@@ -1114,10 +1129,12 @@ function jobToExecutionSummary(row: Record<string, unknown>) {
     triggerType: mcpClient ? "mcp" : "single-node",
     mcpClient,
     nodeStates: {
-      [row.id as string]: {
+      [stateKey]: {
         status: mappedStatus,
         nodeType: jobType,
+        nodeId,
         jobId: row.id,
+        progress: (row.progress as number | null | undefined) ?? 0,
         creditsUsed: row.credits ?? 0,
         error: row.error_message,
         startedAt: row.started_at,
