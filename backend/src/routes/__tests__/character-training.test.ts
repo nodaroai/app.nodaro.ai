@@ -37,6 +37,7 @@ vi.mock("../../providers/replicate/training.js", () => ({
   createCharacterTraining: vi.fn(),
   cancelCharacterTraining: vi.fn(),
   deleteCharacterLora: vi.fn(),
+  characterModelDestination: (id: string) => `nodaroai/char-${id}`,
 }))
 
 vi.mock("../../lib/character-lora.js", () => ({
@@ -60,7 +61,7 @@ vi.mock("../../lib/character-lora.js", () => ({
   },
 }))
 
-vi.mock("../../lib/storage.js", () => ({ deleteFromR2: vi.fn() }))
+vi.mock("../../lib/storage.js", () => ({ deleteFromR2: vi.fn().mockResolvedValue(undefined) }))
 
 const TEST_USER_ID = "00000000-0000-0000-0000-000000000001"
 const TEST_CHARACTER_ID = "00000000-0000-0000-0000-000000000002"
@@ -218,6 +219,28 @@ describe("POST /v1/characters/:id/train — atomic CAS slot claim", () => {
     expect(res.json().error).toBe("claim_failed")
     // A failed claim must never proceed to job creation / Replicate dispatch.
     expect(replicateTraining.createCharacterTraining).not.toHaveBeenCalled()
+  })
+
+  it("dispatch failure (claim OK, Replicate throws) → 502 training_dispatch_failed", async () => {
+    const { fromMock, rpcMock } = mockClaimRace()
+    vi.mocked(supabase.from).mockImplementation(fromMock as never)
+    vi.mocked(supabase.rpc).mockImplementation(rpcMock as never)
+
+    const replicateTraining = await import("../../providers/replicate/training.js")
+    // e.g. the missing-destination-model failure this fix addresses.
+    vi.mocked(replicateTraining.createCharacterTraining).mockRejectedValue(
+      new Error("Replicate 422: destination model does not exist"),
+    )
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/characters/${TEST_CHARACTER_ID}/train`,
+      headers: { "x-user-id": TEST_USER_ID, "content-type": "application/json" },
+      payload: {},
+    })
+
+    expect(res.statusCode).toBe(502)
+    expect(res.json().error).toBe("training_dispatch_failed")
   })
 
   it("missing req.userId returns 401 before any DB call", async () => {

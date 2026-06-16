@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query"
 import { getJobStatus, type Job } from "@/lib/api"
 import { queryKeys } from "@/lib/query-keys"
 import { nonEmptyString } from "@/lib/utils"
+import { isValidUuid } from "@/lib/uuid"
 
 /**
  * The generation config that produced a single output, read back from the
@@ -66,7 +67,11 @@ export function selectSettings(job: Job): ResultGenerationSettings {
 export function useResultGenerationSettings(jobId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.jobs.detail(jobId ?? ""),
-    enabled: !!jobId,
+    // Only real backend jobs (UUIDs) have settings to fetch. Synthetic result
+    // ids (Filerobot edits = `image-edit-<ts>`, imported/refined uploads, etc.)
+    // are never persisted jobs → guarding here stops the GET /v1/jobs/:id 404
+    // spam on every load of such a result. See lib/uuid.ts.
+    enabled: !!jobId && isValidUuid(jobId),
     staleTime: Infinity,
     gcTime: 30 * 60_000,
     retry: 1,

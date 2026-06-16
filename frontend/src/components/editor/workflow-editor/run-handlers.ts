@@ -796,6 +796,12 @@ export function streamBackendExecution(
   ctx: ExecutionContext,
   setIsRunning: (v: boolean) => void,
   onExecutionEnded?: () => void,
+  // `isRestore` = reconnecting to an execution `listWorkflowExecutions` just
+  // reported active (page reload), NOT a fresh user-initiated run. A 404 on
+  // restore is almost always a read-after-write/replica race that resolves on
+  // retry, so we tolerate a few more misses and give up QUIETLY (no scary
+  // toast) instead of the fast 2-strike fail used for fresh runs.
+  opts: { readonly isRestore?: boolean } = {},
 ): void {
   setIsRunning(true);
   const abortController = new AbortController();
@@ -883,10 +889,14 @@ export function streamBackendExecution(
   ).catch((err) => {
     if (err instanceof DOMException && err.name === "AbortError") return;
     if (isNotFound(err)) {
-      // 404 on /stream is definitive — the execution row is gone. The poll
-      // safety-net below confirms and tears down fast; don't imply this is a
-      // transient blip ("polling still active") nor keep the stream alive.
-      console.warn("[SSE] Execution stream not found (404) — execution no longer exists");
+      // 404 on /stream: on a fresh run the row is gone for good; on RESTORE it's
+      // usually a list→connect read-after-write race — the poll safety-net below
+      // retries and reconnects, so don't alarm.
+      if (opts.isRestore) {
+        console.debug("[restore] SSE stream 404 — poll safety-net will retry");
+      } else {
+        console.warn("[SSE] Execution stream not found (404) — execution no longer exists");
+      }
       return;
     }
     console.warn("[SSE] Streaming connection lost, polling still active:", err);
@@ -933,15 +943,23 @@ export function streamBackendExecution(
         return;
       }
     } catch (err) {
-      // A 404 means the execution row is GONE (cleaned up / never persisted /
-      // restored-then-deleted). Don't burn the full MAX_CONSECUTIVE_POLL_FAILURES
-      // budget (~60s of repeated 404s — the "404 storm"). Allow ONE transient
-      // miss (a fresh-run replication race) then give up.
+      // A 404 means the execution row isn't visible. Don't burn the full
+      // MAX_CONSECUTIVE_POLL_FAILURES budget (~60s of 404s — the "404 storm").
+      // Fresh run: a 404 means "never persisted" → give up fast (2 strikes).
+      // RESTORE (page reload): listWorkflowExecutions JUST reported this row
+      // active, so a 404 is a read-after-write/replica race that resolves on
+      // retry — tolerate a few more, then give up QUIETLY (the canvas already
+      // shows the list snapshot; a scary toast on reload is wrong).
       if (isNotFound(err)) {
         notFoundFailures++;
-        if (notFoundFailures >= 2 && !finished) {
+        const limit = opts.isRestore ? 5 : 2;
+        if (notFoundFailures >= limit && !finished) {
           cleanup();
-          toast.error("Backend execution no longer exists");
+          if (opts.isRestore) {
+            console.debug("[restore] execution no longer active — keeping last-known canvas state");
+          } else {
+            toast.error("Backend execution no longer exists");
+          }
           return;
         }
         return;

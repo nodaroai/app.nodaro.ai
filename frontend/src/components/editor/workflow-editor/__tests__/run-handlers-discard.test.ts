@@ -114,6 +114,8 @@ function lastSseCallbacks(): {
 // Helpers
 // ---------------------------------------------------------------------------
 
+// trackInterval must return a real timer id (not the interval object) so the
+// stale-check / poll intervals advance under fake timers.
 function makeCtx(overrides: Partial<ExecutionContext> = {}): ExecutionContext {
   return {
     userId: "u1",
@@ -350,5 +352,67 @@ describe("streamBackendExecution — discarded run detach", () => {
 
     expect(mockGetWorkflowExecution).not.toHaveBeenCalled()
     expect(mockUpdateNodeData).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Restore-path 404 tolerance (page reload reconnect, Gap 2)
+// ---------------------------------------------------------------------------
+
+describe("streamBackendExecution — restore-path 404 race tolerance", () => {
+  const notFound = { status: 404 }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.useFakeTimers()
+    mockNodes = []
+    mockEdges = []
+    teardownActiveWorkflowStream()
+    mockStreamWorkflowExecution.mockReturnValue(new Promise(() => {})) // silent SSE → poll drives
+  })
+
+  afterEach(() => {
+    teardownActiveWorkflowStream()
+    vi.useRealTimers()
+  })
+
+  it("restore: tolerates a transient 404 race then recovers, with NO scary toast", async () => {
+    let n = 0
+    mockGetWorkflowExecution.mockImplementation(async () => {
+      n++
+      if (n <= 2) throw notFound // list→connect read-after-write race
+      return { status: "running", nodeStates: {} } // replica catches up
+    })
+
+    streamBackendExecution("exec-restore-race", makeCtx(), vi.fn(), undefined, { isRestore: true })
+
+    await vi.advanceTimersByTimeAsync(1000) // poll 1 → 404
+    await vi.advanceTimersByTimeAsync(3000) // poll 2 → 404
+    await vi.advanceTimersByTimeAsync(3000) // poll 3 → recovers
+
+    expect(n).toBeGreaterThanOrEqual(3)
+    expect(mockToastError).not.toHaveBeenCalled()
+  })
+
+  it("restore: a persistently-gone execution gives up QUIETLY (no 'no longer exists' toast)", async () => {
+    mockGetWorkflowExecution.mockRejectedValue(notFound)
+
+    streamBackendExecution("exec-restore-gone", makeCtx(), vi.fn(), undefined, { isRestore: true })
+
+    await vi.advanceTimersByTimeAsync(1000)
+    for (let i = 0; i < 6; i++) await vi.advanceTimersByTimeAsync(3000)
+
+    expect(mockToastError).not.toHaveBeenCalledWith("Backend execution no longer exists")
+  })
+
+  it("fresh run (no isRestore): still gives up + toasts after 2 consecutive 404s", async () => {
+    mockGetWorkflowExecution.mockRejectedValue(notFound)
+
+    streamBackendExecution("exec-fresh-gone", makeCtx(), vi.fn())
+
+    await vi.advanceTimersByTimeAsync(1000) // poll 1 → 404
+    await vi.advanceTimersByTimeAsync(3000) // poll 2 → 404 → give up
+
+    expect(mockToastError).toHaveBeenCalledWith("Backend execution no longer exists")
   })
 })

@@ -1,10 +1,24 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi, beforeEach } from "vitest"
+import { renderHook, waitFor } from "@testing-library/react"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { createElement, type ReactNode } from "react"
 import {
   buildAppliedConfigPatch,
   selectSettings,
+  useResultGenerationSettings,
   type ResultGenerationSettings,
 } from "@/hooks/use-result-generation-settings"
 import type { Job } from "@/lib/api"
+
+const mockGetJobStatus = vi.fn()
+vi.mock("@/lib/api", () => ({
+  getJobStatus: (...args: unknown[]) => mockGetJobStatus(...args),
+}))
+
+function wrapper({ children }: { children: ReactNode }) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return createElement(QueryClientProvider, { client: qc }, children)
+}
 
 const FULL: ResultGenerationSettings = {
   provider: "nano-banana-pro",
@@ -127,5 +141,32 @@ describe("selectSettings — video fields", () => {
   it("omits duration when it isn't a number", () => {
     const s = selectSettings(jobWith({ provider: "kling", duration: "5" }))
     expect(s.duration).toBeUndefined()
+  })
+})
+
+describe("useResultGenerationSettings — backend-id guard", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  // A Filerobot-edited / locally-created result carries a synthetic id like
+  // `image-edit-<ts>` that is NOT a backend job. Fetching it 404-spams the
+  // console (the reported bug). The hook must stay disabled for non-UUID ids.
+  it("does NOT fetch for a synthetic (non-UUID) job id", async () => {
+    renderHook(() => useResultGenerationSettings("image-edit-1781549390289"), { wrapper })
+    await new Promise((r) => setTimeout(r, 0))
+    expect(mockGetJobStatus).not.toHaveBeenCalled()
+  })
+
+  it("does NOT fetch when the job id is undefined", async () => {
+    renderHook(() => useResultGenerationSettings(undefined), { wrapper })
+    await new Promise((r) => setTimeout(r, 0))
+    expect(mockGetJobStatus).not.toHaveBeenCalled()
+  })
+
+  it("DOES fetch for a real UUID job id", async () => {
+    mockGetJobStatus.mockResolvedValue({ input_data: {} } as Job)
+    renderHook(() => useResultGenerationSettings("f96a99d2-bc45-4bc5-8196-cd7927ff845b"), { wrapper })
+    await waitFor(() =>
+      expect(mockGetJobStatus).toHaveBeenCalledWith("f96a99d2-bc45-4bc5-8196-cd7927ff845b"),
+    )
   })
 })

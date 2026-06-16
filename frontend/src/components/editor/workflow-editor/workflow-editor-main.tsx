@@ -565,6 +565,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
             result.activeBackendExecution.executionId,
             ctx,
             setIsRunning,
+            undefined,
+            { isRestore: true },
           );
         }
 
