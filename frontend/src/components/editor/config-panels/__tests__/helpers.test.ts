@@ -249,6 +249,35 @@ describe("getModelIdentifier", () => {
     const node = makeNode({ type: "motion-graphics", data: { label: "MG", engine: "lottie" } as any })
     expect(getModelIdentifier(node)).toBe("motion-graphics-lottie")
   })
+
+  // Composite-only-priced nodes: getModelIdentifier must return the SAME seeded
+  // composite the per-node cost pill uses (resolveAiAvatarCreditId /
+  // resolveCinematicCreditId / referenceSheetCreditId), NOT the bare provider/
+  // type key — the bare key is intentionally unpriced and made the model-costs
+  // batch warn "operator must seed: heygen, reference-sheet".
+  it("ai-avatar returns a seeded heygen composite, not the bare 'heygen' key", () => {
+    const node = makeNode({ type: "ai-avatar", data: { label: "Avatar", provider: "heygen" } as any })
+    const id = getModelIdentifier(node)
+    expect(id).not.toBe("heygen")
+    expect(id).toMatch(/^heygen-/)
+  })
+
+  it("cinematic-avatar returns a seeded composite, not the bare 'heygen' key", () => {
+    const node = makeNode({ type: "cinematic-avatar", data: { label: "Cinematic", provider: "heygen" } as any })
+    const id = getModelIdentifier(node)
+    expect(id).not.toBe("heygen")
+    expect(id.length).toBeGreaterThan(0)
+  })
+
+  it("reference-sheet returns the assembly composite, not the bare type key", () => {
+    const node = makeNode({ type: "reference-sheet", data: { label: "Sheet" } as any })
+    expect(getModelIdentifier(node)).toBe("reference-sheet:assembly")
+  })
+
+  it("reference-sheet motion flavour returns the motion-assembly composite", () => {
+    const node = makeNode({ type: "reference-sheet", data: { label: "Sheet", flavour: { outputFormat: "motion" } } as any })
+    expect(getModelIdentifier(node)).toBe("reference-sheet:assembly-motion")
+  })
 })
 
 describe("buildCreditModelIdentifier", () => {
