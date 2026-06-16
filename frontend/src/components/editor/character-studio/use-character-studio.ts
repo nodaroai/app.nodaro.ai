@@ -3,6 +3,7 @@ import { toast } from "sonner"
 import { PLACEHOLDER_CHARACTER_NAME } from "@nodaro/shared"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { CharacterNameTakenError, getCharacter, saveCharacter } from "@/lib/api"
+import { mergeCharacterDetailIntoNodeData } from "@/lib/character-node-data"
 import type { CharacterNodeData } from "@/types/nodes"
 
 /**
@@ -210,37 +211,9 @@ export function useCharacterStudio(nodeId: string): CharacterStudioState | null 
         if (cancelled) return
         setStaged((prev) => {
           if (!prev) return prev
-          const merged: CharacterNodeData = {
-            ...prev,
-            characterName: fresh.name || prev.characterName,
-            description: fresh.description ?? prev.description,
-            gender: (fresh.gender as CharacterNodeData["gender"]) ?? prev.gender,
-            style: (fresh.style as CharacterNodeData["style"]) ?? prev.style,
-            baseOutfit: fresh.baseOutfit ?? prev.baseOutfit,
-            sourceImageUrl: fresh.sourceImageUrl ?? prev.sourceImageUrl,
-            expressions: fresh.expressions ?? prev.expressions,
-            poses: fresh.poses ?? prev.poses,
-            lightingVariations: fresh.lightingVariations ?? prev.lightingVariations,
-            angles: fresh.angles ?? prev.angles,
-            bodyAngles: fresh.bodyAngles ?? prev.bodyAngles,
-            motions: fresh.motions ?? prev.motions,
-            // Reference-sheet buckets — hydrate so the Sheet tab's "Existing
-            // sheets" grid + sidebar badges populate, and so detail/wardrobe
-            // panels are reused by the planner instead of regenerated.
-            sheets: fresh.sheets ?? prev.sheets ?? [],
-            detailCloseups:
-              (fresh.detailCloseups as CharacterNodeData["detailCloseups"]) ?? prev.detailCloseups,
-            outfitVariations:
-              (fresh.outfitVariations as CharacterNodeData["outfitVariations"]) ?? prev.outfitVariations,
-            voice: (fresh.voice as CharacterNodeData["voice"]) ?? prev.voice,
-            personality: fresh.personality ?? prev.personality,
-            person: (fresh.person as CharacterNodeData["person"]) ?? prev.person,
-            wardrobe: (fresh.wardrobe as CharacterNodeData["wardrobe"]) ?? prev.wardrobe,
-            referencePhotos: fresh.referencePhotos ?? prev.referencePhotos,
-            seedPrompt: fresh.seedPrompt ?? prev.seedPrompt,
-            canonicalDescription: fresh.canonicalDescription ?? prev.canonicalDescription,
-            realLifeRefsByVariant: fresh.realLifeRefsByVariant ?? prev.realLifeRefsByVariant,
-          }
+          // Single source of truth for the DETAIL→node-data mapping — shared
+          // with every library→canvas load site (see character-node-data.ts).
+          const merged = mergeCharacterDetailIntoNodeData(prev, fresh)
           updateNodeData(nodeId, merged)
           return merged
         })

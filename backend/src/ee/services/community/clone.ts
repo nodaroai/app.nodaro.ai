@@ -5,6 +5,7 @@ import { ensureDefaultProject } from "../../../lib/default-project.js"
 import { deriveAvailableName } from "../../../lib/entity-naming.js"
 import { copyR2ObjectToPrefix, batchDeleteFromR2, r2KeyFromOurUrl } from "../../../lib/storage.js"
 import { buildCloneRow, COMMUNITY_ENTITY_ADAPTERS, type EntityType } from "../../lib/community-entity-adapters.js"
+import { deepCopyReferenceSheet } from "./asset-lifecycle.js"
 
 /** Internal marker so the outer catch never double-rolls-back an error whose
  *  resources were already released inline (reservation reject + insert fail). */
@@ -61,6 +62,11 @@ export async function cloneListing(input: {
       if (v == null) continue
       if (typeof v === "string") {
         copiedAssets[f] = await copyUrl(v)
+      } else if (f === "sheets" && Array.isArray(v)) {
+        // ReferenceSheet[] — deep-copy nested panel/source/gen URLs, not just the top-level url.
+        copiedAssets[f] = await Promise.all(
+          (v as Array<Record<string, unknown>>).map((s) => deepCopyReferenceSheet(s, copyUrl)),
+        )
       } else if (Array.isArray(v)) {
         copiedAssets[f] = await Promise.all(
           (v as Array<{ url?: string }>).map(async (it) =>

@@ -7,6 +7,7 @@ import { CachedImage } from "@/components/ui/cached-image"
 import { TrainedPill } from "@/components/editor/trained-pill"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { deleteCharacter, getCharacterUsage, restoreCharacter, type DbCharacter } from "@/lib/api"
+import { hydrateCharacterNodeFromDetail } from "@/lib/character-node-data"
 import { useAuth } from "@/hooks/use-auth"
 import { useCharacters, useArchivedCharacters } from "@/hooks/queries/use-assets-queries"
 import { useQueryClient } from "@tanstack/react-query"
@@ -77,6 +78,7 @@ export function CharacterGalleryButton() {
           poses: dbChar.poses ?? [],
           lightingVariations: dbChar.lightingVariations ?? [],
         })
+        hydrateCharacterNodeFromDetail(nodeId, dbChar.id)
         selectNode(nodeId)
         setCharacterPageNodeId(nodeId)
         setOpen(false)
@@ -104,6 +106,7 @@ export function CharacterGalleryButton() {
           poses: dbChar.poses ?? [],
           lightingVariations: dbChar.lightingVariations ?? [],
         })
+        hydrateCharacterNodeFromDetail(nodeId, dbChar.id)
         selectNode(nodeId)
         setOpen(false)
       }

@@ -810,6 +810,8 @@ export async function getCharacter(id: string): Promise<{
   sheets?: ReferenceSheet[]
   detailCloseups?: unknown[]
   outfitVariations?: unknown[]
+  // Uploaded reference videos keyed by emotion/variant (Record<variant, urls[]>).
+  referenceVideosByVariant?: Record<string, string[]>
   voice: { voiceId: string; voiceName: string; traits: string; voiceType?: "premade" | "library" | "custom"; previewUrl?: string; ttsProvider?: string } | null
   person?: Record<string, unknown> | null
   wardrobe?: Record<string, unknown> | null
@@ -1129,6 +1131,19 @@ export interface DbCharacter {
   lightingVariations: { name: string; url: string }[]
   angles?: { name: string; url: string }[]
   motions?: { name: string; url: string }[]
+  // The list endpoint runs the SAME full `toCamel` mapper as the detail route,
+  // so it actually returns these too — declare them (optional) so callers can
+  // hydrate without an `as any` cast.
+  bodyAngles?: { name: string; url: string }[]
+  boards?: { name: string; url: string }[]
+  sheets?: ReferenceSheet[]
+  detailCloseups?: { name: string; url: string }[]
+  outfitVariations?: { name: string; url: string }[]
+  referenceVideosByVariant?: Record<string, string[]>
+  selectedAssetByVariant?: Record<string, string>
+  person?: Record<string, unknown> | null
+  wardrobe?: Record<string, unknown> | null
+  canonicalDescription?: string | null
   voice?: { voiceId: string; voiceName: string; traits: string } | null
   personality?: { mood: string; speechStyle: string; movementStyle: string; behavioralNotes: string } | null
   /** Set when a successful LoRA training exists. Drives the `<TrainedPill>` on gallery + autocomplete. */

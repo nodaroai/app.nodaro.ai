@@ -22,6 +22,7 @@ const CreatureStudioModal = lazy(() => import("./creature-studio/creature-studio
 const LocationStudioModal = lazy(() => import("./location-studio/location-studio-modal"))
 import { createClient } from "@/lib/supabase"
 import type { DbCharacter, DbObject, DbCreature, DbLocation, DbFace, LibraryAsset } from "@/lib/api"
+import { hydrateCharacterNodeFromDetail } from "@/lib/character-node-data"
 import { CachedImage } from "@/components/ui/cached-image"
 import { LibraryMediaBrowser } from "./library-media-browser"
 import { assetToUploadNode } from "@/lib/asset-to-node"
@@ -264,6 +265,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
               poses: c.poses ?? [],
               lightingVariations: c.lightingVariations ?? [],
             })
+            hydrateCharacterNodeFromDetail(nodeId, c.id)
             selectNode(nodeId)
             setCharacterPageNodeId(nodeId)
           } else if (asset.type === "object") {
@@ -356,6 +358,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
             poses: c.poses ?? [],
             lightingVariations: c.lightingVariations ?? [],
           })
+          hydrateCharacterNodeFromDetail(nodeId, c.id)
         } else if (asset.type === "object") {
           const o = asset.originalData as DbObject
           updateNodeData(nodeId, {
@@ -886,6 +889,7 @@ export function UnifiedAssetLibraryButton() {
               poses: c.poses ?? [],
               lightingVariations: c.lightingVariations ?? [],
             })
+            hydrateCharacterNodeFromDetail(nodeId, c.id)
             selectNode(nodeId)
             setCharacterPageNodeId(nodeId)
           } else if (asset.type === "object") {
@@ -977,6 +981,7 @@ export function UnifiedAssetLibraryButton() {
             poses: c.poses ?? [],
             lightingVariations: c.lightingVariations ?? [],
           })
+          hydrateCharacterNodeFromDetail(nodeId, c.id)
         } else if (asset.type === "object") {
           const o = asset.originalData as DbObject
           updateNodeData(nodeId, {

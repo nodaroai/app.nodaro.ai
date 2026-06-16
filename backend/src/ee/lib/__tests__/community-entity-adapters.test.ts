@@ -2,17 +2,24 @@ import { describe, it, expect } from "vitest"
 import { COMMUNITY_ENTITY_ADAPTERS, buildSnapshot, buildCloneRow } from "../community-entity-adapters.js"
 
 // Full live column set per table. KEEP IN SYNC with the DB — this test exists so a
-// new asset/PII column can't silently leak. Source: spec §7 + migrations 004/110/117/118/126/192.
+// new asset/PII column can't silently leak. Source: spec §7 + migrations 004/110/117/118/126/192/200/202/204/205/222.
 const COLUMNS: Record<string, string[]> = {
   characters: [
     "id","project_id","workflow_id","node_id","name","description","gender","style","base_outfit",
-    "source_image_url","character_sheet","expressions","poses","lighting_variations","angles","motions",
+    "source_image_url","image_provider","expressions","poses","lighting_variations","angles","motions",
     "voice","personality","user_id","reference_photos","seed_prompt","canonical_description",
     "real_life_refs_by_variant","body_angles","lora_replicate_version","lora_trigger_word",
     "lora_training_status","lora_training_replicate_id","lora_training_error","lora_trained_at",
-    "lora_training_image_count","reference_videos_by_variant","created_at","updated_at","deleted_at",
+    "lora_training_image_count","reference_videos_by_variant","selected_asset_by_variant",
+    "character_sheet",
+    "created_at","updated_at","deleted_at",
     // Named Character Boards (migration 212) — published + cloned like the buckets.
     "boards",
+    // Reference-sheet buckets (migration 202) — published + cloned like the buckets.
+    "sheets","detail_closeups","outfit_variations",
+    // Structured Person + Wardrobe picker selections (migration 222) — STRIPPED on
+    // share (may embed private refs), classified in stripFields.
+    "person","wardrobe",
   ],
   locations: [
     "id","project_id","workflow_id","node_id","name","description","category","style","main_image_url",
@@ -51,6 +58,8 @@ const ALWAYS_IGNORED = new Set([
   // provider that produced the assets, and the per-variant selected-asset pointer map.
   // Neither is public text nor a copyable asset URL — they're recomputed/owner-local.
   "image_provider","selected_asset_by_variant",
+  // legacy dead column (migration 004) — superseded by sheets/detail_closeups/outfit_variations; physically present but no route/business code reads or writes it.
+  "character_sheet",
 ])
 
 describe("character adapter classifies every column", () => {
@@ -59,6 +68,22 @@ describe("character adapter classifies every column", () => {
     const classified = new Set([...a.publicTextFields, ...a.assetFields, ...a.stripFields, ...ALWAYS_IGNORED])
     const unclassified = COLUMNS.characters.filter((c) => !classified.has(c))
     expect(unclassified).toEqual([])
+  })
+  it("character assetFields use real columns (no phantom character_sheet) and carry sheets/detail/outfit", () => {
+    const a = COMMUNITY_ENTITY_ADAPTERS.character
+    expect(a.assetFields).not.toContain("character_sheet")
+    expect(a.assetFields).toContain("sheets")
+    expect(a.assetFields).toContain("detail_closeups")
+    expect(a.assetFields).toContain("outfit_variations")
+  })
+  // REVERSE guard: catches a phantom adapter field that isn't a real column (the
+  // bug that silently dropped sheets/detail/outfit lived precisely because the
+  // forward guard above can't see a declared field pointing at a non-existent column).
+  it("every character adapter field is a REAL column (no phantom fields)", () => {
+    const a = COMMUNITY_ENTITY_ADAPTERS.character
+    const real = new Set(COLUMNS.characters)
+    const declared = [...a.publicTextFields, ...a.assetFields, ...a.stripFields]
+    expect(declared.filter((f) => !real.has(f))).toEqual([])
   })
 })
 
