@@ -50,6 +50,8 @@ export function createFloatingSuggestionRenderer<P extends { clientRect?: (() =>
         mount = document.createElement("div")
         mount.style.position = "fixed"
         mount.style.zIndex = "9999"
+        // body has pointer-events:none inside a modal Dialog
+        mount.style.pointerEvents = "auto"
         document.body.appendChild(mount)
         root = createRoot(mount)
         render(props)

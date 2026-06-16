@@ -2,6 +2,12 @@
 
 import { useMemo, type ReactNode } from "react"
 import { collectAudioStyleHints, truncateForField, appendField } from "@/lib/audio-style-hints"
+import {
+  GENERATE_MUSIC_BUDGET,
+  TEXT_TO_AUDIO_BUDGET,
+  VOICE_DESC_BUDGET,
+  SUNO_PROMPT_BUDGET,
+} from "@/lib/audio-prompt-assembly"
 import type { SoundConsumerType } from "@nodaro/shared"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { cn } from "@/lib/utils"
@@ -21,13 +27,17 @@ interface Props {
   readonly className?: string
 }
 
+// suno-generate-style (500) is unique to this component — it gates the STYLE
+// field in Suno custom mode, which audio-prompt-assembly.ts does not handle.
+const SUNO_STYLE_BUDGET = 500
+
 const FIELD_MAX = {
-  "suno-generate-style": 500,
-  "suno-generate-prompt": 3000,
-  "generate-music": 2000,
-  "voice-design": 1000,
-  "voice-remix": 1000,
-  "text-to-audio": 2000,
+  "suno-generate-style": SUNO_STYLE_BUDGET,
+  "suno-generate-prompt": SUNO_PROMPT_BUDGET,
+  "generate-music": GENERATE_MUSIC_BUDGET,
+  "voice-design": VOICE_DESC_BUDGET,
+  "voice-remix": VOICE_DESC_BUDGET,
+  "text-to-audio": TEXT_TO_AUDIO_BUDGET,
 } as const
 
 /**

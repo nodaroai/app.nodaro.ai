@@ -298,6 +298,25 @@ async function insertWithUniqueName(
 
 const NAME_TAKEN_MESSAGE = "A character with that name already exists. Pick a different name."
 
+/**
+ * Best-effort lookup of the caller's existing ACTIVE character id for `name`
+ * (the unique-per-user name is case-insensitive). Returned in the `name_taken`
+ * 409 so the studio can ADOPT the existing character (link the unlinked node +
+ * load its assets) instead of dead-ending on "pick a different name". Null on
+ * any error/miss — the 409 still surfaces, just without the adopt affordance.
+ */
+async function findActiveCharacterIdByName(userId: string, name: string): Promise<string | null> {
+  const { data } = await supabase
+    .from("characters")
+    .select("id")
+    .eq("user_id", userId)
+    .ilike("name", name)
+    .is("deleted_at", null)
+    .limit(1)
+    .maybeSingle()
+  return (data?.id as string | undefined) ?? null
+}
+
 export async function characterRoutes(app: FastifyInstance) {
   // -----------------------------------------------------------------------
   // List characters for a project (active by default; `?archived=true` flips).
@@ -653,7 +672,8 @@ export async function characterRoutes(app: FastifyInstance) {
       .single()
     if (error) {
       if (error.code === "23505") {
-        return reply.status(409).send({ error: { code: "name_taken", message: NAME_TAKEN_MESSAGE } })
+        const existingId = await findActiveCharacterIdByName(userId, name)
+        return reply.status(409).send({ error: { code: "name_taken", message: NAME_TAKEN_MESSAGE, existingId } })
       }
       return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
     }

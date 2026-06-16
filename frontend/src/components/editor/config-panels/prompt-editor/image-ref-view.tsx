@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useRef } from "react"
 import { createPortal } from "react-dom"
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react"
 import { optimizedImageUrl } from "@/lib/image"
+import { BODY_MENU_CLASS } from "./body-menu-class"
 import { computeFlipPosition } from "./flip-position"
 
 interface ImageRefAttrs {
@@ -207,7 +208,7 @@ export function ImageRefView(props: NodeViewProps) {
             <div
               ref={menuRef}
               style={{ position: "fixed", top, left, width: MENU_W, maxHeight, overflowY: "auto" }}
-              className="z-[10000] rounded-lg border border-border bg-popover shadow-lg py-1"
+              className={BODY_MENU_CLASS}
               role="menu"
               // Swallow mousedown at the menu boundary so the document-level
               // outside-click listener never sees clicks that originated inside
