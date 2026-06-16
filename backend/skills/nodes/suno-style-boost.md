@@ -1,7 +1,7 @@
 ---
 node_type: suno-style-boost
-generated_at: 2026-05-18T13:23:37.436Z
-generated_from: cb1e786d
+generated_at: 2026-06-16T08:22:28.348Z
+generated_from: 877dfa01a
 ---
 
 # Suno Style Boost
@@ -10,7 +10,7 @@ generated_from: cb1e786d
 **Type:** `suno-style-boost`
 **Category:** ai
 **Credit cost:** 1
-**Inputs (target handles):** `text`
+**Inputs (target handles):** `prompt`
 **Outputs (source handles):** `text`
 
 **Required data fields:**

@@ -1,7 +1,7 @@
 ---
 node_type: split-text
-generated_at: 2026-05-18T13:23:37.762Z
-generated_from: cb1e786d
+generated_at: 2026-06-16T08:22:28.820Z
+generated_from: 877dfa01a
 ---
 
 # Split Text
@@ -10,7 +10,7 @@ generated_from: cb1e786d
 **Type:** `split-text`
 **Category:** utility
 **Credit cost:** 0
-**Inputs (target handles):** `in`
+**Inputs (target handles):** `text`
 **Outputs (source handles):** `out`
 
 **Required data fields:**

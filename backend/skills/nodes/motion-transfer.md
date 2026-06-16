@@ -1,7 +1,7 @@
 ---
 node_type: motion-transfer
-generated_at: 2026-06-11T18:52:25.308Z
-generated_from: 36d155ff
+generated_at: 2026-06-16T08:22:28.667Z
+generated_from: 877dfa01a
 ---
 
 # Motion Transfer
@@ -10,7 +10,7 @@ generated_from: 36d155ff
 **Type:** `motion-transfer`
 **Category:** ai
 **Credit cost:** 30
-**Inputs (target handles):** `image`, `video`
+**Inputs (target handles):** `image`, `video`, `prompt`, `negative`, `assets`
 **Outputs (source handles):** `out`
 
 **Required data fields:**

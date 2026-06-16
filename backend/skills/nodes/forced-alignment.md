@@ -1,7 +1,7 @@
 ---
 node_type: forced-alignment
-generated_at: 2026-05-18T13:23:37.513Z
-generated_from: cb1e786d
+generated_at: 2026-06-16T08:22:28.453Z
+generated_from: 877dfa01a
 ---
 
 # Forced Alignment
@@ -10,7 +10,7 @@ generated_from: cb1e786d
 **Type:** `forced-alignment`
 **Category:** ai
 **Credit cost:** 3
-**Inputs (target handles):** `in`
+**Inputs (target handles):** `audio`, `transcript`
 **Outputs (source handles):** `data`
 
 **Required data fields:**

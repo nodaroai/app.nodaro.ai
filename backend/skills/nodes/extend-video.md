@@ -1,7 +1,7 @@
 ---
 node_type: extend-video
-generated_at: 2026-06-11T21:22:39.952Z
-generated_from: 8b0f26429
+generated_at: 2026-06-16T08:22:28.680Z
+generated_from: 877dfa01a
 ---
 
 # Extend Video
@@ -10,7 +10,7 @@ generated_from: 8b0f26429
 **Type:** `extend-video`
 **Category:** ai
 **Credit cost:** 40
-**Inputs (target handles):** `in`
+**Inputs (target handles):** `video`, `cinematography`, `prompt`
 **Outputs (source handles):** `video`
 
 **Required data fields:**

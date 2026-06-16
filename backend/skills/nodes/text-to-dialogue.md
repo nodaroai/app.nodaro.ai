@@ -1,7 +1,7 @@
 ---
 node_type: text-to-dialogue
-generated_at: 2026-05-18T13:23:37.484Z
-generated_from: cb1e786d
+generated_at: 2026-06-16T08:22:28.417Z
+generated_from: 877dfa01a
 ---
 
 # Text to Dialogue
@@ -10,7 +10,7 @@ generated_from: cb1e786d
 **Type:** `text-to-dialogue`
 **Category:** ai
 **Credit cost:** 4
-**Inputs (target handles):** `in`
+**Inputs (target handles):** `prompt`
 **Outputs (source handles):** `audio`
 
 **Required data fields:**

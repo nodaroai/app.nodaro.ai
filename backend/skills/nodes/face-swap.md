@@ -1,7 +1,7 @@
 ---
 node_type: face-swap
-generated_at: 2026-05-18T20:51:28.965Z
-generated_from: af4193bd
+generated_at: 2026-06-16T08:22:28.688Z
+generated_from: 877dfa01a
 ---
 
 # Face Swap
@@ -10,7 +10,7 @@ generated_from: af4193bd
 **Type:** `face-swap`
 **Category:** ai
 **Credit cost:** 16
-**Inputs (target handles):** `face`, `in`
+**Inputs (target handles):** `face`, `video`
 **Outputs (source handles):** `out`
 
 **Required data fields:**

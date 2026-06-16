@@ -1,7 +1,7 @@
 ---
 node_type: generate-script
-generated_at: 2026-05-18T13:23:37.315Z
-generated_from: cb1e786d
+generated_at: 2026-06-16T08:22:28.131Z
+generated_from: 877dfa01a
 ---
 
 # Generate Script
@@ -10,7 +10,7 @@ generated_from: cb1e786d
 **Type:** `generate-script`
 **Category:** ai
 **Credit cost:** 2
-**Inputs (target handles):** `in`
+**Inputs (target handles):** `prompt`
 **Outputs (source handles):** `scenes`, `images`, `dialogue`, `music`, `sfx`, `characters`, `locations`
 
 **Required data fields:**

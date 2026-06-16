@@ -1,7 +1,7 @@
 ---
 node_type: object
-generated_at: 2026-06-08T20:18:26.908Z
-generated_from: 365d4ab0
+generated_at: 2026-06-16T08:22:28.746Z
+generated_from: 877dfa01a
 ---
 
 # Object
@@ -10,7 +10,7 @@ generated_from: 365d4ab0
 **Type:** `object`
 **Category:** object
 **Credit cost:** 5
-**Inputs (target handles):** `in`
+**Inputs (target handles):** `in`, `type`
 **Outputs (source handles):** `objectRef`
 
 **Required data fields:**

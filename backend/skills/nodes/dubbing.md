@@ -1,7 +1,7 @@
 ---
 node_type: dubbing
-generated_at: 2026-06-12T00:45:40.444Z
-generated_from: 0931668d0
+generated_at: 2026-06-16T08:22:28.432Z
+generated_from: 877dfa01a
 ---
 
 # Dubbing
@@ -10,7 +10,7 @@ generated_from: 0931668d0
 **Type:** `dubbing`
 **Category:** ai
 **Credit cost:** 8
-**Inputs (target handles):** `in`
+**Inputs (target handles):** `audio`
 **Outputs (source handles):** `audio`
 
 **Required data fields:**

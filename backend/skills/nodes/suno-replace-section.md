@@ -1,7 +1,7 @@
 ---
 node_type: suno-replace-section
-generated_at: 2026-05-18T13:23:37.429Z
-generated_from: cb1e786d
+generated_at: 2026-06-16T08:22:28.340Z
+generated_from: 877dfa01a
 ---
 
 # Suno Replace Section
@@ -10,7 +10,7 @@ generated_from: cb1e786d
 **Type:** `suno-replace-section`
 **Category:** ai
 **Credit cost:** 2
-**Inputs (target handles):** `audio`
+**Inputs (target handles):** `audio`, `prompt`
 **Outputs (source handles):** `audio`
 
 **Required data fields:**

@@ -1,7 +1,7 @@
 ---
 node_type: text-to-speech
-generated_at: 2026-05-18T13:23:37.364Z
-generated_from: cb1e786d
+generated_at: 2026-06-16T08:22:28.235Z
+generated_from: 877dfa01a
 ---
 
 # Text to Speech
@@ -10,7 +10,7 @@ generated_from: cb1e786d
 **Type:** `text-to-speech`
 **Category:** ai
 **Credit cost:** 3
-**Inputs (target handles):** `in`
+**Inputs (target handles):** `prompt`
 **Outputs (source handles):** `audio`
 
 **Required data fields:**

@@ -1,7 +1,7 @@
 ---
 node_type: lip-sync
-generated_at: 2026-06-04T21:14:06.688Z
-generated_from: 1a7a17d9
+generated_at: 2026-06-16T08:22:28.639Z
+generated_from: 877dfa01a
 ---
 
 # Lip Sync
@@ -10,7 +10,7 @@ generated_from: 1a7a17d9
 **Type:** `lip-sync`
 **Category:** ai
 **Credit cost:** 40
-**Inputs (target handles):** `image`, `audio`
+**Inputs (target handles):** `image`, `video`, `audio`
 **Outputs (source handles):** `video`
 
 **Required data fields:**

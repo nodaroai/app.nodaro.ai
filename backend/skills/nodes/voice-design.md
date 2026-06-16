@@ -1,7 +1,7 @@
 ---
 node_type: voice-design
-generated_at: 2026-05-18T13:23:37.508Z
-generated_from: cb1e786d
+generated_at: 2026-06-16T08:22:28.446Z
+generated_from: 877dfa01a
 ---
 
 # Voice Design
@@ -10,7 +10,7 @@ generated_from: cb1e786d
 **Type:** `voice-design`
 **Category:** ai
 **Credit cost:** 5
-**Inputs (target handles):** `in`
+**Inputs (target handles):** `prompt`, `audio-style`
 **Outputs (source handles):** `audio`, `voiceId`
 
 **Required data fields:**
