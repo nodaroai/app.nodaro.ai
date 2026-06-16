@@ -13,6 +13,7 @@ import { PendingCard } from "./pending-card"
 import { PerVariantRealLifeRefsDrawer } from "./per-variant-refs-drawer"
 import { MultiImageLightbox } from "@/components/ui/multi-image-lightbox"
 import { injectAssetAsCanvasNode, setCharacterNodeDefaultAsset } from "./inject-helpers"
+import { lowerNameSet } from "../studio-shell/preset-state"
 
 const MOTION_PRESETS = [
   "walking",
@@ -54,6 +55,10 @@ export function MotionsTab({
   const hasPortrait = Boolean(state.staged.sourceImageUrl)
   const items = state.staged.motions
   const pendingForType = Array.from(jobs.pending.entries()).filter(([, m]) => m.assetType === "motions")
+  // GenerationBar chip states: "created" once a motion of that name exists,
+  // "creating" while a job (real or optimistic) is in flight.
+  const createdNames = lowerNameSet(items)
+  const busyNames = lowerNameSet(pendingForType.map(([, m]) => m))
   const [currentModel, setCurrentModel] = useState<string>(DEFAULT_MOTION_PROVIDER)
   // Identity Foundation v2: AssetGenPanel + per-variant real-life refs drawer.
   // Same UX as Expressions/Poses — see expressions-tab.tsx for parity notes.
@@ -66,10 +71,14 @@ export function MotionsTab({
   const handleGenerate = useCallback(
     async (text: string, _isPreset: boolean, model: string) => {
       if (!state.staged.sourceImageUrl) return
+      // Optimistic spinner card immediately — before ensureSaved, the body-angle
+      // auto-chain, and the motion request. abort() clears it on any failure.
+      const tempId = jobs.begin("motions", text)
       let characterId: string
       try {
         characterId = await state.ensureSaved()
       } catch (e) {
+        jobs.abort(tempId)
         toast.error(e instanceof Error ? e.message : "Could not save character.")
         return
       }
@@ -86,6 +95,7 @@ export function MotionsTab({
         })
         chainedSourceUrl = url ?? undefined
       } catch (e) {
+        jobs.abort(tempId)
         toast.error(
           e instanceof Error
             ? `Body reference failed: ${e.message}`
@@ -93,27 +103,32 @@ export function MotionsTab({
         )
         return
       }
-      const { jobId } = await generateCharacterMotion({
-        motionPrompt: text,
-        // Explicit override when we JUST generated a body angle — closes the
-        // race with the DB write. When chainedSourceUrl is undefined (the row
-        // already had body angles), the backend picks the best one from the
-        // row.
-        sourceImageUrl: chainedSourceUrl,
-        provider: model,
-        name: state.staged.characterName,
-        description: state.staged.description,
-        gender: state.staged.gender,
-        style: state.staged.style,
-        baseOutfit: state.staged.baseOutfit,
-        attachToCharacterId: characterId,
-        attachName: text,
-        // Forward the character node's 4-pill toggle so the backend's
-        // motions default (9:16) can be overridden when the user has picked
-        // a different ratio on the canvas.
-        characterNodeAspectRatio: state.staged.defaultAssetAspectRatio,
-      })
-      jobs.track(jobId, "motions", text)
+      try {
+        const { jobId } = await generateCharacterMotion({
+          motionPrompt: text,
+          // Explicit override when we JUST generated a body angle — closes the
+          // race with the DB write. When chainedSourceUrl is undefined (the row
+          // already had body angles), the backend picks the best one from the
+          // row.
+          sourceImageUrl: chainedSourceUrl,
+          provider: model,
+          name: state.staged.characterName,
+          description: state.staged.description,
+          gender: state.staged.gender,
+          style: state.staged.style,
+          baseOutfit: state.staged.baseOutfit,
+          attachToCharacterId: characterId,
+          attachName: text,
+          // Forward the character node's 4-pill toggle so the backend's
+          // motions default (9:16) can be overridden when the user has picked
+          // a different ratio on the canvas.
+          characterNodeAspectRatio: state.staged.defaultAssetAspectRatio,
+        })
+        jobs.settle(tempId, jobId)
+      } catch (e) {
+        jobs.abort(tempId)
+        toast.error(e instanceof Error ? e.message : "Generation failed.")
+      }
     },
     [state, jobs],
   )
@@ -177,14 +192,16 @@ export function MotionsTab({
   const fireCustomGen = useCallback(
     async (submission: AssetGenSubmission) => {
       if (!state.staged.sourceImageUrl) return
+      const variant = submission.userPrompt.slice(0, 100) || "custom"
+      const tempId = jobs.begin("motions", variant)
       let characterId: string
       try {
         characterId = await state.ensureSaved()
       } catch (e) {
+        jobs.abort(tempId)
         toast.error(e instanceof Error ? e.message : "Could not save character.")
         return
       }
-      const variant = submission.userPrompt.slice(0, 100) || "custom"
       // Auto-chain: see handleGenerate for the rationale.
       let chainedSourceUrl: string | undefined
       try {
@@ -196,6 +213,7 @@ export function MotionsTab({
         })
         chainedSourceUrl = url ?? undefined
       } catch (e) {
+        jobs.abort(tempId)
         toast.error(
           e instanceof Error
             ? `Body reference failed: ${e.message}`
@@ -219,8 +237,9 @@ export function MotionsTab({
           realLifeRefs: submission.realLifeRefs,
           characterNodeAspectRatio: state.staged.defaultAssetAspectRatio,
         })
-        jobs.track(jobId, "motions", variant)
+        jobs.settle(tempId, jobId)
       } catch (e) {
+        jobs.abort(tempId)
         toast.error(e instanceof Error ? e.message : "Generation failed.")
       }
     },
@@ -324,6 +343,8 @@ export function MotionsTab({
         customPlaceholder='Custom motion: e.g. "walking confidently toward camera"'
         onGenerate={handleGenerate}
         onModelChange={setCurrentModel}
+        createdNames={createdNames}
+        busyNames={busyNames}
       />
       <AssetGenPanel
         open={genPanelOpen}

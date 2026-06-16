@@ -10,6 +10,7 @@ import { PendingCard } from "./pending-card"
 import { PerVariantRealLifeRefsDrawer } from "./per-variant-refs-drawer"
 import { MultiImageLightbox } from "@/components/ui/multi-image-lightbox"
 import { injectAssetAsCanvasNode, setCharacterNodeDefaultAsset } from "./inject-helpers"
+import { lowerNameSet } from "../studio-shell/preset-state"
 
 // Curated top-tier image models for character work. Drop budget/older options — the studio is
 // opinionated about quality and these all produce high-fidelity character output by default.
@@ -121,6 +122,11 @@ export function ImageAssetTab({
 
   const handleGenerate = useCallback(
     async (text: string, isPreset: boolean, model: string) => {
+      const attachName = isPreset ? text : text.substring(0, 100)
+      // Optimistic spinner card the instant the user clicks — appears BEFORE
+      // the ensureSaved + generate round-trips so the click feels immediate.
+      // settle() swaps it for the real job; abort() drops it on any failure.
+      const tempId = jobs.begin(trackingAssetType, attachName)
       // Lazy-create the character row on first generation so the worker has a
       // target for auto-attach. If the user hasn't given the character a name
       // yet, ensureSaved throws — surface as a toast and bail.
@@ -128,30 +134,35 @@ export function ImageAssetTab({
       try {
         characterId = await state.ensureSaved()
       } catch (e) {
+        jobs.abort(tempId)
         toast.error(e instanceof Error ? e.message : "Could not save character.")
         return
       }
-      const attachName = isPreset ? text : text.substring(0, 100)
-      const { jobId } = await generateCharacterAsset({
-        assetType: isPreset ? assetType : "custom",
-        variant: isPreset ? text : text.substring(0, 100),
-        userPrompt: isPreset ? undefined : text,
-        name: state.staged.characterName,
-        description: state.staged.description,
-        gender: state.staged.gender,
-        style: state.staged.style,
-        baseOutfit: state.staged.baseOutfit,
-        sourceImageUrl: state.staged.sourceImageUrl || undefined,
-        provider: model,
-        attachToCharacterId: characterId,
-        attachToColumn,
-        attachName,
-        // Forward the character node's 4-pill toggle so the backend's
-        // per-asset-type default can be overridden when the user has picked
-        // a different ratio on the canvas.
-        characterNodeAspectRatio: state.staged.defaultAssetAspectRatio,
-      })
-      jobs.track(jobId, trackingAssetType, attachName)
+      try {
+        const { jobId } = await generateCharacterAsset({
+          assetType: isPreset ? assetType : "custom",
+          variant: isPreset ? text : text.substring(0, 100),
+          userPrompt: isPreset ? undefined : text,
+          name: state.staged.characterName,
+          description: state.staged.description,
+          gender: state.staged.gender,
+          style: state.staged.style,
+          baseOutfit: state.staged.baseOutfit,
+          sourceImageUrl: state.staged.sourceImageUrl || undefined,
+          provider: model,
+          attachToCharacterId: characterId,
+          attachToColumn,
+          attachName,
+          // Forward the character node's 4-pill toggle so the backend's
+          // per-asset-type default can be overridden when the user has picked
+          // a different ratio on the canvas.
+          characterNodeAspectRatio: state.staged.defaultAssetAspectRatio,
+        })
+        jobs.settle(tempId, jobId)
+      } catch (e) {
+        jobs.abort(tempId)
+        toast.error(e instanceof Error ? e.message : "Generation failed.")
+      }
     },
     [state, jobs, assetType, attachToColumn, trackingAssetType],
   )
@@ -243,14 +254,16 @@ export function ImageAssetTab({
   // `description` and `realLifeRefs` from the AssetGenPanel.
   const fireCustomGen = useCallback(
     async (submission: AssetGenSubmission) => {
+      const variant = submission.userPrompt.slice(0, 100) || "custom"
+      const tempId = jobs.begin(trackingAssetType, variant)
       let characterId: string
       try {
         characterId = await state.ensureSaved()
       } catch (e) {
+        jobs.abort(tempId)
         toast.error(e instanceof Error ? e.message : "Could not save character.")
         return
       }
-      const variant = submission.userPrompt.slice(0, 100) || "custom"
       try {
         const { jobId } = await generateCharacterAsset({
           assetType: "custom",
@@ -272,16 +285,20 @@ export function ImageAssetTab({
           realLifeRefs: submission.realLifeRefs,
           characterNodeAspectRatio: state.staged.defaultAssetAspectRatio,
         })
-        jobs.track(jobId, trackingAssetType, variant)
+        jobs.settle(tempId, jobId)
       } catch (e) {
+        jobs.abort(tempId)
         toast.error(e instanceof Error ? e.message : "Generation failed.")
       }
     },
     [state, jobs, assetType, currentModel, attachToColumn, trackingAssetType],
   )
 
-  const existingNames = new Set(items.map((i) => i.name.toLowerCase()))
+  const existingNames = lowerNameSet(items)
   const missingCount = presets.filter((p) => !existingNames.has(p.toLowerCase())).length
+  // Names with a generation in flight (real OR optimistic) — drives the
+  // GenerationBar's per-chip "creating" spinner + disabled state.
+  const busyNames = lowerNameSet(pendingForType.map(([, m]) => m))
 
   // Portrait-required gate (PR 2 Task 18). Only applies when the parent has wired a switch
   // callback — the Angles + Lighting embeds inside the Appearance tab omit it so they keep
@@ -383,6 +400,8 @@ export function ImageAssetTab({
         onGenerateAll={handleGenerateAll}
         generateAllCount={missingCount}
         onModelChange={setCurrentModel}
+        createdNames={existingNames}
+        busyNames={busyNames}
       />
       <MultiImageLightbox
         items={items.map((it) => ({ url: it.url, alt: it.name }))}

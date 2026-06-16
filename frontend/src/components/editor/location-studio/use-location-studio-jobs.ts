@@ -37,6 +37,12 @@ export type TrackedJob = {
   readonly jobId: string
   readonly assetType: string
   readonly name: string
+  /** True for a client-side placeholder added by `beginJob()` BEFORE the
+   *  generate request returns a real jobId. Excluded from polling + realtime
+   *  (there's no backend job to query yet); `settleJob()` swaps it for the
+   *  real id and `abortJob()` removes it. Lets the "Generating…" card show the
+   *  instant the user clicks, not after the save + generate round-trips. */
+  readonly optimistic?: boolean
 }
 
 export type CompletedJob = {
@@ -49,6 +55,16 @@ export type CompletedJob = {
 export interface LocationStudioJobs {
   readonly tracked: ReadonlyArray<TrackedJob>
   trackJob: (job: TrackedJob) => void
+  /** Optimistically add a "Generating…" placeholder and return its temp id —
+   *  call synchronously on click, BEFORE awaiting ensureSavedBeforeGen/generate,
+   *  so the card appears instantly. Follow with `settleJob(tempId, realJobId)`
+   *  once the request returns, or `abortJob(tempId)` if it throws. */
+  beginJob: (assetType: string, name: string) => string
+  /** Replace an optimistic placeholder with its real jobId so polling/realtime
+   *  pick it up. No-op if the placeholder was aborted meanwhile. */
+  settleJob: (tempId: string, jobId: string) => void
+  /** Drop an optimistic placeholder (the generate request failed). */
+  abortJob: (tempId: string) => void
   onResolved: (cb: (j: CompletedJob) => void) => void
   onFailed: (cb: (jobId: string) => void) => void
 }
@@ -62,6 +78,32 @@ export function useLocationStudioJobs(initial: ReadonlyArray<TrackedJob> = []): 
 
   const trackJob = useCallback((job: TrackedJob) => {
     setTracked((prev) => (prev.some((t) => t.jobId === job.jobId) ? prev : [...prev, job]))
+  }, [])
+
+  // Monotonic counter for optimistic placeholder ids. A ref (not state) so
+  // bumping it never re-renders and ids stay unique for the hook's lifetime.
+  const optimisticSeq = useRef(0)
+
+  const beginJob = useCallback((assetType: string, name: string): string => {
+    const tempId = `optimistic:${optimisticSeq.current++}`
+    setTracked((prev) => [...prev, { jobId: tempId, assetType, name, optimistic: true }])
+    return tempId
+  }, [])
+
+  const settleJob = useCallback((tempId: string, jobId: string) => {
+    setTracked((prev) => {
+      const idx = prev.findIndex((t) => t.jobId === tempId)
+      if (idx === -1) return prev // aborted before the request returned
+      // If the real id is somehow already tracked, just drop the placeholder.
+      if (prev.some((t) => t.jobId === jobId)) return prev.filter((t) => t.jobId !== tempId)
+      const next = prev.slice()
+      next[idx] = { jobId, assetType: prev[idx].assetType, name: prev[idx].name }
+      return next
+    })
+  }, [])
+
+  const abortJob = useCallback((tempId: string) => {
+    setTracked((prev) => (prev.some((t) => t.jobId === tempId) ? prev.filter((t) => t.jobId !== tempId) : prev))
   }, [])
 
   const onResolved = useCallback((cb: (j: CompletedJob) => void) => {
@@ -111,7 +153,12 @@ export function useLocationStudioJobs(initial: ReadonlyArray<TrackedJob> = []): 
   // tracked-set ref filters events down to the jobs we care about; new
   // tracks become visible to the next event without re-opening the channel.
   const userId = getCachedUserId()
-  const trackedIdsSet = useMemo(() => new Set(tracked.map((t) => t.jobId)), [tracked])
+  // Optimistic placeholders have no backend job yet — keep them out of the
+  // realtime filter set (and the poll batch below).
+  const trackedIdsSet = useMemo(
+    () => new Set(tracked.filter((t) => !t.optimistic).map((t) => t.jobId)),
+    [tracked],
+  )
   const handleRealtimeUpdate = useCallback(
     (job: JobRealtimeRow) => {
       handleJobStatus(job.id, job.status, job.output_data)
@@ -137,7 +184,7 @@ export function useLocationStudioJobs(initial: ReadonlyArray<TrackedJob> = []): 
     const jitter = Math.random() * 400 - 200
     const interval = setInterval(async () => {
       try {
-        const ids = trackedRef.current.map((t) => t.jobId)
+        const ids = trackedRef.current.filter((t) => !t.optimistic).map((t) => t.jobId)
         if (ids.length === 0) return
         const { jobs } = await getJobStatusBatch(ids)
         for (const j of jobs) {
@@ -151,5 +198,5 @@ export function useLocationStudioJobs(initial: ReadonlyArray<TrackedJob> = []): 
     // eslint-disable-next-line react-hooks/exhaustive-deps -- jobIdsKey is the stable hash
   }, [jobIdsKey])
 
-  return { tracked, trackJob, onResolved, onFailed }
+  return { tracked, trackJob, beginJob, settleJob, abortJob, onResolved, onFailed }
 }

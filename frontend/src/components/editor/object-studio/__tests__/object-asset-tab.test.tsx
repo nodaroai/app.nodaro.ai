@@ -357,3 +357,39 @@ describe("ObjectAssetTab — Material catalog browser", () => {
     expect(screen.getByRole("button", { name: "Gold" })).toBeDisabled()
   })
 })
+
+describe("ObjectAssetTab optimistic quick-preset feedback", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    toastError.mockClear()
+  })
+
+  it("shows an optimistic 'Generating…' card and disables the preset the instant it's clicked", async () => {
+    // Keep the request pending so the optimistic card is observable before it resolves.
+    vi.mocked(generateObjectAsset).mockImplementationOnce(() => new Promise<{ jobId: string }>(() => {}))
+    renderAngles(makeStudio())
+
+    const front = screen.getByRole("button", { name: "front" })
+    expect(front).toBeEnabled()
+
+    await userEvent.click(front)
+
+    // Card appears before the (never-resolving) generate request settles.
+    expect(screen.getByText("Generating front…")).toBeInTheDocument()
+    const frontAfter = screen.getByRole("button", { name: "front" })
+    expect(frontAfter).toBeDisabled()
+    expect(frontAfter).toHaveAttribute("data-state", "creating")
+    // The other preset stays clickable.
+    expect(screen.getByRole("button", { name: "side" })).toBeEnabled()
+  })
+
+  it("renders a preset whose asset already exists as created + disabled", () => {
+    const studio = makeStudio({
+      stagedData: makeStagedData({ angles: [{ name: "front", url: "https://example.com/front.png" }] }),
+    })
+    renderAngles(studio)
+    const front = screen.getByRole("button", { name: "front" })
+    expect(front).toBeDisabled()
+    expect(front).toHaveAttribute("data-state", "created")
+  })
+})

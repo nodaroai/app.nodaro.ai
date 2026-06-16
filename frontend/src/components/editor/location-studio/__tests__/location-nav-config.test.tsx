@@ -23,6 +23,9 @@ import type { LocationStudioJobs } from "../use-location-studio-jobs"
 const stubJobs: LocationStudioJobs = {
   tracked: [],
   trackJob: vi.fn(),
+  beginJob: vi.fn(() => ""),
+  settleJob: vi.fn(),
+  abortJob: vi.fn(),
   onResolved: vi.fn(),
   onFailed: vi.fn(),
 }

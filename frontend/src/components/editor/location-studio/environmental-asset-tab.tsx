@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { Check, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import {
   LOCATION_BUCKET_TO_CATALOG_ID,
@@ -7,6 +8,7 @@ import {
 import { generateLocationAsset } from "@/lib/api"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 import { useLocationStudioJobs } from "./use-location-studio-jobs"
+import { presetState, lowerNameSet } from "../studio-shell/preset-state"
 import type { LocationStudioState } from "./use-location-studio"
 import type { LocationAssetItem, LocationNodeData } from "@/types/nodes"
 
@@ -118,9 +120,14 @@ export function EnvironmentalAssetTab({
 
   async function fireGen(variant: string, isCustom: boolean): Promise<void> {
     if (!data) return
+    const trimmedVariant = isCustom ? variant.slice(0, 100) : variant
+    // Optimistic "Generating…" card the instant the user clicks — before the
+    // save + generate round-trips. The placeholder name MUST match the name
+    // later passed to the real trackJob so the chip stays "creating" across the
+    // swap. settleJob swaps it for the real job; abortJob drops it on failure.
+    const tempId = jobs.beginJob(bucketName, trimmedVariant)
     try {
       const locationDbId = await studio.ensureSavedBeforeGen()
-      const trimmedVariant = isCustom ? variant.slice(0, 100) : variant
       const result = await generateLocationAsset({
         assetType: isCustom ? "custom" : bucketName,
         variant: trimmedVariant,
@@ -136,8 +143,9 @@ export function EnvironmentalAssetTab({
         attachToColumn: BUCKET_TO_COLUMN[bucketName],
         attachName: trimmedVariant,
       })
-      jobs.trackJob({ jobId: result.jobId, assetType: bucketName, name: trimmedVariant })
+      jobs.settleJob(tempId, result.jobId)
     } catch {
+      jobs.abortJob(tempId)
       // ensureSavedBeforeGen / generateLocationAsset already toast on failure.
     }
   }
@@ -221,6 +229,11 @@ export function EnvironmentalAssetTab({
   }
 
   const trackedForBucket = jobs.tracked.filter((j) => j.assetType === bucketName)
+  // Chip states: "created" once an asset of that name exists, "creating" while
+  // a job (real or optimistic) is in flight. Lowercased for case-insensitive
+  // match (preset literals vs stored item/job names may differ in case).
+  const createdNames = lowerNameSet(items)
+  const busyNames = lowerNameSet(trackedForBucket)
   const customDisabled = disabled || !customPrompt.trim()
 
   // Phase 2 #11 — Search/filter. Show the input only when the combined count
@@ -388,9 +401,10 @@ export function EnvironmentalAssetTab({
         {visibleTracked.map((j) => (
           <div
             key={j.jobId}
-            className="aspect-video border border-[#1e293b] rounded bg-[#0e1117] flex items-center justify-center text-[11px] text-slate-400"
+            className="aspect-video border border-[#1e293b] rounded bg-[#0e1117] flex flex-col items-center justify-center gap-2 text-[11px] text-slate-400"
           >
-            Generating {j.name}…
+            <Loader2 className="w-4 h-4 animate-spin text-slate-500" />
+            <span className="truncate max-w-full px-2">Generating {j.name}…</span>
           </div>
         ))}
         {!q && items.length === 0 && trackedForBucket.length === 0 && (
@@ -412,19 +426,41 @@ export function EnvironmentalAssetTab({
         )}
       </div>
 
-      {/* Preset chips */}
+      {/* Preset chips. Location renders its own bar (not the shared
+          `<PresetChips>`) because each chip shows a LOCALIZED label and the
+          row is search-filtered (`visiblePresets`) — neither of which the
+          shared component supports. It derives chip state from the SAME
+          `presetState` helper PresetChips uses, so the look + behavior
+          (spinner/✓/disabled, press feedback) stay in lockstep. */}
       <div className="flex flex-wrap gap-2">
-        {visiblePresets.map((p) => (
-          <button
-            key={p}
-            type="button"
-            onClick={() => handlePresetClick(p)}
-            disabled={disabled}
-            className="px-3 py-1 text-[11px] rounded bg-[#1a1d27] hover:bg-[#1e293b] border border-[#1e293b] text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {resolveLabel(LOCATION_PRESET_TO_CATALOG[p]?.entryId ?? p, p)}
-          </button>
-        ))}
+        {visiblePresets.map((p) => {
+          const st = presetState(p, createdNames, busyNames)
+          const inactive = st !== "idle"
+          const label = resolveLabel(LOCATION_PRESET_TO_CATALOG[p]?.entryId ?? p, p)
+          return (
+            <button
+              key={p}
+              type="button"
+              data-state={st}
+              disabled={disabled || inactive}
+              title={
+                disabled
+                  ? undefined
+                  : st === "created"
+                    ? `${label} — already generated`
+                    : st === "creating"
+                      ? `${label} — generating…`
+                      : `Generate ${label}`
+              }
+              onClick={() => handlePresetClick(p)}
+              className="px-3 py-1 text-[11px] rounded bg-[#1a1d27] hover:bg-[#1e293b] border border-[#1e293b] text-slate-300 inline-flex items-center gap-1.5 transition-transform active:scale-95 disabled:active:scale-100 disabled:opacity-40 disabled:cursor-not-allowed data-[state=created]:text-emerald-300/80 data-[state=created]:border-emerald-700/40"
+            >
+              {st === "creating" && <Loader2 className="w-2.5 h-2.5 animate-spin" />}
+              {st === "created" && <Check className="w-2.5 h-2.5" />}
+              {label}
+            </button>
+          )
+        })}
       </div>
 
       {/* Custom prompt */}

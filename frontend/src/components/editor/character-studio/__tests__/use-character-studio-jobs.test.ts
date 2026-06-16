@@ -8,7 +8,7 @@ vi.mock("@/lib/api", () => ({
 }))
 
 import { useCharacterStudioJobs } from "../use-character-studio-jobs"
-import { getJobStatusLean } from "@/lib/api"
+import { getJobStatusLean, cancelJob } from "@/lib/api"
 
 describe("useCharacterStudioJobs.trackAndWait", () => {
   beforeEach(() => {
@@ -178,5 +178,124 @@ describe("useCharacterStudioJobs.trackAndWait", () => {
 
     expect(outcomeRef.current?.ok).toBe(false)
     expect(outcomeRef.current?.err?.message).toBe("studio closed")
+  })
+})
+
+describe("useCharacterStudioJobs optimistic lifecycle (begin/settle/abort)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it("begin() synchronously adds an optimistic pending entry (instant spinner card)", () => {
+    const { result } = renderHook(() => useCharacterStudioJobs(vi.fn(), vi.fn()))
+    let tempId!: string
+    act(() => {
+      tempId = result.current.begin("expressions", "smile")
+    })
+    expect(result.current.pending.has(tempId)).toBe(true)
+    const entry = result.current.pending.get(tempId)
+    expect(entry).toMatchObject({ assetType: "expressions", name: "smile", optimistic: true })
+  })
+
+  it("begin() returns unique ids so two quick clicks both show a card", () => {
+    const { result } = renderHook(() => useCharacterStudioJobs(vi.fn(), vi.fn()))
+    let a!: string, b!: string
+    act(() => {
+      a = result.current.begin("poses", "standing")
+      b = result.current.begin("poses", "walking")
+    })
+    expect(a).not.toBe(b)
+    expect(result.current.pending.size).toBe(2)
+  })
+
+  it("does NOT poll the backend for an optimistic entry (no real jobId yet)", async () => {
+    const { result } = renderHook(() => useCharacterStudioJobs(vi.fn(), vi.fn()))
+    act(() => {
+      result.current.begin("expressions", "smile")
+    })
+    await act(async () => {
+      vi.advanceTimersByTime(2000) // POLL_MS
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(getJobStatusLean).not.toHaveBeenCalled()
+  })
+
+  it("settle() swaps the optimistic temp id for the real jobId (now pollable)", async () => {
+    const onResolved = vi.fn()
+    const { result } = renderHook(() => useCharacterStudioJobs(onResolved, vi.fn()))
+    let tempId!: string
+    act(() => {
+      tempId = result.current.begin("expressions", "smile")
+    })
+    act(() => {
+      result.current.settle(tempId, "job-real")
+    })
+    expect(result.current.pending.has(tempId)).toBe(false)
+    expect(result.current.pending.has("job-real")).toBe(true)
+    expect(result.current.pending.get("job-real")?.optimistic).toBeFalsy()
+
+    // The real entry is now polled to completion like any tracked job.
+    vi.mocked(getJobStatusLean).mockResolvedValueOnce({
+      id: "job-real",
+      status: "completed",
+      output_data: { imageUrl: "https://example.com/smile.png" },
+      input_data: {},
+      created_at: new Date().toISOString(),
+    } as never)
+    await act(async () => {
+      vi.advanceTimersByTime(2000)
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(onResolved).toHaveBeenCalledWith({ assetType: "expressions", name: "smile", url: "https://example.com/smile.png" })
+    expect(result.current.pending.has("job-real")).toBe(false)
+  })
+
+  it("abort() removes the optimistic entry (request failed before a jobId existed)", () => {
+    const { result } = renderHook(() => useCharacterStudioJobs(vi.fn(), vi.fn()))
+    let tempId!: string
+    act(() => {
+      tempId = result.current.begin("expressions", "smile")
+    })
+    act(() => {
+      result.current.abort(tempId)
+    })
+    expect(result.current.pending.has(tempId)).toBe(false)
+    expect(result.current.pending.size).toBe(0)
+  })
+
+  it("settle() after the entry was aborted/cancelled is a no-op (doesn't resurrect)", () => {
+    const { result } = renderHook(() => useCharacterStudioJobs(vi.fn(), vi.fn()))
+    let tempId!: string
+    act(() => {
+      tempId = result.current.begin("expressions", "smile")
+    })
+    act(() => {
+      result.current.abort(tempId)
+    })
+    act(() => {
+      result.current.settle(tempId, "job-real")
+    })
+    expect(result.current.pending.has("job-real")).toBe(false)
+    expect(result.current.pending.size).toBe(0)
+  })
+
+  it("cancel() on an optimistic entry removes the card without calling the backend", async () => {
+    const { result } = renderHook(() => useCharacterStudioJobs(vi.fn(), vi.fn()))
+    let tempId!: string
+    act(() => {
+      tempId = result.current.begin("expressions", "smile")
+    })
+    await act(async () => {
+      await result.current.cancel(tempId)
+    })
+    expect(result.current.pending.has(tempId)).toBe(false)
+    expect(cancelJob).not.toHaveBeenCalled()
   })
 })

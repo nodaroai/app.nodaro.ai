@@ -6,10 +6,20 @@ vi.mock("@/lib/api", () => ({
   getJobStatusBatch: vi.fn(),
 }))
 
-import { useLocationStudioJobs } from "../use-location-studio-jobs"
+// Stub the realtime sync hook used by useCreatureStudioJobs — these tests
+// exercise the polling fallback, not realtime delivery.
+vi.mock("../../location-studio/use-jobs-realtime-sync", () => ({
+  useJobsRealtimeSync: () => {},
+}))
+
+vi.mock("@/hooks/use-auth", () => ({
+  getCachedUserId: () => "user-1",
+}))
+
+import { useCreatureStudioJobs } from "../use-creature-studio-jobs"
 import { getJobStatusBatch } from "@/lib/api"
 
-describe("useLocationStudioJobs", () => {
+describe("useCreatureStudioJobs", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.useFakeTimers()
@@ -21,7 +31,7 @@ describe("useLocationStudioJobs", () => {
   })
 
   it("trackJob adds to pending list", () => {
-    const { result } = renderHook(() => useLocationStudioJobs([]))
+    const { result } = renderHook(() => useCreatureStudioJobs([]))
     expect(result.current.tracked).toHaveLength(0)
     act(() => {
       result.current.trackJob({ jobId: "j1", assetType: "main", name: "candidate-0" })
@@ -30,7 +40,7 @@ describe("useLocationStudioJobs", () => {
   })
 
   it("dedupes on duplicate trackJob (same jobId)", () => {
-    const { result } = renderHook(() => useLocationStudioJobs([]))
+    const { result } = renderHook(() => useCreatureStudioJobs([]))
     act(() => {
       result.current.trackJob({ jobId: "j1", assetType: "main", name: "first" })
       result.current.trackJob({ jobId: "j1", assetType: "main", name: "should-not-overwrite" })
@@ -40,7 +50,7 @@ describe("useLocationStudioJobs", () => {
   })
 
   it("does NOT poll when tracked is empty", async () => {
-    renderHook(() => useLocationStudioJobs([]))
+    renderHook(() => useCreatureStudioJobs([]))
     await act(async () => {
       vi.advanceTimersByTime(5000)
       await Promise.resolve()
@@ -50,14 +60,16 @@ describe("useLocationStudioJobs", () => {
 
   it("hydrates from initial pending jobs", () => {
     const { result } = renderHook(() =>
-      useLocationStudioJobs([{ jobId: "seed-1", assetType: "main", name: "rehydrated" }]),
+      useCreatureStudioJobs([{ jobId: "seed-1", assetType: "main", name: "rehydrated" }]),
     )
-    expect(result.current.tracked).toEqual([{ jobId: "seed-1", assetType: "main", name: "rehydrated" }])
+    expect(result.current.tracked).toEqual([
+      { jobId: "seed-1", assetType: "main", name: "rehydrated" },
+    ])
   })
 
   it("polls getJobStatusBatch and fires onResolved on completion with imageUrl", async () => {
     const onResolved = vi.fn()
-    const { result } = renderHook(() => useLocationStudioJobs([]))
+    const { result } = renderHook(() => useCreatureStudioJobs([]))
     act(() => {
       result.current.onResolved(onResolved)
       result.current.trackJob({ jobId: "j2", assetType: "main", name: "candidate-A" })
@@ -68,7 +80,7 @@ describe("useLocationStudioJobs", () => {
         {
           id: "j2",
           status: "completed",
-          output_data: { imageUrl: "https://example.com/loc.png" },
+          output_data: { imageUrl: "https://example.com/creature.png" },
         },
       ],
     })
@@ -85,7 +97,7 @@ describe("useLocationStudioJobs", () => {
       jobId: "j2",
       assetType: "main",
       name: "candidate-A",
-      url: "https://example.com/loc.png",
+      url: "https://example.com/creature.png",
     })
     // Job is removed from tracked after resolution.
     expect(result.current.tracked).toHaveLength(0)
@@ -93,7 +105,7 @@ describe("useLocationStudioJobs", () => {
 
   it("fires onFailed on status=failed and drops from tracked", async () => {
     const onFailed = vi.fn()
-    const { result } = renderHook(() => useLocationStudioJobs([]))
+    const { result } = renderHook(() => useCreatureStudioJobs([]))
     act(() => {
       result.current.onFailed(onFailed)
       result.current.trackJob({ jobId: "j3", assetType: "main", name: "doomed" })
@@ -116,7 +128,7 @@ describe("useLocationStudioJobs", () => {
 
   it("keeps pending jobs in tracked when status is still pending/running", async () => {
     const onResolved = vi.fn()
-    const { result } = renderHook(() => useLocationStudioJobs([]))
+    const { result } = renderHook(() => useCreatureStudioJobs([]))
     act(() => {
       result.current.onResolved(onResolved)
       result.current.trackJob({ jobId: "j4", assetType: "main", name: "still-running" })
@@ -136,12 +148,12 @@ describe("useLocationStudioJobs", () => {
     expect(result.current.tracked).toHaveLength(1)
   })
 
-  it("falls back to videoUrl when imageUrl is absent (for video-asset jobs)", async () => {
+  it("falls back to videoUrl when imageUrl is absent (for motion-clip jobs)", async () => {
     const onResolved = vi.fn()
-    const { result } = renderHook(() => useLocationStudioJobs([]))
+    const { result } = renderHook(() => useCreatureStudioJobs([]))
     act(() => {
       result.current.onResolved(onResolved)
-      result.current.trackJob({ jobId: "j5", assetType: "atmosphereMotions", name: "rain" })
+      result.current.trackJob({ jobId: "j5", assetType: "motionClips", name: "pounce" })
     })
 
     vi.mocked(getJobStatusBatch).mockResolvedValueOnce({
@@ -149,7 +161,7 @@ describe("useLocationStudioJobs", () => {
         {
           id: "j5",
           status: "completed",
-          output_data: { videoUrl: "https://example.com/rain.mp4" },
+          output_data: { videoUrl: "https://example.com/pounce.mp4" },
         },
       ],
     })
@@ -163,14 +175,93 @@ describe("useLocationStudioJobs", () => {
 
     expect(onResolved).toHaveBeenCalledWith({
       jobId: "j5",
-      assetType: "atmosphereMotions",
-      name: "rain",
-      url: "https://example.com/rain.mp4",
+      assetType: "motionClips",
+      name: "pounce",
+      url: "https://example.com/pounce.mp4",
     })
+  })
+
+  it("does NOT fire onResolved when completed but no URL in output_data", async () => {
+    const onResolved = vi.fn()
+    const { result } = renderHook(() => useCreatureStudioJobs([]))
+    act(() => {
+      result.current.onResolved(onResolved)
+      result.current.trackJob({ jobId: "j6", assetType: "main", name: "no-url" })
+    })
+
+    vi.mocked(getJobStatusBatch).mockResolvedValueOnce({
+      jobs: [{ id: "j6", status: "completed", output_data: {} }],
+    })
+
+    await act(async () => {
+      vi.advanceTimersByTime(10300)
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    // No URL → resolution incomplete; callback not fired and job stays tracked.
+    expect(onResolved).not.toHaveBeenCalled()
+    expect(result.current.tracked).toHaveLength(1)
+  })
+
+  it("ignores status events for jobs not currently tracked", async () => {
+    const onResolved = vi.fn()
+    const { result } = renderHook(() => useCreatureStudioJobs([]))
+    act(() => {
+      result.current.onResolved(onResolved)
+      result.current.trackJob({ jobId: "j7", assetType: "main", name: "tracked" })
+    })
+
+    vi.mocked(getJobStatusBatch).mockResolvedValueOnce({
+      jobs: [
+        // Unrelated job — should be ignored.
+        { id: "untracked-99", status: "completed", output_data: { imageUrl: "https://x" } },
+      ],
+    })
+
+    await act(async () => {
+      vi.advanceTimersByTime(10300)
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(onResolved).not.toHaveBeenCalled()
+    expect(result.current.tracked).toHaveLength(1) // tracked job unchanged
+  })
+
+  it("supports swapping onResolved between renders (callback ref pattern)", async () => {
+    const first = vi.fn()
+    const second = vi.fn()
+
+    const { result, rerender } = renderHook(() => useCreatureStudioJobs([]))
+    act(() => {
+      result.current.onResolved(first)
+      result.current.trackJob({ jobId: "j8", assetType: "main", name: "first-cb" })
+    })
+
+    // Swap callback before resolution arrives.
+    act(() => {
+      result.current.onResolved(second)
+    })
+    rerender()
+
+    vi.mocked(getJobStatusBatch).mockResolvedValueOnce({
+      jobs: [{ id: "j8", status: "completed", output_data: { imageUrl: "https://x.png" } }],
+    })
+
+    await act(async () => {
+      vi.advanceTimersByTime(10300)
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(first).not.toHaveBeenCalled()
+    expect(second).toHaveBeenCalled()
   })
 })
 
-describe("useLocationStudioJobs optimistic lifecycle (beginJob/settleJob/abortJob)", () => {
+describe("useCreatureStudioJobs optimistic lifecycle (beginJob/settleJob/abortJob)", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.useFakeTimers()
@@ -181,21 +272,21 @@ describe("useLocationStudioJobs optimistic lifecycle (beginJob/settleJob/abortJo
   })
 
   it("beginJob adds an optimistic tracked entry synchronously and returns a temp id", () => {
-    const { result } = renderHook(() => useLocationStudioJobs([]))
+    const { result } = renderHook(() => useCreatureStudioJobs([]))
     let tempId!: string
     act(() => {
-      tempId = result.current.beginJob("lighting", "neon")
+      tempId = result.current.beginJob("angles", "front")
     })
     expect(tempId).toMatch(/^optimistic:/)
     expect(result.current.tracked).toEqual([
-      { jobId: tempId, assetType: "lighting", name: "neon", optimistic: true },
+      { jobId: tempId, assetType: "angles", name: "front", optimistic: true },
     ])
   })
 
   it("does NOT poll the backend for an optimistic entry (no real jobId yet)", async () => {
-    const { result } = renderHook(() => useLocationStudioJobs([]))
+    const { result } = renderHook(() => useCreatureStudioJobs([]))
     act(() => {
-      result.current.beginJob("lighting", "neon")
+      result.current.beginJob("angles", "front")
     })
     await act(async () => {
       vi.advanceTimersByTime(10300)
@@ -207,19 +298,19 @@ describe("useLocationStudioJobs optimistic lifecycle (beginJob/settleJob/abortJo
 
   it("settleJob swaps the temp id for the real jobId, which then polls to resolution", async () => {
     const onResolved = vi.fn()
-    const { result } = renderHook(() => useLocationStudioJobs([]))
+    const { result } = renderHook(() => useCreatureStudioJobs([]))
     let tempId!: string
     act(() => {
       result.current.onResolved(onResolved)
-      tempId = result.current.beginJob("lighting", "neon")
+      tempId = result.current.beginJob("angles", "front")
     })
     act(() => {
       result.current.settleJob(tempId, "real-1")
     })
-    expect(result.current.tracked).toEqual([{ jobId: "real-1", assetType: "lighting", name: "neon" }])
+    expect(result.current.tracked).toEqual([{ jobId: "real-1", assetType: "angles", name: "front" }])
 
     vi.mocked(getJobStatusBatch).mockResolvedValueOnce({
-      jobs: [{ id: "real-1", status: "completed", output_data: { imageUrl: "https://x/neon.png" } }],
+      jobs: [{ id: "real-1", status: "completed", output_data: { imageUrl: "https://x/front.png" } }],
     })
     await act(async () => {
       vi.advanceTimersByTime(10300)
@@ -227,15 +318,15 @@ describe("useLocationStudioJobs optimistic lifecycle (beginJob/settleJob/abortJo
       await Promise.resolve()
       await Promise.resolve()
     })
-    expect(onResolved).toHaveBeenCalledWith({ jobId: "real-1", assetType: "lighting", name: "neon", url: "https://x/neon.png" })
+    expect(onResolved).toHaveBeenCalledWith({ jobId: "real-1", assetType: "angles", name: "front", url: "https://x/front.png" })
     expect(result.current.tracked).toHaveLength(0)
   })
 
   it("abortJob removes the optimistic entry", () => {
-    const { result } = renderHook(() => useLocationStudioJobs([]))
+    const { result } = renderHook(() => useCreatureStudioJobs([]))
     let tempId!: string
     act(() => {
-      tempId = result.current.beginJob("lighting", "neon")
+      tempId = result.current.beginJob("angles", "front")
     })
     act(() => {
       result.current.abortJob(tempId)
@@ -244,10 +335,10 @@ describe("useLocationStudioJobs optimistic lifecycle (beginJob/settleJob/abortJo
   })
 
   it("settleJob after abort is a no-op (doesn't resurrect)", () => {
-    const { result } = renderHook(() => useLocationStudioJobs([]))
+    const { result } = renderHook(() => useCreatureStudioJobs([]))
     let tempId!: string
     act(() => {
-      tempId = result.current.beginJob("lighting", "neon")
+      tempId = result.current.beginJob("angles", "front")
     })
     act(() => {
       result.current.abortJob(tempId)
