@@ -16,6 +16,7 @@
 
 import {
   characterMentionSlug,
+  characterMentionableAssetArrays,
   type ConnectedReference,
   type ReferenceSource,
 } from "@nodaro/shared"
@@ -86,14 +87,8 @@ export function buildConnectedRefsFromSources(
             defaultUsageMode,
           })
         }
-        const assetArrays: Record<string, ReadonlyArray<{ readonly name: string; readonly url: string; readonly description?: string }>> = {
-          expressions: charData.expressions ?? [],
-          poses: charData.poses ?? [],
-          motions: charData.motions ?? [],
-          angles: charData.angles ?? [],
-          bodyAngles: charData.bodyAngles ?? [],
-          lightingVariations: charData.lightingVariations ?? [],
-        }
+        // All {name,url}[] variant buckets (incl. wardrobe + detail close-ups).
+        const assetArrays = characterMentionableAssetArrays(charData as unknown as Record<string, unknown>)
         for (const [arrayName, items] of Object.entries(assetArrays)) {
           for (const item of items) {
             if (!item.url) continue

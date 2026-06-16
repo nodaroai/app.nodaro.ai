@@ -232,6 +232,7 @@ import { buildImagePrompt, assembleImageInput, applyReferenceOrderToVideo } from
 import { LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind } from "@nodaro/shared";
 import type { CharacterDef, ConnectedReference, ReferenceSource, ExtraRefCharacterContext } from "@nodaro/shared";
 import { characterMentionSlug, findCharacterMentionTokens, resolveCharacterMentions } from "@nodaro/shared";
+import { characterMentionableAssetArrays } from "@nodaro/shared";
 import { usageModeDirective, DEFAULT_USAGE_MODE } from "@nodaro/shared";
 import { selectLoraRoutingForMentions, extractCharacterLoraFields } from "@nodaro/shared";
 import { expandExtraRefsToConnectedReferences } from "@nodaro/shared";
@@ -514,14 +515,7 @@ function expandCharacterNodeIntoRefs(
       },
     ]);
   }
-  const assetArrays: Record<string, readonly { readonly name: string; readonly url: string }[]> = {
-    expressions: charData.expressions ?? [],
-    poses: charData.poses ?? [],
-    motions: charData.motions ?? [],
-    angles: charData.angles ?? [],
-    bodyAngles: charData.bodyAngles ?? [],
-    lightingVariations: charData.lightingVariations ?? [],
-  };
+  const assetArrays = characterMentionableAssetArrays(charData as unknown as Record<string, unknown>);
   for (const [arrayName, items] of Object.entries(assetArrays)) {
     for (const item of items) {
       if (!item.url) continue;
@@ -1358,14 +1352,7 @@ export function executeNode(
                   defaultUsageMode,
                 });
               }
-              const assetArrays: Record<string, readonly { readonly name: string; readonly url: string }[]> = {
-                expressions: charData.expressions ?? [],
-                poses: charData.poses ?? [],
-                motions: charData.motions ?? [],
-                angles: charData.angles ?? [],
-                bodyAngles: charData.bodyAngles ?? [],
-                lightingVariations: charData.lightingVariations ?? [],
-              };
+              const assetArrays = characterMentionableAssetArrays(charData as unknown as Record<string, unknown>);
               for (const [arrayName, items] of Object.entries(assetArrays)) {
                 for (const item of items) {
                   if (!item.url) continue;
@@ -1475,14 +1462,7 @@ export function executeNode(
             defaultUsageMode,
           });
         }
-        const assetArrays: Record<string, readonly { readonly name: string; readonly url: string }[]> = {
-          expressions: charData.expressions ?? [],
-          poses: charData.poses ?? [],
-          motions: charData.motions ?? [],
-          angles: charData.angles ?? [],
-          bodyAngles: charData.bodyAngles ?? [],
-          lightingVariations: charData.lightingVariations ?? [],
-        };
+        const assetArrays = characterMentionableAssetArrays(charData as unknown as Record<string, unknown>);
         for (const [arrayName, items] of Object.entries(assetArrays)) {
           for (const item of items) {
             if (!item.url) continue;

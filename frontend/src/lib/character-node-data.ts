@@ -1,13 +1,15 @@
 import type { CharacterNodeData } from "@/types/nodes"
 import { getCharacter } from "@/lib/api"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { CHARACTER_VARIANT_ASSET_BUCKETS } from "@nodaro/shared"
 
 type CharacterDetail = Awaited<ReturnType<typeof getCharacter>>
 
-/** Asset buckets the hydrator MUST carry. The drift-guard test asserts coverage. */
-export const HYDRATED_ASSET_BUCKETS = [
-  "expressions", "poses", "lightingVariations", "angles", "bodyAngles", "motions",
-] as const
+/** Asset buckets the hydrator MUST carry as `{name,url}[]`. Bound to the SAME
+ *  single source of truth the @-mention / connected-reference expansion uses, so
+ *  every @-able bucket is guaranteed hydrated (otherwise the picker / @ list sees
+ *  empty data). The drift-guard test asserts the hydrator writes each. */
+export const HYDRATED_ASSET_BUCKETS = CHARACTER_VARIANT_ASSET_BUCKETS
 
 /** Merge a full character DETAIL response into existing node data, carrying every
  *  asset bucket. Used by all library→canvas load sites + the studio so there is one
@@ -67,7 +69,15 @@ export function hydrateCharacterNodeFromDetail(nodeId: string, characterId: stri
     .then((fresh) => {
       const cur = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)
       if (cur?.type === "character" && (cur.data as CharacterNodeData).characterDbId === characterId) {
-        useWorkflowStore.getState().updateNodeData(nodeId, mergeCharacterDetailIntoNodeData(cur.data as CharacterNodeData, fresh))
+        const merged = mergeCharacterDetailIntoNodeData(cur.data as CharacterNodeData, fresh)
+        // Skip the store write — and the autosave / updated_at churn it triggers —
+        // when the live detail already matches the node. This matters now that
+        // hydration runs on every workflow load (not just on placement): an
+        // unchanged refresh must not mark the workflow dirty or trip the
+        // "changed in another tab" latch.
+        if (JSON.stringify(merged) !== JSON.stringify(cur.data)) {
+          useWorkflowStore.getState().updateNodeData(nodeId, merged)
+        }
       }
     })
     .catch(() => {})

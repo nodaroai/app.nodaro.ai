@@ -1192,6 +1192,17 @@ export {
 export type { CharacterMentionTokenInfo } from "./character-mention-slug.js"
 
 export {
+  CHARACTER_VARIANT_ASSET_BUCKETS,
+  characterVariantAssetArrays,
+  characterSheetRefItems,
+  characterMentionableAssetArrays,
+} from "./character-variant-assets.js"
+export type {
+  CharacterVariantAssetBucket,
+  CharacterVariantAssetItem,
+} from "./character-variant-assets.js"
+
+export {
   LOCATION_USAGE_MODES,
   DEFAULT_LOCATION_USAGE_MODE,
   isLocationUsageMode,

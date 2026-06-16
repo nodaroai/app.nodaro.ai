@@ -1,0 +1,89 @@
+import { describe, it, expect } from "vitest"
+import {
+  CHARACTER_VARIANT_ASSET_BUCKETS,
+  characterVariantAssetArrays,
+  characterSheetRefItems,
+  characterMentionableAssetArrays,
+} from "../character-variant-assets.js"
+
+describe("CHARACTER_VARIANT_ASSET_BUCKETS", () => {
+  it("includes the original six image/video-variant buckets", () => {
+    for (const b of ["expressions", "poses", "motions", "angles", "bodyAngles", "lightingVariations"]) {
+      expect(CHARACTER_VARIANT_ASSET_BUCKETS).toContain(b)
+    }
+  })
+
+  it("includes wardrobe (outfitVariations) and detail close-ups — the previously-dropped studio assets", () => {
+    // Regression: studio writes these {name,url}[] buckets but the @-mention /
+    // connected-reference expansion historically hardcoded only the first six,
+    // so wardrobe + close-ups were invisible in the reference picker and @ list.
+    expect(CHARACTER_VARIANT_ASSET_BUCKETS).toContain("outfitVariations")
+    expect(CHARACTER_VARIANT_ASSET_BUCKETS).toContain("detailCloseups")
+  })
+
+  it("has no duplicates", () => {
+    expect(new Set(CHARACTER_VARIANT_ASSET_BUCKETS).size).toBe(CHARACTER_VARIANT_ASSET_BUCKETS.length)
+  })
+})
+
+describe("characterVariantAssetArrays", () => {
+  it("returns one entry per bucket, expanding present arrays", () => {
+    const data = {
+      expressions: [{ name: "smile", url: "https://x/smile.png" }],
+      outfitVariations: [{ name: "red dress", url: "https://x/red.png", description: "evening" }],
+      detailCloseups: [{ name: "eyes", url: "https://x/eyes.png" }],
+      // unrelated field is ignored
+      sourceImageUrl: "https://x/main.png",
+    }
+    const out = characterVariantAssetArrays(data)
+    expect(Object.keys(out).sort()).toEqual([...CHARACTER_VARIANT_ASSET_BUCKETS].sort())
+    expect(out.expressions).toEqual([{ name: "smile", url: "https://x/smile.png" }])
+    expect(out.outfitVariations).toEqual([{ name: "red dress", url: "https://x/red.png", description: "evening" }])
+    expect(out.detailCloseups).toEqual([{ name: "eyes", url: "https://x/eyes.png" }])
+  })
+
+  it("coerces missing / non-array buckets to an empty array", () => {
+    const out = characterVariantAssetArrays({ poses: "not-an-array" as unknown })
+    expect(out.poses).toEqual([])
+    expect(out.expressions).toEqual([])
+    expect(out.outfitVariations).toEqual([])
+  })
+
+  it("tolerates null/undefined input", () => {
+    expect(characterVariantAssetArrays(undefined).expressions).toEqual([])
+    expect(characterVariantAssetArrays(null).motions).toEqual([])
+  })
+})
+
+describe("characterSheetRefItems", () => {
+  it("maps composite reference sheets to {name,url} items (type + skin label)", () => {
+    const sheets = [
+      { id: "s1", type: "turnaround", skin: "studio", url: "https://x/t.png", panelUrls: [] },
+      { id: "s2", type: "variation-board", skin: "cinematic", url: "https://x/v.png", panelUrls: [] },
+    ]
+    expect(characterSheetRefItems(sheets)).toEqual([
+      { name: "turnaround studio", url: "https://x/t.png" },
+      { name: "variation-board cinematic", url: "https://x/v.png" },
+    ])
+  })
+
+  it("drops sheets with no composite url, tolerates non-arrays", () => {
+    expect(characterSheetRefItems([{ type: "detail", url: "" }])).toEqual([])
+    expect(characterSheetRefItems(undefined)).toEqual([])
+    expect(characterSheetRefItems("nope")).toEqual([])
+  })
+})
+
+describe("characterMentionableAssetArrays", () => {
+  it("includes every variant bucket PLUS a derived `sheets` bucket", () => {
+    const data = {
+      expressions: [{ name: "smile", url: "https://x/s.png" }],
+      sheets: [{ type: "turnaround", skin: "studio", url: "https://x/t.png" }],
+    }
+    const out = characterMentionableAssetArrays(data)
+    expect(out.expressions).toHaveLength(1)
+    expect(out.sheets).toEqual([{ name: "turnaround studio", url: "https://x/t.png" }])
+    // every variant bucket present too
+    for (const b of CHARACTER_VARIANT_ASSET_BUCKETS) expect(out[b]).toBeDefined()
+  })
+})
