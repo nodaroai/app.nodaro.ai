@@ -9,7 +9,7 @@
  * across the combined list, Enter confirms, Esc cancels.
  */
 import { useCallback, useMemo, useRef, useState } from "react"
-import { Link2, Unlink, ArrowDownToLine, ArrowUpFromLine } from "lucide-react"
+import { Link2, Unlink } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useClickOutside } from "@/hooks/use-click-outside"
 import type { ConnectionOption, ConnectionOptions } from "@/lib/enumerate-connection-options"
@@ -136,40 +136,50 @@ export function ConnectNodeDialog({ focusedLabel, newLabel, options, onConfirm, 
           <div className="px-4 pt-2 pb-1 text-[10.5px] font-bold tracking-wider uppercase text-[#94A3B8]">Handles</div>
         )}
         {rows.map((row, i) => {
-          if (row.kind === "handle") {
-            return (
-              <button
-                key={`h-${row.opt.direction}-${row.opt.fHandle}-${row.opt.nHandle}`}
-                type="button"
-                className={rowClass(i === highlight)}
-                onMouseEnter={() => setHighlight(i)}
-                onClick={() => confirm(i)}
-              >
-                {i === highlight && <span className="absolute left-0 top-1 bottom-1 w-[2.5px] rounded bg-[#ff0073]" />}
-                <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: row.opt.color ?? "#94A3B8" }} />
-                <span className="flex-1 text-sm font-medium text-[#1E293B] dark:text-[#e8eaed]">{row.opt.label}</span>
-                {/* Direction relative to the focused node, shown as a highlighted
-                    to/from rather than INPUT/OUTPUT jargon: a `source` option feeds
-                    FROM the focused node into the new one; a `target` option sends
-                    the new node's output TO the focused node. */}
-                {(() => {
-                  const isInput = row.opt.direction === "source"
-                  return (
-                    <span
-                      className={cn(
-                        "flex items-center gap-1 shrink-0 text-xs font-semibold",
-                        isInput ? "text-[#3B82F6]" : "text-[#22C55E]",
-                      )}
-                    >
-                      {isInput ? <ArrowDownToLine className="w-3.5 h-3.5" /> : <ArrowUpFromLine className="w-3.5 h-3.5" />}
-                      {isInput ? `from ${focusedLabel}` : `to ${focusedLabel}`}
-                    </span>
-                  )
-                })()}
-              </button>
-            )
-          }
-          return null
+          if (row.kind !== "handle") return null
+          // Direction relative to the focused ("Current") node: `source` = the
+          // focused node feeds the new one (new runs AFTER current); `target` =
+          // the new node feeds the focused one (new runs BEFORE current). Shown as
+          // a Before/After chip + the New/Current role the wire feeds into, which
+          // replaced the older "from/to {focusedLabel}" wording.
+          const isAfter = row.opt.direction === "source"
+          return (
+            <button
+              key={`h-${row.opt.direction}-${row.opt.fHandle}-${row.opt.nHandle}`}
+              type="button"
+              aria-label={`${isAfter ? "After" : "Before"}: wires into ${isAfter ? "new" : "current"} node, ${row.opt.label}`}
+              className={rowClass(i === highlight)}
+              onMouseEnter={() => setHighlight(i)}
+              onClick={() => confirm(i)}
+            >
+              {i === highlight && <span className="absolute left-0 top-1 bottom-1 w-[2.5px] rounded bg-[#ff0073]" />}
+              <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: row.opt.color ?? "#94A3B8" }} />
+              <span className="flex flex-1 items-center gap-1.5 min-w-0">
+                <span
+                  className={cn(
+                    "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                    isAfter
+                      // green-800 (not -600) so the small uppercase text clears WCAG AA on the pale tint
+                      ? "bg-[#22C55E]/15 text-[#166534] dark:text-[#4ADE80]"
+                      : "bg-[#3B82F6]/15 text-[#2563EB] dark:text-[#60A5FA]",
+                  )}
+                >
+                  {isAfter ? "After" : "Before"}
+                </span>
+                <span className="shrink-0 text-xs text-[#94A3B8]">wires into</span>
+                <span
+                  className={cn(
+                    "shrink-0 text-xs font-semibold",
+                    isAfter ? "text-[#1E293B] dark:text-[#e8eaed]" : "text-[#ff0073]",
+                  )}
+                >
+                  {isAfter ? "New" : "Current"}
+                </span>
+                <span className="shrink-0 text-[#94A3B8]" aria-hidden="true">&rsaquo;</span>
+                <span className="flex-1 truncate text-sm font-medium text-[#1E293B] dark:text-[#e8eaed]">{row.opt.label}</span>
+              </span>
+            </button>
+          )
         })}
 
         {options.variables.length > 0 && (

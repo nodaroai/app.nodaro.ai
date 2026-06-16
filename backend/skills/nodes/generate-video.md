@@ -1,7 +1,7 @@
 ---
 node_type: generate-video
-generated_at: 2026-06-14T18:37:58.564Z
-generated_from: 1034359e5
+generated_at: 2026-06-16T07:25:41.320Z
+generated_from: 286cae6f4
 ---
 
 # Generate Video
@@ -10,7 +10,7 @@ generated_from: 1034359e5
 **Type:** `generate-video`
 **Category:** ai
 **Credit cost:** 20
-**Inputs (target handles):** `startFrame`, `endFrame`, `audio`
+**Inputs (target handles):** `prompt`, `negative`, `startFrame`, `endFrame`, `imageReferences`, `videoReferences`, `audio`, `audioReferences`, `assets`, `elements`, `look`
 **Outputs (source handles):** `video`
 
 **Required data fields:**

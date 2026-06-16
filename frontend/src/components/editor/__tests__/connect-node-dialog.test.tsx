@@ -36,7 +36,7 @@ describe("ConnectNodeDialog", () => {
     expect(screen.getByText("Don’t connect (just add)")).toBeInTheDocument()
   })
 
-  it("labels a source option `from` and a target option `to` the focused node (no INPUT/OUTPUT jargon)", () => {
+  it("tags a source option `After`/`New` and a target option `Before`/`Current` (no from/to or INPUT/OUTPUT jargon)", () => {
     renderDialog({
       handles: [
         handle({ label: "Elements", fHandle: "image", nHandle: "elements", direction: "source" }),
@@ -44,8 +44,18 @@ describe("ConnectNodeDialog", () => {
       ],
       variables: [],
     })
-    expect(screen.getByText("from Hero Shot")).toBeInTheDocument()
-    expect(screen.getByText("to Hero Shot")).toBeInTheDocument()
+    // source = the new node runs AFTER current, wiring INTO the new node
+    expect(screen.getByText("After")).toBeInTheDocument()
+    expect(screen.getByText("New")).toBeInTheDocument()
+    // target = the new node runs BEFORE current, wiring INTO the current node
+    expect(screen.getByText("Before")).toBeInTheDocument()
+    expect(screen.getByText("Current")).toBeInTheDocument()
+    // the consumer-handle labels still render
+    expect(screen.getByText("Elements")).toBeInTheDocument()
+    expect(screen.getByText("Prompt")).toBeInTheDocument()
+    // old wording gone
+    expect(screen.queryByText("from Hero Shot")).toBeNull()
+    expect(screen.queryByText("to Hero Shot")).toBeNull()
     expect(screen.queryByText("INPUT")).toBeNull()
     expect(screen.queryByText("OUTPUT")).toBeNull()
   })

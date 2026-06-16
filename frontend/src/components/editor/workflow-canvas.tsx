@@ -1535,10 +1535,13 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     [getNode, addNode, onConnect, screenToFlowPosition],
   )
 
-  // Auto-connect: a node type was picked. Smart Connect (default) skips the
+  // Auto-connect: a node type was picked. Smart Connect (when on) would skip the
   // dialog — auto-pick the handle + name within the entry direction and wire
   // immediately; otherwise open the Connect dialog for manual naming + wiring.
-  // (Only reached when Auto Connect is on — the popup gates onPickType on it.)
+  // Smart Connect is currently force-OFF (getSmartConnectPref() always returns
+  // false — see auto-connect-pref.ts), so in practice the dialog ALWAYS opens;
+  // the branch below is retained for one-line restoration. (Only reached when
+  // Auto Connect is on — the popup gates onPickType on it.)
   const handlePickType = useCallback(
     (type: SceneNodeType, initialData?: Record<string, unknown>) => {
       const ctx = autoConnectCtx

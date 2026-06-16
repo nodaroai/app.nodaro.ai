@@ -37,5 +37,14 @@ export const setAutoConnectPref = autoConnectPref.set
  */
 export const SMART_CONNECT_KEY = "nodaro:smartConnect"
 const smartConnectPref = makeBoolPref(SMART_CONNECT_KEY, true)
-export const getSmartConnectPref = smartConnectPref.get
+/**
+ * Smart Connect is currently DISABLED (its toggle is hidden in the Add Node
+ * popup): picking a node always opens the Connect dialog instead of silently
+ * auto-wiring. We force the getter to `false` here — the single chokepoint the
+ * canvas reads at pick time — so any stale `nodaro:smartConnect=1` in a user's
+ * localStorage is ignored. The pref plumbing (`smartConnectPref`,
+ * `setSmartConnectPref`) is intentionally kept so restoring is a one-line
+ * change: swap this back to `smartConnectPref.get`.
+ */
+export const getSmartConnectPref = (): boolean => false
 export const setSmartConnectPref = smartConnectPref.set

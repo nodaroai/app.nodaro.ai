@@ -301,19 +301,22 @@ describe("AddNodePopup auto-connect", () => {
     expect(screen.getByText("Hero Prompt")).toBeInTheDocument()
   })
 
-  it("renders the Auto + Smart toggles (focused node) and persists toggling Auto", () => {
+  it("renders only the Auto Connect toggle (Smart toggle hidden) and persists toggling Auto", () => {
     renderPopup({ autoConnectCtx: focusedCtx, onPickType: vi.fn() })
     const auto = screen.getByRole("switch", { name: "Auto-connect" })
     expect(auto).toBeInTheDocument()
-    // Smart shows while Auto is on (default).
-    expect(screen.getByRole("switch", { name: "Smart connect" })).toBeInTheDocument()
+    // Smart Connect is disabled (force-OFF in auto-connect-pref.ts) → its toggle
+    // is never rendered, so picking a node always opens the Connect dialog.
+    expect(screen.queryByRole("switch", { name: "Smart connect" })).toBeNull()
     fireEvent.click(auto)
     expect(localStorage.getItem("nodaro:autoConnect")).toBe("0")
   })
 
-  it("hides the Smart toggle when Auto Connect is off", () => {
+  it("never shows the Smart toggle, regardless of Auto Connect state", () => {
     renderPopup({ autoConnectCtx: focusedCtx, onPickType: vi.fn() })
-    fireEvent.click(screen.getByRole("switch", { name: "Auto-connect" }))
+    // Auto on by default (where Smart used to appear) → still hidden.
+    expect(screen.queryByRole("switch", { name: "Smart connect" })).toBeNull()
+    fireEvent.click(screen.getByRole("switch", { name: "Auto-connect" })) // flip Auto off
     expect(screen.queryByRole("switch", { name: "Smart connect" })).toBeNull()
   })
 
