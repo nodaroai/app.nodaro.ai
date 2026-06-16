@@ -33,6 +33,7 @@ import {
   createCharacterTraining,
   cancelCharacterTraining,
   deleteCharacterLora,
+  characterModelDestination,
 } from "../providers/replicate/training.js"
 
 const idParams = z.object({ id: z.string().uuid() })
@@ -274,6 +275,13 @@ export async function characterTrainingRoutes(app: FastifyInstance): Promise<voi
             .send({ error: err.code, count: err.count, message })
           return
         }
+        // Surface the real failure — this catch previously put the reason only
+        // in the response body, leaving the 502 opaque in logs (which is what
+        // made the missing-destination-model bug hard to spot).
+        req.log.error(
+          { err, characterId, jobId },
+          "[character-lora] training dispatch failed",
+        )
         reply.code(502).send({ error: "training_dispatch_failed", message })
         return
       }
@@ -378,7 +386,7 @@ export async function characterTrainingRoutes(app: FastifyInstance): Promise<voi
       }
 
       // Always: delete the Replicate model. Idempotent (404 swallowed).
-      await deleteCharacterLora(`nodaroai/char-${params.data.id}`)
+      await deleteCharacterLora(await characterModelDestination(params.data.id))
 
       await supabase
         .from("characters")
