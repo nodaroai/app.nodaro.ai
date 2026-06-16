@@ -12,6 +12,7 @@ import { orderNodesParentFirst } from "@/components/editor/workflow-editor/group
 import { isStudioWorkflowSettings } from "@/lib/studio"
 import { isValidUuid } from "@/lib/uuid"
 import { collectRestorableSingleNodeJobs, applySingleNodeJobRestore } from "@/lib/single-node-restore"
+import { hydrateCharacterNodeFromDetail } from "@/lib/character-node-data"
 
 interface StillRunningJob {
   readonly nodeId: string
@@ -1009,6 +1010,24 @@ export function useWorkflowPersistence(projectId?: string) {
         // user can manually re-run if reconciliation can't reach the job.
         const { updateNodeData: storeUpdateNodeData } = useWorkflowStore.getState()
         reconcileWorkflowNodeResults(nodes, storeUpdateNodeData).catch(() => {})
+
+        // Refresh each placed character node from its live DB row. Character
+        // assets (expressions, poses, wardrobe, …) are added in the Character
+        // Studio AFTER a node is placed, so the saved workflow JSON holds a STALE
+        // snapshot — without this, studio-added assets never appear in the node,
+        // the reference picker, or the @-mention list on reload (the "whole
+        // expressions/poses missing" report). Fire-and-forget + self-guarded
+        // (skips deleted / re-issued / non-character nodes) and a no-op when the
+        // detail is unchanged. Skip read-only (Studio) workflows — Studio owns
+        // their writes.
+        if (!useWorkflowStore.getState().isReadOnly) {
+          for (const n of nodes) {
+            const dbId = (n.data as Record<string, unknown> | undefined)?.characterDbId
+            if (n.type === "character" && typeof dbId === "string" && dbId) {
+              hydrateCharacterNodeFromDetail(n.id, dbId)
+            }
+          }
+        }
 
         // Prefetch model credit costs for all nodes in one batch request
         const modelIds = [...new Set(

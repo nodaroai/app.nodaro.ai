@@ -9,6 +9,7 @@ import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeExecutionState } from 
 import { collectAncestorRefs as sharedCollectAncestorRefs } from "@nodaro/shared"
 import { buildImagePrompt, assembleImageInput, buildScenePrompt, applyReferenceOrderToVideo } from "@nodaro/shared"
 import { collectIdentityLockClause as sharedCollectIdentityLockClause } from "@nodaro/shared"
+import { characterMentionableAssetArrays } from "@nodaro/shared"
 import { resolveTemplate, applyTemplate } from "@nodaro/shared"
 import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt, resolveVideoProviderForMode, videoProviderRequiresImage } from "@nodaro/shared"
 import { buildLipSyncCreditId, isPerSecondLipSyncProvider } from "@nodaro/shared"
@@ -125,16 +126,6 @@ function collectAncestorRefs(
 // CharacterNodeData in camelCase; the snake_case `characters` DB row is
 // distinct and not what flows through SimpleNode.data).
 // ---------------------------------------------------------------------------
-
-interface CharacterAssetItem {
-  readonly name?: string
-  readonly url?: string
-}
-
-function asAssetItems(value: unknown): readonly CharacterAssetItem[] {
-  if (!Array.isArray(value)) return []
-  return value as readonly CharacterAssetItem[]
-}
 
 /**
  * Build a complete `connectedReferences` list for an image-gen / i2i node.
@@ -325,14 +316,9 @@ function expandWiredCharacterRefs(
       })
     }
 
-    const assetArrays: Record<string, readonly CharacterAssetItem[]> = {
-      expressions: asAssetItems(charData.expressions),
-      poses: asAssetItems(charData.poses),
-      motions: asAssetItems(charData.motions),
-      angles: asAssetItems(charData.angles),
-      bodyAngles: asAssetItems(charData.bodyAngles),
-      lightingVariations: asAssetItems(charData.lightingVariations),
-    }
+    // All {name,url}[] variant buckets (incl. wardrobe + detail close-ups) —
+    // single source of truth shared with the frontend expansion sites.
+    const assetArrays = characterMentionableAssetArrays(charData as unknown as Record<string, unknown>)
     for (const [arrayName, items] of Object.entries(assetArrays)) {
       for (const item of items) {
         if (!item?.url) continue

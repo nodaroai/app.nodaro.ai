@@ -35,7 +35,7 @@ import type {
   CharacterNodeData,
 } from "@/types/nodes"
 import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, VIDEO_GEN_MODELS, MOTION_TRANSFER_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, VIDEO_DURATION_OPTIONS, VIDEO_FPS_OPTIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, EXTEND_VIDEO_MODELS, getVideoResolutionOptions, getAspectRatiosForVideoModel, getVideoModelCapabilitiesTooltip } from "./model-options"
-import { isSeedance2Provider, MODEL_CATALOG, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, buildVideoCreditModelIdentifier, characterMentionSlug, DEFAULT_LABEL_BY_SOURCE, locationMentionSlug } from "@nodaro/shared"
+import { isSeedance2Provider, MODEL_CATALOG, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, buildVideoCreditModelIdentifier, characterMentionSlug, characterMentionableAssetArrays, DEFAULT_LABEL_BY_SOURCE, locationMentionSlug } from "@nodaro/shared"
 import { PromptLengthCounter } from "./prompt-length-counter"
 import type { ReferenceSource } from "@nodaro/shared"
 import { ModelSearchSelect } from "./model-search-select"
@@ -171,14 +171,9 @@ function buildVideoRefAutocomplete(
             loraTrainingStatus,
           })
         }
-        const assetArrays: Record<string, ReadonlyArray<{ readonly name: string; readonly url: string }>> = {
-          expressions: charData.expressions ?? [],
-          poses: charData.poses ?? [],
-          motions: charData.motions ?? [],
-          angles: charData.angles ?? [],
-          bodyAngles: charData.bodyAngles ?? [],
-          lightingVariations: charData.lightingVariations ?? [],
-        }
+        // All {name,url}[] variant buckets (incl. wardrobe + detail close-ups) +
+        // sheets — single source of truth shared with the image expansion sites.
+        const assetArrays = characterMentionableAssetArrays(charData as unknown as Record<string, unknown>)
         for (const [arrayName, items] of Object.entries(assetArrays)) {
           for (const item of items) {
             if (!item.url) continue

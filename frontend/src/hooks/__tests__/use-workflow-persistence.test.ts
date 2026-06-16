@@ -7,6 +7,7 @@ import { renderHook, act } from "@testing-library/react"
 
 const mockGetBatchJobStatus = vi.fn()
 const mockListWorkflowExecutions = vi.fn()
+const mockGetCharacter = vi.fn()
 const mockSupabaseFrom = vi.fn()
 const mockLoadWorkflow = vi.fn()
 const mockSetWorkflowId = vi.fn()
@@ -30,6 +31,7 @@ vi.mock("@/ee/hooks/queries/use-credits-queries", () => ({
 vi.mock("@/lib/api", () => ({
   getBatchJobStatus: (...args: unknown[]) => mockGetBatchJobStatus(...args),
   listWorkflowExecutions: (...args: unknown[]) => mockListWorkflowExecutions(...args),
+  getCharacter: (...args: unknown[]) => mockGetCharacter(...args),
 }))
 
 vi.mock("@/lib/supabase", () => ({
@@ -1158,5 +1160,61 @@ describe("useWorkflowPersistence — single-node restore via load (Gap 3)", () =
       expect(n.data).not.toHaveProperty("currentJobProgress")
       expect(n.data).not.toHaveProperty("executionStatus")
     }
+  })
+})
+
+// ===========================================================================
+// Character-node re-hydration on load (stale studio assets)
+//
+// Character assets (expressions, poses, wardrobe, …) are added in the Character
+// Studio AFTER a node is placed, so a saved workflow holds a stale snapshot.
+// load() must refresh each placed character node from its live DB row, else
+// studio-added assets never appear in the node / reference picker / @ list.
+// ===========================================================================
+
+describe("useWorkflowPersistence — character node re-hydration on load", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockGetBatchJobStatus.mockResolvedValue([])
+    mockListWorkflowExecutions.mockResolvedValue({ data: [] })
+    mockGetCharacter.mockResolvedValue({ id: "char-A", name: "Kira", expressions: [], poses: [], pendingJobs: [] })
+  })
+
+  it("fetches the live DB row for each placed character node (and only those)", async () => {
+    setupSupabaseLoad({
+      id: "w1",
+      name: "WF",
+      nodes: [
+        makeNode({ id: "c1", type: "character", data: { characterDbId: "char-A", executionStatus: "idle" } }),
+        makeNode({ id: "t1", type: "text-prompt", data: { executionStatus: "idle" } }),
+      ],
+      edges: [],
+    })
+
+    const { result } = renderHook(() => useWorkflowPersistence("p1"))
+    await act(async () => {
+      await result.current.load("w1")
+    })
+
+    // The character node's live row is fetched so studio-added assets refresh…
+    expect(mockGetCharacter).toHaveBeenCalledWith("char-A")
+    // …and non-character (and dbId-less) nodes don't trigger a character fetch.
+    expect(mockGetCharacter).toHaveBeenCalledTimes(1)
+  })
+
+  it("does not fetch when a character node has no characterDbId (never saved to library)", async () => {
+    setupSupabaseLoad({
+      id: "w1",
+      name: "WF",
+      nodes: [makeNode({ id: "c1", type: "character", data: { executionStatus: "idle" } })],
+      edges: [],
+    })
+
+    const { result } = renderHook(() => useWorkflowPersistence("p1"))
+    await act(async () => {
+      await result.current.load("w1")
+    })
+
+    expect(mockGetCharacter).not.toHaveBeenCalled()
   })
 })
