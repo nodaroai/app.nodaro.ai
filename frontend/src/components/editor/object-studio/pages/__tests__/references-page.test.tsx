@@ -12,6 +12,9 @@ import type { ObjectStudioJobs } from "../../use-object-studio-jobs"
 const stubJobs: ObjectStudioJobs = {
   tracked: [],
   trackJob: vi.fn(),
+  beginJob: vi.fn(() => "optimistic:test"),
+  settleJob: vi.fn(),
+  abortJob: vi.fn(),
   onResolved: vi.fn(),
   onFailed: vi.fn(),
 }

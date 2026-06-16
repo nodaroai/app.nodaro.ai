@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import {
   OBJECT_MOTION_PROVIDERS,
@@ -6,6 +7,8 @@ import {
 } from "@nodaro/shared"
 import { generateObjectMotion } from "@/lib/api"
 import { useObjectStudioJobs } from "./use-object-studio-jobs"
+import { PresetChips } from "../studio-shell/preset-chips"
+import { lowerNameSet } from "../studio-shell/preset-state"
 import type { ObjectStudioState } from "./use-object-studio"
 import type { ObjectAssetItem, ObjectNodeData } from "@/types/nodes"
 
@@ -80,9 +83,12 @@ export function MotionTab({ studio }: MotionTabProps) {
       toast.error("Approve a main image first")
       return
     }
+    const trimmed = motionPrompt.slice(0, 200)
+    // Optimistic "Generating…" card immediately — before the save + generate
+    // round-trips. settleJob swaps it for the real job; abortJob drops it on failure.
+    const tempId = jobs.beginJob("motion_clips", trimmed)
     try {
       const objectDbId = await studio.ensureSavedBeforeGen()
-      const trimmed = motionPrompt.slice(0, 200)
       const result = await generateObjectMotion({
         motionPrompt,
         sourceImageUrl: data.sourceImageUrl,
@@ -95,12 +101,9 @@ export function MotionTab({ studio }: MotionTabProps) {
         attachToObjectId: objectDbId,
         attachName: trimmed,
       })
-      jobs.trackJob({
-        jobId: result.jobId,
-        assetType: "motion_clips",
-        name: trimmed,
-      })
+      jobs.settleJob(tempId, result.jobId)
     } catch {
+      jobs.abortJob(tempId)
       // ensureSavedBeforeGen / generateObjectMotion already toast on failure.
     }
   }
@@ -145,6 +148,8 @@ export function MotionTab({ studio }: MotionTabProps) {
   }
 
   const trackedMotions = jobs.tracked.filter((j) => j.assetType === "motion_clips")
+  const createdNames = lowerNameSet(items)
+  const busyNames = lowerNameSet(trackedMotions)
   const customDisabled = disabled || !customPrompt.trim()
   const presetTooltip = noSourceImage ? "Approve a main image first" : undefined
 
@@ -202,9 +207,10 @@ export function MotionTab({ studio }: MotionTabProps) {
         {trackedMotions.map((j) => (
           <div
             key={j.jobId}
-            className="aspect-square border border-[#1e293b] rounded bg-[#0e1117] flex items-center justify-center text-[11px] text-slate-400"
+            className="aspect-square border border-[#1e293b] rounded bg-[#0e1117] flex flex-col items-center justify-center gap-2 text-[11px] text-slate-400"
           >
-            Generating {j.name}…
+            <Loader2 className="w-4 h-4 animate-spin text-slate-500" />
+            <span className="truncate max-w-full px-2">Generating {j.name}…</span>
           </div>
         ))}
         {items.length === 0 && trackedMotions.length === 0 && (
@@ -255,20 +261,14 @@ export function MotionTab({ studio }: MotionTabProps) {
       </div>
 
       {/* Preset chips */}
-      <div className="flex flex-wrap gap-2">
-        {MOTION_PRESETS.map((p) => (
-          <button
-            key={p}
-            type="button"
-            onClick={() => handlePresetClick(p)}
-            disabled={disabled}
-            title={presetTooltip}
-            className="px-3 py-1 text-[11px] rounded bg-[#1a1d27] hover:bg-[#1e293b] border border-[#1e293b] text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {p}
-          </button>
-        ))}
-      </div>
+      <PresetChips
+        presets={MOTION_PRESETS}
+        createdNames={createdNames}
+        busyNames={busyNames}
+        disabled={disabled}
+        disabledHint={presetTooltip}
+        onPick={(p) => void handlePresetClick(p)}
+      />
 
       {/* Custom prompt */}
       <div className="flex gap-2">

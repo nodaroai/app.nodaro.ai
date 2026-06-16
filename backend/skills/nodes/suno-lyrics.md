@@ -1,7 +1,7 @@
 ---
 node_type: suno-lyrics
-generated_at: 2026-05-18T13:23:37.406Z
-generated_from: cb1e786d
+generated_at: 2026-06-16T08:22:28.311Z
+generated_from: 877dfa01a
 ---
 
 # Suno Lyrics
@@ -10,7 +10,7 @@ generated_from: cb1e786d
 **Type:** `suno-lyrics`
 **Category:** ai
 **Credit cost:** 1
-**Inputs (target handles):** `in`
+**Inputs (target handles):** `prompt`
 **Outputs (source handles):** `text`
 
 **Required data fields:**

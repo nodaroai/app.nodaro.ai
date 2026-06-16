@@ -1,7 +1,7 @@
 ---
 node_type: transcribe
-generated_at: 2026-05-18T13:23:37.466Z
-generated_from: cb1e786d
+generated_at: 2026-06-16T08:22:28.390Z
+generated_from: 877dfa01a
 ---
 
 # Transcribe
@@ -10,7 +10,7 @@ generated_from: cb1e786d
 **Type:** `transcribe`
 **Category:** ai
 **Credit cost:** 3
-**Inputs (target handles):** `in`
+**Inputs (target handles):** `audio`
 **Outputs (source handles):** `text`
 
 **Required data fields:**

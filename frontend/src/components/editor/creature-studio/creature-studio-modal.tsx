@@ -53,6 +53,9 @@ interface CreatureStudioModalProps {
 const INERT_JOBS: CreatureStudioJobs = {
   tracked: [],
   trackJob: () => {},
+  beginJob: () => "",
+  settleJob: () => {},
+  abortJob: () => {},
   onResolved: () => {},
   onFailed: () => {},
 }

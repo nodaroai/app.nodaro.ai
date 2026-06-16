@@ -1,7 +1,7 @@
 ---
 node_type: image-to-text
-generated_at: 2026-05-18T13:23:37.471Z
-generated_from: cb1e786d
+generated_at: 2026-06-16T08:22:28.397Z
+generated_from: 877dfa01a
 ---
 
 # Describe Image
@@ -10,7 +10,7 @@ generated_from: cb1e786d
 **Type:** `image-to-text`
 **Category:** ai
 **Credit cost:** 1
-**Inputs (target handles):** `image`
+**Inputs (target handles):** `image`, `video`, `text`
 **Outputs (source handles):** `text`
 
 **Required data fields:**

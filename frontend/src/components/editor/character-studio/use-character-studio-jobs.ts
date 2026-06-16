@@ -16,6 +16,12 @@ interface PendingJob {
    *  the worker starts ramping. Used by the spinner card to render the
    *  progress bar. */
   progress: number
+  /** True for a client-side placeholder added by `begin()` BEFORE the
+   *  generate request has returned a real jobId. The poll loop skips these
+   *  (there's nothing to GET yet); `settle()` swaps it for the real id and
+   *  `abort()` removes it. Lets the spinner card appear the instant the user
+   *  clicks, instead of after the ensureSaved + generate round-trips. */
+  optimistic?: boolean
 }
 
 interface ResolvedAsset {
@@ -25,8 +31,19 @@ interface ResolvedAsset {
 }
 
 export interface CharacterStudioJobs {
-  /** jobId -> pending metadata; consumers render a spinner card for each */
+  /** jobId (or optimistic temp id) -> pending metadata; consumers render a
+   *  spinner card for each */
   pending: Map<string, PendingJob>
+  /** Optimistically add a placeholder spinner card and return its temp id —
+   *  call this synchronously on click, BEFORE awaiting ensureSaved/generate,
+   *  so the UI reacts instantly. Follow with `settle(tempId, realJobId)` once
+   *  the generate request returns, or `abort(tempId)` if it throws. */
+  begin: (assetType: StudioAssetType, name: string) => string
+  /** Replace an optimistic placeholder with its real jobId so the poll loop
+   *  picks it up. No-op if the placeholder was cancelled/aborted meanwhile. */
+  settle: (tempId: string, jobId: string) => void
+  /** Drop an optimistic placeholder (the generate request failed). */
+  abort: (tempId: string) => void
   /** add a job to track */
   track: (jobId: string, assetType: StudioAssetType, name: string) => void
   /** Like `track`, but also returns a Promise that resolves with the asset URL
@@ -68,11 +85,45 @@ export function useCharacterStudioJobs(
   const waitersRef = useRef<Map<string, { resolve: (url: string) => void; reject: (err: Error) => void }>>(
     new Map(),
   )
+  // Monotonic counter for optimistic placeholder ids. A ref (not state) so
+  // bumping it never re-renders and ids stay unique for the hook's lifetime.
+  const optimisticSeq = useRef(0)
 
   const track = useCallback((jobId: string, assetType: StudioAssetType, name: string) => {
     setPending((prev) => {
       const next = new Map(prev)
       next.set(jobId, { assetType, name, progress: 0 })
+      return next
+    })
+  }, [])
+
+  const begin = useCallback((assetType: StudioAssetType, name: string): string => {
+    const tempId = `optimistic:${optimisticSeq.current++}`
+    setPending((prev) => {
+      const next = new Map(prev)
+      next.set(tempId, { assetType, name, progress: 0, optimistic: true })
+      return next
+    })
+    return tempId
+  }, [])
+
+  const settle = useCallback((tempId: string, jobId: string) => {
+    setPending((prev) => {
+      const cur = prev.get(tempId)
+      // Cancelled/aborted before the request returned — don't resurrect it.
+      if (!cur) return prev
+      const next = new Map(prev)
+      next.delete(tempId)
+      next.set(jobId, { assetType: cur.assetType, name: cur.name, progress: 0 })
+      return next
+    })
+  }, [])
+
+  const abort = useCallback((tempId: string) => {
+    setPending((prev) => {
+      if (!prev.has(tempId)) return prev
+      const next = new Map(prev)
+      next.delete(tempId)
       return next
     })
   }, [])
@@ -96,6 +147,9 @@ export function useCharacterStudioJobs(
   )
 
   const cancel = useCallback(async (jobId: string) => {
+    // Snapshot whether this is an optimistic placeholder before we drop it —
+    // those have no server-side job to cancel.
+    const wasOptimistic = pendingRef.current.get(jobId)?.optimistic
     // Drop the spinner immediately for snappy UX — the backend call confirms
     // server-side cancellation in the background. If the cancel actually fails,
     // the next poll cycle would re-surface the job, but for that to happen the
@@ -115,6 +169,9 @@ export function useCharacterStudioJobs(
       waitersRef.current.delete(jobId)
       waiter.reject(new Error("cancelled"))
     }
+    // Optimistic placeholder: the generate request hasn't returned a jobId, so
+    // there's nothing for the backend to cancel.
+    if (wasOptimistic) return
     try {
       await cancelJob(jobId)
     } catch {
@@ -133,6 +190,9 @@ export function useCharacterStudioJobs(
     timer.current = setInterval(async () => {
       const snapshot = pendingRef.current
       for (const jobId of Array.from(snapshot.keys())) {
+        // Optimistic placeholders carry a temp id with no backend job yet —
+        // skip them so we don't fire a doomed GET every tick.
+        if (pendingRef.current.get(jobId)?.optimistic) continue
         try {
           const job = await getJobStatusLean(jobId)
           const meta = pendingRef.current.get(jobId)
@@ -197,5 +257,5 @@ export function useCharacterStudioJobs(
     }
   }, [])
 
-  return { pending, track, trackAndWait, cancel, runningTypes }
+  return { pending, begin, settle, abort, track, trackAndWait, cancel, runningTypes }
 }

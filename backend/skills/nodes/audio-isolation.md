@@ -1,7 +1,7 @@
 ---
 node_type: audio-isolation
-generated_at: 2026-05-18T13:23:37.478Z
-generated_from: cb1e786d
+generated_at: 2026-06-16T08:22:28.410Z
+generated_from: 877dfa01a
 ---
 
 # Voice Extractor
@@ -10,7 +10,7 @@ generated_from: cb1e786d
 **Type:** `audio-isolation`
 **Category:** ai
 **Credit cost:** 1
-**Inputs (target handles):** `in`
+**Inputs (target handles):** `audio`
 **Outputs (source handles):** `audio`
 
 **Required data fields:**

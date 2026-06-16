@@ -1,7 +1,7 @@
 ---
 node_type: combine-text
-generated_at: 2026-06-04T12:41:29.078Z
-generated_from: 9bf1388db
+generated_at: 2026-06-16T08:22:28.813Z
+generated_from: 877dfa01a
 ---
 
 # Combine Text
@@ -10,7 +10,7 @@ generated_from: 9bf1388db
 **Type:** `combine-text`
 **Category:** utility
 **Credit cost:** 0
-**Inputs (target handles):** `in`
+**Inputs (target handles):** `text`
 **Outputs (source handles):** `text`
 
 **Required data fields:**

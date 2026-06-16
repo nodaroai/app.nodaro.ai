@@ -21,6 +21,9 @@ import type { CreatureStudioJobs } from "../use-creature-studio-jobs"
 const stubJobs: CreatureStudioJobs = {
   tracked: [],
   trackJob: vi.fn(),
+  beginJob: vi.fn(() => ""),
+  settleJob: vi.fn(),
+  abortJob: vi.fn(),
   onResolved: vi.fn(),
   onFailed: vi.fn(),
 }

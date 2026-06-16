@@ -1,7 +1,7 @@
 ---
 node_type: video-upscale
-generated_at: 2026-05-18T13:23:37.682Z
-generated_from: cb1e786d
+generated_at: 2026-06-16T08:22:28.674Z
+generated_from: 877dfa01a
 ---
 
 # Upscale Video
@@ -10,7 +10,7 @@ generated_from: cb1e786d
 **Type:** `video-upscale`
 **Category:** processing
 **Credit cost:** 15
-**Inputs (target handles):** `in`
+**Inputs (target handles):** `video`
 **Outputs (source handles):** `video`
 
 **Required data fields:**

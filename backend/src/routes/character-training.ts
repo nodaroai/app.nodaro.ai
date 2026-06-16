@@ -84,28 +84,30 @@ export async function characterTrainingRoutes(app: FastifyInstance): Promise<voi
       }
       const selectedImageUrls = body.data?.selectedImageUrls
 
-      // Step 0 — atomic CAS slot claim. `.or()` because Supabase JS `.in()`
-      // does NOT match NULL values; we need both "never trained" and
-      // "previously terminal" states to be claimable.
-      const { data: claimed, error: claimErr } = await supabase
-        .from("characters")
-        .update({
-          lora_training_status: "queued",
-          lora_training_error: null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", characterId)
-        .eq("user_id", req.userId)
-        .is("deleted_at", null)
-        .or(
-          "lora_training_status.is.null,lora_training_status.in.(succeeded,failed,cancelled)",
-        )
-        .select("id")
+      // Step 0 — atomic CAS slot claim via RPC (migration 226). This was a bare
+      // supabase-js UPDATE carrying an `.or()` filter AND `.select()`
+      // (RETURNING); PostgREST mis-compiles that combination to invalid SQL
+      // (42703 "column characters.lora_training_status does not exist"), which
+      // 500'd EVERY train request — silently, because the error was swallowed
+      // as `claim_failed`. The RPC runs the identical conditional
+      // UPDATE...RETURNING as a function body, immune to that quirk, and is the
+      // atomic-claim pattern this codebase mandates (cf. claim_job_finalize).
+      // It returns the claimed character id, or null when the slot is in-flight
+      // (queued/training) or the row isn't owned / was soft-deleted.
+      const { data: claimedId, error: claimErr } = await supabase.rpc(
+        "claim_character_lora_training",
+        { p_character_id: characterId, p_user_id: req.userId },
+      )
       if (claimErr) {
+        // Surface the DB error — swallowing it is exactly what hid this bug.
+        req.log.error(
+          { err: claimErr, characterId },
+          "[character-lora] claim RPC failed",
+        )
         reply.code(500).send({ error: "claim_failed" })
         return
       }
-      if (!claimed?.length) {
+      if (!claimedId) {
         reply.code(409).send({ error: "already_training_or_not_found" })
         return
       }

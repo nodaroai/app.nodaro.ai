@@ -1,7 +1,7 @@
 ---
 node_type: suno-generate
-generated_at: 2026-05-18T20:01:15.992Z
-generated_from: 866224d8
+generated_at: 2026-06-16T08:22:28.285Z
+generated_from: 877dfa01a
 ---
 
 # Suno Generate
@@ -10,7 +10,7 @@ generated_from: 866224d8
 **Type:** `suno-generate`
 **Category:** ai
 **Credit cost:** 3
-**Inputs (target handles):** `in`
+**Inputs (target handles):** `prompt`, `audio-style`, `voice`
 **Outputs (source handles):** `audio`
 
 **Required data fields:**

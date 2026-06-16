@@ -1,7 +1,7 @@
 ---
 node_type: speech-to-video
-generated_at: 2026-06-11T18:52:25.288Z
-generated_from: 36d155ff
+generated_at: 2026-06-16T08:22:28.647Z
+generated_from: 877dfa01a
 ---
 
 # Speech to Video
@@ -10,7 +10,7 @@ generated_from: 36d155ff
 **Type:** `speech-to-video`
 **Category:** ai
 **Credit cost:** 4
-**Inputs (target handles):** `image`, `audio`, `prompt`
+**Inputs (target handles):** `image`, `audio`, `prompt`, `cinematography`
 **Outputs (source handles):** `video`
 
 **Required data fields:**

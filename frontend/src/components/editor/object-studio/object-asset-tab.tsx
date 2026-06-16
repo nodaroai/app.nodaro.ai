@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
+import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import {
   MATERIALS,
@@ -10,6 +11,8 @@ import {
 } from "@nodaro/shared"
 import { generateObjectAsset } from "@/lib/api"
 import { useObjectStudioJobs } from "./use-object-studio-jobs"
+import { PresetChips } from "../studio-shell/preset-chips"
+import { lowerNameSet } from "../studio-shell/preset-state"
 import type { ObjectStudioState } from "./use-object-studio"
 import type { ObjectAssetItem, ObjectNodeData } from "@/types/nodes"
 
@@ -85,9 +88,13 @@ export function ObjectAssetTab({
 
   async function fireGen(variant: string, isCustom: boolean, seedPromptHint?: string): Promise<void> {
     if (!data) return
+    const trimmedVariant = isCustom ? variant.slice(0, 100) : variant
+    // Optimistic "Generating…" card the instant the user clicks — before the
+    // save + generate round-trips. settleJob swaps it for the real job;
+    // abortJob drops it on any failure.
+    const tempId = jobs.beginJob(tabKind, trimmedVariant)
     try {
       const objectDbId = await studio.ensureSavedBeforeGen()
-      const trimmedVariant = isCustom ? variant.slice(0, 100) : variant
       const result = await generateObjectAsset({
         assetType: isCustom ? "custom" : tabKind,
         variant: trimmedVariant,
@@ -105,8 +112,9 @@ export function ObjectAssetTab({
         attachName: trimmedVariant,
         ...(seedPromptHint ? { seedPromptHint } : {}),
       })
-      jobs.trackJob({ jobId: result.jobId, assetType: tabKind, name: trimmedVariant })
+      jobs.settleJob(tempId, result.jobId)
     } catch {
+      jobs.abortJob(tempId)
       // ensureSavedBeforeGen / generateObjectAsset already toast on failure.
     }
   }
@@ -159,6 +167,10 @@ export function ObjectAssetTab({
   }
 
   const trackedForBucket = jobs.tracked.filter((j) => j.assetType === tabKind)
+  // Chip states: "created" once an asset of that name exists, "creating" while
+  // a job (real or optimistic) is in flight.
+  const createdNames = lowerNameSet(items)
+  const busyNames = lowerNameSet(trackedForBucket)
   const customDisabled = disabled || !customPrompt.trim()
 
   return (
@@ -204,9 +216,10 @@ export function ObjectAssetTab({
         {trackedForBucket.map((j) => (
           <div
             key={j.jobId}
-            className="aspect-square border border-[#1e293b] rounded bg-[#0e1117] flex items-center justify-center text-[11px] text-slate-400"
+            className="aspect-square border border-[#1e293b] rounded bg-[#0e1117] flex flex-col items-center justify-center gap-2 text-[11px] text-slate-400"
           >
-            Generating {j.name}…
+            <Loader2 className="w-4 h-4 animate-spin text-slate-500" />
+            <span className="truncate max-w-full px-2">Generating {j.name}…</span>
           </div>
         ))}
         {items.length === 0 && trackedForBucket.length === 0 && (
@@ -217,19 +230,13 @@ export function ObjectAssetTab({
       </div>
 
       {/* Preset chips */}
-      <div className="flex flex-wrap gap-2">
-        {presets.map((p) => (
-          <button
-            key={p}
-            type="button"
-            onClick={() => handlePresetClick(p)}
-            disabled={disabled}
-            className="px-3 py-1 text-[11px] rounded bg-[#1a1d27] hover:bg-[#1e293b] border border-[#1e293b] text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {p}
-          </button>
-        ))}
-      </div>
+      <PresetChips
+        presets={presets}
+        createdNames={createdNames}
+        busyNames={busyNames}
+        disabled={disabled}
+        onPick={(p) => void handlePresetClick(p)}
+      />
 
       {/* Custom prompt */}
       <div className="flex gap-2">
@@ -322,7 +329,7 @@ export function MaterialCatalogBrowser({ disabled, onPick }: MaterialCatalogBrow
                   }}
                   disabled={disabled}
                   title={m.description}
-                  className="px-2.5 py-1 text-[11px] rounded bg-[#1a1d27] hover:bg-[#1e293b] border border-[#1e293b] text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="px-2.5 py-1 text-[11px] rounded bg-[#1a1d27] hover:bg-[#1e293b] border border-[#1e293b] text-slate-300 transition-transform active:scale-95 disabled:active:scale-100 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {m.label}
                 </button>

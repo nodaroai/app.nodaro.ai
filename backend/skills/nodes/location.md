@@ -1,7 +1,7 @@
 ---
 node_type: location
-generated_at: 2026-06-07T18:49:01.975Z
-generated_from: db2337ab
+generated_at: 2026-06-16T08:22:28.774Z
+generated_from: 877dfa01a
 ---
 
 # Location
@@ -10,7 +10,7 @@ generated_from: db2337ab
 **Type:** `location`
 **Category:** location
 **Credit cost:** 5
-**Inputs (target handles):** `in`
+**Inputs (target handles):** `in`, `cinematography`
 **Outputs (source handles):** `locationRef`
 
 **Required data fields:**

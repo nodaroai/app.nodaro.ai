@@ -1,7 +1,7 @@
 ---
 node_type: voice-changer
-generated_at: 2026-06-03T12:31:40.625Z
-generated_from: 57683c07
+generated_at: 2026-06-16T08:22:28.425Z
+generated_from: 877dfa01a
 ---
 
 # Voice Changer
@@ -10,7 +10,7 @@ generated_from: 57683c07
 **Type:** `voice-changer`
 **Category:** ai
 **Credit cost:** 4
-**Inputs (target handles):** `in`
+**Inputs (target handles):** `audio`, `video`
 **Outputs (source handles):** `audio`
 
 **Required data fields:**

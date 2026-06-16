@@ -260,3 +260,92 @@ describe("useObjectStudioJobs", () => {
     expect(second).toHaveBeenCalled()
   })
 })
+
+describe("useObjectStudioJobs optimistic lifecycle (beginJob/settleJob/abortJob)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.useFakeTimers()
+    vi.mocked(getJobStatusBatch).mockResolvedValue({ jobs: [] })
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it("beginJob adds an optimistic tracked entry synchronously and returns a temp id", () => {
+    const { result } = renderHook(() => useObjectStudioJobs([]))
+    let tempId!: string
+    act(() => {
+      tempId = result.current.beginJob("angles", "front")
+    })
+    expect(tempId).toMatch(/^optimistic:/)
+    expect(result.current.tracked).toEqual([
+      { jobId: tempId, assetType: "angles", name: "front", optimistic: true },
+    ])
+  })
+
+  it("does NOT poll the backend for an optimistic entry (no real jobId yet)", async () => {
+    const { result } = renderHook(() => useObjectStudioJobs([]))
+    act(() => {
+      result.current.beginJob("angles", "front")
+    })
+    await act(async () => {
+      vi.advanceTimersByTime(10300)
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(getJobStatusBatch).not.toHaveBeenCalled()
+  })
+
+  it("settleJob swaps the temp id for the real jobId, which then polls to resolution", async () => {
+    const onResolved = vi.fn()
+    const { result } = renderHook(() => useObjectStudioJobs([]))
+    let tempId!: string
+    act(() => {
+      result.current.onResolved(onResolved)
+      tempId = result.current.beginJob("angles", "front")
+    })
+    act(() => {
+      result.current.settleJob(tempId, "real-1")
+    })
+    expect(result.current.tracked).toEqual([{ jobId: "real-1", assetType: "angles", name: "front" }])
+
+    vi.mocked(getJobStatusBatch).mockResolvedValueOnce({
+      jobs: [{ id: "real-1", status: "completed", output_data: { imageUrl: "https://x/front.png" } }],
+    })
+    await act(async () => {
+      vi.advanceTimersByTime(10300)
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(onResolved).toHaveBeenCalledWith({ jobId: "real-1", assetType: "angles", name: "front", url: "https://x/front.png" })
+    expect(result.current.tracked).toHaveLength(0)
+  })
+
+  it("abortJob removes the optimistic entry", () => {
+    const { result } = renderHook(() => useObjectStudioJobs([]))
+    let tempId!: string
+    act(() => {
+      tempId = result.current.beginJob("angles", "front")
+    })
+    act(() => {
+      result.current.abortJob(tempId)
+    })
+    expect(result.current.tracked).toHaveLength(0)
+  })
+
+  it("settleJob after abort is a no-op (doesn't resurrect)", () => {
+    const { result } = renderHook(() => useObjectStudioJobs([]))
+    let tempId!: string
+    act(() => {
+      tempId = result.current.beginJob("angles", "front")
+    })
+    act(() => {
+      result.current.abortJob(tempId)
+    })
+    act(() => {
+      result.current.settleJob(tempId, "real-1")
+    })
+    expect(result.current.tracked).toHaveLength(0)
+  })
+})

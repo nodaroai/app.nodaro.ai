@@ -1,7 +1,7 @@
 ---
 node_type: split-media
-generated_at: 2026-06-03T16:56:58.433Z
-generated_from: 98514458
+generated_at: 2026-06-16T08:22:28.500Z
+generated_from: 877dfa01a
 ---
 
 # Split Media
@@ -10,7 +10,7 @@ generated_from: 98514458
 **Type:** `split-media`
 **Category:** processing
 **Credit cost:** 2
-**Inputs (target handles):** `video-in`, `audio-in`
+**Inputs (target handles):** `video`, `audio`
 **Outputs (source handles):** `video-out`, `audio-out`
 
 **Required data fields:**

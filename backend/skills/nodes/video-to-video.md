@@ -1,7 +1,7 @@
 ---
 node_type: video-to-video
-generated_at: 2026-06-11T18:52:24.878Z
-generated_from: 36d155ff
+generated_at: 2026-06-16T08:22:28.213Z
+generated_from: 877dfa01a
 ---
 
 # Video to Video
@@ -10,7 +10,7 @@ generated_from: 36d155ff
 **Type:** `video-to-video`
 **Category:** ai
 **Credit cost:** 25
-**Inputs (target handles):** `in`
+**Inputs (target handles):** `video`, `cinematography`, `prompt`, `negative`
 **Outputs (source handles):** `video`
 
 **Required data fields:**

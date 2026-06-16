@@ -1,7 +1,7 @@
 ---
 node_type: text-to-audio
-generated_at: 2026-05-18T13:23:37.381Z
-generated_from: cb1e786d
+generated_at: 2026-06-16T08:22:28.270Z
+generated_from: 877dfa01a
 ---
 
 # Text to Audio
@@ -10,7 +10,7 @@ generated_from: cb1e786d
 **Type:** `text-to-audio`
 **Category:** ai
 **Credit cost:** 3
-**Inputs (target handles):** `in`
+**Inputs (target handles):** `prompt`, `audio-style`
 **Outputs (source handles):** `audio`
 
 **Required data fields:**

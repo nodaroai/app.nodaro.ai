@@ -52,6 +52,9 @@ import type { ObjectNodeData } from "@/types/nodes"
 const stubJobs: ObjectStudioJobs = {
   tracked: [],
   trackJob: vi.fn(),
+  beginJob: vi.fn(() => "optimistic:test"),
+  settleJob: vi.fn(),
+  abortJob: vi.fn(),
   onResolved: vi.fn(),
   onFailed: vi.fn(),
 }

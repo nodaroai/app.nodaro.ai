@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { Check, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import {
   LOCATION_ATMOSPHERE_PROVIDERS,
@@ -8,6 +9,7 @@ import {
 import { generateLocationMotion } from "@/lib/api"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 import { useLocationStudioJobs } from "./use-location-studio-jobs"
+import { presetState, lowerNameSet } from "../studio-shell/preset-state"
 import type { LocationStudioState } from "./use-location-studio"
 import type { LocationAssetItem, LocationNodeData } from "@/types/nodes"
 
@@ -84,9 +86,14 @@ export function MotionTab({ studio }: MotionTabProps) {
       toast.error("Approve a main image first")
       return
     }
+    const trimmed = motionPrompt.slice(0, 200)
+    // Optimistic "Generating…" card the instant the user clicks — before the
+    // save + generate round-trips. The placeholder name MUST match the name
+    // later passed to the real trackJob so the chip stays "creating" across the
+    // swap. settleJob swaps it for the real job; abortJob drops it on failure.
+    const tempId = jobs.beginJob("atmosphere_motions", trimmed)
     try {
       const locationDbId = await studio.ensureSavedBeforeGen()
-      const trimmed = motionPrompt.slice(0, 200)
       const result = await generateLocationMotion({
         motionPrompt,
         sourceImageUrl: data.sourceImageUrl,
@@ -99,12 +106,9 @@ export function MotionTab({ studio }: MotionTabProps) {
         attachToColumn: "atmosphere_motions",
         attachName: trimmed,
       })
-      jobs.trackJob({
-        jobId: result.jobId,
-        assetType: "atmosphere_motions",
-        name: trimmed,
-      })
+      jobs.settleJob(tempId, result.jobId)
     } catch {
+      jobs.abortJob(tempId)
       // ensureSavedBeforeGen / generateLocationMotion already toast on failure.
     }
   }
@@ -162,6 +166,10 @@ export function MotionTab({ studio }: MotionTabProps) {
   const trackedMotions = jobs.tracked.filter(
     (j) => j.assetType === "atmosphere_motions",
   )
+  // Chip states: "created" once a clip of that name exists, "creating" while a
+  // job (real or optimistic) is in flight. Lowercased for case-insensitive match.
+  const createdNames = lowerNameSet(items)
+  const busyNames = lowerNameSet(trackedMotions)
   const customDisabled = disabled || !customPrompt.trim()
   const presetTooltip = noSourceImage ? "Approve a main image first" : undefined
 
@@ -316,9 +324,10 @@ export function MotionTab({ studio }: MotionTabProps) {
         {visibleTracked.map((j) => (
           <div
             key={j.jobId}
-            className="aspect-video border border-[#1e293b] rounded bg-[#0e1117] flex items-center justify-center text-[11px] text-slate-400"
+            className="aspect-video border border-[#1e293b] rounded bg-[#0e1117] flex flex-col items-center justify-center gap-2 text-[11px] text-slate-400"
           >
-            Generating {j.name}…
+            <Loader2 className="w-4 h-4 animate-spin text-slate-500" />
+            <span className="truncate max-w-full px-2">Generating {j.name}…</span>
           </div>
         ))}
         {!q && items.length === 0 && trackedMotions.length === 0 && (
@@ -363,20 +372,41 @@ export function MotionTab({ studio }: MotionTabProps) {
         </select>
       </div>
 
-      {/* Preset chips */}
+      {/* Preset chips. Renders its own bar (not the shared `<PresetChips>`)
+          because each chip shows a LOCALIZED label and the row is
+          search-filtered (`visiblePresets`). Chip state comes from the SAME
+          `presetState` helper PresetChips uses, so spinner/✓/disabled + press
+          feedback stay in lockstep. When the whole bar is disabled (no source
+          image) the title stays `presetTooltip` so the "why" tooltip shows. */}
       <div className="flex flex-wrap gap-2">
-        {visiblePresets.map((p) => (
-          <button
-            key={p}
-            type="button"
-            onClick={() => handlePresetClick(p)}
-            disabled={disabled}
-            title={presetTooltip}
-            className="px-3 py-1 text-[11px] rounded bg-[#1a1d27] hover:bg-[#1e293b] border border-[#1e293b] text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {resolveLabel(LOCATION_PRESET_TO_CATALOG[p]?.entryId ?? p, p)}
-          </button>
-        ))}
+        {visiblePresets.map((p) => {
+          const st = presetState(p, createdNames, busyNames)
+          const inactive = st !== "idle"
+          const label = resolveLabel(LOCATION_PRESET_TO_CATALOG[p]?.entryId ?? p, p)
+          return (
+            <button
+              key={p}
+              type="button"
+              data-state={st}
+              disabled={disabled || inactive}
+              title={
+                disabled
+                  ? presetTooltip
+                  : st === "created"
+                    ? `${label} — already generated`
+                    : st === "creating"
+                      ? `${label} — generating…`
+                      : `Generate ${label}`
+              }
+              onClick={() => handlePresetClick(p)}
+              className="px-3 py-1 text-[11px] rounded bg-[#1a1d27] hover:bg-[#1e293b] border border-[#1e293b] text-slate-300 inline-flex items-center gap-1.5 transition-transform active:scale-95 disabled:active:scale-100 disabled:opacity-40 disabled:cursor-not-allowed data-[state=created]:text-emerald-300/80 data-[state=created]:border-emerald-700/40"
+            >
+              {st === "creating" && <Loader2 className="w-2.5 h-2.5 animate-spin" />}
+              {st === "created" && <Check className="w-2.5 h-2.5" />}
+              {label}
+            </button>
+          )
+        })}
       </div>
 
       {/* Custom prompt */}

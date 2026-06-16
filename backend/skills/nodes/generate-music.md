@@ -1,7 +1,7 @@
 ---
 node_type: generate-music
-generated_at: 2026-05-18T13:23:37.376Z
-generated_from: cb1e786d
+generated_at: 2026-06-16T08:22:28.262Z
+generated_from: 877dfa01a
 ---
 
 # generate-music
@@ -10,7 +10,7 @@ generated_from: cb1e786d
 **Type:** `generate-music`
 **Category:** ai
 **Credit cost:** 5
-**Inputs (target handles):** `in`
+**Inputs (target handles):** `prompt`, `ref-audio`, `audio-style`
 **Outputs (source handles):** `audio`
 
 **Required data fields:**

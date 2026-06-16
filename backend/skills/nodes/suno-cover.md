@@ -1,7 +1,7 @@
 ---
 node_type: suno-cover
-generated_at: 2026-05-18T20:01:15.997Z
-generated_from: 866224d8
+generated_at: 2026-06-16T08:22:28.291Z
+generated_from: 877dfa01a
 ---
 
 # Suno Cover
@@ -10,7 +10,7 @@ generated_from: 866224d8
 **Type:** `suno-cover`
 **Category:** ai
 **Credit cost:** 3
-**Inputs (target handles):** `in`
+**Inputs (target handles):** `audio`, `prompt`, `voice`
 **Outputs (source handles):** `audio`
 
 **Required data fields:**

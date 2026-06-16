@@ -1,7 +1,7 @@
 ---
 node_type: modify-image
-generated_at: 2026-06-11T18:52:24.819Z
-generated_from: 36d155ff
+generated_at: 2026-06-16T08:22:28.147Z
+generated_from: 877dfa01a
 ---
 
 # Modify Image
@@ -10,7 +10,7 @@ generated_from: 36d155ff
 **Type:** `modify-image`
 **Category:** ai
 **Credit cost:** 2
-**Inputs (target handles):** `image`
+**Inputs (target handles):** `image`, `mask`, `cinematography`
 **Outputs (source handles):** `out`
 
 **Required data fields:**
