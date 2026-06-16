@@ -38,6 +38,8 @@ export function mergeCharacterDetailIntoNodeData(
     sheets: fresh.sheets ?? prev.sheets ?? [],
     detailCloseups: (fresh.detailCloseups as CharacterNodeData["detailCloseups"]) ?? prev.detailCloseups,
     outfitVariations: (fresh.outfitVariations as CharacterNodeData["outfitVariations"]) ?? prev.outfitVariations,
+    // Named composite boards (Board tab) — carried so studio-created boards show.
+    boards: (fresh.boards as CharacterNodeData["boards"]) ?? prev.boards,
     // Uploaded reference videos per emotion/variant (Record<variant, urls[]>) —
     // NOT a {name,url}[] bucket, so it is intentionally absent from
     // HYDRATED_ASSET_BUCKETS (which the drift-guard maps to {name,url}[]).

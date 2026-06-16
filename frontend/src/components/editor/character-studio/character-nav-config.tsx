@@ -9,7 +9,9 @@ import { AppearancePage } from "./pages/appearance-page"
 import { ExpressionsPage } from "./pages/expressions-page"
 import { PosesPage } from "./pages/poses-page"
 import { MotionsPage } from "./pages/motions-page"
+import { EmotionVideosPage } from "./pages/emotion-videos-page"
 import { SheetPage } from "./pages/sheet-page"
+import { BoardPage } from "./pages/board-page"
 import { VoicePage } from "./pages/voice-page" // Phase 3: Browse / Clone / Design-audition + Talk
 import { PersonalityPage } from "./pages/personality-page"
 
@@ -34,7 +36,9 @@ export const CHARACTER_STUDIO_NAV: StudioNavConfig<S, J> = {
       { key: "expressions", label: "Expressions", icon: "😄", Component: ExpressionsPage, badge: (s) => ({ kind: "count", value: s.staged.expressions.length }) },
       { key: "poses", label: "Poses", icon: "🧍", Component: PosesPage, badge: (s) => ({ kind: "count", value: s.staged.poses.length }) },
       { key: "motions", label: "Motions", icon: "🏃", Component: MotionsPage, badge: (s) => ({ kind: "count", value: s.staged.motions.length }) },
+      { key: "emotion-videos", label: "Emotion videos", icon: "🎭", Component: EmotionVideosPage, badge: (s) => ({ kind: "count", value: Object.values(s.staged.referenceVideosByVariant ?? {}).reduce((n, urls) => n + (urls?.length ?? 0), 0) }) },
       { key: "sheet", label: "Sheet", icon: "📋", Component: SheetPage, badge: (s) => ({ kind: "count", value: s.staged.sheets?.length ?? 0 }) },
+      { key: "board", label: "Board", icon: "🖼", Component: BoardPage, badge: (s) => ({ kind: "count", value: s.staged.boards?.length ?? 0 }) },
     ] },
     { label: "Character", pages: [
       { key: "voice", label: "Voice", icon: "🎤", Component: VoicePage, badge: (s) => (s.staged.voice ? { kind: "check" } : null) },
