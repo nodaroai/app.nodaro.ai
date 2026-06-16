@@ -3552,6 +3552,9 @@ export type CharacterNodeData = {
   // Per-variant cache of real-life reference URLs used at last generation (key = variant id,
   // e.g. expression/pose/angle/lighting slug); used to detect stale renders when refs change.
   readonly realLifeRefsByVariant?: Readonly<Record<string, ReadonlyArray<string>>>
+  // Uploaded reference videos keyed by emotion/variant (e.g. "happy" → [url, …]).
+  // Surfaced from the GET route; rendered in the modal's Videos tab.
+  readonly referenceVideosByVariant?: Readonly<Record<string, ReadonlyArray<string>>>
   // When true, downstream image-to-image / image-to-video / generate-image nodes
   // wired to this Character will forward `injectCharacterContext: true` +
   // `attachToCharacterId: characterDbId` so the backend route appends the

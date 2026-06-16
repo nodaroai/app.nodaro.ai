@@ -20,6 +20,7 @@ import { CachedImage } from "@/components/ui/cached-image"
 import { useCharacters } from "@/hooks/queries/use-assets-queries"
 import { useAuth } from "@/hooks/use-auth"
 import { useClickOutside } from "@/hooks/use-click-outside"
+import { hydrateCharacterNodeFromDetail } from "@/lib/character-node-data"
 import type { DbCharacter } from "@/lib/api"
 import type {
   CharacterNodeData,
@@ -65,7 +66,11 @@ export function CharacterConfig({ data, onUpdate, sources, fieldMappings, onMapF
           to a different character without opening the gallery sidebar first. */}
       <ReplaceCharacterPicker
         currentDbId={data.characterDbId || null}
-        onPick={(picked) =>
+        onPick={(picked) => {
+          // Optimistic light re-bind for instant feedback, then hydrate the
+          // FULL detail (bodyAngles/sheets/detailCloseups/outfitVariations/
+          // referenceVideosByVariant/…) so a Replace carries every asset bucket
+          // without a reload — same pattern as the other library→canvas sites.
           onUpdate({
             characterDbId: picked.id,
             characterName: picked.name,
@@ -82,7 +87,8 @@ export function CharacterConfig({ data, onUpdate, sources, fieldMappings, onMapF
             voice: picked.voice ?? undefined,
             personality: picked.personality ?? undefined,
           })
-        }
+          if (nodeId) hydrateCharacterNodeFromDetail(nodeId, picked.id)
+        }}
       />
 
       <button

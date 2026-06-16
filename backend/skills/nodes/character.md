@@ -1,7 +1,7 @@
 ---
 node_type: character
-generated_at: 2026-06-13T22:11:21.302Z
-generated_from: 1f4bd1bb
+generated_at: 2026-06-16T15:46:28.452Z
+generated_from: e0ca71f6a
 ---
 
 # Character
@@ -65,6 +65,7 @@ generated_from: 1f4bd1bb
 - `seedPrompt?: string`
 - `canonicalDescription?: string`
 - `realLifeRefsByVariant?: Readonly<Record<string, ReadonlyArray<string>>>`
+- `referenceVideosByVariant?: Readonly<Record<string, ReadonlyArray<string>>>`
 - `injectIdentityInPrompts?: boolean`
 - `loraReplicateVersion?: string | null`
 - `loraTriggerWord?: string | null`

@@ -58,6 +58,37 @@ describe("cloneListing", () => {
     expect(copyR2ObjectToPrefix).toHaveBeenCalledWith("x", expect.any(String))
     expect(copyR2ObjectToPrefix).toHaveBeenCalledWith("y", expect.any(String))
   })
+  it("deep-copies nested ReferenceSheet URLs in the sheets bucket (panel/source/gen, not just top-level url)", async () => {
+    mockSnapshotAndInsert(
+      {
+        name: "Hero",
+        sheets: [
+          {
+            id: "s1",
+            type: "turnaround",
+            url: "https://r2/orig/main.png",
+            sourceImageUrlAtGen: "https://r2/orig/src.png",
+            panelUrls: ["https://r2/orig/p1.png", "https://r2/orig/p2.png"],
+            panelSources: [{ board: "b", variant: "v", url: "https://r2/orig/ps1.png" }],
+          },
+        ],
+      },
+      true,
+    )
+    rpc.mockResolvedValue({ data: 1, error: null })
+    await cloneListing({ listingId: "L1", entityType: "character", userId: "u1" })
+    // Each nested URL is re-copied to the clone's dest prefix (top + gen src + 2 panels + 1 panel source).
+    for (const u of [
+      "https://r2/orig/main.png",
+      "https://r2/orig/src.png",
+      "https://r2/orig/p1.png",
+      "https://r2/orig/p2.png",
+      "https://r2/orig/ps1.png",
+    ]) {
+      expect(copyR2ObjectToPrefix).toHaveBeenCalledWith(u, expect.any(String))
+    }
+    expect(copyR2ObjectToPrefix).toHaveBeenCalledTimes(5)
+  })
   it("rejects with listing_unavailable when the listing is inactive (no clone recorded)", async () => {
     from.mockImplementation((table: string) => {
       if (table === "community_listings") {

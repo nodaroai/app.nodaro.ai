@@ -18,13 +18,13 @@ export const COMMUNITY_ENTITY_ADAPTERS: Record<EntityType, CommunityEntityAdapte
       "canonical_description", "seed_prompt", "personality",
     ],
     assetFields: [
-      "source_image_url", "character_sheet", "expressions", "poses",
-      "lighting_variations", "angles", "body_angles", "motions", "boards",
-      "reference_videos_by_variant",
+      "source_image_url", "sheets", "detail_closeups", "outfit_variations",
+      "expressions", "poses", "lighting_variations", "angles", "body_angles",
+      "motions", "boards", "reference_videos_by_variant",
     ],
     stripFields: [
-      "reference_photos", "real_life_refs_by_variant",
-      "voice",
+      "reference_photos", "real_life_refs_by_variant", "voice",
+      "person", "wardrobe",
       "lora_replicate_version", "lora_trigger_word", "lora_training_status",
       "lora_training_replicate_id", "lora_training_error", "lora_trained_at",
       "lora_training_image_count",

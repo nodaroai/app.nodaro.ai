@@ -21,8 +21,9 @@ import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import type { CharacterNodeData, CharacterAssetItem } from "@/types/nodes"
 import { CachedImage } from "@/components/ui/cached-image"
+import { CharacterAssetVideoGrid } from "@/components/editor/character-asset-video-grid"
 
-type TabType = "main" | "expressions" | "poses" | "lighting" | "angles" | "custom"
+type TabType = "main" | "expressions" | "poses" | "lighting" | "angles" | "sheets" | "videos" | "voice" | "custom"
 
 const TABS: readonly { readonly id: TabType; readonly label: string }[] = [
   { id: "main", label: "Main" },
@@ -30,6 +31,9 @@ const TABS: readonly { readonly id: TabType; readonly label: string }[] = [
   { id: "poses", label: "Poses" },
   { id: "lighting", label: "Lighting" },
   { id: "angles", label: "Angles" },
+  { id: "sheets", label: "Sheets" },
+  { id: "videos", label: "Videos" },
+  { id: "voice", label: "Voice" },
   { id: "custom", label: "Custom" },
 ]
 
@@ -175,10 +179,12 @@ function AssetGrid({
   readonly onDragStarted?: () => void
   readonly onDragEnded?: () => void
   readonly emptyMessage: string
-  readonly confirmingIndex: number | null
-  readonly onRequestDelete: (index: number) => void
-  readonly onCancelDelete: () => void
-  readonly onConfirmDelete: (index: number) => void
+  // Delete affordance is optional: when `onRequestDelete` is omitted the grid is
+  // read-only and DraggableImage renders no trash button (it gates on onRequestDelete).
+  readonly confirmingIndex?: number | null
+  readonly onRequestDelete?: (index: number) => void
+  readonly onCancelDelete?: () => void
+  readonly onConfirmDelete?: (index: number) => void
 }) {
   if (items.length === 0) {
     return (
@@ -187,6 +193,7 @@ function AssetGrid({
       </p>
     )
   }
+  const deletable = !!onRequestDelete
   return (
     <div className="grid grid-cols-3 gap-4">
       {items.map((item, i) => (
@@ -198,10 +205,10 @@ function AssetGrid({
           onAddToCanvas={onAddToCanvas}
           onDragStarted={onDragStarted}
           onDragEnded={onDragEnded}
-          confirmingDelete={confirmingIndex === i}
-          onRequestDelete={() => onRequestDelete(i)}
-          onCancelDelete={onCancelDelete}
-          onConfirmDelete={() => onConfirmDelete(i)}
+          confirmingDelete={deletable ? confirmingIndex === i : false}
+          onRequestDelete={deletable ? () => onRequestDelete!(i) : undefined}
+          onCancelDelete={deletable ? onCancelDelete : undefined}
+          onConfirmDelete={deletable ? () => onConfirmDelete?.(i) : undefined}
         />
       ))}
     </div>
@@ -703,8 +710,17 @@ centered composition, high quality, single character`
                 {tab.id === "lighting" && data.lightingVariations.length > 0 && (
                   <span className="ml-1 text-xs text-muted-foreground">({data.lightingVariations.length})</span>
                 )}
-                {tab.id === "angles" && data.angles.length > 0 && (
-                  <span className="ml-1 text-xs text-muted-foreground">({data.angles.length})</span>
+                {tab.id === "angles" && (data.angles.length + (data.bodyAngles?.length ?? 0)) > 0 && (
+                  <span className="ml-1 text-xs text-muted-foreground">({data.angles.length + (data.bodyAngles?.length ?? 0)})</span>
+                )}
+                {tab.id === "sheets" && ((data.sheets?.length ?? 0) + (data.detailCloseups?.length ?? 0) + (data.outfitVariations?.length ?? 0)) > 0 && (
+                  <span className="ml-1 text-xs text-muted-foreground">({(data.sheets?.length ?? 0) + (data.detailCloseups?.length ?? 0) + (data.outfitVariations?.length ?? 0)})</span>
+                )}
+                {tab.id === "videos" && ((data.motions?.length ?? 0) + Object.values(data.referenceVideosByVariant ?? {}).reduce((n, a) => n + (a?.length ?? 0), 0)) > 0 && (
+                  <span className="ml-1 text-xs text-muted-foreground">({(data.motions?.length ?? 0) + Object.values(data.referenceVideosByVariant ?? {}).reduce((n, a) => n + (a?.length ?? 0), 0)})</span>
+                )}
+                {tab.id === "voice" && data.voice && (
+                  <span className="ml-1 text-xs text-muted-foreground">✓</span>
                 )}
                 {tab.id === "custom" && (data.customVariations ?? []).length > 0 && (
                   <span className="ml-1 text-xs text-muted-foreground">({(data.customVariations ?? []).length})</span>
@@ -856,20 +872,93 @@ centered composition, high quality, single character`
               />
             )}
 
-            {/* Angles Tab */}
+            {/* Angles Tab — head angles (deletable) + body angles (read-only) */}
             {activeTab === "angles" && (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-sm font-medium mb-3">Head</h3>
+                  <AssetGrid
+                    items={data.angles}
+                    onEnlarge={setLightboxSrc}
+                    onAddToCanvas={handleAddImageToCanvas}
+                    onDragStarted={() => setIsDragging(true)}
+                    onDragEnded={() => setIsDragging(false)}
+                    emptyMessage="No head angle views generated yet. Generate them from the config panel."
+                    confirmingIndex={confirmingAssetDelete}
+                    onRequestDelete={setConfirmingAssetDelete}
+                    onCancelDelete={() => setConfirmingAssetDelete(null)}
+                    onConfirmDelete={handleDeleteAsset}
+                  />
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium mb-3">Body</h3>
+                  <AssetGrid
+                    items={data.bodyAngles ?? []}
+                    onEnlarge={setLightboxSrc}
+                    onAddToCanvas={handleAddImageToCanvas}
+                    onDragStarted={() => setIsDragging(true)}
+                    onDragEnded={() => setIsDragging(false)}
+                    emptyMessage="No body angle views generated yet. Generate them from the config panel."
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Sheets Tab — composited sheets + detail closeups + outfit variations (read-only) */}
+            {activeTab === "sheets" && (
               <AssetGrid
-                items={data.angles}
+                items={[
+                  ...((data.sheets ?? []).map((s) => ({ name: s.type ?? "Sheet", url: s.url }))),
+                  ...(data.detailCloseups ?? []),
+                  ...(data.outfitVariations ?? []),
+                ]}
                 onEnlarge={setLightboxSrc}
                 onAddToCanvas={handleAddImageToCanvas}
                 onDragStarted={() => setIsDragging(true)}
                 onDragEnded={() => setIsDragging(false)}
-                emptyMessage="No angle views generated yet. Generate them from the config panel."
-                confirmingIndex={confirmingAssetDelete}
-                onRequestDelete={setConfirmingAssetDelete}
-                onCancelDelete={() => setConfirmingAssetDelete(null)}
-                onConfirmDelete={handleDeleteAsset}
+                emptyMessage="No character sheets, detail closeups, or outfit variations yet."
               />
+            )}
+
+            {/* Videos Tab — motion clips + flattened reference videos (read-only) */}
+            {activeTab === "videos" && (
+              <CharacterAssetVideoGrid
+                items={[
+                  ...(data.motions ?? []),
+                  ...Object.entries(data.referenceVideosByVariant ?? {}).flatMap(([variant, urls]) =>
+                    (urls ?? []).map((url, i) => ({ name: `${variant} ${i + 1}`, url })),
+                  ),
+                ]}
+                emptyMessage="No motion or reference videos yet."
+              />
+            )}
+
+            {/* Voice Tab */}
+            {activeTab === "voice" && (
+              <div>
+                {data.voice ? (
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-medium">{data.voice.voiceName}</h3>
+                      {data.voice.voiceType && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                          {data.voice.voiceType}
+                        </span>
+                      )}
+                    </div>
+                    {data.voice.traits && (
+                      <p className="text-sm text-muted-foreground mt-1">{data.voice.traits}</p>
+                    )}
+                    {data.voice.previewUrl && (
+                      <audio controls src={data.voice.previewUrl} className="w-full mt-3" />
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-12">
+                    No voice selected for this character.
+                  </p>
+                )}
+              </div>
             )}
 
             {/* Custom Tab */}
