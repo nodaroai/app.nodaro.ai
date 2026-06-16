@@ -5,6 +5,7 @@ import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS, motionGraphicsFeature }
 import type { LlmFeature } from "@nodaro/shared"
 import { buildScraperCreditId, isScraperActor } from "@nodaro/shared"
 import { isKineticCaptionStyle } from "@nodaro/shared"
+import { resolveAiAvatarCreditId, resolveCinematicCreditId, referenceSheetCreditId } from "@nodaro/shared"
 
 /** Every node type whose output is prose/text. Used to build the compatible
  *  source list for any text-shaped field so the MappableField dropdown is
@@ -326,6 +327,18 @@ export function getModelIdentifier(node: WorkflowNode): string {
       return "add-captions:kinetic"
     }
     return "add-captions"
+  }
+
+  // HeyGen avatar nodes + reference sheet are COMPOSITE-only priced (duration/
+  // resolution reserve buckets; still/motion assembly). Delegate to the SAME
+  // resolvers the per-node cost pills use so the model-costs batch requests a
+  // seeded composite, not the bare provider/type key (`heygen` / `reference-sheet`
+  // are intentionally unpriced — the bare key triggered the "operator must seed"
+  // warning and would 503 at Run time).
+  if (nodeType === "ai-avatar") return resolveAiAvatarCreditId(data)
+  if (nodeType === "cinematic-avatar") return resolveCinematicCreditId(data)
+  if (nodeType === "reference-sheet") {
+    return referenceSheetCreditId(data.flavour as { outputFormat?: string } | undefined)
   }
 
   const provider = data.provider as string | undefined
