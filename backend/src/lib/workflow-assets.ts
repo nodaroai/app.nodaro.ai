@@ -120,6 +120,23 @@ interface AssetIds {
   locationIds: string[]
 }
 
+/**
+ * A real Supabase `uuid`. Guards every entity id before it reaches a uuid-typed
+ * `.in()` / `.eq()` filter.
+ *
+ * Pipeline / Film-Director materialized character/object/location/creature
+ * nodes seed `*DbId: ""` placeholders (canvas-materializer.ts) for "not yet
+ * bound to a DB entity". Those empty strings used to flow straight into
+ * `.in("id", [""])` against a uuid column → Postgres
+ * `invalid input syntax for type uuid: ""` → "Export failed" on the whole
+ * workflow. Validating the format (not just `!== ""`) also rejects any other
+ * non-uuid garbage a future writer might leave in those fields.
+ */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+function isUuid(value: unknown): value is string {
+  return typeof value === "string" && UUID_RE.test(value)
+}
+
 /** Collect entity DB ids referenced by `character` / `object` / `creature` / `location` nodes. */
 export function collectAssetIds(nodes: readonly Record<string, unknown>[]): AssetIds {
   const characterIds: string[] = []
@@ -128,13 +145,13 @@ export function collectAssetIds(nodes: readonly Record<string, unknown>[]): Asse
   const locationIds: string[] = []
   for (const node of nodes) {
     const data = (node.data ?? {}) as Record<string, unknown>
-    if (node.type === "character" && typeof data.characterDbId === "string") {
+    if (node.type === "character" && isUuid(data.characterDbId)) {
       characterIds.push(data.characterDbId)
-    } else if (node.type === "object" && typeof data.objectDbId === "string") {
+    } else if (node.type === "object" && isUuid(data.objectDbId)) {
       objectIds.push(data.objectDbId)
-    } else if (node.type === "creature" && typeof data.creatureDbId === "string") {
+    } else if (node.type === "creature" && isUuid(data.creatureDbId)) {
       creatureIds.push(data.creatureDbId)
-    } else if (node.type === "location" && typeof data.locationDbId === "string") {
+    } else if (node.type === "location" && isUuid(data.locationDbId)) {
       locationIds.push(data.locationDbId)
     }
   }
@@ -150,10 +167,14 @@ function asReferencePhotos(value: unknown): Array<{ kind: string; url: string }>
 }
 
 function fetchByIds(table: string, columns: string, ids: string[], userId: string) {
-  if (ids.length === 0) {
+  // Defense-in-depth: never let a non-uuid (empty placeholder, slug, …) reach a
+  // uuid-typed `.in()` filter — one bad id rejects the whole query with
+  // `invalid input syntax for type uuid`. Dedupe while we're here.
+  const validIds = [...new Set(ids.filter(isUuid))]
+  if (validIds.length === 0) {
     return Promise.resolve({ data: [] as Record<string, unknown>[], error: null })
   }
-  return supabase.from(table).select(columns).in("id", ids).eq("user_id", userId)
+  return supabase.from(table).select(columns).in("id", validIds).eq("user_id", userId)
 }
 
 type WorkflowAssets = NonNullable<WorkflowExport["assets"]>

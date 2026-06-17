@@ -281,12 +281,15 @@ export async function handleRun(
     }
   }
 
-  // Credit gate passed — only NOW clear accumulated output and persist. Doing
-  // this before the gate wiped generatedResults (persisted node data) and saved
-  // the cleared state even when the run was about to abort for insufficient
-  // credits, destroying the prior run's on-canvas results. Mirrors the per-run
-  // clear the backend orchestrator applies via list-execution.ts:42.
-  resetNodeAccumulation(executableNodes);
+  // Credit gate passed — only NOW reset per-run state and persist (deferring
+  // past the gate avoids touching node data when the run aborts for insufficient
+  // credits). preserveHistory:true is LOAD-BEARING: it clears only stale
+  // list/selector badges and KEEPS generatedResults, matching per-node Run and
+  // run-from-here. Without it, Execute-All cleared generatedResults then saved
+  // the empty state — an Execute-All→Stop (or any stop/failure before results
+  // came back) left every node permanently empty, only the stale
+  // generatedImageUrl surviving. (Regression guarded in run-handlers.test.ts.)
+  resetNodeAccumulation(executableNodes, { preserveHistory: true });
   if (wasDirty && projectId) {
     await save(projectId);
   }
@@ -562,7 +565,9 @@ export async function handleRunSelected(
   // editor skips the pre-Run save round-trip (see FIX 4).
   const wasDirty = useWorkflowStore.getState().isDirty;
 
-  resetNodeAccumulation(executableNodes);
+  // preserveHistory:true — Run-Selected accumulates new takes and never wipes
+  // generatedResults (same fix as Execute-All above; clears only stale badges).
+  resetNodeAccumulation(executableNodes, { preserveHistory: true });
 
   // Optimistic UI FIRST — batched pending flip + running state before the save
   // round-trip so the active border appears the instant Run is clicked.
