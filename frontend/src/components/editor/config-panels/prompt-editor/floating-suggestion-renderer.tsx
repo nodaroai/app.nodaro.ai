@@ -1,6 +1,7 @@
 import { createRoot, type Root } from "react-dom/client"
 import { computeFlipPosition } from "./flip-position"
 import { escapeScrollLock } from "./scroll-lock-escape"
+import { PROMPT_EDITOR_PORTAL_ATTR } from "./prompt-editor-portal"
 
 export interface SuggestionKeyHandle {
   onKeyDown: (event: KeyboardEvent) => boolean
@@ -54,6 +55,9 @@ export function createFloatingSuggestionRenderer<P extends { clientRect?: (() =>
         mount.style.zIndex = "9999"
         // body has pointer-events:none inside a modal Dialog
         mount.style.pointerEvents = "auto"
+        // Mark as a prompt-editor portal so a host Dialog's outside-interaction
+        // dismissal ignores clicks here — selecting an item must not close it.
+        mount.setAttribute(PROMPT_EDITOR_PORTAL_ATTR, "")
         document.body.appendChild(mount)
         // …and the dialog's react-remove-scroll blocks wheel/touch for body-
         // mounted nodes — stop those events here so the popup can scroll.

@@ -49,6 +49,14 @@ if (typeof globalThis.ResizeObserver === "undefined") {
   } as unknown as typeof globalThis.ResizeObserver
 }
 
+// jsdom implements scrollIntoView as a stub that throws "Not implemented", which
+// crashes any component that keeps an active option in view (e.g. the prompt
+// editor's suggestion lists). Replace it with a no-op (override, not a missing-
+// guard, since jsdom defines the throwing version).
+if (typeof Element !== "undefined") {
+  Element.prototype.scrollIntoView = function scrollIntoView() {}
+}
+
 // Polyfill ImageData for test environment (jsdom does not implement it)
 if (typeof globalThis.ImageData === "undefined") {
   globalThis.ImageData = class ImageData {

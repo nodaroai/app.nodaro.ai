@@ -2,6 +2,7 @@
 
 import { forwardRef, useImperativeHandle, useState, useEffect } from "react"
 import type { NodeRefItem } from "@/lib/node-refs"
+import { useScrollActiveOptionIntoView } from "./use-scroll-active-option-into-view"
 
 export interface VariableSuggestionListHandle {
   onKeyDown: (event: KeyboardEvent) => boolean
@@ -52,6 +53,7 @@ function categoryFor(type: string): string {
 export const VariableSuggestionList = forwardRef<VariableSuggestionListHandle, VariableSuggestionListProps>(
   function VariableSuggestionList({ items, command }, ref) {
     const [selectedIndex, setSelectedIndex] = useState(0)
+    const listRef = useScrollActiveOptionIntoView<HTMLDivElement>(selectedIndex)
 
     useEffect(() => { setSelectedIndex(0) }, [items])
 
@@ -86,7 +88,7 @@ export const VariableSuggestionList = forwardRef<VariableSuggestionListHandle, V
     return (
       // Same viewport-relative cap as `SuggestionList` so the `{` picker stays
       // scrollable in-place on short viewports instead of clipping off-screen.
-      <div className="z-[9999] overflow-y-auto rounded-lg border border-border bg-popover shadow-lg py-1 max-h-[min(300px,calc(100vh-80px))] min-w-[220px]">
+      <div ref={listRef} className="z-[9999] overflow-y-auto rounded-lg border border-border bg-popover shadow-lg py-1 max-h-[min(300px,calc(100vh-80px))] min-w-[220px]">
         {items.map((item, idx) => {
           const isSelected = idx === selectedIndex
           return (

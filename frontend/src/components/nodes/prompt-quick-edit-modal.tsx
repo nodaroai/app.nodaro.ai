@@ -36,6 +36,7 @@ import {
 import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
 import { PromptEditor } from "@/components/editor/config-panels/prompt-editor"
+import { isPromptEditorPortalInteraction } from "@/components/editor/config-panels/prompt-editor/prompt-editor-portal"
 import { PromptHelperButton } from "@/components/editor/config-panels/prompt-helper-button"
 import { SnippetMenuButton } from "@/components/editor/config-panels/snippet-menu-button"
 import {
@@ -325,7 +326,15 @@ export function PromptQuickEditModal() {
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) close() }}>
-      <DialogContent className="sm:max-w-[680px]" showCloseButton={false} onKeyDown={onKeyDown}>
+      <DialogContent
+        className="sm:max-w-[680px]"
+        showCloseButton={false}
+        onKeyDown={onKeyDown}
+        // Selecting an item in a body-portaled @/{// or chip menu must not close
+        // the modal: those menus mount outside DialogContent, so Radix's dismiss
+        // layer would otherwise treat the click as an "outside" interaction.
+        onInteractOutside={(e) => { if (isPromptEditorPortalInteraction(e)) e.preventDefault() }}
+      >
         {/* Header: node type icon + title + optional gray custom name + EDIT toggle */}
         <DialogHeader>
           <div className="flex items-center justify-between gap-3">
