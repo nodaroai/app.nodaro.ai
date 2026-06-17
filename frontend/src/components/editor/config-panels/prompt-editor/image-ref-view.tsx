@@ -5,6 +5,7 @@ import { createPortal } from "react-dom"
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react"
 import { optimizedImageUrl } from "@/lib/image"
 import { BODY_MENU_CLASS } from "./body-menu-class"
+import { useBodyMenuDismiss } from "./use-body-menu-dismiss"
 import { computeFlipPosition } from "./flip-position"
 
 interface ImageRefAttrs {
@@ -66,30 +67,12 @@ export function ImageRefView(props: NodeViewProps) {
     if (customMode) customInputRef.current?.focus()
   }, [customMode])
 
-  // Close the menu on outside click or Escape.
-  useEffect(() => {
-    if (!menuAnchor) return
-    function onDown(e: PointerEvent) {
-      if (menuRef.current?.contains(e.target as Node)) return
-      setMenuAnchor(null)
-      setCustomMode(false)
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        setMenuAnchor(null)
-        setCustomMode(false)
-      }
-    }
-    // Capture phase + pointerdown: fires before any inner handler can call
-    // stopPropagation (e.g. ProseMirror's mousedown handlers), and pointer
-    // events cover both mouse and touch paths uniformly.
-    window.addEventListener("pointerdown", onDown, { capture: true })
-    document.addEventListener("keydown", onKey)
-    return () => {
-      window.removeEventListener("pointerdown", onDown, { capture: true })
-      document.removeEventListener("keydown", onKey)
-    }
-  }, [menuAnchor])
+  // Dismiss on outside-click / Escape + escape the modal scroll-lock so the
+  // menu can scroll. Shared by all body-portaled pill views.
+  useBodyMenuDismiss(menuRef, menuAnchor, () => {
+    setMenuAnchor(null)
+    setCustomMode(false)
+  })
 
   const handleRemove = useCallback(() => {
     if (typeof props.getPos !== "function") return
