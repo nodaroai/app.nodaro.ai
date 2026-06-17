@@ -3537,6 +3537,9 @@ export type CharacterNodeData = {
   // Named composite reference boards (the `boards` JSONB column, migration 212) —
   // distinct from `sheets`. Hydrated from the GET route; rendered in the Board tab.
   readonly boards?: ReadonlyArray<{ readonly name: string; readonly url: string }>
+  // Per-variant selection map. Also the LEGACY home of pre-column boards
+  // (reserved `studioBoard` / `studioBoard:<name>` keys) — surfaced as boards.
+  readonly selectedAssetByVariant?: Readonly<Record<string, string>>
   // Voice + personality (Phase 1: stored only; Phase 2: auto-injected downstream)
   voice: CharacterVoice | null
   personality: CharacterPersonality | null

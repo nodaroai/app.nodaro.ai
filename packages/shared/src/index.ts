@@ -1195,6 +1195,7 @@ export {
   CHARACTER_VARIANT_ASSET_BUCKETS,
   characterVariantAssetArrays,
   characterSheetRefItems,
+  characterBoardItems,
   characterMentionableAssetArrays,
 } from "./character-variant-assets.js"
 export type {

@@ -40,6 +40,8 @@ export function mergeCharacterDetailIntoNodeData(
     outfitVariations: (fresh.outfitVariations as CharacterNodeData["outfitVariations"]) ?? prev.outfitVariations,
     // Named composite boards (Board tab) — carried so studio-created boards show.
     boards: (fresh.boards as CharacterNodeData["boards"]) ?? prev.boards,
+    // Selection map — also the legacy home of pre-column boards (studioBoard*).
+    selectedAssetByVariant: (fresh.selectedAssetByVariant as CharacterNodeData["selectedAssetByVariant"]) ?? prev.selectedAssetByVariant,
     // Uploaded reference videos per emotion/variant (Record<variant, urls[]>) —
     // NOT a {name,url}[] bucket, so it is intentionally absent from
     // HYDRATED_ASSET_BUCKETS (which the drift-guard maps to {name,url}[]).
