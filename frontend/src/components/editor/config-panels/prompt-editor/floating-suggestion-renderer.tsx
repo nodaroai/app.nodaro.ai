@@ -1,5 +1,6 @@
 import { createRoot, type Root } from "react-dom/client"
 import { computeFlipPosition } from "./flip-position"
+import { escapeScrollLock } from "./scroll-lock-escape"
 
 export interface SuggestionKeyHandle {
   onKeyDown: (event: KeyboardEvent) => boolean
@@ -27,6 +28,7 @@ export function createFloatingSuggestionRenderer<P extends { clientRect?: (() =>
     let mount: HTMLDivElement | null = null
     let root: Root | null = null
     let keyHandle: SuggestionKeyHandle | null = null
+    let detachScrollLock: (() => void) | null = null
     const setKeyHandle = (h: SuggestionKeyHandle | null) => { keyHandle = h }
 
     const position = (rect: DOMRect | null | undefined) => {
@@ -53,12 +55,17 @@ export function createFloatingSuggestionRenderer<P extends { clientRect?: (() =>
         // body has pointer-events:none inside a modal Dialog
         mount.style.pointerEvents = "auto"
         document.body.appendChild(mount)
+        // …and the dialog's react-remove-scroll blocks wheel/touch for body-
+        // mounted nodes — stop those events here so the popup can scroll.
+        detachScrollLock = escapeScrollLock(mount)
         root = createRoot(mount)
         render(props)
       },
       onUpdate: (props: P) => render(props),
       onKeyDown: (props: { event: KeyboardEvent }) => keyHandle?.onKeyDown(props.event) ?? false,
       onExit: () => {
+        detachScrollLock?.()
+        detachScrollLock = null
         if (root) {
           const r = root
           root = null

@@ -1,3 +1,4 @@
+import { characterBoardItems } from "@nodaro/shared"
 import { DEFAULT_STUDIO_ACCENT_ACTIVE, type StudioNavConfig } from "../studio-shell/types"
 import type { CharacterStudioState } from "./use-character-studio"
 import type { CharacterStudioJobs } from "./use-character-studio-jobs"
@@ -38,7 +39,7 @@ export const CHARACTER_STUDIO_NAV: StudioNavConfig<S, J> = {
       { key: "motions", label: "Motions", icon: "🏃", Component: MotionsPage, badge: (s) => ({ kind: "count", value: s.staged.motions.length }) },
       { key: "emotion-videos", label: "Emotion videos", icon: "🎭", Component: EmotionVideosPage, badge: (s) => ({ kind: "count", value: Object.values(s.staged.referenceVideosByVariant ?? {}).reduce((n, urls) => n + (urls?.length ?? 0), 0) }) },
       { key: "sheet", label: "Sheet", icon: "📋", Component: SheetPage, badge: (s) => ({ kind: "count", value: s.staged.sheets?.length ?? 0 }) },
-      { key: "board", label: "Board", icon: "🖼", Component: BoardPage, badge: (s) => ({ kind: "count", value: s.staged.boards?.length ?? 0 }) },
+      { key: "board", label: "Board", icon: "🖼", Component: BoardPage, badge: (s) => ({ kind: "count", value: characterBoardItems(s.staged as unknown as Record<string, unknown>).length }) },
     ] },
     { label: "Character", pages: [
       { key: "voice", label: "Voice", icon: "🎤", Component: VoicePage, badge: (s) => (s.staged.voice ? { kind: "check" } : null) },

@@ -10,6 +10,7 @@ import {
 } from "@nodaro/shared"
 import { optimizedImageUrl } from "@/lib/image"
 import { BODY_MENU_CLASS } from "./body-menu-class"
+import { useBodyMenuDismiss } from "./use-body-menu-dismiss"
 import { computeFlipPosition } from "./flip-position"
 import type { CharacterRefAttrs } from "./character-ref-extension"
 
@@ -86,25 +87,9 @@ export function CharacterRefView(props: NodeViewProps) {
     setMenuAnchor(null)
   }, [])
 
-  // Close menu on outside click or Escape — mirrors image-ref-view.tsx.
-  useEffect(() => {
-    if (!menuAnchor) return
-    function onDown(e: PointerEvent) {
-      if (menuRef.current?.contains(e.target as Node)) return
-      setMenuAnchor(null)
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setMenuAnchor(null)
-    }
-    // Capture-phase pointerdown intercepts before any inner stopPropagation
-    // (e.g. ProseMirror's own mousedown handlers) hides the click from us.
-    window.addEventListener("pointerdown", onDown, { capture: true })
-    document.addEventListener("keydown", onKey)
-    return () => {
-      window.removeEventListener("pointerdown", onDown, { capture: true })
-      document.removeEventListener("keydown", onKey)
-    }
-  }, [menuAnchor])
+  // Dismiss on outside-click / Escape + escape the modal scroll-lock so the
+  // menu can scroll. Shared by all body-portaled pill views.
+  useBodyMenuDismiss(menuRef, menuAnchor, () => setMenuAnchor(null))
 
   const handleRemove = useCallback(() => {
     if (typeof props.getPos !== "function") return

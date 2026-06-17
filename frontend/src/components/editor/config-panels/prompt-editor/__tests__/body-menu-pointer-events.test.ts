@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi } from "vitest"
 import { BODY_MENU_CLASS } from "../body-menu-class"
 
 describe("BODY_MENU_CLASS", () => {
@@ -19,5 +19,25 @@ it("floating suggestion mount sets pointer-events:auto on the body div", () => {
   inst.onStart({ clientRect: () => new DOMRect(0, 0, 0, 0) } as never)
   const mount = document.body.querySelector("div") as HTMLDivElement
   expect(mount.style.pointerEvents).toBe("auto")
+  inst.onExit()
+})
+
+it("floating suggestion mount isolates wheel from document (scroll-lock escape)", () => {
+  // react-remove-scroll (Radix Dialog modal) listens for wheel on `document`
+  // and cancels scroll for body-mounted nodes outside its lock. The mount must
+  // stop wheel from bubbling there so the popup's overflow-y-auto can scroll.
+  const factory = createFloatingSuggestionRenderer(340, (root) => { void root })
+  const inst = factory()
+  // Grab the freshly-appended mount, not a sibling test's deferred-removal one.
+  const before = new Set(document.body.children)
+  inst.onStart({ clientRect: () => new DOMRect(0, 0, 0, 0) } as never)
+  const mount = [...document.body.children].find((el) => !before.has(el)) as HTMLDivElement
+
+  const docSpy = vi.fn()
+  document.addEventListener("wheel", docSpy)
+  mount.dispatchEvent(new Event("wheel", { bubbles: true, cancelable: true }))
+  expect(docSpy).not.toHaveBeenCalled()
+
+  document.removeEventListener("wheel", docSpy)
   inst.onExit()
 })

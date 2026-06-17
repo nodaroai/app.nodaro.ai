@@ -829,6 +829,10 @@ export async function getCharacter(id: string): Promise<{
   referenceVideosByVariant?: Record<string, string[]>
   // Named composite reference boards (the `boards` JSONB column, migration 212).
   boards?: { name: string; url: string }[]
+  // Per-variant selection map — also the LEGACY home of boards born before the
+  // `boards` column (reserved `studioBoard` / `studioBoard:<name>` keys). Needed
+  // to surface those shim boards (studio merges column + shim on read).
+  selectedAssetByVariant?: Record<string, string>
   voice: { voiceId: string; voiceName: string; traits: string; voiceType?: "premade" | "library" | "custom"; previewUrl?: string; ttsProvider?: string } | null
   person?: Record<string, unknown> | null
   wardrobe?: Record<string, unknown> | null

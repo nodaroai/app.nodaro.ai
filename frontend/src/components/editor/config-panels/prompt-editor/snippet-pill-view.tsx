@@ -5,6 +5,7 @@ import { createPortal } from "react-dom"
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react"
 import { CodeXml, ChevronLeft, ChevronRight } from "lucide-react"
 import { BODY_MENU_CLASS } from "./body-menu-class"
+import { useBodyMenuDismiss } from "./use-body-menu-dismiss"
 import { computeFlipPosition } from "./flip-position"
 import type { SnippetPillAttrs } from "./snippet-pill-extension"
 
@@ -39,22 +40,9 @@ export function SnippetPillView(props: NodeViewProps) {
 
   useEffect(() => () => setMenuAnchor(null), [])
 
-  useEffect(() => {
-    if (!menuAnchor) return
-    function onDown(e: PointerEvent) {
-      if (menuRef.current?.contains(e.target as Node)) return
-      setMenuAnchor(null)
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setMenuAnchor(null)
-    }
-    window.addEventListener("pointerdown", onDown, { capture: true })
-    document.addEventListener("keydown", onKey)
-    return () => {
-      window.removeEventListener("pointerdown", onDown, { capture: true })
-      document.removeEventListener("keydown", onKey)
-    }
-  }, [menuAnchor])
+  // Dismiss on outside-click / Escape + escape the modal scroll-lock so the
+  // menu can scroll. Shared by all body-portaled pill views.
+  useBodyMenuDismiss(menuRef, menuAnchor, () => setMenuAnchor(null))
 
   const swapTo = useCallback((s: PoolEntry) => {
     props.updateAttributes({ snippetId: s.id, name: s.name, text: s.text })

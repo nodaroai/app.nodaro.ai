@@ -29,6 +29,8 @@ describe("buildImageConnectedReferences — character variant buckets", () => {
     outfitVariations: [{ name: "red dress", url: "https://x/red.png" }],
     detailCloseups: [{ name: "eyes", url: "https://x/eyes.png" }],
     sheets: [{ id: "s1", type: "turnaround", skin: "studio", url: "https://x/sheet.png", panelUrls: [] }],
+    boards: [{ name: "ref board", url: "https://x/board.png" }],
+    selectedAssetByVariant: { "studioBoard:cinematic": "https://x/shimboard.png" },
   }
 
   it("surfaces wardrobe (outfitVariations) variants in the @-mention list", () => {
@@ -61,5 +63,16 @@ describe("buildImageConnectedReferences — character variant buckets", () => {
     expect(sheet!.url).toBe("https://x/sheet.png")
     expect(sheet!.characterSlug).toBe("kira")
     expect(sheet!.variantSlug).toBe("turnaround-studio")
+  })
+
+  it("surfaces reference boards — from BOTH the column and the legacy shim — as @-mentionable refs", () => {
+    const refs = build(nodeData)
+    const column = refs.find((r) => r.variantDisplayName === "ref board")
+    expect(column, "column board missing from connected references").toBeTruthy()
+    expect(column!.url).toBe("https://x/board.png")
+    // legacy selected_asset_by_variant shim board (studioBoard:cinematic)
+    const shim = refs.find((r) => r.variantDisplayName === "cinematic")
+    expect(shim, "legacy shim board missing from connected references").toBeTruthy()
+    expect(shim!.url).toBe("https://x/shimboard.png")
   })
 })

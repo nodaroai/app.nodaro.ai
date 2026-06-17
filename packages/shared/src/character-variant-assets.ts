@@ -66,11 +66,49 @@ export function characterSheetRefItems(sheets: unknown): CharacterVariantAssetIt
   })
 }
 
+/** Legacy `selected_asset_by_variant` keys that hold boards born before the
+ *  `boards` column existed (studio.nodaro.ai's reserved namespace). */
+const BOARD_SHIM_KEY = "studioBoard"
+const BOARD_SHIM_PREFIX = "studioBoard:"
+
+/**
+ * Resolve a character's named reference boards from BOTH the `boards` column AND
+ * the LEGACY `selected_asset_by_variant` shim (`studioBoard` / `studioBoard:<name>`)
+ * — mirroring studio.nodaro.ai's read (entity-boards.ts), which merges both since
+ * pre-column boards still live in the shim. Column wins on duplicate name; the
+ * unnamed legacy board is named "board". Drops url-less entries.
+ */
+export function characterBoardItems(
+  data: Record<string, unknown> | null | undefined,
+): CharacterVariantAssetItem[] {
+  const column: CharacterVariantAssetItem[] = Array.isArray(data?.boards)
+    ? (data!.boards as unknown[]).flatMap((b) => {
+        const board = b as { name?: unknown; url?: unknown }
+        if (!board || typeof board.url !== "string" || !board.url) return []
+        return [{ name: typeof board.name === "string" && board.name ? board.name : "board", url: board.url }]
+      })
+    : []
+
+  const map = (data?.selectedAssetByVariant ?? {}) as Record<string, unknown>
+  const shim: CharacterVariantAssetItem[] = []
+  const legacy = map[BOARD_SHIM_KEY]
+  if (typeof legacy === "string" && legacy) shim.push({ name: "board", url: legacy })
+  for (const [k, v] of Object.entries(map)) {
+    if (k.startsWith(BOARD_SHIM_PREFIX) && typeof v === "string" && v) {
+      shim.push({ name: k.slice(BOARD_SHIM_PREFIX.length) || "board", url: v })
+    }
+  }
+
+  const haveNames = new Set(column.map((b) => b.name.toLowerCase()))
+  return [...column, ...shim.filter((b) => !haveNames.has(b.name.toLowerCase()))]
+}
+
 /**
  * The COMPLETE set of mentionable character asset arrays: the `{name,url}[]`
- * variant buckets + a derived `sheets` bucket. This is what the connected-
- * reference / `@`-mention expansion sites iterate, so every studio-produced
- * asset (variants AND composite sheets) surfaces in the picker and `@` list.
+ * variant buckets + derived `sheets` and `boards` buckets. This is what the
+ * connected-reference / `@`-mention expansion sites iterate, so every
+ * studio-produced asset (variants, composite sheets, AND boards — incl. legacy
+ * shim boards) surfaces in the reference picker and `@` list.
  */
 export function characterMentionableAssetArrays(
   data: Record<string, unknown> | null | undefined,
@@ -78,5 +116,6 @@ export function characterMentionableAssetArrays(
   return {
     ...characterVariantAssetArrays(data),
     sheets: characterSheetRefItems(data?.sheets),
+    boards: characterBoardItems(data),
   }
 }
