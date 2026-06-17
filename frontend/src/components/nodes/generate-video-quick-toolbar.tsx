@@ -1,6 +1,7 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useContext, useEffect, useRef, useState } from "react"
+import { InlineGluedStripContext } from "./inline-glued-strip-context"
 import { useStore } from "@xyflow/react"
 import { Sparkles, Ratio, Maximize2, Clock, Settings2, Copy, Layers } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -77,10 +78,12 @@ export function GenerateVideoQuickToolbar({
   // `scale(max(MIN, zoom))`. transformOrigin top-center keeps the toolbar
   // anchored to the node's bottom edge as it scales.
   const toolbarScale = Math.max(NODE_VISUAL_SCALE_FLOOR, zoom)
-  const toolbarTransform = {
-    transform: `scale(${toolbarScale})`,
-    transformOrigin: "50% 0%",
-  } as const
+  // When glued inside the node (inline mode), the viewport already applies
+  // scale(zoom), so self-scaling here would double-scale — drop the transform.
+  const glued = useContext(InlineGluedStripContext)
+  const toolbarTransform = glued
+    ? undefined
+    : ({ transform: `scale(${toolbarScale})`, transformOrigin: "50% 0%" } as const)
 
   // Open-state tracking: increment on each select/popover open, decrement
   // on close. While count > 0 we report `open=true` upward so the parent

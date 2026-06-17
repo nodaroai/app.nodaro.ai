@@ -11,6 +11,7 @@ import { useAltKeyStore } from "@/hooks/use-alt-key"
 import { useMobileCanvas } from "@/components/editor/mobile-canvas-context"
 import { CustomHandle } from "./custom-handle"
 import { NodeRunStripShell } from "./node-run-strip-shell"
+import { InlineGluedStripContext } from "./inline-glued-strip-context"
 import { NodeTopToolbar } from "./node-top-toolbar"
 import { computeFittedNodeBox } from "./video-node-defaults"
 import { computeZoomFromDrag, computeVisualSize, applyMagnet } from "./zoom-math"
@@ -72,6 +73,16 @@ interface BaseNodeProps {
    * resize controls get resizeDirection="horizontal"). Default 0 = today.
    */
   readonly chromeHeight?: number
+  /**
+   * True during the post-(re)mount window where inline mode is ON but the
+   * chrome height hasn't been measured yet (`showInline && chromeHeight === 0`).
+   * The sizing effect SKIPS while true: otherwise it would run the area-
+   * preserving (chrome===0) branch against a chrome-INCLUSIVE stored height and
+   * permanently inflate the node's width — which compounds when
+   * `onlyRenderVisibleElements` remounts nodes during a zoom/pan. The chrome
+   * ResizeObserver fires next tick and the effect re-runs with the real chrome.
+   */
+  readonly inlineChromePending?: boolean
   /** Opt a non-`parameter` node into the bottom-left zoom magnifier
    *  (`CustomHandle`) instead of a second plain resize dot. Reuses
    *  BaseNode's existing 2× zoom-drag handlers. */
@@ -163,6 +174,7 @@ function BaseNodeComponent({
   className,
   imageAspectRatio,
   chromeHeight = 0,
+  inlineChromePending = false,
   enableZoomHandle,
 }: BaseNodeProps) {
   // Auto-compute minHeight from handle count: handles need 30px each + 20px padding
@@ -253,6 +265,11 @@ function BaseNodeComponent({
   // any size change.
   useEffect(() => {
     if (!id) return
+    // Skip while inline chrome is expected but not yet measured (post-remount
+    // transient): re-fitting with chromeHeight===0 against a chrome-inclusive
+    // stored height inflates the width permanently. The chrome ResizeObserver
+    // fires next tick → chromeHeight → effectiveMinHeight dep → this re-runs.
+    if (inlineChromePending) return
     const state = useWorkflowStore.getState()
     const node = state.nodes.find((n) => n.id === id)
     if (!node) return
@@ -312,7 +329,7 @@ function BaseNodeComponent({
         n.id === id ? { ...n, height: effectiveMinHeight } : n
       ),
     })
-  }, [imageAspectRatio, id, visualW, visualH, measuredH, effectiveMinHeight, minWidth])
+  }, [imageAspectRatio, id, visualW, visualH, measuredH, effectiveMinHeight, minWidth, inlineChromePending])
 
   // After any size change above, re-measure handle bounds. Needed for nodes
   // whose handles use `top: calc(100% - Npx)` (typed-pip stacks anchored to
@@ -671,26 +688,53 @@ function BaseNodeComponent({
           the shared zoom-scaled pill so every node matches; `rawToolbarContent`
           (bespoke self-framing toolbars) renders as-is. */}
       {(topToolbarContent || rawToolbarContent) && (
-        <NodeToolbar align="center" isVisible={isHovered || !!keepTopToolbarVisible || isRunning || isPending || quickStripPinned} position={Position.Bottom} offset={4}>
-          <div
-            // The bottom toolbar renders in a portal outside the node's DOM
-            // subtree, so hovering it doesn't trigger the node's
-            // onMouseEnter. Bridge the gap: keep `isHovered` true while the
-            // cursor sits over the toolbar itself, and start a fresh
-            // leave-timer when it exits.
-            onMouseEnter={() => {
-              if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current)
-              setIsHovered(true)
-            }}
-            onMouseLeave={() => {
-              leaveTimerRef.current = setTimeout(() => setIsHovered(false), 600)
-            }}
-          >
-            {rawToolbarContent
-              ? rawToolbarContent
-              : <NodeRunStripShell>{topToolbarContent}</NodeRunStripShell>}
-          </div>
-        </NodeToolbar>
+        chromeHeight > 0 ? (
+          // Inline mode: glue the run strip to the card's DOM bottom so it
+          // tracks `node.height` (exactly like the card) instead of
+          // `<NodeToolbar>`'s async-MEASURED height, which lags during a resize
+          // and leaves the pill "too far / too close". `top-full` of the
+          // h-full wrapper = the node's bottom edge; the strip is out-of-flow so
+          // it never reserves layout space (stays hidden at rest).
+          (isHovered || !!keepTopToolbarVisible || isRunning || isPending || quickStripPinned) && (
+            <div
+              className="absolute left-1/2 -translate-x-1/2 top-full mt-1 z-50"
+              onMouseEnter={() => {
+                if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current)
+                setIsHovered(true)
+              }}
+              onMouseLeave={() => {
+                leaveTimerRef.current = setTimeout(() => setIsHovered(false), 600)
+              }}
+            >
+              <InlineGluedStripContext.Provider value={true}>
+                {rawToolbarContent
+                  ? rawToolbarContent
+                  : <NodeRunStripShell>{topToolbarContent}</NodeRunStripShell>}
+              </InlineGluedStripContext.Provider>
+            </div>
+          )
+        ) : (
+          <NodeToolbar align="center" isVisible={isHovered || !!keepTopToolbarVisible || isRunning || isPending || quickStripPinned} position={Position.Bottom} offset={4}>
+            <div
+              // The bottom toolbar renders in a portal outside the node's DOM
+              // subtree, so hovering it doesn't trigger the node's
+              // onMouseEnter. Bridge the gap: keep `isHovered` true while the
+              // cursor sits over the toolbar itself, and start a fresh
+              // leave-timer when it exits.
+              onMouseEnter={() => {
+                if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current)
+                setIsHovered(true)
+              }}
+              onMouseLeave={() => {
+                leaveTimerRef.current = setTimeout(() => setIsHovered(false), 600)
+              }}
+            >
+              {rawToolbarContent
+                ? rawToolbarContent
+                : <NodeRunStripShell>{topToolbarContent}</NodeRunStripShell>}
+            </div>
+          </NodeToolbar>
+        )
       )}
 
       {handles.map((h) => (
@@ -767,10 +811,11 @@ function BaseNodeComponent({
               position={altPressed ? "bottom-left" : "bottom-right"}
               minWidth={minWidth}
               minHeight={effectiveMinHeight}
-              keepAspectRatio={!!imageAspectRatio}
+              keepAspectRatio={!!imageAspectRatio && chromeHeight === 0}
               resizeDirection={resizeDirection}
               onResizeStart={handleGroupResizeStart}
               onResize={(_e, p) => handleGroupResize(p.width)}
+              onResizeEnd={() => { groupResizeStartRef.current = null }}
               className="!w-2.5 !h-2.5 !border-0 !rounded-full" style={{ backgroundColor: "color-mix(in srgb, var(--muted-foreground) 40%, transparent)" }}
             />
             <CustomHandle
@@ -788,10 +833,11 @@ function BaseNodeComponent({
               position="bottom-right"
               minWidth={minWidth}
               minHeight={effectiveMinHeight}
-              keepAspectRatio={!!imageAspectRatio}
+              keepAspectRatio={!!imageAspectRatio && chromeHeight === 0}
               resizeDirection={resizeDirection}
               onResizeStart={handleGroupResizeStart}
               onResize={(_e, p) => handleGroupResize(p.width)}
+              onResizeEnd={() => { groupResizeStartRef.current = null }}
               className="!w-2.5 !h-2.5 !border-0 !rounded-full" style={{ backgroundColor: "color-mix(in srgb, var(--muted-foreground) 40%, transparent)" }}
             />
             <NodeResizeControl
@@ -799,10 +845,11 @@ function BaseNodeComponent({
               position="bottom-left"
               minWidth={minWidth}
               minHeight={effectiveMinHeight}
-              keepAspectRatio={!!imageAspectRatio}
+              keepAspectRatio={!!imageAspectRatio && chromeHeight === 0}
               resizeDirection={resizeDirection}
               onResizeStart={handleGroupResizeStart}
               onResize={(_e, p) => handleGroupResize(p.width)}
+              onResizeEnd={() => { groupResizeStartRef.current = null }}
               className="!w-2.5 !h-2.5 !border-0 !rounded-full" style={{ backgroundColor: "color-mix(in srgb, var(--muted-foreground) 40%, transparent)" }}
             />
           </>
