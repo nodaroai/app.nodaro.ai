@@ -1,14 +1,29 @@
 name: CI
 
 on:
+  # Feature branches are covered by the pull_request event (which tests the
+  # merge result), so we DON'T also run on their push — that doubled every PR's
+  # CI. `push` is kept only for main (post-merge validation + the migrate gate).
   push:
-    branches: [main, "feature/**", "fix/**", "feat/**", "refactor/**", "chore/**", "test/**", "docs/**"]
+    branches: [main]
   pull_request:
     branches: [main, dev]
+
+# Cancel a superseded run when a newer commit lands on the same PR/branch.
+# main is exempt so a post-merge run (and its migrate job) always completes.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read
   pull-requests: write
+
+# Skip youtube-dl-exec's postinstall binary download. No CI job executes the
+# binary (the backend tests mock youtube-dl-exec), and the upstream CDN
+# intermittently 504s — failing `npm ci` and forcing fully-billed reruns.
+env:
+  YOUTUBE_DL_SKIP_DOWNLOAD: "1"
 
 jobs:
   frontend-tests:
