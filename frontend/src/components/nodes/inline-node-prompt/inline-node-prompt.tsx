@@ -16,18 +16,23 @@ export interface InlineNodePromptProps {
   readonly provider?: string
   readonly aspectRatio?: string
   readonly duration?: number
+  /** Lifts the editor's focus state to the node so it can reveal the run pill
+   *  while the prompt is being edited (the pill is otherwise hover-only). */
+  readonly onFocusChange?: (focused: boolean) => void
 }
 
 const DRAG_THRESHOLD_PX = 2
 
-export function InlineNodePrompt({ nodeId, nodeType, data, provider, aspectRatio, duration }: InlineNodePromptProps) {
+export function InlineNodePrompt({ nodeId, nodeType, data, provider, aspectRatio, duration, onFocusChange }: InlineNodePromptProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const { referenceImages, nodeRefs, refMap, promptSnippets } = usePromptEditorRefs(nodeId)
   const fields = getPromptFields(nodeType)
   const promptField = fields?.prompt ?? "prompt"
   const promptValue = typeof data[promptField] === "string" ? (data[promptField] as string) : ""
 
-  const [isFocused, setIsFocused] = useState(false)
+  const [isFocused, setIsFocusedRaw] = useState(false)
+  // Lift focus to the node (reveals the run pill while editing) alongside local state.
+  const setIsFocused = (f: boolean) => { setIsFocusedRaw(f); onFocusChange?.(f) }
   // AUDIT FIX: keep `nodrag` active while a body-portaled suggestion menu
   // (@/{/ ) is open — TipTap blurs into the portal, which would otherwise flip
   // isFocused false and drop nodrag mid-interaction. The floating renderer marks
@@ -66,8 +71,10 @@ export function InlineNodePrompt({ nodeId, nodeType, data, provider, aspectRatio
   return (
     <div
       // nopan always; nodrag only while focused so an unfocused click can still
-      // be discriminated as click-vs-drag by React Flow.
-      className={`nopan ${nodragActive ? "nodrag" : ""} flex flex-col gap-1 px-2 py-1.5`}
+      // be discriminated as click-vs-drag by React Flow. `relative` anchors the
+      // focus-only edit affordances. No border/divider — the prompt flows
+      // seamlessly below the preview on the same node surface.
+      className={`nopan ${nodragActive ? "nodrag" : ""} relative flex flex-col px-2.5 py-1.5`}
       onMouseDown={(e) => {
         // Only the editor area participates in the gesture; clicks on the
         // header (Prompt label, snippet/AI buttons) pass through untouched.
@@ -103,9 +110,10 @@ export function InlineNodePrompt({ nodeId, nodeType, data, provider, aspectRatio
         e.currentTarget.querySelector<HTMLElement>(".ProseMirror")?.focus()
       }}
     >
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[11px] font-medium text-muted-foreground">Prompt</span>
-        <span className="inline-flex items-center gap-0.5">
+      {/* Edit affordances (snippets + Generate-with-AI) appear ONLY while editing,
+          floating top-right over the text so the resting state stays clean. */}
+      {isFocused && (
+        <div className="absolute top-1.5 right-1.5 z-10 inline-flex items-center gap-0.5 rounded-md bg-card/80 backdrop-blur-sm px-0.5">
           <SnippetMenuButton
             pool={promptSnippets}
             value={promptValue}
@@ -122,19 +130,20 @@ export function InlineNodePrompt({ nodeId, nodeType, data, provider, aspectRatio
             duration={duration}
             onAccept={(text, mc) => { writeField(text); if (mc) updateNodeData(nodeId, { [mc.field]: mc.value }) }}
           />
-        </span>
-      </div>
+        </div>
+      )}
 
       {/* nowheel: scrolling a long prompt scrolls the editor, not the canvas.
-          `prompt-editor-surface` scopes the click-vs-drag gesture below to the
-          editor area only (the header buttons pass through). */}
+          `prompt-editor-surface` scopes the click-vs-drag gesture to the editor.
+          `bare` drops the box chrome so the editor blends into the node card. */}
       <div className="nowheel prompt-editor-surface">
         <PromptEditor
+          bare
           value={promptValue}
           onChange={writeField}
           placeholder="Describe what you want to generate… Type @ for references, { for variables"
-          rows={4}
-          scrollable
+          rows={2}
+          maxRows={6}
           referenceImages={referenceImages}
           nodeRefs={nodeRefs}
           refMap={refMap}
