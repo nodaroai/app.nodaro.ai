@@ -1,27 +1,9 @@
 /**
  * On/off preferences for the add-node connect flow, persisted in localStorage.
- * `makeBoolPref` is the shared try/catch boolean-pref helper — SSR-safe, never
- * throws when storage is unavailable. Mirrors the pattern in `add-node-menu-tab.ts`.
+ * Uses the shared `makeBoolPref` helper — SSR-safe, never throws when storage
+ * is unavailable.
  */
-function makeBoolPref(key: string, defaultOn: boolean) {
-  return {
-    get(): boolean {
-      try {
-        const v = localStorage.getItem(key)
-        return v === null ? defaultOn : v === "1"
-      } catch {
-        return defaultOn
-      }
-    },
-    set(on: boolean): void {
-      try {
-        localStorage.setItem(key, on ? "1" : "0")
-      } catch {
-        /* ignore */
-      }
-    },
-  }
-}
+import { makeBoolPref } from "./bool-pref"
 
 /** Tab-auto-connect: create a node from the popup and auto-wire it to the focused
  *  node. Defaults to ON. */

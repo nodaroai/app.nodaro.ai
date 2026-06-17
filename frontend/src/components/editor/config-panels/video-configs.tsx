@@ -44,6 +44,7 @@ import { MappableField } from "./mappable-field"
 import { TagTextarea } from "./tag-textarea"
 import type { RefImageItem } from "./tag-textarea"
 import { PromptEditor } from "./prompt-editor"
+import { usePromptEditorRefs } from "@/components/nodes/inline-node-prompt/use-prompt-editor-refs"
 // Lazy-loaded so the heavy Kling3 studio panel ships in its OWN chunk instead
 // of being statically bundled into the video-configs chunk. config-panel.tsx
 // lazy-imports the same module path, so both share a single on-demand chunk.
@@ -2147,8 +2148,14 @@ export const TextToVideoConfig = memo(TextToVideoConfigImpl)
 //     `connectedRefImageOrder`).
 //   - Kling 3.0 dispatches to Kling3StudioConfig (same as i2v/t2v).
 // ---------------------------------------------------------------------------
-function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources, fieldMappings, onMapField, nodes, edges, onUpdateNode, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<GenerateVideoNodeData> & { nodeId?: string }) {
-  const promptSnippets = useSnippetPool("video", "prompt")
+function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources, fieldMappings, onMapField, nodes, edges, onUpdateNode, variableDisplayMode, nodeId }: ConfigProps<GenerateVideoNodeData> & { nodeId?: string }) {
+  // Single source for the prompt editor's @-refs / variables / snippets — shared
+  // with the inline canvas editor + quick-edit modal so they never drift. Supplies
+  // referenceImages (was the local refImagesForAutocomplete via buildVideoRefAutocomplete;
+  // the hook's buildImageConnectedReferences is the validated superset and also
+  // surfaces video extraRefs), nodeRefs, refMap (were function props), and
+  // promptSnippets (was useSnippetPool("video","prompt")).
+  const { referenceImages, nodeRefs, refMap, promptSnippets } = usePromptEditorRefs(nodeId ?? "")
   const negativeSnippets = useSnippetPool("video", "negative")
   useEffect(() => { prefetchModelCredits(VIDEO_GEN_MODELS.map((m) => m.value)) }, [])
   const [lightboxImage, setLightboxImage] = useState<string | null>(null)
@@ -2326,12 +2333,6 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
     [sources],
   )
 
-  // Character @-mention autocomplete — same as i2v/t2v.
-  const refImagesForAutocomplete = useMemo<RefImageItem[]>(
-    () => toRefImageItems(buildVideoRefAutocomplete(sources)),
-    [sources],
-  )
-
   // Gemini Omni shares a 7-unit input budget: images (1 each) + startFrame (1) +
   // videos (2 each) ≤ 7. Surface the remaining image budget in the label and an
   // over-quota warning below, so the user isn't surprised by the runtime rejection.
@@ -2489,7 +2490,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
               value={data.prompt || ""}
               onChange={(v) => onUpdate({ prompt: v })}
               placeholder={connectedImages.length > 0 ? "Describe the motion or animation you want..." : "Describe the video to generate..."}
-              referenceImages={refImagesForAutocomplete}
+              referenceImages={referenceImages}
               nodeRefs={nodeRefs}
               refMap={refMap}
               snippets={promptSnippets}

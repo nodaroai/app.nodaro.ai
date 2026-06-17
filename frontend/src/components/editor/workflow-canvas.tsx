@@ -463,6 +463,8 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const { screenToFlowPosition, setNodes, setEdges, getNode, getNodes, getEdges, setCenter, fitView, getViewport, setViewport, zoomTo, getInternalNode } = useReactFlow()
   const updateNodeInternals = useUpdateNodeInternals()
   const savedViewport = useWorkflowStore((s) => s.savedViewport)
+  const inlinePromptMode = useWorkflowStore((s) => s.inlinePromptMode)
+  const setInlinePromptMode = useWorkflowStore((s) => s.setInlinePromptMode)
 
   // Freshly-mounted nodes play a ~300ms scale-up entrance (useNodeInsertAnimation
   // + the `.animate-fade-in-scale` wrapper class). React Flow measures each handle
@@ -1612,6 +1614,10 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     })
   }, [])
 
+  const handleToggleInlinePrompt = useCallback(() => {
+    setInlinePromptMode(!useWorkflowStore.getState().inlinePromptMode)
+  }, [setInlinePromptMode])
+
   const handleNodeDragStart = useCallback((_event: React.MouseEvent, node: { id: string }) => {
     wasDraggingRef.current = true
     setDraggingNodeId(node.id)
@@ -2640,6 +2646,8 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         onToggleSnap={handleToggleSnap}
         alignmentEnabled={alignmentEnabled}
         onToggleAlignment={handleToggleAlignment}
+        inlinePromptEnabled={inlinePromptMode}
+        onToggleInlinePrompt={handleToggleInlinePrompt}
         isMobile={isMobile}
       />
 
@@ -2860,6 +2868,12 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           maxZoom={ZOOM_MAX}
           proOptions={{ hideAttribution: true }}
           autoPanOnNodeFocus={false}
+          // Inline prompt mode mounts a live TipTap editor inside each generate
+          // node; bound the live editors to the viewport so off-screen nodes
+          // unmount (no per-keystroke cost for editors the user can't see). Node
+          // data (results/prompt/video position) lives in `node.data`, so
+          // unmount/remount is lossless. Gated: OFF keeps today's render-all.
+          onlyRenderVisibleElements={inlinePromptMode}
         >
           {!isMobile && showMiniMap && (
             <MiniMap

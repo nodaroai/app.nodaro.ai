@@ -2,6 +2,7 @@
 
 import { Wand2 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { SelectItem } from "@/components/ui/select"
 
 interface AspectRatioOption {
   readonly value: string
@@ -77,5 +78,23 @@ export function AspectRatioSelector({ options, value, onValueChange, className }
         )
       })}
     </div>
+  )
+}
+
+/** Aspect-ratio dropdown item: proportional rectangle icon on the left,
+ *  text label to its right. Icon-led layout makes the ratio visually
+ *  scannable — eye lands on the shape before reading the label. Same
+ *  `RatioIcon` SVG as the full config panel's tile grid. Shared so the
+ *  quick-toolbars and the run-strip controls render identical option rows. */
+export function AspectRatioItem({ value, label }: { value: string; label: string }) {
+  return (
+    <SelectItem value={value} className="text-xs pr-8">
+      <span className="flex w-full items-center gap-2">
+        <span className="text-muted-foreground shrink-0">
+          <RatioIcon value={value} label={label} />
+        </span>
+        <span className="flex-1">{label}</span>
+      </span>
+    </SelectItem>
   )
 }

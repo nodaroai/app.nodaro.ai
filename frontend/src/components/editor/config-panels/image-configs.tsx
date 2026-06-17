@@ -49,11 +49,12 @@ import { removeMentionToken, makeRemoveWiredSource, appendSuppressedSlug } from 
 import { ExtraRefsSection } from "./extra-refs-section"
 import type { RefImageItem } from "./tag-textarea"
 import { PromptEditor } from "./prompt-editor"
+import { usePromptEditorRefs } from "@/components/nodes/inline-node-prompt/use-prompt-editor-refs"
 import { ReferenceSupportWarning } from "./reference-support-warning"
 import type { ConnectedReference, ReferenceSource } from "@nodaro/shared"
 import { DEFAULT_LABEL_BY_SOURCE, characterMentionSlug, locationMentionSlug, expandExtraRefsToConnectedReferences, getMaxImagePromptChars, getMaxNegativePromptChars } from "@nodaro/shared"
 import { PromptLengthCounter } from "./prompt-length-counter"
-import { buildImageConnectedReferences, connectedReferencesToRefImages } from "./connected-references"
+import { buildImageConnectedReferences } from "./connected-references"
 import { ConnectedMediaList } from "./connected-media-list"
 import { PromptFieldFinalView, PromptFieldModeToggle } from "./prompt-field-final-view"
 import { useFinalPromptSegments, negativeRoutingCaption } from "./use-final-prompt-segments"
@@ -143,10 +144,14 @@ function expandLocationSourceForAutocomplete(
 
 // REF_IMAGE_MAX_LIMITS / DEFAULT_REF_IMAGE_MAX live in @nodaro/shared (model-constants).
 
-function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<GenerateImageData> & { nodeId?: string }) {
+function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, variableDisplayMode, nodeId }: ConfigProps<GenerateImageData> & { nodeId?: string }) {
   useEffect(() => { prefetchModelCredits(IMAGE_GEN_MODELS.map((m) => m.value)) }, [])
 
-  const promptSnippets = useSnippetPool("image", "prompt")
+  // Single source for the prompt editor's @-refs / variables / snippets — shared
+  // with the inline canvas editor + quick-edit modal so they never drift. Supplies
+  // referenceImages (was the local refImagesForAutocomplete), nodeRefs, refMap
+  // (were function props), and promptSnippets (was useSnippetPool("image","prompt")).
+  const { referenceImages, nodeRefs, refMap, promptSnippets } = usePromptEditorRefs(nodeId ?? "")
   const negativeSnippets = useSnippetPool("image", "negative")
 
   // The selected providers list is the source of truth. Legacy data with only
@@ -337,21 +342,12 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
       .map((c) => ({ id: `char_${c.id}`, url: c.referenceImageUrl!, label: c.name }))
   }, [attachedChars])
 
-  // (refImagesForAutocomplete is derived below, after connectedReferences is built.)
-
   // Rich connectedReferences for the inline final-view — mirrors the runtime
   // path through buildImagePrompt so the view shows the same fidelity
   // blocks the model will actually receive.
   const connectedReferences = useMemo<ConnectedReference[]>(
     () => buildImageConnectedReferences({ data, sources, nodes, attachedChars }),
     [data.referenceImageUrls, data.referenceImageOrder, data.extraRefs, sources, attachedChars, nodes],
-  )
-
-  // Ordered reference-image list for the "@" autocomplete trigger. Derived from
-  // connectedReferences so the default label per source is preserved.
-  const refImagesForAutocomplete = useMemo<RefImageItem[]>(
-    () => connectedReferencesToRefImages(connectedReferences),
-    [connectedReferences],
   )
 
   // Per-field Edit⇄Final toggle state (persisted in node data). The assembled
@@ -430,7 +426,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
               value={data.prompt}
               onChange={(v) => onUpdate({ prompt: v })}
               placeholder="Describe the image to generate..."
-              referenceImages={refImagesForAutocomplete}
+              referenceImages={referenceImages}
               nodeRefs={nodeRefs}
               refMap={refMap}
               snippets={promptSnippets}

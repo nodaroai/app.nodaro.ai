@@ -29,7 +29,10 @@ interface BaseProps {
   readonly nodeRefs?: readonly NodeRefItem[]
   readonly referenceImages?: readonly RefImageItem[]
   readonly displayMode?: VariableDisplayMode
-  readonly refMap?: Map<string, string>
+  // ReadonlyMap (not Map): TagTextarea only reads refMap (renderNodeRefs .get()).
+  // Accepting ReadonlyMap lets callers feed usePromptEditorRefs()'s shared map
+  // directly — and matches PromptEditor's already-ReadonlyMap refMap prop.
+  readonly refMap?: ReadonlyMap<string, string>
   /** Snippet pool for this field (target+media filtered). Enables the "/"
    *  snippets dropdown when tagMode is "none" (negative-prompt fields).
    *  tagMode "audio"/"suno" keep their existing "/" audio-tag behavior. */

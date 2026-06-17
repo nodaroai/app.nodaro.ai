@@ -28,6 +28,7 @@ import { queryClient } from "@/lib/query-client"
 import { queryKeys } from "@/lib/query-keys"
 import { getCachedUserId } from "@/hooks/use-auth"
 import { getStickyParameterDisplayMode } from "@/lib/parameter-node-prefs"
+import { getInlinePromptMode, setInlinePromptMode as persistInlinePromptMode } from "@/lib/inline-prompt-pref"
 import type { GenerateTextTemplate } from "@/lib/generate-text-templates"
 import { migrateGenerateImageHandles } from "@/lib/generate-image-handle-migration"
 import { migrateGenerateVideoNodes } from "@/lib/generate-video-handle-migration"
@@ -428,6 +429,7 @@ interface WorkflowState {
    */
   readonly remoteUpdatedAt: string | null
   readonly videoAutoplay: boolean
+  readonly inlinePromptMode: boolean
   readonly freecutEdit: { nodeId: string; videoUrl: string; freecutProjectUrl?: string } | null
   readonly openFreeCut: (nodeId: string, videoUrl: string, freecutProjectUrl?: string) => void
   readonly closeFreeCut: () => void
@@ -581,6 +583,7 @@ interface WorkflowState {
     settings?: Record<string, unknown> | null
   }) => void
   readonly setVideoAutoplay: (autoplay: boolean) => void
+  readonly setInlinePromptMode: (enabled: boolean) => void
   readonly clearNewNode: (id: string) => void
   readonly runSingleNode: ((nodeId: string) => void) | null
   readonly setRunSingleNode: (fn: ((nodeId: string) => void) | null) => void
@@ -912,6 +915,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   videoAutoplay: typeof window !== "undefined" && typeof localStorage !== "undefined" && typeof localStorage.getItem === "function" && localStorage.getItem("videoAutoplay") !== null
     ? localStorage.getItem("videoAutoplay") === "true"
     : true,
+  inlinePromptMode: getInlinePromptMode(),
   savedViewport: null,
   setSavedViewport: (vp) => set({ savedViewport: vp }),
   freecutEdit: null,
@@ -2739,6 +2743,11 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   setVideoAutoplay: (autoplay) => {
     if (typeof window !== "undefined") localStorage.setItem("videoAutoplay", String(autoplay))
     set({ videoAutoplay: autoplay })
+  },
+
+  setInlinePromptMode: (enabled) => {
+    persistInlinePromptMode(enabled)
+    set({ inlinePromptMode: enabled })
   },
 
   openFreeCut: (nodeId, videoUrl, freecutProjectUrl) => set({ freecutEdit: { nodeId, videoUrl, freecutProjectUrl } }),

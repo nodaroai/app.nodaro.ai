@@ -48,13 +48,12 @@ import {
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { getPromptFields, getSnippetMedia } from "@/lib/prompt-fields"
 import { useSnippetPool } from "@/hooks/queries/use-prompt-snippets-queries"
-import { getUpstreamNodes, buildNodeRefMap } from "@/lib/node-refs"
 import { getConnectedSources } from "@/components/editor/config-panels/helpers"
 import {
   buildImageConnectedReferences,
-  connectedReferencesToRefImages,
   type ConnectedRefsData,
 } from "@/components/editor/config-panels/connected-references"
+import { usePromptEditorRefs } from "./inline-node-prompt/use-prompt-editor-refs"
 import { NODE_DEF_MAP } from "@/types/nodes"
 import { QuickConfigSelect, getQuickConfigs } from "./node-quick-configs"
 import { RunNodeButton } from "./run-node-button"
@@ -166,15 +165,12 @@ export function PromptQuickEditModal() {
   const nodesRef = useRef(nodes)
   nodesRef.current = nodes
 
-  const nodeRefs = useMemo(
-    () => (nodeId ? getUpstreamNodes(nodeId, nodesRef.current, edges) : []),
-    [nodeId, edges],
-  )
-
-  const refMap = useMemo(
-    () => (nodeId ? buildNodeRefMap(nodeId, nodesRef.current, edges) : new Map<string, string>()),
-    [nodeId, edges],
-  )
+  // Prompt-editor @-refs / variables / snippets — shared with the inline canvas
+  // editor + the config panels so the three surfaces never drift. Supplies
+  // referenceImages, nodeRefs, refMap, and promptSnippets (each was derived
+  // locally below). The local `connectedReferences` is KEPT — it feeds
+  // useFinalPromptSegments' image-composition preview, which the hook doesn't expose.
+  const { referenceImages, nodeRefs, refMap, promptSnippets } = usePromptEditorRefs(nodeId ?? "")
 
   const refData = node?.data as {
     referenceImageUrls?: unknown
@@ -195,14 +191,9 @@ export function PromptQuickEditModal() {
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodeId, edges, characterDefinitions, refData?.referenceImageUrls, refData?.referenceImageOrder, refData?.extraRefs, refData?.characterDefinitionIds])
-  const referenceImages = useMemo(
-    () => connectedReferencesToRefImages(connectedReferences),
-    [connectedReferences],
-  )
 
   const snippetMedia = getSnippetMedia(nodeType)
   const providerStr = typeof data.provider === "string" ? data.provider : undefined
-  const promptSnippets = useSnippetPool(snippetMedia, "prompt")
   const negativeSnippets = useSnippetPool(snippetMedia, "negative")
 
   const finalPrompt = useFinalPromptSegments({

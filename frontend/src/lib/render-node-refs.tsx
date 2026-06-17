@@ -11,7 +11,7 @@ import type { VariableDisplayMode } from "@/components/editor/config-panels/type
  */
 export function renderNodeRefs(
   text: string,
-  refMap: Map<string, string>,
+  refMap: ReadonlyMap<string, string>,
   mode: Exclude<VariableDisplayMode, "raw">,
 ): ReactNode[] {
   const parts: ReactNode[] = []

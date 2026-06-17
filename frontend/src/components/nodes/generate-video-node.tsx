@@ -1,7 +1,7 @@
 "use client"
 
 import { memo, useState, useMemo, useEffect, useRef, useCallback } from "react"
-import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
+import { Position, useUpdateNodeInternals, useStore, type NodeProps } from "@xyflow/react"
 import {
   Clapperboard,
   Loader2,
@@ -22,12 +22,18 @@ import {
   Type,
   Minus,
   Film,
+  Clock,
+  Layers,
 } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { BaseNode } from "./base-node"
 import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { EditableNodeLabel } from "./editable-node-label"
 import { GenerateVideoQuickToolbar } from "./generate-video-quick-toolbar"
 import { GenerateVideoResultInfo } from "./generate-video-result-info"
+import { InlineNodePrompt } from "./inline-node-prompt/inline-node-prompt"
+import { NodeRunStripControls } from "./node-run-strip-controls"
+import { useGenerateVideoStripModel } from "./use-generate-video-strip-model"
 import { NodeJobProgress } from "./node-job-progress"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -86,8 +92,26 @@ const HANDLE_TOP = {
 function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as GenerateVideoNodeData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
+  const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const openFreeCut = useWorkflowStore((s) => s.openFreeCut)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
+
+  // Inline prompt mode: render the live prompt editor + in-body run strip when
+  // the global toggle is ON and the canvas is interactive (NOT the read-only
+  // viewer / template-preview modal). OFF → today's behavior byte-for-byte.
+  const inlineEnabled = useWorkflowStore((s) => s.inlinePromptMode)
+  const interactive = useStore((s) => s.elementsSelectable)
+  const showInline = inlineEnabled && interactive
+  const chromeRef = useRef<HTMLDivElement>(null)
+  const [chromeHeight, setChromeHeight] = useState(0)
+  useEffect(() => {
+    if (!showInline || !chromeRef.current) { setChromeHeight(0); return }
+    const el = chromeRef.current
+    const ro = new ResizeObserver(() => setChromeHeight(el.offsetHeight))
+    ro.observe(el)
+    setChromeHeight(el.offsetHeight)
+    return () => ro.disconnect()
+  }, [showInline])
 
   const [toolbarDropdownOpen, setToolbarDropdownOpen] = useState(false)
   const [showThumbnails, setShowThumbnails] = useState(false)
@@ -119,6 +143,11 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
     Array.isArray(nodeData.referenceVideoUrls) && (nodeData.referenceVideoUrls as unknown[]).length > 0,
   )
   const credits = useModelCredits(creditIdentifier, 25)
+
+  // Shared run-strip model (model / aspect / duration / resolution / versions +
+  // Seedance-2 input-mode lever + handlers + run action) — the SAME hook the
+  // hover quick-toolbar consumes, so the in-body strip can never disagree.
+  const strip = useGenerateVideoStripModel(id, nodeData)
 
   // Result-aspect-ratio for the BaseNode minHeight calc + video-element sizing.
   const { aspectRatio: mediaAspectRatio, onLoadDimensions: handleLoadDimensions } =
@@ -197,6 +226,170 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
     updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedVideoUrl"))
   }
 
+  // Media preview (running / result / failed / idle) + ALL absolute hover
+  // controls + the LayoutGrid versions toggle. Reused by BOTH the inline and
+  // non-inline branches. The caller owns the `group/video` wrapper (hover
+  // controls use `group-hover/video:opacity-100`).
+  function renderPreview() {
+    return (
+      <>
+        {/* Running state */}
+        {status === "running" && (
+          <div className="flex flex-col items-center justify-center gap-2 bg-muted/30 rounded-xl w-full h-full min-h-[80px]">
+            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+            <NodeJobProgress progress={nodeData.currentJobProgress as number | undefined} />
+          </div>
+        )}
+
+        {/* Video result */}
+        {status !== "running" && activeUrl && (
+          <>
+            {results.length > 1 && (
+              <button
+                type="button"
+                className="absolute top-2 left-2 z-10 flex items-center gap-1 px-1.5 py-0.5 bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white text-[11px] rounded-md opacity-0 group-hover/video:opacity-100 transition-opacity"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setShowThumbnails((v) => !v)
+                }}
+              >
+                <LayoutGrid className="w-3 h-3" />
+                <span>{results.length}</span>
+              </button>
+            )}
+            <video
+              ref={videoRef}
+              src={activeUrl}
+              crossOrigin="anonymous"
+              autoPlay={shouldPlay}
+              loop={shouldPlay}
+              muted
+              playsInline
+              poster={activeThumbnail}
+              className="w-full h-full object-cover rounded-xl"
+              onLoadedMetadata={(e) => {
+                const v = e.currentTarget
+                if (v.videoWidth > 0) {
+                  handleLoadDimensions({ width: v.videoWidth, height: v.videoHeight })
+                }
+                if (shouldPlay) v.play().catch(() => {})
+              }}
+            />
+            {/* Top-right: delete */}
+            {results.length > 0 && (
+              <div className="absolute top-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity">
+                <button
+                  type="button"
+                  aria-label="Remove result"
+                  className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setDeleteConfirm(activeIndex)
+                  }}
+                  title="Delete this result"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+            {/* Bottom-left: expand, download, copy, freecut */}
+            <div className="absolute bottom-2 left-2 flex gap-1 opacity-0 group-hover/video:opacity-100 transition-opacity">
+              <button
+                type="button"
+                aria-label="Expand preview"
+                className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setPreviewOpen(true)
+                }}
+                title="Fullscreen"
+              >
+                <Expand className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                aria-label="Download"
+                className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  const a = document.createElement("a")
+                  a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl)}&download=1`
+                  a.download = `${(nodeData.label as string) || "video"}.mp4`
+                  a.click()
+                }}
+                title="Download"
+              >
+                <Download className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                aria-label="Copy URL"
+                className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  copyToClipboard(activeUrl, "URL copied")
+                }}
+                title="Copy URL"
+              >
+                <Link className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                aria-label="Edit in FreeCut"
+                className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  openFreeCut(id, activeUrl, activeResult?.freecutProjectUrl)
+                }}
+                title="Edit in FreeCut"
+              >
+                <Scissors className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            {/* Bottom-right: result-info pill (model · aspect · resolution ·
+                duration + audio), read from this result's job. Replaces the
+                old Settings gear — open config by selecting the node, same as
+                Generate Image. Hover-revealed by default; pinned while the
+                versions panel is open so each result's settings stay visible
+                as the user switches versions. */}
+            <div
+              className={`absolute bottom-2 right-2 transition-opacity ${
+                showThumbnails ? "opacity-100" : "opacity-0 group-hover/video:opacity-100"
+              }`}
+            >
+              <GenerateVideoResultInfo nodeId={id} result={activeResult} data={nodeData} />
+            </div>
+          </>
+        )}
+
+        {/* Failed state */}
+        {status === "failed" && !activeUrl && (
+          <div className="flex flex-col items-center justify-center gap-1 rounded-xl p-2 h-[180px] bg-red-500/5 text-red-500">
+            <div className="flex items-center gap-1.5">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span className="font-medium">Failed</span>
+            </div>
+            {nodeData.errorMessage ? (
+              <p
+                className="text-[10px] text-center line-clamp-2 text-red-400"
+                title={nodeData.errorMessage as string}
+              >
+                {nodeData.errorMessage as string}
+              </p>
+            ) : null}
+          </div>
+        )}
+
+        {/* Idle state */}
+        {status !== "running" && !activeUrl && status !== "failed" && (
+          <div className="flex items-center justify-center rounded-xl bg-muted/10 text-muted-foreground/40 h-[160px]">
+            <Clapperboard className="w-10 h-10" />
+          </div>
+        )}
+      </>
+    )
+  }
+
   return (
     <div className="relative" style={{ width: "100%", height: "100%" }}>
       <EditableNodeLabel
@@ -212,14 +405,19 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
         credits={credits}
         selected={selected}
         isRunning={status === "running"}
-        className={activeUrl ? "!border-0 !shadow-none !bg-transparent" : undefined}
+        // Result fills the node transparently (no card chrome) ONLY in the
+        // non-inline layout. In inline mode the prompt editor + run strip sit
+        // below the preview inside the card, so the card border/background must
+        // stay to back that chrome.
+        className={!showInline && activeUrl ? "!border-0 !shadow-none !bg-transparent" : undefined}
         hideHeader
         // Shared video-node sizing: 16:9 @ VIDEO_NODE_MIN_HEIGHT (≈654×368) when
         // idle, snaps to the real result aspect once a result loads. (368 also
         // satisfies this node's 11-pip handle stack.)
         {...videoNodeSizing(mediaAspectRatio)}
+        chromeHeight={showInline ? chromeHeight : undefined}
         handles={handles}
-        rawToolbarContent={
+        rawToolbarContent={showInline ? undefined : (
           <GenerateVideoQuickToolbar
             nodeId={id}
             data={nodeData}
@@ -227,8 +425,8 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
             isRunning={status === "running"}
             onAnyOpenChange={setToolbarDropdownOpen}
           />
-        }
-        keepTopToolbarVisible={toolbarDropdownOpen}
+        )}
+        keepTopToolbarVisible={showInline ? undefined : toolbarDropdownOpen}
         bottomToolbarContent={
           showThumbnails && results.length > 1 ? (
             <div className="flex gap-2 px-2 py-1.5 bg-black/60 backdrop-blur-sm rounded-xl border border-white/10">
@@ -269,161 +467,96 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
           ) : undefined
         }
       >
-        <div className="relative w-full h-full group/video">
-          {/* Running state */}
-          {status === "running" && (
-            <div className="flex flex-col items-center justify-center gap-2 bg-muted/30 rounded-xl w-full h-full min-h-[80px]">
-              <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-              <NodeJobProgress progress={nodeData.currentJobProgress as number | undefined} />
+        {showInline ? (
+          // Inline mode: aspect-locked preview on top, prompt editor + run strip
+          // as chrome below (measured via chromeRef → BaseNode chromeHeight). The
+          // preview sub-region carries `group/video` so the result hover controls'
+          // `group-hover/video:opacity-100` still reveal on hover.
+          <div className="flex flex-col h-full">
+            <div className="relative flex-1 min-h-0 group/video">
+              {renderPreview()}
             </div>
-          )}
-
-          {/* Video result */}
-          {status !== "running" && activeUrl && (
-            <>
-              {results.length > 1 && (
-                <button
-                  type="button"
-                  className="absolute top-2 left-2 z-10 flex items-center gap-1 px-1.5 py-0.5 bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white text-[11px] rounded-md opacity-0 group-hover/video:opacity-100 transition-opacity"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setShowThumbnails((v) => !v)
-                  }}
-                >
-                  <LayoutGrid className="w-3 h-3" />
-                  <span>{results.length}</span>
-                </button>
-              )}
-              <video
-                ref={videoRef}
-                src={activeUrl}
-                crossOrigin="anonymous"
-                autoPlay={shouldPlay}
-                loop={shouldPlay}
-                muted
-                playsInline
-                poster={activeThumbnail}
-                className="w-full h-full object-cover rounded-xl"
-                onLoadedMetadata={(e) => {
-                  const v = e.currentTarget
-                  if (v.videoWidth > 0) {
-                    handleLoadDimensions({ width: v.videoWidth, height: v.videoHeight })
-                  }
-                  if (shouldPlay) v.play().catch(() => {})
-                }}
+            <div ref={chromeRef} className="shrink-0">
+              <InlineNodePrompt
+                nodeId={id}
+                nodeType="generate-video"
+                data={nodeData as never}
+                provider={strip.currentProvider}
+                aspectRatio={strip.currentAspect}
+                duration={strip.currentDuration}
               />
-              {/* Top-right: delete */}
-              {results.length > 0 && (
-                <div className="absolute top-2 right-2 opacity-0 group-hover/video:opacity-100 transition-opacity">
-                  <button
-                    type="button"
-                    aria-label="Remove result"
-                    className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setDeleteConfirm(activeIndex)
-                    }}
-                    title="Delete this result"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              )}
-              {/* Bottom-left: expand, download, copy, freecut */}
-              <div className="absolute bottom-2 left-2 flex gap-1 opacity-0 group-hover/video:opacity-100 transition-opacity">
-                <button
-                  type="button"
-                  aria-label="Expand preview"
-                  className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setPreviewOpen(true)
-                  }}
-                  title="Fullscreen"
-                >
-                  <Expand className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  aria-label="Download"
-                  className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    const a = document.createElement("a")
-                    a.href = `/v1/image-proxy?url=${encodeURIComponent(activeUrl)}&download=1`
-                    a.download = `${(nodeData.label as string) || "video"}.mp4`
-                    a.click()
-                  }}
-                  title="Download"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  aria-label="Copy URL"
-                  className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    copyToClipboard(activeUrl, "URL copied")
-                  }}
-                  title="Copy URL"
-                >
-                  <Link className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  aria-label="Edit in FreeCut"
-                  className="w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    openFreeCut(id, activeUrl, activeResult?.freecutProjectUrl)
-                  }}
-                  title="Edit in FreeCut"
-                >
-                  <Scissors className="w-3.5 h-3.5" />
-                </button>
+              {/* flex-wrap so the strip wraps to a second row on narrow nodes; its
+                  full height is captured by chromeRef's ResizeObserver. */}
+              <div className="flex flex-wrap items-center gap-0.5 px-2 pb-1.5">
+                <NodeRunStripControls
+                  nodeId={id}
+                  isRunning={status === "running"}
+                  credits={credits}
+                  onRun={(nid) => runSingleNode?.(nid)}
+                  isMulti={false}
+                  modelLabel={strip.modelLabel}
+                  currentProvider={strip.currentProvider}
+                  modelOptions={strip.modelOptions}
+                  modelGetTooltip={strip.getModelTooltip}
+                  onModelChange={strip.onModelChange}
+                  aspectOptions={strip.aspectOptions}
+                  currentAspect={strip.currentAspect}
+                  aspectShort={strip.aspectShort}
+                  onAspectChange={strip.onAspectChange}
+                  resolutionOptions={strip.resolutionOptions}
+                  currentResolution={strip.currentResolution}
+                  resolutionShort={strip.resolutionShort}
+                  onResolutionChange={strip.onResolutionChange}
+                  repeatCount={strip.repeatCount}
+                  onRepeatChange={strip.onRepeatChange}
+                  ghostTriggerClass="flex items-center gap-1 px-1.5 py-1 rounded-md text-[11px] h-7 whitespace-nowrap hover:bg-black/5 dark:hover:bg-white/10"
+                  afterModel={
+                    /* Seedance 2 input mode — right after model, matching the
+                       original toolbar order (model → mode → aspect → duration). */
+                    strip.isSeedance2 ? (
+                      <Select disabled={status === "running"} value={strip.currentSeedance2Mode} onValueChange={strip.onSeedance2ModeChange}>
+                        <SelectTrigger className="flex items-center gap-1 px-1.5 py-1 rounded-md text-[11px] h-7 whitespace-nowrap hover:bg-black/5 dark:hover:bg-white/10" title="Input mode (Seedance 2)">
+                          <Layers className="opacity-70" />
+                          <SelectValue>{strip.seedance2ModeLabel}</SelectValue>
+                        </SelectTrigger>
+                        <SelectContent className="node-menu-surface">
+                          <SelectItem value="frames" className="text-xs">Frames (start/end images)</SelectItem>
+                          <SelectItem value="references" className="text-xs">References (image refs)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    ) : null
+                  }
+                  afterAspect={
+                    /* Duration selector (only when the provider exposes one) —
+                       right after aspect, matching the original order. */
+                    strip.durationOptions.length > 0 ? (
+                      <Select
+                        value={strip.currentDuration !== undefined ? String(strip.currentDuration) : ""}
+                        onValueChange={strip.onDurationChange}
+                      >
+                        <SelectTrigger className="flex items-center gap-1 px-1.5 py-1 rounded-md text-[11px] h-7 whitespace-nowrap hover:bg-black/5 dark:hover:bg-white/10">
+                          <Clock className="opacity-70" />
+                          <SelectValue>{strip.durationShort}</SelectValue>
+                        </SelectTrigger>
+                        <SelectContent className="node-menu-surface">
+                          {strip.durationOptions.map((opt) => (
+                            <SelectItem key={opt.value} value={String(opt.value)} className="text-xs">
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : null
+                  }
+                />
               </div>
-              {/* Bottom-right: result-info pill (model · aspect · resolution ·
-                  duration + audio), read from this result's job. Replaces the
-                  old Settings gear — open config by selecting the node, same as
-                  Generate Image. Hover-revealed by default; pinned while the
-                  versions panel is open so each result's settings stay visible
-                  as the user switches versions. */}
-              <div
-                className={`absolute bottom-2 right-2 transition-opacity ${
-                  showThumbnails ? "opacity-100" : "opacity-0 group-hover/video:opacity-100"
-                }`}
-              >
-                <GenerateVideoResultInfo nodeId={id} result={activeResult} data={nodeData} />
-              </div>
-            </>
-          )}
-
-          {/* Failed state */}
-          {status === "failed" && !activeUrl && (
-            <div className="flex flex-col items-center justify-center gap-1 rounded-xl p-2 h-[180px] bg-red-500/5 text-red-500">
-              <div className="flex items-center gap-1.5">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span className="font-medium">Failed</span>
-              </div>
-              {nodeData.errorMessage ? (
-                <p
-                  className="text-[10px] text-center line-clamp-2 text-red-400"
-                  title={nodeData.errorMessage as string}
-                >
-                  {nodeData.errorMessage as string}
-                </p>
-              ) : null}
             </div>
-          )}
-
-          {/* Idle state */}
-          {status !== "running" && !activeUrl && status !== "failed" && (
-            <div className="flex items-center justify-center rounded-xl bg-muted/10 text-muted-foreground/40 h-[160px]">
-              <Clapperboard className="w-10 h-10" />
-            </div>
-          )}
-        </div>
+          </div>
+        ) : (
+          <div className="relative w-full h-full group/video">
+            {renderPreview()}
+          </div>
+        )}
       </BaseNode>
 
       {/* 11 typed input pips + 1 output pip — bottom-up clusters:
