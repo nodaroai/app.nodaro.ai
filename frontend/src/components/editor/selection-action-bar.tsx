@@ -4,7 +4,7 @@ import { useMemo } from "react"
 import { Play, CircleSlash, CircleCheck } from "lucide-react"
 import { useReactFlow, useViewport } from "@xyflow/react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { RUN_BUTTON_CLASS } from "@/lib/run-button-style"
+import { RUN_BUTTON_GLASS_CLASS } from "@/lib/run-button-style"
 
 export function SelectionActionBar() {
   const nodes = useWorkflowStore((s) => s.nodes)
@@ -79,7 +79,7 @@ export function SelectionActionBar() {
         type="button"
         onClick={() => runSelected?.()}
         disabled={isAnyRunning || !runSelected}
-        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed ${RUN_BUTTON_CLASS}`}
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed ${RUN_BUTTON_GLASS_CLASS}`}
       >
         <Play className="w-3.5 h-3.5" />
         Run selected ({selectedCount})

@@ -11,17 +11,16 @@ import { setSkipUndoCapture } from "@/hooks/undo-flags";
 import { queryClient } from "@/lib/query-client";
 import { queryKeys } from "@/lib/query-keys";
 import { getCachedCredits } from "@/ee/hooks/use-model-credits";
-import { getModelIdentifier } from "@/components/editor/config-panels/helpers";
-import type { GeneratedResult, WorkflowNode } from "@/types/nodes";
+import type { GeneratedResult, WorkflowNode, WorkflowEdge } from "@/types/nodes";
 import {
-  NODE_CREDIT_COSTS,
   MAX_CONSECUTIVE_POLL_FAILURES,
   isExecutableNode,
-  getFanOutMultiplier,
   type ExecutionContext,
+  type RunConfirmInfo,
 } from "./types";
+import { estimateRunCredits } from "./estimate-run-credits";
 import { COMPOSER_PLAN_MAP } from "@nodaro/shared";
-import { expandItemsWithRepeat, TRANSIENT_RUNTIME_KEYS } from "@nodaro/shared";
+import { expandItemsWithRepeat, TRANSIENT_RUNTIME_KEYS, isExpandedClone } from "@nodaro/shared";
 import { collapseExpandedClones } from "./execution-graph";
 import { shouldAbandonNode } from "./abandon-guard";
 import { getListInputForNode } from "./node-input-resolver";
@@ -192,6 +191,53 @@ export function clearConnectedListRows(nodes: WorkflowNode[]): void {
 }
 
 // ---------------------------------------------------------------------------
+// Run-confirmation gate
+// ---------------------------------------------------------------------------
+
+/** Live, non-clone, non-hidden executable nodes — the read-only set used to
+ *  size the confirm dialog BEFORE any store mutation. */
+function liveExecutable(nodes: WorkflowNode[]): WorkflowNode[] {
+  return nodes.filter(
+    (n) => isExecutableNode(n) && !(n as { hidden?: boolean }).hidden && !isExpandedClone(n),
+  );
+}
+
+/** Forward BFS: all node ids reachable downstream from `startId` (inclusive). */
+function getDownstreamNodeIds(startId: string, edges: WorkflowEdge[]): Set<string> {
+  const ids = new Set<string>([startId]);
+  const queue = [startId];
+  while (queue.length > 0) {
+    const cur = queue.shift()!;
+    for (const e of edges)
+      if (e.source === cur && !ids.has(e.target)) { ids.add(e.target); queue.push(e.target); }
+  }
+  return ids;
+}
+
+/**
+ * Run-confirmation gate. Returns true to proceed, false to abort. Estimate is
+ * computed read-only (cached costs, no API) so callers can confirm BEFORE any
+ * mutation. Execute-All (`alwaysConfirm`) confirms regardless of cost; other
+ * triggers confirm only when the estimate exceeds 100 credits. `skip` bypasses
+ * (e.g. "Run instead", which already confirmed via its discard dialog). A no-op
+ * (proceed) when there's no `confirmRun` provider or nothing executable.
+ */
+async function confirmRunOrAbort(
+  ctx: ExecutionContext,
+  executable: WorkflowNode[],
+  allNodes: WorkflowNode[],
+  edges: WorkflowEdge[],
+  trigger: RunConfirmInfo["trigger"],
+  alwaysConfirm: boolean,
+  skip?: boolean,
+): Promise<boolean> {
+  if (skip || !ctx.confirmRun || executable.length === 0) return true;
+  const estimatedCredits = hasCredits() ? estimateRunCredits(executable, allNodes, edges, getCachedCredits) : null;
+  if (!alwaysConfirm && (estimatedCredits === null || estimatedCredits <= 100)) return true;
+  return ctx.confirmRun({ trigger, nodeCount: executable.length, estimatedCredits, alwaysConfirm });
+}
+
+// ---------------------------------------------------------------------------
 // handleRun
 // ---------------------------------------------------------------------------
 
@@ -203,8 +249,18 @@ export async function handleRun(
   setIsRunning: (v: boolean) => void,
   onExecutionStarted?: (id: string) => void,
   onExecutionEnded?: () => void,
+  opts?: { skipConfirm?: boolean },
 ): Promise<void> {
   if (useWorkflowStore.getState().isReadOnly) return;
+
+  // Confirm FIRST — before any mutation — so Cancel is a true no-op. Execute-All
+  // always confirms (the accidental-press guard); also confirms when >100 cr.
+  {
+    const st = useWorkflowStore.getState();
+    const exec = liveExecutable(st.nodes);
+    if (!(await confirmRunOrAbort(ctx, exec, st.nodes, st.edges, "all", true, opts?.skipConfirm))) return;
+  }
+
   rejectAllManualEdits();
   const { nodes } = collapseExpandedClones();
   warnUnderMinRows(nodes);
@@ -256,13 +312,7 @@ export async function handleRun(
           staleTime: 10_000,
         });
         const { edges: allEdges } = useWorkflowStore.getState();
-        const estimatedCost = executableNodes.reduce((sum, node) => {
-          const modelId = getModelIdentifier(node);
-          const cached = getCachedCredits(modelId);
-          const cost = cached !== undefined ? cached : (NODE_CREDIT_COSTS[node.type ?? ""] ?? 1);
-          const multiplier = getFanOutMultiplier(node, nodes, allEdges);
-          return sum + cost * multiplier;
-        }, 0);
+        const estimatedCost = estimateRunCredits(executableNodes, nodes, allEdges, getCachedCredits);
         if (balance.total < estimatedCost) {
           // Roll back the optimistic flip before surfacing the modal.
           markNodesStatus(executableIds, undefined);
@@ -333,6 +383,7 @@ export async function handleRunSingleNode(
   save: (pid: string) => Promise<unknown>,
   setIsRunning: (v: boolean) => void,
   pollIntervalsRef: MutableRefObject<Set<ReturnType<typeof setInterval>>>,
+  opts?: { skipConfirm?: boolean },
 ): Promise<void> {
   const { nodes, edges } = useWorkflowStore.getState();
   const node = nodes.find((n) => n.id === nodeId);
@@ -342,6 +393,9 @@ export async function handleRunSingleNode(
     toast.error("This node type cannot be run individually.");
     return;
   }
+
+  // Confirm before any mutation when this single run is estimated >100 cr.
+  if (!(await confirmRunOrAbort(ctx, [node], nodes, edges, "single", false, opts?.skipConfirm))) return;
 
   // Capture dirtiness BEFORE the per-run resets / optimistic flip so a clean
   // editor skips the pre-Run save round-trip (see FIX 4).
@@ -437,6 +491,14 @@ export async function handleRunFromHere(
   _runFromHereLock = true;
 
   try {
+  // Confirm before any mutation when the downstream run is estimated >100 cr.
+  // Read-only forward BFS on the live graph (mirrors the collapse-time BFS below).
+  {
+    const st = useWorkflowStore.getState();
+    const downstreamIds = getDownstreamNodeIds(nodeId, st.edges);
+    const exec = liveExecutable(st.nodes).filter((n) => downstreamIds.has(n.id));
+    if (!(await confirmRunOrAbort(ctx, exec, st.nodes, st.edges, "from-here", false))) return;
+  }
   rejectAllManualEdits();
   const { nodes, edges } = collapseExpandedClones();
   const startNode = nodes.find((n) => n.id === nodeId);
@@ -451,17 +513,7 @@ export async function handleRunFromHere(
   }
 
   // BFS forward to collect all downstream node IDs
-  const downstream = new Set<string>([nodeId]);
-  const queue = [nodeId];
-  while (queue.length > 0) {
-    const current = queue.shift()!;
-    for (const edge of edges) {
-      if (edge.source === current && !downstream.has(edge.target)) {
-        downstream.add(edge.target);
-        queue.push(edge.target);
-      }
-    }
-  }
+  const downstream = getDownstreamNodeIds(nodeId, edges);
 
   warnUnderMinRows(nodes.filter((n) => downstream.has(n.id)));
 
@@ -534,6 +586,12 @@ export async function handleRunSelected(
   onExecutionStarted?: (id: string) => void,
   onExecutionEnded?: () => void,
 ): Promise<void> {
+  // Confirm before any mutation when the selected run is estimated >100 cr.
+  {
+    const st = useWorkflowStore.getState();
+    const exec = liveExecutable(st.nodes).filter((n) => n.selected);
+    if (!(await confirmRunOrAbort(ctx, exec, st.nodes, st.edges, "selected", false))) return;
+  }
   rejectAllManualEdits();
   const { nodes } = collapseExpandedClones();
   const selectedNodes = nodes.filter((n) => n.selected);

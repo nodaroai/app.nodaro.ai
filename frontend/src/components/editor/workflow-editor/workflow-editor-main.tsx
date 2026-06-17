@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, useMemo, Suspense } from "react";
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry";
-import { RUN_BUTTON_CLASS } from "@/lib/run-button-style";
+import { RUN_BUTTON_GLASS_CLASS } from "@/lib/run-button-style";
 import { useNavigate } from "react-router-dom";
 import { isExpandedClone, filterCloneNodes } from "@nodaro/shared";
 import { ReactFlowProvider } from "@xyflow/react";
@@ -71,6 +71,7 @@ import { getModelIdentifier } from "@/components/editor/config-panels/helpers";
 import { useStats } from "@/hooks/queries/use-stats-queries";
 import { InsufficientCreditsModal } from "@/ee/components/credits/InsufficientCreditsModal";
 import { StorageExceededModal } from "@/ee/components/credits/StorageExceededModal";
+import { useRunConfirm } from "./run-confirm-dialog";
 import { PromptQuickEditModal } from "@/components/nodes/prompt-quick-edit-modal";
 import {
   NODE_CREDIT_COSTS,
@@ -817,6 +818,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     return err instanceof StorageExceededError;
   }
 
+  const { confirmRun, isConfirming, dialog: runConfirmDialog } = useRunConfirm();
+
   const ctx: ExecutionContext = {
     userId: user?.id,
     projectId,
@@ -830,6 +833,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     setStorageExceededData,
     setShowInsufficientCredits,
     setInsufficientCreditsData,
+    confirmRun,
   };
 
   // ---------------------------------------------------------------------------
@@ -1271,7 +1275,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                       <DropdownMenuItem
                         onClick={() => withSingleDiscardConfirm(() => {
                           handleSingleNodeDiscard();
-                          handleRun(ctx, projectId, useWorkflowStore.getState().workflowId, save, setIsRunning, onExecutionStarted, onExecutionEnded);
+                          handleRun(ctx, projectId, useWorkflowStore.getState().workflowId, save, setIsRunning, onExecutionStarted, onExecutionEnded, { skipConfirm: true });
                         })}
                       >
                         <RotateCcw className="w-4 h-4 mr-2" />
@@ -1294,7 +1298,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
                   <Button
                     size="lg"
                     onClick={() => setRemixOpen(true)}
-                    className={`rounded-full px-6 ${RUN_BUTTON_CLASS}`}
+                    className={`rounded-full px-6 ${RUN_BUTTON_GLASS_CLASS}`}
                   >
                     <Copy className="w-4 h-4 mr-2" />
                     Clone &amp; Remix
@@ -1303,9 +1307,9 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               ) : (
                 <Button
                   size="lg"
-                  disabled={hasCredits() && estimateLoading}
+                  disabled={(hasCredits() && estimateLoading) || isConfirming}
                   onClick={() => handleRun(ctx, projectId, useWorkflowStore.getState().workflowId, save, setIsRunning, onExecutionStarted, onExecutionEnded)}
-                  className={`rounded-full px-6 ${RUN_BUTTON_CLASS}`}
+                  className={`rounded-full px-6 ${RUN_BUTTON_GLASS_CLASS}`}
                 >
                   {hasCredits() && estimateLoading ? (
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -1359,6 +1363,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
       <RemixProjectDialog open={remixOpen} onOpenChange={setRemixOpen} onConfirm={handleRemix} />
 
+      {runConfirmDialog}
       <InsufficientCreditsModal
         open={showInsufficientCredits}
         onClose={() => setShowInsufficientCredits(false)}
