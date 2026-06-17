@@ -63,7 +63,13 @@ interface PromptEditorProps {
   readonly value: string
   readonly onChange: (value: string) => void
   readonly placeholder?: string
+  /** Minimum visible height in lines (1 line = 1.5rem). With `maxRows`, the
+   *  editor auto-grows from `rows` (min) and caps at `maxRows` (then scrolls). */
   readonly rows?: number
+  /** Maximum visible height in lines. When set, the editor grows with content
+   *  between `rows` and `maxRows`, then scrolls. Overrides `scrollable`'s
+   *  fixed-height behavior. */
+  readonly maxRows?: number
   readonly className?: string
   /** When true, clamps height to `rows * 1.5rem` and makes the content area
    *  scroll rather than grow. Use in fixed-height modal contexts. */
@@ -81,6 +87,10 @@ interface PromptEditorProps {
   readonly onFocus?: () => void
   /** Fired when the editor loses focus. */
   readonly onBlur?: () => void
+  /** When true, drops the bordered/rounded/shadowed box chrome so the editor
+   *  blends into its host surface (used by the inline canvas editor, where the
+   *  node card already provides the panel). Default false = modal/panel box. */
+  readonly bare?: boolean
 }
 
 export interface JsonNode {
@@ -347,6 +357,7 @@ export function PromptEditor({
   onChange,
   placeholder,
   rows,
+  maxRows,
   className,
   scrollable = false,
   referenceImages,
@@ -355,6 +366,7 @@ export function PromptEditor({
   snippets,
   onFocus,
   onBlur,
+  bare = false,
 }: PromptEditorProps) {
   // Content-stabilize the incoming reference list. The parent config panels
   // build this via `.map()` inside a useMemo, so it can arrive as a fresh array
@@ -822,10 +834,19 @@ export function PromptEditor({
   }, [editor, value])
 
   const minHeight = rows ? `${rows * 1.5}rem` : undefined
+  const maxHeight = maxRows ? `${maxRows * 1.5 + 1.125}rem` : undefined
+  // Auto-grow (maxRows) wins: content grows from `rows` (min, set on
+  // EditorContent below) up to `maxRows` (the cap here), then scrolls. Else
+  // `scrollable` pins a fixed `rows`-tall scroll area (modal). Else unbounded.
+  const wrapperStyle = maxHeight
+    ? { maxHeight, overflowY: "auto" as const }
+    : scrollable && minHeight
+      ? { maxHeight: `calc(${minHeight} + 1.125rem)`, overflowY: "auto" as const }
+      : undefined
 
   return (
     <div
-      className={`prompt-editor rounded-md border border-input bg-transparent text-sm shadow-xs transition-colors ${className ?? ""}`}
+      className={`prompt-editor ${bare ? "prompt-editor--bare" : ""} bg-transparent text-sm transition-colors ${bare ? "" : "rounded-md border border-input shadow-xs"} ${className ?? ""}`}
       onClick={() => editor?.chain().focus().run()}
       // Scrollable: cap the outer wrapper (border included). The inner
       // .prompt-editor__content has 1rem vertical padding; .ProseMirror
@@ -834,7 +855,7 @@ export function PromptEditor({
       // this element) to rows*1.5 + 1.125rem gives a content area of
       // rows*1.5 + 1rem — exactly ProseMirror's min-height + the 1rem padding,
       // leaving zero overflow and zero spurious scrollbar.
-      style={scrollable && minHeight ? { maxHeight: `calc(${minHeight} + 1.125rem)`, overflowY: "auto" } : undefined}
+      style={wrapperStyle}
     >
       <EditorContent
         editor={editor}

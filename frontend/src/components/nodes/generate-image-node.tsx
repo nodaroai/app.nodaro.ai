@@ -33,8 +33,6 @@ import { ResultsThumbnailsPanel } from "./results-thumbnails-panel"
 import { GenerateImageQuickToolbar } from "./generate-image-quick-toolbar"
 import { GenerateImageResultInfo } from "./generate-image-result-info"
 import { InlineNodePrompt } from "./inline-node-prompt/inline-node-prompt"
-import { NodeRunStripControls } from "./node-run-strip-controls"
-import { useGenerateImageStripModel } from "./use-generate-image-strip-model"
 import { useFullResolution } from "@/hooks/use-full-resolution"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { useUpstreamImageAspect } from "@/hooks/use-upstream-image-aspect"
@@ -48,11 +46,13 @@ import type { GenerateImageData, ExtractedReference } from "@/types/nodes"
 function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as GenerateImageData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-  const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   // When a dropdown inside the bottom quick-toolbar is open, pin the
   // toolbar visible so the cursor moving into the portaled menu doesn't
   // dismiss it via the node-hover timer.
   const [toolbarDropdownOpen, setToolbarDropdownOpen] = useState(false)
+  // Whether the inline prompt editor is focused — reveals the hover pill while
+  // editing (the run strip/controls are otherwise hover-only, as before).
+  const [promptFocused, setPromptFocused] = useState(false)
 
   // Inline prompt mode: when the global toggle is ON and the canvas is
   // interactive (NOT the read-only viewer / template-preview modal, which
@@ -68,7 +68,9 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   const chromeRef = useRef<HTMLDivElement>(null)
   const [chromeHeight, setChromeHeight] = useState(0)
   useEffect(() => {
-    if (!showInline || !chromeRef.current) { setChromeHeight(0); return }
+    // Reset the editing-pin when inline turns off so the hover pill isn't left
+    // pinned visible (promptFocused can't get a blur if the editor unmounts).
+    if (!showInline || !chromeRef.current) { setChromeHeight(0); if (!showInline) setPromptFocused(false); return }
     const el = chromeRef.current
     const ro = new ResizeObserver(() => setChromeHeight(el.offsetHeight))
     ro.observe(el)
@@ -76,10 +78,11 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
     return () => ro.disconnect()
   }, [showInline])
 
-  // Shared run-strip model (model/aspect/resolution/versions + handlers + run
-  // action) — the SAME hook the hover quick-toolbar consumes, so the in-body
-  // strip can never disagree on the provider default or option sets.
-  const strip = useGenerateImageStripModel(id, nodeData)
+  // When inline, the prompt "chrome" sits below the aspect-locked preview, so the
+  // bottom-anchored input pips must offset by the chrome height to stay beside the
+  // PREVIEW (not spread down beside the prompt). `100% - chrome` = preview bottom.
+  const handleTop = (px: number) =>
+    showInline ? `calc(100% - ${chromeHeight}px - ${px}px)` : `calc(100% - ${px}px)`
   const isSettingsOpen = useWorkflowStore((s) => s.selectedNodeId === id)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
@@ -317,7 +320,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
       listProgress={isNodeRunning && listTotal ? `${listCompleted ?? 0}/${listTotal}` : undefined}
       listProgressPercent={isNodeRunning ? listProgressPercent : undefined}
       hideHeader
-      rawToolbarContent={showInline ? undefined : (
+      rawToolbarContent={
         <GenerateImageQuickToolbar
           nodeId={id}
           data={nodeData}
@@ -325,8 +328,10 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
           isRunning={status === "running"}
           onAnyOpenChange={setToolbarDropdownOpen}
         />
-      )}
-      keepTopToolbarVisible={showInline ? undefined : toolbarDropdownOpen}
+      }
+      // The hover pill behaves exactly as before: visible on hover, and ALSO
+      // while the inline prompt is being edited (promptFocused).
+      keepTopToolbarVisible={toolbarDropdownOpen || promptFocused}
       bottomToolbarContent={
         showThumbnails && results.length > 1 ? (
           <ResultsThumbnailsPanel
@@ -343,19 +348,21 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
         ) : undefined
       }
       handles={[
-        { id: "prompt",     type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)',  left: '-29px' }, external: true },
-        { id: "negative",   type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 56px)',  left: '-29px' }, external: true },
-        { id: "references", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 88px)',  left: '-29px' }, external: true },
-        { id: "assets",     type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 120px)', left: '-29px' }, external: true },
-        { id: "elements",   type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 152px)', left: '-29px' }, external: true },
-        { id: "look",       type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 184px)', left: '-29px' }, external: true },
-        { id: "image",      type: "source", position: Position.Right, customStyle: { top: '24px',               right: '-29px' }, external: true },
+        { id: "prompt",     type: "target", position: Position.Left,  customStyle: { top: handleTop(24),  left: '-29px' }, external: true },
+        { id: "negative",   type: "target", position: Position.Left,  customStyle: { top: handleTop(56),  left: '-29px' }, external: true },
+        { id: "references", type: "target", position: Position.Left,  customStyle: { top: handleTop(88),  left: '-29px' }, external: true },
+        { id: "assets",     type: "target", position: Position.Left,  customStyle: { top: handleTop(120), left: '-29px' }, external: true },
+        { id: "elements",   type: "target", position: Position.Left,  customStyle: { top: handleTop(152), left: '-29px' }, external: true },
+        { id: "look",       type: "target", position: Position.Left,  customStyle: { top: handleTop(184), left: '-29px' }, external: true },
+        { id: "image",      type: "source", position: Position.Right, customStyle: { top: '24px',          right: '-29px' }, external: true },
       ]}
     >
       {showInline ? (
-        // Inline mode: aspect-locked preview on top, prompt editor + run strip
-        // as chrome below (measured via chromeRef → BaseNode chromeHeight). The
-        // preview sub-region carries `group` so the result hover controls'
+        // Inline mode: aspect-locked preview on top, the inline prompt editor as
+        // chrome below (measured via chromeRef → BaseNode chromeHeight). The run
+        // controls stay on the original hover pill (rawToolbarContent) — shown on
+        // hover or while editing — so the resting node stays clean (as before).
+        // The preview sub-region carries `group` so the result hover controls'
         // `group-hover:opacity-100` still reveal on hover.
         <div className="flex flex-col h-full">
           <div className="relative flex-1 min-h-0 group">
@@ -368,33 +375,8 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
               data={nodeData as never}
               provider={nodeData.provider}
               aspectRatio={nodeData.aspectRatio}
+              onFocusChange={setPromptFocused}
             />
-            {/* flex-wrap so the strip wraps to a second row on narrow nodes; its
-                full height is captured by chromeRef's ResizeObserver. */}
-            <div className="flex flex-wrap items-center gap-0.5 px-2 pb-1.5">
-              <NodeRunStripControls
-                nodeId={id}
-                isRunning={status === "running"}
-                credits={credits}
-                onRun={(nid) => runSingleNode?.(nid)}
-                isMulti={strip.isMulti}
-                modelLabel={strip.modelLabel}
-                currentProvider={strip.currentProvider}
-                modelOptions={strip.modelOptions}
-                onModelChange={strip.onModelChange}
-                aspectOptions={strip.aspectOptions}
-                currentAspect={strip.currentAspect}
-                aspectShort={strip.aspectShort}
-                onAspectChange={strip.onAspectChange}
-                resolutionOptions={strip.resolutionOptions}
-                currentResolution={strip.currentResolution}
-                resolutionShort={strip.resolutionShort}
-                onResolutionChange={strip.onResolutionChange}
-                repeatCount={strip.repeatCount}
-                onRepeatChange={strip.onRepeatChange}
-                ghostTriggerClass="flex items-center gap-1 px-1.5 py-1 rounded-md text-[11px] h-7 whitespace-nowrap hover:bg-black/5 dark:hover:bg-white/10"
-              />
-            </div>
           </div>
         </div>
       ) : (
@@ -410,12 +392,12 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
         accepts split by registry family so the popup mirrors the picker
         structure users already know. Distinct icons: Users (Assets,
         identity entities) vs Sparkles (Elements, atomic descriptors). */}
-    <HandleWithPopover nodeId={id} nodeType="generate-image" handleId="prompt"     type="target" position={Position.Left}  label="Prompt"     color={TEXT_HANDLE_COLOR} icon={<Type />}      side="left"  top="calc(100% - 24px)"  accepts={ACCEPTS_PROMPT} />
-    <HandleWithPopover nodeId={id} nodeType="generate-image" handleId="negative"   type="target" position={Position.Left}  label="Negative"   color={HANDLE_COLORS.negative} icon={<Minus />}     side="left"  top="calc(100% - 56px)"  accepts={ACCEPTS_NEGATIVE} />
-    <HandleWithPopover nodeId={id} nodeType="generate-image" handleId="references" type="target" position={Position.Left}  label="References" color={HANDLE_COLORS.image} icon={<ImageIcon />} side="left"  top="calc(100% - 88px)"  orderMatters accepts={ACCEPTS_REFERENCES} />
-    <HandleWithPopover nodeId={id} nodeType="generate-image" handleId="assets"     type="target" position={Position.Left}  label="Assets"     color={HANDLE_COLORS.identity} icon={<Users />}     side="left"  top="calc(100% - 120px)" orderMatters accepts={ACCEPTS_ASSETS} />
-    <HandleWithPopover nodeId={id} nodeType="generate-image" handleId="elements"   type="target" position={Position.Left}  label="Elements"   color={HANDLE_COLORS.look} icon={<Sparkles />}  side="left"  top="calc(100% - 152px)" accepts={ACCEPTS_ELEMENTS} />
-    <HandleWithPopover nodeId={id} nodeType="generate-image" handleId="look"       type="target" position={Position.Left}  label="Look"       color={HANDLE_COLORS.look} icon={<Aperture />}  side="left"  top="calc(100% - 184px)" accepts={ACCEPTS_LOOK} />
+    <HandleWithPopover nodeId={id} nodeType="generate-image" handleId="prompt"     type="target" position={Position.Left}  label="Prompt"     color={TEXT_HANDLE_COLOR} icon={<Type />}      side="left"  top={handleTop(24)}  accepts={ACCEPTS_PROMPT} />
+    <HandleWithPopover nodeId={id} nodeType="generate-image" handleId="negative"   type="target" position={Position.Left}  label="Negative"   color={HANDLE_COLORS.negative} icon={<Minus />}     side="left"  top={handleTop(56)}  accepts={ACCEPTS_NEGATIVE} />
+    <HandleWithPopover nodeId={id} nodeType="generate-image" handleId="references" type="target" position={Position.Left}  label="References" color={HANDLE_COLORS.image} icon={<ImageIcon />} side="left"  top={handleTop(88)}  orderMatters accepts={ACCEPTS_REFERENCES} />
+    <HandleWithPopover nodeId={id} nodeType="generate-image" handleId="assets"     type="target" position={Position.Left}  label="Assets"     color={HANDLE_COLORS.identity} icon={<Users />}     side="left"  top={handleTop(120)} orderMatters accepts={ACCEPTS_ASSETS} />
+    <HandleWithPopover nodeId={id} nodeType="generate-image" handleId="elements"   type="target" position={Position.Left}  label="Elements"   color={HANDLE_COLORS.look} icon={<Sparkles />}  side="left"  top={handleTop(152)} accepts={ACCEPTS_ELEMENTS} />
+    <HandleWithPopover nodeId={id} nodeType="generate-image" handleId="look"       type="target" position={Position.Left}  label="Look"       color={HANDLE_COLORS.look} icon={<Aperture />}  side="left"  top={handleTop(184)} accepts={ACCEPTS_LOOK} />
     {/* Output image shares the References color (#22D3EE) — both are "image" type. */}
     <HandleWithPopover nodeId={id} nodeType="generate-image" handleId="image"      type="source" position={Position.Right} label="Image"      color={HANDLE_COLORS.image} icon={<ImageIcon />} side="right" top="24px" />
     {activeUrl && (

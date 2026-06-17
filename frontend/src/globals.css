@@ -1043,6 +1043,12 @@ html, body {
     line-height: 1.25rem;
   }
 }
+/* Inline canvas editor (bare): 15px — clearly larger than the 11px node label,
+   so the prompt reads as the node's primary content. Two-class specificity
+   overrides the base + media-query rules above at every viewport width. */
+.prompt-editor--bare .prompt-editor__content {
+  font-size: 0.9375rem;
+}
 .prompt-editor__content .ProseMirror {
   outline: none;
   min-height: inherit;

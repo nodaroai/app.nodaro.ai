@@ -22,18 +22,13 @@ import {
   Type,
   Minus,
   Film,
-  Clock,
-  Layers,
 } from "lucide-react"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { BaseNode } from "./base-node"
 import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { EditableNodeLabel } from "./editable-node-label"
 import { GenerateVideoQuickToolbar } from "./generate-video-quick-toolbar"
 import { GenerateVideoResultInfo } from "./generate-video-result-info"
 import { InlineNodePrompt } from "./inline-node-prompt/inline-node-prompt"
-import { NodeRunStripControls } from "./node-run-strip-controls"
-import { useGenerateVideoStripModel } from "./use-generate-video-strip-model"
 import { NodeJobProgress } from "./node-job-progress"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -75,24 +70,27 @@ const ACCEPTS_ELEMENTS        = (t: string) => isValidGenerateVideoConnection("e
 //   Image:   start(92) → end(120) → imgRefs(148) → vidRefs(176)   (gap 40 → 92)
 //   Audio:   audio(216) → audioRefs(244)                          (gap 40 → 216)
 //   Pickers: assets(284) → elements(312) → look(340)              (gap 40 → 284)
-const HANDLE_TOP = {
-  prompt: "calc(100% - 24px)",
-  negative: "calc(100% - 52px)",
-  startFrame: "calc(100% - 92px)",
-  endFrame: "calc(100% - 120px)",
-  imageReferences: "calc(100% - 148px)",
-  videoReferences: "calc(100% - 176px)",
-  audio: "calc(100% - 216px)",
-  audioReferences: "calc(100% - 244px)",
-  assets: "calc(100% - 284px)",
-  elements: "calc(100% - 312px)",
-  look: "calc(100% - 340px)",
+//
+// Stored as bottom-inset pixel offsets and routed through the per-node
+// `handleTop(px)` helper so inline mode can add the prompt-chrome height
+// (keeping the pips beside the PREVIEW, not the prompt below it).
+const HANDLE_OFFSET = {
+  prompt: 24,
+  negative: 52,
+  startFrame: 92,
+  endFrame: 120,
+  imageReferences: 148,
+  videoReferences: 176,
+  audio: 216,
+  audioReferences: 244,
+  assets: 284,
+  elements: 312,
+  look: 340,
 } as const
 
 function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as GenerateVideoNodeData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-  const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const openFreeCut = useWorkflowStore((s) => s.openFreeCut)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
 
@@ -105,7 +103,9 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
   const chromeRef = useRef<HTMLDivElement>(null)
   const [chromeHeight, setChromeHeight] = useState(0)
   useEffect(() => {
-    if (!showInline || !chromeRef.current) { setChromeHeight(0); return }
+    // Reset the editing-pin when inline turns off so the hover pill isn't left
+    // pinned visible (promptFocused can't get a blur if the editor unmounts).
+    if (!showInline || !chromeRef.current) { setChromeHeight(0); if (!showInline) setPromptFocused(false); return }
     const el = chromeRef.current
     const ro = new ResizeObserver(() => setChromeHeight(el.offsetHeight))
     ro.observe(el)
@@ -114,6 +114,9 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
   }, [showInline])
 
   const [toolbarDropdownOpen, setToolbarDropdownOpen] = useState(false)
+  // Whether the inline prompt editor is focused — reveals the hover pill while
+  // editing (the run strip/controls are otherwise hover-only, as before).
+  const [promptFocused, setPromptFocused] = useState(false)
   const [showThumbnails, setShowThumbnails] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
@@ -144,10 +147,11 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
   )
   const credits = useModelCredits(creditIdentifier, 25)
 
-  // Shared run-strip model (model / aspect / duration / resolution / versions +
-  // Seedance-2 input-mode lever + handlers + run action) — the SAME hook the
-  // hover quick-toolbar consumes, so the in-body strip can never disagree.
-  const strip = useGenerateVideoStripModel(id, nodeData)
+  // When inline, the prompt "chrome" sits below the aspect-locked preview, so the
+  // bottom-anchored input pips must offset by the chrome height to stay beside the
+  // PREVIEW (not spread down beside the prompt). `100% - chrome` = preview bottom.
+  const handleTop = (px: number) =>
+    showInline ? `calc(100% - ${chromeHeight}px - ${px}px)` : `calc(100% - ${px}px)`
 
   // Result-aspect-ratio for the BaseNode minHeight calc + video-element sizing.
   const { aspectRatio: mediaAspectRatio, onLoadDimensions: handleLoadDimensions } =
@@ -180,20 +184,21 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
   // <Handle> — the HandleWithPopover instances below own DOM rendering.
   const handles = useMemo(
     () => [
-      { id: "prompt",          type: "target" as const, position: Position.Left,  customStyle: { top: HANDLE_TOP.prompt,          left: "-29px" }, external: true },
-      { id: "negative",        type: "target" as const, position: Position.Left,  customStyle: { top: HANDLE_TOP.negative,        left: "-29px" }, external: true },
-      { id: "startFrame",      type: "target" as const, position: Position.Left,  customStyle: { top: HANDLE_TOP.startFrame,      left: "-29px" }, external: true },
-      { id: "endFrame",        type: "target" as const, position: Position.Left,  customStyle: { top: HANDLE_TOP.endFrame,        left: "-29px" }, external: true },
-      { id: "imageReferences", type: "target" as const, position: Position.Left,  customStyle: { top: HANDLE_TOP.imageReferences, left: "-29px" }, external: true },
-      { id: "videoReferences", type: "target" as const, position: Position.Left,  customStyle: { top: HANDLE_TOP.videoReferences, left: "-29px" }, external: true },
-      { id: "audio",           type: "target" as const, position: Position.Left,  customStyle: { top: HANDLE_TOP.audio,           left: "-29px" }, external: true },
-      { id: "audioReferences", type: "target" as const, position: Position.Left,  customStyle: { top: HANDLE_TOP.audioReferences, left: "-29px" }, external: true },
-      { id: "assets",          type: "target" as const, position: Position.Left,  customStyle: { top: HANDLE_TOP.assets,          left: "-29px" }, external: true },
-      { id: "look",            type: "target" as const, position: Position.Left,  customStyle: { top: HANDLE_TOP.look,            left: "-29px" }, external: true },
-      { id: "elements",        type: "target" as const, position: Position.Left,  customStyle: { top: HANDLE_TOP.elements,        left: "-29px" }, external: true },
+      { id: "prompt",          type: "target" as const, position: Position.Left,  customStyle: { top: handleTop(HANDLE_OFFSET.prompt),          left: "-29px" }, external: true },
+      { id: "negative",        type: "target" as const, position: Position.Left,  customStyle: { top: handleTop(HANDLE_OFFSET.negative),        left: "-29px" }, external: true },
+      { id: "startFrame",      type: "target" as const, position: Position.Left,  customStyle: { top: handleTop(HANDLE_OFFSET.startFrame),      left: "-29px" }, external: true },
+      { id: "endFrame",        type: "target" as const, position: Position.Left,  customStyle: { top: handleTop(HANDLE_OFFSET.endFrame),        left: "-29px" }, external: true },
+      { id: "imageReferences", type: "target" as const, position: Position.Left,  customStyle: { top: handleTop(HANDLE_OFFSET.imageReferences), left: "-29px" }, external: true },
+      { id: "videoReferences", type: "target" as const, position: Position.Left,  customStyle: { top: handleTop(HANDLE_OFFSET.videoReferences), left: "-29px" }, external: true },
+      { id: "audio",           type: "target" as const, position: Position.Left,  customStyle: { top: handleTop(HANDLE_OFFSET.audio),           left: "-29px" }, external: true },
+      { id: "audioReferences", type: "target" as const, position: Position.Left,  customStyle: { top: handleTop(HANDLE_OFFSET.audioReferences), left: "-29px" }, external: true },
+      { id: "assets",          type: "target" as const, position: Position.Left,  customStyle: { top: handleTop(HANDLE_OFFSET.assets),          left: "-29px" }, external: true },
+      { id: "look",            type: "target" as const, position: Position.Left,  customStyle: { top: handleTop(HANDLE_OFFSET.look),            left: "-29px" }, external: true },
+      { id: "elements",        type: "target" as const, position: Position.Left,  customStyle: { top: handleTop(HANDLE_OFFSET.elements),        left: "-29px" }, external: true },
       { id: "video",           type: "source" as const, position: Position.Right, customStyle: { top: "24px",                     right: "-29px" }, external: true },
     ],
-    [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [showInline, chromeHeight],
   )
 
   // Re-register handles with React Flow on changes — edges to new handles
@@ -417,7 +422,7 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
         {...videoNodeSizing(mediaAspectRatio)}
         chromeHeight={showInline ? chromeHeight : undefined}
         handles={handles}
-        rawToolbarContent={showInline ? undefined : (
+        rawToolbarContent={
           <GenerateVideoQuickToolbar
             nodeId={id}
             data={nodeData}
@@ -425,8 +430,10 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
             isRunning={status === "running"}
             onAnyOpenChange={setToolbarDropdownOpen}
           />
-        )}
-        keepTopToolbarVisible={showInline ? undefined : toolbarDropdownOpen}
+        }
+        // The hover pill behaves exactly as before: visible on hover, and ALSO
+        // while the inline prompt is being edited (promptFocused).
+        keepTopToolbarVisible={toolbarDropdownOpen || promptFocused}
         bottomToolbarContent={
           showThumbnails && results.length > 1 ? (
             <div className="flex gap-2 px-2 py-1.5 bg-black/60 backdrop-blur-sm rounded-xl border border-white/10">
@@ -468,10 +475,12 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
         }
       >
         {showInline ? (
-          // Inline mode: aspect-locked preview on top, prompt editor + run strip
-          // as chrome below (measured via chromeRef → BaseNode chromeHeight). The
-          // preview sub-region carries `group/video` so the result hover controls'
-          // `group-hover/video:opacity-100` still reveal on hover.
+          // Inline mode: aspect-locked preview on top, the inline prompt editor as
+          // chrome below (measured via chromeRef → BaseNode chromeHeight). The run
+          // controls stay on the original hover pill (rawToolbarContent) — shown on
+          // hover or while editing — so the resting node stays clean (as before).
+          // The preview sub-region carries `group/video` so the result hover
+          // controls' `group-hover/video:opacity-100` still reveal on hover.
           <div className="flex flex-col h-full">
             <div className="relative flex-1 min-h-0 group/video">
               {renderPreview()}
@@ -481,75 +490,10 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
                 nodeId={id}
                 nodeType="generate-video"
                 data={nodeData as never}
-                provider={strip.currentProvider}
-                aspectRatio={strip.currentAspect}
-                duration={strip.currentDuration}
+                provider={provider}
+                aspectRatio={nodeData.aspectRatio}
+                onFocusChange={setPromptFocused}
               />
-              {/* flex-wrap so the strip wraps to a second row on narrow nodes; its
-                  full height is captured by chromeRef's ResizeObserver. */}
-              <div className="flex flex-wrap items-center gap-0.5 px-2 pb-1.5">
-                <NodeRunStripControls
-                  nodeId={id}
-                  isRunning={status === "running"}
-                  credits={credits}
-                  onRun={(nid) => runSingleNode?.(nid)}
-                  isMulti={false}
-                  modelLabel={strip.modelLabel}
-                  currentProvider={strip.currentProvider}
-                  modelOptions={strip.modelOptions}
-                  modelGetTooltip={strip.getModelTooltip}
-                  onModelChange={strip.onModelChange}
-                  aspectOptions={strip.aspectOptions}
-                  currentAspect={strip.currentAspect}
-                  aspectShort={strip.aspectShort}
-                  onAspectChange={strip.onAspectChange}
-                  resolutionOptions={strip.resolutionOptions}
-                  currentResolution={strip.currentResolution}
-                  resolutionShort={strip.resolutionShort}
-                  onResolutionChange={strip.onResolutionChange}
-                  repeatCount={strip.repeatCount}
-                  onRepeatChange={strip.onRepeatChange}
-                  ghostTriggerClass="flex items-center gap-1 px-1.5 py-1 rounded-md text-[11px] h-7 whitespace-nowrap hover:bg-black/5 dark:hover:bg-white/10"
-                  afterModel={
-                    /* Seedance 2 input mode — right after model, matching the
-                       original toolbar order (model → mode → aspect → duration). */
-                    strip.isSeedance2 ? (
-                      <Select disabled={status === "running"} value={strip.currentSeedance2Mode} onValueChange={strip.onSeedance2ModeChange}>
-                        <SelectTrigger className="flex items-center gap-1 px-1.5 py-1 rounded-md text-[11px] h-7 whitespace-nowrap hover:bg-black/5 dark:hover:bg-white/10" title="Input mode (Seedance 2)">
-                          <Layers className="opacity-70" />
-                          <SelectValue>{strip.seedance2ModeLabel}</SelectValue>
-                        </SelectTrigger>
-                        <SelectContent className="node-menu-surface">
-                          <SelectItem value="frames" className="text-xs">Frames (start/end images)</SelectItem>
-                          <SelectItem value="references" className="text-xs">References (image refs)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    ) : null
-                  }
-                  afterAspect={
-                    /* Duration selector (only when the provider exposes one) —
-                       right after aspect, matching the original order. */
-                    strip.durationOptions.length > 0 ? (
-                      <Select
-                        value={strip.currentDuration !== undefined ? String(strip.currentDuration) : ""}
-                        onValueChange={strip.onDurationChange}
-                      >
-                        <SelectTrigger className="flex items-center gap-1 px-1.5 py-1 rounded-md text-[11px] h-7 whitespace-nowrap hover:bg-black/5 dark:hover:bg-white/10">
-                          <Clock className="opacity-70" />
-                          <SelectValue>{strip.durationShort}</SelectValue>
-                        </SelectTrigger>
-                        <SelectContent className="node-menu-surface">
-                          {strip.durationOptions.map((opt) => (
-                            <SelectItem key={opt.value} value={String(opt.value)} className="text-xs">
-                              {opt.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    ) : null
-                  }
-                />
-              </div>
             </div>
           </div>
         ) : (
@@ -569,17 +513,17 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
             audio/audioRefs → yellow (audio family)
             assets   → character pink (identity entities)
             look/elements → indigo (parameter pickers) */}
-      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="prompt"          type="target" position={Position.Left}  label="Prompt"      color={TEXT_HANDLE_COLOR} icon={<Type />}      side="left"  top={HANDLE_TOP.prompt}          accepts={ACCEPTS_PROMPT} />
-      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="negative"        type="target" position={Position.Left}  label="Negative"    color={HANDLE_COLORS.negative} icon={<Minus />}     side="left"  top={HANDLE_TOP.negative}        accepts={ACCEPTS_NEGATIVE} />
-      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="startFrame"      type="target" position={Position.Left}  label="Start Frame" color={HANDLE_COLORS.image} icon={<ImageIcon />} side="left"  top={HANDLE_TOP.startFrame}      accepts={ACCEPTS_STARTFRAME} disabled={disabledHandles.has("startFrame")} />
-      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="endFrame"        type="target" position={Position.Left}  label="End Frame"   color={HANDLE_COLORS.endFrame} icon={<ImageIcon />} side="left"  top={HANDLE_TOP.endFrame}        accepts={ACCEPTS_ENDFRAME} disabled={disabledHandles.has("endFrame")} />
-      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="imageReferences" type="target" position={Position.Left}  label="Image Refs"  color={HANDLE_COLORS.imageRef} icon={<Images />}    side="left"  top={HANDLE_TOP.imageReferences} orderMatters accepts={ACCEPTS_IMAGE_REFS} disabled={disabledHandles.has("imageReferences")} />
-      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="videoReferences" type="target" position={Position.Left}  label="Video Refs"  color={HANDLE_COLORS.video} icon={<Film />}      side="left"  top={HANDLE_TOP.videoReferences} orderMatters accepts={ACCEPTS_VIDEO_REFS} disabled={disabledHandles.has("videoReferences")} />
-      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="audio"           type="target" position={Position.Left}  label="Audio"       color={HANDLE_COLORS.audio} icon={<Volume2 />}   side="left"  top={HANDLE_TOP.audio}           accepts={ACCEPTS_AUDIO} disabled={disabledHandles.has("audio")} />
-      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="audioReferences" type="target" position={Position.Left}  label="Audio Refs"  color={HANDLE_COLORS.audioRef} icon={<Music />}     side="left"  top={HANDLE_TOP.audioReferences} orderMatters accepts={ACCEPTS_AUDIO_REFS} disabled={disabledHandles.has("audioReferences")} />
-      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="assets"          type="target" position={Position.Left}  label="Assets"      color={HANDLE_COLORS.identity} icon={<Users />}     side="left"  top={HANDLE_TOP.assets}          orderMatters accepts={ACCEPTS_ASSETS} />
-      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="look"            type="target" position={Position.Left}  label="Look"        color={HANDLE_COLORS.look} icon={<Aperture />}  side="left"  top={HANDLE_TOP.look}            accepts={ACCEPTS_LOOK} />
-      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="elements"        type="target" position={Position.Left}  label="Elements"    color={HANDLE_COLORS.look} icon={<Sparkles />}  side="left"  top={HANDLE_TOP.elements}        accepts={ACCEPTS_ELEMENTS} />
+      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="prompt"          type="target" position={Position.Left}  label="Prompt"      color={TEXT_HANDLE_COLOR} icon={<Type />}      side="left"  top={handleTop(HANDLE_OFFSET.prompt)}          accepts={ACCEPTS_PROMPT} />
+      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="negative"        type="target" position={Position.Left}  label="Negative"    color={HANDLE_COLORS.negative} icon={<Minus />}     side="left"  top={handleTop(HANDLE_OFFSET.negative)}        accepts={ACCEPTS_NEGATIVE} />
+      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="startFrame"      type="target" position={Position.Left}  label="Start Frame" color={HANDLE_COLORS.image} icon={<ImageIcon />} side="left"  top={handleTop(HANDLE_OFFSET.startFrame)}      accepts={ACCEPTS_STARTFRAME} disabled={disabledHandles.has("startFrame")} />
+      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="endFrame"        type="target" position={Position.Left}  label="End Frame"   color={HANDLE_COLORS.endFrame} icon={<ImageIcon />} side="left"  top={handleTop(HANDLE_OFFSET.endFrame)}        accepts={ACCEPTS_ENDFRAME} disabled={disabledHandles.has("endFrame")} />
+      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="imageReferences" type="target" position={Position.Left}  label="Image Refs"  color={HANDLE_COLORS.imageRef} icon={<Images />}    side="left"  top={handleTop(HANDLE_OFFSET.imageReferences)} orderMatters accepts={ACCEPTS_IMAGE_REFS} disabled={disabledHandles.has("imageReferences")} />
+      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="videoReferences" type="target" position={Position.Left}  label="Video Refs"  color={HANDLE_COLORS.video} icon={<Film />}      side="left"  top={handleTop(HANDLE_OFFSET.videoReferences)} orderMatters accepts={ACCEPTS_VIDEO_REFS} disabled={disabledHandles.has("videoReferences")} />
+      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="audio"           type="target" position={Position.Left}  label="Audio"       color={HANDLE_COLORS.audio} icon={<Volume2 />}   side="left"  top={handleTop(HANDLE_OFFSET.audio)}           accepts={ACCEPTS_AUDIO} disabled={disabledHandles.has("audio")} />
+      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="audioReferences" type="target" position={Position.Left}  label="Audio Refs"  color={HANDLE_COLORS.audioRef} icon={<Music />}     side="left"  top={handleTop(HANDLE_OFFSET.audioReferences)} orderMatters accepts={ACCEPTS_AUDIO_REFS} disabled={disabledHandles.has("audioReferences")} />
+      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="assets"          type="target" position={Position.Left}  label="Assets"      color={HANDLE_COLORS.identity} icon={<Users />}     side="left"  top={handleTop(HANDLE_OFFSET.assets)}          orderMatters accepts={ACCEPTS_ASSETS} />
+      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="look"            type="target" position={Position.Left}  label="Look"        color={HANDLE_COLORS.look} icon={<Aperture />}  side="left"  top={handleTop(HANDLE_OFFSET.look)}            accepts={ACCEPTS_LOOK} />
+      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="elements"        type="target" position={Position.Left}  label="Elements"    color={HANDLE_COLORS.look} icon={<Sparkles />}  side="left"  top={handleTop(HANDLE_OFFSET.elements)}        accepts={ACCEPTS_ELEMENTS} />
       {/* Output pip — video. Shares Film + purple (videoReferences color) for type identification. */}
       <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="video"           type="source" position={Position.Right} label="Video"       color={HANDLE_COLORS.video} icon={<Film />}      side="right" top="24px" />
 
