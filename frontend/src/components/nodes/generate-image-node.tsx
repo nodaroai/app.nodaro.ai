@@ -337,6 +337,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
       isRunning={status === "running"}
       {...imageNodeSizing(imgAspectRatio, upstreamImageAspect)}
       chromeHeight={showInline ? chromeHeight : undefined}
+      inlineChromePending={showInline && chromeHeight === 0}
       listCount={listTotal}
       listProgress={isNodeRunning && listTotal ? `${listCompleted ?? 0}/${listTotal}` : undefined}
       listProgressPercent={isNodeRunning ? listProgressPercent : undefined}

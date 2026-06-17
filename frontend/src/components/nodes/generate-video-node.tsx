@@ -441,6 +441,7 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
         // satisfies this node's 11-pip handle stack.)
         {...videoNodeSizing(mediaAspectRatio)}
         chromeHeight={showInline ? chromeHeight : undefined}
+        inlineChromePending={showInline && chromeHeight === 0}
         handles={handles}
         rawToolbarContent={
           <GenerateVideoQuickToolbar
