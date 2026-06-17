@@ -436,6 +436,37 @@ export const REF_IMAGE_MAX_LIMITS: Record<string, number> = {
 
 export const DEFAULT_REF_IMAGE_MAX = 4
 
+/**
+ * Maximum reference images the UI should advertise for an IMAGE model — the
+ * scalar image analogue of the video side's `videoReferenceLimits` (images have
+ * a single reference kind, so a scalar suffices). Studio's Framing picker reads
+ * this for its "References" chip; the editor's reference-handle popover reads it
+ * too (via `getHandleConnectionLimit`).
+ *
+ * Returns 0 when the model accepts no reference images at all (so callers can
+ * hide the chip / disable the handle), else the per-model cap from
+ * {@link REF_IMAGE_MAX_LIMITS} (fallback {@link DEFAULT_REF_IMAGE_MAX}).
+ * Therefore `imageReferenceLimit(p) > 0` is an exact "supports references" gate.
+ *
+ * Two behaviors keep the count matching what a user actually gets:
+ *   1. T2I → i2i resolution. Pickers list text-to-image ids (grok, gpt-image-2,
+ *      seedream-5-lite, flux, …). When references are attached the generate-image
+ *      route silently routes to the i2i sibling ({@link T2I_TO_I2I_VARIANT}) —
+ *      the endpoint that actually consumes refs — so the advertised cap is the
+ *      SIBLING's (grok→grok-i2i = 1, gpt-image-2→gpt-image-2-i2i = 16), never the
+ *      t2i id's absent default. Mirrors the route's `resolveEffectiveProvider`.
+ *   2. {@link REF_IMAGE_MAX_LIMITS} is the PRODUCT/UI cap, which may be
+ *      intentionally TIGHTER than the raw provider schema (e.g. flux-2-pro = 4
+ *      here though the BFL schema accepts 8; flux-2-klein = 1 though the array
+ *      slices at 5). The user-facing count must reflect the product cap, so the
+ *      reader reads this map verbatim — do NOT "fix" these to the schema maxima.
+ */
+export function imageReferenceLimit(provider: string | undefined): number {
+  if (!provider || !MODELS_WITH_REFERENCE_IMAGE_SUPPORT.has(provider)) return 0
+  const effective = T2I_TO_I2I_VARIANT[provider] ?? provider
+  return REF_IMAGE_MAX_LIMITS[effective] ?? DEFAULT_REF_IMAGE_MAX
+}
+
 // Variable pricing: which setting type affects cost per provider
 export const VARIABLE_PRICING_MODELS: Record<string, "quality" | "resolution" | "rendering-speed"> = {
   "gpt-image": "quality",
