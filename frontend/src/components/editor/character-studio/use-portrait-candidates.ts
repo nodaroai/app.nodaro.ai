@@ -157,17 +157,12 @@ export function usePortraitCandidates(state: CharacterStudioState): PortraitCand
       return
     }
     try {
-      // Resolve element/asset injection from the canvas wiring (the Assets AND
-      // Prompt handles) so a Studio-generated portrait honors connected sources
-      // too — mirrors the node-Run path (asset-executors::runCharacterGeneration).
-      // Without this, generating from the Studio modal silently ignored every
-      // wired source.
+      // The Assets/Prompt-wired ELEMENTS now flow only into downstream consumers
+      // of this character (folded into their prompt via collectCinematographyHints),
+      // not the character's own portrait — so we don't send `injectedAssets` here.
+      // The char→char facet (facetInjections) stays a portrait-composition feature.
       const { nodes, edges } = useWorkflowStore.getState()
-      const { injectedAssets, facetInjections } = resolveCharacterAssets(
-        { id: state.nodeId },
-        edges,
-        nodes,
-      )
+      const { facetInjections } = resolveCharacterAssets({ id: state.nodeId }, edges, nodes)
       const { jobIds } = await generateCharacter({
         name: s.characterName,
         description: s.description,
@@ -185,7 +180,6 @@ export function usePortraitCandidates(state: CharacterStudioState): PortraitCand
         // per-asset-type default (portrait = 3:4) can be overridden when the
         // user has explicitly picked a different ratio on the canvas.
         characterNodeAspectRatio: s.defaultAssetAspectRatio,
-        injectedAssets: injectedAssets || undefined,
         facetInjections: facetInjections.length > 0 ? facetInjections : undefined,
       })
       setGenBusy(false)
