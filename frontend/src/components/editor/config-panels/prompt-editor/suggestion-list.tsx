@@ -12,6 +12,7 @@ import {
 import type { RefImageItem } from "../tag-textarea"
 import { TrainedPill } from "@/components/editor/trained-pill"
 import { optimizedImageUrl } from "@/lib/image"
+import { useScrollActiveOptionIntoView } from "./use-scroll-active-option-into-view"
 
 /**
  * Command payload — the resolved leaf item, plus an optional per-mention
@@ -177,6 +178,7 @@ interface DrillLocationVariant {
 export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListProps>(
   function SuggestionList({ items, query, command, onDrillChange }, ref) {
     const [selectedIndex, setSelectedIndex] = useState(0)
+    const listRef = useScrollActiveOptionIntoView<HTMLDivElement>(selectedIndex)
     // Drill-in state — three independent levels split across two trees:
     //   `drillCharacterSlug` (character level 2: variant list).
     //   `drillVariant` (character level 3: mode picker).
@@ -594,6 +596,7 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
       // `top` is set by `positionMount` in `prompt-editor/index.tsx`, which
       // also flips above the cursor when there isn't enough room below.
       <div
+        ref={listRef}
         className="z-[9999] overflow-y-auto rounded-lg border border-border bg-popover shadow-lg py-1 max-h-[min(300px,calc(100vh-80px))] min-w-[240px]"
         data-testid="suggestion-list"
       >

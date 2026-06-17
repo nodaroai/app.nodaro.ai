@@ -3,6 +3,7 @@
 import { forwardRef, useImperativeHandle, useState, useEffect, useMemo } from "react"
 import { groupSnippetsByCategory, type SnippetPoolItem } from "@/lib/snippet-pool"
 import { SnippetCategoryHeader, SnippetRowContent } from "../snippet-row"
+import { useScrollActiveOptionIntoView } from "./use-scroll-active-option-into-view"
 
 export interface SnippetSuggestionListHandle {
   onKeyDown: (event: KeyboardEvent) => boolean
@@ -23,6 +24,7 @@ interface SnippetSuggestionListProps {
 export const SnippetSuggestionList = forwardRef<SnippetSuggestionListHandle, SnippetSuggestionListProps>(
   function SnippetSuggestionList({ items, command }, ref) {
     const [selectedIndex, setSelectedIndex] = useState(0)
+    const listRef = useScrollActiveOptionIntoView<HTMLDivElement>(selectedIndex)
 
     useEffect(() => { setSelectedIndex(0) }, [items])
 
@@ -58,7 +60,7 @@ export const SnippetSuggestionList = forwardRef<SnippetSuggestionListHandle, Sni
     if (items.length === 0) return null
 
     return (
-      <div className="z-[9999] overflow-y-auto rounded-lg border border-border bg-popover shadow-lg py-1 max-h-[min(300px,calc(100vh-80px))] w-[340px]">
+      <div ref={listRef} className="z-[9999] overflow-y-auto rounded-lg border border-border bg-popover shadow-lg py-1 max-h-[min(300px,calc(100vh-80px))] w-[340px]">
         {groups.map((g) => (
           <div key={g.category}>
             <SnippetCategoryHeader category={g.category} />

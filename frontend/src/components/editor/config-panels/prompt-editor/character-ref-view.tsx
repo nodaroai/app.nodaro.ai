@@ -11,6 +11,7 @@ import {
 import { optimizedImageUrl } from "@/lib/image"
 import { BODY_MENU_CLASS } from "./body-menu-class"
 import { useBodyMenuDismiss } from "./use-body-menu-dismiss"
+import { PROMPT_EDITOR_PORTAL_PROPS } from "./prompt-editor-portal"
 import { computeFlipPosition } from "./flip-position"
 import type { CharacterRefAttrs } from "./character-ref-extension"
 
@@ -227,6 +228,7 @@ export function CharacterRefView(props: NodeViewProps) {
           const left = Math.min(Math.max(MARGIN, menuAnchor.left), vw - MENU_W - MARGIN)
           return (
             <div
+              {...PROMPT_EDITOR_PORTAL_PROPS}
               ref={menuRef}
               style={{ position: "fixed", top, left, width: MENU_W, maxHeight, overflowY: "auto" }}
               className={BODY_MENU_CLASS}

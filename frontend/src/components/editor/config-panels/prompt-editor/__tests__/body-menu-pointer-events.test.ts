@@ -22,6 +22,16 @@ it("floating suggestion mount sets pointer-events:auto on the body div", () => {
   inst.onExit()
 })
 
+it("floating suggestion mount is marked as a prompt-editor portal (modal won't close on select)", () => {
+  const factory = createFloatingSuggestionRenderer(340, (root) => { void root })
+  const inst = factory()
+  const before = new Set(document.body.children)
+  inst.onStart({ clientRect: () => new DOMRect(0, 0, 0, 0) } as never)
+  const mount = [...document.body.children].find((el) => !before.has(el)) as HTMLDivElement
+  expect(mount.hasAttribute("data-prompt-editor-portal")).toBe(true)
+  inst.onExit()
+})
+
 it("floating suggestion mount isolates wheel from document (scroll-lock escape)", () => {
   // react-remove-scroll (Radix Dialog modal) listens for wheel on `document`
   // and cancels scroll for body-mounted nodes outside its lock. The mount must
