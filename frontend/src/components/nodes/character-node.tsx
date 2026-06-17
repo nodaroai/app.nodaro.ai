@@ -1,13 +1,15 @@
 "use client"
 
-import { memo, useEffect } from "react"
+import { memo, useEffect, useMemo } from "react"
+import { useShallow } from "zustand/react/shallow"
 import { Position, type NodeProps } from "@xyflow/react"
-import { UserCircle, Loader2, Type, ImageIcon } from "lucide-react"
+import { UserCircle, Loader2, Type, ImageIcon, Blend } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { isValidCharacterConnection } from "@/lib/identity-handles"
+import { IDENTITY_TYPES } from "@/lib/generate-image-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -24,11 +26,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { USAGE_MODES, DEFAULT_USAGE_MODE, usageModeLabel, type UsageMode } from "@nodaro/shared"
+import {
+  USAGE_MODES,
+  DEFAULT_USAGE_MODE,
+  usageModeLabel,
+  type UsageMode,
+  CHARACTER_FACETS,
+  DEFAULT_CHARACTER_FACET,
+} from "@nodaro/shared"
 import type { CharacterNodeData } from "@/types/nodes"
 
 const isPickerType = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
 const ACCEPTS_PROMPT = (t: string) => isValidCharacterConnection("in", t, isPickerType)
+const ACCEPTS_ASSETS = (t: string) => isValidCharacterConnection("assets", t, isPickerType)
 
 function CharacterNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as CharacterNodeData
@@ -38,6 +48,46 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
   const setCharacterStudioNodeId = useWorkflowStore((s) => s.setCharacterStudioNodeId)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
+
+  // Element/asset injection (P2): identity/character sources wired to the
+  // Assets handle each get a per-connection facet chip. We subscribe (shallow)
+  // to a FLAT [id, name, id, name, …] array — primitives so `useShallow` can
+  // compare by value and re-render the node only when the connection SET (or a
+  // source name) actually changes, NOT on every graph edit. Sorted by source id
+  // to match the resolver's deterministic order.
+  const facetSourceFlat = useWorkflowStore(
+    useShallow((s) => {
+      const conns = s.edges
+        .filter((e) => e.target === id && e.targetHandle === "assets")
+        .sort((a, b) => a.source.localeCompare(b.source))
+      const out: string[] = []
+      for (const e of conns) {
+        const src = s.nodes.find((n) => n.id === e.source)
+        if (!src || !IDENTITY_TYPES.has(src.type ?? "")) continue
+        const d = src.data as Record<string, unknown>
+        out.push(src.id, (d.characterName as string) || (d.label as string) || (src.type as string))
+      }
+      return out
+    }),
+  )
+  const facetSources = useMemo(() => {
+    const pairs: Array<{ id: string; name: string }> = []
+    for (let i = 0; i < facetSourceFlat.length; i += 2) {
+      pairs.push({ id: facetSourceFlat[i], name: facetSourceFlat[i + 1] })
+    }
+    return pairs
+  }, [facetSourceFlat])
+
+  const assetInjections = nodeData.assetInjections ?? []
+  const facetFor = (sourceId: string): string =>
+    assetInjections.find((a) => a.sourceNodeId === sourceId)?.facet ?? DEFAULT_CHARACTER_FACET
+  const setFacet = (sourceId: string, facet: string) =>
+    updateNodeData(id, {
+      assetInjections: [
+        ...assetInjections.filter((a) => a.sourceNodeId !== sourceId),
+        { sourceNodeId: sourceId, facet },
+      ],
+    })
 
   const expressionCount = (nodeData.expressions ?? []).length
   const poseCount = (nodeData.poses ?? []).length
@@ -350,8 +400,50 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
           <div className="text-[7px] text-[#93c5fd] font-medium">studio</div>
         </button>
       </div>
+
+      {/* Element/asset injection (P2): one facet chip per identity/character
+          source wired to the Assets handle. Picking a facet (Hair / Skin tone /
+          Style / … / Full likeness) controls what gets pulled from that source
+          into THIS character's portrait prompt — resolved server-side at
+          generation time. The headline case: character 1's hair → character 2.
+          Click/pointer handlers stop propagation so the dropdown doesn't drag
+          the node or open the studio. */}
+      {facetSources.length > 0 && (
+        <div className="px-2.5 pb-2.5 space-y-1">
+          <div className="flex items-center gap-1 text-[8px] uppercase tracking-wide text-slate-500">
+            <Blend className="w-2.5 h-2.5" /> Inject into portrait
+          </div>
+          {facetSources.map((src) => (
+            <div key={src.id} className="flex items-center gap-1.5 min-w-0">
+              <span className="flex-1 min-w-0 text-[10px] text-slate-300 truncate" title={src.name}>
+                {src.name}
+              </span>
+              <Select value={facetFor(src.id)} onValueChange={(v) => setFacet(src.id, v)}>
+                <SelectTrigger
+                  aria-label={`Facet to inject from ${src.name}`}
+                  title="Which facet of this source to inject into the portrait"
+                  className="shrink-0 h-6 w-[104px] text-[10px] bg-[#13161f] border-[#334155] text-slate-300 hover:border-[#475569] focus:border-[#ff0073] px-2 py-0"
+                  onClick={(e) => e.stopPropagation()}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CHARACTER_FACETS.map((f) => (
+                    <SelectItem key={f.id} value={f.id} className="text-[11px]">
+                      {f.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ))}
+        </div>
+      )}
     </BaseNode>
 
+    <HandleWithPopover nodeId={id} nodeType="character" handleId="assets"        type="target" position={Position.Left}  label="Assets"    color={HANDLE_COLORS.identity} icon={<Blend />} side="left" top="calc(100% - 52px)" accepts={ACCEPTS_ASSETS} />
     <HandleWithPopover nodeId={id} nodeType="character" handleId="in"           type="target" position={Position.Left}  label="Prompt"    color={HANDLE_COLORS.text} icon={<Type />}       side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_PROMPT} />
     <HandleWithPopover nodeId={id} nodeType="character" handleId="characterRef" type="source" position={Position.Right} label="Character" color={HANDLE_COLORS.identity} icon={<UserCircle />} side="right" top="24px" />
     <HandleWithPopover nodeId={id} nodeType="character" handleId="image"        type="source" position={Position.Right} label="Image"     color={HANDLE_COLORS.image}    icon={<ImageIcon />}  side="right" top="56px" />

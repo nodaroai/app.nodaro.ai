@@ -55,6 +55,7 @@ vi.mock("lucide-react", () => {
     ChevronUpIcon: Icon,
     CheckIcon: Icon,
     Type: Icon,
+    Blend: Icon,
     FileVideo: Icon,
     FileImage: Icon,
     Share2: Icon,
@@ -201,11 +202,17 @@ describe("CharacterNode", () => {
     expect(screen.getByTestId("base-node")).toHaveAttribute("data-category", "character")
   })
 
-  it("has correct handles (in + characterRef + image)", () => {
+  it("has correct handles (assets + in + characterRef + image)", () => {
     renderCharacterNode()
     const inHandle = screen.getByTestId("handle-target-in")
     expect(inHandle).toHaveAttribute("data-type", "target")
     expect(inHandle).toHaveAttribute("data-position", "left")
+
+    // Element/asset injection target (the handle must actually render — P1
+    // registered it in the data array but omitted its HandleWithPopover).
+    const assetsHandle = screen.getByTestId("handle-target-assets")
+    expect(assetsHandle).toHaveAttribute("data-type", "target")
+    expect(assetsHandle).toHaveAttribute("data-position", "left")
 
     const refHandle = screen.getByTestId("handle-source-characterRef")
     expect(refHandle).toHaveAttribute("data-type", "source")

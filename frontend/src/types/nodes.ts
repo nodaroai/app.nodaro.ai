@@ -3498,6 +3498,15 @@ export type CharacterNodeData = {
   generatedResults: GeneratedResult[]
   activeResultIndex: number
   fieldMappings: FieldMappings
+  // Per-connection facet selection for sources wired to the Assets handle
+  // (element/asset injection, P2). Keyed by source node id; `facet` is a
+  // CHARACTER_FACETS id ("full" | "hair" | "skin-tone" | …). Only set for
+  // identity/character sources (text/picker sources inject their whole
+  // fragment, no facet). Wiring is the source of truth — stale entries for
+  // disconnected sources are ignored by the resolver (it iterates live edges),
+  // so no cleanup pass is needed. Resolved into `facetInjections` at
+  // generation time; the character's stored description is never mutated.
+  readonly assetInjections?: ReadonlyArray<{ sourceNodeId: string; facet?: string }>
   scriptCharacterIndex?: number
   // Asset sheets (combined grid images)
   expressionSheet: string

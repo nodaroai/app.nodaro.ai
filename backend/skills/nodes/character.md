@@ -1,7 +1,7 @@
 ---
 node_type: character
-generated_at: 2026-06-17T08:47:21.264Z
-generated_from: f73d43090
+generated_at: 2026-06-17T10:45:25.352Z
+generated_from: be514ef7a
 ---
 
 # Character
@@ -55,6 +55,7 @@ generated_from: f73d43090
 - `defaultUsageMode?: import("@nodaro/shared").UsageMode`
 - `currentJobProgress?: number`
 - `errorMessage?: string`
+- `assetInjections?: ReadonlyArray<{ sourceNodeId: string; facet?: string }>`
 - `scriptCharacterIndex?: number`
 - `sheets?: ReferenceSheet[]`
 - `detailCloseups?: CharacterAssetItem[]`

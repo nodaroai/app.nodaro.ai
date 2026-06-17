@@ -12,8 +12,8 @@ import type {
 import { loopColInputHandle } from "@/types/nodes";
 import { extractNodeOutput, IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE, computeGroupBuckets, computeCollectBuckets } from "./execution-graph";
 import { FAN_IN_NODE_TYPES } from "./types";
-import { ELEMENTS_PICKER_TYPES, TEXT_PRODUCER_TYPES } from "@/lib/generate-image-handles";
-import { DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared";
+import { ELEMENTS_PICKER_TYPES, TEXT_PRODUCER_TYPES, IDENTITY_TYPES } from "@/lib/generate-image-handles";
+import { DYNAMIC_PRODUCER_TYPES, DEFAULT_CHARACTER_FACET } from "@nodaro/shared";
 import { PARAMETER_NODE_TYPES, OBJECT_PICKER_NODE_TYPES, getParameterPromptHint, parseGroupHandle, VIDEO_PRODUCER_TYPES } from "@nodaro/shared";
 import { resolveIndex, selectListItems, type SelectorFields } from "@nodaro/shared";
 import { splitByLoopDelimiter } from "@nodaro/shared";
@@ -96,38 +96,80 @@ export function resolveSeedPromptHint(
   return hints.join(", ");
 }
 
+/** Per-connection facet extraction request for the backend (P2). */
+export interface CharacterFacetInjection {
+  /** The source character/asset's description — the facet-extraction input. */
+  sourceText: string;
+  /** Chosen facet id ("full" | "hair" | "skin-tone" | …). */
+  facet: string;
+}
+
+/** Resolved Assets-handle wiring for a character generation. */
+export interface ResolvedCharacterAssets {
+  /** Pre-resolved text from text/picker sources (P1, whole fragment). */
+  injectedAssets: string;
+  /** Identity/character sources needing server-side facet extraction (P2). */
+  facetInjections: CharacterFacetInjection[];
+}
+
 /**
- * Compose the injected-assets fragment from nodes wired into a character node's
- * `assets` handle (element/asset injection, P1). Each accepted source
- * contributes text: element pickers via `getParameterPromptHint`, text /
- * dynamic producers via their `extractNodeOutput`. Fragments are ordered by
- * source node id (deterministic) and comma-joined. Returns "" when nothing is
- * wired. Wiring is the source of truth — resolved at character-generation time;
- * the character's stored description is never mutated.
+ * Resolve everything wired into a character node's `assets` handle into the two
+ * channels the `generate-character` route consumes (element/asset injection):
+ *
+ *  - **injectedAssets** — text/dynamic producers (`extractNodeOutput`) + element
+ *    pickers (`getParameterPromptHint`), each contributing its whole fragment,
+ *    comma-joined (P1).
+ *  - **facetInjections** — identity/character sources (object/location/creature/
+ *    face/character). Each emits `{ sourceText, facet }`; the backend extracts
+ *    the chosen facet from `sourceText` at generation time (P2). The facet comes
+ *    from the consumer character's `assetInjections` (default "full"). A source
+ *    with no description yet (ungenerated likeness) is skipped.
+ *
+ * Connections are processed in deterministic source-id order. Wiring is the
+ * source of truth — resolved at character-generation time; no stored description
+ * (consumer or source) is ever mutated.
  */
 export function resolveCharacterAssets(
   charNode: { id: string },
   edges: ReadonlyArray<{ source: string; target: string; targetHandle?: string | null }>,
   nodes: ReadonlyArray<{ id: string; type?: string; data?: Record<string, unknown> }>,
-): string {
+): ResolvedCharacterAssets {
   const conns = (edges ?? [])
     .filter((e) => e.target === charNode.id && e.targetHandle === "assets")
     .sort((a, b) => a.source.localeCompare(b.source));
-  if (conns.length === 0) return "";
+  if (conns.length === 0) return { injectedAssets: "", facetInjections: [] };
   const nodesById = new Map((nodes ?? []).map((n) => [n.id, n]));
+  // Per-connection facet selection lives on the CONSUMER character's data.
+  const charData = nodesById.get(charNode.id)?.data as Record<string, unknown> | undefined;
+  const assetInjections =
+    (charData?.assetInjections as Array<{ sourceNodeId: string; facet?: string }> | undefined) ?? [];
+  const facetBySource = new Map(assetInjections.map((a) => [a.sourceNodeId, a.facet]));
+
   const frags: string[] = [];
+  const facetInjections: CharacterFacetInjection[] = [];
   for (const conn of conns) {
     const source = nodesById.get(conn.source);
     if (!source || !source.type) continue;
     if (ELEMENTS_PICKER_TYPES.includes(source.type)) {
       const hint = getParameterPromptHint({ type: source.type, data: source.data ?? {}, id: source.id });
       if (hint && hint.trim()) frags.push(hint.trim());
+    } else if (IDENTITY_TYPES.has(source.type)) {
+      // Identity/character source → inject a chosen facet. The source's
+      // canonical likeness (or user description) is the extraction input; skip
+      // when it has no likeness yet (e.g. an ungenerated character).
+      const d = source.data as Record<string, unknown> | undefined;
+      const sourceText = (
+        (d?.canonicalDescription as string) || (d?.description as string) || ""
+      ).trim();
+      if (!sourceText) continue;
+      const facet = facetBySource.get(conn.source) ?? DEFAULT_CHARACTER_FACET;
+      facetInjections.push({ sourceText, facet });
     } else if (TEXT_PRODUCER_TYPES.has(source.type) || DYNAMIC_PRODUCER_TYPES.has(source.type)) {
       const text = extractNodeOutput(source as WorkflowNode);
       if (text && text.trim()) frags.push(text.trim());
     }
   }
-  return frags.join(", ");
+  return { injectedAssets: frags.join(", "), facetInjections };
 }
 
 /**

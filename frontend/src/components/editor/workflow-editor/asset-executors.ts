@@ -46,9 +46,11 @@ export function runCharacterGeneration(
 ): Promise<string> {
   const { updateNodeData, nodes, edges } = useWorkflowStore.getState();
   updateNodeData(nodeId, { executionStatus: "running" });
-  // Element/asset injection: text composed from nodes wired into this
-  // character's Assets handle, woven into the generation prompt server-side.
-  const injectedAssets = resolveCharacterAssets({ id: nodeId }, edges, nodes) || undefined;
+  // Element/asset injection: everything wired into this character's Assets
+  // handle, resolved into the two channels generate-character consumes —
+  // injectedAssets (pre-resolved text/picker fragments) + facetInjections
+  // (identity/character sources, facet-extracted server-side at gen time).
+  const { injectedAssets, facetInjections } = resolveCharacterAssets({ id: nodeId }, edges, nodes);
 
   return new Promise<string>((resolve, reject) => {
     generateCharacter({
@@ -63,7 +65,8 @@ export function runCharacterGeneration(
       // Canvas-node aspect-ratio toggle — overrides the backend's portrait
       // default (3:4) so the canvas render matches the chosen thumbnail crop.
       characterNodeAspectRatio: data.defaultAssetAspectRatio,
-      injectedAssets,
+      injectedAssets: injectedAssets || undefined,
+      facetInjections: facetInjections.length > 0 ? facetInjections : undefined,
     })
       .then(({ jobId }) => {
         if (ctx.signal?.aborted) {

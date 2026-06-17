@@ -1010,6 +1010,7 @@ export type {
 } from "./transitions.js"
 
 export * from "./character-fx.js"
+export * from "./character-facets.js"
 
 export {
   VEHICLES,

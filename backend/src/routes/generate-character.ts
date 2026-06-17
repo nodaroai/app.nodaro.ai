@@ -9,6 +9,7 @@ import { resolveEntityImageCreditIdentifier } from "../lib/entity-credit-identif
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { buildPortraitPrompt } from "../lib/character-prompts.js"
+import { resolveFacetInjections } from "../lib/character-facet-extract.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { hasCredits } from "../lib/config.js"
 import {
@@ -27,6 +28,15 @@ const generateCharacterBody = z
     // (wiring = source of truth). Woven into the portrait prompt; never
     // mutates the character's stored description. Absent → no-op.
     injectedAssets: z.string().max(8000).optional(),
+    // Per-connection facet injections (P2): each entry is a source
+    // character/asset's description + the chosen facet. Resolved server-side at
+    // generation time — `full` injects the description verbatim, other facets
+    // are LLM-extracted — and woven into the SAME prompt slot as
+    // `injectedAssets`. Absent/empty → byte-identical no-op.
+    facetInjections: z
+      .array(z.object({ sourceText: z.string().max(8000), facet: z.string().max(50) }))
+      .max(20)
+      .optional(),
     gender: z.string().max(50).optional(),
     style: z.enum(["realistic", "anime", "3d-pixar", "illustration"]).optional(),
     baseOutfit: z.string().max(1000).optional(),
@@ -165,6 +175,17 @@ export async function generateCharacterRoutes(app: FastifyInstance) {
         }
       }
 
+      // Element/asset injection: P1's pre-resolved text (`injectedAssets`, from
+      // text/picker sources the editor already flattened) PLUS P2's facet
+      // extractions (`facetInjections`, resolved here via a tiny LLM call —
+      // `full` verbatim, other facets extracted; failures fall back to the full
+      // description, never blocking generation). Both feed the same injection
+      // slot of the portrait prompt; empty → no-op.
+      const facetText = await resolveFacetInjections(data.facetInjections)
+      const injectedAssets = [data.injectedAssets?.trim(), facetText]
+        .filter((s): s is string => !!s && s.length > 0)
+        .join(", ")
+
       // Build portrait prompt — v2 path prefers seedPrompt with studio scaffolding;
       // legacy path falls back to userPrompt → description → name.
       const promptText = data.seedPrompt
@@ -172,14 +193,19 @@ export async function generateCharacterRoutes(app: FastifyInstance) {
             seedPrompt: data.seedPrompt,
             person: characterPerson ?? undefined,
             wardrobe: characterWardrobe ?? undefined,
-            injectedAssets: data.injectedAssets,
+            injectedAssets,
           })
-        : [data.userPrompt ?? data.description ?? data.name, data.injectedAssets?.trim()]
+        : [data.userPrompt ?? data.description ?? data.name, injectedAssets]
             .filter((s): s is string => !!s && s.length > 0)
             .join(", ")
 
       const mcpClient = extractMcpClient(req.body)
-      const inputData = buildJobInputData(parsed.data, "generate-character")
+      // Keep the raw `facetInjections` (up to 20 source descriptions) OUT of the
+      // persisted job config — its extracted result already lives in `prompt`,
+      // and the source material is recoverable from the workflow. Storing it
+      // would bloat the jobs row with redundant text.
+      const { facetInjections: _facetInjections, ...inputDataSource } = parsed.data
+      const inputData = buildJobInputData(inputDataSource, "generate-character")
       const workflowId = extractWorkflowId(req.body)
 
       // Resolve the final aspect ratio: explicit > node override > portrait default.

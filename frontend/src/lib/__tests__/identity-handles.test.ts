@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest"
 import { isValidCharacterConnection, IDENTITY_HANDLE_LABELS } from "../identity-handles"
 
-// The character node's `assets` handle (element/asset injection, P1) accepts
-// text/dynamic producers + element pickers. Identity & character sources are P2.
+// The character node's `assets` handle (element/asset injection) accepts
+// text/dynamic producers + element pickers (P1, whole fragment) AND identity /
+// character sources (P2, facet-extracted) — the character→character case.
 const noPicker = () => false
 
 describe("character `assets` handle predicate", () => {
@@ -15,9 +16,14 @@ describe("character `assets` handle predicate", () => {
     expect(isValidCharacterConnection("assets", "styling", noPicker)).toBe(true)
   })
 
-  it("rejects identity / character sources in P1", () => {
-    expect(isValidCharacterConnection("assets", "character", noPicker)).toBe(false)
-    expect(isValidCharacterConnection("assets", "object", noPicker)).toBe(false)
+  it("accepts identity / character sources (P2 facet injection)", () => {
+    for (const t of ["character", "object", "location", "creature", "face"]) {
+      expect(isValidCharacterConnection("assets", t, noPicker)).toBe(true)
+    }
+  })
+
+  it("rejects an unrelated source type on the assets handle", () => {
+    expect(isValidCharacterConnection("assets", "generate-video", noPicker)).toBe(false)
   })
 
   it("leaves the existing `in`/Prompt handle behaviour intact", () => {
