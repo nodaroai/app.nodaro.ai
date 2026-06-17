@@ -653,6 +653,11 @@ export async function generateCharacter(data: {
    *  node's Assets handle, resolved by the editor at generate time. Woven into
    *  the portrait prompt server-side; never mutates the stored description. */
   injectedAssets?: string
+  /** Element/asset injection (P2): identity/character sources wired to the
+   *  Assets handle, each with a chosen facet. The backend extracts the facet
+   *  from `sourceText` (e.g. just the hair) and weaves it into the portrait
+   *  prompt — the character→character facet case. */
+  facetInjections?: Array<{ sourceText: string; facet: string }>
 }): Promise<{ jobId: string; jobIds: string[] }> {
   return apiJson("/v1/generate-character", {
     body: data,

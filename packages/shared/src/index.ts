@@ -37,6 +37,7 @@ export {
   T2I_TO_I2I_VARIANT,
   REF_IMAGE_MAX_LIMITS,
   DEFAULT_REF_IMAGE_MAX,
+  imageReferenceLimit,
   VARIABLE_PRICING_MODELS,
   HIGH_QUALITY_PROVIDERS,
   TWO_K_RESOLUTION_PROVIDERS,
@@ -1010,6 +1011,7 @@ export type {
 } from "./transitions.js"
 
 export * from "./character-fx.js"
+export * from "./character-facets.js"
 
 export {
   VEHICLES,

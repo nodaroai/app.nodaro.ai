@@ -122,6 +122,8 @@ describe("CanvasControls", () => {
         onToggleSnap={() => {}}
         alignmentEnabled={false}
         onToggleAlignment={() => {}}
+        inlinePromptEnabled={false}
+        onToggleInlinePrompt={() => {}}
       />,
     )
   }

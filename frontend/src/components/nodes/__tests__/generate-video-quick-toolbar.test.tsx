@@ -33,9 +33,16 @@ vi.mock("@/components/editor/config-panels/model-select-option", () => ({
 }))
 
 // RatioIcon is purely visual — stub to a small placeholder so the dropdown
-// items don't pull in SVG-measuring code paths.
+// items don't pull in SVG-measuring code paths. AspectRatioItem now also lives
+// in this module (moved from the toolbar in the inline-prompt refactor) and is
+// imported by the shared NodeRunStripControls the toolbar renders — stub it to
+// a plain option so the dropdown contents stay renderable without the real
+// SelectItem/SVG machinery.
 vi.mock("@/components/editor/config-panels/aspect-ratio-selector", () => ({
   RatioIcon: () => <span data-testid="ratio-icon" />,
+  AspectRatioItem: ({ value, label }: { value: string; label: string }) => (
+    <div data-testid={`aspect-item-${value}`}>{label}</div>
+  ),
 }))
 
 import { GenerateVideoQuickToolbar } from "../generate-video-quick-toolbar"

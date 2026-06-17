@@ -77,6 +77,10 @@ interface PromptEditorProps {
   /** Merged snippet pool for THIS field (already target+media filtered).
    *  Omit/empty → the "/" menu renders nothing. See useSnippetPool(). */
   readonly snippets?: readonly SnippetPoolItem[]
+  /** Fired when the editor gains focus (drives focus-gated nodrag inline). */
+  readonly onFocus?: () => void
+  /** Fired when the editor loses focus. */
+  readonly onBlur?: () => void
 }
 
 export interface JsonNode {
@@ -349,6 +353,8 @@ export function PromptEditor({
   nodeRefs,
   refMap,
   snippets,
+  onFocus,
+  onBlur,
 }: PromptEditorProps) {
   // Content-stabilize the incoming reference list. The parent config panels
   // build this via `.map()` inside a useMemo, so it can arrive as a fresh array
@@ -720,6 +726,8 @@ export function PromptEditor({
       const text = ed.getText({ blockSeparator: "\n" })
       onChangeRef.current(text)
     },
+    onFocus: () => onFocus?.(),
+    onBlur: () => onBlur?.(),
   })
 
   // Push the latest reference list into editor storage so the React node

@@ -1,8 +1,8 @@
 "use client"
 
-import { memo, useState, Suspense } from "react"
+import { memo, useState, useRef, useEffect, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
-import { Position, type NodeProps } from "@xyflow/react"
+import { Position, useStore, type NodeProps } from "@xyflow/react"
 import { ImageIcon, Loader2, AlertCircle, ShieldAlert, X, Scissors, LayoutGrid, Expand, Download, Link, Type, Pencil, Aperture, Minus, Users, Sparkles, RotateCcw } from "lucide-react"
 import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { isValidGenerateImageConnection } from "@/lib/generate-image-handles"
@@ -32,6 +32,9 @@ import { CachedImage } from "@/components/ui/cached-image"
 import { ResultsThumbnailsPanel } from "./results-thumbnails-panel"
 import { GenerateImageQuickToolbar } from "./generate-image-quick-toolbar"
 import { GenerateImageResultInfo } from "./generate-image-result-info"
+import { InlineNodePrompt } from "./inline-node-prompt/inline-node-prompt"
+import { NodeRunStripControls } from "./node-run-strip-controls"
+import { useGenerateImageStripModel } from "./use-generate-image-strip-model"
 import { useFullResolution } from "@/hooks/use-full-resolution"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { useUpstreamImageAspect } from "@/hooks/use-upstream-image-aspect"
@@ -45,10 +48,38 @@ import type { GenerateImageData, ExtractedReference } from "@/types/nodes"
 function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as GenerateImageData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
+  const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   // When a dropdown inside the bottom quick-toolbar is open, pin the
   // toolbar visible so the cursor moving into the portaled menu doesn't
   // dismiss it via the node-hover timer.
   const [toolbarDropdownOpen, setToolbarDropdownOpen] = useState(false)
+
+  // Inline prompt mode: when the global toggle is ON and the canvas is
+  // interactive (NOT the read-only viewer / template-preview modal, which
+  // sets elementsSelectable=false), render the live prompt editor + in-body
+  // run strip inside the node. OFF (or non-interactive) → today's behavior
+  // byte-for-byte (media fills the body, hover pill toolbar).
+  const inlineEnabled = useWorkflowStore((s) => s.inlinePromptMode)
+  const interactive = useStore((s) => s.elementsSelectable)
+  const showInline = inlineEnabled && interactive
+  // Measured height of the in-body chrome ([InlineNodePrompt + run strip]) —
+  // BaseNode derives node height as `chromeHeight + preview(width/aspect)` and
+  // makes resize width-driven when this is set.
+  const chromeRef = useRef<HTMLDivElement>(null)
+  const [chromeHeight, setChromeHeight] = useState(0)
+  useEffect(() => {
+    if (!showInline || !chromeRef.current) { setChromeHeight(0); return }
+    const el = chromeRef.current
+    const ro = new ResizeObserver(() => setChromeHeight(el.offsetHeight))
+    ro.observe(el)
+    setChromeHeight(el.offsetHeight)
+    return () => ro.disconnect()
+  }, [showInline])
+
+  // Shared run-strip model (model/aspect/resolution/versions + handlers + run
+  // action) — the SAME hook the hover quick-toolbar consumes, so the in-body
+  // strip can never disagree on the provider default or option sets.
+  const strip = useGenerateImageStripModel(id, nodeData)
   const isSettingsOpen = useWorkflowStore((s) => s.selectedNodeId === id)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
@@ -120,63 +151,14 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
     updateNodeData(id, updates)
   }
 
-  return (
-    <div className="relative" style={{ width: "100%", height: "100%", minHeight: 220 }}>
-    {/* Floating label above node */}
-    <EditableNodeLabel
-      label={nodeData.label}
-      icon={<ImageIcon className="w-3.5 h-3.5" />}
-      onSave={(newLabel) => updateNodeData(id, { label: newLabel })}
-    />
-    <BaseNode
-      id={id}
-      label={nodeData.label}
-      icon={<ImageIcon className="h-4 w-4" />}
-      category="ai"
-      credits={credits}
-      selected={selected}
-      isRunning={status === "running"}
-      {...imageNodeSizing(imgAspectRatio, upstreamImageAspect)}
-      listCount={listTotal}
-      listProgress={isNodeRunning && listTotal ? `${listCompleted ?? 0}/${listTotal}` : undefined}
-      listProgressPercent={isNodeRunning ? listProgressPercent : undefined}
-      hideHeader
-      rawToolbarContent={
-        <GenerateImageQuickToolbar
-          nodeId={id}
-          data={nodeData}
-          credits={credits}
-          isRunning={status === "running"}
-          onAnyOpenChange={setToolbarDropdownOpen}
-        />
-      }
-      keepTopToolbarVisible={toolbarDropdownOpen}
-      bottomToolbarContent={
-        showThumbnails && results.length > 1 ? (
-          <ResultsThumbnailsPanel
-            results={results}
-            activeIndex={activeIndex}
-            // Either React Flow's `selected` (single-click in canvas) OR
-            // the settings panel being open (gear icon — sets
-            // `selectedNodeId` in Zustand independently of React Flow's
-            // selection state). Both signal "user is currently
-            // interacting with this node" → arrow keys browse results.
-            nodeSelected={!!selected || isSettingsOpen}
-            onSelect={(i) => updateNodeData(id, { activeResultIndex: i, generatedImageUrl: results[i].url })}
-          />
-        ) : undefined
-      }
-      handles={[
-        { id: "prompt",     type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)',  left: '-29px' }, external: true },
-        { id: "negative",   type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 56px)',  left: '-29px' }, external: true },
-        { id: "references", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 88px)',  left: '-29px' }, external: true },
-        { id: "assets",     type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 120px)', left: '-29px' }, external: true },
-        { id: "elements",   type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 152px)', left: '-29px' }, external: true },
-        { id: "look",       type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 184px)', left: '-29px' }, external: true },
-        { id: "image",      type: "source", position: Position.Right, customStyle: { top: '24px',               right: '-29px' }, external: true },
-      ]}
-    >
-      <div className="relative w-full h-full group">
+  // Media preview (running / result / failed / idle) + ALL absolute hover
+  // controls + the LayoutGrid versions toggle. Reused by BOTH the inline and
+  // non-inline branches so the ~130 lines never get duplicated. The caller is
+  // responsible for the `group` wrapper (hover controls use
+  // `group-hover:opacity-100`).
+  function renderPreview() {
+    return (
+      <>
         {/* Running state — fills the node instead of forcing 180px, so the
             loader stays visible when the user resizes the node smaller. */}
         {status === "running" && (
@@ -309,7 +291,117 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
             <ImageIcon className="w-10 h-10" />
           </div>
         )}
-      </div>
+      </>
+    )
+  }
+
+  return (
+    <div className="relative" style={{ width: "100%", height: "100%", minHeight: 220 }}>
+    {/* Floating label above node */}
+    <EditableNodeLabel
+      label={nodeData.label}
+      icon={<ImageIcon className="w-3.5 h-3.5" />}
+      onSave={(newLabel) => updateNodeData(id, { label: newLabel })}
+    />
+    <BaseNode
+      id={id}
+      label={nodeData.label}
+      icon={<ImageIcon className="h-4 w-4" />}
+      category="ai"
+      credits={credits}
+      selected={selected}
+      isRunning={status === "running"}
+      {...imageNodeSizing(imgAspectRatio, upstreamImageAspect)}
+      chromeHeight={showInline ? chromeHeight : undefined}
+      listCount={listTotal}
+      listProgress={isNodeRunning && listTotal ? `${listCompleted ?? 0}/${listTotal}` : undefined}
+      listProgressPercent={isNodeRunning ? listProgressPercent : undefined}
+      hideHeader
+      rawToolbarContent={showInline ? undefined : (
+        <GenerateImageQuickToolbar
+          nodeId={id}
+          data={nodeData}
+          credits={credits}
+          isRunning={status === "running"}
+          onAnyOpenChange={setToolbarDropdownOpen}
+        />
+      )}
+      keepTopToolbarVisible={showInline ? undefined : toolbarDropdownOpen}
+      bottomToolbarContent={
+        showThumbnails && results.length > 1 ? (
+          <ResultsThumbnailsPanel
+            results={results}
+            activeIndex={activeIndex}
+            // Either React Flow's `selected` (single-click in canvas) OR
+            // the settings panel being open (gear icon — sets
+            // `selectedNodeId` in Zustand independently of React Flow's
+            // selection state). Both signal "user is currently
+            // interacting with this node" → arrow keys browse results.
+            nodeSelected={!!selected || isSettingsOpen}
+            onSelect={(i) => updateNodeData(id, { activeResultIndex: i, generatedImageUrl: results[i].url })}
+          />
+        ) : undefined
+      }
+      handles={[
+        { id: "prompt",     type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)',  left: '-29px' }, external: true },
+        { id: "negative",   type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 56px)',  left: '-29px' }, external: true },
+        { id: "references", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 88px)',  left: '-29px' }, external: true },
+        { id: "assets",     type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 120px)', left: '-29px' }, external: true },
+        { id: "elements",   type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 152px)', left: '-29px' }, external: true },
+        { id: "look",       type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 184px)', left: '-29px' }, external: true },
+        { id: "image",      type: "source", position: Position.Right, customStyle: { top: '24px',               right: '-29px' }, external: true },
+      ]}
+    >
+      {showInline ? (
+        // Inline mode: aspect-locked preview on top, prompt editor + run strip
+        // as chrome below (measured via chromeRef → BaseNode chromeHeight). The
+        // preview sub-region carries `group` so the result hover controls'
+        // `group-hover:opacity-100` still reveal on hover.
+        <div className="flex flex-col h-full">
+          <div className="relative flex-1 min-h-0 group">
+            {renderPreview()}
+          </div>
+          <div ref={chromeRef} className="shrink-0">
+            <InlineNodePrompt
+              nodeId={id}
+              nodeType="generate-image"
+              data={nodeData as never}
+              provider={nodeData.provider}
+              aspectRatio={nodeData.aspectRatio}
+            />
+            {/* flex-wrap so the strip wraps to a second row on narrow nodes; its
+                full height is captured by chromeRef's ResizeObserver. */}
+            <div className="flex flex-wrap items-center gap-0.5 px-2 pb-1.5">
+              <NodeRunStripControls
+                nodeId={id}
+                isRunning={status === "running"}
+                credits={credits}
+                onRun={(nid) => runSingleNode?.(nid)}
+                isMulti={strip.isMulti}
+                modelLabel={strip.modelLabel}
+                currentProvider={strip.currentProvider}
+                modelOptions={strip.modelOptions}
+                onModelChange={strip.onModelChange}
+                aspectOptions={strip.aspectOptions}
+                currentAspect={strip.currentAspect}
+                aspectShort={strip.aspectShort}
+                onAspectChange={strip.onAspectChange}
+                resolutionOptions={strip.resolutionOptions}
+                currentResolution={strip.currentResolution}
+                resolutionShort={strip.resolutionShort}
+                onResolutionChange={strip.onResolutionChange}
+                repeatCount={strip.repeatCount}
+                onRepeatChange={strip.onRepeatChange}
+                ghostTriggerClass="flex items-center gap-1 px-1.5 py-1 rounded-md text-[11px] h-7 whitespace-nowrap hover:bg-black/5 dark:hover:bg-white/10"
+              />
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="relative w-full h-full group">
+          {renderPreview()}
+        </div>
+      )}
     </BaseNode>
     {/* Generate Image v2.1 — typed handle pips stacked from bottom-up:
         Prompt → Negative → References → Assets → Elements → Look.

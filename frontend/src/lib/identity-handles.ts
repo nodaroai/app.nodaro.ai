@@ -20,7 +20,7 @@
  * runtime (drift fix from #2823 / #2827 / #2835).
  */
 import { DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared"
-import { TEXT_PRODUCER_TYPES, ELEMENTS_PICKER_TYPES } from "./generate-image-handles"
+import { TEXT_PRODUCER_TYPES, ELEMENTS_PICKER_TYPES, IDENTITY_TYPES } from "./generate-image-handles"
 
 const ACCEPTS_TEXT_OR_DYN = (s: string): boolean =>
   TEXT_PRODUCER_TYPES.has(s) || DYNAMIC_PRODUCER_TYPES.has(s)
@@ -64,10 +64,17 @@ export function isValidCharacterConnection(
     case "in":
       return ACCEPTS_PROMPT(sourceType, isVisualPicker)
     case "assets":
-      // Element/asset injection (P1): text/dynamic producers + element pickers
-      // compose into the character's generation prompt. Identity & character
-      // sources (with per-connection facet chips) land in P2.
-      return ACCEPTS_TEXT_OR_DYN(sourceType) || ELEMENTS_PICKER_TYPES.includes(sourceType)
+      // Element/asset injection. Text/dynamic producers + element pickers
+      // compose their whole fragment into the prompt (P1). Identity & character
+      // sources (object/location/creature/face/character) inject a chosen
+      // *facet* (P2) — picked via the per-connection facet chip and extracted
+      // server-side at generation time. The headline case is character→character
+      // (e.g. character 1's hair → character 2).
+      return (
+        ACCEPTS_TEXT_OR_DYN(sourceType) ||
+        ELEMENTS_PICKER_TYPES.includes(sourceType) ||
+        IDENTITY_TYPES.has(sourceType)
+      )
     default:
       return false
   }

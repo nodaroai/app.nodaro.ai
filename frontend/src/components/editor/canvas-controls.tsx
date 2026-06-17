@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent } from "react"
-import { Maximize2, ZoomIn, ZoomOut, Map, Magnet, Ruler, Crosshair } from "lucide-react"
+import { Maximize2, ZoomIn, ZoomOut, Map, Magnet, Ruler, Crosshair, TextCursorInput } from "lucide-react"
 import { useReactFlow, useStoreApi } from "@xyflow/react"
 import { cn } from "@/lib/utils"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -24,6 +24,8 @@ interface CanvasControlsProps {
   readonly onToggleSnap: () => void
   readonly alignmentEnabled: boolean
   readonly onToggleAlignment: () => void
+  readonly inlinePromptEnabled: boolean
+  readonly onToggleInlinePrompt: () => void
   readonly isMobile?: boolean
 }
 
@@ -257,7 +259,7 @@ function ZoomControl({
 
 export { ZoomControl }
 
-export function CanvasControls({ zoom, showMiniMap, onToggleMiniMap, snapEnabled, onToggleSnap, alignmentEnabled, onToggleAlignment, isMobile }: CanvasControlsProps) {
+export function CanvasControls({ zoom, showMiniMap, onToggleMiniMap, snapEnabled, onToggleSnap, alignmentEnabled, onToggleAlignment, inlinePromptEnabled, onToggleInlinePrompt, isMobile }: CanvasControlsProps) {
   const { fitView, zoomTo, getNodes, setCenter } = useReactFlow()
   const storeApi = useStoreApi()
   const selectNode = useWorkflowStore((s) => s.selectNode)
@@ -341,6 +343,12 @@ export function CanvasControls({ zoom, showMiniMap, onToggleMiniMap, snapEnabled
             label={`Alignment Guides (${formatBinding(SHORTCUTS.alignmentGuides.bindings[0], isMac)})`}
             onClick={onToggleAlignment}
             active={alignmentEnabled}
+          />
+          <ControlButton
+            icon={<TextCursorInput className="w-4 h-4" />}
+            label="Inline Prompts"
+            onClick={onToggleInlinePrompt}
+            active={inlinePromptEnabled}
           />
         </>
       )}

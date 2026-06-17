@@ -80,6 +80,16 @@ vi.mock("@/lib/url-validator.js", async () => {
   return { safeUrlSchema: z.string().url() }
 })
 
+// Facet extraction (P2) — the route awaits resolveFacetInjections to turn
+// `facetInjections: [{ sourceText, facet }]` into a prompt fragment. The helper
+// has its own unit tests (character-facet-extract.test.ts); here we mock it to a
+// deterministic marker so the route's prompt-weaving is what's under test.
+// `vi.hoisted` so the const is available inside the hoisted vi.mock factory.
+const mockResolveFacetInjections = vi.hoisted(() => vi.fn(async (): Promise<string> => ""))
+vi.mock("@/lib/character-facet-extract.js", () => ({
+  resolveFacetInjections: mockResolveFacetInjections,
+}))
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
@@ -374,6 +384,114 @@ describe("POST /v1/generate-character", () => {
     expect(insertedPayload.input_data.prompt).toContain("young woman, glasses")
     expect(insertedPayload.input_data.prompt).toContain("studio lighting")
     expect(insertedPayload.input_data.prompt).toContain("plain background")
+  })
+
+  // ───────────────────────────────────────────────────────────────────────
+  // Element/asset injection (P2) — facetInjections resolve (server-side LLM
+  // extraction, mocked here) and weave into the SAME injection slot as P1's
+  // injectedAssets. No facetInjections → byte-identical no-op.
+  // ───────────────────────────────────────────────────────────────────────
+  describe("element/asset injection (facetInjections)", () => {
+    it("weaves the resolved facet text into the portrait prompt", async () => {
+      mockResolveFacetInjections.mockResolvedValueOnce("curly red hair")
+      const { insert } = mockJobsInsertChain()
+      vi.mocked(supabase.from).mockReturnValue({ insert, ...charSelectChain() } as never)
+
+      await app.inject({
+        method: "POST",
+        url: "/v1/generate-character",
+        headers: { "x-user-id": TEST_USER_ID },
+        payload: {
+          name: "Kira",
+          seedPrompt: "young woman",
+          facetInjections: [{ sourceText: "char 1 description", facet: "hair" }],
+        },
+      })
+
+      expect(mockResolveFacetInjections).toHaveBeenCalledWith([
+        { sourceText: "char 1 description", facet: "hair" },
+      ])
+      const inserted = insert.mock.calls[0][0] as { input_data: { prompt: string } }
+      expect(inserted.input_data.prompt).toContain("young woman")
+      expect(inserted.input_data.prompt).toContain("curly red hair")
+    })
+
+    it("weaves BOTH injectedAssets (P1) and facetInjections (P2) into the prompt", async () => {
+      mockResolveFacetInjections.mockResolvedValueOnce("warm olive skin")
+      const { insert } = mockJobsInsertChain()
+      vi.mocked(supabase.from).mockReturnValue({ insert, ...charSelectChain() } as never)
+
+      await app.inject({
+        method: "POST",
+        url: "/v1/generate-character",
+        headers: { "x-user-id": TEST_USER_ID },
+        payload: {
+          name: "Kira",
+          seedPrompt: "young woman",
+          injectedAssets: "wearing a trench coat",
+          facetInjections: [{ sourceText: "char 1 description", facet: "skin-tone" }],
+        },
+      })
+
+      const inserted = insert.mock.calls[0][0] as { input_data: { prompt: string } }
+      expect(inserted.input_data.prompt).toContain("wearing a trench coat")
+      expect(inserted.input_data.prompt).toContain("warm olive skin")
+    })
+
+    it("weaves facet text on the legacy description path (no seedPrompt)", async () => {
+      mockResolveFacetInjections.mockResolvedValueOnce("short black hair")
+      const { insert } = mockJobsInsertChain()
+      vi.mocked(supabase.from).mockReturnValue({ insert, ...charSelectChain() } as never)
+
+      await app.inject({
+        method: "POST",
+        url: "/v1/generate-character",
+        headers: { "x-user-id": TEST_USER_ID },
+        payload: {
+          name: "Kira",
+          description: "tall woman",
+          facetInjections: [{ sourceText: "char 1 description", facet: "hair" }],
+        },
+      })
+
+      const inserted = insert.mock.calls[0][0] as { input_data: { prompt: string } }
+      expect(inserted.input_data.prompt).toContain("tall woman")
+      expect(inserted.input_data.prompt).toContain("short black hair")
+    })
+
+    it("keeps the raw facetInjections OUT of the persisted job input_data", async () => {
+      mockResolveFacetInjections.mockResolvedValueOnce("curly red hair")
+      const { insert } = mockJobsInsertChain()
+      vi.mocked(supabase.from).mockReturnValue({ insert, ...charSelectChain() } as never)
+
+      await app.inject({
+        method: "POST",
+        url: "/v1/generate-character",
+        headers: { "x-user-id": TEST_USER_ID },
+        payload: {
+          name: "Kira",
+          seedPrompt: "young woman",
+          facetInjections: [{ sourceText: "char 1 description", facet: "hair" }],
+        },
+      })
+
+      const inserted = insert.mock.calls[0][0] as { input_data: Record<string, unknown> }
+      // Extracted result is in the prompt; the raw source array is not persisted.
+      expect(inserted.input_data).not.toHaveProperty("facetInjections")
+      expect(inserted.input_data.prompt).toContain("curly red hair")
+    })
+
+    it("rejects more than 20 facetInjections (Zod cap)", async () => {
+      const many = Array.from({ length: 21 }, () => ({ sourceText: "x", facet: "full" }))
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-character",
+        headers: { "x-user-id": TEST_USER_ID },
+        payload: { name: "Kira", seedPrompt: "y w", facetInjections: many },
+      })
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.code).toBe("validation_error")
+    })
   })
 
   it("returns 500 when job insert fails on the first job (no credits reserved, no queue.add)", async () => {

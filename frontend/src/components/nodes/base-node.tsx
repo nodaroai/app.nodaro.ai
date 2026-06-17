@@ -65,6 +65,13 @@ interface BaseNodeProps {
   readonly keepTopToolbarVisible?: boolean
   readonly className?: string
   readonly imageAspectRatio?: number
+  /**
+   * Fixed-ish height (px) of in-body chrome below the aspect-locked preview
+   * (inline prompt editor + run strip). When set, the node height is derived as
+   * `chromeHeight + preview(width/aspect)` and resize is width-driven (the two
+   * resize controls get resizeDirection="horizontal"). Default 0 = today.
+   */
+  readonly chromeHeight?: number
   /** Opt a non-`parameter` node into the bottom-left zoom magnifier
    *  (`CustomHandle`) instead of a second plain resize dot. Reuses
    *  BaseNode's existing 2× zoom-drag handlers. */
@@ -155,13 +162,20 @@ function BaseNodeComponent({
   keepTopToolbarVisible,
   className,
   imageAspectRatio,
+  chromeHeight = 0,
   enableZoomHandle,
 }: BaseNodeProps) {
   // Auto-compute minHeight from handle count: handles need 30px each + 20px padding
   const leftCount = handles.filter((h) => h.position === Position.Left).length
   const rightCount = handles.filter((h) => h.position === Position.Right).length
   const handleMinHeight = (leftCount + rightCount) * 30 + 20
-  const effectiveMinHeight = Math.max(minHeight, handleMinHeight)
+  // Node-level floor includes chrome; the helper is given the un-inflated
+  // PREVIEW floor (`minHeight`) so chrome is added exactly once (no double-count).
+  const effectiveMinHeight = Math.max(minHeight + chromeHeight, handleMinHeight)
+  // With in-body chrome, height is derived from width (see sizing effect), so
+  // the resize handles only drive width. Without chrome, keep today's
+  // aspect-locked 2-corner resize.
+  const resizeDirection = chromeHeight > 0 ? "horizontal" : undefined
 
   const [isHovered, setIsHovered] = useState(false)
   // Keep the hover toolbar visible while the preset dropdown's (portaled) menu is open, so it
@@ -254,7 +268,9 @@ function BaseNodeComponent({
         width: node.width,
         height: typeof node.height === "number" ? node.height : undefined,
         minWidth,
-        minHeight: effectiveMinHeight,
+        // Preview floor WITHOUT chrome — the helper re-adds chrome itself.
+        minHeight: Math.max(minHeight, handleMinHeight - chromeHeight),
+        chromeHeight,
       })
       if (
         typeof node.width === "number" &&
@@ -273,8 +289,14 @@ function BaseNodeComponent({
       return
     }
 
-    // No aspect ratio: only floor-clamp height for non-resized nodes.
-    if (hasExplicitResize) return
+    // No aspect ratio: floor-clamp height for non-resized nodes — but still
+    // apply the chrome-inclusive floor to resized nodes when chrome is present
+    // (so toggling inline ON grows a previously-resized idle node to fit).
+    // Inert for generate-image/video (they always take the aspectRatio branch
+    // above); kept for forward-safety if a future no-aspect node opts into
+    // chromeHeight. Loop-safe: the `currentHeight >= effectiveMinHeight` guard
+    // below early-returns once the height already satisfies the floor.
+    if (hasExplicitResize && chromeHeight === 0) return
     // Guard: if neither an explicit height nor a RF-measured height exists yet,
     // the node just mounted and React Flow's ResizeObserver hasn't fired. Skip
     // now — `measuredH` in the dep array will re-trigger the effect once RF
@@ -290,7 +312,7 @@ function BaseNodeComponent({
         n.id === id ? { ...n, height: effectiveMinHeight } : n
       ),
     })
-  }, [imageAspectRatio, id, visualH, measuredH, effectiveMinHeight, minWidth])
+  }, [imageAspectRatio, id, visualW, visualH, measuredH, effectiveMinHeight, minWidth])
 
   // After any size change above, re-measure handle bounds. Needed for nodes
   // whose handles use `top: calc(100% - Npx)` (typed-pip stacks anchored to
@@ -711,6 +733,7 @@ function BaseNodeComponent({
               minWidth={minWidth}
               minHeight={effectiveMinHeight}
               keepAspectRatio={!!imageAspectRatio}
+              resizeDirection={resizeDirection}
               className="!w-2.5 !h-2.5 !border-0 !rounded-full" style={{ backgroundColor: "color-mix(in srgb, var(--muted-foreground) 40%, transparent)" }}
             />
             <CustomHandle
@@ -729,6 +752,7 @@ function BaseNodeComponent({
               minWidth={minWidth}
               minHeight={effectiveMinHeight}
               keepAspectRatio={!!imageAspectRatio}
+              resizeDirection={resizeDirection}
               className="!w-2.5 !h-2.5 !border-0 !rounded-full" style={{ backgroundColor: "color-mix(in srgb, var(--muted-foreground) 40%, transparent)" }}
             />
             <NodeResizeControl
@@ -737,6 +761,7 @@ function BaseNodeComponent({
               minWidth={minWidth}
               minHeight={effectiveMinHeight}
               keepAspectRatio={!!imageAspectRatio}
+              resizeDirection={resizeDirection}
               className="!w-2.5 !h-2.5 !border-0 !rounded-full" style={{ backgroundColor: "color-mix(in srgb, var(--muted-foreground) 40%, transparent)" }}
             />
           </>

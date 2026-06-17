@@ -83,8 +83,12 @@ export function imageNodeSizing(
  * between landscape and portrait: a user-resized 1600×900 (16:9) box becomes ~900×1600 for a 9:16
  * result — NOT 1600×2844 (which keeping the width would produce, making portrait nodes huge).
  *
- * - When the node already has a box (both `width` and `height`), re-fit at constant area:
- *   `w = √(area·aspect)`, `h = w/aspect`. Re-running once fitted is a no-op (stable).
+ * - When the node already has a box (both `width` and `height`) AND has no chrome, re-fit at
+ *   constant area: `w = √(area·aspect)`, `h = w/aspect`. Re-running once fitted is a no-op (stable).
+ * - When `chromeHeight > 0` (inline-prompt nodes), the node is WIDTH-DRIVEN: the dragged `width` is
+ *   used directly and height is re-derived (`h = chrome + max(minHeight, w/aspect)`). This avoids the
+ *   rubber-band a `resizeDirection="horizontal"` drag would otherwise hit, since React Flow writes
+ *   only width and area-preservation would re-fit it from the stale stored preview height.
  * - First fit (no prior height) starts from the node's `width` (or `minWidth`) — the snug default.
  * - Both dimensions are floored: width to the proportional minimum (`max(minWidth, minHeight·aspect)`,
  *   the narrowest box that keeps both `minHeight` and the aspect), height to `minHeight`.
@@ -95,16 +99,39 @@ export function computeFittedNodeBox(opts: {
   height: number | undefined
   minWidth: number
   minHeight: number
+  /**
+   * Fixed "chrome" height (px) below the aspect-locked preview sub-region —
+   * e.g. the inline prompt editor + run strip. The preview is what stays at
+   * `aspectRatio`; chrome is additive. Defaults to 0 (no chrome → today's
+   * whole-node behavior). `minHeight` is the PREVIEW floor (un-inflated); the
+   * caller is responsible for the node-level min clamp (`minHeight + chrome`).
+   */
+  chromeHeight?: number
 }): { width: number; height: number } {
   const { aspectRatio, width, height, minWidth, minHeight } = opts
+  const chrome = opts.chromeHeight ?? 0
   const proportionalMinWidth = Math.max(minWidth, minHeight * aspectRatio)
-  const baseW =
-    typeof width === "number" && typeof height === "number"
-      ? Math.sqrt(width * height * aspectRatio) // preserve current area, re-fit to the new aspect
-      : typeof width === "number"
-        ? width
-        : minWidth
+  // Chrome nodes (inline prompt) are WIDTH-DRIVEN: with `resizeDirection="horizontal"`
+  // React Flow writes only width, then this re-derives height. Area preservation
+  // would re-fit width from the STALE stored preview height, rubber-banding a width
+  // drag back toward the old size. So when chrome is present, take the dragged width
+  // directly. Non-chrome nodes (chrome === 0, every existing node) keep the exact
+  // area-preserving √ behavior — height can change there, so area must be conserved
+  // across an aspect rotation (landscape ↔ portrait).
+  let baseW: number
+  if (chrome > 0) {
+    baseW = typeof width === "number" ? width : minWidth
+  } else {
+    // Area math operates on the PREVIEW sub-area only (strip chrome out first).
+    const previewH = typeof height === "number" ? Math.max(0, height - chrome) : undefined
+    baseW =
+      typeof width === "number" && typeof previewH === "number"
+        ? Math.sqrt(width * previewH * aspectRatio) // preserve preview area, re-fit to new aspect
+        : typeof width === "number"
+          ? width
+          : minWidth
+  }
   const w = Math.max(baseW, proportionalMinWidth)
-  const h = Math.max(minHeight, w / aspectRatio)
+  const h = chrome + Math.max(minHeight, w / aspectRatio)
   return { width: w, height: h }
 }

@@ -1,24 +1,22 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useStore } from "@xyflow/react"
 import { Sparkles, Ratio, Maximize2, Clock, Settings2, Copy, Layers } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import {
   VIDEO_GEN_MODELS,
-  VIDEO_RESOLUTION_OPTIONS,
-  getAspectRatiosForVideoModel,
-  getDurationsForVideoModel,
   getVideoModelCapabilitiesTooltip,
 } from "@/components/editor/config-panels/model-options"
 import { ModelSearchSelect } from "@/components/editor/config-panels/model-search-select"
-import { RatioIcon } from "@/components/editor/config-panels/aspect-ratio-selector"
+import { AspectRatioItem } from "@/components/editor/config-panels/aspect-ratio-selector"
 import { RunNodeButton } from "./run-node-button"
 import { PromptEditButton } from "./prompt-edit-button"
+import { NodeRunStripControls } from "./node-run-strip-controls"
+import { useGenerateVideoStripModel } from "./use-generate-video-strip-model"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { NODE_VISUAL_SCALE_FLOOR } from "@/lib/zoom-floor"
-import { isSeedance2Provider } from "@nodaro/shared"
 import type { GenerateVideoNodeData } from "@/types/nodes"
 
 interface GenerateVideoQuickToolbarProps {
@@ -54,9 +52,6 @@ export function GenerateVideoQuickToolbar({
   isRunning,
   onAnyOpenChange,
 }: GenerateVideoQuickToolbarProps) {
-  const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-  const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
-
   // Compact threshold = (toolbar natural width) > 1.5 × (visible node width).
   // The toolbar renders at fixed DOM scale (NodeToolbar's portal isn't
   // zoom-scaled), while the node IS scaled by the canvas zoom. So when
@@ -121,81 +116,37 @@ export function GenerateVideoQuickToolbar({
     }
   }, [])
 
-  const currentProvider = data.provider || "seedance-2-fast"
-
-  const modelEntry = useMemo(
-    () => VIDEO_GEN_MODELS.find((m) => m.value === currentProvider),
-    [currentProvider],
-  )
-  const modelLabel = modelEntry?.label ?? currentProvider
-  // Short-form label for the compact pill (drops vendor prefix, fits ~10 chars).
-  const modelShort = useMemo(() => {
-    const lbl = modelEntry?.label ?? currentProvider
-    return lbl.length > 12 ? lbl.slice(0, 11).trimEnd() + "…" : lbl
-  }, [modelEntry?.label, currentProvider])
-
-  const aspectOptions = useMemo(() => getAspectRatiosForVideoModel(currentProvider), [currentProvider])
-  const durationOptions = useMemo(() => getDurationsForVideoModel(currentProvider), [currentProvider])
-  const resolutionOptions = VIDEO_RESOLUTION_OPTIONS[currentProvider]
-  // The unified GenerateVideoNodeData picks up a `[key: string]: unknown`
-  // index signature via the underlying ImageToVideoData / TextToVideoData
-  // intersection — explicit fields like `resolution` survive the Omit, but
-  // their inferred type widens to `unknown`-ish when accessed. Coerce to a
-  // string at the read boundary; the dropdowns + payload builders all
-  // expect strings.
-  const currentAspect: string = (typeof data.aspectRatio === "string" ? data.aspectRatio : undefined) ?? aspectOptions[0]?.value ?? ""
-  const currentDuration: number | undefined =
-    (typeof data.duration === "number" ? data.duration : undefined) ??
-    durationOptions[0]?.value
-  const currentResolution: string = (typeof data.resolution === "string" ? data.resolution : undefined) ?? resolutionOptions?.[0]?.value ?? ""
-
-  // Short labels for the pill — strips the parenthetical descriptor that
-  // option labels often carry ("1080p (High)" → "1080p", "16:9 (Landscape)" →
-  // "16:9"). The full label still renders inside the dropdown items.
-  const aspectShort = shortenLabel(aspectOptions.find((o) => o.value === currentAspect)?.label ?? currentAspect)
-  const resolutionShort = shortenLabel(resolutionOptions?.find((o) => o.value === currentResolution)?.label ?? currentResolution)
-  const durationShort = currentDuration !== undefined ? `${currentDuration}s` : ""
-
-  // Versions / repeat count — how many results to generate per run.
-  // Clamped to 1-4 in this UI (the shared helper allows up to 20; we
-  // intentionally narrow the toolbar to a sensible default range — power
-  // users can override via the full settings panel if/when that surfaces
-  // the wider range).
-  const repeatCount = Math.min(Math.max(1, (data.repeatCount as number | undefined) ?? 1), 4)
-  const handleRepeatChange = (value: string) => {
-    const n = parseInt(value, 10)
-    updateNodeData(nodeId, { repeatCount: Number.isFinite(n) ? n : 1 })
-  }
-
-  const handleModelChange = (value: string) => {
-    updateNodeData(nodeId, { provider: value })
-  }
-  const handleAspectChange = (value: string) => {
-    updateNodeData(nodeId, { aspectRatio: value })
-  }
-  const handleDurationChange = (value: string) => {
-    const n = parseInt(value, 10)
-    if (Number.isFinite(n)) {
-      updateNodeData(nodeId, { duration: n })
-    }
-  }
-  const handleResolutionChange = (value: string) => {
-    updateNodeData(nodeId, { resolution: value })
-  }
-
-  // Seedance 2 input mode — mutually exclusive between Frames (start/end
-  // images) and References (image references). Visible only when the
-  // chosen provider is in the Seedance 2 family; drives the disabled-handle
-  // styling via `getHandleConnectionLimit`.
-  const isSeedance2 = isSeedance2Provider(currentProvider)
-  const currentSeedance2Mode: "frames" | "references" =
-    (data.seedance2InputMode as "frames" | "references" | undefined) ?? "frames"
-  const handleSeedance2ModeChange = (value: string) => {
-    if (value === "frames" || value === "references") {
-      updateNodeData(nodeId, { seedance2InputMode: value })
-    }
-  }
-  const seedance2ModeLabel = currentSeedance2Mode === "frames" ? "Frames" : "Refs"
+  // Single source for the model / aspect / duration / resolution / versions
+  // derivation + the Seedance-2 input-mode lever + handlers + run action —
+  // SHARED with the inline in-body run strip via this hook so the two
+  // surfaces can never disagree (provider-enum-sync hazard). The compact
+  // branch below still reads the `*Short` pill labels from here.
+  const {
+    modelLabel,
+    modelShort,
+    currentProvider,
+    getModelTooltip,
+    aspectOptions,
+    currentAspect,
+    aspectShort,
+    durationOptions,
+    currentDuration,
+    durationShort,
+    resolutionOptions,
+    currentResolution,
+    resolutionShort,
+    repeatCount,
+    isSeedance2,
+    currentSeedance2Mode,
+    seedance2ModeLabel,
+    onModelChange: handleModelChange,
+    onAspectChange: handleAspectChange,
+    onDurationChange: handleDurationChange,
+    onResolutionChange: handleResolutionChange,
+    onRepeatChange: handleRepeatChange,
+    onSeedance2ModeChange: handleSeedance2ModeChange,
+    runSingleNode,
+  } = useGenerateVideoStripModel(nodeId, data)
 
   // Ghost select trigger — no border, no background by default, subtle
   // hover only. Icon prefix + value + small chevron. `!` modifiers beat
@@ -364,149 +315,85 @@ export function GenerateVideoQuickToolbar({
   }
 
   // ── Default mode: ghost selects with icon prefixes ─────────────────────
+  // The PILL presentation (container/zoom transform/click isolation/open
+  // tracking) stays here; the inner control row is the shared
+  // <NodeRunStripControls>. Video's two provider-specific levers — the
+  // Seedance-2 input-mode select and the Duration select — are threaded as
+  // `extraControls` (rendered between resolution and versions in the shared
+  // row). The model-row capability tooltip is threaded via `modelGetTooltip`.
   return (
     <div
       className={`${containerClass} gap-0.5`}
       style={toolbarTransform}
       onClick={(e) => e.stopPropagation()}
     >
-      <PromptEditButton nodeId={nodeId} />
-      {/* Model selector */}
-      <ModelSearchSelect disabled={isRunning}
-        value={currentProvider}
-        onChange={handleModelChange}
-        onOpenChange={handleOpenChange}
-        options={VIDEO_GEN_MODELS}
-        getTooltip={getVideoModelCapabilitiesTooltip}
-        triggerLabel={modelLabel}
-        triggerIcon={<Sparkles className="opacity-70" />}
-        triggerClassName={`${ghostTriggerClass} max-w-[180px]`}
-        contentClassName="node-menu-surface"
-        ariaLabel="Model"
-      />
-
-      {/* Seedance 2 input mode (Frames vs References) — only when relevant */}
-      {isSeedance2 && (
-        <Select disabled={isRunning} value={currentSeedance2Mode} onValueChange={handleSeedance2ModeChange} onOpenChange={handleOpenChange}>
-          <SelectTrigger className={ghostTriggerClass} title="Input mode (Seedance 2)">
-            <Layers className="opacity-70" />
-            <SelectValue>{seedance2ModeLabel}</SelectValue>
-          </SelectTrigger>
-          <SelectContent className="node-menu-surface">
-            <SelectItem value="frames" className="text-xs">Frames (start/end images)</SelectItem>
-            <SelectItem value="references" className="text-xs">References (image refs)</SelectItem>
-          </SelectContent>
-        </Select>
-      )}
-
-      {/* Aspect ratio selector */}
-      {aspectOptions.length > 0 && (
-        <Select disabled={isRunning} value={currentAspect} onValueChange={handleAspectChange} onOpenChange={handleOpenChange}>
-          <SelectTrigger className={ghostTriggerClass}>
-            <Ratio className="opacity-70" />
-            <SelectValue>{aspectShort}</SelectValue>
-          </SelectTrigger>
-          <SelectContent className="node-menu-surface">
-            {aspectOptions.map((opt) => (
-              <AspectRatioItem key={opt.value} value={opt.value} label={opt.label} />
-            ))}
-          </SelectContent>
-        </Select>
-      )}
-
-      {/* Duration selector (only when the provider exposes one) */}
-      {durationOptions.length > 0 && (
-        <Select
-          value={currentDuration !== undefined ? String(currentDuration) : ""}
-          onValueChange={handleDurationChange}
-          onOpenChange={handleOpenChange}
-        >
-          <SelectTrigger className={ghostTriggerClass}>
-            <Clock className="opacity-70" />
-            <SelectValue>{durationShort}</SelectValue>
-          </SelectTrigger>
-          <SelectContent className="node-menu-surface">
-            {durationOptions.map((opt) => (
-              <SelectItem key={opt.value} value={String(opt.value)} className="text-xs">
-                {opt.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      )}
-
-      {/* Resolution selector (only when the provider exposes one) */}
-      {resolutionOptions && resolutionOptions.length > 0 && (
-        <Select disabled={isRunning} value={currentResolution} onValueChange={handleResolutionChange} onOpenChange={handleOpenChange}>
-          <SelectTrigger className={ghostTriggerClass}>
-            <Maximize2 className="opacity-70" />
-            <SelectValue>{resolutionShort}</SelectValue>
-          </SelectTrigger>
-          <SelectContent className="node-menu-surface">
-            {resolutionOptions.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value} className="text-xs">
-                {opt.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      )}
-
-      {/* Versions (×1–×4): how many results to generate per run. */}
-      <Select disabled={isRunning} value={String(repeatCount)} onValueChange={handleRepeatChange} onOpenChange={handleOpenChange}>
-        <SelectTrigger className={ghostTriggerClass} title="Versions per run">
-          <Copy className="opacity-70" />
-          <SelectValue>× {repeatCount}</SelectValue>
-        </SelectTrigger>
-        <SelectContent className="node-menu-surface">
-          {[1, 2, 3, 4].map((n) => (
-            <SelectItem key={n} value={String(n)} className="text-xs">
-              × {n}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-
-      {/* Run button — credits + run-multiplier already baked in. */}
-      <RunNodeButton
+      <NodeRunStripControls
         nodeId={nodeId}
-        credits={credits}
         isRunning={isRunning}
+        credits={credits}
         onRun={(nid) => runSingleNode?.(nid)}
+        onOpenChange={handleOpenChange}
+        isMulti={false}
+        modelLabel={modelLabel}
+        currentProvider={currentProvider}
+        modelOptions={VIDEO_GEN_MODELS}
+        modelGetTooltip={getModelTooltip}
+        onModelChange={handleModelChange}
+        aspectOptions={aspectOptions}
+        currentAspect={currentAspect}
+        aspectShort={aspectShort}
+        onAspectChange={handleAspectChange}
+        resolutionOptions={resolutionOptions}
+        currentResolution={currentResolution}
+        resolutionShort={resolutionShort}
+        onResolutionChange={handleResolutionChange}
+        repeatCount={repeatCount}
+        onRepeatChange={handleRepeatChange}
+        ghostTriggerClass={ghostTriggerClass}
+        afterModel={
+          /* Seedance 2 input mode (Frames vs References) — only when relevant.
+             Placed right after the model select to match the original pill order
+             (model → mode → aspect → duration → resolution → versions). */
+          isSeedance2 ? (
+            <Select disabled={isRunning} value={currentSeedance2Mode} onValueChange={handleSeedance2ModeChange} onOpenChange={handleOpenChange}>
+              <SelectTrigger className={ghostTriggerClass} title="Input mode (Seedance 2)">
+                <Layers className="opacity-70" />
+                <SelectValue>{seedance2ModeLabel}</SelectValue>
+              </SelectTrigger>
+              <SelectContent className="node-menu-surface">
+                <SelectItem value="frames" className="text-xs">Frames (start/end images)</SelectItem>
+                <SelectItem value="references" className="text-xs">References (image refs)</SelectItem>
+              </SelectContent>
+            </Select>
+          ) : null
+        }
+        afterAspect={
+          /* Duration selector (only when the provider exposes one) — right after
+             aspect, matching the original order. */
+          durationOptions.length > 0 ? (
+            <Select
+              value={currentDuration !== undefined ? String(currentDuration) : ""}
+              onValueChange={handleDurationChange}
+              onOpenChange={handleOpenChange}
+            >
+              <SelectTrigger className={ghostTriggerClass}>
+                <Clock className="opacity-70" />
+                <SelectValue>{durationShort}</SelectValue>
+              </SelectTrigger>
+              <SelectContent className="node-menu-surface">
+                {durationOptions.map((opt) => (
+                  <SelectItem key={opt.value} value={String(opt.value)} className="text-xs">
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null
+        }
       />
     </div>
   )
 }
-
-/** Aspect-ratio dropdown item: proportional rectangle icon on the left,
- *  text label to its right. Icon-led layout makes the ratio visually
- *  scannable — eye lands on the shape before reading the label. Same
- *  `RatioIcon` SVG as the full config panel's tile grid. */
-function AspectRatioItem({ value, label }: { value: string; label: string }) {
-  return (
-    <SelectItem value={value} className="text-xs pr-8">
-      <span className="flex w-full items-center gap-2">
-        <span className="text-muted-foreground shrink-0">
-          <RatioIcon value={value} label={label} />
-        </span>
-        <span className="flex-1">{label}</span>
-      </span>
-    </SelectItem>
-  )
-}
-
-/** Strips the parenthetical descriptor from an option label.
- *    "1080p (High)"     → "1080p"
- *    "16:9 (Landscape)" → "16:9"
- *    "1:1"              → "1:1"  (no parens, returned as-is)
- *  Used so the toolbar pill shows the dense identifier while the dropdown
- *  options keep the descriptive long form. */
-function shortenLabel(label: string): string {
-  const parenIdx = label.indexOf(" (")
-  return parenIdx > 0 ? label.slice(0, parenIdx) : label
-}
-
 
 /** Row inside the compact-mode popover: small icon + label on top, full-
  *  width select underneath. Mirrors the config-panel field rhythm. */
