@@ -6754,7 +6754,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Character",
     category: "character",
     creditCost: 5,
-    inputs: ["in"],
+    inputs: ["assets", "in"],
     outputs: ["characterRef"],
     // PR #2410 removed the `maxWidth: '220px'` wrapper so the node could be
     // resized horizontally via BaseNode's NodeResizeControl. Without an

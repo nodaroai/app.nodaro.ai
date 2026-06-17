@@ -32,6 +32,7 @@ vi.mock("@/hooks/use-workflow-store", () => ({
     getState: () => ({
       updateNodeData: mockUpdateNodeData,
       nodes: mockNodes,
+      edges: [],
       userPromptTemplates: {},
       flowPromptTemplates: {},
     }),

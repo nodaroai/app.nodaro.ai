@@ -512,6 +512,7 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
 
   // ─── Identity nodes (Phase 23 of typed-handles migration) ────────────
   "character": [
+    { handleId: "assets", label: IDENTITY_HANDLE_LABELS["character"].assets, accepts: (s) => isValidCharacterConnection("assets", s, isVisualPickerType) },
     { handleId: "in", label: IDENTITY_HANDLE_LABELS["character"].in, accepts: (s) => isValidCharacterConnection("in", s, isVisualPickerType) },
   ],
   "face": [

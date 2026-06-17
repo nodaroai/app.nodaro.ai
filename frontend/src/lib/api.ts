@@ -649,6 +649,10 @@ export async function generateCharacter(data: {
   /** Character node toggle — wins against the per-asset default (portrait = 3:4),
    *  loses to `aspectRatio`. Driven by the character node's 4-pill UI. */
   characterNodeAspectRatio?: "1:1" | "3:4" | "16:9" | "9:16"
+  /** Element/asset injection: composed text from nodes wired into the character
+   *  node's Assets handle, resolved by the editor at generate time. Woven into
+   *  the portrait prompt server-side; never mutates the stored description. */
+  injectedAssets?: string
 }): Promise<{ jobId: string; jobIds: string[] }> {
   return apiJson("/v1/generate-character", {
     body: data,

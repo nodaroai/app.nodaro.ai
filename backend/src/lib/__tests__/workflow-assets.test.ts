@@ -25,18 +25,25 @@ interface SelectResponse {
 }
 const selectResponses = new Map<string, SelectResponse>()
 
+// Captured `.in("id", ids)` calls — lets tests assert which ids actually reach
+// the DB (defense against passing empty/non-UUID strings to a uuid column).
+const inCalls: { table: string; ids: unknown }[] = []
+
 vi.mock("../supabase.js", () => ({
   supabase: {
     from: vi.fn((table: string) => {
       return {
         // Path used by `fetchByIds`: .select(columns).in("id", ids).eq("user_id", uid)
         select: vi.fn(() => ({
-          in: vi.fn(() => ({
-            eq: vi.fn(() => {
-              const resp = selectResponses.get(table) ?? { data: [], error: null }
-              return Promise.resolve(resp)
-            }),
-          })),
+          in: vi.fn((_col: string, ids: unknown) => {
+            inCalls.push({ table, ids })
+            return {
+              eq: vi.fn(() => {
+                const resp = selectResponses.get(table) ?? { data: [], error: null }
+                return Promise.resolve(resp)
+              }),
+            }
+          }),
         })),
         // Path used by `insertOne`: .insert(row).select("id").single()
         insert: vi.fn((row: Record<string, unknown>) => {
@@ -68,6 +75,57 @@ import {
 beforeEach(() => {
   insertCalls.length = 0
   selectResponses.clear()
+  inCalls.length = 0
+})
+
+describe("workflow-assets — empty/invalid DbId guard (pipeline placeholder export crash)", () => {
+  // Repro for the production export crash: pipeline / Film-Director materialized
+  // character/object/location/creature nodes carry `*DbId: ""` placeholders
+  // (canvas-materializer.ts). Those empty strings flowed into
+  // `.in("id", [""])` against a uuid column → Postgres
+  // `invalid input syntax for type uuid: ""` → "Export failed".
+  const VALID = "11111111-1111-1111-1111-111111111111"
+
+  it("collectAssetIds skips empty-string DbIds (pipeline placeholders)", () => {
+    const ids = collectAssetIds([
+      { type: "character", data: { characterDbId: "" } },
+      { type: "object", data: { objectDbId: "" } },
+      { type: "location", data: { locationDbId: "" } },
+      { type: "creature", data: { creatureDbId: "" } },
+      { type: "character", data: { characterDbId: VALID } },
+    ])
+    expect(ids.characterIds).toEqual([VALID])
+    expect(ids.objectIds).toEqual([])
+    expect(ids.locationIds).toEqual([])
+    expect(ids.creatureIds).toEqual([])
+  })
+
+  it("collectAssetIds skips non-UUID DbIds (any non-uuid garbage, not just empty)", () => {
+    const ids = collectAssetIds([
+      { type: "character", data: { characterDbId: "not-a-uuid" } },
+      { type: "object", data: { objectDbId: "pending" } },
+    ])
+    expect(ids.characterIds).toEqual([])
+    expect(ids.objectIds).toEqual([])
+  })
+
+  it("fetchExportAssets never sends an empty/invalid id to the uuid `.in()` query", async () => {
+    const result = await fetchExportAssets(
+      {
+        characterIds: ["", VALID, "bogus"],
+        objectIds: [""],
+        creatureIds: [],
+        locationIds: [],
+      },
+      "user-1",
+    )
+    expect("error" in result).toBe(false)
+    // Only the valid UUID is ever sent to Postgres.
+    const charIn = inCalls.find((c) => c.table === "characters")
+    expect(charIn?.ids).toEqual([VALID])
+    // An all-invalid id list short-circuits — no query issued at all.
+    expect(inCalls.find((c) => c.table === "objects")).toBeUndefined()
+  })
 })
 
 describe("workflowExportSchema — new location fields", () => {
@@ -82,7 +140,7 @@ describe("workflowExportSchema — new location fields", () => {
         objects: [],
         locations: [
           {
-            id: "loc-1",
+            id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
             nodeId: "node-loc-1",
             name: "Beach",
             description: "Tropical beach",
@@ -134,7 +192,7 @@ describe("workflowExportSchema — new location fields", () => {
         objects: [],
         locations: [
           {
-            id: "loc-1",
+            id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
             nodeId: "node-loc-1",
             name: "Mountain",
             timeOfDay: [],
@@ -156,7 +214,7 @@ describe("reCreateAssets — writes the 6 new location columns", () => {
         objects: [],
         locations: [
           {
-            id: "loc-1",
+            id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
             nodeId: "node-loc-1",
             name: "Beach",
             description: null,
@@ -201,7 +259,7 @@ describe("reCreateAssets — writes the 6 new location columns", () => {
         objects: [],
         locations: [
           {
-            id: "loc-1",
+            id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
             nodeId: "node-loc-1",
             name: "Legacy",
             description: null,
@@ -233,7 +291,7 @@ describe("fetchExportAssets — reads the 6 new location columns", () => {
     selectResponses.set("locations", {
       data: [
         {
-          id: "loc-1",
+          id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
           node_id: "node-loc-1",
           name: "Beach",
           description: null,
@@ -254,7 +312,7 @@ describe("fetchExportAssets — reads the 6 new location columns", () => {
     })
 
     const result = await fetchExportAssets(
-      { characterIds: [], objectIds: [], creatureIds: [], locationIds: ["loc-1"] },
+      { characterIds: [], objectIds: [], creatureIds: [], locationIds: ["cccccccc-cccc-4ccc-8ccc-cccccccccccc"] },
       "user-1",
     )
 
@@ -277,12 +335,12 @@ describe("fetchExportAssets — reads the 6 new location columns", () => {
 describe("workflow-assets — creature node round-trip (Phase H)", () => {
   it("collectAssetIds picks up creatureDbId from a creature node", () => {
     const ids = collectAssetIds([
-      { type: "creature", data: { creatureDbId: "crt-1" } },
-      { type: "object", data: { objectDbId: "obj-1" } },
+      { type: "creature", data: { creatureDbId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" } },
+      { type: "object", data: { objectDbId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" } },
       { type: "creature", data: {} }, // no id → skipped
     ])
-    expect(ids.creatureIds).toEqual(["crt-1"])
-    expect(ids.objectIds).toEqual(["obj-1"])
+    expect(ids.creatureIds).toEqual(["aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"])
+    expect(ids.objectIds).toEqual(["bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"])
   })
 
   it("workflowExportSchema parses a bundle carrying creatures", () => {
@@ -296,7 +354,7 @@ describe("workflow-assets — creature node round-trip (Phase H)", () => {
         objects: [],
         creatures: [
           {
-            id: "crt-1",
+            id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
             nodeId: "node-crt-1",
             name: "Wolf",
             description: "A grey wolf",
@@ -322,7 +380,7 @@ describe("workflow-assets — creature node round-trip (Phase H)", () => {
     selectResponses.set("creatures", {
       data: [
         {
-          id: "crt-1",
+          id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
           node_id: "node-crt-1",
           name: "Wolf",
           description: "A grey wolf",
@@ -338,16 +396,16 @@ describe("workflow-assets — creature node round-trip (Phase H)", () => {
     })
 
     // 1. Collect from nodes
-    const nodes = [{ id: "n1", type: "creature", data: { creatureDbId: "crt-1" } }]
+    const nodes = [{ id: "n1", type: "creature", data: { creatureDbId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" } }]
     const ids = collectAssetIds(nodes)
-    expect(ids.creatureIds).toEqual(["crt-1"])
+    expect(ids.creatureIds).toEqual(["aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"])
 
     // 2. Export from DB → bundle
     const exported = await fetchExportAssets(ids, "user-1")
     expect("error" in exported).toBe(false)
     if ("error" in exported) return
     const crt = exported.creatures![0]
-    expect(crt.id).toBe("crt-1")
+    expect(crt.id).toBe("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
     expect(crt.species).toBe("wolf")
     expect(crt.poses).toEqual([{ name: "howling", url: "https://r2/crt/howl.png" }])
     expect(crt.angles).toEqual([{ name: "side", url: "https://r2/crt/side.png" }])
@@ -385,7 +443,7 @@ describe("workflow-assets — creature node round-trip (Phase H)", () => {
     expect(row.angles).toEqual([{ name: "side", url: "https://r2/crt/side.png" }])
     expect(row.variations).toEqual([{ name: "snowy", url: "https://r2/crt/snowy.png" }])
     // The created id (mock returns `new-<n>`) is mapped from the original.
-    const newId = idMap.get("crt-1")
+    const newId = idMap.get("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
     expect(newId).toBeDefined()
 
     // 5. remapNodeAssetIds rewrites the new id onto the node's creatureDbId
@@ -401,7 +459,7 @@ describe("workflow-assets — creature node round-trip (Phase H)", () => {
         objects: [],
         creatures: [
           {
-            id: "crt-1",
+            id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
             nodeId: "node-crt-1",
             name: "Legacy beast",
             description: null,
@@ -429,7 +487,7 @@ describe("workflow-assets — full round-trip parity", () => {
     selectResponses.set("locations", {
       data: [
         {
-          id: "loc-1",
+          id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
           node_id: "node-loc-1",
           name: "Beach",
           description: "Tropical",
@@ -451,7 +509,7 @@ describe("workflow-assets — full round-trip parity", () => {
 
     // 1. Export from DB → bundle
     const exported = await fetchExportAssets(
-      { characterIds: [], objectIds: [], creatureIds: [], locationIds: ["loc-1"] },
+      { characterIds: [], objectIds: [], creatureIds: [], locationIds: ["cccccccc-cccc-4ccc-8ccc-cccccccccccc"] },
       "user-1",
     )
     expect("error" in exported).toBe(false)

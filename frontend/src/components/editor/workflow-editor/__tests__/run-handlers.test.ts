@@ -1066,7 +1066,11 @@ describe("run handlers reset accumulation at execution start", () => {
     }
   }
 
-  it("handleRun resets generatedResults on every executable node", async () => {
+  it("handleRun preserves generatedResults on every executable node (Execute-All must not wipe history)", async () => {
+    // Regression: Execute-All used to clear generatedResults then save the
+    // empty state; an Execute-All→Stop left nodes permanently empty (only the
+    // stale generatedImageUrl survived). Whole-workflow runs now preserve
+    // history like per-node / run-from-here — new takes prepend, old ones stay.
     const execA = makeAccumulatedExecNode("a", "generate-image")
     const execB = makeAccumulatedExecNode("b", "image-to-video")
     mockCollapseExpandedClones.mockReturnValue({
@@ -1077,14 +1081,11 @@ describe("run handlers reset accumulation at execution start", () => {
     const ctx = makeCtx()
     await handleRun(ctx, "p1", "wf-1", vi.fn().mockResolvedValue(undefined), vi.fn())
 
-    expect(mockUpdateNodeData).toHaveBeenCalledWith(
-      "a",
-      expect.objectContaining({ generatedResults: [], activeResultIndex: 0 }),
-    )
-    expect(mockUpdateNodeData).toHaveBeenCalledWith(
-      "b",
-      expect.objectContaining({ generatedResults: [], activeResultIndex: 0 }),
-    )
+    const generatedResultPatches = mockUpdateNodeData.mock.calls
+      .filter((c: any[]) => c[1]?.generatedResults !== undefined)
+      .map((c: any[]) => c[0])
+    expect(generatedResultPatches).not.toContain("a")
+    expect(generatedResultPatches).not.toContain("b")
   })
 
   it("handleRunSingleNode preserves generatedResults on the target node (history kept across re-runs)", async () => {
@@ -1117,7 +1118,7 @@ describe("run handlers reset accumulation at execution start", () => {
     expect(siblingPatches).toEqual([])
   })
 
-  it("handleRunSelected resets only selected executable nodes", async () => {
+  it("handleRunSelected preserves generatedResults on selected nodes (history kept)", async () => {
     const selected = { ...makeAccumulatedExecNode("sel", "generate-image"), selected: true }
     const unselected = { ...makeAccumulatedExecNode("unsel", "generate-image"), selected: false }
     mockCollapseExpandedClones.mockReturnValue({
@@ -1128,10 +1129,12 @@ describe("run handlers reset accumulation at execution start", () => {
     const ctx = makeCtx()
     await handleRunSelected(ctx, "p1", vi.fn().mockResolvedValue(undefined), vi.fn())
 
+    // Selected node's history is preserved (no generatedResults clear), matching
+    // per-node / run-from-here. Unselected nodes are never touched either.
     const patchedIds = mockUpdateNodeData.mock.calls
       .filter((c: any[]) => c[1]?.generatedResults !== undefined)
       .map((c: any[]) => c[0])
-    expect(patchedIds).toEqual(["sel"])
+    expect(patchedIds).toEqual([])
   })
 
   it("handleRunFromHere preserves generatedResults on downstream nodes (history kept)", async () => {

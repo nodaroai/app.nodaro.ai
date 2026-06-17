@@ -1,7 +1,7 @@
 ---
 node_type: character
-generated_at: 2026-06-17T00:06:02.652Z
-generated_from: 589273d4d
+generated_at: 2026-06-17T08:47:21.264Z
+generated_from: f73d43090
 ---
 
 # Character
@@ -10,7 +10,7 @@ generated_from: 589273d4d
 **Type:** `character`
 **Category:** character
 **Credit cost:** 5
-**Inputs (target handles):** `in`
+**Inputs (target handles):** `assets`, `in`
 **Outputs (source handles):** `characterRef`
 
 **Required data fields:**

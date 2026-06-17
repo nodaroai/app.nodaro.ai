@@ -59,9 +59,22 @@ export function buildEntityHints(person?: PersonValue, wardrobe?: WardrobeValue)
   ]
 }
 
-export function buildPortraitPrompt(args: { seedPrompt: string; person?: PersonValue; wardrobe?: WardrobeValue }): string {
+export function buildPortraitPrompt(args: {
+  seedPrompt: string
+  person?: PersonValue
+  wardrobe?: WardrobeValue
+  /** Composed text from nodes wired into the character's Assets handle
+   *  (element/asset injection). Appended after seed+hints, before the studio
+   *  scaffolding. Empty/absent → byte-identical to the pre-injection prompt. */
+  injectedAssets?: string
+}): string {
   const hints = buildEntityHints(args.person, args.wardrobe).join(", ")
-  const seed = [stripTrailingPeriod(args.seedPrompt.trim()), hints].filter(Boolean).join(", ")
+  const injected = nonEmpty(args.injectedAssets)
+  const seed = [
+    stripTrailingPeriod(args.seedPrompt.trim()),
+    hints,
+    injected ? stripTrailingPeriod(injected) : null,
+  ].filter(Boolean).join(", ")
   return `${seed}. ${PORTRAIT_SCAFFOLDING}.`
 }
 

@@ -20,7 +20,7 @@
  * runtime (drift fix from #2823 / #2827 / #2835).
  */
 import { DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared"
-import { TEXT_PRODUCER_TYPES } from "./generate-image-handles"
+import { TEXT_PRODUCER_TYPES, ELEMENTS_PICKER_TYPES } from "./generate-image-handles"
 
 const ACCEPTS_TEXT_OR_DYN = (s: string): boolean =>
   TEXT_PRODUCER_TYPES.has(s) || DYNAMIC_PRODUCER_TYPES.has(s)
@@ -63,6 +63,11 @@ export function isValidCharacterConnection(
   switch (targetHandleId) {
     case "in":
       return ACCEPTS_PROMPT(sourceType, isVisualPicker)
+    case "assets":
+      // Element/asset injection (P1): text/dynamic producers + element pickers
+      // compose into the character's generation prompt. Identity & character
+      // sources (with per-connection facet chips) land in P2.
+      return ACCEPTS_TEXT_OR_DYN(sourceType) || ELEMENTS_PICKER_TYPES.includes(sourceType)
     default:
       return false
   }
@@ -143,7 +148,7 @@ export function isValidLocationConnection(
 // ─── Friendly labels for source-direction popover candidate rows ──────
 
 export const IDENTITY_HANDLE_LABELS: Record<string, Record<string, string>> = {
-  "character": { in: "Prompt" },
+  "character": { in: "Prompt", assets: "Assets" },
   "face":      { in: "Prompt" },
   "object":    { in: "Prompt", type: "Object type" },
   "creature":  { in: "Prompt", type: "Creature type" },

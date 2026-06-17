@@ -161,8 +161,9 @@ export const TYPED_HANDLE_IDS: ReadonlySet<string> = new Set([
   // `face` is face-swap. The `video` id above also covers face-swap.
   "image", "mask", "cinematography", "face",
   // Identity-node handles (Phase 23). `in` already covered above; `type`
-  // is object-node-specific (accepts identity-type pickers).
-  "type",
+  // is object-node-specific (accepts identity-type pickers); `assets` is the
+  // character node's element/asset-injection input (text producers + pickers).
+  "type", "assets",
   // ai-avatar verbatim spoken-script handle — text producers only (no pickers,
   // no cinematography). Distinct from `prompt` so spoken text never gets
   // parameter-picker prose appended.

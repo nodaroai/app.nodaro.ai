@@ -12,6 +12,8 @@ import type {
 import { loopColInputHandle } from "@/types/nodes";
 import { extractNodeOutput, IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE, computeGroupBuckets, computeCollectBuckets } from "./execution-graph";
 import { FAN_IN_NODE_TYPES } from "./types";
+import { ELEMENTS_PICKER_TYPES, TEXT_PRODUCER_TYPES } from "@/lib/generate-image-handles";
+import { DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared";
 import { PARAMETER_NODE_TYPES, OBJECT_PICKER_NODE_TYPES, getParameterPromptHint, parseGroupHandle, VIDEO_PRODUCER_TYPES } from "@nodaro/shared";
 import { resolveIndex, selectListItems, type SelectorFields } from "@nodaro/shared";
 import { splitByLoopDelimiter } from "@nodaro/shared";
@@ -92,6 +94,40 @@ export function resolveSeedPromptHint(
   }
 
   return hints.join(", ");
+}
+
+/**
+ * Compose the injected-assets fragment from nodes wired into a character node's
+ * `assets` handle (element/asset injection, P1). Each accepted source
+ * contributes text: element pickers via `getParameterPromptHint`, text /
+ * dynamic producers via their `extractNodeOutput`. Fragments are ordered by
+ * source node id (deterministic) and comma-joined. Returns "" when nothing is
+ * wired. Wiring is the source of truth — resolved at character-generation time;
+ * the character's stored description is never mutated.
+ */
+export function resolveCharacterAssets(
+  charNode: { id: string },
+  edges: ReadonlyArray<{ source: string; target: string; targetHandle?: string | null }>,
+  nodes: ReadonlyArray<{ id: string; type?: string; data?: Record<string, unknown> }>,
+): string {
+  const conns = (edges ?? [])
+    .filter((e) => e.target === charNode.id && e.targetHandle === "assets")
+    .sort((a, b) => a.source.localeCompare(b.source));
+  if (conns.length === 0) return "";
+  const nodesById = new Map((nodes ?? []).map((n) => [n.id, n]));
+  const frags: string[] = [];
+  for (const conn of conns) {
+    const source = nodesById.get(conn.source);
+    if (!source || !source.type) continue;
+    if (ELEMENTS_PICKER_TYPES.includes(source.type)) {
+      const hint = getParameterPromptHint({ type: source.type, data: source.data ?? {}, id: source.id });
+      if (hint && hint.trim()) frags.push(hint.trim());
+    } else if (TEXT_PRODUCER_TYPES.has(source.type) || DYNAMIC_PRODUCER_TYPES.has(source.type)) {
+      const text = extractNodeOutput(source as WorkflowNode);
+      if (text && text.trim()) frags.push(text.trim());
+    }
+  }
+  return frags.join(", ");
 }
 
 /**

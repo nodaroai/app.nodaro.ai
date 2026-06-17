@@ -1012,7 +1012,7 @@ describe("cross-tenant denial", () => {
 
 describe("GET /v1/workflows/:id/export", () => {
   const CHAR_ROW = {
-    id: "char-1",
+    id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
     node_id: "n-char",
     name: "Hero",
     description: null,
@@ -1073,7 +1073,7 @@ describe("GET /v1/workflows/:id/export", () => {
   it("includes assets when assets=true and entities exist", async () => {
     const workflowWithChar = {
       ...DB_WORKFLOW_FULL,
-      nodes: [{ id: "n-char", type: "character", data: { characterDbId: "char-1" } }],
+      nodes: [{ id: "n-char", type: "character", data: { characterDbId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd" } }],
     }
     const workflowChain = {
       select: vi.fn().mockReturnThis(),
@@ -1111,7 +1111,7 @@ describe("GET /v1/workflows/:id/export", () => {
     expect(res.statusCode).toBe(200)
     const body = JSON.parse(res.body)
     expect(body.assets.characters).toHaveLength(1)
-    expect(body.assets.characters[0].id).toBe("char-1")
+    expect(body.assets.characters[0].id).toBe("dddddddd-dddd-4ddd-8ddd-dddddddddddd")
     expect(body.assets.objects).toHaveLength(0)
   })
 })

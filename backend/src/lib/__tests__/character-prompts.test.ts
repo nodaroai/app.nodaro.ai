@@ -20,6 +20,19 @@ describe("buildPortraitPrompt", () => {
     const prompt = buildPortraitPrompt({ seedPrompt: "young woman" })
     expect(prompt).not.toContain("canonical")
   })
+
+  it("weaves injectedAssets after the seed, before the scaffolding", () => {
+    // Element/asset injection: wired-in text composed by the editor.
+    const prompt = buildPortraitPrompt({ seedPrompt: "young woman", injectedAssets: "wearing a leather jacket" })
+    expect(prompt).toContain("young woman, wearing a leather jacket")
+    expect(prompt.indexOf("wearing a leather jacket")).toBeLessThan(prompt.indexOf(PORTRAIT_SCAFFOLDING))
+  })
+
+  it("is a no-op when injectedAssets is empty / whitespace / absent", () => {
+    const base = buildPortraitPrompt({ seedPrompt: "young woman" })
+    expect(buildPortraitPrompt({ seedPrompt: "young woman", injectedAssets: "" })).toBe(base)
+    expect(buildPortraitPrompt({ seedPrompt: "young woman", injectedAssets: "   " })).toBe(base)
+  })
 })
 
 describe("buildAssetPromptText", () => {
