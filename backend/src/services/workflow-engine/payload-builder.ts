@@ -1332,6 +1332,34 @@ function collectCinematographyHints(
     const hint = getNodePromptHint(srcNode)
     if (hint) hints.push(hint)
   }
+
+  // Character-borne elements (parity with FE cinematography-hints.ts): a Character
+  // wired into this consumer carries its OWN Assets/Prompt-wired PICKER elements
+  // (held-prop, styling, …) into the prompt — so a composed character's elements
+  // show up wherever it's generated downstream. Sorted by source id + comma-joined
+  // into one fragment to byte-match `resolveCharacterAssets().injectedAssets` on the
+  // FE (preview == run). Deduped per source character. (Text producers wired to a
+  // character are handled on the FE single-node path; backend text parity is a
+  // follow-up — `getNodePromptHint` returns "" for them here.)
+  const seenChars = new Set<string>()
+  for (const edge of edges) {
+    if (edge.target !== consumerNodeId) continue
+    const charNode = nodes.find((n) => n.id === edge.source)
+    if (!charNode || charNode.type !== "character" || seenChars.has(charNode.id)) continue
+    seenChars.add(charNode.id)
+    const frags: string[] = []
+    const elemEdges = edges
+      .filter((ce) => ce.target === charNode.id && (ce.targetHandle === "assets" || ce.targetHandle === "in"))
+      .sort((a, b) => a.source.localeCompare(b.source))
+    for (const ce of elemEdges) {
+      const elemNode = nodes.find((nd) => nd.id === ce.source)
+      if (!elemNode) continue
+      const hint = getNodePromptHint(elemNode)
+      if (hint && hint.trim()) frags.push(hint.trim())
+    }
+    if (frags.length > 0) hints.push(frags.join(", "))
+  }
+
   return hints
 }
 

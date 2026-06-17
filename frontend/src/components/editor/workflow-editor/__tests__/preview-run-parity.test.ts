@@ -118,6 +118,10 @@ vi.mock("@/lib/prompt-builder", () => ({
 vi.mock("../node-input-resolver", () => ({
   resolveNodeInputs: (...args: unknown[]) => mockResolveNodeInputs(...args),
   resolveSeedPromptHint: vi.fn(() => ""),
+  // collectCinematographyHints now folds a character's wired Assets/Prompt
+  // elements via resolveCharacterAssets — these fixtures wire no elements, so
+  // empty channels are the correct stub.
+  resolveCharacterAssets: vi.fn(() => ({ injectedAssets: "", facetInjections: [] })),
 }))
 
 vi.mock("../execution-graph", () => ({

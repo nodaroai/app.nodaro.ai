@@ -180,6 +180,10 @@ vi.mock("../node-input-resolver", () => ({
   // upstream picker nodes wired to the `type` handle. Default to "" so the
   // generic object test path (no picker wired) still passes.
   resolveSeedPromptHint: vi.fn(() => ""),
+  // collectCinematographyHints now folds a wired character's Assets/Prompt
+  // elements via resolveCharacterAssets — these fixtures wire none, so empty
+  // channels are correct (no character-element hint added).
+  resolveCharacterAssets: vi.fn(() => ({ injectedAssets: "", facetInjections: [] })),
 }))
 
 vi.mock("../execution-graph", () => ({
