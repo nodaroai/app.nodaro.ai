@@ -403,6 +403,16 @@ function fanOutCount(items: string[], selector: SelectorFields | undefined): num
   return count > 1 ? count : 0;
 }
 
+/** Payload for the run-confirmation dialog (Execute-All always; any run >100cr). */
+export interface RunConfirmInfo {
+  readonly trigger: "all" | "selected" | "from-here" | "single";
+  readonly nodeCount: number;
+  /** Estimated credits, or null in non-credit editions (cost line hidden). */
+  readonly estimatedCredits: number | null;
+  /** True for Execute-All (confirm regardless of cost). */
+  readonly alwaysConfirm: boolean;
+}
+
 export interface ExecutionContext {
   userId: string | undefined;
   projectId: string | undefined;
@@ -446,6 +456,12 @@ export interface ExecutionContext {
    * and every call creates a fresh row.
    */
   idempotencyKey?: string;
+  /**
+   * Run-confirmation gate. Resolves true to proceed, false to abort. Provided by
+   * the editor (backed by a single-flight AlertDialog). Optional so non-editor
+   * callers (and tests) can omit it — handlers treat an absent gate as "proceed".
+   */
+  confirmRun?: (info: RunConfirmInfo) => Promise<boolean>;
 }
 
 // `iterationIdempotencyKey` lives in `frontend/src/lib/idempotency-key.ts`

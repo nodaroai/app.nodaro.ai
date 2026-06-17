@@ -119,6 +119,7 @@ vi.mock("../types", () => ({
     ])
     return EXECUTABLE.has(n.type ?? "")
   },
+  getFanOutMultiplier: () => 1,
 }))
 
 vi.mock("../execution-graph", () => ({
@@ -159,6 +160,7 @@ import {
   clearConnectedListRows,
   resetNodeAccumulation,
 } from "../run-handlers"
+import { getCachedCredits } from "@/ee/hooks/use-model-credits"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1160,5 +1162,61 @@ describe("run handlers reset accumulation at execution start", () => {
     expect(patchedIds).not.toContain("up")
     expect(patchedIds).not.toContain("start")
     expect(patchedIds).not.toContain("down")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Run confirmation gate
+// ---------------------------------------------------------------------------
+
+describe("run confirmation gate", () => {
+  it("handleRun (Execute-All) always calls confirmRun; abort on false does nothing", async () => {
+    mockNodes = [makeNode("a"), makeNode("b")]
+    mockCollapseExpandedClones.mockReturnValue({ nodes: mockNodes, edges: [] })
+    const confirmRun = vi.fn().mockResolvedValue(false)
+    const ctx = makeCtx({ confirmRun })
+    await handleRun(ctx, "p1", "wf-1", vi.fn().mockResolvedValue(undefined), vi.fn())
+    expect(confirmRun).toHaveBeenCalledWith(
+      expect.objectContaining({ trigger: "all", alwaysConfirm: true, nodeCount: 2 }),
+    )
+    expect(mockMarkNodesStatus).not.toHaveBeenCalled()
+    expect(ctx.save).not.toHaveBeenCalled()
+  })
+
+  it("handleRun proceeds (optimistic flip) when confirmRun resolves true", async () => {
+    mockNodes = [makeNode("a")]
+    mockCollapseExpandedClones.mockReturnValue({ nodes: mockNodes, edges: [] })
+    const confirmRun = vi.fn().mockResolvedValue(true)
+    await handleRun(makeCtx({ confirmRun }), "p1", "wf-1", vi.fn().mockResolvedValue(undefined), vi.fn())
+    expect(confirmRun).toHaveBeenCalled()
+    expect(mockMarkNodesStatus).toHaveBeenCalled()
+  })
+
+  it("handleRun with skipConfirm bypasses confirmRun", async () => {
+    mockNodes = [makeNode("a")]
+    mockCollapseExpandedClones.mockReturnValue({ nodes: mockNodes, edges: [] })
+    const confirmRun = vi.fn().mockResolvedValue(true)
+    await handleRun(makeCtx({ confirmRun }), "p1", "wf-1", vi.fn().mockResolvedValue(undefined), vi.fn(), undefined, undefined, { skipConfirm: true })
+    expect(confirmRun).not.toHaveBeenCalled()
+  })
+
+  it("handleRunSingleNode confirms only when estimate > 100", async () => {
+    mockNodes = [makeNode("n1", "generate-image")]
+    mockHasCredits.mockReturnValue(true)
+    vi.mocked(getCachedCredits).mockReturnValue(150)
+    const confirmRun = vi.fn().mockResolvedValue(false)
+    const ctx = makeCtx({ confirmRun })
+    await handleRunSingleNode("n1", ctx, "p1", vi.fn().mockResolvedValue(undefined), vi.fn(), { current: new Set() } as any)
+    expect(confirmRun).toHaveBeenCalledWith(expect.objectContaining({ trigger: "single", alwaysConfirm: false }))
+    expect(mockMarkNodesStatus).not.toHaveBeenCalled()
+  })
+
+  it("handleRunSingleNode does NOT confirm when estimate <= 100", async () => {
+    mockNodes = [makeNode("n1", "generate-image")]
+    mockHasCredits.mockReturnValue(true)
+    vi.mocked(getCachedCredits).mockReturnValue(5)
+    const confirmRun = vi.fn().mockResolvedValue(false)
+    await handleRunSingleNode("n1", makeCtx({ confirmRun }), "p1", vi.fn().mockResolvedValue(undefined), vi.fn(), { current: new Set() } as any)
+    expect(confirmRun).not.toHaveBeenCalled()
   })
 })
