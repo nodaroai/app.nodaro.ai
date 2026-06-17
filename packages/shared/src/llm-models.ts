@@ -21,6 +21,16 @@ export interface LlmModelDef {
   vendor: "anthropic" | "google" | "openai"
   supportsImages: boolean
   maxOutputTokens: number
+  /**
+   * How this model can be forced into schema-valid structured output.
+   * - "anthropic-tool"       → direct Anthropic SDK forced tool_choice (guaranteed).
+   * - "kie-response-format"  → KIE chat-completions `response_format: json_schema`
+   *                            (verified enforced for Gemini via KIE).
+   * - undefined              → no native structured mode (GPT-via-KIE doesn't honor
+   *                            response_format); callers fall back to parse + retry.
+   * Capability-driven so `llmCompleteStructured` never hardcodes provider ids.
+   */
+  structuredOutputMode?: "anthropic-tool" | "kie-response-format"
   /** If set, fallback to direct Anthropic SDK with this model ID when KIE.ai fails */
   directFallbackModel?: string
   /** Cost per million input tokens (USD) */
@@ -38,6 +48,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     kieFormat: "chat-completions",
     kieSlugOrModel: "gemini-3-flash",
     vendor: "google",
+    structuredOutputMode: "kie-response-format",
     supportsImages: true,
     maxOutputTokens: 8192,
     inputPricePerM: 0.10,
@@ -51,6 +62,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     kieFormat: "messages",
     kieSlugOrModel: "claude-haiku-4-5",
     vendor: "anthropic",
+    structuredOutputMode: "anthropic-tool",
     supportsImages: true,
     maxOutputTokens: 8192,
     directFallbackModel: "claude-haiku-4-5-20251001",
@@ -65,6 +77,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     kieFormat: "messages",
     kieSlugOrModel: "claude-sonnet-4-6",
     vendor: "anthropic",
+    structuredOutputMode: "anthropic-tool",
     supportsImages: true,
     maxOutputTokens: 16384,
     directFallbackModel: "claude-sonnet-4-6",
@@ -92,6 +105,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     kieFormat: "chat-completions",
     kieSlugOrModel: "gemini-3.1-pro",
     vendor: "google",
+    structuredOutputMode: "kie-response-format",
     supportsImages: true,
     maxOutputTokens: 16384,
     inputPricePerM: 3.50,
@@ -105,6 +119,7 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     kieFormat: "messages",
     kieSlugOrModel: "claude-opus-4-7",
     vendor: "anthropic",
+    structuredOutputMode: "anthropic-tool",
     supportsImages: true,
     maxOutputTokens: 16384,
     directFallbackModel: "claude-opus-4-7",

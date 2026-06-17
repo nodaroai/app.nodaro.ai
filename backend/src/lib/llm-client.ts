@@ -13,6 +13,9 @@ import { getLlmModel, LLM_FEATURE_DEFAULTS, calculateLlmCost } from "@nodaro/sha
 import type { LlmModelDef, LlmFeature } from "@nodaro/shared"
 import { getAnthropicClient } from "./anthropic.js"
 import { KIE_API_BASE } from "../providers/kie/client.js"
+import type { ZodType } from "zod"
+import zodToJsonSchema from "zod-to-json-schema"
+import { extractJsonFromAIResponse } from "./json-utils.js"
 
 const LLM_TIMEOUT_MS = 120_000
 
@@ -46,6 +49,14 @@ export interface LlmRequest {
    * outputs (e.g. the Lottie motion-graphics worker) pass a higher value.
    */
   timeoutMs?: number
+  /**
+   * Request schema-constrained output. The router enforces it natively where
+   * the model supports it (Anthropic forced tool / Gemini `response_format`);
+   * for models with no native mode the field is ignored and the caller's
+   * parse+retry loop ({@link llmCompleteStructured}) is the guarantee. Prefer
+   * calling {@link llmCompleteStructured} over setting this directly.
+   */
+  jsonSchema?: { name: string; schema: Record<string, unknown> }
 }
 
 export interface LlmResponse {
@@ -94,6 +105,93 @@ export async function llmStream(
   }
 
   throw new Error(`No LLM provider available for model ${model.id}`)
+}
+
+// ---------------------------------------------------------------------------
+// Structured (schema-validated) completion
+// ---------------------------------------------------------------------------
+
+export interface StructuredLlmOutput<T> {
+  output: T
+  inputTokens: number
+  outputTokens: number
+  providerCost?: number
+}
+
+/**
+ * Schema-constrained completion with validation + retry — the reliable entry
+ * point for "the LLM must return JSON shaped like X".
+ *
+ * The router enforces the schema natively where the model supports it
+ * (Anthropic forced tool / Gemini `response_format`); for models with no native
+ * mode (GPT-via-KIE) the call is plain text. Either way the result is parsed,
+ * Zod-validated, and on failure retried — the bad output + the validation error
+ * are fed back — up to `maxRetries` times before throwing, so callers never see
+ * a malformed object. Replaces ad-hoc `JSON.parse` + single-shot validation.
+ */
+export async function llmCompleteStructured<T>(
+  req: LlmRequest,
+  schema: ZodType<T>,
+  opts?: { schemaName?: string; maxRetries?: number },
+): Promise<StructuredLlmOutput<T>> {
+  const schemaName = opts?.schemaName ?? "result"
+  const retries = Math.max(0, opts?.maxRetries ?? 2)
+  // Draft-7 keeps Anthropic's tool input_schema happy; strip the $schema marker.
+  const jsonSchema = zodToJsonSchema(schema, { target: "jsonSchema7" }) as Record<string, unknown>
+  delete jsonSchema.$schema
+
+  let messages = req.messages
+  let lastError = ""
+  // Accumulate usage across ALL attempts: a retried call really is billed for
+  // every attempt (each re-sends the prompt — incl. multimodal refs), so the
+  // returned cost must reflect the full spend, not just the winning attempt.
+  // Otherwise jobs.provider_cost under-reports vs the real KIE/Anthropic bill
+  // and the credit-anomaly / "actual" audit drifts negative.
+  let inTokens = 0
+  let outTokens = 0
+  let cost = 0
+  let costSeen = false
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const resp = await llmComplete({ ...req, messages, jsonSchema: { name: schemaName, schema: jsonSchema } })
+    inTokens += resp.usage?.inputTokens ?? 0
+    outTokens += resp.usage?.outputTokens ?? 0
+    if (resp.providerCost != null) { cost += resp.providerCost; costSeen = true }
+
+    let parsedJson: unknown
+    try {
+      parsedJson = JSON.parse(extractJsonFromAIResponse(resp.text))
+    } catch {
+      lastError = "Output was not valid JSON."
+      messages = withCorrection(messages, resp.text, lastError)
+      continue
+    }
+
+    const result = schema.safeParse(parsedJson)
+    if (result.success) {
+      return {
+        output: result.data,
+        inputTokens: inTokens,
+        outputTokens: outTokens,
+        providerCost: costSeen ? cost : undefined,
+      }
+    }
+    lastError = result.error.issues.slice(0, 8).map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`).join("; ")
+    messages = withCorrection(messages, resp.text, lastError)
+  }
+  throw new Error(`llm-structured: validation failed after ${retries + 1} attempt(s): ${lastError}`)
+}
+
+/**
+ * Append a correction turn for the next retry. The failed output goes back as an
+ * assistant turn, then a user correction, so roles alternate (Anthropic rejects
+ * consecutive same-role messages).
+ */
+function withCorrection(messages: LlmMessage[], prevOutput: string, error: string): LlmMessage[] {
+  return [
+    ...messages,
+    { role: "assistant", content: prevOutput || "{}" },
+    { role: "user", content: `Your previous output was invalid: ${error}. Return ONLY valid JSON matching the schema — no prose, no markdown fences.` },
+  ]
 }
 
 // ---------------------------------------------------------------------------
@@ -224,6 +322,22 @@ function buildAnthropicMessages(req: LlmRequest) {
   })
 }
 
+/**
+ * KIE `response_format` for models that natively enforce a JSON schema (Gemini
+ * via KIE — live-verified). `strict: false` avoids OpenAI strict-mode's
+ * all-keys-required constraint (our schemas carry optional fields); the schema
+ * still strongly constrains the shape, and `llmCompleteStructured`'s validate +
+ * retry is the actual guarantee. Returns undefined for models with no native
+ * mode (GPT-via-KIE ignores response_format) so the caller falls back to text.
+ */
+function kieResponseFormat(model: LlmModelDef, req: LlmRequest): Record<string, unknown> | undefined {
+  if (!req.jsonSchema || model.structuredOutputMode !== "kie-response-format") return undefined
+  return {
+    type: "json_schema",
+    json_schema: { name: req.jsonSchema.name, strict: false, schema: req.jsonSchema.schema },
+  }
+}
+
 /** Build LlmResponse with computed provider cost from token usage. */
 function buildResponse(model: LlmModelDef, text: string, usage?: { inputTokens: number; outputTokens: number }): LlmResponse {
   return {
@@ -289,12 +403,14 @@ async function streamKie(
 
 async function callKieChatCompletions(model: LlmModelDef, req: LlmRequest): Promise<LlmResponse> {
   const url = `${KIE_API_BASE}/${model.kieSlugOrModel}/v1/chat/completions`
-  const body = {
+  const body: Record<string, unknown> = {
     model: model.kieSlugOrModel,
     messages: buildChatCompletionsMessages(req),
     max_tokens: req.maxTokens ?? model.maxOutputTokens,
     temperature: req.temperature,
   }
+  const responseFormat = kieResponseFormat(model, req)
+  if (responseFormat) body.response_format = responseFormat
 
   const response = await fetch(url, {
     method: "POST",
@@ -321,13 +437,15 @@ async function streamKieChatCompletions(
   model: LlmModelDef, req: LlmRequest, onToken: (chunk: string) => void, signal?: AbortSignal,
 ): Promise<LlmResponse> {
   const url = `${KIE_API_BASE}/${model.kieSlugOrModel}/v1/chat/completions`
-  const body = {
+  const body: Record<string, unknown> = {
     model: model.kieSlugOrModel,
     messages: buildChatCompletionsMessages(req),
     max_tokens: req.maxTokens ?? model.maxOutputTokens,
     temperature: req.temperature,
     stream: true,
   }
+  const responseFormat = kieResponseFormat(model, req)
+  if (responseFormat) body.response_format = responseFormat
 
   const response = await fetch(url, {
     method: "POST",
@@ -463,6 +581,35 @@ async function streamKieResponses(
 
 async function callAnthropicDirect(model: LlmModelDef, req: LlmRequest): Promise<LlmResponse> {
   const anthropic = getAnthropicClient()
+
+  // Forced single-tool structured output: guaranteed schema-shaped JSON. We
+  // return the tool input serialized as `text` so the rest of the pipeline
+  // (and llmCompleteStructured) treats it like any JSON completion. Temperature
+  // is intentionally omitted — newer Anthropic models (e.g. opus-4.7) reject it.
+  if (req.jsonSchema && model.structuredOutputMode === "anthropic-tool") {
+    const toolName = req.jsonSchema.name
+    const response = await anthropic.messages.create(
+      {
+        model: model.directFallbackModel!,
+        max_tokens: req.maxTokens ?? model.maxOutputTokens,
+        system: req.system,
+        messages: buildAnthropicMessages(req),
+        tools: [{
+          name: toolName,
+          description: "Emit the structured result.",
+          input_schema: req.jsonSchema.schema as Anthropic.Messages.Tool.InputSchema,
+        }],
+        tool_choice: { type: "tool", name: toolName },
+      },
+      { timeout: effectiveTimeout(req) },
+    )
+    const toolUse = response.content.find(
+      (b): b is Anthropic.Messages.ToolUseBlock => b.type === "tool_use",
+    )
+    const usage = { inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens }
+    return buildResponse(model, toolUse ? JSON.stringify(toolUse.input) : "", usage)
+  }
+
   const response = await anthropic.messages.create(
     {
       model: model.directFallbackModel!,

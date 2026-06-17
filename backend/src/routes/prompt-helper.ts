@@ -4,12 +4,11 @@ import { supabase } from "../lib/supabase.js"
 import { config } from "../lib/config.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { CreditsService } from "../ee/billing/credits.js"
-import { llmComplete } from "../lib/llm-client.js"
+import { llmCompleteStructured } from "../lib/llm-client.js"
 import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { buildWizardAnalyzeSystem, buildWizardGenerateSystem, buildWizardEnhanceSystem } from "../prompts/prompt-wizard-system.js"
-import { extractJsonFromAIResponse } from "../lib/json-utils.js"
 import { formatZodError } from "../lib/zod-error.js"
 
 const nodeContextSchema = z.object({
@@ -216,47 +215,46 @@ export async function promptHelperRoutes(app: FastifyInstance) {
           messageContent = userMessage
         }
 
-        const response = await llmComplete({
+        // Schema-constrained generation: the router forces valid output natively
+        // where the model supports it (Anthropic tool / Gemini response_format),
+        // and validates + retries everywhere else — no more single-shot JSON.parse.
+        const baseReq = {
           modelId: llmModel,
           system: systemPrompt,
-          messages: [{ role: "user", content: messageContent }],
-          maxTokens: 4096,
+          messages: [{ role: "user" as const, content: messageContent }],
+          // 8192 (vs 4096): `analyze` can emit up to 12 questions × several
+          // options. On the Anthropic forced-tool path a truncated tool call
+          // yields empty input → guaranteed validation failure with no salvage,
+          // so give the structured output real headroom (capped per-model anyway).
+          maxTokens: 8192,
           temperature: 0.7,
-        })
-
-        // Parse and validate JSON response
-        let parsedResponse: unknown
-        try {
-          parsedResponse = JSON.parse(extractJsonFromAIResponse(response.text))
-        } catch {
-          throw new Error("LLM returned invalid JSON")
         }
 
         let result: Record<string, unknown>
+        let usage: { inputTokens: number; outputTokens: number }
+        let providerCost: number | undefined
 
         if (body.action === "analyze") {
-          const validated = analyzeResponseSchema.safeParse(parsedResponse)
-          if (!validated.success) {
-            throw new Error(`Malformed analyze response: ${validated.error.issues[0]?.message}`)
-          }
-          result = { jobId: job.id, questions: validated.data.questions }
+          const s = await llmCompleteStructured(baseReq, analyzeResponseSchema, { schemaName: "questions" })
+          result = { jobId: job.id, questions: s.output.questions }
+          usage = { inputTokens: s.inputTokens, outputTokens: s.outputTokens }
+          providerCost = s.providerCost
         } else {
-          // generate + enhance both return { prompt, recommendedModel? } — validated by the same schema, so this stays 2-way
-          const validated = generateResponseSchema.safeParse(parsedResponse)
-          if (!validated.success) {
-            throw new Error(`Malformed ${body.action} response: ${validated.error.issues[0]?.message}`)
-          }
+          // generate + enhance both return { prompt, recommendedModel? }
+          const s = await llmCompleteStructured(baseReq, generateResponseSchema, { schemaName: "prompt" })
           result = {
             jobId: job.id,
-            prompt: validated.data.prompt,
-            ...(validated.data.recommendedModel && { recommendedModel: validated.data.recommendedModel }),
+            prompt: s.output.prompt,
+            ...(s.output.recommendedModel && { recommendedModel: s.output.recommendedModel }),
           }
+          usage = { inputTokens: s.inputTokens, outputTokens: s.outputTokens }
+          providerCost = s.providerCost
         }
 
         // Mark job completed and commit credits
         try {
           await Promise.all([
-            supabase.from("jobs").update({ status: "completed", output_data: { ...result, usage: response.usage }, provider_cost: response.providerCost ?? null }).eq("id", job.id),
+            supabase.from("jobs").update({ status: "completed", output_data: { ...result, usage }, provider_cost: providerCost ?? null }).eq("id", job.id).eq("user_id", userId),
             usageLogId ? CreditsService.commitCredits(usageLogId) : undefined,
           ])
         } catch (postErr) {
@@ -268,11 +266,13 @@ export async function promptHelperRoutes(app: FastifyInstance) {
         const message = err instanceof Error ? err.message : "Prompt wizard failed"
 
         await Promise.all([
-          supabase.from("jobs").update({ status: "failed", output_data: { error: message } }).eq("id", job.id),
+          supabase.from("jobs").update({ status: "failed", output_data: { error: message } }).eq("id", job.id).eq("user_id", userId),
           usageLogId ? CreditsService.refundCredits(usageLogId) : undefined,
         ])
 
-        const isMalformed = message.includes("Malformed") || message.includes("invalid JSON")
+        // A structured-output failure after retries is still a malformed-response
+        // situation from the client's perspective (502, not a generic 500).
+        const isMalformed = message.includes("Malformed") || message.includes("invalid JSON") || message.includes("llm-structured")
         return reply.status(isMalformed ? 502 : 500).send({
           error: { code: isMalformed ? "malformed_response" : "llm_error", message },
         })
