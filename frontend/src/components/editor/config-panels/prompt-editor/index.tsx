@@ -833,8 +833,13 @@ export function PromptEditor({
     }
   }, [editor, value])
 
-  const minHeight = rows ? `${rows * 1.5}rem` : undefined
-  const maxHeight = maxRows ? `${maxRows * 1.5 + 1.125}rem` : undefined
+  // Per-line height in rem. `bare` (inline canvas) renders at 18px with a 2rem
+  // paragraph line-height (see globals.css), so its line unit is 2rem; the modal
+  // /panel default is 1.5rem. Keeping these aligned makes rows/maxRows map to the
+  // actual visible line count.
+  const lineRem = bare ? 2 : 1.5
+  const minHeight = rows ? `${rows * lineRem}rem` : undefined
+  const maxHeight = maxRows ? `${maxRows * lineRem + 1.125}rem` : undefined
   // Auto-grow (maxRows) wins: content grows from `rows` (min, set on
   // EditorContent below) up to `maxRows` (the cap here), then scrolls. Else
   // `scrollable` pins a fixed `rows`-tall scroll area (modal). Else unbounded.

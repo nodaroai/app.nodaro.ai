@@ -439,6 +439,41 @@ function BaseNodeComponent({
     }
   }, [id])
 
+  // Group resize: when ≥2 nodes are selected and the user drags one node's resize
+  // handle, scale the OTHER selected nodes' WIDTH by the same factor. Width is the
+  // universal lever — each node's own BaseNode sizing effect re-derives its height
+  // from width (respecting its aspect/chrome), so we never write height here (that
+  // would fight aspect-locked/chrome nodes). Scale from a drag-START snapshot so
+  // the ~60Hz onResize stream doesn't compound rounding.
+  const groupResizeStartRef = useRef<Map<string, number> | null>(null)
+  const handleGroupResizeStart = useCallback(() => {
+    const sel = useWorkflowStore.getState().nodes.filter((n) => n.selected)
+    if (sel.length < 2) { groupResizeStartRef.current = null; return }
+    const m = new Map<string, number>()
+    for (const n of sel) {
+      const w = n.width ?? n.measured?.width
+      if (typeof w === "number") m.set(n.id, w)
+    }
+    groupResizeStartRef.current = m
+  }, [])
+  const handleGroupResize = useCallback((newWidth: number) => {
+    const starts = groupResizeStartRef.current
+    if (!starts) return
+    const myStart = starts.get(id)
+    if (!myStart || myStart <= 0) return
+    const scale = newWidth / myStart
+    useWorkflowStore.setState((st) => ({
+      nodes: st.nodes.map((n) => {
+        if (n.id === id || !n.selected) return n // React Flow already wrote the dragged node
+        const w0 = starts.get(n.id)
+        if (typeof w0 !== "number") return n
+        const nextW = Math.max(80, Math.round(w0 * scale))
+        const cls = n.className?.includes("rf-resized") ? n.className : `${n.className ?? ""} rf-resized`.trim()
+        return { ...n, width: nextW, className: cls }
+      }),
+    }))
+  }, [id])
+
   // Note: 7 standard resize handles are now rendered via React Flow's
   // <NodeResizeControl>, which encapsulates pointer math, viewport-zoom
   // compensation, min/max clamping, aspect-ratio locking, and corner-anchored
@@ -734,6 +769,8 @@ function BaseNodeComponent({
               minHeight={effectiveMinHeight}
               keepAspectRatio={!!imageAspectRatio}
               resizeDirection={resizeDirection}
+              onResizeStart={handleGroupResizeStart}
+              onResize={(_e, p) => handleGroupResize(p.width)}
               className="!w-2.5 !h-2.5 !border-0 !rounded-full" style={{ backgroundColor: "color-mix(in srgb, var(--muted-foreground) 40%, transparent)" }}
             />
             <CustomHandle
@@ -753,6 +790,8 @@ function BaseNodeComponent({
               minHeight={effectiveMinHeight}
               keepAspectRatio={!!imageAspectRatio}
               resizeDirection={resizeDirection}
+              onResizeStart={handleGroupResizeStart}
+              onResize={(_e, p) => handleGroupResize(p.width)}
               className="!w-2.5 !h-2.5 !border-0 !rounded-full" style={{ backgroundColor: "color-mix(in srgb, var(--muted-foreground) 40%, transparent)" }}
             />
             <NodeResizeControl
@@ -762,6 +801,8 @@ function BaseNodeComponent({
               minHeight={effectiveMinHeight}
               keepAspectRatio={!!imageAspectRatio}
               resizeDirection={resizeDirection}
+              onResizeStart={handleGroupResizeStart}
+              onResize={(_e, p) => handleGroupResize(p.width)}
               className="!w-2.5 !h-2.5 !border-0 !rounded-full" style={{ backgroundColor: "color-mix(in srgb, var(--muted-foreground) 40%, transparent)" }}
             />
           </>

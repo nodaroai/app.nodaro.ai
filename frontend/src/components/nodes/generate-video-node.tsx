@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useState, useMemo, useEffect, useRef, useCallback } from "react"
+import { memo, useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback } from "react"
 import { Position, useUpdateNodeInternals, useStore, type NodeProps } from "@xyflow/react"
 import {
   Clapperboard,
@@ -102,7 +102,11 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
   const showInline = inlineEnabled && interactive
   const chromeRef = useRef<HTMLDivElement>(null)
   const [chromeHeight, setChromeHeight] = useState(0)
-  useEffect(() => {
+  // useLayoutEffect (not useEffect): commit the measured chrome height BEFORE
+  // paint so BaseNode's derived node.height and React Flow's NodeToolbar (which
+  // positions the run pill off the MEASURED height) land in the same frame —
+  // otherwise the pill lags the node's bottom on resize (bug: pill too far/close).
+  useLayoutEffect(() => {
     // Reset the editing-pin when inline turns off so the hover pill isn't left
     // pinned visible (promptFocused can't get a blur if the editor unmounts).
     if (!showInline || !chromeRef.current) { setChromeHeight(0); if (!showInline) setPromptFocused(false); return }
@@ -112,6 +116,19 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
     setChromeHeight(el.offsetHeight)
     return () => ro.disconnect()
   }, [showInline])
+
+  // Clear the stored height on each inline-mode TRANSITION so BaseNode re-fits
+  // cleanly from WIDTH (first-fit, no area preservation). Without this the node
+  // grows a little every toggle: the OFF area-preservation reads the chrome-
+  // inflated height and inflates the width, compounding each cycle.
+  const prevShowInlineRef = useRef(showInline)
+  useLayoutEffect(() => {
+    if (prevShowInlineRef.current === showInline) return
+    prevShowInlineRef.current = showInline
+    useWorkflowStore.setState((st) => ({
+      nodes: st.nodes.map((n) => (n.id === id ? { ...n, height: undefined } : n)),
+    }))
+  }, [showInline, id])
 
   const [toolbarDropdownOpen, setToolbarDropdownOpen] = useState(false)
   // Whether the inline prompt editor is focused — reveals the hover pill while

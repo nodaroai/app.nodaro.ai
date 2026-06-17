@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useState, useRef, useEffect, Suspense } from "react"
+import { memo, useState, useRef, useEffect, useLayoutEffect, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { Position, useStore, type NodeProps } from "@xyflow/react"
 import { ImageIcon, Loader2, AlertCircle, ShieldAlert, X, Scissors, LayoutGrid, Expand, Download, Link, Type, Pencil, Aperture, Minus, Users, Sparkles, RotateCcw } from "lucide-react"
@@ -67,7 +67,11 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   // makes resize width-driven when this is set.
   const chromeRef = useRef<HTMLDivElement>(null)
   const [chromeHeight, setChromeHeight] = useState(0)
-  useEffect(() => {
+  // useLayoutEffect (not useEffect): commit the measured chrome height BEFORE
+  // paint so BaseNode's derived node.height and React Flow's NodeToolbar (which
+  // positions the run pill off the MEASURED height) land in the same frame —
+  // otherwise the pill lags the node's bottom on resize (bug: pill too far/close).
+  useLayoutEffect(() => {
     // Reset the editing-pin when inline turns off so the hover pill isn't left
     // pinned visible (promptFocused can't get a blur if the editor unmounts).
     if (!showInline || !chromeRef.current) { setChromeHeight(0); if (!showInline) setPromptFocused(false); return }
@@ -77,6 +81,19 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
     setChromeHeight(el.offsetHeight)
     return () => ro.disconnect()
   }, [showInline])
+
+  // Clear the stored height on each inline-mode TRANSITION so BaseNode re-fits
+  // cleanly from WIDTH (first-fit, no area preservation). Without this the node
+  // grows a little every toggle: the OFF area-preservation reads the chrome-
+  // inflated height and inflates the width, compounding each cycle.
+  const prevShowInlineRef = useRef(showInline)
+  useLayoutEffect(() => {
+    if (prevShowInlineRef.current === showInline) return
+    prevShowInlineRef.current = showInline
+    useWorkflowStore.setState((st) => ({
+      nodes: st.nodes.map((n) => (n.id === id ? { ...n, height: undefined } : n)),
+    }))
+  }, [showInline, id])
 
   // When inline, the prompt "chrome" sits below the aspect-locked preview, so the
   // bottom-anchored input pips must offset by the chrome height to stay beside the
