@@ -148,3 +148,38 @@ describe("getHandleConnectionLimit (generate-video)", () => {
     expect(getHandleConnectionLimit(node, "startFrame")).toBeNull()
   })
 })
+
+describe("getHandleConnectionLimit (generate-image references)", () => {
+  const node = (data: Record<string, unknown>) =>
+    ({ id: "n", type: "generate-image", data }) as unknown as WorkflowNode
+
+  it("uses the i2i sibling's cap for an auto-routed T2I provider", () => {
+    // grok (t2i) auto-routes to grok-i2i (cap 1) when refs are attached — the
+    // popover must show 1, matching the reference-support warning (not the t2i
+    // id's default of 4).
+    expect(getHandleConnectionLimit(node({ provider: "grok" }), "references")?.limit).toBe(1)
+    // gpt-image-2 → gpt-image-2-i2i (cap 16).
+    expect(getHandleConnectionLimit(node({ provider: "gpt-image-2" }), "references")?.limit).toBe(16)
+  })
+
+  it("uses the direct cap for a multi-ref T2I provider", () => {
+    expect(
+      getHandleConnectionLimit(node({ provider: "nano-banana-pro" }), "references")?.limit,
+    ).toBe(8)
+  })
+
+  it("returns null when no selected provider consumes references", () => {
+    // imagen4 ignores reference images entirely.
+    expect(getHandleConnectionLimit(node({ provider: "imagen4" }), "references")).toBeNull()
+  })
+
+  it("takes the MIN cap across selected providers in multi-provider mode", () => {
+    // nano-banana-pro (8) + grok→grok-i2i (1) → MIN 1, flagged multi-provider.
+    const result = getHandleConnectionLimit(
+      node({ providers: ["nano-banana-pro", "grok"] }),
+      "references",
+    )
+    expect(result?.limit).toBe(1)
+    expect(result?.isMultiProviderMin).toBe(true)
+  })
+})

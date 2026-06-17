@@ -1,7 +1,5 @@
 import {
-  REF_IMAGE_MAX_LIMITS,
-  DEFAULT_REF_IMAGE_MAX,
-  MODELS_WITH_REFERENCE_IMAGE_SUPPORT,
+  imageReferenceLimit,
   VIDEO_REF_LIMITS_BY_PROVIDER,
   getModel,
   isSeedance2Provider,
@@ -70,7 +68,10 @@ export function getHandleConnectionLimit(
 
     // Filter to providers that actually consume reference images — others
     // ignore them entirely, so their "limit" of zero would be misleading.
-    const refConsumers = providers.filter((p) => MODELS_WITH_REFERENCE_IMAGE_SUPPORT.has(p))
+    // `imageReferenceLimit` returns 0 for a non-consumer and resolves T2I ids to
+    // their auto-routed i2i sibling's cap (grok→1, gpt-image-2→16), matching the
+    // generate-image route + the reference-support warning.
+    const refConsumers = providers.filter((p) => imageReferenceLimit(p) > 0)
     if (refConsumers.length === 0) return null
 
     // Multi-provider: pick the MIN limit across selected providers — past
@@ -78,7 +79,7 @@ export function getHandleConnectionLimit(
     // tooltip can clarify that this is the most-restrictive provider.
     let minLimit = Infinity
     for (const p of refConsumers) {
-      const lim = REF_IMAGE_MAX_LIMITS[p] ?? DEFAULT_REF_IMAGE_MAX
+      const lim = imageReferenceLimit(p)
       if (lim < minLimit) minLimit = lim
     }
     if (!Number.isFinite(minLimit)) return null
