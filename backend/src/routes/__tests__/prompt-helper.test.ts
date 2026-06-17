@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
 import Fastify from "fastify"
 import { promptHelperRoutes } from "../prompt-helper.js"
-import { llmComplete } from "../../lib/llm-client.js"
+import { llmCompleteStructured } from "../../lib/llm-client.js"
 
 vi.mock("../../middleware/credit-guard.js", () => ({
   creditGuard: () => async () => undefined,
@@ -12,12 +12,19 @@ vi.mock("../../lib/supabase.js", () => ({
   supabase: {
     from: () => ({
       insert: () => ({ select: () => ({ single: async () => ({ data: { id: "job-1" }, error: null }) }) }),
-      update: () => ({ eq: async () => ({ error: null }) }),
+      // self-chaining thenable: supports `.eq(...).eq(...)` (id + user_id scope) and `await`
+      update: () => {
+        const builder: { eq: () => typeof builder; then: (r: (v: { error: null }) => void) => void } = {
+          eq: () => builder,
+          then: (resolve) => resolve({ error: null }),
+        }
+        return builder
+      },
     }),
   },
 }))
 
-vi.mock("../../lib/llm-client.js", () => ({ llmComplete: vi.fn() }))
+vi.mock("../../lib/llm-client.js", () => ({ llmCompleteStructured: vi.fn() }))
 
 vi.mock("../../ee/billing/credits.js", () => ({
   CreditsService: { commitCredits: async () => undefined, refundCredits: async () => undefined },
@@ -27,8 +34,10 @@ vi.mock("../../lib/config.js", () => ({
   config: { KIE_API_KEY: "kie", ANTHROPIC_API_KEY: "ant" },
 }))
 
-function mockLlm(text: string) {
-  vi.mocked(llmComplete).mockResolvedValueOnce({ text, usage: { inputTokens: 1, outputTokens: 1 } } as never)
+/** The route now calls llmCompleteStructured, which returns already-validated
+ *  output (the router/wrapper guarantee the shape) — mock that contract. */
+function mockStructured(output: unknown) {
+  vi.mocked(llmCompleteStructured).mockResolvedValueOnce({ output, inputTokens: 1, outputTokens: 1, providerCost: 0.001 } as never)
 }
 
 async function buildApp() {
@@ -42,7 +51,7 @@ describe("POST /v1/prompt-helper/wizard", () => {
   beforeEach(() => vi.clearAllMocks())
 
   it("analyze returns questions", async () => {
-    mockLlm(JSON.stringify({ questions: [{ category: "subject", label: "Subject?", options: [{ value: "cat", label: "Cat" }], selected: "cat", allowCustom: true }] }))
+    mockStructured({ questions: [{ category: "subject", label: "Subject?", options: [{ value: "cat", label: "Cat" }], selected: "cat", allowCustom: true }] })
     const app = await buildApp()
     const res = await app.inject({ method: "POST", url: "/v1/prompt-helper/wizard", payload: { action: "analyze", nodeType: "generate-image", prompt: "a cat" } })
     expect(res.statusCode).toBe(200)
@@ -52,7 +61,7 @@ describe("POST /v1/prompt-helper/wizard", () => {
   })
 
   it("generate returns an optimized prompt", async () => {
-    mockLlm(JSON.stringify({ prompt: "a photorealistic cat" }))
+    mockStructured({ prompt: "a photorealistic cat" })
     const app = await buildApp()
     const res = await app.inject({ method: "POST", url: "/v1/prompt-helper/wizard", payload: { action: "generate", nodeType: "generate-image", selections: [{ category: "subject", value: "cat", isCustom: false }] } })
     expect(res.statusCode).toBe(200)
@@ -60,7 +69,7 @@ describe("POST /v1/prompt-helper/wizard", () => {
   })
 
   it("enhance returns an optimized prompt one-shot (no selections)", async () => {
-    mockLlm(JSON.stringify({ prompt: "a cinematic snow leopard at golden hour" }))
+    mockStructured({ prompt: "a cinematic snow leopard at golden hour" })
     const app = await buildApp()
     const res = await app.inject({ method: "POST", url: "/v1/prompt-helper/wizard", payload: { action: "enhance", nodeType: "generate-image", prompt: "snow leopard" } })
     expect(res.statusCode).toBe(200)
@@ -76,8 +85,10 @@ describe("POST /v1/prompt-helper/wizard", () => {
     expect(JSON.parse(res.body).error.code).toBe("validation_error")
   })
 
-  it("returns 502 malformed_response when enhance LLM output is not valid JSON", async () => {
-    mockLlm("not json at all")
+  it("returns 502 malformed_response when structured output fails validation after retries", async () => {
+    vi.mocked(llmCompleteStructured).mockRejectedValueOnce(
+      new Error("llm-structured: validation failed after 3 attempt(s): prompt: Required"),
+    )
     const app = await buildApp()
     const res = await app.inject({ method: "POST", url: "/v1/prompt-helper/wizard", payload: { action: "enhance", nodeType: "generate-image", prompt: "x" } })
     expect(res.statusCode).toBe(502)
@@ -85,7 +96,7 @@ describe("POST /v1/prompt-helper/wizard", () => {
   })
 
   it("enhance forwards reference image URLs as multimodal content", async () => {
-    mockLlm(JSON.stringify({ prompt: "x" }))
+    mockStructured({ prompt: "x" })
     const app = await buildApp()
     const res = await app.inject({
       method: "POST",
@@ -93,7 +104,8 @@ describe("POST /v1/prompt-helper/wizard", () => {
       payload: { action: "enhance", nodeType: "generate-image", prompt: "snow leopard", nodeContext: { referenceImageUrls: ["https://x/y.png"] } },
     })
     expect(res.statusCode).toBe(200)
-    const content = (vi.mocked(llmComplete).mock.calls[0][0] as { messages: Array<{ content: unknown }> }).messages[0].content as Array<{ type: string; url?: string }>
+    const req = vi.mocked(llmCompleteStructured).mock.calls[0][0] as { messages: Array<{ content: unknown }> }
+    const content = req.messages[0].content as Array<{ type: string; url?: string }>
     expect(Array.isArray(content)).toBe(true)
     expect(content.some((p) => p.type === "image" && p.url === "https://x/y.png")).toBe(true)
   })

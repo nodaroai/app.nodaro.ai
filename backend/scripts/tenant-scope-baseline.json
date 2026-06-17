@@ -123,18 +123,6 @@
       "line": 145
     },
     {
-      "file": "src/routes/prompt-helper.ts",
-      "table": "jobs",
-      "hash": "517acaaf712b",
-      "line": 244
-    },
-    {
-      "file": "src/routes/prompt-helper.ts",
-      "table": "jobs",
-      "hash": "9d065d18dd9f",
-      "line": 232
-    },
-    {
       "file": "src/routes/qa-check.ts",
       "table": "jobs",
       "hash": "63cf46419be7",
