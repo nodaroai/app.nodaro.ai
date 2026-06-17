@@ -16,10 +16,31 @@ describe("resolveCharacterAssets", () => {
     expect(resolveCharacterAssets(char, [], [])).toEqual({ injectedAssets: "", facetInjections: [] })
   })
 
-  it("ignores edges to other handles (e.g. the 'in'/Prompt handle)", () => {
-    const edges = [{ source: "t1", target: "char1", targetHandle: "in" }]
+  it("ignores edges to unrelated handles (not in/assets)", () => {
+    const edges = [{ source: "t1", target: "char1", targetHandle: "characterRef" }]
     const nodes = [{ id: "t1", type: "text-prompt", data: { text: "ignored" } }]
     expect(resolveCharacterAssets(char, edges, nodes)).toEqual({ injectedAssets: "", facetInjections: [] })
+  })
+
+  it("reads a text producer on the 'in'/Prompt handle too (both handles inject)", () => {
+    const edges = [{ source: "t1", target: "char1", targetHandle: "in" }]
+    const nodes = [{ id: "t1", type: "text-prompt", data: { text: "wearing a red scarf" } }]
+    const r = resolveCharacterAssets(char, edges, nodes)
+    expect(r.injectedAssets).toBe("wearing a red scarf")
+    expect(r.facetInjections).toEqual([])
+  })
+
+  it("combines 'in' and 'assets' text fragments in source-id order", () => {
+    const edges = [
+      { source: "z-assets", target: "char1", targetHandle: "assets" },
+      { source: "a-prompt", target: "char1", targetHandle: "in" },
+    ]
+    const nodes = [
+      { id: "a-prompt", type: "text-prompt", data: { text: "from prompt" } },
+      { id: "z-assets", type: "text-prompt", data: { text: "from assets" } },
+    ]
+    // a-prompt < z-assets by source id → prompt fragment first
+    expect(resolveCharacterAssets(char, edges, nodes).injectedAssets).toBe("from prompt, from assets")
   })
 
   // ── P1: text / picker → injectedAssets ──────────────────────────────────

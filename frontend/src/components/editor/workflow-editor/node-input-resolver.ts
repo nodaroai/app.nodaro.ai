@@ -12,7 +12,8 @@ import type {
 import { loopColInputHandle } from "@/types/nodes";
 import { extractNodeOutput, IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE, computeGroupBuckets, computeCollectBuckets } from "./execution-graph";
 import { FAN_IN_NODE_TYPES } from "./types";
-import { ELEMENTS_PICKER_TYPES, TEXT_PRODUCER_TYPES, IDENTITY_TYPES } from "@/lib/generate-image-handles";
+import { TEXT_PRODUCER_TYPES, IDENTITY_TYPES } from "@/lib/generate-image-handles";
+import { isVisualPickerType } from "@/lib/parameter-picker-types";
 import { DYNAMIC_PRODUCER_TYPES, DEFAULT_CHARACTER_FACET } from "@nodaro/shared";
 import { PARAMETER_NODE_TYPES, OBJECT_PICKER_NODE_TYPES, getParameterPromptHint, parseGroupHandle, VIDEO_PRODUCER_TYPES } from "@nodaro/shared";
 import { resolveIndex, selectListItems, type SelectorFields } from "@nodaro/shared";
@@ -113,17 +114,23 @@ export interface ResolvedCharacterAssets {
 }
 
 /**
- * Resolve everything wired into a character node's `assets` handle into the two
- * channels the `generate-character` route consumes (element/asset injection):
+ * Resolve everything wired into a character node's injection handles into the
+ * two channels the `generate-character` route consumes (element/asset injection).
  *
- *  - **injectedAssets** — text/dynamic producers (`extractNodeOutput`) + element
- *    pickers (`getParameterPromptHint`), each contributing its whole fragment,
- *    comma-joined (P1).
+ * BOTH input handles inject — the `assets` handle AND the legacy `in`/Prompt
+ * handle (which historically accepted connections but dropped them at gen time).
+ * Whatever a handle's `accepts` predicate lets through is resolved by source type:
+ *
+ *  - **injectedAssets** — ANY visual picker (`getParameterPromptHint`) + text /
+ *    dynamic producers (`extractNodeOutput`), each contributing its whole
+ *    fragment, comma-joined. (`in` accepts the full visual-picker set incl.
+ *    camera/look; `assets` accepts the element-picker subset — both resolve here.)
  *  - **facetInjections** — identity/character sources (object/location/creature/
- *    face/character). Each emits `{ sourceText, facet }`; the backend extracts
- *    the chosen facet from `sourceText` at generation time (P2). The facet comes
- *    from the consumer character's `assetInjections` (default "full"). A source
- *    with no description yet (ungenerated likeness) is skipped.
+ *    face/character; only acceptable on `assets`). Each emits `{ sourceText,
+ *    facet }`; the backend extracts the chosen facet from `sourceText` at
+ *    generation time. The facet comes from the consumer character's
+ *    `assetInjections` (default "full"). A source with no description yet
+ *    (ungenerated likeness) is skipped.
  *
  * Connections are processed in deterministic source-id order. Wiring is the
  * source of truth — resolved at character-generation time; no stored description
@@ -135,7 +142,7 @@ export function resolveCharacterAssets(
   nodes: ReadonlyArray<{ id: string; type?: string; data?: Record<string, unknown> }>,
 ): ResolvedCharacterAssets {
   const conns = (edges ?? [])
-    .filter((e) => e.target === charNode.id && e.targetHandle === "assets")
+    .filter((e) => e.target === charNode.id && (e.targetHandle === "assets" || e.targetHandle === "in"))
     .sort((a, b) => a.source.localeCompare(b.source));
   if (conns.length === 0) return { injectedAssets: "", facetInjections: [] };
   const nodesById = new Map((nodes ?? []).map((n) => [n.id, n]));
@@ -150,10 +157,7 @@ export function resolveCharacterAssets(
   for (const conn of conns) {
     const source = nodesById.get(conn.source);
     if (!source || !source.type) continue;
-    if (ELEMENTS_PICKER_TYPES.includes(source.type)) {
-      const hint = getParameterPromptHint({ type: source.type, data: source.data ?? {}, id: source.id });
-      if (hint && hint.trim()) frags.push(hint.trim());
-    } else if (IDENTITY_TYPES.has(source.type)) {
+    if (IDENTITY_TYPES.has(source.type)) {
       // Identity/character source → inject a chosen facet. The source's
       // canonical likeness (or user description) is the extraction input; skip
       // when it has no likeness yet (e.g. an ungenerated character).
@@ -164,6 +168,9 @@ export function resolveCharacterAssets(
       if (!sourceText) continue;
       const facet = facetBySource.get(conn.source) ?? DEFAULT_CHARACTER_FACET;
       facetInjections.push({ sourceText, facet });
+    } else if (isVisualPickerType(source.type)) {
+      const hint = getParameterPromptHint({ type: source.type, data: source.data ?? {}, id: source.id });
+      if (hint && hint.trim()) frags.push(hint.trim());
     } else if (TEXT_PRODUCER_TYPES.has(source.type) || DYNAMIC_PRODUCER_TYPES.has(source.type)) {
       const text = extractNodeOutput(source as WorkflowNode);
       if (text && text.trim()) frags.push(text.trim());
