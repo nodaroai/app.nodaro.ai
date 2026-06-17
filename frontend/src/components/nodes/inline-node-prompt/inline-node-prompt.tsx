@@ -74,7 +74,7 @@ export function InlineNodePrompt({ nodeId, nodeType, data, provider, aspectRatio
       // be discriminated as click-vs-drag by React Flow. `relative` anchors the
       // focus-only edit affordances. No border/divider — the prompt flows
       // seamlessly below the preview on the same node surface.
-      className={`nopan ${nodragActive ? "nodrag" : ""} relative flex flex-col px-2.5 py-1.5`}
+      className={`nopan ${nodragActive ? "nodrag" : ""} relative flex flex-col px-2.5 pt-1.5 pb-3`}
       onMouseDown={(e) => {
         // Only the editor area participates in the gesture; clicks on the
         // header (Prompt label, snippet/AI buttons) pass through untouched.

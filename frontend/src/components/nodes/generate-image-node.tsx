@@ -177,12 +177,16 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   // responsible for the `group` wrapper (hover controls use
   // `group-hover:opacity-100`).
   function renderPreview() {
+    // When inline, the prompt sits directly below the preview, so square the
+    // preview's BOTTOM corners (top stays rounded) — it connects flush to the
+    // prompt instead of leaving a rounded notch. Non-inline keeps full rounding.
+    const previewRounding = showInline ? "rounded-t-xl" : "rounded-xl"
     return (
       <>
         {/* Running state — fills the node instead of forcing 180px, so the
             loader stays visible when the user resizes the node smaller. */}
         {status === "running" && (
-          <div className="flex flex-col items-center justify-center gap-2 bg-muted/30 rounded-xl w-full h-full min-h-[80px]">
+          <div className={`flex flex-col items-center justify-center gap-2 bg-muted/30 ${previewRounding} w-full h-full min-h-[80px]`}>
             <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
             <NodeJobProgress progress={nodeData.currentJobProgress} />
           </div>
@@ -213,7 +217,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
             <CachedImage
               src={activeUrl}
               alt="Generated"
-              className="w-full h-full object-cover rounded-xl"
+              className={`w-full h-full object-cover ${previewRounding}`}
               thumbnail={!useFull}
               thumbnailWidth={320}
               onLoadDimensions={handleLoadDimensions}
@@ -292,7 +296,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
 
         {/* Failed state */}
         {status === "failed" && !activeUrl && (
-          <div className={`flex flex-col items-center justify-center gap-1 rounded-xl p-2 h-[180px] ${isContentPolicy ? "bg-amber-500/10 text-amber-500" : "bg-red-500/5 text-red-500"}`}>
+          <div className={`flex flex-col items-center justify-center gap-1 ${previewRounding} p-2 h-[180px] ${isContentPolicy ? "bg-amber-500/10 text-amber-500" : "bg-red-500/5 text-red-500"}`}>
             <div className="flex items-center gap-1.5">
               {isContentPolicy ? <ShieldAlert className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
               <span className="font-medium">{isContentPolicy ? "Prohibited" : "Failed"}</span>
@@ -307,7 +311,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
 
         {/* Idle/empty state */}
         {status !== "running" && !activeUrl && status !== "failed" && (
-          <div className="flex items-center justify-center rounded-xl bg-muted/10 text-muted-foreground/40 h-[160px]">
+          <div className={`flex items-center justify-center ${previewRounding} bg-muted/10 text-muted-foreground/40 h-[160px]`}>
             <ImageIcon className="w-10 h-10" />
           </div>
         )}

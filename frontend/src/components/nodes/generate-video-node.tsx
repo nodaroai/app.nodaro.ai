@@ -253,11 +253,14 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
   // non-inline branches. The caller owns the `group/video` wrapper (hover
   // controls use `group-hover/video:opacity-100`).
   function renderPreview() {
+    // When inline, square the preview's BOTTOM corners (top stays rounded) so it
+    // connects flush to the prompt below. Non-inline keeps full rounding.
+    const previewRounding = showInline ? "rounded-t-xl" : "rounded-xl"
     return (
       <>
         {/* Running state */}
         {status === "running" && (
-          <div className="flex flex-col items-center justify-center gap-2 bg-muted/30 rounded-xl w-full h-full min-h-[80px]">
+          <div className={`flex flex-col items-center justify-center gap-2 bg-muted/30 ${previewRounding} w-full h-full min-h-[80px]`}>
             <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
             <NodeJobProgress progress={nodeData.currentJobProgress as number | undefined} />
           </div>
@@ -288,7 +291,7 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
               muted
               playsInline
               poster={activeThumbnail}
-              className="w-full h-full object-cover rounded-xl"
+              className={`w-full h-full object-cover ${previewRounding}`}
               onLoadedMetadata={(e) => {
                 const v = e.currentTarget
                 if (v.videoWidth > 0) {
@@ -386,7 +389,7 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
 
         {/* Failed state */}
         {status === "failed" && !activeUrl && (
-          <div className="flex flex-col items-center justify-center gap-1 rounded-xl p-2 h-[180px] bg-red-500/5 text-red-500">
+          <div className={`flex flex-col items-center justify-center gap-1 ${previewRounding} p-2 h-[180px] bg-red-500/5 text-red-500`}>
             <div className="flex items-center gap-1.5">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span className="font-medium">Failed</span>
@@ -404,7 +407,7 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
 
         {/* Idle state */}
         {status !== "running" && !activeUrl && status !== "failed" && (
-          <div className="flex items-center justify-center rounded-xl bg-muted/10 text-muted-foreground/40 h-[160px]">
+          <div className={`flex items-center justify-center ${previewRounding} bg-muted/10 text-muted-foreground/40 h-[160px]`}>
             <Clapperboard className="w-10 h-10" />
           </div>
         )}
