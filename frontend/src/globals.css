@@ -1043,11 +1043,34 @@ html, body {
     line-height: 1.25rem;
   }
 }
-/* Inline canvas editor (bare): 15px — clearly larger than the 11px node label,
+/* Inline canvas editor (bare): 18px — clearly larger than the 11px node label,
    so the prompt reads as the node's primary content. Two-class specificity
-   overrides the base + media-query rules above at every viewport width. */
+   overrides the base + media-query rules above at every viewport width. The
+   2rem paragraph line-height is roomy for ref/snippet pills and aligns with the
+   editor's `lineRem = 2` height math (so rows=2/maxRows=6 = ~2–6 visible lines). */
 .prompt-editor--bare .prompt-editor__content {
-  font-size: 0.9375rem;
+  font-size: 1.125rem;
+}
+.prompt-editor--bare .prompt-editor__content .ProseMirror p {
+  line-height: 2rem;
+}
+/* Scrollbar: hidden at rest, revealed a little wider on hover of the editor
+   (mirrors the text node's hover-visible scrollbar). The root .prompt-editor is
+   the scroll container (overflow-y is set on it when maxRows is given). */
+.prompt-editor--bare { scrollbar-width: none; }
+.prompt-editor--bare:hover { scrollbar-width: thin; }
+.prompt-editor--bare::-webkit-scrollbar { width: 0; }
+.prompt-editor--bare:hover::-webkit-scrollbar { width: 10px; }
+.prompt-editor--bare::-webkit-scrollbar-track { background: transparent; }
+.prompt-editor--bare::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.45);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.prompt-editor--bare::-webkit-scrollbar-thumb:hover {
+  background: rgba(128, 128, 128, 0.7);
+  background-clip: padding-box;
 }
 .prompt-editor__content .ProseMirror {
   outline: none;
