@@ -35,6 +35,7 @@ import {
 } from "./types";
 import { pollJobToCompletion, guardedToast } from "./poll-job";
 import { shouldAbandonNode } from "./abandon-guard";
+import { resolveCharacterAssets } from "./node-input-resolver";
 
 // --- Character/Face/Object/Location generation ---
 
@@ -43,8 +44,11 @@ export function runCharacterGeneration(
   data: CharacterNodeData,
   ctx: ExecutionContext,
 ): Promise<string> {
-  const { updateNodeData } = useWorkflowStore.getState();
+  const { updateNodeData, nodes, edges } = useWorkflowStore.getState();
   updateNodeData(nodeId, { executionStatus: "running" });
+  // Element/asset injection: text composed from nodes wired into this
+  // character's Assets handle, woven into the generation prompt server-side.
+  const injectedAssets = resolveCharacterAssets({ id: nodeId }, edges, nodes) || undefined;
 
   return new Promise<string>((resolve, reject) => {
     generateCharacter({
@@ -59,6 +63,7 @@ export function runCharacterGeneration(
       // Canvas-node aspect-ratio toggle — overrides the backend's portrait
       // default (3:4) so the canvas render matches the chosen thumbnail crop.
       characterNodeAspectRatio: data.defaultAssetAspectRatio,
+      injectedAssets,
     })
       .then(({ jobId }) => {
         if (ctx.signal?.aborted) {

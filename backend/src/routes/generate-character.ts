@@ -22,6 +22,11 @@ const generateCharacterBody = z
     name: z.string().min(1).max(200),
     description: z.string().max(2000).optional(),
     userPrompt: z.string().max(8000).optional(),
+    // Element/asset injection: composed text from nodes wired into the
+    // character node's Assets handle, resolved by the editor at generate time
+    // (wiring = source of truth). Woven into the portrait prompt; never
+    // mutates the character's stored description. Absent → no-op.
+    injectedAssets: z.string().max(8000).optional(),
     gender: z.string().max(50).optional(),
     style: z.enum(["realistic", "anime", "3d-pixar", "illustration"]).optional(),
     baseOutfit: z.string().max(1000).optional(),
@@ -167,8 +172,11 @@ export async function generateCharacterRoutes(app: FastifyInstance) {
             seedPrompt: data.seedPrompt,
             person: characterPerson ?? undefined,
             wardrobe: characterWardrobe ?? undefined,
+            injectedAssets: data.injectedAssets,
           })
-        : (data.userPrompt ?? data.description ?? data.name)
+        : [data.userPrompt ?? data.description ?? data.name, data.injectedAssets?.trim()]
+            .filter((s): s is string => !!s && s.length > 0)
+            .join(", ")
 
       const mcpClient = extractMcpClient(req.body)
       const inputData = buildJobInputData(parsed.data, "generate-character")

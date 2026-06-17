@@ -149,6 +149,7 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
         <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
       }
       handles={[
+        { id: "assets",       type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 52px)', left: '-29px' }, external: true },
         { id: "in",           type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
         { id: "characterRef", type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
         { id: "image",        type: "source", position: Position.Right, customStyle: { top: '56px',              right: '-29px' }, external: true },
