@@ -6,6 +6,7 @@ import type {
   CharacterDefinition,
 } from "@/types/nodes"
 import { getConnectedSources } from "./helpers"
+import { stampElementInjections } from "@/components/editor/workflow-editor/node-input-resolver"
 import {
   buildImageConnectedReferences,
   type ConnectedRefsData,
@@ -84,12 +85,17 @@ export function buildImageAssembleInput(
   // for the prompt TEXT; URL fidelity for un-run upstreams is best-effort.
   const attachedIds = (data.characterDefinitionIds as readonly string[] | undefined) ?? []
   const attachedChars = characterDefinitions.filter((c) => attachedIds.includes(c.id))
-  const connectedReferences = buildImageConnectedReferences({
-    data: data as unknown as ConnectedRefsData,
-    sources: getConnectedSources(node.id, edges, nodes),
+  const connectedReferences = stampElementInjections(
+    buildImageConnectedReferences({
+      data: data as unknown as ConnectedRefsData,
+      sources: getConnectedSources(node.id, edges, nodes),
+      nodes,
+      attachedChars,
+    }),
+    node.id,
     nodes,
-    attachedChars,
-  })
+    edges,
+  )
 
   // Ancestor-ref fallback — only when there are no connected-reference URLs,
   // mirroring execute-node's `orderedUrls.length === 0 ? collectAncestorRefs : []`.

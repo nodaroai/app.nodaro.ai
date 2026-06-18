@@ -24,7 +24,8 @@ import { splitGeneratedItems } from "@nodaro/shared";
 import { SOCIAL_POST_NODE_TYPES } from "@nodaro/shared";
 import { resolveSourceThroughConnectedList } from "@nodaro/shared";
 import { VARIABLES_HANDLE_ID } from "@nodaro/shared";
-import type { EntityKind } from "@nodaro/shared";
+import { characterMentionSlug } from "@nodaro/shared";
+import type { EntityKind, ConnectedReference } from "@nodaro/shared";
 export { resolveSourceThroughConnectedList };
 
 /** Empty picker-type set — reused for location/character branches until they
@@ -177,6 +178,65 @@ export function resolveCharacterAssets(
     }
   }
   return { injectedAssets: frags.join(", "), facetInjections };
+}
+
+/**
+ * Map of `characterSlug → resolved element-injection fragment` for every
+ * Character node wired into `consumerNodeId`. The fragment is the character
+ * node's OWN Assets/Prompt wiring resolved via {@link resolveCharacterAssets}
+ * (`injectedAssets` — held-prop / styling / text / pickers). Keyed by the
+ * character's mention slug so it can be stamped onto the matching
+ * `ConnectedReference` entries (which carry the same slug).
+ *
+ * This REPLACES the old flat `collectCinematographyHints` character fold, which
+ * appended the fragment to the prompt BODY (the global tail). Routing it through
+ * the per-character ref instead lets the shared `buildImagePrompt` /
+ * `resolveVideoPromptMentions` weave it INTO that character's identity bullet.
+ * Deduped per character node; merges when two nodes share a slug.
+ */
+export function collectCharacterElementInjections(
+  consumerNodeId: string,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+): Map<string, string> {
+  const bySlug = new Map<string, string>();
+  const seen = new Set<string>();
+  for (const edge of edges) {
+    if (edge.target !== consumerNodeId) continue;
+    const srcNode = nodes.find((n) => n.id === edge.source);
+    if (!srcNode || srcNode.type !== "character" || seen.has(srcNode.id)) continue;
+    seen.add(srcNode.id);
+    const injected = resolveCharacterAssets({ id: srcNode.id }, edges, nodes).injectedAssets.trim();
+    if (!injected) continue;
+    const data = srcNode.data as Record<string, unknown> | undefined;
+    const name = (data?.characterName as string) || (data?.label as string) || "";
+    const slug = characterMentionSlug(name);
+    if (!slug) continue;
+    const prev = bySlug.get(slug);
+    bySlug.set(slug, prev ? `${prev}, ${injected}` : injected);
+  }
+  return bySlug;
+}
+
+/**
+ * Stamp `elementInjection` onto every character `ConnectedReference` whose slug
+ * has wired elements (see {@link collectCharacterElementInjections}). Non-
+ * character refs and characters with no wired elements pass through unchanged.
+ * The shared `buildImagePrompt` / `resolveVideoPromptMentions` then weave the
+ * fragment INTO that character's identity bullet (not the prompt tail).
+ */
+export function stampElementInjections(
+  refs: ReadonlyArray<ConnectedReference>,
+  consumerNodeId: string,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+): ConnectedReference[] {
+  const bySlug = collectCharacterElementInjections(consumerNodeId, nodes, edges);
+  if (bySlug.size === 0) return refs as ConnectedReference[];
+  return refs.map((r) => {
+    const inj = r.characterSlug ? bySlug.get(r.characterSlug) : undefined;
+    return inj ? { ...r, elementInjection: inj } : r;
+  });
 }
 
 /**

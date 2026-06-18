@@ -199,7 +199,7 @@ import {
 import { iterationIdempotencyKey } from "@/lib/idempotency-key";
 import { PLATFORM_SPECS } from "@/lib/social-media-specs";
 import { extractNodeOutput, collectMediaAssets, buildAutoComposition, collectAncestorRefs, IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES_FOR_RENDER, AUDIO_SOURCE_TYPES } from "./execution-graph";
-import { resolveNodeInputs, extractNodeOutputAsList, resolveSourceThroughConnectedList, resolveSeedPromptHint, type FrontendResolvedInputs } from "./node-input-resolver";
+import { resolveNodeInputs, extractNodeOutputAsList, resolveSourceThroughConnectedList, resolveSeedPromptHint, stampElementInjections, type FrontendResolvedInputs } from "./node-input-resolver";
 import { collectPreviewItems } from "./preview-items";
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
 import { resolveFieldMappings, NODE_MAPPABLE_FIELDS } from "./resolve-field-mappings";
@@ -776,7 +776,9 @@ function buildConnectedRefsForI2I(
   for (const [id, meta] of refMetaMap) {
     out.push({ id, ...meta });
   }
-  return out;
+  // Stamp each wired character's Assets/Prompt elements onto its ref so the
+  // shared builder weaves them into the character's identity bullet downstream.
+  return stampElementInjections(out, consumerNodeId, nodes, edges);
 }
 
 // `expandWiredCharacterRefsForVideo` + `resolveVideoPromptMentions` MOVED to
@@ -1135,7 +1137,7 @@ export function executeNode(
 
     // Apply ordering: use referenceImageOrder if set, otherwise default map order
     const orderIds = imgData.referenceImageOrder ?? [];
-    const connectedReferences: ConnectedReference[] = [];
+    let connectedReferences: ConnectedReference[] = [];
     const seen = new Set<string>();
     for (const id of orderIds) {
       const meta = refMetaMap.get(id);
@@ -1156,6 +1158,10 @@ export function executeNode(
       buildExtraRefCharacterContextLookup(node.id, nodes, edges),
     );
     for (const entry of extraRefEntries) connectedReferences.push(entry);
+    // Stamp each wired character's Assets/Prompt elements onto its ref so the
+    // shared builder weaves them into the character's identity bullet (parity
+    // with the preview's `buildImageAssembleInput`).
+    connectedReferences = stampElementInjections(connectedReferences, node.id, nodes, edges);
     const orderedUrls = connectedReferences.map((r) => r.url);
 
     const ancestorRefs = orderedUrls.length === 0
@@ -1175,7 +1181,9 @@ export function executeNode(
     // (mention resolution, identity directives, style, etc.) so an empty
     // user prompt with a wired Character / @-mention / style still runs.
     {
-      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES });
+      // Bullet consumer: character elements are stamped onto the ref's
+      // identity bullet (above), so exclude them here to avoid a tail dup.
+      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES, excludeCharacterElements: true });
       if (cinematographyHints.length > 0) {
         const joined = cinematographyHints.join(", ");
         prompt = prompt ? `${prompt}. ${joined}` : joined;
@@ -1469,7 +1477,8 @@ export function executeNode(
     const provider = i2iData.provider || "nano-banana";
 
     {
-      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES });
+      // Bullet consumer (stamps character elements onto the ref) → exclude here.
+      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES, excludeCharacterElements: true });
       if (cinematographyHints.length > 0) {
         const joined = cinematographyHints.join(", ");
         rawPrompt = rawPrompt ? `${rawPrompt}. ${joined}` : joined;
@@ -1620,7 +1629,8 @@ export function executeNode(
     const provider = modData.provider || "nano-banana";
 
     {
-      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES });
+      // Bullet consumer (stamps character elements onto the ref) → exclude here.
+      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES, excludeCharacterElements: true });
       if (cinematographyHints.length > 0) {
         const joined = cinematographyHints.join(", ");
         rawPrompt = rawPrompt ? `${rawPrompt}. ${joined}` : joined;
@@ -1898,7 +1908,8 @@ export function executeNode(
     // Inject motion + cinematography hints into prompt
     const motionHints: string[] = [];
     if (i2vData.motionEnabled && i2vData.motion) motionHints.push(`${i2vData.motion} motion`);
-    const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
+    // Bullet consumer (stamps character elements onto the video ref) → exclude here.
+    const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeCharacterElements: true });
     for (const h of cinematographyHints) motionHints.push(h);
     if (motionHints.length > 0 && prompt) prompt = `${prompt}. ${motionHints.join(", ")}`;
     else if (motionHints.length > 0) prompt = motionHints.join(", ");
@@ -2056,7 +2067,8 @@ export function executeNode(
     // Manual wins — see gen-image note above.
     let prompt = stripVideoImageTokens(promptOf("video-to-video"))
     {
-      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
+      // Bullet consumer (stamps character elements onto the video ref) → exclude here.
+      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeCharacterElements: true });
       if (cinematographyHints.length > 0) {
         const joined = cinematographyHints.join(", ");
         prompt = prompt ? `${prompt}. ${joined}` : joined;
@@ -2125,7 +2137,8 @@ export function executeNode(
     // text-to-video keeps a prompt stored in data.motionPrompt.
     let prompt = stripVideoImageTokens(promptOf("text-to-video"));
     {
-      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
+      // Bullet consumer (stamps character elements onto the video ref) → exclude here.
+      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeCharacterElements: true });
       if (cinematographyHints.length > 0) {
         const joined = cinematographyHints.join(", ");
         prompt = prompt ? `${prompt}. ${joined}` : joined;

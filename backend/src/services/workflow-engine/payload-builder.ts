@@ -341,7 +341,78 @@ function expandWiredCharacterRefs(
       }
     }
   }
-  return out
+  // Stamp each wired character's Assets/Prompt picker elements onto its ref so
+  // the shared builder weaves them into the character's identity bullet
+  // downstream — covers every caller (generate-image / image-to-image /
+  // modify-image / video via resolveVideoPromptMentions).
+  return stampElementInjections(out, consumerNodeId, buildCtx)
+}
+
+/**
+ * Map of `characterSlug → resolved element-injection fragment` for every
+ * Character node wired into `consumerNodeId`. Picker-only (held-prop / styling /
+ * camera, via `getNodePromptHint`) — byte-matching the frontend held-prop case.
+ * (Text producers wired to a character are a known FE-only single-node behavior;
+ * backend text parity in workflow runs is a follow-up — `getNodePromptHint`
+ * returns "" for them.)
+ *
+ * REPLACES the old flat `collectCinematographyHints` character fold, which
+ * appended the fragment to the prompt BODY (the global tail). Routing it through
+ * the per-character ref lets the shared builder place it INSIDE the bullet.
+ * Deduped per character node; merges when two nodes share a slug.
+ */
+function collectCharacterElementInjections(
+  consumerNodeId: string,
+  ctx: PayloadBuildContext | undefined,
+): Map<string, string> {
+  const nodes = ctx?.nodes ?? []
+  const edges = ctx?.edges ?? []
+  const bySlug = new Map<string, string>()
+  const seen = new Set<string>()
+  for (const edge of edges) {
+    if (edge.target !== consumerNodeId) continue
+    const charNode = nodes.find((n) => n.id === edge.source)
+    if (!charNode || charNode.type !== "character" || seen.has(charNode.id)) continue
+    seen.add(charNode.id)
+    const frags: string[] = []
+    const elemEdges = edges
+      .filter((ce) => ce.target === charNode.id && (ce.targetHandle === "assets" || ce.targetHandle === "in"))
+      .sort((a, b) => a.source.localeCompare(b.source))
+    for (const ce of elemEdges) {
+      const elemNode = nodes.find((nd) => nd.id === ce.source)
+      if (!elemNode) continue
+      const hint = getNodePromptHint(elemNode)
+      if (hint && hint.trim()) frags.push(hint.trim())
+    }
+    if (frags.length === 0) continue
+    const data = charNode.data as Record<string, unknown> | undefined
+    const name = (data?.characterName as string) || (data?.label as string) || ""
+    const slug = characterMentionSlug(name)
+    if (!slug) continue
+    const joined = frags.join(", ")
+    const prev = bySlug.get(slug)
+    bySlug.set(slug, prev ? `${prev}, ${joined}` : joined)
+  }
+  return bySlug
+}
+
+/**
+ * Stamp `elementInjection` onto every character `ConnectedReference` whose slug
+ * has wired elements (see {@link collectCharacterElementInjections}). Non-
+ * character refs and characters with no wired elements pass through unchanged.
+ * Mirror of the frontend `stampElementInjections` in node-input-resolver.ts.
+ */
+function stampElementInjections(
+  refs: ConnectedReference[],
+  consumerNodeId: string,
+  ctx: PayloadBuildContext | undefined,
+): ConnectedReference[] {
+  const bySlug = collectCharacterElementInjections(consumerNodeId, ctx)
+  if (bySlug.size === 0) return refs
+  return refs.map((r) => {
+    const inj = r.characterSlug ? bySlug.get(r.characterSlug) : undefined
+    return inj ? { ...r, elementInjection: inj } : r
+  })
 }
 
 /** Location variant buckets — kept in sync with frontend LocationNodeData. */
@@ -741,8 +812,15 @@ function resolveVideoPromptMentions(
     }
     const directive = usageModeDirective(effectiveMode)
     const includeCanonicalDesc = effectiveMode === "identical" || effectiveMode === "face-pose"
-    const descPart = includeCanonicalDesc && r.characterCanonicalDescription
-      ? `${displayName} — ${r.characterCanonicalDescription.trim()}`
+    // Wired elements ride the bullet alongside the (mode-gated) canonical desc —
+    // mirrors the shared image-side `composeIdentityDescPart` and the FE video path.
+    const descBodyParts: string[] = []
+    if (includeCanonicalDesc && r.characterCanonicalDescription?.trim()) {
+      descBodyParts.push(r.characterCanonicalDescription.trim())
+    }
+    if (r.elementInjection?.trim()) descBodyParts.push(r.elementInjection.trim())
+    const descPart = descBodyParts.length > 0
+      ? `${displayName} — ${descBodyParts.join(". ")}`
       : displayName
     fallbackDirectiveLines.push(`- ${descPart}.${directive ? ` ${directive}` : ""}`)
   }
@@ -1298,7 +1376,7 @@ const STILL_IMAGE_EXCLUDE_TYPES: ReadonlySet<string> = new Set(["camera-motion",
 function collectCinematographyHints(
   consumerNodeId: string,
   ctx: PayloadBuildContext | undefined,
-  options?: { excludeTypes?: ReadonlySet<string> },
+  options?: { excludeTypes?: ReadonlySet<string>; excludeCharacterElements?: boolean },
 ): string[] {
   const hints: string[] = []
   const nodes = ctx?.nodes ?? []
@@ -1333,31 +1411,27 @@ function collectCinematographyHints(
     if (hint) hints.push(hint)
   }
 
-  // Character-borne elements (parity with FE cinematography-hints.ts): a Character
-  // wired into this consumer carries its OWN Assets/Prompt-wired PICKER elements
-  // (held-prop, styling, …) into the prompt — so a composed character's elements
-  // show up wherever it's generated downstream. Sorted by source id + comma-joined
-  // into one fragment to byte-match `resolveCharacterAssets().injectedAssets` on the
-  // FE (preview == run). Deduped per source character. (Text producers wired to a
-  // character are handled on the FE single-node path; backend text parity is a
-  // follow-up — `getNodePromptHint` returns "" for them here.)
-  const seenChars = new Set<string>()
-  for (const edge of edges) {
-    if (edge.target !== consumerNodeId) continue
-    const charNode = nodes.find((n) => n.id === edge.source)
-    if (!charNode || charNode.type !== "character" || seenChars.has(charNode.id)) continue
-    seenChars.add(charNode.id)
-    const frags: string[] = []
-    const elemEdges = edges
-      .filter((ce) => ce.target === charNode.id && (ce.targetHandle === "assets" || ce.targetHandle === "in"))
-      .sort((a, b) => a.source.localeCompare(b.source))
-    for (const ce of elemEdges) {
-      const elemNode = nodes.find((nd) => nd.id === ce.source)
-      if (!elemNode) continue
-      const hint = getNodePromptHint(elemNode)
-      if (hint && hint.trim()) frags.push(hint.trim())
+  // Character-borne elements: a Character wired into this consumer carries its
+  // OWN Assets/Prompt elements (held-prop, styling, …) downstream. Bullet
+  // consumers (generate-image / image-to-image / modify-image / video gen)
+  // stamp the element onto the character's identity bullet via
+  // `ConnectedReference.elementInjection` and pass `excludeCharacterElements:
+  // true` so it isn't ALSO appended here (the tail dup was the reported bug).
+  // Consumers WITHOUT a character bullet (edit-image, location, …) append it
+  // here by DEFAULT — single source (`collectCharacterElementInjections`),
+  // preserving their behavior.
+  if (!options?.excludeCharacterElements) {
+    // Lazy: only resolve when a Character actually feeds this consumer (the
+    // common case has none), mirroring the frontend collector.
+    const hasWiredCharacter = edges.some((edge) => {
+      if (edge.target !== consumerNodeId) return false
+      return nodes.find((nd) => nd.id === edge.source)?.type === "character"
+    })
+    if (hasWiredCharacter) {
+      for (const frag of collectCharacterElementInjections(consumerNodeId, ctx).values()) {
+        if (frag.trim()) hints.push(frag.trim())
+      }
     }
-    if (frags.length > 0) hints.push(frags.join(", "))
   }
 
   return hints
@@ -1425,7 +1499,9 @@ function composeVideoPrompt(args: {
   let p = args.rawPrompt
   const hints: string[] = []
   if (args.motionHint) hints.push(args.motionHint)
-  const cinematographyHints = collectCinematographyHints(args.nodeId, args.buildCtx)
+  // Video gen is a bullet consumer (stamps character elements onto the video
+  // ref) → exclude them here to avoid a prompt-tail dup.
+  const cinematographyHints = collectCinematographyHints(args.nodeId, args.buildCtx, { excludeCharacterElements: true })
   for (const h of cinematographyHints) hints.push(h)
   if (hints.length > 0) {
     const joined = hints.join(", ")
@@ -1539,7 +1615,8 @@ export function buildPayload(
 
       let rawPrompt = promptFor("generate-image")
       {
-        const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES })
+        // Bullet consumer (stamps character elements onto the ref) → exclude here.
+        const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES, excludeCharacterElements: true })
         if (cinematographyHints.length > 0) {
           const joined = cinematographyHints.join(", ")
           rawPrompt = rawPrompt ? `${rawPrompt}. ${joined}` : joined
@@ -1855,7 +1932,8 @@ export function buildPayload(
         || resolveRefs(data.prompt as string | undefined, refMap)
         || ""
       {
-        const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES })
+        // Bullet consumer (stamps character elements onto the ref) → exclude here.
+        const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES, excludeCharacterElements: true })
         if (cinematographyHints.length > 0) {
           const joined = cinematographyHints.join(", ")
           rawPrompt = rawPrompt ? `${rawPrompt}. ${joined}` : joined
@@ -1991,7 +2069,8 @@ export function buildPayload(
           }
         }
         {
-          const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES })
+          // Bullet consumer (stamps character elements onto the ref) → exclude here.
+          const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES, excludeCharacterElements: true })
           if (cinematographyHints.length > 0) {
             const joined = cinematographyHints.join(", ")
             editPrompt = editPrompt ? `${editPrompt}. ${joined}` : joined
@@ -2064,7 +2143,8 @@ export function buildPayload(
           || resolveRefs(data.prompt as string | undefined, refMap)
           || ""
         {
-          const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES })
+          // Bullet consumer (stamps character elements onto the ref) → exclude here.
+          const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES, excludeCharacterElements: true })
           if (cinematographyHints.length > 0) {
             const joined = cinematographyHints.join(", ")
             rawPrompt = rawPrompt ? `${rawPrompt}. ${joined}` : joined
@@ -2694,7 +2774,8 @@ export function buildPayload(
       let v2vPrompt: string | undefined = (() => {
         let p: string | undefined = promptFor("video-to-video")
         {
-          const cinematographyHints = collectCinematographyHints(node.id, buildCtx)
+          // Bullet consumer (stamps character elements onto the video ref) → exclude here.
+          const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { excludeCharacterElements: true })
           if (cinematographyHints.length > 0) {
             const joined = cinematographyHints.join(", ")
             p = p ? `${p}. ${joined}` : joined

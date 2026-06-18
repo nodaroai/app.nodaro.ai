@@ -3,7 +3,7 @@ import { getParameterPromptHint } from "@nodaro/shared"
 import { composeTransitionHintFromConnections, type TransitionTiming } from "@nodaro/shared"
 import { composeCharacterFxHintFromConnections, type CharacterFxTiming } from "@nodaro/shared"
 import type { WorkflowNode, WorkflowEdge, TransitionData, CharacterFxData } from "@/types/nodes"
-import { resolveCharacterAssets } from "@/components/editor/workflow-editor/node-input-resolver"
+import { collectCharacterElementInjections } from "@/components/editor/workflow-editor/node-input-resolver"
 
 /**
  * Dispatch by parameter-node type to that node's prompt-hint string. Used by
@@ -113,7 +113,7 @@ export function collectCinematographyHints(
   consumerNodeId: string,
   nodes: ReadonlyArray<WorkflowNode>,
   edges: ReadonlyArray<WorkflowEdge>,
-  options?: { excludeTypes?: ReadonlySet<string> },
+  options?: { excludeTypes?: ReadonlySet<string>; excludeCharacterElements?: boolean },
 ): string[] {
   const hints: string[] = []
   const exclude = options?.excludeTypes
@@ -147,22 +147,29 @@ export function collectCinematographyHints(
   }
 
   // Character-borne elements: a Character wired into this consumer carries its
-  // OWN Assets/Prompt-wired elements (held-prop, styling, text, …) into the
-  // consumer's prompt — so composing a character with elements makes them show
-  // up wherever the character is generated downstream (preview + run + backend,
-  // since this collector is the single source all three share). Resolved from
-  // the wiring at assembly time (never stored on the character); deduped per
-  // source character. Only the FE-resolvable `injectedAssets` (text + pickers)
-  // are folded — the char→char facet path needs server-side LLM extraction and
-  // isn't previewable, so it stays out.
-  const seenChars = new Set<string>()
-  for (const edge of edges) {
-    if (edge.target !== consumerNodeId) continue
-    const srcNode = nodes.find((nd) => nd.id === edge.source)
-    if (!srcNode || srcNode.type !== "character" || seenChars.has(srcNode.id)) continue
-    seenChars.add(srcNode.id)
-    const injected = resolveCharacterAssets({ id: srcNode.id }, edges, nodes).injectedAssets
-    if (injected && injected.trim()) hints.push(injected.trim())
+  // OWN Assets/Prompt elements (held-prop, styling, text, …) downstream. For
+  // consumers that build a "Use these characters:" bullet (generate-image,
+  // image-to-image, modify-image, video gen), the element is woven INTO the
+  // character's identity bullet via `ConnectedReference.elementInjection`
+  // (stampElementInjections) — those callers pass `excludeCharacterElements:
+  // true` so it isn't ALSO appended here (that double-injection at the prompt
+  // tail was the reported bug). Consumers WITHOUT a character bullet
+  // (edit-image, location, avatar / extend / retake video) have no bullet to
+  // weave into, so by DEFAULT the element is appended here — single source
+  // (`collectCharacterElementInjections`), preserving their behavior.
+  if (!options?.excludeCharacterElements) {
+    // Lazy: only resolve when a Character actually feeds this consumer (the
+    // common case has none). Mirrors the old fold's laziness and avoids the
+    // resolveCharacterAssets walk + Map allocation otherwise.
+    const hasWiredCharacter = edges.some((edge) => {
+      if (edge.target !== consumerNodeId) return false
+      return nodes.find((nd) => nd.id === edge.source)?.type === "character"
+    })
+    if (hasWiredCharacter) {
+      for (const frag of collectCharacterElementInjections(consumerNodeId, nodes, edges).values()) {
+        if (frag.trim()) hints.push(frag.trim())
+      }
+    }
   }
 
   return hints

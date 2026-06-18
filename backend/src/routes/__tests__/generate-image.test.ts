@@ -164,6 +164,7 @@ describe("connectedReferenceSchema mirrors ConnectedReference (key-set drift gua
       characterSlug: true,
       variantSlug: true,
       characterCanonicalDescription: true,
+      elementInjection: true,
       locationCanonicalDescription: true,
       locationSlug: true,
       locationVariantBucket: true,

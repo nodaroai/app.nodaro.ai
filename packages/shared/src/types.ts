@@ -85,6 +85,19 @@ export interface ConnectedReference {
   /** Character's canonical_description. Set on every entry from the same character (used for dedup). */
   readonly characterCanonicalDescription?: string | null
   /**
+   * Resolved prompt-fragment for the elements (held-prop / styling / text /
+   * pickers) wired into the SOURCE character node's Assets/Prompt handle. A
+   * mode-INDEPENDENT sibling of `characterCanonicalDescription`: where the
+   * canonical description is only emitted for identity-locking modes, this is
+   * scene composition ("holding a smartphone…") and rides the character's
+   * identity bullet in EVERY mode that emits one (only `none` — which emits no
+   * bullet — drops it). Resolved at assembly time from the wiring (never stored
+   * on the character record). Stamped onto every entry of the same character so
+   * whichever entry produces the primary bullet carries it. Absent/empty →
+   * byte-identical to the pre-elementInjection output.
+   */
+  readonly elementInjection?: string | null
+  /**
    * Location's canonical_description. Set on every entry derived from a wired
    * Location node (canonical image + future per-variant entries from Phase 2 #2
    * @location:1:variant mention syntax). Mirrors `characterCanonicalDescription`

@@ -118,10 +118,14 @@ vi.mock("@/lib/prompt-builder", () => ({
 vi.mock("../node-input-resolver", () => ({
   resolveNodeInputs: (...args: unknown[]) => mockResolveNodeInputs(...args),
   resolveSeedPromptHint: vi.fn(() => ""),
-  // collectCinematographyHints now folds a character's wired Assets/Prompt
-  // elements via resolveCharacterAssets — these fixtures wire no elements, so
-  // empty channels are the correct stub.
   resolveCharacterAssets: vi.fn(() => ({ injectedAssets: "", facetInjections: [] })),
+  // Character-borne elements ride `ConnectedReference.elementInjection`
+  // (stampElementInjections), consumed by BOTH the preview (build-image-assemble-
+  // input) and the run (execute-node). These fixtures wire no elements, so a
+  // pass-through is behaviorally identical to the real stamp AND keeps preview
+  // and run byte-identical — the property this suite guards.
+  stampElementInjections: vi.fn((refs: unknown) => refs),
+  collectCharacterElementInjections: vi.fn(() => new Map<string, string>()),
 }))
 
 vi.mock("../execution-graph", () => ({

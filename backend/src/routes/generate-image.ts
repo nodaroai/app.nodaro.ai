@@ -81,6 +81,7 @@ export const connectedReferenceSchema = z.object({
   characterSlug: z.string().optional(),
   variantSlug: z.string().optional(),
   characterCanonicalDescription: z.string().nullable().optional(),
+  elementInjection: z.string().nullable().optional(),
   locationCanonicalDescription: z.string().nullable().optional(),
   locationSlug: z.string().optional(),
   locationVariantBucket: z.string().optional(),
