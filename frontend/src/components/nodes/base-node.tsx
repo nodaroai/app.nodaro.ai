@@ -236,6 +236,14 @@ function BaseNodeComponent({
     }),
   )
 
+  // The aspect ratio the node's box was last fitted to. Lets the sizing effect
+  // distinguish a result-aspect ROTATION (preserve area) from a same-aspect
+  // width drag (width-driven, inline nodes only). `imageAspectRatio` is derived
+  // from the active result's stored width/height, so it's numerically stable
+  // across re-renders for the same result and only changes on a genuine
+  // rotation/result switch — a reliable trigger signal. See computeFittedNodeBox.
+  const prevAspectRef = useRef<number | undefined>(undefined)
+
   // Unified node-sizing effect. One source of truth — runs whenever the
   // aspect ratio, stored height, handle-derived minHeight, or minWidth
   // changes. Two cases:
@@ -274,6 +282,12 @@ function BaseNodeComponent({
     const node = state.nodes.find((n) => n.id === id)
     if (!node) return
     const hasExplicitResize = typeof node.className === "string" && node.className.includes("rf-resized")
+    // Snapshot the aspect this box was last fitted to, then record the current
+    // one for the next run. A rotation (prev !== current) re-fits at constant
+    // area even for inline/chrome nodes; a same-aspect re-run on a chrome node
+    // stays width-driven so a horizontal-resize drag isn't rubber-banded.
+    const prevAspect = prevAspectRef.current
+    prevAspectRef.current = imageAspectRatio
 
     if (imageAspectRatio) {
       // Fit to the result aspect, PRESERVING the node's current area across aspect changes (so a
@@ -288,6 +302,10 @@ function BaseNodeComponent({
         // Preview floor WITHOUT chrome — the helper re-adds chrome itself.
         minHeight: Math.max(minHeight, handleMinHeight - chromeHeight),
         chromeHeight,
+        // Same aspect as last fit → width-driven (chrome resize drag); changed
+        // aspect → area-preserving, so a rotated result doesn't keep the old
+        // width and balloon the height. Inert when chromeHeight === 0.
+        prevAspectRatio: prevAspect,
       })
       if (
         typeof node.width === "number" &&
