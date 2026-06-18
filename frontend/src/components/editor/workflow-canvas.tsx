@@ -601,6 +601,20 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   // Focus mode: zoom to selected node; mobile gets nav arrows + bottom sheet
   const [focusMode, setFocusMode] = useState(false)
   const focusAnimatingRef = useRef(false)
+  // One timer governs the "camera is mid-flight" window. EVERY focus transition
+  // (zoom-in, zoom-out, re-zoom) routes through beginFocusAnimation, so a new
+  // transition cancels the previous timer — the flag never flips false early and
+  // unguards a still-running animation. The toggle handler reads focusAnimatingRef
+  // to refuse re-entry mid-flight; without that, a rapid second Enter/double-click
+  // snapshots getViewport() while the camera is between frames as the "pre-zoom"
+  // overview, and the next exit then restores to that corrupted intermediate
+  // camera instead of the true overview ("doesn't return to full-size view").
+  const focusAnimTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const beginFocusAnimation = useCallback(() => {
+    focusAnimatingRef.current = true
+    if (focusAnimTimerRef.current) clearTimeout(focusAnimTimerRef.current)
+    focusAnimTimerRef.current = setTimeout(() => { focusAnimatingRef.current = false }, 350)
+  }, [])
 
   // When the fullscreen config panel closes, restore keyboard focus to the
   // React Flow pane so that arrow-key node nudging works immediately.
@@ -1188,21 +1202,33 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     preZoomViewportRef.current = null
     preZoomNodeIdRef.current = null
     setFocusMode(false)
+    // The camera now animates back to the overview; mark the window so a rapid
+    // re-press is refused and can't snapshot a mid-flight viewport (see
+    // beginFocusAnimation). Exit was previously UNguarded — the corruption hole.
+    beginFocusAnimation()
     if (!saved) {
       fitView({ maxZoom: 1, minZoom: 0.3, padding: 0.2, duration: 300 })
       return
     }
     const exitNode = exitNodeId && exitNodeId !== enteredOn ? getNode(exitNodeId) : null
     if (exitNode) {
-      const w = exitNode.measured?.width ?? 200
-      const h = exitNode.measured?.height ?? 100
+      // Prefer the explicit (fresh) size over measured, which lags a resize.
+      const w = exitNode.width ?? exitNode.measured?.width ?? 200
+      const h = exitNode.height ?? exitNode.measured?.height ?? 100
       setCenter(exitNode.position.x + w / 2, exitNode.position.y + h / 2, { zoom: saved.zoom, duration: 300 })
     } else {
       setViewport(saved, { duration: 300 })
     }
-  }, [getNode, setCenter, setViewport, fitView])
+  }, [getNode, setCenter, setViewport, fitView, beginFocusAnimation])
 
   const handleZoomToggleFn = useCallback((nodeId: string) => {
+    // Refuse re-entry while the camera is mid-flight. Without this, a rapid
+    // second Enter/double-click during the 300ms animation snapshots
+    // getViewport() (an intermediate camera) as the pre-zoom overview, and the
+    // next exit restores to that corrupted viewport instead of the real
+    // overview — the "doesn't return to full-size view" / "rapid Enter ruins the
+    // zoom" report. One press per animation window keeps the toggle consistent.
+    if (focusAnimatingRef.current) return
     if (zoomedNodeIdRef.current === nodeId) {
       exitZoomFn(nodeId)
     } else {
@@ -1214,8 +1240,10 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       }
       const n = getNode(nodeId)
       if (!n) return
-      const nodeW = n.measured?.width ?? 200
-      const nodeH = n.measured?.height ?? 100
+      // Explicit (fresh) size first; measured lags a just-completed resize and
+      // would zoom-to-fit the stale box, over/under-shooting the target.
+      const nodeW = n.width ?? n.measured?.width ?? 200
+      const nodeH = n.height ?? n.measured?.height ?? 100
       const nodeCenterX = n.position.x + nodeW / 2
       const nodeCenterY = n.position.y + nodeH / 2
       const panelW = isMobile ? 0 : (useWorkflowStore.getState().selectedNodeId ? 384 : 0)
@@ -1225,13 +1253,12 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       const zoomToFit = Math.min((visibleW * 0.6) / nodeW, (visibleH * 0.6) / nodeH)
       const zoomClamped = Math.max(0.5, Math.min(2.5, zoomToFit))
       const panelOffsetX = panelW / (2 * zoomClamped)
-      focusAnimatingRef.current = true
+      beginFocusAnimation()
       setCenter(nodeCenterX + panelOffsetX, nodeCenterY - sheetOffset, { zoom: zoomClamped, duration: 300 })
       if (isMobile) setFocusMode(true)
       zoomedNodeIdRef.current = nodeId
-      setTimeout(() => { focusAnimatingRef.current = false }, 350)
     }
-  }, [exitZoomFn, getNode, getViewport, setCenter, isMobile])
+  }, [exitZoomFn, getNode, getViewport, setCenter, isMobile, beginFocusAnimation])
 
   // Stable ref so the keyboard handler (inside a useEffect) always calls the latest version
   const handleZoomToggleRef = useRef(handleZoomToggleFn)
@@ -1242,8 +1269,8 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const enterZoomNodeFn = useCallback((nodeId: string) => {
     const n = getNode(nodeId)
     if (!n) return
-    const nodeW = n.measured?.width ?? 200
-    const nodeH = n.measured?.height ?? 100
+    const nodeW = n.width ?? n.measured?.width ?? 200
+    const nodeH = n.height ?? n.measured?.height ?? 100
     const nodeCenterX = n.position.x + nodeW / 2
     const nodeCenterY = n.position.y + nodeH / 2
     const panelW = isMobile ? 0 : (useWorkflowStore.getState().selectedNodeId ? 384 : 0)
@@ -1253,12 +1280,11 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     const zoomToFit = Math.min((visibleW * 0.6) / nodeW, (visibleH * 0.6) / nodeH)
     const zoomClamped = Math.max(0.5, Math.min(2.5, zoomToFit))
     const panelOffsetX = panelW / (2 * zoomClamped)
-    focusAnimatingRef.current = true
+    beginFocusAnimation()
     setCenter(nodeCenterX + panelOffsetX, nodeCenterY - sheetOffset, { zoom: zoomClamped, duration: 300 })
     if (isMobile) setFocusMode(true)
     zoomedNodeIdRef.current = nodeId
-    setTimeout(() => { focusAnimatingRef.current = false }, 350)
-  }, [getNode, setCenter, isMobile])
+  }, [getNode, setCenter, isMobile, beginFocusAnimation])
   const enterZoomNodeRef = useRef(enterZoomNodeFn)
   useEffect(() => { enterZoomNodeRef.current = enterZoomNodeFn }, [enterZoomNodeFn])
 
@@ -1273,7 +1299,10 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   }, [])
 
   const handleNodeDoubleClick: NodeMouseHandler = useCallback(
-    (_event, node) => {
+    (event, node) => {
+      // Inside an inline prompt, double-click opens the full edit modal (handled
+      // by InlineNodePrompt) — don't also fire focus-zoom here.
+      if ((event.target as HTMLElement | null)?.closest?.(".inline-node-prompt")) return
       setFocusedNodeId(node.id)
       handleZoomToggleRef.current(node.id)
     },
@@ -1848,8 +1877,8 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         } else {
           const tgt = getNode(targetId)
           if (tgt) {
-            const nw = tgt.measured?.width ?? 200
-            const nh = tgt.measured?.height ?? 100
+            const nw = tgt.width ?? tgt.measured?.width ?? 200
+            const nh = tgt.height ?? tgt.measured?.height ?? 100
             setCenter(tgt.position.x + nw / 2, tgt.position.y + nh / 2, { zoom: getViewport().zoom, duration: 250 })
           }
         }
