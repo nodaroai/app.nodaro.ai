@@ -8,6 +8,7 @@ import type {
 } from "@nodaro/shared"
 import { LOCATION_REFERENCE_PHOTO_KINDS } from "@nodaro/shared"
 import { supabase } from "./supabase.js"
+import { deriveAvailableName } from "./entity-naming.js"
 
 /**
  * Shared helpers for the workflow export + import endpoints. Backed by both
@@ -327,12 +328,54 @@ export async function reCreateAssets(
     return null
   }
 
+  // Import ALWAYS creates a NEW character — it never merges into one the caller
+  // already owns. But `characters` is the one asset table with a per-user unique
+  // active-name index (`characters_user_name_active_unique`, migration 112), so a
+  // bundle name already held by another active character used to trip 23505 and
+  // 500 the whole import. Derive a free "<name>"/"<name> N" first and retry on
+  // the 23505 race, mirroring routes/characters.ts::insertWithUniqueName.
+  async function insertCharacterWithUniqueName(
+    sourceId: string,
+    baseName: string,
+    row: Record<string, unknown>,
+  ): Promise<ReCreateAssetsError | null> {
+    try {
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const name = await deriveAvailableName("characters", userId, baseName)
+        const { data, error } = await supabase
+          .from("characters")
+          .insert({ ...row, name })
+          .select("id")
+          .single()
+        if (!error && data) {
+          idMap.set(sourceId, (data as Record<string, unknown>).id as string)
+          return null
+        }
+        if (error && error.code !== "23505") {
+          return { kind: "character", message: error.message }
+        }
+        // 23505 — a concurrent writer took the derived name; loop and re-derive.
+      }
+      return {
+        kind: "character",
+        message: `Couldn't insert a unique '${baseName}*' after retries.`,
+      }
+    } catch (e) {
+      // deriveAvailableName throws when it exhausts "<name> N" candidates. Convert
+      // it to reCreateAssets' structured {error} contract — the import route
+      // surfaces result.error.message and never try/catches an escaping throw.
+      return {
+        kind: "character",
+        message: e instanceof Error ? e.message : `Failed to create character '${baseName}'`,
+      }
+    }
+  }
+
   for (const c of assets.characters) {
-    const err = await insertOne("characters", "character", c.id, {
+    const err = await insertCharacterWithUniqueName(c.id, c.name, {
       user_id: userId,
       node_id: c.nodeId,
       project_id: projectId,
-      name: c.name,
       description: c.description ?? null,
       gender: c.gender ?? null,
       style: c.style ?? null,

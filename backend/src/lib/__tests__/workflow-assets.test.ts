@@ -29,23 +29,47 @@ const selectResponses = new Map<string, SelectResponse>()
 // the DB (defense against passing empty/non-UUID strings to a uuid column).
 const inCalls: { table: string; ids: unknown }[] = []
 
-vi.mock("../supabase.js", () => ({
-  supabase: {
-    from: vi.fn((table: string) => {
-      return {
-        // Path used by `fetchByIds`: .select(columns).in("id", ids).eq("user_id", uid)
-        select: vi.fn(() => ({
-          in: vi.fn((_col: string, ids: unknown) => {
-            inCalls.push({ table, ids })
-            return {
-              eq: vi.fn(() => {
-                const resp = selectResponses.get(table) ?? { data: [], error: null }
-                return Promise.resolve(resp)
-              }),
-            }
-          }),
-        })),
-        // Path used by `insertOne`: .insert(row).select("id").single()
+// `deriveAvailableName`: existing active names per table (drives "<name> N"
+// suffixing so an import name-clash inserts a fresh row instead of 500ing).
+const existingNames = new Map<string, string[]>()
+
+vi.mock("../supabase.js", () => {
+  // Thenable query builder covering every READ chain the module issues:
+  //   • fetchByIds:          select(cols).in("id", ids).eq("user_id")            ← awaited
+  //   • deriveAvailableName: select("name").eq("user_id").is("deleted_at").ilike ← awaited
+  function makeReadBuilder(table: string) {
+    const state = { usedIlike: false }
+    const builder = {
+      in(_col: string, ids: unknown) {
+        inCalls.push({ table, ids })
+        return builder
+      },
+      eq() {
+        return builder
+      },
+      is() {
+        return builder
+      },
+      ilike() {
+        state.usedIlike = true
+        return builder
+      },
+      then(resolve: (v: SelectResponse) => unknown, reject?: (e: unknown) => unknown) {
+        const result: SelectResponse = state.usedIlike
+          ? { data: (existingNames.get(table) ?? []).map((name) => ({ name })), error: null }
+          : selectResponses.get(table) ?? { data: [], error: null }
+        return Promise.resolve(result).then(resolve, reject)
+      },
+    }
+    return builder
+  }
+
+  return {
+    supabase: {
+      from: vi.fn((table: string) => ({
+        // READ chains (fetchByIds / deriveAvailableName)
+        select: vi.fn(() => makeReadBuilder(table)),
+        // WRITE: .insert(row).select("id").single()
         insert: vi.fn((row: Record<string, unknown>) => {
           insertCalls.push({ table, row })
           return {
@@ -59,10 +83,10 @@ vi.mock("../supabase.js", () => ({
             })),
           }
         }),
-      }
-    }),
-  },
-}))
+      })),
+    },
+  }
+})
 
 import {
   collectAssetIds,
@@ -76,7 +100,40 @@ beforeEach(() => {
   insertCalls.length = 0
   selectResponses.clear()
   inCalls.length = 0
+  existingNames.clear()
 })
+
+// Minimal active-character bundle entry (only the fields reCreateAssets reads).
+function bundleCharacter(
+  id: string,
+  name: string,
+): {
+  id: string
+  nodeId: string
+  name: string
+  description: null
+  gender: null
+  style: null
+  baseOutfit: null
+  sourceImageUrl: null
+  expressions: never[]
+  poses: never[]
+  lightingVariations: never[]
+} {
+  return {
+    id,
+    nodeId: `node-${id}`,
+    name,
+    description: null,
+    gender: null,
+    style: null,
+    baseOutfit: null,
+    sourceImageUrl: null,
+    expressions: [],
+    poses: [],
+    lightingVariations: [],
+  }
+}
 
 describe("workflow-assets — empty/invalid DbId guard (pipeline placeholder export crash)", () => {
   // Repro for the production export crash: pipeline / Film-Director materialized
@@ -544,5 +601,69 @@ describe("workflow-assets — full round-trip parity", () => {
     ])
     expect(row.canonical_description).toBe("Windswept beach.")
     expect(row.style_lock).toBe(true)
+  })
+})
+
+// Regression: importing a bundle whose character name already exists active for
+// the caller used to 500 the whole import on `characters_user_name_active_unique`
+// (migration 112). Import ALWAYS creates a NEW character (never merges into one
+// the caller owns) — it just de-dupes the name ("<name> N") so the insert can't
+// collide, instead of blind-inserting the original name.
+describe("reCreateAssets — character name-collision handling (import 500 fix)", () => {
+  const CHAR_ID = "d5199695-e7df-49b0-b8be-e612a9213748"
+
+  it("creates a NEW character under a derived name when the name is already taken", async () => {
+    // 'Alice miller' is already an active character for the caller → must not
+    // 500, must not collide, and must still create a brand-new row (no merge).
+    existingNames.set("characters", ["Alice miller"])
+
+    const idMap = await reCreateAssets(
+      { characters: [bundleCharacter(CHAR_ID, "Alice miller")], objects: [], locations: [] },
+      "user-2",
+      "project-2",
+    )
+
+    expect(idMap).toBeInstanceOf(Map)
+    if (!(idMap instanceof Map)) return
+    const charInsert = insertCalls.find((c) => c.table === "characters")
+    expect(charInsert).toBeDefined()
+    expect(charInsert!.row.name).toBe("Alice miller 2")
+    expect(charInsert!.row.user_id).toBe("user-2")
+    // node_id is preserved so the node binds to its freshly-created character.
+    expect(charInsert!.row.node_id).toBe(`node-${CHAR_ID}`)
+    // old bundle id → the NEW row's id, so remap repoints the node at the copy.
+    expect(idMap.get(CHAR_ID)).toBeDefined()
+    expect(idMap.get(CHAR_ID)).not.toBe(CHAR_ID)
+  })
+
+  it("inserts under the ORIGINAL name when there is no collision (happy path)", async () => {
+    await reCreateAssets(
+      { characters: [bundleCharacter(CHAR_ID, "Brand New Hero")], objects: [], locations: [] },
+      "user-3",
+      "project-3",
+    )
+
+    const charInsert = insertCalls.find((c) => c.table === "characters")
+    expect(charInsert!.row.name).toBe("Brand New Hero")
+  })
+
+  it("returns a structured {error} (never throws) when no unique name is available", async () => {
+    // Occupy the base name + every "<base> N" up to deriveAvailableName's ceiling
+    // (it scans n = 2..999) so it THROWS. reCreateAssets must convert that into
+    // its {error} contract rather than let it escape to an uncontrolled 500.
+    const base = "Maxed Out"
+    const taken = [base, ...Array.from({ length: 998 }, (_, i) => `${base} ${i + 2}`)]
+    existingNames.set("characters", taken)
+
+    const result = await reCreateAssets(
+      { characters: [bundleCharacter(CHAR_ID, base)], objects: [], locations: [] },
+      "user-4",
+      "project-4",
+    )
+
+    expect(result).not.toBeInstanceOf(Map)
+    expect((result as { error: { kind: string; message: string } }).error.kind).toBe("character")
+    // No character row was inserted on the give-up path.
+    expect(insertCalls.find((c) => c.table === "characters")).toBeUndefined()
   })
 })
