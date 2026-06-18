@@ -266,7 +266,10 @@ export function useFinalPromptSegments(args: UseFinalPromptSegmentsArgs): UseFin
     const styleBypass = hasConnectedStyleNode(consumerNodeId, nodes, edges)
 
     const hints = consumerNodeId
-      ? collectCinematographyHints(consumerNodeId, nodes, edges)
+      // Image preview is a bullet consumer (character elements are stamped onto
+      // the ref's identity bullet); exclude them here to mirror the run and
+      // avoid a tail dup in the preview.
+      ? collectCinematographyHints(consumerNodeId, nodes, edges, { excludeCharacterElements: true })
       : []
     const identityClause = consumerNodeId
       ? collectIdentityLockClause(consumerNodeId, nodes, edges)

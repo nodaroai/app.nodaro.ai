@@ -30,6 +30,7 @@ import {
   collectIdentityLockClause,
 } from "@nodaro/shared"
 import { collectCinematographyHints } from "@/lib/cinematography-hints"
+import { stampElementInjections } from "@/components/editor/workflow-editor/node-input-resolver"
 
 /**
  * Strip `{image:N:label}` tokens from video prompts (label kept, curly syntax
@@ -162,7 +163,9 @@ export function expandWiredCharacterRefsForVideo(
       out.push({ id, ...meta })
     }
   }
-  return out
+  // Stamp wired-element injection so it rides each character's identity bullet
+  // in the video "Use these characters:" block (parity with the image side).
+  return stampElementInjections(out, consumerNodeId, nodes, edges)
 }
 
 /**
@@ -290,8 +293,16 @@ export function resolveVideoPromptMentions(
     }
     const directive = usageModeDirective(effectiveMode)
     const includeCanonicalDesc = effectiveMode === "identical" || effectiveMode === "face-pose"
-    const descPart = includeCanonicalDesc && r.characterCanonicalDescription
-      ? `${displayName} — ${r.characterCanonicalDescription.trim()}`
+    // Wired elements ride the bullet alongside the (mode-gated) canonical desc —
+    // mirrors the shared image-side `composeIdentityDescPart`. The subject here
+    // is the bare display name (video numbering is applied separately above).
+    const descBodyParts: string[] = []
+    if (includeCanonicalDesc && r.characterCanonicalDescription?.trim()) {
+      descBodyParts.push(r.characterCanonicalDescription.trim())
+    }
+    if (r.elementInjection?.trim()) descBodyParts.push(r.elementInjection.trim())
+    const descPart = descBodyParts.length > 0
+      ? `${displayName} — ${descBodyParts.join(". ")}`
       : displayName
     fallbackDirectiveLines.push(`- ${descPart}.${directive ? ` ${directive}` : ""}`)
   }
@@ -507,13 +518,13 @@ export function assembleVideoPrompt(nodeType: string, args: AssembleVideoPromptA
     // joined to the body with ". " (execute-node.ts:2290-2295).
     const motionHints: string[] = []
     if (data.motionEnabled && data.motion) motionHints.push(`${data.motion as string} motion`)
-    for (const h of collectCinematographyHints(id, nodes, edges)) motionHints.push(h)
+    for (const h of collectCinematographyHints(id, nodes, edges, { excludeCharacterElements: true })) motionHints.push(h)
     if (motionHints.length > 0 && prompt) prompt = `${prompt}. ${motionHints.join(", ")}`
     else if (motionHints.length > 0) prompt = motionHints.join(", ")
   } else {
     // t2v / v2v / s2v / cinematic-avatar / extend-video / video-retake:
     // cinematography hints only (execute-node.ts t2v:2519-2523 et al).
-    const hints = collectCinematographyHints(id, nodes, edges)
+    const hints = collectCinematographyHints(id, nodes, edges, { excludeCharacterElements: true })
     if (hints.length > 0) {
       const joined = hints.join(", ")
       prompt = prompt ? `${prompt}. ${joined}` : joined

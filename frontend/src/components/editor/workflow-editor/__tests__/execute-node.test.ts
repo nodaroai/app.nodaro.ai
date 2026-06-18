@@ -180,10 +180,12 @@ vi.mock("../node-input-resolver", () => ({
   // upstream picker nodes wired to the `type` handle. Default to "" so the
   // generic object test path (no picker wired) still passes.
   resolveSeedPromptHint: vi.fn(() => ""),
-  // collectCinematographyHints now folds a wired character's Assets/Prompt
-  // elements via resolveCharacterAssets — these fixtures wire none, so empty
-  // channels are correct (no character-element hint added).
   resolveCharacterAssets: vi.fn(() => ({ injectedAssets: "", facetInjections: [] })),
+  // Character-borne elements ride `ConnectedReference.elementInjection`
+  // (stampElementInjections). These fixtures wire none, so a pass-through is
+  // behaviorally identical to the real stamp.
+  stampElementInjections: vi.fn((refs: unknown) => refs),
+  collectCharacterElementInjections: vi.fn(() => new Map<string, string>()),
 }))
 
 vi.mock("../execution-graph", () => ({

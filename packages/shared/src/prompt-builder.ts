@@ -43,6 +43,30 @@ export interface ResolveCharacterMentionsResult {
 }
 
 /**
+ * Compose the descriptive body of a character identity bullet:
+ *   `${subject} — ${canonicalDesc?}. ${elementInjection?}`  (parts joined by ". ")
+ *
+ * Either part may be absent. `canonicalDesc` is mode-gated by the caller (pass
+ * `undefined` to omit it for non-identity modes); `elementInjection` is the
+ * mode-INDEPENDENT scene-composition fragment wired into the character node's
+ * Assets/Prompt handle (held-prop / styling / text). When BOTH are absent the
+ * bullet collapses to the bare `subject` — byte-identical to the
+ * pre-elementInjection output, which the parity tests pin.
+ */
+function composeIdentityDescPart(
+  subject: string,
+  canonicalDesc: string | null | undefined,
+  elementInjection: string | null | undefined,
+): string {
+  const parts: string[] = []
+  const c = canonicalDesc?.trim()
+  if (c) parts.push(c)
+  const e = elementInjection?.trim()
+  if (e) parts.push(e)
+  return parts.length > 0 ? `${subject} — ${parts.join(". ")}` : subject
+}
+
+/**
  * Resolve @-mention tokens in a prompt against connected references.
  * Returns: augmented prompt (with directives prepended + tokens replaced
  * by character display names) and the set of asset URLs to include as refs.
@@ -152,9 +176,15 @@ export function resolveCharacterMentions(
       // and keep the bullet focused on the mode-specific instruction.
       const includeCanonicalDesc =
         effectiveMode === "identical" || effectiveMode === "face-pose"
-      const descPart = includeCanonicalDesc && match.characterCanonicalDescription
-        ? `${subject} — ${match.characterCanonicalDescription.trim()}`
-        : subject
+      // Canonical desc is mode-gated; the character's wired elements
+      // (held-prop / styling / text) ride the bullet in every mode that emits
+      // one. Byte-identical to the old `${subject} — ${canonical}` form when no
+      // injection is present.
+      const descPart = composeIdentityDescPart(
+        subject,
+        includeCanonicalDesc ? match.characterCanonicalDescription : undefined,
+        match.elementInjection,
+      )
       // `directive` is non-null here because usageModeDirective only returns
       // null for "none"/"name", both of which are already handled above.
       directiveLines.push(`- ${descPart}.${directive ? ` ${directive}` : ""}`)
@@ -424,9 +454,15 @@ function buildCanonicalFallback(
     // Subject line includes the numeric position so the model can correlate
     // "Image N in the input array" with the named character in the directive.
     const subject = `Image ${cursor} (${displayName})`
-    const descPart = includeCanonicalDesc && r.characterCanonicalDescription
-      ? `${subject} — ${r.characterCanonicalDescription.trim()}`
-      : subject
+    // Wired elements (held-prop / styling / text) ride this bullet alongside
+    // the (mode-gated) canonical description. This is the reported path — a
+    // character wired with no @-mention — so a composed character surfaces its
+    // elements wherever it's used downstream.
+    const descPart = composeIdentityDescPart(
+      subject,
+      includeCanonicalDesc ? r.characterCanonicalDescription : undefined,
+      r.elementInjection,
+    )
     // `directive` is non-null here ("none"/"name" already short-circuited).
     directiveLines.push(`- ${descPart}.${directive ? ` ${directive}` : ""}`)
     cursor += 1
@@ -525,13 +561,12 @@ function buildExtraRefDirectives(
         const canonicalDesc = r.characterCanonicalDescription?.trim()
         // Description preference: per-ref description > canonical (when mode
         // allows it) > nothing. The per-ref description is what the user
-        // typed in the extra-ref row, so it always wins.
-        let descPart = subject
-        if (description) {
-          descPart = `${subject} — ${description}`
-        } else if (includeCanonicalDesc && canonicalDesc) {
-          descPart = `${subject} — ${canonicalDesc}`
-        }
+        // typed in the extra-ref row, so it always wins. The character's wired
+        // elements (held-prop / styling) ride alongside whichever wins.
+        const chosenDesc = description
+          ? description
+          : (includeCanonicalDesc ? canonicalDesc : undefined)
+        const descPart = composeIdentityDescPart(subject, chosenDesc, r.elementInjection)
         directiveLines.push(`- ${descPart}.${directive ? ` ${directive}` : ""}`)
         positionsByChar.set(r.characterSlug, cursor)
       }
