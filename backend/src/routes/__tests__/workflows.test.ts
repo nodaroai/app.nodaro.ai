@@ -1165,6 +1165,22 @@ describe("POST /v1/workflows/import", () => {
     }
   }
 
+  // reCreateAssets de-dupes character names before inserting, so each bundled
+  // character now issues a `deriveAvailableName` read FIRST:
+  //   characters.select("name").eq("user_id").is("deleted_at").ilike("name", pat)
+  // Empty result ⇒ the bundle name is free (inserted as-is, no "<name> N").
+  function deriveNameChain(existing: string[] = []) {
+    return {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      is: vi.fn().mockReturnThis(),
+      ilike: vi.fn().mockResolvedValue({
+        data: existing.map((name) => ({ name })),
+        error: null,
+      }),
+    }
+  }
+
   it("returns 401 when unauthenticated", async () => {
     const res = await app.inject({
       method: "POST",
@@ -1248,6 +1264,7 @@ describe("POST /v1/workflows/import", () => {
     }
     vi.mocked(supabase.from)
       .mockReturnValueOnce(projectChain({ id: TEST_PROJECT_ID, user_id: TEST_USER_ID }) as never)
+      .mockReturnValueOnce(deriveNameChain() as never) // deriveAvailableName("Hero") → free
       .mockReturnValueOnce(insertIdChain("new-char-1") as never)
       .mockReturnValueOnce(insertIdChain("new-obj-1") as never)
       .mockReturnValueOnce(insertIdChain("new-loc-1") as never)
