@@ -25,6 +25,7 @@ const DRAG_THRESHOLD_PX = 2
 
 export function InlineNodePrompt({ nodeId, nodeType, data, provider, aspectRatio, duration, onFocusChange }: InlineNodePromptProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
+  const openPromptEditor = useWorkflowStore((s) => s.openPromptEditor)
   const { referenceImages, nodeRefs, refMap, promptSnippets } = usePromptEditorRefs(nodeId)
   const fields = getPromptFields(nodeType)
   const promptField = fields?.prompt ?? "prompt"
@@ -73,8 +74,21 @@ export function InlineNodePrompt({ nodeId, nodeType, data, provider, aspectRatio
       // nopan always; nodrag only while focused so an unfocused click can still
       // be discriminated as click-vs-drag by React Flow. `relative` anchors the
       // focus-only edit affordances. No border/divider — the prompt flows
-      // seamlessly below the preview on the same node surface.
-      className={`nopan ${nodragActive ? "nodrag" : ""} relative flex flex-col px-2.5 pt-1.5 pb-3`}
+      // seamlessly below the preview on the same node surface. `inline-node-prompt`
+      // marks the region so the canvas double-click (focus-zoom) bows out here.
+      className={`inline-node-prompt nopan ${nodragActive ? "nodrag" : ""} relative flex flex-col px-2.5 pt-1.5 pb-3`}
+      onDoubleClick={(e) => {
+        // Double-click inside the prompt escalates to the full edit modal. Scope
+        // to the editor surface so the snippet/AI header buttons are untouched;
+        // stop the event so React Flow's node double-click (focus-zoom) — which
+        // the canvas also suppresses via the `.inline-node-prompt` guard — never
+        // fires alongside it.
+        const target = e.target as HTMLElement | null
+        if (!target?.closest(".prompt-editor-surface")) return
+        e.preventDefault()
+        e.stopPropagation()
+        openPromptEditor(nodeId)
+      }}
       onMouseDown={(e) => {
         // Only the editor area participates in the gesture; clicks on the
         // header (Prompt label, snippet/AI buttons) pass through untouched.
