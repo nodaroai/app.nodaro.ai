@@ -38,11 +38,12 @@ describe("computeFittedNodeBox with chromeHeight", () => {
     expect(withZero).toEqual(without)
   })
 
-  it("is WIDTH-DRIVEN with chrome: a new larger width is kept, NOT √-resnapped from a stale height", () => {
+  it("is WIDTH-DRIVEN with chrome on a SAME-ASPECT resize: a new larger width is kept, NOT √-resnapped from a stale height", () => {
     const C = 120
-    // The node carries a STALE stored height (457) from before a horizontal
-    // resize that wrote only the new width (800). Area preservation would pull
-    // width back to ~692 (√(800·337·aspect)); width-driven keeps the dragged 800.
+    // A horizontal-resize drag re-fits to the SAME aspect (prevAspectRatio ===
+    // aspectRatio). The node carries a STALE stored height (457) from before the
+    // drag wrote only the new width (800). Area preservation would pull width back
+    // to ~692 (√(800·337·aspect)); width-driven keeps the dragged 800.
     const { width, height } = computeFittedNodeBox({
       aspectRatio: 16 / 9,
       width: 800,
@@ -50,11 +51,49 @@ describe("computeFittedNodeBox with chromeHeight", () => {
       minWidth: 240,
       minHeight: 368,
       chromeHeight: C,
+      prevAspectRatio: 16 / 9, // same aspect ⇒ this is a resize drag, not a rotation
     })
     expect(width).toBe(800)
     // Height re-derived from the kept width: chrome + (width / aspect). The impl
     // returns the raw w/aspect (no rounding); 800/(16/9) === 450 exactly.
     expect(height).toBe(C + 800 / (16 / 9))
+  })
+
+  it("PRESERVES AREA on an aspect CHANGE even with chrome (a 16:9→9:16 inline node does NOT keep its wide width and balloon)", () => {
+    // The regression: after inline-prompt shipped, a chrome node was width-driven
+    // unconditionally, so a portrait result kept the landscape width and the node
+    // ballooned in height. With prevAspectRatio !== aspectRatio (a real rotation),
+    // the helper must fall through to the AREA-preserving branch even with chrome.
+    const C = 140
+    const W = 654 // landscape preview width
+    const H = C + 368 // node height = chrome + 16:9 preview (368 tall)
+    const { width, height } = computeFittedNodeBox({
+      aspectRatio: 9 / 16,
+      width: W,
+      height: H,
+      minWidth: 240,
+      minHeight: 368,
+      chromeHeight: C,
+      prevAspectRatio: 16 / 9, // box was fitted to 16:9; new result is 9:16 ⇒ rotation
+    })
+    // PREVIEW area (node area minus the chrome band) is conserved across the rotation.
+    expect(width * (height - C)).toBeCloseTo(W * (H - C), -2)
+    // It did NOT keep the wide width / balloon: width shrinks, and height is far
+    // below the width-driven result (C + 654/(9/16) ≈ 1303).
+    expect(width).toBeLessThan(W)
+    expect(height).toBeLessThan(C + W / (9 / 16))
+    // The preview sub-region keeps the new 9:16 aspect.
+    expect(width / (height - C)).toBeCloseTo(9 / 16, 3)
+  })
+
+  it("first fit with chrome is unaffected by prevAspectRatio (no prior aspect ⇒ snug width-based fit)", () => {
+    // No prior box (height undefined): both branches fall back to the given width,
+    // so omitting prevAspectRatio (undefined) must still produce the snug first fit.
+    const C = 120
+    const W = 800
+    const { width, height } = computeFittedNodeBox({ ...base, width: W, height: undefined, chromeHeight: C })
+    expect(width).toBe(W)
+    expect(height).toBe(C + W / (16 / 9))
   })
 })
 

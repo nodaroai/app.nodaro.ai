@@ -85,10 +85,16 @@ export function imageNodeSizing(
  *
  * - When the node already has a box (both `width` and `height`) AND has no chrome, re-fit at
  *   constant area: `w = √(area·aspect)`, `h = w/aspect`. Re-running once fitted is a no-op (stable).
- * - When `chromeHeight > 0` (inline-prompt nodes), the node is WIDTH-DRIVEN: the dragged `width` is
- *   used directly and height is re-derived (`h = chrome + max(minHeight, w/aspect)`). This avoids the
- *   rubber-band a `resizeDirection="horizontal"` drag would otherwise hit, since React Flow writes
- *   only width and area-preservation would re-fit it from the stale stored preview height.
+ * - When `chromeHeight > 0` (inline-prompt nodes) AND the fit is to the SAME aspect the box already
+ *   has (`prevAspectRatio === aspectRatio` — i.e. a manual horizontal-resize drag), the node is
+ *   WIDTH-DRIVEN: the dragged `width` is used directly and height is re-derived
+ *   (`h = chrome + max(minHeight, w/aspect)`). This avoids the rubber-band a
+ *   `resizeDirection="horizontal"` drag would otherwise hit, since React Flow writes only width and
+ *   area-preservation would re-fit it from the stale stored preview height.
+ * - When the aspect CHANGES (a new result rotated landscape↔portrait), area is preserved EVEN WITH
+ *   chrome — otherwise a 16:9→9:16 inline node keeps its wide width and balloons in height. The
+ *   width-driven shortcut is strictly for same-aspect resize drags; aspect rotations always re-fit
+ *   at constant preview area (the chrome is stripped out before the √ and re-added after).
  * - First fit (no prior height) starts from the node's `width` (or `minWidth`) — the snug default.
  * - Both dimensions are floored: width to the proportional minimum (`max(minWidth, minHeight·aspect)`,
  *   the narrowest box that keeps both `minHeight` and the aspect), height to `minHeight`.
@@ -107,19 +113,29 @@ export function computeFittedNodeBox(opts: {
    * caller is responsible for the node-level min clamp (`minHeight + chrome`).
    */
   chromeHeight?: number
+  /**
+   * The aspect ratio the node's box is CURRENTLY fitted to (i.e. the previous
+   * `aspectRatio` this helper was last fed for this node). Lets the helper tell
+   * a same-aspect manual resize (width-driven, chrome only) from a result-aspect
+   * ROTATION (area-preserving, always). Omit/undefined ⇒ treated as a change ⇒
+   * area is preserved. Only consulted when `chromeHeight > 0`.
+   */
+  prevAspectRatio?: number
 }): { width: number; height: number } {
   const { aspectRatio, width, height, minWidth, minHeight } = opts
   const chrome = opts.chromeHeight ?? 0
   const proportionalMinWidth = Math.max(minWidth, minHeight * aspectRatio)
-  // Chrome nodes (inline prompt) are WIDTH-DRIVEN: with `resizeDirection="horizontal"`
-  // React Flow writes only width, then this re-derives height. Area preservation
-  // would re-fit width from the STALE stored preview height, rubber-banding a width
-  // drag back toward the old size. So when chrome is present, take the dragged width
-  // directly. Non-chrome nodes (chrome === 0, every existing node) keep the exact
-  // area-preserving √ behavior — height can change there, so area must be conserved
-  // across an aspect rotation (landscape ↔ portrait).
+  // Width-driven ONLY for a chrome node being re-fitted to the SAME aspect it
+  // already has — that is a manual `resizeDirection="horizontal"` drag, where
+  // React Flow wrote only width and this re-derives height. Area preservation
+  // there would re-fit width from the STALE stored preview height, rubber-banding
+  // the drag. When the aspect CHANGES (new result rotated landscape↔portrait), we
+  // fall through to the area-preserving √ branch EVEN WITH chrome — keeping the
+  // wide width on a now-portrait result is exactly what made inline nodes balloon.
+  // Non-chrome nodes (chrome === 0, every existing node) always area-preserve.
+  const sameAspect = opts.prevAspectRatio === aspectRatio
   let baseW: number
-  if (chrome > 0) {
+  if (chrome > 0 && sameAspect) {
     baseW = typeof width === "number" ? width : minWidth
   } else {
     // Area math operates on the PREVIEW sub-area only (strip chrome out first).
