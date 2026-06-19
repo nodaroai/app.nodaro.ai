@@ -24,6 +24,7 @@ import { splitGeneratedItems } from "@nodaro/shared";
 import { SOCIAL_POST_NODE_TYPES } from "@nodaro/shared";
 import { resolveSourceThroughConnectedList } from "@nodaro/shared";
 import { VARIABLES_HANDLE_ID } from "@nodaro/shared";
+import { extractReferencedLabels, canonicalVarName } from "@nodaro/shared";
 import { characterMentionSlug } from "@nodaro/shared";
 import type { EntityKind, ConnectedReference } from "@nodaro/shared";
 export { resolveSourceThroughConnectedList };
@@ -231,6 +232,13 @@ export function stampElementInjections(
   nodes: ReadonlyArray<WorkflowNode>,
   edges: ReadonlyArray<WorkflowEdge>,
 ): ConnectedReference[] {
+  // "Inject Elements" off switch (config-panel Prompt Injection section).
+  // Default is ON: only an explicit `injectElements === false` on the CONSUMER
+  // node skips character-element stamping for this consumer.
+  const consumer = nodes.find((n) => n.id === consumerNodeId);
+  if ((consumer?.data as { injectElements?: boolean } | undefined)?.injectElements === false) {
+    return refs as ConnectedReference[];
+  }
   const bySlug = collectCharacterElementInjections(consumerNodeId, nodes, edges);
   if (bySlug.size === 0) return refs as ConnectedReference[];
   return refs.map((r) => {
@@ -1047,6 +1055,20 @@ export function resolveNodeInputs(
   const incomingEdges = edges.filter((e) => e.target === node.id);
   const inputs: FrontendResolvedInputs = {};
 
+  // Prompt-handle injection control (generate-image / generate-video): a source
+  // placed explicitly via {label} in the consumer's prompt/negative — or when
+  // Inject Prompt is off — must NOT also flow into inputs.prompt (no double).
+  const consumerData = node.data as Record<string, unknown>;
+  const referencedLabels = extractReferencedLabels(
+    consumerData.prompt as string | undefined,
+    consumerData.negativePrompt as string | undefined,
+  );
+  const promptInjectOff = consumerData.injectPrompt === false;
+  const negativeInjectOff = consumerData.injectNegative === false;
+  // Negative auto-append (and thus its suppression) is generate-image /
+  // generate-video only — standalone i2v/t2v keep legacy negative handling.
+  const isGenImageOrVideo = node.type === "generate-image" || node.type === "generate-video";
+
   for (const srcEdge of incomingEdges) {
     let src = nodes.find((n) => n.id === srcEdge.source);
     if (!src) continue;
@@ -1062,6 +1084,20 @@ export function resolveNodeInputs(
       const origin = resolveTeleportOrigin(src, nodes, edges)
       src = origin.node
       if (origin.sourceHandle !== undefined) resolvedSourceHandle = origin.sourceHandle
+    }
+
+    // Prompt-handle suppression (see referencedLabels above): drop a source the
+    // author placed via {label}, or all of them when Inject Prompt is off.
+    if (srcEdge.targetHandle === "prompt") {
+      const lbl = canonicalVarName(((src.data as Record<string, unknown>).label as string) || src.type || src.id);
+      if (promptInjectOff || referencedLabels.has(lbl)) continue;
+    }
+    // Negative-handle suppression (generate-image / generate-video): drop a
+    // source placed via {label} in the negative, or all when Inject Negative is
+    // off, so it isn't ALSO appended by composeNegative (no double).
+    if (isGenImageOrVideo && srcEdge.targetHandle === "negative") {
+      const lbl = canonicalVarName(((src.data as Record<string, unknown>).label as string) || src.type || src.id);
+      if (negativeInjectOff || referencedLabels.has(lbl)) continue;
     }
 
     const edgeMode = (srcEdge.data as Record<string, unknown> | undefined)

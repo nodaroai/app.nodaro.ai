@@ -842,6 +842,24 @@ export interface BuildImagePromptConfig {
   /** Per-identity (imageIndex+label) user overrides for fidelity / custom text. */
   identityMeta?: readonly IdentityMeta[]
   /**
+   * Reference-prompt assembly format for the `{image:N:label}` connected-
+   * reference (non-character) path. Additive + opt-in:
+   *   - "legacy" (default): the "Use these references:/Compose them naturally:"
+   *     wrap with numeric `Image N` directives — unchanged behavior.
+   *   - "hybrid": token expansion only — every `{image:N:label}` token → "the
+   *     <label> from reference image <LETTER>". NO lock snippet is auto-injected
+   *     (authors prepend their own). Images-only for now; characters/objects/
+   *     locations still render legacy. v1 skips `referenceOrder` renumbering.
+   */
+  referenceFormat?: "legacy" | "hybrid"
+  /**
+   * OPTIONAL reference-lock snippet to prepend ahead of the hybrid scene. Only
+   * used when `referenceFormat === "hybrid"`. Nothing is prepended by default —
+   * authors include their own lock snippet in the prompt text. Provide this only
+   * if a caller wants to auto-prepend a lock.
+   */
+  referenceLockSnippet?: string
+  /**
    * User-defined reorder of the injected reference list. Each entry is a
    * stable tile ID using the scheme from `compute-injected-refs.ts`:
    *   - `wired:<sourceNodeId>` (a wired upstream — manual / wired-image /
@@ -1257,6 +1275,8 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
       if (!finalIndexByUrl.has(u)) finalIndexByUrl.set(u, i + 1)
     })
 
+    const isHybrid = config.referenceFormat === "hybrid"
+
     // Non-character directives — `{image:N}` identities (renumbered to their
     // final slot) + the location/object canonical fallback — all numbered
     // against the unified `finalIndexByUrl`.
@@ -1267,7 +1287,25 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
       finalIndexByUrl,
       suppressedCanonicalLocationIds,
     )
-    if (directives) {
+    if (isHybrid) {
+      // Hybrid reference format (images-only, flag-gated): TOKEN EXPANSION ONLY.
+      // Every {image:N:label} token becomes "the <label> from reference image
+      // <LETTER>". NO reference-lock snippet is auto-injected — authors prepend
+      // their own lock (default-deny / likeness / compose / extract / ghost-
+      // mannequin, per goal) in the prompt text, and it passes through here
+      // untouched. A caller MAY still opt to prepend one via
+      // `config.referenceLockSnippet`, but nothing is added by default.
+      // Replaces the legacy "Use these references:/Compose:" wrap + numeric
+      // token expansion. Characters/objects/locations stay legacy.
+      const scene = buildHybridScene(prompt, nonCharacterRefs, finalIndexByUrl)
+      prompt = config.referenceLockSnippet
+        ? `${config.referenceLockSnippet}\n${scene}`
+        : scene
+      // The hybrid token rewrite can't be modeled by the segment marks → the
+      // join-mismatch fallback in buildImagePromptSegments collapses to a single
+      // segment (documented degradation, same as the Phase-0 splice branch).
+      if (marks) marks.directivesPrefix = ""
+    } else if (directives) {
       // Capture the prompt state across the splice so the segment builder can
       // isolate what the directive block contributed as a PREFIX. Only the
       // prepend branch yields a clean prefix; the Phase-0 consolidation branch
@@ -1346,8 +1384,11 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
 
     // Resolve `{image:N:label}` → "Image <finalSlot> (label)". The token's N
     // indexes `nonCharacterRefs`; we rewrite it to the ref's FINAL slot so the
-    // body text agrees with the directive numbering above.
-    prompt = expandImageRefTokensForRefs(prompt, nonCharacterRefs, finalIndexByUrl)
+    // body text agrees with the directive numbering above. (The hybrid format
+    // already expanded tokens to lettered role phrases in buildHybridScene.)
+    if (!isHybrid) {
+      prompt = expandImageRefTokensForRefs(prompt, nonCharacterRefs, finalIndexByUrl)
+    }
 
     const supportsRefs = MODELS_WITH_REFERENCE_IMAGE_SUPPORT.has(provider)
 
@@ -1357,7 +1398,9 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
     // order was supplied (no-op contract).
     let finalUrls = assembledUrls
     let finalPrompt = prompt
-    if (supportsRefs && referenceOrder.length > 0 && assembledUrls.length > 1) {
+    // v1: the hybrid format skips referenceOrder renumbering (its tokens are
+    // already expanded to fixed letters). Reorder support is a follow-up.
+    if (!isHybrid && supportsRefs && referenceOrder.length > 0 && assembledUrls.length > 1) {
       const reordered = applyReferenceOrder(
         assembledUrls,
         prompt,
@@ -1515,7 +1558,9 @@ const STRICT_DEFAULT_SOURCES: ReadonlySet<ReferenceSource> = new Set([
 
 /** Matches `{image:N}` and `{image:N:label}` tokens.
  *  Group 1 = position, group 2 = optional label. */
-const IMAGE_TOKEN_PATTERN = /\{image:(\d+)(?::([a-zA-Z0-9_-]+))?\}/gi
+// Label allows spaces (multi-word labels like "clothes and shoes") but never a
+// newline or `}` so the match can't run away across lines / token boundaries.
+const IMAGE_TOKEN_PATTERN = /\{image:(\d+)(?::([^}\n]+))?\}/gi
 
 interface ResolvedIdentity {
   imageIndex: number
@@ -1833,6 +1878,68 @@ function expandImageRefTokensForRefs(
     if (!finalIdx) return match
     return label ? `Image ${finalIdx} (${label})` : `Image ${finalIdx}`
   })
+}
+
+// ---------------------------------------------------------------------------
+// Hybrid reference format (images-only, flag-gated via
+// `BuildImagePromptConfig.referenceFormat === "hybrid"`). TOKEN EXPANSION ONLY:
+// every {image:N:label} token → "the <label> from reference image <LETTER>"
+// (letters map the FINAL 1-based slot, 1→A). NO reference-lock snippet is
+// auto-injected — authors prepend their own lock in the prompt text (it passes
+// through untouched); a caller may optionally prepend one via
+// `config.referenceLockSnippet`. Scope is the `{image:N:label}` non-character
+// path — characters/objects/locations still use the legacy wrap.
+// ---------------------------------------------------------------------------
+
+/** Map a 1-based reference slot to a letter (1→A, 2→B …). Slots beyond 26 fall
+ *  back to the numeric slot so we never emit a non-letter control character. */
+function slotToLetter(slot: number): string {
+  return slot >= 1 && slot <= 26 ? String.fromCharCode(64 + slot) : String(slot)
+}
+
+/** Hybrid inline phrase for a `{image:N:label}` token bound to a lettered slot.
+ *  Uniform: "the <label> from reference image <letter>" — the label is used
+ *  verbatim (the global identity directive handles subject preservation, so no
+ *  per-role branching is needed). A label-less token → "reference image <letter>". */
+function hybridRolePhrase(label: string, letter: string): string {
+  if (!label) return `reference image ${letter}`
+  return `the ${label} from reference image ${letter}`
+}
+
+/** Like `expandImageRefTokensForRefs`, but emits the hybrid lettered phrase
+ *  ("the subject from reference image A") instead of the legacy "Image N
+ *  (label)". Out-of-range tokens / URL-less refs are left untouched. */
+function expandImageRefTokensHybrid(
+  prompt: string,
+  refs: readonly ConnectedReference[],
+  finalIndexByUrl: ReadonlyMap<string, number>,
+): string {
+  return prompt.replace(IMAGE_TOKEN_PATTERN, (match, num, label) => {
+    const n = parseInt(num, 10)
+    const ref = refs[n - 1]
+    const finalIdx = ref?.url ? finalIndexByUrl.get(ref.url) : undefined
+    if (!finalIdx) return match
+    return hybridRolePhrase((label ?? "").trim(), slotToLetter(finalIdx))
+  })
+}
+
+/** Capitalize the first alphabetic character of a string (line-initial). */
+function capitalizeLineInitial(line: string): string {
+  return line.replace(/[a-zA-Z]/, (c) => c.toUpperCase())
+}
+
+/** Render the user prompt as the hybrid scene: each `{image:N:label}` token
+ *  expanded to its uniform lettered phrase, each line's first letter
+ *  capitalized. No per-role special-casing — the label drives the phrase. */
+function buildHybridScene(
+  prompt: string,
+  refs: readonly ConnectedReference[],
+  finalIndexByUrl: ReadonlyMap<string, number>,
+): string {
+  return prompt
+    .split("\n")
+    .map((line) => capitalizeLineInitial(expandImageRefTokensHybrid(line, refs, finalIndexByUrl)))
+    .join("\n")
 }
 
 /** Build the combined per-identity directive intro for previews.

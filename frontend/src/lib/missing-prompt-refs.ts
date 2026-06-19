@@ -1,5 +1,5 @@
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
-import { NODE_REF_PATTERN, NODE_MAPPABLE_FIELDS, parseNodeRef } from "@nodaro/shared"
+import { NODE_REF_PATTERN, NODE_MAPPABLE_FIELDS, parseNodeRef, canonicalVarName } from "@nodaro/shared"
 import { getUpstreamNodes } from "@/lib/node-refs"
 import { classifyPromptToken } from "@/lib/prompt-ref-scan"
 
@@ -35,7 +35,7 @@ export function computeMissingPromptRefs(
   const fields = NODE_MAPPABLE_FIELDS[node.type ?? ""] ?? []
   if (fields.length === 0) return []
 
-  const resolvable = new Set(getUpstreamNodes(nodeId, nodes, edges).map((u) => u.label))
+  const resolvable = new Set(getUpstreamNodes(nodeId, nodes, edges).map((u) => canonicalVarName(u.label)))
 
   const data = node.data as Record<string, unknown>
   const seen = new Set<string>()
@@ -45,8 +45,9 @@ export function computeMissingPromptRefs(
     if (typeof value !== "string" || value.length === 0) continue
     for (const match of value.matchAll(NODE_REF_PATTERN)) {
       const { name } = parseNodeRef(match[1] ?? "")
-      if (classifyPromptToken(name, resolvable) !== "missing" || seen.has(name)) continue
-      seen.add(name)
+      const canon = canonicalVarName(name)
+      if (classifyPromptToken(name, resolvable) !== "missing" || seen.has(canon)) continue
+      seen.add(canon)
       missing.push({ kind: "text", name })
     }
   }

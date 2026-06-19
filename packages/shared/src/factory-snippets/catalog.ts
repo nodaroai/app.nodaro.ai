@@ -14,6 +14,11 @@ export const FACTORY_SNIPPETS: readonly FactorySnippet[] = [
   { id: "wardrobe-lock", name: "Wardrobe Lock", description: "Outfit continuity across shots and edits", text: "wearing exactly the same outfit as the reference — same garments, colors, fabrics, and accessories, unchanged", target: "prompt", media: B, category: "Identity & Consistency" },
   { id: "no-beautify", name: "No Beautify", description: "Stop the model 'improving' a face", text: "preserve natural skin texture, age lines, and asymmetries; do not beautify, smooth, slim, or rejuvenate the face", target: "prompt", media: I, category: "Identity & Consistency" },
 
+  // ── Reference locks (prompt) — insert at the START of a reference prompt ──
+  { id: "reference-lock", name: "Reference Lock", description: "Default-deny + preserve likeness + compose into one image (full scenes)", text: "Do not use anything from reference images unless specified explicitly. All elements taken from reference images must preserve likeness. Compose them naturally into a single image.", target: "prompt", media: I, category: "Reference locks" },
+  { id: "reference-extract", name: "Reference Extract", description: "Isolate only the specified elements — no scene, no figure", text: "Take only what is specified from the reference images. Do not take anything else.", target: "prompt", media: I, category: "Reference locks" },
+  { id: "ghost-mannequin", name: "Ghost Mannequin", description: "Show worn garments without a wearer (product shot)", text: "Ghost-mannequin product shot: the garment in its natural worn shape, with no person, body, face, or mannequin visible.", target: "prompt", media: I, category: "Reference locks" },
+
   // ── Quality (prompt) ──
   { id: "cinematic-quality", name: "Cinematic Quality", description: "Concrete film language that works on all modern models", text: "cinematic still, shallow depth of field, filmic color grade, soft motivated lighting, subtle film grain", target: "prompt", media: B, category: "Quality" },
   { id: "editorial-photo", name: "Editorial Photo", description: "Magazine-grade photographic quality", text: "professional editorial photography, sharp focus, balanced natural exposure, magazine-quality composition", target: "prompt", media: I, category: "Quality" },

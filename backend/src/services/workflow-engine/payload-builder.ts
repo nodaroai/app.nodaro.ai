@@ -8,6 +8,7 @@ import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeExecutionState } from 
 // Shared logic from packages/shared — single source of truth
 import { collectAncestorRefs as sharedCollectAncestorRefs } from "@nodaro/shared"
 import { buildImagePrompt, assembleImageInput, buildScenePrompt, applyReferenceOrderToVideo } from "@nodaro/shared"
+import { composeNegative } from "@nodaro/shared"
 import { collectIdentityLockClause as sharedCollectIdentityLockClause } from "@nodaro/shared"
 import { characterMentionableAssetArrays } from "@nodaro/shared"
 import { resolveTemplate, applyTemplate } from "@nodaro/shared"
@@ -16,6 +17,7 @@ import { buildLipSyncCreditId, isPerSecondLipSyncProvider } from "@nodaro/shared
 import { resolveAiAvatarCreditId } from "@nodaro/shared"
 import { resolveCinematicCreditId } from "@nodaro/shared"
 import { referenceSheetCreditId } from "@nodaro/shared"
+import { extractReferencedLabels, combineSameLabelRefs, refHandleCategory, canonicalVarName } from "@nodaro/shared"
 import { validateAiAvatarPayload, validateCinematicAvatarPayload } from "@nodaro/shared"
 import { resolveNodeRefs } from "@nodaro/shared"
 import {
@@ -407,6 +409,11 @@ function stampElementInjections(
   consumerNodeId: string,
   ctx: PayloadBuildContext | undefined,
 ): ConnectedReference[] {
+  // "Inject Elements" off switch — mirror of the FE gate in node-input-resolver.ts.
+  // Default ON: only an explicit `injectElements === false` on the CONSUMER node
+  // skips character-element stamping for this consumer.
+  const consumer = (ctx?.nodes ?? []).find((n) => n.id === consumerNodeId)
+  if ((consumer?.data as { injectElements?: boolean } | undefined)?.injectElements === false) return refs
   const bySlug = collectCharacterElementInjections(consumerNodeId, ctx)
   if (bySlug.size === 0) return refs
   return refs.map((r) => {
@@ -1233,7 +1240,18 @@ export function buildNodeRefMap(
     else edgesByTarget.set(edge.target, [edge])
   }
   const visited = new Set<string>()
-  const queue: Array<{ id: string; connectingEdges: ReadonlyArray<SimpleEdge> }> = []
+  const queue: Array<{ id: string; connectingEdges: ReadonlyArray<SimpleEdge>; category: number }> = []
+
+  // Direct-parent handle category (prompt→0, elements→1, look-family→2, else -1)
+  // for same-label combination — mirror of the frontend buildNodeRefMap.
+  const edgeGroupCategory = (group: ReadonlyArray<SimpleEdge>): number => {
+    let cat = -1
+    for (const e of group) {
+      const c = refHandleCategory(e.targetHandle)
+      if (c >= 0 && (cat === -1 || c < cat)) cat = c
+    }
+    return cat
+  }
 
   // Seed BFS with direct parents, grouping edges by source
   const seedEdges = new Map<string, SimpleEdge[]>()
@@ -1243,11 +1261,14 @@ export function buildNodeRefMap(
   }
   for (const [sourceId, edgeGroup] of seedEdges) {
     visited.add(sourceId)
-    queue.push({ id: sourceId, connectingEdges: edgeGroup })
+    queue.push({ id: sourceId, connectingEdges: edgeGroup, category: edgeGroupCategory(edgeGroup) })
   }
 
+  // Collect results for combine + last-wins. `category` is -1 for deeper nodes.
+  const results: Array<{ label: string; output: string; category: number }> = []
+
   while (queue.length > 0) {
-    const { id: currentId, connectingEdges } = queue.shift()!
+    const { id: currentId, connectingEdges, category } = queue.shift()!
     const node = nodesById.get(currentId)
     if (!node) continue
 
@@ -1287,7 +1308,7 @@ export function buildNodeRefMap(
       }
     }
 
-    if (output) map.set(label, output)
+    if (output) results.push({ label, output, category })
 
     // BFS: traverse to parents of current node
     const nextEdges = new Map<string, SimpleEdge[]>()
@@ -1299,8 +1320,19 @@ export function buildNodeRefMap(
     }
     for (const [sourceId, edgeGroup] of nextEdges) {
       visited.add(sourceId)
-      queue.push({ id: sourceId, connectingEdges: edgeGroup })
+      queue.push({ id: sourceId, connectingEdges: edgeGroup, category: -1 })
     }
+  }
+
+  // Same-label COMBINE (prompt → elements → look, inner edge order); the rest
+  // keep last-wins (BE's historical behavior). Mirror of the frontend. Map is
+  // CANONICAL-keyed (lowercase) so {TEXT}/{Text}/{text} all resolve.
+  const combined = combineSameLabelRefs(results)
+  for (const [label, value] of combined) map.set(label, value)
+  for (const r of results) {
+    const canon = canonicalVarName(r.label)
+    if (combined.has(canon)) continue
+    map.set(canon, r.output)
   }
 
   return map
@@ -1380,6 +1412,18 @@ function collectCinematographyHints(
 ): string[] {
   const hints: string[] = []
   const nodes = ctx?.nodes ?? []
+  // Prompt Injection off switches (mirror of FE cinematography-hints.ts), gated
+  // BY HANDLE: injectLook === false drops the Look family (look / cinematography
+  // / style); injectElements === false drops the `elements` handle + character-
+  // borne elements. Default ON for both (undefined/true).
+  const consumerData = nodes.find((n) => n.id === consumerNodeId)?.data as
+    | { injectLook?: boolean; injectElements?: boolean; prompt?: string; negativePrompt?: string }
+    | undefined
+  const lookOff = consumerData?.injectLook === false
+  const elementsOff = consumerData?.injectElements === false
+  // Used-as-variable suppression (mirror of FE): a source placed explicitly via
+  // `{label}` in the prompt/negative must NOT also auto-inject (no double).
+  const referenced = extractReferencedLabels(consumerData?.prompt, consumerData?.negativePrompt)
   const edges = ctx?.edges ?? []
   const exclude = options?.excludeTypes
   for (const edge of edges) {
@@ -1392,9 +1436,16 @@ function collectCinematographyHints(
       edge.targetHandle !== "look" &&
       edge.targetHandle !== "elements"
     ) continue
+    // Handle-scoped injection gate: `elements` follows Inject Elements; every
+    // other accepted handle is the Look family (Inject Look).
+    if (edge.targetHandle === "elements" ? elementsOff : lookOff) continue
     const srcNode = nodes.find((n) => n.id === edge.source)
     if (!srcNode) continue
     if (exclude?.has(srcNode.type ?? "")) continue
+    // Placed explicitly via `{label}` → skip auto-inject (no double). Canonical
+    // (lowercase) so {Foo} suppresses a `foo` node (case-insensitive).
+    const srcLabel = canonicalVarName(((srcNode.data as { label?: string } | undefined)?.label) || srcNode.type || srcNode.id)
+    if (referenced.has(srcLabel)) continue
 
     if (srcNode.type === "camera-motion") {
       // Use the shared getParameterPromptHint WITH graph context so the
@@ -1420,7 +1471,8 @@ function collectCinematographyHints(
   // Consumers WITHOUT a character bullet (edit-image, location, …) append it
   // here by DEFAULT — single source (`collectCharacterElementInjections`),
   // preserving their behavior.
-  if (!options?.excludeCharacterElements) {
+  // Character-borne elements follow Inject Elements — skip when disabled.
+  if (!options?.excludeCharacterElements && !elementsOff) {
     // Lazy: only resolve when a Character actually feeds this consumer (the
     // common case has none), mirroring the frontend collector.
     const hasWiredCharacter = edges.some((edge) => {
@@ -1533,11 +1585,12 @@ export function buildPayload(
   // override > typed candidate fields > wired). Shared with the frontend
   // executor via @nodaro/shared so field-selection + precedence are
   // structurally identical. Each single-prompt case below calls promptFor(type).
-  const promptFor = (nodeType: string) =>
+  const promptFor = (nodeType: string, appendWired?: boolean) =>
     computeNodePrompt(nodeType, data, {
       wired: resolvedInputs.prompt,
       override: resolvedInputs.overridePrompt,
       refMap,
+      appendWired,
     })
 
   switch (type) {
@@ -1613,7 +1666,7 @@ export function buildPayload(
         ? collectAncestorRefs(node.id, buildCtx.nodes, buildCtx.edges, buildCtx.nodeStates)
         : []
 
-      let rawPrompt = promptFor("generate-image")
+      let rawPrompt = promptFor("generate-image", true)
       {
         // Bullet consumer (stamps character elements onto the ref) → exclude here.
         const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES, excludeCharacterElements: true })
@@ -1687,7 +1740,9 @@ export function buildPayload(
             userPrompt: rawPrompt,
             provider: effectiveProvider,
             style: styleBypass ? undefined : (typeof data.style === "string" ? data.style : undefined),
-            negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
+            // Negative: typed ({label} resolved) + wired connected-negative both
+            // emitted; input-resolver dropped referenced / Inject-Negative-off.
+            negativePrompt: composeNegative(resolveRefs(typeof data.negativePrompt === "string" ? data.negativePrompt : undefined, refMap), resolvedInputs.negativePrompt) || undefined,
             characterDefs: charDefs as CharacterDef[],
             userTemplates: settings?.userPromptTemplates,
             flowTemplates: settings?.flowPromptTemplates,
@@ -1711,7 +1766,9 @@ export function buildPayload(
             userPrompt: rawPrompt,
             provider: effectiveProvider,
             style: styleBypass ? undefined : (typeof data.style === "string" ? data.style : undefined),
-            negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
+            // Negative: typed ({label} resolved) + wired connected-negative both
+            // emitted; input-resolver dropped referenced / Inject-Negative-off.
+            negativePrompt: composeNegative(resolveRefs(typeof data.negativePrompt === "string" ? data.negativePrompt : undefined, refMap), resolvedInputs.negativePrompt) || undefined,
             characterDefs: charDefs as CharacterDef[],
             userTemplates: settings?.userPromptTemplates,
             flowTemplates: settings?.flowPromptTemplates,
@@ -2515,7 +2572,7 @@ export function buildPayload(
             jobId,
             provider,
             task,
-            prompt: promptFor("generate-video"),
+            prompt: promptFor("generate-video", true),
             ...(task === "image_to_video" && {
               image: resolvedInputs.startFrameUrl,
               ...(hasEnd && { last_frame_image: resolvedInputs.endFrameUrl }),
@@ -2574,7 +2631,7 @@ export function buildPayload(
       // → data.prompt → data.motionPrompt (legacy field still emitted by the
       // inline picker) → upstream wire. composeVideoPrompt appends cinematography
       // hints + optional motion-hint + identity-lock.
-      const rawPrompt = promptFor("generate-video")
+      const rawPrompt = promptFor("generate-video", true)
       const motionHint = data.motionEnabled && typeof data.motion === "string" && data.motion
         ? `${data.motion} motion`
         : undefined
@@ -2645,9 +2702,10 @@ export function buildPayload(
           jobId,
           provider: resolvedProvider,
           prompt: composedPrompt,
-          // Typed `negative` handle takes precedence over the config-panel
-          // field, with the config field as fallback (parallel to `prompt`).
-          negativePrompt: resolvedInputs.negativePrompt ?? (data.negativePrompt as string | undefined),
+          // Negative: typed ({label} resolved) + wired connected-negative both
+          // emitted (composeNegative). The input-resolver dropped any referenced
+          // / Inject-Negative-off source from resolvedInputs.negativePrompt.
+          negativePrompt: composeNegative(resolveRefs(data.negativePrompt as string | undefined, refMap), resolvedInputs.negativePrompt) || undefined,
           imageUrl,            // swap-aware
           endFrameUrl,         // gated on having a startFrame to pair with
           referenceImageUrls,

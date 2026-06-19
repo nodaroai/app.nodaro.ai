@@ -20,7 +20,7 @@ import { SnippetSuggestionList } from "./snippet-suggestion-list"
 import { SnippetPillExtension } from "./snippet-pill-extension"
 import { filterSnippets, computeSnippetInsertPrefix, type SnippetPoolItem } from "@/lib/snippet-pool"
 import { matchSnippetRanges, type MatchableSnippet } from "@/lib/snippet-matching"
-import { DEFAULT_USAGE_MODE } from "@nodaro/shared"
+import { DEFAULT_USAGE_MODE, canonicalVarName } from "@nodaro/shared"
 import type { RefImageItem } from "../tag-textarea"
 import type { NodeRefItem } from "@/lib/node-refs"
 
@@ -417,7 +417,7 @@ export function PromptEditor({
   // upstream currently produces a NON-EMPTY output (fallback active/dormant;
   // buildNodeRefMap only inserts non-empty outputs).
   const stableLabelsRef = useContentStable<ReadonlySet<string> | null>(
-    nodeRefs ? new Set(nodeRefs.map((r) => r.label)) : null,
+    nodeRefs ? new Set(nodeRefs.map((r) => canonicalVarName(r.label))) : null,
     labelSetsEqual,
   )
   const resolvableLabels = stableLabelsRef.current
@@ -668,7 +668,7 @@ export function PromptEditor({
             ed
               ?.chain()
               .focus()
-              .insertContentAt(range, `{${props.label}} `)
+              .insertContentAt(range, `{${canonicalVarName(props.label)}} `)
               .run()
           },
           render: createFloatingSuggestionRenderer<{

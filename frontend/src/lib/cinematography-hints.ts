@@ -1,5 +1,6 @@
 import { composeCameraMotionHintFromConnections } from "@nodaro/shared"
 import { getParameterPromptHint } from "@nodaro/shared"
+import { extractReferencedLabels, canonicalVarName } from "@nodaro/shared"
 import { composeTransitionHintFromConnections, type TransitionTiming } from "@nodaro/shared"
 import { composeCharacterFxHintFromConnections, type CharacterFxTiming } from "@nodaro/shared"
 import type { WorkflowNode, WorkflowEdge, TransitionData, CharacterFxData } from "@/types/nodes"
@@ -115,6 +116,18 @@ export function collectCinematographyHints(
   edges: ReadonlyArray<WorkflowEdge>,
   options?: { excludeTypes?: ReadonlySet<string>; excludeCharacterElements?: boolean },
 ): string[] {
+  // Prompt Injection off switches (config-panel section), gated BY HANDLE:
+  //  - injectLook === false     → drop the Look family (look / cinematography / style)
+  //  - injectElements === false → drop the `elements` handle + character-borne elements
+  // Default ON for both (undefined/true).
+  const consumerData = nodes.find((n) => n.id === consumerNodeId)?.data as
+    | { injectLook?: boolean; injectElements?: boolean; prompt?: string; negativePrompt?: string }
+    | undefined
+  const lookOff = consumerData?.injectLook === false
+  const elementsOff = consumerData?.injectElements === false
+  // Used-as-variable suppression: a source the author placed explicitly via
+  // `{label}` in the prompt/negative must NOT also auto-inject (no double).
+  const referenced = extractReferencedLabels(consumerData?.prompt, consumerData?.negativePrompt)
   const hints: string[] = []
   const exclude = options?.excludeTypes
   for (const edge of edges) {
@@ -128,9 +141,15 @@ export function collectCinematographyHints(
       edge.targetHandle !== "look" &&
       edge.targetHandle !== "elements"
     ) continue
+    // Handle-scoped injection gate: `elements` follows Inject Elements; every
+    // other accepted handle is the Look family (Inject Look).
+    if (edge.targetHandle === "elements" ? elementsOff : lookOff) continue
     const srcNode = nodes.find((n) => n.id === edge.source)
     if (!srcNode) continue
     if (exclude?.has(srcNode.type ?? "")) continue
+    // Placed explicitly via `{label}` → skip auto-inject (no double).
+    const srcLabel = canonicalVarName(((srcNode.data as { label?: string } | undefined)?.label) || srcNode.type || srcNode.id)
+    if (referenced.has(srcLabel)) continue
 
     if (srcNode.type === "camera-motion") {
       // Build via the shared getParameterPromptHint WITH graph context so the
@@ -157,7 +176,9 @@ export function collectCinematographyHints(
   // (edit-image, location, avatar / extend / retake video) have no bullet to
   // weave into, so by DEFAULT the element is appended here — single source
   // (`collectCharacterElementInjections`), preserving their behavior.
-  if (!options?.excludeCharacterElements) {
+  // Character-borne elements follow Inject Elements (same family as the
+  // `elements` handle) — skip them when elements injection is disabled.
+  if (!options?.excludeCharacterElements && !elementsOff) {
     // Lazy: only resolve when a Character actually feeds this consumer (the
     // common case has none). Mirrors the old fold's laziness and avoids the
     // resolveCharacterAssets walk + Map allocation otherwise.

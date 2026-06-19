@@ -11,8 +11,13 @@ import {
   resolveIndex,
   resolveNodeRefs,
   parseNodeRef,
+  canonicalVarName,
+  extractReferencedLabels,
+  PARAMETER_NODE_TYPES,
   NODE_REF_PATTERN,
   RESERVED_TEMPLATE_VARS,
+  combineSameLabelRefs,
+  refHandleCategory,
 } from "@nodaro/shared"
 import type { PromptSegment } from "@nodaro/shared"
 
@@ -162,7 +167,20 @@ export function buildNodeRefMap(
   const queue: Array<{
     id: string
     connectingEdges: ReadonlyArray<WorkflowEdge>
+    category: number
   }> = []
+
+  // Direct-parent handle category (prompt→0, elements→1, look-family→2, else -1)
+  // for same-label combination. A source on multiple handles takes the
+  // highest-priority (lowest) category.
+  const edgeGroupCategory = (group: ReadonlyArray<WorkflowEdge>): number => {
+    let cat = -1
+    for (const e of group) {
+      const c = refHandleCategory(e.targetHandle)
+      if (c >= 0 && (cat === -1 || c < cat)) cat = c
+    }
+    return cat
+  }
 
   // Seed BFS with direct parents, grouping edges by source
   const seedEdges = new Map<string, WorkflowEdge[]>()
@@ -174,14 +192,15 @@ export function buildNodeRefMap(
   }
   for (const [sourceId, edgeGroup] of seedEdges) {
     visited.add(sourceId)
-    queue.push({ id: sourceId, connectingEdges: edgeGroup })
+    queue.push({ id: sourceId, connectingEdges: edgeGroup, category: edgeGroupCategory(edgeGroup) })
   }
 
-  // Collect results for duplicate-label handling
-  const results: Array<{ label: string; output: string }> = []
+  // Collect results for combine + duplicate-label handling. `category` is the
+  // direct-parent handle category (-1 for deeper-BFS nodes, never combined).
+  const results: Array<{ label: string; output: string; category: number }> = []
 
   while (queue.length > 0) {
-    const { id: currentId, connectingEdges } = queue.shift()!
+    const { id: currentId, connectingEdges, category } = queue.shift()!
     const node = nodes.find((n) => n.id === currentId)
     if (!node) continue
 
@@ -201,7 +220,7 @@ export function buildNodeRefMap(
       output = extractNodeOutput(node)
     }
 
-    if (output) results.push({ label, output })
+    if (output) results.push({ label, output, category })
 
     // BFS: traverse to parents of current node
     const nextEdges = new Map<string, WorkflowEdge[]>()
@@ -213,27 +232,89 @@ export function buildNodeRefMap(
     }
     for (const [sourceId, edgeGroup] of nextEdges) {
       visited.add(sourceId)
-      queue.push({ id: sourceId, connectingEdges: edgeGroup })
+      queue.push({ id: sourceId, connectingEdges: edgeGroup, category: -1 })
     }
   }
 
-  // Duplicate label handling (same logic as getUpstreamNodes)
+  // Same-label COMBINE first: ≥2 direct-parent connections sharing a label →
+  // one {label} = combined value (prompt → elements → look, inner edge order).
+  const combined = combineSameLabelRefs(results)
+  for (const [label, value] of combined) map.set(label, value)
+
+  // Remaining labels: legacy duplicate handling (first-wins bare label + "(2)"
+  // suffixes), skipping any label already owned by a combine.
+  // Map is CANONICAL-keyed (lowercase) so {TEXT}/{Text}/{text} all resolve.
+  const rest = results.filter((r) => !combined.has(canonicalVarName(r.label)))
   const labelCount = new Map<string, number>()
-  for (const r of results) {
-    labelCount.set(r.label, (labelCount.get(r.label) ?? 0) + 1)
+  for (const r of rest) {
+    const canon = canonicalVarName(r.label)
+    labelCount.set(canon, (labelCount.get(canon) ?? 0) + 1)
   }
   const labelSeen = new Map<string, number>()
-  for (const r of results) {
-    let key = r.label
-    if ((labelCount.get(r.label) ?? 0) > 1) {
-      const seen = (labelSeen.get(r.label) ?? 0) + 1
-      labelSeen.set(r.label, seen)
-      if (seen > 1) key = `${r.label} (${seen})`
+  for (const r of rest) {
+    const canon = canonicalVarName(r.label)
+    let key = canon
+    if ((labelCount.get(canon) ?? 0) > 1) {
+      const seen = (labelSeen.get(canon) ?? 0) + 1
+      labelSeen.set(canon, seen)
+      if (seen > 1) key = `${canon} (${seen})`
     }
-    map.set(key, r.output)
+    if (!map.has(key)) map.set(key, r.output)
   }
 
   return map
+}
+
+/**
+ * Preview-side mirror of the RUN's `inputs.prompt` / `inputs.negativePrompt`
+ * assembly for the `prompt` / `negative` handle, so FinalPromptPreview can show
+ * the wired text that execute-node APPENDS (appendWired / composeNegative) for
+ * generate-image / generate-video.
+ *
+ * Mirrors `node-input-resolver.ts`:
+ *  - LAST-WINS over direct-parent sources on the handle (execution overwrites
+ *    `inputs.prompt = output` per source),
+ *  - PARAMETER_NODE_TYPES on the `prompt` handle are EXCLUDED (they inject via
+ *    collectCinematographyHints, not inputs.prompt),
+ *  - sources placed explicitly as `{label}` (case-insensitive) or with the
+ *    handle's inject toggle off are suppressed (no double).
+ * Returns the RAW (un-ref-resolved) winning output; callers ref-resolve + join
+ * exactly as the run does (resolvePrompt / composeNegative).
+ */
+export function collectWiredPromptContribution(
+  consumerId: string,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  handle: "prompt" | "negative",
+): string {
+  const consumer = nodes.find((n) => n.id === consumerId)
+  const cdata = (consumer?.data ?? {}) as Record<string, unknown>
+  const injectOff = handle === "prompt" ? cdata.injectPrompt === false : cdata.injectNegative === false
+  if (injectOff) return ""
+  const referenced = extractReferencedLabels(
+    cdata.prompt as string | undefined,
+    cdata.negativePrompt as string | undefined,
+  )
+  let last = ""
+  for (const edge of edges) {
+    if (edge.target !== consumerId || edge.targetHandle !== handle) continue
+    const src = nodes.find((n) => n.id === edge.source)
+    if (!src) continue
+    // Parameter pickers on the prompt handle are additive via cinematography
+    // hints (execution skips them from inputs.prompt) — skip here too.
+    if (handle === "prompt" && src.type && PARAMETER_NODE_TYPES.has(src.type)) continue
+    const lbl = canonicalVarName(((src.data as Record<string, unknown>).label as string) || src.type || src.id)
+    if (referenced.has(lbl)) continue
+    let output: string | undefined
+    if (LIST_LIKE_TYPES.has(src.type as string)) {
+      const { mode, itemIndex } = getEdgeOutputMode([edge])
+      output = resolveListOutput(extractListItems(src), mode, itemIndex)
+    } else {
+      output = extractNodeOutput(src)
+    }
+    if (output) last = output
+  }
+  return last
 }
 
 /**
@@ -288,7 +369,9 @@ export function resolveTextRefsSegments(
       // resolveNodeRefs leaves reserved vars literal — fold into the gap push.
       continue
     }
-    const output = refMap.get(name)
+    // exact key first, then lowercase-canonical (node-name vars are
+    // case-insensitive; the refMap is canonical-keyed) — mirrors resolveNodeRefs.
+    const output = refMap.get(name) ?? refMap.get(canonicalVarName(name))
     if (output !== undefined) {
       // Connected output (even empty string) → resolved value, tagged variable.
       pushUser(text.slice(last, idx))

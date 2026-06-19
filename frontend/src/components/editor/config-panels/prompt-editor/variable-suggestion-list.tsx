@@ -1,6 +1,7 @@
 "use client"
 
 import { forwardRef, useImperativeHandle, useState, useEffect } from "react"
+import { canonicalVarName } from "@nodaro/shared"
 import type { NodeRefItem } from "@/lib/node-refs"
 import { useScrollActiveOptionIntoView } from "./use-scroll-active-option-into-view"
 
@@ -114,7 +115,7 @@ export const VariableSuggestionList = forwardRef<VariableSuggestionListHandle, V
                     : "border-sky-400/40 bg-sky-500/10 text-sky-700 dark:text-sky-300"
                 }`}
               >
-                {`{${item.label}}`}
+                {`{${canonicalVarName(item.label)}}`}
               </span>
               <span className="truncate flex-1 min-w-0">{item.label}</span>
               <span className="text-[9px] text-muted-foreground/70 shrink-0 uppercase tracking-wider">
