@@ -40,9 +40,10 @@ import { join } from "node:path"
 import { readFile, rm } from "node:fs/promises"
 import { uploadBufferToR2 } from "../../lib/storage.js"
 import { runPostProcessing } from "../../lib/post-processing-error.js"
-import { KieAudioProvider } from "../../providers/kie/audio.js"
+import { KieAudioProvider, isKieAcceptedVoice } from "../../providers/kie/audio.js"
 import { extractAudioTrack } from "../../providers/video/extract-audio-track.js"
 import { directVoiceChanger } from "../../providers/elevenlabs/voice-changer.js"
+import { directElevenLabsTTS, stripAudioTags } from "../../providers/elevenlabs/direct-tts.js"
 
 /**
  * VEO3 / VEO3.1 always produce a video with background audio per KIE's
@@ -1288,11 +1289,14 @@ const handleGenerateMask: HandlerFn = async function handleGenerateMask(job, ctx
 // ── Voiced video (character-voice orchestration) ─────────────────────────────
 // One job, one combined reservation. Two modes, chosen by the model's audio
 // capability (the route already gated this via videoModelCanSpeakDialogue):
-//   audio_driven (Seedance 2) -> synthesise the dialogue in the character voice(s)
-//     via ElevenLabs Dialogue v3, feed it as reference audio, model lip-syncs.
+//   audio_driven (Seedance 2) -> synthesise the dialogue track (direct ElevenLabs
+//     TTS for single / library / custom voices; Dialogue v3 only for all-premade
+//     multi-speaker), feed it as reference audio, model lip-syncs.
 //   native_speech (VEO)       -> bake the line during generation, then revoice the
 //     baked audio to the primary character voice (keeps the music/SFX bed).
-// If no voice resolves for the mode the clip still generates and the audio addon
+// The voice chain NEVER hard-fails the clip: a synth / revoice failure degrades to
+// a plain silent clip + a `voiceWarning`, and the audio addon auto-refunds. If no
+// voice resolves for the mode the clip still generates and the audio addon
 // auto-refunds (finalize commits at the video provider cost only). No provider
 // call is registered for reconcile: a worker crash re-runs the whole chain on
 // BullMQ retry (credits reserve-once / commit-once; only the provider spend
@@ -1346,6 +1350,47 @@ async function revoiceClipToR2(
   return out
 }
 
+/**
+ * Synthesise the resolved dialogue into ONE reference-audio track (R2 URL) for the
+ * audio_driven (Seedance) path. KIE's Dialogue v3 only accepts ~21 PREMADE voice
+ * NAMES, so it's used ONLY for genuine multi-speaker where every voice is
+ * KIE-premade. Otherwise (single voice, or ANY library / custom voice) we go
+ * through the direct ElevenLabs API — the same path the TTS node uses for
+ * library/custom voices (resolves by id, honours `ttsProvider`). This is the fix
+ * for the Studio bug: a `library` voice UUID sent to Dialogue v3 was rejected
+ * ("Invalid input parameters"). Multiple distinct non-premade voices degrade to
+ * the primary voice (best-effort; proper per-voice multi-speaker needs per-line
+ * concat — fast-follow).
+ */
+async function synthesizeDialogueTrack(
+  ctx: Parameters<HandlerFn>[1],
+  resolved: ResolvedDialogueVoiceLine[],
+  voices: readonly CharacterVoiceSpec[],
+  languageCode: string | undefined,
+): Promise<string> {
+  const distinctVoices = new Set(resolved.map((r) => r.voice))
+  const allPremade = resolved.every((r) => isKieAcceptedVoice(r.voice))
+  if (distinctVoices.size > 1 && allPremade) {
+    // Genuine multi-speaker, every voice KIE-premade → Dialogue v3 (one call).
+    const dia = await new KieAudioProvider().generateDialogue(
+      resolved.map((r) => ({ text: r.text, voice: r.voice })),
+      languageCode ? { languageCode } : undefined,
+    )
+    return runPostProcessing(() => uploadToR2(dia.url, ctx.jobId, "audio", ctx.jobUserId))
+  }
+  // Single voice OR any library/custom voice → direct ElevenLabs TTS (supports
+  // library/custom by id; premade names resolve too). Honour the voice's ttsProvider.
+  const ttsProvider = voices[0]?.ttsProvider
+  const joined = resolved.map((r) => r.text).join(" ")
+  const processed = ttsProvider === "elevenlabs-v3" ? joined : stripAudioTags(joined)
+  const buf = await directElevenLabsTTS(processed, resolved[0]!.voice, ttsProvider, {
+    allowDefaultVoiceFallback: true,
+  })
+  return runPostProcessing(() =>
+    uploadBufferToR2(buf, `audio/${ctx.jobId}.mp3`, "audio/mpeg", ctx.jobUserId),
+  )
+}
+
 const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) {
   const d = job.data as {
     jobId: string
@@ -1377,42 +1422,60 @@ const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) 
   console.log(`[worker] voiced-video ${ctx.jobId} (provider: ${provider}, mode: ${mode}, lines: ${resolved.length})`)
   await setJobProgress(job, ctx.jobId, 5)
 
-  let result: Awaited<ReturnType<typeof imageToVideo>>
-  let finalUrl: string
+  let result: Awaited<ReturnType<typeof imageToVideo>> | undefined
+  let finalUrl: string | undefined
   let voiceApplied = false
+  let voiceWarning: string | undefined
 
   if (mode === "audio_driven" && resolved.length > 0) {
-    // Synthesise the dialogue (each line in its own voice) -> reference audio -> lip-sync.
-    const kieAudio = new KieAudioProvider()
-    const dia = await withProgressRamp(job, ctx.jobId, { start: 5, cap: 30 },
-      () => kieAudio.generateDialogue(
-        resolved.map((r) => ({ text: r.text, voice: r.voice })),
-        d.languageCode ? { languageCode: d.languageCode } : undefined,
-      ))
-    // Re-host on R2 (stable URL for KIE to fetch; provider result URLs can expire).
-    const trackUrl = await runPostProcessing(() => uploadToR2(dia.url, ctx.jobId, "audio", ctx.jobUserId))
-    result = await withProgressRamp(job, ctx.jobId, { start: 30, cap: 90 },
-      () => imageToVideo(d.imageUrl, provider, d.prompt, d.duration, undefined,
-        { referenceAudioUrls: [trackUrl], generateAudio: false, resolution: d.resolution, aspectRatio: d.aspectRatio, seed: d.seed, negativePrompt: d.negativePrompt, referenceImageUrls: d.referenceImageUrls }))
-    finalUrl = await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
-    voiceApplied = true
+    // Synthesise the dialogue track (voiceType-aware) -> reference audio -> lip-sync.
+    // Any failure in this chain degrades to a plain silent clip below rather than
+    // hard-failing the job (the Studio-reported contract violation).
+    try {
+      const trackUrl = await withProgressRamp(job, ctx.jobId, { start: 5, cap: 30 },
+        () => synthesizeDialogueTrack(ctx, resolved, voices, d.languageCode))
+      result = await withProgressRamp(job, ctx.jobId, { start: 30, cap: 90 },
+        () => imageToVideo(d.imageUrl, provider, d.prompt, d.duration, undefined,
+          { referenceAudioUrls: [trackUrl], generateAudio: false, resolution: d.resolution, aspectRatio: d.aspectRatio, seed: d.seed, negativePrompt: d.negativePrompt, referenceImageUrls: d.referenceImageUrls }))
+      finalUrl = await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+      voiceApplied = true
+    } catch (err) {
+      console.warn(`[worker] voiced-video ${ctx.jobId}: audio_driven voice chain failed — falling back to a silent clip: ${err instanceof Error ? err.message : String(err)}`)
+      voiceWarning = "voice_chain_failed"
+      result = undefined
+      finalUrl = undefined
+    }
   } else if (mode === "native_speech" && primaryVoiceId) {
     // Bake the line during generation (VEO speaks + lip-syncs), then revoice it.
+    // If ONLY the revoice fails, keep the baked clip (it spoke, just not in the
+    // exact saved voice) rather than discarding a paid-for generation.
     const spoken = resolved.map((r) => r.text).join(" ").trim()
     const veoPrompt = spoken ? `${(d.prompt ?? "").trim()}\n\nSpoken dialogue: "${spoken}"`.trim() : (d.prompt ?? "")
     result = await withProgressRamp(job, ctx.jobId, { start: 5, cap: 55 },
       () => imageToVideo(d.imageUrl, provider, veoPrompt, d.duration, undefined,
         { generateAudio: true, resolution: d.resolution, aspectRatio: d.aspectRatio, seed: d.seed, negativePrompt: d.negativePrompt }))
-    finalUrl = await revoiceClipToR2(job, ctx, result.url, primaryVoiceId)
-    voiceApplied = true
-  } else {
-    // No voice resolvable for this mode -> plain generation. The reserved audio
-    // addon auto-refunds (finalize commits at the video provider cost only).
-    console.warn(`[worker] voiced-video ${ctx.jobId}: no voice resolved (mode=${mode}); generating without voice`)
-    result = await withProgressRamp(job, ctx.jobId, { start: 5, cap: 90 },
+    try {
+      finalUrl = await revoiceClipToR2(job, ctx, result.url, primaryVoiceId)
+      voiceApplied = true
+    } catch (err) {
+      console.warn(`[worker] voiced-video ${ctx.jobId}: revoice failed — keeping the model's baked audio: ${err instanceof Error ? err.message : String(err)}`)
+      voiceWarning = "revoice_failed"
+      finalUrl = await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+    }
+  }
+
+  if (!result || !finalUrl) {
+    // No voice resolvable for this mode, OR the audio_driven voice chain failed
+    // above -> plain silent clip. The reserved audio addon auto-refunds (finalize
+    // commits at the video provider cost only, voiceApplied=false).
+    if (!voiceWarning) {
+      console.warn(`[worker] voiced-video ${ctx.jobId}: no voice resolved (mode=${mode}); generating without voice`)
+    }
+    result = await withProgressRamp(job, ctx.jobId, { start: 30, cap: 90 },
       () => imageToVideo(d.imageUrl, provider, d.prompt, d.duration, undefined,
         { generateAudio: d.generateAudio, sound: d.sound, resolution: d.resolution, aspectRatio: d.aspectRatio, seed: d.seed, negativePrompt: d.negativePrompt, referenceImageUrls: d.referenceImageUrls }))
     finalUrl = await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+    voiceApplied = false
   }
 
   await setJobProgress(job, ctx.jobId, 95)
@@ -1426,10 +1489,15 @@ const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) 
     // Charge the audio step only when it ran; otherwise finalize commits at the
     // video provider cost and the reserved addon is refunded automatically.
     extraNonProviderCredits: voiceApplied ? audioAddon : 0,
-    extraOutputData: { thumbnailUrl: thumbUrl, voiceApplied, ...buildProviderMeta(result) },
+    extraOutputData: {
+      thumbnailUrl: thumbUrl,
+      voiceApplied,
+      ...(voiceWarning ? { voiceWarning } : {}),
+      ...buildProviderMeta(result),
+    },
   })
   if (!ok) return
-  console.log(`[worker] voiced-video ${ctx.jobId} completed (voiceApplied=${voiceApplied}): ${finalUrl}`)
+  console.log(`[worker] voiced-video ${ctx.jobId} completed (voiceApplied=${voiceApplied}${voiceWarning ? `, warning=${voiceWarning}` : ""}): ${finalUrl}`)
 }
 
 export const videoAIHandlers: Record<string, HandlerFn> = {
