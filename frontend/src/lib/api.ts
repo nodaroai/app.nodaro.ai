@@ -3243,12 +3243,13 @@ export async function textToDialogueApi(
   })
 }
 
-export async function voiceChangerApi(audioUrl: string | undefined, voiceId: string, userId?: string, stability?: number, similarityBoost?: number, style?: number, removeBackgroundNoise?: boolean, videoUrl?: string): Promise<{ jobId: string }> {
+export async function voiceChangerApi(audioUrl: string | undefined, voiceId: string, userId?: string, stability?: number, similarityBoost?: number, style?: number, removeBackgroundNoise?: boolean, videoUrl?: string, model?: string): Promise<{ jobId: string }> {
   // Audio mode (audioUrl) or video mode (videoUrl → revoiced video + audio).
   // Video wins server-side when both are sent; the caller only sends one.
   const body: Record<string, unknown> = { voiceId }
   if (audioUrl) body.audioUrl = audioUrl
   if (videoUrl) body.videoUrl = videoUrl
+  if (model) body.model = model
   if (userId) body.userId = userId
   if (stability != null) body.stability = stability
   if (similarityBoost != null) body.similarityBoost = similarityBoost

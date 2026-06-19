@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
+import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { SCRIPT_PROVIDERS } from "@nodaro/shared"
 import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId } from "@nodaro/shared"
@@ -39,6 +40,7 @@ export async function generateScriptRoutes(app: FastifyInstance) {
     }
 
     const modelIdentifier = buildLlmCreditIdentifier("generate-script", llmModel)
+    const mcpClient = extractMcpClient(req.body)
 
     const { data: job, error } = await supabase
       .from("jobs")
@@ -49,6 +51,7 @@ export async function generateScriptRoutes(app: FastifyInstance) {
         user_id: userId,
         status: "pending",
         input_data: buildJobInputData(parsed.data, "generate-script"),
+        ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
       .select("id")
       .single()

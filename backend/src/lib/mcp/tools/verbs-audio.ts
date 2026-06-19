@@ -10,8 +10,9 @@ import {
   parseFailure,
   jobResultWithWidget,
   dispatchJob,
+  JOB_OUTPUT_SCHEMA,
 } from "./_verb-helpers.js"
-import { SUNO_MODELS, SUNO_ADD_TRACK_MODELS } from "@nodaro/shared"
+import { SUNO_MODELS, SUNO_ADD_TRACK_MODELS, SUNO_TITLE_MAX } from "@nodaro/shared"
 
 /**
  * Look up the Suno task / track ids stored on a completed Nodaro job's
@@ -67,9 +68,14 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         "For instrumental tracks set `instrumental: true`; for songs with vocals " +
         "provide `lyrics`.",
       inputSchema: {
-        prompt: z.string().min(1).max(8000),
+        // Cap at 2000 — the tighter of the two downstream routes (minimax
+        // /v1/generate-music = 2000, suno = 5000) so the prompt never trips a
+        // route 400. 2000 chars is ample for a music style/description.
+        prompt: z.string().min(1).max(2000),
         model: z
-          .enum(["suno-v5-5", "suno-v5", "suno", "minimax"])
+          // `suno-v5_5` (underscore) is the catalog id list_models advertises;
+          // accept it as an alias for `suno-v5-5` so a copied id doesn't reject.
+          .enum(["suno-v5-5", "suno-v5_5", "suno-v5", "suno", "minimax"])
           .default("suno-v5-5")
           .describe(
             "Music model. suno-v5-5 (default) is latest with best quality; " +
@@ -104,12 +110,14 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
     },
     },
     async (args) => {
+      // Normalize the `suno-v5_5` alias → `suno-v5-5` so dispatch is uniform.
+      const modelId = args.model === "suno-v5_5" ? "suno-v5-5" : args.model
       // Suno and MiniMax live behind different backend routes — Suno has
       // its own /v1/suno/generate (with internal version select) while
       // MiniMax goes through /v1/generate-music. Dispatch by model id.
-      const isSuno = args.model === "suno" || args.model === "suno-v5" || args.model === "suno-v5-5"
+      const isSuno = modelId === "suno" || modelId === "suno-v5" || modelId === "suno-v5-5"
       const url = isSuno ? "/v1/suno/generate" : "/v1/generate-music"
-      const sunoVersion = args.model === "suno-v5-5" ? "V5_5" : args.model === "suno-v5" ? "V5" : "V4"
+      const sunoVersion = modelId === "suno-v5-5" ? "V5_5" : modelId === "suno-v5" ? "V5" : "V4"
       const payload = isSuno
         ? {
             prompt: args.prompt,
@@ -123,7 +131,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
           }
         : {
             prompt: args.prompt,
-            provider: args.model,
+            provider: modelId,
             duration: args.duration,
             instrumental: args.instrumental,
             lyrics: args.lyrics,
@@ -924,7 +932,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         audio_asset_id: z.string().optional(),
         lyrics: z.string().max(3000).optional(),
         style: z.string().max(500).optional(),
-        title: z.string().max(200).optional(),
+        title: z.string().max(SUNO_TITLE_MAX).optional(),
         instrumental: z.boolean().optional(),
         custom_mode: z.boolean().optional(),
         vocal_gender: z.enum(["male", "female"]).optional(),
@@ -1134,7 +1142,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         loop: z.boolean().optional().describe("Whether the output should loop seamlessly."),
         prompt_influence: z.number().min(0).max(1).optional().describe("How strongly the prompt guides generation (0–1)."),
       },
-      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
         "ui/resourceUri": "ui://nodaro/widget/v3/job-audio",
@@ -1167,7 +1175,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         audio_url: z.string().url().optional(),
         audio_asset_id: z.string().optional().describe("Nodaro audio or video job id."),
       },
-      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
         "ui/resourceUri": "ui://nodaro/widget/v3/job-audio",
@@ -1250,7 +1258,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         tag_audio_events: z.boolean().optional().describe("Annotate non-speech events like [laughter], [music]. Default false."),
         word_timestamps: z.boolean().optional().describe("Include per-word start/end timestamps. Default false."),
       },
-      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     async (args) => {
@@ -1286,7 +1294,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         text: z.string().min(1).max(5000).describe("Text to speak."),
         voice_description: z.string().min(1).max(1000).describe("Natural-language description of the voice (e.g. 'a warm, mid-40s British woman with a calm news-anchor tone')."),
       },
-      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
         "ui/resourceUri": "ui://nodaro/widget/v3/job-audio",
@@ -1315,7 +1323,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         prompt: z.string().min(1).max(3000).describe("Song description or inspiration prompt."),
         model: z.enum(SUNO_MODELS).optional().describe(`Suno model. Default V5_5. Options: ${SUNO_MODELS.join(", ")}.`),
         style: z.string().max(500).optional().describe("Musical style tags (e.g. 'lo-fi hip-hop, melancholy, piano')."),
-        title: z.string().max(200).optional(),
+        title: z.string().max(SUNO_TITLE_MAX).optional(),
         lyrics: z.string().max(3000).optional().describe("Full lyrics (only used when custom_mode=true)."),
         negative_style: z.string().max(500).optional().describe("Styles to avoid."),
         vocal_gender: z.enum(["male", "female"]).optional(),
@@ -1325,7 +1333,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         weirdness: z.number().min(0).max(1).optional(),
         audio_weight: z.number().min(0).max(1).optional(),
       },
-      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
         "ui/resourceUri": "ui://nodaro/widget/v3/job-audio",
@@ -1365,7 +1373,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       inputSchema: {
         prompt: z.string().min(1).max(1000).describe("Topic or theme for the lyrics (e.g. 'a heartbreak ballad about summer')."),
       },
-      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     async (args) => {
@@ -1387,12 +1395,12 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         audio_url_2: z.string().url().optional().describe("Second track URL."),
         audio_asset_id_2: z.string().optional().describe("Second track Nodaro audio job id."),
         style: z.string().max(500).optional(),
-        title: z.string().max(200).optional(),
+        title: z.string().max(SUNO_TITLE_MAX).optional(),
         negative_style: z.string().max(500).optional(),
         vocal_gender: z.enum(["male", "female"]).optional(),
         custom_mode: z.boolean().optional(),
       },
-      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
         "ui/resourceUri": "ui://nodaro/widget/v3/job-audio",
@@ -1435,9 +1443,9 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         infill_end_s: z.number().min(6).max(60).describe("End time in seconds (must be ≥ start + 6, max 60)."),
         prompt: z.string().min(1).max(3000).describe("Description of what to generate for the replaced region."),
         tags: z.string().max(500).describe("Style tags for the replacement segment."),
-        title: z.string().max(200).optional(),
+        title: z.string().max(SUNO_TITLE_MAX).optional(),
       },
-      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
         "ui/resourceUri": "ui://nodaro/widget/v3/job-audio",
@@ -1474,7 +1482,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       inputSchema: {
         content: z.string().min(1).max(3000).describe("Style description to enhance (e.g. 'lo-fi chill')."),
       },
-      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     async (args) => {
@@ -1494,7 +1502,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         audio_asset_id: z.string().min(1).describe("Nodaro audio job id of a Suno track."),
         model: z.enum(SUNO_ADD_TRACK_MODELS).optional().describe(`Suno model for the new layer. Options: ${SUNO_ADD_TRACK_MODELS.join(", ")}. Default V5_5.`),
       },
-      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
         "ui/resourceUri": "ui://nodaro/widget/v3/job-audio",
@@ -1520,7 +1528,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         audio_asset_id: z.string().min(1).describe("Nodaro audio job id of a Suno track."),
         model: z.enum(SUNO_ADD_TRACK_MODELS).optional().describe(`Suno model for the vocals. Options: ${SUNO_ADD_TRACK_MODELS.join(", ")}. Default V5_5.`),
       },
-      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
         "ui/resourceUri": "ui://nodaro/widget/v3/job-audio",
@@ -1545,7 +1553,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       inputSchema: {
         audio_asset_id: z.string().min(1).describe("Nodaro audio job id of a Suno track."),
       },
-      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
         "ui/resourceUri": "ui://nodaro/widget/v3/job-audio",
@@ -1573,12 +1581,12 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         continue_at: z.number().min(0).describe("Timestamp (seconds) from which Suno continues generating."),
         model: z.enum(SUNO_MODELS).optional().describe(`Suno model. Default V5_5. Options: ${SUNO_MODELS.join(", ")}.`),
         style: z.string().max(500).optional(),
-        title: z.string().max(200).optional(),
+        title: z.string().max(SUNO_TITLE_MAX).optional(),
         negative_style: z.string().max(500).optional(),
         vocal_gender: z.enum(["male", "female"]).optional(),
         use_default_params: z.boolean().optional().describe("Use Suno defaults instead of the supplied style/title. Default false."),
       },
-      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
         "ui/resourceUri": "ui://nodaro/widget/v3/job-audio",

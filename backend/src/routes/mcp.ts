@@ -36,12 +36,23 @@ export async function registerMcpRoute(app: FastifyInstance): Promise<void> {
   // `app.all()` covers POST (JSON-RPC requests) and GET (SSE upgrade for
   // server-initiated notifications). The SDK transport handles both shapes.
   //
-  // bodyLimit is bumped to 32 MB so the upload_image / upload_audio /
-  // upload_video tools can carry base64-encoded media in their args.
-  // Single-shot uploads use up to ~21 MB decoded (after base64 inflation
-  // of ~33%); larger files use the chunked variant which sends ~5 MB
-  // chunks, well under the cap.
-  app.all("/mcp", { bodyLimit: 32 * 1024 * 1024 }, async (req, reply) => {
+  // bodyLimit: the inline-base64 upload tools were removed (uploads now go
+  // through presigned/handoff/widget paths), so the old 32 MB ceiling is
+  // obsolete. 8 MB comfortably covers the largest remaining payloads
+  // (import_workflow / update_workflow_json JSON) while shrinking the
+  // amplification surface of every other JSON-RPC call ~4×.
+  //
+  // rateLimit: the limiter is registered global:false, so opt the route in
+  // here. The keyGenerator hashes the Authorization header (per-token), and
+  // 600/min comfortably absorbs legitimate widget polling (get_asset every
+  // 2s ≈ 30/min per active widget) while capping runaway/abusive clients.
+  app.all(
+    "/mcp",
+    {
+      bodyLimit: 8 * 1024 * 1024,
+      config: { rateLimit: { max: 600, timeWindow: "1 minute" } },
+    },
+    async (req, reply) => {
     if (!req.userId) {
       return reply
         .status(401)
@@ -78,12 +89,23 @@ export async function registerMcpRoute(app: FastifyInstance): Promise<void> {
  * Falls back to "Unknown MCP client" if the row was deleted or has a
  * null/empty name.
  */
+// Cache appId → client name (5-min TTL, mirrors the auth token cache). The
+// app name changes ~never, but resolveClientName runs on EVERY /mcp request —
+// including each 2s widget poll — so an uncached lookup was a redundant
+// developer_apps round-trip per poll.
+const clientNameCache = new Map<string, { name: string; expires: number }>()
+const CLIENT_NAME_TTL_MS = 5 * 60 * 1000
+
 async function resolveClientName(appId: string): Promise<string> {
+  const cached = clientNameCache.get(appId)
+  if (cached && cached.expires > Date.now()) return cached.name
   const { supabase } = await import("../lib/supabase.js")
   const { data } = await supabase
     .from("developer_apps")
     .select("name")
     .eq("id", appId)
     .maybeSingle()
-  return (data?.name as string) || "Unknown MCP client"
+  const name = (data?.name as string) || "Unknown MCP client"
+  clientNameCache.set(appId, { name, expires: Date.now() + CLIENT_NAME_TTL_MS })
+  return name
 }

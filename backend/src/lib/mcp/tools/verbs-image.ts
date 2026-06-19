@@ -10,8 +10,10 @@ import {
   errorResult,
   dispatchJob,
   resolveRefArray,
+  StructuredFields,
+  JOB_OUTPUT_SCHEMA,
 } from "./_verb-helpers.js"
-import { modelIdsByKindMode } from "@nodaro/shared"
+import { modelIdsByKindMode, MODIFY_IMAGE_PROVIDERS } from "@nodaro/shared"
 import { getUserMcpPreferences } from "../user-preferences.js"
 import { normalizeImageInput } from "../normalize.js"
 
@@ -33,51 +35,6 @@ const I2I_MODEL_IDS = modelIdsByKindMode("image", ["i2i", "edit"], { includeHidd
  * for the canonical pattern; subsequent verbs in this file follow the same
  * shape.
  */
-const StructuredFields = z
-  .object({
-    person: z
-      .object({
-        age: z.number().int().min(0).max(120).optional(),
-        gender: z.enum(["man", "woman", "child", "non-binary"]).optional(),
-        hair: z.string().optional(),
-        eyes: z.string().optional(),
-        expression: z.string().optional(),
-        profession: z.string().optional(),
-        warriorType: z.string().optional(),
-      })
-      .optional(),
-    styling: z
-      .object({
-        mood: z.string().optional(),
-        lighting: z.string().optional(),
-        aesthetic: z.string().optional(),
-        colorLook: z.string().optional(),
-      })
-      .optional(),
-    setting: z
-      .object({
-        era: z.string().optional(),
-        atmosphere: z.string().optional(),
-        backdrop: z.string().optional(),
-      })
-      .optional(),
-    camera: z
-      .object({
-        framing: z.string().optional(),
-        motion: z.string().optional(),
-        format: z.string().optional(),
-      })
-      .optional(),
-    lens: z
-      .object({
-        focalLength: z.string().optional(),
-        aperture: z.string().optional(),
-      })
-      .optional(),
-    mood: z.string().optional(),
-  })
-  .partial()
-
 const executeGate: ToolGate = { required: ["workflows:execute"] }
 
 export interface RegisterOpts {
@@ -406,6 +363,15 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           "nano-banana-2",
         )
 
+        // The /v1/image-to-image route validates against MODIFY_IMAGE_PROVIDERS.
+        // normalizeImageInput keeps any valid catalog id verbatim — including
+        // edit-only models (recraft-remove-bg, gpt-image-2) that this i2i route
+        // can't run. Snap anything outside the accepted set to the default so an
+        // advertised-but-unsupported model degrades to a working edit, not a 400.
+        const provider = (MODIFY_IMAGE_PROVIDERS as readonly string[]).includes(model)
+          ? model
+          : "nano-banana-2"
+
         const imageUrl =
           args.image_url ??
           (args.image_asset_id
@@ -431,7 +397,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         const payload = {
           imageUrl,
           prompt: compositePrompt,
-          provider: model,
+          provider,
           aspectRatio,
           resolution,
           quality,
@@ -447,7 +413,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           widgetKind: "image",
           widgetData: {
             prompt: compositePrompt,
-            model,
+            model: provider,
             aspectRatio,
             resolution,
             userDefaults: {
@@ -699,7 +665,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         prompt: z.string().min(1).max(500).describe("What to mask (e.g. 'the person' or 'sky and clouds')."),
         threshold: z.number().min(0).max(1).optional().describe("Segmentation confidence threshold (0–1). Default 0.3."),
       },
-      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
         "ui/resourceUri": "ui://nodaro/widget/v3/job-image",
@@ -739,7 +705,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         detail_level: z.enum(["brief", "detailed", "comprehensive"]).optional().describe("How much detail to include. Default detailed."),
         custom_prompt: z.string().max(2000).optional().describe("Override the default system prompt with a specific question (e.g. 'List all text visible in the image')."),
       },
-      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     async (args) => {
@@ -777,7 +743,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         target_duration: z.number().int().min(5).max(600).optional().describe("Approximate total video duration in seconds."),
         model: z.enum(["gemini", "claude", "gpt"]).optional().describe("LLM to use. Default gemini."),
       },
-      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     async (args) => {

@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
+import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { SUNO_MODELS, SUNO_ADD_TRACK_MODELS, SUNO_TEXT_MAX, SUNO_TITLE_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars } from "@nodaro/shared"
 import {
@@ -274,6 +275,8 @@ export async function sunoRoutes(app: FastifyInstance) {
         })
       }
 
+      const mcpClient = extractMcpClient(req.body)
+
       const { data: job, error } = await supabase
         .from("jobs")
         .insert({
@@ -283,6 +286,7 @@ export async function sunoRoutes(app: FastifyInstance) {
           user_id: userId,
           status: "pending",
           input_data: buildJobInputData(parsed.data, "suno-generate"),
+          ...(mcpClient ? { mcp_client: mcpClient } : {}),
         })
         .select("id")
         .single()
@@ -351,6 +355,8 @@ export async function sunoRoutes(app: FastifyInstance) {
         })
       }
 
+      const mcpClient = extractMcpClient(req.body)
+
       const { data: job, error } = await supabase
         .from("jobs")
         .insert({
@@ -360,6 +366,7 @@ export async function sunoRoutes(app: FastifyInstance) {
           user_id: userId,
           status: "pending",
           input_data: buildJobInputData(parsed.data, "suno-cover"),
+          ...(mcpClient ? { mcp_client: mcpClient } : {}),
         })
         .select("id")
         .single()
@@ -427,6 +434,8 @@ export async function sunoRoutes(app: FastifyInstance) {
         })
       }
 
+      const mcpClient = extractMcpClient(req.body)
+
       const { data: job, error } = await supabase
         .from("jobs")
         .insert({
@@ -436,6 +445,7 @@ export async function sunoRoutes(app: FastifyInstance) {
           user_id: userId,
           status: "pending",
           input_data: buildJobInputData(parsed.data, "suno-extend"),
+          ...(mcpClient ? { mcp_client: mcpClient } : {}),
         })
         .select("id")
         .single()
@@ -497,6 +507,8 @@ export async function sunoRoutes(app: FastifyInstance) {
         })
       }
 
+      const mcpClient = extractMcpClient(req.body)
+
       const { data: job, error } = await supabase
         .from("jobs")
         .insert({
@@ -506,6 +518,7 @@ export async function sunoRoutes(app: FastifyInstance) {
           user_id: userId,
           status: "pending",
           input_data: buildJobInputData(parsed.data, "suno-lyrics"),
+          ...(mcpClient ? { mcp_client: mcpClient } : {}),
         })
         .select("id")
         .single()
@@ -556,6 +569,8 @@ export async function sunoRoutes(app: FastifyInstance) {
         })
       }
 
+      const mcpClient = extractMcpClient(req.body)
+
       const { data: job, error } = await supabase
         .from("jobs")
         .insert({
@@ -565,6 +580,7 @@ export async function sunoRoutes(app: FastifyInstance) {
           user_id: userId,
           status: "pending",
           input_data: { ...buildJobInputData(parsed.data, "suno-separate"), separateType: type },
+          ...(mcpClient ? { mcp_client: mcpClient } : {}),
         })
         .select("id")
         .single()
@@ -615,6 +631,8 @@ export async function sunoRoutes(app: FastifyInstance) {
         })
       }
 
+      const mcpClient = extractMcpClient(req.body)
+
       const { data: job, error } = await supabase
         .from("jobs")
         .insert({
@@ -624,6 +642,7 @@ export async function sunoRoutes(app: FastifyInstance) {
           user_id: userId,
           status: "pending",
           input_data: buildJobInputData(parsed.data, "suno-music-video"),
+          ...(mcpClient ? { mcp_client: mcpClient } : {}),
         })
         .select("id")
         .single()
@@ -675,6 +694,8 @@ export async function sunoRoutes(app: FastifyInstance) {
         })
       }
 
+      const mcpClient = extractMcpClient(req.body)
+
       const { data: job, error } = await supabase
         .from("jobs")
         .insert({
@@ -684,6 +705,7 @@ export async function sunoRoutes(app: FastifyInstance) {
           user_id: userId,
           status: "pending",
           input_data: buildJobInputData(parsed.data, "suno-mashup"),
+          ...(mcpClient ? { mcp_client: mcpClient } : {}),
         })
         .select("id")
         .single()
@@ -737,6 +759,8 @@ export async function sunoRoutes(app: FastifyInstance) {
         })
       }
 
+      const mcpClient = extractMcpClient(req.body)
+
       const { data: job, error } = await supabase
         .from("jobs")
         .insert({
@@ -746,6 +770,7 @@ export async function sunoRoutes(app: FastifyInstance) {
           user_id: userId,
           status: "pending",
           input_data: buildJobInputData(parsed.data, "suno-replace-section"),
+          ...(mcpClient ? { mcp_client: mcpClient } : {}),
         })
         .select("id")
         .single()
@@ -800,6 +825,8 @@ export async function sunoRoutes(app: FastifyInstance) {
       }
 
       // Create a job for credit tracking
+      const mcpClient = extractMcpClient(req.body)
+
       const { data: job, error } = await supabase
         .from("jobs")
         .insert({
@@ -809,6 +836,7 @@ export async function sunoRoutes(app: FastifyInstance) {
           user_id: userId,
           status: "pending",
           input_data: buildJobInputData(parsed.data, "suno-style-boost"),
+          ...(mcpClient ? { mcp_client: mcpClient } : {}),
         })
         .select("id")
         .single()
@@ -883,6 +911,8 @@ export async function sunoRoutes(app: FastifyInstance) {
         })
       }
 
+      const mcpClient = extractMcpClient(req.body)
+
       const { data: job, error } = await supabase
         .from("jobs")
         .insert({
@@ -892,6 +922,7 @@ export async function sunoRoutes(app: FastifyInstance) {
           user_id: userId,
           status: "pending",
           input_data: buildJobInputData(parsed.data, "suno-add-instrumental"),
+          ...(mcpClient ? { mcp_client: mcpClient } : {}),
         })
         .select("id")
         .single()
@@ -941,6 +972,8 @@ export async function sunoRoutes(app: FastifyInstance) {
         })
       }
 
+      const mcpClient = extractMcpClient(req.body)
+
       const { data: job, error } = await supabase
         .from("jobs")
         .insert({
@@ -950,6 +983,7 @@ export async function sunoRoutes(app: FastifyInstance) {
           user_id: userId,
           status: "pending",
           input_data: buildJobInputData(parsed.data, "suno-add-vocals"),
+          ...(mcpClient ? { mcp_client: mcpClient } : {}),
         })
         .select("id")
         .single()
@@ -999,6 +1033,8 @@ export async function sunoRoutes(app: FastifyInstance) {
         })
       }
 
+      const mcpClient = extractMcpClient(req.body)
+
       const { data: job, error } = await supabase
         .from("jobs")
         .insert({
@@ -1008,6 +1044,7 @@ export async function sunoRoutes(app: FastifyInstance) {
           user_id: userId,
           status: "pending",
           input_data: buildJobInputData(parsed.data, "suno-convert-wav"),
+          ...(mcpClient ? { mcp_client: mcpClient } : {}),
         })
         .select("id")
         .single()
@@ -1059,6 +1096,8 @@ export async function sunoRoutes(app: FastifyInstance) {
         })
       }
 
+      const mcpClient = extractMcpClient(req.body)
+
       const { data: job, error } = await supabase
         .from("jobs")
         .insert({
@@ -1068,6 +1107,7 @@ export async function sunoRoutes(app: FastifyInstance) {
           user_id: userId,
           status: "pending",
           input_data: buildJobInputData(parsed.data, "suno-upload-extend"),
+          ...(mcpClient ? { mcp_client: mcpClient } : {}),
         })
         .select("id")
         .single()
@@ -1272,6 +1312,7 @@ export async function sunoRoutes(app: FastifyInstance) {
 
       // Step 1 — create a jobs row so credit lifecycle (reserve/commit/refund)
       // is consistent with the rest of the codebase.
+      const mcpClient = extractMcpClient(req.body)
       const { data: job, error: jobErr } = await supabase
         .from("jobs")
         .insert({
@@ -1281,6 +1322,7 @@ export async function sunoRoutes(app: FastifyInstance) {
           user_id: userId,
           status: "pending",
           input_data: buildJobInputData(parsed.data, "suno-voice-create"),
+          ...(mcpClient ? { mcp_client: mcpClient } : {}),
         })
         .select("id")
         .single()

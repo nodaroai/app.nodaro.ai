@@ -8,7 +8,7 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate, extractProvider 
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { llmComplete } from "../lib/llm-client.js"
-import { IMAGE_I2I_PROVIDERS, IMAGE_PROMPT_MAX, PROMPT_HARD_CEILING } from "@nodaro/shared"
+import { MODIFY_IMAGE_PROVIDERS, IMAGE_PROMPT_MAX, PROMPT_HARD_CEILING } from "@nodaro/shared"
 import { buildCreditModelIdentifier } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 import {
@@ -22,7 +22,11 @@ const imageToImageBody = z.object({
   // Generous ceiling; per-model truncation happens in the assembler (warn-don't-block).
   prompt: z.string().min(1).max(PROMPT_HARD_CEILING),
   userPrompt: z.string().max(8000).optional(),
-  provider: z.enum(IMAGE_I2I_PROVIDERS).optional(),
+  // MODIFY_IMAGE_PROVIDERS = IMAGE_I2I_PROVIDERS + nano-banana-edit (the KIE
+  // i2i path handles it — see providers/kie/image.ts). Using the wider set
+  // lets the MCP modify_image tool pass nano-banana-edit without a 400; it's
+  // a superset so existing i2i callers are unaffected.
+  provider: z.enum(MODIFY_IMAGE_PROVIDERS).optional(),
   referenceImageUrls: z.array(safeUrlSchema).max(13).optional(),
   resolution: z.enum(["1K", "2K", "4K", "0.5 MP", "1 MP", "2 MP", "4 MP"]).optional(),
   quality: z.enum(["medium", "high", "basic"]).optional(),

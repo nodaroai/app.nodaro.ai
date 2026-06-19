@@ -11,25 +11,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { VIDEO_PRODUCER_TYPES } from "@nodaro/shared"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { MergeVideoAudioData } from "@/types/nodes"
 import type { ConfigProps } from "./types"
-
-const AUDIO_SOURCE_TYPES = new Set([
-  "text-to-speech", "generate-music", "text-to-audio",
-  "upload-audio", "reference-audio", "trim-audio",
-  "adjust-volume", "mix-audio",
-  "suno-separate", "suno-generate", "suno-cover", "suno-extend",
-  "suno-mashup", "suno-add-vocals", "suno-add-instrumental",
-  "suno-convert-wav", "suno-upload-extend", "split-media",
-])
-
-const VIDEO_SOURCE_TYPES = new Set([
-  "image-to-video", "video-to-video", "text-to-video",
-  "lip-sync", "motion-transfer", "video-upscale",
-  "combine-videos", "add-captions", "resize-video", "trim-video", "speed-ramp", "loop-video", "fade-video",
-  "render-video", "upload-video", "youtube-video",
-])
+import { classifyMergeSource } from "./merge-audio-classify"
 
 const TRACK_ROLE_OPTIONS = [
   { value: "dialogue", label: "Dialogue", icon: Mic, color: "text-pink-400 bg-pink-500/15" },
@@ -46,7 +32,7 @@ function getTrackIcon(sourceType: string) {
   if (sourceType === "text-to-speech") return Mic
   if (sourceType === "generate-music") return Music
   if (sourceType === "text-to-audio") return AudioWaveform
-  if (VIDEO_SOURCE_TYPES.has(sourceType)) return Film
+  if (VIDEO_PRODUCER_TYPES.has(sourceType)) return Film
   return Volume2
 }
 
@@ -66,19 +52,19 @@ export function MergeVideoAudioConfig({ data, onUpdate, nodes }: ConfigProps<Mer
   const { videoSource, audioSources } = useMemo(() => {
     if (!selectedNodeId) return { videoSource: null, audioSources: [] }
     const incomingEdges = edges.filter((e) => e.target === selectedNodeId)
-    const sourceNodes = incomingEdges
-      .map((e) => nodes.find((n) => n.id === e.source))
-      .filter((n): n is typeof nodes[number] => n !== undefined)
 
     let firstVideo: typeof nodes[number] | null = null
     const audios: typeof nodes[number][] = []
+    const seen = new Set<string>()
 
-    for (const src of sourceNodes) {
+    for (const edge of incomingEdges) {
+      const src = nodes.find((n) => n.id === edge.source)
+      if (!src || seen.has(src.id)) continue
+      const handle = edge.sourceHandle as string | undefined
+
       // Resolve sub-workflow output port media type from the edge's sourceHandle
       let effectiveType = src.type as string
       if (src.type === "sub-workflow" || src.type === "sub-workflow-input") {
-        const srcEdge = incomingEdges.find((e) => e.source === src.id)
-        const handle = srcEdge?.sourceHandle as string | undefined
         const srcData = src.data as Record<string, unknown>
         const snapshot = srcData.routeSnapshot as { outputPorts?: Array<{ id: string; mediaType: string }> } | undefined
         const ports = (src.type === "sub-workflow-input")
@@ -92,12 +78,15 @@ export function MergeVideoAudioConfig({ data, onUpdate, nodes }: ConfigProps<Mer
         }
       }
 
-      if (!firstVideo && (VIDEO_SOURCE_TYPES.has(effectiveType) || effectiveType === "__video__")) {
-        firstVideo = src
-      } else if (AUDIO_SOURCE_TYPES.has(effectiveType) || effectiveType === "__audio__") {
+      const kind = classifyMergeSource(effectiveType, handle)
+      if (kind === "video") {
+        // First video becomes the base; any extra video has its audio extracted.
+        if (!firstVideo) firstVideo = src
+        else audios.push(src)
+        seen.add(src.id)
+      } else if (kind === "audio") {
         audios.push(src)
-      } else if (firstVideo && (VIDEO_SOURCE_TYPES.has(effectiveType) || effectiveType === "__video__")) {
-        audios.push(src)
+        seen.add(src.id)
       }
     }
     return { videoSource: firstVideo, audioSources: audios }
@@ -239,7 +228,7 @@ export function MergeVideoAudioConfig({ data, onUpdate, nodes }: ConfigProps<Mer
               })
               .map((src, idx) => {
               const srcLabel = (src.data as Record<string, unknown>).label as string ?? src.type
-              const isVideoSource = VIDEO_SOURCE_TYPES.has(src.type)
+              const isVideoSource = VIDEO_PRODUCER_TYPES.has(src.type)
               const TrackIcon = getTrackIcon(src.type)
               const vol = getTrackSetting(src.id, "volume") as number
               const startTime = getTrackSetting(src.id, "startTime") as number

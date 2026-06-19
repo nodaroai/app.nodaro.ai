@@ -649,9 +649,10 @@ function registerGenerationTools({
         "`source_image_url` (override) > the character's `front` body angle " +
         "(full-body framing produces much better motion than a portrait " +
         "headshot) > any other body angle > the anchor portrait. " +
-        "Generate body angles first via `generate_character_asset` with " +
-        "`asset_type=bodyAngles` and `attach_to_column=body_angles` for the " +
-        "best motion results. The motion_prompt describes WHAT moves and " +
+        "Generate body angles first via `generate_character` " +
+        "(`kind='asset'`, `asset_type='bodyAngles'`, " +
+        "`attach_to_character_id=<id>`) for the best motion results. " +
+        "The motion_prompt describes WHAT moves and " +
         "HOW (e.g. 'slow head turn left, eyes track the camera, soft " +
         "smile'). Returns the i2v job id — poll via `get_job` until " +
         "completion. Credit cost depends on the provider.",

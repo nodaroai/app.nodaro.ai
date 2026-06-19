@@ -1,4 +1,5 @@
 import type { GenericNode, GenericEdge } from "./types.js"
+import { EXECUTION_DATA_KEYS } from "./node-runtime-keys.js"
 
 /** A named media variant (expression, pose, angle, etc.) produced during entity generation. */
 interface AssetVariant {
@@ -88,15 +89,15 @@ export interface WorkflowExport {
   }
 }
 
-/** Top-level node data fields that hold generated/transient content and should be cleared on template export. */
-const GENERATED_FIELDS = [
-  "generatedResults",
-  "generatedImageUrl",
-  "sourceImageUrl",
-  "executionStatus",
-  "activeResultIndex",
-  "assetId",
-] as const
+/**
+ * Top-level node data fields cleared on template export. Built from
+ * EXECUTION_DATA_KEYS (the single source of truth for runtime/result keys) so
+ * a new result field is stripped by default — never re-leak generated media
+ * URLs, job ids, or trained-LoRA identity (loraReplicateVersion /
+ * loraTriggerWord / outputResults / generatedVideoUrl / …) into a shareable
+ * template. `assetId` is the one non-runtime extra (a library-asset pointer).
+ */
+const GENERATED_FIELDS: readonly string[] = [...EXECUTION_DATA_KEYS, "assetId"]
 
 /** Per-node-type extra generated fields beyond GENERATED_FIELDS. Unknown types get no extras ([] default). */
 const NODE_EXTRA_FIELDS: Record<string, string[]> = {
@@ -114,6 +115,14 @@ const NODE_EXTRA_FIELDS: Record<string, string[]> = {
     "referencePhotos",
     "canonicalDescription",
   ],
+  // Strip the exporter's private face-row pointer + variants from templates
+  // (faceDbId points at a row the importer doesn't own — see workflow-assets
+  // import remap, which also clears it).
+  face: ["faceDbId", "expressions", "customVariations"],
+  // A template shouldn't carry a link to a specific child workflow id (it's
+  // the exporter's, and unremapped on import). Strip it so the node lands
+  // unlinked rather than dangling at the exporter's workflow.
+  "sub-workflow": ["referencedWorkflowId"],
 }
 
 /** Strip generated/transient content from nodes for template export. Returns new node objects; inputs are not mutated. */

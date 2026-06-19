@@ -52,6 +52,7 @@ import type {
   ForcedAlignmentData,
   GeneratedScript,
 } from "@/types/nodes"
+import { VOICE_CHANGER_MODELS } from "@nodaro/shared"
 import { MappableField } from "./mappable-field"
 import { PromptHelperButton } from "./prompt-helper-button"
 import { SnippetMenuButton } from "./snippet-menu-button"
@@ -1718,6 +1719,23 @@ export function VoiceChangerConfig({ data, onUpdate, nodeRefs }: ConfigProps<Voi
           }}
           showCustomVoices
         />
+      </div>
+      <div>
+        <Label htmlFor="vc-model">Model</Label>
+        <Select
+          value={data.model || "eleven_english_sts_v2"}
+          onValueChange={(v) => onUpdate({ model: v as VoiceChangerData["model"] })}
+        >
+          <SelectTrigger id="vc-model" aria-label="Model"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {VOICE_CHANGER_MODELS.map((m) => (
+              <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-[10px] text-muted-foreground mt-1">
+          {VOICE_CHANGER_MODELS.find((m) => m.value === (data.model || "eleven_english_sts_v2"))?.desc}
+        </p>
       </div>
       <div>
         <Label htmlFor="vc-stability">Stability ({data.stability ?? 0.5})</Label>

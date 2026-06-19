@@ -32,6 +32,7 @@ import { registerTaskHandlers } from "./tasks.js"
 import { startProgressEmitter as _startProgressEmitter } from "./progress-emitter.js"
 void _startProgressEmitter
 import { registerWidgetResources } from "./widgets/registrar.js"
+import { hasCredits } from "../config.js"
 import type { Scope } from "../scopes.js"
 
 interface BuildOpts {
@@ -123,9 +124,18 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
   registerObjectTools({ server, session, fastify: opts.fastify })
   registerCreatureTools({ server, session, fastify: opts.fastify })
   registerUploadTools({ server, session })
-  registerFilmDirectorTool(server, session)
   registerSkillLoaders(server, session)
-  registerPipelineTools({ server, session })
+  // Film Director + Pipelines are a Cloud-only (EE) feature: the pipeline
+  // worker / reconcile-cron / event-bridge only start when hasCredits()
+  // (see server.ts startup). The MCP tools dispatch to the ee/pipelines
+  // services directly (bypassing the HTTP route's gateEdition() 403), so on
+  // community/business they would enqueue work no worker consumes and hang at
+  // `pending`. Gate registration on the edition so they don't appear in
+  // tools/list off-cloud — mirrors models.ts gating check_balance.
+  if (hasCredits()) {
+    registerFilmDirectorTool(server, session)
+    registerPipelineTools({ server, session })
+  }
   registerReduce({ server, session, fastify: opts.fastify })
   registerPromptHelper({ server, session, fastify: opts.fastify })
   registerPresets({ server, session, fastify: opts.fastify })

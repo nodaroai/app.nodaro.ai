@@ -111,7 +111,6 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Bytedance Pro I2V | Bytedance | Standard | 18 | i2v, t2v | Pro Bytedance video tier — better quality. |
 | Wan 2.6 | Alibaba | Standard | 18 | v2v, t2v | Wan 2.6 — text-to-video and video-to-video under a single id. |
 | Wan 2.6 I2V | Alibaba | Standard | 18 | i2v | Wan 2.6 image-to-video — 5/10/15s at 720p/1080p. |
-| Hailuo Avatar | MiniMax | Standard | 19 | lip-sync | MiniMax avatar lip-sync. |
 | Topaz Video Upscale | Topaz | Standard | 19 | video-upscale | High-quality video upscale and enhancement. |
 | VEO Extend | Google | Standard | 19 | extend | Extend an existing VEO 3.1 clip by another segment. |
 | Wan 2.7 I2V | Alibaba | Standard | 19 | i2v | Wan 2.7 image-to-video — 2–15s at 720p/1080p, supports start+end frame. |
@@ -155,7 +154,6 @@ Text-to-speech, voice cloning/design/changing, dubbing, sound effects, transcrip
 | Suno v4 | Suno | Everyday | 3 | music | Suno v4 music generation — full songs with vocals, multiple genres. |
 | Suno v5 | Suno | Everyday | 3 | music | Newer Suno v5 — better vocal quality, more genres. Same price as v4. |
 | ⭐ Suno v5.5 | Suno | Everyday | 3 | music | Suno v5.5 — latest model with improved audio quality and expressiveness. |
-| ElevenLabs Dialogue v3 | ElevenLabs | Standard | 4 | tts | Multi-speaker dialogue TTS — give it a script, it voices each role. |
 | ElevenLabs Voice Changer | ElevenLabs | Standard | 4 | voice-changer | Speech-to-speech: convert one voice to another while preserving prosody. |
 | ElevenLabs Voice Design | ElevenLabs | Standard | 5 | voice-design | Design a synthetic voice from a description (no reference clip needed). |
 | Voice Clone (Instant) | ElevenLabs | Standard | 5 | voice-clone | Clone a voice from a short reference clip. Instant clone via direct ElevenLabs API. |

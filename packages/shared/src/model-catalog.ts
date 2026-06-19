@@ -1656,6 +1656,10 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     description: "MiniMax avatar lip-sync.",
     useCases: ["lip-sync", "talking-head"],
     pricing: [{ identifier: "hailuo-avatar", credits: 19 }],
+    // Not wired in any provider / not in LIP_SYNC_PROVIDERS — hide from MCP
+    // list_models so the lip_sync tool can't advertise a model its route
+    // rejects with a 400. Re-expose when the provider lands.
+    mcpHidden: true,
   },
   "sync-lipsync-v3": {
     id: "sync-lipsync-v3",
@@ -1727,6 +1731,11 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Multi-speaker dialogue TTS — give it a script, it voices each role.",
     useCases: ["tts", "dialogue", "multi-speaker"],
     pricing: [{ identifier: "elevenlabs-dialogue", credits: 4, note: "per 1K chars" }],
+    // Driven only via the dialogue/character-voice path (multi-speaker script
+    // shape), NOT the single-text generate_speech verb. Hide from MCP
+    // list_models so generate_speech (TTS_PROVIDERS) can't advertise it and
+    // then 400. Re-expose if a dialogue-capable MCP verb is added.
+    mcpHidden: true,
   },
 
   // ── ElevenLabs voice utilities ──

@@ -468,6 +468,19 @@ export function remapNodeAssetIds<T extends Record<string, unknown>>(
         data[field] = idMap.get(oldId)
       }
     }
+    // Reference fields that are NOT bundled/remapped point at rows the importer
+    // doesn't own. Clear them so the node lands unlinked rather than dangling at
+    // the exporter's private row: `faceDbId` (the face node regenerates from its
+    // inline data — the backend never reads faceDbId) and `referencedWorkflowId`
+    // (a sub-workflow node's target; lands unlinked, fails fast rather than
+    // silently resolving to the exporter's workflow). The `!idMap.has` guard
+    // keeps this correct if either field ever joins ASSET_FIELDS (bundled).
+    for (const field of ["faceDbId", "referencedWorkflowId"] as const) {
+      const oldId = data[field]
+      if (typeof oldId === "string" && oldId && !idMap.has(oldId)) {
+        data[field] = ""
+      }
+    }
     return { ...node, data }
   })
 }

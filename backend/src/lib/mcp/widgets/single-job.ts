@@ -373,6 +373,13 @@ ${uiProtocolShim()}
     // the job lands — stateless HTTP transport can't deliver async progress
     // notifications, so polling via tools/call is the only path that works.
     window.addEventListener('mcp-tool-result', function(e) {
+      // Synchronous tool error (e.g. 402 out-of-credits, 400 validation, 503):
+      // the result carries isError + a text message and NO structuredContent.
+      // Show a terminal status instead of hanging on "Loading…" forever.
+      if (e.detail && e.detail.isError) {
+        statusEl.textContent = 'Generation failed — see the message above.';
+        return;
+      }
       var sc = (e.detail && e.detail.structuredContent) || {};
       if (sc.jobId) state.jobId = sc.jobId;
       if (sc.model) state.model = sc.model;
@@ -385,6 +392,9 @@ ${uiProtocolShim()}
       } else if (state.jobId) {
         statusEl.textContent = 'Generating…';
         startPolling();
+      } else {
+        // Neither a jobId to poll nor a direct URL — don't sit on "Loading…".
+        statusEl.textContent = 'No result returned.';
       }
       renderMeta();
       // Now that we know the model id, surface the audio follow-up buttons
@@ -446,6 +456,14 @@ ${uiProtocolShim()}
       if (!data || data.jsonrpc !== '2.0' || !data.id) return;
       if (typeof data.id !== 'string' || data.id.indexOf('poll-') !== 0) return;
       if (data.error) { return; }
+      // Application error from get_asset (row deleted / not found): a successful
+      // JSON-RPC result with isError:true and no structuredContent. Stop polling
+      // and surface it rather than spinning until the MAX timeout.
+      if (data.result && data.result.isError) {
+        stopPolling();
+        statusEl.textContent = 'Couldn\'t load — check Nodaro library.';
+        return;
+      }
       var sc = (data.result && data.result.structuredContent) || {};
       if (typeof sc.progress === 'number') {
         var pct = sc.progress > 1 ? sc.progress : sc.progress * 100;

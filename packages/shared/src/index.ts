@@ -1295,6 +1295,13 @@ export {
   FAN_OUT_EACH_TYPES,
 } from "./producer-types.js"
 
+export {
+  VOICE_CHANGER_MODELS,
+  VOICE_CHANGER_MODEL_IDS,
+  DEFAULT_VOICE_CHANGER_MODEL,
+} from "./voice-changer-models.js"
+export type { VoiceChangerModel } from "./voice-changer-models.js"
+
 // --- Node presets ---
 export { EXECUTION_DATA_KEYS, TRANSIENT_RUNTIME_KEYS, stripTransientRuntimeData } from "./node-runtime-keys.js"
 export { extractPresetData, PRESET_EXCLUDED_KEYS, PRESET_APPLY_CLEAR_KEYS, presetDataMatches } from "./node-preset-extract.js"

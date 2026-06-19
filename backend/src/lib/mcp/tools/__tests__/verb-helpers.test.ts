@@ -1,9 +1,14 @@
 import { describe, it, expect, vi } from "vitest"
 
 vi.mock("../../asset-resolver.js", () => ({
-  resolveAssetId: vi.fn(async ({ assetId }: { assetId: string }) =>
-    assetId === "known-asset" ? "https://cdn.nodaro.ai/images/known-asset.png" : null,
-  ),
+  resolveAssetId: vi.fn(async ({ assetId }: { assetId: string }) => {
+    if (assetId === "known-asset") return "https://cdn.nodaro.ai/images/known-asset.png"
+    // Production resolveAssetId THROWS for an unresolvable/unowned/wrong-kind
+    // id (it returns null only for null/empty input). Mirror that here so a
+    // future "be lenient, return null" refactor can't silently reintroduce
+    // ref-dropping — which would make image_to_image behave like text2img.
+    throw new Error("forbidden")
+  }),
 }))
 
 const { coerceStringArray, resolveRefArray } = await import("../_verb-helpers.js")
@@ -44,9 +49,9 @@ describe("coerceStringArray", () => {
 })
 
 describe("resolveRefArray", () => {
-  it("passes URLs through, resolves asset ids, drops unresolvable ids", async () => {
+  it("passes URLs through and resolves known asset ids", async () => {
     const out = await resolveRefArray(
-      ["https://cdn.nodaro.ai/uploads/x.png", "known-asset", "missing-asset"],
+      ["https://cdn.nodaro.ai/uploads/x.png", "known-asset"],
       "u1",
       "image",
       14,
@@ -55,6 +60,17 @@ describe("resolveRefArray", () => {
       "https://cdn.nodaro.ai/uploads/x.png",
       "https://cdn.nodaro.ai/images/known-asset.png",
     ])
+  })
+
+  it("loud-fails (rejects) on an unresolvable asset id — never silently drops a required ref", async () => {
+    await expect(
+      resolveRefArray(
+        ["https://cdn.nodaro.ai/uploads/x.png", "missing-asset"],
+        "u1",
+        "image",
+        14,
+      ),
+    ).rejects.toThrow()
   })
 
   it("accepts the JSON-stringified form end-to-end", async () => {
