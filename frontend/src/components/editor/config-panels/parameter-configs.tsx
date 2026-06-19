@@ -49,6 +49,7 @@ import type {
   AnimalData,
   VehicleData,
   WeaponData,
+  FurnitureData,
   PhotoGenreData,
   BackdropData,
   HeldPropData,
@@ -86,6 +87,7 @@ import { MaterialPicker } from "./material-picker"
 import { AnimalPicker } from "./animal-picker"
 import { VehiclePicker } from "./vehicle-picker"
 import { WeaponPicker } from "./weapon-picker"
+import { FurniturePicker } from "./furniture-picker"
 import { PhotoGenrePicker } from "./photo-genre-picker"
 import { BackdropPicker } from "./backdrop-picker"
 import { HeldPropPicker } from "./held-prop-picker"
@@ -118,6 +120,7 @@ import { buildMaterialHints } from "@nodaro/shared"
 import { getAnimal } from "@nodaro/shared"
 import { getVehicle } from "@nodaro/shared"
 import { getWeapon } from "@nodaro/shared"
+import { getFurniture } from "@nodaro/shared"
 import { getPhotoGenrePromptHint } from "@nodaro/shared"
 import { getBackdropPromptHint } from "@nodaro/shared"
 import { buildHeldPropHints } from "@nodaro/shared"
@@ -1113,6 +1116,31 @@ export function WeaponConfig({ data, onUpdate }: ConfigProps<WeaponData>) {
       <WeaponPicker
         value={data.weapon || "katana"}
         onValueChange={(v) => onUpdate({ weapon: v })}
+      />
+    </div>
+  )
+}
+
+export function FurnitureConfig({ data, onUpdate }: ConfigProps<FurnitureData>) {
+  const dir = useLocaleDir()
+  const furniture = getFurniture(data.furniture)
+  const hint = furniture ? `featuring ${furniture.label.toLowerCase()}, ${furniture.description}` : ""
+  return (
+    <div className="flex flex-col gap-3" dir={dir}>
+      <LocaleHeader />
+      <PromptInjectionPreview hints={[data.preText, hint, data.postText]} />
+      <CustomTextRows
+        idPrefix="furniture"
+        preText={data.preText}
+        postText={data.postText}
+        prePlaceholder="e.g. mid-century"
+        postPlaceholder="e.g. in walnut"
+        onChange={onUpdate}
+      />
+      <Label>Furniture</Label>
+      <FurniturePicker
+        value={data.furniture || "sofa"}
+        onValueChange={(v) => onUpdate({ furniture: v })}
       />
     </div>
   )

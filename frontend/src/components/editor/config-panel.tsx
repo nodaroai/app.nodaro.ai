@@ -74,6 +74,7 @@ import {
   AnimalConfig,
   VehicleConfig,
   WeaponConfig,
+  FurnitureConfig,
   PhotoGenreConfig,
   BackdropConfig,
   HeldPropConfig,
@@ -256,6 +257,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "animal": "Animal",
   "vehicle": "Vehicle",
   "weapon": "Weapon",
+  "furniture": "Furniture",
   "photo-genre": "Photo Genre",
   "backdrop": "Backdrop",
   "held-prop": "Held Prop",
@@ -496,6 +498,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "animal": return <AnimalConfig {...configProps} />
     case "vehicle": return <VehicleConfig {...configProps} />
     case "weapon": return <WeaponConfig {...configProps} />
+    case "furniture": return <FurnitureConfig {...configProps} />
     case "photo-genre": return <PhotoGenreConfig {...configProps} />
     case "backdrop": return <BackdropConfig {...configProps} />
     case "held-prop": return <HeldPropConfig {...configProps} />

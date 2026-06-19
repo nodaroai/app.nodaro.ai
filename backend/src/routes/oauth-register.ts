@@ -1,9 +1,10 @@
 import type { FastifyInstance, FastifyRequest } from "fastify"
 import { z } from "zod"
-import { createHash, randomBytes } from "node:crypto"
+import { randomBytes } from "node:crypto"
 import { supabase } from "../lib/supabase.js"
 import { config } from "../lib/config.js"
 import { ALL_SCOPES } from "../lib/scopes.js"
+import { hashSecret } from "./developer-apps.js"
 
 const SECRET_TTL_DAYS = 90
 const CLIENT_ID_PREFIX = "ndr_dcr_"
@@ -39,10 +40,6 @@ function genClientId(): string {
 
 function genClientSecret(): string {
   return randomBytes(32).toString("hex")
-}
-
-function hashSecret(secret: string): string {
-  return createHash("sha256").update(secret).digest("hex")
 }
 
 function parseScope(scope?: string): string[] {
@@ -150,7 +147,7 @@ export async function registerOauthRegister(app: FastifyInstance): Promise<void>
           allowed_origins: [],
           redirect_uris: meta.redirect_uris,
           client_id: clientId,
-          client_secret_hash: hashSecret(clientSecret),
+          client_secret_hash: await hashSecret(clientSecret),
           scopes_requested: scopes,
           status: "active",
         })
