@@ -11,9 +11,23 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
-import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, PROMPT_HARD_CEILING, isSeedance2Provider, estimateLoopTrimAddonCredits, seedance2AudioLimitSec, findSeedance2AudioOverLimit } from "@nodaro/shared"
+import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, PROMPT_HARD_CEILING, isSeedance2Provider, estimateLoopTrimAddonCredits, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS } from "@nodaro/shared"
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
+
+// Character-voice orchestration (voiced-video). All optional + additive: absent
+// => today's behaviour. A "voiced" request ALSO requires a dialogue-capable
+// provider (videoModelCanSpeakDialogue) — enforced in the route handler.
+const characterVoiceSpecSchema = z.object({
+  voiceId: z.string().min(1),
+  voiceType: z.enum(["premade", "library", "custom"]).optional(),
+  ttsProvider: z.enum(TTS_PROVIDERS).optional(),
+  speaker: z.string().min(1).max(80).optional(),
+})
+const dialogueLineSchema = z.object({
+  speaker: z.string().min(1).max(80),
+  line: z.string().min(1).max(500),
+})
 
 export const generateVideoBody = z.object({
   imageUrl: safeUrlSchema.optional(),  // Optional in VEO REFERENCE_2_VIDEO mode
@@ -79,6 +93,11 @@ export const generateVideoBody = z.object({
   userId: z.string().uuid().optional(),
   videoTrimStart: z.number().int().min(0).optional(),
   videoTrimEnd: z.number().int().min(0).optional(),
+  // Character-voice orchestration. When present AND the provider can voice
+  // dialogue, the route enqueues a "voiced-video" job; otherwise the spec is
+  // ignored with a non-fatal warning (the clip still generates, just silent).
+  characterVoices: z.array(characterVoiceSpecSchema).max(8).optional(),
+  dialogue: z.array(dialogueLineSchema).max(50).optional(),
 }).superRefine((b, ctx) => {
   // Validate the EFFECTIVE trim window when EITHER bound is supplied — a one-sided
   // value still resolves a window at the provider (start ?? 0, ends ?? start+10),
@@ -96,6 +115,39 @@ export const generateVideoBody = z.object({
 
 const IDENTITY_PRESERVE_SUFFIX =
   "The subject must remain exactly the same person — preserve facial identity, eye color, hair color, skin tone, and unique features."
+
+/** True when the request carries a character-voice spec (voices and/or dialogue). */
+function voiceSpecPresent(b: { characterVoices?: unknown; dialogue?: unknown }): boolean {
+  return (
+    (Array.isArray(b.characterVoices) && b.characterVoices.length > 0) ||
+    (Array.isArray(b.dialogue) && b.dialogue.length > 0)
+  )
+}
+
+/**
+ * Credit id for the voiced-video audio step: audio_driven (Seedance 2)
+ * synthesises a Dialogue v3 track; native_speech (VEO) revoices the baked audio
+ * via the voice-changer. Single source for both the reservation (here) and the
+ * worker's commit (forwarded through the queue as `voicedAudioAddon`).
+ */
+function voicedAudioAddonId(provider: string | undefined): "elevenlabs-dialogue" | "elevenlabs-voice-changer" {
+  return getVideoAudioCapability(provider).mode === "audio_driven"
+    ? "elevenlabs-dialogue"
+    : "elevenlabs-voice-changer"
+}
+
+/**
+ * Base (pre-markup) credit addon for the voiced-video audio chain, or 0 when the
+ * request isn't voiced or the provider can't carry dialogue. Mirrors the
+ * loop-trim addon: reserved up front via base costs (no double-markup), and
+ * refunded by the worker's finalize if the audio step doesn't actually run.
+ */
+async function voicedAudioAddonCredits(b: Record<string, unknown>): Promise<number> {
+  const provider = b.provider as string | undefined
+  if (!voiceSpecPresent(b) || !videoModelCanSpeakDialogue(provider)) return 0
+  const { creditCost } = await getModelCreditBaseCost(voicedAudioAddonId(provider))
+  return creditCost
+}
 
 /**
  * Fastify preHandler: for Seedance 2.0 providers with a verified r2v
@@ -185,7 +237,8 @@ export async function generateVideoRoutes(app: FastifyInstance) {
             : undefined)
           const duration = typeof b.duration === "number" ? b.duration : 8
           const addon = estimateLoopTrimAddonCredits(loopTrim, duration)
-          return baseCost + addon
+          const audioAddon = await voicedAudioAddonCredits(b)
+          return baseCost + addon + audioAddon
         },
       },
     ),
@@ -198,7 +251,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const { audioUrl, prompt: rawPrompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, webSearch, nsfwChecker, generationType, autoLoopTrim, loopTrim: rawLoopTrim, enableTranslation, seedance2InputMode, videoTrimStart, videoTrimEnd } = parsed.data
+    const { audioUrl, prompt: rawPrompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, webSearch, nsfwChecker, generationType, autoLoopTrim, loopTrim: rawLoopTrim, enableTranslation, seedance2InputMode, videoTrimStart, videoTrimEnd, characterVoices, dialogue } = parsed.data
     let prompt = rawPrompt
 
     // Seedance 2: strip inputs that belong to the inactive mode — hidden handles leave
@@ -328,7 +381,23 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
-    await videoQueue.add("image-to-video", {
+    // Voiced-video gate: a voice spec only triggers the audio chain when the
+    // model can carry dialogue (native_speech / audio_driven). Otherwise the
+    // spec is dropped and the clip generates silently — we never fail it — but
+    // we surface a non-fatal warning so the skip is never silent. The render-time
+    // "no voice on this model" confirmation lives in studio (client-side, via the
+    // same videoModelCanSpeakDialogue helper).
+    const wantsVoice = voiceSpecPresent(parsed.data)
+    const canVoice = videoModelCanSpeakDialogue(provider)
+    const isVoiced = wantsVoice && canVoice
+    // Credit addon the worker commits on top of the video provider cost (mirrors
+    // loop-trim's extraNonProviderCredits). Computed here so the route owns all
+    // billing math; the worker forwards it verbatim to finalize.
+    const voicedAudioAddon = isVoiced
+      ? (await getModelCreditBaseCost(voicedAudioAddonId(provider))).creditCost
+      : 0
+
+    await videoQueue.add(isVoiced ? "voiced-video" : "image-to-video", {
       jobId: job.id,
       imageUrl,
       endFrameUrl,
@@ -361,9 +430,21 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       enableTranslation,
       videoTrimStart,
       videoTrimEnd,
+      ...(isVoiced ? { characterVoices, dialogue, voicedAudioAddon } : {}),
       usageLogId,
     })
 
+    if (wantsVoice && !canVoice) {
+      return {
+        jobId: job.id,
+        warnings: [
+          {
+            code: "voice_unsupported_for_provider",
+            message: `The selected model (${provider ?? "minimax"}) can't voice dialogue; the clip was generated without voice. Use a VEO 3.x or Seedance-2 model for character voice.`,
+          },
+        ],
+      }
+    }
     return { jobId: job.id }
   })
 }
