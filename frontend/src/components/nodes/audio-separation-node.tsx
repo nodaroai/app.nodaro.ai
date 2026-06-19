@@ -31,10 +31,19 @@ const STEMS = [
   { id: "piano", field: "pianoUrl", label: "Piano", top: "192px" },
 ] as const
 
-/** Which stems a given mode produces (drives handle muting). */
-const ACTIVE_STEMS: Record<AudioSeparationData["mode"], ReadonlySet<string>> = {
-  vocal_instrumental: new Set(["vocals", "instrumental"]),
-  stems: new Set(["vocals", "drums", "bass", "other", "guitar", "piano"]),
+/** Which stems a (mode, quality) pair produces — drives handle muting.
+ *  Mirrors the backend pickModel: full-stems "fast" uses htdemucs (4 stems),
+ *  auto/best use htdemucs_6s (adds guitar+piano). */
+function activeStemsFor(
+  mode: AudioSeparationData["mode"],
+  quality: AudioSeparationData["quality"],
+): ReadonlySet<string> {
+  if (mode === "stems") {
+    const base = ["vocals", "drums", "bass", "other"]
+    if (quality !== "fast") base.push("guitar", "piano")
+    return new Set(base)
+  }
+  return new Set(["vocals", "instrumental"])
 }
 
 function AudioSeparationNodeComponent({ id, data, selected }: NodeProps) {
@@ -46,17 +55,27 @@ function AudioSeparationNodeComponent({ id, data, selected }: NodeProps) {
   const activeResult = results[activeIndex]
   const activeUrl = activeResult?.url ?? nodeData.generatedAudioUrl ?? nodeData.vocalUrl
   const mode = nodeData.mode ?? "vocal_instrumental"
-  const activeStems = ACTIVE_STEMS[mode] ?? ACTIVE_STEMS.vocal_instrumental
+  const activeStems = activeStemsFor(mode, nodeData.quality ?? "auto")
   const separateCreditId = nodeData.quality === "best" ? "audio-separation:best" : "audio-separation"
   const credits = useModelCredits(separateCreditId, nodeData.quality === "best" ? 8 : 3)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
 
   function handleDeleteResult(indexToDelete: number) {
-    updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedAudioUrl"))
+    // Also clear the per-stem fields — they belong to the active run, not to
+    // generatedResults, so computeDeleteResultUpdates won't touch them.
+    updateNodeData(id, {
+      ...computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedAudioUrl"),
+      vocalUrl: undefined, instrumentalUrl: undefined, drumsUrl: undefined,
+      bassUrl: undefined, otherUrl: undefined, guitarUrl: undefined, pianoUrl: undefined,
+    })
   }
 
-  const presentStems = STEMS.filter((s) => nodeData[s.field as keyof AudioSeparationData])
+  // Per-stem previews — exclude the one already shown in the primary overlay.
+  const presentStems = STEMS.filter((s) => {
+    const url = nodeData[s.field as keyof AudioSeparationData]
+    return url && url !== activeUrl
+  })
 
   return (
     <div className="relative" style={{ maxWidth: '220px' }}>

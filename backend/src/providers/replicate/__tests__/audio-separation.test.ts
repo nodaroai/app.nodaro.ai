@@ -79,6 +79,19 @@ describe("ReplicateAudioSeparationProvider.separateAudio", () => {
     expect(lastCallInput().input.model).toBe("htdemucs_ft")
   })
 
+  it("stems + best stays on htdemucs_6s (6 stems), never downgrades to 4-stem htdemucs_ft", async () => {
+    runReplicatePrediction.mockResolvedValue({
+      output: { vocals: "v", drums: "d", bass: "b", other: "o", guitar: "g", piano: "p" },
+      cost: null,
+      predictionId: "p6",
+    })
+    await new ReplicateAudioSeparationProvider().separateAudio("a", {
+      mode: "stems",
+      quality: "best",
+    })
+    expect(lastCallInput().input.model).toBe("htdemucs_6s")
+  })
+
   it("fast quality uses base htdemucs even in stems mode", async () => {
     runReplicatePrediction.mockResolvedValue({
       output: { vocals: "v", drums: "d", bass: "b", other: "o" },

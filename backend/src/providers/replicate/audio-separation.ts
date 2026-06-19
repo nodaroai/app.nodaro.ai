@@ -46,10 +46,14 @@ const STEM_KEY_MAP: Record<string, StemField> = {
 
 /** Pick the Demucs model variant for (mode, quality). */
 function pickModel(mode: SeparationMode, quality: SeparationQuality): string {
-  if (quality === "fast") return "htdemucs"
-  if (quality === "best") return "htdemucs_ft" // fine-tuned, 4-stem only
-  // auto: richest sensible default per mode
-  return mode === "stems" ? "htdemucs_6s" : "htdemucs"
+  if (mode === "stems") {
+    // Full stems: htdemucs_6s (6 stems incl. guitar/piano) for auto/best;
+    // htdemucs (4 stems) for fast. htdemucs_ft is 4-stem-only, so "best" must
+    // NOT downgrade the stem count (would be charge-more-get-fewer).
+    return quality === "fast" ? "htdemucs" : "htdemucs_6s"
+  }
+  // Vocal/Instrumental (two-stem): fine-tuned for best, base otherwise.
+  return quality === "best" ? "htdemucs_ft" : "htdemucs"
 }
 
 export class ReplicateAudioSeparationProvider implements AudioSeparationProvider {
@@ -87,13 +91,10 @@ export class ReplicateAudioSeparationProvider implements AudioSeparationProvider
       }
     }
 
-    if (
-      !result.vocals &&
-      !result.instrumental &&
-      !result.drums &&
-      !result.bass &&
-      !result.other
-    ) {
+    // `cost` is always present; any additional key means at least one stem
+    // mapped. Derived from the result (not a hand-maintained stem subset) so it
+    // can't drift as stems are added.
+    if (Object.keys(result).length <= 1) {
       throw new Error(
         `Demucs output had no recognized stems: ${Object.keys(output as object).join(", ")}`,
       )

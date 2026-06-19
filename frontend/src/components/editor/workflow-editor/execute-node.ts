@@ -2449,8 +2449,8 @@ export function executeNode(
         const extra: Record<string, unknown> = {};
         const stemKeys = ["vocalUrl", "instrumentalUrl", "drumsUrl", "bassUrl", "otherUrl", "guitarUrl", "pianoUrl"] as const;
         for (const key of stemKeys) {
-          const v = (od as Record<string, unknown>)[key];
-          if (v) extra[key] = v;
+          // Always set (undefined clears a stale stem from a prior mode/run).
+          extra[key] = (od as Record<string, unknown>)[key];
         }
         return extra;
       },

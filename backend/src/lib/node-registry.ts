@@ -276,7 +276,7 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
     category: "ai-audio",
     description: "Separate ANY audio into vocals + instrumental, or full stems (drums, bass, other, guitar, piano), using Demucs on Replicate. Unlike Suno Separate, works on uploaded or upstream audio with no Suno track required.",
     outputType: "audio",
-    creditCost: 8,
+    creditCost: "3-8",
     capabilities: ["audio-to-audio", "multi-stem-output"],
     inputSchema: {
       fields: [
