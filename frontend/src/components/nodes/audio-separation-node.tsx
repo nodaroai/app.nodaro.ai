@@ -147,22 +147,15 @@ function AudioSeparationNodeComponent({ id, data, selected }: NodeProps) {
       </div>
     </BaseNode>
     <HandleWithPopover nodeId={id} nodeType="audio-separation" handleId="audio" type="target" position={Position.Left} label="Audio" color={HANDLE_COLORS.audio} icon={<SplitSquareVertical />} side="left" top="calc(100% - 24px)" accepts={ACCEPTS_AUDIO} />
-    {STEMS.map((s) => (
-      <HandleWithPopover
-        key={s.id}
-        nodeId={id}
-        nodeType="audio-separation"
-        handleId={s.id}
-        type="source"
-        position={Position.Right}
-        label={s.label}
-        color={HANDLE_COLORS.audio}
-        icon={s.id === "vocals" ? <Mic /> : <Music />}
-        side="right"
-        top={s.top}
-        disabled={!activeStems.has(s.id)}
-      />
-    ))}
+    {/* Static handle ids (NOT a .map) so the handle-color guard + edge-color
+        registry stay statically analyzable. Muted per mode via `disabled`. */}
+    <HandleWithPopover nodeId={id} nodeType="audio-separation" handleId="vocals"       type="source" position={Position.Right} label="Vocals"       color={HANDLE_COLORS.audio} icon={<Mic />}   side="right" top="24px"  disabled={!activeStems.has("vocals")} />
+    <HandleWithPopover nodeId={id} nodeType="audio-separation" handleId="instrumental" type="source" position={Position.Right} label="Instrumental" color={HANDLE_COLORS.audio} icon={<Music />} side="right" top="52px"  disabled={!activeStems.has("instrumental")} />
+    <HandleWithPopover nodeId={id} nodeType="audio-separation" handleId="drums"        type="source" position={Position.Right} label="Drums"        color={HANDLE_COLORS.audio} icon={<Music />} side="right" top="80px"  disabled={!activeStems.has("drums")} />
+    <HandleWithPopover nodeId={id} nodeType="audio-separation" handleId="bass"         type="source" position={Position.Right} label="Bass"         color={HANDLE_COLORS.audio} icon={<Music />} side="right" top="108px" disabled={!activeStems.has("bass")} />
+    <HandleWithPopover nodeId={id} nodeType="audio-separation" handleId="other"        type="source" position={Position.Right} label="Other"        color={HANDLE_COLORS.audio} icon={<Music />} side="right" top="136px" disabled={!activeStems.has("other")} />
+    <HandleWithPopover nodeId={id} nodeType="audio-separation" handleId="guitar"       type="source" position={Position.Right} label="Guitar"       color={HANDLE_COLORS.audio} icon={<Music />} side="right" top="164px" disabled={!activeStems.has("guitar")} />
+    <HandleWithPopover nodeId={id} nodeType="audio-separation" handleId="piano"        type="source" position={Position.Right} label="Piano"        color={HANDLE_COLORS.audio} icon={<Music />} side="right" top="192px" disabled={!activeStems.has("piano")} />
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}
       onClose={() => setDeleteConfirm(null)}
