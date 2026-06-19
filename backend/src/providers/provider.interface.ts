@@ -44,6 +44,7 @@ export type ProviderCapability =
   | "text-to-speech" // text -> speech audio
   | "sound-effect" // text -> sound effect audio
   | "audio-isolation" // audio -> isolated voice audio
+  | "audio-separation" // audio -> separated stems (vocals/instrumental/drums/...)
   | "transcription" // audio -> text
   | "dialogue" // multi-speaker text -> dialogue audio
 
@@ -232,6 +233,31 @@ export interface TranscriptionProvider {
     segments?: Array<{ start: number; end: number; text: string }>
     cost: number | null
   }>
+}
+
+/**
+ * Stem-separation result. Bespoke (NOT ProviderResult) because ProviderResult
+ * is single-`url`; a separator returns up to 7 NAMED stems. Mirrors the shape
+ * of suno-client's SunoSeparateResult. `instrumental` carries Demucs's
+ * `no_vocals` two-stems output.
+ */
+export interface AudioSeparationResult {
+  vocals?: string
+  instrumental?: string
+  drums?: string
+  bass?: string
+  other?: string
+  guitar?: string
+  piano?: string
+  cost: number | null
+}
+
+export interface AudioSeparationProvider {
+  separateAudio(
+    audioUrl: string,
+    opts: { mode: "vocal_instrumental" | "stems"; quality: "auto" | "fast" | "best" },
+    reconcileOpts?: ReconcileOpts,
+  ): Promise<AudioSeparationResult>
 }
 
 // Provider metadata

@@ -59,6 +59,7 @@ const kieInfo: ProviderInfo = {
     "text-to-speech": Object.keys(KIE_TTS_MODELS),
     "sound-effect": Object.keys(KIE_SOUND_EFFECT_MODELS),
     "audio-isolation": Object.keys(KIE_AUDIO_ISOLATION_MODELS),
+    "audio-separation": [], // KIE has no Demucs; Replicate-only capability
     "transcription": Object.keys(KIE_STT_MODELS),
     "dialogue": Object.keys(KIE_DIALOGUE_MODELS),
   },
