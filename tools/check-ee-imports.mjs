@@ -129,6 +129,7 @@ const ALLOWLIST = new Set([
   "frontend/src/components/nodes/after-effects-node.tsx",
   "frontend/src/components/nodes/ai-writer-node.tsx",
   "frontend/src/components/nodes/audio-isolation-node.tsx",
+  "frontend/src/components/nodes/audio-separation-node.tsx",
   "frontend/src/components/nodes/character-node.tsx",
   "frontend/src/components/nodes/combine-audio-node.tsx",
   "frontend/src/components/nodes/combine-videos-node.tsx",
