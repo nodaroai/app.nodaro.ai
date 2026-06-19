@@ -271,6 +271,22 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
   { type: "text-to-dialogue", label: "Text to Dialogue", category: "ai-audio", description: "Generate multi-speaker dialogue audio where each line is spoken by a different voice.", outputType: "audio" },
   { type: "audio-isolation", label: "Audio Isolation", category: "ai-audio", description: "Isolate and clean up vocal audio by removing background noise and non-speech elements.", outputType: "audio" },
   {
+    type: "audio-separation",
+    label: "Audio Separation",
+    category: "ai-audio",
+    description: "Separate ANY audio into vocals + instrumental, or full stems (drums, bass, other, guitar, piano), using Demucs on Replicate. Unlike Suno Separate, works on uploaded or upstream audio with no Suno track required.",
+    outputType: "audio",
+    creditCost: "3-8",
+    capabilities: ["audio-to-audio", "multi-stem-output"],
+    inputSchema: {
+      fields: [
+        { key: "audioUrl", type: "audio-url", required: true },
+        { key: "mode", type: "string" },
+        { key: "quality", type: "string" },
+      ],
+    },
+  },
+  {
     type: "voice-changer",
     label: "Voice Changer",
     category: "ai-audio",

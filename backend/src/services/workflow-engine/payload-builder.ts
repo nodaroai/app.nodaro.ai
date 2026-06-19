@@ -1056,15 +1056,19 @@ interface PayloadResult {
   modelIdentifier: string
 }
 
-/** Shorthand for FFmpeg nodes that all share queueName + modelIdentifier. */
+/** Shorthand for FFmpeg nodes that all share queueName + modelIdentifier.
+ *  `modelIdentifier` defaults to `jobName`; pass an override for nodes whose
+ *  credit cost varies by config (e.g. `speed-ramp:smooth`) so the orchestrator
+ *  reserves the same composite the single-node route charges. */
 function ffmpegResult(
   jobName: string,
   payload: Record<string, unknown>,
+  modelIdentifier: string = jobName,
 ): PayloadResult {
   return {
     jobName,
     queueName: "video-generation",
-    modelIdentifier: jobName,
+    modelIdentifier,
     payload,
   }
 }
@@ -3393,6 +3397,21 @@ export function buildPayload(
         usageLogId,
       })
 
+    case "audio-separation": {
+      // "best" quality costs more — mirror the route's creditGuard so
+      // orchestrated runs don't under-charge.
+      const sepQuality = (data.quality as string | undefined) || "auto"
+      const sepIdentifier =
+        sepQuality === "best" ? "audio-separation:best" : "audio-separation"
+      return simpleResult("audio-separation", sepIdentifier, {
+        jobId,
+        audioUrl: resolvedInputs.audioUrl || data.audioUrl,
+        mode: (data.mode as string | undefined) || "vocal_instrumental",
+        quality: sepQuality,
+        usageLogId,
+      })
+    }
+
     case "text-to-dialogue": {
       // Filter empty dialogue lines (matches frontend behavior)
       const rawDialogue = (data.dialogue ?? data.script) as Array<{ text: string; voice?: string }> | undefined
@@ -3855,17 +3874,23 @@ export function buildPayload(
     }
 
     case "speed-ramp":
-      return ffmpegResult("speed-ramp", {
-        jobId,
-        videoUrl: resolvedInputs.videoUrl || data.videoUrl,
-        speed: data.speed,
-        adjustAudio: data.adjustAudio,
-        reverse: data.reverse,
-        audioMode: data.audioMode,
-        quality: data.quality,
-        ramps: data.ramps,
-        usageLogId,
-      })
+      return ffmpegResult(
+        "speed-ramp",
+        {
+          jobId,
+          videoUrl: resolvedInputs.videoUrl || data.videoUrl,
+          speed: data.speed,
+          adjustAudio: data.adjustAudio,
+          reverse: data.reverse,
+          audioMode: data.audioMode,
+          quality: data.quality,
+          ramps: data.ramps,
+          usageLogId,
+        },
+        // Motion-compensated interpolation (minterpolate) costs more; mirror the
+        // route's buildSpeedRampCreditId so DAG runs reserve the same tier.
+        data.quality === "smooth" ? "speed-ramp:smooth" : "speed-ramp",
+      )
 
     case "loop-video":
       return ffmpegResult("loop-video", {

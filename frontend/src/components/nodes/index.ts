@@ -78,6 +78,7 @@ import { SunoCoverNode } from "./suno-cover-node";
 import { SunoExtendNode } from "./suno-extend-node";
 import { SunoLyricsNode } from "./suno-lyrics-node";
 import { SunoSeparateNode } from "./suno-separate-node";
+import { AudioSeparationNode } from "./audio-separation-node";
 import { SunoMusicVideoNode } from "./suno-music-video-node";
 import { SunoMashupNode } from "./suno-mashup-node";
 import { SunoReplaceSectionNode } from "./suno-replace-section-node";
@@ -257,6 +258,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "suno-extend": SunoExtendNode,
   "suno-lyrics": SunoLyricsNode,
   "suno-separate": SunoSeparateNode,
+  "audio-separation": AudioSeparationNode,
   "suno-music-video": SunoMusicVideoNode,
   "suno-mashup": SunoMashupNode,
   "suno-replace-section": SunoReplaceSectionNode,

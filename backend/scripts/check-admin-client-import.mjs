@@ -101,11 +101,13 @@ const ALLOWED_PATHS = [
   // credits-balance + user-settings).
   /^src\/routes\/me\.ts$/,
 
-  // Extract Audio / Remove Audio: job-creation routes that derive
-  // `userId = req.userId` (401 if absent) and INSERT the job with
-  // `user_id: userId`. Service-role mirrors the other media-generation routes.
+  // Extract Audio / Remove Audio / Audio Separation: job-creation routes that
+  // derive `userId = req.userId` (401 if absent) and INSERT the job with
+  // `user_id: userId`. Service-role mirrors the other media-generation routes
+  // (audio-isolation is baselined; audio-separation is the same shape).
   /^src\/routes\/extract-audio\.ts$/,
   /^src\/routes\/remove-audio\.ts$/,
+  /^src\/routes\/audio-separation\.ts$/,
 
   // Node presets: per-user CRUD collection. Every handler derives
   // `userId = req.userId` (401 if absent); LIST/DELETE scope by

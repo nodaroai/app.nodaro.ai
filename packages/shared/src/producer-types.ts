@@ -126,6 +126,7 @@ export const AUDIO_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   "suno-cover",
   "suno-extend",
   "suno-separate",
+  "audio-separation",
   "suno-mashup",
   "suno-replace-section",
   "suno-add-instrumental",

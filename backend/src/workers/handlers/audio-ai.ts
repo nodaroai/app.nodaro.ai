@@ -8,6 +8,7 @@ import { directElevenLabsTTS, stripAudioTags } from "../../providers/elevenlabs/
 import { generateMusic, type MusicProvider } from "../../providers/audio/generate-music.js"
 import { textToAudio, type AudioProvider } from "../../providers/audio/text-to-audio.js"
 import { KieAudioProvider, isKieAcceptedVoice } from "../../providers/kie/audio.js"
+import { ReplicateAudioSeparationProvider } from "../../providers/replicate/audio-separation.js"
 import { transcribe, type TranscribeProvider } from "../../providers/audio/transcribe.js"
 import { extractYouTubeAudio } from "../../providers/audio/youtube-extractor.js"
 import { voiceChangerFromUrl, directVoiceChanger } from "../../providers/elevenlabs/voice-changer.js"
@@ -495,6 +496,62 @@ const handleForcedAlignment: HandlerFn = async function handleForcedAlignment(jo
   console.log(`[worker] Job ${ctx.jobId} completed: aligned ${result.alignment.length} words`)
 }
 
+const handleAudioSeparation: HandlerFn = async function handleAudioSeparation(job, ctx) {
+  const { audioUrl, mode, quality } = job.data as {
+    jobId: string
+    audioUrl: string
+    mode?: "vocal_instrumental" | "stems"
+    quality?: "auto" | "fast" | "best"
+  }
+  const sepMode = mode ?? "vocal_instrumental"
+  const sepQuality = quality ?? "auto"
+  console.log(`[worker] audio-separation ${ctx.jobId} (mode: ${sepMode}, quality: ${sepQuality})`)
+  const provider = new ReplicateAudioSeparationProvider()
+  // No onTaskCreated: a crash fails+refunds rather than being single-URL
+  // reconcile-recovered (which would flatten the stems). See design §C(c).
+  const result = await withProgressRamp(
+    job,
+    ctx.jobId,
+    { start: 5, cap: 80 },
+    () => provider.separateAudio(audioUrl, { mode: sepMode, quality: sepQuality }),
+  )
+
+  // Upload each returned stem to R2. POST-PROVIDER: Demucs already delivered
+  // the separation (billed) — an R2 upload failure here skips the refund.
+  const stemFields = [
+    ["vocals", "vocalUrl"],
+    ["instrumental", "instrumentalUrl"],
+    ["drums", "drumsUrl"],
+    ["bass", "bassUrl"],
+    ["other", "otherUrl"],
+    ["guitar", "guitarUrl"],
+    ["piano", "pianoUrl"],
+  ] as const
+  const present = stemFields.filter(([stem]) => result[stem])
+  const uploaded = await runPostProcessing(() =>
+    Promise.all(
+      present.map(async ([stem, field]) => {
+        const r2Url = await uploadToR2(result[stem] as string, `${ctx.jobId}-${stem}`, "audio", ctx.jobUserId)
+        return { field, r2Url }
+      }),
+    ),
+  )
+
+  const outputData: Record<string, unknown> = {}
+  for (const { field, r2Url } of uploaded) {
+    outputData[field] = r2Url
+  }
+  // Primary audioUrl for single-handle downstream routing + gallery.
+  outputData.audioUrl = outputData.vocalUrl ?? outputData.instrumentalUrl
+
+  await setJobProgress(job, ctx.jobId, 100)
+  if (!await shouldSaveJobResult(ctx.jobId)) return
+  const ok = await markJobCompleted(ctx.jobId, { output_data: outputData })
+  if (!ok) return
+  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${uploaded.length} stem(s) uploaded`)
+}
+
 export const audioAIHandlers: Record<string, HandlerFn> = {
   "text-to-speech": handleTextToSpeech,
   "generate-music": handleGenerateMusic,
@@ -502,6 +559,7 @@ export const audioAIHandlers: Record<string, HandlerFn> = {
   "transcribe": handleTranscribe,
   "extract-youtube-audio": handleExtractYoutubeAudio,
   "audio-isolation": handleAudioIsolation,
+  "audio-separation": handleAudioSeparation,
   "text-to-dialogue": handleTextToDialogue,
   "voice-changer": handleVoiceChanger,
   "dubbing": handleDubbing,

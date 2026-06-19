@@ -353,6 +353,20 @@ export function isValidSunoSeparateConnection(
   }
 }
 
+/** audio-separation (Demucs): single `audio` target accepts any audio producer.
+ *  The 7 stem outputs are source handles — validators only gate targets. */
+export function isValidAudioSeparationConnection(
+  targetHandleId: string,
+  sourceType: string,
+): boolean {
+  switch (targetHandleId) {
+    case "audio":
+      return ACCEPTS_AUDIO_OR_DYN(sourceType)
+    default:
+      return false
+  }
+}
+
 /** suno-music-video: audio (audio producers). */
 export function isValidSunoMusicVideoConnection(
   targetHandleId: string,

@@ -2514,6 +2514,28 @@ export type SunoSeparateData = {
   fieldMappings?: FieldMappings
 }
 
+export type AudioSeparationData = {
+  [key: string]: unknown
+  label: string
+  mode: "vocal_instrumental" | "stems"
+  quality: "auto" | "fast" | "best"
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedAudioUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
+  vocalUrl?: string
+  instrumentalUrl?: string
+  drumsUrl?: string
+  bassUrl?: string
+  otherUrl?: string
+  guitarUrl?: string
+  pianoUrl?: string
+  currentJobId?: string
+  currentJobProgress?: number
+  fieldMappings?: FieldMappings
+}
+
 export type SunoMusicVideoData = {
   [key: string]: unknown
   label: string
@@ -4701,6 +4723,7 @@ export type SceneNodeData =
   | ImageToTextData
   | DescribeToPickerData
   | AudioIsolationData
+  | AudioSeparationData
   | TextToDialogueData
   | VoiceChangerData
   | DubbingData
@@ -4872,6 +4895,7 @@ export type SceneNodeType =
   | "image-to-text"
   | "describe-to-picker"
   | "audio-isolation"
+  | "audio-separation"
   | "text-to-dialogue"
   | "voice-changer"
   | "dubbing"
@@ -6056,6 +6080,23 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       generatedResults: [],
       activeResultIndex: 0,
     } as AudioIsolationData,
+  },
+  {
+    type: "audio-separation",
+    label: "Audio Separation",
+    category: "ai",
+    creditCost: 8,
+    inputs: ["audio"],
+    outputs: ["audio"],
+    defaultData: {
+      label: "Audio Separation",
+      mode: "vocal_instrumental",
+      quality: "auto",
+      fieldMappings: {},
+      executionStatus: "idle",
+      generatedResults: [],
+      activeResultIndex: 0,
+    } as AudioSeparationData,
   },
   {
     type: "text-to-dialogue",

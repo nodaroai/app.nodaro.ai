@@ -162,6 +162,13 @@ const DIRECT_OUTPUT_KEYS: Array<keyof NodeOutput> = [
   "script",
   "vocalUrl",
   "instrumentalUrl",
+  // audio-separation (Demucs) full-stems outputs — without these the live DAG
+  // path drops stems 3-7 and their source handles fall back to the primary audio.
+  "drumsUrl",
+  "bassUrl",
+  "otherUrl",
+  "guitarUrl",
+  "pianoUrl",
   "splitResults",
   "combinedText",
   "kieTaskId",
@@ -579,6 +586,20 @@ export function getPrimaryOutput(
   if (sourceType === "suno-separate" && sourceHandle) {
     if (sourceHandle === "vocals" || sourceHandle === "vocal" || sourceHandle === "vocal-out") return output.vocalUrl || output.audioUrl
     if (sourceHandle === "instrumental" || sourceHandle === "instrumental-out") return output.instrumentalUrl || output.audioUrl
+  }
+
+  // Audio-separation (Demucs): route each of the 7 stem handles; fall back to
+  // the primary audio. Handle id = stem name (only vocals→vocalUrl is irregular).
+  if (sourceType === "audio-separation" && sourceHandle) {
+    switch (sourceHandle) {
+      case "vocals": return output.vocalUrl || output.audioUrl
+      case "instrumental": return output.instrumentalUrl || output.audioUrl
+      case "drums": return output.drumsUrl || output.audioUrl
+      case "bass": return output.bassUrl || output.audioUrl
+      case "other": return output.otherUrl || output.audioUrl
+      case "guitar": return output.guitarUrl || output.audioUrl
+      case "piano": return output.pianoUrl || output.audioUrl
+    }
   }
 
   // Voice-design: support voiceId routing via sourceHandle
@@ -1039,6 +1060,21 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
     const instrumentalUrl = data.instrumentalUrl as string | undefined
     if (vocalUrl) output.vocalUrl = vocalUrl
     if (instrumentalUrl) output.instrumentalUrl = instrumentalUrl
+    return Object.keys(output).length > 0 ? output : undefined
+  }
+
+  // Audio-separation (Demucs) → audioUrl + all 7 stem URLs from node data
+  if (type === "audio-separation") {
+    const url =
+      getActiveResultUrl(data) ??
+      (data.generatedAudioUrl as string | undefined)
+    const output: NodeOutput = {}
+    if (url) output.audioUrl = url
+    const stemKeys = ["vocalUrl", "instrumentalUrl", "drumsUrl", "bassUrl", "otherUrl", "guitarUrl", "pianoUrl"] as const
+    for (const key of stemKeys) {
+      const v = data[key] as string | undefined
+      if (v) output[key] = v
+    }
     return Object.keys(output).length > 0 ? output : undefined
   }
 
