@@ -9,6 +9,7 @@ import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATUR
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { safeFetch } from "../lib/safe-fetch.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
+import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { markProviderCallStart } from "../lib/reconcile/persistence.js"
@@ -67,6 +68,7 @@ export async function imageToTextRoutes(app: FastifyInstance) {
 
       const llmModel = parsed.data.llmModel ?? LLM_FEATURE_DEFAULTS["image-to-text"]
       const modelIdentifier = buildLlmCreditIdentifier("image-to-text", llmModel)
+      const mcpClient = extractMcpClient(req.body)
 
       // Create a job record for audit trail
       const { data: job, error: jobError } = await supabase
@@ -78,6 +80,7 @@ export async function imageToTextRoutes(app: FastifyInstance) {
           user_id: userId,
           status: "pending",
           input_data: buildJobInputData(parsed.data, "image-to-text"),
+          ...(mcpClient ? { mcp_client: mcpClient } : {}),
         })
         .select("id")
         .single()

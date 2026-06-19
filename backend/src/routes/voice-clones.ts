@@ -7,6 +7,7 @@ import { supabase } from "../lib/supabase.js"
 import { uploadBufferToR2 } from "../lib/storage.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
+import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { safeFetch } from "../lib/safe-fetch.js"
 import { formatZodError } from "../lib/zod-error.js"
@@ -112,6 +113,7 @@ export async function voiceCloneRoutes(app: FastifyInstance) {
 
     const buffer = await data.toBuffer()
     const mimeType = data.mimetype
+    const mcpClient = extractMcpClient(req.body)
 
     const { data: job, error: jobError } = await supabase
       .from("jobs")
@@ -122,6 +124,7 @@ export async function voiceCloneRoutes(app: FastifyInstance) {
         user_id: userId,
         status: "pending",
         input_data: { type: "voice-clone", name },
+        ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
       .select("id")
       .single()
@@ -279,6 +282,7 @@ export async function voiceCloneRoutes(app: FastifyInstance) {
       })
     }
     const mimeType = fetched.headers.get("content-type")?.split(";")[0]?.trim() || "audio/mpeg"
+    const mcpClient = extractMcpClient(req.body)
 
     const { data: job, error: jobError } = await supabase
       .from("jobs")
@@ -289,6 +293,7 @@ export async function voiceCloneRoutes(app: FastifyInstance) {
         user_id: userId,
         status: "pending",
         input_data: { type: "voice-clone", name },
+        ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
       .select("id")
       .single()

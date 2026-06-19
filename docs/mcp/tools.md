@@ -1,6 +1,6 @@
 # MCP Tool Reference
 
-Complete reference for the 123 tools exposed by the Nodaro MCP server.
+Complete reference for the 128 tools exposed by the Nodaro MCP server.
 
 ## Scopes
 
@@ -21,6 +21,7 @@ authorizing the connector; missing scopes cause tools to be omitted entirely
 | `pipelines:read` | `get_pipeline_stage_chat`, `get_pipeline_status`, `pipeline_pending_approvals` |
 | `pipelines:execute` | `branch_pipeline`, `start_pipeline` |
 | `pipelines:approve` | `chat_pipeline_stage`, `apply_chat_proposal` |
+| `presets:read` | `list_node_presets` |
 
 **Ungated (always visible):** `ping`, `list_models`, `start_film_director`, `start_workflow_editor`, `get_node_skill`
 
@@ -698,6 +699,60 @@ Pass `refine_from_video_url` to use video-to-video refinement.
 
 ---
 
+## Creature tools
+
+Four tools for the creature / animal lifecycle — main-image approval, LLM
+recaption, motion clips, and verb-style generation. Mirrors the Object tools
+with the Animal/Creature delta (free-text `species` / `category` / `style`).
+
+### `generate_creature`
+
+**Scope:** `workflows:execute`
+
+Generate a creature/animal main image (`kind: "main"`) or a variant asset
+(`kind: "asset"` + `asset_type` + `variant`). Parallel to `generate_object`;
+`species` (free text, e.g. `"dragon"`, `"wolf"`) is the creature delta vs
+objects.
+
+**Input (main):** `kind`, `name`, `description`, `species`, `category`, `style`, `source_image_url`, `model`
+
+**Input (asset):** `kind`, `name`, `asset_type` (`angles`/`poses`/`variations`/`custom`), `variant`, `species`, `category`, `style`, `source_image_url`, `model`
+
+---
+
+### `approve_creature_main_image`
+
+**Scope:** `assets:write`
+
+Approve a completed `generate_creature` candidate as the creature's main
+image. Fires the LLM caption inline.
+
+**Input:** `{ creature_id: uuid, candidate_job_id: uuid }` + optional `expected_updated_at`
+
+---
+
+### `recaption_creature`
+
+**Scope:** `assets:write`
+
+Re-run the LLM caption against the current main image.
+
+**Input:** `{ creature_id: uuid }`
+
+---
+
+### `generate_creature_motion`
+
+**Scope:** `workflows:execute`
+
+Animate the creature's main image into an ambient motion clip
+(image-to-video). Provider defaults to `"kling-turbo"`, aspect ratio defaults
+to `"1:1"`. Pass `refine_from_video_url` to use video-to-video refinement.
+
+**Input:** `motion_prompt`, `source_image_url` (required), `name`, `canonical_description`, `category`, `style`, `attach_to_creature_id`, `attach_name`, `provider`, `aspect_ratio`, `refine_from_video_url`
+
+---
+
 ## Gallery and asset tools
 
 ### `browse_gallery`
@@ -940,6 +995,23 @@ Lists recent credit transactions (deductions and top-ups) with amounts,
 model identifiers, and timestamps.
 
 **Input:** `limit`, `cursor`
+
+---
+
+### `list_node_presets`
+
+**Scope:** `presets:read`
+
+List saved node presets — reusable named node configurations. Returns
+names, ids, and descriptions for discovery; fetch the full config `data` via
+the REST API / SDK (`GET /v1/node-presets`, `GET /v1/node-presets/factory`).
+
+**Input:**
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `nodeType` | string | Filter to one node type, e.g. `"generate-image"`. **Required** when `source` includes factory. |
+| `source` | enum `custom` / `factory` / `all` | Which presets to return. Default `custom` (your own saved presets). |
 
 ---
 

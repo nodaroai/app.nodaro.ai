@@ -24,7 +24,11 @@ const PICK_BEST_LLM_STRATEGY = {
   label: "Pick best (LLM judge)",
   description: "Sonnet picks the best item against your criteria.",
   configSchema: z.object({
-    criteria: z.string().min(1, "criteria is required"),
+    // Default to the sensible "best quality" criteria when omitted (matches
+    // defaultConfig) so a reduce({strategyId:"pick-best-llm"}) call with no
+    // criteria degrades gracefully instead of erroring. An explicit "" still
+    // rejects via min(1).
+    criteria: z.string().min(1, "criteria cannot be empty").default("Pick the highest-quality result."),
     inputKind: z.enum(["text", "image-url"]).default("text"),
   }),
   defaultConfig: { criteria: "Pick the highest-quality result.", inputKind: "text" as const },

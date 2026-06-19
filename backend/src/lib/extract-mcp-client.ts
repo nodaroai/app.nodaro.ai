@@ -9,6 +9,8 @@ export function extractMcpClient(rawBody: unknown): string | null {
   if (!rawBody || typeof rawBody !== "object") return null
   const v = (rawBody as Record<string, unknown>).mcp_client
   if (typeof v !== "string") return null
-  if (v.length === 0 || v.length > 50) return null
-  return v
+  if (v.length === 0) return null
+  // developer_apps.name allows up to 100 chars; truncate (don't drop) so a
+  // legitimately long client name still produces an origin badge.
+  return v.length > 50 ? v.slice(0, 50) : v
 }

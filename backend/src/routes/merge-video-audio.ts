@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
+import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 
@@ -44,6 +45,7 @@ export async function mergeVideoAudioRoutes(app: FastifyInstance) {
     }
 
     const modelIdentifier = "merge-video-audio"
+    const mcpClient = extractMcpClient(req.body)
 
     const { data: job, error } = await supabase
       .from("jobs")
@@ -54,6 +56,7 @@ export async function mergeVideoAudioRoutes(app: FastifyInstance) {
         user_id: userId,
         status: "pending",
         input_data: buildJobInputData(parsed.data, "merge-video-audio"),
+        ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
       .select("id")
       .single()

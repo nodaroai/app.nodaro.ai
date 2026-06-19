@@ -98,7 +98,14 @@ export async function cancelTask(taskId: string, userId: string): Promise<boolea
 
 async function markJobCancelled(jobId: string): Promise<void> {
   const { supabase } = await import("../supabase.js")
-  await supabase.from("jobs").update({ status: "cancelled" }).eq("id", jobId)
+  // Guard: only cancel a job that is still in flight. Without the status
+  // filter, cancelling a taskId whose job already completed would clobber a
+  // `completed` row with `cancelled`, losing the finished result.
+  await supabase
+    .from("jobs")
+    .update({ status: "cancelled" })
+    .eq("id", jobId)
+    .in("status", ["pending", "processing"])
 }
 
 /**
@@ -157,9 +164,10 @@ export function registerTaskHandlers(server: McpServer, getUserId: () => string)
         taskId: t.taskId,
         // We don't track per-task status in the in-process registry; that
         // lives in Supabase. To keep tasks/list cheap (no batched DB read on
-        // every invocation), we report all known tasks as "working" — the
-        // moment a task reaches a terminal state, the worker calls
-        // completeTask() and it falls out of the registry on the next poll.
+        // every invocation), we report all known tasks as "working". Terminal
+        // tasks are drained from the registry when tasks/get or tasks/result
+        // observes their terminal Supabase status (see completeTask calls
+        // below), so a finished task falls out of this list on the next poll.
         // Clients that need the precise terminal status should call
         // tasks/get for the specific taskId.
         status: "working" as const,
@@ -186,6 +194,14 @@ export function registerTaskHandlers(server: McpServer, getUserId: () => string)
     const created = data?.created_at ?? new Date(t.startedAt).toISOString()
     const updated = data?.updated_at ?? created
     const status = mapJobStatus(data?.status)
+
+    // Drain terminal tasks from the in-process registry so it can't grow
+    // unbounded. The progress emitter that used to call completeTask() is
+    // intentionally disabled (see server.ts), so tasks/get + tasks/result are
+    // now the eviction points.
+    if (status === "completed" || status === "failed" || status === "cancelled") {
+      completeTask(t.taskId)
+    }
 
     const result: {
       taskId: string
@@ -236,7 +252,8 @@ export function registerTaskHandlers(server: McpServer, getUserId: () => string)
  *
  * Returns either:
  *   - `{ taskId, status, output, error }` when terminal, or
- *   - `{ taskId, status: "in_progress", message }` on timeout.
+ *   - `{ taskId, status: "working", message }` on timeout (a valid MCP
+ *     task-status enum value — clients re-call `tasks/result` to keep waiting).
  *
  * The 90-second cap aligns with typical proxy timeouts (most CDNs and load
  * balancers cut idle connections at 60-100s); clients that need to wait
@@ -256,19 +273,28 @@ async function waitForTerminal(jobId: string, signal: AbortSignal): Promise<{
 }> {
   const start = Date.now()
   const TIMEOUT_MS = 90_000
+  // Hoisted out of the loop — the dynamic import resolves the same cached
+  // module every iteration; importing once avoids the repeated lookup.
+  const { supabase } = await import("../supabase.js")
   while (Date.now() - start < TIMEOUT_MS && !signal.aborted) {
-    const { supabase } = await import("../supabase.js")
     const { data } = await supabase
       .from("jobs")
       .select("status, output_data, error_message")
       .eq("id", jobId)
       .maybeSingle()
-    if (!data) throw new Error(`Job ${jobId} disappeared`)
+    if (!data) {
+      // The job row was removed mid-poll (e.g. credit-reservation cleanup
+      // deletes the orphan job on a reserve failure). Return a clean terminal
+      // status instead of throwing an internal error at the client.
+      completeTask(jobId)
+      return { taskId: jobId, status: "failed", error: "Job no longer exists" }
+    }
     if (
       data.status === "completed" ||
       data.status === "failed" ||
       data.status === "cancelled"
     ) {
+      completeTask(jobId)
       return {
         taskId: jobId,
         status: data.status,
@@ -280,7 +306,7 @@ async function waitForTerminal(jobId: string, signal: AbortSignal): Promise<{
   }
   return {
     taskId: jobId,
-    status: "in_progress",
+    status: "working",
     message: "Timed out — call again to keep waiting",
   }
 }

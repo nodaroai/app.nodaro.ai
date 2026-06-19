@@ -16,6 +16,10 @@ const SCOPE_DESCRIPTIONS: Record<string, string> = {
   "assets:write": "Upload assets to your account",
   "credits:read": "See your credit balance",
   "apps:read": "Read published apps",
+  "pipelines:read": "Read your Film Director pipelines",
+  "pipelines:execute": "Start and run pipelines on your behalf",
+  "pipelines:approve": "Approve and refine pipeline stages",
+  "presets:read": "Read node presets",
 }
 
 export default function OAuthAuthorizePage() {

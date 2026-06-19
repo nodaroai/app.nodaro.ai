@@ -11,6 +11,8 @@ import {
   jobResultWithWidget,
   dispatchJob,
   resolveRefArray,
+  StructuredFields,
+  JOB_OUTPUT_SCHEMA,
 } from "./_verb-helpers.js"
 import {
   modelIdsByKindMode,
@@ -34,17 +36,6 @@ const T2V_MODEL_IDS = modelIdsByKindMode(null, ["t2v"], { includeHidden: true })
 const I2V_MODEL_IDS = modelIdsByKindMode("video", ["i2v"], { includeHidden: true })
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
-
-const StructuredFields = z
-  .object({
-    person: z.record(z.string(), z.unknown()).optional(),
-    styling: z.record(z.string(), z.unknown()).optional(),
-    setting: z.record(z.string(), z.unknown()).optional(),
-    camera: z.record(z.string(), z.unknown()).optional(),
-    lens: z.record(z.string(), z.unknown()).optional(),
-    mood: z.string().optional(),
-  })
-  .partial()
 
 export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): void {
   if (!passesGate(session, executeGate)) return
@@ -153,7 +144,12 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         duration,
         aspectRatio,
         resolution,
+        // Map the single `sound` toggle onto BOTH route levers: Kling-family
+        // models read `sound`, but Seedance (the default) + VEO read
+        // `generateAudio` (which defaults ON). Without forwarding both, a
+        // `sound: false` was silently ignored on the default/VEO models.
         sound: args.sound,
+        generateAudio: args.sound,
         negativePrompt: args.negative_prompt,
         seed: args.seed,
         mcp_client: session.clientName,
@@ -416,7 +412,11 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         duration,
         aspectRatio,
         resolution: callResolution,
+        // Map the single `sound` toggle onto BOTH route levers — Kling reads
+        // `sound`, Seedance (default) + VEO read `generateAudio` (default ON);
+        // forwarding only `sound` silently ignored `sound:false` on those.
         sound: args.sound,
+        generateAudio: args.sound,
         ...(refImageUrls.length ? { referenceImageUrls: refImageUrls } : {}),
         ...(refVideoUrls.length ? { referenceVideoUrls: refVideoUrls } : {}),
         ...(refAudioUrls.length ? { referenceAudioUrls: refAudioUrls } : {}),
@@ -1734,7 +1734,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         face_image_url: z.string().url().optional().describe("Portrait image whose face to use."),
         face_image_asset_id: z.string().optional().describe("Nodaro image job id for the face."),
       },
-      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
         "ui/resourceUri": "ui://nodaro/widget/v3/job-video",
@@ -1779,7 +1779,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         upscale_factor: z.enum(["1", "2", "4"]).optional().describe("Upscale factor for topaz (1×/2×/4×). Default 2."),
         kie_task_id: z.string().optional().describe("KIE task id from the original VEO generation — required for veo-1080p / veo-4k."),
       },
-      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
         "ui/resourceUri": "ui://nodaro/widget/v3/job-video",
@@ -1833,7 +1833,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         resolution: z.enum(["480p", "580p", "720p"]).optional().describe("Output resolution. Default 480p."),
         negative_prompt: z.string().max(2500).optional(),
       },
-      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
         "ui/resourceUri": "ui://nodaro/widget/v3/job-video",
