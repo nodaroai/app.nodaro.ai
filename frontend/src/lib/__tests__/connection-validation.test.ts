@@ -564,3 +564,25 @@ describe("collectTargetCandidates (image input lists entity image output)", () =
     ).toHaveLength(0)
   })
 })
+
+describe("audio-separation source → audio/media inputs (regression)", () => {
+  const typeOf = (id: string) => id // node id == node type in these probes
+  it("audio-separation vocals → voice-changer audio input", () => {
+    expect(isValidWorkflowConnection(
+      { source: "audio-separation", target: "voice-changer", sourceHandle: "vocals", targetHandle: "audio" },
+      typeOf,
+    )).toBe(true)
+  })
+  it("audio-separation instrumental → merge-video-audio media input", () => {
+    expect(isValidWorkflowConnection(
+      { source: "audio-separation", target: "merge-video-audio", sourceHandle: "instrumental", targetHandle: "in" },
+      typeOf,
+    )).toBe(true)
+  })
+  it("audio-separation drums → mix-audio input", () => {
+    expect(isValidWorkflowConnection(
+      { source: "audio-separation", target: "mix-audio", sourceHandle: "drums", targetHandle: "in" },
+      typeOf,
+    )).toBe(true)
+  })
+})
