@@ -298,6 +298,8 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   "suno-lyrics":       { provider: "KIE.ai",    providerCostUsd: 0.002, markupPct: 25 },  // 0.4 KIE cr
   "suno-separate":     { provider: "KIE.ai",    providerCostUsd: 0.050, markupPct: 25 },  // 10 KIE cr (vocal)
   "suno-separate-stem": { provider: "KIE.ai",   providerCostUsd: 0.250, markupPct: 25 },  // 50 KIE cr (multi-stem)
+  "audio-separation":      { provider: "Replicate", providerCostUsd: 0.048, markupPct: 25 },  // Demucs fixed 3 cr (Auto/Fast)
+  "audio-separation:best": { provider: "Replicate", providerCostUsd: 0.128, markupPct: 25 },  // Demucs htdemucs_ft fixed 8 cr
   "suno-music-video":  { provider: "KIE.ai",    providerCostUsd: 0.010, markupPct: 25 },  // 2 KIE cr
   "suno-mashup":       { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 },  // 12 KIE cr
   "suno-replace-section": { provider: "KIE.ai", providerCostUsd: 0.025, markupPct: 25 },  // 5 KIE cr

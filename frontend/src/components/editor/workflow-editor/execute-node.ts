@@ -4,6 +4,7 @@ import {
   generateMusicApi,
   textToAudioApi,
   audioIsolationApi,
+  audioSeparationApi,
   textToDialogueApi,
   sunoGenerateApi,
   sunoCoverApi,
@@ -100,6 +101,7 @@ import type {
   GenerateMusicData,
   TextToAudioData,
   AudioIsolationData,
+  AudioSeparationData,
   TextToDialogueData,
   SunoGenerateData,
   SunoCoverData,
@@ -2418,6 +2420,40 @@ export function executeNode(
       "generatedAudioUrl",
       "Voice Extractor",
       ctx,
+    );
+  }
+
+  if (node.type === "audio-separation") {
+    const d = node.data as AudioSeparationData;
+    // Input resolution mirrors audio-isolation (plain audio URL); multi-stem
+    // output is written via the extraOutputFields callback like suno-separate.
+    const audioUrl = inputs.audioUrl;
+    if (!audioUrl) {
+      toast.error(`Node "${d.label}": no audio input found`);
+      return Promise.reject(new Error("No audio input"));
+    }
+    setUserPromptTemplate(undefined);
+    return runProcessingNode(
+      node.id,
+      () =>
+        audioSeparationApi({
+          audioUrl,
+          mode: d.mode || "vocal_instrumental",
+          quality: d.quality || "auto",
+          userId: ctx.userId,
+        }),
+      "generatedAudioUrl",
+      "Audio Separation",
+      ctx,
+      (od) => {
+        const extra: Record<string, unknown> = {};
+        const stemKeys = ["vocalUrl", "instrumentalUrl", "drumsUrl", "bassUrl", "otherUrl", "guitarUrl", "pianoUrl"] as const;
+        for (const key of stemKeys) {
+          const v = (od as Record<string, unknown>)[key];
+          if (v) extra[key] = v;
+        }
+        return extra;
+      },
     );
   }
 

@@ -756,6 +756,7 @@ const LLM_REF_AUDIO_NODE_TYPES = new Set<string>([
   "trim-audio", "combine-audio", "mix-audio", "audio-isolation",
   "text-to-dialogue",
   "suno-generate", "suno-cover", "suno-extend", "suno-separate",
+  "audio-separation",
   "suno-mashup", "suno-replace-section", "suno-add-instrumental",
   "suno-add-vocals", "suno-convert-wav", "suno-upload-extend",
   "upload-audio", "extract-audio",
@@ -2075,6 +2076,26 @@ export function resolveNodeInputs(
         }
       }
     } else if (
+      src.type === "audio-separation" &&
+      resolvedSourceHandle != null &&
+      ["vocals", "instrumental", "drums", "bass", "other", "guitar", "piano"].includes(resolvedSourceHandle)
+    ) {
+      // Audio-separation (Demucs) emits up to 7 stems; route the one matching
+      // the edge's sourceHandle. Handle id = stem name (vocals→vocalUrl).
+      const srcData = src.data as Record<string, unknown>;
+      const fieldByHandle: Record<string, string> = {
+        vocals: "vocalUrl", instrumental: "instrumentalUrl", drums: "drumsUrl",
+        bass: "bassUrl", other: "otherUrl", guitar: "guitarUrl", piano: "pianoUrl",
+      };
+      const stemUrl = srcData[fieldByHandle[resolvedSourceHandle]] as string | undefined;
+      if (stemUrl) {
+        if (node.type === "merge-video-audio") {
+          inputs.audioSources = [...(inputs.audioSources ?? []), { url: stemUrl, sourceNodeId: src.id }];
+        } else {
+          inputs.audioUrl = stemUrl;
+        }
+      }
+    } else if (
       src.type === "text-to-speech" ||
       src.type === "generate-music" ||
       src.type === "text-to-audio" ||
@@ -2084,6 +2105,7 @@ export function resolveNodeInputs(
       src.type === "suno-cover" ||
       src.type === "suno-extend" ||
       src.type === "suno-separate" ||
+      src.type === "audio-separation" ||
       src.type === "suno-mashup" ||
       src.type === "suno-replace-section" ||
       src.type === "suno-add-instrumental" ||
