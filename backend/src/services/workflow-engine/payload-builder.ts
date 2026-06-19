@@ -3335,6 +3335,21 @@ export function buildPayload(
         usageLogId,
       })
 
+    case "audio-separation": {
+      // "best" quality costs more — mirror the route's creditGuard so
+      // orchestrated runs don't under-charge.
+      const sepQuality = (data.quality as string | undefined) || "auto"
+      const sepIdentifier =
+        sepQuality === "best" ? "audio-separation:best" : "audio-separation"
+      return simpleResult("audio-separation", sepIdentifier, {
+        jobId,
+        audioUrl: resolvedInputs.audioUrl || data.audioUrl,
+        mode: (data.mode as string | undefined) || "vocal_instrumental",
+        quality: sepQuality,
+        usageLogId,
+      })
+    }
+
     case "text-to-dialogue": {
       // Filter empty dialogue lines (matches frontend behavior)
       const rawDialogue = (data.dialogue ?? data.script) as Array<{ text: string; voice?: string }> | undefined
