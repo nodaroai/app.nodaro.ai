@@ -66,16 +66,15 @@ function AudioSeparationNodeComponent({ id, data, selected }: NodeProps) {
     // generatedResults, so computeDeleteResultUpdates won't touch them.
     updateNodeData(id, {
       ...computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedAudioUrl"),
-      vocalUrl: undefined, instrumentalUrl: undefined, drumsUrl: undefined,
-      bassUrl: undefined, otherUrl: undefined, guitarUrl: undefined, pianoUrl: undefined,
+      ...Object.fromEntries(STEMS.map((s) => [s.field, undefined])),
     })
   }
 
-  // Per-stem previews — exclude the one already shown in the primary overlay.
-  const presentStems = STEMS.filter((s) => {
-    const url = nodeData[s.field as keyof AudioSeparationData]
-    return url && url !== activeUrl
-  })
+  // Per-stem previews — resolve each url once; exclude the one already shown in
+  // the primary overlay.
+  const presentStems = STEMS
+    .map((s) => ({ stem: s, url: nodeData[s.field as keyof AudioSeparationData] as string | undefined }))
+    .filter(({ url }) => url && url !== activeUrl)
 
   return (
     <div className="relative" style={{ maxWidth: '220px' }}>
@@ -127,12 +126,12 @@ function AudioSeparationNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         )}
 
-        {presentStems.map((s) => (
-          <div key={s.id} className="flex flex-col gap-1 px-1">
-            <span className="text-[10px] text-muted-foreground font-medium">{s.label}</span>
+        {presentStems.map(({ stem, url }) => (
+          <div key={stem.id} className="flex flex-col gap-1 px-1">
+            <span className="text-[10px] text-muted-foreground font-medium">{stem.label}</span>
             <AudioResultOverlay
-              url={nodeData[s.field as keyof AudioSeparationData] as string}
-              label={s.label}
+              url={url as string}
+              label={stem.label}
               hasResults={false}
               onExpand={() => setPreviewOpen(true)}
               onDelete={() => {}}
