@@ -308,6 +308,11 @@ export function getModelIdentifier(node: WorkflowNode): string {
     return (data.type as string) === "split_stem" ? "suno-separate-stem" : "suno-separate"
   }
 
+  // Audio separation (Demucs): "best" quality costs more
+  if (nodeType === "audio-separation") {
+    return (data.quality as string) === "best" ? "audio-separation:best" : "audio-separation"
+  }
+
   // Entity nodes: use provider field (default nano-banana)
   if (nodeType === "character" || nodeType === "face" || nodeType === "object" || nodeType === "location") {
     const entityProvider = (data.provider as string) || "nano-banana"

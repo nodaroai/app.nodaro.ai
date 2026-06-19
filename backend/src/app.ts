@@ -126,6 +126,7 @@ import { lottieOverlayAIRoutes } from "./routes/lottie-overlay-ai.js"
 import { threeDTitleAIRoutes } from "./routes/three-d-title-ai.js"
 import { motionGraphicsAIRoutes } from "./routes/motion-graphics-ai.js"
 import { audioIsolationRoutes } from "./routes/audio-isolation.js"
+import { audioSeparationRoutes } from "./routes/audio-separation.js"
 import { textToDialogueRoutes } from "./routes/text-to-dialogue.js"
 import { imageToTextRoutes } from "./routes/image-to-text.js"
 import { describeToPickerRoutes } from "./routes/describe-to-picker.js"
@@ -408,6 +409,7 @@ export async function buildApp() {
   await app.register(threeDTitleAIRoutes)
   await app.register(motionGraphicsAIRoutes)
   await app.register(audioIsolationRoutes)
+  await app.register(audioSeparationRoutes)
   await app.register(textToDialogueRoutes)
   await app.register(imageToTextRoutes)
   await app.register(describeToPickerRoutes)

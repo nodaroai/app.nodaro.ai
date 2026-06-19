@@ -119,6 +119,7 @@ import {
   SunoExtendConfig,
   SunoLyricsConfig,
   SunoSeparateConfig,
+  AudioSeparationConfig,
   SunoMusicVideoConfig,
   SunoMashupConfig,
   SunoReplaceSectionConfig,
@@ -212,7 +213,7 @@ import { TileCommitContext } from "./config-panels/dimension-tile-grid"
 import { createRovingTabIndexRef, handleConfigPanelNavKeyDown } from "./config-panels/config-keyboard-nav"
 
 const LIBRARY_VIDEO_TYPES = new Set(["image-to-video", "video-to-video", "text-to-video", "generate-video", "video-upscale", "extend-video", "motion-transfer", "lip-sync", "speech-to-video", "face-swap", "video-sfx", "ai-avatar", "cinematic-avatar"])
-const LIBRARY_AUDIO_TYPES = new Set(["text-to-speech", "generate-music", "text-to-audio", "audio-isolation", "text-to-dialogue", "voice-changer", "dubbing", "voice-remix", "voice-design", "suno-generate", "suno-cover", "suno-extend", "suno-separate", "suno-mashup", "suno-replace-section", "suno-add-instrumental", "suno-add-vocals", "suno-convert-wav", "suno-upload-extend"])
+const LIBRARY_AUDIO_TYPES = new Set(["text-to-speech", "generate-music", "text-to-audio", "audio-isolation", "audio-separation", "text-to-dialogue", "voice-changer", "dubbing", "voice-remix", "voice-design", "suno-generate", "suno-cover", "suno-extend", "suno-separate", "suno-mashup", "suno-replace-section", "suno-add-instrumental", "suno-add-vocals", "suno-convert-wav", "suno-upload-extend"])
 
 const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "text-prompt": "Text",
@@ -296,6 +297,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "suno-extend": "Suno Extend",
   "suno-lyrics": "Suno Lyrics",
   "suno-separate": "Suno Separate",
+  "audio-separation": "Audio Separation",
   "suno-music-video": "Music Video",
   "suno-mashup": "Suno Mashup",
   "suno-replace-section": "Suno Replace Section",
@@ -384,7 +386,7 @@ export function getNodeTypeDisplayName(type: string): string {
 export const GENERATE_BUTTON_TYPES = new Set([
   "generate-script", "generate-image", "modify-image", "upscale-image", "remove-background", "generate-mask", "reference-sheet", "reference-board",
   "image-to-video", "video-to-video", "text-to-video", "generate-video", "text-to-speech",
-  "text-to-audio", "audio-isolation", "text-to-dialogue", "voice-changer", "dubbing", "voice-remix", "voice-design", "forced-alignment", "generate-music", "motion-transfer", "lip-sync", "speech-to-video",
+  "text-to-audio", "audio-isolation", "audio-separation", "text-to-dialogue", "voice-changer", "dubbing", "voice-remix", "voice-design", "forced-alignment", "generate-music", "motion-transfer", "lip-sync", "speech-to-video",
   "video-upscale", "extend-video", "video-retake", "face-swap", "video-sfx", "ai-avatar", "cinematic-avatar", "suno-generate", "suno-cover", "suno-extend",
   "suno-lyrics", "suno-separate", "suno-music-video",
   "suno-mashup", "suno-replace-section", "suno-style-boost", "suno-add-instrumental", "suno-add-vocals", "suno-convert-wav", "suno-upload-extend",
@@ -564,6 +566,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "suno-extend": return <SunoExtendConfig {...configProps} nodeId={selectedNodeId} />
     case "suno-lyrics": return <SunoLyricsConfig {...configProps} nodeId={selectedNodeId} />
     case "suno-separate": return <SunoSeparateConfig {...configProps} />
+    case "audio-separation": return <AudioSeparationConfig {...configProps} />
     case "suno-music-video": return <SunoMusicVideoConfig {...configProps} />
     case "suno-mashup": return <SunoMashupConfig {...configProps} />
     case "suno-replace-section": return <SunoReplaceSectionConfig {...configProps} nodeId={selectedNodeId} />

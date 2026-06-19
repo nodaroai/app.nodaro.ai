@@ -45,6 +45,12 @@ export interface NodeOutput {
   script?: unknown
   vocalUrl?: string
   instrumentalUrl?: string
+  /** audio-separation (Demucs) full-stems outputs. */
+  drumsUrl?: string
+  bassUrl?: string
+  otherUrl?: string
+  guitarUrl?: string
+  pianoUrl?: string
   splitResults?: string[]
   combinedText?: string
   kieTaskId?: string

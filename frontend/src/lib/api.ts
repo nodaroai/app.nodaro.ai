@@ -3492,6 +3492,23 @@ export async function sunoSeparateApi(params: {
   })
 }
 
+export async function audioSeparationApi(params: {
+  audioUrl: string
+  mode?: "vocal_instrumental" | "stems"
+  quality?: "auto" | "fast" | "best"
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { audioUrl: params.audioUrl }
+  if (params.mode) body.mode = params.mode
+  if (params.quality) body.quality = params.quality
+  if (params.userId) body.userId = params.userId
+  return apiJson("/v1/audio-separation", {
+    body,
+    workflowId: true,
+    label: "Failed to start audio separation",
+  })
+}
+
 export async function sunoMusicVideoApi(params: {
   taskId: string
   audioId: string

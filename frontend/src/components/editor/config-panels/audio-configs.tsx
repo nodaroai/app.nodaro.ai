@@ -32,6 +32,7 @@ import type {
   SunoExtendData,
   SunoLyricsData,
   SunoSeparateData,
+  AudioSeparationData,
   SunoMusicVideoData,
   SunoMashupData,
   SunoReplaceSectionData,
@@ -850,6 +851,46 @@ export function SunoSeparateConfig({ data, onUpdate }: { readonly data: SunoSepa
               <WaveformAudioPlayer url={url} variant="compact" className="w-full" />
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function AudioSeparationConfig({ data, onUpdate }: { readonly data: AudioSeparationData; readonly onUpdate: (updates: Partial<AudioSeparationData>) => void }) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-muted-foreground">Mode</label>
+        <Select value={data.mode} onValueChange={(v) => onUpdate({ mode: v as AudioSeparationData["mode"] })}>
+          <SelectTrigger aria-label="Mode"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="vocal_instrumental">Vocal / Instrumental</SelectItem>
+            <SelectItem value="stems">Full stems</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-muted-foreground">Quality</label>
+        <Select value={data.quality} onValueChange={(v) => onUpdate({ quality: v as AudioSeparationData["quality"] })}>
+          <SelectTrigger aria-label="Quality"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="auto">Auto</SelectItem>
+            <SelectItem value="fast">Fast</SelectItem>
+            <SelectItem value="best">Best (slower)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      {data.vocalUrl && (
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-muted-foreground">Vocals</label>
+          <WaveformAudioPlayer url={data.vocalUrl} variant="compact" className="w-full" />
+        </div>
+      )}
+      {data.instrumentalUrl && (
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-muted-foreground">Instrumental</label>
+          <WaveformAudioPlayer url={data.instrumentalUrl} variant="compact" className="w-full" />
         </div>
       )}
     </div>
