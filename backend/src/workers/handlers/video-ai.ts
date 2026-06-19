@@ -186,6 +186,12 @@ async function dispatchLtxIfRequested(
       url: result.videoUrl,
       cost: result.cost,
       providerUsed: variant,
+      // LTX 2.3 is a genuine Replicate GPU-time provider: `cost` is the actual
+      // metered Replicate cost. The reserved credit identifier is the bare
+      // provider id (LTX has no resolution/duration composite in the pricing
+      // sets), so commit MUST meter to the real cost — otherwise a 2k/4k/long
+      // run reserved at the cheapest tier (24cr) under-charges up to ~6.6x.
+      meteredCost: true,
     },
     mediaUrl: r2Url,
     extraOutputData: { thumbnailUrl: thumbUrl },
@@ -992,6 +998,8 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
         url: ltxExtendResult.videoUrl,
         cost: ltxExtendResult.cost,
         providerUsed: "ltx-2.3-pro",
+        // Metered Replicate cost — see the main LTX finalize above.
+        meteredCost: true,
       },
       mediaUrl: ltxExtendR2Url,
       extraOutputData: { thumbnailUrl: ltxExtendThumbUrl },

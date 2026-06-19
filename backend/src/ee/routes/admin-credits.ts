@@ -6,6 +6,7 @@ import { CreditsService, invalidateModelPricingCache } from "../billing/credits.
 import { invalidateBalanceCache } from "../routes/credits.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { invalidateAuthCache } from "../../middleware/auth.js"
+import { invalidateAdminCache } from "../../lib/admin-check.js"
 import { TIER_CREDITS } from "../billing/stripe-config.js"
 
 // ---- Zod Schemas ----
@@ -267,8 +268,11 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
       return reply.code(500).send({ error: updateError.message })
     }
 
-    // Invalidate auth cache so the new role takes effect immediately
+    // Invalidate auth + admin caches so the new role takes effect immediately
+    // (the admin-verdict cache is separate from the token cache; without this a
+    // demoted admin keeps admin access until the 5-min TTL expires).
     invalidateAuthCache(id)
+    invalidateAdminCache(id)
 
     return { role, previous_role: previousRole }
   })

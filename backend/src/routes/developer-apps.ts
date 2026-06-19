@@ -34,7 +34,10 @@ function generateClientSecret(): string {
   return `sec_${randomBytes(32).toString("hex")}`
 }
 
-async function hashSecret(secret: string): Promise<string> {
+// Exported so DCR (oauth-register.ts) hashes with the SAME algorithm the token
+// endpoint verifies against (verifyClientSecret → bcrypt.compare). Hashing with
+// anything else (e.g. sha256) makes every non-PKCE secret check fail.
+export async function hashSecret(secret: string): Promise<string> {
   return bcrypt.hash(secret, 10)
 }
 

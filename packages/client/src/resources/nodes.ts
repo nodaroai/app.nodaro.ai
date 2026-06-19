@@ -78,8 +78,18 @@ export type RunNodeResult =
  * present, so the index signature is open.
  */
 export interface NodeJobOutput {
-  /** `text-to-speech` / `generate-music` / audio nodes write here. */
+  /** `text-to-speech` / `generate-music` / audio nodes write here. For
+   *  `audio-separation` this is the primary stem (vocals). */
   readonly audioUrl?: string
+  /** `audio-separation` (Demucs) per-stem URLs. `vocalUrl`/`instrumentalUrl`
+   *  in vocal/instrumental mode; the rest in full-stems mode. */
+  readonly vocalUrl?: string
+  readonly instrumentalUrl?: string
+  readonly drumsUrl?: string
+  readonly bassUrl?: string
+  readonly otherUrl?: string
+  readonly guitarUrl?: string
+  readonly pianoUrl?: string
   /** `generate-video` / `combine-videos` / `merge-video-audio` / `video-upscale` write here. */
   readonly videoUrl?: string
   /** `generate-image` / `edit-image` / `extract-frame` write here. */

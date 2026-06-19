@@ -380,6 +380,26 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
       (data.generatedAudioUrl as string | undefined)
     );
   }
+  // Audio-separation (Demucs): route each of the 7 stem handles; fall back to
+  // the primary generated audio. Handle id = stem name (vocals→vocalUrl).
+  if (type === "audio-separation") {
+    const handleField: Record<string, string> = {
+      vocals: "vocalUrl", instrumental: "instrumentalUrl", drums: "drumsUrl",
+      bass: "bassUrl", other: "otherUrl", guitar: "guitarUrl", piano: "pianoUrl",
+    };
+    const field = sourceHandle ? handleField[sourceHandle] : undefined;
+    if (field) {
+      return (data[field] as string | undefined) ??
+        (data.generatedAudioUrl as string | undefined);
+    }
+    const results =
+      (data.generatedResults as GeneratedResult[] | undefined) ?? [];
+    const activeIndex = (data.activeResultIndex as number | undefined) ?? 0;
+    return (
+      results[activeIndex]?.url ??
+      (data.generatedAudioUrl as string | undefined)
+    );
+  }
   // Voice-design: support voiceId routing via sourceHandle (matches backend)
   if (type === "voice-design") {
     if (sourceHandle === "voiceId") {
@@ -922,6 +942,7 @@ export const AUDIO_SOURCE_TYPES = new Set([
   "suno-cover",
   "suno-extend",
   "suno-separate",
+  "audio-separation",
   "suno-mashup",
   "suno-replace-section",
   "suno-add-instrumental",

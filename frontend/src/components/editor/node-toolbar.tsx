@@ -135,6 +135,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "text-to-audio", label: "Text to Audio", icon: <Volume2 className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
   { type: "generate-music", label: "Generate Music", icon: <Music className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
   { type: "audio-isolation", label: "Voice Extractor", icon: <AudioWaveform className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
+  { type: "audio-separation", label: "Audio Separation", icon: <Scissors className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
   { type: "text-to-dialogue", label: "Text to Dialogue", icon: <Users className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
   { type: "voice-changer", label: "Voice Changer", icon: <AudioWaveform className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
   { type: "dubbing", label: "Dubbing", icon: <Languages className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },

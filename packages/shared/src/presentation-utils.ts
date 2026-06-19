@@ -137,6 +137,7 @@ const AUDIO_OUTPUT_TYPES = new Set([
   "text-to-dialogue", "voice-changer", "dubbing", "voice-remix",
   "voice-design", "mix-audio", "adjust-volume", "trim-audio",
   "audio-isolation",
+  "audio-separation",
   "upload-audio",
 ])
 

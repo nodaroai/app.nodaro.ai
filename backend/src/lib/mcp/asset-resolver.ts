@@ -68,6 +68,7 @@ const AUDIO_TYPES = new Set<string>([
   "voice-remix",
   "voice-design",
   "audio-isolation",
+  "audio-separation",
   "trim-audio",
   "mix-audio",
   "combine-audio",

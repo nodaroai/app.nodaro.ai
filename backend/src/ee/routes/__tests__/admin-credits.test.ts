@@ -57,6 +57,7 @@ vi.mock("@/ee/routes/credits.js", () => ({
 vi.mock("@/lib/admin-check.js", () => ({
   warmAdminCache: vi.fn(),
   checkIsAdmin: vi.fn().mockResolvedValue(false),
+  invalidateAdminCache: vi.fn(),
 }))
 
 vi.mock("@/middleware/credit-guard.js", () => ({

@@ -218,6 +218,7 @@ Text-to-speech, voice processing, and audio generation using ElevenLabs and othe
 | [Text to Speech](./ai-audio/text-to-speech.md) | ElevenLabs TTS with 3 models, 46 languages | Convert text to natural speech with voice selection |
 | [Text to Audio](./ai-audio/text-to-audio.md) | Generate ambient audio and sound effects | Create SFX, ambient sounds, or background audio from description |
 | [Voice Extractor](./ai-audio/audio-isolation.md) | Isolate voice from mixed audio | Remove background noise, extract clean vocal track |
+| [Audio Separation](./ai-audio/audio-separation.md) | Separate any audio into stems (Demucs) | Vocal/instrumental split or full stems on any (non-Suno) audio |
 | [Text to Dialogue](./ai-audio/text-to-dialogue.md) | Multi-speaker dialogue generation | Create conversations with different voices per speaker |
 | [Voice Changer](./ai-audio/voice-changer.md) | Revoice audio or a talking video | Replace the voice in audio — or a whole video — preserving emotion and timing |
 | [Dubbing](./ai-audio/dubbing.md) | Translate audio preserving speaker identity | Translate spoken audio to another language |

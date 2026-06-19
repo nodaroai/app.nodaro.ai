@@ -10,13 +10,14 @@ import { providerRegistry } from "../registry.js"
 import type { ProviderInfo } from "../provider.interface.js"
 import { ReplicateImageProvider, REPLICATE_IMAGE_MODEL_IDS } from "./image.js"
 import { ReplicateVideoProvider } from "./video.js"
+import { ReplicateAudioSeparationProvider } from "./audio-separation.js"
 
 const LTX_VIDEO_MODEL_IDS = ["ltx-2.3-pro", "ltx-2.3-fast"] as const
 
 const replicateInfo: ProviderInfo = {
   id: "replicate",
   name: "Replicate",
-  capabilities: ["image-generation"],
+  capabilities: ["image-generation", "audio-separation"],
   supportedModels: {
     "image-generation": REPLICATE_IMAGE_MODEL_IDS,
     "image-editing": [],
@@ -30,6 +31,7 @@ const replicateInfo: ProviderInfo = {
     "text-to-speech": [],
     "sound-effect": ["replicate-mmaudio"],
     "audio-isolation": [],
+    "audio-separation": ["demucs"],
     "transcription": [],
     "dialogue": [],
   },
@@ -39,6 +41,7 @@ export function registerReplicateProviders(): void {
   providerRegistry.register(replicateInfo, {
     image: new ReplicateImageProvider(),
     video: new ReplicateVideoProvider(),
+    audioSeparation: new ReplicateAudioSeparationProvider(),
   })
 }
 

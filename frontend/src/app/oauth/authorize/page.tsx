@@ -16,10 +16,14 @@ const SCOPE_DESCRIPTIONS: Record<string, string> = {
   "assets:write": "Upload assets to your account",
   "credits:read": "See your credit balance",
   "apps:read": "Read published apps",
-  "pipelines:read": "Read your Film Director pipelines",
-  "pipelines:execute": "Start and run pipelines on your behalf",
-  "pipelines:approve": "Approve and refine pipeline stages",
-  "presets:read": "Read node presets",
+  // Keep in sync with backend ALL_SCOPES (lib/scopes.ts) — a requested scope
+  // with no entry here renders as its raw machine string on the consent screen,
+  // which is worst for the most sensitive scopes (pipelines:execute spends
+  // credits; pipelines:approve approves pipeline stages).
+  "pipelines:read": "Read your pipelines",
+  "pipelines:execute": "Run pipelines on your behalf (this can spend your credits)",
+  "pipelines:approve": "Approve pipeline stages on your behalf",
+  "presets:read": "Read your saved presets",
 }
 
 export default function OAuthAuthorizePage() {

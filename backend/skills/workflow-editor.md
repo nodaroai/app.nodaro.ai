@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-06-14T16:32:34.857Z
-generated_from: c7e81348f
+generated_at: 2026-06-19T13:33:55.042Z
+generated_from: 9cc2f45ee
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -74,6 +74,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `aspect-ratio` — Aspect Ratio
 - `atmosphere` — Atmosphere
 - `audio-isolation` — Voice Extractor
+- `audio-separation` — Audio Separation
 - `backdrop` — Backdrop
 - `camera-format` — Camera / Film Stock
 - `camera-motion` — Camera Motion
