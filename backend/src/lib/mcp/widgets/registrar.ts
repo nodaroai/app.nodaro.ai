@@ -179,8 +179,6 @@ export function registerWidgetResources(server: McpServer): void {
           },
         },
         async (resolvedUri) => {
-          // eslint-disable-next-line no-console
-          console.log(`[mcp] resources/read ${resolvedUri.href}`)
           return {
             contents: [
               {

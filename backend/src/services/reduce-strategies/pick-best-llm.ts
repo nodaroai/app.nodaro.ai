@@ -1,5 +1,4 @@
 import { llmComplete, type LlmContentBlock, type LlmMessage } from "../../lib/llm-client.js"
-import { filterSurvivors } from "./_normalize.js"
 import { EmptyInputError, type StrategyContext, type StrategyResult } from "./types.js"
 
 type Config = { criteria: string; inputKind: "text" | "image-url" }
@@ -36,7 +35,14 @@ export async function execute(
   config: Config,
   ctx: StrategyContext,
 ): Promise<StrategyResult<string>> {
-  const survivors = filterSurvivors(items)
+  // Track each survivor's ORIGINAL index so the reported selectedIndex is
+  // correct even when survivors contain duplicate strings (an indexOf-by-value
+  // lookup would collapse duplicates to the first occurrence).
+  const survivorIndices: number[] = []
+  items.forEach((s, i) => {
+    if (s.trim() !== "") survivorIndices.push(i)
+  })
+  const survivors = survivorIndices.map((i) => items[i]!)
   if (survivors.length === 0) throw new EmptyInputError()
 
   const messages: LlmMessage[] = config.inputKind === "image-url"
@@ -70,7 +76,7 @@ export async function execute(
   }
 
   const chosenSurvivor = survivors[chosenIndex]
-  const originalIndex = items.indexOf(chosenSurvivor)
+  const originalIndex = survivorIndices[chosenIndex] ?? chosenIndex
 
   ctx.logger.info({ jobId: ctx.jobId, chosenIndex: originalIndex, reasoning }, "pick-best-llm: chose")
 

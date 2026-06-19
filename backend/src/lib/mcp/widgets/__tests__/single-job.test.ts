@@ -41,7 +41,7 @@ describe("single-job widget template", () => {
       const html = buildSingleJobWidget(kind)
       const scriptBlocks = html.match(/<script>[\s\S]*?<\/script>/g) ?? []
       for (const block of scriptBlocks) {
-        expect(block).not.toMatch(/\.innerHTML\s*=/)
+        expect(block).not.toMatch(/\.(inner|outer)HTML\s*=|\binsertAdjacentHTML\b|\bdocument\.write\b/)
       }
     }
   })

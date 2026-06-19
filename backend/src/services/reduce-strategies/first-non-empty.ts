@@ -5,7 +5,7 @@ export async function execute(
   _config: Record<string, never>,
   _ctx: StrategyContext,
 ): Promise<StrategyResult<string>> {
-  const idx = items.findIndex((s) => s !== "")
+  const idx = items.findIndex((s) => s.trim() !== "")
   if (idx === -1) throw new EmptyInputError()
   return {
     result: items[idx],

@@ -7,6 +7,7 @@ import {
   PIPELINE_OUTPUT_RESOLUTIONS,
   PipelineInputSchema,
   CHAT_ENABLED_STAGES,
+  CHAT_WIRED_STAGES,
   CHAT_TURN_CAPS,
   type ChatEnabledStage,
   type JsonPatch,
@@ -212,10 +213,17 @@ export function registerPipelineTools({ server, session }: RegisterPipelineTools
       async (args) => {
         const stageName = args.stage as ChatEnabledStage
 
-        // Only Script chat ships in 1D.2b — mirror the route's 501 guard.
-        if (stageName !== "script") {
+        // Gate on the shared CHAT_WIRED_STAGES source of truth (mirrors the
+        // HTTP route's chat_not_wired_for_stage guard) so a stage stays
+        // available the moment its specialist is wired — script + post_merge
+        // today, shot_list still unwired.
+        if (!CHAT_WIRED_STAGES[stageName]) {
           return err(
-            `Chat specialist not implemented for stage '${stageName}'. Only 'script' is wired in Phase 1D.2b.`,
+            `Chat specialist not wired for stage '${stageName}'. Wired stages: ${(
+              Object.keys(CHAT_WIRED_STAGES) as ChatEnabledStage[]
+            )
+              .filter((s) => CHAT_WIRED_STAGES[s])
+              .join(", ")}.`,
           )
         }
 
@@ -397,9 +405,13 @@ export function registerPipelineTools({ server, session }: RegisterPipelineTools
       async (args) => {
         const stageName = args.stage as ChatEnabledStage
 
-        if (stageName !== "script") {
+        if (!CHAT_WIRED_STAGES[stageName]) {
           return err(
-            `Chat specialist not implemented for stage '${stageName}'. Only 'script' is wired in Phase 1D.2b.`,
+            `Chat specialist not wired for stage '${stageName}'. Wired stages: ${(
+              Object.keys(CHAT_WIRED_STAGES) as ChatEnabledStage[]
+            )
+              .filter((s) => CHAT_WIRED_STAGES[s])
+              .join(", ")}.`,
           )
         }
 

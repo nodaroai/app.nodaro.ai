@@ -95,28 +95,45 @@ function formatRow(row: GalleryRow): string {
 function extractReferences(input: Record<string, unknown> | null): string[] {
   if (!input) return []
   const refs: string[] = []
+  // Single-URL keys. The names MUST match what the routes actually persist to
+  // jobs.input_data (the Zod-parsed body, spread verbatim → camelCase). The
+  // real keys are imageUrl / audioUrl / videoUrl / referenceImageUrl plus
+  // endFrameUrl (i2v end frame) and baseImageUrl (inpaint base). The legacy
+  // snake_case + start/tail names are kept harmlessly for any older rows.
   const single = [
-    "image_url",
     "imageUrl",
+    "image_url",
+    "referenceImageUrl",
+    "reference_image_url",
+    "endFrameUrl",
+    "baseImageUrl",
+    "audioUrl",
+    "audio_url",
+    "videoUrl",
+    "video_url",
     "start_image_url",
     "startImageUrl",
     "end_image_url",
     "endImageUrl",
     "tail_image_url",
-    "audio_url",
-    "audioUrl",
-    "video_url",
-    "videoUrl",
-    "reference_image_url",
-    "referenceImageUrl",
   ] as const
   for (const k of single) {
     const v = input[k]
     if (typeof v === "string" && v.startsWith("http")) refs.push(v)
   }
-  // Array forms — generate-character / multi-ref edits sometimes pass an
-  // array under image_urls / imageUrls / reference_images.
-  const arrays = ["image_urls", "imageUrls", "reference_images", "referenceImages"] as const
+  // Array forms — the keys 17+ generation routes write are referenceImageUrls
+  // / referenceVideoUrls / referenceAudioUrls (plural camelCase). The old
+  // image_urls / reference_images names are written by NO route (kept as
+  // harmless legacy fallbacks).
+  const arrays = [
+    "referenceImageUrls",
+    "referenceVideoUrls",
+    "referenceAudioUrls",
+    "image_urls",
+    "imageUrls",
+    "reference_images",
+    "referenceImages",
+  ] as const
   for (const k of arrays) {
     const v = input[k]
     if (Array.isArray(v)) {
@@ -686,14 +703,14 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
               ? "audio"
               : null
 
-        // Debug: log to Railway when a completed job has no URL we can find,
-        // so we can see what shape output_data actually has in production.
+        // Log (structured, keys only) when a completed job has no URL we can
+        // find, so we can diagnose output_data shape in production WITHOUT
+        // dumping the value (which can carry generated text / transcripts /
+        // PII). Uses the Fastify logger — never console.log in prod code.
         if (data.status === "completed" && !outputUrl) {
-          // eslint-disable-next-line no-console
-          console.log(
-            `[mcp] get_asset ${args.job_id} completed but no URL found. ` +
-              `job_type=${data.job_type} output_data keys=${Object.keys(out).join(",")} ` +
-              `output_data=${JSON.stringify(out).slice(0, 500)}`,
+          fastify.log.warn(
+            { jobId: args.job_id, jobType: data.job_type, outputKeys: Object.keys(out) },
+            "[mcp] get_asset: completed job has no resolvable output URL",
           )
         }
 

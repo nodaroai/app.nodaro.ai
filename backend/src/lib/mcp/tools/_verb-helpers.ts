@@ -11,12 +11,95 @@
  * (so `tasks/get` can look up the job's media kind) AND chooses the
  * structuredContent shape the iframe expects.
  */
+import { z } from "zod"
 import type { FastifyInstance } from "fastify"
 import type { McpSession } from "../session.js"
 import { registerTask } from "../tasks.js"
 import { resolveAssetId } from "../asset-resolver.js"
 import { config } from "../../config.js"
 import { validateModelInput } from "@nodaro/shared"
+
+/**
+ * Path-1 structured-field input shared by the image AND video generation
+ * verbs. The keys here MUST stay aligned with what `renderStructuredFields`
+ * (@nodaro/shared) actually reads (person/styling/setting/camera/lens + the
+ * `mood` shorthand) — a typed `z.object` so the tool advertises exactly the
+ * honored keys to the client. (Previously generate_video used an open
+ * `z.record(z.string(), z.unknown())`, which accepted plausible keys the
+ * renderer silently ignored — e.g. `camera.angle` — dropping the directive.)
+ */
+export const StructuredFields = z
+  .object({
+    person: z
+      .object({
+        age: z.number().int().min(0).max(120).optional(),
+        gender: z.enum(["man", "woman", "child", "non-binary"]).optional(),
+        hair: z.string().optional(),
+        eyes: z.string().optional(),
+        expression: z.string().optional(),
+        profession: z.string().optional(),
+        warriorType: z.string().optional(),
+      })
+      .optional(),
+    styling: z
+      .object({
+        mood: z.string().optional(),
+        lighting: z.string().optional(),
+        aesthetic: z.string().optional(),
+        colorLook: z.string().optional(),
+      })
+      .optional(),
+    setting: z
+      .object({
+        era: z.string().optional(),
+        atmosphere: z.string().optional(),
+        backdrop: z.string().optional(),
+      })
+      .optional(),
+    camera: z
+      .object({
+        framing: z.string().optional(),
+        motion: z.string().optional(),
+        format: z.string().optional(),
+      })
+      .optional(),
+    lens: z
+      .object({
+        focalLength: z.string().optional(),
+        aperture: z.string().optional(),
+      })
+      .optional(),
+    mood: z.string().optional(),
+  })
+  .partial()
+
+/**
+ * Shared output schema (raw Zod shape) for verb tools that return a single job
+ * via {@link jobResultWithWidget}. It is a SUPERSET of every key `widgetData`
+ * can carry (the {@link SingleJobStructuredContent} fields). `zod-to-json-schema`
+ * emits `additionalProperties:false` for a plain object, so strict MCP clients
+ * (Cursor) that cache the schema from `tools/list` reject any result carrying
+ * an undeclared key. Tools that emit `prompt`/`model`/etc. in their
+ * structuredContent MUST declare them here — using this shared shape keeps the
+ * declared keys and the emitted keys in lockstep.
+ */
+export const JOB_OUTPUT_SCHEMA = {
+  jobId: z.string(),
+  outputUrl: z.string().optional(),
+  prompt: z.string().optional(),
+  model: z.string().optional(),
+  aspectRatio: z.string().optional(),
+  resolution: z.string().optional(),
+  duration: z.number().optional(),
+  userDefaults: z
+    .object({
+      model: z.string().optional(),
+      aspectRatio: z.string().optional(),
+      resolution: z.string().optional(),
+      quality: z.string().optional(),
+    })
+    .optional(),
+}
 
 interface ParsedJobBody {
   jobId?: string
@@ -33,13 +116,44 @@ export function parseJobId(body: string): string | null {
   }
 }
 
+/**
+ * Build a tool-error result from an internal route's response, classified by
+ * status. 4xx are caller-actionable, so we surface the route's
+ * `error.message` (lets the LLM self-correct on a validation/credit error).
+ * 5xx / 503 bodies can carry internal detail (DB/SQL strings, internal
+ * hostnames, operator-only remediation text), so we NEVER forward the raw
+ * body — only a generic, classified message.
+ */
 export function errorResult(statusCode: number, body: string) {
   return {
-    content: [
-      { type: "text" as const, text: `Error from Nodaro: ${statusCode} ${body}` },
-    ],
-    isError: true,
+    content: [{ type: "text" as const, text: formatRouteError(statusCode, body) }],
+    isError: true as const,
   }
+}
+
+function formatRouteError(statusCode: number, body: string): string {
+  let code: string | undefined
+  let message: string | undefined
+  try {
+    const parsed = JSON.parse(body) as { error?: { code?: unknown; message?: unknown } }
+    if (parsed?.error && typeof parsed.error === "object") {
+      if (typeof parsed.error.code === "string") code = parsed.error.code
+      if (typeof parsed.error.message === "string") message = parsed.error.message
+    }
+  } catch {
+    // non-JSON body — fall through to a generic message (never echoed for 5xx)
+  }
+  if (statusCode === 402) return "Nodaro: insufficient credits for this generation."
+  if (statusCode === 429) return "Nodaro: rate limited — wait a moment and try again."
+  if (statusCode >= 400 && statusCode < 500) {
+    // Surface the structured code (a safe API-contract identifier, e.g.
+    // "validation_error") + the human message so the LLM can self-correct —
+    // but never the raw body.
+    const detail = message ?? "invalid request"
+    return `Nodaro rejected the request (${statusCode}${code ? ` ${code}` : ""}): ${detail}`
+  }
+  if (statusCode === 503) return "Nodaro: this model is not available right now."
+  return `Nodaro had a server error (${statusCode}) — usually transient, please try again.${code ? ` [${code}]` : ""}`
 }
 
 export function parseFailure(body: string) {

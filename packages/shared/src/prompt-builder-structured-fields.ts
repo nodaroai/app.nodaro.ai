@@ -57,7 +57,13 @@ export interface StructuredPromptFields {
 export function renderStructuredFields(fields: StructuredPromptFields): string {
   const parts: string[] = []
   if (fields.person) parts.push(renderPerson(fields.person))
-  if (fields.styling) parts.push(renderStyling(fields.styling))
+  if (fields.styling) {
+    // The standalone `mood` shorthand overrides styling.mood (per the type
+    // doc) — drop styling.mood when the shorthand is set so the two don't both
+    // render conflicting "mood …" / "Mood: …" directives.
+    const styling = fields.mood ? { ...fields.styling, mood: undefined } : fields.styling
+    parts.push(renderStyling(styling))
+  }
   if (fields.setting) parts.push(renderSetting(fields.setting))
   if (fields.camera) parts.push(renderCamera(fields.camera))
   if (fields.lens) parts.push(renderLens(fields.lens))

@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
+import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { VOICE_DESIGN_MODELS } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
@@ -41,6 +42,8 @@ export async function voiceDesignRoutes(app: FastifyInstance) {
       })
     }
 
+    const mcpClient = extractMcpClient(req.body)
+
     const { data: job, error } = await supabase
       .from("jobs")
       .insert({
@@ -50,6 +53,7 @@ export async function voiceDesignRoutes(app: FastifyInstance) {
         user_id: userId,
         status: "pending",
         input_data: buildJobInputData(parsed.data, "voice-design"),
+        ...(mcpClient ? { mcp_client: mcpClient } : {}),
       })
       .select("id")
       .single()

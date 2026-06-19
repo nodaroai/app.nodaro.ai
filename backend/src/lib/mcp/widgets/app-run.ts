@@ -364,7 +364,11 @@ ${uiProtocolShim()}
       return state.displayMode === 'fullscreen' && state.selectedId !== null;
     }
     function isTerminal(s) {
-      return s === 'completed' || s === 'failed' || s === 'cancelled';
+      // 'discarded' + 'timed_out' are real terminal execution statuses
+      // (migration 182) — including them stops the poll loop instead of
+      // spinning until the 15-min cap on a discarded run.
+      return s === 'completed' || s === 'failed' || s === 'cancelled' ||
+        s === 'discarded' || s === 'timed_out';
     }
     // Stable id for the tile: prefer the source jobId; fall back to URL so
     // outputs without a jobId (inline-only nodes) still get a unique key.

@@ -15,8 +15,8 @@ describe("extractMcpClient", () => {
     expect(extractMcpClient({ mcp_client: "Claude" })).toBe("Claude")
     expect(extractMcpClient({ mcp_client: "Cursor" })).toBe("Cursor")
   })
-  it("rejects too-long values to prevent abuse", () => {
+  it("truncates too-long values to 50 chars (developer_apps.name allows up to 100)", () => {
     const longName = "a".repeat(100)
-    expect(extractMcpClient({ mcp_client: longName })).toBeNull()
+    expect(extractMcpClient({ mcp_client: longName })).toBe("a".repeat(50))
   })
 })

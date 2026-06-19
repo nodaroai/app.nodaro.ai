@@ -10,7 +10,10 @@ import {
 // Mock supabase so cancelTask -> markJobCancelled is a no-op in unit tests.
 // The path is relative to tasks.ts, not to this test file.
 vi.mock("../../supabase.js", () => {
-  const eq = vi.fn().mockResolvedValue({ data: null, error: null })
+  // markJobCancelled now guards with .in("status", [...]) so it can't clobber a
+  // terminal job: update().eq().in() — the terminal .in resolves.
+  const inFn = vi.fn().mockResolvedValue({ data: null, error: null })
+  const eq = vi.fn().mockReturnValue({ in: inFn })
   const update = vi.fn().mockReturnValue({ eq })
   const from = vi.fn().mockReturnValue({ update })
   return {

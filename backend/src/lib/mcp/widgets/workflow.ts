@@ -186,11 +186,18 @@ ${uiProtocolShim()}
         });
       }
 
-      // Stop polling on terminal status; show a short summary.
+      // Stop polling on ANY terminal status; show a short summary. 'discarded'
+      // and 'timed_out' are real terminal execution statuses (migration 182) —
+      // without them a discarded run polls until the 10-min cap (stuck spinner).
       if (sc.status === 'completed') {
         progressEl.textContent = 'Done';
         stopPolling();
-      } else if (sc.status === 'failed' || sc.status === 'cancelled') {
+      } else if (
+        sc.status === 'failed' ||
+        sc.status === 'cancelled' ||
+        sc.status === 'discarded' ||
+        sc.status === 'timed_out'
+      ) {
         progressEl.textContent = 'Run ' + sc.status;
         stopPolling();
       } else if (sc.status === 'running') {
