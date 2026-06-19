@@ -1185,6 +1185,55 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
     },
   )
 
+  // ── separate_audio ──
+  // Demucs stem separation on ANY audio (unlike suno_separate_stems, which
+  // requires a Suno-generated track). Vocal/instrumental or full stems.
+  server.registerTool(
+    "separate_audio",
+    {
+      title: "Separate Audio (Demucs)",
+      description:
+        "Separate ANY audio into vocals + instrumental, or full stems (drums, " +
+        "bass, other, guitar, piano), using Demucs. Works on uploaded or " +
+        "generated audio — unlike `suno_separate_stems`, no Suno track is " +
+        "needed. Returns a job_id; poll `get_job` for the per-stem URLs " +
+        "(vocalUrl, instrumentalUrl, drumsUrl, …).",
+      inputSchema: {
+        audio_url: z.string().url().optional(),
+        audio_asset_id: z.string().optional().describe("Nodaro audio or video job id."),
+        mode: z
+          .enum(["vocal_instrumental", "stems"])
+          .optional()
+          .describe("`vocal_instrumental` (default) = vocals + instrumental. `stems` = full per-instrument split."),
+        quality: z
+          .enum(["auto", "fast", "best"])
+          .optional()
+          .describe("`auto` (default) picks the model per mode; `fast` = quickest; `best` = highest quality."),
+      },
+      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/v3/job-audio",
+        ui: { resourceUri: "ui://nodaro/widget/v3/job-audio", visibility: ["model", "app"] },
+      },
+    },
+    async (args) => {
+      const audioUrl =
+        args.audio_url ??
+        (args.audio_asset_id
+          ? await resolveAssetId({ assetId: args.audio_asset_id, userId: session.userId, expectedKind: "audio" })
+          : null)
+      if (!audioUrl) return { content: [{ type: "text" as const, text: "Pass audio_url or audio_asset_id." }], isError: true }
+      return dispatchJob(fastify, session, {
+        url: "/v1/audio-separation",
+        payload: { audioUrl, mode: args.mode, quality: args.quality, mcp_client: session.clientName, userId: session.userId },
+        label: "audio separation",
+        widgetKind: "audio",
+        widgetData: { prompt: "(separate audio)", model: "audio-separation" },
+      })
+    },
+  )
+
   // ── transcribe ──
   server.registerTool(
     "transcribe",

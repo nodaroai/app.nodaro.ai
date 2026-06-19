@@ -440,7 +440,8 @@ prompt with no questions round-trip.
 | `voice_remix` | Re-stylize or re-arrange an existing audio clip. |
 | `dubbing` | Dub a video or audio clip into a target language with voice preservation. |
 | `transcribe` | Speech-to-text transcription. Returns a transcript + optional timestamps. |
-| `audio_isolation` | Separate vocals from background music / noise (stem isolation). |
+| `audio_isolation` | Isolate and clean the primary voice from a mixed clip (removes background music/noise). Returns one clean voice track. |
+| `separate_audio` | Separate ANY audio into vocals + instrumental, or full stems (drums/bass/other/guitar/piano), via Demucs. Works on non-Suno audio. |
 | `trim_audio` | Trim an audio file to a start/end timestamp. |
 | `download_youtube_audio` | Download the audio track from a YouTube URL. Returns an audio asset URL. |
 

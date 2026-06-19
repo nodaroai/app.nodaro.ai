@@ -160,7 +160,7 @@ describe("buildMcpServer full catalog (v1.1)", () => {
     // Upper bound has headroom for future tool additions; bump when adding
     // a new tool family rather than tracking every single tool.
     expect(tools.length).toBeGreaterThanOrEqual(28)
-    expect(tools.length).toBeLessThanOrEqual(120)
+    expect(tools.length).toBeLessThanOrEqual(125)
   })
 
   it("with only jobs:read, registers ping + jobs tools and nothing else", async () => {
