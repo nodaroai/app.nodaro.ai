@@ -36,6 +36,14 @@ vi.mock("@/middleware/credit-guard.js", () => ({
   }),
 }))
 
+// The voiced path computes the audio addon in the route handler body via
+// getModelCreditBaseCost (creditGuard's computeCredits is bypassed by the mock
+// above). Stub it so the addon math is deterministic and never touches the DB.
+vi.mock("@/ee/billing/credits.js", async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>
+  return { ...actual, getModelCreditBaseCost: vi.fn().mockResolvedValue({ creditCost: 4 }) }
+})
+
 vi.mock("@/providers/video/ffmpeg-utils.js", async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
   return { ...actual, probeMediaDuration: vi.fn() }
@@ -569,5 +577,83 @@ describe("POST /v1/generate-video", () => {
     }
 
     expect(res.statusCode).toBe(200)
+  })
+})
+
+describe("POST /v1/generate-video — character voice (voiced-video)", () => {
+  const USER = "00000000-0000-4000-8000-000000000001"
+
+  it("enqueues a voiced-video job (with the voice spec + addon) for a dialogue-capable provider", async () => {
+    mockJobInsert({ data: { id: "job-voiced" }, error: null })
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-video",
+      payload: {
+        imageUrl: "https://example.com/face.png",
+        prompt: "she greets the room",
+        userId: USER,
+        provider: "veo3.1",
+        characterVoices: [{ voiceId: "anna-voice", speaker: "Anna" }],
+        dialogue: [{ speaker: "Anna", line: "good morning" }],
+      },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().jobId).toBe("job-voiced")
+    expect(res.json().warnings).toBeUndefined()
+    expect(videoQueue.add).toHaveBeenCalledWith(
+      "voiced-video",
+      expect.objectContaining({
+        jobId: "job-voiced",
+        provider: "veo3.1",
+        characterVoices: [{ voiceId: "anna-voice", speaker: "Anna" }],
+        dialogue: [{ speaker: "Anna", line: "good morning" }],
+        voicedAudioAddon: 4,
+      }),
+    )
+  })
+
+  it("falls back to a silent image-to-video job + warning for a non-dialogue provider (never fails the clip)", async () => {
+    mockJobInsert({ data: { id: "job-silent" }, error: null })
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-video",
+      payload: {
+        imageUrl: "https://example.com/face.png",
+        prompt: "she waves",
+        userId: USER,
+        provider: "minimax",
+        characterVoices: [{ voiceId: "anna-voice", speaker: "Anna" }],
+        dialogue: [{ speaker: "Anna", line: "hi" }],
+      },
+    })
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.jobId).toBe("job-silent")
+    expect(body.warnings?.[0]?.code).toBe("voice_unsupported_for_provider")
+    // Enqueued as a plain i2v job; the voice spec is NOT forwarded to the worker.
+    expect(videoQueue.add).toHaveBeenCalledWith(
+      "image-to-video",
+      expect.not.objectContaining({ characterVoices: expect.anything() }),
+    )
+  })
+
+  it("ignores an empty voice spec — normal image-to-video, no warning", async () => {
+    mockJobInsert({ data: { id: "job-plain" }, error: null })
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-video",
+      payload: {
+        imageUrl: "https://example.com/face.png",
+        prompt: "slow pan",
+        userId: USER,
+        provider: "veo3.1",
+        characterVoices: [],
+        dialogue: [],
+      },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().warnings).toBeUndefined()
+    const [jobName] = vi.mocked(videoQueue.add).mock.calls.at(-1)!
+    expect(jobName).toBe("image-to-video")
   })
 })

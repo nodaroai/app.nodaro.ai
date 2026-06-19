@@ -184,6 +184,43 @@ credits on top of the base provider cost, with a minimum of 1 each. If smart-loo
 
 Quality mode (`lossless` vs `precise`) does not affect pricing.
 
+## Character voice
+
+The single-node path — `client.nodes.run("generate-video", { … })` (also the MCP `generate_video` tool and `POST /v1/generate-video`) — can make the clip **speak in a character's saved voice**. Pass a character-voice spec and the route orchestrates the full audio chain server-side, returning **one** `jobId` whose result is the final voiced clip (poll it like any generate-video job — no intermediate jobs to manage). The fields are additive and optional; omit them for today's behavior.
+
+| Field | Type | Notes |
+|---|---|---|
+| `characterVoices` | `Array<{ voiceId, voiceType?, ttsProvider?, speaker? }>` (max 8) | The voice(s) to speak. `voiceType` is `premade` / `library` / `custom`; `speaker` is the label joined to dialogue lines. |
+| `dialogue` | `Array<{ speaker, line }>` (max 50) | Optional structured dialogue. When omitted, the route extracts attributed dialogue (`Anna: "good morning"`) from `prompt`. |
+
+A request is **voiced** only when a spec is present **and** the model can carry dialogue (`videoModelCanSpeakDialogue` — VEO 3.x or Seedance 2). The chain is chosen by the model's audio capability (`getVideoAudioCapability`):
+
+| Audio mode | Models | Chain |
+|---|---|---|
+| `audio_driven` | `seedance-2`, `seedance-2-fast` | Synthesize the dialogue (each line in its own voice) via ElevenLabs Dialogue v3 → feed as reference audio → the model lip-syncs to it. |
+| `native_speech` | `veo3`, `veo3.1`, `veo3_lite` | Bake the line during generation, then revoice the baked audio to the primary character voice (ElevenLabs voice-changer, keeping the music/SFX bed). |
+
+**Speaker mapping.** Each `dialogue[].speaker` is matched (case-insensitive) to a `characterVoices[].speaker` to pick that line's `voiceId`. An unmatched speaker falls back to the default (first) voice, mirroring the pipeline's non-fatal missing-voice behavior. Total dialogue text is capped at 5000 characters (the Dialogue v3 limit); lines over the budget are dropped with a log entry.
+
+### Credit pricing (character voice)
+
+The audio step is reserved as an add-on **on top of** the base video cost — same `computeCredits` mechanism as Loop Trim (no double-markup) — and committed only if the step actually runs:
+
+| Mode | Add-on identifier | Add-on credits |
+|---|---|---|
+| `audio_driven` (Seedance 2) | `elevenlabs-dialogue` | +4 |
+| `native_speech` (VEO 3.x) | `elevenlabs-voice-changer` | +4 |
+
+Example: `veo3.1` 8s / 1080p i2v voiced = 17 (base) + 4 (revoice) = **21 credits**.
+
+### Fallback behavior
+
+- **Provider can't voice dialogue** (`none` / `ambient` models — minimax, kling, hailuo, …): the spec is **ignored**, the clip still generates (never failed), and the response carries a non-fatal warning `{ code: "voice_unsupported_for_provider" }`. No audio add-on is charged. Clients should gate the voice UI on `videoModelCanSpeakDialogue` and confirm with the user before sending.
+- **No voice resolves** (dialogue / voices empty or unparseable): the clip generates silently and the reserved audio add-on is refunded automatically (committed at the video provider cost only).
+- **A chain step fails** (TTS / revoice / generation): the whole job fails and credits are fully refunded.
+
+> **Phase 1 scope.** Single-speaker clips are fully supported in both modes. A multi-speaker prompt produces a correct multi-voice **audio** track (Dialogue v3 voices each line separately) for a single-subject `audio_driven` clip; true per-face lip-sync across multiple on-screen speakers is not yet supported. The silent / ambient-only chain (separate-stems → voice-change → re-merge → lip-sync) for `none` / `ambient` models is deferred to Phase 2.
+
 ## Configuration
 
 Most provider-specific fields are exposed in the node's config panel only when the wired provider supports them. The config panel reads from the node's data and writes back the user's choices. The full per-provider matrix is documented in the legacy [Image to Video](./image-to-video.md) page for I2V parameters and [Text to Video](./text-to-video.md) page for T2V parameters — both pages redirect here but the parameter tables remain valid because Generate Video forwards to the same worker handlers.
