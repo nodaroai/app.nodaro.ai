@@ -644,6 +644,8 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   ***REDACTED-OSS-SCRUB***
   "suno-separate": 4,            // matches model_pricing (mig 059); held by re-baseline (unclear)
   ***REDACTED-OSS-SCRUB***
+  "audio-separation": 3,         // Demucs (ryan5453) on Replicate, fixed reserved tier (Auto/Fast)
+  "audio-separation:best": 8,    // htdemucs_ft (~4× compute), fixed reserved tier
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
@@ -2001,6 +2003,11 @@ function getNodeModelIdentifier(node: { type: string; data?: Record<string, unkn
   // Suno separate: "split_stem" costs more
   if (nodeType === "suno-separate") {
     return (data.type as string) === "split_stem" ? "suno-separate-stem" : "suno-separate"
+  }
+
+  // Audio separation (Demucs): "best" quality costs more
+  if (nodeType === "audio-separation") {
+    return (data.quality as string) === "best" ? "audio-separation:best" : "audio-separation"
   }
 
   const provider = data.provider as string | undefined
