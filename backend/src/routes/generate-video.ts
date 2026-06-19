@@ -19,7 +19,10 @@ import { formatZodError } from "../lib/zod-error.js"
 // => today's behaviour. A "voiced" request ALSO requires a dialogue-capable
 // provider (videoModelCanSpeakDialogue) — enforced in the route handler.
 const characterVoiceSpecSchema = z.object({
-  voiceId: z.string().min(1),
+  // Alphanumeric (+ space / _ / -): a premade name ("Rachel"), an ElevenLabs
+  // voice-library/custom id, or a saved-voice slug. Bounded + character-guarded
+  // because voiceId flows into provider URL paths (/v1/text-to-speech/{voiceId}).
+  voiceId: z.string().min(1).max(64).regex(/^[A-Za-z0-9 _-]+$/, "voiceId must be alphanumeric (letters, digits, space, _ or -)"),
   voiceType: z.enum(["premade", "library", "custom"]).optional(),
   ttsProvider: z.enum(TTS_PROVIDERS).optional(),
   speaker: z.string().min(1).max(80).optional(),

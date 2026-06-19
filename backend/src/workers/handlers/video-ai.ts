@@ -1305,9 +1305,9 @@ const handleGenerateMask: HandlerFn = async function handleGenerateMask(job, ctx
 // job_type via the worker CAS, but finalize/asset both key off the passed
 // jobType + output_data, so the deliverable is always handled as a video.
 
-const MAX_DIALOGUE_CHARS = 5000 // ElevenLabs Dialogue v3 total-text cap
+const MAX_DIALOGUE_CHARS = 5000 // total-text cap for synthesis (Dialogue v3 / direct TTS)
 
-/** Trim resolved lines to the Dialogue v3 char budget; logs any drop (no silent cap). */
+/** Trim resolved lines to the synthesis char budget; logs any drop (no silent cap). */
 function capDialogueLines(lines: ResolvedDialogueVoiceLine[], jobId: string): ResolvedDialogueVoiceLine[] {
   let total = 0
   const out: ResolvedDialogueVoiceLine[] = []
