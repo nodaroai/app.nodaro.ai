@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { VOICE_CHANGER_MODEL_IDS } from "@nodaro/shared"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
@@ -16,6 +17,10 @@ const voiceChangerBody = z
     audioUrl: safeUrlSchema.optional(),
     videoUrl: safeUrlSchema.optional(),
     voiceId: z.string().min(1),
+    // ElevenLabs speech-to-speech model. Optional: when omitted the provider
+    // falls back to eleven_english_sts_v2 (the prior hardcoded default), so
+    // existing nodes are byte-for-byte unchanged.
+    model: z.enum(VOICE_CHANGER_MODEL_IDS as [string, ...string[]]).optional(),
     stability: z.number().min(0).max(1).optional(),
     similarityBoost: z.number().min(0).max(1).optional(),
     style: z.number().min(0).max(1).optional(),
@@ -38,7 +43,7 @@ export async function voiceChangerRoutes(app: FastifyInstance) {
       })
     }
 
-    const { audioUrl, videoUrl, voiceId, stability, similarityBoost, style, removeBackgroundNoise } = parsed.data
+    const { audioUrl, videoUrl, voiceId, model, stability, similarityBoost, style, removeBackgroundNoise } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -75,6 +80,7 @@ export async function voiceChangerRoutes(app: FastifyInstance) {
       audioUrl,
       videoUrl,
       voiceId,
+      model,
       stability,
       similarityBoost,
       style,

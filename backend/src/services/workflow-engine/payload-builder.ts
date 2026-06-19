@@ -3433,6 +3433,7 @@ export function buildPayload(
         audioUrl: resolvedInputs.audioUrl || data.audioUrl,
         videoUrl: resolvedInputs.videoUrl || data.videoUrl,
         voiceId: data.voiceId || data.voice,
+        model: data.model,
         stability: data.stability,
         similarityBoost: data.similarityBoost,
         style: data.style,

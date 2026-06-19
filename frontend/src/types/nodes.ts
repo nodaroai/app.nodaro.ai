@@ -7,7 +7,7 @@ import type {
   VideoUpscaleProvider, ExtendVideoProvider, FaceSwapProvider, TtsProvider,
   TextToAudioProvider, MusicProvider, TranscribeProvider,
   LipSyncProvider, ScriptProvider, QaCheckProvider,
-  SunoModel, VoiceDesignModel, CaptionStyle, ImageCriticMode,
+  SunoModel, VoiceDesignModel, VoiceChangerModel, CaptionStyle, ImageCriticMode,
   ReduceStrategyId, ReduceMeta,
   SelectorConfig,
 } from "@nodaro/shared"
@@ -2726,6 +2726,9 @@ export type VoiceChangerData = {
   voiceId: string
   voiceLabel: string
   voiceType: "premade" | "custom" | "library"
+  /** ElevenLabs speech-to-speech model. Optional: when unset the backend falls
+   *  back to eleven_english_sts_v2 (the prior hardcoded default). */
+  model?: VoiceChangerModel
   stability: number
   similarityBoost: number
   /** Style exaggeration (0–1). Default 0; >0 amplifies the source's delivery
@@ -6128,6 +6131,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       voiceId: "",
       voiceLabel: "",
       voiceType: "premade",
+      model: "eleven_english_sts_v2",
       stability: 0.5,
       similarityBoost: 0.75,
       removeBackgroundNoise: false,

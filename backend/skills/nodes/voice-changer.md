@@ -1,7 +1,7 @@
 ---
 node_type: voice-changer
-generated_at: 2026-06-16T08:22:28.425Z
-generated_from: 877dfa01a
+generated_at: 2026-06-19T15:46:45.578Z
+generated_from: 0fe2336b2
 ---
 
 # Voice Changer
@@ -24,6 +24,7 @@ generated_from: 877dfa01a
 - `fieldMappings: FieldMappings`
 
 **Optional data fields:**
+- `model?: VoiceChangerModel`
 - `style?: number`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
@@ -41,6 +42,7 @@ generated_from: 877dfa01a
   "voiceId": "",
   "voiceLabel": "",
   "voiceType": "premade",
+  "model": "eleven_english_sts_v2",
   "stability": 0.5,
   "similarityBoost": 0.75,
   "removeBackgroundNoise": false,
@@ -91,6 +93,7 @@ generated_from: 877dfa01a
     "voiceId": "",
     "voiceLabel": "",
     "voiceType": "premade",
+    "model": "eleven_english_sts_v2",
     "stability": 0.5,
     "similarityBoost": 0.75,
     "removeBackgroundNoise": false,
