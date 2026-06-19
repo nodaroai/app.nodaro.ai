@@ -634,7 +634,19 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
       return reply.status(404).send({ error: { code: "not_found", message: "Template not found" } })
     }
 
-    return reply.send(toCamelCase(template as Record<string, unknown>))
+    // Broken-object-level-auth guard: this route is public and uses the
+    // service-role client (RLS bypassed), so `is_active` alone would expose
+    // templates the creator never listed. Only return a template that is
+    // listed in a public channel, OR is being fetched by its own creator.
+    const row = template as Record<string, unknown>
+    const listed = readListedIn(row)
+    const isListedPublicly = listed.includes(MARKETPLACE) || listed.includes(TUTORIAL)
+    const isOwner = !!req.userId && req.userId === row.creator_id
+    if (!isListedPublicly && !isOwner) {
+      return reply.status(404).send({ error: { code: "not_found", message: "Template not found" } })
+    }
+
+    return reply.send(toCamelCase(row))
   })
 
   // =========================================================================

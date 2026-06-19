@@ -31,3 +31,12 @@ export function warmAdminCache(userId: string, role: string | null | undefined):
   const isAdmin = role === "admin" || role === "super_admin"
   adminCache.set(userId, { isAdmin, expiresAt: Date.now() + CACHE_TTL_MS })
 }
+
+/**
+ * Drop a user's cached admin verdict so a role change takes effect immediately.
+ * Must be called wherever `profiles.role` is changed — otherwise a demoted admin
+ * keeps admin access for up to CACHE_TTL_MS (privilege-revocation lag).
+ */
+export function invalidateAdminCache(userId: string): void {
+  adminCache.delete(userId)
+}

@@ -358,7 +358,6 @@ export function SplitMediaConfig({ data, onUpdate }: ConfigProps<SplitMediaData>
             value={data.outputChunkIndex ?? 0}
             onChange={(e) => {
               const val = Number(e.target.value)
-              console.log('[SplitMedia] outputChunkIndex changed to:', val)
               onUpdate({ outputChunkIndex: val })
             }}
             className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"

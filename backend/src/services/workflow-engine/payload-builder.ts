@@ -1056,15 +1056,19 @@ interface PayloadResult {
   modelIdentifier: string
 }
 
-/** Shorthand for FFmpeg nodes that all share queueName + modelIdentifier. */
+/** Shorthand for FFmpeg nodes that all share queueName + modelIdentifier.
+ *  `modelIdentifier` defaults to `jobName`; pass an override for nodes whose
+ *  credit cost varies by config (e.g. `speed-ramp:smooth`) so the orchestrator
+ *  reserves the same composite the single-node route charges. */
 function ffmpegResult(
   jobName: string,
   payload: Record<string, unknown>,
+  modelIdentifier: string = jobName,
 ): PayloadResult {
   return {
     jobName,
     queueName: "video-generation",
-    modelIdentifier: jobName,
+    modelIdentifier,
     payload,
   }
 }
@@ -3855,17 +3859,23 @@ export function buildPayload(
     }
 
     case "speed-ramp":
-      return ffmpegResult("speed-ramp", {
-        jobId,
-        videoUrl: resolvedInputs.videoUrl || data.videoUrl,
-        speed: data.speed,
-        adjustAudio: data.adjustAudio,
-        reverse: data.reverse,
-        audioMode: data.audioMode,
-        quality: data.quality,
-        ramps: data.ramps,
-        usageLogId,
-      })
+      return ffmpegResult(
+        "speed-ramp",
+        {
+          jobId,
+          videoUrl: resolvedInputs.videoUrl || data.videoUrl,
+          speed: data.speed,
+          adjustAudio: data.adjustAudio,
+          reverse: data.reverse,
+          audioMode: data.audioMode,
+          quality: data.quality,
+          ramps: data.ramps,
+          usageLogId,
+        },
+        // Motion-compensated interpolation (minterpolate) costs more; mirror the
+        // route's buildSpeedRampCreditId so DAG runs reserve the same tier.
+        data.quality === "smooth" ? "speed-ramp:smooth" : "speed-ramp",
+      )
 
     case "loop-video":
       return ffmpegResult("loop-video", {

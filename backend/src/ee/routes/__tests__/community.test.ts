@@ -55,9 +55,10 @@ describe("GET /v1/community/detail/:slug/full", () => {
   it("returns card identity + snapshot for an active listing", async () => {
     vi.mocked(supabase.from).mockImplementation(((t: string) => {
       if (t === "community_listings") {
-        return { select: () => ({ eq: () => ({ eq: () => ({ single: vi.fn().mockResolvedValue({
+        // chain: .eq(slug).eq(is_listed).eq(is_active).single()
+        return { select: () => ({ eq: () => ({ eq: () => ({ eq: () => ({ single: vi.fn().mockResolvedValue({
           data: { id: "L1", slug: "hero", entity_type: "character", title: "Hero", creator_display_name: "Admin" },
-        }) }) }) }) }
+        }) }) }) }) }) }
       }
       return { select: () => ({ eq: () => ({ single: vi.fn().mockResolvedValue({
         data: { snapshot: { name: "Hero", source_image_url: "u" } },
@@ -71,7 +72,7 @@ describe("GET /v1/community/detail/:slug/full", () => {
 
   it("404 when there is no active listing", async () => {
     vi.mocked(supabase.from).mockImplementation((() => ({
-      select: () => ({ eq: () => ({ eq: () => ({ single: vi.fn().mockResolvedValue({ data: null }) }) }) }),
+      select: () => ({ eq: () => ({ eq: () => ({ eq: () => ({ single: vi.fn().mockResolvedValue({ data: null }) }) }) }) }),
     })) as unknown as typeof supabase.from)
     const r = await app.inject({ method: "GET", url: "/v1/community/detail/missing/full", headers: { "x-user-id": "u1" } })
     expect(r.statusCode).toBe(404)
