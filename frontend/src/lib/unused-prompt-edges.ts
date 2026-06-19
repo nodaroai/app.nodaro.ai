@@ -1,5 +1,5 @@
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
-import { NODE_PROMPT_CANDIDATE_FIELDS, NODE_MAPPABLE_FIELDS } from "@nodaro/shared"
+import { NODE_PROMPT_CANDIDATE_FIELDS, NODE_MAPPABLE_FIELDS, canonicalVarName } from "@nodaro/shared"
 import { getUpstreamNodes } from "@/lib/node-refs"
 import { referencedRefs, hasEmptyInjection } from "@/lib/prompt-ref-scan"
 // Canonical identity-source set (character/face/object/location) — reused so a
@@ -73,7 +73,7 @@ export function computeUnusedPromptEdges(
     if (hasEmptyInjection(cdata, scanFields)) continue
 
     const sourceLabel = upstreamFor(consumer.id).find((u) => u.id === source.id)?.label
-    if (sourceLabel && referencedRefs(cdata, scanFields).has(sourceLabel)) continue
+    if (sourceLabel && referencedRefs(cdata, scanFields).has(canonicalVarName(sourceLabel))) continue
 
     unused.add(edge.id)
   }

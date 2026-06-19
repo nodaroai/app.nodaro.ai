@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useRef, useState } from "react"
+import { useCallback, useMemo, useRef, useState } from "react"
 import { CodeXml, Plus, Settings2 } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Input } from "@/components/ui/input"
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { appendSnippetText, filterSnippets, groupSnippetsByCategory, type SnippetPoolItem } from "@/lib/snippet-pool"
 import { SnippetCategoryHeader, SnippetRowContent } from "./snippet-row"
 import { SnippetManageDialog } from "./snippet-manage-dialog"
+import { escapeScrollLock } from "./prompt-editor/scroll-lock-escape"
 import type { SnippetMedia, SnippetTarget } from "@nodaro/shared"
 
 interface SnippetMenuButtonProps {
@@ -33,6 +34,14 @@ export function SnippetMenuButton({ pool, value, onInsert, target, media }: Snip
   const [manageOpen, setManageOpen] = useState(false)
   const [createPrefill, setCreatePrefill] = useState<string | null>(null)
   const selectionRef = useRef("")
+  // The Popover content is a body-mounted portal OUTSIDE the quick-edit modal's
+  // Radix Dialog, so the dialog's react-remove-scroll blocks the wheel on this
+  // scrollable list — escape it natively, exactly like the "/" suggestion menu.
+  const detachScrollLock = useRef<(() => void) | null>(null)
+  const scrollListRef = useCallback((el: HTMLDivElement | null) => {
+    detachScrollLock.current?.()
+    detachScrollLock.current = el ? escapeScrollLock(el) : null
+  }, [])
 
   const filtered = useMemo(() => filterSnippets(pool, query), [pool, query])
   const groups = useMemo(() => groupSnippetsByCategory(filtered), [filtered])
@@ -64,7 +73,7 @@ export function SnippetMenuButton({ pool, value, onInsert, target, media }: Snip
               className="h-8 text-xs"
             />
           </div>
-          <div className="max-h-72 overflow-y-auto py-1">
+          <div ref={scrollListRef} className="max-h-72 overflow-y-auto py-1">
             {groups.length === 0 && (
               <p className="px-3 py-2 text-[11px] text-muted-foreground">No snippets match.</p>
             )}

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest"
 import { collectVariableRanges } from "../prompt-editor/variable-highlight-extension"
 
 describe("collectVariableRanges", () => {
-  const labels = new Set(["Setting"])
+  const labels = new Set(["setting"])
   it("returns brace-inclusive offsets with kinds, in document order", () => {
     //        0123456789012345678901234567890123
     const s = "a {Setting} and {Style Guide} end"
@@ -35,11 +35,16 @@ describe("collectVariableRanges", () => {
       { from: 0, to: 11, kind: "wired" },
     ])
   })
+  it("matches case-insensitively: {MYNODE} resolves against a canonical 'mynode'", () => {
+    expect(collectVariableRanges("{MYNODE}", new Set(["mynode"]))).toEqual([
+      { from: 0, to: 8, kind: "wired" },
+    ])
+  })
 })
 
 describe("collectVariableRanges — fallback sub-ranges", () => {
-  const labels = new Set(["Setting"])
-  const values = new Set(["Setting"])
+  const labels = new Set(["setting"])
+  const values = new Set(["setting"])
 
   it("emits sep + trimmed fallback spans, dormant when the label has a value", () => {
     const s = "{Setting || a misty forest}"
@@ -65,7 +70,7 @@ describe("collectVariableRanges — fallback sub-ranges", () => {
 
   it("active when wired but the value is empty (label in resolvable, not in values)", () => {
     const s = "{Style || cinematic}"
-    expect(collectVariableRanges(s, new Set(["Style"]), new Set())).toEqual([
+    expect(collectVariableRanges(s, new Set(["style"]), new Set())).toEqual([
       {
         from: 0, to: 20, kind: "wired",
         sep: { from: 7, to: 9 },

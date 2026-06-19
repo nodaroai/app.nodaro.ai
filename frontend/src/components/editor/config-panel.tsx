@@ -25,6 +25,7 @@ import {
 } from "@/types/nodes"
 import { PresentationDisplayConfig } from "./config-panels/presentation-display-config"
 import { PresetDropdown } from "./config-panels/node-preset-dropdown"
+import { PromptInjectionSection } from "./config-panels/prompt-injection-section"
 // Phase 1B.2: SceneConfig now ships from `./config-panels/scene-configs`.
 // Legacy `./scene-config` + `./scene-editor-modal` are dead code pending cleanup.
 import { IterationResultsPanel } from "./iteration-results-panel"
@@ -1124,6 +1125,15 @@ export function ConfigPanel() {
                 selectedNodeId={selectedNodeId ?? undefined}
               />
             )}
+            {/* Prompt Injection — opt out of auto-injecting Look / Elements.
+               Renders only for nodes with a look/cinematography or elements
+               handle (gated inside the component). */}
+            <PromptInjectionSection
+              nodeType={nodeType}
+              nodeData={nodeData}
+              selectedNodeId={selectedNodeId ?? undefined}
+              updateNodeData={updateNodeData}
+            />
           </fieldset>
 
           <Separator />

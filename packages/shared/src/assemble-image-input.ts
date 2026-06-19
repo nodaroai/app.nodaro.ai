@@ -106,6 +106,14 @@ export interface AssembleImageInput {
   suppressedCanonicalCharacterIds?: readonly string[]
   /** Location slugs whose canonical-fallback the user explicitly hid. */
   suppressedCanonicalLocationIds?: readonly string[]
+  /**
+   * Reference-prompt assembly format for the `{image:N:label}` path. Forwarded
+   * verbatim to `buildImagePrompt` (default legacy). "hybrid" = images-only
+   * reference-lock snippet + lettered inline scene.
+   */
+  referenceFormat?: "legacy" | "hybrid"
+  /** Override the hybrid reference-lock snippet (forwarded to buildImagePrompt). */
+  referenceLockSnippet?: string
   /** Character definitions selected for this node (legacy `buildImagePrompt` path). */
   characterDefs?: CharacterDef[]
   /** User-level prompt template overrides. */
@@ -203,6 +211,8 @@ export function assembleImageInput(
     ...(input.suppressedCanonicalLocationIds !== undefined
       ? { suppressedCanonicalLocationIds: input.suppressedCanonicalLocationIds }
       : {}),
+    ...(input.referenceFormat !== undefined ? { referenceFormat: input.referenceFormat } : {}),
+    ...(input.referenceLockSnippet !== undefined ? { referenceLockSnippet: input.referenceLockSnippet } : {}),
     ...(input.characterDefs !== undefined ? { characterDefs: input.characterDefs } : {}),
     ...(input.userTemplates !== undefined ? { userTemplates: input.userTemplates } : {}),
     ...(input.flowTemplates !== undefined ? { flowTemplates: input.flowTemplates } : {}),

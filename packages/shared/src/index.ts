@@ -779,9 +779,10 @@ export type { PickerOption, PickerCatalog, PickerDimension } from "./picker-cata
 
 export { resolveFieldMappings, resolveLocationFields } from "./resolve-field-mappings.js"
 
-export { resolveNodeRefs, parseNodeRef, NODE_REF_PATTERN, RESERVED_TEMPLATE_VARS } from "./node-refs.js"
+export { resolveNodeRefs, parseNodeRef, canonicalVarName, NODE_REF_PATTERN, RESERVED_TEMPLATE_VARS, extractReferencedLabels, combineSameLabelRefs, refHandleCategory, REF_HANDLE_CATEGORY } from "./node-refs.js"
+export type { RefCandidate } from "./node-refs.js"
 
-export { resolvePrompt, NODE_PROMPT_CANDIDATE_FIELDS, computeNodePrompt, computeLlmChatFields } from "./resolve-prompt.js"
+export { resolvePrompt, composeNegative, NODE_PROMPT_CANDIDATE_FIELDS, computeNodePrompt, computeLlmChatFields } from "./resolve-prompt.js"
 
 export { resolveSourceThroughConnectedList } from "./list-source-resolver.js"
 

@@ -66,7 +66,7 @@ describe("PromptEditor variable highlighting", () => {
         value={value}
         onChange={vi.fn()}
         nodeRefs={REFS}
-        refMap={new Map([["Setting", "sunset beach"]])}
+        refMap={new Map([["setting", "sunset beach"]])}
       />,
     )
     await waitFor(() => {
@@ -78,7 +78,8 @@ describe("PromptEditor variable highlighting", () => {
 })
 
 describe("fallback value-aware rendering", () => {
-  const VALUE_MAP = new Map([["Setting", "sunset beach"]])
+  // refMap keys are lowercase-canonical (buildNodeRefMap keys via canonicalVarName).
+  const VALUE_MAP = new Map([["setting", "sunset beach"]])
 
   it("dormant default: grey strikethrough span when a wired value exists", async () => {
     const { container } = render(

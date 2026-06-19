@@ -46,11 +46,14 @@ describe("buildPayload", () => {
       expect(result.payload.usageLogId).toBe(usageLogId)
     })
 
-    it("prefers the typed node prompt over a wired input (typed-primary)", () => {
+    it("appends a wired input to the typed prompt (generate-image auto-inject)", () => {
+      // Prompt Injection: a connected prompt now AUTO-APPENDS to the typed
+      // prompt (was typed-primary/fallback before — changed via resolvePrompt
+      // `appendWired`, passed only by generate-image / generate-video).
       const n = node("n1", "generate-image", { prompt: "typed wins" })
       const inputs: ResolvedInputs = { prompt: "new from upstream" }
       const result = buildPayload(n, jobId, inputs)
-      expect(result.payload.prompt).toBe("typed wins")
+      expect(result.payload.prompt).toBe("typed wins. new from upstream")
     })
 
     it("falls back to the wired input when the typed prompt is empty", () => {
@@ -274,14 +277,16 @@ describe("buildPayload", () => {
     })
 
     // 8. The `negative` typed handle is resolved (in input-resolver) into
-    //    `resolvedInputs.negativePrompt`. It MUST take precedence over the
-    //    config-panel `data.negativePrompt` field, with that field as the
-    //    fallback — mirrors how `prompt` already works.
-    it("negative handle text reaches payload.negativePrompt", () => {
+    //    `resolvedInputs.negativePrompt` and AUTO-APPENDS to the config-panel
+    //    `data.negativePrompt` (composeNegative) — parallel to how a wired
+    //    prompt now appends. Variable / Inject-Negative suppression happens
+    //    upstream in the input-resolver (so a referenced/disabled source never
+    //    reaches resolvedInputs here).
+    it("negative handle text appends to the config negative (composeNegative)", () => {
       const n = node("n1", "generate-video", { provider: "kling", negativePrompt: "fallback" })
       const inputs: ResolvedInputs = { negativePrompt: "blurry, low quality" }
       const result = buildPayload(n, jobId, inputs)
-      expect(result.payload.negativePrompt).toBe("blurry, low quality")
+      expect(result.payload.negativePrompt).toBe("fallback. blurry, low quality")
     })
 
     // 9. Kling 3.0 mode/sound field-name desync (final-review finding):
@@ -882,6 +887,8 @@ describe("buildPayload", () => {
 // buildNodeRefMap
 // ---------------------------------------------------------------------------
 
+// Node-name variables are case-insensitive: the resolved map is CANONICAL-keyed
+// (lowercase), so a node labeled "My Prompt" lands under "my prompt".
 describe("buildNodeRefMap", () => {
   it("returns empty map with no context", () => {
     const result = buildNodeRefMap("n1")
@@ -896,7 +903,7 @@ describe("buildNodeRefMap", () => {
       edges: [edge("p", "c")],
       nodeStates: { p: { status: "completed", output: { text: "hello" } } },
     })
-    expect(result.get("My Prompt")).toBe("hello")
+    expect(result.get("my prompt")).toBe("hello")
   })
 
   it("traverses multiple levels of parents", () => {
@@ -911,8 +918,8 @@ describe("buildNodeRefMap", () => {
         p: { status: "completed", output: { text: "p text" } },
       },
     })
-    expect(result.get("GP")).toBe("gp text")
-    expect(result.get("Parent")).toBe("p text")
+    expect(result.get("gp")).toBe("gp text")
+    expect(result.get("parent")).toBe("p text")
   })
 
   it("uses node type as label when label is missing", () => {
@@ -934,7 +941,7 @@ describe("buildNodeRefMap", () => {
       edges: [{ id: "e1", source: "l", target: "c", sourceHandle: null, targetHandle: null, data: { outputMode: "last" } }],
       nodeStates: {},
     })
-    expect(result.get("My List")).toBe("c")
+    expect(result.get("my list")).toBe("c")
   })
 
   it("resolves list node with outputMode 'all'", () => {
@@ -945,7 +952,7 @@ describe("buildNodeRefMap", () => {
       edges: [{ id: "e1", source: "l", target: "c", sourceHandle: null, targetHandle: null, data: { outputMode: "all" } }],
       nodeStates: {},
     })
-    expect(result.get("My List")).toBe("a, b, c")
+    expect(result.get("my list")).toBe("a, b, c")
   })
 
   it("falls back to saved node output", () => {
@@ -956,7 +963,7 @@ describe("buildNodeRefMap", () => {
       edges: [edge("p", "c")],
       nodeStates: {},
     })
-    expect(result.get("Image")).toBe("saved.png")
+    expect(result.get("image")).toBe("saved.png")
   })
 })
 

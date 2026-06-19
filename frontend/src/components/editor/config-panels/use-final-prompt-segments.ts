@@ -3,7 +3,8 @@
 import { useMemo } from "react"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { collectCinematographyHints, hasConnectedStyleNode } from "@/lib/cinematography-hints"
-import { buildNodeRefMap, resolveTextRefs, resolveTextRefsSegments } from "@/lib/node-refs"
+import { IMAGE_REFERENCE_FORMAT } from "@/lib/image-reference-format"
+import { buildNodeRefMap, resolveTextRefs, resolveTextRefsSegments, collectWiredPromptContribution } from "@/lib/node-refs"
 import { matchSnippetRanges } from "@/lib/snippet-matching"
 import type { SnippetPoolItem } from "@/lib/snippet-pool"
 import { getStylePromptHint } from "@nodaro/shared"
@@ -12,7 +13,7 @@ import {
   buildIdentityDirectives,
 } from "@nodaro/shared"
 import { collectIdentityLockClause } from "@nodaro/shared"
-import { applyVideoNegativePrompt } from "@nodaro/shared"
+import { applyVideoNegativePrompt, composeNegative } from "@nodaro/shared"
 import type {
   CharacterDef,
   ConnectedReference,
@@ -259,10 +260,19 @@ export function useFinalPromptSegments(args: UseFinalPromptSegmentsArgs): UseFin
     // Resolve {Node Label} variable refs first — this mirrors the runtime
     // step in execute-node.ts before the prompt enters buildImagePrompt.
     const refMap = consumerNodeId ? buildNodeRefMap(consumerNodeId, nodes, edges) : new Map<string, string>()
+    const consumerType = consumerNodeId ? nodes.find((n) => n.id === consumerNodeId)?.type : undefined
     const rawUser = (userPrompt ?? "").trim()
     const resolvedUser = (resolveTextRefs(rawUser, refMap) ?? rawUser).trim()
     const rawNeg = (negativePrompt ?? "").trim()
-    const resolvedNeg = (resolveTextRefs(rawNeg, refMap) ?? rawNeg).trim()
+    let resolvedNeg = (resolveTextRefs(rawNeg, refMap) ?? rawNeg).trim()
+    // generate-image / generate-video COMPOSE the wired negative-handle text
+    // (parity with execute-node's composeNegative) so the preview shows the
+    // connected negative the run sends. The wired half is RAW — composeNegative
+    // does not ref-resolve the wired value (mirrors execute-node).
+    if ((consumerType === "generate-image" || consumerType === "generate-video") && consumerNodeId) {
+      const wiredN = collectWiredPromptContribution(consumerNodeId, nodes, edges, "negative")
+      if (wiredN) resolvedNeg = composeNegative(resolvedNeg, wiredN)
+    }
     const styleBypass = hasConnectedStyleNode(consumerNodeId, nodes, edges)
 
     const hints = consumerNodeId
@@ -275,9 +285,16 @@ export function useFinalPromptSegments(args: UseFinalPromptSegmentsArgs): UseFin
       ? collectIdentityLockClause(consumerNodeId, nodes, edges)
       : ""
 
-    // Replicate the cinematography + identity-clause prefix that execute-node.ts
-    // performs before invoking buildImagePrompt.
+    // Replicate the prompt assembly execute-node.ts performs before
+    // buildImagePrompt: typed → APPENDED wired prompt (generate-image only;
+    // generate-video appends inside assembleVideoPrompt) → cinematography hints
+    // → identity clause. The wired prompt is ref-resolved to mirror resolvePrompt.
     let preBuildPrompt = resolvedUser
+    if (consumerType === "generate-image" && consumerNodeId) {
+      const wiredP = collectWiredPromptContribution(consumerNodeId, nodes, edges, "prompt")
+      const rp = wiredP ? (resolveTextRefs(wiredP, refMap) ?? wiredP).trim() : ""
+      if (rp) preBuildPrompt = preBuildPrompt ? `${preBuildPrompt}. ${rp}` : rp
+    }
     if (hints.length > 0) {
       const joined = hints.join(", ")
       preBuildPrompt = preBuildPrompt ? `${preBuildPrompt}. ${joined}` : joined
@@ -321,7 +338,7 @@ export function useFinalPromptSegments(args: UseFinalPromptSegmentsArgs): UseFin
           styleBypass,
           resolvedNegative: resolvedNeg,
         })
-        const result = assembleImageInput(assembleInput)
+        const result = assembleImageInput({ ...assembleInput, referenceFormat: IMAGE_REFERENCE_FORMAT })
         const promptText = result.prompt
 
         // The reference/identity DIRECTIVE block sits at the very START of the

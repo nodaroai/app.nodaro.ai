@@ -2,7 +2,7 @@ import { Extension } from "@tiptap/core"
 import { Plugin, PluginKey } from "@tiptap/pm/state"
 import { Decoration, DecorationSet } from "@tiptap/pm/view"
 import type { Node as PMNode } from "@tiptap/pm/model"
-import { NODE_REF_PATTERN, parseNodeRef } from "@nodaro/shared"
+import { NODE_REF_PATTERN, parseNodeRef, canonicalVarName } from "@nodaro/shared"
 import { classifyPromptToken, type PromptTokenKind } from "@/lib/prompt-ref-scan"
 
 /** A `{...}` span (brace-inclusive offsets, relative to the scanned text).
@@ -75,7 +75,7 @@ function fallbackSubRanges(
   const fbFrom = sepFrom + 2 + rawFallback.indexOf(fallback)
   return {
     sep: { from: sepFrom, to: sepFrom + 2 },
-    fallback: { from: fbFrom, to: fbFrom + fallback.length, active: !valueLabels.has(name) },
+    fallback: { from: fbFrom, to: fbFrom + fallback.length, active: !valueLabels.has(canonicalVarName(name)) },
   }
 }
 

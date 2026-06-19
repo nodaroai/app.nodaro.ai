@@ -229,6 +229,8 @@ import {
   runLocationGeneration,
 } from "./asset-executors";
 import { buildImagePrompt, assembleImageInput } from "@nodaro/shared";
+import { composeNegative } from "@nodaro/shared";
+import { IMAGE_REFERENCE_FORMAT } from "@/lib/image-reference-format";
 import { LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind } from "@nodaro/shared";
 import type { CharacterDef, ConnectedReference, ReferenceSource, ExtraRefCharacterContext } from "@nodaro/shared";
 import { characterMentionSlug } from "@nodaro/shared";
@@ -859,11 +861,12 @@ export function executeNode(
   // override > typed candidate fields > wired). Shared with the backend
   // orchestrator via @nodaro/shared so field-selection + precedence are
   // structurally identical. Each single-prompt case below calls promptOf(type).
-  const promptOf = (nodeType: string) =>
+  const promptOf = (nodeType: string, appendWired?: boolean) =>
     computeNodePrompt(nodeType, node.data as Record<string, unknown>, {
       wired: typeof inputs.prompt === "string" ? inputs.prompt : undefined,
       override: overridePrompt,
       refMap,
+      appendWired,
     });
 
   // --- Field mapping resolution + {} injection (centralized) ---
@@ -1173,7 +1176,7 @@ export function executeNode(
     // fallback when the user hasn't typed anything. fieldMappings resolution
     // (upstream dropdown pick) already ran earlier, so if the user selected
     // a source, `imgData.prompt` holds that source's output.
-    let prompt: string | undefined = promptOf("generate-image");
+    let prompt: string | undefined = promptOf("generate-image", true);
     // Fold cinematography hints — a Person / Framing / Style node wired to
     // the `cinematography` handle is a perfectly valid prompt source on its
     // own. Requiring a manual prompt in that case would force users to type
@@ -1228,8 +1231,12 @@ export function executeNode(
     const result = assembleImageInput({
       userPrompt: prompt ?? "",
       provider: providerKey,
+      referenceFormat: IMAGE_REFERENCE_FORMAT,
       style: hasConnectedStyleNode(node.id, nodes, edges) ? undefined : imgData.style,
-      negativePrompt: imgData.negativePrompt,
+      // Negative: typed (with {label} resolved) + wired connected-negative are
+      // BOTH emitted (composeNegative). The input-resolver already dropped any
+      // referenced / Inject-Negative-off source from `inputs.negativePrompt`.
+      negativePrompt: composeNegative(resolveTextRefs(imgData.negativePrompt, refMap) ?? imgData.negativePrompt, inputs.negativePrompt) || undefined,
       userTemplates: useWorkflowStore.getState().userPromptTemplates,
       flowTemplates: useWorkflowStore.getState().flowPromptTemplates,
       connectedReferences,
@@ -1532,6 +1539,7 @@ export function executeNode(
       connectedReferences,
       ancestorRefs: [],
       referenceOrder: i2iData.referenceOrder ?? undefined,
+      referenceFormat: IMAGE_REFERENCE_FORMAT,
       suppressedCanonicalCharacterIds: i2iData.suppressedCanonicalCharacterIds ?? undefined,
       suppressedCanonicalLocationIds: i2iData.suppressedCanonicalLocationIds ?? undefined,
     });
@@ -1682,6 +1690,7 @@ export function executeNode(
       connectedReferences,
       ancestorRefs: [],
       referenceOrder: modData.referenceOrder ?? undefined,
+      referenceFormat: IMAGE_REFERENCE_FORMAT,
       suppressedCanonicalCharacterIds: modData.suppressedCanonicalCharacterIds ?? undefined,
       suppressedCanonicalLocationIds: modData.suppressedCanonicalLocationIds ?? undefined,
     });
@@ -1804,10 +1813,14 @@ export function executeNode(
     const syntheticNode = {
       ...node,
       type: mode as SceneNodeType,
-      data:
-        resolvedProvider && resolvedProvider !== rawProvider
-          ? { ...node.data, provider: resolvedProvider }
-          : node.data,
+      // `__appendWired` marks this as a generate-video re-type so the i2v/t2v
+      // case auto-appends the connected prompt — WITHOUT changing standalone or
+      // legacy image-to-video / text-to-video nodes (they carry no marker).
+      data: {
+        ...node.data,
+        ...(resolvedProvider && resolvedProvider !== rawProvider ? { provider: resolvedProvider } : {}),
+        __appendWired: true,
+      },
     } as WorkflowNode;
     return executeNode(syntheticNode, ctx, overridePrompt, overrideMediaUrl, listIterationIndex, runId);
   }
@@ -1903,7 +1916,7 @@ export function executeNode(
     // (`["prompt","motionPrompt"]`) also covers Kling 3 Studio, which stores
     // the main prompt in data.motionPrompt (not data.prompt), AND a
     // generate-video node re-typed to image-to-video (same field list).
-    let prompt: string | undefined = promptOf("image-to-video");
+    let prompt: string | undefined = promptOf("image-to-video", (node.data as Record<string, unknown>).__appendWired === true);
     prompt = stripVideoImageTokens(prompt)
     // Inject motion + cinematography hints into prompt
     const motionHints: string[] = [];
@@ -1977,11 +1990,14 @@ export function executeNode(
     const kling3Sound =
       ((i2vData as Record<string, unknown>).sound as boolean | undefined) ??
       ((i2vData as Record<string, unknown>).kling3Sound as boolean | undefined);
-    // Typed `negative` handle wins; config-panel field is the fallback —
-    // mirrors backend payload-builder generate-video (commit b75b2127).
+    // generate-video (re-typed, carries `__appendWired`): typed negative (with
+    // {label} resolved) + wired connected-negative are BOTH emitted. Standalone
+    // image-to-video keeps legacy wired-wins (mirrors BE payload-builder).
+    const i2vTypedNeg = (i2vData as Record<string, unknown>).negativePrompt as string | undefined;
     const i2vNegativePrompt =
-      inputs.negativePrompt ??
-      ((i2vData as Record<string, unknown>).negativePrompt as string | undefined);
+      (node.data as Record<string, unknown>).__appendWired === true
+        ? composeNegative(resolveTextRefs(i2vTypedNeg, refMap) ?? i2vTypedNeg, inputs.negativePrompt) || undefined
+        : inputs.negativePrompt ?? i2vTypedNeg;
     const i2vCfgScale = (i2vData as Record<string, unknown>).cfgScale as
       | number
       | undefined;
@@ -2135,7 +2151,7 @@ export function executeNode(
     // t2v's candidate-field list includes `motionPrompt`
     // (NODE_PROMPT_CANDIDATE_FIELDS), so a generate-video node re-typed to
     // text-to-video keeps a prompt stored in data.motionPrompt.
-    let prompt = stripVideoImageTokens(promptOf("text-to-video"));
+    let prompt = stripVideoImageTokens(promptOf("text-to-video", (node.data as Record<string, unknown>).__appendWired === true));
     {
       // Bullet consumer (stamps character elements onto the video ref) → exclude here.
       const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeCharacterElements: true });
@@ -2230,9 +2246,13 @@ export function executeNode(
     // silently submits without aspectRatio/resolution. Fill the defaults
     // explicitly so the request matches what the user sees.
     const effectiveT2vAspect = (t2vData.aspectRatio as string | undefined) ?? (isSeedance2T2V ? "16:9" : undefined)
-    // Typed `negative` handle wins; config-panel field is the fallback —
-    // mirrors backend payload-builder generate-video (commit b75b2127).
-    const t2vNegativePrompt = inputs.negativePrompt ?? (t2vData.negativePrompt || undefined);
+    // generate-video (re-typed, carries `__appendWired`): typed + wired negative
+    // both emitted. Standalone text-to-video keeps legacy wired-wins.
+    const t2vTypedNeg = (t2vData.negativePrompt as string | undefined) || undefined;
+    const t2vNegativePrompt =
+      (node.data as Record<string, unknown>).__appendWired === true
+        ? composeNegative(resolveTextRefs(t2vTypedNeg, refMap) ?? t2vTypedNeg, inputs.negativePrompt) || undefined
+        : inputs.negativePrompt ?? t2vTypedNeg;
     // ONE options object for every provider, mirroring the backend
     // orchestrator's t2v payload (payload-builder.ts case "generate-video"),
     // which forwards all of these unconditionally. The /v1/text-to-video route

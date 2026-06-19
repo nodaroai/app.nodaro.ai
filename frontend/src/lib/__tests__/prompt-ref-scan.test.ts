@@ -13,10 +13,10 @@ describe("isExcludedToken", () => {
 describe("referencedRefs", () => {
   it("collects non-excluded {labels} across fields, trimmed", () => {
     const r = referencedRefs({ prompt: "a {Hero} b {Sky}", negativePrompt: "{name}" }, ["prompt", "negativePrompt"])
-    expect(r.has("Hero")).toBe(true); expect(r.has("Sky")).toBe(true); expect(r.has("name")).toBe(false)
+    expect(r.has("hero")).toBe(true); expect(r.has("sky")).toBe(true); expect(r.has("name")).toBe(false)
   })
   it("matches duplicate-suffixed labels like {Hero (2)}", () => {
-    expect(referencedRefs({ prompt: "{Hero (2)}" }, ["prompt"]).has("Hero (2)")).toBe(true)
+    expect(referencedRefs({ prompt: "{Hero (2)}" }, ["prompt"]).has("hero (2)")).toBe(true)
   })
   it("extracts the parsed name for {Label || default} refs", () => {
     const r = referencedRefs({ prompt: "a {person || man} b" }, ["prompt"])
@@ -31,14 +31,16 @@ describe("hasEmptyInjection", () => {
   })
 })
 describe("classifyPromptToken", () => {
-  const labels = new Set(["Setting", "Hero (2)"])
-  it("wired when the label has a matching upstream", () => {
+  const labels = new Set(["setting", "hero (2)"]) // canonical (lowercase) resolvable set
+  it("wired when the label has a matching upstream (case-insensitive)", () => {
     expect(classifyPromptToken("Setting", labels)).toBe("wired")
-    expect(classifyPromptToken("Hero (2)", labels)).toBe("wired") // duplicate-suffix labels match exactly
+    expect(classifyPromptToken("setting", labels)).toBe("wired") // lowercase-canonical match
+    expect(classifyPromptToken("SETTING", labels)).toBe("wired")
+    expect(classifyPromptToken("Hero (2)", labels)).toBe("wired") // duplicate-suffix labels match
   })
-  it("missing when no upstream matches (case-sensitive, exact)", () => {
+  it("missing when no upstream matches", () => {
     expect(classifyPromptToken("Style Guide", labels)).toBe("missing")
-    expect(classifyPromptToken("setting", labels)).toBe("missing")
+    expect(classifyPromptToken("Nope", labels)).toBe("missing")
   })
   it("reserved for system template vars regardless of upstream", () => {
     expect(RESERVED_TEMPLATE_VARS.size).toBeGreaterThan(0)

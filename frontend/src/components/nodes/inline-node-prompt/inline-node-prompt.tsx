@@ -7,6 +7,7 @@ import { PROMPT_EDITOR_PORTAL_ATTR } from "@/components/editor/config-panels/pro
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { getPromptFields, getSnippetMedia } from "@/lib/prompt-fields"
 import { usePromptEditorRefs } from "./use-prompt-editor-refs"
+import { InlineFinalPrompt } from "./inline-final-prompt"
 import type { FieldMappings } from "@/types/nodes" // FieldMappings is exported from @/types/nodes (verified)
 
 export interface InlineNodePromptProps {
@@ -30,6 +31,13 @@ export function InlineNodePrompt({ nodeId, nodeType, data, provider, aspectRatio
   const fields = getPromptFields(nodeType)
   const promptField = fields?.prompt ?? "prompt"
   const promptValue = typeof data[promptField] === "string" ? (data[promptField] as string) : ""
+  // Edit / Final / Both view (persisted on node data via the index signature).
+  // "Final" renders the assembled prompt through the SAME machinery as the
+  // config panel's final view (useNodeFinalPrompt) → node-Final == panel == run.
+  const rawView = data.inlinePromptView
+  const view: "edit" | "final" | "both" = rawView === "final" ? "final" : rawView === "both" ? "both" : "edit"
+  const showEditor = view !== "final"
+  const showFinal = view !== "edit"
 
   const [isFocused, setIsFocusedRaw] = useState(false)
   // Lift focus to the node (reveals the run pill while editing) alongside local state.
@@ -124,48 +132,79 @@ export function InlineNodePrompt({ nodeId, nodeType, data, provider, aspectRatio
         e.currentTarget.querySelector<HTMLElement>(".ProseMirror")?.focus()
       }}
     >
-      {/* Edit affordances (snippets + Generate-with-AI) appear ONLY while editing,
-          floating top-right over the text so the resting state stays clean. */}
-      {isFocused && (
-        <div className="absolute top-1.5 right-1.5 z-10 inline-flex items-center gap-0.5 rounded-md bg-card/80 backdrop-blur-sm px-0.5">
-          <SnippetMenuButton
-            pool={promptSnippets}
-            value={promptValue}
-            onInsert={(v) => writeField(v)}
-            target="prompt"
-            media={getSnippetMedia(nodeType)}
-          />
-          <PromptHelperButton
-            size="sm"
-            nodeType={nodeType}
-            currentPrompt={promptValue}
-            provider={provider}
-            aspectRatio={aspectRatio}
-            duration={duration}
-            onAccept={(text, mc) => { writeField(text); if (mc) updateNodeData(nodeId, { [mc.field]: mc.value }) }}
-          />
+      {/* Header row: the Edit/Final/Both view toggle (ALWAYS visible, `nodrag`
+          so a click doesn't start a node drag) on the left; the edit affordances
+          (snippets + Generate-with-AI) on the right, ONLY while editing — in a
+          row ABOVE the text so they never overlap it. */}
+      <div className="nodrag flex items-center justify-between gap-1 mb-1 px-0.5">
+        <div className="inline-flex items-center overflow-hidden rounded-md border border-border/60 text-[10px] leading-none">
+          {(["edit", "final", "both"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              aria-pressed={view === m}
+              title={m === "edit" ? "Edit prompt" : m === "final" ? "Show the assembled final prompt" : "Show edit + final"}
+              onClick={() => updateNodeData(nodeId, { inlinePromptView: m })}
+              className={`px-1.5 py-0.5 capitalize transition-colors ${
+                view === m
+                  ? "bg-muted text-foreground font-medium"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {m}
+            </button>
+          ))}
         </div>
-      )}
+        {showEditor && isFocused && (
+          <div className="flex items-center gap-0.5">
+            <SnippetMenuButton
+              pool={promptSnippets}
+              value={promptValue}
+              onInsert={(v) => writeField(v)}
+              target="prompt"
+              media={getSnippetMedia(nodeType)}
+            />
+            <PromptHelperButton
+              size="sm"
+              nodeType={nodeType}
+              currentPrompt={promptValue}
+              provider={provider}
+              aspectRatio={aspectRatio}
+              duration={duration}
+              onAccept={(text, mc) => { writeField(text); if (mc) updateNodeData(nodeId, { [mc.field]: mc.value }) }}
+            />
+          </div>
+        )}
+      </div>
 
       {/* nowheel: scrolling a long prompt scrolls the editor, not the canvas.
           `prompt-editor-surface` scopes the click-vs-drag gesture to the editor.
           `bare` drops the box chrome so the editor blends into the node card. */}
-      <div className="nowheel prompt-editor-surface">
-        <PromptEditor
-          bare
-          value={promptValue}
-          onChange={writeField}
-          placeholder="Describe what you want to generate… Type @ for references, { for variables"
-          rows={2}
-          maxRows={6}
-          referenceImages={referenceImages}
-          nodeRefs={nodeRefs}
-          refMap={refMap}
-          snippets={promptSnippets}
-          onFocus={() => setIsFocused(true)}
-          onBlur={() => setIsFocused(false)}
-        />
-      </div>
+      {showEditor && (
+        <div className="nowheel prompt-editor-surface">
+          <PromptEditor
+            bare
+            value={promptValue}
+            onChange={writeField}
+            placeholder="Describe what you want to generate… Type @ for references, { for variables"
+            rows={2}
+            maxRows={6}
+            referenceImages={referenceImages}
+            nodeRefs={nodeRefs}
+            refMap={refMap}
+            snippets={promptSnippets}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
+          />
+        </div>
+      )}
+      {/* Final view (read-only assembled prompt) — same hook as the config
+          panel. `nodrag`/`nowheel` so the Copy button + scroll work on canvas. */}
+      {showFinal && (
+        <div className="nodrag nowheel">
+          <InlineFinalPrompt nodeId={nodeId} />
+        </div>
+      )}
     </div>
   )
 }

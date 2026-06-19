@@ -1,4 +1,4 @@
-import { NODE_REF_PATTERN, RESERVED_TEMPLATE_VARS, parseNodeRef } from "@nodaro/shared"
+import { NODE_REF_PATTERN, RESERVED_TEMPLATE_VARS, parseNodeRef, canonicalVarName } from "@nodaro/shared"
 
 /** How a `{...}` token (parsed name) renders/behaves. Single source of truth for
  *  the editor decoration AND the missing-refs chip — predicate-level identity. */
@@ -17,7 +17,9 @@ export function classifyPromptToken(
   if (name === "" || name.startsWith("image:")) return "skip"
   if (RESERVED_TEMPLATE_VARS.has(name)) return "reserved"
   if (resolvable === null) return "unknown"
-  return resolvable.has(name) ? "wired" : "missing"
+  // Case-insensitive: node-name variables are lowercase-canonical (every producer
+  // builds the resolvable set canonical), so `{MyNode}`/`{MYNODE}` both match.
+  return resolvable.has(canonicalVarName(name)) ? "wired" : "missing"
 }
 
 /** Tokens never treated as a real reference: empty, image-ref tokens, reserved vars. */
@@ -34,7 +36,7 @@ export function referencedRefs(data: Record<string, unknown>, fields: readonly s
     if (typeof value !== "string" || value.length === 0) continue
     for (const match of value.matchAll(NODE_REF_PATTERN)) {
       const { name } = parseNodeRef(match[1] ?? "")
-      if (!isExcludedToken(name)) refs.add(name)
+      if (!isExcludedToken(name)) refs.add(canonicalVarName(name))
     }
   }
   return refs

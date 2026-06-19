@@ -22,6 +22,7 @@ import { splitByLoopDelimiter } from "@nodaro/shared"
 import { SOCIAL_POST_NODE_TYPES } from "@nodaro/shared"
 import { PARAMETER_NODE_TYPES } from "@nodaro/shared"
 import { FAN_OUT_EACH_TYPES, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES } from "@nodaro/shared"
+import { extractReferencedLabels, canonicalVarName } from "@nodaro/shared"
 
 /**
  * Resolve a node's primary output from execution state or source node data.
@@ -70,6 +71,21 @@ export function resolveNodeInputs(
   const inputs: ResolvedInputs = {}
   const ctx = { nodes: allNodes, edges }
 
+  // Prompt-handle injection control (generate-image / generate-video): a source
+  // placed via {label} in the consumer's prompt/negative — or when Inject Prompt
+  // is off — must NOT also flow into inputs.prompt (no double). Mirror of FE
+  // node-input-resolver.ts.
+  const consumerData = targetNode.data as Record<string, unknown>
+  const referencedLabels = extractReferencedLabels(
+    consumerData.prompt as string | undefined,
+    consumerData.negativePrompt as string | undefined,
+  )
+  const promptInjectOff = consumerData.injectPrompt === false
+  const negativeInjectOff = consumerData.injectNegative === false
+  // Negative auto-append (and its suppression) is generate-image / generate-video
+  // only — standalone i2v/t2v keep legacy negative handling.
+  const isGenImageOrVideo = targetNode.type === "generate-image" || targetNode.type === "generate-video"
+
   for (const edge of incomingEdges) {
     let sourceNode = nodeById.get(edge.source)
     if (!sourceNode) continue
@@ -104,6 +120,17 @@ export function resolveNodeInputs(
       }
       sourceNode = current
       if (lastInEdge) effectiveSourceHandle = lastInEdge.sourceHandle
+    }
+
+    // Prompt-handle suppression (see referencedLabels above).
+    if (edge.targetHandle === "prompt") {
+      const lbl = canonicalVarName(((sourceNode.data as Record<string, unknown>).label as string) || sourceNode.type || sourceNode.id)
+      if (promptInjectOff || referencedLabels.has(lbl)) continue
+    }
+    // Negative-handle suppression (generate-image / generate-video only).
+    if (isGenImageOrVideo && edge.targetHandle === "negative") {
+      const lbl = canonicalVarName(((sourceNode.data as Record<string, unknown>).label as string) || sourceNode.type || sourceNode.id)
+      if (negativeInjectOff || referencedLabels.has(lbl)) continue
     }
 
     // Get output from node state or source node data

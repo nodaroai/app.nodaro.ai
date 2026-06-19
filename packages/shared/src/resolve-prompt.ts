@@ -6,6 +6,13 @@ export interface ResolvePromptArgs {
   typed?: ReadonlyArray<string | undefined>
   wired?: string
   refMap: ReadonlyMap<string, string>
+  /** Opt-in (generate-image / generate-video only): APPEND the wired
+   *  (connected-prompt) value to the TYPED base instead of treating wired as a
+   *  fallback, so a connected prompt auto-injects alongside the typed prompt. An
+   *  `override` (list fan-out item) still fully replaces — no wired append.
+   *  Off/undefined = exact legacy precedence (override > typed > wired) for every
+   *  other node type. */
+  appendWired?: boolean
 }
 const present = (s?: string): s is string => typeof s === "string" && s.trim().length > 0
 const rr = (s: string, m: ReadonlyMap<string, string>) => (m.size > 0 ? resolveNodeRefs(s, m) : s)
@@ -13,12 +20,30 @@ const rr = (s: string, m: ReadonlyMap<string, string>) => (m.size > 0 ? resolveN
 /** SINGLE SOURCE OF TRUTH for prompt precedence across both DAG engines:
  *  override (list fan-out) > first present typed candidate > wired > "".
  *  "present" = non-empty after trim. {Label} refs are resolved on the chosen
- *  branch via the shared resolveNodeRefs. */
-export function resolvePrompt({ override, typed = [], wired, refMap }: ResolvePromptArgs): string {
+ *  branch via the shared resolveNodeRefs. With `appendWired`, the chosen base
+ *  AND the wired value are both emitted (joined ". "). */
+export function resolvePrompt({ override, typed = [], wired, refMap, appendWired }: ResolvePromptArgs): string {
+  // appendWired: a connected prompt APPENDS to the TYPED base. An `override`
+  // (list fan-out item) still fully REPLACES — it never receives a wired append,
+  // so per-item fan-out prompts are unchanged.
+  if (appendWired && !present(override)) {
+    const base = typed.find(present)
+    return [base, wired].filter(present).map((s) => rr(s, refMap)).join(". ")
+  }
   if (present(override)) return rr(override, refMap)
   for (const t of typed) if (present(t)) return rr(t, refMap)
   if (present(wired)) return rr(wired, refMap)
   return ""
+}
+
+/** Compose a final NEGATIVE prompt from a TYPED base + a WIRED (connected
+ *  negative-handle) value: both are emitted, joined ". " (mirrors `appendWired`
+ *  for the positive prompt). Pure join — the caller resolves `{label}` refs on
+ *  the typed value first, and the wired value is already a resolved output that
+ *  the input-resolver has filtered (referenced / Inject-Negative-off dropped).
+ *  Generate-image / generate-video only; empty parts are dropped. */
+export function composeNegative(typed?: string, wired?: string): string {
+  return [typed, wired].filter(present).join(". ")
 }
 
 /** Ordered typed-candidate fields per node type — the precedence source of
@@ -56,13 +81,15 @@ export interface ComputeNodePromptArgs {
   override?: string
   wired?: string
   refMap: ReadonlyMap<string, string>
+  /** See ResolvePromptArgs.appendWired — generate-image / generate-video only. */
+  appendWired?: boolean
 }
 /** Resolve a single-prompt node's final prompt (typed-primary). Both engines
  *  call this so field-selection + precedence are structurally identical. */
 export function computeNodePrompt(
   nodeType: string,
   data: Record<string, unknown>,
-  { override, wired, refMap }: ComputeNodePromptArgs,
+  { override, wired, refMap, appendWired }: ComputeNodePromptArgs,
 ): string {
   let typed: ReadonlyArray<string | undefined>
   if (nodeType === "text-to-speech") {
@@ -72,7 +99,7 @@ export function computeNodePrompt(
     const fields = NODE_PROMPT_CANDIDATE_FIELDS[nodeType] ?? ["prompt"]
     typed = fields.map((f) => data[f] as string | undefined)
   }
-  return resolvePrompt({ override, typed, wired, refMap })
+  return resolvePrompt({ override, typed, wired, refMap, appendWired })
 }
 
 export interface LlmChatFieldArgs {

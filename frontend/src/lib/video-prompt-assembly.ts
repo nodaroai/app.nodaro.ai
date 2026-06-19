@@ -31,6 +31,7 @@ import {
 } from "@nodaro/shared"
 import { collectCinematographyHints } from "@/lib/cinematography-hints"
 import { stampElementInjections } from "@/components/editor/workflow-editor/node-input-resolver"
+import { collectWiredPromptContribution } from "@/lib/node-refs"
 
 /**
  * Strip `{image:N:label}` tokens from video prompts (label kept, curly syntax
@@ -495,8 +496,14 @@ export function assembleVideoPrompt(nodeType: string, args: AssembleVideoPromptA
   const id = node.id
   const data = node.data as Record<string, unknown>
 
-  // ── Base prompt: typed candidate fields resolved via refMap (no wired/override) ──
-  let prompt: string | undefined = computeNodePrompt(nodeType, data, { refMap })
+  // ── Base prompt: typed candidate fields resolved via refMap. generate-video
+  // APPENDS the wired prompt-handle contribution (parity with execute-node's
+  // appendWired); standalone t2v/i2v keep wired as a fallback (no append). ──
+  const appendWired = node.type === "generate-video"
+  const wired = appendWired
+    ? collectWiredPromptContribution(node.id, nodes, edges, "prompt") || undefined
+    : undefined
+  let prompt: string | undefined = computeNodePrompt(nodeType, data, { refMap, wired, appendWired })
 
   // ── motion-transfer / video-sfx: NO folding — bare resolved prompt ──
   if (nodeType === "motion-transfer" || nodeType === "video-sfx") {
