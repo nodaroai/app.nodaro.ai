@@ -7,6 +7,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 const mocks = vi.hoisted(() => ({
   mockImageToVideo: vi.fn(),
   mockGenerateDialogue: vi.fn(),
+  mockDirectTTS: vi.fn(),
+  mockIsKieAcceptedVoice: vi.fn(),
   mockExtractAudioTrack: vi.fn(),
   mockDirectVoiceChanger: vi.fn(),
   mockMergeVideoAudio: vi.fn(),
@@ -42,6 +44,12 @@ vi.mock("@/providers/kie/audio.js", () => ({
   KieAudioProvider: class {
     generateDialogue = mocks.mockGenerateDialogue
   },
+  isKieAcceptedVoice: mocks.mockIsKieAcceptedVoice,
+}))
+
+vi.mock("@/providers/elevenlabs/direct-tts.js", () => ({
+  directElevenLabsTTS: mocks.mockDirectTTS,
+  stripAudioTags: (t: string) => t,
 }))
 
 vi.mock("@/providers/video/extract-audio-track.js", () => ({
@@ -105,10 +113,12 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.mockImageToVideo.mockResolvedValue(VIDEO_RESULT)
   mocks.mockGenerateDialogue.mockResolvedValue({ url: "https://kie.example.com/dialogue.mp3", cost: 0.07 })
+  mocks.mockDirectTTS.mockResolvedValue(Buffer.from("tts-audio"))
+  mocks.mockIsKieAcceptedVoice.mockReturnValue(false) // default: treat as library/custom
   mocks.mockUploadToR2.mockResolvedValue("https://r2.example.com/dialogue.mp3")
+  mocks.mockUploadBufferToR2.mockResolvedValue("https://r2.example.com/tts.mp3")
   mocks.mockExtractAudioTrack.mockResolvedValue({ audioPath: "/tmp/a.mp3", workDir: "/tmp/wd" })
   mocks.mockDirectVoiceChanger.mockResolvedValue(Buffer.from("revoiced"))
-  mocks.mockUploadBufferToR2.mockResolvedValue("https://r2.example.com/revoiced.mp3")
   mocks.mockMergeVideoAudio.mockResolvedValue("/tmp/merged.mp4")
   mocks.mockWatermarkLocalVideoAndUpload.mockResolvedValue("https://r2.example.com/job-1-revoiced.mp4")
   mocks.mockUploadVideoMaybeWatermark.mockResolvedValue("https://r2.example.com/job-1.mp4")
@@ -118,50 +128,102 @@ beforeEach(() => {
 })
 
 describe("voiced-video handler — audio_driven (Seedance 2)", () => {
-  it("synthesises multi-speaker dialogue, feeds it as reference audio, and charges the addon", async () => {
+  it("synthesises a LIBRARY voice via direct ElevenLabs TTS (not Dialogue v3) and charges the addon", async () => {
     await handler(
       makeJob({
         imageUrl: "https://x.png",
-        prompt: "two people talk",
-        provider: "seedance-2-fast",
+        prompt: "she greets",
+        provider: "seedance-2",
         duration: 8,
         characterVoices: [
-          { voiceId: "anna-v", speaker: "Anna" },
-          { voiceId: "gordon-v", speaker: "Gordon" },
+          { voiceId: "W3C2vBPukr5b5jvoXhPK", voiceType: "library", ttsProvider: "elevenlabs-turbo", speaker: "Natalie" },
+        ],
+        dialogue: [{ speaker: "Natalie", line: "good morning" }],
+        voicedAudioAddon: 4,
+      }) as never,
+      ctx,
+    )
+
+    // The Studio bug fix: library voice routes through direct TTS, NOT Dialogue v3.
+    expect(mocks.mockDirectTTS).toHaveBeenCalledWith(
+      "good morning",
+      "W3C2vBPukr5b5jvoXhPK",
+      "elevenlabs-turbo",
+      expect.objectContaining({ allowDefaultVoiceFallback: true }),
+    )
+    expect(mocks.mockGenerateDialogue).not.toHaveBeenCalled()
+    expect(mocks.mockImageToVideo).toHaveBeenCalledWith(
+      "https://x.png",
+      "seedance-2",
+      "she greets",
+      8,
+      undefined,
+      expect.objectContaining({ referenceAudioUrls: ["https://r2.example.com/tts.mp3"], generateAudio: false }),
+    )
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(
+      expect.objectContaining({
+        extraNonProviderCredits: 4,
+        extraOutputData: expect.objectContaining({ voiceApplied: true }),
+      }),
+    )
+  })
+
+  it("uses Dialogue v3 only for multi-speaker where every voice is KIE-premade", async () => {
+    mocks.mockIsKieAcceptedVoice.mockReturnValue(true)
+    await handler(
+      makeJob({
+        imageUrl: "https://x.png",
+        prompt: "two talk",
+        provider: "seedance-2",
+        duration: 8,
+        characterVoices: [
+          { voiceId: "Rachel", voiceType: "premade", speaker: "Anna" },
+          { voiceId: "Sarah", voiceType: "premade", speaker: "Gordon" },
         ],
         dialogue: [
-          { speaker: "Anna", line: "good morning" },
-          { speaker: "Gordon", line: "morning to you" },
+          { speaker: "Anna", line: "hi" },
+          { speaker: "Gordon", line: "hello" },
         ],
         voicedAudioAddon: 4,
       }) as never,
       ctx,
     )
 
-    // each line synthesised in its OWN voice, in order
     expect(mocks.mockGenerateDialogue).toHaveBeenCalledWith(
       [
-        { text: "good morning", voice: "anna-v" },
-        { text: "morning to you", voice: "gordon-v" },
+        { text: "hi", voice: "Rachel" },
+        { text: "hello", voice: "Sarah" },
       ],
       undefined,
     )
-    // the stitched track is fed as reference audio; the model supplies the soundtrack
-    expect(mocks.mockImageToVideo).toHaveBeenCalledWith(
-      "https://x.png",
-      "seedance-2-fast",
-      "two people talk",
-      8,
-      undefined,
-      expect.objectContaining({ referenceAudioUrls: ["https://r2.example.com/dialogue.mp3"], generateAudio: false }),
+    expect(mocks.mockDirectTTS).not.toHaveBeenCalled()
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(
+      expect.objectContaining({ extraOutputData: expect.objectContaining({ voiceApplied: true }) }),
     )
-    // no separate revoice for the audio_driven path
-    expect(mocks.mockDirectVoiceChanger).not.toHaveBeenCalled()
+  })
+
+  it("degrades to a silent clip (never hard-fails) when synthesis throws, and refunds the addon", async () => {
+    mocks.mockDirectTTS.mockRejectedValueOnce(new Error("Invalid input parameters"))
+    await handler(
+      makeJob({
+        imageUrl: "https://x.png",
+        prompt: "she greets",
+        provider: "seedance-2",
+        duration: 8,
+        characterVoices: [{ voiceId: "W3C2vBPukr5b5jvoXhPK", voiceType: "library", speaker: "Natalie" }],
+        dialogue: [{ speaker: "Natalie", line: "good morning" }],
+        voicedAudioAddon: 4,
+      }) as never,
+      ctx,
+    )
+
+    // Fell back to a plain generation (no reference audio) — job NOT failed.
+    const lastCall = mocks.mockImageToVideo.mock.calls.at(-1)!
+    expect((lastCall[5] as Record<string, unknown>).referenceAudioUrls).toBeUndefined()
     expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(
       expect.objectContaining({
-        jobType: "image-to-video",
-        extraNonProviderCredits: 4,
-        extraOutputData: expect.objectContaining({ voiceApplied: true }),
+        extraNonProviderCredits: 0,
+        extraOutputData: expect.objectContaining({ voiceApplied: false, voiceWarning: "voice_chain_failed" }),
       }),
     )
   })
@@ -175,7 +237,7 @@ describe("voiced-video handler — native_speech (VEO)", () => {
         prompt: "she speaks to camera",
         provider: "veo3.1",
         duration: 8,
-        characterVoices: [{ voiceId: "anna-v", speaker: "Anna" }],
+        characterVoices: [{ voiceId: "W3C2vBPukr5b5jvoXhPK", voiceType: "library", speaker: "Anna" }],
         dialogue: [{ speaker: "Anna", line: "hello there" }],
         voicedAudioAddon: 4,
       }) as never,
@@ -187,19 +249,36 @@ describe("voiced-video handler — native_speech (VEO)", () => {
     expect(prov).toBe("veo3.1")
     expect(bakedPrompt).toContain("hello there")
     expect((opts as { generateAudio?: boolean }).generateAudio).toBe(true)
-    expect((opts as Record<string, unknown>).referenceAudioUrls).toBeUndefined()
-
-    // revoice chain: extract -> speech-to-speech (primary voice, keep bed) -> remux
-    expect(mocks.mockExtractAudioTrack).toHaveBeenCalledWith(VIDEO_RESULT.url)
     expect(mocks.mockDirectVoiceChanger).toHaveBeenCalledWith(
       expect.any(Buffer),
-      "anna-v",
+      "W3C2vBPukr5b5jvoXhPK",
       expect.objectContaining({ removeBackgroundNoise: false }),
     )
     expect(mocks.mockWatermarkLocalVideoAndUpload).toHaveBeenCalled()
-    expect(mocks.mockGenerateDialogue).not.toHaveBeenCalled()
     expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(
       expect.objectContaining({ extraNonProviderCredits: 4, extraOutputData: expect.objectContaining({ voiceApplied: true }) }),
+    )
+  })
+
+  it("keeps the baked clip (voiceApplied false) when only the revoice fails", async () => {
+    mocks.mockDirectVoiceChanger.mockRejectedValueOnce(new Error("s2s failed"))
+    await handler(
+      makeJob({
+        imageUrl: "https://x.png",
+        prompt: "she speaks",
+        provider: "veo3.1",
+        duration: 8,
+        characterVoices: [{ voiceId: "W3C2vBPukr5b5jvoXhPK", voiceType: "library", speaker: "Anna" }],
+        dialogue: [{ speaker: "Anna", line: "hello" }],
+        voicedAudioAddon: 4,
+      }) as never,
+      ctx,
+    )
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(
+      expect.objectContaining({
+        extraNonProviderCredits: 0,
+        extraOutputData: expect.objectContaining({ voiceApplied: false, voiceWarning: "revoice_failed" }),
+      }),
     )
   })
 })
@@ -210,7 +289,7 @@ describe("voiced-video handler — no voice resolvable", () => {
       makeJob({
         imageUrl: "https://x.png",
         prompt: "a plain clip with no quoted dialogue",
-        provider: "seedance-2-fast",
+        provider: "seedance-2",
         duration: 8,
         characterVoices: [],
         dialogue: [],
@@ -220,6 +299,7 @@ describe("voiced-video handler — no voice resolvable", () => {
     )
 
     expect(mocks.mockGenerateDialogue).not.toHaveBeenCalled()
+    expect(mocks.mockDirectTTS).not.toHaveBeenCalled()
     const opts = mocks.mockImageToVideo.mock.calls[0][5] as Record<string, unknown>
     expect(opts.referenceAudioUrls).toBeUndefined()
     expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(
