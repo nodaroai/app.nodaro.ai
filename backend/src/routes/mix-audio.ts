@@ -9,8 +9,8 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 
 const mixAudioBody = z.object({
-  audioUrls: z.array(safeUrlSchema).min(2),
-  trackVolumes: z.array(z.number().min(0).max(200)).optional(),
+  audioUrls: z.array(safeUrlSchema).min(2).max(20),
+  trackVolumes: z.array(z.number().min(0).max(200)).max(20).optional(),
   userId: z.string().uuid().optional(),
 })
 

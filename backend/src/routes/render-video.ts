@@ -44,7 +44,7 @@ const mediaSegmentSchema = z.object({
   layout: segmentLayoutSchema,
   transitionIn: transitionSchema.optional(),
   transitionOut: transitionSchema.optional(),
-  effects: z.array(effectSchema).default([]),
+  effects: z.array(effectSchema).max(50).default([]),
 })
 
 const textSegmentSchema = z.object({
@@ -65,7 +65,7 @@ const mediaTrackSchema = z.object({
   type: z.literal("media"),
   id: z.string(),
   zIndex: z.number(),
-  segments: z.array(mediaSegmentSchema).min(1),
+  segments: z.array(mediaSegmentSchema).min(1).max(500),
 })
 
 const audioTrackSchema = z.object({
@@ -82,7 +82,7 @@ const textTrackSchema = z.object({
   type: z.literal("text"),
   id: z.string(),
   zIndex: z.number(),
-  segments: z.array(textSegmentSchema).min(1),
+  segments: z.array(textSegmentSchema).min(1).max(500),
 })
 
 const trackSchema = z.discriminatedUnion("type", [mediaTrackSchema, audioTrackSchema, textTrackSchema])
@@ -93,7 +93,7 @@ const sceneGraphSchema = z.object({
   height: z.number().min(100).max(3840),
   durationInFrames: z.number().min(1).max(54000),
   backgroundColor: z.string(),
-  tracks: z.array(trackSchema).min(1),
+  tracks: z.array(trackSchema).min(1).max(50),
 })
 
 // ── Legacy template schema ─────────────────────────────────────────────
@@ -109,16 +109,16 @@ const renderVideoBody = z.object({
     url: safeUrlSchema,
     type: z.enum(["image", "video", "audio"]),
     durationSeconds: z.number().optional(),
-  })).min(1),
+  })).min(1).max(200),
   audioTrackUrl: safeUrlSchema.optional(),
   textOverlays: z.array(z.object({
-    text: z.string(),
+    text: z.string().max(2000),
     position: z.enum(["top", "center", "bottom"]),
     fontSize: z.number(),
     color: z.string(),
     startFrame: z.number(),
     endFrame: z.number(),
-  })).default([]),
+  })).max(200).default([]),
   captions: z.object({
     enabled: z.boolean(),
     style: z.enum(["subtitle", "word-highlight", "karaoke"]),
