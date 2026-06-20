@@ -17,7 +17,28 @@ export interface CapturedSchema {
   config: Record<string, unknown>
 }
 
-export async function captureMcpToolSchemas(): Promise<CapturedSchema[]> {
+const DEFAULT_CAPTURE_SCOPES = [
+  "workflows:read",
+  "workflows:write",
+  "workflows:execute",
+  "assets:read",
+  "assets:write",
+  "jobs:read",
+  "apps:read",
+  "credits:read",
+  "pipelines:read",
+  "pipelines:execute",
+  "pipelines:approve",
+] as const
+
+/**
+ * Capture every registered MCP tool's name + schemas. `scopes` defaults to the
+ * set gen-skills uses; pass a wider set (e.g. the full ALL_SCOPES) to capture
+ * scope-gated tools like `list_node_presets` for invariant tests.
+ */
+export async function captureMcpToolSchemas(
+  scopes: readonly string[] = DEFAULT_CAPTURE_SCOPES,
+): Promise<CapturedSchema[]> {
   const captured: CapturedSchema[] = []
 
   const { McpServer } = await import("@modelcontextprotocol/sdk/server/mcp.js")
@@ -45,19 +66,7 @@ export async function captureMcpToolSchemas(): Promise<CapturedSchema[]> {
     } as unknown as FastifyInstance
     await buildMcpServer({
       userId: "__gen_skills_capture__",
-      scopes: [
-        "workflows:read",
-        "workflows:write",
-        "workflows:execute",
-        "assets:read",
-        "assets:write",
-        "jobs:read",
-        "apps:read",
-        "credits:read",
-        "pipelines:read",
-        "pipelines:execute",
-        "pipelines:approve",
-      ],
+      scopes: scopes as never,
       clientName: "gen-skills",
       fastify: stubFastify,
     })
