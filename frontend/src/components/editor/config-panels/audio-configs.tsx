@@ -33,6 +33,7 @@ import type {
   SunoLyricsData,
   SunoSeparateData,
   AudioSeparationData,
+  AudioFxData,
   SunoMusicVideoData,
   SunoMashupData,
   SunoReplaceSectionData,
@@ -53,6 +54,7 @@ import type {
   GeneratedScript,
 } from "@/types/nodes"
 import { VOICE_CHANGER_MODELS } from "@nodaro/shared"
+import { AUDIO_FX_PRESETS, AUDIO_FX_PRESET_LABELS, AUDIO_FX_REVERB_PRESETS } from "@nodaro/shared"
 import { MappableField } from "./mappable-field"
 import { PromptHelperButton } from "./prompt-helper-button"
 import { SnippetMenuButton } from "./snippet-menu-button"
@@ -853,6 +855,55 @@ export function SunoSeparateConfig({ data, onUpdate }: { readonly data: SunoSepa
             </div>
           ))}
         </div>
+      )}
+    </div>
+  )
+}
+
+export function AudioFxConfig({ data, onUpdate }: { readonly data: AudioFxData; readonly onUpdate: (updates: Partial<AudioFxData>) => void }) {
+  const isCustom = data.preset === "custom"
+  const isReverb = AUDIO_FX_REVERB_PRESETS.has(data.preset)
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-muted-foreground">Effect</label>
+        <Select value={data.preset} onValueChange={(v) => onUpdate({ preset: v as AudioFxData["preset"] })}>
+          <SelectTrigger aria-label="Effect"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {AUDIO_FX_PRESETS.map((p) => (<SelectItem key={p} value={p}>{AUDIO_FX_PRESET_LABELS[p]}</SelectItem>))}
+          </SelectContent>
+        </Select>
+      </div>
+      {isReverb && (
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-medium text-muted-foreground">Wet / Dry mix: {data.mix ?? "auto"}</label>
+          <Slider min={0} max={100} step={1} value={[data.mix ?? 30]} onValueChange={(vals) => onUpdate({ mix: vals[0] })} />
+          <p className="text-[10px] text-muted-foreground">Higher = more room, less direct voice.</p>
+        </div>
+      )}
+      {(isCustom || data.preset === "echo") && (
+        <>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-muted-foreground">Delay (ms): {data.delayMs ?? 250}</label>
+            <Slider min={20} max={2000} step={10} value={[data.delayMs ?? 250]} onValueChange={(vals) => onUpdate({ delayMs: vals[0] })} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-muted-foreground">Decay: {data.decay ?? 0.4}</label>
+            <Slider min={0.1} max={0.9} step={0.05} value={[data.decay ?? 0.4]} onValueChange={(vals) => onUpdate({ decay: vals[0] })} />
+          </div>
+        </>
+      )}
+      {isCustom && (
+        <>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-muted-foreground">EQ Low (dB): {data.eqLow ?? 0}</label>
+            <Slider min={-20} max={20} step={1} value={[data.eqLow ?? 0]} onValueChange={(vals) => onUpdate({ eqLow: vals[0] })} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-muted-foreground">EQ High (dB): {data.eqHigh ?? 0}</label>
+            <Slider min={-20} max={20} step={1} value={[data.eqHigh ?? 0]} onValueChange={(vals) => onUpdate({ eqHigh: vals[0] })} />
+          </div>
+        </>
       )}
     </div>
   )

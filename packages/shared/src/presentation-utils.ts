@@ -135,7 +135,7 @@ const VIDEO_OUTPUT_TYPES = new Set([
 const AUDIO_OUTPUT_TYPES = new Set([
   "text-to-speech", "generate-music", "text-to-audio",
   "text-to-dialogue", "voice-changer", "dubbing", "voice-remix",
-  "voice-design", "mix-audio", "adjust-volume", "trim-audio",
+  "voice-design", "mix-audio", "adjust-volume", "audio-fx", "trim-audio",
   "audio-isolation",
   "audio-separation",
   "upload-audio",

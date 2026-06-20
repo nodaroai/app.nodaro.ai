@@ -12,7 +12,7 @@ import {
   dispatchJob,
   JOB_OUTPUT_SCHEMA,
 } from "./_verb-helpers.js"
-import { SUNO_MODELS, SUNO_ADD_TRACK_MODELS, SUNO_TITLE_MAX } from "@nodaro/shared"
+import { SUNO_MODELS, SUNO_ADD_TRACK_MODELS, SUNO_TITLE_MAX, AUDIO_FX_PRESETS } from "@nodaro/shared"
 
 /**
  * Look up the Suno task / track ids stored on a completed Nodaro job's
@@ -1238,6 +1238,51 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         label: "audio separation",
         widgetKind: "audio",
         widgetData: { prompt: "(separate audio)", model: "audio-separation" },
+      })
+    },
+  )
+
+  // ── apply_audio_fx ──
+  // FFmpeg creative audio effects — scenario reverbs (place a voice in a room),
+  // telephone/megaphone/echo, or custom delay+EQ.
+  server.registerTool(
+    "apply_audio_fx",
+    {
+      title: "Apply Audio FX",
+      description:
+        "Apply a creative audio effect to a voice/audio clip — scenario reverbs " +
+        "(room, bathroom, car, hall, concert-hall, church, cave, arena, outdoor) " +
+        "to place a dry voice in a believable space, plus telephone, megaphone, " +
+        "echo, or custom (delay + EQ). Returns a job_id with the processed audio.",
+      inputSchema: {
+        audio_url: z.string().url().optional(),
+        audio_asset_id: z.string().optional().describe("Nodaro audio or video job id."),
+        preset: z
+          .enum(AUDIO_FX_PRESETS)
+          .optional()
+          .describe("Effect/scenario. Reverb scenarios place the voice in a space; default `room`."),
+        mix: z.number().min(0).max(100).optional().describe("Reverb wet/dry 0–100 (higher = more room)."),
+      },
+      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/v3/job-audio",
+        ui: { resourceUri: "ui://nodaro/widget/v3/job-audio", visibility: ["model", "app"] },
+      },
+    },
+    async (args) => {
+      const audioUrl =
+        args.audio_url ??
+        (args.audio_asset_id
+          ? await resolveAssetId({ assetId: args.audio_asset_id, userId: session.userId, expectedKind: "audio" })
+          : null)
+      if (!audioUrl) return { content: [{ type: "text" as const, text: "Pass audio_url or audio_asset_id." }], isError: true }
+      return dispatchJob(fastify, session, {
+        url: "/v1/audio-fx",
+        payload: { audioUrl, preset: args.preset, mix: args.mix, mcp_client: session.clientName, userId: session.userId },
+        label: "audio fx",
+        widgetKind: "audio",
+        widgetData: { prompt: "(audio fx)", model: "audio-fx" },
       })
     },
   )

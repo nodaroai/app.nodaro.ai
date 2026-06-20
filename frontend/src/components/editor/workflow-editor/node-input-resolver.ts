@@ -761,7 +761,7 @@ const LLM_REF_VIDEO_NODE_TYPES = new Set<string>([
 const LLM_REF_AUDIO_NODE_TYPES = new Set<string>([
   "generate-music", "text-to-speech", "text-to-audio",
   "voice-changer", "voice-design", "voice-remix", "dubbing",
-  "trim-audio", "combine-audio", "mix-audio", "audio-isolation",
+  "trim-audio", "combine-audio", "mix-audio", "audio-fx", "audio-isolation",
   "text-to-dialogue",
   "suno-generate", "suno-cover", "suno-extend", "suno-separate",
   "audio-separation",
@@ -2152,6 +2152,7 @@ export function resolveNodeInputs(
       src.type === "mix-audio" ||
       src.type === "combine-audio" ||
       src.type === "extract-audio" ||
+      src.type === "audio-fx" ||
       src.type === "dubbing" ||
       src.type === "voice-remix" ||
       src.type === "voice-design"
