@@ -29,7 +29,7 @@ import sharp from "sharp"
 import { PutObjectCommand } from "@aws-sdk/client-s3"
 import { s3 } from "../lib/storage.js"
 import { config } from "../lib/config.js"
-import { verifyUploadToken } from "./upload-proxy.js"
+import { verifyUploadToken, claimUploadToken } from "./upload-proxy.js"
 
 const MAX_HANDOFF_BYTES = 256 * 1024 * 1024 // 256 MB
 
@@ -285,6 +285,14 @@ export async function uploadHandoffRoutes(app: FastifyInstance): Promise<void> {
             },
           })
         }
+      }
+
+      // Single-use: claim AFTER validation (so a wrong-kind/decode failure
+      // doesn't burn the token) but before the R2 write. A replayed link 409s.
+      if (!(await claimUploadToken(payload))) {
+        return reply.status(409).send({
+          error: { code: "token_already_used", message: "This upload link has already been used." },
+        })
       }
 
       try {
