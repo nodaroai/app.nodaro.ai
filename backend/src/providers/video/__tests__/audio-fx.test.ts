@@ -2,19 +2,27 @@ import { describe, it, expect } from "vitest"
 import { buildAudioFxArgs } from "../audio-fx.js"
 
 describe("buildAudioFxArgs", () => {
-  it("reverb preset (room) synthesizes an inline IR and convolves via afir", () => {
+  it("reverb preset (room) splits dry/wet, convolves via afir, and amixes them back", () => {
     const args = buildAudioFxArgs({ audioUrl: "x", preset: "room" })
     expect(args[0]).toBe("-filter_complex")
     const fc = args[1]
     expect(fc).toContain("anoisesrc")
     expect(fc).toContain("afir")
+    expect(fc).toContain("asplit") // dry/wet split so the dry passes through
+    expect(fc).toContain("amix")   // mixed back (afir alone drops the dry)
     expect(args).toContain("-map")
     expect(args).toContain("[out]")
   })
 
-  it("mix maps to the afir wet gain (0–1)", () => {
+  it("mix maps to the wet (reverb) volume; 50 → ×4", () => {
     const fc = buildAudioFxArgs({ audioUrl: "x", preset: "hall", mix: 50 })[1]
-    expect(fc).toContain("wet=0.500")
+    expect(fc).toContain("volume=4.000")
+  })
+
+  it("mix=0 bypasses reverb (wet volume 0) — dry passthrough, NOT silence", () => {
+    const fc = buildAudioFxArgs({ audioUrl: "x", preset: "room", mix: 0 })[1]
+    expect(fc).toContain("volume=0.000")
+    expect(fc).toContain("asplit")
   })
 
   it("church (cathedral scenario) uses a long IR (3.0s decay)", () => {
