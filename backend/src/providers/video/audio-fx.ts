@@ -50,9 +50,19 @@ export function buildAudioFxArgs(opts: AudioFxOptions): string[] {
 
   if (AUDIO_FX_REVERB_PRESETS.has(p)) {
     const r = REVERB[p] ?? REVERB.room
-    const wet = (clampNum(opts.mix, 0, 100, r.mix) / 100).toFixed(3)
-    const ir = `anoisesrc=r=48000:d=${r.dur}:c=pink:a=0.5,afade=t=out:st=0:d=${r.dur}:curve=exp,${r.shape}[ir]`
-    const complex = `[0:a]aresample=48000[a];${ir};[a][ir]afir=dry=1:wet=${wet}[out]`
+    // afir's OWN dry/wet gains do NOT pass the dry input through (`dry=1:wet=0`
+    // outputs silence — verified). So we split the input, convolve one copy
+    // (the wet/reverb), and amix it back with the untouched dry copy. At mix=0
+    // the wet gain is 0 → pure dry (the effect is bypassed), NEVER silence.
+    // Convolution with a noise IR is quiet, so the wet is boosted ×8 at full mix.
+    const wetGain = ((clampNum(opts.mix, 0, 100, r.mix) / 100) * 8).toFixed(3)
+    const ir = `anoisesrc=r=48000:d=${r.dur}:c=pink:a=0.8,afade=t=out:st=0:d=${r.dur}:curve=exp,${r.shape}[ir]`
+    const complex =
+      `[0:a]aresample=48000,asplit=2[d][w];` +
+      `${ir};` +
+      `[w][ir]afir=gtype=gn[wc];` +
+      `[wc]volume=${wetGain}[wg];` +
+      `[d][wg]amix=inputs=2:normalize=0:duration=longest[out]`
     return ["-filter_complex", complex, "-map", "[out]"]
   }
 
