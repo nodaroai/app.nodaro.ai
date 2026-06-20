@@ -601,11 +601,11 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         seed: z.number().int().min(0).optional(),
         mask_url: z.string().url().optional().describe("Inpainting mask (white=edit). Used by nano-banana-edit."),
       },
-      outputSchema: {
-        jobId: z.string(),
-        model: z.string().optional(),
-        outputUrl: z.string().optional(),
-      },
+      // Superset schema — edit_image emits prompt+model in structuredContent
+      // (the prompt fallback `(${provider})` is unconditional), so the previous
+      // {jobId,model,outputUrl} schema omitted `prompt` and strict clients
+      // (Cursor) rejected every result. Matches the sibling verbs.
+      outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
         "ui/resourceUri": "ui://nodaro/widget/v3/job-image",

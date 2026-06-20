@@ -11,7 +11,7 @@ import type {
   ReduceStrategyId, ReduceMeta,
   SelectorConfig,
 } from "@nodaro/shared"
-import type { ScraperActorId, CharacterAspectRatio } from "@nodaro/shared"
+import type { ScraperActorId, CharacterAspectRatio, AudioFxPreset } from "@nodaro/shared"
 import type { LocationReferencePhotoKind as SharedLocationReferencePhotoKind } from "@nodaro/shared"
 import type {
   PipelineFormat,
@@ -3105,6 +3105,24 @@ export type AdjustVolumeData = {
   activeResultIndex?: number
 }
 
+export type AudioFxData = {
+  [key: string]: unknown
+  label: string
+  preset: AudioFxPreset
+  mix?: number
+  delayMs?: number
+  decay?: number
+  eqLow?: number
+  eqHigh?: number
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedAudioUrl?: string
+  generatedResults?: readonly GeneratedResult[]
+  activeResultIndex?: number
+  currentJobProgress?: number
+}
+
 export type TrimVideoData = {
   currentJobProgress?: number
   [key: string]: unknown
@@ -4745,6 +4763,7 @@ export type SceneNodeData =
   | MixAudioData
   | CombineAudioData
   | AdjustVolumeData
+  | AudioFxData
   | TrimVideoData
   | ExtractFrameData
   | VideoComposerData
@@ -4917,6 +4936,7 @@ export type SceneNodeType =
   | "mix-audio"
   | "combine-audio"
   | "adjust-volume"
+  | "audio-fx"
   | "trim-video"
   | "extract-frame"
   | "video-composer"
@@ -6337,6 +6357,15 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["audio"],
     defaultData: { label: "Adjust Volume", volume: 100, normalize: false, fadeIn: 0, fadeOut: 0, fieldMappings: {} },
+  },
+  {
+    type: "audio-fx",
+    label: "Audio FX",
+    category: "processing",
+    creditCost: 2,
+    inputs: ["in"],
+    outputs: ["audio"],
+    defaultData: { label: "Audio FX", preset: "room", fieldMappings: {} } as AudioFxData,
   },
   {
     type: "trim-video",

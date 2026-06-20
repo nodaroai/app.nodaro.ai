@@ -14,12 +14,15 @@ async function findOldestMcpProject(userId: string): Promise<string | null> {
   // order + limit(1) → maybeSingle never errors even if a prior race created
   // duplicate "mcp" rows, and every session deterministically converges on the
   // SAME (oldest) project — so workflows can't partition across duplicates.
+  // Secondary order by id breaks the (extremely unlikely) created_at tie so
+  // two concurrent creators still pick the identical winner.
   const { data } = await supabase
     .from("projects")
     .select("id")
     .eq("user_id", userId)
     .eq("name", "mcp")
     .order("created_at", { ascending: true })
+    .order("id", { ascending: true })
     .limit(1)
     .maybeSingle()
   return (data?.id as string | undefined) ?? null
@@ -34,28 +37,22 @@ export async function ensureMcpProject(session: McpSession): Promise<string> {
     return existing
   }
 
-  const { data: created, error } = await supabase
-    .from("projects")
-    .insert({
-      user_id: session.userId,
-      name: "mcp",
-      description: "Workflows managed via MCP",
-    })
-    .select("id")
-    .single()
+  // Not found → create. There is NO unique constraint on projects(user_id,name)
+  // (and a de-dup migration is unsafe due to ON DELETE CASCADE children), so a
+  // truly-concurrent first-use request could ALSO insert one. Therefore we do
+  // NOT trust our own inserted id — after inserting we re-select the OLDEST and
+  // use that, so both racing creators converge on the same project and no
+  // workflow is ever orphaned in a duplicate (the loser's row stays empty).
+  const { error } = await supabase.from("projects").insert({
+    user_id: session.userId,
+    name: "mcp",
+    description: "Workflows managed via MCP",
+  })
 
-  if (created?.id) {
-    session.mcpProjectId = created.id as string
-    return session.mcpProjectId
-  }
-
-  // A concurrent first-use request may have inserted the row between our
-  // SELECT and INSERT. Re-select the oldest instead of failing — converges
-  // on the winner rather than erroring or compounding duplicates.
-  const raced = await findOldestMcpProject(session.userId)
-  if (raced) {
-    session.mcpProjectId = raced
-    return raced
+  const resolved = await findOldestMcpProject(session.userId)
+  if (resolved) {
+    session.mcpProjectId = resolved
+    return resolved
   }
 
   throw new Error(`Failed to create mcp project: ${error?.message ?? "unknown"}`)

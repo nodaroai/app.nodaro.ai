@@ -95,11 +95,10 @@ function formatRow(row: GalleryRow): string {
 function extractReferences(input: Record<string, unknown> | null): string[] {
   if (!input) return []
   const refs: string[] = []
-  // Single-URL keys. The names MUST match what the routes actually persist to
-  // jobs.input_data (the Zod-parsed body, spread verbatim → camelCase). The
-  // real keys are imageUrl / audioUrl / videoUrl / referenceImageUrl plus
-  // endFrameUrl (i2v end frame) and baseImageUrl (inpaint base). The legacy
-  // snake_case + start/tail names are kept harmlessly for any older rows.
+  // IMAGE-only single-URL keys. The gallery widget renders every reference as
+  // an <img>, so collecting a video/audio URL here produces a broken-image
+  // thumbnail — only image refs belong. Names match what routes persist to
+  // jobs.input_data (camelCase); legacy snake_case + start/tail kept for old rows.
   const single = [
     "imageUrl",
     "image_url",
@@ -107,10 +106,6 @@ function extractReferences(input: Record<string, unknown> | null): string[] {
     "reference_image_url",
     "endFrameUrl",
     "baseImageUrl",
-    "audioUrl",
-    "audio_url",
-    "videoUrl",
-    "video_url",
     "start_image_url",
     "startImageUrl",
     "end_image_url",
@@ -121,14 +116,12 @@ function extractReferences(input: Record<string, unknown> | null): string[] {
     const v = input[k]
     if (typeof v === "string" && v.startsWith("http")) refs.push(v)
   }
-  // Array forms — the keys 17+ generation routes write are referenceImageUrls
-  // / referenceVideoUrls / referenceAudioUrls (plural camelCase). The old
-  // image_urls / reference_images names are written by NO route (kept as
-  // harmless legacy fallbacks).
+  // IMAGE-only array forms. `referenceImageUrls` is what 17+ routes write;
+  // referenceVideoUrls/referenceAudioUrls are deliberately EXCLUDED — they'd
+  // render as broken <img> thumbnails. image_urls/reference_images are legacy
+  // fallbacks (no route writes them).
   const arrays = [
     "referenceImageUrls",
-    "referenceVideoUrls",
-    "referenceAudioUrls",
     "image_urls",
     "imageUrls",
     "reference_images",

@@ -108,6 +108,7 @@ const ALLOWED_PATHS = [
   /^src\/routes\/extract-audio\.ts$/,
   /^src\/routes\/remove-audio\.ts$/,
   /^src\/routes\/audio-separation\.ts$/,
+  /^src\/routes\/audio-fx\.ts$/,
 
   // Node presets: per-user CRUD collection. Every handler derives
   // `userId = req.userId` (401 if absent); LIST/DELETE scope by

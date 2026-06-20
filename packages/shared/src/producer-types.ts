@@ -137,6 +137,7 @@ export const AUDIO_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   "mix-audio",
   "combine-audio",
   "adjust-volume",
+  "audio-fx",
   "reference-audio",
   "audio-isolation",
   "text-to-dialogue",

@@ -58,11 +58,25 @@ export function _activeTaskIds(): string[] {
   return [...REGISTRY.keys()]
 }
 
+// Max time a task can stay in the registry. 90 min is beyond the 60-min
+// workflow + 30-min node timeouts, so a swept entry is always terminal — and
+// well beyond the seconds/minutes a client takes to poll tasks/get → call
+// tasks/result. We bound growth via this lazy sweep rather than evicting on
+// terminal-status observation: eager eviction in tasks/get broke the spec
+// get→result sequence (the second call threw "Unknown taskId").
+const TASK_TTL_MS = 90 * 60 * 1000
+
 export function registerTask(opts: {
   taskId: string
   userId: string
   kind: Task["kind"]
 }): Task {
+  // Lazy TTL sweep keeps the process-global registry bounded (the
+  // progress-emitter that used to drain it is intentionally disabled).
+  const cutoff = Date.now() - TASK_TTL_MS
+  for (const [id, t] of REGISTRY) {
+    if (t.startedAt < cutoff) REGISTRY.delete(id)
+  }
   const task: Task = {
     ...opts,
     startedAt: Date.now(),
@@ -194,14 +208,10 @@ export function registerTaskHandlers(server: McpServer, getUserId: () => string)
     const created = data?.created_at ?? new Date(t.startedAt).toISOString()
     const updated = data?.updated_at ?? created
     const status = mapJobStatus(data?.status)
-
-    // Drain terminal tasks from the in-process registry so it can't grow
-    // unbounded. The progress emitter that used to call completeTask() is
-    // intentionally disabled (see server.ts), so tasks/get + tasks/result are
-    // now the eviction points.
-    if (status === "completed" || status === "failed" || status === "cancelled") {
-      completeTask(t.taskId)
-    }
+    // NOTE: do NOT evict the task here on terminal status — a client polls
+    // tasks/get until terminal, THEN calls tasks/result; evicting on the
+    // terminal tasks/get would make tasks/result throw "Unknown taskId".
+    // The registry is bounded by the TTL sweep in registerTask instead.
 
     const result: {
       taskId: string
@@ -285,8 +295,9 @@ async function waitForTerminal(jobId: string, signal: AbortSignal): Promise<{
     if (!data) {
       // The job row was removed mid-poll (e.g. credit-reservation cleanup
       // deletes the orphan job on a reserve failure). Return a clean terminal
-      // status instead of throwing an internal error at the client.
-      completeTask(jobId)
+      // status instead of throwing an internal error at the client. (No
+      // eviction here — the TTL sweep in registerTask bounds the registry, and
+      // keeping the entry lets a follow-up tasks/get/result still resolve.)
       return { taskId: jobId, status: "failed", error: "Job no longer exists" }
     }
     if (
@@ -294,7 +305,6 @@ async function waitForTerminal(jobId: string, signal: AbortSignal): Promise<{
       data.status === "failed" ||
       data.status === "cancelled"
     ) {
-      completeTask(jobId)
       return {
         taskId: jobId,
         status: data.status,

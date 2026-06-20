@@ -1,6 +1,6 @@
 # MCP Tool Reference
 
-Complete reference for the 128 tools exposed by the Nodaro MCP server.
+Complete reference for the 129 tools exposed by the Nodaro MCP server.
 
 ## Scopes
 
@@ -443,6 +443,7 @@ prompt with no questions round-trip.
 | `transcribe` | Speech-to-text transcription. Returns a transcript + optional timestamps. |
 | `audio_isolation` | Isolate and clean the primary voice from a mixed clip (removes background music/noise). Returns one clean voice track. |
 | `separate_audio` | Separate ANY audio into vocals + instrumental, or full stems (drums/bass/other/guitar/piano), via Demucs. Works on non-Suno audio. |
+| `apply_audio_fx` | Apply a creative audio effect — scenario reverbs (room/hall/church/cave/arena/outdoor…) to place a voice in a space, plus telephone/megaphone/echo/custom (delay+EQ). |
 | `trim_audio` | Trim an audio file to a start/end timestamp. |
 | `download_youtube_audio` | Download the audio track from a YouTube URL. Returns an audio asset URL. |
 
