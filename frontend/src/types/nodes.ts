@@ -1829,7 +1829,7 @@ export type TextToVideoData = {
  *  fields from each side and re-declare them with the unified, looser shape.
  */
 export type GenerateVideoNodeData =
-  & Omit<ImageToVideoData, "provider" | "aspectRatio" | "connectedRefImageOrder" | "seedance2InputMode">
+  & Omit<ImageToVideoData, "provider" | "aspectRatio" | "connectedRefImageOrder">
   & Omit<TextToVideoData, "provider" | "aspectRatio" | "prompt" | "negativePrompt" | "connectedRefImageOrder">
   & {
     provider: VideoGenProvider

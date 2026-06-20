@@ -3398,11 +3398,17 @@ export function buildPayload(
       })
 
     case "audio-separation": {
-      // "best" quality costs more — mirror the route's creditGuard so
-      // orchestrated runs don't under-charge.
+      // Mirror the route's creditGuard (audioSeparationCreditId) so orchestrated
+      // runs don't under-charge: full-stems (auto/best) → htdemucs_6s tier,
+      // "best" vocal/instrumental → htdemucs_ft tier, else base.
       const sepQuality = (data.quality as string | undefined) || "auto"
+      const sepMode = (data.mode as string | undefined) || "vocal_instrumental"
       const sepIdentifier =
-        sepQuality === "best" ? "audio-separation:best" : "audio-separation"
+        sepMode === "stems" && sepQuality !== "fast"
+          ? "audio-separation:stems"
+          : sepQuality === "best"
+            ? "audio-separation:best"
+            : "audio-separation"
       return simpleResult("audio-separation", sepIdentifier, {
         jobId,
         audioUrl: resolvedInputs.audioUrl || data.audioUrl,

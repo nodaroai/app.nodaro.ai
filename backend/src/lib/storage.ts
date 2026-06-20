@@ -305,6 +305,24 @@ export async function downloadR2ObjectToFile(key: string, dest: string): Promise
   await pipeline(res.Body as Readable, createWriteStream(dest))
 }
 
+/**
+ * HEAD an R2 object and return its byte size (0 on any error). Used to backfill
+ * `assets.size_bytes` for generated media — `trackStorage` already adds the real
+ * bytes to the user's quota at upload, so the asset row MUST record the real
+ * size too, or the cleanup reaper (which decrements quota by `size_bytes`)
+ * subtracts 0 and the free-user `storage_used_bytes` ratchets permanently up.
+ */
+export async function getR2ObjectSize(key: string): Promise<number> {
+  try {
+    const head = await s3.send(
+      new HeadObjectCommand({ Bucket: config.R2_BUCKET_NAME, Key: key }),
+    )
+    return Number(head.ContentLength ?? 0)
+  } catch {
+    return 0
+  }
+}
+
 export function r2KeyFromOurUrl(url: string): string | null {
   if (!config.R2_PUBLIC_URL) return null
   const prefix = config.R2_PUBLIC_URL.endsWith("/")
