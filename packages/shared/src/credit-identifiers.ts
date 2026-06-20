@@ -95,6 +95,20 @@ const T2V_CREDIT_OVERRIDES: Record<string, string> = {
  *  nearest-tier snap below doesn't reallocate on every (hot-path) call. */
 const GEMINI_OMNI_DURATIONS = [4, 6, 8, 10]
 
+/**
+ * LTX 2.3 (Lightricks via Replicate) credit tiers: priced by
+ * (resolution-band × duration-seconds). Keys mirror STATIC_CREDIT_COSTS /
+ * model_pricing EXACTLY (lowercase band + raw seconds + "s"), e.g.
+ * "ltx-2.3-pro:1080p:6s". This map is the source of truth for the nearest-tier
+ * snap below, so an off-catalog (resolution, duration) from a direct API/SDK
+ * call maps to a SEEDED price instead of hard-failing (price_not_configured
+ * 503). Pro: 6/8/10s at every band. Fast: up to 20s at 1080p, 6/8/10s at 2k/4k.
+ */
+const LTX_DURATION_TIERS: Record<string, Record<string, number[]>> = {
+  "ltx-2.3-pro": { "1080p": [6, 8, 10], "2k": [6, 8, 10], "4k": [6, 8, 10] },
+  "ltx-2.3-fast": { "1080p": [6, 8, 10, 12, 14, 16, 18, 20], "2k": [6, 8, 10], "4k": [6, 8, 10] },
+}
+
 export function buildVideoCreditModelIdentifier(
   provider: string,
   duration?: number | string,
@@ -141,6 +155,21 @@ export function buildVideoCreditModelIdentifier(
     const raw = parseInt(String(duration ?? 8), 10)
     const d = Number.isNaN(raw) ? 8 : GEMINI_OMNI_DURATIONS.reduce((b, a) => (Math.abs(a - raw) < Math.abs(b - raw) ? a : b))
     return resolution === "4k" ? `gemini-omni-video:4k:${d}` : `gemini-omni-video:${d}`
+  }
+
+  // LTX 2.3: priced by (resolution-band × duration-seconds). The RESERVE must be
+  // the correct composite — commit_credits (migration 176) only refunds a surplus
+  // (actual < reserved) and NEVER collects an upward delta, so an under-reserved
+  // LTX run (the bare-id default = cheapest 1080p:6s tier) stays under-charged
+  // even with meteredCost:true. Snap to a seeded tier so the id always prices.
+  if (effectiveProvider === "ltx-2.3-pro" || effectiveProvider === "ltx-2.3-fast") {
+    const bands = LTX_DURATION_TIERS[effectiveProvider]
+    const band = bands[String(resolution)] ? String(resolution) : "1080p"
+    const allowed = bands[band]
+    const raw = typeof duration === "string" ? parseInt(duration, 10) : (duration ?? allowed[0])
+    const want = Number.isNaN(raw) ? allowed[0] : raw
+    const dur = allowed.reduce((b, a) => (Math.abs(a - want) < Math.abs(b - want) ? a : b))
+    return `${effectiveProvider}:${band}:${dur}s`
   }
 
   if (!DURATION_PRICED_PROVIDERS.has(effectiveProvider)) {

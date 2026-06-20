@@ -233,6 +233,33 @@ describe("buildCreditModelIdentifier", () => {
 // buildVideoCreditModelIdentifier
 // ---------------------------------------------------------------------------
 describe("buildVideoCreditModelIdentifier", () => {
+  // --- LTX 2.3 resolution×duration composites (regression: a bare-id reserve
+  //     undercharged 2k/4k/long runs up to ~6.6x because commit can't collect
+  //     an upward delta). Every emitted id MUST be a seeded composite. ---
+  describe("LTX 2.3 resolution×duration pricing", () => {
+    const sig = (p: string, res?: string, dur?: number) =>
+      buildVideoCreditModelIdentifier(p, dur, false, "image-to-video", undefined, res, false)
+
+    it("emits the resolution×duration composite (not the bare cheapest tier)", () => {
+      expect(sig("ltx-2.3-pro", "4k", 10)).toBe("ltx-2.3-pro:4k:10s")
+      expect(sig("ltx-2.3-pro", "2k", 8)).toBe("ltx-2.3-pro:2k:8s")
+      expect(sig("ltx-2.3-fast", "1080p", 20)).toBe("ltx-2.3-fast:1080p:20s")
+    })
+
+    it("defaults to the cheapest seeded tier when res/duration are absent", () => {
+      expect(sig("ltx-2.3-pro")).toBe("ltx-2.3-pro:1080p:6s")
+      expect(sig("ltx-2.3-fast")).toBe("ltx-2.3-fast:1080p:6s")
+    })
+
+    it("snaps off-catalog inputs to a SEEDED tier (no price_not_configured 503)", () => {
+      // fast 2k/4k only seed up to 10s; an 18s 4k request must snap to 4k:10s
+      expect(sig("ltx-2.3-fast", "4k", 18)).toBe("ltx-2.3-fast:4k:10s")
+      // off-tier duration snaps to nearest; unknown band defaults to 1080p
+      expect(sig("ltx-2.3-pro", "4k", 7)).toBe("ltx-2.3-pro:4k:6s")
+      expect(sig("ltx-2.3-pro", "8k", 8)).toBe("ltx-2.3-pro:1080p:8s")
+    })
+  })
+
   // --- Non-duration-priced providers ---
   describe("non-duration-priced providers", () => {
     it("minimax returns plain provider", () => {
