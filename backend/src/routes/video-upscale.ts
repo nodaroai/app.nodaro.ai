@@ -17,6 +17,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
+import { kieTaskOwnedByAnother } from "../lib/kie-task-ownership.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
@@ -70,6 +71,14 @@ export async function videoUpscaleRoutes(app: FastifyInstance) {
     if (!userId) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
+    // IDOR guard: reject a kieTaskId that demonstrably belongs to another user
+    // (fail-open for untracked ids — see kie-task-ownership.ts).
+    if (kieTaskId && (await kieTaskOwnedByAnother(kieTaskId, userId))) {
+      return reply.status(403).send({
+        error: { code: "forbidden", message: "You do not own the referenced task" },
       })
     }
 

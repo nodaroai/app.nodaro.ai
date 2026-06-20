@@ -104,7 +104,11 @@ export const VIDEO_I2V_MODELS = [
   { value: "wan-2.7-i2v",    label: "Wan 2.7",            desc: "Wan 2.7 I2V, 2–15s, 720p/1080p, start+end frame" },
   { value: "happyhorse-i2v",  label: "HappyHorse",        desc: "3–15s, 720p/1080p, image or text" },
   { value: "happyhorse-ref2v", label: "HappyHorse Ref2V", desc: "1–9 reference images to video, 3–15s" },
-  { value: "kling-3-omni", label: "Kling 3 Omni", desc: "Replicate, 3–15s, 720p/1080p, end frame + up to 7 reference images" },
+  // kling-3-omni pulled from the picker: it has a Replicate impl but no working
+  // dispatch path (the i2v routing chain is KIE-only and there is no worker
+  // short-circuit like LTX's), so every run failed at the router. Re-enable only
+  // after wiring a worker short-circuit AND verifying a live generation. The
+  // backend enum + cost entry stay so legacy saved workflows still validate.
   { value: "ltx-2.3-pro", label: "LTX 2.3 Pro", desc: "Lightricks LTX 2.3 Pro — text/image/audio→video, up to 4K" },
   { value: "ltx-2.3-fast", label: "LTX 2.3 Fast", desc: "Lightricks LTX 2.3 Fast — text/image→video, durations up to 20s" },
   { value: "gemini-omni-video", label: "Gemini Omni", desc: "Google, 4–10s, 720p/1080p/4K, native audio, refs + video-edit" },

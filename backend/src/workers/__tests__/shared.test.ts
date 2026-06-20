@@ -88,6 +88,7 @@ vi.mock("@/lib/storage.js", () => ({
   uploadBufferToR2: mocks.mockUploadBufferToR2,
   uploadFileToR2: mocks.mockUploadFileToR2,
   uploadFileWithKeyToR2: vi.fn(),
+  getR2ObjectSize: vi.fn().mockResolvedValue(0),
 }))
 
 // uploadImageMaybeWatermark now uses safeFetch (DNS-aware SSRF gate) instead

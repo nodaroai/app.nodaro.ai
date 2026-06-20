@@ -1,7 +1,7 @@
 ---
 node_type: generate-video
-generated_at: 2026-06-16T07:25:41.320Z
-generated_from: 286cae6f4
+generated_at: 2026-06-20T22:59:35.671Z
+generated_from: 1457f45e4
 ---
 
 # Generate Video
@@ -61,6 +61,7 @@ generated_from: 286cae6f4
 - `suppressedCanonicalCharacterIds?: readonly string[]`
 - `suppressedCanonicalLocationIds?: readonly string[]`
 - `veoMode?: "frame-to-frame" | "reference"`
+- `seedance2InputMode?: "frames" | "references"`
 - `extraRefs?: readonly ExtraRef[]`
 - `videoPlayState?: "loop" | "paused" | "stopped"`
 - `pausedAtTime?: number`

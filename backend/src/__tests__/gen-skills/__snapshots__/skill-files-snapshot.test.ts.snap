@@ -278,6 +278,7 @@ exports[`per-node skill file snapshots > generate-video.md auto-gen blocks match
 - \`suppressedCanonicalCharacterIds?: readonly string[]\`
 - \`suppressedCanonicalLocationIds?: readonly string[]\`
 - \`veoMode?: "frame-to-frame" | "reference"\`
+- \`seedance2InputMode?: "frames" | "references"\`
 - \`extraRefs?: readonly ExtraRef[]\`
 - \`videoPlayState?: "loop" | "paused" | "stopped"\`
 - \`pausedAtTime?: number\`

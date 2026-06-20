@@ -260,6 +260,25 @@ describe("buildVideoCreditModelIdentifier", () => {
     })
   })
 
+  // --- Metered-reserve invariant (commit_credits cannot collect an upward
+  //     delta — migration 176 only refunds a surplus). So any video provider
+  //     finalized with meteredCost:true MUST reserve a CONFIG-SCALED ceiling:
+  //     for a high-res / long-duration config its credit id must NOT be the bare
+  //     provider id, or the run under-bills (the LTX ~6.6x regression). A new
+  //     metered video provider added without a resolution/duration pricing tier
+  //     fails this — add it to the pricing sets (and to this list). ---
+  describe("metered video providers reserve a config-scaled ceiling", () => {
+    const METERED_VIDEO_PROVIDERS = ["ltx-2.3-pro", "ltx-2.3-fast"]
+    it.each(METERED_VIDEO_PROVIDERS)(
+      "%s: a 4k/10s config does NOT reserve the bare provider id",
+      (provider) => {
+        const id = buildVideoCreditModelIdentifier(provider, 10, false, "image-to-video", undefined, "4k", false)
+        expect(id).not.toBe(provider)
+        expect(id).toContain(":")
+      },
+    )
+  })
+
   // --- Non-duration-priced providers ---
   describe("non-duration-priced providers", () => {
     it("minimax returns plain provider", () => {
