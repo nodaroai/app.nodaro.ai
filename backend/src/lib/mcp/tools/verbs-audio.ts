@@ -1218,7 +1218,10 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe("`auto` (default) picks the model per mode; `fast` = quickest; `best` = highest quality."),
       },
-      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      // Superset schema — separate_audio emits prompt+model in structuredContent
+      // (via jobResultWithWidget), so a narrow {jobId,outputUrl} schema would be
+      // rejected by strict clients (Cursor). Matches all 25 sibling verbs.
+      outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
         "ui/resourceUri": "ui://nodaro/widget/v3/job-audio",

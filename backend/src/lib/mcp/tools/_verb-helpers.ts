@@ -152,7 +152,7 @@ function formatRouteError(statusCode: number, body: string): string {
     const detail = message ?? "invalid request"
     return `Nodaro rejected the request (${statusCode}${code ? ` ${code}` : ""}): ${detail}`
   }
-  if (statusCode === 503) return "Nodaro: this model is not available right now."
+  if (statusCode === 503) return `Nodaro: this model is not available right now.${code ? ` [${code}]` : ""}`
   return `Nodaro had a server error (${statusCode}) — usually transient, please try again.${code ? ` [${code}]` : ""}`
 }
 
