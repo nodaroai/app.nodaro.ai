@@ -201,6 +201,38 @@ function BaseNodeComponent({
     }
   }, [])
 
+  // Hover detection spans the WHOLE React Flow node element, not just BaseNode's
+  // own subtree. A node may render content that visually sits on top of the card
+  // as an absolutely-positioned SIBLING of BaseNode — most notably
+  // VideoResultOverlay (z-10), which covers the card on the ~14 video-result
+  // nodes once a result lands. `mouseenter` only fires for an element or its
+  // descendants, so such an overlay would otherwise swallow every hover and the
+  // run strip (a portaled NodeToolbar gated on `isHovered`) would be unreachable
+  // on any node showing a result. Listening on the `.react-flow__node` ancestor —
+  // which contains BaseNode AND any sibling overlay — fixes every current and
+  // future overlay node in one place, with no per-node opt-in. Falls back to the
+  // parent (or BaseNode's own element) when no RF wrapper is present (unit tests).
+  useEffect(() => {
+    const host =
+      outerRef.current?.closest(".react-flow__node") ??
+      outerRef.current?.parentElement ??
+      outerRef.current
+    if (!host) return
+    const onEnter = () => {
+      if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current)
+      setIsHovered(true)
+    }
+    const onLeave = () => {
+      leaveTimerRef.current = setTimeout(() => setIsHovered(false), 1200)
+    }
+    host.addEventListener("mouseenter", onEnter)
+    host.addEventListener("mouseleave", onLeave)
+    return () => {
+      host.removeEventListener("mouseenter", onEnter)
+      host.removeEventListener("mouseleave", onLeave)
+    }
+  }, [])
+
   // Inner zoom wrapper bookkeeping + per-node flags + stored height. Combine
   // into ONE selector with shallow compare so we do a single `nodes.find(...)`
   // per store update (not one per flag). Resize fires the store at ~60Hz; with
@@ -526,13 +558,6 @@ function BaseNodeComponent({
       ref={outerRef}
       className="w-full h-full relative flex flex-col"
       style={insertStyle}
-      onMouseEnter={() => {
-        if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current)
-        setIsHovered(true)
-      }}
-      onMouseLeave={() => {
-        leaveTimerRef.current = setTimeout(() => setIsHovered(false), 1200)
-      }}
     >
       <div
         className={cn(
