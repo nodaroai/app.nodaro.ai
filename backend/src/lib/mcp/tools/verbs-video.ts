@@ -21,7 +21,16 @@ import {
   ALL_CAPTION_STYLES,
   COMBINE_TRANSITION_IDS,
   AUDIO_CROSSFADE_CURVE_IDS,
+  MOTION_TRANSFER_PROVIDERS,
 } from "@nodaro/shared"
+
+// Map list_models catalog/display ids → /v1/motion-transfer route providers.
+// The catalog advertises `motion-transfer` / `kling-3.0-motion` (the credit/
+// display layer); the route's Zod enum only accepts the canonical providers.
+const MOTION_TRANSFER_PROVIDER_ALIASES: Record<string, string> = {
+  "motion-transfer": "kling",
+  "kling-3.0-motion": "kling-3.0",
+}
 import { normalizeVideoInput } from "../normalize.js"
 import { getUserMcpPreferences } from "../user-preferences.js"
 
@@ -1691,7 +1700,17 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           isError: true,
         }
       }
-      const provider = args.provider ?? "kling"
+      // list_models advertises the catalog/display ids (motion-transfer,
+      // kling-3.0-motion); the /v1/motion-transfer route validates against
+      // MOTION_TRANSFER_PROVIDERS (kling, kling-3.0, wan-animate-*). Map the
+      // display ids → route providers and snap anything unknown to the kling
+      // default so an advertised id never 400s at the route enum.
+      const rawProvider = args.provider ?? "kling"
+      const mappedProvider =
+        MOTION_TRANSFER_PROVIDER_ALIASES[rawProvider] ?? rawProvider
+      const provider = (MOTION_TRANSFER_PROVIDERS as readonly string[]).includes(mappedProvider)
+        ? mappedProvider
+        : "kling"
       const resolution = args.resolution ?? "720p"
       const payload: Record<string, unknown> = {
         imageUrl,

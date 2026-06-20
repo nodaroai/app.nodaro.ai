@@ -90,14 +90,30 @@ export interface WorkflowExport {
 }
 
 /**
- * Top-level node data fields cleared on template export. Built from
- * EXECUTION_DATA_KEYS (the single source of truth for runtime/result keys) so
- * a new result field is stripped by default — never re-leak generated media
- * URLs, job ids, or trained-LoRA identity (loraReplicateVersion /
- * loraTriggerWord / outputResults / generatedVideoUrl / …) into a shareable
- * template. `assetId` is the one non-runtime extra (a library-asset pointer).
+ * Config keys that are (mis)classified inside EXECUTION_DATA_KEYS but are
+ * actually USER CONFIG a template MUST keep — NOT runtime/result. `shots` is
+ * the Kling-3.0 multi-shot storyboard (user-authored, route-accepted via
+ * shotsSchema); stripping it on template export silently drops every shot's
+ * prompt+duration while leaving `multiShot:true`, producing a broken template.
+ * (`elements`, the sibling Kling-3 config, is correctly absent from
+ * EXECUTION_DATA_KEYS — `shots` should arguably be too, but is kept there for
+ * other run-state consumers, so we exclude it here rather than reclassify.)
  */
-const GENERATED_FIELDS: readonly string[] = [...EXECUTION_DATA_KEYS, "assetId"]
+const TEMPLATE_KEEP_CONFIG_KEYS = new Set<string>(["shots"])
+
+/**
+ * Top-level node data fields cleared on template export. Built from
+ * EXECUTION_DATA_KEYS (the single source of truth for runtime/result keys),
+ * minus the config keys above, so a new result field is stripped by default —
+ * never re-leak generated media URLs, job ids, or trained-LoRA identity
+ * (loraReplicateVersion / loraTriggerWord / outputResults / generatedVideoUrl
+ * / …) into a shareable template — while preserving user config. `assetId` is
+ * the one non-runtime extra (a library-asset pointer).
+ */
+const GENERATED_FIELDS: readonly string[] = [
+  ...[...EXECUTION_DATA_KEYS].filter((k) => !TEMPLATE_KEEP_CONFIG_KEYS.has(k)),
+  "assetId",
+]
 
 /** Per-node-type extra generated fields beyond GENERATED_FIELDS. Unknown types get no extras ([] default). */
 const NODE_EXTRA_FIELDS: Record<string, string[]> = {

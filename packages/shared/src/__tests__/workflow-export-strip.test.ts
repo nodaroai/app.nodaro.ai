@@ -12,7 +12,11 @@ import type { GenericNode } from "../types.js"
  * runtime key is added without being covered.
  */
 describe("stripExportContent — template export hygiene", () => {
-  it("strips every EXECUTION_DATA_KEYS field while keeping config fields", () => {
+  // `shots` lives in EXECUTION_DATA_KEYS but is user config (Kling-3.0
+  // storyboard) — it must SURVIVE a template export, not be stripped.
+  const CONFIG_KEPT = new Set(["shots"])
+
+  it("strips runtime/result EXECUTION_DATA_KEYS while keeping config fields", () => {
     const data: Record<string, unknown> = {}
     for (const key of EXECUTION_DATA_KEYS) data[key] = "SENSITIVE_RUNTIME_VALUE"
     data.prompt = "keep me" // a real config field — must survive the strip
@@ -23,10 +27,13 @@ describe("stripExportContent — template export hygiene", () => {
     const outData = out.data as Record<string, unknown>
 
     for (const key of EXECUTION_DATA_KEYS) {
+      if (CONFIG_KEPT.has(key)) continue
       expect(outData[key], `${key} must be stripped from a template export`).toBeUndefined()
     }
     expect(outData.prompt).toBe("keep me")
     expect(outData.provider).toBe("veo3.1")
+    // Regression guard: Kling-3.0 multishot config must survive template export.
+    expect(outData.shots, "shots (Kling-3 config) must NOT be stripped").toBe("SENSITIVE_RUNTIME_VALUE")
   })
 
   it("clears faceDbId / referencedWorkflowId on face + sub-workflow template nodes", () => {

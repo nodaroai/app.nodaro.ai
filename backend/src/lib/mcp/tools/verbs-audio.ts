@@ -124,8 +124,9 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
             model: sunoVersion,
             instrumental: args.instrumental,
             lyrics: args.lyrics,
-            // Map mcp's generic `genre` to suno's `style` — same intent.
-            style: args.genre,
+            // Fold mcp's generic `genre` + `mood` into suno's `style` (same
+            // intent) — previously `mood` was silently dropped on the suno path.
+            style: [args.genre, args.mood].filter(Boolean).join(", ") || undefined,
             mcp_client: session.clientName,
             userId: session.userId,
           }
@@ -1218,7 +1219,10 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe("`auto` (default) picks the model per mode; `fast` = quickest; `best` = highest quality."),
       },
-      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      // Superset schema — separate_audio emits prompt+model in structuredContent
+      // (via jobResultWithWidget), so a narrow {jobId,outputUrl} schema would be
+      // rejected by strict clients (Cursor). Matches all 25 sibling verbs.
+      outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
         "ui/resourceUri": "ui://nodaro/widget/v3/job-audio",
