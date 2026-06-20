@@ -1858,7 +1858,14 @@ export function executeNode(
     // in the assembled prompt respect the user's ordering. Mirrors the
     // orchestrator's `applyOrderToReferenceUrls` in `payload-builder.ts`.
     let referenceImageUrls = inputs.referenceImageUrls as string[] | undefined;
-    if (i2vData.connectedRefImageOrder?.length) {
+    // A generate-video node re-typed to i2v carries the migrated
+    // `referenceImageOrder` (the load migration renames `connectedRefImageOrder`
+    // → `referenceImageOrder`), so fall back to it — otherwise single-node Run
+    // drops the drag order while the DAG (payload-builder reads
+    // `referenceImageOrder`) honors it.
+    const i2vRefOrder = i2vData.connectedRefImageOrder
+      ?? ((i2vData as Record<string, unknown>).referenceImageOrder as readonly string[] | undefined);
+    if (i2vRefOrder?.length) {
       const refSourceNodes = edges
         .filter((e) => e.target === node.id && e.targetHandle === "references")
         .map((e) => nodes.find((n) => n.id === e.source))
@@ -1871,7 +1878,7 @@ export function executeNode(
         }
         const reordered = applyMediaOrder(
           refSourceNodes.map((n) => ({ id: n.id })),
-          i2vData.connectedRefImageOrder,
+          i2vRefOrder,
         );
         const orderedUrls = reordered
           .map((e) => idToUrl.get(e.id))
@@ -2194,7 +2201,11 @@ export function executeNode(
     // startFrame handle, so the filter accepts any wired image/character/
     // entity upstream (matches `T2V_IMAGE_TYPES` in `video-configs.tsx`).
     let upstreamRefImages = inputs.referenceImageUrls as string[] | undefined
-    if (t2vData.connectedRefImageOrder?.length) {
+    // Fall back to the migrated `referenceImageOrder` (see the i2v branch) so a
+    // re-typed generate-video node keeps its drag order on single-node Run.
+    const t2vRefOrder = t2vData.connectedRefImageOrder
+      ?? (t2vRaw.referenceImageOrder as readonly string[] | undefined);
+    if (t2vRefOrder?.length) {
       const t2vRefAllowedTypes = new Set([
         "generate-image", "upload-image", "character", "object", "creature", "location",
         "edit-image", "image-to-image", "scene",
@@ -2218,7 +2229,7 @@ export function executeNode(
         });
         const reordered = applyMediaOrder(
           uniqueSources.map((n) => ({ id: n.id })),
-          t2vData.connectedRefImageOrder,
+          t2vRefOrder,
         );
         const orderedUrls = reordered
           .map((e) => idToUrl.get(e.id))
