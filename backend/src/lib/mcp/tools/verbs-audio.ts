@@ -1267,7 +1267,10 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
           .describe("Effect/scenario. Reverb scenarios place the voice in a space; default `room`."),
         mix: z.number().min(0).max(100).optional().describe("Reverb wet/dry 0–100 (higher = more room)."),
       },
-      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      // Superset schema — apply_audio_fx emits prompt+model in structuredContent
+      // (widgetData below), so a narrow {jobId,outputUrl} schema would be
+      // rejected by strict clients. Matches the sibling verbs.
+      outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
       _meta: {
         "ui/resourceUri": "ui://nodaro/widget/v3/job-audio",
