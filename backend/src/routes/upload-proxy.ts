@@ -15,10 +15,22 @@
  * Token TTL: 1 hour. Body size: up to 256 MB (matches video upload cap).
  */
 import type { FastifyInstance } from "fastify"
-import { createHmac, timingSafeEqual } from "node:crypto"
+import { createHmac, timingSafeEqual, hkdfSync, randomUUID } from "node:crypto"
 import { PutObjectCommand } from "@aws-sdk/client-s3"
 import { s3 } from "../lib/storage.js"
 import { config } from "../lib/config.js"
+import { redis } from "../lib/queue.js"
+
+// Dedicated upload-token signing key, HKDF-derived from the internal secret so
+// the upload-signing purpose is cryptographically separated from the
+// internal-RPC bearer (the same INTERNAL_ORCHESTRATOR_SECRET is presented as
+// the x-internal-orchestrator-secret header to assert an arbitrary userId — two
+// very different trust purposes must not share one key). Clean cutover: tokens
+// minted before deploy (signed with the old key) become invalid, but they're
+// ephemeral (minted → used within seconds; ≤1h TTL), so the window is tiny.
+const UPLOAD_SIGNING_KEY = Buffer.from(
+  hkdfSync("sha256", config.INTERNAL_ORCHESTRATOR_SECRET, "", "nodaro-upload-token-v1", 32),
+)
 
 export interface TokenPayload {
   userId: string
@@ -31,18 +43,38 @@ export interface TokenPayload {
   // Content-Type the multipart upload reports.
   purpose?: "proxy" | "handoff"
   kind?: "image" | "audio" | "video"
+  /** Single-use nonce — claimed in Redis on first consume to prevent replay. */
+  jti?: string
 }
 
 function hmac(payload: string): string {
-  return createHmac("sha256", config.INTERNAL_ORCHESTRATOR_SECRET)
-    .update(payload)
-    .digest("base64url")
+  return createHmac("sha256", UPLOAD_SIGNING_KEY).update(payload).digest("base64url")
 }
 
 export function signUploadToken(payload: TokenPayload): string {
-  const json = JSON.stringify(payload)
+  const withJti: TokenPayload = { ...payload, jti: payload.jti ?? randomUUID() }
+  const json = JSON.stringify(withJti)
   const data = Buffer.from(json, "utf8").toString("base64url")
   return `${data}.${hmac(data)}`
+}
+
+/**
+ * Atomically claim an upload token's single-use nonce. Returns true on the
+ * FIRST consume, false on replay (already claimed). Fail-OPEN on a Redis error
+ * or a missing jti: single-use is defense-in-depth (the token is still
+ * HMAC-signed, TTL-bound, and key-scoped), so a Redis hiccup must not break
+ * legitimate uploads. Call at consume time (PUT proxy / handoff POST), never on
+ * the handoff GET (page render must not burn the token).
+ */
+export async function claimUploadToken(payload: TokenPayload): Promise<boolean> {
+  if (!payload.jti) return true
+  try {
+    const ttlSec = Math.max(1, Math.ceil((payload.exp - Date.now()) / 1000))
+    const res = await redis.set(`upload:jti:${payload.jti}`, "1", "EX", ttlSec, "NX")
+    return res === "OK"
+  } catch {
+    return true
+  }
 }
 
 export function verifyUploadToken(token: string): TokenPayload | null {
@@ -99,6 +131,13 @@ export async function uploadProxyRoutes(app: FastifyInstance): Promise<void> {
       if (!payload || (payload.purpose && payload.purpose !== "proxy")) {
         return reply.status(403).send({
           error: { code: "invalid_token", message: "Token invalid or expired." },
+        })
+      }
+      // Single-use: reject a replayed token (claimed before the upload so a
+      // concurrent second PUT can't also write the key).
+      if (!(await claimUploadToken(payload))) {
+        return reply.status(409).send({
+          error: { code: "token_already_used", message: "This upload token has already been used." },
         })
       }
 
