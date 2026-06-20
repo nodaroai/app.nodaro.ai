@@ -1,6 +1,6 @@
 # MCP Tool Reference
 
-Complete reference for the 128 tools exposed by the Nodaro MCP server.
+Complete reference for the 129 tools exposed by the Nodaro MCP server.
 
 ## Scopes
 

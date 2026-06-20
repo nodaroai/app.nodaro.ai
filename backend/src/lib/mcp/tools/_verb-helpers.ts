@@ -206,10 +206,15 @@ export function coerceStringArray(value: unknown, max: number): string[] {
 
 /**
  * Normalize a mixed ref input (array | JSON-string | lone string) where each
- * item is either a public URL or a Nodaro asset id. Asset ids are resolved
- * via `resolveAssetId` (kind-typed); unresolvable entries are dropped.
- * Shared by generate_image and animate_image so every ref param tolerates
- * the same client quirks.
+ * item is either a public URL or a Nodaro asset id. Asset ids are resolved via
+ * `resolveAssetId` (kind-typed). LOUD-FAIL contract: an unresolvable id
+ * (not-found / forbidden / wrong-kind / not-yet-complete) THROWS — the whole
+ * call rejects with a clear error rather than silently proceeding with fewer
+ * refs than the user specified (silently dropping a forbidden/other-user id
+ * would be a privacy/UX trap; dropping a required ref would change the
+ * operation, e.g. image_to_image degrading to text2img). Shared by
+ * generate_image / animate_image so every ref param tolerates the same client
+ * quirks (array vs JSON-string vs lone string).
  */
 export async function resolveRefArray(
   value: unknown,
@@ -218,8 +223,9 @@ export async function resolveRefArray(
   max: number,
 ): Promise<string[]> {
   const items = coerceStringArray(value, max)
-  // Resolve asset ids concurrently (up to ~15 per call across the verb
-  // tools); order is preserved and unresolvable ids drop.
+  // Resolve asset ids concurrently (up to ~15 per call across the verb tools);
+  // order is preserved. resolveAssetId throws on an unresolvable id, so
+  // Promise.all rejects the whole call (loud-fail — see contract above).
   const resolved = await Promise.all(
     items.map((item) =>
       /^https?:\/\//.test(item)

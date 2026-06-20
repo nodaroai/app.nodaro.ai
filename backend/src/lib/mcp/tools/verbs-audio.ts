@@ -124,8 +124,9 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
             model: sunoVersion,
             instrumental: args.instrumental,
             lyrics: args.lyrics,
-            // Map mcp's generic `genre` to suno's `style` — same intent.
-            style: args.genre,
+            // Fold mcp's generic `genre` + `mood` into suno's `style` (same
+            // intent) — previously `mood` was silently dropped on the suno path.
+            style: [args.genre, args.mood].filter(Boolean).join(", ") || undefined,
             mcp_client: session.clientName,
             userId: session.userId,
           }
