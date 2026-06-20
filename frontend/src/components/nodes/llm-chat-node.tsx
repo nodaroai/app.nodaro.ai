@@ -1,10 +1,10 @@
 "use client"
 
-import { memo, useMemo, useState, Suspense } from "react"
+import { memo, useMemo, useState, useRef, useEffect, Suspense } from "react"
 import { createPortal } from "react-dom"
 import { Position, type NodeProps } from "@xyflow/react"
 import { MessageSquare, Type, Loader2, AlertCircle, X, FileText, Copy, Download, BookOpen, ImageIcon, List, LayoutGrid, LayoutTemplate, Sparkles, Braces, Eye } from "lucide-react"
-import { computeDeleteResultUpdates, copyToClipboard, downloadTextFile } from "@/lib/utils"
+import { cn, computeDeleteResultUpdates, copyToClipboard, downloadTextFile } from "@/lib/utils"
 import { lazyWithRetry } from "@/lib/lazy-with-retry"
 import { BaseNode } from "./base-node"
 import { LlmChatQuickToolbar } from "./llm-chat-quick-toolbar"
@@ -19,6 +19,7 @@ import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS, LLM_MODELS } from "@nodaro/shared"
 import { getGenerateTextTemplate, GENERATE_TEXT_TEMPLATES } from "@/lib/generate-text-templates"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
+import { MAX_OUTPUT_HEIGHT, shouldCapOutput } from "./text-output-cap"
 import type { LLMChatData } from "@/types/nodes"
 
 const isVisualPicker = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
@@ -89,6 +90,31 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
   const [outputView, setOutputView] = useState<"raw" | "rendered">("raw")
   const jsonValue = useMemo(() => tryParseLlmJson(activeText), [activeText])
   const isJsonOutput = jsonValue !== undefined
+
+  // Output auto-grow cap. The node has no fixed height, so React Flow sizes it
+  // to content — a long/streaming result would otherwise grow it without bound.
+  // Measure the natural content height and, while the node is auto-sized, cap
+  // the scroll region at ~10 lines (then it scrolls). Once the user drag-resizes
+  // (`rf-resized`), they own the height → fill it (flex-1) so dragging works.
+  const isResized = useWorkflowStore((s) => {
+    const n = s.nodes.find((node) => node.id === id)
+    return typeof n?.className === "string" && n.className.includes("rf-resized")
+  })
+  const contentRef = useRef<HTMLDivElement>(null)
+  const [contentHeight, setContentHeight] = useState(0)
+  useEffect(() => {
+    const el = contentRef.current
+    if (!el) return
+    const measure = () => setContentHeight(el.scrollHeight)
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    measure()
+    return () => ro.disconnect()
+    // Re-attach when the result block (un)mounts or the view toggles; the
+    // observer itself tracks per-token growth in between.
+  }, [Boolean(activeText), outputView])
+  const capOutput = shouldCapOutput(contentHeight, isResized)
+
   const credits = useModelCredits(buildLlmCreditIdentifier("llm-chat", nodeData.llmModel || LLM_FEATURE_DEFAULTS["llm-chat"]), 3)
   const template = getGenerateTextTemplate(nodeData.templateId ?? "")
 
@@ -294,24 +320,34 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
                   </div>
                 )}
 
-                {/* Scrollable output — Radix ScrollArea, matching the Text
-                    Prompt node's scrollbar look + behavior (height-driven, not
-                    a fixed maxHeight, so the box tracks the node size). The
-                    rendered view (Markdown / colored JSON) is lazy-loaded. */}
-                <ScrollArea className="flex-1 min-h-0 w-full">
-                  {outputView === "rendered" ? (
-                    <Suspense
-                      fallback={
-                        <p className="text-xs text-muted-foreground px-3 pb-3 pt-0.5">Rendering…</p>
-                      }
-                    >
-                      <LlmOutputView text={activeText} json={jsonValue} />
-                    </Suspense>
-                  ) : (
-                    <p className="text-sm text-foreground/85 whitespace-pre-wrap leading-relaxed px-3 pb-3 pt-0.5">
-                      {activeText}
-                    </p>
-                  )}
+                {/* Scrollable output — Radix ScrollArea. While the node is
+                    auto-sized, the region fills (flex-1) and grows the node up to
+                    ~10 lines; past that it's pinned to MAX_OUTPUT_HEIGHT and
+                    scrolls (Radix needs an explicit height to scroll, never a
+                    maxHeight). `nowheel` lets the wheel scroll the text instead of
+                    panning the canvas. Once the user drag-resizes, `capOutput`
+                    is false → flex-1 fills their height. The rendered view
+                    (Markdown / colored JSON) is lazy-loaded. */}
+                <ScrollArea
+                  data-testid="llm-output-scroll"
+                  className={cn("w-full", capOutput ? "nowheel" : "flex-1 min-h-0")}
+                  style={capOutput ? { height: MAX_OUTPUT_HEIGHT } : undefined}
+                >
+                  <div ref={contentRef}>
+                    {outputView === "rendered" ? (
+                      <Suspense
+                        fallback={
+                          <p className="text-xs text-muted-foreground px-3 pb-3 pt-0.5">Rendering…</p>
+                        }
+                      >
+                        <LlmOutputView text={activeText} json={jsonValue} />
+                      </Suspense>
+                    ) : (
+                      <p className="text-sm text-foreground/85 whitespace-pre-wrap leading-relaxed px-3 pb-3 pt-0.5">
+                        {activeText}
+                      </p>
+                    )}
+                  </div>
                 </ScrollArea>
               </div>
               {status === "running" && (
