@@ -521,6 +521,12 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
       (data.generatedAudioUrl as string | undefined)
     );
   }
+  if (type === "audio-fx") {
+    const results =
+      (data.generatedResults as GeneratedResult[] | undefined) ?? [];
+    const activeIndex = (data.activeResultIndex as number | undefined) ?? 0;
+    return results[activeIndex]?.url ?? (data.generatedAudioUrl as string | undefined);
+  }
   if (type === "adjust-volume") {
     const results =
       (data.generatedResults as GeneratedResult[] | undefined) ?? [];
@@ -953,6 +959,7 @@ export const AUDIO_SOURCE_TYPES = new Set([
   "mix-audio",
   "combine-audio",
   "adjust-volume",
+  "audio-fx",
   "reference-audio",
   "voice-changer",
   "dubbing",

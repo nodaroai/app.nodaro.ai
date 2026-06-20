@@ -4036,6 +4036,19 @@ export function buildPayload(
       })
     }
 
+    case "audio-fx":
+      return ffmpegResult("audio-fx", {
+        jobId,
+        audioUrl: resolvedInputs.audioUrl || data.audioUrl,
+        preset: data.preset,
+        mix: data.mix,
+        delayMs: data.delayMs,
+        decay: data.decay,
+        eqLow: data.eqLow,
+        eqHigh: data.eqHigh,
+        usageLogId,
+      })
+
     // --- Entity generation (character, face, object, location) ---
     // IMPORTANT: build the same prompt the route would produce. A single-node
     // HTTP call hits /v1/generate-{character,face,object,location} which enriches

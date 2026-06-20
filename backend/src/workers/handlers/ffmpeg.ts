@@ -18,6 +18,7 @@ import { extractAudio } from "../../providers/video/extract-audio.js"
 import { removeAudio } from "../../providers/video/remove-audio.js"
 import { resizeVideo } from "../../providers/video/resize-video.js"
 import { adjustVolume } from "../../providers/video/adjust-volume.js"
+import { applyAudioFx } from "../../providers/video/audio-fx.js"
 import { addCaptions } from "../../providers/video/add-captions.js"
 import { mixAudio } from "../../providers/video/mix-audio.js"
 import { combineAudio } from "../../providers/video/combine-audio.js"
@@ -298,6 +299,26 @@ const handleAdjustVolume: HandlerFn = async function handleAdjustVolume(job, ctx
   const ok = await markJobCompleted(ctx.jobId, {
     output_data: { ...outputData, inputType },
   })
+  if (!ok) return
+  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
+}
+
+const handleAudioFx: HandlerFn = async function handleAudioFx(job, ctx) {
+  const { audioUrl, preset, mix, delayMs, decay, eqLow, eqHigh } = job.data as {
+    jobId: string
+    audioUrl: string
+    preset: import("@nodaro/shared").AudioFxPreset
+    mix?: number; delayMs?: number; decay?: number; eqLow?: number; eqHigh?: number
+  }
+  console.log(`[worker] audio-fx ${ctx.jobId} (${preset})`)
+  const { outputPath } = await applyAudioFx({ audioUrl, preset, mix, delayMs, decay, eqLow, eqHigh })
+  await setJobProgress(job, ctx.jobId, 80)
+  const r2Url = await uploadFileToR2(outputPath, ctx.jobId, "audio", ctx.jobUserId)
+  await cleanupWorkDir(dirname(outputPath))
+  await setJobProgress(job, ctx.jobId, 100)
+  if (!await shouldSaveJobResult(ctx.jobId)) return
+  const ok = await markJobCompleted(ctx.jobId, { output_data: { audioUrl: r2Url } })
   if (!ok) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
@@ -633,6 +654,7 @@ export const ffmpegHandlers: Record<string, HandlerFn> = {
   "fade-video": handleFadeVideo,
   "resize-video": handleResizeVideo,
   "adjust-volume": handleAdjustVolume,
+  "audio-fx": handleAudioFx,
   "add-captions": handleAddCaptions,
   "mix-audio": handleMixAudio,
   "combine-audio": handleCombineAudio,

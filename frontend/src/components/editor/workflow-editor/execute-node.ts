@@ -61,6 +61,7 @@ import {
   resizeVideoApi,
   socialMediaFormatApi,
   adjustVolumeApi,
+  audioFxApi,
   addCaptionsApi,
   mixAudioApi,
   combineAudioApi,
@@ -153,6 +154,7 @@ import type {
   FadeVideoData,
   ResizeVideoData,
   AdjustVolumeData,
+  AudioFxData,
   AddCaptionsData,
   MixAudioData,
   CombineAudioData,
@@ -5468,6 +5470,32 @@ export function executeNode(
         ),
       "generatedVideoUrl",
       "Social Media Format",
+      ctx,
+    );
+  }
+
+  if (node.type === "audio-fx") {
+    const d = node.data as AudioFxData;
+    const audioUrl = overrideMediaUrl ?? inputs.audioUrl;
+    if (!audioUrl) {
+      toast.error(`Node "${d.label}": no audio input`);
+      return Promise.reject(new Error("No audio input"));
+    }
+    return runProcessingNode(
+      node.id,
+      () =>
+        audioFxApi({
+          audioUrl,
+          preset: d.preset,
+          mix: d.mix,
+          delayMs: d.delayMs,
+          decay: d.decay,
+          eqLow: d.eqLow,
+          eqHigh: d.eqHigh,
+          userId: ctx.userId,
+        }),
+      "generatedAudioUrl",
+      "Audio FX",
       ctx,
     );
   }

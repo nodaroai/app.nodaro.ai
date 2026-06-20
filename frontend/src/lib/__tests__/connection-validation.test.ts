@@ -586,3 +586,25 @@ describe("audio-separation source → audio/media inputs (regression)", () => {
     )).toBe(true)
   })
 })
+
+describe("audio-fx source → audio inputs (regression)", () => {
+  const typeOf = (id: string) => id
+  it("audio-fx → voice-changer audio input", () => {
+    expect(isValidWorkflowConnection(
+      { source: "audio-fx", target: "voice-changer", sourceHandle: "audio-out", targetHandle: "audio" },
+      typeOf,
+    )).toBe(true)
+  })
+  it("audio-fx → merge-video-audio media input", () => {
+    expect(isValidWorkflowConnection(
+      { source: "audio-fx", target: "merge-video-audio", sourceHandle: "audio-out", targetHandle: "in" },
+      typeOf,
+    )).toBe(true)
+  })
+  it("audio-fx → mix-audio input", () => {
+    expect(isValidWorkflowConnection(
+      { source: "audio-fx", target: "mix-audio", sourceHandle: "audio-out", targetHandle: "in" },
+      typeOf,
+    )).toBe(true)
+  })
+})

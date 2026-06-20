@@ -182,6 +182,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "mix-audio", label: "Mix Audio", icon: <Music className="h-4 w-4" />, category: "Processing", group: "Audio" },
   { type: "combine-audio", label: "Combine Audio", icon: <ListMusic className="h-4 w-4" />, category: "Processing", group: "Audio" },
   { type: "adjust-volume", label: "Adjust Volume", icon: <SlidersHorizontal className="h-4 w-4" />, category: "Processing", group: "Audio" },
+  { type: "audio-fx", label: "Audio FX", icon: <SlidersHorizontal className="h-4 w-4" />, category: "Processing", group: "Audio" },
   // Processing — Text
   { type: "combine-text", label: "Combine Text", icon: <Merge className="h-4 w-4" />, category: "Processing", group: "Text" },
   { type: "split-text", label: "Split Text", icon: <Scissors className="h-4 w-4" />, category: "Processing", group: "Text" },

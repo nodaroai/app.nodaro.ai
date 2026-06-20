@@ -1184,6 +1184,13 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     category: "Processing",
     group: "Audio",
   },
+  {
+    type: "audio-fx",
+    label: "Audio FX",
+    icon: <SlidersHorizontal className="h-4 w-4" />,
+    category: "Processing",
+    group: "Audio",
+  },
   // Processing — Text
   {
     type: "combine-text",

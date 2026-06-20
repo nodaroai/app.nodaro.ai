@@ -287,6 +287,7 @@ FFmpeg-based audio manipulation.
 | [Mix Audio](./processing-audio/mix-audio.md) | Blend multiple audio tracks with levels | Layer voice, music, and SFX with volume control |
 | [Combine Audio](./processing-audio/combine-audio.md) | Concatenate audio tracks end-to-end, with per-segment trim | Join clips sequentially (vs. Mix Audio's layering) |
 | [Adjust Volume](./processing-audio/adjust-volume.md) | Change volume and add fade transitions | Normalize, boost, or fade audio tracks |
+| [Audio FX](./processing-audio/audio-fx.md) | Reverb / EQ / echo audio effects | Place a dry voice in a room (reverb), telephone/megaphone, echo |
 
 ---
 

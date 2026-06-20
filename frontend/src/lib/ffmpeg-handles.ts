@@ -70,6 +70,7 @@ export const FFMPEG_NODE_TYPES: ReadonlySet<string> = new Set([
   "add-captions",
   "trim-audio",
   "adjust-volume",
+  "audio-fx",
   "combine-audio",
   "mix-audio",
   "extract-audio",
@@ -111,6 +112,7 @@ export function isValidFfmpegConnection(
     case "trim-audio":
     case "combine-audio":
     case "mix-audio":
+    case "audio-fx":
       return targetHandle === "in" && ACCEPTS_AUDIO(sourceType)
 
     // Mixed-media inputs: merge-video-audio + adjust-volume both take

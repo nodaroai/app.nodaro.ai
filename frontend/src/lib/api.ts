@@ -3005,6 +3005,31 @@ export async function adjustVolumeApi(inputUrl: string, inputType: "audio" | "vi
   })
 }
 
+export async function audioFxApi(params: {
+  audioUrl: string
+  preset?: string
+  mix?: number
+  delayMs?: number
+  decay?: number
+  eqLow?: number
+  eqHigh?: number
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { audioUrl: params.audioUrl }
+  if (params.preset) body.preset = params.preset
+  if (params.mix != null) body.mix = params.mix
+  if (params.delayMs != null) body.delayMs = params.delayMs
+  if (params.decay != null) body.decay = params.decay
+  if (params.eqLow != null) body.eqLow = params.eqLow
+  if (params.eqHigh != null) body.eqHigh = params.eqHigh
+  if (params.userId) body.userId = params.userId
+  return apiJson("/v1/audio-fx", {
+    body,
+    workflowId: true,
+    label: "Failed to start audio FX",
+  })
+}
+
 export async function addCaptionsApi(videoUrl: string, text: string, style?: string, position?: string, fontSize?: number, color?: string, backgroundColor?: string, userId?: string): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { videoUrl, text, style, position, fontSize, color, backgroundColor }
   if (userId) {

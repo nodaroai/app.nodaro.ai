@@ -613,6 +613,22 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
   { type: "combine-audio", label: "Combine Audio", category: "processing", description: "Concatenate audio tracks end-to-end in order, with optional per-segment trim. (Mix Audio layers tracks; this joins them sequentially.)", outputType: "audio" },
   { type: "extract-audio", label: "Extract Audio", category: "processing", description: "Demux the audio track from a video to a standalone MP3.", outputType: "audio" },
   { type: "adjust-volume", label: "Adjust Volume", category: "processing", description: "Change audio volume with optional normalize and fade-in / fade-out transitions (FFmpeg). (creditCost auto-filled from STATIC_CREDIT_COSTS = 1)", outputType: "audio" },
+  {
+    type: "audio-fx",
+    label: "Audio FX",
+    category: "processing",
+    description: "Apply creative audio effects (FFmpeg) — scenario reverbs (Room, Bathroom, Car, Hall, Concert Hall, Church, Cave, Arena, Outdoor), Telephone, Megaphone, Echo, or Custom (delay + EQ). Places a dry voice into a believable space before mixing onto video.",
+    outputType: "audio",
+    creditCost: 2,
+    capabilities: ["audio-to-audio"],
+    inputSchema: {
+      fields: [
+        { key: "audioUrl", type: "audio-url", required: true },
+        { key: "preset", type: "string" },
+        { key: "mix", type: "number" },
+      ],
+    },
+  },
 
   { type: "render-video", label: "Render Video", category: "composition", description: "Render a Remotion composition to MP4.", outputType: "video", creditCost: 15 },
   { type: "after-effects", label: "After Effects", category: "composition", description: "AI-generated post-processing layer.", outputType: "video", creditCost: 2 },

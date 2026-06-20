@@ -110,6 +110,7 @@ import { RemoveAudioNode } from "./remove-audio-node";
 import { MixAudioNode } from "./mix-audio-node";
 import { CombineAudioNode } from "./combine-audio-node";
 import { AdjustVolumeNode } from "./adjust-volume-node";
+import { AudioFxNode } from "./audio-fx-node";
 import { TrimVideoNode } from "./trim-video-node";
 import { ExtractFrameNode } from "./extract-frame-node";
 import { ExtractFieldNode } from "./extract-field-node";
@@ -296,6 +297,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "mix-audio": MixAudioNode,
   "combine-audio": CombineAudioNode,
   "adjust-volume": AdjustVolumeNode,
+  "audio-fx": AudioFxNode,
   "trim-video": TrimVideoNode,
   "extract-frame": ExtractFrameNode,
   "video-composer": VideoComposerNode,

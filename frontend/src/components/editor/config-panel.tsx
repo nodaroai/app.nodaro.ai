@@ -144,6 +144,7 @@ import {
   MixAudioConfig,
   CombineAudioConfig,
   AdjustVolumeConfig,
+  AudioFxConfig,
   TrimVideoConfig,
   ExtractFrameConfig,
   SpeedRampConfig,
@@ -322,6 +323,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "mix-audio": "Mix Audio",
   "combine-audio": "Combine Audio",
   "adjust-volume": "Adjust Volume",
+  "audio-fx": "Audio FX",
   "trim-video": "Trim Video",
   "extract-frame": "Extract Frame",
   "speed-ramp": "Adjust Speed",
@@ -398,7 +400,7 @@ export const GENERATE_BUTTON_TYPES = new Set([
   "component",
   // FFmpeg processing (tiered credits)
   "merge-video-audio", "combine-videos", "trim-audio", "split-media", "extract-audio", "remove-audio", "trim-video", "extract-frame",
-  "speed-ramp", "loop-video", "fade-video", "transcode-video", "resize-video", "social-media-format", "adjust-volume",
+  "speed-ramp", "loop-video", "fade-video", "transcode-video", "resize-video", "social-media-format", "adjust-volume", "audio-fx",
   "add-captions", "mix-audio", "combine-audio",
 ])
 
@@ -601,6 +603,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "mix-audio": return <MixAudioConfig {...configProps} />
     case "combine-audio": return <CombineAudioConfig {...configProps} />
     case "adjust-volume": return <AdjustVolumeConfig {...configProps} />
+    case "audio-fx": return <AudioFxConfig {...configProps} />
     case "trim-video": return <TrimVideoConfig {...configProps} />
     case "extract-frame": return <ExtractFrameConfig {...configProps} />
     case "video-composer": return <VideoComposerConfig {...configProps} />
