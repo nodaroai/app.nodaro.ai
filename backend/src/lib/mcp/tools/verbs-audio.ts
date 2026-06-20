@@ -1209,7 +1209,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         "(vocalUrl, instrumentalUrl, drumsUrl, …).",
       inputSchema: {
         audio_url: z.string().url().optional(),
-        audio_asset_id: z.string().optional().describe("Nodaro audio or video job id."),
+        audio_asset_id: z.string().optional().describe("Nodaro audio job id."),
         mode: z
           .enum(["vocal_instrumental", "stems"])
           .optional()

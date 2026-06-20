@@ -43,6 +43,18 @@ export interface Task {
 
 const REGISTRY = new Map<string, Task>()
 
+// Containment cap for the registry. `completeTask` (the terminal-state eviction)
+// is only invoked by the progress-emitter, which is currently dormant (never
+// started in the live path), so absent this cap the registry grows monotonically
+// for the process lifetime (one entry + AbortController per generation task) —
+// a slow leak cleared only on worker restart. Evicting the OLDEST entry when
+// over the cap bounds it safely: Map preserves insertion order, the cap is far
+// above any realistic count of concurrently-live MCP tasks, and the oldest
+// entries are overwhelmingly terminal. The fuller fix (evict on terminal
+// Supabase status, or start the emitter with per-session scoping) is the MCP
+// owner's call — see the audit doc.
+const MAX_REGISTRY_SIZE = 2000
+
 /** Test-only escape hatch — clears all tasks. Used by the test bed. */
 export function _resetRegistry(): void {
   REGISTRY.clear()
@@ -81,6 +93,11 @@ export function registerTask(opts: {
     ...opts,
     startedAt: Date.now(),
     abortController: new AbortController(),
+  }
+  // Bound the registry: drop the oldest entry (insertion order) when at the cap.
+  if (REGISTRY.size >= MAX_REGISTRY_SIZE) {
+    const oldest = REGISTRY.keys().next().value
+    if (oldest !== undefined) REGISTRY.delete(oldest)
   }
   REGISTRY.set(opts.taskId, task)
   return task
