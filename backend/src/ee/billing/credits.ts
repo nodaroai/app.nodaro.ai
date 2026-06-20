@@ -811,6 +811,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "mix-audio": 2,
   "combine-audio": 1,
   "adjust-volume": 1,
+  "audio-fx": 2,                  // Demucs-free FFmpeg audio effects (reverb/EQ/echo)
   "trim-video": 1,
   "extract-frame": 1,
   "speed-ramp": 2,

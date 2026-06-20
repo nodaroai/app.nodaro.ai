@@ -27,6 +27,7 @@ import { trimVideoRoutes } from "./routes/trim-video.js"
 import { extractFrameRoutes } from "./routes/extract-frame.js"
 import { resizeVideoRoutes } from "./routes/resize-video.js"
 import { adjustVolumeRoutes } from "./routes/adjust-volume.js"
+import { audioFxRoutes } from "./routes/audio-fx.js"
 import { speedRampRoutes } from "./routes/speed-ramp.js"
 import { loopVideoRoutes } from "./routes/loop-video.js"
 import { fadeVideoRoutes } from "./routes/fade-video.js"
@@ -309,6 +310,7 @@ export async function buildApp() {
   await app.register(extractFrameRoutes)
   await app.register(resizeVideoRoutes)
   await app.register(adjustVolumeRoutes)
+  await app.register(audioFxRoutes)
   await app.register(speedRampRoutes)
   await app.register(loopVideoRoutes)
   await app.register(fadeVideoRoutes)

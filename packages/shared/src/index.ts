@@ -1333,3 +1333,6 @@ export * from "./reference-board-templates.js"
 
 // --- Model tree (derive node targets + product-line grouping for the Models tab) ---
 export * from "./model-tree.js"
+
+// --- Audio FX node preset ids (single source of truth for route/UI/data type) ---
+export * from "./audio-fx-presets.js"
