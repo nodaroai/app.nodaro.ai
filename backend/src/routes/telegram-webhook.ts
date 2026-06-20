@@ -25,9 +25,13 @@ export async function telegramWebhookRoutes(app: FastifyInstance) {
       return reply.status(404).send({ error: "Unknown webhook" })
     }
 
-    // Validate Telegram secret_token header
+    // Validate Telegram secret_token header. Fail-CLOSED: a trigger with no
+    // stored secret cannot authenticate the caller as Telegram, so reject rather
+    // than accept an unverified update. Creation always sets a secret (via
+    // generateWebhookToken + registerTelegramWebhook), so this only rejects
+    // misconfigured/legacy rows — which should not be processing updates anyway.
     const telegramSecret = req.headers["x-telegram-bot-api-secret-token"] as string | undefined
-    if (triggers[0].secretToken && telegramSecret !== triggers[0].secretToken) {
+    if (!triggers[0].secretToken || telegramSecret !== triggers[0].secretToken) {
       return reply.status(403).send({ error: "Invalid secret" })
     }
 

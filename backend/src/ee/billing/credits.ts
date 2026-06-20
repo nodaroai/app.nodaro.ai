@@ -646,6 +646,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   ***REDACTED-OSS-SCRUB***
   "audio-separation": 3,         // Demucs (ryan5453) on Replicate, fixed reserved tier (Auto/Fast)
   "audio-separation:best": 8,    // htdemucs_ft (~4× compute), fixed reserved tier
+  "audio-separation:stems": 6,   // htdemucs_6s (6-stem, heavier than base) — conservative estimate, tune via audit-credits
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***

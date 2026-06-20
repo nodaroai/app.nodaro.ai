@@ -15,16 +15,23 @@ const audioSeparationBody = z.object({
   userId: z.string().uuid().optional(),
 })
 
-/** Composite credit id from the raw `quality` (read before Zod strips it). */
-function audioSeparationCreditId(quality: unknown): string {
-  return quality === "best" ? "audio-separation:best" : "audio-separation"
+/**
+ * Composite credit id from the raw `mode`+`quality` (read before Zod strips
+ * them). Mirrors `pickModel`: full-stems (auto/best) routes to htdemucs_6s
+ * (6-stem, materially more GPU compute than the base 2/4-stem htdemucs), so it
+ * must price above the base tier rather than charging the same as a 2-stem run.
+ */
+function audioSeparationCreditId(quality: unknown, mode: unknown): string {
+  if (mode === "stems" && quality !== "fast") return "audio-separation:stems" // htdemucs_6s
+  if (quality === "best") return "audio-separation:best" // htdemucs_ft (vocal/instrumental)
+  return "audio-separation"
 }
 
 export async function audioSeparationRoutes(app: FastifyInstance) {
   app.post("/v1/audio-separation", {
     preHandler: creditGuard((req) => {
       const body = req.body as Record<string, unknown> | undefined
-      return audioSeparationCreditId(body?.quality)
+      return audioSeparationCreditId(body?.quality, body?.mode)
     }),
   }, async (req, reply) => {
     const parsed = audioSeparationBody.safeParse(req.body)
@@ -62,7 +69,7 @@ export async function audioSeparationRoutes(app: FastifyInstance) {
       })
     }
 
-    const reservation = await reserveCreditsForJob(req, reply, job.id, audioSeparationCreditId(quality))
+    const reservation = await reserveCreditsForJob(req, reply, job.id, audioSeparationCreditId(quality, mode))
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 

@@ -8,7 +8,9 @@ import Fastify, { type FastifyInstance } from "fastify"
 vi.mock("@/lib/supabase.js", () => {
   const mockFrom = vi.fn().mockReturnValue({
     insert: vi.fn().mockReturnValue({ select: vi.fn().mockReturnValue({ single: vi.fn().mockResolvedValue({ data: { id: "job-1" }, error: null }) }) }),
-    select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ single: vi.fn().mockResolvedValue({ data: { id: "user-123", tier: "pro" }, error: null }) }) }),
+    // `.eq()` supports both `.single()` (profile lookup) and `.limit()` (the
+    // kieTaskOwnedByAnother IDOR check, which expects [] → no other owner → pass).
+    select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ single: vi.fn().mockResolvedValue({ data: { id: "user-123", tier: "pro" }, error: null }), limit: vi.fn().mockResolvedValue({ data: [], error: null }) }) }),
     update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }),
   })
   return {

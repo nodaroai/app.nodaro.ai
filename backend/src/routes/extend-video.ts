@@ -13,6 +13,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
+import { kieTaskOwnedByAnother } from "../lib/kie-task-ownership.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
@@ -89,6 +90,15 @@ export async function extendVideoRoutes(app: FastifyInstance) {
     if (!userId) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
+    // IDOR guard: a kieTaskId references the caller's upstream generation. Reject
+    // only if it demonstrably belongs to ANOTHER user (fail-open for untracked
+    // ids so legit/older jobs without provider_task_id still extend).
+    if (kieTaskId && (await kieTaskOwnedByAnother(kieTaskId, userId))) {
+      return reply.status(403).send({
+        error: { code: "forbidden", message: "You do not own the referenced task" },
       })
     }
 

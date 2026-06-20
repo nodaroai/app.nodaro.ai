@@ -8,7 +8,7 @@ import { variantJobId } from "@nodaro/shared"
 import { config, hasCredits } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
 import type { ProviderResult } from "../providers/provider.interface.js"
-import { uploadToR2, uploadFileToR2, uploadBufferToR2, uploadFileWithKeyToR2 } from "../lib/storage.js"
+import { uploadToR2, uploadFileToR2, uploadBufferToR2, uploadFileWithKeyToR2, getR2ObjectSize } from "../lib/storage.js"
 import { safeFetch } from "../lib/safe-fetch.js"
 import { isAllowedSocialVideoUrl } from "../lib/url-validator.js"
 import sharp from "sharp"
@@ -645,6 +645,11 @@ export async function createAssetFromJob(
 
       const filename = url.split("/").pop() ?? `${jobId}.${type === "image" ? "png" : type === "video" ? "mp4" : "mp3"}`
 
+      // Record the real byte size so the cleanup reaper decrements the user's
+      // quota by what `trackStorage` added at upload (size_bytes:0 made free-user
+      // storage_used_bytes ratchet up forever). HEAD failure → 0 (prior behavior).
+      const sizeBytes = await getR2ObjectSize(r2Key)
+
       await supabase.from("assets").insert({
         user_id: userId,
         job_id: jobId,
@@ -653,7 +658,7 @@ export async function createAssetFromJob(
         r2_url: url,
         filename,
         mime_type: mime,
-        size_bytes: 0,
+        size_bytes: sizeBytes,
         upload_source: "generated",
         metadata: thumbnailUrl ? { thumbnail_url: thumbnailUrl } : {},
       })
