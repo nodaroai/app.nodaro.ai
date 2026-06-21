@@ -40,6 +40,9 @@ describe("applySeedance2Params — first-frame-deletion gate (hasMultimodalRef)"
       generateAudio: false,
     })
     expect(hasMultimodalRef).toBe(false)
-    expect(input.generate_audio).toBe(false)
+    // generate_audio is NO LONGER owned by applySeedance2Params — the shared
+    // applyVideoAudioToggle dispatcher sets it from the neutral intent at the
+    // call site (so the `sound` toggle reaches Seedance 2, not just `generateAudio`).
+    expect(input.generate_audio).toBeUndefined()
   })
 })
