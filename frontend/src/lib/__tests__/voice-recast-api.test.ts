@@ -1,0 +1,141 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+
+// ---------------------------------------------------------------------------
+// Mock: Supabase client (no auth needed, but apiJson always calls getSession)
+// ---------------------------------------------------------------------------
+
+const mockGetSession = vi.fn()
+
+vi.mock("@/lib/supabase", () => ({
+  createClient: () => ({
+    auth: { getSession: mockGetSession },
+  }),
+}))
+
+// ---------------------------------------------------------------------------
+// Imports (after mocks)
+// ---------------------------------------------------------------------------
+
+import { voiceRecastApi } from "../api"
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function mockFetchJson(data: unknown, status = 200) {
+  return vi.fn().mockResolvedValue({
+    ok: status >= 200 && status < 300,
+    status,
+    json: () => Promise.resolve(data),
+    text: () => Promise.resolve(JSON.stringify(data)),
+  })
+}
+
+function noSession() {
+  mockGetSession.mockResolvedValue({ data: { session: null } })
+}
+
+beforeEach(() => {
+  mockGetSession.mockReset()
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
+// ---------------------------------------------------------------------------
+// voiceRecastApi
+// ---------------------------------------------------------------------------
+
+describe("voiceRecastApi", () => {
+  it("posts videoUrl + ordered voiceIds, omitting absent optionals", async () => {
+    noSession()
+    const mock = mockFetchJson({ jobId: "j1" })
+    vi.stubGlobal("fetch", mock)
+
+    const res = await voiceRecastApi(
+      undefined,
+      ["vA", "vB"],
+      "u1",
+      undefined,
+      true,
+      undefined,
+      "https://r2/v.mp4",
+    )
+
+    expect(res).toEqual({ jobId: "j1" })
+
+    expect(mock).toHaveBeenCalledWith(
+      "/v1/voice-recast",
+      expect.objectContaining({ method: "POST" }),
+    )
+
+    const body = JSON.parse(mock.mock.calls[0][1].body as string)
+    expect(body).toEqual({
+      orderedVoices: ["vA", "vB"],
+      videoUrl: "https://r2/v.mp4",
+      userId: "u1",
+      preserveBackground: true,
+    })
+  })
+
+  it("posts audioUrl when no videoUrl, omitting absent optionals", async () => {
+    noSession()
+    const mock = mockFetchJson({ jobId: "j2" })
+    vi.stubGlobal("fetch", mock)
+
+    const res = await voiceRecastApi("https://r2/a.mp3", ["vC"])
+
+    expect(res).toEqual({ jobId: "j2" })
+
+    const body = JSON.parse(mock.mock.calls[0][1].body as string)
+    expect(body).toEqual({
+      orderedVoices: ["vC"],
+      audioUrl: "https://r2/a.mp3",
+    })
+  })
+
+  it("includes all optional fields when provided", async () => {
+    noSession()
+    const mock = mockFetchJson({ jobId: "j3" })
+    vi.stubGlobal("fetch", mock)
+
+    await voiceRecastApi(
+      "https://r2/a.mp3",
+      ["vA"],
+      "u2",
+      "eleven_multilingual_v2",
+      false,
+      true,
+      "https://r2/v.mp4",
+    )
+
+    const body = JSON.parse(mock.mock.calls[0][1].body as string)
+    expect(body).toEqual({
+      orderedVoices: ["vA"],
+      audioUrl: "https://r2/a.mp3",
+      videoUrl: "https://r2/v.mp4",
+      userId: "u2",
+      model: "eleven_multilingual_v2",
+      preserveBackground: false,
+      removeBackgroundNoise: true,
+    })
+  })
+
+  it("throws on error response", async () => {
+    noSession()
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: () => Promise.resolve({ error: { message: "Voice recast failed" } }),
+        text: () => Promise.resolve(JSON.stringify({ error: { message: "Voice recast failed" } })),
+      }),
+    )
+
+    await expect(voiceRecastApi(undefined, ["vA"])).rejects.toThrow(
+      "Voice recast failed",
+    )
+  })
+})

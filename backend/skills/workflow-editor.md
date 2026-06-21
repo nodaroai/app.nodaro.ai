@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-06-20T22:52:08.936Z
-generated_from: 1a15bf767
+generated_at: 2026-06-21T18:35:32.203Z
+generated_from: 0eddf3eb0
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -229,6 +229,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `voice-character` — Voice Character
 - `voice-delivery` — Voice Delivery
 - `voice-design` — Voice Design
+- `voice-recast` — Voice Recast
 - `voice-remix` — Voice Remix
 - `weapon` — Weapon
 - `web-scrape` — Web Scrape

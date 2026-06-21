@@ -14,7 +14,8 @@ import { extractYouTubeAudio } from "../../providers/audio/youtube-extractor.js"
 import { voiceChangerFromUrl, directVoiceChanger } from "../../providers/elevenlabs/voice-changer.js"
 import { extractAudioTrack } from "../../providers/video/extract-audio-track.js"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
-import { cleanupWorkDir } from "../../providers/video/ffmpeg-utils.js"
+import { createWorkDir, cleanupWorkDir } from "../../providers/video/ffmpeg-utils.js"
+import { mixAudio } from "../../providers/video/mix-audio.js"
 import { startDubbing, waitForDubbing, downloadDubbedAudio } from "../../providers/elevenlabs/dubbing.js"
 import { remixVoice } from "../../providers/elevenlabs/voice-remix.js"
 import { designVoice } from "../../providers/elevenlabs/voice-design.js"
@@ -553,6 +554,8 @@ const handleAudioSeparation: HandlerFn = async function handleAudioSeparation(jo
   console.log(`[worker] Job ${ctx.jobId} completed: ${uploaded.length} stem(s) uploaded`)
 }
 
+// Base credit cost per voice recast — mirrors the credit seed in ee/billing/credits.ts.
+// [enterprise handler removed]
 export const audioAIHandlers: Record<string, HandlerFn> = {
   "text-to-speech": handleTextToSpeech,
   "generate-music": handleGenerateMusic,
@@ -567,4 +570,5 @@ export const audioAIHandlers: Record<string, HandlerFn> = {
   "voice-remix": handleVoiceRemix,
   "voice-design": handleVoiceDesign,
   "forced-alignment": handleForcedAlignment,
+  "voice-recast": handleVoiceRecast,
 }

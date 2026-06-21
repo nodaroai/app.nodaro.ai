@@ -2749,6 +2749,25 @@ export type VoiceChangerData = {
   currentJobProgress?: number
 }
 
+export type VoiceRecastData = {
+  [key: string]: unknown
+  label: string
+  /** Ordered target voices; voice i recasts the i-th speaker (first-appearance order). */
+  orderedVoices: Array<{ voiceId: string; voiceLabel: string; voiceType: "premade" | "custom" | "library" }>
+  model?: VoiceChangerModel
+  preserveBackground: boolean
+  removeBackgroundNoise: boolean
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedAudioUrl?: string
+  generatedVideoUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
+  currentJobId?: string
+  currentJobProgress?: number
+}
+
 export type DubbingData = {
   [key: string]: unknown
   label: string
@@ -4747,6 +4766,7 @@ export type SceneNodeData =
   | AudioSeparationData
   | TextToDialogueData
   | VoiceChangerData
+  | VoiceRecastData
   | DubbingData
   | VoiceRemixData
   | VoiceDesignData
@@ -4920,6 +4940,7 @@ export type SceneNodeType =
   | "audio-separation"
   | "text-to-dialogue"
   | "voice-changer"
+  | "voice-recast"
   | "dubbing"
   | "voice-remix"
   | "voice-design"
@@ -6160,6 +6181,25 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       generatedResults: [],
       activeResultIndex: 0,
     } as VoiceChangerData,
+  },
+  {
+    type: "voice-recast",
+    label: "Voice Recast",
+    category: "ai",
+    creditCost: 4,
+    inputs: ["audio", "video"],
+    outputs: ["audio", "video"],
+    defaultData: {
+      label: "Voice Recast",
+      orderedVoices: [],
+      model: "eleven_english_sts_v2",
+      preserveBackground: true,
+      removeBackgroundNoise: false,
+      fieldMappings: {},
+      executionStatus: "idle",
+      generatedResults: [],
+      activeResultIndex: 0,
+    } as VoiceRecastData,
   },
   {
     type: "dubbing",

@@ -307,7 +307,7 @@ export class KieAudioProvider
     audioUrl: string,
     options?: { languageCode?: string; diarize?: boolean; tagAudioEvents?: boolean },
     reconcileOpts?: ReconcileOpts,
-  ): Promise<{ text: string; language: string; cost: number }> {
+  ): Promise<{ text: string; language: string; cost: number; words?: Array<{ text: string; start: number; end: number; speaker: string }> }> {
     const modelConfig = KIE_STT_MODELS["elevenlabs-stt"]
     if (!modelConfig) {
       throw createSanitizedError(
@@ -337,6 +337,16 @@ export class KieAudioProvider
     const text = (raw.text as string) ?? (raw.transcription as string) ?? ""
     const language = (raw.language_code as string) ?? (raw.detected_language as string) ?? "unknown"
 
+    const rawWords = Array.isArray(raw.words) ? (raw.words as Array<Record<string, unknown>>) : []
+    const words = rawWords
+      .filter((w) => w.type === "word" && typeof w.start === "number" && typeof w.end === "number")
+      .map((w) => ({
+        text: String(w.text ?? ""),
+        start: w.start as number,
+        end: w.end as number,
+        speaker: String(w.speaker_id ?? ""),
+      }))
+
     // `costTime` is provider generation time in SECONDS (see client.ts), NOT KIE
     // credits — the previous `costTime * KIE_CREDIT_USD` ~5x-inflated provider_cost
     // (corrupting the credit-audit baseline). Use the catalog cost; user billing is
@@ -346,7 +356,7 @@ export class KieAudioProvider
       `[KIE.ai] STT completed: ${text.length} chars (cost: $${actualCost.toFixed(4)}, gen time: ${costTime ?? "N/A"}s)`
     )
 
-    return { text, language, cost: actualCost }
+    return { text, language, cost: actualCost, words: words.length ? words : undefined }
   }
 
   async generateDialogue(

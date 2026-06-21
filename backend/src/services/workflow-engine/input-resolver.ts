@@ -1624,6 +1624,22 @@ function routeOutput(
     return
   }
 
+  // --- Voice-recast → audio (audio mode) or video (video mode) ---
+  // Same dual-mode as voice-changer: the node re-voices each detected speaker
+  // independently. Route by the tapped source handle; default prefers video
+  // when the node produced one (mirrors the voice-changer pattern exactly).
+  if (srcType === "voice-recast") {
+    const producedVideo =
+      Boolean(nodeStates[src.id]?.output?.videoUrl) ||
+      Boolean(src.data.generatedVideoUrl)
+    if (edge.sourceHandle === "video" || (edge.sourceHandle !== "audio" && producedVideo)) {
+      inputs.videoUrl = output
+    } else {
+      routeAudioOutput(inputs, output, targetType, src.id)
+    }
+    return
+  }
+
   // --- Audio output nodes ---
   if (AUDIO_OUTPUT_NODE_TYPES.has(srcType)) {
     routeAudioOutput(inputs, output, targetType, src.id)
