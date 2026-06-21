@@ -168,3 +168,35 @@ describe("request", () => {
     expect(result).toBeUndefined()
   })
 })
+
+describe("voices.recast", () => {
+  it("POSTs /v1/voice-recast with the correct body", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job_recast_123" }))
+    const c = createClient({
+      baseUrl: "https://api.example.com",
+      auth: new StaticTokenAuth("t"),
+      fetch: fetchMock,
+    })
+    const result = await c.voices.recast({
+      audioUrl: "https://cdn.example.com/dialogue.mp3",
+      orderedVoices: ["Rachel", "Aria"],
+      model: "eleven_multilingual_v2",
+      preserveBackground: true,
+      removeBackgroundNoise: false,
+    })
+    expect(result).toEqual({ jobId: "job_recast_123" })
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.example.com/v1/voice-recast",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          audioUrl: "https://cdn.example.com/dialogue.mp3",
+          orderedVoices: ["Rachel", "Aria"],
+          model: "eleven_multilingual_v2",
+          preserveBackground: true,
+          removeBackgroundNoise: false,
+        }),
+      }),
+    )
+  })
+})

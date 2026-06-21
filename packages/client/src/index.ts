@@ -279,6 +279,7 @@ export type {
   VoiceClone,
   VoiceLibraryParams,
   VoiceLibraryResponse,
+  VoiceRecastInput,
 } from "./resources/voices.js"
 
 export type {

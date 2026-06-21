@@ -87,4 +87,36 @@ export class VoicesResource {
   }): Promise<{ jobId: string }> {
     return this.client.request<{ jobId: string }>("POST", "/v1/voice-changer", { body: input })
   }
+
+  /**
+   * Recast each detected speaker in a multi-speaker recording to a different
+   * voice (`POST /v1/voice-recast`). `orderedVoices` maps speaker positions to
+   * voice ids in detection order — speaker 0 → `orderedVoices[0]`, speaker 1 →
+   * `orderedVoices[1]`, etc. Speakers beyond the end of `orderedVoices` keep
+   * their original voice. Pass `audioUrl` for audio-only recast or `videoUrl`
+   * to recast the audio track of a video clip (the server demuxes, recasts, and
+   * remuxes). `preserveBackground` keeps music/SFX beds under the new voices;
+   * `removeBackgroundNoise` strips them for a clean voice-only result. Cloud-only
+   * — costs credits and runs async; poll `jobs.get(jobId)` for the result
+   * (`output_data.videoUrl` + `output_data.audioUrl` in video mode).
+   */
+  recast(input: VoiceRecastInput): Promise<{ jobId: string }> {
+    return this.client.request<{ jobId: string }>("POST", "/v1/voice-recast", { body: input })
+  }
+}
+
+/** Input for {@link VoicesResource.recast}. */
+export interface VoiceRecastInput {
+  /** URL of an audio file to recast (audio → audio). Exactly one of `audioUrl` / `videoUrl` is required. */
+  audioUrl?: string
+  /** URL of a video file to recast (the audio track is recast and remuxed). Exactly one of `audioUrl` / `videoUrl` is required. */
+  videoUrl?: string
+  /** Voice ids in speaker-detection order. Speaker N is mapped to `orderedVoices[N]`; speakers beyond the array keep their original voice. */
+  orderedVoices: string[]
+  /** Model to use for speech-to-speech. Defaults to the server-configured default when omitted. */
+  model?: string
+  /** Preserve background audio (music / SFX) under the recasted voices. */
+  preserveBackground?: boolean
+  /** Strip background noise for a clean voice-only result. */
+  removeBackgroundNoise?: boolean
 }
