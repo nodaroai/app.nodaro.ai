@@ -7,7 +7,6 @@ import { healthRoutes } from "./routes/health.js"
 import { projectRoutes } from "./routes/projects.js"
 import { workflowRoutes } from "./routes/workflows.js"
 import { jobRoutes } from "./routes/jobs.js"
-import { renderRoutes } from "./routes/render.js"
 import { generateImageRoutes } from "./routes/generate-image.js"
 import { editImageRoutes } from "./routes/edit-image.js"
 import { imageToImageRoutes } from "./routes/image-to-image.js"
@@ -290,7 +289,6 @@ export async function buildApp() {
   await app.register(projectRoutes)
   await app.register(workflowRoutes)
   await app.register(jobRoutes)
-  await app.register(renderRoutes)
   await app.register(generateImageRoutes)
   await app.register(editImageRoutes)
   await app.register(imageToImageRoutes)

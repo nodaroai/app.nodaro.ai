@@ -359,6 +359,13 @@ export async function uploadRoutes(app: FastifyInstance) {
 
     const json = JSON.stringify(body)
     const buffer = Buffer.from(json, "utf-8")
+    // Bound the R2 write: arbitrary user JSON with no schema, so cap the size
+    // (generous for a FreeCut project file) rather than relying solely on the
+    // body-parser limit.
+    const MAX_JSON_BYTES = 25 * 1024 * 1024
+    if (buffer.length > MAX_JSON_BYTES) {
+      return reply.status(413).send({ error: { code: "payload_too_large", message: "JSON exceeds 25MB limit" } })
+    }
     const key = `projects/${randomUUID()}.json`
     const publicUrl = await uploadBufferToS3(buffer, key, "application/json")
 

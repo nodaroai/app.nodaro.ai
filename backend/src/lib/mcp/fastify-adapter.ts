@@ -82,8 +82,12 @@ export async function handleMcpRequest(
           // malformed/unparseable requests.
           id: null,
           error: {
+            // Generic message only — the full error is already logged above
+            // (line: "MCP request handler failed"). Echoing err.message here
+            // could leak internal detail (DB/SQL strings, internal hostnames)
+            // to the client.
             code: -32603,
-            message: err instanceof Error ? err.message : "Internal MCP error",
+            message: "Internal MCP error",
           },
         }),
       )

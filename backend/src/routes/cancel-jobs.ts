@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify"
+import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { tryRemoveFromQueue } from "../lib/queue.js"
 import { CreditsService } from "../ee/billing/credits.js"
@@ -45,6 +46,12 @@ export async function cancelJobsRoutes(app: FastifyInstance) {
       if (!userId) {
         return reply.status(401).send({
           error: { code: "unauthorized", message: "Authentication required" },
+        })
+      }
+
+      if (!z.string().uuid().safeParse(jobId).success) {
+        return reply.status(400).send({
+          error: { code: "validation_error", message: "Invalid job id" },
         })
       }
 

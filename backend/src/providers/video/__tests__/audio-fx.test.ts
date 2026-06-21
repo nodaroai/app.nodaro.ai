@@ -14,14 +14,25 @@ describe("buildAudioFxArgs", () => {
     expect(args).toContain("[out]")
   })
 
-  it("mix maps to the wet (reverb) volume; 50 → ×4", () => {
+  it("dry/wet is a complementary unity crossfade (mix=50 → dry 0.5, wet 0.5)", () => {
     const fc = buildAudioFxArgs({ audioUrl: "x", preset: "hall", mix: 50 })[1]
-    expect(fc).toContain("volume=4.000")
+    // both legs at 0.5 → sum ≈ unity (no longer dry@1.0 + wet@×8 = too loud)
+    expect(fc).toContain("volume=0.500")
+    expect((fc.match(/volume=0\.500/g) ?? []).length).toBe(2) // dry + wet
+    expect(fc).toContain("alimiter=limit=0.95") // hard clip/corruption safety
   })
 
-  it("mix=0 bypasses reverb (wet volume 0) — dry passthrough, NOT silence", () => {
+  it("mix=100 is full wet at unity (NOT ×8 → no clipping/corruption)", () => {
+    const fc = buildAudioFxArgs({ audioUrl: "x", preset: "hall", mix: 100 })[1]
+    expect(fc).toContain("volume=1.000") // wet at unity
+    expect(fc).toContain("volume=0.000") // dry muted
+    expect(fc).not.toContain("volume=8.000")
+  })
+
+  it("mix=0 bypasses reverb (wet volume 0, dry at full) — passthrough, NOT silence", () => {
     const fc = buildAudioFxArgs({ audioUrl: "x", preset: "room", mix: 0 })[1]
-    expect(fc).toContain("volume=0.000")
+    expect(fc).toContain("volume=0.000") // wet muted
+    expect(fc).toContain("volume=1.000") // dry at full
     expect(fc).toContain("asplit")
   })
 
