@@ -12,7 +12,9 @@ import { composeNegative } from "@nodaro/shared"
 import { collectIdentityLockClause as sharedCollectIdentityLockClause } from "@nodaro/shared"
 import { characterMentionableAssetArrays } from "@nodaro/shared"
 import { resolveTemplate, applyTemplate } from "@nodaro/shared"
-import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt, resolveVideoProviderForMode, videoProviderRequiresImage } from "@nodaro/shared"
+import { buildCreditModelIdentifier, resolveImageGenCreditIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt, resolveVideoProviderForMode, videoProviderRequiresImage } from "@nodaro/shared"
+import { appendMusicMeta } from "@nodaro/shared"
+import { resolveEntityImageCreditIdentifier } from "../../lib/entity-credit-identifier.js"
 import { buildLipSyncCreditId, isPerSecondLipSyncProvider } from "@nodaro/shared"
 import { resolveAiAvatarCreditId } from "@nodaro/shared"
 import { resolveCinematicCreditId } from "@nodaro/shared"
@@ -1788,12 +1790,18 @@ export function buildPayload(
         queueName: "video-generation",
         modelIdentifier: lora
           ? FLUX_LORA_CHARACTER_MODEL_ID
-          : buildCreditModelIdentifier(
+          : resolveImageGenCreditIdentifier({
               provider,
-              data.quality as string | undefined,
-              data.resolution as string | undefined,
-              data.renderingSpeed as string | undefined,
-            ),
+              quality: data.quality as string | undefined,
+              resolution: data.resolution as string | undefined,
+              renderingSpeed: data.renderingSpeed as string | undefined,
+              // refCount = the assembled refs actually sent to the worker, and
+              // swapToI2i mirrors the route's T2I→I2I auto-swap when refs attach.
+              // Flux 2 bills per ref with NO metered true-up, so omitting these
+              // (the old 4-arg call) under-charged every Flux 2 workflow run.
+              refCount: result.referenceImageUrls?.length ?? 0,
+              swapToI2i: true,
+            }),
         payload: {
           jobId,
           prompt: result.prompt,
@@ -2059,12 +2067,18 @@ export function buildPayload(
       return {
         jobName: "image-to-image",
         queueName: "video-generation",
-        modelIdentifier: buildCreditModelIdentifier(
+        // i2i: the primary `imageUrl` always counts as one reference plus the
+        // assembled extras (mirrors routes/image-to-image.ts refCount = 1 +
+        // extras). Without this the Flux 2 i2i family billed the :1ref-less
+        // cheapest tier in workflow runs.
+        modelIdentifier: resolveImageGenCreditIdentifier({
           provider,
-          data.quality as string | undefined,
-          data.resolution as string | undefined,
-          data.renderingSpeed as string | undefined,
-        ),
+          quality: data.quality as string | undefined,
+          resolution: data.resolution as string | undefined,
+          renderingSpeed: data.renderingSpeed as string | undefined,
+          refCount: 1 + (i2iResult.referenceImageUrls?.length ?? 0),
+          swapToI2i: false,
+        }),
         payload: {
           jobId,
           imageUrl: i2iMainImage,
@@ -2269,12 +2283,16 @@ export function buildPayload(
         return {
           jobName: "image-to-image",
           queueName: "video-generation",
-          modelIdentifier: buildCreditModelIdentifier(
+          // Same ref-aware identifier as the image-to-image case: primary image
+          // + assembled extras (modify-image routes through /v1/image-to-image).
+          modelIdentifier: resolveImageGenCreditIdentifier({
             provider,
-            data.quality as string | undefined,
-            data.resolution as string | undefined,
-            data.renderingSpeed as string | undefined,
-          ),
+            quality: data.quality as string | undefined,
+            resolution: data.resolution as string | undefined,
+            renderingSpeed: data.renderingSpeed as string | undefined,
+            refCount: 1 + (i2iResult.referenceImageUrls?.length ?? 0),
+            swapToI2i: false,
+          }),
           payload: {
             jobId,
             imageUrl: i2iMainImage,
@@ -2433,6 +2451,11 @@ export function buildPayload(
           grokMode: data.grokMode,
           videoSize: data.videoSize,
           removeWatermark: data.removeWatermark,
+          // ≤10s trim window (Seedance 2 selects which slice of the driving
+          // audio/video to use). The worker reads videoTrimStart/videoTrimEnd;
+          // dropping them produced the un-trimmed full clip in workflow runs.
+          videoTrimStart: data.videoTrimStart,
+          videoTrimEnd: data.videoTrimEnd,
           referenceImageUrls: i2vReferenceImageUrls,
           referenceVideoUrls: (isS2 && s2Mode === "frames") ? undefined : resolvedInputs.referenceVideoUrls,
           referenceAudioUrls: (isS2 && s2Mode === "frames") ? undefined : resolvedInputs.referenceAudioUrls,
@@ -3348,18 +3371,29 @@ export function buildPayload(
       // on consumer.data.provider === "minimax" — they're undefined for other
       // providers, so a flat `data.x || audioStyle.fields.x` short-circuits
       // correctly without an outer isMinimax ternary.
+      const musicGenre = (data.genre as string | undefined) || audioStyle.fields.genre
+      const musicMood = (data.mood as string | undefined) || audioStyle.fields.mood
+      const musicInstrumental = Boolean(data.instrumental || audioStyle.fields.instrumental)
+      // Fold genre/mood/instrumental INTO the prompt the same way the single-node
+      // route does (appendMusicMeta). The music worker only reads `prompt`, so
+      // without this those three controls were silently ignored in workflow runs.
+      const enrichedMusicPrompt = appendMusicMeta(finalPrompt, {
+        genre: musicGenre,
+        mood: musicMood,
+        instrumental: musicInstrumental,
+      })
       return {
         jobName: "generate-music",
         queueName: "video-generation",
         modelIdentifier: "generate-music",
         payload: {
           jobId,
-          prompt: finalPrompt,
+          prompt: enrichedMusicPrompt,
           provider,
           duration: data.duration,
-          genre: data.genre || audioStyle.fields.genre,
-          mood:  data.mood  || audioStyle.fields.mood,
-          instrumental: data.instrumental || audioStyle.fields.instrumental || false,
+          genre: musicGenre,
+          mood: musicMood,
+          instrumental: musicInstrumental,
           lyrics: resolveRefs(data.lyrics as string | undefined, refMap),
           referenceAudioUrl: resolvedInputs.audioUrl || data.referenceAudioUrl,
           // modelVersion is an optional Suno-family field (v4/v5/v4.5); forward
@@ -3743,6 +3777,9 @@ export function buildPayload(
         transition: data.transition ?? "cut",
         transitionDuration: data.transitionDuration ?? 0.5,
         audioMode: data.audioMode ?? "crossfade",
+        // Worker reads audioCrossfadeCurve (resolveAudioCrossfadeCurve); dropping
+        // it forced every workflow run back to the linear curve.
+        audioCrossfadeCurve: data.audioCrossfadeCurve,
         trimStartFrames: (data.trimStartFrames as number) ?? 0,
         trimEndFrames: (data.trimEndFrames as number) ?? 0,
         upstreamDurations,
@@ -3830,6 +3867,12 @@ export function buildPayload(
         // Frame-based trim — worker probes source fps and converts.
         trimStartFrames: trimMode === "frames" ? data.trimStartFrames : undefined,
         trimEndFrames: trimMode === "frames" ? data.trimEndFrames : undefined,
+        // Seconds + keep-first/keep-last modes — the worker reads these fields;
+        // dropping them passed the video through UNTRIMMED in those modes.
+        trimStartSeconds: trimMode === "seconds" ? data.trimStartSeconds : undefined,
+        trimEndSeconds: trimMode === "seconds" ? data.trimEndSeconds : undefined,
+        keepFirstSeconds: trimMode === "keep-first-seconds" ? data.keepFirstSeconds : undefined,
+        keepLastSeconds: trimMode === "keep-last-seconds" ? data.keepLastSeconds : undefined,
         // Smart loop cut — worker picks the trailing frame closest to frame 0.
         smartLoopCut: trimMode === "smart-loop-cut",
         smartLoopCutLookback: trimMode === "smart-loop-cut" ? data.smartLoopCutLookback : undefined,
@@ -3847,6 +3890,11 @@ export function buildPayload(
         videoUrl: resolvedInputs.videoUrl || data.videoUrl,
         mode: data.mode || "first",
         timestamp: data.timestamp,
+        // Index modes — worker reads frameIndex (frame-index) / framesFromEnd
+        // (frame-from-end); dropping them returned the first/last frame
+        // regardless of the chosen index in workflow runs.
+        frameIndex: data.mode === "frame-index" ? data.frameIndex : undefined,
+        framesFromEnd: data.mode === "frame-from-end" ? data.framesFromEnd : undefined,
         usageLogId,
       })
 
@@ -3945,8 +3993,12 @@ export function buildPayload(
         videoUrl: resolvedInputs.videoUrl || data.videoUrl,
         text: !isCaptionArray ? (resolvedInputs.prompt || resolveRefs(data.text as string | undefined, refMap)) : undefined,
         captions: isCaptionArray ? captionsValue : (resolvedInputs.captions ?? undefined),
-        auto_transcribe: data.auto_transcribe as boolean | undefined,
-        transcribe_provider: data.transcribe_provider as string | undefined,
+        // Node data stores camelCase (AddCaptionsData.autoTranscribe / .transcribeProvider);
+        // the worker payload uses snake_case. Reading data.auto_transcribe (snake) was
+        // always undefined → an explicit autoTranscribe:false and any transcribeProvider
+        // choice were silently dropped in workflow runs. Snake fallback kept for safety.
+        auto_transcribe: (data.autoTranscribe ?? data.auto_transcribe) as boolean | undefined,
+        transcribe_provider: (data.transcribeProvider ?? data.transcribe_provider) as string | undefined,
         style: data.captionStyle ?? data.style,
         position: data.captionPosition ?? data.position,
         fontSize: data.fontSize,
@@ -4000,18 +4052,31 @@ export function buildPayload(
     }
 
     case "combine-audio": {
-      let combineAudioUrls: string[] = resolvedInputs.audioUrls ?? (Array.isArray(data.audioUrls) ? data.audioUrls as string[] : [])
       const segmentOrder = data.segmentOrder as string[] | undefined
+      // Source entries keyed by nodeId so per-segment settings + ordering work.
+      let sourceEntries: Array<{ nodeId: string; url: string }> =
+        resolvedInputs.audioUrlsWithSourceIds
+        ?? (resolvedInputs.audioUrls ?? (Array.isArray(data.audioUrls) ? data.audioUrls as string[] : []))
+            .map((url) => ({ nodeId: "", url }))
+      // Honour the user-arranged segmentOrder (mirrors the frontend executor's
+      // applyMediaOrder: ordered entries first, then any unlisted appended). The
+      // previous code reordered a THROWAWAY url array and then built segments
+      // from the unordered source list — so a workflow run concatenated segments
+      // in edge-arrival order instead of the user's chosen order.
       if (segmentOrder?.length && resolvedInputs.audioUrlsWithSourceIds?.length) {
-        const ordered: string[] = []
+        const entries = resolvedInputs.audioUrlsWithSourceIds
+        const ordered: Array<{ nodeId: string; url: string }> = []
+        const seen = new Set<string>()
         for (const nodeId of segmentOrder) {
-          const entry = resolvedInputs.audioUrlsWithSourceIds.find((e) => e.nodeId === nodeId)
-          if (entry) ordered.push(entry.url)
+          const entry = entries.find((e) => e.nodeId === nodeId)
+          if (entry && !seen.has(nodeId)) { ordered.push(entry); seen.add(nodeId) }
         }
-        if (ordered.length >= 1) combineAudioUrls = ordered
+        for (const entry of entries) {
+          if (!seen.has(entry.nodeId)) ordered.push(entry)
+        }
+        if (ordered.length >= 1) sourceEntries = ordered
       }
       const segmentSettings = (data.segmentSettings ?? {}) as Record<string, { startTime?: number; endTime?: number }>
-      const sourceEntries: Array<{ nodeId: string; url: string }> = resolvedInputs.audioUrlsWithSourceIds ?? combineAudioUrls.map((url) => ({ nodeId: "", url }))
       const segments = sourceEntries.map((entry) => {
         const settings = segmentSettings[entry.nodeId] ?? {}
         return {
@@ -4077,7 +4142,11 @@ export function buildPayload(
       return {
         jobName: "generate-character",
         queueName: "video-generation",
-        modelIdentifier: provider,
+        // Ref-aware identifier: `sourceImageUrl` doubles as one reference image,
+        // so Flux 2 character generations price the correct :Nref tier. Mirrors
+        // generate-character.ts; the entity worker commits NON-metered, so the
+        // reserved id IS the final charge (bare `provider` mischarged Flux 2).
+        modelIdentifier: resolveEntityImageCreditIdentifier(data),
         payload: {
           jobId,
           prompt: entityPrompt,
@@ -4198,7 +4267,9 @@ export function buildPayload(
       return {
         jobName: "generate-location",
         queueName: "video-generation",
-        modelIdentifier: provider,
+        // Ref-aware identifier (see generate-character above) — `sourceImageUrl`
+        // counts as one reference so Flux 2 locations hit the correct :Nref tier.
+        modelIdentifier: resolveEntityImageCreditIdentifier(data),
         payload: {
           jobId,
           prompt: entityPrompt,

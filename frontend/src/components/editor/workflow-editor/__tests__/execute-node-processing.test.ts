@@ -1186,6 +1186,37 @@ describe("add-captions", () => {
       "#FFFFFF",
       undefined,
       "u1",
+      { autoTranscribe: undefined, transcribeProvider: undefined },
+    )
+  })
+
+  it("proceeds without manual text when autoTranscribe is enabled (matches DAG)", async () => {
+    // Kinetic factory presets set autoTranscribe:true with no manual text. The
+    // single-node path used to reject "No text" here while the workflow/DAG path
+    // auto-transcribed the video — this locks in the parity fix.
+    mockResolveNodeInputs.mockReturnValue({ videoUrl: "http://vid.mp4" })
+    mockAddCaptionsApi.mockResolvedValue({ jobId: "j1" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("add-captions", {
+        autoTranscribe: true,
+        transcribeProvider: "whisper",
+        style: "word-pop",
+      }),
+      makeCtx(),
+    )
+    const apiCallFn = mockPollJobWithNodeUpdate.mock.calls[0][1]
+    await apiCallFn()
+    expect(mockAddCaptionsApi).toHaveBeenCalledWith(
+      "http://vid.mp4",
+      "",
+      "word-pop",
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      "u1",
+      { autoTranscribe: true, transcribeProvider: "whisper" },
     )
   })
 })

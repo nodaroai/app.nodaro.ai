@@ -4,6 +4,7 @@ import {
   getVideoAudioCapability,
   videoModelSupportsAudio,
   videoModelCanSpeakDialogue,
+  applyVideoAudioToggle,
   AUDIO_ADDON_PROVIDERS,
   VEO_PROVIDERS,
   SEEDANCE_2_PROVIDERS,
@@ -119,5 +120,70 @@ describe("VIDEO_AUDIO_CAPABILITY internal consistency", () => {
         expect(cap.field, model).toBeDefined()
       }
     }
+  })
+})
+
+describe("applyVideoAudioToggle — neutral audio intent → per-model KIE field", () => {
+  it("maps the neutral toggle onto Kling's `sound` field", () => {
+    const input: Record<string, unknown> = {}
+    applyVideoAudioToggle(input, "kling", { sound: true })
+    expect(input.sound).toBe(true)
+    expect(input.generate_audio).toBeUndefined()
+  })
+
+  it("maps the neutral toggle onto Seedance's `generate_audio` field (the Studio bug)", () => {
+    // Studio sends ONLY `sound`, but Seedance's lever is `generate_audio`.
+    // Pre-fix the toggle was silently dropped on Seedance; it must now reach
+    // generate_audio in BOTH directions.
+    const on: Record<string, unknown> = {}
+    applyVideoAudioToggle(on, "seedance-2", { sound: true })
+    expect(on.generate_audio).toBe(true)
+    expect(on.sound).toBeUndefined()
+
+    const off: Record<string, unknown> = {}
+    applyVideoAudioToggle(off, "seedance-2", { sound: false })
+    expect(off.generate_audio).toBe(false)
+
+    const v1: Record<string, unknown> = {}
+    applyVideoAudioToggle(v1, "seedance", { sound: true })
+    expect(v1.generate_audio).toBe(true)
+  })
+
+  it("accepts `generateAudio` as a legacy alias on FREE models (Seedance)", () => {
+    const input: Record<string, unknown> = {}
+    applyVideoAudioToggle(input, "seedance", { generateAudio: true })
+    expect(input.generate_audio).toBe(true)
+  })
+
+  it("IGNORES the `generateAudio` alias on cost-affecting Kling — only `sound` toggles it", () => {
+    // Kling's audio is a credit surcharge keyed off `sound`. If the model honoured
+    // `generateAudio` too, a generateAudio-driven enable would generate (cost-affecting)
+    // audio the `sound`-keyed surcharge never billed. So the alias is gated off here.
+    const aliasOnly: Record<string, unknown> = {}
+    applyVideoAudioToggle(aliasOnly, "kling", { generateAudio: true })
+    expect(aliasOnly).toEqual({}) // no enable from the alias alone
+
+    const canonical: Record<string, unknown> = {}
+    applyVideoAudioToggle(canonical, "kling", { sound: true, generateAudio: false })
+    expect(canonical.sound).toBe(true) // the canonical lever still works (and wins)
+  })
+
+  it("is a no-op for always-on VEO — there is no user toggle to honour", () => {
+    const input: Record<string, unknown> = {}
+    applyVideoAudioToggle(input, "veo3", { sound: false })
+    expect(input).toEqual({})
+  })
+
+  it("is a no-op for silent / unknown models (not in the capability table)", () => {
+    const input: Record<string, unknown> = {}
+    applyVideoAudioToggle(input, "minimax", { sound: true })
+    applyVideoAudioToggle(input, undefined, { sound: true })
+    expect(input).toEqual({})
+  })
+
+  it("leaves the model's own default untouched when no intent is expressed", () => {
+    const input: Record<string, unknown> = { generate_audio: true }
+    applyVideoAudioToggle(input, "seedance-2", {})
+    expect(input.generate_audio).toBe(true)
   })
 })

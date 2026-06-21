@@ -9,7 +9,7 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { llmComplete } from "../lib/llm-client.js"
 import { MODIFY_IMAGE_PROVIDERS, IMAGE_PROMPT_MAX, PROMPT_HARD_CEILING } from "@nodaro/shared"
-import { buildCreditModelIdentifier } from "@nodaro/shared"
+import { resolveImageGenCreditIdentifier } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 import {
   ASSET_DESCRIPTION_SYSTEM_PROMPT,
@@ -84,10 +84,11 @@ export async function imageToImageRoutes(app: FastifyInstance) {
     // flux-2-max bills per reference image. In image-to-image the primary
     // `imageUrl` is always one input plus any extra `referenceImageUrls` — so
     // refCount = 1 + extras (worker concatenates them into `allImages` before
-    // dispatching to the provider).
+    // dispatching to the provider). Shared builder (also used by the workflow
+    // orchestrator); swapToI2i:false because i2i is already an i2i provider.
     const extraRefs = (body?.referenceImageUrls as string[] | undefined)?.length ?? 0
     const refCount = 1 + extraRefs
-    return buildCreditModelIdentifier(provider, quality, resolution, renderingSpeed, undefined, refCount)
+    return resolveImageGenCreditIdentifier({ provider, quality, resolution, renderingSpeed, refCount, swapToI2i: false })
   }) }, async (req, reply) => {
     const parsed = imageToImageBody.safeParse(req.body)
     if (!parsed.success) {
@@ -108,16 +109,16 @@ export async function imageToImageRoutes(app: FastifyInstance) {
 
     // Must mirror the preHandler's identifier — flux-2-max bills per reference image,
     // and in i2i the primary `imageUrl` counts as one of the up-to-8 refs (the worker
-    // concatenates [imageUrl, ...refs] before dispatch).
+    // concatenates [imageUrl, ...refs] before dispatch). Shared builder, swapToI2i:false.
     const i2iRefCount = 1 + (referenceImageUrls?.length ?? 0)
-    const modelIdentifier = buildCreditModelIdentifier(
-      provider ?? "nano-banana",
+    const modelIdentifier = resolveImageGenCreditIdentifier({
+      provider,
       quality,
       resolution,
       renderingSpeed,
-      undefined,
-      i2iRefCount,
-    )
+      refCount: i2iRefCount,
+      swapToI2i: false,
+    })
 
     // ─────────────────────────────────────────────────────────────────────
     // Studio path — when attachToCharacterId is set AND the caller has NOT

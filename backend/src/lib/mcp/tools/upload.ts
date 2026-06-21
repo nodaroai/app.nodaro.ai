@@ -32,7 +32,6 @@ import { config } from "../../config.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import type { McpSession } from "../session.js"
 import { signUploadToken } from "../../../routes/upload-proxy.js"
-import { redis } from "../../queue.js"
 
 const writeGate: ToolGate = { required: ["assets:write"] }
 

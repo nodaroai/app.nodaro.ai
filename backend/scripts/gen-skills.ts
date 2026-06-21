@@ -336,7 +336,21 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((err) => {
-  console.error("[gen-skills] failed:", err)
-  process.exit(1)
-})
+main()
+  .then(() => {
+    // One-shot script: force a clean exit. The MCP schema-capture step imports
+    // the real MCP server (capture-mcp-schemas.ts), whose static module graph
+    // opens infra handles — notably the ioredis client via
+    // tools/upload.ts → routes/upload-proxy.ts → lib/queue.ts. A live or
+    // retrying Redis socket keeps the event loop alive, so without an explicit
+    // exit the process never terminates when Redis is unreachable (e.g. CI,
+    // which has no Redis service). Surfaced 2026-06-21: the identical commit
+    // exited in 8s the night before, then hung 45min+ after a GitHub-hosted
+    // runner image change altered localhost connection behavior. Force-exiting
+    // makes this deterministic regardless of the import graph's side effects.
+    process.exit(0)
+  })
+  .catch((err) => {
+    console.error("[gen-skills] failed:", err)
+    process.exit(1)
+  })
