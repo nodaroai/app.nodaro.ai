@@ -10,7 +10,7 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
 import { IMAGE_GEN_PROVIDERS, T2I_TO_I2I_VARIANT, FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_PROMPT_MAX, PROMPT_HARD_CEILING } from "@nodaro/shared"
-import { buildCreditModelIdentifier } from "@nodaro/shared"
+import { resolveImageGenCreditIdentifier } from "@nodaro/shared"
 import {
   assembleImageInput,
   USAGE_MODES,
@@ -389,16 +389,13 @@ export function resolveImageCreditIdentifier(req: FastifyRequest): string {
     ? assembledRefCountForPricing(body as Parameters<typeof assembledRefCountForPricing>[0])
     : (flatRefs?.length ?? 0)
 
-  // Mirror the auto-swap inside the route handler so credits are reserved for
-  // the variant we'll actually invoke. The swap triggers on whether refs are
-  // attached — in structured mode use the ASSEMBLED count (a wired character
-  // with no @-mention contributes zero refs, so it must not trigger the swap).
-  const provider = refCount > 0
-    ? (T2I_TO_I2I_VARIANT[rawProvider] ?? rawProvider)
-    : rawProvider
-  // flux-2-max bills per reference image — pass the count so the identifier
-  // becomes `flux-2-max:Nref` and the right model_pricing row is hit.
-  return buildCreditModelIdentifier(provider, quality, resolution, renderingSpeed, undefined, refCount)
+  // Shared reference-aware builder: mirrors the handler's T2I→I2I auto-swap
+  // (triggered by refs being attached — in structured mode the ASSEMBLED count,
+  // so a wired character with no @-mention contributes zero refs and does not
+  // swap) and encodes the per-ref Flux 2 tier. The SAME helper drives the
+  // workflow orchestrator (payload-builder.ts), so single-node and DAG runs
+  // reserve identical credits.
+  return resolveImageGenCreditIdentifier({ provider: rawProvider, quality, resolution, renderingSpeed, refCount, swapToI2i: true })
 }
 
 export async function generateImageRoutes(app: FastifyInstance) {
@@ -571,14 +568,18 @@ export async function generateImageRoutes(app: FastifyInstance) {
     // so this is byte-identical to the previous `referenceImageUrls?.length`.
     const modelIdentifier = resolvedLora
       ? FLUX_LORA_CHARACTER_MODEL_ID
-      : buildCreditModelIdentifier(
-          effectiveProvider ?? "nano-banana",
+      : resolveImageGenCreditIdentifier({
+          // Pass the RAW provider — the shared helper applies the same T2I→I2I
+          // swap as `resolveEffectiveProvider` above, keyed on the assembled
+          // ref count, so this DEBIT matches the preHandler CHECK and the
+          // workflow orchestrator exactly.
+          provider,
           quality,
           resolution,
           renderingSpeed,
-          undefined,
-          assembledRefs.length,
-        )
+          refCount: assembledRefs.length,
+          swapToI2i: true,
+        })
 
     const mcpClient = extractMcpClient(req.body)
 

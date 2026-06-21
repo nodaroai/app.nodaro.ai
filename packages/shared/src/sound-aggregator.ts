@@ -203,3 +203,25 @@ export function getEffectiveSunoCustomMode(
   if (typeof data.customMode === "boolean") return data.customMode
   return !!(data.style || data.title || data.lyrics)
 }
+
+/**
+ * Fold a Generate Music node's genre / mood / instrumental selections into the
+ * prompt text. The music worker only reads `prompt`, so this enrichment is the
+ * ONLY channel by which those three controls reach the provider.
+ *
+ * Shared by the single-node route (`/v1/generate-music`) and the workflow
+ * orchestrator (`payload-builder.ts` `generate-music`) so a workflow / app /
+ * webhook run produces the same prompt — and the same music — as a Run-button
+ * run. Mirrors the route's original inline `[prompt, genre, mood, …].join(", ")`
+ * exactly (locked by `routes/__tests__/generate-music.test.ts`).
+ */
+export function appendMusicMeta(
+  basePrompt: string,
+  meta: { genre?: string; mood?: string; instrumental?: boolean },
+): string {
+  const parts = [basePrompt]
+  if (meta.genre) parts.push(meta.genre)
+  if (meta.mood) parts.push(meta.mood)
+  if (meta.instrumental) parts.push("instrumental, no vocals")
+  return parts.join(", ")
+}

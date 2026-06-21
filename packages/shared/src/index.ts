@@ -200,6 +200,7 @@ export {
 
 export {
   buildCreditModelIdentifier,
+  resolveImageGenCreditIdentifier,
   buildVideoCreditModelIdentifier,
   buildMotionCreditModelIdentifier,
 } from "./credit-identifiers.js"
@@ -1159,6 +1160,7 @@ export {
   appendField,
   truncateForField,
   getEffectiveSunoCustomMode,
+  appendMusicMeta,
 } from "./sound-aggregator.js"
 export type { SoundConsumerType, SoundCompositionFields, SoundComposition } from "./sound-aggregator.js"
 
