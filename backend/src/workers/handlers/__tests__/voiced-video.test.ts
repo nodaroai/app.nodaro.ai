@@ -168,6 +168,42 @@ describe("voiced-video handler — audio_driven (Seedance 2)", () => {
     )
   })
 
+  it("muxes the synthesised voice track INTO the output (Seedance 2 generate_audio:false → silent clip)", async () => {
+    // BUG #2: Seedance 2 with generate_audio:false produces a SILENT video — the
+    // reference audio only drives lip MOTION (KIE doc: "false: Generate without
+    // audio"). The handler must mux the exact synthesised track into the output,
+    // like the native_speech revoice path does, or voiceApplied:true is a lie.
+    await handler(
+      makeJob({
+        imageUrl: "https://x.png",
+        prompt: "she greets",
+        provider: "seedance-2",
+        duration: 8,
+        characterVoices: [
+          { voiceId: "W3C2vBPukr5b5jvoXhPK", voiceType: "library", ttsProvider: "elevenlabs-turbo", speaker: "Natalie" },
+        ],
+        dialogue: [{ speaker: "Natalie", line: "good morning" }],
+        voicedAudioAddon: 4,
+      }) as never,
+      ctx,
+    )
+
+    // The synthesised voice (referenceAudioUrls) is muxed into the generated clip,
+    // replacing any (absent) model audio — NOT uploaded silent-and-direct.
+    expect(mocks.mockMergeVideoAudio).toHaveBeenCalledWith(
+      expect.objectContaining({
+        videoUrl: VIDEO_RESULT.url,
+        audioTracks: [expect.objectContaining({ url: "https://r2.example.com/tts.mp3", startTime: 0 })],
+        keepOriginalAudio: false,
+      }),
+    )
+    expect(mocks.mockWatermarkLocalVideoAndUpload).toHaveBeenCalled()
+    expect(mocks.mockUploadVideoMaybeWatermark).not.toHaveBeenCalled()
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(
+      expect.objectContaining({ extraOutputData: expect.objectContaining({ voiceApplied: true }) }),
+    )
+  })
+
   it("uses Dialogue v3 only for multi-speaker where every voice is KIE-premade", async () => {
     mocks.mockIsKieAcceptedVoice.mockReturnValue(true)
     await handler(

@@ -48,6 +48,7 @@ export {
   getVideoAudioCapability,
   videoModelSupportsAudio,
   videoModelCanSpeakDialogue,
+  applyVideoAudioToggle,
   VIDEO_VARIABLE_PRICING,
   VIDEO_DURATION_TIERS,
   ASPECT_RATIO_DIMENSIONS,

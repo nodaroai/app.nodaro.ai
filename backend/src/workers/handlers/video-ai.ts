@@ -1359,6 +1359,28 @@ async function revoiceClipToR2(
 }
 
 /**
+ * Mux a ready voice track into a (silent) generated clip, replacing any model
+ * audio, then watermark+upload. Used by the audio_driven path: Seedance 2 with
+ * `generate_audio:false` outputs a SILENT video (the reference audio only drove
+ * lip MOTION), so the synthesised voice must be muxed back in — otherwise
+ * `voiceApplied:true` ships a silent clip. Mirrors `revoiceClipToR2`'s tail.
+ */
+async function mergeVoiceTrackToR2(
+  ctx: Parameters<HandlerFn>[1],
+  videoUrl: string,
+  audioUrl: string,
+): Promise<string> {
+  const mergedPath = await mergeVideoAudio({
+    videoUrl,
+    audioTracks: [{ url: audioUrl, startTime: 0, volume: 100, sourceType: "audio" }],
+    keepOriginalAudio: false,
+  })
+  const out = await watermarkLocalVideoAndUpload(mergedPath, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  await cleanupWorkDir(dirname(mergedPath))
+  return out
+}
+
+/**
  * Synthesise the resolved dialogue into ONE reference-audio track (R2 URL) for the
  * audio_driven (Seedance) path. KIE's Dialogue v3 only accepts ~21 PREMADE voice
  * NAMES, so it's used ONLY for genuine multi-speaker where every voice is
@@ -1442,10 +1464,17 @@ const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) 
     try {
       const trackUrl = await withProgressRamp(job, ctx.jobId, { start: 5, cap: 30 },
         () => synthesizeDialogueTrack(ctx, resolved, voices, d.languageCode))
-      result = await withProgressRamp(job, ctx.jobId, { start: 30, cap: 90 },
+      result = await withProgressRamp(job, ctx.jobId, { start: 30, cap: 85 },
         () => imageToVideo(d.imageUrl, provider, d.prompt, d.duration, undefined,
           { referenceAudioUrls: [trackUrl], generateAudio: false, resolution: d.resolution, aspectRatio: d.aspectRatio, seed: d.seed, negativePrompt: d.negativePrompt, referenceImageUrls: d.referenceImageUrls }))
-      finalUrl = await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+      // Seedance 2 ran with generate_audio:false → the clip is SILENT; the
+      // reference audio only drove lip motion. Mux the SAME synthesised track in
+      // so the delivered video actually carries the voice (a bare upload of
+      // result.url shipped a silent clip with voiceApplied:true). Inside the try
+      // so a mux failure still degrades to the plain-clip fallback below.
+      const genUrl = result.url
+      finalUrl = await withProgressRamp(job, ctx.jobId, { start: 85, cap: 95 },
+        () => mergeVoiceTrackToR2(ctx, genUrl, trackUrl))
       voiceApplied = true
     } catch (err) {
       console.warn(`[worker] voiced-video ${ctx.jobId}: audio_driven voice chain failed — falling back to a silent clip: ${err instanceof Error ? err.message : String(err)}`)

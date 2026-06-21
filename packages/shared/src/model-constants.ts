@@ -1347,6 +1347,47 @@ export function videoModelCanSpeakDialogue(model: string | undefined): boolean {
 }
 
 /**
+ * Write the caller's neutral "enable native audio" intent onto a KIE provider
+ * `input` under whichever field the chosen model actually reads, per
+ * `VIDEO_AUDIO_CAPABILITY.field`. This is the single dispatch point that fixes
+ * the recurring "sound toggle dropped on Seedance/VEO" bug class: callers pass
+ * the model-agnostic toggle ONCE and never need to know that Kling's lever is
+ * `sound` while Seedance's is `generate_audio`.
+ *
+ * - `sound` is the canonical neutral name; `generateAudio` is accepted as a
+ *   legacy alias (the workflow node + some clients send that key). `sound` wins
+ *   if both are present.
+ * - **Cost-affecting models (Kling) honour ONLY the canonical `sound` lever** —
+ *   the same field the `:audio` credit surcharge keys off (`AUDIO_ADDON_PROVIDERS`
+ *   in `credit-identifiers.ts`). This makes a billed-but-not-generated (or
+ *   generated-but-not-billed) divergence structurally impossible: the model and
+ *   the surcharge read the same flag. Free models accept the `generateAudio`
+ *   alias too, where mis-billing isn't possible.
+ * - No-op for `alwaysOn` models (VEO — audio can't be toggled) and silent /
+ *   unlisted models (no `field`), and when the caller expressed no intent
+ *   (leaves the model's own default in place).
+ *
+ * Future audio models are covered automatically by adding a
+ * `VIDEO_AUDIO_CAPABILITY` entry — already guarded by the
+ * `video-audio-capability` drift test, so this never silently regresses.
+ */
+export function applyVideoAudioToggle(
+  input: Record<string, unknown>,
+  provider: string | undefined,
+  opts: { sound?: boolean; generateAudio?: boolean } | undefined,
+): void {
+  const cap = getVideoAudioCapability(provider)
+  if (!cap.field) return // alwaysOn (VEO) or silent/unlisted model — nothing to toggle
+  // Cost-affecting models stay on the canonical `sound` lever so the model and
+  // the credit surcharge can never read different flags; free models also accept
+  // the `generateAudio` alias. `sound` is canonical and wins when both are set.
+  const enabled = cap.affectsCost ? opts?.sound : (opts?.sound ?? opts?.generateAudio)
+  if (enabled === undefined) return // no intent — keep the model's own default
+  if (cap.field === "generateAudio") input.generate_audio = enabled
+  else input.sound = enabled
+}
+
+/**
  * Video models where a quality/mode parameter (e.g., videoSize "high") incurs higher cost.
  * When provider is in this set and mode is "high", ":high" is appended to the identifier.
  */

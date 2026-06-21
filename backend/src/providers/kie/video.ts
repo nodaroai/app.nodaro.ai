@@ -17,7 +17,7 @@ import type {
   ProviderOptions,
   ReconcileOpts,
 } from "../provider.interface.js"
-import { SEEDANCE_2_REF_LIMITS, isSeedance2Provider, isVeoProvider, getLipSyncMaxAudioSeconds, applyVideoNegativePrompt, getModel } from "@nodaro/shared"
+import { SEEDANCE_2_REF_LIMITS, isSeedance2Provider, isVeoProvider, getLipSyncMaxAudioSeconds, applyVideoNegativePrompt, applyVideoAudioToggle, getModel } from "@nodaro/shared"
 import {
   createSanitizedError,
   runKieTask,
@@ -89,7 +89,9 @@ export function applySeedance2Params(
   if (refAudios.length > 0) input.reference_audio_urls = refAudios
   input.web_search = options?.webSearch ?? false
   if (options?.nsfwChecker !== undefined) input.nsfw_checker = options.nsfwChecker
-  if (options?.generateAudio !== undefined) input.generate_audio = options.generateAudio
+  // NB: generate_audio is set by applyVideoAudioToggle (the shared neutral-intent
+  // dispatcher) at the call sites, BEFORE this runs — so the Studio `sound`
+  // toggle reaches Seedance 2 too, not just the legacy `generateAudio` key.
   if (options?.aspectRatio) input.aspect_ratio = options.aspectRatio
   if (options?.resolution) input.resolution = options.resolution
   if (input.duration !== undefined) input.duration = Number(input.duration)
@@ -399,6 +401,10 @@ async function runKling3(
   const snappedDuration = duration
     ? snapToAllowedDuration(duration, modelConfig.allowedDurations ?? [])
     : 5
+  // Kling 3.0 is cost-affecting (AUDIO_ADDON_PROVIDERS) — keep it on the canonical
+  // `sound` lever ONLY, the same flag the `:audio` surcharge reads, so the model
+  // and the credit charge can never diverge. Default on. (Mirrors the affectsCost
+  // gate in applyVideoAudioToggle for the generic path.)
   const sound = options?.sound ?? true
   const mode = (options?.mode as "std" | "pro" | "4K") ?? "pro"
   const result = await kling3Generate({
@@ -780,10 +786,11 @@ export class KieVideoProvider
       }
     }
 
-    // Override sound from options (Kling 2.6 supports sound toggle)
-    if (options?.sound !== undefined) {
-      input.sound = options.sound
-    }
+    // Native audio toggle — map the model-agnostic intent onto whichever field
+    // THIS model reads (Kling: `sound`, Seedance/Seedance-2: `generate_audio`),
+    // via the VIDEO_AUDIO_CAPABILITY table. Single dispatch point so the toggle
+    // is never silently dropped on a model whose lever isn't `sound`.
+    applyVideoAudioToggle(input, provider, options)
     // Native negative_prompt for providers in NATIVE_NEGATIVE_VIDEO_PROVIDERS
     // (Kling family / Wan family). For everyone else the negative was already
     // injected into `effectivePrompt` above as "Avoid: …", so we don't send
@@ -825,7 +832,7 @@ export class KieVideoProvider
     }
 
     if (provider === "seedance") {
-      if (options?.generateAudio !== undefined) input.generate_audio = options.generateAudio
+      // generate_audio is handled by applyVideoAudioToggle above (capability field).
       if (options?.aspectRatio) input.aspect_ratio = options.aspectRatio
     }
 
@@ -1061,10 +1068,10 @@ export class KieVideoProvider
       input[ratioKey] = mapAspectRatio(provider, aspectRatio)
     }
 
-    // Override sound from options (Kling 2.6 supports sound toggle)
-    if (options?.sound !== undefined) {
-      input.sound = options.sound
-    }
+    // Native audio toggle — neutral intent → the model's own field (Kling
+    // `sound` / Seedance `generate_audio`) via VIDEO_AUDIO_CAPABILITY. Same
+    // single dispatch point the i2v path uses.
+    applyVideoAudioToggle(input, provider, options)
     // Native negative_prompt for providers in NATIVE_NEGATIVE_VIDEO_PROVIDERS.
     // Non-native providers got "Avoid: …" injected into `effectivePrompt` above.
     if (nativeNegativePrompt) {

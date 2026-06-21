@@ -134,7 +134,9 @@ export class ReplicateVideoProvider
       if (options?.aspectRatio && ["16:9", "9:16", "1:1"].includes(options.aspectRatio)) {
         extraInput.aspect_ratio = options.aspectRatio
       }
-      extraInput.generate_audio = options?.generateAudio !== false
+      // Neutral audio intent: `generateAudio` is the model's lever, but accept
+      // `sound` as the alias (default on) so the single toggle reaches it.
+      extraInput.generate_audio = (options?.generateAudio ?? options?.sound) !== false
       if (options?.negativePrompt) {
         extraInput.negative_prompt = options.negativePrompt
       }
