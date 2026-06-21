@@ -52,17 +52,30 @@ export function buildAudioFxArgs(opts: AudioFxOptions): string[] {
     const r = REVERB[p] ?? REVERB.room
     // afir's OWN dry/wet gains do NOT pass the dry input through (`dry=1:wet=0`
     // outputs silence — verified). So we split the input, convolve one copy
-    // (the wet/reverb), and amix it back with the untouched dry copy. At mix=0
-    // the wet gain is 0 → pure dry (the effect is bypassed), NEVER silence.
-    // Convolution with a noise IR is quiet, so the wet is boosted ×8 at full mix.
-    const wetGain = ((clampNum(opts.mix, 0, 100, r.mix) / 100) * 8).toFixed(3)
+    // (the wet/reverb), and amix it back with the dry copy.
+    //
+    // dry/wet is a COMPLEMENTARY crossfade so the output level stays ~constant
+    // regardless of mix. Two bugs were here before:
+    //   1. the dry passed through at FULL volume while the wet was SUMMED on top
+    //      (`amix=normalize=0` sums) → louder the higher the mix;
+    //   2. the wet was boosted ×8 → 100% wet clipped (too loud / corrupt).
+    // `afir=gtype=gn` gain-normalizes the IR, so the convolved wet is already
+    // ~unity (≈ the dry level) — no boost is needed. We scale each leg
+    // ourselves: dry by (1 − mix), wet by mix. At mix=0 → pure dry; mix=100 →
+    // pure wet (≈ original loudness); in between the two unity legs sum to ~1.
+    // A final alimiter is a hard safety against constructive peaks (no clipping
+    // / corruption regardless of mix).
+    const mixPct = clampNum(opts.mix, 0, 100, r.mix)
+    const wetGain = (mixPct / 100).toFixed(3)
+    const dryGain = ((100 - mixPct) / 100).toFixed(3)
     const ir = `anoisesrc=r=48000:d=${r.dur}:c=pink:a=0.8,afade=t=out:st=0:d=${r.dur}:curve=exp,${r.shape}[ir]`
     const complex =
       `[0:a]aresample=48000,asplit=2[d][w];` +
       `${ir};` +
       `[w][ir]afir=gtype=gn[wc];` +
       `[wc]volume=${wetGain}[wg];` +
-      `[d][wg]amix=inputs=2:normalize=0:duration=longest[out]`
+      `[d]volume=${dryGain}[dg];` +
+      `[dg][wg]amix=inputs=2:normalize=0:duration=longest,alimiter=limit=0.95[out]`
     return ["-filter_complex", complex, "-map", "[out]"]
   }
 
