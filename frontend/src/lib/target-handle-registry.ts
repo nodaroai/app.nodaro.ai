@@ -296,6 +296,9 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
   "voice-changer": [
     { handleId: "audio", label: AUDIO_TEXT_HANDLE_LABELS["voice-changer"].audio, accepts: (s) => isValidVoiceChangerConnection("audio", s) },
   ],
+  "voice-recast": [
+    { handleId: "audio", label: AUDIO_TEXT_HANDLE_LABELS["voice-changer"].audio, accepts: (s) => isValidVoiceChangerConnection("audio", s) },
+  ],
   "dubbing": [
     { handleId: "audio", label: AUDIO_TEXT_HANDLE_LABELS["dubbing"].audio, accepts: (s) => isValidDubbingConnection("audio", s) },
   ],

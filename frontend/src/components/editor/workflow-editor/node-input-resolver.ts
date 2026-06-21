@@ -6,6 +6,7 @@ import type {
   GenerateImageData,
   AdjustVolumeData,
   VoiceChangerData,
+  VoiceRecastData,
   GeneratedResult,
   LoopNodeData,
 } from "@/types/nodes";
@@ -760,7 +761,7 @@ const LLM_REF_VIDEO_NODE_TYPES = new Set<string>([
 /** Node types whose primary output is an audio URL. */
 const LLM_REF_AUDIO_NODE_TYPES = new Set<string>([
   "generate-music", "text-to-speech", "text-to-audio",
-  "voice-changer", "voice-design", "voice-remix", "dubbing",
+  "voice-changer", "voice-recast", "voice-design", "voice-remix", "dubbing",
   "trim-audio", "combine-audio", "mix-audio", "audio-fx", "audio-isolation",
   "text-to-dialogue",
   "suno-generate", "suno-cover", "suno-extend", "suno-separate",
@@ -2044,6 +2045,32 @@ export function resolveNodeInputs(
       // via the source handle. Default prefers video when the node produced one.
       const vcData = src.data as VoiceChangerData;
       const producedVideo = Boolean(vcData.generatedVideoUrl);
+      if (resolvedSourceHandle === "video" || (resolvedSourceHandle !== "audio" && producedVideo)) {
+        inputs.videoUrl = output;
+      } else if (node.type === "suno-mashup") {
+        routeSunoMashupAudio(inputs, output);
+      } else if (MULTI_AUDIO_INPUT_TYPES.has(node.type!)) {
+        inputs.audioUrls = [...(inputs.audioUrls ?? []), output];
+        inputs.audioUrlsWithSourceIds = [
+          ...(inputs.audioUrlsWithSourceIds ?? []),
+          { nodeId: src.id, url: output },
+        ];
+      } else if (node.type === "merge-video-audio") {
+        inputs.audioSources = [
+          ...(inputs.audioSources ?? []),
+          { url: output, sourceNodeId: src.id },
+        ];
+      } else if (node.type === "manual-edit") {
+        appendManualEditAsset(inputs, src.id, output, "audio");
+      } else {
+        inputs.audioUrl = output;
+      }
+    } else if (src.type === "voice-recast") {
+      // Same dual-mode as voice-changer: audio-primary output, video output when
+      // video was the input. Route by the edge's sourceHandle; default prefers
+      // video when the node produced one.
+      const vrData = src.data as VoiceRecastData;
+      const producedVideo = Boolean(vrData.generatedVideoUrl);
       if (resolvedSourceHandle === "video" || (resolvedSourceHandle !== "audio" && producedVideo)) {
         inputs.videoUrl = output;
       } else if (node.type === "suno-mashup") {

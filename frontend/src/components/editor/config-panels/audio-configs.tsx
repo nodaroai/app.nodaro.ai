@@ -47,6 +47,7 @@ import type {
   TextToDialogueData,
   DialogueLine,
   VoiceChangerData,
+  VoiceRecastData,
   DubbingData,
   VoiceRemixData,
   VoiceDesignData,
@@ -2143,6 +2144,70 @@ export function ForcedAlignmentConfig({ data, onUpdate, sources, fieldMappings, 
       <p className="text-xs text-muted-foreground">
         Aligns audio with a transcript to produce word-level timestamps. Connect an audio source to the input.
       </p>
+    </div>
+  )
+}
+
+export function VoiceRecastConfig({ data, onUpdate }: ConfigProps<VoiceRecastData>) {
+  const voices = data.orderedVoices ?? []
+  const addVoice = (voiceId: string, voiceLabel: string, voiceType: "premade" | "custom" | "library") =>
+    onUpdate({ orderedVoices: [...voices, { voiceId, voiceLabel, voiceType }] })
+  const removeVoice = (i: number) =>
+    onUpdate({ orderedVoices: voices.filter((_, idx) => idx !== i) })
+  const move = (i: number, delta: number) => {
+    const j = i + delta
+    if (j < 0 || j >= voices.length) return
+    const next = [...voices]
+    ;[next[i], next[j]] = [next[j], next[i]]
+    onUpdate({ orderedVoices: next })
+  }
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-xs text-muted-foreground">
+        Speakers are detected automatically. Voice 1 recasts the first speaker to talk, voice 2 the
+        second, and so on. Speakers past the end of this list keep their original voice.
+      </p>
+      <div>
+        <Label>Add a voice</Label>
+        <VoiceBrowser
+          value=""
+          onSelect={(id, name, voiceType) => addVoice(id, name, voiceType ?? "premade")}
+          showCustomVoices
+        />
+      </div>
+      <div className="flex flex-col gap-1">
+        {voices.map((v, i) => (
+          <div key={`${v.voiceId}-${i}`} className="flex items-center gap-2 rounded border px-2 py-1">
+            <span className="text-xs text-muted-foreground w-16">Speaker {i + 1}</span>
+            <span className="text-sm flex-1 truncate">{v.voiceLabel}</span>
+            <button aria-label="Move up" onClick={() => move(i, -1)} className="text-xs px-1">↑</button>
+            <button aria-label="Move down" onClick={() => move(i, 1)} className="text-xs px-1">↓</button>
+            <button aria-label="Remove voice" onClick={() => removeVoice(i)} className="text-xs px-1">✕</button>
+          </div>
+        ))}
+      </div>
+      <div>
+        <Label>Model</Label>
+        <Select
+          value={data.model ?? "eleven_english_sts_v2"}
+          onValueChange={(v) => onUpdate({ model: v as VoiceRecastData["model"] })}
+        >
+          <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {VOICE_CHANGER_MODELS.map((m) => (
+              <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="flex items-center justify-between">
+        <Label>Preserve background music</Label>
+        <Switch checked={data.preserveBackground ?? true} onCheckedChange={(v) => onUpdate({ preserveBackground: v })} />
+      </div>
+      <div className="flex items-center justify-between">
+        <Label>Remove background noise</Label>
+        <Switch checked={data.removeBackgroundNoise ?? false} onCheckedChange={(v) => onUpdate({ removeBackgroundNoise: v })} />
+      </div>
     </div>
   )
 }

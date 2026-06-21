@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useReactFlow } from "@xyflow/react"
 import { cn } from "@/lib/utils"
+import { hasCredits } from "@/lib/edition"
 import { clusterByGroup } from "@/lib/cluster-by-group"
 import { categoryRank } from "@/lib/node-category-order"
 const UnifiedAssetLibraryButton = lazy(() => import("./unified-asset-library").then(m => ({ default: m.UnifiedAssetLibraryButton })))
@@ -138,6 +139,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "audio-separation", label: "Audio Separation", icon: <Scissors className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
   { type: "text-to-dialogue", label: "Text to Dialogue", icon: <Users className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
   { type: "voice-changer", label: "Voice Changer", icon: <AudioWaveform className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
+  { type: "voice-recast", label: "Voice Recast", icon: <AudioWaveform className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
   { type: "dubbing", label: "Dubbing", icon: <Languages className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
   { type: "voice-remix", label: "Voice Remix", icon: <Mic className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
   { type: "voice-design", label: "Voice Design", icon: <Wand2 className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
@@ -228,7 +230,13 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "preview", label: "Preview", icon: <Eye className="h-4 w-4" />, category: "Processing", group: "Text" },
 ]
 
-const CATEGORIES = Array.from(new Set(NODE_OPTIONS.map((n) => n.category)))
+/** Node types that must only appear in Cloud edition (hasCredits()). */
+const CLOUD_ONLY_NODE_TYPES = new Set<string>(["voice-recast"])
+
+/** Returns NODE_OPTIONS filtered for the current edition. */
+function getNodeOptions(): ReadonlyArray<NodeOption> {
+  return NODE_OPTIONS.filter((o) => !CLOUD_ONLY_NODE_TYPES.has(o.type) || hasCredits())
+}
 
 // Category-specific hover colors for icons
 const CATEGORY_ICON_HOVER: Record<string, string> = {
@@ -250,7 +258,8 @@ function NodeList({ onAdd }: { readonly onAdd: (type: SceneNodeType) => void }) 
   const { isAdmin } = useAuth()
   // Show every node type in the sidebar (Parameter pickers included). Only
   // admin-only nodes stay gated, matching the add-node popup's pool.
-  const visibleNodes = NODE_OPTIONS.filter((n) => !n.adminOnly || isAdmin)
+  // Cloud-only nodes (e.g. voice-recast) are filtered out when !hasCredits().
+  const visibleNodes = getNodeOptions().filter((n) => !n.adminOnly || isAdmin)
   const categories = Array.from(new Set(visibleNodes.map((n) => n.category)))
     .sort((a, b) => categoryRank(a) - categoryRank(b))
   return (

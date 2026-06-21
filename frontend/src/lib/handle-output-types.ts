@@ -131,6 +131,7 @@ export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleCo
   "video-upscale": { video: "video" },
   "voice-changer": { audio: "audio", video: "video" },
   "voice-design": { audio: "audio", voiceId: "identity" },
+  "voice-recast": { audio: "audio", video: "video" },
   "voice-remix": { audio: "audio" },
   "web-scrape": { json: "look" },
   "webhook-output": { out: "approve" },

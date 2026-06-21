@@ -3296,6 +3296,29 @@ export async function voiceChangerApi(audioUrl: string | undefined, voiceId: str
   })
 }
 
+export async function voiceRecastApi(
+  audioUrl: string | undefined,
+  orderedVoices: string[],
+  userId?: string,
+  model?: string,
+  preserveBackground?: boolean,
+  removeBackgroundNoise?: boolean,
+  videoUrl?: string,
+): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { orderedVoices }
+  if (audioUrl) body.audioUrl = audioUrl
+  if (videoUrl) body.videoUrl = videoUrl
+  if (model) body.model = model
+  if (userId) body.userId = userId
+  if (preserveBackground != null) body.preserveBackground = preserveBackground
+  if (removeBackgroundNoise != null) body.removeBackgroundNoise = removeBackgroundNoise
+  return apiJson("/v1/voice-recast", {
+    body,
+    workflowId: true,
+    label: "Failed to start voice recast",
+  })
+}
+
 export async function dubbingApi(audioUrl: string, targetLanguage: string, userId?: string, sourceLanguage?: string, numSpeakers?: number, options?: { disableVoiceCloning?: boolean; dropBackgroundAudio?: boolean }): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { audioUrl, targetLanguage }
   if (userId) body.userId = userId

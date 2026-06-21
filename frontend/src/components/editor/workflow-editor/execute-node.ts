@@ -23,6 +23,7 @@ import {
   imageToTextApi,
   describeToPickerApi,
   voiceChangerApi,
+  voiceRecastApi,
   dubbingApi,
   voiceRemixApi,
   voiceDesignApi,
@@ -168,6 +169,7 @@ import type {
   SplitTextData,
   PreviewNodeData,
   VoiceChangerData,
+  VoiceRecastData,
   DubbingData,
   VoiceRemixData,
   VoiceDesignData,
@@ -2595,6 +2597,38 @@ export function executeNode(
         ),
       "generatedAudioUrl",
       "Voice Changer",
+      ctx,
+    );
+  }
+
+  if (node.type === "voice-recast") {
+    const d = node.data as VoiceRecastData;
+    // Video wins when both are wired (matches voice-changer + backend behaviour).
+    const videoUrl = inputs.videoUrl;
+    const audioUrl = inputs.audioUrl;
+    if (!audioUrl && !videoUrl) {
+      toast.error(`Node "${d.label}": no audio or video input`);
+      return Promise.reject(new Error("No input"));
+    }
+    if (!d.orderedVoices?.length) {
+      toast.error(`Node "${d.label}": add at least one voice`);
+      return Promise.reject(new Error("No voices"));
+    }
+    setUserPromptTemplate(undefined);
+    return runProcessingNode(
+      node.id,
+      () =>
+        voiceRecastApi(
+          audioUrl,
+          d.orderedVoices.map((v) => v.voiceId),
+          ctx.userId,
+          d.model,
+          d.preserveBackground,
+          d.removeBackgroundNoise,
+          videoUrl,
+        ),
+      "generatedAudioUrl",
+      "Voice Recast",
       ctx,
     );
   }

@@ -139,6 +139,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { Switch } from "@/components/ui/switch";
 import { enumerateConnectionOptionsCore } from "@/lib/enumerate-connection-options";
 import { getAutoConnectPref, setAutoConnectPref } from "@/lib/auto-connect-pref";
+import { hasCredits } from "@/lib/edition";
 
 const ComponentMarketplaceModal = lazy(() => import("./component-marketplace-modal").then(m => ({ default: m.ComponentMarketplaceModal })));
 import type { ComponentSelection } from "./component-marketplace-modal";
@@ -840,6 +841,13 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     group: "Audio & Speech",
   },
   {
+    type: "voice-recast",
+    label: "Voice Recast",
+    icon: <AudioWaveform className="h-4 w-4" />,
+    category: "AI",
+    group: "Audio & Speech",
+  },
+  {
     type: "dubbing",
     label: "Dubbing",
     icon: <Languages className="h-4 w-4" />,
@@ -1388,6 +1396,18 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   },
 ];
 
+/** Node types that must only appear in Cloud edition (hasCredits()). */
+const CLOUD_ONLY_NODE_TYPES = new Set<string>(["voice-recast"]);
+
+/**
+ * Returns `NODE_OPTIONS` filtered for the current edition.
+ * Cloud-only nodes are excluded when `hasCredits()` is false.
+ * Use this instead of `NODE_OPTIONS` whenever building a user-visible list.
+ */
+export function getNodeOptions(): ReadonlyArray<NodeOption> {
+  return NODE_OPTIONS.filter((o) => !CLOUD_ONLY_NODE_TYPES.has(o.type) || hasCredits());
+}
+
 export const VIRTUAL_CATEGORY_IDS = {
   recent: "Recent",
   mostUsed: "Most Used",
@@ -1787,7 +1807,7 @@ export function AddNodePopup({
   // The "Parameter" category is currently hidden from the UI. Re-enable by
   // dropping the `n.category !== "Parameter"` clause below.
   const visibleNodes = useMemo(
-    () => NODE_OPTIONS.filter((n) => (!n.adminOnly || isAdmin) && n.category !== "Parameter"),
+    () => getNodeOptions().filter((n) => (!n.adminOnly || isAdmin) && n.category !== "Parameter"),
     [isAdmin],
   );
 
@@ -1806,7 +1826,7 @@ export function AddNodePopup({
   // on every non-ffmpeg `in` handle (text-to-speech, voice-*, motion-
   // graphics, after-effects, transcribe, etc.) — false-positive UX.
   const typedHandlePool = useMemo(
-    () => NODE_OPTIONS.filter((n) => !n.adminOnly || isAdmin),
+    () => getNodeOptions().filter((n) => !n.adminOnly || isAdmin),
     [isAdmin],
   );
 

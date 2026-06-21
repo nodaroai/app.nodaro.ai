@@ -3481,6 +3481,33 @@ export function buildPayload(
         usageLogId,
       })
 
+    case "voice-recast": {
+      // Multi-speaker recast: orderedVoices is an array of { voiceId, ... }
+      // objects on the node data. The worker expects a string[] of voice ids
+      // (one per speaker, in first-appearance order). Unmapped speakers pass
+      // through unchanged when the array is shorter than the detected count.
+      // NOTE: the orchestrator reserves credits via a flat model-identifier
+      // lookup ("voice-recast" → 4 credits in STATIC_CREDIT_COSTS / model_pricing).
+      // The single-node route uses a computeCredits hook to reserve
+      // 4 × orderedVoices.length dynamically; that hook is not available in
+      // the orchestrator path. A workflow run therefore reserves 4 credits
+      // flat while the worker commits 4 × mappedCount — an under-reserve for
+      // multi-speaker (>1 voice) runs. Follow-up: wire dynamic per-node credit
+      // override into the orchestrator (same class as the route's metered fix).
+      const rawVoices = (data.orderedVoices ?? []) as Array<{ voiceId: string }>
+      const orderedVoices = rawVoices.map((v) => v.voiceId)
+      return simpleResult("voice-recast", "voice-recast", {
+        jobId,
+        audioUrl: resolvedInputs.audioUrl || data.audioUrl,
+        videoUrl: resolvedInputs.videoUrl || data.videoUrl,
+        orderedVoices,
+        model: data.model,
+        preserveBackground: data.preserveBackground,
+        removeBackgroundNoise: data.removeBackgroundNoise,
+        usageLogId,
+      })
+    }
+
     case "dubbing":
       return simpleResult("dubbing", "elevenlabs-dubbing", {
         jobId,
