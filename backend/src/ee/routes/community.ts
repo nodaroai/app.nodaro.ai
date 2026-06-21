@@ -9,6 +9,8 @@ import { decodeCommunityCursor, encodeCommunityCursor } from "./community-cursor
 
 const PUBLIC_COLS = "id, entity_type, creator_display_name, slug, title, description, category, style, tags, preview_media_url, preview_images, clone_count, favorite_count, created_at"
 
+const ENTITY_TABLE: Record<EntityType, string> = { character: "characters", location: "locations", object: "objects", creature: "creatures" }
+
 function auth(req: FastifyRequest, reply: FastifyReply): string | null {
   if (!req.userId) { reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } }); return null }
   return req.userId
@@ -102,6 +104,37 @@ export async function communityRoutes(app: FastifyInstance) {
       }
     },
   )
+
+  // Which of the caller's library entities are clones of this listing (still
+  // present, not archived). Lets the in-node Asset Picker offer "use my copy"
+  // instead of silently making yet another duplicate on every gallery pick.
+  app.get<{ Params: { id: string } }>("/v1/community/listings/:id/clones", async (req, reply) => {
+    const userId = auth(req, reply); if (!userId) return
+    const entityType = (req.query as Record<string, string | undefined>).entityType
+    if (!entityType || !["character", "location", "object", "creature"].includes(entityType)) {
+      return reply.status(400).send({ error: { code: "validation_error", message: "entityType must be character|location|object|creature" } })
+    }
+    const { data: cloneRows } = await supabase
+      .from("community_clones")
+      .select("new_entity_id")
+      .eq("user_id", userId)
+      .eq("listing_id", req.params.id)
+    const ids = (cloneRows ?? []).map((r) => (r as { new_entity_id: string }).new_entity_id)
+    if (ids.length === 0) return reply.send({ clones: [] })
+    // Only surface clones whose entity still exists and isn't archived — a
+    // soft-deleted copy must not be offered as "use my copy".
+    const { data: rows } = await supabase
+      .from(ENTITY_TABLE[entityType as EntityType])
+      .select("id, name, source_image_url")
+      .in("id", ids)
+      .is("deleted_at", null)
+      .order("updated_at", { ascending: false })
+    const clones = (rows ?? []).map((r) => {
+      const row = r as { id: string; name: string; source_image_url: string | null }
+      return { id: row.id, name: row.name, sourceImageUrl: row.source_image_url }
+    })
+    return reply.send({ clones })
+  })
 
   app.post<{ Params: { id: string } }>("/v1/community/listings/:id/favorite", async (req, reply) => {
     const userId = auth(req, reply); if (!userId) return

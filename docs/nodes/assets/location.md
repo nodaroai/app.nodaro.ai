@@ -1,8 +1,8 @@
-# Location
-> Create a multi-variation environment asset with consistent identity across time of day, weather, seasons, angles, lighting, and atmospheric motion clips — built and managed in the full-screen Location Studio.
+# Location Asset
+> Create a multi-variation environment asset with consistent identity across time of day, weather, seasons, angles, lighting, and atmospheric motion clips — built and managed in the full-screen Location Studio — or choose an existing location from your Library or the Public Gallery.
 
 ## Overview
-The Location node creates a reusable environment asset with a canonical establishing shot, multiple visual variation categories (time of day, weather, seasons, angles, lighting), a set of atmospheric motion clips, and identity metadata (canonical description, category, style, mood-board reference photos). All location editing happens inside the **Location Studio** — a full-screen modal — while the canvas node itself stays compact and shows a summary. Locations are persisted per-project in the database and can be referenced by downstream nodes (scenes, image generation, image-to-video) via the `locationRef` output to maintain visual consistency across a project.
+The Location node creates a reusable environment asset with a canonical establishing shot, multiple visual variation categories (time of day, weather, seasons, angles, lighting), a set of atmospheric motion clips, and identity metadata (canonical description, category, style, mood-board reference photos). You can either build a new location or bind the node to an existing one from your Library or the Public Gallery. All location editing happens inside the **Location Studio** — a full-screen modal — while the canvas node itself stays compact and shows a summary. Locations are persisted per-project in the database and can be referenced by downstream nodes (scenes, image generation, image-to-video) via the `locationRef` output to maintain visual consistency across a project.
 
 ## When to Use
 - **Multi-scene narratives** — you want the same setting to look the same across every shot.
@@ -17,6 +17,7 @@ The Location node on the canvas is a compact summary card. It shows:
 - The location name plus `style · category` line, with a `· Style locked` suffix when style lock is on
 - A 6-cell asset grid with one badge per bucket — **TOD**, **Weather**, **Seasons**, **Angles**, **Lighting**, **Motion** — each showing the bucket's icon and item count (or a spinner while a generation is in-flight)
 - An **⬡ Open Studio** button that launches the Location Studio
+- A **Choose existing** button (next to **⬡ Open Studio**) that opens the **Asset Picker** to bind the node to a location you already have. Once a location is bound, this button becomes **Replace** — use it to swap in a different location.
 
 All appearance and asset editing — generating the main image, approving candidates, generating environmental variants, atmosphere motion clips, editing the canonical description, mood-board photos, and style lock — happens inside the studio.
 
@@ -28,6 +29,7 @@ The config panel (right side, when a Location node is selected) is intentionally
 |-------|------|-------------|
 | Summary | read-only | Location name, style, and category at a glance. |
 | Open Location Studio | button | Opens the full-screen Location Studio (same modal as the node's **⬡ Open Studio** button). |
+| Choose from Library / Gallery | button (row) | Opens the **Asset Picker** to bind the node to an existing location. Becomes **Replace from Library / Gallery** once a location is bound — use it to swap in a different one. |
 | Style Lock | toggle | When on, downstream image/video nodes inject the canonical description verbatim and refuse to override the style. When off, downstream nodes may freely reinterpret the location (useful for variants and mash-ups). Mirrors the toggle in the studio header. |
 | Field Mappings | section | Map upstream node outputs to the location's inputs — `{locationName}` injection still works. |
 
@@ -62,6 +64,20 @@ In addition to the main image and identity settings, a location holds the follow
 | Atmosphere Motions | video clips | 8 | `slow dolly-in`, `drone fly-over`, `parallax`, `gentle drift` |
 
 > Preset strings are load-bearing on backend dispatch — the `variant` you select is stored on the asset entry and sent as the route's enum value. Any custom variant is supported via the per-tab **Custom** prompt input, which uses `assetType: "custom"` so the worker doesn't try to look the variant up in the preset switch.
+
+## Choosing an existing asset
+
+Instead of building a new location in the studio, you can bind the node to one you already have. Open the **Asset Picker** from either the **Choose existing** button on the canvas node or the **Choose from Library / Gallery** row in the config panel. The picker has two tabs:
+
+- **My Library** — your own saved locations.
+- **Public Gallery** — locations shared by the community. Selecting one **clones it into your library first** (you can't reference another creator's private asset), then binds the node to that fresh clone.
+
+This works both for an empty node (first-time selection) and to **replace** a location that's already set — once a location is bound, the buttons read **Replace** / **Replace from Library / Gallery**. Binding or replacing carries the full location (establishing shot plus every variation bucket — time of day, weather, seasons, angles, lighting, and atmosphere motion clips), so downstream nodes immediately use the new location.
+
+In two more cases the picker helps you avoid clutter:
+
+- **Already have a copy?** If you pick a Public Gallery listing you've cloned before, the picker asks whether to **use your existing copy** or **make a new copy** — so a gallery pick never silently piles up duplicates.
+- **Delete from My Library.** Hover a card in the **My Library** tab and click the trash icon to remove a saved asset. It's archived (recoverable), and any nodes already using it keep working.
 
 ## Location Studio
 

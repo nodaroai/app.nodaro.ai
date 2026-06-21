@@ -325,10 +325,10 @@ Create reusable character, creature, object, location, and face assets with mult
 
 | Node | Description | When to Use |
 |------|-------------|-------------|
-| [Create Character](./assets/character.md) | Multi-variation character assets, built in the full-screen Character Studio (Resources / Identity / Visuals / Character) | Define characters with expressions, poses, motions, lighting, structured Person + Wardrobe attributes, a trainable LoRA (Cloud), voice, and personality |
-| [Animal/Creature](./assets/creature.md) | Animal or creature with angles, poses, variations, motion — built in the full-screen Creature Studio | Define recurring animals or creatures (free-text species, incl. mythical) for consistent scenes |
-| [Create Object/Props](./assets/object.md) | Object or prop with angles, materials, variations | Define props with multiple viewing angles and material options |
-| [Create Location](./assets/location.md) | Environment with time/weather variations | Define settings with time-of-day and weather variations |
+| [Character Asset](./assets/character.md) | Multi-variation character assets, built in the full-screen Character Studio (Resources / Identity / Visuals / Character) — or pick an existing character from your Library or the Public Gallery | Define characters with expressions, poses, motions, lighting, structured Person + Wardrobe attributes, a trainable LoRA (Cloud), voice, and personality; or reuse a saved/community character |
+| [Animal/Creature Asset](./assets/creature.md) | Animal or creature with angles, poses, variations, motion — built in the full-screen Creature Studio, or chosen from your Library or the Public Gallery | Define recurring animals or creatures (free-text species, incl. mythical) for consistent scenes; or reuse a saved/community creature |
+| [Object/Props Asset](./assets/object.md) | Object or prop with angles, materials, variations — created new, or picked from your Library or the Public Gallery | Define props with multiple viewing angles and material options; or reuse a saved/community object |
+| [Location Asset](./assets/location.md) | Environment with time/weather variations — created new, or picked from your Library or the Public Gallery | Define settings with time-of-day and weather variations; or reuse a saved/community location |
 | [Create Face](./assets/face.md) | Facial asset for lip-sync and replacement | Maintain facial identity across generated images and video |
 
 ---

@@ -6834,7 +6834,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
   // Character
   {
     type: "character",
-    label: "Character",
+    label: "Character Asset",
     category: "character",
     creditCost: 5,
     inputs: ["assets", "in"],
@@ -6846,7 +6846,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     // matches its pre-#2410 visual size on creation but stays freely resizable.
     width: 220,
     defaultData: {
-      label: "Character",
+      label: "Character Asset",
       characterDbId: "",
       characterName: "",
       description: "",
@@ -6908,13 +6908,13 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
   // Object
   {
     type: "object",
-    label: "Object/Props",
+    label: "Object/Props Asset",
     category: "object",
     creditCost: 5,
     inputs: ["in", "type"],
     outputs: ["objectRef"],
     defaultData: {
-      label: "Object/Props",
+      label: "Object/Props Asset",
       objectDbId: "",
       objectName: "",
       description: "",
@@ -6948,13 +6948,13 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
   // angles / poses / variations / motion clips / reference photos)
   {
     type: "creature",
-    label: "Animal/Creature",
+    label: "Animal/Creature Asset",
     category: "creature",
     creditCost: 5,
     inputs: ["in", "type"],
     outputs: ["creatureRef"],
     defaultData: {
-      label: "Animal/Creature",
+      label: "Animal/Creature Asset",
       creatureDbId: "",
       creatureName: "",
       description: "",
@@ -6990,13 +6990,13 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
   // Location
   {
     type: "location",
-    label: "Location",
+    label: "Location Asset",
     category: "location",
     creditCost: 5,
     inputs: ["in", "cinematography"],
     outputs: ["locationRef"],
     defaultData: {
-      label: "Location",
+      label: "Location Asset",
       locationDbId: "",
       locationName: "",
       description: "",

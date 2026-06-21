@@ -1209,25 +1209,25 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   // Assets
   {
     type: "character",
-    label: "Create Character",
+    label: "Character Asset",
     icon: <UserPlus className="h-4 w-4" />,
     category: "Assets",
   },
   {
     type: "object",
-    label: "Create Object/Props",
+    label: "Object/Props Asset",
     icon: <Package className="h-4 w-4" />,
     category: "Assets",
   },
   {
     type: "creature",
-    label: "Create Animal/Creature",
+    label: "Animal/Creature Asset",
     icon: <PawPrint className="h-4 w-4" />,
     category: "Assets",
   },
   {
     type: "location",
-    label: "Create Location",
+    label: "Location Asset",
     icon: <MapPin className="h-4 w-4" />,
     category: "Assets",
   },

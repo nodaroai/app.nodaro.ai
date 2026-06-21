@@ -16,6 +16,7 @@ import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useFullResolution } from "@/hooks/use-full-resolution"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
+import { AssetPickerNodeButton } from "@/components/editor/asset-picker/asset-picker-node-button"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { NodeJobProgress } from "./node-job-progress"
 import { PipelineStateOverlay } from "./pipeline-state-overlay"
@@ -302,6 +303,9 @@ function ObjectNodeComponent({ id, data, selected }: NodeProps) {
           <AssetBadge icon="🎬" label="Motion" count={counts.motionClips} status={nodeData.motionStatus ?? "idle"} variant="video" />
           <AssetBadge icon="📷" label="Refs" count={counts.referencePhotos} status="idle" />
         </div>
+
+        {/* Choose existing / replace from library or gallery */}
+        <AssetPickerNodeButton kind="object" nodeId={id} currentDbId={nodeData.objectDbId || null} />
 
         {/* Open Studio button */}
         <button

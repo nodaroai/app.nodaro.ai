@@ -35,36 +35,18 @@ vi.mock("../base-node", () => ({
   ),
 }))
 
-vi.mock("lucide-react", () => {
+vi.mock("lucide-react", async (importOriginal) => {
+  const actual = await importOriginal<Record<string, any>>()
   const Icon = (props: any) => <span data-testid="mock-icon" {...props} />
-  return {
-    UserCircle: Icon,
-    SmilePlus: Icon,
-    Package: Icon,
-    MapPin: Icon,
-    Loader2: (props: any) => <span data-testid="icon-Loader2" {...props} />,
-    AlertCircle: (props: any) => <span data-testid="icon-AlertCircle" {...props} />,
-    X: Icon,
-    ImageIcon: Icon,
-    Maximize2: Icon,
-    ChevronDown: Icon,
-    ChevronRight: Icon,
-    // shadcn `Select` (used by CharacterNode's usage-mode dropdown) imports
-    // ChevronDownIcon / ChevronUpIcon / CheckIcon under the *Icon suffix.
-    ChevronDownIcon: Icon,
-    ChevronUpIcon: Icon,
-    CheckIcon: Icon,
-    Type: Icon,
-    Blend: Icon,
-    FileVideo: Icon,
-    FileImage: Icon,
-    Share2: Icon,
-    Heart: Icon,
-    MessageCircle: Icon,
-    Send: Icon,
-    Expand: Icon,
-    Aperture: Icon,
-  }
+  // Stub every real lucide export by name, so any icon pulled in later by an
+  // imported component (e.g. the Asset Picker's Library / Globe / PawPrint)
+  // already exists on the mock — no hand-listing, no future drift.
+  const out: Record<string, any> = {}
+  for (const k of Object.keys(actual)) out[k] = Icon
+  // Keep the dedicated test-ids this file's assertions rely on.
+  out.Loader2 = (props: any) => <span data-testid="icon-Loader2" {...props} />
+  out.AlertCircle = (props: any) => <span data-testid="icon-AlertCircle" {...props} />
+  return out
 })
 
 vi.mock("../run-node-button", () => ({

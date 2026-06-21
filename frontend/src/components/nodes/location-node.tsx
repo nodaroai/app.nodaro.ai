@@ -16,6 +16,7 @@ import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useFullResolution } from "@/hooks/use-full-resolution"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
+import { AssetPickerNodeButton } from "@/components/editor/asset-picker/asset-picker-node-button"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { NodeJobProgress } from "./node-job-progress"
 import { PipelineStateOverlay } from "./pipeline-state-overlay"
@@ -298,6 +299,9 @@ function LocationNodeComponent({ id, data, selected }: NodeProps) {
           <AssetBadge icon="💡" label="Lighting" count={counts.lighting} status={nodeData.lightingStatus ?? "idle"} />
           <AssetBadge icon="🎬" label="Motion" count={counts.atmosphereMotions} status={nodeData.atmosphereStatus ?? "idle"} variant="video" />
         </div>
+
+        {/* Choose existing / replace from library or gallery */}
+        <AssetPickerNodeButton kind="location" nodeId={id} currentDbId={nodeData.locationDbId || null} />
 
         {/* Open Studio button */}
         <button

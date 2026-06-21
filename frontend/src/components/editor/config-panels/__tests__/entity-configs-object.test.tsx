@@ -1,19 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, fireEvent } from "@testing-library/react"
 
-vi.mock("lucide-react", () => {
+vi.mock("lucide-react", async (importOriginal) => {
+  const actual = await importOriginal<Record<string, any>>()
   const Icon = (props: any) => <span data-testid="mock-icon" {...props} />
-  return {
-    Play: Icon,
-    Loader2: Icon,
-    Upload: Icon,
-    UserCircle: Icon,
-    ChevronDown: Icon,
-    Check: Icon,
-    ChevronDownIcon: Icon,
-    ChevronUpIcon: Icon,
-    CheckIcon: Icon,
-  }
+  // Stub every real lucide export by name so icons pulled in later by an
+  // imported component (e.g. the Asset Picker) already exist on the mock.
+  const out: Record<string, any> = {}
+  for (const k of Object.keys(actual)) out[k] = Icon
+  return out
 })
 
 const setObjectStudioNodeIdMock = vi.fn()

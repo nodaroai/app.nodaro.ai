@@ -18,6 +18,7 @@ import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { hasCredits } from "@/lib/edition"
 import { createClient } from "@/lib/supabase"
 import { TrainedPill } from "@/components/editor/trained-pill"
+import { AssetPickerNodeButton } from "@/components/editor/asset-picker/asset-picker-node-button"
 import { PipelineStateOverlay } from "./pipeline-state-overlay"
 import {
   Select,
@@ -208,7 +209,7 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
       {/* Header */}
       <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#1a2744] border-b border-[#1e3a6e]">
         <span className="text-[11px]">👤</span>
-        <span className="text-[11px] font-semibold text-[#93c5fd]">Character</span>
+        <span className="text-[11px] font-semibold text-[#93c5fd]">Character Asset</span>
         <span className="ml-auto text-[9px] text-[#3b82f6] bg-[#0f1e40] px-1.5 py-0.5 rounded">entity</span>
       </div>
 
@@ -399,6 +400,11 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
           <div className="text-[11px]">⬡</div>
           <div className="text-[7px] text-[#93c5fd] font-medium">studio</div>
         </button>
+      </div>
+
+      {/* Choose existing / replace from library or gallery */}
+      <div className="px-2.5 pt-1.5">
+        <AssetPickerNodeButton kind="character" nodeId={id} currentDbId={nodeData.characterDbId || null} />
       </div>
 
       {/* Element/asset injection (P2): one facet chip per identity/character

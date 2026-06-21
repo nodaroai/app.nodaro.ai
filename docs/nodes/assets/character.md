@@ -1,5 +1,5 @@
-# Character
-> Create a multi-variation character with consistent identity across poses, expressions, motions, lighting, and voice — built and managed in the full-screen Character Studio.
+# Character Asset
+> Create a multi-variation character with consistent identity across poses, expressions, motions, lighting, and voice — built and managed in the full-screen Character Studio — or choose an existing character from your Library or the Public Gallery.
 
 ## Overview
 The Character node creates a reusable character asset with a base portrait, multiple visual variation categories (expressions, poses, motions, reference angles, lighting), structured attribute and wardrobe selections, an optional high-fidelity LoRA (Cloud edition), and definition data (voice and personality). All character editing happens inside the **Character Studio** — a full-screen modal organized into a config-driven sidebar — while the canvas node itself stays compact and shows a summary. Characters are persisted per-project in the database and can be referenced by other nodes (scenes, image generation) via the `characterRef` output to maintain visual consistency.
@@ -12,6 +12,7 @@ The Character node on the canvas is a compact summary card. It shows:
 - Asset-count badges for **Expressions**, **Poses**, and **Motions**
 - A row indicating whether **Voice** and **Personality** are filled in (✓)
 - A **⬡ Studio** button that opens the Character Studio
+- A **Choose existing** button (next to **⬡ Studio**) that opens the **Asset Picker** to bind the node to a character you already have. Once a character is bound, this button becomes **Replace** — use it to swap in a different character.
 
 All appearance and asset editing — generating the portrait, expressions, poses, motions, reference views, lighting, and setting voice/personality — happens inside the studio. The old in-node image action buttons, version history, accordions, and asset-sheet thumbnails have been replaced by the studio.
 
@@ -23,6 +24,7 @@ The config panel (right side, when a Character node is selected) is intentionall
 |-------|------|-------------|
 | Summary | read-only | Character name and style at a glance. |
 | Open Character Studio | button | Opens the full-screen Character Studio (same modal as the node's **⬡ Studio** button). |
+| Choose from Library / Gallery | button (row) | Opens the **Asset Picker** to bind the node to an existing character. Becomes **Replace from Library / Gallery** once a character is bound — use it to swap in a different one. |
 | Identity Lock | dropdown | Controls how strictly downstream nodes preserve the character's face/identity. |
 | Field Mappings | section | Map upstream node outputs to the character's inputs — `{characterName}` injection still works. |
 
@@ -55,6 +57,20 @@ In addition to the base portrait and identity settings, a character holds the fo
 | Motions | video clips | image-to-video (Kling / Wan) | Short video clips of the character in motion (walking, running, waving, dancing, …). Requires a portrait first. |
 | Reference Views (Angles) | images | image models | Head and body angles — front, 3/4 left, left profile, right profile, 3/4 right, back. Sub-section of the **Appearance** page. |
 | Lighting Variations | images | image models | The character under daylight / night / dramatic lighting. Sub-section of the **Appearance** page. |
+
+## Choosing an existing asset
+
+Instead of building a new character in the studio, you can bind the node to a character you already have. Open the **Asset Picker** from either the **Choose existing** button on the canvas node or the **Choose from Library / Gallery** row in the config panel. The picker has two tabs:
+
+- **My Library** — your own saved characters.
+- **Public Gallery** — characters shared by the community. Selecting one **clones it into your library first** (you can't reference another creator's private asset), then binds the node to that fresh clone.
+
+This works both for an empty node (first-time selection) and to **replace** a character that's already set — once a character is bound, the buttons read **Replace** / **Replace from Library / Gallery**. Binding or replacing carries the full character (portrait plus every variation bucket — expressions, poses, motions, angles, lighting, voice, and personality), so downstream nodes immediately use the new character.
+
+In two more cases the picker helps you avoid clutter:
+
+- **Already have a copy?** If you pick a Public Gallery listing you've cloned before, the picker asks whether to **use your existing copy** or **make a new copy** — so a gallery pick never silently piles up duplicates.
+- **Delete from My Library.** Hover a card in the **My Library** tab and click the trash icon to remove a saved asset. It's archived (recoverable), and any nodes already using it keep working.
 
 ## Character Studio
 
