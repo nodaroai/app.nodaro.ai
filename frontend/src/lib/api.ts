@@ -3030,10 +3030,19 @@ export async function audioFxApi(params: {
   })
 }
 
-export async function addCaptionsApi(videoUrl: string, text: string, style?: string, position?: string, fontSize?: number, color?: string, backgroundColor?: string, userId?: string): Promise<{ jobId: string }> {
+export async function addCaptionsApi(videoUrl: string, text: string, style?: string, position?: string, fontSize?: number, color?: string, backgroundColor?: string, userId?: string, opts?: { autoTranscribe?: boolean; transcribeProvider?: string }): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { videoUrl, text, style, position, fontSize, color, backgroundColor }
   if (userId) {
     body.userId = userId
+  }
+  // Route schema uses snake_case (auto_transcribe / transcribe_provider). Sending
+  // these lets a single-node Run auto-transcribe kinetic styles (factory presets
+  // set autoTranscribe:true with no manual text) — matching workflow/DAG runs.
+  if (opts?.autoTranscribe !== undefined) {
+    body.auto_transcribe = opts.autoTranscribe
+  }
+  if (opts?.transcribeProvider) {
+    body.transcribe_provider = opts.transcribeProvider
   }
   return apiJson("/v1/add-captions", {
     body,

@@ -16,6 +16,7 @@ import {
   VEO_RESOLUTION_TIERED_PROVIDERS,
   VIDEO_DURATION_TIERS,
   MOTION_DURATION_TIERS,
+  T2I_TO_I2I_VARIANT,
   isVeoProvider,
 } from "./model-constants.js"
 import { isFlux2Model } from "./flux2-pricing.js"
@@ -68,6 +69,46 @@ export function buildCreditModelIdentifier(
     if (renderingSpeed === "QUALITY") return `${provider}:QUALITY`
   }
   return provider
+}
+
+/**
+ * Reference-aware image-generation credit identifier — the SINGLE source of
+ * truth shared by the single-node routes (`/v1/generate-image`,
+ * `/v1/image-to-image`) and the workflow orchestrator
+ * (`payload-builder.ts`). It centralises the two pricing dimensions that must
+ * match across both paths or a Flux 2 generation is billed the wrong tier
+ * (Flux 2 commits non-metered / has no upward true-up, so the reserved
+ * identifier IS the final charge):
+ *   - `refCount`: the number of reference images sent to the provider (Flux 2
+ *     bills per ref). generate-image passes the assembled count (0 for pure
+ *     text-to-image); image-to-image passes 1 (the primary `imageUrl`) + extras.
+ *   - `swapToI2i`: generate-image auto-swaps a bare T2I provider to its i2i
+ *     sibling (`T2I_TO_I2I_VARIANT`) when refs are attached, so the credit id
+ *     matches the variant actually invoked. image-to-image is already an i2i
+ *     provider → pass `false`.
+ *
+ * The LoRA short-circuit (`flux-lora-character`) stays at the call site because
+ * the routing decision needs a DB lookup the routes/orchestrator own.
+ */
+export function resolveImageGenCreditIdentifier(opts: {
+  provider: string | undefined
+  quality?: string
+  resolution?: string
+  renderingSpeed?: string
+  refCount: number
+  swapToI2i?: boolean
+}): string {
+  const provider = opts.provider || "nano-banana"
+  const effectiveProvider =
+    opts.swapToI2i && opts.refCount > 0 ? (T2I_TO_I2I_VARIANT[provider] ?? provider) : provider
+  return buildCreditModelIdentifier(
+    effectiveProvider,
+    opts.quality,
+    opts.resolution,
+    opts.renderingSpeed,
+    undefined,
+    opts.refCount,
+  )
 }
 
 // T2V-specific credit overrides: some providers have different costs for T2V

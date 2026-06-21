@@ -535,15 +535,20 @@ describe("buildPayload", () => {
       expect(result.payload.style).toBe("tiktok-words")
     })
 
-    it("add-captions forwards auto_transcribe + transcribe_provider", () => {
+    it("add-captions maps camelCase node fields to the snake_case worker payload", () => {
+      // Node data stores autoTranscribe / transcribeProvider (camelCase, per
+      // AddCaptionsData); the worker reads auto_transcribe / transcribe_provider
+      // (snake_case). The payload-builder must bridge the two — reading the
+      // snake_case keys off node data (the old bug) left them always undefined,
+      // so an explicit autoTranscribe:false / transcribeProvider choice was lost.
       const n = node("n1", "add-captions", {
-        auto_transcribe: true,
-        transcribe_provider: "whisper",
+        autoTranscribe: false,
+        transcribeProvider: "whisper",
         style: "word-pop",
       })
       const inputs: ResolvedInputs = { videoUrl: "https://v.mp4" }
       const result = buildPayload(n, jobId, inputs)
-      expect(result.payload.auto_transcribe).toBe(true)
+      expect(result.payload.auto_transcribe).toBe(false)
       expect(result.payload.transcribe_provider).toBe("whisper")
       expect(result.payload.style).toBe("word-pop")
     })

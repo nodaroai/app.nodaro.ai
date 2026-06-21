@@ -5555,7 +5555,11 @@ export function executeNode(
     }
     const d = node.data as AddCaptionsData;
     const text = inputs.prompt ?? "";
-    if (!text) {
+    // Auto-transcribe styles (kinetic factory presets) carry no manual text —
+    // proceed when autoTranscribe is enabled so single-node Run matches the
+    // workflow/DAG path (which transcribes the input video). Plain manual-text
+    // styles still require text.
+    if (!text && !d.autoTranscribe) {
       toast.error(`Node "${d.label}": no caption text`);
       return Promise.reject(new Error("No text"));
     }
@@ -5571,6 +5575,7 @@ export function executeNode(
           d.color,
           d.backgroundColor as string | undefined,
           ctx.userId,
+          { autoTranscribe: d.autoTranscribe, transcribeProvider: d.transcribeProvider },
         ),
       "generatedVideoUrl",
       "Add Captions",
