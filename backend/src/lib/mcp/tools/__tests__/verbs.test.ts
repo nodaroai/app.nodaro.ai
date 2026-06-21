@@ -966,6 +966,23 @@ describe("voice_changer verb", () => {
   })
 })
 
+describe("voice_recast verb", () => {
+  it("calls /v1/voice-recast with video_url + ordered_voices", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/voice-recast", { jobId: "j-vr" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "voice_recast", {
+      video_url: "https://a/x.mp4",
+      ordered_voices: ["v1", "v2"],
+    })
+    expect(result.isError).toBeUndefined()
+    expect(((result.structuredContent as Record<string, unknown>)?.jobId)).toBe("j-vr")
+    expect(received.body?.videoUrl).toBe("https://a/x.mp4")
+    expect(received.body?.orderedVoices).toEqual(["v1", "v2"])
+    expect(received.body?.audioUrl).toBeUndefined()
+  })
+})
+
 describe("dubbing verb", () => {
   it("calls /v1/dubbing with audio + target_language", async () => {
     const { fastify, received } = stubRoute("POST", "/v1/dubbing", { jobId: "j-db" })

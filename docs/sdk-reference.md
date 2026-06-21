@@ -2251,6 +2251,45 @@ const { jobId: vjobId } = await client.voices.change({
 })
 ```
 
+#### `recast(input)`
+
+```ts
+recast(input: {
+  audioUrl?: string
+  videoUrl?: string
+  orderedVoices: string[]
+  model?: string
+  preserveBackground?: boolean
+  removeBackgroundNoise?: boolean
+}): Promise<{ jobId: string }>
+```
+
+Recast each detected speaker in a multi-speaker recording to a different voice
+(`POST /v1/voice-recast`). `orderedVoices` maps speaker-detection positions to
+voice ids — speaker 0 → `orderedVoices[0]`, speaker 1 → `orderedVoices[1]`,
+etc. Speakers beyond the end of `orderedVoices` keep their original voice.
+Pass **`audioUrl`** for audio → audio recast, or **`videoUrl`** to recast the
+audio track of a video clip (the server demuxes, recasts, and remuxes).
+`preserveBackground` keeps music/SFX beds under the new voices;
+`removeBackgroundNoise` strips them for a clean voice-only result. Cloud-only —
+costs credits and runs async; poll `client.jobs.get(jobId)` for the result
+(`output_data.videoUrl` + `output_data.audioUrl` in video mode).
+
+```ts
+// Two-speaker audio recast
+const { jobId } = await client.voices.recast({
+  audioUrl: "https://cdn.example.com/dialogue.mp3",
+  orderedVoices: ["Rachel", "Aria"],
+  preserveBackground: true,
+})
+
+// Multi-speaker video recast
+const { jobId: vjobId } = await client.voices.recast({
+  videoUrl: "https://cdn.example.com/interview.mp4",
+  orderedVoices: ["Callum", "Charlotte", "Liam"],
+})
+```
+
 ---
 
 ### `client.credits`

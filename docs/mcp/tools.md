@@ -438,6 +438,7 @@ prompt with no questions round-trip.
 | `voice_clone` | Instant voice clone from a reference audio clip (ElevenLabs). Returns a `voice_id` for use with `generate_speech`. |
 | `voice_design` | Design a new synthetic voice from text descriptors (ElevenLabs `/v1/text-to-voice/design`). Returns a `voice_id`. |
 | `voice_changer` | Transform the speaker identity in an audio clip to a target voice. |
+| `voice_recast` | Detect each speaker in a multi-speaker clip and recast each to a chosen voice, preserving words and timing (Cloud only). |
 | `voice_remix` | Re-stylize or re-arrange an existing audio clip. |
 | `dubbing` | Dub a video or audio clip into a target language with voice preservation. |
 | `transcribe` | Speech-to-text transcription. Returns a transcript + optional timestamps. |

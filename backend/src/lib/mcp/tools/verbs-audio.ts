@@ -407,6 +407,133 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
     },
   )
 
+  // ── voice_recast ──
+  // Detect each speaker and recast each to the voice at its position
+  // (first-appearance order). Cloud-only.
+  server.registerTool(
+    "voice_recast",
+    {
+      title: "Voice Recast",
+      description:
+        "Detect each speaker in an audio or video clip and recast each one to " +
+        "a different target voice (first-appearance order). Supply an ordered " +
+        "list of voice ids — speaker 1 → voices[0], speaker 2 → voices[1], " +
+        "etc. Unmapped speakers keep their original voice.\n\n" +
+        "Provide ONE source: audio_url / audio_asset_id to recast audio→audio, " +
+        "OR video_url / video_asset_id to recast the voices in a full video clip.\n\n" +
+        "Voice ids use the same naming as `generate_speech`: pass a premade " +
+        "voice NAME (Rachel, Aria, Roger, ...) or an ElevenLabs UUID for a " +
+        "custom clone. Cloud-only.",
+      inputSchema: {
+        audio_url: z.string().url().optional(),
+        audio_asset_id: z.string().optional(),
+        video_url: z
+          .string()
+          .url()
+          .optional()
+          .describe(
+            "Recast voices in a talking video — demux audio, run multi-speaker recast, remux.",
+          ),
+        video_asset_id: z
+          .string()
+          .optional()
+          .describe(
+            "A Nodaro video job id to recast (alternative to video_url).",
+          ),
+        ordered_voices: z
+          .array(z.string().min(1))
+          .min(1)
+          .describe(
+            "Ordered list of target voice ids — speaker 1 → voices[0], speaker 2 → voices[1], etc. Premade name or ElevenLabs UUID.",
+          ),
+        model: z.string().optional().describe("Voice model override."),
+        preserve_background: z
+          .boolean()
+          .optional()
+          .describe(
+            "Keep the music/SFX bed under the new voices (default: true).",
+          ),
+        remove_background_noise: z
+          .boolean()
+          .optional()
+          .describe(
+            "Remove background noise before recasting — yields a clean voice-only result.",
+          ),
+      },
+      outputSchema: {
+        jobId: z.string(),
+        prompt: z.string().optional(),
+        model: z.string().optional(),
+        outputUrl: z.string().optional(),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: true,
+      },
+      _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/v3/job-audio",
+        ui: {
+          resourceUri: "ui://nodaro/widget/v3/job-audio",
+          visibility: ["model", "app"],
+        },
+      },
+    },
+    async (args) => {
+      const videoUrl =
+        args.video_url ??
+        (args.video_asset_id
+          ? await resolveAssetId({
+              assetId: args.video_asset_id,
+              userId: session.userId,
+              expectedKind: "video",
+            })
+          : null)
+      const audioUrl =
+        args.audio_url ??
+        (args.audio_asset_id
+          ? await resolveAssetId({
+              assetId: args.audio_asset_id,
+              userId: session.userId,
+              expectedKind: "audio",
+            })
+          : null)
+      if (!videoUrl && !audioUrl) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "Pass audio_url/audio_asset_id to recast audio, or video_url/video_asset_id to recast voices in a talking video.",
+            },
+          ],
+          isError: true,
+        }
+      }
+      const isVideo = Boolean(videoUrl)
+      const payload: Record<string, unknown> = {
+        ...(isVideo ? { videoUrl } : { audioUrl }),
+        orderedVoices: args.ordered_voices,
+        mcp_client: session.clientName,
+        userId: session.userId,
+      }
+      if (args.model !== undefined) payload.model = args.model
+      if (args.preserve_background !== undefined)
+        payload.preserveBackground = args.preserve_background
+      if (args.remove_background_noise !== undefined)
+        payload.removeBackgroundNoise = args.remove_background_noise
+      return dispatchJob(fastify, session, {
+        url: "/v1/voice-recast",
+        payload,
+        label: isVideo ? "voice recast (video)" : "voice recast",
+        widgetKind: "audio",
+        widgetData: {
+          prompt: `recast → ${args.ordered_voices.join(", ")}`,
+          model: "voice-recast",
+        },
+      })
+    },
+  )
+
   // ── dubbing ──
   server.registerTool(
     "dubbing",
