@@ -6,6 +6,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 const mocks = vi.hoisted(() => {
   const mockHasCredits = { value: true }
+  // Controllable admin markup for the credit-commit paths. The count-based
+  // (voice-recast) branch + the provider-metered branch both read this via
+  ***REDACTED-OSS-SCRUB***
+  const mockMarkupPercent = { value: 25 }
   const mockCommitCredits = vi.fn().mockResolvedValue(undefined)
   const mockRefundCredits = vi.fn().mockResolvedValue(undefined)
   const mockUploadToR2 = vi.fn().mockResolvedValue("https://r2.example.com/images/test.png")
@@ -43,6 +47,7 @@ const mocks = vi.hoisted(() => {
 
   return {
     mockHasCredits,
+    mockMarkupPercent,
     mockCommitCredits,
     mockRefundCredits,
     mockUploadToR2,
@@ -81,6 +86,32 @@ vi.mock("@/ee/services/credits.js", () => ({
     commitCredits: mocks.mockCommitCredits,
     refundCredits: mocks.mockRefundCredits,
   },
+}))
+
+// getAppSettings drives the post-markup commit basis for both the
+// provider-metered branch and the count-based (voice-recast) branch.
+vi.mock("@/lib/app-settings.js", () => ({
+  getAppSettings: vi.fn(async () => ({
+    ai_provider: "replicate" as const,
+    cost_markup_percent: mocks.mockMarkupPercent.value,
+    carousel_video_autoplay: true,
+    apps_page_video_autoplay: true,
+    featured_app_ids: [] as string[],
+    featured_apps_limit: 20,
+    apps_auto_scroll_seconds: 4,
+  })),
+}))
+
+// credit-anomaly is dynamically imported inside commitJobCredits. Mock both the
+// provider→credits converter (mirrors the real markup formula so the existing
+// provider-metered tests stay deterministic) and the anomaly logger (no-op).
+vi.mock("@/ee/billing/credit-anomaly.js", () => ({
+  computeActualCredits: vi.fn(async (providerCostUsd: number) => {
+    const base = Math.ceil(providerCostUsd / 0.02)
+    const pct = mocks.mockMarkupPercent.value
+    return pct > 0 ? Math.ceil(base * (1 + pct / 100)) : base
+  }),
+  checkAndLogAnomaly: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock("@/lib/storage.js", () => ({
@@ -161,6 +192,7 @@ import { PostProcessingError } from "../../lib/post-processing-error.js"
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.mockHasCredits.value = true
+  mocks.mockMarkupPercent.value = 25
 })
 
 // ---------------------------------------------------------------------------
@@ -349,6 +381,47 @@ describe("commitJobCredits", () => {
     mocks.mockCommitCredits.mockClear()
     await commitJobCredits("u1", "j1", 0.4, -5, true)
     expect(mocks.mockCommitCredits).toHaveBeenCalledWith("u1", base)
+  })
+
+  // ── Count-based metered actual (voice-recast): metered=true, extra>0, no
+  //    provider USD cost. Commits the POST-MARKUP count-based actual, NOT the
+  //    reserved tier. Before this branch existed, the 12 fell through to the
+  //    reserved-tier `else` and the per-speaker scaling was silently dropped. ──
+
+  it("commits the count-based actual POST-markup (25%) when metered with no provider cost", async () => {
+    mocks.mockMarkupPercent.value = 25
+    await commitJobCredits("u1", "job1", null, 12, true)
+    // 12 base × 1.25 = 15 committed (NOT the reserved tier, NOT 12).
+    expect(mocks.mockCommitCredits).toHaveBeenCalledWith("u1", 15)
+    // commit must carry an explicit actual — never the no-arg reserved-tier form.
+    expect(mocks.mockCommitCredits).not.toHaveBeenCalledWith("u1")
+  })
+
+  it("commits the count-based actual unchanged at 0% markup", async () => {
+    mocks.mockMarkupPercent.value = 0
+    await commitJobCredits("u1", "job1", null, 12, true)
+    expect(mocks.mockCommitCredits).toHaveBeenCalledWith("u1", 12)
+  })
+
+  it("mirrors the count-based actual onto jobs.credits_actual", async () => {
+    mocks.mockMarkupPercent.value = 25
+    await commitJobCredits("u1", "job1", null, 12, true)
+    expect(mocks.mockUpdate).toHaveBeenCalledWith({ credits_actual: 15 })
+  })
+
+  it("does NOT take the count-based branch when a real provider cost is present (metered branch wins)", async () => {
+    // providerCostUsd>0 → provider-metered branch: actual = computeActualCredits(cost) + extra.
+    // computeActualCredits(0.4) = ceil(0.4/0.02)=20, ×1.25=25; +3 addon = 28.
+    mocks.mockMarkupPercent.value = 25
+    await commitJobCredits("u1", "job1", 0.4, 3, true)
+    expect(mocks.mockCommitCredits).toHaveBeenCalledWith("u1", 28)
+  })
+
+  it("does NOT take the count-based branch when NOT metered (reserved tier, no actual)", async () => {
+    // metered defaults false → reserved-tier else, even with extra>0.
+    mocks.mockMarkupPercent.value = 25
+    await commitJobCredits("u1", "job1", null, 12)
+    expect(mocks.mockCommitCredits).toHaveBeenCalledWith("u1")
   })
 })
 

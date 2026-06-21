@@ -7,6 +7,7 @@ import youtubedl from "youtube-dl-exec"
 import { variantJobId } from "@nodaro/shared"
 import { config, hasCredits } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
+import { getAppSettings } from "../lib/app-settings.js"
 import type { ProviderResult } from "../providers/provider.interface.js"
 import { uploadToR2, uploadFileToR2, uploadBufferToR2, uploadFileWithKeyToR2, getR2ObjectSize } from "../lib/storage.js"
 import { safeFetch } from "../lib/safe-fetch.js"
@@ -298,6 +299,49 @@ export async function commitJobCredits(
       await Promise.all(tasks)
 
       console.log(`[worker] Credits committed for job ${jobId} (actual: ${actualCredits}, reserved: ${usageLog?.credits_used ?? "??"})`)
+    } else if (metered && extraNonProviderCredits > 0 && !(providerCostUsd && providerCostUsd > 0)) {
+      // Count-based metered actual (no provider USD cost) — e.g. voice-recast,
+      // which reserves by voice count and commits by mapped-speaker count.
+      // `extraNonProviderCredits` is the BASE (pre-markup) actual; apply the
+      // SAME post-markup formula the reserve path uses (credit-guard-impl.ts
+      // lines ~64-68: ceil(base × (1 + markup/100)) when markup>0, from
+      // getAppSettings()) so reserved and committed share one basis. Without
+      // this, the count-based actual would fall through to the reserved-tier
+      // `else` and the per-speaker scaling would be silently dropped.
+      const baseActual = Math.max(0, extraNonProviderCredits)
+      const settings = await getAppSettings()
+      const actualCredits =
+        settings.cost_markup_percent > 0 && baseActual > 0
+          ? Math.ceil(baseActual * (1 + settings.cost_markup_percent / 100))
+          : baseActual
+
+      const { data: usageLog } = await supabase
+        .from("usage_logs")
+        .select("credits_used, user_id, action, provider")
+        .eq("id", usageLogId)
+        .single()
+
+      // checkAndLogAnomaly has internal try/catch so it never rejects.
+      const tasks: PromiseLike<unknown>[] = [
+        CreditsService.commitCredits(usageLogId, actualCredits),
+        supabase.from("jobs").update({ credits_actual: actualCredits }).eq("id", jobId),
+      ]
+      if (usageLog) {
+        tasks.push(checkAndLogAnomaly({
+          jobId,
+          userId: usageLog.user_id,
+          usageLogId,
+          modelIdentifier: usageLog.action ?? "unknown",
+          provider: usageLog.provider ?? null,
+          reservedCredits: usageLog.credits_used,
+          actualCredits,
+          // No provider USD cost on this path — it's a count-based charge.
+          providerCostUsd: 0,
+        }))
+      }
+      await Promise.all(tasks)
+
+      console.log(`[worker] Credits committed for job ${jobId} (count-based actual: ${actualCredits}, reserved: ${usageLog?.credits_used ?? "??"})`)
     } else {
       // Fixed/composite provider (or cost-less): commit the RESERVED tier.
       await CreditsService.commitCredits(usageLogId)
