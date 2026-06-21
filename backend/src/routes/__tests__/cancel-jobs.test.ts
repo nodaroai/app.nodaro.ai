@@ -144,7 +144,7 @@ function jobsHandler(opts: {
     //   bulk:   update().in("id",[...]).in("status",[...]).select("id")
     const defaultRows =
       opts.cancelledRows ??
-      ((opts.jobsList?.data as Array<{ id: string }> | undefined) ?? [{ id: "job-1" }])
+      ((opts.jobsList?.data as Array<{ id: string }> | undefined) ?? [{ id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }])
     const updateSelect = vi.fn().mockResolvedValue({
       data: defaultRows,
       error: opts.updateError ?? null,
@@ -178,7 +178,7 @@ describe("POST /v1/jobs/:jobId/cancel", () => {
   it("returns 401 when no userId", async () => {
     const res = await app.inject({
       method: "POST",
-      url: "/v1/jobs/job-1/cancel",
+      url: "/v1/jobs/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/cancel",
       payload: {},
     })
 
@@ -193,7 +193,7 @@ describe("POST /v1/jobs/:jobId/cancel", () => {
 
     const res = await app.inject({
       method: "POST",
-      url: "/v1/jobs/nonexistent-job/cancel",
+      url: "/v1/jobs/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/cancel",
       payload: { userId: TEST_USER_ID },
     })
 
@@ -205,7 +205,7 @@ describe("POST /v1/jobs/:jobId/cancel", () => {
     setupTableMocks({
       jobs: jobsHandler({
         jobLookup: {
-          data: { id: "job-1", status: "pending", user_id: "other-user-id", input_data: {}, output_data: {} },
+          data: { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", status: "pending", user_id: "other-user-id", input_data: {}, output_data: {} },
           error: null,
         },
       }),
@@ -213,7 +213,7 @@ describe("POST /v1/jobs/:jobId/cancel", () => {
 
     const res = await app.inject({
       method: "POST",
-      url: "/v1/jobs/job-1/cancel",
+      url: "/v1/jobs/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/cancel",
       payload: { userId: TEST_USER_ID },
     })
 
@@ -226,7 +226,7 @@ describe("POST /v1/jobs/:jobId/cancel", () => {
     setupTableMocks({
       jobs: jobsHandler({
         jobLookup: {
-          data: { id: "job-1", status: "completed", user_id: TEST_USER_ID, input_data: {}, output_data: {} },
+          data: { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", status: "completed", user_id: TEST_USER_ID, input_data: {}, output_data: {} },
           error: null,
         },
       }),
@@ -234,7 +234,7 @@ describe("POST /v1/jobs/:jobId/cancel", () => {
 
     const res = await app.inject({
       method: "POST",
-      url: "/v1/jobs/job-1/cancel",
+      url: "/v1/jobs/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/cancel",
       payload: { userId: TEST_USER_ID },
     })
 
@@ -247,7 +247,7 @@ describe("POST /v1/jobs/:jobId/cancel", () => {
     setupTableMocks({
       jobs: jobsHandler({
         jobLookup: {
-          data: { id: "job-1", status: "pending", user_id: TEST_USER_ID, input_data: {}, output_data: {} },
+          data: { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", status: "pending", user_id: TEST_USER_ID, input_data: {}, output_data: {} },
           error: null,
         },
       }),
@@ -256,13 +256,13 @@ describe("POST /v1/jobs/:jobId/cancel", () => {
 
     const res = await app.inject({
       method: "POST",
-      url: "/v1/jobs/job-1/cancel",
+      url: "/v1/jobs/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/cancel",
       payload: { userId: TEST_USER_ID },
     })
 
     expect(res.statusCode).toBe(200)
     expect(res.json()).toEqual({ success: true, cancelled: 1, inFlight: false })
-    expect(tryRemoveFromQueue).toHaveBeenCalledWith("job-1")
+    expect(tryRemoveFromQueue).toHaveBeenCalledWith("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
     // CRITICAL: the reserved credit hold MUST be refunded — without this the
     // user pays for cancelled work that never produced output.
     expect(mockRefundCredits).toHaveBeenCalledWith("usage-log-1")
@@ -273,7 +273,7 @@ describe("POST /v1/jobs/:jobId/cancel", () => {
     setupTableMocks({
       jobs: jobsHandler({
         jobLookup: {
-          data: { id: "job-1", status: "processing", user_id: TEST_USER_ID, input_data: {}, output_data: {}, provider_task_id: "kie-task-abc" },
+          data: { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", status: "processing", user_id: TEST_USER_ID, input_data: {}, output_data: {}, provider_task_id: "kie-task-abc" },
           error: null,
         },
       }),
@@ -281,7 +281,7 @@ describe("POST /v1/jobs/:jobId/cancel", () => {
 
     const res = await app.inject({
       method: "POST",
-      url: "/v1/jobs/job-1/cancel",
+      url: "/v1/jobs/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/cancel",
       payload: { userId: TEST_USER_ID },
     })
 
@@ -300,7 +300,7 @@ describe("POST /v1/jobs/:jobId/cancel", () => {
       jobs: jobsHandler({
         jobLookup: {
           data: {
-            id: "job-1", status: "processing", user_id: TEST_USER_ID,
+            id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", status: "processing", user_id: TEST_USER_ID,
             input_data: {}, output_data: {},
             provider_task_id: "kie-task-abc", reconcile_attempts: 3,
           },
@@ -312,7 +312,7 @@ describe("POST /v1/jobs/:jobId/cancel", () => {
 
     const res = await app.inject({
       method: "POST",
-      url: "/v1/jobs/job-1/cancel",
+      url: "/v1/jobs/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/cancel",
       payload: { userId: TEST_USER_ID },
     })
 
@@ -328,7 +328,7 @@ describe("POST /v1/jobs/:jobId/cancel", () => {
     setupTableMocks({
       jobs: jobsHandler({
         jobLookup: {
-          data: { id: "job-1", status: "pending", user_id: TEST_USER_ID, input_data: {}, output_data: {} },
+          data: { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", status: "pending", user_id: TEST_USER_ID, input_data: {}, output_data: {} },
           error: null,
         },
         cancelledRows: [],
@@ -337,7 +337,7 @@ describe("POST /v1/jobs/:jobId/cancel", () => {
 
     const res = await app.inject({
       method: "POST",
-      url: "/v1/jobs/job-1/cancel",
+      url: "/v1/jobs/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/cancel",
       payload: { userId: TEST_USER_ID },
     })
 
@@ -350,7 +350,7 @@ describe("POST /v1/jobs/:jobId/cancel", () => {
     setupTableMocks({
       jobs: jobsHandler({
         jobLookup: {
-          data: { id: "job-1", status: "pending", user_id: TEST_USER_ID, input_data: {}, output_data: {} },
+          data: { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", status: "pending", user_id: TEST_USER_ID, input_data: {}, output_data: {} },
           error: null,
         },
       }),
@@ -359,7 +359,7 @@ describe("POST /v1/jobs/:jobId/cancel", () => {
 
     const res = await app.inject({
       method: "POST",
-      url: "/v1/jobs/job-1/cancel",
+      url: "/v1/jobs/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/cancel",
       payload: { userId: TEST_USER_ID },
     })
 
@@ -401,7 +401,7 @@ describe("POST /v1/jobs/cancel-all", () => {
   it("cancels all pending jobs and refunds each one's reserved credits", async () => {
     setupTableMocks({
       jobs: jobsHandler({
-        jobsList: { data: [{ id: "job-1" }, { id: "job-2" }], error: null },
+        jobsList: { data: [{ id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }, { id: "job-2" }], error: null },
       }),
       usage_logs: usageLogsHandler([
         { id: "usage-log-1" },
@@ -417,7 +417,7 @@ describe("POST /v1/jobs/cancel-all", () => {
 
     expect(res.statusCode).toBe(200)
     expect(res.json()).toEqual({ success: true, cancelled: 2 })
-    expect(tryRemoveFromQueue).toHaveBeenCalledWith("job-1")
+    expect(tryRemoveFromQueue).toHaveBeenCalledWith("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
     expect(tryRemoveFromQueue).toHaveBeenCalledWith("job-2")
     // Both reserved holds refunded — bulk cancel previously also leaked credits.
     expect(mockRefundCredits).toHaveBeenCalledWith("usage-log-1")
