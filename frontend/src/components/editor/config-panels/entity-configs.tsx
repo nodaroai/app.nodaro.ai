@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useMemo, useEffect } from "react"
-import { Play, Loader2, Upload, UserCircle, ChevronDown, Check } from "lucide-react"
+import { Play, Loader2, Upload } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -16,12 +16,7 @@ import {
 import { Separator } from "@/components/ui/separator"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useMediaEditor, MediaEditorModal } from "@/components/editor/media-editor"
-import { CachedImage } from "@/components/ui/cached-image"
-import { useCharacters } from "@/hooks/queries/use-assets-queries"
-import { useAuth } from "@/hooks/use-auth"
-import { useClickOutside } from "@/hooks/use-click-outside"
-import { hydrateCharacterNodeFromDetail } from "@/lib/character-node-data"
-import type { DbCharacter } from "@/lib/api"
+import { AssetPickerConfigButton } from "@/components/editor/asset-picker/asset-picker-config-button"
 import type {
   CharacterNodeData,
   FaceNodeData,
@@ -55,41 +50,17 @@ export function CharacterConfig({ data, onUpdate, sources, fieldMappings, onMapF
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <div className="text-[9px] uppercase tracking-wide text-muted-foreground mb-1">Character</div>
+        <div className="text-[9px] uppercase tracking-wide text-muted-foreground mb-1">Character Asset</div>
         <div className="text-[13px] font-semibold text-foreground">{data.characterName || "Unnamed"}</div>
         <div className="text-[10px] text-muted-foreground">
           {data.style} · {data.gender} · {exprCount} expr · {poseCount} poses · {motionCount} motions
         </div>
       </div>
 
-      {/* Replace / pick from library. Lets the user re-bind this canvas node
-          to a different character without opening the gallery sidebar first. */}
-      <ReplaceCharacterPicker
-        currentDbId={data.characterDbId || null}
-        onPick={(picked) => {
-          // Optimistic light re-bind for instant feedback, then hydrate the
-          // FULL detail (bodyAngles/sheets/detailCloseups/outfitVariations/
-          // referenceVideosByVariant/…) so a Replace carries every asset bucket
-          // without a reload — same pattern as the other library→canvas sites.
-          onUpdate({
-            characterDbId: picked.id,
-            characterName: picked.name,
-            description: picked.description ?? "",
-            gender: (picked.gender as CharacterNodeData["gender"]) ?? "other",
-            style: (picked.style as CharacterNodeData["style"]) ?? "realistic",
-            baseOutfit: picked.baseOutfit ?? "",
-            sourceImageUrl: picked.sourceImageUrl ?? "",
-            expressions: picked.expressions ?? [],
-            poses: picked.poses ?? [],
-            lightingVariations: picked.lightingVariations ?? [],
-            angles: picked.angles ?? [],
-            motions: picked.motions ?? [],
-            voice: picked.voice ?? undefined,
-            personality: picked.personality ?? undefined,
-          })
-          if (nodeId) hydrateCharacterNodeFromDetail(nodeId, picked.id)
-        }}
-      />
+      {/* Choose an existing character — from the user's library or the public
+          gallery — or replace the one already bound. The modal handles the
+          rebind + full-detail hydration (every asset bucket) in one place. */}
+      <AssetPickerConfigButton kind="character" nodeId={nodeId} currentDbId={data.characterDbId || null} />
 
       <button
         type="button"
@@ -164,101 +135,6 @@ export function CharacterConfig({ data, onUpdate, sources, fieldMappings, onMapF
           />
         </MappableField>
       </div>
-    </div>
-  )
-}
-
-/**
- * Compact "Replace character" button that opens a dropdown listing all active
- * characters in the user's library. Picking one re-binds this node's
- * `characterDbId` + populates every field from the picked row — useful when a
- * user wants to drop a Character node and reuse a library entry without going
- * through the gallery sidebar. Hidden state (assets, voice, personality) is
- * copied wholesale so the studio shows the picked character as soon as it opens.
- */
-function ReplaceCharacterPicker({
-  currentDbId,
-  onPick,
-}: {
-  currentDbId: string | null
-  onPick: (c: DbCharacter) => void
-}) {
-  const { user } = useAuth()
-  const projectId = useWorkflowStore((s) => s.projectId)
-  const { data: characters = [], isLoading } = useCharacters(projectId ?? undefined, user?.id)
-  const [open, setOpen] = useState(false)
-  const [filter, setFilter] = useState("")
-  const containerRef = useRef<HTMLDivElement>(null)
-
-  useClickOutside(containerRef, () => setOpen(false), open)
-
-  const filtered = useMemo(() => {
-    const q = filter.trim().toLowerCase()
-    if (!q) return characters
-    return characters.filter((c) => c.name.toLowerCase().includes(q))
-  }, [characters, filter])
-
-  const label = currentDbId ? "Replace from library" : "Pick from library"
-
-  return (
-    <div ref={containerRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-2 text-[11px] bg-muted/30 border border-border rounded-md px-3 py-2 hover:bg-muted/50 transition-colors"
-      >
-        <UserCircle className="h-3.5 w-3.5 text-muted-foreground" />
-        <span className="flex-1 text-left text-muted-foreground">{label}</span>
-        <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
-      </button>
-      {open && (
-        <div className="absolute z-30 mt-1 left-0 right-0 bg-popover border rounded-md shadow-lg max-h-[280px] flex flex-col">
-          <input
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            placeholder="Search characters…"
-            autoFocus
-            className="text-[11px] bg-transparent border-b px-3 py-2 outline-none placeholder:text-muted-foreground"
-          />
-          <div className="flex-1 overflow-y-auto py-1">
-            {isLoading ? (
-              <div className="flex items-center justify-center py-4 text-[11px] text-muted-foreground">
-                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> Loading…
-              </div>
-            ) : filtered.length === 0 ? (
-              <div className="px-3 py-4 text-[11px] text-muted-foreground text-center">
-                {characters.length === 0 ? "No saved characters yet" : "No matches"}
-              </div>
-            ) : (
-              filtered.map((c) => {
-                const isCurrent = c.id === currentDbId
-                return (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => {
-                      onPick(c)
-                      setOpen(false)
-                      setFilter("")
-                    }}
-                    className={`flex items-center gap-2 w-full px-3 py-1.5 text-left hover:bg-accent ${isCurrent ? "bg-accent/40" : ""}`}
-                  >
-                    {c.sourceImageUrl ? (
-                      <CachedImage src={c.sourceImageUrl} alt={c.name} className="w-7 h-7 rounded object-cover" thumbnail thumbnailWidth={56} />
-                    ) : (
-                      <div className="w-7 h-7 rounded bg-muted flex items-center justify-center">
-                        <UserCircle className="h-4 w-4 text-muted-foreground/40" />
-                      </div>
-                    )}
-                    <span className="flex-1 text-[11px] truncate">{c.name}</span>
-                    {isCurrent && <Check className="h-3.5 w-3.5 text-primary" />}
-                  </button>
-                )
-              })
-            )}
-          </div>
-        </div>
-      )}
     </div>
   )
 }
@@ -426,12 +302,14 @@ export function ObjectConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <div className="text-[9px] uppercase tracking-wide text-muted-foreground mb-1">Object/Props</div>
+        <div className="text-[9px] uppercase tracking-wide text-muted-foreground mb-1">Object/Props Asset</div>
         <div className="text-[13px] font-semibold text-foreground">{data.objectName || "(unnamed object)"}</div>
         <div className="text-[10px] text-muted-foreground">
           {data.style} · {data.category} · {anglesCount} angles · {materialsCount} materials · {variationsCount} variations · {motionCount} motion · {refsCount} refs
         </div>
       </div>
+
+      <AssetPickerConfigButton kind="object" nodeId={nodeId} currentDbId={data.objectDbId || null} />
 
       <button
         type="button"
@@ -505,12 +383,14 @@ export function CreatureConfig({ data, onUpdate, sources, fieldMappings, onMapFi
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <div className="text-[9px] uppercase tracking-wide text-muted-foreground mb-1">Animal/Creature</div>
+        <div className="text-[9px] uppercase tracking-wide text-muted-foreground mb-1">Animal/Creature Asset</div>
         <div className="text-[13px] font-semibold text-foreground">{data.creatureName || "(unnamed creature)"}</div>
         <div className="text-[10px] text-muted-foreground">
           {data.style} · {data.species || data.category} · {anglesCount} angles · {posesCount} poses · {variationsCount} variations · {motionCount} motion · {refsCount} refs
         </div>
       </div>
+
+      <AssetPickerConfigButton kind="creature" nodeId={nodeId} currentDbId={data.creatureDbId || null} />
 
       <button
         type="button"
@@ -603,12 +483,14 @@ export function LocationConfig({ data, onUpdate, sources, fieldMappings, onMapFi
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <div className="text-[9px] uppercase tracking-wide text-muted-foreground mb-1">Location</div>
+        <div className="text-[9px] uppercase tracking-wide text-muted-foreground mb-1">Location Asset</div>
         <div className="text-[13px] font-semibold text-foreground">{data.locationName || "(unnamed location)"}</div>
         <div className="text-[10px] text-muted-foreground">
           {data.style} · {data.category} · {todCount} tod · {weatherCount} weather · {seasonsCount} seasons · {anglesCount} angles · {lightingCount} lighting
         </div>
       </div>
+
+      <AssetPickerConfigButton kind="location" nodeId={nodeId} currentDbId={data.locationDbId || null} />
 
       <button
         type="button"

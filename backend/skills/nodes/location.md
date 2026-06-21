@@ -1,7 +1,7 @@
 ---
 node_type: location
-generated_at: 2026-06-16T08:22:28.774Z
-generated_from: 877dfa01a
+generated_at: 2026-06-20T22:52:09.952Z
+generated_from: 1a15bf767
 ---
 
 # Location
@@ -65,7 +65,7 @@ generated_from: 877dfa01a
 **Default data:**
 ```json
 {
-  "label": "Location",
+  "label": "Location Asset",
   "locationDbId": "",
   "locationName": "",
   "description": "",
@@ -121,7 +121,7 @@ generated_from: 877dfa01a
     "y": 0
   },
   "data": {
-    "label": "Location",
+    "label": "Location Asset",
     "locationDbId": "",
     "locationName": "",
     "description": "",

@@ -8,6 +8,7 @@ import {
   isValidTextToAudioConnection,
   isValidGenerateMusicConnection,
   isValidAudioIsolationConnection,
+  isValidAudioSeparationConnection,
   isValidTextToDialogueConnection,
   isValidVoiceChangerConnection,
   isValidDubbingConnection,
@@ -576,6 +577,7 @@ const AUDIO_TEXT_VALIDATORS: Record<string, AudioTextValidator> = {
   // Predicates that don't take isVisualPicker get a thin adapter so the
   // dispatch table is homogeneous (Record<string, AudioTextValidator>).
   "audio-isolation":   (h, s) => isValidAudioIsolationConnection(h, s),
+  "audio-separation":  (h, s) => isValidAudioSeparationConnection(h, s),
   "text-to-dialogue":  isValidTextToDialogueConnection,
   "voice-changer":     (h, s) => isValidVoiceChangerConnection(h, s),
   "dubbing":           (h, s) => isValidDubbingConnection(h, s),

@@ -1,7 +1,7 @@
 ---
 node_type: character
-generated_at: 2026-06-17T10:45:25.352Z
-generated_from: be514ef7a
+generated_at: 2026-06-20T22:52:09.902Z
+generated_from: 1a15bf767
 ---
 
 # Character
@@ -85,7 +85,7 @@ generated_from: be514ef7a
 **Default data:**
 ```json
 {
-  "label": "Character",
+  "label": "Character Asset",
   "characterDbId": "",
   "characterName": "",
   "description": "",
@@ -146,7 +146,7 @@ generated_from: be514ef7a
     "y": 0
   },
   "data": {
-    "label": "Character",
+    "label": "Character Asset",
     "characterDbId": "",
     "characterName": "",
     "description": "",

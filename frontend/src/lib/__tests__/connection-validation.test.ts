@@ -69,6 +69,29 @@ describe("isValidWorkflowConnection (generate-video dispatch)", () => {
   })
 })
 
+// ─── audio-separation drop-time validator ───────────────────────────────
+// Regression: isValidAudioSeparationConnection existed and gated the pip
+// glow, but the type was missing from AUDIO_TEXT_VALIDATORS, so the canvas
+// drop validator default-allowed ANY source on the `audio` target (asymmetric
+// with every sibling audio node). Wiring it in makes glow + drop agree.
+describe("isValidWorkflowConnection (audio-separation dispatch)", () => {
+  it("accepts an audio producer on audio-separation's audio target", () => {
+    const ok = isValidWorkflowConnection(
+      { source: "src", target: "as1", sourceHandle: "audio", targetHandle: "audio" },
+      (id: string) => (id === "as1" ? "audio-separation" : "text-to-speech"),
+    )
+    expect(ok).toBe(true)
+  })
+
+  it("rejects a non-audio (image) producer on audio-separation's audio target", () => {
+    const ok = isValidWorkflowConnection(
+      { source: "src", target: "as1", sourceHandle: "image", targetHandle: "audio" },
+      (id: string) => (id === "as1" ? "audio-separation" : "generate-image"),
+    )
+    expect(ok).toBe(false)
+  })
+})
+
 // ─── cinematic-avatar ref-* connectivity (drop-time validator) ──────────
 // Regression: cinematic-avatar renders ref-video / ref-audio / ref-image
 // target handles, each accepting one media producer. The bug was that

@@ -18,6 +18,17 @@ import { videoNodeSizing } from "./video-node-defaults"
 import { CachedImage } from "@/components/ui/cached-image"
 import { resolveCinematicCreditId } from "@nodaro/shared"
 import type { CinematicAvatarData } from "@/types/nodes"
+import { isValidCinematicAvatarConnection } from "@/lib/video-producer-handles"
+import { isVisualPickerType } from "@/lib/parameter-picker-types"
+
+// Per-input drop predicates → drive the drag-to-connect "valid candidate"
+// glow on each input pip (mirrors ai-avatar). Same predicate the canvas drop
+// validator uses (VIDEO_PRODUCER_VALIDATORS["cinematic-avatar"]), so glow and
+// drop stay in lockstep.
+const ACCEPTS_REF_VIDEO = (t: string) => isValidCinematicAvatarConnection("ref-video", t, isVisualPickerType)
+const ACCEPTS_REF_AUDIO = (t: string) => isValidCinematicAvatarConnection("ref-audio", t, isVisualPickerType)
+const ACCEPTS_REF_IMAGE = (t: string) => isValidCinematicAvatarConnection("ref-image", t, isVisualPickerType)
+const ACCEPTS_PROMPT    = (t: string) => isValidCinematicAvatarConnection("prompt",    t, isVisualPickerType)
 
 function CinematicAvatarNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as CinematicAvatarData
@@ -276,6 +287,7 @@ function CinematicAvatarNodeComponent({ id, data, selected }: NodeProps) {
         icon={<Film />}
         side="left"
         top="calc(100% - 120px)"
+        accepts={ACCEPTS_REF_VIDEO}
       />
       <HandleWithPopover
         nodeId={id}
@@ -288,6 +300,7 @@ function CinematicAvatarNodeComponent({ id, data, selected }: NodeProps) {
         icon={<Volume2 />}
         side="left"
         top="calc(100% - 88px)"
+        accepts={ACCEPTS_REF_AUDIO}
       />
       <HandleWithPopover
         nodeId={id}
@@ -300,6 +313,7 @@ function CinematicAvatarNodeComponent({ id, data, selected }: NodeProps) {
         icon={<ImageIcon />}
         side="left"
         top="calc(100% - 56px)"
+        accepts={ACCEPTS_REF_IMAGE}
       />
       <HandleWithPopover
         nodeId={id}
@@ -312,6 +326,7 @@ function CinematicAvatarNodeComponent({ id, data, selected }: NodeProps) {
         icon={<Type />}
         side="left"
         top="calc(100% - 24px)"
+        accepts={ACCEPTS_PROMPT}
       />
       <HandleWithPopover
         nodeId={id}

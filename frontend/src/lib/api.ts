@@ -6797,6 +6797,18 @@ export async function cloneCommunityListing(id: string, entityType: string): Pro
   return apiRequest(`/v1/community/listings/${encodeURIComponent(id)}/clone`, "Failed to clone", { method: "POST", body: { entityType } })
 }
 
+/** The caller's existing (non-archived) library copies of a community listing —
+ *  so the picker can offer "use my copy" instead of cloning a duplicate. */
+export async function getMyClonesOfListing(
+  id: string,
+  entityType: string,
+): Promise<{ clones: { id: string; name: string; sourceImageUrl: string | null }[] }> {
+  return apiRequest(
+    `/v1/community/listings/${encodeURIComponent(id)}/clones?entityType=${encodeURIComponent(entityType)}`,
+    "Failed to check existing copies",
+  )
+}
+
 export async function toggleCommunityFavorite(id: string): Promise<{ favorited: boolean }> {
   return apiRequest(`/v1/community/listings/${encodeURIComponent(id)}/favorite`, "Failed to favorite", { method: "POST", body: {} })
 }

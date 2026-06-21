@@ -1,7 +1,7 @@
 ---
 node_type: creature
-generated_at: 2026-06-16T08:22:28.760Z
-generated_from: 877dfa01a
+generated_at: 2026-06-20T22:52:09.940Z
+generated_from: 1a15bf767
 ---
 
 # Animal/Creature
@@ -60,7 +60,7 @@ generated_from: 877dfa01a
 **Default data:**
 ```json
 {
-  "label": "Animal/Creature",
+  "label": "Animal/Creature Asset",
   "creatureDbId": "",
   "creatureName": "",
   "description": "",
@@ -114,7 +114,7 @@ generated_from: 877dfa01a
     "y": 0
   },
   "data": {
-    "label": "Animal/Creature",
+    "label": "Animal/Creature Asset",
     "creatureDbId": "",
     "creatureName": "",
     "description": "",

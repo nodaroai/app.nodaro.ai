@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-06-20T20:51:28.899Z
-generated_from: 4ffe0ec68
+generated_at: 2026-06-20T22:52:08.936Z
+generated_from: 1a15bf767
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -79,7 +79,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `backdrop` — Backdrop
 - `camera-format` — Camera / Film Stock
 - `camera-motion` — Camera Motion
-- `character` — Character
+- `character` — Character Asset
 - `character-fx` — Character FX
 - `cinematic-avatar` — Cinematic Avatar
 - `collect` — Collect
@@ -90,7 +90,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `component` — Component
 - `composite` — Composite
 - `composition-effects` — Composition Effects
-- `creature` — Animal/Creature
+- `creature` — Animal/Creature Asset
 - `deduplicate` — Remove Duplicates
 - `describe-to-picker` — Describe to Picker
 - `dubbing` — Dubbing
@@ -129,7 +129,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `lip-sync` — Lip Sync
 - `list` — List
 - `llm-chat` — Generate Text
-- `location` — Location
+- `location` — Location Asset
 - `loop-subject` — Loop Subject
 - `loop-video` — Loop Video
 - `lottie-overlay` — Lottie Overlay
@@ -145,7 +145,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `motion-transfer` — Motion Transfer
 - `music-genre` — Music Genre
 - `music-mood` — Music Mood
-- `object` — Object/Props
+- `object` — Object/Props Asset
 - `person` — Person
 - `photo-genre` — Photo Genre
 - `photographer` — Photographer / Artist Style

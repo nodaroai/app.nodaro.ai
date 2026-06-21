@@ -78,3 +78,40 @@ describe("GET /v1/community/detail/:slug/full", () => {
     expect(r.statusCode).toBe(404)
   })
 })
+
+describe("GET /v1/community/listings/:id/clones", () => {
+  it("401 without session", async () => {
+    const r = await app.inject({ method: "GET", url: "/v1/community/listings/L1/clones?entityType=character" })
+    expect(r.statusCode).toBe(401)
+  })
+
+  it("400 without a valid entityType", async () => {
+    const r = await app.inject({ method: "GET", url: "/v1/community/listings/L1/clones", headers: { "x-user-id": "u1" } })
+    expect(r.statusCode).toBe(400)
+  })
+
+  it("returns the caller's existing, non-archived copies", async () => {
+    vi.mocked(supabase.from).mockImplementation(((t: string) => {
+      if (t === "community_clones") {
+        return { select: () => ({ eq: () => ({ eq: () => Promise.resolve({ data: [{ new_entity_id: "e1" }] }) }) }) }
+      }
+      // entity table — only non-deleted rows come back from the .is("deleted_at", null) filter
+      return { select: () => ({ in: () => ({ is: () => ({ order: () => Promise.resolve({ data: [{ id: "e1", name: "Kira", source_image_url: "u" }] }) }) }) }) }
+    }) as unknown as typeof supabase.from)
+    const r = await app.inject({ method: "GET", url: "/v1/community/listings/L1/clones?entityType=character", headers: { "x-user-id": "u1" } })
+    expect(r.statusCode).toBe(200)
+    expect(r.json().clones).toEqual([{ id: "e1", name: "Kira", sourceImageUrl: "u" }])
+  })
+
+  it("returns an empty list when the user has never cloned it (no entity lookup)", async () => {
+    vi.mocked(supabase.from).mockImplementation(((t: string) => {
+      if (t === "community_clones") {
+        return { select: () => ({ eq: () => ({ eq: () => Promise.resolve({ data: [] }) }) }) }
+      }
+      throw new Error("entity table must not be queried when there are no clones")
+    }) as unknown as typeof supabase.from)
+    const r = await app.inject({ method: "GET", url: "/v1/community/listings/L1/clones?entityType=character", headers: { "x-user-id": "u1" } })
+    expect(r.statusCode).toBe(200)
+    expect(r.json().clones).toEqual([])
+  })
+})

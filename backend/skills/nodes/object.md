@@ -1,7 +1,7 @@
 ---
 node_type: object
-generated_at: 2026-06-16T08:22:28.746Z
-generated_from: 877dfa01a
+generated_at: 2026-06-20T22:52:09.927Z
+generated_from: 1a15bf767
 ---
 
 # Object
@@ -66,7 +66,7 @@ generated_from: 877dfa01a
 **Default data:**
 ```json
 {
-  "label": "Object/Props",
+  "label": "Object/Props Asset",
   "objectDbId": "",
   "objectName": "",
   "description": "",
@@ -118,7 +118,7 @@ generated_from: 877dfa01a
     "y": 0
   },
   "data": {
-    "label": "Object/Props",
+    "label": "Object/Props Asset",
     "objectDbId": "",
     "objectName": "",
     "description": "",

@@ -26,7 +26,7 @@ import { getUpstreamNodes } from "@/lib/node-refs"
 import { NODE_COLORS, getEffectiveColor } from "@/lib/node-colors"
 import { hasCredits } from "@/lib/edition"
 import { estimateNodeCredits, EXECUTABLE_TYPES } from "@/components/editor/workflow-editor/types"
-import { getPickerOutputMeta } from "@/lib/picker-handles"
+import { getPickerOutputMeta, PICKER_FAMILY_COLORS } from "@/lib/picker-handles"
 import type { TextPromptData } from "@/types/nodes"
 
 // Module-level so HandleWithPopover's useConnection memo keeps a stable
@@ -327,18 +327,20 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
   // Typed source pip — text-prompt registers as a hint-producer in
   // picker-handles so it lights up Generate Image's `prompt` handle and
   // camera-motion / transition state handles during drag-to-connect. The
-  // visible cyan pip is owned by HandleWithPopover.
+  // visible blue (text-family) pip is owned by HandleWithPopover.
   //
   // text-prompt is pinned in REGISTRY by an explicit drift-catcher test
   // in `picker-handles.test.ts` (the "text-prompt is in REGISTRY"
   // assertion), so in any reachable build pickerMeta is non-null. The
   // explicit defaults below replace a previous `!` force-unwrap: even if
   // a future REGISTRY refactor briefly leaves text-prompt missing, the
-  // node renders with sensible cyan/Text defaults instead of crashing
-  // the editor — the drift-test fails CI before that ships.
+  // node renders with sensible text-family defaults instead of crashing
+  // the editor — the drift-test fails CI before that ships. The fallback
+  // color derives from PICKER_FAMILY_COLORS (canonical HANDLE_COLORS) so
+  // it can't drift from the "text" family the real path resolves to.
   const pickerMeta = getPickerOutputMeta("text-prompt") ?? {
     family: "text" as const,
-    color: "#22D3EE",
+    color: PICKER_FAMILY_COLORS.text,
     label: "Text",
   }
 
