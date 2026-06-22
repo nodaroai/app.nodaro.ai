@@ -1003,6 +1003,27 @@ describe("voice_recast verb", () => {
     expect(received.body?.separationQuality).toBe("best")
     expect(received.body?.preserveBackground).toBe(false)
   })
+
+  it("forwards per-voice seed and maps voice_fx → voiceFx", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/voice-recast", { jobId: "j-vr3" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const orderedVoices = [
+      { voiceId: "Rachel", seed: 12345 },
+      { voiceId: "Aria", seed: 67890 },
+    ]
+    const result = await callTool(server, "voice_recast", {
+      audio_url: "https://a/x.mp3",
+      ordered_voices: orderedVoices,
+      voice_fx: { preset: "hall", wetDryMix: 35 },
+    })
+    expect(result.isError).toBeUndefined()
+    expect(((result.structuredContent as Record<string, unknown>)?.jobId)).toBe("j-vr3")
+    // Per-voice seed rides through inside the ordered_voices objects verbatim.
+    expect(received.body?.orderedVoices).toEqual(orderedVoices)
+    // snake_case top-level voice_fx → camelCase voiceFx (mirrors separationQuality).
+    expect(received.body?.voiceFx).toEqual({ preset: "hall", wetDryMix: 35 })
+  })
 })
 
 describe("dubbing verb", () => {

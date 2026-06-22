@@ -3306,6 +3306,7 @@ export async function voiceRecastApi(
     useSpeakerBoost?: boolean
     volumeMode?: "match" | "normalize" | "manual"
     volume?: number
+    seed?: number
   }>,
   userId?: string,
   model?: string,
@@ -3313,6 +3314,7 @@ export async function voiceRecastApi(
   removeBackgroundNoise?: boolean,
   videoUrl?: string,
   separationQuality?: "fast" | "best",
+  voiceFx?: { preset: string; wetDryMix?: number; delayMs?: number; decay?: number },
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { orderedVoices }
   if (audioUrl) body.audioUrl = audioUrl
@@ -3322,6 +3324,7 @@ export async function voiceRecastApi(
   if (preserveBackground != null) body.preserveBackground = preserveBackground
   if (removeBackgroundNoise != null) body.removeBackgroundNoise = removeBackgroundNoise
   if (separationQuality != null) body.separationQuality = separationQuality
+  if (voiceFx != null) body.voiceFx = voiceFx
   return apiJson("/v1/voice-recast", {
     body,
     workflowId: true,

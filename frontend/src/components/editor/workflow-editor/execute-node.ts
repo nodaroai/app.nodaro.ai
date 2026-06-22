@@ -2643,6 +2643,7 @@ export function executeNode(
         useSpeakerBoost?: boolean;
         volumeMode?: "match" | "normalize" | "manual";
         volume?: number;
+        seed?: number;
       } = { voiceId: v.voiceId };
       if (v.stability != null) entry.stability = v.stability;
       if (v.similarityBoost != null) entry.similarityBoost = v.similarityBoost;
@@ -2650,6 +2651,7 @@ export function executeNode(
       if (v.useSpeakerBoost != null) entry.useSpeakerBoost = v.useSpeakerBoost;
       if (v.volumeMode != null) entry.volumeMode = v.volumeMode;
       if (v.volume != null) entry.volume = v.volume;
+      if (v.seed != null) entry.seed = v.seed;
       return entry;
     });
     const callVoiceRecast = () =>
@@ -2662,6 +2664,7 @@ export function executeNode(
         d.removeBackgroundNoise,
         videoUrl,
         d.separationQuality,
+        d.voiceFx,
       );
     if (videoUrl) {
       return runProcessingNode(

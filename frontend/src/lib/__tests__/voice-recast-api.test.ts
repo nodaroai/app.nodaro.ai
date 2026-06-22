@@ -139,6 +139,53 @@ describe("voiceRecastApi", () => {
     })
   })
 
+  it("passes per-voice seed through as-is (including 0)", async () => {
+    noSession()
+    const mock = mockFetchJson({ jobId: "js" })
+    vi.stubGlobal("fetch", mock)
+
+    await voiceRecastApi("https://r2/a.mp3", [
+      { voiceId: "vA", seed: 0 },
+      { voiceId: "vB", seed: 4242 },
+      { voiceId: "vC" },
+    ])
+
+    const body = JSON.parse(mock.mock.calls[0][1].body as string)
+    expect(body.orderedVoices).toEqual([
+      { voiceId: "vA", seed: 0 },
+      { voiceId: "vB", seed: 4242 },
+      { voiceId: "vC" },
+    ])
+  })
+
+  it("includes voiceFx when provided and omits it otherwise", async () => {
+    noSession()
+    const mock = mockFetchJson({ jobId: "jfx" })
+    vi.stubGlobal("fetch", mock)
+
+    await voiceRecastApi(
+      "https://r2/a.mp3",
+      [{ voiceId: "vA" }],
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { preset: "hall", wetDryMix: 60 },
+    )
+
+    const body = JSON.parse(mock.mock.calls[0][1].body as string)
+    expect(body.voiceFx).toEqual({ preset: "hall", wetDryMix: 60 })
+
+    // Second call with no voiceFx → key omitted entirely.
+    const mock2 = mockFetchJson({ jobId: "jno" })
+    vi.stubGlobal("fetch", mock2)
+    await voiceRecastApi("https://r2/a.mp3", [{ voiceId: "vA" }])
+    const body2 = JSON.parse(mock2.mock.calls[0][1].body as string)
+    expect("voiceFx" in body2).toBe(false)
+  })
+
   it("throws on error response", async () => {
     noSession()
     vi.stubGlobal(

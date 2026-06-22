@@ -2262,6 +2262,7 @@ type VoiceRecastVoice =
       similarityBoost?: number    // 0–1
       style?: number              // 0–1, default 0
       useSpeakerBoost?: boolean
+      seed?: number               // int 0–4294967295 — reproducible STS for this speaker
       volumeMode?: "match" | "normalize" | "manual"  // default "match"
       volume?: number             // 0–200 (%), used only when volumeMode === "manual"
     }
@@ -2274,6 +2275,12 @@ recast(input: {
   preserveBackground?: boolean             // default true
   separationQuality?: "fast" | "best"      // default "fast"
   removeBackgroundNoise?: boolean
+  voiceFx?: {                              // reverb/echo on the combined voices, pre-background-remix
+    preset: AudioFxPreset                  // reverb space / telephone / megaphone / echo / custom
+    wetDryMix?: number                     // 0–100, reverb wetness
+    delayMs?: number                       // 20–2000, echo delay
+    decay?: number                         // 0–1, echo decay
+  }
 }): Promise<{ jobId: string }>
 ```
 
@@ -2283,9 +2290,10 @@ voices — speaker 0 → `orderedVoices[0]`, speaker 1 → `orderedVoices[1]`, e
 Speakers beyond the end of `orderedVoices` keep their original voice. Each entry
 is **either a bare voice id** (premade name or ElevenLabs UUID) **or an object**
 with per-voice ElevenLabs speech-to-speech settings (`stability`,
-`similarityBoost`, `style`, `useSpeakerBoost`) plus a loudness `volumeMode`
-(`"match"` matches the original speaker, `"normalize"` applies loudnorm,
-`"manual"` uses `volume` as a percentage).
+`similarityBoost`, `style`, `useSpeakerBoost`, `seed`) plus a loudness
+`volumeMode` (`"match"` matches the original speaker, `"normalize"` applies
+loudnorm, `"manual"` uses `volume` as a percentage). A per-voice `seed`
+(integer 0–4294967295) makes that speaker's recast reproducible across runs.
 
 Pass **`audioUrl`** for audio → audio recast, or **`videoUrl`** to recast the
 audio track of a video clip (the server demuxes, recasts, and remuxes).
@@ -2296,9 +2304,13 @@ only controls whether that music/instrumental stem is mixed back under the new
 voices; set it `false` for a clean voice-only result. `separationQuality`
 selects the demucs model used for the split: `"fast"` (default, htdemucs —
 preserves more of the voice) or `"best"` (htdemucs_ft — finer separation).
-`removeBackgroundNoise` additionally denoises the result. Cloud-only — costs
-credits and runs async; poll `client.jobs.get(jobId)` for the result
-(`output_data.videoUrl` + `output_data.audioUrl` in video mode).
+`removeBackgroundNoise` additionally denoises the result. `voiceFx` applies a
+reverb/echo to the **combined** recast voices **before** the background is mixed
+back in (so the effect sits on the voices, not the music/SFX bed): reverb presets
+(`"room"`, `"hall"`, `"church"`, …) use `wetDryMix`; the `"echo"` / `"custom"`
+presets use `delayMs` + `decay`. Cloud-only — costs credits and runs async; poll
+`client.jobs.get(jobId)` for the result (`output_data.videoUrl` +
+`output_data.audioUrl` in video mode).
 
 ```ts
 // Two-speaker audio recast (bare voice ids)
@@ -2306,6 +2318,16 @@ const { jobId } = await client.voices.recast({
   audioUrl: "https://cdn.example.com/dialogue.mp3",
   orderedVoices: ["Rachel", "Aria"],
   preserveBackground: true,
+})
+
+// Reproducible recast (per-voice seed) + a hall reverb on the voices
+const { jobId: reverbed } = await client.voices.recast({
+  audioUrl: "https://cdn.example.com/dialogue.mp3",
+  orderedVoices: [
+    { voiceId: "Rachel", seed: 12345 },
+    { voiceId: "Aria", seed: 67890 },
+  ],
+  voiceFx: { preset: "hall", wetDryMix: 35 },
 })
 
 // Per-voice settings + finer separation

@@ -421,14 +421,17 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         "etc. Unmapped speakers keep their original voice.\n\n" +
         "Each entry is EITHER a bare voice id OR an object with per-voice " +
         "speech-to-speech settings — { voiceId, stability, similarityBoost, " +
-        "style, useSpeakerBoost, volumeMode, volume }. volumeMode 'match' " +
+        "style, useSpeakerBoost, seed, volumeMode, volume }. volumeMode 'match' " +
         "(default) matches the original speaker's loudness, 'normalize' applies " +
-        "loudnorm, 'manual' uses volume (0–200%).\n\n" +
+        "loudnorm, 'manual' uses volume (0–200%). A per-voice `seed` " +
+        "(0–4294967295) makes that speaker's recast reproducible.\n\n" +
         "Provide ONE source: audio_url / audio_asset_id to recast audio→audio, " +
         "OR video_url / video_asset_id to recast the voices in a full video clip.\n\n" +
         "Voice and music are ALWAYS separated first (ElevenLabs only ever sees " +
         "the isolated vocals); preserve_background (default true) just controls " +
         "whether the music/SFX bed is mixed back in under the new voices.\n\n" +
+        "voice_fx applies a reverb/echo to the COMBINED recast voices BEFORE the " +
+        "background is mixed back in (the effect sits on the voices, not the music bed).\n\n" +
         "Voice ids use the same naming as `generate_speech`: pass a premade " +
         "voice NAME (Rachel, Aria, Roger, ...) or an ElevenLabs UUID for a " +
         "custom clone. Cloud-only.",
@@ -458,6 +461,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
                 similarityBoost: z.number().min(0).max(1).optional(),
                 style: z.number().min(0).max(1).optional(),
                 useSpeakerBoost: z.boolean().optional(),
+                seed: z.number().int().min(0).max(4294967295).optional(),
                 volumeMode: z.enum(["match", "normalize", "manual"]).optional(),
                 volume: z.number().min(0).max(200).optional(),
               }),
@@ -468,8 +472,21 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
           .describe(
             "Ordered list of target voices — speaker 1 → voices[0], speaker 2 → voices[1], etc. " +
               "Each entry is either a bare voice id (premade name or ElevenLabs UUID) or an object " +
-              "{ voiceId, stability, similarityBoost, style, useSpeakerBoost, volumeMode, volume } " +
-              "with per-voice speech-to-speech settings.",
+              "{ voiceId, stability, similarityBoost, style, useSpeakerBoost, seed, volumeMode, volume } " +
+              "with per-voice speech-to-speech settings. `seed` (0–4294967295) makes that speaker's recast reproducible.",
+          ),
+        voice_fx: z
+          .object({
+            preset: z.enum([...AUDIO_FX_PRESETS] as [string, ...string[]]),
+            wetDryMix: z.number().min(0).max(100).optional(),
+            delayMs: z.number().min(20).max(2000).optional(),
+            decay: z.number().min(0).max(1).optional(),
+          })
+          .optional()
+          .describe(
+            "Reverb/echo applied to the combined recast voices before background is mixed back. " +
+              "preset = reverb space (room/hall/church/…), telephone, megaphone, echo, or custom; " +
+              "wetDryMix (0–100) for reverb wetness; delayMs (20–2000) + decay (0–1) for echo.",
           ),
         model: z.string().optional().describe("Voice model override."),
         preserve_background: z
@@ -554,6 +571,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         payload.separationQuality = args.separation_quality
       if (args.remove_background_noise !== undefined)
         payload.removeBackgroundNoise = args.remove_background_noise
+      if (args.voice_fx !== undefined) payload.voiceFx = args.voice_fx
       // ordered_voices entries can now be objects — surface the voice id in the
       // widget prompt either way.
       const voiceLabels = args.ordered_voices

@@ -1,4 +1,4 @@
-import type { Voice, VoiceClone, VoiceLibraryParams, VoiceLibraryResponse } from "@nodaro/shared"
+import type { Voice, VoiceClone, VoiceLibraryParams, VoiceLibraryResponse, AudioFxPreset } from "@nodaro/shared"
 import type { NodaroClient } from "../client.js"
 
 /**
@@ -8,6 +8,8 @@ import type { NodaroClient } from "../client.js"
  * `@nodaro/shared`.
  */
 export type { Voice, SharedVoice, VoiceClone, VoiceLibraryParams, VoiceLibraryResponse } from "@nodaro/shared"
+/** Audio-FX preset union (reverb spaces / telephone / megaphone / echo / custom) — used by {@link VoiceRecastInput.voiceFx}. */
+export type { AudioFxPreset } from "@nodaro/shared"
 
 /**
  * Read access to ElevenLabs voices: the premade catalog plus the shared
@@ -96,7 +98,8 @@ export class VoicesResource {
    * their original voice. Each entry is EITHER a bare voice id (premade name or
    * ElevenLabs UUID) OR a {@link VoiceRecastVoice} object carrying per-voice
    * ElevenLabs speech-to-speech settings (stability / similarityBoost / style /
-   * useSpeakerBoost) plus a loudness `volumeMode` (and a manual `volume`).
+   * useSpeakerBoost / `seed`) plus a loudness `volumeMode` (and a manual
+   * `volume`). A per-voice `seed` makes that speaker's recast reproducible.
    *
    * Pass `audioUrl` for audio-only recast or `videoUrl` to recast the audio
    * track of a video clip (the server demuxes, recasts, and remuxes).
@@ -108,6 +111,8 @@ export class VoicesResource {
    * `separationQuality` selects the demucs model used for that split: `"fast"`
    * (default, htdemucs — preserves more of the voice) or `"best"` (htdemucs_ft —
    * finer separation). `removeBackgroundNoise` additionally denoises the result.
+   * `voiceFx` applies a reverb/echo to the COMBINED recast voices BEFORE the
+   * background is mixed back in (effect sits on the voices, not the music bed).
    *
    * Cloud-only — costs credits and runs async; poll `jobs.get(jobId)` for the
    * result (`output_data.videoUrl` + `output_data.audioUrl` in video mode).
@@ -136,6 +141,12 @@ export type VoiceRecastVoice =
       style?: number
       /** ElevenLabs speaker boost — sharpens fidelity to the target speaker. */
       useSpeakerBoost?: boolean
+      /**
+       * Deterministic speech-to-speech seed (integer 0–4294967295) for
+       * reproducible per-voice output — the same source + settings + seed
+       * recast this speaker identically across runs. Omit for a random seed.
+       */
+      seed?: number
       /**
        * Loudness handling for this recast voice. `"match"` (default) matches the
        * original speaker's loudness; `"normalize"` applies EBU R128 loudnorm;
@@ -173,4 +184,21 @@ export interface VoiceRecastInput {
   separationQuality?: "fast" | "best"
   /** Strip background noise for a clean voice-only result. */
   removeBackgroundNoise?: boolean
+  /**
+   * Node-level reverb/echo applied to the COMBINED recast voices **before** the
+   * background is mixed back in (so the effect sits on the voices only, not the
+   * music/SFX bed). Reverb presets (`room`, `hall`, `church`, …) use
+   * `wetDryMix`; the `echo` / `custom` presets use `delayMs` + `decay`. Omit for
+   * no effect.
+   */
+  voiceFx?: {
+    /** Effect preset — reverb space, `telephone`, `megaphone`, `echo`, or `custom`. */
+    preset: AudioFxPreset
+    /** Reverb wet/dry mix as a percentage (0–100). Higher = wetter (more reverb). */
+    wetDryMix?: number
+    /** Echo delay in milliseconds (20–2000). Used by the `echo` / `custom` presets. */
+    delayMs?: number
+    /** Echo decay / feedback (0–1). Higher = more repeats. Used by the `echo` / `custom` presets. */
+    decay?: number
+  }
 }

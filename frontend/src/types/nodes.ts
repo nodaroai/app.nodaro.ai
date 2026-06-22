@@ -2771,6 +2771,9 @@ export type VoiceRecastData = {
     /** Output volume as a percentage (100 = unchanged). Only applied when
      *  volumeMode === "manual". */
     volume?: number
+    /** Per-voice generation seed for reproducible recasts. Integer in
+     *  [0, 4294967295]. Omitted ⇒ random (the backend default). */
+    seed?: number
   }>
   model?: VoiceChangerModel
   preserveBackground: boolean
@@ -2778,6 +2781,18 @@ export type VoiceRecastData = {
    *  "best" does finer vocal isolation at the cost of speed. */
   separationQuality?: "fast" | "best"
   removeBackgroundNoise: boolean
+  /** Optional node-level audio effect applied to the COMBINED recast voices
+   *  (after recasting, before any preserved background music is mixed back).
+   *  Mirrors the Audio FX node's preset/param model. Undefined ⇒ no effect. */
+  voiceFx?: {
+    preset: AudioFxPreset
+    /** Reverb wet/dry mix (0–100). Only for reverb presets. */
+    wetDryMix?: number
+    /** Echo/custom delay in ms (20–2000). */
+    delayMs?: number
+    /** Echo/custom decay (0–1). */
+    decay?: number
+  }
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string

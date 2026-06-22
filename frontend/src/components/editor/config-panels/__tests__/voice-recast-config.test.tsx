@@ -274,4 +274,120 @@ describe("VoiceRecastConfig", () => {
     // Either no additional call or the call count should not increase
     expect(onUpdate.mock.calls.length).toBe(firstCallCount)
   })
+
+  // ----- Feature 1: per-voice Seed -----------------------------------------
+
+  describe("per-voice Seed", () => {
+    it("renders one Seed input per voice, blank by default", () => {
+      renderPanel({
+        orderedVoices: [
+          { voiceId: "v1", voiceLabel: "One", voiceType: "premade" },
+          { voiceId: "v2", voiceLabel: "Two", voiceType: "premade" },
+        ],
+      })
+      const seeds = screen.getAllByLabelText("Seed") as HTMLInputElement[]
+      expect(seeds).toHaveLength(2)
+      expect(seeds[0].value).toBe("")
+      expect(seeds[1].value).toBe("")
+    })
+
+    it("writes seed for the right voice index immutably", () => {
+      const onUpdate = vi.fn()
+      renderPanel({
+        orderedVoices: [
+          { voiceId: "v1", voiceLabel: "One", voiceType: "premade" },
+          { voiceId: "v2", voiceLabel: "Two", voiceType: "premade" },
+        ],
+      }, onUpdate)
+      // Set the SECOND voice's seed.
+      fireEvent.change(screen.getAllByLabelText("Seed")[1], { target: { value: "42" } })
+      expect(onUpdate).toHaveBeenCalledWith({
+        orderedVoices: [
+          { voiceId: "v1", voiceLabel: "One", voiceType: "premade" },
+          { voiceId: "v2", voiceLabel: "Two", voiceType: "premade", seed: 42 },
+        ],
+      })
+    })
+
+    it("treats 0 as an explicit seed (not unset)", () => {
+      const onUpdate = vi.fn()
+      renderPanel({
+        orderedVoices: [{ voiceId: "v1", voiceLabel: "One", voiceType: "premade" }],
+      }, onUpdate)
+      fireEvent.change(screen.getByLabelText("Seed"), { target: { value: "0" } })
+      expect(onUpdate).toHaveBeenLastCalledWith({
+        orderedVoices: [{ voiceId: "v1", voiceLabel: "One", voiceType: "premade", seed: 0 }],
+      })
+    })
+
+    it("clears the seed (unset) when the input is emptied", () => {
+      const onUpdate = vi.fn()
+      renderPanel({
+        orderedVoices: [{ voiceId: "v1", voiceLabel: "One", voiceType: "premade", seed: 123 }],
+      }, onUpdate)
+      const input = screen.getByLabelText("Seed") as HTMLInputElement
+      expect(input.value).toBe("123")
+      fireEvent.change(input, { target: { value: "" } })
+      expect(onUpdate).toHaveBeenLastCalledWith({
+        orderedVoices: [{ voiceId: "v1", voiceLabel: "One", voiceType: "premade", seed: undefined }],
+      })
+    })
+  })
+
+  // ----- Feature 2: node-level Voice FX ------------------------------------
+
+  describe("Voice FX section", () => {
+    it("defaults the preset select to None and shows the voice-targeted hint", () => {
+      renderPanel({})
+      const fx = screen.getByLabelText("Voice FX") as HTMLSelectElement
+      expect(fx.value).toBe("__none__")
+      expect(
+        screen.getByText(/before the background music is mixed back/i),
+      ).toBeInTheDocument()
+      // No param controls when no preset is selected.
+      expect(screen.queryByText(/Wet \/ Dry mix/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/Delay \(ms\)/)).not.toBeInTheDocument()
+    })
+
+    it("sets voiceFx with a reverb preset and reveals wetDryMix only", () => {
+      const onUpdate = vi.fn()
+      renderPanel({}, onUpdate)
+      fireEvent.change(screen.getByLabelText("Voice FX"), { target: { value: "hall" } })
+      expect(onUpdate).toHaveBeenCalledWith({ voiceFx: { preset: "hall" } })
+    })
+
+    it("reveals wetDryMix (and not delay/decay) for a reverb preset", () => {
+      renderPanel({ voiceFx: { preset: "church" } })
+      expect(screen.getByText(/Wet \/ Dry mix/)).toBeInTheDocument()
+      expect(screen.queryByText(/Delay \(ms\)/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/^Decay/)).not.toBeInTheDocument()
+    })
+
+    it("reveals delay + decay (and not wetDryMix) for the echo preset", () => {
+      renderPanel({ voiceFx: { preset: "echo" } })
+      expect(screen.getByText(/Delay \(ms\)/)).toBeInTheDocument()
+      expect(screen.getByText(/Decay/)).toBeInTheDocument()
+      expect(screen.queryByText(/Wet \/ Dry mix/)).not.toBeInTheDocument()
+    })
+
+    it("reveals delay + decay for the custom preset", () => {
+      renderPanel({ voiceFx: { preset: "custom" } })
+      expect(screen.getByText(/Delay \(ms\)/)).toBeInTheDocument()
+      expect(screen.getByText(/Decay/)).toBeInTheDocument()
+    })
+
+    it("clears voiceFx when None is selected", () => {
+      const onUpdate = vi.fn()
+      renderPanel({ voiceFx: { preset: "hall", wetDryMix: 50 } }, onUpdate)
+      fireEvent.change(screen.getByLabelText("Voice FX"), { target: { value: "__none__" } })
+      expect(onUpdate).toHaveBeenCalledWith({ voiceFx: undefined })
+    })
+
+    it("preserves existing params when switching to another preset of the same family", () => {
+      const onUpdate = vi.fn()
+      renderPanel({ voiceFx: { preset: "hall", wetDryMix: 70 } }, onUpdate)
+      fireEvent.change(screen.getByLabelText("Voice FX"), { target: { value: "church" } })
+      expect(onUpdate).toHaveBeenCalledWith({ voiceFx: { preset: "church", wetDryMix: 70 } })
+    })
+  })
 })
