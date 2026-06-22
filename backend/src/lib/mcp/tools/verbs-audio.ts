@@ -413,14 +413,22 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
   server.registerTool(
     "voice_recast",
     {
-      title: "Voice Recast",
+      title: "Voice Changer Pro",
       description:
         "Detect each speaker in an audio or video clip and recast each one to " +
         "a different target voice (first-appearance order). Supply an ordered " +
-        "list of voice ids — speaker 1 → voices[0], speaker 2 → voices[1], " +
+        "list of voices — speaker 1 → voices[0], speaker 2 → voices[1], " +
         "etc. Unmapped speakers keep their original voice.\n\n" +
+        "Each entry is EITHER a bare voice id OR an object with per-voice " +
+        "speech-to-speech settings — { voiceId, stability, similarityBoost, " +
+        "style, useSpeakerBoost, volumeMode, volume }. volumeMode 'match' " +
+        "(default) matches the original speaker's loudness, 'normalize' applies " +
+        "loudnorm, 'manual' uses volume (0–200%).\n\n" +
         "Provide ONE source: audio_url / audio_asset_id to recast audio→audio, " +
         "OR video_url / video_asset_id to recast the voices in a full video clip.\n\n" +
+        "Voice and music are ALWAYS separated first (ElevenLabs only ever sees " +
+        "the isolated vocals); preserve_background (default true) just controls " +
+        "whether the music/SFX bed is mixed back in under the new voices.\n\n" +
         "Voice ids use the same naming as `generate_speech`: pass a premade " +
         "voice NAME (Rachel, Aria, Roger, ...) or an ElevenLabs UUID for a " +
         "custom clone. Cloud-only.",
@@ -441,17 +449,40 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
             "A Nodaro video job id to recast (alternative to video_url).",
           ),
         ordered_voices: z
-          .array(z.string().min(1))
+          .array(
+            z.union([
+              z.string().min(1),
+              z.object({
+                voiceId: z.string().min(1),
+                stability: z.number().min(0).max(1).optional(),
+                similarityBoost: z.number().min(0).max(1).optional(),
+                style: z.number().min(0).max(1).optional(),
+                useSpeakerBoost: z.boolean().optional(),
+                volumeMode: z.enum(["match", "normalize", "manual"]).optional(),
+                volume: z.number().min(0).max(200).optional(),
+              }),
+            ]),
+          )
           .min(1)
+          .max(8)
           .describe(
-            "Ordered list of target voice ids — speaker 1 → voices[0], speaker 2 → voices[1], etc. Premade name or ElevenLabs UUID.",
+            "Ordered list of target voices — speaker 1 → voices[0], speaker 2 → voices[1], etc. " +
+              "Each entry is either a bare voice id (premade name or ElevenLabs UUID) or an object " +
+              "{ voiceId, stability, similarityBoost, style, useSpeakerBoost, volumeMode, volume } " +
+              "with per-voice speech-to-speech settings.",
           ),
         model: z.string().optional().describe("Voice model override."),
         preserve_background: z
           .boolean()
           .optional()
           .describe(
-            "Keep the music/SFX bed under the new voices (default: true).",
+            "Mix the separated music/SFX bed back under the new voices (default: true). The voice is always split out first regardless; false yields a clean voice-only result.",
+          ),
+        separation_quality: z
+          .enum(["fast", "best"])
+          .optional()
+          .describe(
+            "Demucs model used to split voice from music: 'fast' (default, htdemucs — preserves more voice) or 'best' (htdemucs_ft — finer separation).",
           ),
         remove_background_noise: z
           .boolean()
@@ -519,15 +550,22 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       if (args.model !== undefined) payload.model = args.model
       if (args.preserve_background !== undefined)
         payload.preserveBackground = args.preserve_background
+      if (args.separation_quality !== undefined)
+        payload.separationQuality = args.separation_quality
       if (args.remove_background_noise !== undefined)
         payload.removeBackgroundNoise = args.remove_background_noise
+      // ordered_voices entries can now be objects — surface the voice id in the
+      // widget prompt either way.
+      const voiceLabels = args.ordered_voices
+        .map((v) => (typeof v === "string" ? v : v.voiceId))
+        .join(", ")
       return dispatchJob(fastify, session, {
         url: "/v1/voice-recast",
         payload,
         label: isVideo ? "voice recast (video)" : "voice recast",
         widgetKind: "audio",
         widgetData: {
-          prompt: `recast → ${args.ordered_voices.join(", ")}`,
+          prompt: `recast → ${voiceLabels}`,
           model: "voice-recast",
         },
       })

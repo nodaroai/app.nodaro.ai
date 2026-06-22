@@ -280,6 +280,7 @@ export type {
   VoiceLibraryParams,
   VoiceLibraryResponse,
   VoiceRecastInput,
+  VoiceRecastVoice,
 } from "./resources/voices.js"
 
 export type {

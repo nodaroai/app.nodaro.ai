@@ -981,6 +981,28 @@ describe("voice_recast verb", () => {
     expect(received.body?.orderedVoices).toEqual(["v1", "v2"])
     expect(received.body?.audioUrl).toBeUndefined()
   })
+
+  it("passes per-voice objects + separation_quality straight through", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/voice-recast", { jobId: "j-vr2" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const orderedVoices = [
+      "Rachel",
+      { voiceId: "Aria", stability: 0.6, volumeMode: "manual", volume: 120 },
+    ]
+    const result = await callTool(server, "voice_recast", {
+      audio_url: "https://a/x.mp3",
+      ordered_voices: orderedVoices,
+      separation_quality: "best",
+      preserve_background: false,
+    })
+    expect(result.isError).toBeUndefined()
+    expect(((result.structuredContent as Record<string, unknown>)?.jobId)).toBe("j-vr2")
+    // camelCase object fields pass straight through to the route.
+    expect(received.body?.orderedVoices).toEqual(orderedVoices)
+    expect(received.body?.separationQuality).toBe("best")
+    expect(received.body?.preserveBackground).toBe(false)
+  })
 })
 
 describe("dubbing verb", () => {

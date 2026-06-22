@@ -2254,33 +2254,68 @@ const { jobId: vjobId } = await client.voices.change({
 #### `recast(input)`
 
 ```ts
+type VoiceRecastVoice =
+  | string
+  | {
+      voiceId: string
+      stability?: number          // 0–1
+      similarityBoost?: number    // 0–1
+      style?: number              // 0–1, default 0
+      useSpeakerBoost?: boolean
+      volumeMode?: "match" | "normalize" | "manual"  // default "match"
+      volume?: number             // 0–200 (%), used only when volumeMode === "manual"
+    }
+
 recast(input: {
   audioUrl?: string
   videoUrl?: string
-  orderedVoices: string[]
+  orderedVoices: Array<VoiceRecastVoice>   // 1–8 entries
   model?: string
-  preserveBackground?: boolean
+  preserveBackground?: boolean             // default true
+  separationQuality?: "fast" | "best"      // default "fast"
   removeBackgroundNoise?: boolean
 }): Promise<{ jobId: string }>
 ```
 
 Recast each detected speaker in a multi-speaker recording to a different voice
 (`POST /v1/voice-recast`). `orderedVoices` maps speaker-detection positions to
-voice ids — speaker 0 → `orderedVoices[0]`, speaker 1 → `orderedVoices[1]`,
-etc. Speakers beyond the end of `orderedVoices` keep their original voice.
+voices — speaker 0 → `orderedVoices[0]`, speaker 1 → `orderedVoices[1]`, etc.
+Speakers beyond the end of `orderedVoices` keep their original voice. Each entry
+is **either a bare voice id** (premade name or ElevenLabs UUID) **or an object**
+with per-voice ElevenLabs speech-to-speech settings (`stability`,
+`similarityBoost`, `style`, `useSpeakerBoost`) plus a loudness `volumeMode`
+(`"match"` matches the original speaker, `"normalize"` applies loudnorm,
+`"manual"` uses `volume` as a percentage).
+
 Pass **`audioUrl`** for audio → audio recast, or **`videoUrl`** to recast the
 audio track of a video clip (the server demuxes, recasts, and remuxes).
-`preserveBackground` keeps music/SFX beds under the new voices;
-`removeBackgroundNoise` strips them for a clean voice-only result. Cloud-only —
-costs credits and runs async; poll `client.jobs.get(jobId)` for the result
+
+Voice and music are **always separated first** — ElevenLabs only ever sees the
+isolated vocal stem, never the music bed. `preserveBackground` (default `true`)
+only controls whether that music/instrumental stem is mixed back under the new
+voices; set it `false` for a clean voice-only result. `separationQuality`
+selects the demucs model used for the split: `"fast"` (default, htdemucs —
+preserves more of the voice) or `"best"` (htdemucs_ft — finer separation).
+`removeBackgroundNoise` additionally denoises the result. Cloud-only — costs
+credits and runs async; poll `client.jobs.get(jobId)` for the result
 (`output_data.videoUrl` + `output_data.audioUrl` in video mode).
 
 ```ts
-// Two-speaker audio recast
+// Two-speaker audio recast (bare voice ids)
 const { jobId } = await client.voices.recast({
   audioUrl: "https://cdn.example.com/dialogue.mp3",
   orderedVoices: ["Rachel", "Aria"],
   preserveBackground: true,
+})
+
+// Per-voice settings + finer separation
+const { jobId: tuned } = await client.voices.recast({
+  audioUrl: "https://cdn.example.com/dialogue.mp3",
+  orderedVoices: [
+    { voiceId: "Rachel", stability: 0.6, similarityBoost: 0.8 },
+    { voiceId: "Aria", volumeMode: "manual", volume: 120 },
+  ],
+  separationQuality: "best",
 })
 
 // Multi-speaker video recast

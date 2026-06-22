@@ -842,7 +842,7 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   },
   {
     type: "voice-recast",
-    label: "Voice Recast",
+    label: "Voice Changer Pro",
     icon: <AudioWaveform className="h-4 w-4" />,
     category: "AI",
     group: "Audio & Speech",

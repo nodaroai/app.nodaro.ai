@@ -3298,12 +3298,21 @@ export async function voiceChangerApi(audioUrl: string | undefined, voiceId: str
 
 export async function voiceRecastApi(
   audioUrl: string | undefined,
-  orderedVoices: string[],
+  orderedVoices: Array<{
+    voiceId: string
+    stability?: number
+    similarityBoost?: number
+    style?: number
+    useSpeakerBoost?: boolean
+    volumeMode?: "match" | "normalize" | "manual"
+    volume?: number
+  }>,
   userId?: string,
   model?: string,
   preserveBackground?: boolean,
   removeBackgroundNoise?: boolean,
   videoUrl?: string,
+  separationQuality?: "fast" | "best",
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { orderedVoices }
   if (audioUrl) body.audioUrl = audioUrl
@@ -3312,6 +3321,7 @@ export async function voiceRecastApi(
   if (userId) body.userId = userId
   if (preserveBackground != null) body.preserveBackground = preserveBackground
   if (removeBackgroundNoise != null) body.removeBackgroundNoise = removeBackgroundNoise
+  if (separationQuality != null) body.separationQuality = separationQuality
   return apiJson("/v1/voice-recast", {
     body,
     workflowId: true,

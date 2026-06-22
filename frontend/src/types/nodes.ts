@@ -2752,10 +2752,31 @@ export type VoiceChangerData = {
 export type VoiceRecastData = {
   [key: string]: unknown
   label: string
-  /** Ordered target voices; voice i recasts the i-th speaker (first-appearance order). */
-  orderedVoices: Array<{ voiceId: string; voiceLabel: string; voiceType: "premade" | "custom" | "library" }>
+  /** Ordered target voices; voice i recasts the i-th speaker (first-appearance order).
+   *  Per-voice ElevenLabs voice-settings are optional; when omitted the backend
+   *  applies its defaults (stability 0.5, similarity 0.75, style 0, speakerBoost
+   *  true, volume 100%). */
+  orderedVoices: Array<{
+    voiceId: string
+    voiceLabel: string
+    voiceType: "premade" | "custom" | "library"
+    stability?: number
+    similarityBoost?: number
+    style?: number
+    useSpeakerBoost?: boolean
+    /** How this voice's output level is set. "match" (default) keeps the
+     *  source speaker's loudness, "normalize" levels it to a target, "manual"
+     *  applies the `volume` percentage below. */
+    volumeMode?: "match" | "normalize" | "manual"
+    /** Output volume as a percentage (100 = unchanged). Only applied when
+     *  volumeMode === "manual". */
+    volume?: number
+  }>
   model?: VoiceChangerModel
   preserveBackground: boolean
+  /** Source-separation quality. "fast" (default) preserves more of the voice;
+   *  "best" does finer vocal isolation at the cost of speed. */
+  separationQuality?: "fast" | "best"
   removeBackgroundNoise: boolean
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
@@ -6184,13 +6205,13 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
   },
   {
     type: "voice-recast",
-    label: "Voice Recast",
+    label: "Voice Changer Pro",
     category: "ai",
     creditCost: 4,
     inputs: ["audio", "video"],
     outputs: ["audio", "video"],
     defaultData: {
-      label: "Voice Recast",
+      label: "Voice Changer Pro",
       orderedVoices: [],
       model: "eleven_english_sts_v2",
       preserveBackground: true,

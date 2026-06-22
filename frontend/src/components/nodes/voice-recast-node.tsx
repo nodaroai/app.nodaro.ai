@@ -46,7 +46,7 @@ function VoiceRecastNodeComponent({ id, data, selected }: NodeProps) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const credits = useModelCredits("voice-recast", 4)
 
-  // Voice Recast is dual-mode: audio by default, but video when a video input
+  // Voice Changer Pro is dual-mode: audio by default, but video when a video input
   // is wired (isVideoResult). In video mode it behaves like the other video
   // nodes — 240 / 16:9-until-result / snap-to-result-aspect. Audio mode keeps
   // its compact waveform layout (no aspect, default sizing) untouched.
@@ -187,7 +187,7 @@ function VoiceRecastNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         <div className="flex justify-between text-muted-foreground">
-          <span>Voice Recast</span>
+          <span>Voice Changer Pro</span>
           {nodeData.orderedVoices?.length > 0 && (
             <span className="text-xs truncate max-w-[80px]">{nodeData.orderedVoices[0].voiceLabel}</span>
           )}

@@ -283,6 +283,37 @@ describe("voice-changer — directVoiceChanger", () => {
     expect(settings.style).toBe(0)
   })
 
+  it("packs use_speaker_boost into voice_settings and defaults stability + similarity", async () => {
+    // useSpeakerBoost alone must trigger voice_settings (it's a valid STS lever on its own).
+    await directVoiceChanger(Buffer.from("input"), "v1", { useSpeakerBoost: true })
+    const init = fetchMock.mock.calls[0][1] as { body: FormData }
+    const settings = JSON.parse(init.body.get("voice_settings") as string)
+    expect(settings).toEqual({ stability: 0.5, similarity_boost: 0.75, use_speaker_boost: true })
+  })
+
+  it("sends use_speaker_boost=false when explicitly disabled", async () => {
+    await directVoiceChanger(Buffer.from("input"), "v1", { useSpeakerBoost: false })
+    const init = fetchMock.mock.calls[0][1] as { body: FormData }
+    const settings = JSON.parse(init.body.get("voice_settings") as string)
+    expect(settings.use_speaker_boost).toBe(false)
+  })
+
+  it("omits use_speaker_boost when not provided (back-compat)", async () => {
+    await directVoiceChanger(Buffer.from("input"), "v1", { stability: 0.3 })
+    const init = fetchMock.mock.calls[0][1] as { body: FormData }
+    const settings = JSON.parse(init.body.get("voice_settings") as string)
+    expect(settings).not.toHaveProperty("use_speaker_boost")
+  })
+
+  it("combines all levers: stability, similarity, style + use_speaker_boost", async () => {
+    await directVoiceChanger(Buffer.from("input"), "v1", {
+      stability: 0.3, similarityBoost: 0.9, style: 0.6, useSpeakerBoost: true,
+    })
+    const init = fetchMock.mock.calls[0][1] as { body: FormData }
+    const settings = JSON.parse(init.body.get("voice_settings") as string)
+    expect(settings).toEqual({ stability: 0.3, similarity_boost: 0.9, style: 0.6, use_speaker_boost: true })
+  })
+
   it("throws on non-200 with error text in message", async () => {
     fetchMock.mockReset()
     fetchMock.mockResolvedValueOnce(errorResponse("voice not found", 404))

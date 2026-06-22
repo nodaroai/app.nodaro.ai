@@ -307,7 +307,7 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
   },
   {
     type: "voice-recast",
-    label: "Voice Recast",
+    label: "Voice Changer Pro",
     category: "ai-audio",
     description: "Detect each speaker in a multi-speaker recording and replace each one's voice independently, preserving words, timing and lip-sync. Provide an ordered list of target voices — voice N recasts the N-th speaker to talk. Cloud edition only.",
     outputType: "audio",
@@ -317,9 +317,12 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
       fields: [
         { key: "audioUrl", type: "audio-url" },
         { key: "videoUrl", type: "video-url" },
-        { key: "orderedVoices", type: "string[]", required: true },
+        // Each entry is a voiceId string OR a per-voice settings object
+        // { voiceId, stability?, similarityBoost?, style?, useSpeakerBoost?, volumeMode?, volume? }.
+        { key: "orderedVoices", type: "voice[]", required: true },
         { key: "model", type: "select", options: [...VOICE_CHANGER_MODEL_IDS] },
         { key: "preserveBackground", type: "boolean" },
+        { key: "separationQuality", type: "select", options: ["fast", "best"] },
         { key: "removeBackgroundNoise", type: "boolean" },
       ],
     },
