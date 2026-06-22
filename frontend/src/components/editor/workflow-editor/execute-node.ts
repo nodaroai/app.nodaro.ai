@@ -2665,6 +2665,8 @@ export function executeNode(
         videoUrl,
         d.separationQuality,
         d.voiceFx,
+        d.musicVolumeMode,
+        d.musicVolume,
       );
     if (videoUrl) {
       return runProcessingNode(

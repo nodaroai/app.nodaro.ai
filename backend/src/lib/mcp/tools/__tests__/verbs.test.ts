@@ -995,6 +995,8 @@ describe("voice_recast verb", () => {
       ordered_voices: orderedVoices,
       separation_quality: "best",
       preserve_background: false,
+      music_volume_mode: "manual",
+      music_volume: 80,
     })
     expect(result.isError).toBeUndefined()
     expect(((result.structuredContent as Record<string, unknown>)?.jobId)).toBe("j-vr2")
@@ -1002,6 +1004,9 @@ describe("voice_recast verb", () => {
     expect(received.body?.orderedVoices).toEqual(orderedVoices)
     expect(received.body?.separationQuality).toBe("best")
     expect(received.body?.preserveBackground).toBe(false)
+    // snake_case music_volume_mode / music_volume → camelCase musicVolumeMode / musicVolume.
+    expect(received.body?.musicVolumeMode).toBe("manual")
+    expect(received.body?.musicVolume).toBe(80)
   })
 
   it("forwards per-voice seed and maps voice_fx → voiceFx", async () => {

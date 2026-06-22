@@ -2777,6 +2777,15 @@ export type VoiceRecastData = {
   }>
   model?: VoiceChangerModel
   preserveBackground: boolean
+  /** How the preserved background music's level is set when mixed back under the
+   *  recast voices. "match" (default) keeps the source music at its original
+   *  loudness, "normalize" levels it to a target, "manual" applies the
+   *  `musicVolume` percentage below. Only meaningful when `preserveBackground`
+   *  is on. */
+  musicVolumeMode?: "match" | "normalize" | "manual"
+  /** Background-music volume as a percentage (100 = unchanged). Only applied
+   *  when `musicVolumeMode === "manual"`. */
+  musicVolume?: number
   /** Source-separation quality. "fast" (default) preserves more of the voice;
    *  "best" does finer vocal isolation at the cost of speed. */
   separationQuality?: "fast" | "best"

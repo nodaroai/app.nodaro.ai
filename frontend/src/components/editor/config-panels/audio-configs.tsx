@@ -2214,9 +2214,14 @@ export function VoiceRecastConfig({ data, onUpdate }: ConfigProps<VoiceRecastDat
                   <Input id={`style-${i}`} type="range" min={0} max={1} step={0.05} value={v.style ?? 0} onChange={(e) => updateVoice(i, { style: parseFloat(e.target.value) })} className="h-2" />
                   <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5"><span>None</span><span>Exaggerated</span></div>
                 </div>
-                <div className="flex items-center justify-between">
-                  <Label htmlFor={`speaker-boost-${i}`}>Speaker Boost</Label>
-                  <Switch id={`speaker-boost-${i}`} checked={v.useSpeakerBoost ?? true} onCheckedChange={(c) => updateVoice(i, { useSpeakerBoost: c })} />
+                <div>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor={`speaker-boost-${i}`}>Speaker Boost</Label>
+                    <Switch id={`speaker-boost-${i}`} checked={v.useSpeakerBoost ?? true} onCheckedChange={(c) => updateVoice(i, { useSpeakerBoost: c })} />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                    Boosts the recast&apos;s fidelity to the target voice (slightly higher latency).
+                  </p>
                 </div>
                 <div>
                   <Label htmlFor={`volume-mode-${i}`}>Volume</Label>
@@ -2301,6 +2306,32 @@ export function VoiceRecastConfig({ data, onUpdate }: ConfigProps<VoiceRecastDat
         <Label>Preserve background music</Label>
         <Switch checked={data.preserveBackground ?? true} onCheckedChange={(v) => onUpdate({ preserveBackground: v })} />
       </div>
+      {data.preserveBackground !== false && (
+        <div>
+          <Label htmlFor="music-volume-mode">Music volume</Label>
+          <Select
+            value={data.musicVolumeMode ?? "match"}
+            onValueChange={(mode) => onUpdate({ musicVolumeMode: mode as NonNullable<VoiceRecastData["musicVolumeMode"]> })}
+          >
+            <SelectTrigger id="music-volume-mode" aria-label="Music volume mode" className="h-8"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="match">Match source</SelectItem>
+              <SelectItem value="normalize">Normalize</SelectItem>
+              <SelectItem value="manual">Manual</SelectItem>
+            </SelectContent>
+          </Select>
+          {(data.musicVolumeMode ?? "match") === "manual" && (
+            <div className="mt-2">
+              <Label htmlFor="music-volume">Music level ({data.musicVolume ?? 100}%)</Label>
+              <Input id="music-volume" type="range" min={0} max={200} step={5} value={data.musicVolume ?? 100} onChange={(e) => onUpdate({ musicVolume: parseFloat(e.target.value) })} className="h-2" />
+              <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5"><span>0%</span><span>200%</span></div>
+            </div>
+          )}
+          <p className="text-[10px] text-muted-foreground mt-0.5">
+            Sets the preserved background music level relative to the recast voices.
+          </p>
+        </div>
+      )}
       <div className="flex flex-col gap-1.5 rounded border p-2">
         <Label htmlFor="voice-fx-preset">Voice FX</Label>
         <Select

@@ -480,6 +480,23 @@ describe("mixAudio", () => {
     expect(args[fcIdx + 1]).toContain("[a0][a1][a2]amix=inputs=3:duration=longest[aout]")
   })
 
+  it("does NOT add normalize=0 by default (back-compat averaging)", async () => {
+    await mixAudio({ audioUrls: ["a.mp3", "b.mp3"] })
+    const args = ffargs()
+    const fcIdx = args.indexOf("-filter_complex")
+    expect(args[fcIdx + 1]).not.toContain("normalize=0")
+  })
+
+  it("sumTracks:true adds normalize=0 + a brickwall limiter to the amix (sum, no clip)", async () => {
+    await mixAudio({ audioUrls: ["a.mp3", "b.mp3"], sumTracks: true })
+    const args = ffargs()
+    const fcIdx = args.indexOf("-filter_complex")
+    // normalize=0 sums (preserves loudness); the limiter caps summed peaks past 0 dBFS.
+    expect(args[fcIdx + 1]).toContain("amix=inputs=2:duration=longest:normalize=0")
+    expect(args[fcIdx + 1]).toContain("alimiter=level=disabled:limit=0.95")
+    expect(args[fcIdx + 1]).toMatch(/normalize=0,alimiter=level=disabled:limit=0\.95\[aout\]/)
+  })
+
   it("maps the [aout] output", async () => {
     await mixAudio({ audioUrls: ["a.mp3"] })
     const args = ffargs()

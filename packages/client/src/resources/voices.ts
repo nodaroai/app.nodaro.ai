@@ -111,6 +111,9 @@ export class VoicesResource {
    * `separationQuality` selects the demucs model used for that split: `"fast"`
    * (default, htdemucs — preserves more of the voice) or `"best"` (htdemucs_ft —
    * finer separation). `removeBackgroundNoise` additionally denoises the result.
+   * `musicVolumeMode` sets the level of that preserved background (only relevant
+   * when `preserveBackground` is on): `"match"` (default) keeps the original
+   * level, `"normalize"` loudnorms it, `"manual"` uses `musicVolume`%.
    * `voiceFx` applies a reverb/echo to the COMBINED recast voices BEFORE the
    * background is mixed back in (effect sits on the voices, not the music bed).
    *
@@ -184,6 +187,16 @@ export interface VoiceRecastInput {
   separationQuality?: "fast" | "best"
   /** Strip background noise for a clean voice-only result. */
   removeBackgroundNoise?: boolean
+  /**
+   * Level of the preserved background music / SFX stem in the final mix. Only
+   * relevant when `preserveBackground` is on (otherwise there is no background to
+   * level). `"match"` (default) leaves the separated instrumental at its original
+   * level; `"normalize"` applies EBU R128 loudnorm; `"manual"` sets its level to
+   * `musicVolume`%.
+   */
+  musicVolumeMode?: "match" | "normalize" | "manual"
+  /** Background music level as a percentage (0–200). Consulted only when `musicVolumeMode === "manual"`. */
+  musicVolume?: number
   /**
    * Node-level reverb/echo applied to the COMBINED recast voices **before** the
    * background is mixed back in (so the effect sits on the voices only, not the
