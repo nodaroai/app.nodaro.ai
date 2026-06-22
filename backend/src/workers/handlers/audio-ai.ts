@@ -307,12 +307,13 @@ const handleTextToDialogue: HandlerFn = async function handleTextToDialogue(job,
 }
 
 const handleVoiceChanger: HandlerFn = async function handleVoiceChanger(job, ctx) {
-  const { audioUrl, videoUrl, voiceId, model, stability, similarityBoost, style, removeBackgroundNoise } = job.data as {
+  const { audioUrl, videoUrl, voiceId, model, stability, similarityBoost, style, removeBackgroundNoise, useSpeakerBoost, seed } = job.data as {
     jobId: string; audioUrl?: string; videoUrl?: string; voiceId: string; model?: string
     stability?: number; similarityBoost?: number; style?: number; removeBackgroundNoise?: boolean
+    useSpeakerBoost?: boolean; seed?: number
   }
   // modelId omitted → provider falls back to eleven_english_sts_v2 (prior default).
-  const opts = { modelId: model, stability, similarityBoost, style, removeBackgroundNoise }
+  const opts = { modelId: model, stability, similarityBoost, style, removeBackgroundNoise, useSpeakerBoost, seed }
 
   // --- Video mode: demux audio → speech-to-speech → remux onto the original
   // video. Video takes precedence when both inputs are wired (matches the route

@@ -2734,6 +2734,11 @@ export type VoiceChangerData = {
   /** Style exaggeration (0–1). Default 0; >0 amplifies the source's delivery
    *  but adds latency and can reduce stability. */
   style?: number
+  /** Speaker boost — amplifies similarity to the target voice (more compute,
+   *  slight latency). Default true. */
+  useSpeakerBoost?: boolean
+  /** Deterministic STS seed (0–4294967295). Omitted = random each run. */
+  seed?: number
   removeBackgroundNoise: boolean
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"

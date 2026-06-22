@@ -1809,6 +1809,35 @@ export function VoiceChangerConfig({ data, onUpdate, nodeRefs }: ConfigProps<Voi
         </p>
       </div>
       <div>
+        <div className="flex items-center justify-between">
+          <Label htmlFor="vc-speaker-boost">Speaker Boost</Label>
+          <Switch id="vc-speaker-boost" checked={data.useSpeakerBoost ?? true} onCheckedChange={(c: boolean) => onUpdate({ useSpeakerBoost: c })} />
+        </div>
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Amplifies similarity to the target voice (uses more compute, slight latency). On by default.
+        </p>
+      </div>
+      <div>
+        <Label htmlFor="vc-seed">Seed</Label>
+        <Input
+          id="vc-seed"
+          type="number"
+          min={0}
+          max={4294967295}
+          placeholder="Random"
+          value={data.seed ?? ""}
+          onChange={(e) => {
+            const raw = e.target.value.trim()
+            if (raw === "") { onUpdate({ seed: undefined }); return }
+            const n = parseInt(raw, 10)
+            if (Number.isFinite(n)) onUpdate({ seed: n })
+          }}
+        />
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Fix for reproducible output (same seed + same input + same settings). Leave blank for random.
+        </p>
+      </div>
+      <div>
         <div className="flex items-center gap-2">
           <Checkbox
             id="vc-remove-bg"

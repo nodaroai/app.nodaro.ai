@@ -31,6 +31,7 @@ function VoiceChangerProNodeComponent({ id, data, selected }: NodeProps) {
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const isSettingsOpen = useWorkflowStore((s) => s.selectedNodeId === id)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
+  const openFreeCut = useWorkflowStore((s) => s.openFreeCut)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
@@ -220,6 +221,7 @@ function VoiceChangerProNodeComponent({ id, data, selected }: NodeProps) {
         hasResults={results.length > 0}
         onExpand={() => setPreviewOpen(true)}
         onDelete={() => { if (activeJobId) setDeleteConfirm(activeJobId) }}
+        onEdit={() => openFreeCut(id, activeUrl!, activeResult?.freecutProjectUrl)}
         onRawDimensions={handleLoadDimensions}
         onVideoError={() => setVideoError(true)}
         onVideoLoad={() => setVideoError(false)}
