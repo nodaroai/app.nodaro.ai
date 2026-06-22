@@ -163,6 +163,7 @@ import { ogTagsRoutes } from "./routes/og-tags.js"
 import { appAnalyticsRoutes } from "./routes/app-analytics.js"
 import { monetizationRoutes } from "./ee/routes/monetization.js"
 import { voiceChangerProRoutes } from "./ee/routes/voice-changer-pro.js"
+import { freecutExportRoutes } from "./ee/routes/freecut-export.js"
 import { embedRoutes } from "./routes/embed.js"
 import { qaCheckRoutes } from "./routes/qa-check.js"
 import { imageCriticRoutes } from "./routes/image-critic.js"
@@ -447,6 +448,7 @@ export async function buildApp() {
   await app.register(appAnalyticsRoutes)
   if (hasCredits()) await app.register(monetizationRoutes)
   if (hasCredits()) await app.register(voiceChangerProRoutes)
+  if (hasCredits()) await app.register(freecutExportRoutes)
   await app.register(embedRoutes)
   await app.register(qaCheckRoutes)
   await app.register(imageCriticRoutes)
