@@ -124,6 +124,36 @@ describe("POST /v1/oauth/register (RFC 7591 DCR)", () => {
     expect(body.grant_types).toEqual(["authorization_code"])
     expect(body.response_types).toEqual(["code"])
   })
+
+  // Regression: RFC 7591 §2 says the server MUST ignore unrecognized client
+  // metadata. Real MCP clients (Claude.ai, Cursor, …) send extra fields like
+  // `application_type` / `software_id` / `software_version`. A `.strict()`
+  // schema 400s the whole request → "Couldn't register with Nodaro's sign-in
+  // service" for every such client. The extras must be ignored, not rejected.
+  it("ignores unknown RFC 7591 metadata fields instead of 400ing", async () => {
+    const app = await makeApp()
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/oauth/register",
+      payload: {
+        client_name: "Claude",
+        redirect_uris: ["https://claude.ai/api/mcp/auth_callback"],
+        grant_types: ["authorization_code", "refresh_token"],
+        response_types: ["code"],
+        token_endpoint_auth_method: "client_secret_post",
+        // Fields outside our whitelist that real clients send:
+        application_type: "web",
+        software_id: "claude-ai",
+        software_version: "1.0.0",
+        jwks: { keys: [] },
+      },
+      headers: { "x-forwarded-for": "10.0.0.5" },
+    })
+    expect(res.statusCode).toBe(201)
+    const body = JSON.parse(res.body)
+    expect(body.client_id).toBeTruthy()
+    expect(body.client_secret).toBeTruthy()
+  })
 })
 
 describe("DCR abuse mitigations", () => {

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest"
 import {
   NODARO_LOAD_VIDEO,
+  NODARO_LOAD_TIMELINE,
   NODARO_IMPORT_FILES,
   NODARO_RESET_PROJECT,
   FREECUT_READY,
@@ -13,6 +14,7 @@ describe("freecut protocol constants", () => {
   it("pins the wire strings the fork mirrors", () => {
     expect({
       NODARO_LOAD_VIDEO,
+      NODARO_LOAD_TIMELINE,
       NODARO_IMPORT_FILES,
       NODARO_RESET_PROJECT,
       FREECUT_READY,
@@ -21,6 +23,7 @@ describe("freecut protocol constants", () => {
       FREECUT_REQUEST_IMPORT,
     }).toEqual({
       NODARO_LOAD_VIDEO: "NODARO_LOAD_VIDEO",
+      NODARO_LOAD_TIMELINE: "NODARO_LOAD_TIMELINE",
       NODARO_IMPORT_FILES: "NODARO_IMPORT_FILES",
       NODARO_RESET_PROJECT: "NODARO_RESET_PROJECT",
       FREECUT_READY: "FREECUT_READY",
