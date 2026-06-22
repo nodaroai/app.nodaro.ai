@@ -3,6 +3,14 @@
 import { useEffect, useCallback, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { X, Loader2, Check, FilePlus } from "lucide-react"
+import {
+  NODARO_LOAD_VIDEO,
+  NODARO_IMPORT_FILES,
+  NODARO_RESET_PROJECT,
+  FREECUT_READY,
+  FREECUT_EXPORT_COMPLETE,
+  FREECUT_REQUEST_IMPORT,
+} from "@nodaro/shared"
 
 const FREECUT_URL = import.meta.env.VITE_FREECUT_URL || "http://localhost:5174"
 const FREECUT_ORIGIN = new URL(FREECUT_URL).origin
@@ -67,7 +75,7 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAsse
 
       console.warn("[FreeCut] Sending to iframe", { hasBuffer: !!videoBuffer, hasProjectJson: !!projectJson, additionalFiles: additionalFiles?.map((f) => ({ name: f.name, size: f.size })) ?? [] })
       iframe.contentWindow!.postMessage(
-        { type: "NODARO_LOAD_VIDEO", payload: { videoUrl, videoBuffer, projectJson, additionalFiles } },
+        { type: NODARO_LOAD_VIDEO, payload: { videoUrl, videoBuffer, projectJson, additionalFiles } },
         FREECUT_ORIGIN,
         [videoBuffer],
       )
@@ -81,7 +89,7 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAsse
       if (!iframe?.contentWindow) return
       const buffers = files.map(f => f.buffer)
       iframe.contentWindow.postMessage(
-        { type: "NODARO_IMPORT_FILES", payload: { files } },
+        { type: NODARO_IMPORT_FILES, payload: { files } },
         FREECUT_ORIGIN,
         buffers,
       )
@@ -98,7 +106,7 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAsse
     (event: MessageEvent) => {
       if (event.origin !== FREECUT_ORIGIN) return
 
-      if (event.data?.type === "FREECUT_READY") {
+      if (event.data?.type === FREECUT_READY) {
         if (!sentVideoRef.current) {
           sentVideoRef.current = true
           const iframe = iframeRef.current
@@ -106,7 +114,7 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAsse
             sendVideoToFreeCut(iframe, true).catch(() => {
               // Fallback: send URL only (buffer fetch failed)
               iframe.contentWindow!.postMessage(
-                { type: "NODARO_LOAD_VIDEO", payload: { videoUrl } },
+                { type: NODARO_LOAD_VIDEO, payload: { videoUrl } },
                 FREECUT_ORIGIN,
               )
             })
@@ -114,7 +122,7 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAsse
         }
       }
 
-      if (event.data?.type === "FREECUT_EXPORT_COMPLETE") {
+      if (event.data?.type === FREECUT_EXPORT_COMPLETE) {
         const buffer: ArrayBuffer = event.data.payload?.videoBuffer
         if (!buffer) return
         setSaveState("saving")
@@ -129,7 +137,7 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAsse
         })
       }
 
-      if (event.data?.type === "FREECUT_REQUEST_IMPORT") {
+      if (event.data?.type === FREECUT_REQUEST_IMPORT) {
         const { accept, multiple } = event.data.payload
         if (onImportRequest) {
           onImportRequest(accept || "video/*,audio/*,image/*", multiple ?? true)
@@ -152,7 +160,7 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAsse
           )
           const buffers = payload.map((f) => f.buffer)
           iframeRef.current?.contentWindow?.postMessage(
-            { type: "NODARO_IMPORT_FILES", payload: { files: payload } },
+            { type: NODARO_IMPORT_FILES, payload: { files: payload } },
             FREECUT_ORIGIN,
             buffers,
           )
@@ -188,14 +196,14 @@ export function FreeCutEditorModal({ videoUrl, freecutProjectUrl, additionalAsse
     const iframe = iframeRef.current
     if (iframe?.contentWindow) {
       iframe.contentWindow.postMessage(
-        { type: "NODARO_RESET_PROJECT", payload: {} },
+        { type: NODARO_RESET_PROJECT, payload: {} },
         FREECUT_ORIGIN,
       )
       // Re-send video without project JSON
       sentVideoRef.current = false
       sendVideoToFreeCut(iframe, false).catch(() => {
         iframe.contentWindow!.postMessage(
-          { type: "NODARO_LOAD_VIDEO", payload: { videoUrl } },
+          { type: NODARO_LOAD_VIDEO, payload: { videoUrl } },
           FREECUT_ORIGIN,
         )
       })
