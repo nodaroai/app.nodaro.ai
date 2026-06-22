@@ -5,6 +5,10 @@
 
 // Nodaro (parent) -> FreeCut (iframe)
 export const NODARO_LOAD_VIDEO = "NODARO_LOAD_VIDEO"
+// Multi-clip analog of NODARO_LOAD_VIDEO: lay N ordered urls on the timeline as
+// sequential clips (FreeCut fetches them itself). Used by Studio's production
+// "Edit in FreeCut" to assemble the whole cut.
+export const NODARO_LOAD_TIMELINE = "NODARO_LOAD_TIMELINE"
 export const NODARO_IMPORT_FILES = "NODARO_IMPORT_FILES"
 export const NODARO_RESET_PROJECT = "NODARO_RESET_PROJECT"
 
@@ -26,6 +30,11 @@ export interface NodaroLoadVideoPayload {
   readonly videoBuffer?: ArrayBuffer
   readonly projectJson?: unknown
   readonly additionalFiles?: ReadonlyArray<FreecutImportFile>
+}
+
+export interface NodaroLoadTimelinePayload {
+  // Ordered clip urls; FreeCut fetches each and lays them end-to-end on the timeline.
+  readonly clips: ReadonlyArray<string>
 }
 
 export interface FreecutExportCompletePayload {
