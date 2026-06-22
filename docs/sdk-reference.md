@@ -2254,7 +2254,7 @@ const { jobId: vjobId } = await client.voices.change({
 #### `recast(input)`
 
 ```ts
-type VoiceRecastVoice =
+type VoiceChangerProVoice =
   | string
   | {
       voiceId: string
@@ -2270,7 +2270,7 @@ type VoiceRecastVoice =
 recast(input: {
   audioUrl?: string
   videoUrl?: string
-  orderedVoices: Array<VoiceRecastVoice>   // 1–8 entries
+  orderedVoices: Array<VoiceChangerProVoice>   // 1–8 entries
   model?: string
   preserveBackground?: boolean             // default true
   separationQuality?: "fast" | "best"      // default "fast"
@@ -2287,7 +2287,7 @@ recast(input: {
 ```
 
 Recast each detected speaker in a multi-speaker recording to a different voice
-(`POST /v1/voice-recast`). `orderedVoices` maps speaker-detection positions to
+(`POST /v1/voice-changer-pro`). `orderedVoices` maps speaker-detection positions to
 voices — speaker 0 → `orderedVoices[0]`, speaker 1 → `orderedVoices[1]`, etc.
 Speakers beyond the end of `orderedVoices` keep their original voice. Each entry
 is **either a bare voice id** (premade name or ElevenLabs UUID) **or an object**

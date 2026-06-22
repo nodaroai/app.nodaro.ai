@@ -215,7 +215,7 @@ const ALLOWLIST = new Set([
   "frontend/src/components/nodes/video-upscale-node.tsx",
   "frontend/src/components/nodes/voice-changer-node.tsx",
   "frontend/src/components/nodes/voice-design-node.tsx",
-  "frontend/src/components/nodes/voice-recast-node.tsx",
+  "frontend/src/components/nodes/voice-changer-pro-node.tsx",
   "frontend/src/components/nodes/voice-remix-node.tsx",
   "frontend/src/components/presentation/presentation-view.tsx",
   "frontend/src/hooks/use-workflow-persistence.ts",

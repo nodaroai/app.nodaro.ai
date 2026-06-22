@@ -8,7 +8,7 @@ import type { NodaroClient } from "../client.js"
  * `@nodaro/shared`.
  */
 export type { Voice, SharedVoice, VoiceClone, VoiceLibraryParams, VoiceLibraryResponse } from "@nodaro/shared"
-/** Audio-FX preset union (reverb spaces / telephone / megaphone / echo / custom) — used by {@link VoiceRecastInput.voiceFx}. */
+/** Audio-FX preset union (reverb spaces / telephone / megaphone / echo / custom) — used by {@link VoiceChangerProInput.voiceFx}. */
 export type { AudioFxPreset } from "@nodaro/shared"
 
 /**
@@ -92,11 +92,11 @@ export class VoicesResource {
 
   /**
    * Recast each detected speaker in a multi-speaker recording to a different
-   * voice (`POST /v1/voice-recast`). `orderedVoices` maps speaker positions to
+   * voice (`POST /v1/voice-changer-pro`). `orderedVoices` maps speaker positions to
    * voices in detection order — speaker 0 → `orderedVoices[0]`, speaker 1 →
    * `orderedVoices[1]`, etc. Speakers beyond the end of `orderedVoices` keep
    * their original voice. Each entry is EITHER a bare voice id (premade name or
-   * ElevenLabs UUID) OR a {@link VoiceRecastVoice} object carrying per-voice
+   * ElevenLabs UUID) OR a {@link VoiceChangerProVoice} object carrying per-voice
    * ElevenLabs speech-to-speech settings (stability / similarityBoost / style /
    * useSpeakerBoost / `seed`) plus a loudness `volumeMode` (and a manual
    * `volume`). A per-voice `seed` makes that speaker's recast reproducible.
@@ -120,18 +120,18 @@ export class VoicesResource {
    * Cloud-only — costs credits and runs async; poll `jobs.get(jobId)` for the
    * result (`output_data.videoUrl` + `output_data.audioUrl` in video mode).
    */
-  recast(input: VoiceRecastInput): Promise<{ jobId: string }> {
-    return this.client.request<{ jobId: string }>("POST", "/v1/voice-recast", { body: input })
+  recast(input: VoiceChangerProInput): Promise<{ jobId: string }> {
+    return this.client.request<{ jobId: string }>("POST", "/v1/voice-changer-pro", { body: input })
   }
 }
 
 /**
- * One entry in {@link VoiceRecastInput.orderedVoices}. Either a bare voice id
+ * One entry in {@link VoiceChangerProInput.orderedVoices}. Either a bare voice id
  * (premade name like `"Rachel"` or an ElevenLabs UUID for a custom clone), or
  * an object pinning per-voice speech-to-speech settings and the recast's
  * loudness behaviour for that speaker.
  */
-export type VoiceRecastVoice =
+export type VoiceChangerProVoice =
   | string
   | {
       /** Target voice — premade name (`"Rachel"`, `"Aria"`, …) or an ElevenLabs UUID for a custom clone. */
@@ -161,7 +161,7 @@ export type VoiceRecastVoice =
     }
 
 /** Input for {@link VoicesResource.recast}. */
-export interface VoiceRecastInput {
+export interface VoiceChangerProInput {
   /** URL of an audio file to recast (audio → audio). Exactly one of `audioUrl` / `videoUrl` is required. */
   audioUrl?: string
   /** URL of a video file to recast (the audio track is recast and remuxed). Exactly one of `audioUrl` / `videoUrl` is required. */
@@ -169,9 +169,9 @@ export interface VoiceRecastInput {
   /**
    * Voices in speaker-detection order. Speaker N is mapped to `orderedVoices[N]`;
    * speakers beyond the array keep their original voice. Each entry is a bare
-   * voice id OR a {@link VoiceRecastVoice} object with per-voice settings.
+   * voice id OR a {@link VoiceChangerProVoice} object with per-voice settings.
    */
-  orderedVoices: Array<VoiceRecastVoice>
+  orderedVoices: Array<VoiceChangerProVoice>
   /** Model to use for speech-to-speech. Defaults to the server-configured default when omitted. */
   model?: string
   /**

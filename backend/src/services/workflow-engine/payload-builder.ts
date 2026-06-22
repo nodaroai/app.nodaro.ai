@@ -3481,13 +3481,13 @@ export function buildPayload(
         usageLogId,
       })
 
-    case "voice-recast": {
+    case "voice-changer-pro": {
       // Multi-speaker recast: orderedVoices is an array of { voiceId, ... }
       // objects on the node data. The worker expects a string[] of voice ids
       // (one per speaker, in first-appearance order). Unmapped speakers pass
       // through unchanged when the array is shorter than the detected count.
       // NOTE: the orchestrator reserves credits via a flat model-identifier
-      // lookup ("voice-recast" → 4 credits in STATIC_CREDIT_COSTS / model_pricing).
+      // lookup ("voice-changer-pro" → 4 credits in STATIC_CREDIT_COSTS / model_pricing).
       // The single-node route uses a computeCredits hook to reserve
       // 4 × orderedVoices.length dynamically; that hook is not available in
       // the orchestrator path. A workflow run therefore reserves 4 credits
@@ -3496,7 +3496,7 @@ export function buildPayload(
       // override into the orchestrator (same class as the route's metered fix).
       const rawVoices = (data.orderedVoices ?? []) as Array<{ voiceId: string }>
       const orderedVoices = rawVoices.map((v) => v.voiceId)
-      return simpleResult("voice-recast", "voice-recast", {
+      return simpleResult("voice-changer-pro", "voice-changer-pro", {
         jobId,
         audioUrl: resolvedInputs.audioUrl || data.audioUrl,
         videoUrl: resolvedInputs.videoUrl || data.videoUrl,

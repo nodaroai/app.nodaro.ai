@@ -580,7 +580,7 @@ const AUDIO_TEXT_VALIDATORS: Record<string, AudioTextValidator> = {
   "audio-separation":  (h, s) => isValidAudioSeparationConnection(h, s),
   "text-to-dialogue":  isValidTextToDialogueConnection,
   "voice-changer":     (h, s) => isValidVoiceChangerConnection(h, s),
-  "voice-recast":      (h, s) => isValidVoiceChangerConnection(h, s),
+  "voice-changer-pro":      (h, s) => isValidVoiceChangerConnection(h, s),
   "dubbing":           (h, s) => isValidDubbingConnection(h, s),
   "voice-remix":       (h, s) => isValidVoiceRemixConnection(h, s),
   "voice-design":      isValidVoiceDesignConnection,

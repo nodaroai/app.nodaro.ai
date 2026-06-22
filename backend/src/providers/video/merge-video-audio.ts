@@ -21,7 +21,7 @@ interface MergeVideoAudioOptions {
    * rather than averaged (ffmpeg's default divides every input by N, which
    * attenuates the result by ~−6dB for 2 inputs). Use this when the tracks are
    * time-disjoint or volume-controlled and must retain their leveled loudness
-   * (e.g. voice-recast: per-speaker recast stems + instrumental reconstruct the
+   * (e.g. voice-changer-pro: per-speaker recast stems + instrumental reconstruct the
    * original level). Default false = back-compat averaging.
    */
   readonly sumTracks?: boolean

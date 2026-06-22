@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-06-22T08:05:05.950Z
-generated_from: fe864903b
+generated_at: 2026-06-22T12:36:44.414Z
+generated_from: 41c5c5bde
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -226,10 +226,10 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `video-to-video` — Video to Video
 - `video-upscale` — Upscale Video
 - `voice-changer` — Voice Changer
+- `voice-changer-pro` — Voice Changer Pro
 - `voice-character` — Voice Character
 - `voice-delivery` — Voice Delivery
 - `voice-design` — Voice Design
-- `voice-recast` — Voice Changer Pro
 - `voice-remix` — Voice Remix
 - `weapon` — Weapon
 - `web-scrape` — Web Scrape

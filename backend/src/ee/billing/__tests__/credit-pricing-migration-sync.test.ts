@@ -113,6 +113,11 @@ describe("STATIC_CREDIT_COSTS keys have model_pricing migrations", () => {
 // ---------------------------------------------------------------------------
 
 const KNOWN_GHOST_IDENTIFIERS: ReadonlySet<string> = new Set([
+  // ── voice-recast renamed → voice-changer-pro. Migration 233 historically
+  //    seeded 'voice-recast'; migration 234 renames that row to
+  //    'voice-changer-pro' (the live id, now in STATIC_CREDIT_COSTS). 233's
+  //    INSERT remains in the file, so the old id is a documented ghost. ──
+  "voice-recast",
   // ── Replicate providers — disabled in current build, kept as historical ──
   "runway",
   "pika",

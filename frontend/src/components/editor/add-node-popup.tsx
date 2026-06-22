@@ -841,7 +841,7 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     group: "Audio & Speech",
   },
   {
-    type: "voice-recast",
+    type: "voice-changer-pro",
     label: "Voice Changer Pro",
     icon: <AudioWaveform className="h-4 w-4" />,
     category: "AI",
@@ -1397,7 +1397,7 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
 ];
 
 /** Node types that must only appear in Cloud edition (hasCredits()). */
-const CLOUD_ONLY_NODE_TYPES = new Set<string>(["voice-recast"]);
+const CLOUD_ONLY_NODE_TYPES = new Set<string>(["voice-changer-pro"]);
 
 /**
  * Returns `NODE_OPTIONS` filtered for the current edition.

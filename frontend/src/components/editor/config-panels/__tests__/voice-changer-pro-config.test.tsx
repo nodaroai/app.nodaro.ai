@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest"
 import { render, screen, fireEvent } from "@testing-library/react"
-import { VoiceRecastConfig } from "../audio-configs"
-import type { VoiceRecastData } from "@/types/nodes"
+import { VoiceChangerProConfig } from "../audio-configs"
+import type { VoiceChangerProData } from "@/types/nodes"
 
 // VoiceBrowser is exercised elsewhere; stub it to a button that adds a voice.
 vi.mock("../voice-browser", () => ({
@@ -59,15 +59,15 @@ vi.mock("@/components/ui/select", () => {
   }
 })
 
-const baseData: VoiceRecastData = {
+const baseData: VoiceChangerProData = {
   label: "Voice Changer Pro", orderedVoices: [], model: "eleven_english_sts_v2",
   preserveBackground: true, removeBackgroundNoise: false, fieldMappings: {},
 }
 
-function renderPanel(over: Partial<VoiceRecastData> = {}, onUpdate = vi.fn()) {
-  const data: VoiceRecastData = { ...baseData, ...over }
+function renderPanel(over: Partial<VoiceChangerProData> = {}, onUpdate = vi.fn()) {
+  const data: VoiceChangerProData = { ...baseData, ...over }
   render(
-    <VoiceRecastConfig
+    <VoiceChangerProConfig
       data={data}
       onUpdate={onUpdate}
       sources={[]}
@@ -79,7 +79,7 @@ function renderPanel(over: Partial<VoiceRecastData> = {}, onUpdate = vi.fn()) {
   return { onUpdate }
 }
 
-describe("VoiceRecastConfig", () => {
+describe("VoiceChangerProConfig", () => {
   it("appends a picked voice to orderedVoices (immutably)", () => {
     const onUpdate = vi.fn()
     renderPanel({}, onUpdate)
@@ -179,7 +179,7 @@ describe("VoiceRecastConfig", () => {
   it("reveals the manual Volume slider only when mode is 'manual'", () => {
     // Match: no slider.
     const { unmount } = render(
-      <VoiceRecastConfig
+      <VoiceChangerProConfig
         data={{ ...baseData, orderedVoices: [{ voiceId: "v1", voiceLabel: "One", voiceType: "premade", volumeMode: "match" }] }}
         onUpdate={vi.fn()} sources={[]} fieldMappings={{}} onMapField={vi.fn()} nodes={[]}
       />,
@@ -189,7 +189,7 @@ describe("VoiceRecastConfig", () => {
 
     // Normalize: still no slider.
     const r2 = render(
-      <VoiceRecastConfig
+      <VoiceChangerProConfig
         data={{ ...baseData, orderedVoices: [{ voiceId: "v1", voiceLabel: "One", voiceType: "premade", volumeMode: "normalize" }] }}
         onUpdate={vi.fn()} sources={[]} fieldMappings={{}} onMapField={vi.fn()} nodes={[]}
       />,
@@ -199,7 +199,7 @@ describe("VoiceRecastConfig", () => {
 
     // Manual: slider appears with default 100%.
     render(
-      <VoiceRecastConfig
+      <VoiceChangerProConfig
         data={{ ...baseData, orderedVoices: [{ voiceId: "v1", voiceLabel: "One", voiceType: "premade", volumeMode: "manual" }] }}
         onUpdate={vi.fn()} sources={[]} fieldMappings={{}} onMapField={vi.fn()} nodes={[]}
       />,
@@ -278,7 +278,7 @@ describe("VoiceRecastConfig", () => {
     it("reveals the music level slider only when mode is 'manual'", () => {
       // Match: no slider.
       const { unmount } = render(
-        <VoiceRecastConfig
+        <VoiceChangerProConfig
           data={{ ...baseData, musicVolumeMode: "match" }}
           onUpdate={vi.fn()} sources={[]} fieldMappings={{}} onMapField={vi.fn()} nodes={[]}
         />,
@@ -288,7 +288,7 @@ describe("VoiceRecastConfig", () => {
 
       // Normalize: still no slider.
       const r2 = render(
-        <VoiceRecastConfig
+        <VoiceChangerProConfig
           data={{ ...baseData, musicVolumeMode: "normalize" }}
           onUpdate={vi.fn()} sources={[]} fieldMappings={{}} onMapField={vi.fn()} nodes={[]}
         />,
@@ -298,7 +298,7 @@ describe("VoiceRecastConfig", () => {
 
       // Manual: slider appears with default 100%.
       render(
-        <VoiceRecastConfig
+        <VoiceChangerProConfig
           data={{ ...baseData, musicVolumeMode: "manual" }}
           onUpdate={vi.fn()} sources={[]} fieldMappings={{}} onMapField={vi.fn()} nodes={[]}
         />,

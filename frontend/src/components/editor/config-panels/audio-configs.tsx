@@ -47,7 +47,7 @@ import type {
   TextToDialogueData,
   DialogueLine,
   VoiceChangerData,
-  VoiceRecastData,
+  VoiceChangerProData,
   DubbingData,
   VoiceRemixData,
   VoiceDesignData,
@@ -2154,7 +2154,7 @@ export function ForcedAlignmentConfig({ data, onUpdate, sources, fieldMappings, 
  *  `voiceFx` is cleared to undefined (the default = no effect). */
 const VOICE_FX_NONE = "__none__"
 
-export function VoiceRecastConfig({ data, onUpdate }: ConfigProps<VoiceRecastData>) {
+export function VoiceChangerProConfig({ data, onUpdate }: ConfigProps<VoiceChangerProData>) {
   const voices = data.orderedVoices ?? []
   const addVoice = (voiceId: string, voiceLabel: string, voiceType: "premade" | "custom" | "library") =>
     onUpdate({ orderedVoices: [...voices, { voiceId, voiceLabel, voiceType }] })
@@ -2168,7 +2168,7 @@ export function VoiceRecastConfig({ data, onUpdate }: ConfigProps<VoiceRecastDat
     onUpdate({ orderedVoices: next })
   }
   // Immutably patch one voice entry's per-voice settings (copy array + entry).
-  const updateVoice = (i: number, patch: Partial<VoiceRecastData["orderedVoices"][number]>) => {
+  const updateVoice = (i: number, patch: Partial<VoiceChangerProData["orderedVoices"][number]>) => {
     const next = voices.map((v, idx) => (idx === i ? { ...v, ...patch } : v))
     onUpdate({ orderedVoices: next })
   }
@@ -2227,7 +2227,7 @@ export function VoiceRecastConfig({ data, onUpdate }: ConfigProps<VoiceRecastDat
                   <Label htmlFor={`volume-mode-${i}`}>Volume</Label>
                   <Select
                     value={v.volumeMode ?? "match"}
-                    onValueChange={(mode) => updateVoice(i, { volumeMode: mode as NonNullable<VoiceRecastData["orderedVoices"][number]["volumeMode"]> })}
+                    onValueChange={(mode) => updateVoice(i, { volumeMode: mode as NonNullable<VoiceChangerProData["orderedVoices"][number]["volumeMode"]> })}
                   >
                     <SelectTrigger id={`volume-mode-${i}`} aria-label={`Volume mode for speaker ${i + 1}`} className="h-8"><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -2279,7 +2279,7 @@ export function VoiceRecastConfig({ data, onUpdate }: ConfigProps<VoiceRecastDat
         <Label>Model</Label>
         <Select
           value={data.model ?? "eleven_english_sts_v2"}
-          onValueChange={(v) => onUpdate({ model: v as VoiceRecastData["model"] })}
+          onValueChange={(v) => onUpdate({ model: v as VoiceChangerProData["model"] })}
         >
           <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -2293,7 +2293,7 @@ export function VoiceRecastConfig({ data, onUpdate }: ConfigProps<VoiceRecastDat
         <Label>Separation quality</Label>
         <Select
           value={data.separationQuality ?? "fast"}
-          onValueChange={(v) => onUpdate({ separationQuality: v as NonNullable<VoiceRecastData["separationQuality"]> })}
+          onValueChange={(v) => onUpdate({ separationQuality: v as NonNullable<VoiceChangerProData["separationQuality"]> })}
         >
           <SelectTrigger aria-label="Separation quality"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -2311,7 +2311,7 @@ export function VoiceRecastConfig({ data, onUpdate }: ConfigProps<VoiceRecastDat
           <Label htmlFor="music-volume-mode">Music volume</Label>
           <Select
             value={data.musicVolumeMode ?? "match"}
-            onValueChange={(mode) => onUpdate({ musicVolumeMode: mode as NonNullable<VoiceRecastData["musicVolumeMode"]> })}
+            onValueChange={(mode) => onUpdate({ musicVolumeMode: mode as NonNullable<VoiceChangerProData["musicVolumeMode"]> })}
           >
             <SelectTrigger id="music-volume-mode" aria-label="Music volume mode" className="h-8"><SelectValue /></SelectTrigger>
             <SelectContent>

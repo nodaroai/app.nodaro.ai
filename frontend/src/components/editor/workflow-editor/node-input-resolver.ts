@@ -6,7 +6,7 @@ import type {
   GenerateImageData,
   AdjustVolumeData,
   VoiceChangerData,
-  VoiceRecastData,
+  VoiceChangerProData,
   GeneratedResult,
   LoopNodeData,
 } from "@/types/nodes";
@@ -761,7 +761,7 @@ const LLM_REF_VIDEO_NODE_TYPES = new Set<string>([
 /** Node types whose primary output is an audio URL. */
 const LLM_REF_AUDIO_NODE_TYPES = new Set<string>([
   "generate-music", "text-to-speech", "text-to-audio",
-  "voice-changer", "voice-recast", "voice-design", "voice-remix", "dubbing",
+  "voice-changer", "voice-changer-pro", "voice-design", "voice-remix", "dubbing",
   "trim-audio", "combine-audio", "mix-audio", "audio-fx", "audio-isolation",
   "text-to-dialogue",
   "suno-generate", "suno-cover", "suno-extend", "suno-separate",
@@ -2065,11 +2065,11 @@ export function resolveNodeInputs(
       } else {
         inputs.audioUrl = output;
       }
-    } else if (src.type === "voice-recast") {
+    } else if (src.type === "voice-changer-pro") {
       // Same dual-mode as voice-changer: audio-primary output, video output when
       // video was the input. Route by the edge's sourceHandle; default prefers
       // video when the node produced one.
-      const vrData = src.data as VoiceRecastData;
+      const vrData = src.data as VoiceChangerProData;
       const producedVideo = Boolean(vrData.generatedVideoUrl);
       if (resolvedSourceHandle === "video" || (resolvedSourceHandle !== "audio" && producedVideo)) {
         inputs.videoUrl = output;

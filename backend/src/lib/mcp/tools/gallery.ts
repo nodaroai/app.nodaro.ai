@@ -56,7 +56,7 @@ const AUDIO_JOBS = new Set([
   "suno-extend",
   "text-to-dialogue",
   "voice-changer",
-  "voice-recast",
+  "voice-changer-pro",
   "dubbing",
   "voice-remix",
   "voice-design",

@@ -20,13 +20,13 @@ import { VideoResultOverlay } from "./video-result-overlay"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
-import type { VoiceChangerData } from "@/types/nodes"
+import type { VoiceChangerProData } from "@/types/nodes"
 
 const ACCEPTS_AUDIO = (t: string) => isValidVoiceChangerConnection("audio", t)
 const ACCEPTS_VIDEO = (t: string) => isValidVoiceChangerConnection("video", t)
 
-function VoiceChangerNodeComponent({ id, data, selected }: NodeProps) {
-  const nodeData = data as VoiceChangerData
+function VoiceChangerProNodeComponent({ id, data, selected }: NodeProps) {
+  const nodeData = data as VoiceChangerProData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const isSettingsOpen = useWorkflowStore((s) => s.selectedNodeId === id)
@@ -51,13 +51,13 @@ function VoiceChangerNodeComponent({ id, data, selected }: NodeProps) {
   const [showThumbnails, setShowThumbnails] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [videoError, setVideoError] = useState(false)
-  const credits = useModelCredits("elevenlabs-voice-changer", 4)
+  const credits = useModelCredits("voice-changer-pro", 4)
 
   useEffect(() => {
     setVideoError(false)
   }, [activeUrl])
 
-  // Voice Changer is dual-mode: audio by default, but video when a video input
+  // Voice Changer Pro is dual-mode: audio by default, but video when a video input
   // is wired (isVideoResult). In video mode it behaves like the other video
   // nodes — 240 / 16:9-until-result / snap-to-result-aspect, with the rich
   // VideoResultOverlay filling a transparent BaseNode. Audio mode keeps its
@@ -200,8 +200,10 @@ function VoiceChangerNodeComponent({ id, data, selected }: NodeProps) {
           )}
 
           <div className="flex justify-between text-muted-foreground">
-            <span>Voice Changer</span>
-            {nodeData.voiceLabel && <span className="text-xs truncate max-w-[80px]">{nodeData.voiceLabel}</span>}
+            <span>Voice Changer Pro</span>
+            {nodeData.orderedVoices?.length > 0 && (
+              <span className="text-xs truncate max-w-[80px]">{nodeData.orderedVoices[0].voiceLabel}</span>
+            )}
           </div>
         </div>
       )}
@@ -228,12 +230,12 @@ function VoiceChangerNodeComponent({ id, data, selected }: NodeProps) {
 
     {/* Inputs (left): video above audio. Audio input is dimmed when a video is
         also wired (video wins, audio ignored). */}
-    <HandleWithPopover nodeId={id} nodeType="voice-changer" handleId="video" type="target" position={Position.Left}  label="Video" color={HANDLE_COLORS.video} icon={<Film />}           side="left"  top="calc(100% - 52px)" accepts={ACCEPTS_VIDEO} />
-    <HandleWithPopover nodeId={id} nodeType="voice-changer" handleId="audio" type="target" position={Position.Left}  label="Audio" color={HANDLE_COLORS.audio} icon={<AudioWaveform />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_AUDIO} disabled={videoInConnected} />
+    <HandleWithPopover nodeId={id} nodeType="voice-changer-pro" handleId="video" type="target" position={Position.Left}  label="Video" color={HANDLE_COLORS.video} icon={<Film />}           side="left"  top="calc(100% - 52px)" accepts={ACCEPTS_VIDEO} />
+    <HandleWithPopover nodeId={id} nodeType="voice-changer-pro" handleId="audio" type="target" position={Position.Left}  label="Audio" color={HANDLE_COLORS.audio} icon={<AudioWaveform />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_AUDIO} disabled={videoInConnected} />
     {/* Outputs (right): audio always live (revoiced track). Video output is
         disabled until a video input is wired. */}
-    <HandleWithPopover nodeId={id} nodeType="voice-changer" handleId="audio" type="source" position={Position.Right} label="Audio" color={HANDLE_COLORS.audio} icon={<AudioWaveform />} side="right" top="24px" />
-    <HandleWithPopover nodeId={id} nodeType="voice-changer" handleId="video" type="source" position={Position.Right} label="Video" color={HANDLE_COLORS.video} icon={<Film />}           side="right" top="52px" disabled={!videoInConnected} />
+    <HandleWithPopover nodeId={id} nodeType="voice-changer-pro" handleId="audio" type="source" position={Position.Right} label="Audio" color={HANDLE_COLORS.audio} icon={<AudioWaveform />} side="right" top="24px" />
+    <HandleWithPopover nodeId={id} nodeType="voice-changer-pro" handleId="video" type="source" position={Position.Right} label="Video" color={HANDLE_COLORS.video} icon={<Film />}           side="right" top="52px" disabled={!videoInConnected} />
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}
       onClose={() => setDeleteConfirm(null)}
@@ -252,4 +254,4 @@ function VoiceChangerNodeComponent({ id, data, selected }: NodeProps) {
   )
 }
 
-export const VoiceChangerNode = memo(VoiceChangerNodeComponent)
+export const VoiceChangerProNode = memo(VoiceChangerProNodeComponent)

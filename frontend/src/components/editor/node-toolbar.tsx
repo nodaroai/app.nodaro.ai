@@ -139,7 +139,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "audio-separation", label: "Audio Separation", icon: <Scissors className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
   { type: "text-to-dialogue", label: "Text to Dialogue", icon: <Users className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
   { type: "voice-changer", label: "Voice Changer", icon: <AudioWaveform className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
-  { type: "voice-recast", label: "Voice Changer Pro", icon: <AudioWaveform className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
+  { type: "voice-changer-pro", label: "Voice Changer Pro", icon: <AudioWaveform className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
   { type: "dubbing", label: "Dubbing", icon: <Languages className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
   { type: "voice-remix", label: "Voice Remix", icon: <Mic className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
   { type: "voice-design", label: "Voice Design", icon: <Wand2 className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
@@ -231,7 +231,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
 ]
 
 /** Node types that must only appear in Cloud edition (hasCredits()). */
-const CLOUD_ONLY_NODE_TYPES = new Set<string>(["voice-recast"])
+const CLOUD_ONLY_NODE_TYPES = new Set<string>(["voice-changer-pro"])
 
 /** Returns NODE_OPTIONS filtered for the current edition. */
 function getNodeOptions(): ReadonlyArray<NodeOption> {
@@ -258,7 +258,7 @@ function NodeList({ onAdd }: { readonly onAdd: (type: SceneNodeType) => void }) 
   const { isAdmin } = useAuth()
   // Show every node type in the sidebar (Parameter pickers included). Only
   // admin-only nodes stay gated, matching the add-node popup's pool.
-  // Cloud-only nodes (e.g. voice-recast) are filtered out when !hasCredits().
+  // Cloud-only nodes (e.g. voice-changer-pro) are filtered out when !hasCredits().
   const visibleNodes = getNodeOptions().filter((n) => !n.adminOnly || isAdmin)
   const categories = Array.from(new Set(visibleNodes.map((n) => n.category)))
     .sort((a, b) => categoryRank(a) - categoryRank(b))

@@ -2749,7 +2749,7 @@ export type VoiceChangerData = {
   currentJobProgress?: number
 }
 
-export type VoiceRecastData = {
+export type VoiceChangerProData = {
   [key: string]: unknown
   label: string
   /** Ordered target voices; voice i recasts the i-th speaker (first-appearance order).
@@ -4811,7 +4811,7 @@ export type SceneNodeData =
   | AudioSeparationData
   | TextToDialogueData
   | VoiceChangerData
-  | VoiceRecastData
+  | VoiceChangerProData
   | DubbingData
   | VoiceRemixData
   | VoiceDesignData
@@ -4985,7 +4985,7 @@ export type SceneNodeType =
   | "audio-separation"
   | "text-to-dialogue"
   | "voice-changer"
-  | "voice-recast"
+  | "voice-changer-pro"
   | "dubbing"
   | "voice-remix"
   | "voice-design"
@@ -6228,7 +6228,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     } as VoiceChangerData,
   },
   {
-    type: "voice-recast",
+    type: "voice-changer-pro",
     label: "Voice Changer Pro",
     category: "ai",
     creditCost: 4,
@@ -6244,7 +6244,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       executionStatus: "idle",
       generatedResults: [],
       activeResultIndex: 0,
-    } as VoiceRecastData,
+    } as VoiceChangerProData,
   },
   {
     type: "dubbing",

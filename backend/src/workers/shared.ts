@@ -300,7 +300,7 @@ export async function commitJobCredits(
 
       console.log(`[worker] Credits committed for job ${jobId} (actual: ${actualCredits}, reserved: ${usageLog?.credits_used ?? "??"})`)
     } else if (metered && extraNonProviderCredits > 0 && !(providerCostUsd && providerCostUsd > 0)) {
-      // Count-based metered actual (no provider USD cost) — e.g. voice-recast,
+      // Count-based metered actual (no provider USD cost) — e.g. voice-changer-pro,
       // which reserves by voice count and commits by mapped-speaker count.
       // `extraNonProviderCredits` is the BASE (pre-markup) actual; apply the
       // SAME post-markup formula the reserve path uses (credit-guard-impl.ts

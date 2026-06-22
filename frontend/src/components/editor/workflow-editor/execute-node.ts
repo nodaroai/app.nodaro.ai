@@ -23,7 +23,7 @@ import {
   imageToTextApi,
   describeToPickerApi,
   voiceChangerApi,
-  voiceRecastApi,
+  voiceChangerProApi,
   dubbingApi,
   voiceRemixApi,
   voiceDesignApi,
@@ -169,7 +169,7 @@ import type {
   SplitTextData,
   PreviewNodeData,
   VoiceChangerData,
-  VoiceRecastData,
+  VoiceChangerProData,
   DubbingData,
   VoiceRemixData,
   VoiceDesignData,
@@ -2601,8 +2601,8 @@ export function executeNode(
     );
   }
 
-  if (node.type === "voice-recast") {
-    const d = node.data as VoiceRecastData;
+  if (node.type === "voice-changer-pro") {
+    const d = node.data as VoiceChangerProData;
     // Video wins when both are wired (matches voice-changer + backend behaviour).
     const videoUrl = inputs.videoUrl;
     const audioUrl = inputs.audioUrl;
@@ -2654,8 +2654,8 @@ export function executeNode(
       if (v.seed != null) entry.seed = v.seed;
       return entry;
     });
-    const callVoiceRecast = () =>
-      voiceRecastApi(
+    const callVoiceChangerPro = () =>
+      voiceChangerProApi(
         audioUrl,
         orderedVoicePayload,
         ctx.userId,
@@ -2671,7 +2671,7 @@ export function executeNode(
     if (videoUrl) {
       return runProcessingNode(
         node.id,
-        callVoiceRecast,
+        callVoiceChangerPro,
         "generatedVideoUrl",
         "Voice Changer Pro",
         ctx,
@@ -2681,7 +2681,7 @@ export function executeNode(
     }
     return runProcessingNode(
       node.id,
-      callVoiceRecast,
+      callVoiceChangerPro,
       "generatedAudioUrl",
       "Voice Changer Pro",
       ctx,

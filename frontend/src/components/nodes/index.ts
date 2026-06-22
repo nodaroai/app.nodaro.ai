@@ -91,7 +91,7 @@ import { TranscribeNode } from "./transcribe-node";
 import { AudioIsolationNode } from "./audio-isolation-node"
 import { TextToDialogueNode } from "./text-to-dialogue-node"
 import { VoiceChangerNode } from "./voice-changer-node"
-import { VoiceRecastNode } from "./voice-recast-node"
+import { VoiceChangerProNode } from "./voice-changer-pro-node"
 import { DubbingNode } from "./dubbing-node"
 import { VoiceRemixNode } from "./voice-remix-node"
 import { VoiceDesignNode } from "./voice-design-node"
@@ -280,7 +280,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "audio-isolation": AudioIsolationNode,
   "text-to-dialogue": TextToDialogueNode,
   "voice-changer": VoiceChangerNode,
-  "voice-recast": VoiceRecastNode,
+  "voice-changer-pro": VoiceChangerProNode,
   "dubbing": DubbingNode,
   "voice-remix": VoiceRemixNode,
   "voice-design": VoiceDesignNode,
