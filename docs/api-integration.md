@@ -787,7 +787,119 @@ curl -s -X POST "https://app.nodaro.ai/v1/admin/community/character/$CHARACTER_I
 # → { "slug": "detective-mara", "id": "<listing-id>" }
 ```
 
-## 18. SDK alternative (TypeScript)
+## 18. Studio timeline export
+
+> **Cloud edition only.** Export a Studio production timeline to a portable
+> editing-project file so you can finish the cut in an external NLE. Registered
+> on Cloud instances; on Community/Business it is not registered and returns
+> `404`.
+
+### `POST /v1/freecut-export`
+
+Serialize a timeline (your scene composites + the cut decisions between them)
+into either a **FreeCut JSON** (`freecut-v1`) or a **FCPXML** (`fcpxml-v1.10`)
+project file, upload it to your storage, and return the file URL.
+
+This endpoint is **0 credits** and rate-limited to **10 requests / minute**.
+Auth is the same bearer token as every other endpoint (`ndr_…` / `ndr_app_…` /
+Supabase JWT); no scope is required.
+
+**Body:**
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `format` | `"json" \| "fcpxml"` | yes | `json` → FreeCut JSON (`freecut-v1`, `application/json`); `fcpxml` → Final Cut Pro XML (`fcpxml-v1.10`, `application/xml`). |
+| `timeline` | object | yes | The timeline to serialize (see below). |
+| `name` | `string` | no | Up to 200 chars. A human label for your records. |
+
+**`timeline` object:**
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `scenes` | `Scene[]` | yes | ≥ 1 scene, in playback order. One video clip is emitted per scene. |
+| `musicAssetUrl` | `string` | no (default `""`) | URL of the music track. Empty string skips the music track/lane entirely. |
+| `narrationAssetUrl` | `string` | no | URL of a narration track. When present, emitted as a **separate** audio track/lane (not pre-mixed with music). |
+| `fadeOutDurationSec` | `number` | no (default `0.8`) | Tail fade-out applied to the music clip (JSON only; FCPXML carries no fade primitive). |
+
+**`Scene` object** (each entry of `timeline.scenes`):
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `sceneEntityId` | `string` | yes | Non-empty id for the scene. |
+| `compositeUrl` | `string` (URL) | yes | The pre-merged scene composite video — becomes one clip on the video track. |
+| `shots` | `Shot[]` | yes | ≥ 1 shot. Drives the scene's duration and, via the first/last shot's `cut_decision`, its head/tail trim and out-transition. |
+
+**`Shot` object** (each entry of `scene.shots`):
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `shot_id` | `string` | yes | Non-empty shot id. |
+| `duration_seconds` | `number` (≥ 0) | yes | The shot's length; the scene clip's full duration is the sum of its shots. |
+| `cut_decision` | object | no | The transition leaving this shot + in/out trims (see below). |
+
+**`cut_decision` object:**
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `in_offset_sec` | `number` | yes | Head-trim into the scene composite (applied from the **first** shot's `cut_decision`). |
+| `out_offset_sec` | `number` | yes | Tail-trim off the scene composite (applied from the **last** shot's `cut_decision`). |
+| `transition_to_next` | `"hard_cut" \| "dissolve" \| "match_cut" \| "overlap"` | yes | Transition into the next scene. `dissolve`/`overlap` overlap the timeline by their duration; `hard_cut`/`match_cut` butt-join (no overlap). |
+| `transition_duration_sec` | `number` | no | Overrides the per-type default (`hard_cut`/`match_cut` → 0, `overlap` → 1.0, `dissolve` → 0.5). |
+
+**Response (200):**
+
+```json
+{ "url": "https://…/exports/<userId>/freecut-<uuid>.json", "format": "json", "assetId": "<uuid-or-null>" }
+```
+
+- `url` — the R2 URL of the uploaded project file.
+- `format` — echoes the requested `format` (`"json"` or `"fcpxml"`).
+- `assetId` — the id of the `assets` row created for the file, or `null` if the
+  asset-row insert failed (the file upload still succeeded, so `url` is valid).
+
+**Errors:** 400 `validation_error` (the `issues` array carries the Zod
+details) · 401 `unauthorized`.
+
+**Concatenation note:** when none of a timeline's shots carry a `cut_decision`,
+the export is a **simple concatenation** — one clip per scene laid end-to-end at
+cumulative positions, all joins are hard cuts, and the music (if any) is a single
+track spanning the whole timeline. Per-shot trims **within** a scene are not
+honored; only the first and last shot's `cut_decision` of each scene contribute
+(head trim / tail trim / out-transition), because the scene composite is already
+pre-merged.
+
+```bash
+TOKEN="ndr_..."
+BASE="https://app.nodaro.ai"
+
+# Export a two-scene timeline as FreeCut JSON (simple concatenation —
+# no cut_decision on any shot).
+curl -s -X POST "$BASE/v1/freecut-export" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "format": "json",
+        "name": "My Cut",
+        "timeline": {
+          "musicAssetUrl": "https://…/music.mp3",
+          "scenes": [
+            {
+              "sceneEntityId": "scene-1",
+              "compositeUrl": "https://…/scene-1.mp4",
+              "shots": [{ "shot_id": "s1", "duration_seconds": 4 }]
+            },
+            {
+              "sceneEntityId": "scene-2",
+              "compositeUrl": "https://…/scene-2.mp4",
+              "shots": [{ "shot_id": "s2", "duration_seconds": 6 }]
+            }
+          ]
+        }
+      }' | jq .
+# → { "url": "https://…/exports/<userId>/freecut-<uuid>.json", "format": "json", "assetId": "<uuid>" }
+```
+
+## 19. SDK alternative (TypeScript)
 
 The same backend is fronted by a typed TypeScript client:
 
