@@ -11,6 +11,8 @@ export type {
 
 export { DEFAULT_LABEL_BY_SOURCE } from "./types.js"
 
+export * from "./freecut-protocol.js"
+
 export {
   CREDIT_BASE_USD,
   IMAGE_PROMPT_MAX,
