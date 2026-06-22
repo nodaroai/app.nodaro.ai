@@ -18,21 +18,29 @@ const CLIENT_ID_PREFIX = "ndr_dcr_"
 const OPEN_REGISTRATIONS_CAP = 5
 const OPEN_REGISTRATION_LOOKBACK_MS = 24 * 60 * 60 * 1000
 
-const registerBody = z
-  .object({
-    client_name: z.string().min(1).max(100),
-    redirect_uris: z.array(z.string().url()).min(1).max(10),
-    grant_types: z.array(z.string()).optional(),
-    response_types: z.array(z.string()).optional(),
-    scope: z.string().optional(),
-    token_endpoint_auth_method: z.string().optional(),
-    client_uri: z.string().url().optional(),
-    logo_uri: z.string().url().optional(),
-    policy_uri: z.string().url().optional(),
-    tos_uri: z.string().url().optional(),
-    contacts: z.array(z.string().email()).optional(),
-  })
-  .strict()
+// IMPORTANT: this schema must NOT be `.strict()`. RFC 7591 §2 requires the
+// registration endpoint to IGNORE unrecognized client metadata, and real MCP
+// clients (Claude.ai, Cursor, ChatGPT, …) send extra fields we don't model —
+// `application_type`, `software_id`, `software_version`, `jwks`, etc. Zod's
+// default object behavior strips unknown keys, which is exactly the
+// spec-mandated "ignore" semantics. A `.strict()` here 400s the whole request
+// and breaks DCR for every such client ("Couldn't register with Nodaro's
+// sign-in service"). The route only ever reads the whitelisted fields below,
+// so dropping the extras is safe. Regression test:
+// __tests__/oauth-register.test.ts "ignores unknown RFC 7591 metadata fields".
+const registerBody = z.object({
+  client_name: z.string().min(1).max(100),
+  redirect_uris: z.array(z.string().url()).min(1).max(10),
+  grant_types: z.array(z.string()).optional(),
+  response_types: z.array(z.string()).optional(),
+  scope: z.string().optional(),
+  token_endpoint_auth_method: z.string().optional(),
+  client_uri: z.string().url().optional(),
+  logo_uri: z.string().url().optional(),
+  policy_uri: z.string().url().optional(),
+  tos_uri: z.string().url().optional(),
+  contacts: z.array(z.string().email()).optional(),
+})
 
 function genClientId(): string {
   return CLIENT_ID_PREFIX + randomBytes(16).toString("hex")
