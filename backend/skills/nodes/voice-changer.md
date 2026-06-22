@@ -1,7 +1,7 @@
 ---
 node_type: voice-changer
-generated_at: 2026-06-19T15:46:45.578Z
-generated_from: 0fe2336b2
+generated_at: 2026-06-22T15:56:06.973Z
+generated_from: 910852c22
 ---
 
 # Voice Changer
@@ -26,6 +26,8 @@ generated_from: 0fe2336b2
 **Optional data fields:**
 - `model?: VoiceChangerModel`
 - `style?: number`
+- `useSpeakerBoost?: boolean`
+- `seed?: number`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
 - `generatedAudioUrl?: string`

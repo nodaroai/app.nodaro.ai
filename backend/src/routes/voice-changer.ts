@@ -25,6 +25,8 @@ const voiceChangerBody = z
     stability: z.number().min(0).max(1).optional(),
     similarityBoost: z.number().min(0).max(1).optional(),
     style: z.number().min(0).max(1).optional(),
+    useSpeakerBoost: z.boolean().optional(),
+    seed: z.number().int().min(0).max(4294967295).optional(),
     removeBackgroundNoise: z.boolean().optional(),
     userId: z.string().uuid().optional(),
   })
@@ -44,7 +46,7 @@ export async function voiceChangerRoutes(app: FastifyInstance) {
       })
     }
 
-    const { audioUrl, videoUrl, voiceId, model, stability, similarityBoost, style, removeBackgroundNoise } = parsed.data
+    const { audioUrl, videoUrl, voiceId, model, stability, similarityBoost, style, removeBackgroundNoise, useSpeakerBoost, seed } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -89,6 +91,8 @@ export async function voiceChangerRoutes(app: FastifyInstance) {
       similarityBoost,
       style,
       removeBackgroundNoise,
+      useSpeakerBoost,
+      seed,
       usageLogId,
     })
 
