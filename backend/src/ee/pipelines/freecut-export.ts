@@ -211,6 +211,7 @@ export async function generateFreecutExport(
     fileExtension: "json",
     mimeType: "application/json",
     formatTag: "freecut-v1",
+    source: "pipeline-freecut-export",
     content: JSON.stringify(timeline, null, 2),
     logTag: "pipeline-freecut-export",
   })

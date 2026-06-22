@@ -124,6 +124,7 @@ export async function generateFcpxmlExport(
     fileExtension: "fcpxml",
     mimeType: "application/xml",
     formatTag: "fcpxml-v1.10",
+    source: "pipeline-freecut-export",
     content: xml,
     logTag: "pipeline-freecut-fcpxml",
   })
