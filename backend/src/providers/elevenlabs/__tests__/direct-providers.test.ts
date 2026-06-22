@@ -314,6 +314,26 @@ describe("voice-changer — directVoiceChanger", () => {
     expect(settings).toEqual({ stability: 0.3, similarity_boost: 0.9, style: 0.6, use_speaker_boost: true })
   })
 
+  it("appends seed as a top-level form field when set", async () => {
+    await directVoiceChanger(Buffer.from("input"), "v1", { seed: 12345 })
+    const init = fetchMock.mock.calls[0][1] as { body: FormData }
+    expect(init.body.get("seed")).toBe("12345")
+    // seed is a top-level form field, NOT part of voice_settings.
+    expect(init.body.get("voice_settings")).toBeNull()
+  })
+
+  it("appends seed=0 (falsy but defined; impl uses != null)", async () => {
+    await directVoiceChanger(Buffer.from("input"), "v1", { seed: 0 })
+    const init = fetchMock.mock.calls[0][1] as { body: FormData }
+    expect(init.body.get("seed")).toBe("0")
+  })
+
+  it("omits the seed field when seed is not provided (back-compat)", async () => {
+    await directVoiceChanger(Buffer.from("input"), "v1", { stability: 0.3 })
+    const init = fetchMock.mock.calls[0][1] as { body: FormData }
+    expect(init.body.get("seed")).toBeNull()
+  })
+
   it("throws on non-200 with error text in message", async () => {
     fetchMock.mockReset()
     fetchMock.mockResolvedValueOnce(errorResponse("voice not found", 404))

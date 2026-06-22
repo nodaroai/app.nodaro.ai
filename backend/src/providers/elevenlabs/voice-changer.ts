@@ -10,6 +10,9 @@ export interface VoiceChangerOptions {
   style?: number
   /** Boosts similarity to the target speaker at a small latency cost. */
   useSpeakerBoost?: boolean
+  /** Deterministic STS seed (integer 0–4294967295). Same seed + same input +
+   *  same settings ⇒ reproducible conversion. Sent as a form field when set. */
+  seed?: number
 }
 
 export async function directVoiceChanger(
@@ -26,6 +29,12 @@ export async function directVoiceChanger(
 
   if (options?.removeBackgroundNoise) {
     formData.append("remove_background_noise", "true")
+  }
+
+  // Deterministic seed (top-level STS form field, not part of voice_settings).
+  // `!= null` so a 0 seed is honored.
+  if (options?.seed != null) {
+    formData.append("seed", String(options.seed))
   }
 
   if (

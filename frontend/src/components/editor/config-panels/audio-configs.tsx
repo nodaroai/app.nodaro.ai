@@ -56,6 +56,7 @@ import type {
 } from "@/types/nodes"
 import { VOICE_CHANGER_MODELS } from "@nodaro/shared"
 import { AUDIO_FX_PRESETS, AUDIO_FX_PRESET_LABELS, AUDIO_FX_REVERB_PRESETS } from "@nodaro/shared"
+import type { AudioFxPreset } from "@nodaro/shared"
 import { MappableField } from "./mappable-field"
 import { PromptHelperButton } from "./prompt-helper-button"
 import { SnippetMenuButton } from "./snippet-menu-button"
@@ -2148,6 +2149,11 @@ export function ForcedAlignmentConfig({ data, onUpdate, sources, fieldMappings, 
   )
 }
 
+/** Sentinel for the "no Voice FX" Select option. Distinct from every
+ *  AudioFxPreset id so picking it can't be mistaken for a real preset; chosen ⇒
+ *  `voiceFx` is cleared to undefined (the default = no effect). */
+const VOICE_FX_NONE = "__none__"
+
 export function VoiceRecastConfig({ data, onUpdate }: ConfigProps<VoiceRecastData>) {
   const voices = data.orderedVoices ?? []
   const addVoice = (voiceId: string, voiceLabel: string, voiceType: "premade" | "custom" | "library") =>
@@ -2233,6 +2239,32 @@ export function VoiceRecastConfig({ data, onUpdate }: ConfigProps<VoiceRecastDat
                     </div>
                   )}
                 </div>
+                <div>
+                  <Label htmlFor={`seed-${i}`}>Seed</Label>
+                  <Input
+                    id={`seed-${i}`}
+                    type="number"
+                    min={0}
+                    max={4294967295}
+                    step={1}
+                    inputMode="numeric"
+                    placeholder="random"
+                    value={v.seed ?? ""}
+                    onChange={(e) => {
+                      const raw = e.target.value.trim()
+                      // Empty/blank clears the seed (random); only a parseable
+                      // integer is stored — never coerce blank to 0.
+                      if (raw === "") {
+                        updateVoice(i, { seed: undefined })
+                        return
+                      }
+                      const n = Number.parseInt(raw, 10)
+                      if (Number.isFinite(n)) updateVoice(i, { seed: n })
+                    }}
+                    className="h-8"
+                  />
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Leave blank for a random seed.</p>
+                </div>
               </div>
             </details>
           </div>
@@ -2268,6 +2300,48 @@ export function VoiceRecastConfig({ data, onUpdate }: ConfigProps<VoiceRecastDat
       <div className="flex items-center justify-between">
         <Label>Preserve background music</Label>
         <Switch checked={data.preserveBackground ?? true} onCheckedChange={(v) => onUpdate({ preserveBackground: v })} />
+      </div>
+      <div className="flex flex-col gap-1.5 rounded border p-2">
+        <Label htmlFor="voice-fx-preset">Voice FX</Label>
+        <Select
+          value={data.voiceFx?.preset ?? VOICE_FX_NONE}
+          onValueChange={(v) => {
+            if (v === VOICE_FX_NONE) {
+              onUpdate({ voiceFx: undefined })
+              return
+            }
+            onUpdate({ voiceFx: { ...data.voiceFx, preset: v as AudioFxPreset } })
+          }}
+        >
+          <SelectTrigger id="voice-fx-preset" aria-label="Voice FX"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value={VOICE_FX_NONE}>None</SelectItem>
+            {AUDIO_FX_PRESETS.map((p) => (
+              <SelectItem key={p} value={p}>{AUDIO_FX_PRESET_LABELS[p]}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {data.voiceFx && AUDIO_FX_REVERB_PRESETS.has(data.voiceFx.preset) && (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="voice-fx-mix">Wet / Dry mix: {data.voiceFx.wetDryMix ?? "auto"}</Label>
+            <Slider id="voice-fx-mix" min={0} max={100} step={1} value={[data.voiceFx.wetDryMix ?? 30]} onValueChange={(vals) => onUpdate({ voiceFx: { ...data.voiceFx!, wetDryMix: vals[0] } })} />
+          </div>
+        )}
+        {data.voiceFx && (data.voiceFx.preset === "echo" || data.voiceFx.preset === "custom") && (
+          <>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="voice-fx-delay">Delay (ms): {data.voiceFx.delayMs ?? 250}</Label>
+              <Slider id="voice-fx-delay" min={20} max={2000} step={10} value={[data.voiceFx.delayMs ?? 250]} onValueChange={(vals) => onUpdate({ voiceFx: { ...data.voiceFx!, delayMs: vals[0] } })} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="voice-fx-decay">Decay: {data.voiceFx.decay ?? 0.4}</Label>
+              <Slider id="voice-fx-decay" min={0} max={1} step={0.05} value={[data.voiceFx.decay ?? 0.4]} onValueChange={(vals) => onUpdate({ voiceFx: { ...data.voiceFx!, decay: vals[0] } })} />
+            </div>
+          </>
+        )}
+        <p className="text-[11px] text-muted-foreground">
+          Adds reverb/echo to the recast voices before the background music is mixed back.
+        </p>
       </div>
       <div>
         <div className="flex items-center justify-between">
