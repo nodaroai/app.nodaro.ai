@@ -191,7 +191,8 @@ export function reduceTimeline(
 
 export interface PersistExportAssetArgs {
   supabase: SupabaseClient
-  pipelineId: string
+  /** Optional — pipeline exports set it; Studio exports omit it. */
+  pipelineId?: string
   userId: string
   /** Suffix-less unique filename component (the random id half). */
   filenameStem: string
@@ -199,6 +200,8 @@ export interface PersistExportAssetArgs {
   mimeType: "application/json" | "application/xml"
   /** What goes into `assets.metadata.format`. */
   formatTag: string
+  /** `assets.metadata.source` ("pipeline-freecut-export" | "studio-freecut-export"). */
+  source: string
   /** Serialized content to upload (UTF-8 text). */
   content: string
   /** Tag for the warn line if the assets insert fails. */
@@ -227,13 +230,16 @@ export async function persistExportAsset(
     fileExtension,
     mimeType,
     formatTag,
+    source,
     content,
     logTag,
   } = args
 
   const buffer = Buffer.from(content, "utf-8")
   const filename = `${filenameStem}-${randomUUID()}.${fileExtension}`
-  const r2Key = `pipelines/${pipelineId}/exports/${filename}`
+  const r2Key = pipelineId
+    ? `pipelines/${pipelineId}/exports/${filename}`
+    : `exports/${userId}/${filename}`
   const r2Url = await uploadBufferToR2(buffer, r2Key, mimeType, userId)
 
   const { data: inserted, error } = await supabase
@@ -246,8 +252,8 @@ export async function persistExportAsset(
       size_bytes: buffer.length,
       r2_key: r2Key,
       r2_url: r2Url,
-      pipeline_id: pipelineId,
-      metadata: { source: "pipeline-freecut-export", format: formatTag },
+      pipeline_id: pipelineId ?? null,
+      metadata: { source, format: formatTag },
     })
     .select("id")
     .single()

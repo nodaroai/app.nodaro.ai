@@ -7,11 +7,16 @@ vi.mock("../../../lib/storage.js", () => ({
 }))
 
 import { uploadBufferToR2 } from "../../../lib/storage.js"
+import { reduceTimeline } from "../_freecut-timeline.js"
 import {
   generateFcpxmlExport,
   buildFcpxml,
   type FcpxmlSceneInput,
 } from "../freecut-fcpxml.js"
+
+// Shared opts for the direct `buildFcpxml(reduced, opts)` calls below. The XML
+// body ignores `generatedAt`/`source`, so the rendered document is unchanged.
+const xmlOpts = { musicAssetUrl: "", generatedAt: "2026-01-01T00:00:00.000Z", source: "pipeline-freecut-export" }
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -321,18 +326,16 @@ describe("generateFcpxmlExport", () => {
   })
 
   it("9. XML escaping handles special chars in pipelineId + scene URLs", () => {
-    const xml = buildFcpxml({
-      pipelineId: "p1 & <test>",
-      scenes: [
+    const xml = buildFcpxml(
+      reduceTimeline([
         {
           sceneEntityId: "scene-1",
           compositeUrl: "https://r2/scene.mp4?x=1&y=2",
           shots: [{ shot_id: "shot_01", duration_seconds: 5 }],
         },
-      ],
-      musicAssetUrl: "",
-      narrationAssetUrl: "",
-    })
+      ]),
+      { ...xmlOpts, pipelineId: "p1 & <test>", narrationAssetUrl: "" },
+    )
     // Project name escaped.
     expect(xml).toContain(`name="Nodaro p1 &amp; &lt;test&gt;"`)
     // src URL escaped.
@@ -371,9 +374,8 @@ describe("generateFcpxmlExport", () => {
   })
 
   it("11. snapshot — 2-scene + music + narration", async () => {
-    const xml = buildFcpxml({
-      pipelineId: "pipe-abc",
-      scenes: [
+    const xml = buildFcpxml(
+      reduceTimeline([
         {
           sceneEntityId: "scene-1",
           compositeUrl: "https://r2/s1.mp4",
@@ -395,10 +397,14 @@ describe("generateFcpxmlExport", () => {
           compositeUrl: "https://r2/s2.mp4",
           shots: [{ shot_id: "shot_02", duration_seconds: 3 }],
         },
-      ],
-      musicAssetUrl: "https://r2/music.mp3",
-      narrationAssetUrl: "https://r2/narr.mp3",
-    })
+      ]),
+      {
+        ...xmlOpts,
+        pipelineId: "pipe-abc",
+        musicAssetUrl: "https://r2/music.mp3",
+        narrationAssetUrl: "https://r2/narr.mp3",
+      },
+    )
     expect(xml).toMatchInlineSnapshot(`
       "<?xml version="1.0" encoding="UTF-8"?>
       <fcpxml version="1.10">
