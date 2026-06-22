@@ -1,13 +1,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import {
-  DEFAULT_FADE_OUT_SEC,
   persistExportAsset,
   reduceTimeline,
-  round3,
-  type ReducedClip,
   type TimelineSceneInput,
   type TimelineShotInput,
 } from "./_freecut-timeline.js"
+import { serializeFreecut } from "./freecut-serialize.js"
+
+// The pure XML builder now lives in the shared serialize core; re-export it so
+// existing importers of `freecut-fcpxml.js` keep their import path unchanged.
+export { buildFcpxml } from "./freecut-serialize.js"
 
 /**
  * Phase 1C.2.1 §H — FCPXML export format.
@@ -95,37 +97,44 @@ export async function generateFcpxmlExport(
     scenes,
     musicAssetUrl,
     narrationAssetUrl,
-    fadeOutDurationSec = DEFAULT_FADE_OUT_SEC,
+    fadeOutDurationSec,
   } = args
 
   if (scenes.length === 0) {
     throw new Error("generateFcpxmlExport requires at least 1 scene")
   }
 
-  // Reuse the same fadeOutDurationSec parameter as JSON FreeCut so toggling
-  // the export format is a no-op on every other knob. The actual fade-out
-  // behavior on import is up to the consuming NLE (FCP renders the music
-  // track as-is — fade information isn't part of the FCPXML spec at this
-  // level). Tracked here for parity / future use.
-  void fadeOutDurationSec
-
-  const xml = buildFcpxml({
-    pipelineId,
-    scenes,
-    musicAssetUrl,
-    narrationAssetUrl: narrationAssetUrl ?? "",
-  })
+  // Thin wrapper (FreeCut-in-Studio F2): the XML rendering now lives in the
+  // shared pure core `serializeFreecut`. We pass `fadeOutDurationSec` through
+  // for parity (the FCPXML body ignores it, as before). The reduction is the
+  // same shared `reduceTimeline`, so the output is byte-identical to before.
+  const reduced = reduceTimeline(scenes)
+  const { content, mimeType, fileExtension } = serializeFreecut(
+    reduced,
+    "fcpxml",
+    {
+      musicAssetUrl,
+      narrationAssetUrl: narrationAssetUrl ?? "",
+      fadeOutDurationSec,
+      generatedAt: new Date().toISOString(),
+      pipelineId,
+      source: "pipeline-freecut-export",
+    },
+  )
 
   const persisted = await persistExportAsset({
     supabase,
     pipelineId,
     userId,
     filenameStem: "freecut",
-    fileExtension: "fcpxml",
-    mimeType: "application/xml",
+    fileExtension,
+    mimeType,
+    // Pipeline path keeps its historical, more-specific format tag (NOT the
+    // dispatcher's generic "fcpxml") so `assets.metadata.format` + the typed
+    // return below stay byte-identical to pre-F2.
     formatTag: "fcpxml-v1.10",
     source: "pipeline-freecut-export",
-    content: xml,
+    content,
     logTag: "pipeline-freecut-fcpxml",
   })
 
@@ -134,129 +143,4 @@ export async function generateFcpxmlExport(
     exportAssetUrl: persisted.assetUrl,
     format: "fcpxml-v1.10",
   }
-}
-
-interface BuildFcpxmlArgs {
-  pipelineId: string
-  scenes: ReadonlyArray<FcpxmlSceneInput>
-  musicAssetUrl: string
-  narrationAssetUrl: string
-}
-
-/**
- * Pure XML builder — exported for snapshot tests. Walks the shared timeline
- * reduction once and emits the document as a string.
- */
-export function buildFcpxml(args: BuildFcpxmlArgs): string {
-  const { pipelineId, scenes, musicAssetUrl, narrationAssetUrl } = args
-
-  // ─── Reduction (shared) ──────────────────────────────────────────────
-  const reduced = reduceTimeline(scenes)
-
-  // Allocate one FCPXML resource id per scene + (optionally) per audio lane.
-  // r1 is reserved for the video format element.
-  let nextResourceIndex = 2
-  type Plan = ReducedClip & { assetId: string; sceneName: string }
-  const plans: Plan[] = reduced.clips.map((clip, i) => ({
-    ...clip,
-    assetId: `r${nextResourceIndex++}`,
-    sceneName: `scene-${i + 1}`,
-  }))
-  const musicResourceId = musicAssetUrl ? `r${nextResourceIndex++}` : null
-  const narrationResourceId = narrationAssetUrl
-    ? `r${nextResourceIndex++}`
-    : null
-
-  const timelineDuration = reduced.timelineDurationSec
-
-  // ─── Resources block ─────────────────────────────────────────────────
-  const resources: string[] = []
-  resources.push(
-    `    <format id="r1" name="FFVideoFormat1080p30" frameDuration="1001/30000s" width="1920" height="1080"/>`,
-  )
-  for (const plan of plans) {
-    resources.push(
-      `    <asset id="${plan.assetId}" name="${escXml(plan.sceneName)}" src="${escXml(plan.compositeUrl)}" duration="${formatDuration(plan.fullDurationSec)}" hasVideo="1" hasAudio="1" format="r1"/>`,
-    )
-  }
-  if (musicResourceId) {
-    resources.push(
-      `    <asset id="${musicResourceId}" name="music" src="${escXml(musicAssetUrl)}" duration="${formatDuration(timelineDuration)}" hasAudio="1"/>`,
-    )
-  }
-  if (narrationResourceId) {
-    resources.push(
-      `    <asset id="${narrationResourceId}" name="narration" src="${escXml(narrationAssetUrl)}" duration="${formatDuration(timelineDuration)}" hasAudio="1"/>`,
-    )
-  }
-
-  // ─── Spine ───────────────────────────────────────────────────────────
-  const spine: string[] = []
-  let runningOffset = 0
-  for (let i = 0; i < plans.length; i++) {
-    const plan = plans[i]!
-    spine.push(
-      `          <asset-clip ref="${plan.assetId}" offset="${formatDuration(runningOffset)}" duration="${formatDuration(plan.clipDurationSec)}" start="${formatDuration(plan.startInClipSec)}" name="${escXml(plan.sceneName)}"/>`,
-    )
-    const next = plan.transitionOut
-    if (i < plans.length - 1 && next && next.type !== "hard_cut" && next.type !== "match_cut") {
-      const transitionName = "Cross Dissolve"
-      const transitionOffset = runningOffset + plan.clipDurationSec - next.durationSec
-      spine.push(
-        `          <transition name="${escXml(transitionName)}" offset="${formatDuration(Math.max(0, transitionOffset))}" duration="${formatDuration(next.durationSec)}"/>`,
-      )
-      runningOffset += plan.clipDurationSec - next.durationSec
-    } else {
-      runningOffset += plan.clipDurationSec
-    }
-  }
-
-  // Audio overlays: music on lane -1, narration on lane -2. Both span the
-  // full timeline. The fade-out behavior is a downstream-NLE concern.
-  if (musicResourceId) {
-    spine.push(
-      `          <asset-clip ref="${musicResourceId}" lane="-1" offset="0s" duration="${formatDuration(timelineDuration)}" name="music"/>`,
-    )
-  }
-  if (narrationResourceId) {
-    spine.push(
-      `          <asset-clip ref="${narrationResourceId}" lane="-2" offset="0s" duration="${formatDuration(timelineDuration)}" name="narration"/>`,
-    )
-  }
-
-  // ─── Assemble document ───────────────────────────────────────────────
-  return [
-    `<?xml version="1.0" encoding="UTF-8"?>`,
-    `<fcpxml version="1.10">`,
-    `  <resources>`,
-    ...resources,
-    `  </resources>`,
-    `  <library>`,
-    `    <event name="Nodaro Pipeline Export">`,
-    `      <project name="${escXml(`Nodaro ${pipelineId}`)}">`,
-    `        <sequence format="r1" duration="${formatDuration(timelineDuration)}">`,
-    `          <spine>`,
-    ...spine.map((line) => `  ${line}`),
-    `          </spine>`,
-    `        </sequence>`,
-    `      </project>`,
-    `    </event>`,
-    `  </library>`,
-    `</fcpxml>`,
-    ``,
-  ].join("\n")
-}
-
-/** XML special-character escape — handles &, <, >, ", and ' for attributes. */
-function escXml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;")
-}
-
-function formatDuration(sec: number): string {
-  return `${round3(sec).toFixed(3)}s`
 }
