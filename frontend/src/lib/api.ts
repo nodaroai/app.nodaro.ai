@@ -3315,6 +3315,8 @@ export async function voiceRecastApi(
   videoUrl?: string,
   separationQuality?: "fast" | "best",
   voiceFx?: { preset: string; wetDryMix?: number; delayMs?: number; decay?: number },
+  musicVolumeMode?: "match" | "normalize" | "manual",
+  musicVolume?: number,
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { orderedVoices }
   if (audioUrl) body.audioUrl = audioUrl
@@ -3325,6 +3327,8 @@ export async function voiceRecastApi(
   if (removeBackgroundNoise != null) body.removeBackgroundNoise = removeBackgroundNoise
   if (separationQuality != null) body.separationQuality = separationQuality
   if (voiceFx != null) body.voiceFx = voiceFx
+  if (musicVolumeMode != null) body.musicVolumeMode = musicVolumeMode
+  if (musicVolume != null) body.musicVolume = musicVolume
   return apiJson("/v1/voice-recast", {
     body,
     workflowId: true,

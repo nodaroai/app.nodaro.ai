@@ -249,6 +249,77 @@ describe("VoiceRecastConfig", () => {
     expect(screen.getByText(/Under evaluation/i)).toBeInTheDocument()
   })
 
+  it("shows the Speaker Boost explanation hint", () => {
+    renderPanel({
+      orderedVoices: [{ voiceId: "v1", voiceLabel: "One", voiceType: "premade" }],
+    })
+    expect(
+      screen.getByText(/Boosts the recast.s fidelity to the target voice/i),
+    ).toBeInTheDocument()
+  })
+
+  // ----- Feature: node-level Music volume ----------------------------------
+
+  describe("Music volume control", () => {
+    it("defaults the music volume mode to 'match' and hides the slider", () => {
+      renderPanel({})
+      const mode = screen.getByLabelText(/Music volume mode/) as HTMLSelectElement
+      expect(mode.value).toBe("match")
+      expect(screen.queryByLabelText(/Music level \(/)).not.toBeInTheDocument()
+    })
+
+    it("writes the chosen music volume mode immutably", () => {
+      const onUpdate = vi.fn()
+      renderPanel({}, onUpdate)
+      fireEvent.change(screen.getByLabelText(/Music volume mode/), { target: { value: "normalize" } })
+      expect(onUpdate).toHaveBeenCalledWith({ musicVolumeMode: "normalize" })
+    })
+
+    it("reveals the music level slider only when mode is 'manual'", () => {
+      // Match: no slider.
+      const { unmount } = render(
+        <VoiceRecastConfig
+          data={{ ...baseData, musicVolumeMode: "match" }}
+          onUpdate={vi.fn()} sources={[]} fieldMappings={{}} onMapField={vi.fn()} nodes={[]}
+        />,
+      )
+      expect(screen.queryByLabelText(/Music level \(/)).not.toBeInTheDocument()
+      unmount()
+
+      // Normalize: still no slider.
+      const r2 = render(
+        <VoiceRecastConfig
+          data={{ ...baseData, musicVolumeMode: "normalize" }}
+          onUpdate={vi.fn()} sources={[]} fieldMappings={{}} onMapField={vi.fn()} nodes={[]}
+        />,
+      )
+      expect(screen.queryByLabelText(/Music level \(/)).not.toBeInTheDocument()
+      r2.unmount()
+
+      // Manual: slider appears with default 100%.
+      render(
+        <VoiceRecastConfig
+          data={{ ...baseData, musicVolumeMode: "manual" }}
+          onUpdate={vi.fn()} sources={[]} fieldMappings={{}} onMapField={vi.fn()} nodes={[]}
+        />,
+      )
+      expect(screen.getByLabelText(/Music level \(100%\)/)).toBeInTheDocument()
+    })
+
+    it("updates the manual music level immutably (no other fields touched)", () => {
+      const onUpdate = vi.fn()
+      renderPanel({ musicVolumeMode: "manual" }, onUpdate)
+      fireEvent.change(screen.getByLabelText(/Music level \(/), { target: { value: "150" } })
+      expect(onUpdate).toHaveBeenCalledWith({ musicVolume: 150 })
+    })
+
+    it("hides the music volume control when background music is not preserved", () => {
+      renderPanel({ preserveBackground: false })
+      expect(screen.queryByLabelText(/Music volume mode/)).not.toBeInTheDocument()
+      expect(screen.queryByLabelText(/Music level \(/)).not.toBeInTheDocument()
+    })
+  })
+
   it("reorders voices and respects bounds", () => {
     const onUpdate = vi.fn()
     renderPanel({

@@ -429,7 +429,10 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         "OR video_url / video_asset_id to recast the voices in a full video clip.\n\n" +
         "Voice and music are ALWAYS separated first (ElevenLabs only ever sees " +
         "the isolated vocals); preserve_background (default true) just controls " +
-        "whether the music/SFX bed is mixed back in under the new voices.\n\n" +
+        "whether the music/SFX bed is mixed back in under the new voices. " +
+        "music_volume_mode sets the level of that preserved background — 'match' " +
+        "(default) keeps the original level, 'normalize' loudnorms it, 'manual' " +
+        "uses music_volume (0–200%).\n\n" +
         "voice_fx applies a reverb/echo to the COMBINED recast voices BEFORE the " +
         "background is mixed back in (the effect sits on the voices, not the music bed).\n\n" +
         "Voice ids use the same naming as `generate_speech`: pass a premade " +
@@ -501,6 +504,18 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
           .describe(
             "Demucs model used to split voice from music: 'fast' (default, htdemucs — preserves more voice) or 'best' (htdemucs_ft — finer separation).",
           ),
+        music_volume_mode: z
+          .enum(["match", "normalize", "manual"])
+          .optional()
+          .describe(
+            "Background music level: match (original), normalize (loudnorm), or manual.",
+          ),
+        music_volume: z
+          .number()
+          .min(0)
+          .max(200)
+          .optional()
+          .describe("Background music volume % when music_volume_mode is manual."),
         remove_background_noise: z
           .boolean()
           .optional()
@@ -569,6 +584,9 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         payload.preserveBackground = args.preserve_background
       if (args.separation_quality !== undefined)
         payload.separationQuality = args.separation_quality
+      if (args.music_volume_mode !== undefined)
+        payload.musicVolumeMode = args.music_volume_mode
+      if (args.music_volume !== undefined) payload.musicVolume = args.music_volume
       if (args.remove_background_noise !== undefined)
         payload.removeBackgroundNoise = args.remove_background_noise
       if (args.voice_fx !== undefined) payload.voiceFx = args.voice_fx

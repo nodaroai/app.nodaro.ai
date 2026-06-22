@@ -2275,6 +2275,8 @@ recast(input: {
   preserveBackground?: boolean             // default true
   separationQuality?: "fast" | "best"      // default "fast"
   removeBackgroundNoise?: boolean
+  musicVolumeMode?: "match" | "normalize" | "manual"  // level of preserved background, default "match"
+  musicVolume?: number                     // 0–200 (%), used only when musicVolumeMode === "manual"
   voiceFx?: {                              // reverb/echo on the combined voices, pre-background-remix
     preset: AudioFxPreset                  // reverb space / telephone / megaphone / echo / custom
     wetDryMix?: number                     // 0–100, reverb wetness
@@ -2304,7 +2306,10 @@ only controls whether that music/instrumental stem is mixed back under the new
 voices; set it `false` for a clean voice-only result. `separationQuality`
 selects the demucs model used for the split: `"fast"` (default, htdemucs —
 preserves more of the voice) or `"best"` (htdemucs_ft — finer separation).
-`removeBackgroundNoise` additionally denoises the result. `voiceFx` applies a
+`removeBackgroundNoise` additionally denoises the result. `musicVolumeMode` sets
+the level of the preserved background (only relevant when `preserveBackground` is
+on): `"match"` (default) keeps the original level, `"normalize"` loudnorms it,
+`"manual"` uses `musicVolume`%. `voiceFx` applies a
 reverb/echo to the **combined** recast voices **before** the background is mixed
 back in (so the effect sits on the voices, not the music/SFX bed): reverb presets
 (`"room"`, `"hall"`, `"church"`, …) use `wetDryMix`; the `"echo"` / `"custom"`

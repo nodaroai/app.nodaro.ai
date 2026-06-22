@@ -16,6 +16,15 @@ interface MergeVideoAudioOptions {
   readonly voiceoverVolume?: number
   readonly backgroundVolume?: number
   readonly keepOriginalAudio?: boolean
+  /**
+   * When true, the `amix` uses `normalize=0` so the audio tracks are SUMMED
+   * rather than averaged (ffmpeg's default divides every input by N, which
+   * attenuates the result by ~−6dB for 2 inputs). Use this when the tracks are
+   * time-disjoint or volume-controlled and must retain their leveled loudness
+   * (e.g. voice-recast: per-speaker recast stems + instrumental reconstruct the
+   * original level). Default false = back-compat averaging.
+   */
+  readonly sumTracks?: boolean
 }
 
 /** Build FFmpeg filter_complex for mixing audio tracks (with optional original audio). */
@@ -24,6 +33,7 @@ function buildAudioFilter(
   defaultVol: number,
   bgVol: number,
   includeOriginal: boolean,
+  sumTracks: boolean,
 ): string {
   const parts: string[] = []
   const labels: string[] = []
@@ -42,15 +52,21 @@ function buildAudioFilter(
     labels.push(`[${label}]`)
   }
 
+  const norm = sumTracks ? ":normalize=0" : ""
+  // Summing (normalize=0) can push peaks past 0 dBFS; a transparent brickwall
+  // limiter (level=disabled → no make-up gain) caps clipping peaks without
+  // touching quieter audio. The single-track path doesn't sum, so no limiter.
+  const limit = sumTracks ? ",alimiter=level=disabled:limit=0.95" : ""
   if (includeOriginal) {
     parts.unshift(`[0:a]volume=${bgVol}[orig]`)
     const allLabels = `[orig]${labels.join("")}`
-    parts.push(`${allLabels}amix=inputs=${tracks.length + 1}:duration=longest[aout]`)
+    parts.push(`${allLabels}amix=inputs=${tracks.length + 1}:duration=longest${norm}${limit}[aout]`)
   } else if (tracks.length === 1) {
-    // Single track, no amix needed - rename label to [aout]
+    // Single track, no amix needed - rename label to [aout]. No division happens
+    // here, so sumTracks has no effect (a lone track keeps its level).
     parts[parts.length - 1] = parts[parts.length - 1].replace(`[a0]`, `[aout]`)
   } else {
-    parts.push(`${labels.join("")}amix=inputs=${tracks.length}:duration=longest[aout]`)
+    parts.push(`${labels.join("")}amix=inputs=${tracks.length}:duration=longest${norm}${limit}[aout]`)
   }
 
   return parts.join(";")
@@ -66,7 +82,7 @@ export async function mergeVideoAudio(options: MergeVideoAudioOptions): Promise<
 }
 
 async function mergeVideoAudioImpl(options: MergeVideoAudioOptions): Promise<string> {
-  const { videoUrl, audioUrl, audioTracks, voiceoverVolume = 100, backgroundVolume = 100, keepOriginalAudio = false } = options
+  const { videoUrl, audioUrl, audioTracks, voiceoverVolume = 100, backgroundVolume = 100, keepOriginalAudio = false, sumTracks = false } = options
   const workDir = await createWorkDir("merge-video-audio")
 
   try {
@@ -119,7 +135,7 @@ async function mergeVideoAudioImpl(options: MergeVideoAudioOptions): Promise<str
       inputArgs.push("-i", ap)
     }
 
-    const filterComplex = buildAudioFilter(tracks, voiceoverVolume, bgVol, keepOriginalAudio)
+    const filterComplex = buildAudioFilter(tracks, voiceoverVolume, bgVol, keepOriginalAudio, sumTracks)
 
     // The video stream is stream-COPIED into the MP4 unless it isn't
     // browser-safe. `needsTranscode` is true when the source isn't H.264/yuv420p
@@ -156,7 +172,7 @@ async function mergeVideoAudioImpl(options: MergeVideoAudioOptions): Promise<str
       if (keepOriginalAudio) {
         // Fallback: video may not have audio stream, retry without original audio
         console.log("[mergeVideoAudio] Fallback: video has no audio stream, merging without original")
-        const fallbackFilter = buildAudioFilter(tracks, voiceoverVolume, bgVol, false)
+        const fallbackFilter = buildAudioFilter(tracks, voiceoverVolume, bgVol, false, sumTracks)
         await doMerge(fallbackFilter)
       } else {
         throw new Error("FFmpeg merge failed")
