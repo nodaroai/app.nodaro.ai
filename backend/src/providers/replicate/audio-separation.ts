@@ -27,6 +27,50 @@ import { runReplicatePrediction, extractUrl } from "./client.js"
 const DEMUCS_VERSION =
   "5a7041cc9b82e5a558fea6b3d7b12dea89625e89da33f0447bd727c2d0ab9e77"
 
+// Cap concurrent Demucs calls. Replicate cold-starts/rate-limits concurrent
+// separations hard: a single run is ~8s, but several at once queue for MINUTES
+// and throw 502s (prod incident 2026-06-22 — 4 concurrent voice-changer-pro jobs
+// each ran 4-8 min + one 502). always-split means EVERY recast job hits Demucs,
+// so concurrency is now the norm. A small FIFO pool serializes them so each runs
+// at its fast solo speed instead of all stalling. Process-local (per worker).
+const MAX_CONCURRENT_SEPARATIONS = 2
+let activeSeparations = 0
+const separationQueue: Array<() => void> = []
+function acquireSeparationSlot(): Promise<() => void> {
+  return new Promise((resolve) => {
+    const grant = () => {
+      activeSeparations++
+      resolve(() => {
+        activeSeparations--
+        separationQueue.shift()?.()
+      })
+    }
+    if (activeSeparations < MAX_CONCURRENT_SEPARATIONS) grant()
+    else separationQueue.push(grant)
+  })
+}
+
+/** Retry Demucs on transient Replicate gateway errors (Cloudflare 502/503/504,
+ *  connection resets, DNS) — not real failures; a retry with backoff succeeds. */
+async function runDemucsWithRetry(
+  args: Parameters<typeof runReplicatePrediction>[0],
+  attempts = 3,
+): ReturnType<typeof runReplicatePrediction> {
+  let lastErr: unknown
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await runReplicatePrediction(args)
+    } catch (err) {
+      lastErr = err
+      const msg = String((err as { message?: string })?.message ?? err)
+      const transient = /\b50[234]\b|bad gateway|gateway time|ECONNRESET|EAI_AGAIN|ETIMEDOUT|socket hang up/i.test(msg)
+      if (!transient || i === attempts - 1) throw err
+      await new Promise((r) => setTimeout(r, 2000 * (i + 1)))
+    }
+  }
+  throw lastErr
+}
+
 type SeparationMode = "vocal_instrumental" | "stems"
 type SeparationQuality = "auto" | "fast" | "best"
 
@@ -72,12 +116,21 @@ export class ReplicateAudioSeparationProvider implements AudioSeparationProvider
     // Intentionally NO reconcileOpts/onTaskCreated: a crashed job fails+refunds
     // rather than being single-URL reconcile-recovered (which would flatten the
     // stems to one mediaUrl). See design §C(c).
-    const { output, cost } = await runReplicatePrediction({
-      version: DEMUCS_VERSION,
-      input,
-      label: "Audio separation",
-      costModelKey: "demucs",
-    })
+    // Throttle + retry: concurrent Demucs calls otherwise hammer Replicate
+    // (minutes + 502s under load). Serialize to a small pool, retry transient 5xx.
+    const releaseSlot = await acquireSeparationSlot()
+    let prediction: Awaited<ReturnType<typeof runReplicatePrediction>>
+    try {
+      prediction = await runDemucsWithRetry({
+        version: DEMUCS_VERSION,
+        input,
+        label: "Audio separation",
+        costModelKey: "demucs",
+      })
+    } finally {
+      releaseSlot()
+    }
+    const { output, cost } = prediction
 
     if (!output || typeof output !== "object") {
       throw new Error("Demucs returned no output")
