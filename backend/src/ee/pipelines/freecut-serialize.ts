@@ -328,14 +328,13 @@ export interface SerializedFreecut {
  *   - `json`   → `JSON.stringify(buildFreecutTimelineJson(...), null, 2)`,
  *                `application/json`, `.json`, formatTag `freecut-v1`.
  *   - `fcpxml` → `buildFcpxml(...)`, `application/xml`, `.fcpxml`,
- *                formatTag `fcpxml`.
+ *                formatTag `fcpxml-v1.10`.
  *
- * NOTE on `formatTag` for fcpxml: this returns the generic `"fcpxml"` tag (used
- * by the Studio route's `assets.metadata.format`). The PIPELINE wrappers do NOT
- * consume this value — they keep persisting their historical `"fcpxml-v1.10"`
- * tag so the pipeline's `assets.metadata.format` + `generateFcpxmlExport`'s
- * typed return stay byte-identical to before. (JSON's `freecut-v1` already
- * matches the historical pipeline tag, so the JSON wrapper can use either.)
+ * `formatTag` matches the historical pipeline values for BOTH formats
+ * (`freecut-v1` / `fcpxml-v1.10`), so a Studio-route export and a pipeline
+ * export of the same format carry the same `assets.metadata.format`. The
+ * pipeline FCPXML wrapper still passes `"fcpxml-v1.10"` explicitly (now equal
+ * to this dispatcher value) — pipeline output stays byte-identical.
  */
 export function serializeFreecut(
   reduced: TimelineState,
@@ -347,7 +346,7 @@ export function serializeFreecut(
       content: buildFcpxml(reduced, opts),
       mimeType: "application/xml",
       fileExtension: "fcpxml",
-      formatTag: "fcpxml",
+      formatTag: "fcpxml-v1.10",
     }
   }
   return {
