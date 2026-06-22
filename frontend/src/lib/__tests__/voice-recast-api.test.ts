@@ -55,7 +55,7 @@ describe("voiceRecastApi", () => {
 
     const res = await voiceRecastApi(
       undefined,
-      ["vA", "vB"],
+      [{ voiceId: "vA" }, { voiceId: "vB" }],
       "u1",
       undefined,
       true,
@@ -72,7 +72,7 @@ describe("voiceRecastApi", () => {
 
     const body = JSON.parse(mock.mock.calls[0][1].body as string)
     expect(body).toEqual({
-      orderedVoices: ["vA", "vB"],
+      orderedVoices: [{ voiceId: "vA" }, { voiceId: "vB" }],
       videoUrl: "https://r2/v.mp4",
       userId: "u1",
       preserveBackground: true,
@@ -84,15 +84,32 @@ describe("voiceRecastApi", () => {
     const mock = mockFetchJson({ jobId: "j2" })
     vi.stubGlobal("fetch", mock)
 
-    const res = await voiceRecastApi("https://r2/a.mp3", ["vC"])
+    const res = await voiceRecastApi("https://r2/a.mp3", [{ voiceId: "vC" }])
 
     expect(res).toEqual({ jobId: "j2" })
 
     const body = JSON.parse(mock.mock.calls[0][1].body as string)
     expect(body).toEqual({
-      orderedVoices: ["vC"],
+      orderedVoices: [{ voiceId: "vC" }],
       audioUrl: "https://r2/a.mp3",
     })
+  })
+
+  it("passes per-voice settings through as-is", async () => {
+    noSession()
+    const mock = mockFetchJson({ jobId: "jp" })
+    vi.stubGlobal("fetch", mock)
+
+    await voiceRecastApi("https://r2/a.mp3", [
+      { voiceId: "vA", stability: 0.8, similarityBoost: 0.6, style: 0.3, useSpeakerBoost: false, volume: 150 },
+      { voiceId: "vB" },
+    ])
+
+    const body = JSON.parse(mock.mock.calls[0][1].body as string)
+    expect(body.orderedVoices).toEqual([
+      { voiceId: "vA", stability: 0.8, similarityBoost: 0.6, style: 0.3, useSpeakerBoost: false, volume: 150 },
+      { voiceId: "vB" },
+    ])
   })
 
   it("includes all optional fields when provided", async () => {
@@ -102,7 +119,7 @@ describe("voiceRecastApi", () => {
 
     await voiceRecastApi(
       "https://r2/a.mp3",
-      ["vA"],
+      [{ voiceId: "vA" }],
       "u2",
       "eleven_multilingual_v2",
       false,
@@ -112,7 +129,7 @@ describe("voiceRecastApi", () => {
 
     const body = JSON.parse(mock.mock.calls[0][1].body as string)
     expect(body).toEqual({
-      orderedVoices: ["vA"],
+      orderedVoices: [{ voiceId: "vA" }],
       audioUrl: "https://r2/a.mp3",
       videoUrl: "https://r2/v.mp4",
       userId: "u2",
@@ -134,7 +151,7 @@ describe("voiceRecastApi", () => {
       }),
     )
 
-    await expect(voiceRecastApi(undefined, ["vA"])).rejects.toThrow(
+    await expect(voiceRecastApi(undefined, [{ voiceId: "vA" }])).rejects.toThrow(
       "Voice recast failed",
     )
   })

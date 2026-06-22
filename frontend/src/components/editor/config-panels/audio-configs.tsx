@@ -2161,6 +2161,11 @@ export function VoiceRecastConfig({ data, onUpdate }: ConfigProps<VoiceRecastDat
     ;[next[i], next[j]] = [next[j], next[i]]
     onUpdate({ orderedVoices: next })
   }
+  // Immutably patch one voice entry's per-voice settings (copy array + entry).
+  const updateVoice = (i: number, patch: Partial<VoiceRecastData["orderedVoices"][number]>) => {
+    const next = voices.map((v, idx) => (idx === i ? { ...v, ...patch } : v))
+    onUpdate({ orderedVoices: next })
+  }
   return (
     <div className="flex flex-col gap-3">
       <p className="text-xs text-muted-foreground">
@@ -2177,12 +2182,59 @@ export function VoiceRecastConfig({ data, onUpdate }: ConfigProps<VoiceRecastDat
       </div>
       <div className="flex flex-col gap-1">
         {voices.map((v, i) => (
-          <div key={`${v.voiceId}-${i}`} className="flex items-center gap-2 rounded border px-2 py-1">
-            <span className="text-xs text-muted-foreground w-16">Speaker {i + 1}</span>
-            <span className="text-sm flex-1 truncate">{v.voiceLabel}</span>
-            <button aria-label="Move up" onClick={() => move(i, -1)} className="text-xs px-1">↑</button>
-            <button aria-label="Move down" onClick={() => move(i, 1)} className="text-xs px-1">↓</button>
-            <button aria-label="Remove voice" onClick={() => removeVoice(i)} className="text-xs px-1">✕</button>
+          <div key={`${v.voiceId}-${i}`} className="rounded border">
+            <div className="flex items-center gap-2 px-2 py-1">
+              <span className="text-xs text-muted-foreground w-16">Speaker {i + 1}</span>
+              <span className="text-sm flex-1 truncate">{v.voiceLabel}</span>
+              <button aria-label="Move up" onClick={() => move(i, -1)} className="text-xs px-1">↑</button>
+              <button aria-label="Move down" onClick={() => move(i, 1)} className="text-xs px-1">↓</button>
+              <button aria-label="Remove voice" onClick={() => removeVoice(i)} className="text-xs px-1">✕</button>
+            </div>
+            <details className="border-t px-2 py-1">
+              <summary className="cursor-pointer text-[11px] text-muted-foreground select-none">Voice settings</summary>
+              <div className="flex flex-col gap-2 pt-2">
+                <div>
+                  <Label htmlFor={`stability-${i}`}>Stability ({v.stability ?? 0.5})</Label>
+                  <Input id={`stability-${i}`} type="range" min={0} max={1} step={0.05} value={v.stability ?? 0.5} onChange={(e) => updateVoice(i, { stability: parseFloat(e.target.value) })} className="h-2" />
+                  <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5"><span>Variable</span><span>Stable</span></div>
+                </div>
+                <div>
+                  <Label htmlFor={`similarity-${i}`}>Similarity ({v.similarityBoost ?? 0.75})</Label>
+                  <Input id={`similarity-${i}`} type="range" min={0} max={1} step={0.05} value={v.similarityBoost ?? 0.75} onChange={(e) => updateVoice(i, { similarityBoost: parseFloat(e.target.value) })} className="h-2" />
+                  <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5"><span>Low</span><span>High</span></div>
+                </div>
+                <div>
+                  <Label htmlFor={`style-${i}`}>Style Exaggeration ({v.style ?? 0})</Label>
+                  <Input id={`style-${i}`} type="range" min={0} max={1} step={0.05} value={v.style ?? 0} onChange={(e) => updateVoice(i, { style: parseFloat(e.target.value) })} className="h-2" />
+                  <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5"><span>None</span><span>Exaggerated</span></div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor={`speaker-boost-${i}`}>Speaker Boost</Label>
+                  <Switch id={`speaker-boost-${i}`} checked={v.useSpeakerBoost ?? true} onCheckedChange={(c) => updateVoice(i, { useSpeakerBoost: c })} />
+                </div>
+                <div>
+                  <Label htmlFor={`volume-mode-${i}`}>Volume</Label>
+                  <Select
+                    value={v.volumeMode ?? "match"}
+                    onValueChange={(mode) => updateVoice(i, { volumeMode: mode as NonNullable<VoiceRecastData["orderedVoices"][number]["volumeMode"]> })}
+                  >
+                    <SelectTrigger id={`volume-mode-${i}`} aria-label={`Volume mode for speaker ${i + 1}`} className="h-8"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="match">Match source</SelectItem>
+                      <SelectItem value="normalize">Normalize</SelectItem>
+                      <SelectItem value="manual">Manual</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {(v.volumeMode ?? "match") === "manual" && (
+                    <div className="mt-2">
+                      <Label htmlFor={`volume-${i}`}>Volume ({v.volume ?? 100}%)</Label>
+                      <Input id={`volume-${i}`} type="range" min={0} max={200} step={5} value={v.volume ?? 100} onChange={(e) => updateVoice(i, { volume: parseFloat(e.target.value) })} className="h-2" />
+                      <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5"><span>0%</span><span>200%</span></div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </details>
           </div>
         ))}
       </div>
@@ -2200,13 +2252,31 @@ export function VoiceRecastConfig({ data, onUpdate }: ConfigProps<VoiceRecastDat
           </SelectContent>
         </Select>
       </div>
+      <div>
+        <Label>Separation quality</Label>
+        <Select
+          value={data.separationQuality ?? "fast"}
+          onValueChange={(v) => onUpdate({ separationQuality: v as NonNullable<VoiceRecastData["separationQuality"]> })}
+        >
+          <SelectTrigger aria-label="Separation quality"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="fast">Fast — preserves more of the voice</SelectItem>
+            <SelectItem value="best">Quality — finer separation</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
       <div className="flex items-center justify-between">
         <Label>Preserve background music</Label>
         <Switch checked={data.preserveBackground ?? true} onCheckedChange={(v) => onUpdate({ preserveBackground: v })} />
       </div>
-      <div className="flex items-center justify-between">
-        <Label>Remove background noise</Label>
-        <Switch checked={data.removeBackgroundNoise ?? false} onCheckedChange={(v) => onUpdate({ removeBackgroundNoise: v })} />
+      <div>
+        <div className="flex items-center justify-between">
+          <Label>Remove background noise</Label>
+          <Switch checked={data.removeBackgroundNoise ?? false} onCheckedChange={(v) => onUpdate({ removeBackgroundNoise: v })} />
+        </div>
+        <p className="text-[11px] text-muted-foreground mt-1">
+          Under evaluation — vocals are isolated automatically; this may be unnecessary.
+        </p>
       </div>
     </div>
   )

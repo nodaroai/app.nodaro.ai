@@ -8,6 +8,8 @@ export interface VoiceChangerOptions {
   /** Style exaggeration (0–1). Amplifies the source speaker's stylistic
    *  delivery; >0 adds latency and can reduce stability, so 0 is the default. */
   style?: number
+  /** Boosts similarity to the target speaker at a small latency cost. */
+  useSpeakerBoost?: boolean
 }
 
 export async function directVoiceChanger(
@@ -26,14 +28,20 @@ export async function directVoiceChanger(
     formData.append("remove_background_noise", "true")
   }
 
-  if (options?.stability != null || options?.similarityBoost != null || options?.style != null) {
-    const voiceSettings: Record<string, number> = {
+  if (
+    options?.stability != null ||
+    options?.similarityBoost != null ||
+    options?.style != null ||
+    options?.useSpeakerBoost != null
+  ) {
+    const voiceSettings: Record<string, number | boolean> = {
       stability: options?.stability ?? 0.5,
       similarity_boost: options?.similarityBoost ?? 0.75,
     }
-    // Only send style when explicitly set, so default requests stay byte-for-byte
-    // identical to before this lever existed.
+    // Only send style/speaker-boost when explicitly set, so default requests stay
+    // byte-for-byte identical to before these levers existed.
     if (options?.style != null) voiceSettings.style = options.style
+    if (options?.useSpeakerBoost != null) voiceSettings.use_speaker_boost = options.useSpeakerBoost
     formData.append("voice_settings", JSON.stringify(voiceSettings))
   }
 

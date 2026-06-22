@@ -2615,20 +2615,70 @@ export function executeNode(
       return Promise.reject(new Error("No voices"));
     }
     setUserPromptTemplate(undefined);
+
+    // Switching modes (audio↔video) drops stale results of the other media type
+    // so the node never shows an audio URL in a video element (or vice versa).
+    const targetIsVideo = Boolean(videoUrl);
+    const curIsVideo = Boolean(d.generatedVideoUrl);
+    if (targetIsVideo !== curIsVideo) {
+      useWorkflowStore.getState().updateNodeData(node.id, {
+        generatedResults: [],
+        activeResultIndex: 0,
+        generatedVideoUrl: undefined,
+        generatedAudioUrl: undefined,
+      });
+    }
+
+    // Video input → backend returns output_data.videoUrl; audio input → audioUrl.
+    // Reading the wrong key is why video runs hit "No output URL returned".
+    // Send the full per-voice settings; omit undefined fields so the backend
+    // applies its defaults (stability 0.5, similarity 0.75, style 0,
+    // speakerBoost true, volume 100%).
+    const orderedVoicePayload = d.orderedVoices.map((v) => {
+      const entry: {
+        voiceId: string;
+        stability?: number;
+        similarityBoost?: number;
+        style?: number;
+        useSpeakerBoost?: boolean;
+        volumeMode?: "match" | "normalize" | "manual";
+        volume?: number;
+      } = { voiceId: v.voiceId };
+      if (v.stability != null) entry.stability = v.stability;
+      if (v.similarityBoost != null) entry.similarityBoost = v.similarityBoost;
+      if (v.style != null) entry.style = v.style;
+      if (v.useSpeakerBoost != null) entry.useSpeakerBoost = v.useSpeakerBoost;
+      if (v.volumeMode != null) entry.volumeMode = v.volumeMode;
+      if (v.volume != null) entry.volume = v.volume;
+      return entry;
+    });
+    const callVoiceRecast = () =>
+      voiceRecastApi(
+        audioUrl,
+        orderedVoicePayload,
+        ctx.userId,
+        d.model,
+        d.preserveBackground,
+        d.removeBackgroundNoise,
+        videoUrl,
+        d.separationQuality,
+      );
+    if (videoUrl) {
+      return runProcessingNode(
+        node.id,
+        callVoiceRecast,
+        "generatedVideoUrl",
+        "Voice Changer Pro",
+        ctx,
+        // Surface a revoiced audio sidecar on the audio handle when present.
+        (od) => (od.audioUrl ? { generatedAudioUrl: od.audioUrl as string } : {}),
+      );
+    }
     return runProcessingNode(
       node.id,
-      () =>
-        voiceRecastApi(
-          audioUrl,
-          d.orderedVoices.map((v) => v.voiceId),
-          ctx.userId,
-          d.model,
-          d.preserveBackground,
-          d.removeBackgroundNoise,
-          videoUrl,
-        ),
+      callVoiceRecast,
       "generatedAudioUrl",
-      "Voice Recast",
+      "Voice Changer Pro",
       ctx,
     );
   }

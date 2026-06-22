@@ -91,19 +91,60 @@ export class VoicesResource {
   /**
    * Recast each detected speaker in a multi-speaker recording to a different
    * voice (`POST /v1/voice-recast`). `orderedVoices` maps speaker positions to
-   * voice ids in detection order — speaker 0 → `orderedVoices[0]`, speaker 1 →
+   * voices in detection order — speaker 0 → `orderedVoices[0]`, speaker 1 →
    * `orderedVoices[1]`, etc. Speakers beyond the end of `orderedVoices` keep
-   * their original voice. Pass `audioUrl` for audio-only recast or `videoUrl`
-   * to recast the audio track of a video clip (the server demuxes, recasts, and
-   * remuxes). `preserveBackground` keeps music/SFX beds under the new voices;
-   * `removeBackgroundNoise` strips them for a clean voice-only result. Cloud-only
-   * — costs credits and runs async; poll `jobs.get(jobId)` for the result
-   * (`output_data.videoUrl` + `output_data.audioUrl` in video mode).
+   * their original voice. Each entry is EITHER a bare voice id (premade name or
+   * ElevenLabs UUID) OR a {@link VoiceRecastVoice} object carrying per-voice
+   * ElevenLabs speech-to-speech settings (stability / similarityBoost / style /
+   * useSpeakerBoost) plus a loudness `volumeMode` (and a manual `volume`).
+   *
+   * Pass `audioUrl` for audio-only recast or `videoUrl` to recast the audio
+   * track of a video clip (the server demuxes, recasts, and remuxes).
+   *
+   * Voice and music are ALWAYS separated first — ElevenLabs only ever sees the
+   * isolated vocal stem, never the music bed. `preserveBackground` (default
+   * `true`) only controls whether that music/instrumental stem is mixed back
+   * under the new voices; set it `false` for a clean voice-only result.
+   * `separationQuality` selects the demucs model used for that split: `"fast"`
+   * (default, htdemucs — preserves more of the voice) or `"best"` (htdemucs_ft —
+   * finer separation). `removeBackgroundNoise` additionally denoises the result.
+   *
+   * Cloud-only — costs credits and runs async; poll `jobs.get(jobId)` for the
+   * result (`output_data.videoUrl` + `output_data.audioUrl` in video mode).
    */
   recast(input: VoiceRecastInput): Promise<{ jobId: string }> {
     return this.client.request<{ jobId: string }>("POST", "/v1/voice-recast", { body: input })
   }
 }
+
+/**
+ * One entry in {@link VoiceRecastInput.orderedVoices}. Either a bare voice id
+ * (premade name like `"Rachel"` or an ElevenLabs UUID for a custom clone), or
+ * an object pinning per-voice speech-to-speech settings and the recast's
+ * loudness behaviour for that speaker.
+ */
+export type VoiceRecastVoice =
+  | string
+  | {
+      /** Target voice — premade name (`"Rachel"`, `"Aria"`, …) or an ElevenLabs UUID for a custom clone. */
+      voiceId: string
+      /** ElevenLabs stability (0–1). Higher = steadier, lower = more expressive. */
+      stability?: number
+      /** ElevenLabs similarity boost (0–1) — how closely the output hugs the target voice's timbre. */
+      similarityBoost?: number
+      /** Style exaggeration (0–1). Default 0; >0 amplifies delivery at the cost of latency / stability. */
+      style?: number
+      /** ElevenLabs speaker boost — sharpens fidelity to the target speaker. */
+      useSpeakerBoost?: boolean
+      /**
+       * Loudness handling for this recast voice. `"match"` (default) matches the
+       * original speaker's loudness; `"normalize"` applies EBU R128 loudnorm;
+       * `"manual"` uses `volume` as a percentage.
+       */
+      volumeMode?: "match" | "normalize" | "manual"
+      /** Manual output volume as a percentage (0–200). Consulted only when `volumeMode === "manual"`. */
+      volume?: number
+    }
 
 /** Input for {@link VoicesResource.recast}. */
 export interface VoiceRecastInput {
@@ -111,12 +152,25 @@ export interface VoiceRecastInput {
   audioUrl?: string
   /** URL of a video file to recast (the audio track is recast and remuxed). Exactly one of `audioUrl` / `videoUrl` is required. */
   videoUrl?: string
-  /** Voice ids in speaker-detection order. Speaker N is mapped to `orderedVoices[N]`; speakers beyond the array keep their original voice. */
-  orderedVoices: string[]
+  /**
+   * Voices in speaker-detection order. Speaker N is mapped to `orderedVoices[N]`;
+   * speakers beyond the array keep their original voice. Each entry is a bare
+   * voice id OR a {@link VoiceRecastVoice} object with per-voice settings.
+   */
+  orderedVoices: Array<VoiceRecastVoice>
   /** Model to use for speech-to-speech. Defaults to the server-configured default when omitted. */
   model?: string
-  /** Preserve background audio (music / SFX) under the recasted voices. */
+  /**
+   * Mix the separated music / SFX stem back under the recast voices. Default
+   * `true`. The voice is ALWAYS split out before recasting regardless of this
+   * flag — `false` simply drops the music for a clean voice-only result.
+   */
   preserveBackground?: boolean
+  /**
+   * Demucs model used to split voice from music. `"fast"` (default, htdemucs —
+   * preserves more of the voice) or `"best"` (htdemucs_ft — finer separation).
+   */
+  separationQuality?: "fast" | "best"
   /** Strip background noise for a clean voice-only result. */
   removeBackgroundNoise?: boolean
 }

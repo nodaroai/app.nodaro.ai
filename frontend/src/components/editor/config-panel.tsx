@@ -289,7 +289,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "audio-isolation": "Voice Extractor",
   "text-to-dialogue": "Text to Dialogue",
   "voice-changer": "Voice Changer",
-  "voice-recast": "Voice Recast",
+  "voice-recast": "Voice Changer Pro",
   "dubbing": "Dubbing",
   "voice-remix": "Voice Remix",
   "voice-design": "Voice Design",
