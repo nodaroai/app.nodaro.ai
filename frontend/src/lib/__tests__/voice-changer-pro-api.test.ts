@@ -16,7 +16,7 @@ vi.mock("@/lib/supabase", () => ({
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
-import { voiceRecastApi } from "../api"
+import { voiceChangerProApi } from "../api"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -44,16 +44,16 @@ afterEach(() => {
 })
 
 // ---------------------------------------------------------------------------
-// voiceRecastApi
+// voiceChangerProApi
 // ---------------------------------------------------------------------------
 
-describe("voiceRecastApi", () => {
+describe("voiceChangerProApi", () => {
   it("posts videoUrl + ordered voiceIds, omitting absent optionals", async () => {
     noSession()
     const mock = mockFetchJson({ jobId: "j1" })
     vi.stubGlobal("fetch", mock)
 
-    const res = await voiceRecastApi(
+    const res = await voiceChangerProApi(
       undefined,
       [{ voiceId: "vA" }, { voiceId: "vB" }],
       "u1",
@@ -66,7 +66,7 @@ describe("voiceRecastApi", () => {
     expect(res).toEqual({ jobId: "j1" })
 
     expect(mock).toHaveBeenCalledWith(
-      "/v1/voice-recast",
+      "/v1/voice-changer-pro",
       expect.objectContaining({ method: "POST" }),
     )
 
@@ -84,7 +84,7 @@ describe("voiceRecastApi", () => {
     const mock = mockFetchJson({ jobId: "j2" })
     vi.stubGlobal("fetch", mock)
 
-    const res = await voiceRecastApi("https://r2/a.mp3", [{ voiceId: "vC" }])
+    const res = await voiceChangerProApi("https://r2/a.mp3", [{ voiceId: "vC" }])
 
     expect(res).toEqual({ jobId: "j2" })
 
@@ -100,7 +100,7 @@ describe("voiceRecastApi", () => {
     const mock = mockFetchJson({ jobId: "jp" })
     vi.stubGlobal("fetch", mock)
 
-    await voiceRecastApi("https://r2/a.mp3", [
+    await voiceChangerProApi("https://r2/a.mp3", [
       { voiceId: "vA", stability: 0.8, similarityBoost: 0.6, style: 0.3, useSpeakerBoost: false, volume: 150 },
       { voiceId: "vB" },
     ])
@@ -117,7 +117,7 @@ describe("voiceRecastApi", () => {
     const mock = mockFetchJson({ jobId: "j3" })
     vi.stubGlobal("fetch", mock)
 
-    await voiceRecastApi(
+    await voiceChangerProApi(
       "https://r2/a.mp3",
       [{ voiceId: "vA" }],
       "u2",
@@ -144,7 +144,7 @@ describe("voiceRecastApi", () => {
     const mock = mockFetchJson({ jobId: "js" })
     vi.stubGlobal("fetch", mock)
 
-    await voiceRecastApi("https://r2/a.mp3", [
+    await voiceChangerProApi("https://r2/a.mp3", [
       { voiceId: "vA", seed: 0 },
       { voiceId: "vB", seed: 4242 },
       { voiceId: "vC" },
@@ -163,7 +163,7 @@ describe("voiceRecastApi", () => {
     const mock = mockFetchJson({ jobId: "jfx" })
     vi.stubGlobal("fetch", mock)
 
-    await voiceRecastApi(
+    await voiceChangerProApi(
       "https://r2/a.mp3",
       [{ voiceId: "vA" }],
       undefined,
@@ -181,7 +181,7 @@ describe("voiceRecastApi", () => {
     // Second call with no voiceFx → key omitted entirely.
     const mock2 = mockFetchJson({ jobId: "jno" })
     vi.stubGlobal("fetch", mock2)
-    await voiceRecastApi("https://r2/a.mp3", [{ voiceId: "vA" }])
+    await voiceChangerProApi("https://r2/a.mp3", [{ voiceId: "vA" }])
     const body2 = JSON.parse(mock2.mock.calls[0][1].body as string)
     expect("voiceFx" in body2).toBe(false)
   })
@@ -198,7 +198,7 @@ describe("voiceRecastApi", () => {
       }),
     )
 
-    await expect(voiceRecastApi(undefined, [{ voiceId: "vA" }])).rejects.toThrow(
+    await expect(voiceChangerProApi(undefined, [{ voiceId: "vA" }])).rejects.toThrow(
       "Voice recast failed",
     )
   })

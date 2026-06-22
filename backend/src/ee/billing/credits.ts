@@ -835,7 +835,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "object": 2,
   "location": 2,
   "voice-changer": 4,
-  "voice-recast": 4,              // [comment removed]
+  "voice-changer-pro": 4,              // [comment removed]
   "dubbing": 8,
   "voice-remix": 4,
   "voice-design": 5,

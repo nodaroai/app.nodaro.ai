@@ -704,7 +704,7 @@ export function getPrimaryOutput(
   // Voice-recast is dual-mode (same pattern as voice-changer): each detected
   // speaker is independently re-voiced. Route by the tapped output handle;
   // default prefers video when the node produced one.
-  if (sourceType === "voice-recast") {
+  if (sourceType === "voice-changer-pro") {
     if (sourceHandle === "audio") return output.audioUrl
     if (sourceHandle === "video") return output.videoUrl
     return output.videoUrl || output.audioUrl
@@ -1005,7 +1005,7 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
   // speaker is independently re-voiced. Prefer the video result so downstream
   // video consumers hydrate on "Run from here"; expose audioUrl for the audio
   // handle (the revoiced audio track).
-  if (type === "voice-recast") {
+  if (type === "voice-changer-pro") {
     const videoUrl = data.generatedVideoUrl as string | undefined
     if (videoUrl) {
       const out: NodeOutput = { videoUrl }

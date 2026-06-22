@@ -23,7 +23,7 @@ function makeNode<T extends Record<string, unknown>>(type: string, data: T): Wor
   } as WorkflowNode
 }
 
-describe("extractNodeOutput voice-recast", () => {
+describe("extractNodeOutput voice-changer-pro", () => {
   const data = {
     generatedVideoUrl: "https://r2/out.mp4",
     generatedAudioUrl: "https://r2/out.mp3",
@@ -31,16 +31,16 @@ describe("extractNodeOutput voice-recast", () => {
     activeResultIndex: 0,
   }
   it("returns the video URL on the video handle", () => {
-    expect(extractNodeOutput(makeNode("voice-recast", data), "video")).toBe("https://r2/out.mp4")
+    expect(extractNodeOutput(makeNode("voice-changer-pro", data), "video")).toBe("https://r2/out.mp4")
   })
   it("returns the audio URL on the audio handle", () => {
-    expect(extractNodeOutput(makeNode("voice-recast", data), "audio")).toBe("https://r2/out.mp3")
+    expect(extractNodeOutput(makeNode("voice-changer-pro", data), "audio")).toBe("https://r2/out.mp3")
   })
   it("falls back to videoUrl when no sourceHandle and results is empty", () => {
-    expect(extractNodeOutput(makeNode("voice-recast", data))).toBe("https://r2/out.mp4")
+    expect(extractNodeOutput(makeNode("voice-changer-pro", data))).toBe("https://r2/out.mp4")
   })
   it("falls back to audioUrl when no sourceHandle and no videoUrl and results is empty", () => {
     const audioOnly = { ...data, generatedVideoUrl: undefined }
-    expect(extractNodeOutput(makeNode("voice-recast", audioOnly))).toBe("https://r2/out.mp3")
+    expect(extractNodeOutput(makeNode("voice-changer-pro", audioOnly))).toBe("https://r2/out.mp3")
   })
 })

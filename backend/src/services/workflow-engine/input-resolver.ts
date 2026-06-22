@@ -1628,7 +1628,7 @@ function routeOutput(
   // Same dual-mode as voice-changer: the node re-voices each detected speaker
   // independently. Route by the tapped source handle; default prefers video
   // when the node produced one (mirrors the voice-changer pattern exactly).
-  if (srcType === "voice-recast") {
+  if (srcType === "voice-changer-pro") {
     const producedVideo =
       Boolean(nodeStates[src.id]?.output?.videoUrl) ||
       Boolean(src.data.generatedVideoUrl)

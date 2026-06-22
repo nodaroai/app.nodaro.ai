@@ -109,7 +109,7 @@ import {
   AudioIsolationConfig,
   TextToDialogueConfig,
   VoiceChangerConfig,
-  VoiceRecastConfig,
+  VoiceChangerProConfig,
   DubbingConfig,
   VoiceRemixConfig,
   VoiceDesignConfig,
@@ -215,7 +215,7 @@ import { TileCommitContext } from "./config-panels/dimension-tile-grid"
 import { createRovingTabIndexRef, handleConfigPanelNavKeyDown } from "./config-panels/config-keyboard-nav"
 
 const LIBRARY_VIDEO_TYPES = new Set(["image-to-video", "video-to-video", "text-to-video", "generate-video", "video-upscale", "extend-video", "motion-transfer", "lip-sync", "speech-to-video", "face-swap", "video-sfx", "ai-avatar", "cinematic-avatar"])
-const LIBRARY_AUDIO_TYPES = new Set(["text-to-speech", "generate-music", "text-to-audio", "audio-isolation", "audio-separation", "text-to-dialogue", "voice-changer", "voice-recast", "dubbing", "voice-remix", "voice-design", "suno-generate", "suno-cover", "suno-extend", "suno-separate", "suno-mashup", "suno-replace-section", "suno-add-instrumental", "suno-add-vocals", "suno-convert-wav", "suno-upload-extend"])
+const LIBRARY_AUDIO_TYPES = new Set(["text-to-speech", "generate-music", "text-to-audio", "audio-isolation", "audio-separation", "text-to-dialogue", "voice-changer", "voice-changer-pro", "dubbing", "voice-remix", "voice-design", "suno-generate", "suno-cover", "suno-extend", "suno-separate", "suno-mashup", "suno-replace-section", "suno-add-instrumental", "suno-add-vocals", "suno-convert-wav", "suno-upload-extend"])
 
 const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "text-prompt": "Text",
@@ -289,7 +289,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "audio-isolation": "Voice Extractor",
   "text-to-dialogue": "Text to Dialogue",
   "voice-changer": "Voice Changer",
-  "voice-recast": "Voice Changer Pro",
+  "voice-changer-pro": "Voice Changer Pro",
   "dubbing": "Dubbing",
   "voice-remix": "Voice Remix",
   "voice-design": "Voice Design",
@@ -560,7 +560,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "audio-isolation": return <AudioIsolationConfig {...configProps} />
     case "text-to-dialogue": return <TextToDialogueConfig {...configProps} />
     case "voice-changer": return <VoiceChangerConfig {...configProps} />
-    case "voice-recast": return <VoiceRecastConfig {...configProps} />
+    case "voice-changer-pro": return <VoiceChangerProConfig {...configProps} />
     case "dubbing": return <DubbingConfig {...configProps} />
     case "voice-remix": return <VoiceRemixConfig {...configProps} nodeId={selectedNodeId} />
     case "voice-design": return <VoiceDesignConfig {...configProps} nodeId={selectedNodeId} />

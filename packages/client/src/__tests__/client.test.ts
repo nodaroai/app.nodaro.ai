@@ -170,7 +170,7 @@ describe("request", () => {
 })
 
 describe("voices.recast", () => {
-  it("POSTs /v1/voice-recast with the correct body", async () => {
+  it("POSTs /v1/voice-changer-pro with the correct body", async () => {
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "job_recast_123" }))
     const c = createClient({
       baseUrl: "https://api.example.com",
@@ -186,7 +186,7 @@ describe("voices.recast", () => {
     })
     expect(result).toEqual({ jobId: "job_recast_123" })
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.example.com/v1/voice-recast",
+      "https://api.example.com/v1/voice-changer-pro",
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({

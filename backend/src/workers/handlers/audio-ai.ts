@@ -572,5 +572,5 @@ export const audioAIHandlers: Record<string, HandlerFn> = {
   "voice-remix": handleVoiceRemix,
   "voice-design": handleVoiceDesign,
   "forced-alignment": handleForcedAlignment,
-  "voice-recast": handleVoiceRecast,
+[handler entry removed]
 }

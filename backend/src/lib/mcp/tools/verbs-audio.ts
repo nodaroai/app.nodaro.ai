@@ -407,11 +407,11 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
     },
   )
 
-  // ── voice_recast ──
+  // ── voice_changer_pro ──
   // Detect each speaker and recast each to the voice at its position
   // (first-appearance order). Cloud-only.
   server.registerTool(
-    "voice_recast",
+    "voice_changer_pro",
     {
       title: "Voice Changer Pro",
       description:
@@ -596,13 +596,13 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         .map((v) => (typeof v === "string" ? v : v.voiceId))
         .join(", ")
       return dispatchJob(fastify, session, {
-        url: "/v1/voice-recast",
+        url: "/v1/voice-changer-pro",
         payload,
         label: isVideo ? "voice recast (video)" : "voice recast",
         widgetKind: "audio",
         widgetData: {
           prompt: `recast → ${voiceLabels}`,
-          model: "voice-recast",
+          model: "voice-changer-pro",
         },
       })
     },

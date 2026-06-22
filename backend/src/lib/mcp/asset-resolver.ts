@@ -64,7 +64,7 @@ const AUDIO_TYPES = new Set<string>([
   "suno-extend",
   "text-to-dialogue",
   "voice-changer",
-  "voice-recast",
+  "voice-changer-pro",
   "dubbing",
   "voice-remix",
   "voice-design",

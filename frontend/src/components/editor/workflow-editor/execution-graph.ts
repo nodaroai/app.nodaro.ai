@@ -552,7 +552,7 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     if (sourceHandle === "video") return videoUrl;
     return results[activeIndex]?.url ?? videoUrl ?? audioUrl;
   }
-  if (type === "voice-recast") {
+  if (type === "voice-changer-pro") {
     // Same dual-mode as voice-changer: audio in → audio out; video in → video out.
     // Route by the tapped output handle; default prefers the active result, then
     // video (video mode), then audio.
@@ -974,7 +974,7 @@ export const AUDIO_SOURCE_TYPES = new Set([
   "audio-fx",
   "reference-audio",
   "voice-changer",
-  "voice-recast",
+  "voice-changer-pro",
   "dubbing",
   "voice-remix",
   "voice-design",

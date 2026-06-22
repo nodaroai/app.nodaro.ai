@@ -306,7 +306,7 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
     },
   },
   {
-    type: "voice-recast",
+    type: "voice-changer-pro",
     label: "Voice Changer Pro",
     category: "ai-audio",
     description: "Detect each speaker in a multi-speaker recording and replace each one's voice independently, preserving words, timing and lip-sync. Provide an ordered list of target voices — voice N recasts the N-th speaker to talk. Cloud edition only.",

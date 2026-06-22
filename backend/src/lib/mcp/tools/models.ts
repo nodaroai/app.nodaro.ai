@@ -78,7 +78,7 @@ export function registerModels({ server, session }: RegisterModelsOpts): void {
             "t2i", "i2i", "edit", "upscale", "remove-bg",
             "i2v", "t2v", "v2v", "extend", "motion-transfer", "lip-sync", "video-upscale",
             "tts", "music", "sfx", "stt", "voice-clone", "voice-design",
-            "voice-changer", "voice-recast", "isolation", "dubbing", "forced-alignment",
+            "voice-changer", "voice-changer-pro", "isolation", "dubbing", "forced-alignment",
           ])
           .optional()
           .describe("Filter to a specific operation (e.g. 't2i' = text-to-image, 'i2v' = image-to-video)."),

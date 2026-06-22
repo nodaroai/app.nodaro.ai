@@ -3296,7 +3296,7 @@ export async function voiceChangerApi(audioUrl: string | undefined, voiceId: str
   })
 }
 
-export async function voiceRecastApi(
+export async function voiceChangerProApi(
   audioUrl: string | undefined,
   orderedVoices: Array<{
     voiceId: string
@@ -3329,7 +3329,7 @@ export async function voiceRecastApi(
   if (voiceFx != null) body.voiceFx = voiceFx
   if (musicVolumeMode != null) body.musicVolumeMode = musicVolumeMode
   if (musicVolume != null) body.musicVolume = musicVolume
-  return apiJson("/v1/voice-recast", {
+  return apiJson("/v1/voice-changer-pro", {
     body,
     workflowId: true,
     label: "Failed to start voice recast",

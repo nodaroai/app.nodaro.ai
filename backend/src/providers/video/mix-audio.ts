@@ -9,7 +9,7 @@ interface MixAudioOptions {
    * rather than averaged (ffmpeg's default divides every input by N, which
    * attenuates each track by ~−6dB for 2 inputs). Use this when the tracks are
    * time-disjoint or volume-controlled and must retain their leveled loudness
-   * (e.g. voice-recast: per-speaker stems are silence elsewhere, so summing
+   * (e.g. voice-changer-pro: per-speaker stems are silence elsewhere, so summing
    * reconstructs the original level). Default false = back-compat averaging.
    */
   readonly sumTracks?: boolean

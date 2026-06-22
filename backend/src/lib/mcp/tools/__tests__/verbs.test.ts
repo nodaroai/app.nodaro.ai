@@ -966,12 +966,12 @@ describe("voice_changer verb", () => {
   })
 })
 
-describe("voice_recast verb", () => {
-  it("calls /v1/voice-recast with video_url + ordered_voices", async () => {
-    const { fastify, received } = stubRoute("POST", "/v1/voice-recast", { jobId: "j-vr" })
+describe("voice_changer_pro verb", () => {
+  it("calls /v1/voice-changer-pro with video_url + ordered_voices", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/voice-changer-pro", { jobId: "j-vr" })
     const server = buildServer()
     registerVerbs({ server, session: executeSession(), fastify })
-    const result = await callTool(server, "voice_recast", {
+    const result = await callTool(server, "voice_changer_pro", {
       video_url: "https://a/x.mp4",
       ordered_voices: ["v1", "v2"],
     })
@@ -983,14 +983,14 @@ describe("voice_recast verb", () => {
   })
 
   it("passes per-voice objects + separation_quality straight through", async () => {
-    const { fastify, received } = stubRoute("POST", "/v1/voice-recast", { jobId: "j-vr2" })
+    const { fastify, received } = stubRoute("POST", "/v1/voice-changer-pro", { jobId: "j-vr2" })
     const server = buildServer()
     registerVerbs({ server, session: executeSession(), fastify })
     const orderedVoices = [
       "Rachel",
       { voiceId: "Aria", stability: 0.6, volumeMode: "manual", volume: 120 },
     ]
-    const result = await callTool(server, "voice_recast", {
+    const result = await callTool(server, "voice_changer_pro", {
       audio_url: "https://a/x.mp3",
       ordered_voices: orderedVoices,
       separation_quality: "best",
@@ -1010,14 +1010,14 @@ describe("voice_recast verb", () => {
   })
 
   it("forwards per-voice seed and maps voice_fx → voiceFx", async () => {
-    const { fastify, received } = stubRoute("POST", "/v1/voice-recast", { jobId: "j-vr3" })
+    const { fastify, received } = stubRoute("POST", "/v1/voice-changer-pro", { jobId: "j-vr3" })
     const server = buildServer()
     registerVerbs({ server, session: executeSession(), fastify })
     const orderedVoices = [
       { voiceId: "Rachel", seed: 12345 },
       { voiceId: "Aria", seed: 67890 },
     ]
-    const result = await callTool(server, "voice_recast", {
+    const result = await callTool(server, "voice_changer_pro", {
       audio_url: "https://a/x.mp3",
       ordered_voices: orderedVoices,
       voice_fx: { preset: "hall", wetDryMix: 35 },

@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
-import { ChevronLeft, ChevronRight, FileText, X } from "lucide-react"
+import { ChevronLeft, ChevronRight, FileText, Volume2, X } from "lucide-react"
 import { CachedImage } from "@/components/ui/cached-image"
 import { isVideoUrl } from "@/lib/media-type"
 
@@ -21,8 +21,10 @@ interface ResultsThumbnailsPanelProps<T extends { url?: string; text?: string; j
   /** Media type — `"image"` (default) renders thumbnails via CachedImage
    *  (`<img>`). `"video"` renders a muted/playsInline `<video>`. `"text"`
    *  renders a numbered FileText tile (for text-producing nodes like
-   *  Generate Text) — no media element, snippet shown via `title`. */
-  readonly mediaType?: "image" | "video" | "text"
+   *  Generate Text) — no media element, snippet shown via `title`. `"audio"`
+   *  renders a numbered Volume2 tile (for audio-producing nodes like
+   *  Dubbing / Voice Changer) — audio has no visual thumbnail. */
+  readonly mediaType?: "image" | "video" | "text" | "audio"
   /** Per-thumbnail delete affordance (hover-revealed red X on each tile).
    *  Omit to disable. Matches the legacy inline strip behavior — without
    *  it, removing non-active results becomes a two-click detour through
@@ -204,6 +206,7 @@ export function ResultsThumbnailsPanel<T extends { url?: string; text?: string; 
           const absoluteIndex = pageStart + i
           const isActive = absoluteIndex === activeIndex
           const isTextTile = mediaType === "text"
+          const isAudioTile = mediaType === "audio"
           const useVideoTile = mediaType === "video" && isVideoUrl(r.url ?? "")
           const tileClass = `w-full h-full object-cover rounded-lg cursor-pointer transition-all ${
             isActive ? "ring-2 ring-[#ff0073]" : "opacity-60 hover:opacity-100"
@@ -218,15 +221,19 @@ export function ResultsThumbnailsPanel<T extends { url?: string; text?: string; 
               className="relative shrink-0 group/thumb"
               style={{ width: thumbSize, height: thumbSize }}
             >
-              {isTextTile ? (
+              {isTextTile || isAudioTile ? (
                 <button
                   type="button"
                   aria-label={`Switch to result ${absoluteIndex + 1}`}
-                  title={(r.text ?? "").slice(0, 120)}
+                  title={isTextTile ? (r.text ?? "").slice(0, 120) : `Result ${absoluteIndex + 1}`}
                   className={`${tileClass} flex items-center justify-center ${isActive ? "bg-[#ff0073]/15" : "bg-muted"}`}
                   onClick={handleClick}
                 >
-                  <FileText className="w-1/2 h-1/2 text-muted-foreground" />
+                  {isAudioTile ? (
+                    <Volume2 className="w-1/2 h-1/2 text-muted-foreground" />
+                  ) : (
+                    <FileText className="w-1/2 h-1/2 text-muted-foreground" />
+                  )}
                 </button>
               ) : useVideoTile ? (
                 // iOS Safari intercepts taps on <video> without controls

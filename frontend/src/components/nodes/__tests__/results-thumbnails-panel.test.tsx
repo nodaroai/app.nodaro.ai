@@ -40,3 +40,31 @@ describe("ResultsThumbnailsPanel — text mode", () => {
     expect(onDelete).toHaveBeenCalledWith(1)
   })
 })
+
+describe("ResultsThumbnailsPanel — audio mode", () => {
+  const audioResults = [
+    { url: "https://cdn.nodaro.ai/a1.mp3", jobId: "j1" },
+    { url: "https://cdn.nodaro.ai/a2.mp3", jobId: "j2" },
+  ]
+
+  it("renders numbered tiles with no <img> (audio has no visual thumbnail)", () => {
+    render(
+      <ResultsThumbnailsPanel results={audioResults} activeIndex={0} mediaType="audio" nodeSelected={false} onSelect={() => {}} />,
+    )
+    expect(screen.getByLabelText("Switch to result 1")).toBeInTheDocument()
+    expect(screen.getByLabelText("Switch to result 2")).toBeInTheDocument()
+    expect(screen.queryByTestId("cached-image")).not.toBeInTheDocument()
+  })
+
+  it("calls onSelect / onDelete with the tile index", () => {
+    const onSelect = vi.fn()
+    const onDelete = vi.fn()
+    render(
+      <ResultsThumbnailsPanel results={audioResults} activeIndex={0} mediaType="audio" nodeSelected={false} onSelect={onSelect} onDelete={onDelete} />,
+    )
+    fireEvent.click(screen.getByLabelText("Switch to result 2"))
+    expect(onSelect).toHaveBeenCalledWith(1)
+    fireEvent.click(screen.getByLabelText("Delete result 1"))
+    expect(onDelete).toHaveBeenCalledWith(0)
+  })
+})

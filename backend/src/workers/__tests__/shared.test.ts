@@ -7,7 +7,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 const mocks = vi.hoisted(() => {
   const mockHasCredits = { value: true }
   // Controllable admin markup for the credit-commit paths. The count-based
-  // (voice-recast) branch + the provider-metered branch both read this via
+  // (voice-changer-pro) branch + the provider-metered branch both read this via
   ***REDACTED-OSS-SCRUB***
   const mockMarkupPercent = { value: 25 }
   const mockCommitCredits = vi.fn().mockResolvedValue(undefined)
@@ -89,7 +89,7 @@ vi.mock("@/ee/services/credits.js", () => ({
 }))
 
 // getAppSettings drives the post-markup commit basis for both the
-// provider-metered branch and the count-based (voice-recast) branch.
+// provider-metered branch and the count-based (voice-changer-pro) branch.
 vi.mock("@/lib/app-settings.js", () => ({
   getAppSettings: vi.fn(async () => ({
     ai_provider: "replicate" as const,
@@ -383,7 +383,7 @@ describe("commitJobCredits", () => {
     expect(mocks.mockCommitCredits).toHaveBeenCalledWith("u1", base)
   })
 
-  // ── Count-based metered actual (voice-recast): metered=true, extra>0, no
+  // ── Count-based metered actual (voice-changer-pro): metered=true, extra>0, no
   //    provider USD cost. Commits the POST-MARKUP count-based actual, NOT the
   //    reserved tier. Before this branch existed, the 12 fell through to the
   //    reserved-tier `else` and the per-speaker scaling was silently dropped. ──
