@@ -83,15 +83,24 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
       // v1.2: declare `tasks` capability so the SDK accepts our `tasks/*`
       // request handlers. Without this, `Server.assertRequestHandlerCapability`
       // throws "Server does not support tasks capability" the moment a
-      // client invokes one of the four task methods. The empty objects
-      // (per `ServerTasksCapabilitySchema`) are a positive presence signal —
-      // every key is optional but the parent object MUST exist.
+      // client invokes one of the four task methods.
+      //
+      // CRITICAL: do NOT advertise `requests: { tools: { call: {} } }` here.
+      // That opt-in tells the client every `tools/call` MAY be task-augmented,
+      // and Claude.ai web then runs the job tools (generate_image,
+      // suno_generate, …) AS TASKS — it awaits completion via `tasks/result`
+      // and never delivers `ui/notifications/tool-result` to the iframe, so the
+      // single-job widget sits on "Initializing…" forever. The gallery widget
+      // (read-only, not augmented) is unaffected — exactly the observed
+      // symptom (gallery works, jobs don't). Our widgets do NOT use `tasks/*`
+      // at all; they poll `get_asset` / `get_app_run` via tools/call. So
+      // withholding the augmentation opt-in costs nothing and restores normal
+      // tool-result delivery to the widgets. Regression introduced in d3fbc97c2.
       capabilities: {
         tools: { listChanged: false },
         tasks: {
           list: {},
           cancel: {},
-          requests: { tools: { call: {} } },
         },
         // Explicitly declare resources support without `subscribe`. We
         // register MCP App widget resources for Claude.ai's iframe
