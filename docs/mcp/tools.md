@@ -231,7 +231,10 @@ to enable optimistic concurrency control.
 
 ### `update_workflow_json`
 
-Replaces the full node graph of a workflow in the mcp project.
+Updates a workflow in the mcp project: its node graph (`nodes` + `edges`), its
+`settings`, and/or its `thumbnail_url`. All content fields are optional — pass
+only `thumbnail_url`, for example, to set the preview image without re-sending
+the graph.
 
 **Scope:** `workflows:write`
 
@@ -240,10 +243,12 @@ Replaces the full node graph of a workflow in the mcp project.
 | Field | Type | Notes |
 |-------|------|-------|
 | `workflow_id` | UUID string | Must be in the mcp project |
-| `nodes` | array of objects | Required; replaces the current nodes |
-| `edges` | array of objects | Required; replaces the current edges |
+| `nodes` | array of objects | Optional; replaces the current nodes. Must be sent together with `edges`. |
+| `edges` | array of objects | Optional; replaces the current edges. Must be sent together with `nodes`. |
 | `settings` | object | Optional; if provided, replaces current settings |
+| `thumbnail_url` | string (URL) or null | Optional; sets the workflow's thumbnail image, or `null` to clear it. Must be an already-hosted image URL. |
 | `expected_updated_at` | string (ISO 8601) | Optional; enables optimistic concurrency |
+| `expected_version` | integer | Optional; integer CAS from `get_workflow_json` (preferred over `expected_updated_at`) |
 
 **Optimistic concurrency:** Pass the `updated_at` value from a prior
 `get_workflow_json` call as `expected_updated_at`. If the workflow has been

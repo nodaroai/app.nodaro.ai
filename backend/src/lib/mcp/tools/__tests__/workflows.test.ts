@@ -319,6 +319,86 @@ describe("update_workflow_json tool", () => {
     })
     expect(result.isError).toBeUndefined()
   })
+
+  it("sets thumbnail_url via a thumbnail-only update (no nodes/edges)", async () => {
+    const updateChain = chain({
+      data: { id: WORKFLOW_ID, name: "Flow", updated_at: "t9" },
+      error: null,
+    })
+    fromMock.mockReturnValueOnce(updateChain)
+    const server = buildServer()
+    registerWorkflows({ server, session: mcpSession(["workflows:write"]), fastify: Fastify() })
+    const result = await callTool(server, "update_workflow_json", {
+      workflow_id: WORKFLOW_ID,
+      thumbnail_url: "https://cdn.example.com/thumb.jpg",
+    })
+    expect(result.isError).toBeUndefined()
+    const payload = (updateChain.update as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as Record<string, unknown>
+    expect(payload.thumbnail_url).toBe("https://cdn.example.com/thumb.jpg")
+    // a metadata-only update must NOT touch the graph
+    expect(payload.nodes).toBeUndefined()
+    expect(payload.edges).toBeUndefined()
+  })
+
+  it("clears the thumbnail when thumbnail_url is null", async () => {
+    const updateChain = chain({
+      data: { id: WORKFLOW_ID, name: "Flow", updated_at: "t10" },
+      error: null,
+    })
+    fromMock.mockReturnValueOnce(updateChain)
+    const server = buildServer()
+    registerWorkflows({ server, session: mcpSession(["workflows:write"]), fastify: Fastify() })
+    const result = await callTool(server, "update_workflow_json", {
+      workflow_id: WORKFLOW_ID,
+      thumbnail_url: null,
+    })
+    expect(result.isError).toBeUndefined()
+    const payload = (updateChain.update as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as Record<string, unknown>
+    expect(payload.thumbnail_url).toBeNull()
+  })
+
+  it("sets thumbnail_url alongside a graph replacement", async () => {
+    const updateChain = chain({
+      data: { id: WORKFLOW_ID, name: "Flow", updated_at: "t11" },
+      error: null,
+    })
+    fromMock.mockReturnValueOnce(updateChain)
+    const server = buildServer()
+    registerWorkflows({ server, session: mcpSession(["workflows:write"]), fastify: Fastify() })
+    const result = await callTool(server, "update_workflow_json", {
+      workflow_id: WORKFLOW_ID,
+      nodes: [{ id: "n1", type: "text-prompt", data: {} }],
+      edges: [],
+      thumbnail_url: "https://cdn.example.com/x.png",
+    })
+    expect(result.isError).toBeUndefined()
+    const payload = (updateChain.update as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as Record<string, unknown>
+    expect(payload.thumbnail_url).toBe("https://cdn.example.com/x.png")
+    expect(payload.nodes).toBeDefined()
+  })
+
+  it("rejects nodes provided without edges (never hits the DB)", async () => {
+    const server = buildServer()
+    registerWorkflows({ server, session: mcpSession(["workflows:write"]), fastify: Fastify() })
+    const result = await callTool(server, "update_workflow_json", {
+      workflow_id: WORKFLOW_ID,
+      nodes: [{ id: "n1", type: "text-prompt", data: {} }],
+    })
+    expect(result.isError).toBe(true)
+    expect(result.content[0]?.text).toContain("both")
+    expect(fromMock).not.toHaveBeenCalled()
+  })
+
+  it("rejects an empty update with no content fields (never hits the DB)", async () => {
+    const server = buildServer()
+    registerWorkflows({ server, session: mcpSession(["workflows:write"]), fastify: Fastify() })
+    const result = await callTool(server, "update_workflow_json", {
+      workflow_id: WORKFLOW_ID,
+    })
+    expect(result.isError).toBe(true)
+    expect(result.content[0]?.text).toContain("Nothing to update")
+    expect(fromMock).not.toHaveBeenCalled()
+  })
 })
 
 // ── export_workflow ─────────────────────────────────────────────────────────

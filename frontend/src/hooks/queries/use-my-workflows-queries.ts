@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 import { createClient } from "@/lib/supabase"
+import { getAuthHeaders } from "@/lib/api"
 import { queryKeys } from "@/lib/query-keys"
 
 export interface MyWorkflow {
@@ -12,6 +13,8 @@ export interface MyWorkflow {
   readonly thumbnailUrl: string | null
   readonly createdAt: string
   readonly updatedAt: string
+  /** Set only by the admin "all users" Studio view; the owner's email. */
+  readonly ownerEmail?: string | null
 }
 
 interface DbWorkflowRow {
@@ -55,7 +58,8 @@ const WORKFLOW_COLS =
  * Flat, owner-scoped list of every workflow the caller owns, joined with
  * minimal project info (name + isDefault) for badge rendering. Powers the
  * "My Workflows" dashboard tab. Excludes sub-workflows (parent_workflow_id
- * IS NOT NULL) so the list shows top-level flows only.
+ * IS NOT NULL) so the list shows top-level flows only, and Studio-origin
+ * workflows (settings.studio set) which live in the "Studio Workflows" tab.
  *
  * Tries the full select (with `projects.is_default`) first. Pre-migration
  * environments fail at the PostgREST level with "column does not exist";
@@ -79,6 +83,9 @@ export function useMyWorkflows() {
           .select(cols)
           .eq("user_id", user.id)
           .is("parent_workflow_id", null)
+          // Studio-origin workflows (settings.studio set) live in the dedicated
+          // "Studio Workflows" tab, not here.
+          .is("settings->studio", null)
           .order("updated_at", { ascending: false })
           .limit(200)
 
@@ -94,6 +101,86 @@ export function useMyWorkflows() {
       if (fallback.error) throw fallback.error
       return (fallback.data as unknown as DbWorkflowRow[]).map(toMyWorkflow)
     },
+    staleTime: 30_000,
+  })
+}
+
+/**
+ * Owner-scoped list of the caller's Studio-origin workflows (settings.studio
+ * set). Powers the default view of the "Studio Workflows" dashboard tab — same
+ * shape and project join as useMyWorkflows, with the studio filter inverted.
+ */
+export function useMyStudioWorkflows() {
+  return useQuery({
+    queryKey: queryKeys.workflows.listStudioMine(),
+    queryFn: async (): Promise<MyWorkflow[]> => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return []
+
+      const fullSelect = `${WORKFLOW_COLS}, projects(id, name, is_default)`
+      const fallbackSelect = `${WORKFLOW_COLS}, projects(id, name)`
+
+      const baseQuery = (cols: string) =>
+        supabase
+          .from("workflows")
+          .select(cols)
+          .eq("user_id", user.id)
+          .is("parent_workflow_id", null)
+          .not("settings->studio", "is", null)
+          .order("updated_at", { ascending: false })
+          .limit(200)
+
+      const primary = await baseQuery(fullSelect)
+      if (!primary.error) {
+        return (primary.data as unknown as DbWorkflowRow[]).map(toMyWorkflow)
+      }
+      const fallback = await baseQuery(fallbackSelect)
+      if (fallback.error) throw fallback.error
+      return (fallback.data as unknown as DbWorkflowRow[]).map(toMyWorkflow)
+    },
+    staleTime: 30_000,
+  })
+}
+
+export interface AllStudioWorkflowsResult {
+  readonly data: MyWorkflow[]
+  readonly currentUserId: string
+}
+
+/**
+ * Admin-only: every user's Studio-origin workflows, via the backend
+ * GET /v1/workflows?viewAll=true&studio=true (mirrors useAllProjects). Each row
+ * carries ownerEmail; projectName is not joined (cards show the owner instead).
+ * Pass enabled = isAdmin && viewAll.
+ */
+export function useAllStudioWorkflows(enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.workflows.listStudioAll(),
+    queryFn: async (): Promise<AllStudioWorkflowsResult> => {
+      const res = await fetch("/v1/workflows?viewAll=true&studio=true", {
+        headers: await getAuthHeaders(),
+      })
+      if (!res.ok) throw new Error("Failed to fetch all Studio workflows")
+      const json = await res.json()
+      const rows = (json.data as Record<string, unknown>[]) ?? []
+      return {
+        data: rows.map((row) => ({
+          id: row.id as string,
+          projectId: row.projectId as string,
+          projectName: "",
+          projectIsDefault: false,
+          folderId: (row.folderId as string | null) ?? null,
+          name: row.name as string,
+          thumbnailUrl: (row.thumbnailUrl as string | null) ?? null,
+          createdAt: row.createdAt as string,
+          updatedAt: row.updatedAt as string,
+          ownerEmail: (row.ownerEmail as string | null) ?? null,
+        })),
+        currentUserId: json.currentUserId as string,
+      }
+    },
+    enabled,
     staleTime: 30_000,
   })
 }

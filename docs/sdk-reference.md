@@ -339,6 +339,13 @@ are stripped server-side and never persist.
 await client.workflows.update(id, { name: "Renamed", expectedVersion: 7 })
 ```
 
+`thumbnailUrl` sets the workflow's preview image — an already-hosted image URL,
+or `null` to clear it:
+
+```ts
+await client.workflows.update(id, { thumbnailUrl: "https://cdn.example.com/thumb.jpg" })
+```
+
 #### `delete(id)`
 
 ```ts

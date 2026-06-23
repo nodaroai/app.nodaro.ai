@@ -22,6 +22,7 @@ import { ProjectCard } from "@/components/dashboard/project-card"
 import { StatsOverview } from "@/components/dashboard/stats-overview"
 import { WorkflowThumbnail } from "@/components/dashboard/workflow-thumbnail"
 import { MyWorkflowsView } from "@/components/dashboard/my-workflows-view"
+import { StudioWorkflowsView } from "@/components/dashboard/studio-workflows-view"
 import { MoveWorkflowDialog } from "@/components/dashboard/move-workflow-dialog"
 import { UserFilter, type UserFilterValue } from "@/components/user-filter"
 import { useAuth } from "@/hooks/use-auth"
@@ -286,13 +287,14 @@ export default function ProjectsPage() {
 
   // Lower-half tab — defaults to the flat workflow list. URL takes precedence
   // over localStorage; both feed the same setter so deep links stay stable.
-  type WorkspaceTab = "workflows" | "projects"
+  type WorkspaceTab = "workflows" | "projects" | "studio"
   const initialWorkspaceTab: WorkspaceTab = (() => {
     if (typeof window === "undefined") return "workflows"
     const url = new URLSearchParams(window.location.search).get("tab")
-    if (url === "projects" || url === "workflows") return url
+    if (url === "projects" || url === "workflows" || url === "studio") return url
     const stored = localStorage.getItem("nodaro-dashboard-workspace-tab")
-    return stored === "projects" ? "projects" : "workflows"
+    if (stored === "projects" || stored === "studio") return stored
+    return "workflows"
   })()
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>(initialWorkspaceTab)
   useEffect(() => {
@@ -663,6 +665,7 @@ export default function ProjectsPage() {
         {([
           { id: "workflows", label: "My Workflows" },
           { id: "projects", label: "My Projects" },
+          { id: "studio", label: "Studio Workflows" },
         ] as const).map((t) => (
           <button
             key={t.id}
@@ -687,6 +690,8 @@ export default function ProjectsPage() {
           isCreating={isCreating}
         />
       )}
+
+      {workspaceTab === "studio" && <StudioWorkflowsView showAll={showAll} />}
 
       {workspaceTab === "projects" && (
       <>

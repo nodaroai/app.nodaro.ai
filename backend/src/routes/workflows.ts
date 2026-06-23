@@ -11,6 +11,7 @@ import { ensureDefaultProject } from "../lib/default-project.js"
 import { openApiRegistry } from "../lib/openapi-registry.js"
 import { requireScope } from "../lib/scopes.js"
 import type { Scope } from "../lib/scopes.js"
+import { checkIsAdmin } from "../lib/admin-check.js"
 import { formatZodError } from "../lib/zod-error.js"
 import {
   asObjectArray,
@@ -145,6 +146,16 @@ const listWorkflowsQuery = z.object({
   limit: z
     .preprocess((v) => (typeof v === "string" ? Number(v) : v), z.number().int().min(1).max(500))
     .optional(),
+  // Admin-only: return every user's workflows (mirrors GET /v1/projects?viewAll=true).
+  viewAll: z
+    .string()
+    .optional()
+    .transform((v) => v === "true"),
+  // Filter to Studio-origin workflows only (settings.studio is set).
+  studio: z
+    .string()
+    .optional()
+    .transform((v) => v === "true"),
 })
 
 const exportWorkflowQuery = z.object({
@@ -348,15 +359,66 @@ export async function workflowRoutes(app: FastifyInstance) {
 
     const query = parseWith(reply, listWorkflowsQuery, req.query ?? {}, "Invalid query")
     if (!query) return
-    const limit = query.limit ?? 100
+    const limit = query.limit ?? (query.viewAll ? 500 : 100)
 
-    const { data, error } = await supabase
+    // Admin "All users" view — mirrors GET /v1/projects?viewAll=true. Returns
+    // every user's top-level workflows (optionally Studio-origin only) with
+    // owner emails. Powers the dashboard "Studio Workflows" tab when an admin
+    // flips the "All users" switch.
+    if (query.viewAll) {
+      const isAdmin = await checkIsAdmin(userId)
+      if (!isAdmin) {
+        return reply.status(403).send({
+          error: { code: "forbidden", message: "Admin access required" },
+        })
+      }
+
+      let allQuery = supabase
+        // tenant-scope-ignore: deliberate cross-tenant read, admin-gated above.
+        .from("workflows")
+        .select(WORKFLOW_META_COLS)
+        .is("parent_workflow_id", null)
+        .order("updated_at", { ascending: false })
+        .limit(limit)
+      if (query.studio) {
+        allQuery = allQuery.not("settings->studio", "is", null)
+      }
+      const { data, error } = await allQuery
+      if (error) return internalError(reply, error.message)
+
+      const rows = data ?? []
+      const ownerIds = [...new Set(rows.map((r) => r.user_id as string))]
+      const emailMap = new Map<string, string>()
+      if (ownerIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("id, email")
+          .in("id", ownerIds)
+        for (const p of profiles ?? []) {
+          emailMap.set(p.id as string, p.email as string)
+        }
+      }
+
+      return {
+        data: rows.map((row) => ({
+          ...toWorkflowMeta(row),
+          ownerEmail: emailMap.get(row.user_id as string) ?? "Unknown",
+        })),
+        currentUserId: userId,
+      }
+    }
+
+    let listQuery = supabase
       .from("workflows")
       .select(WORKFLOW_META_COLS)
       .eq("user_id", userId)
       .is("parent_workflow_id", null)
       .order("updated_at", { ascending: false })
       .limit(limit)
+    if (query.studio) {
+      listQuery = listQuery.not("settings->studio", "is", null)
+    }
+    const { data, error } = await listQuery
 
     if (error) return internalError(reply, error.message)
     return { data: (data ?? []).map(toWorkflowMeta) }
