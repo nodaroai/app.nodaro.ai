@@ -220,9 +220,9 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
           openWorldHint: true,
         },
         _meta: {
-          "ui/resourceUri": "ui://nodaro/widget/v3/app-run",
+          "ui/resourceUri": "ui://nodaro/widget/v4/app-run",
           ui: {
-            resourceUri: "ui://nodaro/widget/v3/app-run",
+            resourceUri: "ui://nodaro/widget/v4/app-run",
             visibility: ["model", "app"],
           },
         },

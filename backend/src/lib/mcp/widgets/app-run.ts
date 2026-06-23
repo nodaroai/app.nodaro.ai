@@ -2,7 +2,7 @@
  * App-run widget — live status header + gallery-style outputs grid for
  * `run_app` executions.
  *
- * Static template registered at `ui://nodaro/widget/v3/app-run`. The host
+ * Static template registered at `ui://nodaro/widget/v4/app-run`. The host
  * delivers per-call data via:
  *   - `ui/notifications/tool-result` — initial { executionId, slug, name }
  *
