@@ -490,7 +490,12 @@ ${uiProtocolShim()}
       // and surface it rather than spinning until the MAX timeout.
       if (data.result && data.result.isError) {
         stopPolling();
-        statusEl.textContent = 'Couldn\'t load — check Nodaro library.';
+        // NOTE: no apostrophe — this string is inside a TS template literal,
+        // where \\' collapses to a bare ' and would produce 'Couldn't' in the
+        // rendered widget JS: a fatal SyntaxError that breaks the ENTIRE
+        // script (card freezes on "Initializing…"). Guarded by
+        // __tests__/widget-js-valid.test.ts.
+        statusEl.textContent = 'Could not load — check Nodaro library.';
         return;
       }
       var sc = (data.result && data.result.structuredContent) || {};
