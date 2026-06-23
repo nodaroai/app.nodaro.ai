@@ -5,7 +5,7 @@
  * `_meta.ui.resourceUri` on the tool definition. The host then fetches that
  * URI via `resources/read` to get the iframe HTML.
  *
- * This module owns the URI scheme `ui://nodaro/widget/v3/{kind}` and keeps the
+ * This module owns the URI scheme `ui://nodaro/widget/v4/{kind}` and keeps the
  * widget HTML on the server side. Per-call data is delivered to the iframe
  * via the host's `ui/notifications/tool-input` and
  * `ui/notifications/tool-result` events (NOT embedded in the HTML).
@@ -19,16 +19,16 @@ import { buildUploadWidget } from "./upload.js"
 import { config } from "../../config.js"
 
 export const WIDGET_URI = {
-  jobImage: "ui://nodaro/widget/v3/job-image",
-  jobVideo: "ui://nodaro/widget/v3/job-video",
-  jobAudio: "ui://nodaro/widget/v3/job-audio",
-  jobGeneric: "ui://nodaro/widget/v3/job-generic",
-  workflow: "ui://nodaro/widget/v3/workflow",
-  gallery: "ui://nodaro/widget/v3/gallery",
-  appRun: "ui://nodaro/widget/v3/app-run",
-  uploadImage: "ui://nodaro/widget/v3/upload-image",
-  uploadAudio: "ui://nodaro/widget/v3/upload-audio",
-  uploadVideo: "ui://nodaro/widget/v3/upload-video",
+  jobImage: "ui://nodaro/widget/v4/job-image",
+  jobVideo: "ui://nodaro/widget/v4/job-video",
+  jobAudio: "ui://nodaro/widget/v4/job-audio",
+  jobGeneric: "ui://nodaro/widget/v4/job-generic",
+  workflow: "ui://nodaro/widget/v4/workflow",
+  gallery: "ui://nodaro/widget/v4/gallery",
+  appRun: "ui://nodaro/widget/v4/app-run",
+  uploadImage: "ui://nodaro/widget/v4/upload-image",
+  uploadAudio: "ui://nodaro/widget/v4/upload-audio",
+  uploadVideo: "ui://nodaro/widget/v4/upload-video",
 } as const
 
 const WIDGETS: Array<{
@@ -125,23 +125,28 @@ const WIDGET_CSP = {
 }
 
 /**
- * Historical URI prefixes we register at, in addition to the current `/v3/`.
+ * Historical URI prefixes we register at, in addition to the current `/v4/`.
  *
- * Claude.ai caches `tools/list` aggressively — once a connector is paired,
- * the host may keep using the OLD `_meta.ui.resourceUri` from the cached
- * tool definition for hours/days, even after the server publishes new
- * tool registrations. If we don't keep the old resource URIs alive, those
- * users see "Resource ui://nodaro/widget/job-image not found" errors.
+ * Claude.ai caches `tools/list` AND `resources/read` aggressively — once a
+ * connector is paired, the host may keep using the OLD `_meta.ui.resourceUri`
+ * from the cached tool definition AND keep serving the cached HTML for that
+ * URI for hours/days, even after the server publishes new tool registrations
+ * / new widget HTML. So an edit to a widget under the SAME URI never reaches
+ * paired users. The fix is to BUMP the version (new URI → guaranteed-fresh
+ * fetch) and demote the old prefix here so it still resolves (to the current
+ * HTML) for clients whose cached tool-def still points at it. If we don't
+ * keep the old URIs alive, those users see "Resource ... not found" errors.
  *
  * Each historical prefix maps to the SAME widget HTML — only the URI
- * differs. Add a new entry if we ever bump the version again.
+ * differs. Add a new entry whenever we bump the version again.
  */
 const LEGACY_URI_PREFIXES = [
   "ui://nodaro/widget/", // v0 (initial release)
   "ui://nodaro/widget/v2/", // v2 cache-bust
+  "ui://nodaro/widget/v3/", // v3 → demoted on the v4 cache-bust (grace-timer + task-augmentation fixes never loaded under the cached v3 URI)
 ] as const
 
-const CURRENT_URI_PREFIX = "ui://nodaro/widget/v3/"
+const CURRENT_URI_PREFIX = "ui://nodaro/widget/v4/"
 
 const KIND_OF = {
   jobImage: "job-image",

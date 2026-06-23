@@ -160,9 +160,9 @@ export function registerUploadTools({ server, session }: RegisterUploadOpts): vo
  * accept-MIME and copy.
  */
 const WIDGET_URI_FOR_KIND: Record<KindMeta["kind"], string> = {
-  image: "ui://nodaro/widget/v3/upload-image",
-  audio: "ui://nodaro/widget/v3/upload-audio",
-  video: "ui://nodaro/widget/v3/upload-video",
+  image: "ui://nodaro/widget/v4/upload-image",
+  audio: "ui://nodaro/widget/v4/upload-audio",
+  video: "ui://nodaro/widget/v4/upload-video",
 }
 
 /** Reasonable upper bound — [redacted-reference] supports up to ~10 in their soul-train flow. */

@@ -264,9 +264,9 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
         },
         annotations: { readOnlyHint: true },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v3/gallery",
+        "ui/resourceUri": "ui://nodaro/widget/v4/gallery",
         ui: {
-          resourceUri: "ui://nodaro/widget/v3/gallery",
+          resourceUri: "ui://nodaro/widget/v4/gallery",
           visibility: ["model", "app"],
         },
       },
@@ -439,9 +439,9 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
         },
         annotations: { readOnlyHint: true },
         _meta: {
-          "ui/resourceUri": "ui://nodaro/widget/v3/gallery",
+          "ui/resourceUri": "ui://nodaro/widget/v4/gallery",
           ui: {
-            resourceUri: "ui://nodaro/widget/v3/gallery",
+            resourceUri: "ui://nodaro/widget/v4/gallery",
             visibility: ["model", "app"],
           },
         },
@@ -560,9 +560,9 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
         },
         annotations: { readOnlyHint: true },
       _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v3/gallery",
+        "ui/resourceUri": "ui://nodaro/widget/v4/gallery",
         ui: {
-          resourceUri: "ui://nodaro/widget/v3/gallery",
+          resourceUri: "ui://nodaro/widget/v4/gallery",
           visibility: ["model", "app"],
         },
       },
@@ -763,9 +763,9 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
         // those URLs). Text-only is valid without an outputSchema.
         annotations: { readOnlyHint: true },
         _meta: {
-          "ui/resourceUri": "ui://nodaro/widget/v3/job-image",
+          "ui/resourceUri": "ui://nodaro/widget/v4/job-image",
           ui: {
-            resourceUri: "ui://nodaro/widget/v3/job-image",
+            resourceUri: "ui://nodaro/widget/v4/job-image",
             visibility: ["model", "app"],
           },
         },
