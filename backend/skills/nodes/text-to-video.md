@@ -1,7 +1,7 @@
 ---
 node_type: text-to-video
-generated_at: 2026-06-10T20:57:26.746Z
-generated_from: 2fc5e6fd3
+generated_at: 2026-06-23T20:58:11.943Z
+generated_from: c4e4998f5
 ---
 
 # Text to Video
@@ -68,6 +68,7 @@ generated_from: 2fc5e6fd3
 
 **Input parameters:**
 - `prompt`
+- `presetId`
 - `model`
 - `duration`
 - `aspect_ratio`

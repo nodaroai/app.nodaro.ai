@@ -16,6 +16,7 @@ import {
 import { modelIdsByKindMode, MODIFY_IMAGE_PROVIDERS } from "@nodaro/shared"
 import { getUserMcpPreferences } from "../user-preferences.js"
 import { normalizeImageInput } from "../normalize.js"
+import { resolvePreset } from "../../presets/resolve-preset.js"
 
 // Used only as `description` hints in the schema below — the actual model
 // validation runs through `normalizeImageInput` which silently maps unknown
@@ -81,9 +82,26 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           "didn't make it.\n\n" +
           "Accepts a text prompt and optional Path-1 structured fields " +
           "(person, styling, setting, camera, mood, lens). Returns a job_id; " +
-          "the iframe widget will surface the final image automatically.",
+          "the iframe widget will surface the final image automatically.\n\n" +
+          "**Presets/templates**: call list_node_presets { nodeType: \"generate-image\" } " +
+          "to browse built-ins (e.g. Character Board, Cinematic Portrait) + your saved " +
+          "presets, get_node_preset to read one's config, or pass presetId here to apply " +
+          "one directly.",
         inputSchema: {
-          prompt: z.string().min(1).max(4000).describe("Free-text image prompt"),
+          // Optional in the preset path: when presetId is supplied the preset
+          // provides the prompt, so the caller may omit it. The handler
+          // enforces "prompt OR presetId required" and keeps the same 1–4000
+          // bound on whatever prompt is ultimately used.
+          prompt: z.string().min(1).max(4000).optional().describe("Free-text image prompt"),
+          presetId: z
+            .string()
+            .min(1)
+            .max(200)
+            .optional()
+            .describe(
+              "Apply a built-in/custom preset by id from list_node_presets; " +
+              "explicit fields below override it.",
+            ),
           // Schemas are intentionally permissive — handler normalizes
           // anything unknown to the closest valid value (silent fallback).
           // Description carries the recommended set so Claude has guidance.
@@ -164,6 +182,79 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
       },
       },
       async (args) => {
+        // ── Preset application (server-side, faithful) ──────────────────────
+        // When the caller passes `presetId`, resolve the preset's tuned config
+        // (factory catalog, or the caller's own custom preset — owner-scoped)
+        // and use it as the BASE; only fields the CALLER actually provided
+        // override it. The schema has NO `.default()` on any field, so an
+        // absent caller value is exactly `undefined` here — that's what lets a
+        // defaulted-but-not-passed lever lose to the preset (the critical
+        // override rule). Preset `data` is already extractPresetData-stripped.
+        //
+        // The preset's keys mirror the node's data fields (camelCase:
+        // provider / aspectRatio / negativePrompt / …); we map them onto THIS
+        // handler's snake_case param namespace so the rest of the handler can
+        // read `effective` exactly as it read `args`.
+        let effective: Record<string, unknown> = { ...args }
+        if (args.presetId) {
+          const preset = await resolvePreset({
+            nodeType: "generate-image",
+            presetId: args.presetId,
+            userId: session.userId,
+          })
+          if (!preset) {
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: `Preset not found: ${args.presetId}. List ids with list_node_presets { nodeType: "generate-image" }.`,
+                },
+              ],
+              isError: true as const,
+            }
+          }
+          // preset.data (camelCase node-data keys) → this handler's params.
+          const d = preset.data
+          const presetParams: Record<string, unknown> = {}
+          if (d.provider !== undefined) presetParams.model = d.provider
+          if (d.prompt !== undefined) presetParams.prompt = d.prompt
+          if (d.aspectRatio !== undefined) presetParams.aspect_ratio = d.aspectRatio
+          if (d.resolution !== undefined) presetParams.resolution = d.resolution
+          if (d.quality !== undefined) presetParams.quality = d.quality
+          if (d.negativePrompt !== undefined) presetParams.negative_prompt = d.negativePrompt
+          // Carry portable node-data fields a custom preset may have captured
+          // that THIS handler actually forwards (factory image presets don't
+          // set these, but extractPresetData keeps them for user-saved presets
+          // — apply them faithfully). `seed` is intentionally NOT mapped: the
+          // generate_image payload has no seed lever, so it would be dead.
+          if (d.referenceImageUrls !== undefined) presetParams.reference_image_urls = d.referenceImageUrls
+          if (d.strength !== undefined) presetParams.strength = d.strength
+          if (d.guidanceScale !== undefined) presetParams.guidance_scale = d.guidanceScale
+          // Preset is the base; only caller-PROVIDED fields win. `args[k] !==
+          // undefined` precisely means "the caller passed it" here (no defaults).
+          const callerProvided = Object.fromEntries(
+            Object.entries(args).filter(([, v]) => v !== undefined),
+          )
+          effective = { ...presetParams, ...callerProvided }
+        }
+        // `presetId` is a control field — never submit it to the provider.
+        delete effective.presetId
+
+        // Prompt is required once a preset hasn't supplied one. (The schema
+        // relaxes prompt to optional for the preset path; guard the no-preset
+        // bare call so it still fails clearly instead of generating empty.)
+        if (effective.prompt === undefined || effective.prompt === "") {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: "A prompt is required (or pass a presetId whose preset includes one).",
+              },
+            ],
+            isError: true as const,
+          }
+        }
+
         // Silent normalization — never reject on bad params. Anything
         // Claude sends (typos, wrong-tier values, made-up model ids) gets
         // mapped to the closest valid alternative or the catalog default.
@@ -179,10 +270,10 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         const { model, aspectRatio, resolution, quality, modelEntry: _modelEntry } =
           normalizeImageInput(
             {
-              model: args.model,
-              aspect_ratio: args.aspect_ratio,
-              resolution: args.resolution,
-              quality: args.quality,
+              model: effective.model as string | undefined,
+              aspect_ratio: effective.aspect_ratio as string | undefined,
+              resolution: effective.resolution as string | undefined,
+              quality: effective.quality as string | undefined,
             },
             {
               model: userImg.model,
@@ -193,22 +284,25 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
             "nano-banana-2",
           )
 
-        const compositePrompt = buildCompositePrompt(args.prompt, args.structured)
+        const compositePrompt = buildCompositePrompt(
+          effective.prompt as string,
+          effective.structured as Parameters<typeof buildCompositePrompt>[1],
+        )
         // Tolerant: array | JSON-string | lone URL; asset ids resolved to URLs.
         // The route's referenceImageUrls schema is URL-only (max 14).
-        const refUrls = await resolveRefArray(args.reference_image_urls, session.userId, "image", 14)
+        const refUrls = await resolveRefArray(effective.reference_image_urls, session.userId, "image", 14)
         const payload = {
           prompt: compositePrompt,
           provider: model,
           aspectRatio,
           resolution,
           quality,
-          negativePrompt: args.negative_prompt,
+          negativePrompt: effective.negative_prompt as string | undefined,
           ...(refUrls.length ? { referenceImageUrls: refUrls } : {}),
-          ...(args.base_image_url ? { baseImageUrl: args.base_image_url } : {}),
-          ...(args.mask_url ? { maskUrl: args.mask_url } : {}),
-          ...(args.strength !== undefined ? { strength: args.strength } : {}),
-          ...(args.guidance_scale !== undefined ? { guidanceScale: args.guidance_scale } : {}),
+          ...(effective.base_image_url ? { baseImageUrl: effective.base_image_url } : {}),
+          ...(effective.mask_url ? { maskUrl: effective.mask_url } : {}),
+          ...(effective.strength !== undefined ? { strength: effective.strength } : {}),
+          ...(effective.guidance_scale !== undefined ? { guidanceScale: effective.guidance_scale } : {}),
           mcp_client: session.clientName,
           userId: session.userId,
         }

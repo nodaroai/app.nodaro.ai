@@ -1,7 +1,7 @@
 ---
 node_type: generate-video
-generated_at: 2026-06-20T22:59:35.671Z
-generated_from: 1457f45e4
+generated_at: 2026-06-23T20:58:11.908Z
+generated_from: c4e4998f5
 ---
 
 # Generate Video
@@ -91,6 +91,7 @@ generated_from: 1457f45e4
 
 **Input parameters:**
 - `prompt`
+- `presetId`
 - `model`
 - `duration`
 - `aspect_ratio`

@@ -1,7 +1,7 @@
 ---
 node_type: text-to-speech
-generated_at: 2026-06-16T08:22:28.235Z
-generated_from: 877dfa01a
+generated_at: 2026-06-23T20:58:11.949Z
+generated_from: c4e4998f5
 ---
 
 # Text to Speech
@@ -68,6 +68,7 @@ generated_from: 877dfa01a
 
 **Input parameters:**
 - `text`
+- `presetId`
 - `voice_id`
 - `model`
 - `voice_type`
