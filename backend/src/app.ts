@@ -172,6 +172,7 @@ import { promptHelperRoutes } from "./routes/prompt-helper.js"
 import { adminLlmModelsRoutes } from "./ee/routes/admin-llm-models.js"
 import { nodeDefaultsRoutes } from "./routes/node-defaults.js"
 import { nodesRoutes } from "./routes/nodes.js"
+import { pickerCatalogsRoutes } from "./routes/picker-catalogs.js"
 import { oauthRoutes } from "./routes/oauth.js"
 import { registerOauthRegister } from "./routes/oauth-register.js"
 import { registerWellKnown } from "./routes/well-known.js"
@@ -457,6 +458,7 @@ export async function buildApp() {
   if (hasAdmin()) await app.register(adminLlmModelsRoutes)
   await app.register(nodeDefaultsRoutes)
   await app.register(nodesRoutes)
+  await app.register(pickerCatalogsRoutes)
   await app.register(oauthRoutes)
   await registerOauthRegister(app)
   await registerWellKnown(app)

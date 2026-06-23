@@ -132,6 +132,8 @@ const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean }[] = [
   { method: "GET", path: "/v1/templates/browse" },
   { method: "GET", path: "/v1/tutorials" },
   { method: "GET", path: "/v1/nodes" },
+  { method: "GET", path: "/v1/picker-catalogs" },
+  { method: "GET", path: "/v1/picker-catalogs/", prefix: true },
   { method: "GET", path: "/v1/nodes/", prefix: true },
   { method: "GET", path: "/v1/openapi.json" },
   { method: "GET", path: "/v1/templates/", prefix: true },

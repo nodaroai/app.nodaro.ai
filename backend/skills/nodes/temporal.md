@@ -1,7 +1,7 @@
 ---
 node_type: temporal
-generated_at: 2026-05-18T13:23:37.285Z
-generated_from: cb1e786d
+generated_at: 2026-06-23T16:51:38.224Z
+generated_from: 52fc7de9b
 ---
 
 # Temporal
@@ -24,6 +24,8 @@ generated_from: cb1e786d
 - `maxItemsPerRow?: number`
 - `preText?: string`
 - `postText?: string`
+
+**Valid values:** call `get_picker_catalog("temporal")` (MCP) or `GET /v1/picker-catalogs/temporal` for the catalog of valid ids.
 
 **Default data:**
 ```json

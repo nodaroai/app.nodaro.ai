@@ -128,6 +128,12 @@ nodaro nodes get <type>                                 # full input schema
 nodaro nodes run <type> --param prompt="…" --param provider=flux [--watch]
 nodaro nodes run <type> --params-file body.json [--watch] [--poll-interval 1000]
 
+# Pickers — valid values for parameter-picker nodes (setting, mood, person, …)
+nodaro pickers list [--json]                            # all picker node types + option counts
+nodaro pickers get <nodeType> [--full] [--category <c>] [--field <f>] [--json]
+#   --full adds each option's description + the prompt fragment it injects
+#   --category filters a single-dim picker; --field picks one dimension of a multi-dim picker (person/styling/framing)
+
 # Prompt — AI wizard that turns a rough idea into an optimized prompt
 nodaro prompt wizard [--node-type <type>] [--prompt "…"] [--provider <name>] [--style <name>] [--aspect-ratio <ratio>] [--duration <seconds>] [--llm-model <id>]   # interactive Q&A; node picker if --node-type omitted
 nodaro prompt analyze --node-type <type> [--prompt "…"] [--provider <name>] [--style <name>] [--aspect-ratio <ratio>] [--duration <seconds>] [--llm-model <id>] [--json]   # return guided questions

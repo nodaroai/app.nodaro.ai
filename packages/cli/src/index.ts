@@ -11,6 +11,7 @@ import { promptCommand } from "./commands/prompt.js"
 import { voiceCommand } from "./commands/voice.js"
 import { presetsCommand } from "./commands/presets.js"
 import { communityCommand } from "./commands/community.js"
+import { pickerCatalogsCommand } from "./commands/picker-catalogs.js"
 import { registerLocationsCommands } from "./commands/locations.js"
 import { registerObjectsCommands } from "./commands/objects.js"
 
@@ -42,6 +43,7 @@ program.addCommand(promptCommand())
 program.addCommand(voiceCommand())
 program.addCommand(presetsCommand())
 program.addCommand(communityCommand())
+program.addCommand(pickerCatalogsCommand())
 registerLocationsCommands(program)
 registerObjectsCommands(program)
 

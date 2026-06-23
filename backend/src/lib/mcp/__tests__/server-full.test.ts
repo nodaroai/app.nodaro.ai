@@ -200,7 +200,7 @@ describe("buildMcpServer full catalog (v1.1)", () => {
     expect(names).not.toContain("list_apps")
   })
 
-  it("with no scopes, registers only the unscoped tools (ping, list_models, start_film_director, start_workflow_editor, get_node_skill)", async () => {
+  it("with no scopes, registers only the unscoped tools (ping, list_models, start_film_director, start_workflow_editor, get_node_skill, get_picker_catalog)", async () => {
     const fastify = Fastify()
     const server = await buildMcpServer({
       userId: "u1",
@@ -221,10 +221,13 @@ describe("buildMcpServer full catalog (v1.1)", () => {
     // tools (return backend/skills/*.md) — same posture as start_film_director.
     expect(names).toContain("start_workflow_editor")
     expect(names).toContain("get_node_skill")
+    // get_picker_catalog is also ungated content delivery (returns parameter-
+    // picker value catalogs) — same posture as get_node_skill.
+    expect(names).toContain("get_picker_catalog")
     expect(names).not.toContain("list_jobs")
     expect(names).not.toContain("generate_image")
     expect(names).not.toContain("check_balance")
-    expect(tools).toHaveLength(5)
+    expect(tools).toHaveLength(6)
   })
 
   it("v3.0: dynamic per-user tools dropped — list_apps + get_app_inputs + run_app cover the same surface", async () => {

@@ -4,7 +4,7 @@ Nodaro's editor has a family of **parameter pickers** — curated, tile-grid sel
 
 Every picker's data — its options, the prompt fragment each option contributes, its categories, and its i18n keys — ships as **pure data in [`@nodaro/shared`](https://www.npmjs.com/package/@nodaro/shared)**. So you can build the exact same pickers in your own app, in your own styling, and assemble the exact same prompts, with **no API calls and no coupling to Nodaro's UI**.
 
-> **Why a library, not an API?** Picker catalogs are static config + pure functions. The SDK/API is for *server state* (jobs, credits, uploads, workflows). There is intentionally no `GET /v1/catalogs` — you `import` the data and run it locally (typed, offline, tree-shakeable).
+> **Library first.** Picker catalogs are static config + pure functions, so the preferred path is to `import` the data and run it locally — typed, offline, tree-shakeable, with no API round-trips. (The SDK/API is otherwise for *server state*: jobs, credits, uploads, workflows.) A read-only discovery endpoint also exists for clients that can't bundle the package (e.g. LLM agents over MCP): `GET /v1/picker-catalogs`, `client.pickerCatalogs.list()/get()`, `nodaro pickers`, and the MCP `get_picker_catalog` tool — see [API Integration §11](./api-integration.md#11-node-discovery), the [SDK Reference](./sdk-reference.md#clientpickercatalogs), the [CLI](./cli.md), and the [MCP tools](./mcp/tools.md). They return the same data this page documents.
 
 ```bash
 npm install @nodaro/shared @nodaro/client

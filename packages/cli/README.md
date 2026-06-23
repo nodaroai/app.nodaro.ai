@@ -107,6 +107,10 @@ nodaro nodes get <type>                                 # full input schema
 nodaro nodes run <type> --param prompt="…" --param provider=flux [--watch]
 nodaro nodes run <type> --params-file body.json [--watch] [--poll-interval 1000]
 
+# Pickers — valid values for parameter-picker nodes (setting, mood, person, …)
+nodaro pickers list                                     # all picker node types + option counts
+nodaro pickers get <nodeType> [--full] [--category <c>] [--field <f>]  # one picker's valid ids
+
 nodaro executions get <id>
 nodaro executions get <id> --watch
 nodaro executions cancel <id> [--mode cancelled|stopping]

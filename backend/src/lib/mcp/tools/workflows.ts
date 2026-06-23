@@ -307,12 +307,20 @@ export function registerWorkflows({
       {
         title: "Update Workflow JSON",
         description:
-          "Replace the full node graph of a workflow in the mcp project. Supply expected_updated_at (from get_workflow_json) to enable optimistic concurrency control.",
+          "Update a workflow in the mcp project: replace its node graph (nodes + edges together), and/or its settings, and/or its thumbnail_url. All content fields are optional — e.g. pass only thumbnail_url to set the preview image without re-sending the graph. Supply expected_updated_at or expected_version (from get_workflow_json) to enable optimistic concurrency control.",
         inputSchema: {
           workflow_id: z.string().uuid(),
-          nodes: z.array(z.record(z.unknown())),
-          edges: z.array(z.record(z.unknown())),
+          nodes: z.array(z.record(z.unknown())).optional(),
+          edges: z.array(z.record(z.unknown())).optional(),
           settings: z.record(z.unknown()).optional(),
+          thumbnail_url: z
+            .string()
+            .url()
+            .nullable()
+            .optional()
+            .describe(
+              "Public URL of the workflow's thumbnail/preview image, or null to clear it. Must be an already-hosted image URL.",
+            ),
           expected_updated_at: z
             .string()
             .optional()
@@ -332,18 +340,35 @@ export function registerWorkflows({
       },
       async (args) => {
         const mcpProjectId = await ensureMcpProject(session)
-        const migratedEdges = migrateGenerateImageHandles(
-          args.nodes as Array<{ id: string; type?: string }>,
-          args.edges as Array<{ id: string; source: string; target: string; sourceHandle: string | null; targetHandle: string | null }>,
-        )
+
+        // nodes + edges are a unit (the handle migration needs both). Allow
+        // neither (metadata-only update) or both — never just one.
+        const hasNodes = args.nodes !== undefined
+        const hasEdges = args.edges !== undefined
+        if (hasNodes !== hasEdges) {
+          return err("Provide both `nodes` and `edges` together, or neither.")
+        }
+        if (!hasNodes && args.settings === undefined && args.thumbnail_url === undefined) {
+          return err(
+            "Nothing to update — provide nodes+edges, settings, and/or thumbnail_url.",
+          )
+        }
+
         const updates: Record<string, unknown> = {
-          // Server-side strip of transient run-state (status/jobId/progress) —
-          // agent-authored graphs must never seed phantom "running" state.
-          nodes: stripTransientRuntimeData(args.nodes as Array<{ data?: Record<string, unknown> }>),
-          edges: migratedEdges,
           updated_at: new Date().toISOString(),
         }
+        if (hasNodes) {
+          const migratedEdges = migrateGenerateImageHandles(
+            args.nodes as Array<{ id: string; type?: string }>,
+            args.edges as Array<{ id: string; source: string; target: string; sourceHandle: string | null; targetHandle: string | null }>,
+          )
+          // Server-side strip of transient run-state (status/jobId/progress) —
+          // agent-authored graphs must never seed phantom "running" state.
+          updates.nodes = stripTransientRuntimeData(args.nodes as Array<{ data?: Record<string, unknown> }>)
+          updates.edges = migratedEdges
+        }
         if (args.settings !== undefined) updates.settings = args.settings
+        if (args.thumbnail_url !== undefined) updates.thumbnail_url = args.thumbnail_url
         // Atomic optimistic concurrency: fold the version check INTO the UPDATE
         // (no read-then-write race). When expected_updated_at is provided it is
         // part of the match, so a concurrent writer that bumped updated_at between
@@ -384,8 +409,12 @@ export function registerWorkflows({
           return err("Workflow not found in mcp project")
         }
         const updated = data as Record<string, unknown>
+        const changed: string[] = []
+        if (hasNodes) changed.push(`${args.nodes!.length} nodes`)
+        if (args.settings !== undefined) changed.push("settings")
+        if (args.thumbnail_url !== undefined) changed.push("thumbnail")
         return ok(
-          `Updated workflow ${args.workflow_id} (${args.nodes.length} nodes).`,
+          `Updated workflow ${args.workflow_id} (${changed.join(", ")}).`,
           { id: updated.id, name: updated.name, updated_at: updated.updated_at, version: updated.version },
         )
       },

@@ -1,6 +1,6 @@
 # MCP Tool Reference
 
-Complete reference for the 129 tools exposed by the Nodaro MCP server.
+Complete reference for the 130 tools exposed by the Nodaro MCP server.
 
 ## Scopes
 
@@ -23,7 +23,7 @@ authorizing the connector; missing scopes cause tools to be omitted entirely
 | `pipelines:approve` | `chat_pipeline_stage`, `apply_chat_proposal` |
 | `presets:read` | `list_node_presets` |
 
-**Ungated (always visible):** `ping`, `list_models`, `start_film_director`, `start_workflow_editor`, `get_node_skill`
+**Ungated (always visible):** `ping`, `list_models`, `start_film_director`, `start_workflow_editor`, `get_node_skill`, `get_picker_catalog`
 
 ---
 
@@ -231,7 +231,10 @@ to enable optimistic concurrency control.
 
 ### `update_workflow_json`
 
-Replaces the full node graph of a workflow in the mcp project.
+Updates a workflow in the mcp project: its node graph (`nodes` + `edges`), its
+`settings`, and/or its `thumbnail_url`. All content fields are optional — pass
+only `thumbnail_url`, for example, to set the preview image without re-sending
+the graph.
 
 **Scope:** `workflows:write`
 
@@ -240,10 +243,12 @@ Replaces the full node graph of a workflow in the mcp project.
 | Field | Type | Notes |
 |-------|------|-------|
 | `workflow_id` | UUID string | Must be in the mcp project |
-| `nodes` | array of objects | Required; replaces the current nodes |
-| `edges` | array of objects | Required; replaces the current edges |
+| `nodes` | array of objects | Optional; replaces the current nodes. Must be sent together with `edges`. |
+| `edges` | array of objects | Optional; replaces the current edges. Must be sent together with `nodes`. |
 | `settings` | object | Optional; if provided, replaces current settings |
+| `thumbnail_url` | string (URL) or null | Optional; sets the workflow's thumbnail image, or `null` to clear it. Must be an already-hosted image URL. |
 | `expected_updated_at` | string (ISO 8601) | Optional; enables optimistic concurrency |
+| `expected_version` | integer | Optional; integer CAS from `get_workflow_json` (preferred over `expected_updated_at`) |
 
 **Optimistic concurrency:** Pass the `updated_at` value from a prior
 `get_workflow_json` call as `expected_updated_at`. If the workflow has been
@@ -1123,3 +1128,33 @@ and configuration options — so the LLM can correctly populate that node
 when building or editing a workflow.
 
 **Input:** `{ node_type: string }`
+
+---
+
+### `get_picker_catalog`
+
+**Scope:** none (always visible)
+
+Discover the valid values for **parameter-picker** nodes (setting, mood,
+person, action-fx, lens, …) — curated catalogs that contribute a descriptive
+clause to a downstream node's prompt rather than calling the API. Read-only,
+idempotent, no side effects. Call it before writing a picker node's value field
+in `update_workflow_json` so you set a real catalog id instead of guessing.
+
+- **No `node_type`** → a directory of every picker: `nodeType`, `label`, `kind`
+  (`single` / `multi`), `valueField` (single-dim) or `fields` (multi-dim), and
+  `optionCount`.
+- **With `node_type`** → that picker's catalog of valid ids. An unknown type
+  returns an error listing the valid picker types.
+
+**Input:**
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `node_type` | string | Picker node type, e.g. `"setting"` (kebab-case, from `start_workflow_editor`'s catalog). Omit to list every picker. |
+| `detail` | enum `compact` / `full` | `compact` (default): `id`, `label`, `category`, `icon`. `full`: additionally includes each option's `description` and `promptHint` (the prompt fragment it injects). |
+| `category` | string | Single-dim pickers: filter options to one category. |
+| `field` | string | Multi-dim pickers (person / styling / framing): return only this dimension's field. |
+
+See [Parameter Picker Catalogs](../picker-catalogs.md) for the underlying
+`@nodaro/shared` data and the prompt-fragment helpers.

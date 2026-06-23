@@ -1,7 +1,7 @@
 ---
 node_type: music-mood
-generated_at: 2026-05-18T13:23:37.181Z
-generated_from: cb1e786d
+generated_at: 2026-06-23T16:51:38.095Z
+generated_from: 52fc7de9b
 ---
 
 # Music Mood
@@ -22,6 +22,8 @@ generated_from: cb1e786d
 - `energy?: string`
 - `emotion?: string | ReadonlyArray<string>`
 - `vibe?: string | ReadonlyArray<string>`
+
+**Valid values:** call `get_picker_catalog("music-mood")` (MCP) or `GET /v1/picker-catalogs/music-mood` for the catalog of valid ids.
 
 **Default data:**
 ```json

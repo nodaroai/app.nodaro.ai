@@ -1,7 +1,7 @@
 ---
 node_type: mood
-generated_at: 2026-05-18T13:23:37.214Z
-generated_from: cb1e786d
+generated_at: 2026-06-23T16:51:38.129Z
+generated_from: 52fc7de9b
 ---
 
 # Mood
@@ -20,6 +20,8 @@ generated_from: cb1e786d
 **Optional data fields:**
 - `preText?: string`
 - `postText?: string`
+
+**Valid values:** call `get_picker_catalog("mood")` (MCP) or `GET /v1/picker-catalogs/mood` for the catalog of valid ids.
 
 **Default data:**
 ```json

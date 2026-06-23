@@ -1,7 +1,7 @@
 ---
 node_type: loop-subject
-generated_at: 2026-05-18T13:23:37.171Z
-generated_from: cb1e786d
+generated_at: 2026-06-23T16:51:38.081Z
+generated_from: 52fc7de9b
 ---
 
 # Loop Subject
@@ -20,6 +20,8 @@ generated_from: cb1e786d
 **Optional data fields:**
 - `preText?: string`
 - `postText?: string`
+
+**Valid values:** call `get_picker_catalog("loop-subject")` (MCP) or `GET /v1/picker-catalogs/loop-subject` for the catalog of valid ids.
 
 **Default data:**
 ```json

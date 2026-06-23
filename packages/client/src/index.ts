@@ -54,6 +54,14 @@ export { UploadsResource } from "./resources/uploads.js"
 export { LibraryResource } from "./resources/library.js"
 export { PresetsResource } from "./resources/node-presets.js"
 export { CommunityResource } from "./resources/community.js"
+export { PickerCatalogsResource } from "./resources/picker-catalogs.js"
+export type {
+  PickerOption,
+  PickerDimension,
+  PickerCatalog,
+  PickerCatalogSummary,
+  GetPickerCatalogOptions,
+} from "./resources/picker-catalogs.js"
 
 // --- Resource type definitions ---
 export type {

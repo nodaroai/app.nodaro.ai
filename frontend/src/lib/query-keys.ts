@@ -129,6 +129,8 @@ export const queryKeys = {
   workflows: {
     all: ["workflows"] as const,
     listMine: () => ["workflows", "list", "mine"] as const,
+    listStudioMine: () => ["workflows", "list", "studio", "mine"] as const,
+    listStudioAll: () => ["workflows", "list", "studio", "all"] as const,
   },
 
   // Search

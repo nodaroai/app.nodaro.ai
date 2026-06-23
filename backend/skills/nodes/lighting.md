@@ -1,7 +1,7 @@
 ---
 node_type: lighting
-generated_at: 2026-05-18T13:23:37.137Z
-generated_from: cb1e786d
+generated_at: 2026-06-23T16:51:38.040Z
+generated_from: 52fc7de9b
 ---
 
 # Lighting
@@ -25,6 +25,8 @@ generated_from: cb1e786d
 - `maxItemsPerRow?: number`
 - `preText?: string`
 - `postText?: string`
+
+**Valid values:** call `get_picker_catalog("lighting")` (MCP) or `GET /v1/picker-catalogs/lighting` for the catalog of valid ids.
 
 **Default data:**
 ```json
