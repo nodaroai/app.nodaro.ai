@@ -28,6 +28,7 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
   - [`client.credits`](#clientcredits)
   - [`client.uploads`](#clientuploads)
   - [`client.presets`](#clientpresets)
+  - [`client.pickerCatalogs`](#clientpickercatalogs)
   - [`client.community`](#clientcommunity)
 - [Type re-exports](#type-re-exports)
 
@@ -56,12 +57,12 @@ const client = createClient({
 | `fetch` | `typeof fetch` | no | Custom fetch implementation. Default: `globalThis.fetch`. |
 | `timeoutMs` | `number` | no | Per-request timeout. Default: `60_000`. |
 
-The instance exposes 19 resource objects: `workflows`, `projects`, `jobs`,
+The instance exposes 20 resource objects: `workflows`, `projects`, `jobs`,
 `executions`, `nodes`, `characters`, `locations`, `objects`, `pipelines`,
 `reduce`, `promptHelper`, `apps`, `developerApps`, `oauth`, `voices`,
-`credits`, `uploads`, `presets`, `community`. It also exposes a low-level
-`request<T>(method, path, options)` method for endpoints not yet wrapped by a
-resource.
+`credits`, `uploads`, `presets`, `pickerCatalogs`, `community`. It also exposes
+a low-level `request<T>(method, path, options)` method for endpoints not yet
+wrapped by a resource.
 
 ### `class NodaroClient`
 
@@ -250,7 +251,7 @@ but rarely need to be imported directly:
 `NodesResource`, `CharactersResource`, `LocationsResource`, `ObjectsResource`,
 `PipelinesResource`, `ReduceResource`, `PromptHelperResource`, `AppsResource`,
 `DeveloperAppsResource`, `OAuthResource`, `VoicesResource`, `CreditsResource`,
-`UploadsResource`, `PresetsResource`, `CommunityResource`.
+`UploadsResource`, `PresetsResource`, `PickerCatalogsResource`, `CommunityResource`.
 
 All "data" responses follow the envelope `{ data: T }` — the SDK returns the
 envelope as-is. Mutation responses (`delete`, `cancel`) return `{ success: true }`.
@@ -2493,6 +2494,61 @@ const orbit = data.find((p) => p.id === "generate-video/orbit-360")
 
 ---
 
+### `client.pickerCatalogs`
+
+Discover the valid values for **parameter-picker** nodes — the curated catalogs
+(setting, mood, person, lens, framing, …) whose selection contributes a
+descriptive clause to a downstream node's prompt. Both endpoints are public
+(no auth) and publicly cacheable for 5 minutes server-side
+(`Cache-Control: public, max-age=300`).
+
+> This is the over-the-wire discovery surface. If you can `import` from
+> `@nodaro/shared`, prefer doing so — the catalogs ship as pure, typed,
+> tree-shakeable data (see [Parameter Picker Catalogs](./picker-catalogs.md)).
+> The SDK endpoints exist for clients that can't bundle the package (and back
+> the MCP `get_picker_catalog` tool).
+
+#### `list()`
+
+```ts
+list(): Promise<{ data: PickerCatalogSummary[] }>
+```
+
+`GET /v1/picker-catalogs` → a directory of every picker: `nodeType`, `label`,
+`catalogId`, `kind` (`"single"` / `"multi"`), `valueField` (single-dim) or
+`fields` (multi-dim), and `optionCount`.
+
+```ts
+const { data } = await client.pickerCatalogs.list()
+const moods = data.find((c) => c.nodeType === "mood")
+```
+
+#### `get(nodeType, opts?)`
+
+```ts
+get(nodeType: string, opts?: GetPickerCatalogOptions): Promise<{ data: PickerCatalog }>
+```
+
+`GET /v1/picker-catalogs/:nodeType` → one picker's catalog of valid ids. Single-
+dim pickers carry `options`; multi-dim pickers carry `dimensions` (one
+`{ field, label, options }` per field). 404 `not_found` for an unknown type.
+
+**`GetPickerCatalogOptions`:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `detail` | `"compact"` \| `"full"` | `"compact"` (default): `id`, `label`, `category`, `icon`. `"full"`: additionally includes each option's `description` and `promptHint` (the prompt fragment it injects). |
+| `category` | `string` | Single-dim pickers: filter options to one category. |
+| `field` | `string` | Multi-dim pickers (person / styling / framing): return only this dimension's field. |
+
+```ts
+const { data } = await client.pickerCatalogs.get("mood", { detail: "full" })
+const serene = data.options?.find((o) => o.id === "serene")
+console.log(serene?.promptHint) // the clause this option injects downstream
+```
+
+---
+
 ### `client.community`
 
 Browse, favorite, clone, and report the **admin-curated** community library of
@@ -2799,6 +2855,14 @@ Every type used in a public method signature is re-exported from
 - `CloneListingResult` — `{ entityType, id }` from `clone()`
 - `FavoriteListingResult` — `{ favorited }` from `favorite()`
 - `ReportListingResult` — `{ ok }` from `report()`
+
+### Picker catalogs
+
+- `PickerCatalogSummary` — one row of `pickerCatalogs.list()`: `{ nodeType, label, catalogId, kind, valueField?, fields?, optionCount }`
+- `PickerCatalog` — full catalog from `pickerCatalogs.get()`: single-dim carries `options`, multi-dim carries `dimensions`
+- `PickerOption` — one selectable id: `{ id, label, description?, category?, promptHint?, icon? }` (`promptHint` present only with `detail: "full"`)
+- `PickerDimension` — a multi-dim field: `{ field, label, options }`
+- `GetPickerCatalogOptions` — `get()` options: `{ detail?, category?, field? }`
 
 ### Generic node/edge
 

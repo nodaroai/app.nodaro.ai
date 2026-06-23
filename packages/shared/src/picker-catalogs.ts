@@ -735,3 +735,124 @@ export function getPickerCatalog(nodeTypeOrCatalogId: string): PickerCatalog | u
 export function listPickerCatalogs(): readonly PickerCatalog[] {
   return PICKER_CATALOGS
 }
+
+// ─── Summary + projection (for MCP / REST exposure) ──────────────────────────
+
+export interface PickerCatalogSummary {
+  readonly nodeType: string
+  readonly label: string
+  readonly catalogId: string
+  readonly kind: "single" | "multi"
+  /** single only. */
+  readonly valueField?: string
+  /** multi only. */
+  readonly fields?: readonly string[]
+  /** single: options.length; multi: sum of every dimension's options. */
+  readonly optionCount: number
+}
+
+/** Lightweight directory of every picker catalog — no option payloads. */
+export function summarizePickerCatalogs(): readonly PickerCatalogSummary[] {
+  return PICKER_CATALOGS.map((c) => ({
+    nodeType: c.nodeType,
+    label: c.label,
+    catalogId: c.catalogId,
+    kind: c.kind,
+    valueField: c.valueField,
+    fields: c.fields,
+    optionCount:
+      c.kind === "single"
+        ? (c.options?.length ?? 0)
+        : (c.dimensions?.reduce((n, d) => n + d.options.length, 0) ?? 0),
+  }))
+}
+
+export type PickerCatalogDetail = "compact" | "full"
+
+export interface ProjectPickerCatalogOptions {
+  /** Default "compact" (id/label/category/icon). "full" adds description + promptHint. */
+  readonly detail?: PickerCatalogDetail
+  /** single-dim: keep only options in this category. */
+  readonly category?: string
+  /** multi-dim: keep only this dimension field. */
+  readonly field?: string
+}
+
+/** An option after projection — description/promptHint present only when detail="full". */
+export interface ProjectedPickerOption {
+  readonly id: string
+  readonly label: string
+  readonly description?: string
+  readonly category?: string
+  readonly promptHint?: string
+  readonly icon?: string
+}
+
+export interface ProjectedPickerDimension {
+  readonly field: string
+  readonly label: string
+  readonly options: readonly ProjectedPickerOption[]
+}
+
+export interface ProjectedPickerCatalog {
+  readonly nodeType: string
+  readonly label: string
+  readonly catalogId: string
+  readonly kind: "single" | "multi"
+  readonly valueField?: string
+  readonly defaultValue?: string
+  readonly categoryOrder?: readonly string[]
+  readonly categoryLabels?: Readonly<Record<string, string>>
+  readonly options?: readonly ProjectedPickerOption[]
+  readonly fields?: readonly string[]
+  readonly dimensions?: readonly ProjectedPickerDimension[]
+  readonly detail: PickerCatalogDetail
+}
+
+function projectOption(o: PickerOption, detail: PickerCatalogDetail): ProjectedPickerOption {
+  return detail === "full"
+    ? {
+        id: o.id,
+        label: o.label,
+        description: o.description,
+        category: o.category,
+        promptHint: o.promptHint,
+        icon: o.icon,
+      }
+    : { id: o.id, label: o.label, category: o.category, icon: o.icon }
+}
+
+/** Project a catalog to the wire shape: compact by default, optional category/field filter. */
+export function projectPickerCatalog(
+  c: PickerCatalog,
+  opts: ProjectPickerCatalogOptions = {},
+): ProjectedPickerCatalog {
+  const detail: PickerCatalogDetail = opts.detail ?? "compact"
+  const base = {
+    nodeType: c.nodeType,
+    label: c.label,
+    catalogId: c.catalogId,
+    kind: c.kind,
+    valueField: c.valueField,
+    defaultValue: c.defaultValue,
+    categoryOrder: c.categoryOrder,
+    categoryLabels: c.categoryLabels,
+    detail,
+  }
+  if (c.kind === "single") {
+    let options = c.options ?? []
+    if (opts.category) options = options.filter((o) => o.category === opts.category)
+    return { ...base, options: options.map((o) => projectOption(o, detail)) }
+  }
+  let dims = c.dimensions ?? []
+  if (opts.field) dims = dims.filter((d) => d.field === opts.field)
+  return {
+    ...base,
+    fields: c.fields,
+    dimensions: dims.map((d) => ({
+      field: d.field,
+      label: d.label,
+      options: d.options.map((o) => projectOption(o, detail)),
+    })),
+  }
+}

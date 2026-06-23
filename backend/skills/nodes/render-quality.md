@@ -1,7 +1,7 @@
 ---
 node_type: render-quality
-generated_at: 2026-05-18T13:23:37.297Z
-generated_from: cb1e786d
+generated_at: 2026-06-23T16:51:38.237Z
+generated_from: 52fc7de9b
 ---
 
 # Render Quality
@@ -20,6 +20,8 @@ generated_from: cb1e786d
 **Optional data fields:**
 - `preText?: string`
 - `postText?: string`
+
+**Valid values:** call `get_picker_catalog("render-quality")` (MCP) or `GET /v1/picker-catalogs/render-quality` for the catalog of valid ids.
 
 **Default data:**
 ```json

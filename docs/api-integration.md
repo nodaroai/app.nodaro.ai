@@ -516,6 +516,35 @@ exact shape grows over time — treat unknown fields as forward-compatible.
 Neither endpoint requires authentication; they expose only static
 registry metadata. No scopes required.
 
+### Picker catalogs
+
+`GET /v1/picker-catalogs` and `GET /v1/picker-catalogs/:nodeType` expose the
+valid values for **parameter-picker** nodes (setting, mood, person, lens, …) —
+the curated catalogs whose selection contributes a descriptive clause to a
+downstream node's prompt. Public, no auth, same 5-minute cache as node
+discovery (`Cache-Control: public, max-age=300`).
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/v1/picker-catalogs` | Directory of every picker (`{ data: PickerCatalogSummary[] }`) — each `{ nodeType, label, catalogId, kind, valueField?, fields?, optionCount }`. |
+| `GET` | `/v1/picker-catalogs/:nodeType` | One picker's catalog (`{ data: PickerCatalog }`). 404 `not_found` for an unknown type. |
+
+`GET /v1/picker-catalogs/:nodeType` accepts these query params (a bad value
+returns 400 `validation_error`):
+
+| Param | Values | Purpose |
+|---|---|---|
+| `detail` | `compact` (default) / `full` | `compact`: `id`, `label`, `category`, `icon`. `full`: additionally includes each option's `description` and `promptHint` (the prompt fragment it injects). |
+| `category` | string | Single-dim pickers: filter options to one category. |
+| `field` | string | Multi-dim pickers (person / styling / framing): return only this dimension's field. |
+
+A single-dim catalog carries `options`; a multi-dim catalog carries
+`dimensions` (one `{ field, label, options }` per field). These are the same
+catalogs that ship as pure data in [`@nodaro/shared`](https://www.npmjs.com/package/@nodaro/shared)
+— prefer importing the package when you can bundle it (see
+[Parameter Picker Catalogs](picker-catalogs.md)); the REST endpoints exist for
+clients that can't.
+
 ## 12. Credits (Cloud edition)
 
 Two endpoints surface the caller's credit balance and transaction

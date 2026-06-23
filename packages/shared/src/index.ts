@@ -778,8 +778,24 @@ export {
 } from "./lottie-overlay-catalog.js"
 export type { LottieOverlayCatalogEntry } from "./lottie-overlay-catalog.js"
 
-export { PICKER_CATALOGS, getPickerCatalog, listPickerCatalogs } from "./picker-catalogs.js"
-export type { PickerOption, PickerCatalog, PickerDimension } from "./picker-catalogs.js"
+export {
+  PICKER_CATALOGS,
+  getPickerCatalog,
+  listPickerCatalogs,
+  summarizePickerCatalogs,
+  projectPickerCatalog,
+} from "./picker-catalogs.js"
+export type {
+  PickerOption,
+  PickerCatalog,
+  PickerDimension,
+  PickerCatalogSummary,
+  PickerCatalogDetail,
+  ProjectPickerCatalogOptions,
+  ProjectedPickerOption,
+  ProjectedPickerDimension,
+  ProjectedPickerCatalog,
+} from "./picker-catalogs.js"
 
 export { resolveFieldMappings, resolveLocationFields } from "./resolve-field-mappings.js"
 

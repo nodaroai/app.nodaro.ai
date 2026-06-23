@@ -1,7 +1,7 @@
 ---
 node_type: furniture
-generated_at: 2026-05-20T13:30:18.888Z
-generated_from: a183bc77
+generated_at: 2026-06-23T16:51:38.197Z
+generated_from: 52fc7de9b
 ---
 
 # Furniture
@@ -20,6 +20,8 @@ generated_from: a183bc77
 **Optional data fields:**
 - `preText?: string`
 - `postText?: string`
+
+**Valid values:** call `get_picker_catalog("furniture")` (MCP) or `GET /v1/picker-catalogs/furniture` for the catalog of valid ids.
 
 **Default data:**
 ```json

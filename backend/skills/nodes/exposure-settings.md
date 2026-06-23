@@ -1,7 +1,7 @@
 ---
 node_type: exposure-settings
-generated_at: 2026-05-18T13:23:37.290Z
-generated_from: cb1e786d
+generated_at: 2026-06-23T16:51:38.231Z
+generated_from: 52fc7de9b
 ---
 
 # Exposure Settings
@@ -23,6 +23,8 @@ generated_from: cb1e786d
 - `maxItemsPerRow?: number`
 - `preText?: string`
 - `postText?: string`
+
+**Valid values:** call `get_picker_catalog("exposure-settings")` (MCP) or `GET /v1/picker-catalogs/exposure-settings` for the catalog of valid ids.
 
 **Default data:**
 ```json

@@ -20,6 +20,7 @@ import { CreditsResource } from "./resources/credits.js"
 import { UploadsResource } from "./resources/uploads.js"
 import { LibraryResource } from "./resources/library.js"
 import { PresetsResource } from "./resources/node-presets.js"
+import { PickerCatalogsResource } from "./resources/picker-catalogs.js"
 import { CommunityResource } from "./resources/community.js"
 
 export interface ClientOptions {
@@ -94,6 +95,7 @@ export class NodaroClient {
   readonly uploads: UploadsResource
   readonly library: LibraryResource
   readonly presets: PresetsResource
+  readonly pickerCatalogs: PickerCatalogsResource
   readonly community: CommunityResource
 
   constructor(opts: ClientOptions) {
@@ -122,6 +124,7 @@ export class NodaroClient {
     this.uploads = new UploadsResource(this)
     this.library = new LibraryResource(this)
     this.presets = new PresetsResource(this)
+    this.pickerCatalogs = new PickerCatalogsResource(this)
     this.community = new CommunityResource(this)
   }
 

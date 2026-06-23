@@ -1,7 +1,7 @@
 ---
 node_type: voice-delivery
-generated_at: 2026-05-18T13:23:37.199Z
-generated_from: cb1e786d
+generated_at: 2026-06-23T16:51:38.117Z
+generated_from: 52fc7de9b
 ---
 
 # Voice Delivery
@@ -22,6 +22,8 @@ generated_from: cb1e786d
 - `pace?: string`
 - `emotion?: string`
 - `archetype?: string`
+
+**Valid values:** call `get_picker_catalog("voice-delivery")` (MCP) or `GET /v1/picker-catalogs/voice-delivery` for the catalog of valid ids.
 
 **Default data:**
 ```json

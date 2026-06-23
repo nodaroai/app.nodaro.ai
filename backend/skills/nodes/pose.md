@@ -1,7 +1,7 @@
 ---
 node_type: pose
-generated_at: 2026-05-18T13:23:37.235Z
-generated_from: cb1e786d
+generated_at: 2026-06-23T16:51:38.157Z
+generated_from: 52fc7de9b
 ---
 
 # Pose
@@ -24,6 +24,8 @@ generated_from: cb1e786d
 - `activity?: string`
 - `preText?: string`
 - `postText?: string`
+
+**Valid values:** call `get_picker_catalog("pose")` (MCP) or `GET /v1/picker-catalogs/pose` for the catalog of valid ids.
 
 **Default data:**
 ```json

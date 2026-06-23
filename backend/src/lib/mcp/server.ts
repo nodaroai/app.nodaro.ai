@@ -21,6 +21,7 @@ import { registerSkillLoaders } from "./tools/skill-loaders.js"
 import { registerPipelineTools } from "./tools/pipelines.js"
 import { registerReduce } from "./tools/reduce.js"
 import { registerPromptHelper } from "./tools/prompt-helper.js"
+import { registerPickerCatalogs } from "./tools/picker-catalogs.js"
 import { registerPresets } from "./tools/node-presets.js"
 // v3.0: dynamic per-user app_<slug> / component_<slug> tools dropped in
 // favor of the pure-discovery model (list_* / get_*_inputs / run_*).
@@ -134,6 +135,7 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
   registerCreatureTools({ server, session, fastify: opts.fastify })
   registerUploadTools({ server, session })
   registerSkillLoaders(server, session)
+  registerPickerCatalogs(server, session)
   // Film Director + Pipelines are a Cloud-only (EE) feature: the pipeline
   // worker / reconcile-cron / event-bridge only start when hasCredits()
   // (see server.ts startup). The MCP tools dispatch to the ee/pipelines

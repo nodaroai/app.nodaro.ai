@@ -1,7 +1,7 @@
 ---
 node_type: lens
-generated_at: 2026-06-14T23:30:28.699Z
-generated_from: 90fa6b6ee
+generated_at: 2026-06-23T16:51:38.025Z
+generated_from: 52fc7de9b
 ---
 
 # Lens
@@ -20,6 +20,8 @@ generated_from: 90fa6b6ee
 **Optional data fields:**
 - `preText?: string`
 - `postText?: string`
+
+**Valid values:** call `get_picker_catalog("lens")` (MCP) or `GET /v1/picker-catalogs/lens` for the catalog of valid ids.
 
 **Default data:**
 ```json

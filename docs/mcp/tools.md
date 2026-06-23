@@ -1,6 +1,6 @@
 # MCP Tool Reference
 
-Complete reference for the 129 tools exposed by the Nodaro MCP server.
+Complete reference for the 130 tools exposed by the Nodaro MCP server.
 
 ## Scopes
 
@@ -23,7 +23,7 @@ authorizing the connector; missing scopes cause tools to be omitted entirely
 | `pipelines:approve` | `chat_pipeline_stage`, `apply_chat_proposal` |
 | `presets:read` | `list_node_presets` |
 
-**Ungated (always visible):** `ping`, `list_models`, `start_film_director`, `start_workflow_editor`, `get_node_skill`
+**Ungated (always visible):** `ping`, `list_models`, `start_film_director`, `start_workflow_editor`, `get_node_skill`, `get_picker_catalog`
 
 ---
 
@@ -1123,3 +1123,33 @@ and configuration options — so the LLM can correctly populate that node
 when building or editing a workflow.
 
 **Input:** `{ node_type: string }`
+
+---
+
+### `get_picker_catalog`
+
+**Scope:** none (always visible)
+
+Discover the valid values for **parameter-picker** nodes (setting, mood,
+person, action-fx, lens, …) — curated catalogs that contribute a descriptive
+clause to a downstream node's prompt rather than calling the API. Read-only,
+idempotent, no side effects. Call it before writing a picker node's value field
+in `update_workflow_json` so you set a real catalog id instead of guessing.
+
+- **No `node_type`** → a directory of every picker: `nodeType`, `label`, `kind`
+  (`single` / `multi`), `valueField` (single-dim) or `fields` (multi-dim), and
+  `optionCount`.
+- **With `node_type`** → that picker's catalog of valid ids. An unknown type
+  returns an error listing the valid picker types.
+
+**Input:**
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `node_type` | string | Picker node type, e.g. `"setting"` (kebab-case, from `start_workflow_editor`'s catalog). Omit to list every picker. |
+| `detail` | enum `compact` / `full` | `compact` (default): `id`, `label`, `category`, `icon`. `full`: additionally includes each option's `description` and `promptHint` (the prompt fragment it injects). |
+| `category` | string | Single-dim pickers: filter options to one category. |
+| `field` | string | Multi-dim pickers (person / styling / framing): return only this dimension's field. |
+
+See [Parameter Picker Catalogs](../picker-catalogs.md) for the underlying
+`@nodaro/shared` data and the prompt-fragment helpers.

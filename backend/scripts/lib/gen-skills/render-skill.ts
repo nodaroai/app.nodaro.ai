@@ -8,7 +8,7 @@ import type {
   InterfaceShape,
 } from "./parse-node-definitions.js"
 import type { CapturedSchema } from "./capture-mcp-schemas.js"
-import { PROVIDER_PROMPT_DOCTRINES } from "@nodaro/shared"
+import { PROVIDER_PROMPT_DOCTRINES, getPickerCatalog } from "@nodaro/shared"
 
 /** Node types whose skill doc carries the per-provider prompting doctrine. */
 export const PROVIDER_PROMPTING_NODE_TYPES = new Set([
@@ -70,6 +70,16 @@ export function renderNodeDataShapeBlock(
       for (const f of optional) lines.push(`- \`${f.name}?: ${f.type}\``)
       lines.push("")
     }
+  }
+
+  // Catalog-backed picker nodes: point readers at the catalog API so they can
+  // discover the valid ids for the picker's value field(s).
+  if (getPickerCatalog(def.type)) {
+    lines.push(
+      `**Valid values:** call \`get_picker_catalog("${def.type}")\` (MCP) or ` +
+        `\`GET /v1/picker-catalogs/${def.type}\` for the catalog of valid ids.`,
+    )
+    lines.push("")
   }
 
   lines.push("**Default data:**")

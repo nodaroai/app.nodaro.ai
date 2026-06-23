@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest"
+import { getPickerCatalog } from "@nodaro/shared"
 import {
   renderNodeDataShapeBlock,
   renderMcpCallBlock,
@@ -79,6 +80,34 @@ describe("renderNodeDataShapeBlock", () => {
   it("handles undefined InterfaceShape without throwing", () => {
     const out = renderNodeDataShapeBlock(SAMPLE_DEF, undefined)
     expect(out).toContain("**Type:** `generate-image`")
+  })
+
+  it("appends a get_picker_catalog pointer for catalog-backed picker nodes", () => {
+    // setting is a single-dim picker present in PICKER_CATALOGS
+    expect(getPickerCatalog("setting")).toBeTruthy()
+    const def = {
+      type: "setting",
+      category: "parameter",
+      creditCost: 0,
+      inputs: ["in"],
+      outputs: ["out"],
+      defaultData: { label: "Setting", setting: "forest" },
+    } as never
+    const out = renderNodeDataShapeBlock(def, undefined)
+    expect(out).toContain('get_picker_catalog("setting")')
+    expect(out).toContain("/v1/picker-catalogs/setting")
+  })
+
+  it("omits the pointer for non-picker nodes", () => {
+    const def = {
+      type: "generate-image",
+      category: "ai-image",
+      creditCost: "1-6",
+      inputs: ["in"],
+      outputs: ["out"],
+      defaultData: {},
+    } as never
+    expect(renderNodeDataShapeBlock(def, undefined)).not.toContain("get_picker_catalog")
   })
 })
 
