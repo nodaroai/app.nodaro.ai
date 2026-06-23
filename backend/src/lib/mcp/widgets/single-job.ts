@@ -403,6 +403,35 @@ ${uiProtocolShim()}
       populateAudioActions();
     });
 
+    // ── Stuck-card recovery (defense in depth) ──
+    // The card only advances when the host delivers tool-input → tool-result.
+    // If Claude.ai never delivers tool-result (a rejected ui/initialize
+    // handshake, or the host silently dropping the notification), the iframe
+    // would otherwise sit on "Initializing…"/"Loading…" forever even though
+    // the job completed server-side and the result is already in the user's
+    // library. After a grace period with no tool-result, replace the frozen
+    // status with an honest, actionable state + a link to the library. This
+    // is cancelled the instant a real tool-result arrives (flag below), so
+    // the normal path is completely unaffected — working widgets never see it.
+    var sawToolResult = false;
+    window.addEventListener('mcp-tool-result', function () { sawToolResult = true; });
+    setTimeout(function () {
+      if (sawToolResult || state.outputUrl) return;
+      progEl.hidden = true;
+      while (statusEl.firstChild) statusEl.removeChild(statusEl.firstChild);
+      statusEl.appendChild(document.createTextNode('Your result will appear at the top of your Nodaro library when ready. '));
+      var libLink = document.createElement('button');
+      libLink.type = 'button';
+      libLink.textContent = 'Open Nodaro library';
+      libLink.addEventListener('click', function () {
+        if (window.NodaroMCP && window.NodaroMCP.openLink) {
+          window.NodaroMCP.openLink('https://app.nodaro.ai/gallery');
+        }
+      });
+      statusEl.appendChild(libLink);
+      statusEl.style.display = '';
+    }, 15000);
+
     // Bridged from progress-emitter via host-forwarded notifications/progress.
     // Currently a no-op for stateless HTTP transport but kept for forward
     // compatibility (e.g. session-based connections in future MCP clients).
