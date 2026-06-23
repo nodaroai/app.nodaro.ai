@@ -1,6 +1,6 @@
 # MCP Tool Reference
 
-Complete reference for the 130 tools exposed by the Nodaro MCP server.
+Complete reference for the 131 tools exposed by the Nodaro MCP server.
 
 ## Scopes
 
@@ -21,7 +21,7 @@ authorizing the connector; missing scopes cause tools to be omitted entirely
 | `pipelines:read` | `get_pipeline_stage_chat`, `get_pipeline_status`, `pipeline_pending_approvals` |
 | `pipelines:execute` | `branch_pipeline`, `start_pipeline` |
 | `pipelines:approve` | `chat_pipeline_stage`, `apply_chat_proposal` |
-| `presets:read` | `list_node_presets` |
+| `presets:read` | `list_node_presets`, `get_node_preset` |
 
 **Ungated (always visible):** `ping`, `list_models`, `start_film_director`, `start_workflow_editor`, `get_node_skill`, `get_picker_catalog`
 
@@ -396,7 +396,7 @@ prompt with no questions round-trip.
 
 | Tool | Description |
 |------|-------------|
-| `generate_image` | Text-to-image generation. Accepts `prompt`, `model`, `aspect_ratio`, `resolution`, `quality`, `negative_prompt`, `reference_image_urls` (up to 14 URLs or asset ids for identity/style/composition guidance — the response text confirms how many were attached), and optional `structured` fields. |
+| `generate_image` | Text-to-image generation. Accepts `prompt`, `model`, `aspect_ratio`, `resolution`, `quality`, `negative_prompt`, `reference_image_urls` (up to 14 URLs or asset ids for identity/style/composition guidance — the response text confirms how many were attached), and optional `structured` fields. Also accepts `presetId` (from `list_node_presets`) to apply a built-in or saved preset's config server-side; any explicit field above overrides the preset, and `prompt` may be omitted when the preset supplies one. |
 | `modify_image` | Image-to-image transformation — apply a style, change colors, swap backgrounds. Accepts `image_url`, `prompt`, and strength controls. |
 | `image_to_image` | Structural image-to-image (i2i) using a dedicated i2i model. Distinct from `modify_image` in that it uses models optimized for structural transfer. Supports multi-reference composition via `reference_image_urls` (up to 13). |
 | `edit_image` | Targeted edits: remove background, upscale, inpaint, or use Nodaro's nano-banana-edit model. |
@@ -413,7 +413,7 @@ prompt with no questions round-trip.
 
 | Tool | Description |
 |------|-------------|
-| `generate_video` | Text-to-video generation. Accepts `prompt`, `model`, `duration`, `aspect_ratio`, `resolution`, `sound`, `negative_prompt`, `seed`, and optional `structured` fields. To animate from a still or use start/end frames, use `animate_image`. |
+| `generate_video` | Text-to-video generation. Accepts `prompt`, `model`, `duration`, `aspect_ratio`, `resolution`, `sound`, `negative_prompt`, `seed`, and optional `structured` fields. Also accepts `presetId` (from `list_node_presets { nodeType: "generate-video" }`) to apply a built-in or saved preset's config server-side; any explicit field above overrides the preset, and `prompt` may be omitted when the preset supplies one. To animate from a still or use start/end frames, use `animate_image`. |
 | `animate_image` | Image-to-video animation — bring a still image to life. Accepts `image_url` / `image_asset_id`, optional `prompt`, `model`, `duration`, `aspect_ratio`, `sound`, and `end_frame_url` (start/end-frame animation). |
 | `extend_video` | Extend an existing video clip forward in time. Accepts `video_url`, `prompt`, `model`, `duration`. |
 | `loop_video` | Create a seamless looping clip from a short video segment. Accepts `video_url` and optional loop-trim parameters. |
@@ -437,9 +437,9 @@ prompt with no questions round-trip.
 
 | Tool | Description |
 |------|-------------|
-| `generate_music` | Text-to-music generation (Suno v4/v5 via KIE). Accepts `prompt`, `genre`, `mood`, `duration`, `model`. |
-| `generate_speech` | Text-to-speech. Accepts `text`, `voice_id`, `model`. Supports ElevenLabs v3 (default) and KIE v2 models. |
-| `text_to_audio` | Text-to-sound-effect (ElevenLabs SFX). Accepts `prompt` and optional `duration`. |
+| `generate_music` | Text-to-music generation (Suno v4/v5 via KIE). Accepts `prompt`, `genre`, `mood`, `duration`, `model`. Also accepts `presetId` (from `list_node_presets { nodeType: "generate-music" }`) to apply a built-in or saved preset's config server-side; any explicit field above overrides the preset, and `prompt` may be omitted when the preset supplies one. |
+| `generate_speech` | Text-to-speech. Accepts `text`, `voice_id`, `model`. Supports ElevenLabs v3 (default) and KIE v2 models. Also accepts `presetId` (from `list_node_presets { nodeType: "text-to-speech" }`) to apply a built-in delivery preset (speed/stability/style) server-side; explicit fields override it, and `text` is always required (presets tune delivery, not content). |
+| `text_to_audio` | Text-to-sound-effect (ElevenLabs SFX). Accepts `prompt` and optional `duration`. Also accepts `presetId` (from `list_node_presets { nodeType: "text-to-audio" }`) to apply a built-in or saved preset's config server-side; any explicit field overrides the preset, and `prompt` may be omitted when the preset supplies one. |
 | `voice_clone` | Instant voice clone from a reference audio clip (ElevenLabs). Returns a `voice_id` for use with `generate_speech`. |
 | `voice_design` | Design a new synthetic voice from text descriptors (ElevenLabs `/v1/text-to-voice/design`). Returns a `voice_id`. |
 | `voice_changer` | Transform the speaker identity in an audio clip to a target voice. |
@@ -1020,6 +1020,26 @@ the REST API / SDK (`GET /v1/node-presets`, `GET /v1/node-presets/factory`).
 |-------|------|-------|
 | `nodeType` | string | Filter to one node type, e.g. `"generate-image"`. **Required** when `source` includes factory. |
 | `source` | enum `custom` / `factory` / `all` | Which presets to return. Default `custom` (your own saved presets). |
+
+---
+
+### `get_node_preset`
+
+**Scope:** `presets:read`
+
+Fetch ONE preset's full saved configuration by id — the provider/model, prompt,
+aspect ratio, resolution, quality, and negative prompt it ships. Use it to apply
+a preset faithfully: get the id from `list_node_presets`, then either read these
+fields and pass them to the matching `generate_*` tool, or pass `presetId`
+directly to `generate_image`. Works for built-in (factory) and your own custom
+presets. Returns `isError` when the id resolves to neither.
+
+**Input:**
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `nodeType` | string | **Required.** Node type, e.g. `"generate-image"`. |
+| `presetId` | string | **Required.** Preset id from `list_node_presets` (factory slug like `generate-image/location-board`, or a custom uuid). |
 
 ---
 

@@ -33,6 +33,7 @@ const MOTION_TRANSFER_PROVIDER_ALIASES: Record<string, string> = {
 }
 import { normalizeVideoInput } from "../normalize.js"
 import { getUserMcpPreferences } from "../user-preferences.js"
+import { resolvePreset } from "../../presets/resolve-preset.js"
 
 // Derive video model enums from MODEL_CATALOG. `includeHidden: true` keeps
 // legacy ids (seedance V1.5 etc.) accepted for cached Claude.ai sessions —
@@ -68,9 +69,25 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         "per shot. Cue native audio inline: （background music）, <sound " +
         "effects>, quoted dialogue. End with: 'HD, rich details, stable " +
         "picture, keep it subtitle-free, do not generate a watermark.' " +
-        "Full doctrine: `get_node_skill(\"generate-video\")`.",
+        "Full doctrine: `get_node_skill(\"generate-video\")`.\n\n" +
+        "**Presets/templates**: call list_node_presets { nodeType: \"generate-video\" } " +
+        "to browse built-ins (e.g. Slow Push-In, FPV Drone, Vertical Hero) + your saved " +
+        "presets, get_node_preset to read one's config, or pass presetId here to apply " +
+        "one directly.",
       inputSchema: {
-        prompt: z.string().min(1).max(8000),
+        // Optional in the preset path: when presetId is supplied the preset
+        // provides the prompt, so the caller may omit it. The handler enforces
+        // "prompt OR presetId required" (the guard moved from Zod to hand-rolled).
+        prompt: z.string().min(1).max(8000).optional(),
+        presetId: z
+          .string()
+          .min(1)
+          .max(200)
+          .optional()
+          .describe(
+            "Apply a built-in/custom preset by id from list_node_presets; " +
+            "explicit fields below override it.",
+          ),
         // Schemas are permissive — handler normalizes to closest valid value.
         // Description carries the recommended set for Claude's guidance.
         model: z
@@ -121,6 +138,67 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
     },
     },
     async (args) => {
+      // ── Preset application (server-side, faithful) ──────────────────────
+      // Mirrors generate_image: when the caller passes `presetId`, resolve the
+      // preset's tuned config (factory catalog, or the caller's own custom
+      // preset — owner-scoped) and use it as the BASE; only fields the CALLER
+      // actually provided override it. This schema has NO `.default()` on any
+      // field, so an absent caller value is exactly `undefined` here — that's
+      // what lets a defaulted-but-not-passed lever lose to the preset (the
+      // critical override rule). Preset `data` (camelCase node-data keys:
+      // provider / aspectRatio / negativePrompt / …) is mapped onto THIS
+      // handler's snake_case param namespace so the rest reads `effective`.
+      let effective: Record<string, unknown> = { ...args }
+      if (args.presetId) {
+        const preset = await resolvePreset({
+          nodeType: "generate-video",
+          presetId: args.presetId,
+          userId: session.userId,
+        })
+        if (!preset) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `Preset not found: ${args.presetId}. List ids with list_node_presets { nodeType: "generate-video" }.`,
+              },
+            ],
+            isError: true as const,
+          }
+        }
+        const d = preset.data
+        const presetParams: Record<string, unknown> = {}
+        if (d.provider !== undefined) presetParams.model = d.provider
+        if (d.prompt !== undefined) presetParams.prompt = d.prompt
+        if (d.aspectRatio !== undefined) presetParams.aspect_ratio = d.aspectRatio
+        if (d.resolution !== undefined) presetParams.resolution = d.resolution
+        if (d.duration !== undefined) presetParams.duration = d.duration
+        if (d.negativePrompt !== undefined) presetParams.negative_prompt = d.negativePrompt
+        if (d.sound !== undefined) presetParams.sound = d.sound
+        if (d.seed !== undefined) presetParams.seed = d.seed
+        const callerProvided = Object.fromEntries(
+          Object.entries(args).filter(([, v]) => v !== undefined),
+        )
+        effective = { ...presetParams, ...callerProvided }
+      }
+      // `presetId` is a control field — never submit it to the provider.
+      delete effective.presetId
+
+      // Prompt is required once a preset hasn't supplied one. (The schema
+      // relaxes prompt to optional for the preset path; guard the no-preset
+      // bare call so it fails clearly instead of generating empty.)
+      if (effective.prompt === undefined || effective.prompt === "") {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: "A prompt is required (or pass a presetId whose preset includes one).",
+            },
+          ],
+          isError: true as const,
+        }
+      }
+
       // Silent normalization. Anything Claude sends gets mapped to the
       // closest valid value or the catalog default — never reject on
       // bad params. Saved video prefs are filtered against the resolved
@@ -132,10 +210,10 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       } catch { /* swallow */ }
       const { model, aspectRatio, resolution, duration } = normalizeVideoInput(
         {
-          model: args.model,
-          aspect_ratio: args.aspect_ratio,
-          resolution: args.resolution,
-          duration: args.duration,
+          model: effective.model as string | undefined,
+          aspect_ratio: effective.aspect_ratio as string | undefined,
+          resolution: effective.resolution as string | undefined,
+          duration: effective.duration as number | undefined,
         },
         {
           model: userVid.model as string | undefined,
@@ -146,7 +224,10 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         "seedance-2-fast",
       )
 
-      const compositePrompt = buildCompositePrompt(args.prompt, args.structured)
+      const compositePrompt = buildCompositePrompt(
+        effective.prompt as string,
+        effective.structured as Parameters<typeof buildCompositePrompt>[1],
+      )
       const payload = {
         prompt: compositePrompt,
         provider: model,
@@ -157,10 +238,10 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         // models read `sound`, but Seedance (the default) + VEO read
         // `generateAudio` (which defaults ON). Without forwarding both, a
         // `sound: false` was silently ignored on the default/VEO models.
-        sound: args.sound,
-        generateAudio: args.sound,
-        negativePrompt: args.negative_prompt,
-        seed: args.seed,
+        sound: effective.sound as boolean | undefined,
+        generateAudio: effective.sound as boolean | undefined,
+        negativePrompt: effective.negative_prompt as string | undefined,
+        seed: effective.seed as number | undefined,
         mcp_client: session.clientName,
         userId: session.userId,
       }
@@ -171,9 +252,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         widgetKind: "video",
         widgetData: {
           prompt: compositePrompt,
-          model: args.model ?? "generate-video",
-          aspectRatio: args.aspect_ratio,
-          duration: args.duration,
+          model: (effective.model as string | undefined) ?? "generate-video",
+          aspectRatio: effective.aspect_ratio as string | undefined,
+          duration: effective.duration as number | undefined,
         },
       })
     },

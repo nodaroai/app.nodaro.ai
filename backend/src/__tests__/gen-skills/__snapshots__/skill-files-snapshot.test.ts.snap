@@ -28,6 +28,7 @@ exports[`per-node skill file snapshots > generate-image.md auto-gen blocks match
 
 **Input parameters:**
 - \`prompt\`
+- \`presetId\`
 - \`model\`
 - \`resolution\`
 - \`quality\`
@@ -133,6 +134,7 @@ exports[`per-node skill file snapshots > generate-music.md auto-gen blocks match
 
 **Input parameters:**
 - \`prompt\`
+- \`presetId\`
 - \`model\`
 - \`duration\`
 - \`instrumental\`
@@ -216,6 +218,7 @@ exports[`per-node skill file snapshots > generate-video.md auto-gen blocks match
 
 **Input parameters:**
 - \`prompt\`
+- \`presetId\`
 - \`model\`
 - \`duration\`
 - \`aspect_ratio\`

@@ -13,6 +13,7 @@ import {
   JOB_OUTPUT_SCHEMA,
 } from "./_verb-helpers.js"
 import { SUNO_MODELS, SUNO_ADD_TRACK_MODELS, SUNO_TITLE_MAX, AUDIO_FX_PRESETS } from "@nodaro/shared"
+import { resolvePreset } from "../../presets/resolve-preset.js"
 
 /**
  * Look up the Suno task / track ids stored on a completed Nodaro job's
@@ -66,17 +67,36 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         "quality, full songs with lyrics. `suno-v5` is the prior V5 generation. " +
         "`suno` is the v4 alias. `minimax` is an alternative for short instrumental loops. " +
         "For instrumental tracks set `instrumental: true`; for songs with vocals " +
-        "provide `lyrics`.",
+        "provide `lyrics`.\n\n" +
+        "**Presets/templates**: call list_node_presets { nodeType: \"generate-music\" } " +
+        "to browse built-ins (e.g. Lo-fi Study, Cinematic Trailer, EDM Drop) + your saved " +
+        "presets, get_node_preset to read one's config, or pass presetId here to apply " +
+        "one directly.",
       inputSchema: {
         // Cap at 2000 — the tighter of the two downstream routes (minimax
         // /v1/generate-music = 2000, suno = 5000) so the prompt never trips a
         // route 400. 2000 chars is ample for a music style/description.
-        prompt: z.string().min(1).max(2000),
+        // Optional in the preset path: a preset supplies the prompt, so the
+        // caller may omit it. The handler enforces "prompt OR presetId required".
+        prompt: z.string().min(1).max(2000).optional(),
+        presetId: z
+          .string()
+          .min(1)
+          .max(200)
+          .optional()
+          .describe(
+            "Apply a built-in/custom preset by id from list_node_presets; " +
+            "explicit fields below override it.",
+          ),
         model: z
           // `suno-v5_5` (underscore) is the catalog id list_models advertises;
           // accept it as an alias for `suno-v5-5` so a copied id doesn't reject.
+          // `.optional()` (NOT `.default()`): the in-handler default below keeps
+          // suno-v5-5 as the fallback, while leaving `args.model === undefined`
+          // when the caller didn't pass it — so a defaulted model can't clobber
+          // a preset's provider (the override rule, mirroring generate_image).
           .enum(["suno-v5-5", "suno-v5_5", "suno-v5", "suno", "minimax"])
-          .default("suno-v5-5")
+          .optional()
           .describe(
             "Music model. suno-v5-5 (default) is latest with best quality; " +
             "suno-v5 is prior V5; suno is v4; minimax for short instrumental loops.",
@@ -110,8 +130,70 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
     },
     },
     async (args) => {
-      // Normalize the `suno-v5_5` alias → `suno-v5-5` so dispatch is uniform.
-      const modelId = args.model === "suno-v5_5" ? "suno-v5-5" : args.model
+      // ── Preset application (server-side, faithful) ──────────────────────
+      // Mirrors generate_image: preset is the BASE; only caller-PROVIDED
+      // fields override it. The factory generate-music presets supply
+      // genre/mood/instrumental/duration/prompt (NOT provider) — all mapped
+      // to this handler's params; a custom preset's provider maps to `model`.
+      let effective: Record<string, unknown> = { ...args }
+      if (args.presetId) {
+        const preset = await resolvePreset({
+          nodeType: "generate-music",
+          presetId: args.presetId,
+          userId: session.userId,
+        })
+        if (!preset) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `Preset not found: ${args.presetId}. List ids with list_node_presets { nodeType: "generate-music" }.`,
+              },
+            ],
+            isError: true as const,
+          }
+        }
+        const d = preset.data
+        const presetParams: Record<string, unknown> = {}
+        if (d.provider !== undefined) presetParams.model = d.provider
+        if (d.prompt !== undefined) presetParams.prompt = d.prompt
+        if (d.duration !== undefined) presetParams.duration = d.duration
+        if (d.instrumental !== undefined) presetParams.instrumental = d.instrumental
+        if (d.lyrics !== undefined) presetParams.lyrics = d.lyrics
+        if (d.genre !== undefined) presetParams.genre = d.genre
+        if (d.mood !== undefined) presetParams.mood = d.mood
+        const callerProvided = Object.fromEntries(
+          Object.entries(args).filter(([, v]) => v !== undefined),
+        )
+        effective = { ...presetParams, ...callerProvided }
+      }
+      // `presetId` is a control field — never submit it to the provider.
+      delete effective.presetId
+
+      // Prompt is required once a preset hasn't supplied one. (Schema relaxes
+      // prompt to optional for the preset path; guard the no-preset bare call.)
+      if (effective.prompt === undefined || effective.prompt === "") {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: "A prompt is required (or pass a presetId whose preset includes one).",
+            },
+          ],
+          isError: true as const,
+        }
+      }
+
+      const prompt = effective.prompt as string
+      const duration = effective.duration as number | undefined
+      const instrumental = effective.instrumental as boolean | undefined
+      const lyrics = effective.lyrics as string | undefined
+      const genre = effective.genre as string | undefined
+      const mood = effective.mood as string | undefined
+      // `.optional()` model → default suno-v5-5 in-handler (so an unspecified
+      // model can't clobber a preset); normalize the `suno-v5_5` alias too.
+      const rawModel = (effective.model as string | undefined) ?? "suno-v5-5"
+      const modelId = rawModel === "suno-v5_5" ? "suno-v5-5" : rawModel
       // Suno and MiniMax live behind different backend routes — Suno has
       // its own /v1/suno/generate (with internal version select) while
       // MiniMax goes through /v1/generate-music. Dispatch by model id.
@@ -120,24 +202,24 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       const sunoVersion = modelId === "suno-v5-5" ? "V5_5" : modelId === "suno-v5" ? "V5" : "V4"
       const payload = isSuno
         ? {
-            prompt: args.prompt,
+            prompt,
             model: sunoVersion,
-            instrumental: args.instrumental,
-            lyrics: args.lyrics,
+            instrumental,
+            lyrics,
             // Fold mcp's generic `genre` + `mood` into suno's `style` (same
             // intent) — previously `mood` was silently dropped on the suno path.
-            style: [args.genre, args.mood].filter(Boolean).join(", ") || undefined,
+            style: [genre, mood].filter(Boolean).join(", ") || undefined,
             mcp_client: session.clientName,
             userId: session.userId,
           }
         : {
-            prompt: args.prompt,
+            prompt,
             provider: modelId,
-            duration: args.duration,
-            instrumental: args.instrumental,
-            lyrics: args.lyrics,
-            genre: args.genre,
-            mood: args.mood,
+            duration,
+            instrumental,
+            lyrics,
+            genre,
+            mood,
             mcp_client: session.clientName,
             userId: session.userId,
           }
@@ -147,9 +229,9 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         label: "music generation",
         widgetKind: "audio",
         widgetData: {
-          prompt: args.prompt,
-          model: args.model,
-          duration: args.duration,
+          prompt,
+          model: modelId,
+          duration,
         },
       })
     },
@@ -166,9 +248,27 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         "like `[laughs]`, `[whispers]`, `[sighs]` for emotion / pacing — best " +
         "for expressive narration. `elevenlabs-turbo` is cheaper for plain " +
         "narration. `elevenlabs-multilingual` for non-English. Call " +
-        "`list_models { kind: \"audio\", mode: \"tts\" }` for the full sheet.",
+        "`list_models { kind: \"audio\", mode: \"tts\" }` for the full sheet.\n\n" +
+        "**Presets/templates**: call list_node_presets { nodeType: \"text-to-speech\" } " +
+        "to browse built-in delivery styles (e.g. Calm Narrator, Commercial Read, " +
+        "Audiobook) + your saved presets, get_node_preset to read one's config, or " +
+        "pass presetId here to apply one — the preset tunes speed/stability/style; " +
+        "you still supply `text`. Explicit fields below override the preset.",
       inputSchema: {
+        // `text` stays required: the text-to-speech factory presets are a
+        // delivery-tuning overlay (speed/stability/style) and supply NO text,
+        // so a preset can never satisfy this content field — Zod enforces it.
         text: z.string().min(1).max(5000),
+        presetId: z
+          .string()
+          .min(1)
+          .max(200)
+          .optional()
+          .describe(
+            "Apply a built-in/custom preset by id from list_node_presets; " +
+            "the preset tunes delivery (speed/stability/style). Explicit fields " +
+            "below override it.",
+          ),
         voice_id: z
           .string()
           .optional()
@@ -186,13 +286,17 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
             "Defaults to Rachel.",
           ),
         model: z
+          // `.optional()` (NOT `.default()`): the in-handler default below keeps
+          // elevenlabs-v3 as the fallback, while leaving `args.model === undefined`
+          // when the caller didn't pass it — so a defaulted model can't clobber a
+          // custom preset's provider (the override rule, mirroring generate_image).
           .enum([
             "elevenlabs-v3",
             "elevenlabs-turbo",
             "elevenlabs-multilingual",
             "elevenlabs",
           ])
-          .default("elevenlabs-v3")
+          .optional()
           .describe(
             "TTS model. Default `elevenlabs-v3` (newest) supports `[audio tags]` " +
             "like `[laughs]`, `[whispers]`, `[sighs]` for emotion. " +
@@ -229,16 +333,61 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
     },
     },
     async (args) => {
+      // ── Preset application (server-side, faithful) ──────────────────────
+      // Mirrors generate_image: preset is the BASE; only caller-PROVIDED
+      // fields override it. text-to-speech factory presets supply delivery
+      // tuning (speed/stability/similarityBoost/style) and NO text — so this
+      // is a tuning overlay; `text` is always caller-supplied. A custom preset
+      // may also carry provider/voice/voiceType/languageCode — applied here.
+      let effective: Record<string, unknown> = { ...args }
+      if (args.presetId) {
+        const preset = await resolvePreset({
+          nodeType: "text-to-speech",
+          presetId: args.presetId,
+          userId: session.userId,
+        })
+        if (!preset) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `Preset not found: ${args.presetId}. List ids with list_node_presets { nodeType: "text-to-speech" }.`,
+              },
+            ],
+            isError: true as const,
+          }
+        }
+        const d = preset.data
+        const presetParams: Record<string, unknown> = {}
+        if (d.provider !== undefined) presetParams.model = d.provider
+        if (d.voice !== undefined) presetParams.voice_id = d.voice
+        if (d.voiceType !== undefined) presetParams.voice_type = d.voiceType
+        if (d.stability !== undefined) presetParams.stability = d.stability
+        if (d.similarityBoost !== undefined) presetParams.similarity_boost = d.similarityBoost
+        if (d.style !== undefined) presetParams.style = d.style
+        if (d.speed !== undefined) presetParams.speed = d.speed
+        if (d.languageCode !== undefined) presetParams.language_code = d.languageCode
+        const callerProvided = Object.fromEntries(
+          Object.entries(args).filter(([, v]) => v !== undefined),
+        )
+        effective = { ...presetParams, ...callerProvided }
+      }
+      // `presetId` is a control field — never submit it to the provider.
+      delete effective.presetId
+
+      // `.optional()` model → default elevenlabs-v3 in-handler (so an
+      // unspecified model can't clobber a custom preset's provider).
+      const modelId = (effective.model as string | undefined) ?? "elevenlabs-v3"
       const payload = {
-        text: args.text,
-        voice: args.voice_id,
-        provider: args.model,
-        voiceType: args.voice_type,
-        stability: args.stability,
-        similarityBoost: args.similarity_boost,
-        style: args.style,
-        speed: args.speed,
-        languageCode: args.language_code,
+        text: effective.text as string,
+        voice: effective.voice_id as string | undefined,
+        provider: modelId,
+        voiceType: effective.voice_type as string | undefined,
+        stability: effective.stability as number | undefined,
+        similarityBoost: effective.similarity_boost as number | undefined,
+        style: effective.style as number | undefined,
+        speed: effective.speed as number | undefined,
+        languageCode: effective.language_code as string | undefined,
         mcp_client: session.clientName,
         userId: session.userId,
       }
@@ -248,8 +397,8 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         label: "text-to-speech",
         widgetKind: "audio",
         widgetData: {
-          prompt: args.text,
-          model: args.model ?? "elevenlabs",
+          prompt: effective.text as string,
+          model: modelId,
         },
       })
     },
@@ -1337,9 +1486,24 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       description:
         "Generate a sound effect (SFX) from a text prompt using ElevenLabs. " +
         "Returns a job_id. Use for foley, ambience, UI sounds, etc. — NOT for " +
-        "speech (use generate_speech) or music (use generate_music).",
+        "speech (use generate_speech) or music (use generate_music).\n\n" +
+        "**Presets/templates**: call list_node_presets { nodeType: \"text-to-audio\" } " +
+        "to browse built-ins (e.g. Rain Ambience, Whoosh, Impact / Boom) + your saved " +
+        "presets, get_node_preset to read one's config, or pass presetId here to apply " +
+        "one directly.",
       inputSchema: {
-        prompt: z.string().min(1).max(2000).describe("Describe the sound effect (e.g. 'thunderstorm with heavy rain')."),
+        // Optional in the preset path: a preset supplies the prompt, so the
+        // caller may omit it. The handler enforces "prompt OR presetId required".
+        prompt: z.string().min(1).max(2000).optional().describe("Describe the sound effect (e.g. 'thunderstorm with heavy rain')."),
+        presetId: z
+          .string()
+          .min(1)
+          .max(200)
+          .optional()
+          .describe(
+            "Apply a built-in/custom preset by id from list_node_presets; " +
+            "explicit fields below override it.",
+          ),
         duration: z.number().min(0.5).max(30).optional().describe("Duration in seconds (0.5–30). Defaults to model choice."),
         loop: z.boolean().optional().describe("Whether the output should loop seamlessly."),
         prompt_influence: z.number().min(0).max(1).optional().describe("How strongly the prompt guides generation (0–1)."),
@@ -1352,15 +1516,66 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       },
     },
     async (args) => {
+      // ── Preset application (server-side, faithful) ──────────────────────
+      // Mirrors generate_image: preset is the BASE; only caller-PROVIDED
+      // fields override it. text-to-audio factory presets supply
+      // prompt/duration/loop/promptInfluence — all mapped here. (The preset's
+      // `provider: "elevenlabs-sfx"` has no param: the route is fixed-provider.)
+      let effective: Record<string, unknown> = { ...args }
+      if (args.presetId) {
+        const preset = await resolvePreset({
+          nodeType: "text-to-audio",
+          presetId: args.presetId,
+          userId: session.userId,
+        })
+        if (!preset) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `Preset not found: ${args.presetId}. List ids with list_node_presets { nodeType: "text-to-audio" }.`,
+              },
+            ],
+            isError: true as const,
+          }
+        }
+        const d = preset.data
+        const presetParams: Record<string, unknown> = {}
+        if (d.prompt !== undefined) presetParams.prompt = d.prompt
+        if (d.duration !== undefined) presetParams.duration = d.duration
+        if (d.loop !== undefined) presetParams.loop = d.loop
+        if (d.promptInfluence !== undefined) presetParams.prompt_influence = d.promptInfluence
+        const callerProvided = Object.fromEntries(
+          Object.entries(args).filter(([, v]) => v !== undefined),
+        )
+        effective = { ...presetParams, ...callerProvided }
+      }
+      // `presetId` is a control field — never submit it to the provider.
+      delete effective.presetId
+
+      // Prompt is required once a preset hasn't supplied one. (Schema relaxes
+      // prompt to optional for the preset path; guard the no-preset bare call.)
+      if (effective.prompt === undefined || effective.prompt === "") {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: "A prompt is required (or pass a presetId whose preset includes one).",
+            },
+          ],
+          isError: true as const,
+        }
+      }
+
       const payload: Record<string, unknown> = {
-        prompt: args.prompt,
-        ...(args.duration !== undefined ? { duration: args.duration } : {}),
-        ...(args.loop !== undefined ? { loop: args.loop } : {}),
-        ...(args.prompt_influence !== undefined ? { promptInfluence: args.prompt_influence } : {}),
+        prompt: effective.prompt as string,
+        ...(effective.duration !== undefined ? { duration: effective.duration } : {}),
+        ...(effective.loop !== undefined ? { loop: effective.loop } : {}),
+        ...(effective.prompt_influence !== undefined ? { promptInfluence: effective.prompt_influence } : {}),
         mcp_client: session.clientName,
         userId: session.userId,
       }
-      return dispatchJob(fastify, session, { url: "/v1/text-to-audio", payload, label: "sound effect", widgetKind: "audio", widgetData: { prompt: args.prompt, model: "elevenlabs-sfx" } })
+      return dispatchJob(fastify, session, { url: "/v1/text-to-audio", payload, label: "sound effect", widgetKind: "audio", widgetData: { prompt: effective.prompt as string, model: "elevenlabs-sfx" } })
     },
   )
 
