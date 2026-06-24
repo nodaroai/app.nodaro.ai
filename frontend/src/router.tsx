@@ -28,6 +28,7 @@ const ExecutionsPage = lazy(() => import("@/app/(dashboard)/executions/page"))
 const ArchivedRunsPage = lazy(() => import("@/app/(dashboard)/archived-runs/page"))
 const GalleryPage = lazy(() => import("@/app/gallery/page"))
 const PricingPage = lazy(() => import("@/app/pricing/page"))
+const CheckoutCompletePage = lazy(() => import("@/app/checkout-complete/page"))
 const PresentPage = lazy(() => import("@/routes/present-page"))
 const AppRunnerPage = lazy(() => import("@/routes/app-runner-page"))
 const EmbedPage = lazy(() => import("@/routes/embed-page"))
@@ -157,6 +158,12 @@ export const router = createBrowserRouter([
   {
     path: "/pricing",
     element: <SuspenseWrapper><PricingPage /></SuspenseWrapper>,
+    errorElement: <RouteErrorBoundary />,
+  },
+  {
+    // Public, no-auth return page for embedded Stripe Checkout (new-tab flow).
+    path: "/checkout-complete",
+    element: <SuspenseWrapper><CheckoutCompletePage /></SuspenseWrapper>,
     errorElement: <RouteErrorBoundary />,
   },
   {

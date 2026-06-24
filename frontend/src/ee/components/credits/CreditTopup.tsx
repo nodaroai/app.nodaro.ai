@@ -2,7 +2,7 @@ import { useState } from "react"
 import { Coins, Plus } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
-import { createCheckoutSession } from "@/lib/api"
+import { startCheckout } from "@/lib/checkout"
 import { TOPUP_PACKAGES, type TopupPackage } from "@/lib/pricing-data"
 
 export function CreditTopup() {
@@ -11,12 +11,8 @@ export function CreditTopup() {
   async function handlePurchase(pkg: TopupPackage) {
     setLoadingId(pkg.id)
     try {
-      const url = await createCheckoutSession({
-        priceId: pkg.priceId,
-        mode: "payment",
-      })
-      window.location.href = url
-    } catch (err) {
+      await startCheckout({ priceId: pkg.priceId, mode: "payment" })
+    } catch {
       toast.error("Failed to open checkout")
     } finally {
       setLoadingId(null)

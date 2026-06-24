@@ -6,7 +6,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { createCheckoutSession } from "@/lib/api"
+import { startCheckout } from "@/lib/checkout"
 import {
   PRICING_TIERS,
   TOPUP_PACKAGES,
@@ -45,8 +45,7 @@ export function GetCreditsModal({
   async function handleCheckout(priceId: string, mode: "subscription" | "payment") {
     setLoadingId(priceId)
     try {
-      const url = await createCheckoutSession({ priceId, mode })
-      window.location.href = url
+      await startCheckout({ priceId, mode })
     } catch {
       toast.error("Failed to open checkout")
     } finally {
