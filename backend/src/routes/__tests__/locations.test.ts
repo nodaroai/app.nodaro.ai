@@ -228,12 +228,17 @@ describe("GET /v1/locations/:id", () => {
     return { mockSelect, chain, mockSingle }
   }
 
-  // Second .from() call in the success path: jobs query for pendingJobs.
+  // 2nd + 3rd .from() calls in the success path: the pendingJobs query and the
+  // previousCandidates query. Both are jobs-table chains; `gte` is included so
+  // the same helper covers the previousCandidates shape
+  // (eq/eq/filter/filter/gte/order/limit) as well as pendingJobs
+  // (eq/in/filter/order/limit).
   function jobsChain(jobsResult: { data: unknown; error: unknown } = { data: [], error: null }) {
     const chain: Record<string, unknown> = {
       eq: vi.fn().mockReturnThis(),
       in: vi.fn().mockReturnThis(),
       filter: vi.fn().mockReturnThis(),
+      gte: vi.fn().mockReturnThis(),
       order: vi.fn().mockReturnThis(),
       limit: vi.fn().mockResolvedValue(jobsResult),
     }
@@ -253,9 +258,11 @@ describe("GET /v1/locations/:id", () => {
   it("returns 200 with camelCase data and scopes by user_id", async () => {
     const { mockSelect: locSelect, chain: locChain } = getByIdChain({ data: DB_LOCATION, error: null })
     const { mockSelect: jobsSelect } = jobsChain()
+    const { mockSelect: prevSelect } = jobsChain()
     vi.mocked(supabase.from)
       .mockReturnValueOnce({ select: locSelect } as never)
       .mockReturnValueOnce({ select: jobsSelect } as never)
+      .mockReturnValueOnce({ select: prevSelect } as never)
 
     const res = await app.inject({
       method: "GET",
@@ -264,8 +271,8 @@ describe("GET /v1/locations/:id", () => {
     })
 
     expect(res.statusCode).toBe(200)
-    // GET /:id now also returns pendingJobs alongside the row.
-    expect(res.json()).toEqual({ ...CAMEL_LOCATION, pendingJobs: [] })
+    // GET /:id now also returns pendingJobs + previousCandidates alongside the row.
+    expect(res.json()).toEqual({ ...CAMEL_LOCATION, pendingJobs: [], previousCandidates: [] })
     expect(locChain.eq).toHaveBeenCalledWith("id", TEST_LOCATION_ID)
     expect(locChain.eq).toHaveBeenCalledWith("user_id", TEST_USER_ID)
   })
@@ -277,9 +284,11 @@ describe("GET /v1/locations/:id", () => {
     }
     const { mockSelect: locSelect } = getByIdChain({ data: rowWithSelection, error: null })
     const { mockSelect: jobsSelect } = jobsChain()
+    const { mockSelect: prevSelect } = jobsChain()
     vi.mocked(supabase.from)
       .mockReturnValueOnce({ select: locSelect } as never)
       .mockReturnValueOnce({ select: jobsSelect } as never)
+      .mockReturnValueOnce({ select: prevSelect } as never)
 
     const res = await app.inject({
       method: "GET",
@@ -291,17 +300,54 @@ describe("GET /v1/locations/:id", () => {
     expect(res.json().selectedAssetByVariant).toEqual({ "timeOfDay:Dawn": "https://example.com/dawn.png" })
   })
 
+  it("returns previousCandidates, excluding the current main image + null urls, trimmed", async () => {
+    const { mockSelect: locSelect } = getByIdChain({ data: DB_LOCATION, error: null })
+    const { mockSelect: jobsSelect } = jobsChain()
+    // Completed candidates tracked to this location via candidateForLocationId.
+    // `image_url` is the projected output_data->>imageUrl alias.
+    const { mockSelect: prevSelect } = jobsChain({
+      data: [
+        { id: "cand-1", image_url: "https://example.com/alt1.png", created_at: "2026-02-02T00:00:00Z" },
+        // collides with DB_LOCATION.source_image_url (the current main) -> excluded
+        { id: "cand-2", image_url: "https://example.com/forest.png", created_at: "2026-02-01T00:00:00Z" },
+        // missing imageUrl (JSONB ->> yields null) -> excluded
+        { id: "cand-3", image_url: null, created_at: "2026-01-31T00:00:00Z" },
+        { id: "cand-4", image_url: "https://example.com/alt2.png", created_at: "2026-01-30T00:00:00Z" },
+      ],
+      error: null,
+    })
+    vi.mocked(supabase.from)
+      .mockReturnValueOnce({ select: locSelect } as never)
+      .mockReturnValueOnce({ select: jobsSelect } as never)
+      .mockReturnValueOnce({ select: prevSelect } as never)
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/locations/${TEST_LOCATION_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().previousCandidates).toEqual([
+      { jobId: "cand-1", url: "https://example.com/alt1.png", createdAt: "2026-02-02T00:00:00Z" },
+      { jobId: "cand-4", url: "https://example.com/alt2.png", createdAt: "2026-01-30T00:00:00Z" },
+    ])
+  })
+
   it("returns 404 on PGRST116 (not found OR not owned)", async () => {
     const { mockSelect: locSelect } = getByIdChain({
       data: null,
       error: { code: "PGRST116", message: "not found" },
     })
-    // GET /:id parallelizes the location + jobs queries via Promise.all, so
-    // both .from() calls fire even on the not-found path. Mock both chains.
+    // GET /:id parallelizes the location + pendingJobs + previousCandidates
+    // queries via Promise.all, so all three .from() calls fire even on the
+    // not-found path. Mock all three chains.
     const { mockSelect: jobsSelect } = jobsChain()
+    const { mockSelect: prevSelect } = jobsChain()
     vi.mocked(supabase.from)
       .mockReturnValueOnce({ select: locSelect } as never)
       .mockReturnValueOnce({ select: jobsSelect } as never)
+      .mockReturnValueOnce({ select: prevSelect } as never)
 
     const res = await app.inject({
       method: "GET",
@@ -319,9 +365,11 @@ describe("GET /v1/locations/:id", () => {
       error: { code: "OTHER", message: "DB error" },
     })
     const { mockSelect: jobsSelect } = jobsChain()
+    const { mockSelect: prevSelect } = jobsChain()
     vi.mocked(supabase.from)
       .mockReturnValueOnce({ select: locSelect } as never)
       .mockReturnValueOnce({ select: jobsSelect } as never)
+      .mockReturnValueOnce({ select: prevSelect } as never)
 
     const res = await app.inject({
       method: "GET",

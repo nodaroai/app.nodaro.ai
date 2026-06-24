@@ -278,6 +278,122 @@ describe("POST /v1/generate-location — multi-candidate (Task 10)", () => {
     }
   })
 
+  // ───────────────────────────────────────────────────────────────────────
+  // Candidate tracking (candidateForLocationId) + transient refine prompt.
+  // The studio's location Edit / pick-from-N flow needs count>1 candidates to
+  // be FINDABLE by location (so GET /v1/locations/:id surfaces them as
+  // previousCandidates) WITHOUT auto-attaching, and `userPrompt` honored as a
+  // transient edit instruction instead of silently dropped.
+  // ───────────────────────────────────────────────────────────────────────
+  it("count=1 + attachToLocationId — candidateForLocationId is set alongside attachToLocationId", async () => {
+    const { insert } = mockJobsInsertChain()
+    vi.mocked(supabase.from).mockReturnValue({ insert } as never)
+
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-location",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { name: "Forest Glade", attachToLocationId: TEST_LOCATION_ID },
+    })
+
+    const payload = insert.mock.calls[0][0] as { input_data: Record<string, unknown> }
+    // count=1 keeps the auto-attach trigger AND the candidate-tracking key.
+    expect(payload.input_data.attachToLocationId).toBe(TEST_LOCATION_ID)
+    expect(payload.input_data.candidateForLocationId).toBe(TEST_LOCATION_ID)
+  })
+
+  it("count=4 + attachToLocationId — every candidate carries candidateForLocationId but NOT attachToLocationId", async () => {
+    const { insert } = mockJobsInsertChain()
+    vi.mocked(supabase.from).mockReturnValue({ insert } as never)
+
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-location",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { name: "Forest Glade", count: 4, attachToLocationId: TEST_LOCATION_ID },
+    })
+
+    expect(insert).toHaveBeenCalledTimes(4)
+    for (const call of insert.mock.calls) {
+      const payload = call[0] as { input_data: Record<string, unknown> }
+      // Tracking key on EVERY candidate so the detail GET can surface them as
+      // previousCandidates...
+      expect(payload.input_data.candidateForLocationId).toBe(TEST_LOCATION_ID)
+      // ...but the auto-attach trigger is absent so no candidate auto-attaches.
+      expect(payload.input_data.attachToLocationId).toBeUndefined()
+    }
+  })
+
+  it("no attachToLocationId — candidateForLocationId is absent (standalone generation)", async () => {
+    const { insert } = mockJobsInsertChain()
+    vi.mocked(supabase.from).mockReturnValue({ insert } as never)
+
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-location",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { name: "Forest Glade", count: 2 },
+    })
+
+    for (const call of insert.mock.calls) {
+      const payload = call[0] as { input_data: Record<string, unknown> }
+      expect(payload.input_data.candidateForLocationId).toBeUndefined()
+      expect(payload.input_data.attachToLocationId).toBeUndefined()
+    }
+  })
+
+  it("userPrompt is honored as a TRANSIENT refine prompt (i2i edit), not dropped", async () => {
+    const { insert } = mockJobsInsertChain()
+    vi.mocked(supabase.from).mockReturnValue({ insert } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-location",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        name: "Forest Glade",
+        description: "a sunlit clearing",
+        userPrompt: "make it night, add drifting fog",
+        sourceImageUrl: "https://example.com/forest.png",
+        attachToLocationId: TEST_LOCATION_ID,
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    // The edit instruction drives the generation prompt; i2i runs from sourceImageUrl.
+    expect(videoQueue.add).toHaveBeenCalledWith(
+      "generate-location",
+      expect.objectContaining({
+        prompt: expect.stringContaining("make it night, add drifting fog"),
+        sourceImageUrl: "https://example.com/forest.png",
+      }),
+    )
+    // Transient: the persisted scene `description` is preserved verbatim, and
+    // the built prompt is the EDIT instruction (NOT the description-built one),
+    // so the stored description can never be polluted by the edit text.
+    const payload = insert.mock.calls[0][0] as { input_data: Record<string, unknown> }
+    expect(payload.input_data.description).toBe("a sunlit clearing")
+    expect(payload.input_data.prompt).toContain("make it night, add drifting fog")
+    expect(payload.input_data.prompt).not.toContain("a sunlit clearing")
+  })
+
+  it("without userPrompt, the prompt is built from the scene fields (legacy path)", async () => {
+    const { insert } = mockJobsInsertChain()
+    vi.mocked(supabase.from).mockReturnValue({ insert } as never)
+
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-location",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { name: "Forest Glade", description: "a sunlit clearing" },
+    })
+
+    const payload = insert.mock.calls[0][0] as { input_data: Record<string, unknown> }
+    // buildLocationPrompt weaves the name + persisted description into the prompt.
+    expect(payload.input_data.prompt).toContain("Forest Glade")
+    expect(payload.input_data.prompt).toContain("a sunlit clearing")
+  })
+
   it("returns 400 for count above the max (11)", async () => {
     const res = await app.inject({
       method: "POST",

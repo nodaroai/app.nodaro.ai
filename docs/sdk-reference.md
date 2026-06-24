@@ -980,7 +980,10 @@ get(id: string): Promise<LocationDetail>
 ```
 
 Fetches a single location including `pendingJobs` (in-flight asset
-generations the studio uses to rehydrate spinners after a reload).
+generations the studio uses to rehydrate spinners after a reload) and
+`previousCandidates` (completed candidate main images whose URL differs from
+the current `sourceImageUrl`, newest first, max 5 — the "pick from N / keep the
+original" strip; promote one with `approveMainImage(id, jobId)`).
 Soft-deleted locations are returned by id intentionally so canvas nodes
 that hold a stale `locationDbId` keep loading.
 
@@ -2747,7 +2750,7 @@ Every type used in a public method signature is re-exported from
 ### Locations
 
 - `Location` — full location record (camelCase)
-- `LocationDetail` — `Location` plus in-flight job state
+- `LocationDetail` — `Location` plus in-flight `pendingJobs` + completed `previousCandidates` buckets
 - `LocationReferencePhoto`, `LocationReferencePhotoKind` — mood-board reference shapes
 - `CreateLocationInput`, `UpdateLocationInput` — bodies for `create()` / `update()`
 - `UpdateLocationResult` — `{ id, updatedAt }`

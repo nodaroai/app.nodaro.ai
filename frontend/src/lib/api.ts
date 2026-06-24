@@ -2421,6 +2421,11 @@ export interface DbLocation {
   // Studio can re-attach spinners on reopen + the canvas can clear stale
   // running-status badges when no jobs remain.
   pendingJobs?: { jobId: string; assetType: string; name: string; status: string }[]
+  // Only populated by `getLocationById`. Completed candidate main images whose
+  // URL differs from the current `sourceImageUrl`, newest first (max 5) - the
+  // studio renders these as a "pick from N" strip and promotes a winner via
+  // approve-main-image. Mirrors the character previousCandidates bucket.
+  previousCandidates?: { jobId: string; url: string; createdAt: string }[]
 }
 
 export async function getLocations(projectId?: string, userId?: string): Promise<{ locations: DbLocation[] }> {
