@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { NodaroLogo } from "@/components/nodaro-logo"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
+import { isEmbedded as isInIframe } from "@/hooks/use-embed-session-handoff"
 import {
   PRICING_TIERS,
   getTierPrice,
@@ -79,7 +80,14 @@ export default function PricingPage() {
         navigate("/billing?success=true")
       } else {
         const url = await createCheckoutSession({ priceId, mode: "subscription" })
-        window.location.href = url
+        // Stripe Checkout sends X-Frame-Options: DENY, so it can't load inside
+        // an iframe (e.g. studio's pricing modal). When framed, open it in a new
+        // top-level tab; otherwise navigate in place.
+        if (isInIframe()) {
+          window.open(url, "_blank", "noopener,noreferrer")
+        } else {
+          window.location.href = url
+        }
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Something went wrong"
