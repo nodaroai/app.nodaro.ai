@@ -3,6 +3,7 @@ import {
   LOCATION_ASSET_TYPES,
   LOCATION_ATTACH_COLUMNS,
   buildLocationMotionPrompt,
+  buildLocationRefinePrompt,
   type LocationAssetType,
   type LocationAttachColumn,
 } from "../entity-prompts"
@@ -77,5 +78,26 @@ describe("buildLocationMotionPrompt", () => {
       style: "anime",
     })
     expect(result).toContain("anime style")
+  })
+})
+
+describe("buildLocationRefinePrompt", () => {
+  it("leads with the trimmed edit instruction", () => {
+    const result = buildLocationRefinePrompt({ editPrompt: "  make it night, add fog  " })
+    expect(result.startsWith("make it night, add fog,")).toBe(true)
+  })
+
+  it("frames the instruction as an establishing shot without weaving in a persisted description", () => {
+    const result = buildLocationRefinePrompt({ editPrompt: "add neon signage" })
+    expect(result).toContain("add neon signage")
+    expect(result).toContain("wide establishing shot")
+  })
+
+  it("defaults style to 'realistic'", () => {
+    expect(buildLocationRefinePrompt({ editPrompt: "x" })).toContain("realistic art style")
+  })
+
+  it("honors explicit style", () => {
+    expect(buildLocationRefinePrompt({ editPrompt: "x", style: "anime" })).toContain("anime art style")
   })
 })

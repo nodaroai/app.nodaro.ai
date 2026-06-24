@@ -111,6 +111,19 @@ export interface LocationDetail extends Location {
     name: string
     status: string
   }>
+  /**
+   * Completed candidate main images for this location whose URL differs from
+   * the current `sourceImageUrl`, newest first (max 5). Surfaced so a
+   * "pick from N" UI can offer alternatives the user can promote via
+   * `approveMainImage(id, jobId)`; until they pick, the current main image is
+   * left untouched. Mirrors `CharacterDetail.previousCandidates`. Optional -
+   * absent on `list()` rows, present (possibly empty) on `get()`.
+   */
+  previousCandidates?: Array<{
+    jobId: string
+    url: string
+    createdAt: string
+  }>
 }
 
 /**

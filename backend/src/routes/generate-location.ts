@@ -8,7 +8,7 @@ import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.j
 import { resolveEntityImageCreditIdentifier } from "../lib/entity-credit-identifier.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { buildLocationPrompt } from "@nodaro/shared"
+import { buildLocationPrompt, buildLocationRefinePrompt } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 import { hasCredits } from "../lib/config.js"
 
@@ -92,7 +92,7 @@ export async function generateLocationRoutes(app: FastifyInstance) {
         })
       }
 
-      const { name, description, category, style, sourceImageUrl } = parsed.data
+      const { name, description, category, style, sourceImageUrl, userPrompt } = parsed.data
       const userId = req.userId
 
       if (!userId) {
@@ -105,7 +105,23 @@ export async function generateLocationRoutes(app: FastifyInstance) {
       // the SAME resolver the preHandler ran on the raw body, so CHECK===DEBIT.
       const modelIdentifier = resolveEntityImageCreditIdentifier(parsed.data)
 
-      const prompt = buildLocationPrompt({ name, description, category, style })
+      // Prompt building has two modes:
+      //  - Refine/edit: when the caller supplies a non-empty `userPrompt` (the
+      //    studio's "describe changes" / sparkle Edit flow), it is honored as a
+      //    TRANSIENT edit instruction via buildLocationRefinePrompt. Paired with
+      //    `sourceImageUrl` the worker runs i2i so the source establishing shot
+      //    is edited toward the instruction. Crucially the instruction is NOT
+      //    written back to the row (this route only image-only auto-attaches),
+      //    so the stored name / description / canonicalDescription are untouched
+      //    - that is the whole point of "transient". Previously `userPrompt` was
+      //    accepted by the schema but silently dropped, which pushed callers to
+      //    smuggle edits through `description` and risk polluting the stored copy.
+      //  - From-scratch: no `userPrompt` -> build from the persisted scene
+      //    fields exactly as before.
+      const refineInstruction = userPrompt?.trim()
+      const prompt = refineInstruction
+        ? buildLocationRefinePrompt({ editPrompt: refineInstruction, style })
+        : buildLocationPrompt({ name, description, category, style })
 
       const mcpClient = extractMcpClient(req.body)
       const workflowId = extractWorkflowId(req.body)
@@ -128,10 +144,29 @@ export async function generateLocationRoutes(app: FastifyInstance) {
       // On mid-batch insert failure: roll back any earlier inserts so we
       // don't leave orphan `pending` rows that will never be queued.
       // ──────────────────────────────────────────────────────────────────────
-      const includeAttach = parsed.data.count === 1 && parsed.data.attachToLocationId !== undefined
-      const inputDataForInsert = includeAttach
-        ? { ...baseInputData, attachToLocationId: parsed.data.attachToLocationId, prompt }
-        : { ...baseInputData, prompt }
+      // `attachToLocationId` (the auto-attach trigger) is propagated to
+      // input_data ONLY for the single-candidate (count=1) "instant attach"
+      // flow: the worker reads it from the QUEUE payload to write
+      // source_image_url, and the count=1 main job also surfaces in the
+      // location's pendingJobs via this field. Multi-candidate batches omit it
+      // so no candidate auto-attaches; the user picks a winner via
+      // approve-main-image.
+      //
+      // `candidateForLocationId` is the SEPARATE candidate-tracking key. It is
+      // written for EVERY generation tied to a location (count=1 AND count>1)
+      // and is NEVER read by any worker/reconcile auto-attach path - it exists
+      // purely so GET /v1/locations/:id can surface completed candidates as
+      // `previousCandidates` (the "pick from N / keep the original" strip). This
+      // is why count>1 candidates are now findable WITHOUT re-introducing the
+      // auto-attach risk that keeping `attachToLocationId` on them would carry.
+      const attachId = parsed.data.attachToLocationId
+      const includeAttach = parsed.data.count === 1 && attachId !== undefined
+      const inputDataForInsert = {
+        ...baseInputData,
+        prompt,
+        ...(attachId !== undefined ? { candidateForLocationId: attachId } : {}),
+        ...(includeAttach ? { attachToLocationId: attachId } : {}),
+      }
 
       const insertedJobIds: string[] = []
       for (let i = 0; i < parsed.data.count; i++) {

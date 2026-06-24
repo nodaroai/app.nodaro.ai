@@ -291,6 +291,40 @@ export function buildLocationPrompt(input: LocationPromptInput): string {
   ].join(" ")
 }
 
+export interface LocationRefinePromptInput {
+  /**
+   * The user's TRANSIENT edit/refine instruction (e.g. "make it night, add
+   * drifting fog"). Used only to build this one generation's prompt - it is
+   * never written back to the location row, so the stored name / description /
+   * canonical description stay untouched. This is the deliberate contrast with
+   * `LocationPromptInput.description`, which IS the persisted scene description
+   * that `buildLocationPrompt` weaves in.
+   */
+  editPrompt: string
+  style?: EntityStyle | string
+}
+
+/**
+ * Build a TRANSIENT prompt from a user-supplied edit/refine instruction.
+ *
+ * Used by `POST /v1/generate-location` when the caller passes `userPrompt`
+ * (the studio's "describe changes" / sparkle Edit flow). Paired with an i2i
+ * `sourceImageUrl` the provider edits the source establishing shot toward the
+ * instruction; with no source image it reads as a from-scratch custom scene
+ * prompt. Mirrors `characters.generate`'s seed/edit-prompt path, but locations
+ * have no stored seed prompt - this output is purely transient and the route
+ * persists nothing derived from it back to the row.
+ */
+export function buildLocationRefinePrompt(input: LocationRefinePromptInput): string {
+  const instruction = input.editPrompt.trim()
+  const styleDesc = input.style ?? "realistic"
+  return [
+    `${instruction},`,
+    `${styleDesc} art style, wide establishing shot,`,
+    "4k, highly detailed, cinematic lighting, no text, no labels, no watermarks.",
+  ].join(" ")
+}
+
 export interface FacePromptInput {
   name: string
   description?: string

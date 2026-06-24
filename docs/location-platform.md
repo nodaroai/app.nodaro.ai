@@ -59,6 +59,13 @@ which is UI-only by design — the SDK, CLI, and MCP surfaces all soft-delete.
 > derived at request time from rows in the `jobs` table where
 > `input_data.attachToLocationId = :id` and `status ∈ {pending, running}`.
 
+> Completed candidate main images are surfaced via `previousCandidates` on
+> `GET /v1/locations/:id` (newest first, max 5): completed `generate-location`
+> jobs tracked to the row via `input_data.candidateForLocationId`, excluding the
+> one whose URL is the current `source_image_url`. This powers a "pick from N /
+> keep the original" UI - the current main image is left untouched until the
+> user approves one (see "The main-image approval flow" below).
+
 ## Asset arrays explained
 
 Six bucket columns hold the variants of a location's anchor establishing
@@ -233,6 +240,25 @@ reference this location ("A neon-soaked Tokyo alley after midnight, with
 mismatched vending machines lining a wet concrete corridor…"). Without it,
 visual drift between scenes is much more likely.
 
+### Candidate surfacing + non-destructive refine
+
+For `count > 1` runs no candidate auto-attaches. Every candidate job is tracked
+to the location via `input_data.candidateForLocationId` (written for `count === 1`
+AND `count > 1`, and never read by any auto-attach path), so completed candidates
+surface on `GET /v1/locations/:id` as `previousCandidates` - newest first, max 5,
+excluding the one whose URL is the current `source_image_url`. The studio renders
+these as a "pick from N" strip and promotes a winner via `approve-main-image`;
+the current main image stays intact until the user picks, so refining is
+non-destructive.
+
+`POST /v1/generate-location` also honors a transient `userPrompt` edit
+instruction. When present it drives the generation prompt directly - paired with
+an i2i `sourceImageUrl` the source establishing shot is edited toward the
+instruction. It is never persisted, so the stored `name`, `description`, and
+`canonical_description` are left untouched (the route only image-only
+auto-attaches). Omit `userPrompt` and the prompt is built from the persisted
+scene fields exactly as before.
+
 ## Using location assets as references
 
 After the assets are populated, downstream generation calls reference the
@@ -382,14 +408,14 @@ curl -s -X POST "$BASE/v1/generate-location-motion" \
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
 | `GET` | `/v1/locations` | JWT / `ndr_` | List active. Pass `?archived=true` to list archived. |
-| `GET` | `/v1/locations/:id` | JWT / `ndr_` | Detail row + `pendingJobs[]`. Soft-deleted rows ARE returned by id. |
+| `GET` | `/v1/locations/:id` | JWT / `ndr_` | Detail row + `pendingJobs[]` + `previousCandidates[]` (completed candidate main images, max 5). Soft-deleted rows ARE returned by id. |
 | `POST` | `/v1/locations` | JWT / `ndr_` | Upsert. With `id` → UPDATE (worker-owned columns dropped); without → INSERT. Optimistic-concurrency via `expectedUpdatedAt`. |
 | `DELETE` | `/v1/locations/:id` | JWT / `ndr_` | Soft-delete (sets `deleted_at`). |
 | `DELETE` | `/v1/locations/:id?permanent=true` | JWT / `ndr_` | Permanent destroy. **Row must already be archived** (400 `not_archived` otherwise). UI-only by design — SDK, CLI, MCP all omit this path. |
 | `POST` | `/v1/locations/:id/restore` | JWT / `ndr_` | Un-archive. Auto-suffixes `"(restored)"` on name collision. |
 | `POST` | `/v1/locations/:id/approve-main-image` | JWT / `ndr_` | Approve a candidate; sets `source_image_url`, fires LLM caption inline. |
 | `POST` | `/v1/locations/:id/llm-caption` | JWT / `ndr_` | Re-run LLM caption against the current main image. |
-| `POST` | `/v1/generate-location` | JWT / `ndr_` | Generate 1–10 candidate establishing shots. |
+| `POST` | `/v1/generate-location` | JWT / `ndr_` | Generate 1–10 candidate establishing shots. Optional transient `userPrompt` drives an i2i edit (never written to the row). |
 | `POST` | `/v1/generate-location-asset` | JWT / `ndr_` | Generate one variant for any of the 5 image buckets (or `custom`). |
 | `POST` | `/v1/generate-surround-continuation` | JWT / `ndr_` | Generate the next seamless 360° ring view (half-carry composite + paint + color-harmonize); attaches to `angles`. |
 | `POST` | `/v1/generate-location-motion` | JWT / `ndr_` | Animate the establishing shot into an atmosphere motion clip via i2v. |

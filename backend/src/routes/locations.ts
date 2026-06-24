@@ -287,7 +287,10 @@ export async function locationRoutes(app: FastifyInstance) {
     // `userId` + route param `id` only, NOT the fetched location row. Run them
     // in parallel via Promise.all to shave ~30-80ms of sequential round-trip
     // latency. Mirrors the characters.ts GET /:id pattern.
-    const [locationResult, jobsResult] = await Promise.all([
+    // previousCandidates over-fetches completed candidates from the last 7 days,
+    // then trims to 5 in JS (after excluding the current main image).
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+    const [locationResult, jobsResult, previousCandidatesResult] = await Promise.all([
       supabase
         .from("locations")
         .select(SELECT_COLUMNS)
@@ -306,10 +309,28 @@ export async function locationRoutes(app: FastifyInstance) {
         .filter("input_data->>attachToLocationId", "eq", id)
         .order("created_at", { ascending: false })
         .limit(100),
+      // previousCandidates: recently-completed `generate-location` jobs tracked
+      // to THIS location via `candidateForLocationId` (written for count=1 AND
+      // count>1 by generate-location.ts). Mirrors the characters.ts
+      // previousCandidates bucket: project imageUrl via the JSONB path so we
+      // don't drag the whole output_data blob over the wire, order by created_at
+      // DESC, over-fetch 10 to absorb URL-collisions with the current main image
+      // and the rare row missing output_data.imageUrl, then trim to 5 in JS.
+      supabase
+        .from("jobs")
+        .select("id, image_url:output_data->>imageUrl, created_at")
+        .eq("user_id", userId)
+        .eq("status", "completed")
+        .filter("input_data->>type", "eq", "generate-location")
+        .filter("input_data->>candidateForLocationId", "eq", id)
+        .gte("created_at", sevenDaysAgo)
+        .order("created_at", { ascending: false })
+        .limit(10),
     ])
 
     const { data, error } = locationResult
     const { data: jobsRows } = jobsResult
+    const { data: previousCandidateRows } = previousCandidatesResult
 
     if (error) {
       if (error.code === "PGRST116") {
@@ -340,7 +361,27 @@ export async function locationRoutes(app: FastifyInstance) {
       }
     })
 
-    return { ...toCamel(data as LocationRow), pendingJobs }
+    // previousCandidates: completed candidate images for this location whose URL
+    // differs from the current main image (source_image_url). Same wire shape as
+    // characters.previousCandidates ({ jobId, url, createdAt }). The studio's
+    // candidate pick strip renders these and calls approve-main-image with the
+    // chosen jobId; until the user picks, the current main image is left intact
+    // ("pick from N / keep the original").
+    const currentMainImage = (data as { source_image_url?: string | null }).source_image_url ?? null
+    type PreviousCandidate = { jobId: string; url: string; createdAt: string }
+    const previousCandidates: PreviousCandidate[] = (previousCandidateRows ?? [])
+      .map((row) => {
+        // image_url is the projected alias from output_data->>imageUrl. ->>
+        // always yields text|null, so defend against non-string values and
+        // collisions with the current main image in JS.
+        const u = (row as { image_url?: unknown }).image_url
+        if (typeof u !== "string" || u === currentMainImage) return null
+        return { jobId: row.id as string, url: u, createdAt: row.created_at as string }
+      })
+      .filter((x): x is PreviousCandidate => x !== null)
+      .slice(0, 5)
+
+    return { ...toCamel(data as LocationRow), pendingJobs, previousCandidates }
   })
 
   // ---------------------------------------------------------------------------

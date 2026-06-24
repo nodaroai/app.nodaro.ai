@@ -344,9 +344,22 @@ describe("GET /v1/locations/:id — pendingJobs + canonicalDescription coercion"
     }
     const jobsSelect = vi.fn().mockReturnValue(jobsChain)
 
+    // Third .from() call: previousCandidates (completed candidate jobs). Empty
+    // here - this test asserts pendingJobs; previousCandidates has its own test
+    // in locations.test.ts.
+    const prevChain: Record<string, unknown> = {
+      eq: vi.fn().mockReturnThis(),
+      filter: vi.fn().mockReturnThis(),
+      gte: vi.fn().mockReturnThis(),
+      order: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+    }
+    const prevSelect = vi.fn().mockReturnValue(prevChain)
+
     vi.mocked(supabase.from)
       .mockReturnValueOnce({ select: locationSelect } as never)
       .mockReturnValueOnce({ select: jobsSelect } as never)
+      .mockReturnValueOnce({ select: prevSelect } as never)
 
     const res = await app.inject({
       method: "GET",
@@ -385,9 +398,20 @@ describe("GET /v1/locations/:id — pendingJobs + canonicalDescription coercion"
     }
     const jobsSelect = vi.fn().mockReturnValue(jobsChain)
 
+    // Third .from() call: previousCandidates (completed candidate jobs), empty here.
+    const prevChain: Record<string, unknown> = {
+      eq: vi.fn().mockReturnThis(),
+      filter: vi.fn().mockReturnThis(),
+      gte: vi.fn().mockReturnThis(),
+      order: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+    }
+    const prevSelect = vi.fn().mockReturnValue(prevChain)
+
     vi.mocked(supabase.from)
       .mockReturnValueOnce({ select: locationSelect } as never)
       .mockReturnValueOnce({ select: jobsSelect } as never)
+      .mockReturnValueOnce({ select: prevSelect } as never)
 
     const res = await app.inject({
       method: "GET",
