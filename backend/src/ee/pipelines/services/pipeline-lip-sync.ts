@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { buildLipSyncCreditId } from "@nodaro/shared"
+import { buildLipSyncCreditId, SEEDANCE_LIP_SYNC_PROVIDERS } from "@nodaro/shared"
 import { runPipelineWorkerJob } from "./_run-worker-job.js"
 
 export interface PipelineLipSyncArgs {
@@ -67,7 +67,7 @@ export async function pipelineLipSync(
   const modelIdentifier =
     provider === "infinitalk"
       ? `infinitalk:${resolution ?? "720p"}`
-      : provider === "seedance-2" || provider === "seedance-2-fast"
+      : SEEDANCE_LIP_SYNC_PROVIDERS.has(provider)
         ? `${provider}:8s:${resolution ?? "720p"}-ref`
         : provider === "kling-avatar" || provider === "kling-avatar-pro"
           ? buildLipSyncCreditId(provider, audioDurationSec)

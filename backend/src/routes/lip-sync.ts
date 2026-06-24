@@ -7,7 +7,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { LIP_SYNC_PROVIDERS, buildLipSyncCreditId, isPerSecondLipSyncProvider } from "@nodaro/shared"
+import { LIP_SYNC_PROVIDERS, SEEDANCE_LIP_SYNC_PROVIDERS, buildLipSyncCreditId, isPerSecondLipSyncProvider } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 
 const lipSyncBody = z.object({
@@ -60,10 +60,10 @@ function resolveLipSyncIdentifier(body: Record<string, unknown> | undefined): st
   if (provider === "infinitalk") {
     return `infinitalk:${(body?.resolution as string) ?? "720p"}`
   }
-  // Seedance 2 / 2 Fast — billed per-second × resolution × ref. We ALWAYS pass
-  // the audio as a reference, so the identifier always ends in -ref. Default to
-  // the 8s tier for reservation; the worker decides actual duration (≤ audio).
-  if (provider === "seedance-2" || provider === "seedance-2-fast") {
+  // Seedance 2 family (incl. -mini) — billed per-second × resolution × ref. We
+  // ALWAYS pass the audio as a reference, so the identifier always ends in -ref.
+  // Default to the 8s tier for reservation; the worker decides actual duration.
+  if (SEEDANCE_LIP_SYNC_PROVIDERS.has(provider)) {
     return `${provider}:8s:${(body?.resolution as string) ?? "720p"}-ref`
   }
   // Per-second-billed providers (Kling AI Avatar 2.0, HeyGen Lipsync Precision,

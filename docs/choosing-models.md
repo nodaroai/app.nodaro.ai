@@ -111,6 +111,7 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | Bytedance Pro I2V | Bytedance | Standard | 18 | i2v, t2v | Pro Bytedance video tier — better quality. |
 | Wan 2.6 | Alibaba | Standard | 18 | v2v, t2v | Wan 2.6 — text-to-video and video-to-video under a single id. |
 | Wan 2.6 I2V | Alibaba | Standard | 18 | i2v | Wan 2.6 image-to-video — 5/10/15s at 720p/1080p. |
+| Seedance 2 Mini | Bytedance | Standard | 19 | i2v, t2v | Budget Seedance 2 tier — 480p/720p only, per-second pricing by resolution. |
 | Topaz Video Upscale | Topaz | Standard | 19 | video-upscale | High-quality video upscale and enhancement. |
 | VEO Extend | Google | Standard | 19 | extend | Extend an existing VEO 3.1 clip by another segment. |
 | Wan 2.7 I2V | Alibaba | Standard | 19 | i2v | Wan 2.7 image-to-video — 2–15s at 720p/1080p, supports start+end frame. |

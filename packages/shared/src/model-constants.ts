@@ -113,6 +113,7 @@ export const MAX_VIDEO_PROMPT_CHARS_BY_PROVIDER: Record<string, number> = {
   // higher than the 8000 default
   "seedance-2": 20000,
   "seedance-2-fast": 20000,
+  "seedance-2-mini": 20000,
   "seedance-2-extend": 20000,
   "gemini-omni-video": 20000,
   "bytedance-lite": 10000,
@@ -613,6 +614,7 @@ export const IMAGE_TO_VIDEO_PROVIDERS = [
   "seedance",
   "seedance-2",
   "seedance-2-fast",
+  "seedance-2-mini",
   "hailuo-2.3-pro",
   "hailuo-2.3",
   "hailuo-standard",
@@ -654,6 +656,7 @@ export const TEXT_TO_VIDEO_PROVIDERS = [
   "seedance",
   "seedance-2",
   "seedance-2-fast",
+  "seedance-2-mini",
   "wan",
   "hailuo-standard",
   "bytedance-lite",
@@ -821,15 +824,17 @@ export const LIP_SYNC_PROVIDERS = [
   // not the dedicated lip-sync flow.
   "seedance-2",
   "seedance-2-fast",
+  "seedance-2-mini",
 ] as const
 export type LipSyncProvider = typeof LIP_SYNC_PROVIDERS[number]
 
 /** Seedance variants exposed via the lip-sync surface. They go through
  *  the i2v provider with the audio plumbed as `reference_audio_urls`. */
-export const SEEDANCE_LIP_SYNC_PROVIDERS = new Set([
+export const SEEDANCE_LIP_SYNC_PROVIDERS = new Set<string>([
   "seedance-2",
   "seedance-2-fast",
-] as const)
+  "seedance-2-mini",
+])
 
 /** Replicate-based lip-sync providers (video or image+audio via Replicate SDK) */
 export const REPLICATE_LIP_SYNC_PROVIDERS = new Set([
@@ -1051,6 +1056,7 @@ export const DURATION_PRICED_PROVIDERS = new Set([
   "seedance",
   "seedance-2",
   "seedance-2-fast",
+  "seedance-2-mini",
   "grok-imagine-video-1.5",
 ])
 
@@ -1061,6 +1067,7 @@ export const DURATION_PRICED_PROVIDERS = new Set([
 export const SEEDANCE_2_PROVIDERS = new Set<string>([
   "seedance-2",
   "seedance-2-fast",
+  "seedance-2-mini",
 ])
 
 export function isSeedance2Provider(provider: string | undefined): boolean {
@@ -1160,6 +1167,7 @@ export const VIDEO_REF_LIMITS_BY_PROVIDER: Record<
 > = {
   "seedance-2": { ...SEEDANCE_2_REF_LIMITS },
   "seedance-2-fast": { ...SEEDANCE_2_REF_LIMITS },
+  "seedance-2-mini": { ...SEEDANCE_2_REF_LIMITS },
   "wan-i2v": { images: 1 },
   "hailuo-2.3-pro": { images: 1 },
   "hailuo-2.3": { images: 1 },
@@ -1211,6 +1219,7 @@ export const RESOLUTION_DURATION_PRICING: Record<string, readonly string[]> = {
 export const NATIVE_ADAPTIVE_ASPECT: Record<string, string> = {
   "seedance-2": "adaptive",
   "seedance-2-fast": "adaptive",
+  "seedance-2-mini": "adaptive",
 }
 
 /**
@@ -1313,6 +1322,7 @@ export const VIDEO_AUDIO_CAPABILITY: Record<string, VideoAudioCapability> = {
   // Seedance 2.0 — multimodal; lip-syncs to a supplied reference-audio track.
   "seedance-2": { mode: "audio_driven", field: "generateAudio" },
   "seedance-2-fast": { mode: "audio_driven", field: "generateAudio" },
+  "seedance-2-mini": { mode: "audio_driven", field: "generateAudio" },
 }
 
 const VIDEO_AUDIO_NONE: VideoAudioCapability = { mode: "none" }
@@ -1430,6 +1440,7 @@ export const VIDEO_VARIABLE_PRICING: Record<string, "duration" | "duration+audio
   "seedance": "duration",
   "seedance-2": "duration+resolution+ref",
   "seedance-2-fast": "duration+resolution+ref",
+  "seedance-2-mini": "duration+resolution+ref",
   // Grok Imagine Video 1.5 — per-second billing split 480p/720p (no video-ref dimension).
   "grok-imagine-video-1.5": "duration+resolution",
 }
@@ -1490,6 +1501,12 @@ export const VIDEO_DURATION_TIERS: Record<string, Array<{ maxSeconds: number; su
     { maxSeconds: 12, suffix: "12s" },
   ],
   "seedance-2": [
+    { maxSeconds: 4, suffix: "4s" },
+    { maxSeconds: 8, suffix: "8s" },
+    { maxSeconds: 12, suffix: "12s" },
+    { maxSeconds: 15, suffix: "15s" },
+  ],
+  "seedance-2-mini": [
     { maxSeconds: 4, suffix: "4s" },
     { maxSeconds: 8, suffix: "8s" },
     { maxSeconds: 12, suffix: "12s" },

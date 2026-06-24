@@ -1202,6 +1202,27 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "seedance-2-fast:8s:1080p-ref", credits: 60 },
     ],
   },
+  "seedance-2-mini": {
+    id: "seedance-2-mini",
+    kind: "video",
+    modes: ["i2v", "t2v"] as const,
+    family: "Bytedance",
+    label: "Seedance 2 Mini",
+    series: "Seedance",
+    description: "Budget Seedance 2 tier — 480p/720p only, per-second pricing by resolution.",
+    useCases: ["fast", "motion"],
+    features: ["end-frame", "audio", "reference-image"],
+    aspectRatios: VIDEO_RATIOS_SEEDANCE_2,
+    durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    resolutions: ["480p", "720p"],
+    pricing: [
+      { identifier: "seedance-2-mini", credits: 19, note: "default — see :NsR variants" },
+      { identifier: "seedance-2-mini:8s:480p", credits: 19 },
+      { identifier: "seedance-2-mini:8s:720p", credits: 41 },
+      { identifier: "seedance-2-mini:8s:480p-ref", credits: 12 },
+      { identifier: "seedance-2-mini:8s:720p-ref", credits: 25 },
+    ],
+  },
 
   // ── Wan ──
   "wan-i2v": {

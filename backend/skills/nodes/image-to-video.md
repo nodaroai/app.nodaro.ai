@@ -1,7 +1,7 @@
 ---
 node_type: image-to-video
-generated_at: 2026-06-11T18:52:24.841Z
-generated_from: 36d155ff
+generated_at: 2026-06-24T17:51:20.452Z
+generated_from: 056170208
 ---
 
 # image-to-video
@@ -141,7 +141,7 @@ Animate a still image into a short video clip (5-15s typical). For multi-shot fi
 
 Model-family-specific prompting rules. Apply the section matching the node's `provider`.
 
-### Seedance 2.0 (seedance-2, seedance-2-fast)
+### Seedance 2.0 (seedance-2, seedance-2-fast, seedance-2-mini)
 
 Prompt structure (front-load what matters most):
 precise subject → action details → scene/environment → lighting & color tone → camera movement → visual style → image quality → constraints.

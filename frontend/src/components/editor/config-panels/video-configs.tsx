@@ -959,9 +959,10 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
             >
               <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="480p">480p</SelectItem>
-                <SelectItem value="720p">720p</SelectItem>
-                <SelectItem value="1080p">1080p</SelectItem>
+                {/* Catalog-driven: seedance-2/-fast expose 480p/720p/1080p; seedance-2-mini 480p/720p */}
+                {(getVideoResolutionOptions(currentI2VProvider) ?? []).map((o) => (
+                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -2046,9 +2047,10 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
             >
               <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="480p">480p</SelectItem>
-                <SelectItem value="720p">720p</SelectItem>
-                <SelectItem value="1080p">1080p</SelectItem>
+                {/* Catalog-driven: seedance-2/-fast expose 480p/720p/1080p; seedance-2-mini 480p/720p */}
+                {(getVideoResolutionOptions(currentProvider) ?? []).map((o) => (
+                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -2919,9 +2921,10 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
             >
               <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="480p">480p</SelectItem>
-                <SelectItem value="720p">720p</SelectItem>
-                <SelectItem value="1080p">1080p</SelectItem>
+                {/* Catalog-driven: seedance-2/-fast expose 480p/720p/1080p; seedance-2-mini 480p/720p */}
+                {(getVideoResolutionOptions(currentProvider) ?? []).map((o) => (
+                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

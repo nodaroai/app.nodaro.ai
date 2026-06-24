@@ -24,8 +24,8 @@ export interface ProviderPromptDoctrine {
 }
 
 const SEEDANCE_2_DOCTRINE: ProviderPromptDoctrine = {
-  providers: ["seedance-2", "seedance-2-fast"],
-  heading: "Seedance 2.0 (seedance-2, seedance-2-fast)",
+  providers: ["seedance-2", "seedance-2-fast", "seedance-2-mini"],
+  heading: "Seedance 2.0 (seedance-2, seedance-2-fast, seedance-2-mini)",
   tips: [
     "Storyboard complex videos as 'Shot 1: … Shot 2: …' WITHOUT timestamps — timed shots like '(0-3s)' are officially unstable and can break generation.",
     "One camera movement per shot; describe actions per body part with degree ('slowly raises a hand'); express emotion as physical detail, never abstract words.",

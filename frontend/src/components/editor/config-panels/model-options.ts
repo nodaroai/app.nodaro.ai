@@ -96,6 +96,7 @@ export const VIDEO_I2V_MODELS = [
   { value: "seedance", label: "Seedance 1.5", desc: "Bytedance, 4-12s, audio generation" },
   { value: "seedance-2", label: "Seedance 2.0", desc: "Bytedance, 4-15s, multimodal references" },
   { value: "seedance-2-fast", label: "Seedance 2.0 Fast", desc: "Bytedance Fast, 4-15s, multimodal references" },
+  { value: "seedance-2-mini", label: "Seedance 2.0 Mini", desc: "Bytedance budget, 4-15s, 480p/720p" },
   { value: "veo3", label: "VEO 3.1 (Quality)", desc: "Top quality, 4/6/8s with audio" },
   { value: "veo3.1", label: "VEO 3.1 (Fast)", desc: "Fast VEO, 4/6/8s with audio" },
   { value: "veo3_lite", label: "VEO 3.1 (Lite)", desc: "Cheapest VEO tier, 4/6/8s with audio" },
@@ -128,6 +129,7 @@ export const VIDEO_T2V_MODELS: readonly { value: TextToVideoProvider; label: str
   { value: "seedance", label: "Seedance 1.5", desc: "Bytedance, 4-12s with audio option" },
   { value: "seedance-2", label: "Seedance 2.0", desc: "Bytedance, 4-15s, multimodal references" },
   { value: "seedance-2-fast", label: "Seedance 2.0 Fast", desc: "Bytedance Fast, 4-15s, multimodal references" },
+  { value: "seedance-2-mini", label: "Seedance 2.0 Mini", desc: "Bytedance budget, 4-15s, 480p/720p" },
   { value: "veo3", label: "VEO 3.1 (Quality)", desc: "Top quality, 4/6/8s with audio" },
   { value: "veo3.1", label: "VEO 3.1 (Fast)", desc: "Fast VEO, 4/6/8s with audio" },
   { value: "veo3_lite", label: "VEO 3.1 (Lite)", desc: "Cheapest VEO tier, 4/6/8s with audio" },
@@ -493,7 +495,7 @@ export const PROVIDERS_WITH_REFERENCES: string[] = modelsWithFeature("reference-
 export const VIDEO_PROVIDER_FALLBACKS: Record<string, number> = {
   minimax: 18, veo3: 79, "veo3.1": 19, "veo3_lite": 10, kling: 28, "kling-turbo": 14,
   "kling-3.0": 63, "grok-i2v": 7, seedance: 7,
-  "seedance-2": 82, "seedance-2-fast": 66,
+  "seedance-2": 82, "seedance-2-fast": 66, "seedance-2-mini": 41,
   "wan-i2v": 22, "wan-turbo": 13, "hailuo-2.3-pro": 20, "hailuo-2.3": 10,
   "hailuo-standard": 10, "bytedance-lite": 6, "bytedance-pro": 18,
   "bytedance-pro-fast": 9, "kling-master": 50, "runway-kie": 4,
@@ -532,6 +534,7 @@ export const KIE_T2V_DURATIONS: Record<string, number[]> = {
 export const LIP_SYNC_MODELS: readonly { value: LipSyncProvider; label: string; desc: string }[] = [
   { value: "seedance-2", label: "Seedance 2", desc: "Native phoneme lip sync, 8+ languages, cinematic. Premium quality." },
   { value: "seedance-2-fast", label: "Seedance 2 Fast", desc: "Same lip sync, cheaper / quicker tier" },
+  { value: "seedance-2-mini", label: "Seedance 2 Mini", desc: "Same lip sync, budget tier, 480p/720p" },
   { value: "kling-avatar", label: "Kling Avatar", desc: "Talking head, 720p, speech-optimized" },
   { value: "kling-avatar-pro", label: "Kling Avatar Pro", desc: "Premium talking head, 1080p" },
   { value: "infinitalk", label: "Infinitalk", desc: "KIE flexible resolution, 480p\u2013720p" },
