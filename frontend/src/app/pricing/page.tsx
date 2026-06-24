@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button"
 import { NodaroLogo } from "@/components/nodaro-logo"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
-import { isEmbedded as isInIframe } from "@/hooks/use-embed-session-handoff"
 import {
   PRICING_TIERS,
   getTierPrice,
@@ -13,7 +12,7 @@ import {
   getAnnualSavingsDollars,
   type BillingCycle,
 } from "@/lib/pricing-data"
-import { createCheckoutSession } from "@/lib/api"
+import { startCheckout } from "@/lib/checkout"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { toast } from "sonner"
 import { useSubscription, useChangePlanMutation } from "@/ee/hooks/queries/use-billing-queries"
@@ -79,15 +78,9 @@ export default function PricingPage() {
         toast.success("Plan changed successfully! Changes will apply shortly.")
         navigate("/billing?success=true")
       } else {
-        const url = await createCheckoutSession({ priceId, mode: "subscription" })
-        // Stripe Checkout sends X-Frame-Options: DENY, so it can't load inside
-        // an iframe (e.g. studio's pricing modal). When framed, open it in a new
-        // top-level tab; otherwise navigate in place.
-        if (isInIframe()) {
-          window.open(url, "_blank", "noopener,noreferrer")
-        } else {
-          window.location.href = url
-        }
+        // New subscription → Stripe Checkout (opens in a new tab when embedded,
+        // since Stripe can't be iframed). See startCheckout.
+        await startCheckout({ priceId, mode: "subscription" })
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Something went wrong"

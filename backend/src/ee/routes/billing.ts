@@ -30,6 +30,11 @@ function getOrigin(req: { headers: Record<string, string | string[] | undefined>
 const checkoutSessionSchema = z.object({
   priceId: z.string(),
   mode: z.enum(["subscription", "payment"]).optional(),
+  // Set by first-party embedded surfaces (e.g. studio.nodaro.ai's pricing /
+  // billing iframe, which opens checkout in a new tab): return to the public
+  // no-auth /checkout-complete page instead of /billing — the latter would
+  // bounce that tab to login, since its session lives in the parent app.
+  embedded: z.boolean().optional(),
 })
 
 const changePlanSchema = z.object({
@@ -104,7 +109,7 @@ export async function billingRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: "priceId is required" })
     }
 
-    const { priceId, mode } = parsed.data
+    const { priceId, mode, embedded } = parsed.data
     const checkoutMode = mode ?? (PRICE_TO_PLAN[priceId] ? "subscription" : "payment")
 
     // Validate price ID
@@ -144,9 +149,18 @@ export async function billingRoutes(app: FastifyInstance) {
       }
 
       const baseUrl = getOrigin(req)
-      const successUrl = checkoutMode === "payment"
-        ? `${baseUrl}/billing?topup=true`
-        : `${baseUrl}/billing?success=true`
+      // Embedded checkouts (opened in a new tab from a parent app's iframe)
+      // return to the public no-auth /checkout-complete page — the normal
+      // /billing (or /pricing) return URL would bounce that tab to login,
+      // since its session lives in the parent app, not here.
+      const successUrl = embedded
+        ? `${baseUrl}/checkout-complete?status=success`
+        : checkoutMode === "payment"
+          ? `${baseUrl}/billing?topup=true`
+          : `${baseUrl}/billing?success=true`
+      const cancelUrl = embedded
+        ? `${baseUrl}/checkout-complete?status=cancelled`
+        : `${baseUrl}/pricing`
 
       const session = await getStripe().checkout.sessions.create({
         customer: stripeCustomerId ?? undefined,
@@ -159,7 +173,7 @@ export async function billingRoutes(app: FastifyInstance) {
         subscription_data: checkoutMode === "subscription" ? { metadata: { userId } } : undefined,
         allow_promotion_codes: true,
         success_url: successUrl,
-        cancel_url: `${baseUrl}/pricing`,
+        cancel_url: cancelUrl,
       })
 
       return reply.send({ data: { url: session.url } })

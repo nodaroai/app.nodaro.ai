@@ -5057,6 +5057,8 @@ export async function changePlan(
 export async function createCheckoutSession(params: {
   priceId: string
   mode?: "subscription" | "payment"
+  /** Opened from an embedded iframe → return to the no-auth /checkout-complete page. */
+  embedded?: boolean
 }): Promise<string> {
   const res = await fetch(`${API_BASE_URL}/v1/billing/create-checkout-session`, {
     method: "POST",
