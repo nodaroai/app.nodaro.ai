@@ -396,6 +396,29 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "seedance-2-fast:8s:1080p-ref": 60,  // 240 KIE cr, $1.20
   "seedance-2-fast:12s:1080p-ref": 90, // 360 KIE cr, $1.80
   "seedance-2-fast:15s:1080p-ref": 113, // 450 KIE cr, $2.25
+  // ── Seedance 2.0 Mini — budget tier, 480p/720p only, per-second × video-ref ──
+  // Base fallback (8s/480p/no-ref)
+  "seedance-2-mini": 19,
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
   "gemini-omni-video": 23,         // base = 720p/1080p 4s
   ***REDACTED-OSS-SCRUB***

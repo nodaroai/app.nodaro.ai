@@ -99,11 +99,12 @@ const DIRECT_API_EXEMPTIONS = new Set<string>([
   // (falLipSync) and dispatched from the lip-sync worker's fal branch, not via
   // providerRegistry/KIE.
   "sync-lipsync-v3",
-  // Seedance 2 / 2-fast — go through the i2v worker with audio plumbed
-  // as reference_audio_urls. They appear in LIP_SYNC_PROVIDERS for UX
+  // Seedance 2 family (incl. -mini) — go through the i2v worker with audio
+  // plumbed as reference_audio_urls. They appear in LIP_SYNC_PROVIDERS for UX
   // purposes but the lip-sync route delegates to the i2v code path.
   "seedance-2",
   "seedance-2-fast",
+  "seedance-2-mini",
   // ── TTS ────────────────────────────────────────────────────────────────
   // ElevenLabs v3 routes through ElevenLabs direct API
   // (backend/src/providers/elevenlabs/direct-tts.ts), not via KIE.

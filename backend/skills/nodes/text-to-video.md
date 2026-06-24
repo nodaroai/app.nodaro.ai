@@ -1,7 +1,7 @@
 ---
 node_type: text-to-video
-generated_at: 2026-06-23T20:58:11.943Z
-generated_from: c4e4998f5
+generated_at: 2026-06-24T17:51:20.505Z
+generated_from: 056170208
 ---
 
 # Text to Video
@@ -112,7 +112,7 @@ generated_from: c4e4998f5
 
 Model-family-specific prompting rules. Apply the section matching the node's `provider`.
 
-### Seedance 2.0 (seedance-2, seedance-2-fast)
+### Seedance 2.0 (seedance-2, seedance-2-fast, seedance-2-mini)
 
 Prompt structure (front-load what matters most):
 precise subject → action details → scene/environment → lighting & color tone → camera movement → visual style → image quality → constraints.

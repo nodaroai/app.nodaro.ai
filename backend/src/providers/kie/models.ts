@@ -546,6 +546,27 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     endFrameParam: "last_frame_url",
   },
 
+  // Seedance 2.0 Mini — docs.kie.ai/market/bytedance/seedance-2-mini
+  // Budget tier, 480p/720p only. Per-second pricing: 480p no-ref 9.5 cr/s, 480p ref 6 cr/s,
+  // 720p no-ref 20.5 cr/s, 720p ref 12.5 cr/s. Per-second composites in credits.ts are authoritative.
+  "seedance-2-mini": {
+    model: "bytedance/seedance-2-mini",
+    credits: 41,
+    ***REDACTED-OSS-SCRUB***
+    imageParam: "first_frame_url",
+    extraParams: {
+      resolution: "720p",
+      aspect_ratio: "16:9",
+      duration: 8,
+      generate_audio: true,
+      web_search: false,
+      nsfw_checker: false,
+    },
+    allowedDurations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    supportsEndFrame: true,
+    endFrameParam: "last_frame_url",
+  },
+
   // Wan 2.6 I2V - docs.kie.ai/market/wan/2-6-image-to-video
   "wan-i2v": {
     model: "wan/2-6-image-to-video",
@@ -814,6 +835,22 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     model: "bytedance/seedance-2-fast",
     credits: 66,
     cost: 0.33,
+    extraParams: {
+      resolution: "720p",
+      aspect_ratio: "16:9",
+      duration: 8,
+      generate_audio: true,
+      web_search: false,
+      nsfw_checker: false,
+    },
+    allowedDurations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+  },
+
+  // Seedance 2.0 Mini T2V — docs.kie.ai/market/bytedance/seedance-2-mini
+  "seedance-2-mini": {
+    model: "bytedance/seedance-2-mini",
+    credits: 41,
+    cost: 0.205,  // nominal 8s/720p/no-ref fallback; per-second composites authoritative
     extraParams: {
       resolution: "720p",
       aspect_ratio: "16:9",

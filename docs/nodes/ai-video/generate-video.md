@@ -58,7 +58,7 @@ Generate Video covers the union of the legacy image-to-video and text-to-video c
 | VEO 3.x | `veo3` (Quality), `veo3.1` (Fast), `veo3_lite` (Lite) | T2V, I2V, first+last, reference | 4 / 6 / 8s; 720p / 1080p; generate-audio default on; auto-translate |
 | Gemini Omni | `gemini-omni-video` | T2V, I2V, video-edit (V2V) | 4 / 6 / 8 / 10s; 720p / 1080p / 4K (4K not on free tier); no prompt-baked audio (external `audio_ids` only — see section); up to 7 reference images; V2V uses trim window ≤ 10 s |
 | Kling | `kling`, `kling-turbo`, `kling-3.0`, `kling-master` | T2V, I2V (`kling-master` is I2V-only) | 5 / 10s (Kling 3.0: continuous 3–15s) |
-| Seedance / Seedance 2 | `seedance`, `seedance-2`, `seedance-2-fast` | T2V, I2V, reference (S2) | S2: 4–15s; 480p / 720p / 1080p; up to 9 image + 3 video + 3 audio refs |
+| Seedance / Seedance 2 | `seedance`, `seedance-2`, `seedance-2-fast`, `seedance-2-mini` | T2V, I2V, reference (S2) | S2: 4–15s; 480p / 720p / 1080p (`seedance-2-mini`: **480p / 720p only**); up to 9 image + 3 video + 3 audio refs |
 | Hailuo | `hailuo-2.3-pro`, `hailuo-2.3`, `hailuo-standard` | T2V (`hailuo-standard`), I2V | 6 / 10s |
 | Bytedance | `bytedance-lite`, `bytedance-pro`, `bytedance-pro-fast` | T2V (lite, pro), I2V | 5 / 10s |
 | MiniMax | `minimax` | T2V, I2V | Fixed 5s, end-frame supported |
@@ -80,7 +80,7 @@ Providers that accept a paired last frame: `veo3`, `veo3.1`, `veo3_lite` (`image
 
 ### Multimodal references
 
-Seedance 2 (`seedance-2` / `seedance-2-fast`) accepts up to 9 image refs, 3 video refs, and 3 audio refs in a single call. **`seedance-2-fast` requires each reference audio clip to be ≤ 15.2 seconds** (audio-driven r2v mode) — longer clips are rejected before the job is created with an `audio_too_long` error. HappyHorse Ref2V accepts 1–9 image refs. VEO 3.1 (`veo3.1`) supports `REFERENCE_2_VIDEO` mode when image references are wired without a start frame. Gemini Omni (`gemini-omni-video`) accepts up to 7 image refs in both modes — with a start frame (i2v) or without one (reference-conditioned t2v).
+Seedance 2 (`seedance-2` / `seedance-2-fast` / `seedance-2-mini`) accepts up to 9 image refs, 3 video refs, and 3 audio refs in a single call. **`seedance-2-fast` requires each reference audio clip to be ≤ 15.2 seconds** (audio-driven r2v mode) — longer clips are rejected before the job is created with an `audio_too_long` error. HappyHorse Ref2V accepts 1–9 image refs. VEO 3.1 (`veo3.1`) supports `REFERENCE_2_VIDEO` mode when image references are wired without a start frame. Gemini Omni (`gemini-omni-video`) accepts up to 7 image refs in both modes — with a start frame (i2v) or without one (reference-conditioned t2v).
 
 **Seedance 2 mode toggle (Frames ⇄ References).** Unlike other providers (where mode is inferred from wiring), Seedance 2 has an explicit **Frames vs References** toggle because KIE makes the two mutually exclusive: *Frames* uses `startFrame` (+ optional `endFrame`); *References* uses `imageReferences` / `videoReferences` / `audioReferences`. The inactive set's handles are disabled (greyed) in each mode, and edges wired to them are ignored at execution. **New Generate Video nodes default to References mode.** Note `audio` (a post-merge soundtrack) is distinct from `audioReferences` (generation-conditioning audio) — `audio` works in both modes; `audioReferences` is References-mode only.
 
@@ -157,6 +157,8 @@ If neither has the identifier, the route returns HTTP 503 `price_not_configured`
 | `seedance-2` | 8s | 720p | i2v | no ref | ~82 |
 | `seedance-2` | 8s | 1080p | i2v | with ref | ~75 |
 | `seedance-2-fast` | 8s | 720p | i2v | with ref | ~40 |
+| `seedance-2-mini` | 8s | 720p | i2v | no ref | ~41 |
+| `seedance-2-mini` | 8s | 480p | i2v | with ref | ~12 |
 | `grok-imagine-video-1.5` | 8s | 480p | i2v | image required | 30 |
 | `grok-imagine-video-1.5` | 8s | 720p | i2v | image required | 51 |
 | `grok-imagine-video-1.5` | 15s | 720p | i2v | image required | 95 |
@@ -197,7 +199,7 @@ A request is **voiced** only when a spec is present **and** the model can carry 
 
 | Audio mode | Models | Chain |
 |---|---|---|
-| `audio_driven` | `seedance-2`, `seedance-2-fast` | Synthesize the dialogue (each line in its own voice) via ElevenLabs Dialogue v3 → feed as reference audio → the model lip-syncs to it. |
+| `audio_driven` | `seedance-2`, `seedance-2-fast`, `seedance-2-mini` | Synthesize the dialogue (each line in its own voice) via ElevenLabs Dialogue v3 → feed as reference audio → the model lip-syncs to it. |
 | `native_speech` | `veo3`, `veo3.1`, `veo3_lite` | Bake the line during generation, then revoice the baked audio to the primary character voice (ElevenLabs voice-changer, keeping the music/SFX bed). |
 
 **Speaker mapping.** Each `dialogue[].speaker` is matched (case-insensitive) to a `characterVoices[].speaker` to pick that line's `voiceId`. An unmatched speaker falls back to the default (first) voice, mirroring the pipeline's non-fatal missing-voice behavior. Total dialogue text is capped at 5000 characters (the Dialogue v3 limit); lines over the budget are dropped with a log entry.

@@ -8,6 +8,9 @@ import {
   AUDIO_ADDON_PROVIDERS,
   VEO_PROVIDERS,
   SEEDANCE_2_PROVIDERS,
+  isSeedance2Provider,
+  VIDEO_REF_LIMITS_BY_PROVIDER,
+  SEEDANCE_2_REF_LIMITS,
 } from "../model-constants.js"
 
 describe("getVideoAudioCapability", () => {
@@ -76,12 +79,24 @@ describe("videoModelCanSpeakDialogue", () => {
     expect(videoModelCanSpeakDialogue("veo3_lite")).toBe(true)
     expect(videoModelCanSpeakDialogue("seedance-2")).toBe(true)
     expect(videoModelCanSpeakDialogue("seedance-2-fast")).toBe(true)
+    expect(videoModelCanSpeakDialogue("seedance-2-mini")).toBe(true)
     // ambient-only models are NOT dialogue-capable — their audio is SFX/ambient
     expect(videoModelCanSpeakDialogue("kling")).toBe(false)
     expect(videoModelCanSpeakDialogue("kling-3.0")).toBe(false)
     expect(videoModelCanSpeakDialogue("seedance")).toBe(false)
     expect(videoModelCanSpeakDialogue("minimax")).toBe(false)
     expect(videoModelCanSpeakDialogue(undefined)).toBe(false)
+  })
+})
+
+describe("seedance-2-mini is a full Seedance 2 family member", () => {
+  it("is in the family set — drives the Frames/References mode toggle", () => {
+    expect(SEEDANCE_2_PROVIDERS.has("seedance-2-mini")).toBe(true)
+    expect(isSeedance2Provider("seedance-2-mini")).toBe(true)
+  })
+  it("carries the full multimodal reference caps (9 images / 3 videos / 3 audio)", () => {
+    expect(VIDEO_REF_LIMITS_BY_PROVIDER["seedance-2-mini"]).toEqual(SEEDANCE_2_REF_LIMITS)
+    expect(VIDEO_REF_LIMITS_BY_PROVIDER["seedance-2-mini"]).toEqual({ images: 9, videos: 3, audio: 3 })
   })
 })
 

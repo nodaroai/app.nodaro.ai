@@ -20,6 +20,7 @@ import {
   isVeoProvider,
 } from "./model-constants.js"
 import { isFlux2Model } from "./flux2-pricing.js"
+import { MODEL_CATALOG } from "./model-catalog.js"
 
 /**
  * Compute composite model identifier for variable credit pricing.
@@ -241,7 +242,15 @@ export function buildVideoCreditModelIdentifier(
   // KIE accepts 480p / 720p / 1080p natively; per-second rates rise non-linearly
   // so each tier gets its own composite identifier.
   if (RESOLUTION_VIDEO_REF_PRICING.has(effectiveProvider)) {
-    const res = resolution === "1080p" ? "1080p" : resolution === "720p" ? "720p" : "480p"
+    // Clamp to the model's catalog resolutions (single source of truth): e.g.
+    // seedance-2-mini exposes only 480p/720p, so a stale/explicit 1080p (or 4k)
+    // maps to its top priced tier instead of emitting an unpriced composite
+    // (which the hard-fail credit guard would 503 on at runtime).
+    const supported = MODEL_CATALOG[effectiveProvider]?.resolutions ?? ["480p", "720p", "1080p"]
+    const want = resolution === "1080p" ? "1080p" : resolution === "720p" ? "720p" : "480p"
+    // Unsupported (e.g. a stale 1080p on seedance-2-mini) clamps to the model's
+    // top priced tier so the emitted composite is always seeded.
+    const res = supported.includes(want) ? want : (supported[supported.length - 1] ?? "480p")
     identifier += `:${res}`
     if (hasVideoRef) identifier += "-ref"
   }

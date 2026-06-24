@@ -55,6 +55,7 @@ export const VIDEO_CLIP_CREDITS: Record<string, VideoClipCost> = {
   "seedance": { credits: 7, clipSeconds: 8 }, // seedance:8s
   "seedance-2": { credits: 50, clipSeconds: 8 }, // seedance-2:8s:720p-ref
   "seedance-2-fast": { credits: 40, clipSeconds: 8 }, // seedance-2-fast:8s:720p-ref
+  "seedance-2-mini": { credits: 25, clipSeconds: 8 }, // seedance-2-mini:8s:720p-ref
   "veo3": { credits: 79, clipSeconds: 8 }, // flat per generation (VEO 3.1 Quality)
   "veo3.1": { credits: 19, clipSeconds: 6 }, // veo3.1 @ 720p
   "veo3_lite": { credits: 10, clipSeconds: 6 }, // veo3_lite @ 720p

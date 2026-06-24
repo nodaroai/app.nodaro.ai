@@ -79,6 +79,7 @@ const VIDEO_MODEL_LABELS: Record<string, string> = {
   seedance: "Seedance",
   "seedance-2": "Seedance 2",
   "seedance-2-fast": "Seedance 2 Fast",
+  "seedance-2-mini": "Seedance 2 Mini",
   veo3: "VEO 3.1 Quality (~125cr/shot)",
   "veo3.1": "VEO 3.1 Fast (~30-40cr/shot)",
   veo3_lite: "VEO 3.1 Lite (~30cr/shot)",

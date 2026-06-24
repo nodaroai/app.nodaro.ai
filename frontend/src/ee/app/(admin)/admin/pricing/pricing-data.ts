@@ -187,6 +187,7 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   "seedance-2-fast":   { provider: "KIE.ai",    providerCostUsd: 0.330, markupPct: 25 },  // 66 KIE cr avg (8s, 720p, no ref; per-sec)
   "seedance-2-fast:8s:1080p":     { provider: "KIE.ai", providerCostUsd: 0.495, markupPct: 25 },  // 99 KIE cr (8s, 1080p, no ref; 1.5× 720p)
   "seedance-2-fast:8s:1080p-ref": { provider: "KIE.ai", providerCostUsd: 0.300, markupPct: 25 },  // 60 KIE cr (8s, 1080p, w/ref)
+  "seedance-2-mini":   { provider: "KIE.ai",    providerCostUsd: 0.205, markupPct: 25 },  // ~41 cr (8s, 720p, no ref; per-sec; 480p/720p only)
   "grok-i2v":          { provider: "KIE.ai",    providerCostUsd: 0.100, markupPct: 25 },  // 20 KIE cr (6s 720p)
   "grok-imagine-video-1.5":        { provider: "KIE.ai", providerCostUsd: 0.590, markupPct: 25 },  // 118 KIE cr (8s 480p default; per-sec 14.5/25 cr/s + 2/img)
   "grok-imagine-video-1.5:8s:720p": { provider: "KIE.ai", providerCostUsd: 1.010, markupPct: 25 },  // 202 KIE cr (8s 720p)
