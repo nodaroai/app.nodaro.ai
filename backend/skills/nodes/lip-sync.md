@@ -1,7 +1,7 @@
 ---
 node_type: lip-sync
-generated_at: 2026-06-16T08:22:28.639Z
-generated_from: 877dfa01a
+generated_at: 2026-06-24T22:32:05.096Z
+generated_from: e08287907
 ---
 
 # Lip Sync
@@ -49,6 +49,12 @@ generated_from: 877dfa01a
 - `syncMode?: "loop" | "bounce" | "cut_off" | "silence" | "remap"`
 - `temperature?: number`
 - `activeSpeaker?: boolean`
+- `mode?: "lite" | "basic"`
+- `separateVocal?: boolean`
+- `openScenedet?: boolean`
+- `alignAudio?: boolean`
+- `alignAudioReverse?: boolean`
+- `templStartSeconds?: number`
 - `referenceOrder?: readonly string[]`
 - `suppressedCanonicalCharacterIds?: readonly string[]`
 - `suppressedCanonicalLocationIds?: readonly string[]`
@@ -87,6 +93,7 @@ generated_from: 877dfa01a
 - `prompt`
 - `model`
 - `resolution`
+- `mode`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## Common gotchas

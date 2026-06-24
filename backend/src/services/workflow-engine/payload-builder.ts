@@ -2984,6 +2984,13 @@ export function buildPayload(
           syncMode: data.syncMode,
           temperature: data.temperature,
           activeSpeaker: data.activeSpeaker,
+          // Volcengine video-to-video dubbing
+          mode: data.mode,
+          separateVocal: data.separateVocal,
+          openScenedet: data.openScenedet,
+          alignAudio: data.alignAudio,
+          alignAudioReverse: data.alignAudioReverse,
+          templStartSeconds: data.templStartSeconds,
           usageLogId,
         },
       }

@@ -13,6 +13,7 @@ import type {
   MotionTransferProvider,
   VideoUpscaleProvider,
   LipSyncProvider,
+  VideoLipSyncOptions,
   ProviderResult,
   ProviderOptions,
   ReconcileOpts,
@@ -1680,6 +1681,81 @@ export class KieVideoProvider
     )
 
     return { url: videoUrl, cost: modelConfig.cost, ...(providerMs !== undefined && { providerMs }) }
+  }
+
+  /**
+   * Video-to-video lip-sync (AI dubbing) for KIE models whose config sets
+   * `inputKind: "video"` (e.g. volcengine). Distinct from `lipSync()`, which is
+   * image+audio and requires a prompt — this path sends `video_url` + `audio_url`
+   * + `mode` and the optional dubbing toggles, and NEVER a prompt. Audio is
+   * auto-trimmed to the provider cap; the route bills per-second via the
+   * `<provider>:<bucket>s` identifiers.
+   */
+  async lipSyncVideo(
+    videoUrl: string,
+    audioUrl: string,
+    opts: VideoLipSyncOptions,
+    model?: string,
+    audioDurationSec?: number,
+    reconcileOpts?: ReconcileOpts,
+  ): Promise<ProviderResult> {
+    const provider = model ?? "volcengine-lipsync"
+    const modelConfig = KIE_LIP_SYNC_MODELS[provider]
+    if (!modelConfig || modelConfig.inputKind !== "video") {
+      throw createSanitizedError(
+        `does not support video lip-sync provider: ${provider}`,
+        "Lip sync generation"
+      )
+    }
+
+    console.log(`[KIE.ai] Generating video lip-sync (dubbing) with ${modelConfig.model}`)
+    console.log(`[KIE.ai] Video: ${videoUrl}, Audio: ${audioUrl}`)
+
+    // Auto-trim audio to the provider's upstream cap (300s for volcengine).
+    const audioCapSec = lipSyncAudioCapFor(provider)
+    const effectiveAudioUrl = await ensureAudioDuration(audioUrl, audioCapSec)
+
+    const input: Record<string, unknown> = {
+      ...(modelConfig.extraParams ?? {}),
+      mode: opts.mode ?? "lite",
+      video_url: videoUrl,
+      audio_url: effectiveAudioUrl,
+    }
+    // Optional toggles — only send when explicitly set. Mode-gated levers
+    // (align_* in lite, open_scenedet in basic) are passed through as provided;
+    // the config UI only surfaces the applicable set and upstream ignores the rest.
+    if (opts.separateVocal !== undefined) input.separate_vocal = opts.separateVocal
+    if (opts.openScenedet !== undefined) input.open_scenedet = opts.openScenedet
+    if (opts.alignAudio !== undefined) input.align_audio = opts.alignAudio
+    if (opts.alignAudioReverse !== undefined) input.align_audio_reverse = opts.alignAudioReverse
+    if (opts.templStartSeconds !== undefined) input.templ_start_seconds = opts.templStartSeconds
+
+    // Dubbing output length follows the audio — use the long poll budget when
+    // audio exceeds 30s (matches kling-avatar's long-run handling).
+    const usesLongBudget = audioDurationSec === undefined || audioDurationSec > 30
+    const pollAttempts = usesLongBudget ? MAX_POLL_ATTEMPTS_LIP_SYNC_LONG : MAX_POLL_ATTEMPTS_VIDEO
+    if (audioDurationSec !== undefined) {
+      console.log(`[KIE.ai] Lip-sync audio duration: ${audioDurationSec.toFixed(1)}s, poll budget: ${pollAttempts}`)
+    }
+
+    const { resultJson, providerMs } = await runKieTask(
+      modelConfig.model,
+      input,
+      pollAttempts,
+      undefined,
+      reconcileOpts,
+    )
+
+    const outUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
+    if (!outUrl) {
+      throw createSanitizedError(
+        "lip sync task succeeded but no URL found",
+        "Lip sync generation"
+      )
+    }
+
+    console.log(`[KIE.ai] Video lip-sync completed: ${outUrl} (cost: $${modelConfig.cost.toFixed(4)})`)
+    return { url: outUrl, cost: modelConfig.cost, ...(providerMs !== undefined && { providerMs }) }
   }
 
   async speechToVideo(

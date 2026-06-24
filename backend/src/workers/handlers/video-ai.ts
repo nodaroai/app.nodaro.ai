@@ -5,9 +5,11 @@ import {
   textToVideo,
   videoToVideo,
   lipSync,
+  lipSyncVideo,
   motionTransfer,
   videoUpscale,
 } from "../../providers/index.js"
+import { KIE_LIP_SYNC_MODELS } from "../../providers/kie/models.js"
 import type { ProgressCallback } from "../../providers/provider.interface.js"
 import { runVeoExtendTask, runVeo1080pTask, runVeo4kTask } from "../../providers/kie/client.js"
 
@@ -600,6 +602,7 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
     enhancer, preprocess, still, poseStyle, expressionScale,
     enableDynamicDuration, disableMusicTrack, enableSpeechEnhancement,
     syncMode, temperature, activeSpeaker,
+    mode, separateVocal, openScenedet, alignAudio, alignAudioReverse, templStartSeconds,
   } = job.data as {
     jobId: string
     imageUrl?: string
@@ -627,6 +630,13 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
     syncMode?: string
     temperature?: number
     activeSpeaker?: boolean
+    // Volcengine video-to-video dubbing
+    mode?: "lite" | "basic"
+    separateVocal?: boolean
+    openScenedet?: boolean
+    alignAudio?: boolean
+    alignAudioReverse?: boolean
+    templStartSeconds?: number
   }
 
   const resolvedProvider = provider ?? "kling-avatar"
@@ -728,6 +738,25 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
     resultCost = out.cost
     resultDisplayCost = out.cost
     resultProviderUsed = "fal"
+  } else if (KIE_LIP_SYNC_MODELS[resolvedProvider]?.inputKind === "video") {
+    // KIE video-to-video dubbing (volcengine) — video_url + audio_url + mode +
+    // optional toggles, NO prompt. Reconciles via the standard "kie-lip-sync"
+    // kind (set above). audioDurationSec drives per-second credit bucketing
+    // (reserved at the route) and selects the longer poll budget for >30s runs.
+    if (!videoUrl) throw new Error("Volcengine lip sync requires a video input (videoUrl)")
+    const result = await lipSyncVideo(
+      videoUrl,
+      audioUrl,
+      resolvedProvider,
+      { mode, separateVocal, openScenedet, alignAudio, alignAudioReverse, templStartSeconds },
+      audioDurationSec,
+      { onTaskCreated: lipSyncOnTaskCreated },
+    )
+    resultUrl = result.url
+    resultCost = result.cost
+    resultDisplayCost = result.displayCost
+    resultProviderUsed = result.providerUsed
+    resultMeta = result
   } else {
     // KIE path (existing) — audioDurationSec drives per-second pricing for
     // kling-avatar(-pro) and selects the longer poll budget for >30s runs.

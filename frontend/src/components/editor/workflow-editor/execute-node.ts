@@ -4045,6 +4045,13 @@ export function executeNode(
             syncMode: lsData.syncMode,
             temperature: lsData.temperature,
             activeSpeaker: lsData.activeSpeaker,
+            // Volcengine video-to-video dubbing
+            mode: lsData.mode,
+            separateVocal: lsData.separateVocal,
+            openScenedet: lsData.openScenedet,
+            alignAudio: lsData.alignAudio,
+            alignAudioReverse: lsData.alignAudioReverse,
+            templStartSeconds: lsData.templStartSeconds,
           },
         );
       },

@@ -96,6 +96,7 @@ const PROVIDER_LABELS: Record<string, string> = {
   "heygen-lipsync-precision": "HeyGen Lipsync Precision",
   "lipsync-2-pro": "Lipsync 2 Pro",
   "sync-lipsync-v3": "Sync Lipsync v3",
+  "volcengine-lipsync": "Volcengine Lip Sync",
 }
 
 interface ConnectedNodeInfo {

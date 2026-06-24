@@ -52,6 +52,7 @@ export {
   motionTransfer,
   videoUpscale,
   lipSync,
+  lipSyncVideo,
   generateMusic,
   textToSpeech,
 } from "./router.js"

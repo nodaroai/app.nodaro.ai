@@ -184,6 +184,16 @@ export interface VideoUpscaleProvider {
   ): Promise<ProviderResult>
 }
 
+/** Optional dubbing toggles for video-input lip-sync (e.g. volcengine). */
+export interface VideoLipSyncOptions {
+  mode?: "lite" | "basic"
+  separateVocal?: boolean
+  openScenedet?: boolean
+  alignAudio?: boolean
+  alignAudioReverse?: boolean
+  templStartSeconds?: number
+}
+
 export interface LipSyncProvider {
   lipSync(
     imageUrl: string,
@@ -191,6 +201,19 @@ export interface LipSyncProvider {
     prompt?: string,
     model?: string,
     resolution?: string,
+    audioDurationSec?: number,
+    reconcileOpts?: ReconcileOpts,
+  ): Promise<ProviderResult>
+  /**
+   * Video-to-video lip-sync (AI dubbing) for video-input KIE models
+   * (`KieModelConfig.inputKind === "video"`). Optional — only the KIE provider
+   * implements it; the router resolves it explicitly.
+   */
+  lipSyncVideo?(
+    videoUrl: string,
+    audioUrl: string,
+    opts: VideoLipSyncOptions,
+    model?: string,
     audioDurationSec?: number,
     reconcileOpts?: ReconcileOpts,
   ): Promise<ProviderResult>

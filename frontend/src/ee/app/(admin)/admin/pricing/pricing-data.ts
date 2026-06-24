@@ -276,6 +276,15 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   "sync-lipsync-v3:60s":           { provider: "fal.ai",    providerCostUsd: 8.0000,  markupPct: 0 },
   "sync-lipsync-v3:120s":          { provider: "fal.ai",    providerCostUsd: 16.0000, markupPct: 0 },
   "sync-lipsync-v3:300s":          { provider: "fal.ai",    providerCostUsd: 40.0000, markupPct: 0 },  // 5-min ceiling
+  // Volcengine ($0.04/s = 8 KIE cr/sec, identical to kling-avatar) — KIE, video-to-video
+  // dubbing, per output second, billed at cost (0% markup → admin display = the 2 cr/sec
+  // charge). Buckets 15/30/60/120/300s.
+  "volcengine-lipsync":            { provider: "KIE.ai",    providerCostUsd: 12.0000, markupPct: 0 },  // bare = 300s ceiling
+  "volcengine-lipsync:15s":        { provider: "KIE.ai",    providerCostUsd: 0.6000,  markupPct: 0 },
+  "volcengine-lipsync:30s":        { provider: "KIE.ai",    providerCostUsd: 1.2000,  markupPct: 0 },
+  "volcengine-lipsync:60s":        { provider: "KIE.ai",    providerCostUsd: 2.4000,  markupPct: 0 },
+  "volcengine-lipsync:120s":       { provider: "KIE.ai",    providerCostUsd: 4.8000,  markupPct: 0 },
+  "volcengine-lipsync:300s":       { provider: "KIE.ai",    providerCostUsd: 12.0000, markupPct: 0 },  // 5-min ceiling
   // ── Audio / TTS / Music ──
   "elevenlabs-v3":     { provider: "ElevenLabs", providerCostUsd: 0.050, markupPct: 25 },  // direct ElevenLabs API
   "elevenlabs-turbo":       { provider: "KIE.ai",    providerCostUsd: 0.030, markupPct: 25 },  // 6 KIE cr

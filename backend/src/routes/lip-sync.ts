@@ -46,6 +46,13 @@ const lipSyncBody = z.object({
   syncMode: z.enum(["loop", "bounce", "cut_off", "silence", "remap"]).optional(),
   temperature: z.number().min(0).max(1).optional(),
   activeSpeaker: z.boolean().optional(),
+  // Volcengine video-to-video lip sync (AI dubbing) params
+  mode: z.enum(["lite", "basic"]).optional(),
+  separateVocal: z.boolean().optional(),
+  openScenedet: z.boolean().optional(),
+  alignAudio: z.boolean().optional(),
+  alignAudioReverse: z.boolean().optional(),
+  templStartSeconds: z.number().min(0).max(86400).optional(),
   userId: z.string().uuid().optional(),
 })
 
@@ -97,6 +104,7 @@ export async function lipSyncRoutes(app: FastifyInstance) {
       enhancer, preprocess, still, poseStyle, expressionScale,
       enableDynamicDuration, disableMusicTrack, enableSpeechEnhancement,
       syncMode, temperature, activeSpeaker,
+      mode, separateVocal, openScenedet, alignAudio, alignAudioReverse, templStartSeconds,
     } = parsed.data
     const userId = req.userId
 
@@ -110,6 +118,14 @@ export async function lipSyncRoutes(app: FastifyInstance) {
     if (!imageUrl && !videoUrl) {
       return reply.status(400).send({
         error: { code: "validation_error", message: "Either imageUrl or videoUrl is required" },
+      })
+    }
+
+    // Volcengine is video-to-video dubbing — no image fallback, so a video input
+    // is mandatory (the worker routes it through the KIE lipSyncVideo path).
+    if (provider === "volcengine-lipsync" && !videoUrl) {
+      return reply.status(400).send({
+        error: { code: "validation_error", message: "Volcengine lip sync requires a video input (videoUrl)" },
       })
     }
 
@@ -155,6 +171,7 @@ export async function lipSyncRoutes(app: FastifyInstance) {
       enhancer, preprocess, still, poseStyle, expressionScale,
       enableDynamicDuration, disableMusicTrack, enableSpeechEnhancement,
       syncMode, temperature, activeSpeaker,
+      mode, separateVocal, openScenedet, alignAudio, alignAudioReverse, templStartSeconds,
       usageLogId,
     })
 
