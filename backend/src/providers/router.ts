@@ -27,6 +27,7 @@ import type {
   MotionTransferProvider,
   VideoUpscaleProvider,
   LipSyncProvider,
+  VideoLipSyncOptions,
   MusicGenerationProvider,
   TextToSpeechProvider,
   TextToSpeechOptions,
@@ -291,6 +292,33 @@ export async function lipSync(
     async (instance) => {
       const p = resolveModule<LipSyncProvider>(instance, "video")
       return p.lipSync(imageUrl, audioUrl, prompt, model, resolution, audioDurationSec, reconcileOpts)
+    }
+  )
+}
+
+/**
+ * Video-to-video lip-sync (AI dubbing) for video-input models (volcengine).
+ * Same "lip-sync" capability/routing as lipSync(), but dispatches the provider's
+ * optional `lipSyncVideo` (video_url + audio_url + dubbing toggles, no prompt).
+ */
+export async function lipSyncVideo(
+  videoUrl: string,
+  audioUrl: string,
+  model: string,
+  opts: VideoLipSyncOptions,
+  audioDurationSec?: number,
+  reconcileOpts?: ReconcileOpts,
+): Promise<RouteResult> {
+  return routeAndExecute(
+    "lip-sync",
+    model,
+    "lipSync",
+    async (instance) => {
+      const p = resolveModule<LipSyncProvider>(instance, "video")
+      if (!p.lipSyncVideo) {
+        throw new Error(`Provider for ${model} does not implement video lip-sync`)
+      }
+      return p.lipSyncVideo(videoUrl, audioUrl, opts, model, audioDurationSec, reconcileOpts)
     }
   )
 }

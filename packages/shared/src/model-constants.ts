@@ -817,6 +817,12 @@ export const LIP_SYNC_PROVIDERS = [
   ***REDACTED-OSS-SCRUB***
   // branch); priced per-second via buildLipSyncCreditId (see lip-sync-pricing.ts).
   "sync-lipsync-v3",
+  // Volcengine video-to-video lip sync — KIE-hosted, VIDEO-input AI dubbing
+  // (mode lite/basic; multi-speaker scene-detection + speaker ID in basic).
+  // Billed per-second via buildLipSyncCreditId; routed through the KIE
+  // `lipSyncVideo` path (KieModelConfig.inputKind === "video"), NOT the
+  // image+prompt `lipSync` path.
+  "volcengine-lipsync",
   // Seedance 2 / 2 Fast — not "lip-sync models" per se, but ByteDance's
   // multimodal video models do native phoneme-level lip sync in 8+
   // languages when fed `reference_audio_urls` alongside a `first_frame_url`.
@@ -859,6 +865,7 @@ export const VIDEO_INPUT_LIP_SYNC_PROVIDERS = new Set([
   "heygen-lipsync-precision",
   "lipsync-2-pro",
   "sync-lipsync-v3",
+  "volcengine-lipsync",
 ] as const)
 
 /** Lip-sync providers that accept either video or image input */

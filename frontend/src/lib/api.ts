@@ -4055,6 +4055,13 @@ export async function lipSyncApi(
     syncMode?: string
     temperature?: number
     activeSpeaker?: boolean
+    // Volcengine video-to-video dubbing
+    mode?: string
+    separateVocal?: boolean
+    openScenedet?: boolean
+    alignAudio?: boolean
+    alignAudioReverse?: boolean
+    templStartSeconds?: number
   } = {},
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { audioUrl }
@@ -4083,6 +4090,12 @@ export async function lipSyncApi(
   if (opts.syncMode !== undefined) body.syncMode = opts.syncMode
   if (opts.temperature !== undefined) body.temperature = opts.temperature
   if (opts.activeSpeaker !== undefined) body.activeSpeaker = opts.activeSpeaker
+  if (opts.mode !== undefined) body.mode = opts.mode
+  if (opts.separateVocal !== undefined) body.separateVocal = opts.separateVocal
+  if (opts.openScenedet !== undefined) body.openScenedet = opts.openScenedet
+  if (opts.alignAudio !== undefined) body.alignAudio = opts.alignAudio
+  if (opts.alignAudioReverse !== undefined) body.alignAudioReverse = opts.alignAudioReverse
+  if (opts.templStartSeconds !== undefined) body.templStartSeconds = opts.templStartSeconds
   return apiJson("/v1/lip-sync", {
     body,
     workflowId: true,

@@ -2014,6 +2014,13 @@ export type LipSyncData = {
   syncMode?: "loop" | "bounce" | "cut_off" | "silence" | "remap"
   temperature?: number
   activeSpeaker?: boolean
+  // Volcengine video-to-video lip sync (AI dubbing) params
+  mode?: "lite" | "basic"
+  separateVocal?: boolean
+  openScenedet?: boolean
+  alignAudio?: boolean
+  alignAudioReverse?: boolean
+  templStartSeconds?: number
   /** See GenerateImageData.referenceOrder. */
   referenceOrder?: readonly string[]
   /** See GenerateImageData.suppressedCanonicalCharacterIds. */

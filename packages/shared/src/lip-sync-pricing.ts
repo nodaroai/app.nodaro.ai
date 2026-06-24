@@ -38,6 +38,8 @@ export const LIP_SYNC_MAX_AUDIO_SECONDS: Record<string, number> = {
   "lipsync-2-pro": 300,
   // Sync Lipsync v3 (fal.ai) — per-second dubbing, 5-min ceiling for bucketing.
   "sync-lipsync-v3": 300,
+  // Volcengine (KIE) — video-to-video dubbing, per-second, 5-min ceiling.
+  "volcengine-lipsync": 300,
 }
 
 export function getLipSyncMaxAudioSeconds(provider: string): number {
@@ -52,6 +54,8 @@ const PER_SECOND_LIP_SYNC_PROVIDERS = new Set([
   "lipsync-2-pro",
   ***REDACTED-OSS-SCRUB***
   "sync-lipsync-v3",
+  ***REDACTED-OSS-SCRUB***
+  "volcengine-lipsync",
 ])
 
 export function isPerSecondLipSyncProvider(provider: string): boolean {

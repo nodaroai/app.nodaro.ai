@@ -51,6 +51,10 @@ describe("getLipSyncMaxAudioSeconds", () => {
     expect(getLipSyncMaxAudioSeconds("sync-lipsync-v3")).toBe(300)
   })
 
+  it("reports 5min for the Volcengine dubbing model (NOT the 15s default)", () => {
+    expect(getLipSyncMaxAudioSeconds("volcengine-lipsync")).toBe(300)
+  })
+
   it("defaults unknown providers to 15s", () => {
     expect(getLipSyncMaxAudioSeconds("nope")).toBe(15)
   })
@@ -69,6 +73,10 @@ describe("isPerSecondLipSyncProvider", () => {
 
   it("flags the fal sync-lipsync-v3 model", () => {
     expect(isPerSecondLipSyncProvider("sync-lipsync-v3")).toBe(true)
+  })
+
+  it("flags the Volcengine dubbing model", () => {
+    expect(isPerSecondLipSyncProvider("volcengine-lipsync")).toBe(true)
   })
 
   it("returns false for everything else", () => {
@@ -104,6 +112,13 @@ describe("buildLipSyncCreditId", () => {
     expect(buildLipSyncCreditId("sync-lipsync-v3", 12)).toBe("sync-lipsync-v3:15s")
     expect(buildLipSyncCreditId("sync-lipsync-v3", 200)).toBe("sync-lipsync-v3:300s")
     expect(buildLipSyncCreditId("sync-lipsync-v3", undefined)).toBe("sync-lipsync-v3:300s")
+  })
+
+  it("emits composite IDs for the Volcengine dubbing model", () => {
+    expect(buildLipSyncCreditId("volcengine-lipsync", 12)).toBe("volcengine-lipsync:15s")
+    expect(buildLipSyncCreditId("volcengine-lipsync", 45)).toBe("volcengine-lipsync:60s")
+    expect(buildLipSyncCreditId("volcengine-lipsync", 200)).toBe("volcengine-lipsync:300s")
+    expect(buildLipSyncCreditId("volcengine-lipsync", undefined)).toBe("volcengine-lipsync:300s")
   })
 
   it("returns the bare provider for non-per-second models", () => {

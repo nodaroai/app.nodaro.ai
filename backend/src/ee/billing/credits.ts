@@ -638,6 +638,17 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  // to kling-avatar — billed per output second, bucketed via buildLipSyncCreditId.
+  // At-cost (matches kling-avatar + the per-second lip-sync family): credits =
+  ***REDACTED-OSS-SCRUB***
+  // the reserved bucket is committed verbatim as the charge.
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
   // ── Replicate MMAudio (video-sfx node) ──
   // BASE credits (pre-markup). creditGuard applies cost_markup_percent at request time.
   ***REDACTED-OSS-SCRUB***

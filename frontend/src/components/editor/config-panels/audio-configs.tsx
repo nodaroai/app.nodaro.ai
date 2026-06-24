@@ -70,7 +70,7 @@ import { ProviderAudioTagWarning } from "./provider-audio-tag-warning"
 import { ConnectedAudioSources } from "./connected-audio-sources"
 import { FinalAudioPromptPreview } from "./final-audio-prompt-preview"
 import { LIP_SYNC_MODELS, TTS_MODELS, SUNO_MODELS } from "./model-options"
-import { REPLICATE_LIP_SYNC_PROVIDERS, FAL_LIP_SYNC_PROVIDERS, getEffectiveSunoCustomMode, SUNO_ADD_TRACK_MODELS, SUNO_TEXT_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars, getMaxTtsChars } from "@nodaro/shared"
+import { REPLICATE_LIP_SYNC_PROVIDERS, FAL_LIP_SYNC_PROVIDERS, VIDEO_INPUT_LIP_SYNC_PROVIDERS, getEffectiveSunoCustomMode, SUNO_ADD_TRACK_MODELS, SUNO_TEXT_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars, getMaxTtsChars } from "@nodaro/shared"
 import { PromptLengthCounter } from "./prompt-length-counter"
 import { InjectedReferenceList } from "./injected-reference-list"
 import { SeedanceReferenceTip } from "./seedance-reference-tip"
@@ -1300,16 +1300,25 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
   const isKie =
     !REPLICATE_LIP_SYNC_PROVIDERS.has(provider as never) &&
     !FAL_LIP_SYNC_PROVIDERS.has(provider as never)
+  // Volcengine is KIE-hosted but VIDEO-input dubbing — no resolution lever and
+  // no motion prompt. The image-input KIE talking-head set (kling-avatar*,
+  // infinitalk, seedance*) is `isKie` minus the video-input providers. This
+  // (data-driven via the shared set) gates the resolution dropdown, motion
+  // prompt, and KIE help text so they stay hidden for Volcengine and any future
+  // KIE video-input dubbing model.
+  const imageInputKie =
+    isKie && !VIDEO_INPUT_LIP_SYNC_PROVIDERS.has(provider as never)
+  const isVolcengine = provider === "volcengine-lipsync"
   // Seedance 2 / 2 Fast support 1080p (cinematic tier); other KIE providers
   // cap at 720p. Toggling between them adds/removes the 1080p option.
   const supports1080p = provider === "seedance-2" || provider === "seedance-2-fast"
 
-  // Fail-safe: only KIE providers expose the resolution lever. When the user
-  // switches to a Replicate or fal provider (or the cached resolution isn't in
-  // the current provider's valid set), clear/snap so the lip-sync route's Zod
-  // enum doesn't see a stale value.
+  // Fail-safe: only image-input KIE providers expose the resolution lever. When
+  // the user switches to a Replicate/fal provider, to Volcengine (video-input,
+  // no resolution), or the cached resolution isn't valid for the current
+  // provider, clear/snap so the lip-sync route's Zod enum never sees a stale value.
   useEffect(() => {
-    if (!isKie) {
+    if (!imageInputKie) {
       if (data.resolution !== undefined) onUpdate({ resolution: undefined })
       return
     }
@@ -1335,8 +1344,8 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
       </MappableField>
       <ModelDescriptionHint modelId={provider} />
 
-      {/* Resolution — Kling Avatar / InfiniTalk providers only */}
-      {isKie && (
+      {/* Resolution — image-input KIE providers only (Kling Avatar / InfiniTalk / Seedance) */}
+      {imageInputKie && (
         <MappableField field="resolution" label="Resolution" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
           <Select value={data.resolution || "720p"} onValueChange={(v) => onUpdate({ resolution: v as LipSyncData["resolution"] })}>
             <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
@@ -1349,8 +1358,8 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
         </MappableField>
       )}
 
-      {/* Motion Prompt — Kling Avatar / InfiniTalk providers only */}
-      {isKie && (
+      {/* Motion Prompt — image-input KIE providers only (Kling Avatar / InfiniTalk / Seedance) */}
+      {imageInputKie && (
         <MappableField field="prompt" label="Motion Prompt (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={
           <span className="inline-flex items-center gap-0.5">
             <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
@@ -1548,8 +1557,63 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
         </p>
       )}
 
+      {/* Volcengine video-to-video dubbing — mode-conditional controls. Lite =
+          single-speaker frontal (loop levers); Basic = complex scenes + the
+          multi-speaker scene-detection differentiator. */}
+      {isVolcengine && (
+        <>
+          <div>
+            <Label>Mode</Label>
+            <Select value={data.mode ?? "lite"} onValueChange={(v) => onUpdate({ mode: v as "lite" | "basic" })}>
+              <SelectTrigger aria-label="Mode"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="lite">Lite — single speaker, frontal (faster)</SelectItem>
+                <SelectItem value="basic">Basic — complex scenes, multi-speaker</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center justify-between">
+            <Label>Separate vocals (denoise)</Label>
+            <Switch checked={data.separateVocal ?? false} onCheckedChange={(v) => onUpdate({ separateVocal: v })} />
+          </div>
+          <p className="text-xs text-muted-foreground -mt-1">Strip background noise from the driving audio</p>
+
+          {/* Basic mode only — multi-speaker scene detection + speaker ID */}
+          {(data.mode ?? "lite") === "basic" && (
+            <>
+              <div className="flex items-center justify-between">
+                <Label>Scene detection + speaker ID</Label>
+                <Switch checked={data.openScenedet ?? false} onCheckedChange={(v) => onUpdate({ openScenedet: v })} />
+              </div>
+              <p className="text-xs text-muted-foreground -mt-1">Segment scene cuts and identify who is speaking (multi-speaker clips)</p>
+            </>
+          )}
+
+          {/* Lite mode only — loop the video when the audio runs longer */}
+          {(data.mode ?? "lite") === "lite" && (
+            <>
+              <div className="flex items-center justify-between">
+                <Label>Loop video if audio is longer</Label>
+                <Switch checked={data.alignAudio !== false} onCheckedChange={(v) => onUpdate({ alignAudio: v })} />
+              </div>
+              <div className="flex items-center justify-between">
+                <Label>Reverse loop (ping-pong)</Label>
+                <Switch checked={data.alignAudioReverse ?? false} onCheckedChange={(v) => onUpdate({ alignAudioReverse: v })} disabled={data.alignAudio === false} />
+              </div>
+              <p className="text-xs text-muted-foreground -mt-1">Reverse loop requires looping to be on</p>
+            </>
+          )}
+
+          <div>
+            <Label>Template start time (seconds)</Label>
+            <Input type="number" min={0} value={data.templStartSeconds ?? 0} onChange={(e) => onUpdate({ templStartSeconds: parseFloat(e.target.value) || 0 })} />
+            <p className="text-xs text-muted-foreground mt-1">Where in the source video to start driving the lips (advanced)</p>
+          </div>
+        </>
+      )}
+
       {/* Help text per provider category */}
-      {isKie && (
+      {imageInputKie && (
         <p className="text-xs text-muted-foreground">
           Connect a portrait image and an audio track (speech/voiceover) to generate a talking head video.
         </p>
@@ -1582,6 +1646,11 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
       {provider === "sync-lipsync-v3" && (
         <p className="text-xs text-muted-foreground">
           Connect a video and an audio track to dub the footage with sync.so v3 (fal.ai). Billed per second of output.
+        </p>
+      )}
+      {isVolcengine && (
+        <p className="text-xs text-muted-foreground">
+          Connect a video and an audio track to dub the footage (Volcengine). Output length follows the audio. Billed per second; ~2 credits/second.
         </p>
       )}
     </div>

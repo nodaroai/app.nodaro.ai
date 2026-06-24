@@ -56,6 +56,17 @@ vi.mock("../../../lib/safe-fetch.js", () => ({
   safeFetch: mocks.mockSafeFetch,
 }))
 
+// Neutralize the audio-trim helpers so ensureAudioDuration (used by lipSync /
+// lipSyncVideo) is a no-op: getVideoDuration returns a short duration so the
+// original audio URL passes through without download/ffmpeg/upload.
+vi.mock("../../video/ffmpeg-utils.js", () => ({
+  downloadFile: vi.fn().mockResolvedValue(undefined),
+  getVideoDuration: vi.fn().mockResolvedValue(10),
+  createWorkDir: vi.fn().mockResolvedValue("/tmp/lip-sync-test"),
+  cleanupWorkDir: vi.fn().mockResolvedValue(undefined),
+  runFfmpeg: vi.fn().mockResolvedValue(undefined),
+}))
+
 // Mock sharp so ensureImageForProvider doesn't need real image data. The chain
 // is intentionally permissive — resize/jpeg return `this`, toBuffer returns a
 // tiny fake JPEG — so the conversion path can run without real image bytes.
@@ -478,5 +489,54 @@ describe("KieVideoProvider.textToVideo", () => {
     expect(callArgs.imageUrls).toBeUndefined()
     expect(mocks.mockRunKieTask).not.toHaveBeenCalled()
     expect(result.cost).toBe(1.00)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// lipSyncVideo (video-to-video dubbing — volcengine)
+// ---------------------------------------------------------------------------
+
+describe("KieVideoProvider.lipSyncVideo", () => {
+  it("builds the Volcengine payload: video_url + audio_url + mode, NO image_url / prompt", async () => {
+    await provider.lipSyncVideo(
+      "https://clip.mp4",
+      "https://speech.mp3",
+      { mode: "basic", separateVocal: true, openScenedet: true },
+      "volcengine-lipsync",
+      10,
+    )
+    const [model, input] = mocks.mockRunKieTask.mock.calls[0]
+    expect(model).toBe("volcengine/video-to-video-lip-sync")
+    expect(input.video_url).toBe("https://clip.mp4")
+    expect(input.audio_url).toBe("https://speech.mp3")
+    expect(input.mode).toBe("basic")
+    expect(input.separate_vocal).toBe(true)
+    expect(input.open_scenedet).toBe(true)
+    // Volcengine is video-to-video — it must NOT receive the image-path params.
+    expect(input.image_url).toBeUndefined()
+    expect(input.prompt).toBeUndefined()
+  })
+
+  it("defaults mode to 'lite' and omits unset toggles", async () => {
+    await provider.lipSyncVideo(
+      "https://clip.mp4",
+      "https://speech.mp3",
+      {},
+      "volcengine-lipsync",
+      10,
+    )
+    const input = mocks.mockRunKieTask.mock.calls[0][1]
+    expect(input.mode).toBe("lite")
+    expect(input.separate_vocal).toBeUndefined()
+    expect(input.open_scenedet).toBeUndefined()
+    expect(input.align_audio).toBeUndefined()
+    expect(input.templ_start_seconds).toBeUndefined()
+  })
+
+  it("rejects a non-video-input provider", async () => {
+    await expect(
+      provider.lipSyncVideo("https://clip.mp4", "https://speech.mp3", {}, "kling-avatar", 10),
+    ).rejects.toThrow()
+    expect(mocks.mockRunKieTask).not.toHaveBeenCalled()
   })
 })

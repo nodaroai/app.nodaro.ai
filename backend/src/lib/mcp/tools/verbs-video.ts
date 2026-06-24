@@ -962,10 +962,14 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         "output. Requires video input. Good when the source clip's face is " +
         "small / blurry and you want sharpening on top of the lip sync.\n" +
         "  • **`sadtalker`** (9 cr) — talking avatar from a SINGLE image. Good " +
-        "for animating a portrait into a speaking head when no video exists.\n\n" +
+        "for animating a portrait into a speaking head when no video exists.\n" +
+        "  • **`volcengine-lipsync`** (2 cr/s — e.g. 30 cr/15s, 120 cr/60s) — KIE " +
+        "**video-to-video AI dubbing**: re-syncs an existing clip's lips to a new " +
+        "vocal track. `mode: basic` adds multi-speaker scene detection + speaker " +
+        "ID. Cheapest modern dubbing option. Requires video input.\n\n" +
         "**Input requirements by model**: seedance-2(-fast), kling-avatar(-pro), " +
-        "infinitalk, sadtalker → image input only. latentsync, video-retalking → " +
-        "video input only. wav2lip → image OR video.\n\n" +
+        "infinitalk, sadtalker → image input only. latentsync, video-retalking, " +
+        "volcengine-lipsync → video input only. wav2lip → image OR video.\n\n" +
         "Returns a job_id. The widget renders the resulting video inline.",
       inputSchema: {
         image_url: z
@@ -991,13 +995,14 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .string()
           .optional()
           .describe(
-            "Lip-sync model. Default kling-avatar. All 9 options: " +
+            "Lip-sync model. Default kling-avatar. All 10 options: " +
             "seedance-2 (~50/75 cr, image, native phoneme lip-sync 8+ languages, premium), " +
             "seedance-2-fast (~40/60 cr, image, same lip-sync cheaper), " +
             "kling-avatar (28 cr, image, 720p), kling-avatar-pro (56 cr, image, 1080p), " +
             "infinitalk (11/42 cr, image, 480p|720p), latentsync (5 cr, video, singing), " +
             "wav2lip (1 cr, image|video, fastest+cheapest), video-retalking " +
-            "(20 cr, video, face enhancement), sadtalker (9 cr, single image). " +
+            "(20 cr, video, face enhancement), sadtalker (9 cr, single image), " +
+            "volcengine-lipsync (2 cr/s, video, AI dubbing, mode lite|basic for multi-speaker). " +
             "Unknown values fall back to kling-avatar.",
           ),
         resolution: z
@@ -1006,6 +1011,13 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .describe(
             "Resolution lever. infinitalk: 480p|720p. seedance-2(-fast): 480p|720p|1080p. " +
             "Other models ignore this.",
+          ),
+        mode: z
+          .enum(["lite", "basic"])
+          .optional()
+          .describe(
+            "volcengine-lipsync only. 'lite' (default) = single-person frontal, faster. " +
+            "'basic' = multi-speaker (scene detection + speaker ID). Other models ignore this.",
           ),
       },
       outputSchema: {
@@ -1096,6 +1108,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         provider,
         ...(args.prompt ? { prompt: args.prompt } : {}),
         ...(args.resolution ? { resolution: args.resolution } : {}),
+        ...(args.mode ? { mode: args.mode } : {}),
         mcp_client: session.clientName,
         userId: session.userId,
       }

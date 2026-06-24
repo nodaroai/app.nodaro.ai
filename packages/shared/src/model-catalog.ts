@@ -1700,6 +1700,24 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "sync-lipsync-v3:300s", credits: 2000, note: "5-min ceiling" },
     ],
   },
+  "volcengine-lipsync": {
+    id: "volcengine-lipsync",
+    kind: "video",
+    modes: ["lip-sync"] as const,
+    family: "Volcengine",
+    label: "Volcengine Lip Sync",
+    series: "Volcengine",
+    description: "Video-to-video AI dubbing — re-syncs lips to a new vocal track. Multi-speaker (scene detection + speaker ID) in basic mode. Video input, billed per second.",
+    useCases: ["lip-sync", "dubbing", "video-to-video"],
+    pricing: [
+      { identifier: "volcengine-lipsync", credits: 600, note: "5-min ceiling (no duration given)" },
+      { identifier: "volcengine-lipsync:15s", credits: 30 },
+      { identifier: "volcengine-lipsync:30s", credits: 60 },
+      { identifier: "volcengine-lipsync:60s", credits: 120 },
+      { identifier: "volcengine-lipsync:120s", credits: 240 },
+      { identifier: "volcengine-lipsync:300s", credits: 600, note: "5-min ceiling" },
+    ],
+  },
 }
 
 // =============================================================================

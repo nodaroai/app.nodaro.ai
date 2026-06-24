@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => {
   const mockMotionTransfer = vi.fn()
   const mockVideoUpscale = vi.fn()
   const mockFalLipSync = vi.fn()
+  const mockLipSyncVideo = vi.fn()
 
   const mockSpeechToVideo = vi.fn()
 
@@ -45,6 +46,7 @@ const mocks = vi.hoisted(() => {
     mockMotionTransfer,
     mockVideoUpscale,
     mockFalLipSync,
+    mockLipSyncVideo,
     mockSpeechToVideo,
     mockUploadToR2,
     mockMergeVideoAudio,
@@ -76,6 +78,7 @@ vi.mock("@/providers/index.js", () => ({
   textToVideo: mocks.mockTextToVideo,
   videoToVideo: mocks.mockVideoToVideo,
   lipSync: mocks.mockLipSync,
+  lipSyncVideo: mocks.mockLipSyncVideo,
   motionTransfer: mocks.mockMotionTransfer,
   videoUpscale: mocks.mockVideoUpscale,
 }))
@@ -169,6 +172,7 @@ beforeEach(() => {
   mocks.mockTextToVideo.mockResolvedValue(VIDEO_RESULT)
   mocks.mockVideoToVideo.mockResolvedValue(VIDEO_RESULT)
   mocks.mockLipSync.mockResolvedValue(VIDEO_RESULT)
+  mocks.mockLipSyncVideo.mockResolvedValue(VIDEO_RESULT)
   mocks.mockFalLipSync.mockResolvedValue({ videoUrl: "https://fal.media/out.mp4", cost: 8.0 })
   mocks.mockMotionTransfer.mockResolvedValue(VIDEO_RESULT)
   mocks.mockVideoUpscale.mockResolvedValue(VIDEO_RESULT)
@@ -558,6 +562,46 @@ describe("lip-sync handler", () => {
       "Lip-sync requires a video or image input",
     )
     expect(mocks.mockFalLipSync).not.toHaveBeenCalled()
+  })
+
+  // --- KIE video-input branch (volcengine) ----------------------------------
+  it("routes volcengine-lipsync to the KIE lipSyncVideo branch (NOT lipSync) with video_url + mode + toggles", async () => {
+    const job = makeJob("lip-sync", {
+      provider: "volcengine-lipsync",
+      videoUrl: "https://clip.mp4",
+      audioUrl: "https://speech.mp3",
+      mode: "basic",
+      openScenedet: true,
+      separateVocal: true,
+      audioDurationSec: 30,
+    })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockLipSyncVideo).toHaveBeenCalledWith(
+      "https://clip.mp4",
+      "https://speech.mp3",
+      "volcengine-lipsync",
+      expect.objectContaining({ mode: "basic", openScenedet: true, separateVocal: true }),
+      30,
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+    )
+    // The image+prompt KIE path must NOT run for a video-input dubbing provider.
+    expect(mocks.mockLipSync).not.toHaveBeenCalled()
+    expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalled()
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalled()
+  })
+
+  it("volcengine-lipsync throws when no videoUrl is provided (no image fallback)", async () => {
+    const job = makeJob("lip-sync", {
+      provider: "volcengine-lipsync",
+      imageUrl: "https://portrait.png",
+      audioUrl: "https://speech.mp3",
+    })
+    await expect(handler(job as never, makeCtx())).rejects.toThrow(
+      "Volcengine lip sync requires a video input",
+    )
+    expect(mocks.mockLipSyncVideo).not.toHaveBeenCalled()
+    expect(mocks.mockLipSync).not.toHaveBeenCalled()
   })
 })
 

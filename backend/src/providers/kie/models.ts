@@ -22,6 +22,7 @@ export interface KieModelConfig {
   cost: number            // Cost in USD per generation
   credits: number         // Credits consumed per generation
   inputType?: string      // Some models have different input types
+  inputKind?: "image" | "video"  // Lip-sync input shape: "image" (image+audio, default) vs "video" (video+audio dubbing, e.g. volcengine). Drives the KIE lipSync vs lipSyncVideo dispatch.
   imageParam?: string     // Parameter name for input image (default: "image", some use "input_urls")
   aspectRatioParam?: string    // Non-standard aspect ratio param name (default: "aspect_ratio"; e.g., "ratio")
   maxRefImages?: number        // If set, merges primary + referenceImageUrls into imageParam array up to this cap
@@ -1117,6 +1118,19 @@ export const KIE_LIP_SYNC_MODELS: Record<string, KieModelConfig> = {
     ***REDACTED-OSS-SCRUB***
     imageParam: "image_url",
     extraParams: { resolution: "720p" },
+  },
+
+  // Volcengine video-to-video lip sync (AI dubbing). VIDEO input (video_url +
+  // audio_url) — routed through the KIE `lipSyncVideo` path, NOT the image+prompt
+  // `lipSync` path. Billed per-second by the route via the volcengine-lipsync:Ns
+  ***REDACTED-OSS-SCRUB***
+  // kling-avatar) and are NOT the billing driver.
+  "volcengine-lipsync": {
+    model: "volcengine/video-to-video-lip-sync",
+    inputKind: "video",
+    credits: 112,
+    cost: 0.56,
+    extraParams: {},
   },
 }
 
