@@ -205,11 +205,20 @@ describe("POST /v1/generate-character", () => {
     },
   )
 
-  it("rejects invalid style 'cartoon'", async () => {
+  it("accepts a free-text style (e.g. 'cartoon') — entities inherit the project's broad visualStyle vocabulary", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/generate-character",
       payload: { ...validPayload, style: "cartoon" },
+    })
+    expect(res.statusCode).not.toBe(400)
+  })
+
+  it("rejects an over-long style (>50 chars) — the real free-text boundary", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-character",
+      payload: { ...validPayload, style: "x".repeat(51) },
     })
     expect(res.statusCode).toBe(400)
   })
@@ -297,11 +306,20 @@ describe("POST /v1/generate-face", () => {
     expect(res.statusCode).not.toBe(400)
   })
 
-  it("rejects invalid style 'watercolor'", async () => {
+  it("accepts a free-text style (e.g. 'watercolor') — entities persist style as free text", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/generate-face",
       payload: { ...validPayload, style: "watercolor" },
+    })
+    expect(res.statusCode).not.toBe(400)
+  })
+
+  it("rejects an over-long style (>50 chars) — the real free-text boundary", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-face",
+      payload: { ...validPayload, style: "x".repeat(51) },
     })
     expect(res.statusCode).toBe(400)
   })

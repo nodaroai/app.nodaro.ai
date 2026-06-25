@@ -13,7 +13,8 @@ import { formatZodError } from "../lib/zod-error.js"
 const generateFaceBody = z.object({
   name: z.string().min(1).max(200),
   description: z.string().max(2000).optional(),
-  style: z.enum(["realistic", "anime", "3d-pixar", "illustration"]).optional(),
+  // Free-text style (matches the entity save route + DB; a narrow enum would 400 inherited styles like "cinematic").
+  style: z.string().max(50).optional(),
   prompt: z.string().max(4000).optional(),
   userPrompt: z.string().max(8000).optional(),
   sourceImageUrl: safeUrlSchema.optional(),

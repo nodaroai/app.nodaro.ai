@@ -17,7 +17,10 @@ import {
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
 
-const STYLE = z.enum(["realistic", "anime", "3d-pixar", "illustration"]).optional()
+// Free-text style — entities persist style as free text (the save routes + DB
+// column are both z.string().max(50)). A narrow enum 400s inherited styles
+// like the project's "cinematic" visualStyle. Style is only prompt seasoning.
+const STYLE = z.string().max(50).optional()
 
 /**
  * Character/Location/Object generators.

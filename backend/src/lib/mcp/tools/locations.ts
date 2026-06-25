@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { CHARACTER_STYLES, LOCATION_ATMOSPHERE_PROVIDERS } from "@nodaro/shared"
+import { LOCATION_ATMOSPHERE_PROVIDERS } from "@nodaro/shared"
 import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
@@ -655,7 +655,8 @@ function registerGenerationTools(opts: RegisterLocationToolsOpts): void {
             "Display name for the location (used in the generated prompt context).",
           ),
         category: z.string().max(100).optional(),
-        style: z.enum(CHARACTER_STYLES).optional(),
+        // Free-text style (matches the entity save route + DB; a narrow enum would 400 inherited styles like "cinematic").
+        style: z.string().max(50).optional(),
         canonical_description: z
           .string()
           .max(4000)

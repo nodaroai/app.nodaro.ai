@@ -35,7 +35,8 @@ export const generateCharacterMotionBody = z.object({
   // because motion descriptions are intentionally tighter than visual ones.
   motionDescription: z.string().max(500).optional(),
   gender: z.string().max(50).optional(),
-  style: z.enum(["realistic", "anime", "3d-pixar", "illustration"]).optional(),
+  // Free-text style (matches the entity save route + DB; a narrow enum would 400 inherited styles like "cinematic").
+  style: z.string().max(50).optional(),
   baseOutfit: z.string().max(1000).optional(),
   // Optional real-life reference photos the worker can ship to providers that
   // support multi-image conditioning. Capped at 5; SSRF-gated via safeUrlSchema.

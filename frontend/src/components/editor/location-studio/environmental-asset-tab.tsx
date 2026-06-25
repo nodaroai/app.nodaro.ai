@@ -126,8 +126,16 @@ export function EnvironmentalAssetTab({
     // later passed to the real trackJob so the chip stays "creating" across the
     // swap. settleJob swaps it for the real job; abortJob drops it on failure.
     const tempId = jobs.beginJob(bucketName, trimmedVariant)
+    // `ensureSavedBeforeGen` (saveStaged) toasts its OWN failure ("Save failed"
+    // / 409 reload), so bail quietly on a save error to avoid a double-toast.
+    let locationDbId: string
     try {
-      const locationDbId = await studio.ensureSavedBeforeGen()
+      locationDbId = await studio.ensureSavedBeforeGen()
+    } catch {
+      jobs.abortJob(tempId)
+      return
+    }
+    try {
       const result = await generateLocationAsset({
         assetType: isCustom ? "custom" : bucketName,
         variant: trimmedVariant,
@@ -144,9 +152,12 @@ export function EnvironmentalAssetTab({
         attachName: trimmedVariant,
       })
       jobs.settleJob(tempId, result.jobId)
-    } catch {
+    } catch (e) {
       jobs.abortJob(tempId)
-      // ensureSavedBeforeGen / generateLocationAsset already toast on failure.
+      // `generateLocationAsset` (apiJson) THROWS without toasting — surface the
+      // backend message so the optimistic card doesn't vanish unexplained. This
+      // silent swallow is exactly what hid the "Sunset Boat" style-enum 400.
+      toast.error(e instanceof Error ? e.message : "Failed to generate variant")
     }
   }
 

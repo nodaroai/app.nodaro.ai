@@ -18,7 +18,6 @@ import {
   OBJECT_MOTION_PROVIDERS,
   buildObjectMotionPrompt,
   resolveObjectAspectRatio,
-  CHARACTER_STYLES,
   OBJECT_ASPECT_OPTIONS,
   getDurationsForModel,
   buildVideoCreditModelIdentifier,
@@ -48,7 +47,8 @@ export const generateCreatureMotionBody = z.object({
   // description is preferred when present; the helper falls back to
   // `category` + `name` otherwise.
   category: z.string().max(100).optional(),
-  style: z.enum(CHARACTER_STYLES).optional(),
+  // Free-text style (matches the entity save route + DB; a narrow enum would 400 inherited styles like "cinematic").
+  style: z.string().max(50).optional(),
   canonicalDescription: z.string().max(4000).optional(),
   seedPromptHint: z.string().max(2000).optional(),
   userId: z.string().uuid().optional(),

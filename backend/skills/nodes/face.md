@@ -1,7 +1,7 @@
 ---
 node_type: face
-generated_at: 2026-06-04T12:41:29.018Z
-generated_from: 9bf1388db
+generated_at: 2026-06-23T20:10:00.119Z
+generated_from: 527130f41
 ---
 
 # Face
@@ -19,7 +19,7 @@ generated_from: 9bf1388db
 - `faceName: string`
 - `description: string`
 - `sourceImageUrl: string`
-- `style: "realistic" | "anime" | "3d-pixar" | "illustration"`
+- `style: EntityArtStyle`
 - `projectId: string`
 - `createdAt: string`
 - `executionStatus: "idle" | "running" | "completed" | "failed"`

@@ -1,7 +1,7 @@
 ---
 node_type: character
-generated_at: 2026-06-20T22:52:09.902Z
-generated_from: 1a15bf767
+generated_at: 2026-06-23T20:10:00.105Z
+generated_from: 527130f41
 ---
 
 # Character
@@ -20,7 +20,7 @@ generated_from: 1a15bf767
 - `description: string`
 - `sourceImageUrl: string`
 - `gender: "male" | "female" | "other"`
-- `style: "realistic" | "anime" | "3d-pixar" | "illustration"`
+- `style: EntityArtStyle`
 - `baseOutfit: string`
 - `characterSheet: CharacterSheet | null`
 - `projectId: string`

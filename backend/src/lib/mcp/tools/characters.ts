@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { CHARACTER_STYLES, CHARACTER_MOTION_PROVIDERS } from "@nodaro/shared"
+import { CHARACTER_MOTION_PROVIDERS } from "@nodaro/shared"
 import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
@@ -126,10 +126,10 @@ const SUMMARY_COLUMNS =
 const FULL_COLUMNS =
   "id, name, description, canonical_description, source_image_url, seed_prompt, gender, style, base_outfit, expressions, poses, motions, angles, body_angles, lighting_variations, reference_photos, real_life_refs_by_variant, reference_videos_by_variant, created_at, updated_at"
 
-// Single source of truth lives in `@nodaro/shared/entity-prompts` —
-// reused here so the MCP tool surface, the SDK, the CLI, and the route's
-// Zod schema all stay in lockstep when a new style is added.
-const STYLE_ENUM = CHARACTER_STYLES
+// Free-text style — entities persist style as free text (the save routes + DB
+// column are both z.string().max(50)). A narrow enum 400s inherited styles
+// like the project's "cinematic" visualStyle. Style is only prompt seasoning.
+const STYLE_FIELD = z.string().max(50)
 
 function err(text: string) {
   return { content: [{ type: "text" as const, text }], isError: true as const }
@@ -363,7 +363,7 @@ function registerWriteTools(opts: RegisterCharacterToolsOpts): void {
           ),
         description: z.string().max(2000).optional(),
         gender: z.string().max(50).optional(),
-        style: z.enum(STYLE_ENUM).optional(),
+        style: STYLE_FIELD.optional(),
         base_outfit: z.string().max(1000).optional(),
         seed_prompt: z
           .string()
@@ -431,7 +431,7 @@ function registerWriteTools(opts: RegisterCharacterToolsOpts): void {
         name: z.string().min(1).max(200).optional(),
         description: z.string().max(2000).optional(),
         gender: z.string().max(50).optional(),
-        style: z.enum(STYLE_ENUM).optional(),
+        style: STYLE_FIELD.optional(),
         base_outfit: z.string().max(1000).optional(),
         seed_prompt: z.string().max(2000).optional(),
         expected_updated_at: z
@@ -685,7 +685,7 @@ function registerGenerationTools({
         description: z.string().max(1000).optional(),
         motion_description: z.string().max(500).optional(),
         gender: z.string().max(50).optional(),
-        style: z.enum(STYLE_ENUM).optional(),
+        style: STYLE_FIELD.optional(),
         base_outfit: z.string().max(1000).optional(),
         provider: z
           .enum(CHARACTER_MOTION_PROVIDERS)

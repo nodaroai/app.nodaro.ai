@@ -1,7 +1,7 @@
 ---
 node_type: creature
-generated_at: 2026-06-20T22:52:09.940Z
-generated_from: 1a15bf767
+generated_at: 2026-06-23T20:10:00.147Z
+generated_from: 527130f41
 ---
 
 # Animal/Creature
@@ -19,7 +19,7 @@ generated_from: 1a15bf767
 - `creatureName: string`
 - `description: string`
 - `category: string`
-- `style: "realistic" | "anime" | "3d-pixar" | "illustration"`
+- `style: EntityArtStyle`
 - `sourceImageUrl: string`
 - `projectId: string`
 - `createdAt: string`

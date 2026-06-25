@@ -16,7 +16,8 @@ const generateObjectBody = z.object({
   description: z.string().max(2000).optional(),
   userPrompt: z.string().max(8000).optional(),
   category: z.enum(["furniture", "vehicle", "weapon", "food", "clothing", "electronics", "nature", "tool", "animal", "other"]).optional(),
-  style: z.enum(["realistic", "anime", "3d-pixar", "illustration"]).optional(),
+  // Free-text style (matches the entity save route + DB; a narrow enum would 400 inherited styles like "cinematic").
+  style: z.string().max(50).optional(),
   sourceImageUrl: safeUrlSchema.optional(),
   provider: z.string().optional().default("nano-banana"),
   userId: z.string().uuid().optional(),

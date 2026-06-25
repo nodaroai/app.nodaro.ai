@@ -1,7 +1,7 @@
 ---
 node_type: location
-generated_at: 2026-06-20T22:52:09.952Z
-generated_from: 1a15bf767
+generated_at: 2026-06-23T20:10:00.161Z
+generated_from: 527130f41
 ---
 
 # Location
@@ -19,7 +19,7 @@ generated_from: 1a15bf767
 - `locationName: string`
 - `description: string`
 - `category: "indoor" | "outdoor" | "urban" | "nature" | "fantasy" | "sci-fi" | "historical" | "futuristic" | "other"`
-- `style: "realistic" | "anime" | "3d-pixar" | "illustration"`
+- `style: EntityArtStyle`
 - `sourceImageUrl: string`
 - `projectId: string`
 - `createdAt: string`
