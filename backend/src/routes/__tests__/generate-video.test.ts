@@ -176,14 +176,20 @@ describe("POST /v1/generate-video — Seedance 2 reference-audio limit", () => {
     expect(probeMediaDuration).not.toHaveBeenCalled()
   })
 
-  it("skips the audio check in frames input mode (audio is dropped there)", async () => {
-    mockJobInsert({ data: { id: "job-frames" }, error: null })
-    await app.inject({
+  it("ignores the deprecated seedance2InputMode field and still validates reference audio", async () => {
+    // seedance2InputMode is accepted-but-ignored for back-compat. The mode is
+    // now auto-detected downstream by resolveSeedance2Inputs, so reference audio
+    // must be validated regardless of any (legacy) mode value — a previously
+    // "frames"-mode request with over-limit audio is still rejected.
+    vi.mocked(probeMediaDuration).mockResolvedValue(21)
+    const res = await app.inject({
       method: "POST",
       url: "/v1/generate-video",
       payload: { ...SEEDANCE_BODY, seedance2InputMode: "frames" },
     })
-    expect(probeMediaDuration).not.toHaveBeenCalled()
+    expect(probeMediaDuration).toHaveBeenCalledWith("https://cdn.example/voice.mp3")
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("audio_too_long")
   })
 })
 

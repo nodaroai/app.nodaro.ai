@@ -2,14 +2,82 @@ import {
   imageReferenceLimit,
   VIDEO_REF_LIMITS_BY_PROVIDER,
   getModel,
-  isSeedance2Provider,
   isAnalyzablePicker,
+  isSeedance2Provider,
 } from "@nodaro/shared"
 import {
   PROVIDERS_WITH_END_FRAME,
   PROVIDERS_WITH_REFERENCES,
 } from "@/components/editor/config-panels/model-options"
-import type { WorkflowNode } from "@/types/nodes"
+import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
+
+/**
+ * Connection counts a caller can thread into `getHandleConnectionLimit` so the
+ * limit can account for OTHER wired inputs that compete for the same runtime
+ * resource. Today only Seedance 2's Generate Video `imageReferences` handle
+ * uses this: its `reference_image_urls` array is a single 9-slot pool shared by
+ * the user image refs (this handle) + the start frame + the end frame + any
+ * wired identity assets (characters/objects/…) that the resolver merges into
+ * the same array. See `resolveSeedance2Inputs` (the backend SoT) and
+ * `seedance2ImagePoolSlotsConsumed` below.
+ *
+ * Omitted entirely by the per-node `fakeNode` callers that only need the static
+ * provider-capability cap (and only inspect `limit === 0` to disable a handle);
+ * supplied by the handle popover, which has the live edge list.
+ */
+export interface HandleConnectionCounts {
+  /** Slots already consumed in Seedance 2's `reference_image_urls` pool by
+   *  inputs OTHER than the handle being measured — start/end frame + wired
+   *  identity assets. Subtracted from the image-pool budget. */
+  readonly seedance2ImagePoolConsumed?: number
+}
+
+/**
+ * Generate-Video target handles whose wired producers the resolver merges into
+ * the SAME `reference_image_urls` array as the user `imageReferences` refs.
+ * Derived from the resolver's real routing (input-resolver.ts):
+ *   - `startFrame` / `endFrame` → `startFrameUrl`/`endFrameUrl`, which
+ *     `resolveSeedance2Inputs` appends to the tail of `reference_image_urls`.
+ *   - `assets` → identity nodes (character/object/location/creature/face) that
+ *     fall through to ENTITY_NODE_TYPES source-routing → `referenceImageUrls`.
+ * Pickers on `look`/`elements` become prompt fragments (never image slots) and
+ * video/audio refs use separate pools, so neither appears here.
+ *
+ * `imageReferences` itself is intentionally absent — it is the handle being
+ * measured, so its own connections are counted by the popover, not subtracted.
+ */
+const SEEDANCE2_IMAGE_POOL_HANDLES: ReadonlySet<string> = new Set([
+  "startFrame",
+  "endFrame",
+  "assets",
+])
+
+/**
+ * Count the Seedance 2 `reference_image_urls` slots consumed by inputs wired to
+ * a Generate Video node OTHER than its `imageReferences` handle. `startFrame`
+ * and `endFrame` are clamped to 1 each (the resolver only ever appends one of
+ * each); `assets` edges are counted 1 slot per edge (each identity node emits
+ * one reference image into the pool). Used to turn the flat `imageReferences`
+ * cap into a shared budget so the user can't wire 9 refs + a frame = 10 and
+ * have the runtime silently drop the overflow into a frame's `Image N`.
+ */
+export function seedance2ImagePoolSlotsConsumed(
+  edges: readonly WorkflowEdge[],
+  nodeId: string,
+): number {
+  let startFrame = 0
+  let endFrame = 0
+  let assets = 0
+  for (const e of edges) {
+    if (e.target !== nodeId) continue
+    const h = e.targetHandle ?? ""
+    if (!SEEDANCE2_IMAGE_POOL_HANDLES.has(h)) continue
+    if (h === "startFrame") startFrame = 1
+    else if (h === "endFrame") endFrame = 1
+    else assets += 1
+  }
+  return startFrame + endFrame + assets
+}
 
 export interface HandleConnectionLimit {
   /** Number of connections the runtime will actually consume on this
@@ -42,6 +110,7 @@ export interface HandleConnectionLimit {
 export function getHandleConnectionLimit(
   node: WorkflowNode | undefined,
   handleId: string,
+  counts?: HandleConnectionCounts,
 ): HandleConnectionLimit | null {
   if (!node) return null
 
@@ -96,59 +165,60 @@ export function getHandleConnectionLimit(
   // parity check). Compare against the runtime string until the union
   // catches up.
   if ((node.type as string) === "generate-video") {
-    const data = node.data as { provider?: string; seedance2InputMode?: "frames" | "references" } | undefined
+    const data = node.data as { provider?: string } | undefined
     const provider = data?.provider ?? "kling"
     // Use the catalog label if available so the tooltip reads naturally
     // ("Beyond Kling 2.6's max" rather than "Beyond kling's max"); fall
     // back to the raw provider id when the catalog has no entry yet.
     const providerLabel = getModel(provider)?.label ?? provider
     const caps = VIDEO_REF_LIMITS_BY_PROVIDER[provider]
-    // Seedance 2 mode toggle is mutually exclusive between Frames (start/end)
-    // and References (image references). Force the inactive set's caps to 0
-    // so the disabled-handle visual lights up the right pips for the chosen
-    // mode. Default = "frames" (matches the seedance2InputMode fallback
-    // throughout the codebase).
-    const isS2 = isSeedance2Provider(provider)
-    const s2Mode = isS2 ? (data?.seedance2InputMode ?? "frames") : null
-    const s2FramesDisabled = s2Mode === "references"
-    const s2ReferencesDisabled = s2Mode === "frames"
+    // Every handle is gated ONLY by provider capability — never by an input
+    // "mode". Seedance 2 used to force a frames-vs-references choice here, but
+    // the backend resolver (resolveSeedance2Inputs) now decides the mode from
+    // the connected inputs at run time, so all S2 inputs are always available.
     switch (handleId) {
       case "startFrame":
-        return s2FramesDisabled
-          ? { limit: 0, providerLabel, isMultiProviderMin: false }
-          : { limit: 1, providerLabel, isMultiProviderMin: false }
+        return { limit: 1, providerLabel, isMultiProviderMin: false }
       case "endFrame":
-        if (s2FramesDisabled) return { limit: 0, providerLabel, isMultiProviderMin: false }
         return PROVIDERS_WITH_END_FRAME.includes(provider)
           ? { limit: 1, providerLabel, isMultiProviderMin: false }
           : { limit: 0, providerLabel, isMultiProviderMin: false }
-      case "imageReferences":
-        if (s2ReferencesDisabled) return { limit: 0, providerLabel, isMultiProviderMin: false }
-        return PROVIDERS_WITH_REFERENCES.includes(provider)
-          ? { limit: caps?.images ?? 1, providerLabel, isMultiProviderMin: false }
-          : { limit: 0, providerLabel, isMultiProviderMin: false }
+      case "imageReferences": {
+        if (!PROVIDERS_WITH_REFERENCES.includes(provider)) {
+          return { limit: 0, providerLabel, isMultiProviderMin: false }
+        }
+        const poolMax = caps?.images ?? 1
+        // Seedance 2: `reference_image_urls` is ONE pool shared by user image
+        // refs (this handle) + start/end frame + wired identity assets. Subtract
+        // the slots those other inputs consume so the user-ref cap reflects the
+        // budget the runtime resolver (resolveSeedance2Inputs) will actually
+        // honor — wiring more than this many user refs would push the overflow
+        // off the tail (where the frames live), corrupting `Image N`. Non-S2
+        // ref providers (gemini-omni-video=7, grok-imagine-video-1.5=1, wan-i2v,
+        // …) don't merge frames/assets into one shared pool, so the budget only
+        // applies to S2 — they keep their flat capability cap. Floor at 0 so the
+        // popover shows "N of 0 max" (handle full) rather than a negative max.
+        const limit = isSeedance2Provider(provider)
+          ? Math.max(0, poolMax - (counts?.seedance2ImagePoolConsumed ?? 0))
+          : poolMax
+        return { limit, providerLabel, isMultiProviderMin: false }
+      }
       case "videoReferences": {
-        // Multimodal reference input — mutually exclusive with frames on
-        // Seedance 2, so disable it in frames mode (mirrors imageReferences
-        // above + the runtime stripping in execute-node/generate-video).
-        if (s2ReferencesDisabled) return { limit: 0, providerLabel, isMultiProviderMin: false }
         const cap = caps?.videos
         return cap != null
           ? { limit: cap, providerLabel, isMultiProviderMin: false }
           : { limit: 0, providerLabel, isMultiProviderMin: false }
       }
       case "audio":
-        // NOTE: `audio` (a post-gen soundtrack/overlay) is NOT a multimodal
-        // reference and is available in BOTH Seedance 2 modes — do not gate it.
+        // NOTE: `audio` is a post-gen soundtrack/overlay (not a multimodal
+        // reference). LTX 2.3 Fast has no audio overlay handle.
         if (provider === "ltx-2.3-fast") {
           return { limit: 0, providerLabel, isMultiProviderMin: false }
         }
         return { limit: 1, providerLabel, isMultiProviderMin: false }
       case "audioReferences": {
-        // Multimodal reference input — mutually exclusive with frames on
-        // Seedance 2 (distinct from the `audio` overlay above). Disable in
-        // frames mode so the pip can't be wired and then silently dropped.
-        if (s2ReferencesDisabled) return { limit: 0, providerLabel, isMultiProviderMin: false }
+        // Multimodal audio reference input (distinct from the `audio`
+        // overlay above) — gated by the provider's audio-ref capability.
         const cap = caps?.audio
         return cap != null
           ? { limit: cap, providerLabel, isMultiProviderMin: false }

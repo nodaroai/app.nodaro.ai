@@ -227,14 +227,13 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
 
   // Per-provider "this handle has cap 0" set — drives the muted pip styling
   // below. Edges connecting to these handles are independently grayed/dashed
-  // in the canvas's edge enricher (workflow-canvas.tsx). Recomputes on
-  // provider OR seedance2InputMode change — the mode is mutually exclusive
-  // between frames (start/end) and references on the seedance-2 family.
-  const seedance2InputMode = nodeData.seedance2InputMode as "frames" | "references" | undefined
+  // in the canvas's edge enricher (workflow-canvas.tsx). Gated only by the
+  // provider's capability now (Seedance 2's input mode is resolved at run
+  // time by the backend, so all its handles stay enabled).
   const disabledHandles = useMemo(() => {
     const fakeNode = {
       type: "generate-video",
-      data: { provider, seedance2InputMode },
+      data: { provider },
     } as unknown as WorkflowNode
     const set = new Set<string>()
     for (const hid of ["startFrame", "endFrame", "imageReferences", "videoReferences", "audio", "audioReferences"] as const) {
@@ -242,7 +241,7 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
       if (lim?.limit === 0) set.add(hid)
     }
     return set
-  }, [provider, seedance2InputMode])
+  }, [provider])
 
   function handleDeleteResult(indexToDelete: number) {
     updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedVideoUrl"))

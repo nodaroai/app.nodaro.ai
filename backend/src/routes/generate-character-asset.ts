@@ -53,7 +53,8 @@ const generateCharacterAssetBody = z.object({
   description: z.string().max(1000).optional(),
   userPrompt: z.string().max(8000).optional(),
   gender: z.string().max(50).optional(),
-  style: z.enum(["realistic", "anime", "3d-pixar", "illustration"]).optional(),
+  // Free-text style (matches the entity save route + DB; a narrow enum would 400 inherited styles like "cinematic").
+  style: z.string().max(50).optional(),
   baseOutfit: z.string().max(1000).optional(),
   sourceImageUrl: safeUrlSchema.optional(),
   // Optional real-life reference photos the worker can ship to providers

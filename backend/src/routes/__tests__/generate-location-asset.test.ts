@@ -186,6 +186,36 @@ describe("POST /v1/generate-location-asset — extended asset types (Task 9)", (
     expect(String(enqueued.prompt).toLowerCase()).toContain("neon")
   })
 
+  it("accepts a free-text style inherited from the project (e.g. 'cinematic')", async () => {
+    // Regression (Sunset Boat outage): locations created from a scene/film
+    // flow inherit the project's broader `visualStyle` vocabulary
+    // (cinematic / noir / vintage / fantasy / sci-fi / cartoon) and persist it
+    // via the loose `POST /v1/locations` save route (style: z.string().max(50)).
+    // The variant route MUST accept the SAME free-text style the save route +
+    // DB column already allow — a narrow 4-value enum here 400s every variant
+    // generation for such a location. Style is pure free-text prompt seasoning
+    // (`${style} art style`), never a hard constraint.
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-location-asset",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        assetType: "timeOfDay",
+        variant: "night",
+        name: "Sunset Boat",
+        style: "cinematic",
+        attachToLocationId: TEST_LOCATION_ID,
+        attachToColumn: "time_of_day",
+        attachName: "night",
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().jobId).toBe("job-1")
+    const enqueued = vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>
+    expect(String(enqueued.prompt).toLowerCase()).toContain("cinematic")
+  })
+
   it("custom assetType uses userPrompt (not the literal variant) in the prompt", async () => {
     // GAP 48 — when assetType=custom and userPrompt is supplied (typically
     // the long free-form text from the studio UI), the prompt builder MUST

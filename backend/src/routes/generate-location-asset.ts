@@ -52,7 +52,13 @@ const generateLocationAssetBody = z.object({
   description: z.string().max(2000).optional(),
   userPrompt: z.string().max(8000).optional(),
   category: z.string().max(50).optional(),
-  style: z.enum(["realistic", "anime", "3d-pixar", "illustration"]).optional(),
+  // Free-text style — a location can carry any visual style (the project's
+  // `visualStyle` vocabulary is broader: cinematic / noir / vintage / fantasy /
+  // …), persisted as free text by the `POST /v1/locations` save route + the DB
+  // column (both `z.string().max(50)`). Matching that contract here is load-
+  // bearing: a narrow enum 400s every variant gen for a non-canonical style.
+  // Style is only prompt seasoning (`${style} art style`), never a hard gate.
+  style: z.string().max(50).optional(),
   sourceImageUrl: safeUrlSchema.optional(),
   provider: z.string().optional().default("nano-banana"),
   // Credit-affecting output levers (mirrors generate-image). The enums are

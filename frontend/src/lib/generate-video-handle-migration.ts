@@ -42,12 +42,15 @@ export function migrateGenerateVideoNodes(
         data.referenceImageOrder = data.connectedRefImageOrder
       }
       delete data.connectedRefImageOrder
-      delete data.seedance2InputMode
       if (data.kling3Mode != null && data.mode == null) data.mode = data.kling3Mode
       if (data.kling3Sound != null && data.sound == null) data.sound = data.kling3Sound
       delete data.kling3Mode
       delete data.kling3Sound
     }
+    // seedance2InputMode is a deprecated, now-inert field. Strip it for BOTH
+    // converting i2v/t2v nodes AND pre-existing generate-video nodes (which the
+    // converting-only guard above used to skip, leaving the stale field behind).
+    delete data.seedance2InputMode
     // Split-id models (Grok Imagine 1, Wan 2.6/2.7) collapse to one unified-picker
     // row keyed by the base (i2v) id; a node may still carry the now-hidden t2v
     // twin (grok/wan/wan-2.7-t2v). Normalize it to the base id so the picker shows

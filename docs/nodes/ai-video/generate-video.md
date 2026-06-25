@@ -58,7 +58,7 @@ Generate Video covers the union of the legacy image-to-video and text-to-video c
 | VEO 3.x | `veo3` (Quality), `veo3.1` (Fast), `veo3_lite` (Lite) | T2V, I2V, first+last, reference | 4 / 6 / 8s; 720p / 1080p; generate-audio default on; auto-translate |
 | Gemini Omni | `gemini-omni-video` | T2V, I2V, video-edit (V2V) | 4 / 6 / 8 / 10s; 720p / 1080p / 4K (4K not on free tier); no prompt-baked audio (external `audio_ids` only — see section); up to 7 reference images; V2V uses trim window ≤ 10 s |
 | Kling | `kling`, `kling-turbo`, `kling-3.0`, `kling-master` | T2V, I2V (`kling-master` is I2V-only) | 5 / 10s (Kling 3.0: continuous 3–15s) |
-| Seedance / Seedance 2 | `seedance`, `seedance-2`, `seedance-2-fast`, `seedance-2-mini` | T2V, I2V, reference (S2) | S2: 4–15s; 480p / 720p / 1080p (`seedance-2-mini`: **480p / 720p only**); up to 9 image + 3 video + 3 audio refs |
+| Seedance / Seedance 2 | `seedance`, `seedance-2`, `seedance-2-fast`, `seedance-2-mini` | T2V, I2V, reference (S2) | S2: 4–15s; aspect 16:9 / 9:16 / 1:1 / 4:3 / 3:4 / **21:9** / **adaptive** (match the wired input). Resolution by variant (separate KIE models): `seedance-2` (full) **480p / 720p / 1080p / 4K**; `seedance-2-fast` up to **1080p** (no 4K); `seedance-2-mini` **480p / 720p only**. Up to 9 image + 3 video + 3 audio refs |
 | Hailuo | `hailuo-2.3-pro`, `hailuo-2.3`, `hailuo-standard` | T2V (`hailuo-standard`), I2V | 6 / 10s |
 | Bytedance | `bytedance-lite`, `bytedance-pro`, `bytedance-pro-fast` | T2V (lite, pro), I2V | 5 / 10s |
 | MiniMax | `minimax` | T2V, I2V | Fixed 5s, end-frame supported |
@@ -82,7 +82,12 @@ Providers that accept a paired last frame: `veo3`, `veo3.1`, `veo3_lite` (`image
 
 Seedance 2 (`seedance-2` / `seedance-2-fast` / `seedance-2-mini`) accepts up to 9 image refs, 3 video refs, and 3 audio refs in a single call. **`seedance-2-fast` requires each reference audio clip to be ≤ 15.2 seconds** (audio-driven r2v mode) — longer clips are rejected before the job is created with an `audio_too_long` error. HappyHorse Ref2V accepts 1–9 image refs. VEO 3.1 (`veo3.1`) supports `REFERENCE_2_VIDEO` mode when image references are wired without a start frame. Gemini Omni (`gemini-omni-video`) accepts up to 7 image refs in both modes — with a start frame (i2v) or without one (reference-conditioned t2v).
 
-**Seedance 2 mode toggle (Frames ⇄ References).** Unlike other providers (where mode is inferred from wiring), Seedance 2 has an explicit **Frames vs References** toggle because KIE makes the two mutually exclusive: *Frames* uses `startFrame` (+ optional `endFrame`); *References* uses `imageReferences` / `videoReferences` / `audioReferences`. The inactive set's handles are disabled (greyed) in each mode, and edges wired to them are ignored at execution. **New Generate Video nodes default to References mode.** Note `audio` (a post-merge soundtrack) is distinct from `audioReferences` (generation-conditioning audio) — `audio` works in both modes; `audioReferences` is References-mode only.
+**Seedance 2 unified inputs (frames + references together).** Seedance 2 no longer has a Frames-vs-References toggle (`data.seedance2InputMode` was removed) — first/last frames and references can all be connected at once, and the dispatch mode is derived from the wiring:
+
+- **With no references connected** (`startFrame` and/or `endFrame` only), the frames are used in exact **first/last-frame** mode (`first_frame_url` / `last_frame_url`).
+- **With any reference connected** (image / video / audio), the frames are passed as **prompt-directed reference images** — they join the reference set and are named `Image N` in the prompt so the model can refer to them, rather than being pinned as exact endpoints.
+
+The node shows an indicator of the active mode, and warns when a wired input would be dropped. Note `audio` (a post-merge soundtrack) is distinct from `audioReferences` (generation-conditioning audio): `audio` always applies as the final soundtrack, while `audioReferences` conditions generation (and triggers audio-driven lip-sync on Seedance 2).
 
 Reference arrays are forwarded to the backend for **every** provider in both dispatch modes; models that don't support them ignore them. (Earlier editor builds dropped reference images on the text-to-video path for all providers except Kling and Seedance 2.)
 
@@ -154,16 +159,30 @@ If neither has the identifier, the route returns HTTP 503 `price_not_configured`
 | `kling-turbo` | 5s | — | i2v | — | 11 |
 | `kling-3.0` | 10s | — | i2v | sound on | doubles base cost |
 | `minimax` | 5s | — | i2v | — | 15 |
-| `seedance-2` | 8s | 720p | i2v | no ref | ~82 |
-| `seedance-2` | 8s | 1080p | i2v | with ref | ~75 |
-| `seedance-2-fast` | 8s | 720p | i2v | with ref | ~40 |
-| `seedance-2-mini` | 8s | 720p | i2v | no ref | ~41 |
-| `seedance-2-mini` | 8s | 480p | i2v | with ref | ~12 |
+| `seedance-2` | 8s | 720p | i2v | no ref | 82 |
+| `seedance-2` | 8s | 1080p | i2v | no ref | 204 |
+| `seedance-2` | 8s | 1080p | i2v | with ref | 124 |
+| `seedance-2` | 8s | 4K | i2v | no ref | 416 |
+| `seedance-2` | 8s | 4K | i2v | with ref | 256 |
+| `seedance-2-fast` | 8s | 720p | i2v | with ref | 40 |
+| `seedance-2-mini` | 8s | 720p | i2v | no ref | 41 |
+| `seedance-2-mini` | 8s | 480p | i2v | with ref | 12 |
 | `grok-imagine-video-1.5` | 8s | 480p | i2v | image required | 30 |
 | `grok-imagine-video-1.5` | 8s | 720p | i2v | image required | 51 |
 | `grok-imagine-video-1.5` | 15s | 720p | i2v | image required | 95 |
 
 **Grok Imagine 1.5** uses true per-second pricing via the composite identifier `grok-imagine-video-1.5:<N>s:<resolution>` (N = 1–15, resolution = `480p` / `720p`). Credits = `ceil((rate × seconds + 2) / 4)`, where the per-second rate is 14.5 @ 480p and 25 @ 720p and the `+2` covers the required input image. Examples: 4s/480p = 15, 8s/480p = 30, 8s/720p = 51, 15s/720p = 95.
+
+**Seedance 2** (full `seedance-2`) is per-second priced via the composite identifier `seedance-2:<N>s:<resolution>` (no-ref) or `seedance-2:<N>s:<resolution>-ref` (any reference wired). Credits = `ceil(KIE_per_sec × duration / 4)`, where the per-second KIE rate depends on resolution and whether a reference is present:
+
+| Resolution | Per-sec (no ref) | Per-sec (with ref) |
+|---|---:|---:|
+| 4K | 208 | 128 |
+| 1080p | 102 | 62 |
+| 720p | 41 | 25 |
+| 480p | 19 | 11.5 |
+
+So at 8s: 1080p = `ceil(102×8/4)` = **204** no-ref / `ceil(62×8/4)` = **124** with-ref; 4K = `ceil(208×8/4)` = **416** no-ref / `ceil(128×8/4)` = **256** with-ref. Wiring any reference (image / video / audio) selects the cheaper `-ref` ladder. 4K is the full `seedance-2` only — `seedance-2-fast` (up to 1080p) and `seedance-2-mini` (480p / 720p) are separate, cheaper KIE models with their own ladders.
 
 Cross-check the runtime table in `/admin/models` for the live numbers — the worked examples above match the `STATIC_CREDIT_COSTS` snapshot at the time of this writing.
 

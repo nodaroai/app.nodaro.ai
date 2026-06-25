@@ -86,6 +86,42 @@ export interface PayloadBuildContext {
 }
 
 // ---------------------------------------------------------------------------
+// Seedance 2 frame-numbering guard (shared by the image-to-video AND
+// generate-video cases — single source of truth so the semantics can't drift).
+//
+// `resolveVideoPromptMentions` numbers every `Image N` mention bullet against
+// the FRONT of the reference list. Promoting the first mention URL into the
+// frame slot (`imageUrl` → `first_frame_url`) is fine for ordinary i2v
+// providers, but Seedance 2's resolver (`resolveSeedance2Inputs`) re-appends
+// `first_frame_url` to the TAIL of `reference_image_urls` in reference mode and
+// emits a "Use Image <tail> as the opening frame" suffix. That tail ordinal
+// contradicts the mention's frozen front-of-list bullet number (and shifts
+// every other bullet), so a @-mentioned character that auto-fills the empty
+// start frame WHILE other references are present ends up double-numbered.
+//
+// Suppress the promotion ONLY for Seedance 2 AND when other references will
+// remain (→ reference mode is guaranteed): the mention then stays front-of-list
+// at its bullet's number and no frame suffix is emitted. A lone mention with no
+// other refs still fills the frame slot — genuine strict first-frame mode, a
+// single image, nothing to collide with.
+function keepSeedance2MentionsAsRefs(
+  provider: string,
+  opts: {
+    remainingMentionCount: number
+    baseRefCount: number
+    refVideoCount: number
+    refAudioCount: number
+  },
+): boolean {
+  const otherRefsPresent =
+    opts.remainingMentionCount > 1 ||
+    opts.baseRefCount > 0 ||
+    opts.refVideoCount > 0 ||
+    opts.refAudioCount > 0
+  return isSeedance2Provider(provider) && otherRefsPresent
+}
+
+// ---------------------------------------------------------------------------
 // Ancestor reference image collection — delegates to shared implementation
 // ---------------------------------------------------------------------------
 
@@ -2349,8 +2385,6 @@ export function buildPayload(
     // --- Video generation ---
     case "image-to-video": {
       const provider = (data.provider as string) ?? "kling"
-      const isS2 = isSeedance2Provider(provider)
-      const s2Mode = isS2 ? ((data.seedance2InputMode as string | undefined) ?? "frames") : "frames"
       const hasVideoRef = (resolvedInputs.referenceVideoUrls?.length ?? 0) > 0
       // Compose the prompt first so we can run @-mention resolution against
       // it before the worker sees the final string. The mention pass swaps
@@ -2375,9 +2409,7 @@ export function buildPayload(
       // overwrite. When no `imageUrl` is wired yet, the first resolved
       // mention URL fills that slot so a pure "@kira-smile dancing" prompt
       // gets the smile image as input rather than failing with no image.
-      const i2vBaseImage = (isS2 && s2Mode === "references")
-        ? undefined
-        : (resolvedInputs.startFrameUrl || resolvedInputs.imageUrl || data.imageUrl as string | undefined)
+      const i2vBaseImage = resolvedInputs.startFrameUrl || resolvedInputs.imageUrl || data.imageUrl as string | undefined
       // Apply user-defined reorder before mention-merge so the positional
       // Image-N letters assigned by `resolveVideoPromptMentions` match the
       // order shown in the config panel's drag-list. Walks the `references`
@@ -2388,14 +2420,24 @@ export function buildPayload(
         buildCtx,
         (e) => e.targetHandle === "references",
       )
-      const i2vBaseRefs = (isS2 && s2Mode === "frames")
-        ? undefined
-        : (i2vOrderedRefs ?? resolvedInputs.referenceImageUrls)
+      const i2vBaseRefs = i2vOrderedRefs ?? resolvedInputs.referenceImageUrls
       let i2vImageUrl = i2vBaseImage
       let i2vReferenceImageUrls = i2vBaseRefs
       if (i2vMention.additionalUrls.length > 0) {
         let remainingMentionUrls = i2vMention.additionalUrls
-        if (!i2vImageUrl) {
+        // Seedance 2 frame-numbering guard (shared helper — see
+        // keepSeedance2MentionsAsRefs). Keep a @-mention front-of-list as a plain
+        // reference (no frame promotion) when other references will remain, so the
+        // resolver's tail "Use Image <tail>" suffix can't contradict the mention's
+        // frozen bullet ordinal. A lone mention with no other refs still fills the
+        // frame slot.
+        const keepMentionsAsRefs = keepSeedance2MentionsAsRefs(provider, {
+          remainingMentionCount: remainingMentionUrls.length,
+          baseRefCount: i2vBaseRefs?.length ?? 0,
+          refVideoCount: resolvedInputs.referenceVideoUrls?.length ?? 0,
+          refAudioCount: resolvedInputs.referenceAudioUrls?.length ?? 0,
+        })
+        if (!i2vImageUrl && !keepMentionsAsRefs) {
           i2vImageUrl = remainingMentionUrls[0]
           remainingMentionUrls = remainingMentionUrls.slice(1)
         }
@@ -2427,7 +2469,7 @@ export function buildPayload(
         payload: {
           jobId,
           imageUrl: i2vImageUrl,
-          endFrameUrl: (isS2 && s2Mode === "references") ? undefined : resolvedInputs.endFrameUrl,
+          endFrameUrl: resolvedInputs.endFrameUrl,
           audioUrl: resolvedInputs.audioUrl,
           prompt: i2vPrompt,
           provider,
@@ -2457,8 +2499,8 @@ export function buildPayload(
           videoTrimStart: data.videoTrimStart,
           videoTrimEnd: data.videoTrimEnd,
           referenceImageUrls: i2vReferenceImageUrls,
-          referenceVideoUrls: (isS2 && s2Mode === "frames") ? undefined : resolvedInputs.referenceVideoUrls,
-          referenceAudioUrls: (isS2 && s2Mode === "frames") ? undefined : resolvedInputs.referenceAudioUrls,
+          referenceVideoUrls: resolvedInputs.referenceVideoUrls,
+          referenceAudioUrls: resolvedInputs.referenceAudioUrls,
           webSearch: data.webSearch,
           nsfwChecker: data.nsfwChecker,
           generationType: data.veoMode === "reference" ? "REFERENCE_2_VIDEO" : undefined,
@@ -2692,7 +2734,19 @@ export function buildPayload(
       let imageUrl = startFrameUrl
       if (mentionResult.additionalUrls.length > 0) {
         let remaining = mentionResult.additionalUrls
-        if (!imageUrl) {
+        // Seedance 2 frame-numbering guard (shared helper — see
+        // keepSeedance2MentionsAsRefs). generate-video is the PRIMARY path (only
+        // creatable video node + migration target), so the same mention→frame
+        // promotion that desynced `Image N` in the i2v case must be suppressed
+        // here too: don't promote a mention into `imageUrl` when other refs will
+        // remain. A lone mention with no other refs still fills the frame slot.
+        const keepMentionsAsRefs = keepSeedance2MentionsAsRefs(provider, {
+          remainingMentionCount: remaining.length,
+          baseRefCount: referenceImageUrls?.length ?? 0,
+          refVideoCount: resolvedInputs.referenceVideoUrls?.length ?? 0,
+          refAudioCount: resolvedInputs.referenceAudioUrls?.length ?? 0,
+        })
+        if (!imageUrl && !keepMentionsAsRefs) {
           imageUrl = remaining[0]
           remaining = remaining.slice(1)
         }

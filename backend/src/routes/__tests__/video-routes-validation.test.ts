@@ -60,9 +60,11 @@ import { videoQueue } from "@/lib/queue.js"
 import { reserveCreditsForJob } from "@/middleware/credit-guard.js"
 import { videoUpscaleRoutes } from "../video-upscale.js"
 import { motionTransferRoutes } from "../motion-transfer.js"
-import { lipSyncRoutes } from "../lip-sync.js"
+import { lipSyncRoutes, resolveLipSyncIdentifier } from "../lip-sync.js"
 import { speechToVideoRoutes } from "../speech-to-video.js"
 import { videoToVideoRoutes } from "../video-to-video.js"
+import { STATIC_CREDIT_COSTS } from "@/ee/billing/credits.js"
+import { SEEDANCE_LIP_SYNC_PROVIDERS } from "@nodaro/shared"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -443,6 +445,41 @@ describe("POST /v1/lip-sync — Zod validation", () => {
     const res = await app.inject({ method: "POST", url: "/v1/lip-sync", payload: { ...validBody, resolution: "720p" } })
     expect(res.statusCode).not.toBe(400)
   })
+
+  // This body has NO provider, so it uses the default kling-avatar — this test
+  // ONLY proves the Zod enum accepts "4k". It does NOT exercise the seedance
+  // composite resolution (kling-avatar never builds a seedance-2:8s:*-ref id).
+  // The seedance resolution → seeded-composite invariant is covered separately
+  // below (see "resolveLipSyncIdentifier — seedance composites are all seeded").
+  it("accepts resolution 4k", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/lip-sync", payload: { ...validBody, resolution: "4k" } })
+    expect(res.statusCode).not.toBe(400)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 4b. resolveLipSyncIdentifier — seedance composites are all seeded
+//
+// Invariant: for EVERY seedance lip-sync provider × EVERY value of the route's
+// resolution Zod enum, resolveLipSyncIdentifier must produce a composite that
+// exists in STATIC_CREDIT_COSTS. Otherwise the hard-fail credit guard 503s at
+// runtime (PriceNotConfiguredError). This reproduced the I1 bug: seedance-2-fast
+// + 4k, seedance-2-mini + 4k, and seedance-2-mini + 1080p emitted unseeded
+// composites before the catalog clamp. Mirror the lip-sync route's enum here so
+// the fuzz stays in lockstep with what the route actually accepts.
+// ---------------------------------------------------------------------------
+
+const LIP_SYNC_RESOLUTION_ENUM = ["480p", "720p", "1080p", "4k"] as const
+
+describe("resolveLipSyncIdentifier — seedance composites are all seeded", () => {
+  for (const provider of SEEDANCE_LIP_SYNC_PROVIDERS) {
+    for (const resolution of LIP_SYNC_RESOLUTION_ENUM) {
+      it(`${provider} + ${resolution} → seeded composite`, () => {
+        const id = resolveLipSyncIdentifier({ provider, resolution })
+        expect(STATIC_CREDIT_COSTS[id], `unseeded composite "${id}" for ${provider}+${resolution}`).not.toBeUndefined()
+      })
+    }
+  }
 })
 
 // ---------------------------------------------------------------------------

@@ -7,7 +7,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { LIP_SYNC_PROVIDERS, SEEDANCE_LIP_SYNC_PROVIDERS, buildLipSyncCreditId, isPerSecondLipSyncProvider } from "@nodaro/shared"
+import { LIP_SYNC_PROVIDERS, SEEDANCE_LIP_SYNC_PROVIDERS, MODEL_CATALOG, buildLipSyncCreditId, isPerSecondLipSyncProvider } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 
 const lipSyncBody = z.object({
@@ -17,8 +17,8 @@ const lipSyncBody = z.object({
   prompt: z.string().max(500).optional(),
   userPrompt: z.string().max(8000).optional(),
   provider: z.enum(LIP_SYNC_PROVIDERS).optional(),
-  // 1080p only valid for seedance-2 / seedance-2-fast; infinitalk caps at 720p.
-  resolution: z.enum(["480p", "720p", "1080p"]).optional(),
+  // 1080p / 4k only valid for the seedance-2 family; infinitalk caps at 720p.
+  resolution: z.enum(["480p", "720p", "1080p", "4k"]).optional(),
   // Audio length in seconds — drives per-second credit reservation for
   // kling-avatar(-pro). If absent, we reserve the worst-case 5-min bucket
   // and refund the unused credits after the worker reconciles actual cost.
@@ -63,7 +63,7 @@ const lipSyncBody = z.object({
  * can never drift from the charged price. Mirrors extend-video.ts's
  * resolveExtendVideoIdentifier().
  */
-function resolveLipSyncIdentifier(body: Record<string, unknown> | undefined): string {
+export function resolveLipSyncIdentifier(body: Record<string, unknown> | undefined): string {
   const provider = (body?.provider as string) ?? "kling-avatar"
   if (provider === "infinitalk") {
     return `infinitalk:${(body?.resolution as string) ?? "720p"}`
@@ -71,8 +71,16 @@ function resolveLipSyncIdentifier(body: Record<string, unknown> | undefined): st
   // Seedance 2 family (incl. -mini) — billed per-second × resolution × ref. We
   // ALWAYS pass the audio as a reference, so the identifier always ends in -ref.
   // Default to the 8s tier for reservation; the worker decides actual duration.
+  // Clamp the requested resolution to the model's catalog resolutions (single
+  // source of truth) before interpolating — mirrors the generate-video clamp in
+  // credit-identifiers.ts. Without this, seedance-2-fast/-mini + 4k (and -mini +
+  // 1080p) emit an unseeded composite that 503s under the hard-fail credit guard.
+  // seedance-2 4k→:8s:4k-ref; -fast 4k→:8s:1080p-ref; -mini 4k|1080p→:8s:720p-ref.
   if (SEEDANCE_LIP_SYNC_PROVIDERS.has(provider)) {
-    return `${provider}:8s:${(body?.resolution as string) ?? "720p"}-ref`
+    const supported = MODEL_CATALOG[provider]?.resolutions ?? ["480p", "720p", "1080p"]
+    const want = (body?.resolution as string) ?? "720p"
+    const res = supported.includes(want) ? want : (supported[supported.length - 1] ?? "720p")
+    return `${provider}:8s:${res}-ref`
   }
   // Per-second-billed providers (Kling AI Avatar 2.0, HeyGen Lipsync Precision,
   // Sync Lipsync 2 Pro) — bucketed by audio length. Missing audioDurationSec

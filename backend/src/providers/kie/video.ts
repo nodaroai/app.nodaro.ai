@@ -19,7 +19,7 @@ import type {
   ProviderOptions,
   ReconcileOpts,
 } from "../provider.interface.js"
-import { SEEDANCE_2_REF_LIMITS, isSeedance2Provider, isVeoProvider, getLipSyncMaxAudioSeconds, applyVideoNegativePrompt, applyVideoAudioToggle, getModel } from "@nodaro/shared"
+import { SEEDANCE_2_REF_LIMITS, isSeedance2Provider, isVeoProvider, getLipSyncMaxAudioSeconds, applyVideoNegativePrompt, applyVideoAudioToggle, getModel, resolveSeedance2Inputs } from "@nodaro/shared"
 import {
   createSanitizedError,
   runKieTask,
@@ -69,38 +69,59 @@ const GROK_VIDEO_15_ASPECT_RATIOS = new Set<string>([
 
 /**
  * Merge Seedance 2.0 options into the KIE payload (I2V + T2V).
- * Returns whether REFERENCE-VIDEO mode is active — mutually exclusive with
- * first/last frame mode per KIE's schema, so the i2v caller deletes
- * first_frame_url/last_frame_url when this is true.
  *
- * Audio is DELIBERATELY excluded from the gate: `reference_audio_urls` is
- * compatible with a `first_frame_url` (KIE's audio-driven lip-sync — a face
- * image + a voice line), so audio must NOT force the first-frame deletion. The
- * generate-video NODE never sends frame+audio together (its route strips
- * reference audio in frames mode), so excluding audio here only matters for the
- * lip-sync path, which intentionally pairs a first frame with reference audio.
+ * Delegates the three mutually-exclusive KIE input modes (first-frame /
+ * first-last-frame / reference) to the shared `resolveSeedance2Inputs` resolver,
+ * then writes/deletes the frame + reference keys and appends the resolver's
+ * frame prompt suffix. Frames ride along in reference mode (moved into
+ * reference_image_urls after the user's own images) instead of being rejected
+ * when a multimodal reference is present.
+ *
+ * NB: generate_audio is set by applyVideoAudioToggle (the shared neutral-intent
+ * dispatcher) at the call sites, BEFORE this runs — so the Studio `sound`
+ * toggle reaches Seedance 2 too, not just the legacy `generateAudio` key.
+ * Reference audio deliberately coexists with a first frame (audio-driven
+ * lip-sync); the resolver keeps both in that case.
  */
 export function applySeedance2Params(
   input: Record<string, unknown>,
   options: ProviderOptions | undefined,
-): { hasMultimodalRef: boolean } {
-  const refImages = (options?.referenceImageUrls ?? []).slice(0, SEEDANCE_2_REF_LIMITS.images)
-  const refVideos = (options?.referenceVideoUrls ?? []).slice(0, SEEDANCE_2_REF_LIMITS.videos)
-  const refAudios = (options?.referenceAudioUrls ?? []).slice(0, SEEDANCE_2_REF_LIMITS.audio)
-  if (refImages.length > 0) input.reference_image_urls = refImages
-  if (refVideos.length > 0) input.reference_video_urls = refVideos
-  if (refAudios.length > 0) input.reference_audio_urls = refAudios
+): void {
+  // Passthrough params (unchanged behavior).
   input.web_search = options?.webSearch ?? false
   if (options?.nsfwChecker !== undefined) input.nsfw_checker = options.nsfwChecker
-  // NB: generate_audio is set by applyVideoAudioToggle (the shared neutral-intent
-  // dispatcher) at the call sites, BEFORE this runs — so the Studio `sound`
-  // toggle reaches Seedance 2 too, not just the legacy `generateAudio` key.
   if (options?.aspectRatio) input.aspect_ratio = options.aspectRatio
   if (options?.resolution) input.resolution = options.resolution
   if (input.duration !== undefined) input.duration = Number(input.duration)
-  // Audio is intentionally NOT part of this gate — see the doc comment above:
-  // reference audio coexists with a first frame (audio-driven lip-sync).
-  return { hasMultimodalRef: refVideos.length > 0 }
+
+  // Unified input resolution: pick the KIE mode, order reference_image_urls, and
+  // emit the frame prompt suffix. video.ts is the single chokepoint every run
+  // path (single-node route + orchestrator worker) flows through, so appending
+  // the suffix here applies it exactly once.
+  const resolved = resolveSeedance2Inputs({
+    firstFrameUrl: typeof input.first_frame_url === "string" ? input.first_frame_url : undefined,
+    lastFrameUrl: typeof input.last_frame_url === "string" ? input.last_frame_url : undefined,
+    refImageUrls: options?.referenceImageUrls,
+    refVideoUrls: options?.referenceVideoUrls,
+    refAudioUrls: options?.referenceAudioUrls,
+  })
+
+  if (resolved.firstFrameUrl) input.first_frame_url = resolved.firstFrameUrl
+  else delete input.first_frame_url
+  if (resolved.lastFrameUrl) input.last_frame_url = resolved.lastFrameUrl
+  else delete input.last_frame_url
+
+  if (resolved.referenceImageUrls.length > 0) input.reference_image_urls = resolved.referenceImageUrls
+  else delete input.reference_image_urls
+  if (resolved.referenceVideoUrls.length > 0) input.reference_video_urls = resolved.referenceVideoUrls
+  else delete input.reference_video_urls
+  if (resolved.referenceAudioUrls.length > 0) input.reference_audio_urls = resolved.referenceAudioUrls
+  else delete input.reference_audio_urls
+
+  if (resolved.promptSuffix) {
+    const base = typeof input.prompt === "string" ? input.prompt : ""
+    input.prompt = base ? `${base}\n\n${resolved.promptSuffix}` : resolved.promptSuffix
+  }
 }
 
 // Audio-duration cap per lip-sync provider (seconds).
@@ -898,17 +919,7 @@ export class KieVideoProvider
     }
 
     if (isSeedance2Provider(provider)) {
-      const { hasMultimodalRef } = applySeedance2Params(input, options)
-      if (hasMultimodalRef) {
-        if (endFrameUrl) {
-          throw createSanitizedError(
-            "Seedance 2.0: reference videos cannot be combined with start+end frame. Disconnect one mode before running.",
-            "Video generation",
-          )
-        }
-        delete input.first_frame_url
-        delete input.last_frame_url
-      }
+      applySeedance2Params(input, options)
     }
 
     // Wan Turbo specific params

@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { CHARACTER_STYLES, OBJECT_MOTION_PROVIDERS, OBJECT_ASPECT_OPTIONS } from "@nodaro/shared"
+import { OBJECT_MOTION_PROVIDERS, OBJECT_ASPECT_OPTIONS } from "@nodaro/shared"
 import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { config } from "../../config.js"
@@ -291,7 +291,8 @@ function registerGenerationTools(opts: RegisterObjectToolsOpts): void {
             "Display name for the object (used in the generated prompt context).",
           ),
         category: z.string().max(100).optional(),
-        style: z.enum(CHARACTER_STYLES).optional(),
+        // Free-text style (matches the entity save route + DB; a narrow enum would 400 inherited styles like "cinematic").
+        style: z.string().max(50).optional(),
         canonical_description: z
           .string()
           .max(4000)

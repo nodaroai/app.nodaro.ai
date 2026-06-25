@@ -1,7 +1,7 @@
 ---
 node_type: object
-generated_at: 2026-06-20T22:52:09.927Z
-generated_from: 1a15bf767
+generated_at: 2026-06-23T20:10:00.133Z
+generated_from: 527130f41
 ---
 
 # Object
@@ -19,7 +19,7 @@ generated_from: 1a15bf767
 - `objectName: string`
 - `description: string`
 - `category: "furniture" | "vehicle" | "weapon" | "food" | "clothing" | "electronics" | "nature" | "tool" | "animal" | "other"`
-- `style: "realistic" | "anime" | "3d-pixar" | "illustration"`
+- `style: EntityArtStyle`
 - `sourceImageUrl: string`
 - `projectId: string`
 - `createdAt: string`

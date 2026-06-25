@@ -1743,7 +1743,8 @@ export type ImageToVideoData = {
   /** See GenerateImageData.suppressedCanonicalCharacterIds — location equivalent. */
   suppressedCanonicalLocationIds?: readonly string[]
   veoMode?: "frame-to-frame" | "reference"  // VEO 3/3.1: toggle between start+end frame and reference mode
-  seedance2InputMode?: "frames" | "references"  // Seedance 2: toggle between start/end frames and reference media
+  /** @deprecated Seedance 2 inputs are auto-detected; no longer written by the UI. */
+  seedance2InputMode?: "frames" | "references"
   /** Extra reference images with per-ref descriptions. See `ExtraRef`. */
   extraRefs?: readonly ExtraRef[]
   videoPlayState?: "loop" | "paused" | "stopped"
@@ -3584,6 +3585,18 @@ export interface CharacterPersonality {
   behavioralNotes: string   // "responds aggressively when challenged"
 }
 
+/**
+ * Visual style of an entity node (character / object / creature / location /
+ * face). Free-text BY DESIGN — entities inherit styles from the project's
+ * broader `visualStyle` vocabulary (cinematic / noir / vintage / fantasy /
+ * sci-fi / cartoon) and the backend persists `style` as `z.string().max(50)`
+ * (save routes + DB). The four canonical art styles ("realistic" | "anime" |
+ * "3d-pixar" | "illustration") are the common values but NOT an enforced set:
+ * narrowing this back to a union desyncs from the backend and silently 400s
+ * inherited styles. See backend/src/routes/generate-location-asset.ts.
+ */
+export type EntityArtStyle = string
+
 export type CharacterNodeData = {
   [key: string]: unknown
   label: string
@@ -3592,7 +3605,7 @@ export type CharacterNodeData = {
   description: string
   sourceImageUrl: string
   gender: "male" | "female" | "other"
-  style: "realistic" | "anime" | "3d-pixar" | "illustration"
+  style: EntityArtStyle
   baseOutfit: string
   provider?: string
   /** Identity preservation strength when this Character is fed as a reference.
@@ -3771,7 +3784,7 @@ export type ObjectNodeData = {
   objectName: string
   description: string
   category: "furniture" | "vehicle" | "weapon" | "food" | "clothing" | "electronics" | "nature" | "tool" | "animal" | "other"
-  style: "realistic" | "anime" | "3d-pixar" | "illustration"
+  style: EntityArtStyle
   provider?: string
   sourceImageUrl: string
   projectId: string
@@ -3878,7 +3891,7 @@ export type CreatureNodeData = {
   // Free-text category (backend stores via z.string().max(50)). Distinct from
   // ObjectNodeData.category which is a hard enum.
   category: string
-  style: "realistic" | "anime" | "3d-pixar" | "illustration"
+  style: EntityArtStyle
   provider?: string
   sourceImageUrl: string
   projectId: string
@@ -3996,7 +4009,7 @@ export type LocationNodeData = {
   locationName: string
   description: string
   category: "indoor" | "outdoor" | "urban" | "nature" | "fantasy" | "sci-fi" | "historical" | "futuristic" | "other"
-  style: "realistic" | "anime" | "3d-pixar" | "illustration"
+  style: EntityArtStyle
   provider?: string
   sourceImageUrl: string
   projectId: string
@@ -4072,7 +4085,7 @@ export type FaceNodeData = {
   faceName: string
   description: string
   sourceImageUrl: string
-  style: "realistic" | "anime" | "3d-pixar" | "illustration"
+  style: EntityArtStyle
   provider?: string
   projectId: string
   createdAt: string
@@ -5808,7 +5821,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     // drift test in enumerate-connection-options.test.ts.
     inputs: ["prompt", "negative", "startFrame", "endFrame", "imageReferences", "videoReferences", "audio", "audioReferences", "assets", "elements", "look"],
     outputs: ["video"],
-    defaultData: { label: "Generate Video", provider: "seedance-2-fast", seedance2InputMode: "references", duration: 5, prompt: "", negativePrompt: "", fieldMappings: {} },
+    defaultData: { label: "Generate Video", provider: "seedance-2-fast", duration: 5, prompt: "", negativePrompt: "", fieldMappings: {} },
     exposableOutputs: [{ key: "result", label: "Result", outputType: "video" as const }],
     exposableFields: [
       {

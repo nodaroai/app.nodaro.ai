@@ -12,7 +12,6 @@ import { resolveLocationAspectRatio } from "../lib/aspect-ratio.js"
 import {
   LOCATION_ATMOSPHERE_PROVIDERS,
   buildLocationMotionPrompt,
-  CHARACTER_STYLES,
   CHARACTER_ASPECT_OPTIONS,
 } from "@nodaro/shared"
 
@@ -41,7 +40,8 @@ export const generateLocationMotionBody = z.object({
   // canonical description is preferred when present; the helper falls back to
   // `category` + `name` otherwise.
   category: z.string().max(100).optional(),
-  style: z.enum(CHARACTER_STYLES).optional(),
+  // Free-text style (matches the entity save route + DB; a narrow enum would 400 inherited styles like "cinematic").
+  style: z.string().max(50).optional(),
   canonicalDescription: z.string().max(4000).optional(),
   userId: z.string().uuid().optional(),
   // Studio auto-attach. When set the worker appends `{name, url}` to the

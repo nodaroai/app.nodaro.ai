@@ -92,8 +92,16 @@ export function MotionTab({ studio }: MotionTabProps) {
     // later passed to the real trackJob so the chip stays "creating" across the
     // swap. settleJob swaps it for the real job; abortJob drops it on failure.
     const tempId = jobs.beginJob("atmosphere_motions", trimmed)
+    // `ensureSavedBeforeGen` (saveStaged) toasts its OWN failure ("Save failed"
+    // / 409 reload), so bail quietly on a save error to avoid a double-toast.
+    let locationDbId: string
     try {
-      const locationDbId = await studio.ensureSavedBeforeGen()
+      locationDbId = await studio.ensureSavedBeforeGen()
+    } catch {
+      jobs.abortJob(tempId)
+      return
+    }
+    try {
       const result = await generateLocationMotion({
         motionPrompt,
         sourceImageUrl: data.sourceImageUrl,
@@ -107,9 +115,11 @@ export function MotionTab({ studio }: MotionTabProps) {
         attachName: trimmed,
       })
       jobs.settleJob(tempId, result.jobId)
-    } catch {
+    } catch (e) {
       jobs.abortJob(tempId)
-      // ensureSavedBeforeGen / generateLocationMotion already toast on failure.
+      // `generateLocationMotion` (apiJson) THROWS without toasting — surface the
+      // backend message so the optimistic card doesn't vanish unexplained.
+      toast.error(e instanceof Error ? e.message : "Failed to generate motion")
     }
   }
 

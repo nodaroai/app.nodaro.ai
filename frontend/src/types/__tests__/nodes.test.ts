@@ -397,19 +397,19 @@ describe("resolveViewMode", () => {
 })
 
 // ---------------------------------------------------------------------------
-// Generate Video default mode (product decision: new seedance-2 nodes start in
-// "references" mode, not "frames"). Set on defaultData so only NEW nodes get
-// it — legacy nodes loaded from the DB keep their saved value / the "frames"
-// runtime fallback.
+// Generate Video defaultData: defaults to seedance-2-fast. The unified node no
+// longer carries a `seedance2InputMode` (the frames-vs-references lever was
+// removed — the backend resolver decides the mode at run time from the
+// connected inputs), so defaultData must NOT set that field.
 // ---------------------------------------------------------------------------
 
 describe("generate-video defaultData", () => {
   const def = NODE_DEFINITIONS.find((d) => d.type === "generate-video")
 
-  it("defaults a new node to seedance-2-fast in references mode", () => {
+  it("defaults a new node to seedance-2-fast with no input-mode lever", () => {
     expect(def).toBeDefined()
     const data = def!.defaultData as Record<string, unknown>
     expect(data.provider).toBe("seedance-2-fast")
-    expect(data.seedance2InputMode).toBe("references")
+    expect(data.seedance2InputMode).toBeUndefined()
   })
 })
