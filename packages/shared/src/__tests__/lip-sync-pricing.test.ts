@@ -126,3 +126,17 @@ describe("buildLipSyncCreditId", () => {
     expect(buildLipSyncCreditId("latentsync", undefined)).toBe("latentsync")
   })
 })
+
+describe("omnihuman-1-5 (per-second, 60s cap)", () => {
+  it("is per-second and capped at 60s", () => {
+    expect(isPerSecondLipSyncProvider("omnihuman-1-5")).toBe(true)
+    expect(getLipSyncMaxAudioSeconds("omnihuman-1-5")).toBe(60)
+  })
+  it("buckets to 15/30/60 and clamps anything longer (and missing) to 60", () => {
+    expect(buildLipSyncCreditId("omnihuman-1-5", 8)).toBe("omnihuman-1-5:15s")
+    expect(buildLipSyncCreditId("omnihuman-1-5", 25)).toBe("omnihuman-1-5:30s")
+    expect(buildLipSyncCreditId("omnihuman-1-5", 59)).toBe("omnihuman-1-5:60s")
+    expect(buildLipSyncCreditId("omnihuman-1-5", 999)).toBe("omnihuman-1-5:60s")
+    expect(buildLipSyncCreditId("omnihuman-1-5", undefined)).toBe("omnihuman-1-5:60s")
+  })
+})

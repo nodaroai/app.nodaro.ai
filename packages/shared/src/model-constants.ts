@@ -804,6 +804,10 @@ export const LIP_SYNC_PROVIDERS = [
   "kling-avatar",
   "kling-avatar-pro",
   "infinitalk",
+  // ByteDance OmniHuman 1.5 — KIE image+audio avatar, prompt-directed
+  // performance, per-second billed, 60s audio cap. Routes the default KIE
+  // path (not in any replicate/fal/seedance/video-input set).
+  "omnihuman-1-5",
   "latentsync",
   "wav2lip",
   "video-retalking",

@@ -252,6 +252,10 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   "kling-avatar-pro:60s":  { provider: "KIE.ai",    providerCostUsd: 4.800, markupPct: 25 },
   "kling-avatar-pro:120s": { provider: "KIE.ai",    providerCostUsd: 9.600, markupPct: 25 },
   "kling-avatar-pro:300s": { provider: "KIE.ai",    providerCostUsd: 24.000, markupPct: 25 }, // 5-min ceiling
+  "omnihuman-1-5":         { provider: "KIE.ai",    providerCostUsd: 8.100, markupPct: 25 },  // bare = 60s ceiling (27 KIE cr/sec)
+  "omnihuman-1-5:15s":     { provider: "KIE.ai",    providerCostUsd: 2.025, markupPct: 25 },  // 15s × 27 KIE cr/sec
+  "omnihuman-1-5:30s":     { provider: "KIE.ai",    providerCostUsd: 4.050, markupPct: 25 },
+  "omnihuman-1-5:60s":     { provider: "KIE.ai",    providerCostUsd: 8.100, markupPct: 25 },
   "infinitalk":        { provider: "KIE.ai",    providerCostUsd: 0.525, markupPct: 25 },  // 3–12 KIE cr/sec × ~14s (avg 480p/720p)
   "hailuo-avatar":     { provider: "KIE.ai",    providerCostUsd: 0.350, markupPct: 25 },  // estimated
   // HeyGen Lipsync Precision ($0.0667/s) + Sync Lipsync 2 Pro ($0.08325/s) — Replicate,

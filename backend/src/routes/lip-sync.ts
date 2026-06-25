@@ -27,6 +27,7 @@ const lipSyncBody = z.object({
   guidanceScale: z.number().min(1).max(3).optional(),
   inferenceSteps: z.number().int().min(20).max(50).optional(),
   seed: z.number().int().optional(),
+  fastMode: z.boolean().optional(),        // OmniHuman 1.5 — pe_fast_mode (trade quality for speed)
   // Wav2Lip params
   pads: z.string().max(50).optional(),
   smooth: z.boolean().optional(),
@@ -99,7 +100,7 @@ export async function lipSyncRoutes(app: FastifyInstance) {
     const {
       imageUrl, videoUrl, audioUrl, prompt, provider, resolution,
       audioDurationSec,
-      guidanceScale, inferenceSteps, seed,
+      guidanceScale, inferenceSteps, seed, fastMode,
       pads, smooth, fps, resizeFactor,
       enhancer, preprocess, still, poseStyle, expressionScale,
       enableDynamicDuration, disableMusicTrack, enableSpeechEnhancement,
@@ -166,7 +167,7 @@ export async function lipSyncRoutes(app: FastifyInstance) {
       provider: baseProvider,
       resolution,
       audioDurationSec,
-      guidanceScale, inferenceSteps, seed,
+      guidanceScale, inferenceSteps, seed, fastMode,
       pads, smooth, fps, resizeFactor,
       enhancer, preprocess, still, poseStyle, expressionScale,
       enableDynamicDuration, disableMusicTrack, enableSpeechEnhancement,

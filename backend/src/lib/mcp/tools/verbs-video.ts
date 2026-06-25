@@ -995,11 +995,13 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .string()
           .optional()
           .describe(
-            "Lip-sync model. Default kling-avatar. All 10 options: " +
+            "Lip-sync model. Default kling-avatar. All 11 options: " +
             "seedance-2 (~50/75 cr, image, native phoneme lip-sync 8+ languages, premium), " +
             "seedance-2-fast (~40/60 cr, image, same lip-sync cheaper), " +
             "kling-avatar (28 cr, image, 720p), kling-avatar-pro (56 cr, image, 1080p), " +
-            "infinitalk (11/42 cr, image, 480p|720p), latentsync (5 cr, video, singing), " +
+            "infinitalk (11/42 cr, image, 480p|720p), " +
+            "omnihuman-1-5 (102/203/405 cr for 15/30/60s, image, prompt-directed performance, 720p|1080p, premium), " +
+            "latentsync (5 cr, video, singing), " +
             "wav2lip (1 cr, image|video, fastest+cheapest), video-retalking " +
             "(20 cr, video, face enhancement), sadtalker (9 cr, single image), " +
             "volcengine-lipsync (2 cr/s, video, AI dubbing, mode lite|basic for multi-speaker). " +
@@ -1010,8 +1012,19 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe(
             "Resolution lever. infinitalk: 480p|720p. seedance-2(-fast): 480p|720p|1080p. " +
-            "Other models ignore this.",
+            "omnihuman-1-5: 720p|1080p (default 1080p). Other models ignore this.",
           ),
+        seed: z
+          .number()
+          .int()
+          .min(0)
+          .max(2147483647)
+          .optional()
+          .describe("Reproducibility seed (omnihuman-1-5). Same seed + inputs → near-identical result."),
+        fast_mode: z
+          .boolean()
+          .optional()
+          .describe("omnihuman-1-5 only — trade some quality for faster generation."),
         mode: z
           .enum(["lite", "basic"])
           .optional()
@@ -1128,6 +1141,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         provider,
         ...(args.prompt ? { prompt: args.prompt } : {}),
         ...(args.resolution ? { resolution: args.resolution } : {}),
+        ...(args.seed !== undefined ? { seed: args.seed } : {}),
+        ...(args.fast_mode !== undefined ? { fastMode: args.fast_mode } : {}),
         ...(args.mode ? { mode: args.mode } : {}),
         // Volcengine dubbing toggles — snake_case MCP inputs → camelCase route body.
         ...(args.separate_vocal !== undefined ? { separateVocal: args.separate_vocal } : {}),

@@ -1667,6 +1667,23 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "infinitalk:720p", credits: 42 },
     ],
   },
+  "omnihuman-1-5": {
+    id: "omnihuman-1-5",
+    kind: "video",
+    modes: ["lip-sync"] as const,
+    family: "ByteDance",
+    label: "OmniHuman 1.5",
+    series: "OmniHuman",
+    description: "Premium prompt-directed talking avatar from a still image + audio. 720p / 1080p, up to 60s. People, pets, anime.",
+    useCases: ["lip-sync", "talking-head", "premium"],
+    resolutions: ["720p", "1080p"],
+    pricing: [
+      { identifier: "omnihuman-1-5", credits: 405, note: "60s ceiling (no duration given)" },
+      { identifier: "omnihuman-1-5:15s", credits: 102 },
+      { identifier: "omnihuman-1-5:30s", credits: 203 },
+      { identifier: "omnihuman-1-5:60s", credits: 405 },
+    ],
+  },
   "hailuo-avatar": {
     id: "hailuo-avatar",
     kind: "video",

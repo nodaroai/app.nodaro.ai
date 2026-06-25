@@ -184,6 +184,12 @@ export interface VideoUpscaleProvider {
   ): Promise<ProviderResult>
 }
 
+// Per-model lip-sync levers (OmniHuman 1.5: pe_fast_mode + seed)
+export interface LipSyncOptions {
+  fastMode?: boolean
+  seed?: number
+}
+
 /** Optional dubbing toggles for video-input lip-sync (e.g. volcengine). */
 export interface VideoLipSyncOptions {
   mode?: "lite" | "basic"
@@ -203,6 +209,7 @@ export interface LipSyncProvider {
     resolution?: string,
     audioDurationSec?: number,
     reconcileOpts?: ReconcileOpts,
+    options?: LipSyncOptions,
   ): Promise<ProviderResult>
   /**
    * Video-to-video lip-sync (AI dubbing) for video-input KIE models

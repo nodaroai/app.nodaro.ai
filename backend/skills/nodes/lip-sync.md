@@ -1,7 +1,7 @@
 ---
 node_type: lip-sync
-generated_at: 2026-06-25T00:05:53.117Z
-generated_from: a00d7d3bb
+generated_at: 2026-06-25T00:52:39.876Z
+generated_from: e70d38e91
 ---
 
 # Lip Sync
@@ -34,6 +34,7 @@ generated_from: a00d7d3bb
 - `guidanceScale?: number`
 - `inferenceSteps?: number`
 - `seed?: number`
+- `fastMode?: boolean`
 - `pads?: string`
 - `smooth?: boolean`
 - `fps?: number`
@@ -93,6 +94,8 @@ generated_from: a00d7d3bb
 - `prompt`
 - `model`
 - `resolution`
+- `seed`
+- `fast_mode`
 - `mode`
 - `separate_vocal`
 - `open_scenedet`

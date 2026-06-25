@@ -1995,6 +1995,8 @@ export type LipSyncData = {
   guidanceScale?: number
   inferenceSteps?: number
   seed?: number
+  // OmniHuman 1.5 — pe_fast_mode (trade quality for speed)
+  fastMode?: boolean
   // Wav2Lip params
   pads?: string
   smooth?: boolean
@@ -6691,6 +6693,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
           { value: "kling-avatar", label: "Kling Avatar" },
           { value: "kling-avatar-pro", label: "Kling Avatar Pro" },
           { value: "infinitalk", label: "InfiniTalk" },
+          { value: "omnihuman-1-5", label: "OmniHuman 1.5" },
         ],
       },
       {

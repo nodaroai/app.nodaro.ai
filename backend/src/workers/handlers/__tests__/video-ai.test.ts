@@ -475,6 +475,7 @@ describe("lip-sync handler", () => {
     expect(mocks.mockLipSync).toHaveBeenCalledWith(
       "https://face.png", "https://speech.mp3", "kling-avatar", undefined, undefined, undefined,
       expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+      { fastMode: undefined, seed: undefined },
     )
     expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalled()
     expect(mocks.mockGenerateAndUploadThumbnail).toHaveBeenCalled()
@@ -491,6 +492,7 @@ describe("lip-sync handler", () => {
     expect(mocks.mockLipSync).toHaveBeenCalledWith(
       "https://face.png", "https://speech.mp3", "kling-avatar", undefined, undefined, undefined,
       expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+      { fastMode: undefined, seed: undefined },
     )
   })
 
@@ -507,6 +509,7 @@ describe("lip-sync handler", () => {
     expect(mocks.mockLipSync).toHaveBeenCalledWith(
       "https://face.png", "https://speech.mp3", "hailuo-avatar", "talking", "1080p", undefined,
       expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+      { fastMode: undefined, seed: undefined },
     )
   })
 

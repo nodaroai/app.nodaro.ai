@@ -13,8 +13,19 @@ It can also **dub an existing video**: HeyGen Lipsync Precision, Sync Lipsync 2 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | Provider | Select | kling-avatar | AI model for lip sync |
-| Resolution | Select | 720p | Output resolution: 480p or 720p (KIE providers only) |
+| Resolution | Select | 720p | Output resolution: 480p/720p (most KIE providers); OmniHuman 1.5 is 720p/1080p (default 1080p) |
 | Motion Prompt | Textarea | — | Optional: describe head/expression motions (KIE providers only) |
+
+### OmniHuman 1.5 options
+
+`omnihuman-1-5` is ByteDance's premium **prompt-directed** talking avatar (image + audio → performing avatar). It animates people, pets, or anime at any aspect ratio, and uses the motion prompt to direct the performance.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| Motion Prompt | Textarea | — | Directs the performance (e.g. "sing confidently into a microphone") |
+| Resolution | Select | 1080p | 720p or 1080p (no 480p) |
+| Fast Mode | Toggle | Off | Trade some quality for faster generation (`pe_fast_mode`) |
+| Seed | Number | -1 | Reproducibility — same seed + inputs → near-identical result. -1 = random |
 
 ### HeyGen Lipsync Precision options
 
@@ -72,6 +83,7 @@ It can also **dub an existing video**: HeyGen Lipsync Precision, Sync Lipsync 2 
 | `kling-avatar` (Standard) | 5 minutes |
 | `kling-avatar-pro` (Pro) | 5 minutes |
 | `infinitalk` | 15 seconds |
+| `omnihuman-1-5` | 60 seconds |
 | `heygen-lipsync-precision` | 5 minutes* |
 | `lipsync-2-pro` | 5 minutes* |
 | `sync-lipsync-v3` | 5 minutes* |
@@ -83,12 +95,15 @@ For the KIE providers (`kling-avatar(-pro)`, `infinitalk`, `volcengine-lipsync`)
 
 ## Credit Cost
 
-Kling AI Avatar bills per-second. Credit reservation buckets to the next supported tier; any reserved credits beyond the actual cost are refunded once the job completes.
+Kling AI Avatar and OmniHuman 1.5 bill per-second. Credit reservation buckets to the next supported tier; any reserved credits beyond the actual cost are refunded once the job completes.
 
 | Provider | Per-second | 15s | 30s | 1min | 2min | 5min |
 |----------|-----------:|----:|----:|-----:|-----:|-----:|
 | `kling-avatar` (720p) | 2 CR/s | 30 | 60 | 120 | 240 | 600 |
 | `kling-avatar-pro` (1080p) | 4 CR/s | 60 | 120 | 240 | 480 | 1,200 |
+| `omnihuman-1-5` (720p/1080p) | ~6.75 CR/s | 102 | 203 | 405 | — | — |
+
+`omnihuman-1-5` is capped at 60s of audio (longer is auto-trimmed), so only the 15s / 30s / 60s tiers apply. Resolution (720p vs 1080p) does not change the price.
 
 HeyGen Lipsync Precision, Sync Lipsync 2 Pro, and Sync Lipsync v3 also bill per second of output (priced at cost), bucketed to the same 15s / 30s / 1min / 2min / 5min tiers:
 

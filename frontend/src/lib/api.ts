@@ -4040,6 +4040,7 @@ export async function lipSyncApi(
     guidanceScale?: number
     inferenceSteps?: number
     seed?: number
+    fastMode?: boolean
     pads?: string
     smooth?: boolean
     fps?: number
@@ -4075,6 +4076,7 @@ export async function lipSyncApi(
   if (opts.guidanceScale !== undefined) body.guidanceScale = opts.guidanceScale
   if (opts.inferenceSteps !== undefined) body.inferenceSteps = opts.inferenceSteps
   if (opts.seed !== undefined) body.seed = opts.seed
+  if (opts.fastMode !== undefined) body.fastMode = opts.fastMode
   if (opts.pads !== undefined) body.pads = opts.pads
   if (opts.smooth !== undefined) body.smooth = opts.smooth
   if (opts.fps !== undefined) body.fps = opts.fps
