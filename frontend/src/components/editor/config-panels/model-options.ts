@@ -224,6 +224,16 @@ export function formatCreditBadge(value: string, credits: number): string | unde
   return undefined
 }
 
+/** Badge for per-second-billed providers (per-second lip-sync). Their bare
+ *  credit id is the 5-min worst-case ceiling, which reads as an alarming flat
+ *  price in a picker. Show the per-second rate instead, derived from the 15s
+ *  bucket (÷15) so it tracks the DB pricing with no hardcoded rates. Pass the
+ *  resolved credits for the provider's `:15s` identifier. */
+export function formatPerSecondCreditBadge(credits15s: number): string | undefined {
+  if (!(credits15s > 0)) return undefined
+  return `~${Math.max(1, Math.round(credits15s / 15))} CR/s`
+}
+
 // =============================================================================
 // IMAGE MODEL ASPECT RATIOS — derived from MODEL_CATALOG (single source of
 // truth). When you add a new model, update its `aspectRatios` in

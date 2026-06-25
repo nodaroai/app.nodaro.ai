@@ -165,7 +165,13 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
   const creditModelId = useMemo(() => {
     if (lipSyncProvider === "infinitalk") return `infinitalk:${nodeData.resolution ?? "720p"}`
     if (isPerSecondLipSyncProvider(lipSyncProvider)) {
-      return buildLipSyncCreditId(lipSyncProvider, nodeData.audioDurationSec)
+      // With a probed duration, show the accurate bucket. BEFORE audio is wired
+      // (duration unknown), show the 15s floor — NOT buildLipSyncCreditId's 5-min
+      // ceiling, which reads as an alarming run-button price. Display only; the
+      // real reservation is computed server-side from the actual audio length.
+      return nodeData.audioDurationSec
+        ? buildLipSyncCreditId(lipSyncProvider, nodeData.audioDurationSec)
+        : `${lipSyncProvider}:15s`
     }
     return lipSyncProvider
   }, [lipSyncProvider, nodeData.resolution, nodeData.audioDurationSec])

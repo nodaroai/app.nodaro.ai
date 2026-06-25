@@ -70,7 +70,7 @@ import { ProviderAudioTagWarning } from "./provider-audio-tag-warning"
 import { ConnectedAudioSources } from "./connected-audio-sources"
 import { FinalAudioPromptPreview } from "./final-audio-prompt-preview"
 import { LIP_SYNC_MODELS, TTS_MODELS, SUNO_MODELS } from "./model-options"
-import { REPLICATE_LIP_SYNC_PROVIDERS, FAL_LIP_SYNC_PROVIDERS, VIDEO_INPUT_LIP_SYNC_PROVIDERS, getEffectiveSunoCustomMode, SUNO_ADD_TRACK_MODELS, SUNO_TEXT_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars, getMaxTtsChars } from "@nodaro/shared"
+import { REPLICATE_LIP_SYNC_PROVIDERS, FAL_LIP_SYNC_PROVIDERS, VIDEO_INPUT_LIP_SYNC_PROVIDERS, isPerSecondLipSyncProvider, getEffectiveSunoCustomMode, SUNO_ADD_TRACK_MODELS, SUNO_TEXT_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars, getMaxTtsChars } from "@nodaro/shared"
 import { PromptLengthCounter } from "./prompt-length-counter"
 import { InjectedReferenceList } from "./injected-reference-list"
 import { SeedanceReferenceTip } from "./seedance-reference-tip"
@@ -1347,7 +1347,7 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
           <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
           <SelectContent>
             {LIP_SYNC_MODELS.map((m) => (
-              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
+              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} perSecond={isPerSecondLipSyncProvider(m.value)} />
             ))}
           </SelectContent>
         </Select>

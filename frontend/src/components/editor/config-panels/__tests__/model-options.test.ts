@@ -8,6 +8,7 @@ import {
   KIE_VIDEO_DURATIONS,
   KIE_T2V_DURATIONS,
   PROVIDERS_WITH_END_FRAME,
+  formatPerSecondCreditBadge,
 } from "../model-options"
 
 describe("IMAGE_GEN_MODELS", () => {
@@ -133,6 +134,23 @@ describe("KIE_T2V_DURATIONS", () => {
     for (const [, durations] of Object.entries(KIE_T2V_DURATIONS)) {
       expect(durations.length).toBeGreaterThan(0)
     }
+  })
+})
+
+describe("formatPerSecondCreditBadge", () => {
+  it("renders the per-second rate from the 15s bucket (÷15)", () => {
+    // volcengine / kling-avatar :15s = 30 → 2 CR/s
+    expect(formatPerSecondCreditBadge(30)).toBe("~2 CR/s")
+    // sync-lipsync-v3 :15s = 100 → 6.67 → ~7 CR/s
+    expect(formatPerSecondCreditBadge(100)).toBe("~7 CR/s")
+    // omnihuman-1-5 :15s = 102 → 6.8 → ~7 CR/s
+    expect(formatPerSecondCreditBadge(102)).toBe("~7 CR/s")
+  })
+
+  it("floors at 1 CR/s for tiny rates and hides on zero/unknown", () => {
+    expect(formatPerSecondCreditBadge(5)).toBe("~1 CR/s") // 5/15 rounds to 0 → clamped to 1
+    expect(formatPerSecondCreditBadge(0)).toBeUndefined()
+    expect(formatPerSecondCreditBadge(-1)).toBeUndefined()
   })
 })
 
