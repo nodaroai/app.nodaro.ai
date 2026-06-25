@@ -369,7 +369,7 @@ describe("typed wrapper dispatch", () => {
     await lipSync("img", "audio", "kling-avatar", "motion-prompt", "720p", 42)
 
     expect(configMocks.buildRoutingDecision).toHaveBeenCalledWith("lip-sync", "kling-avatar")
-    expect(fn).toHaveBeenCalledWith("img", "audio", "motion-prompt", "kling-avatar", "720p", 42, undefined)
+    expect(fn).toHaveBeenCalledWith("img", "audio", "motion-prompt", "kling-avatar", "720p", 42, undefined, undefined)
   })
 
   it("generateMusic routes via music-generation capability + audio submodule", async () => {

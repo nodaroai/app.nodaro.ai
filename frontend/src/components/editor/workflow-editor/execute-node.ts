@@ -4030,6 +4030,7 @@ export function executeNode(
             guidanceScale: lsData.guidanceScale,
             inferenceSteps: lsData.inferenceSteps,
             seed: lsData.seed,
+            fastMode: lsData.fastMode,
             pads: lsData.pads,
             smooth: lsData.smooth,
             fps: lsData.fps,

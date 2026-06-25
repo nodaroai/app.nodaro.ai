@@ -423,7 +423,7 @@ prompt with no questions round-trip.
 | `merge_video_audio` | Merge a video track and an audio track into a single output file. |
 | `add_captions` | Burn subtitles/captions onto a video. Accepts `video_url` and caption style options. |
 | `extract_frame` | Extract a single frame from a video at a given timestamp. Returns an image URL. |
-| `lip_sync` | Drive lip-sync on a video or portrait image from an audio track. Accepts `video_url` / `image_url` + `audio_url`. |
+| `lip_sync` | Drive lip-sync on a video or portrait image from an audio track. Accepts `video_url` / `image_url` + `audio_url`, plus `model` (kling-avatar, kling-avatar-pro, infinitalk, omnihuman-1-5, seedance-2(-fast), latentsync, wav2lip, video-retalking, sadtalker), `prompt`, `resolution`, and (omnihuman-1-5) `seed` / `fast_mode`. |
 | `speech_to_video` | Generate a talking-head video from a portrait + speech audio. |
 | `motion_transfer` | Transfer the motion pattern from one video onto a target image or video. |
 | `face_swap` | Swap a face in a source image/video with a reference face. |

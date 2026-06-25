@@ -597,7 +597,7 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
   const {
     imageUrl, videoUrl, audioUrl, prompt, provider, resolution,
     audioDurationSec,
-    guidanceScale, inferenceSteps, seed,
+    guidanceScale, inferenceSteps, seed, fastMode,
     pads, smooth, fps, resizeFactor,
     enhancer, preprocess, still, poseStyle, expressionScale,
     enableDynamicDuration, disableMusicTrack, enableSpeechEnhancement,
@@ -615,6 +615,7 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
     guidanceScale?: number
     inferenceSteps?: number
     seed?: number
+    fastMode?: boolean
     pads?: string
     smooth?: boolean
     fps?: number
@@ -768,6 +769,7 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
       resolution,
       audioDurationSec,
       { onTaskCreated: lipSyncOnTaskCreated },
+      { fastMode, seed },
     )
     resultUrl = result.url
     resultCost = result.cost

@@ -1282,6 +1282,19 @@ export function TranscribeConfig({ data, onUpdate, sources, fieldMappings, onMap
   )
 }
 
+// Per-provider resolution option set for the Lip Sync node. OmniHuman 1.5 is
+// 720/1080 only (no 480p), default 1080; Seedance 2 (-fast) adds 1080 to
+// 480/720; other KIE avatars are 480/720. Drives both the dropdown and the
+// fail-safe useEffect so a stale value snaps to a valid one on provider switch.
+function lipSyncResolutionOptions(
+  provider: string,
+): { values: Array<"480p" | "720p" | "1080p">; def: "480p" | "720p" | "1080p" } {
+  if (provider === "omnihuman-1-5") return { values: ["720p", "1080p"], def: "1080p" }
+  if (provider === "seedance-2" || provider === "seedance-2-fast")
+    return { values: ["480p", "720p", "1080p"], def: "720p" }
+  return { values: ["480p", "720p"], def: "720p" }
+}
+
 export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, nodeId }: ConfigProps<LipSyncData> & { nodeId?: string }) {
   const promptSnippets = useSnippetPool("audio", "prompt")
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
@@ -1300,18 +1313,18 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
   const isKie =
     !REPLICATE_LIP_SYNC_PROVIDERS.has(provider as never) &&
     !FAL_LIP_SYNC_PROVIDERS.has(provider as never)
+  // Per-provider resolution shape (values + default). See lipSyncResolutionOptions.
+  const resOpts = lipSyncResolutionOptions(provider)
+
   // Volcengine is KIE-hosted but VIDEO-input dubbing — no resolution lever and
   // no motion prompt. The image-input KIE talking-head set (kling-avatar*,
-  // infinitalk, seedance*) is `isKie` minus the video-input providers. This
-  // (data-driven via the shared set) gates the resolution dropdown, motion
-  // prompt, and KIE help text so they stay hidden for Volcengine and any future
-  // KIE video-input dubbing model.
+  // infinitalk, seedance*, omnihuman-1-5) is `isKie` minus the video-input
+  // providers (data-driven via the shared set) — gates the resolution dropdown,
+  // motion prompt, and KIE help text so they stay hidden for Volcengine and any
+  // future KIE video-input dubbing model.
   const imageInputKie =
     isKie && !VIDEO_INPUT_LIP_SYNC_PROVIDERS.has(provider as never)
   const isVolcengine = provider === "volcengine-lipsync"
-  // Seedance 2 / 2 Fast support 1080p (cinematic tier); other KIE providers
-  // cap at 720p. Toggling between them adds/removes the 1080p option.
-  const supports1080p = provider === "seedance-2" || provider === "seedance-2-fast"
 
   // Fail-safe: only image-input KIE providers expose the resolution lever. When
   // the user switches to a Replicate/fal provider, to Volcengine (video-input,
@@ -1322,11 +1335,8 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
       if (data.resolution !== undefined) onUpdate({ resolution: undefined })
       return
     }
-    const valid = supports1080p
-      ? new Set(["480p", "720p", "1080p"])
-      : new Set(["480p", "720p"])
-    if (data.resolution && !valid.has(data.resolution)) {
-      onUpdate({ resolution: "720p" })
+    if (data.resolution && !resOpts.values.includes(data.resolution)) {
+      onUpdate({ resolution: resOpts.def as LipSyncData["resolution"] })
     }
   }, [provider]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1344,15 +1354,15 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
       </MappableField>
       <ModelDescriptionHint modelId={provider} />
 
-      {/* Resolution — image-input KIE providers only (Kling Avatar / InfiniTalk / Seedance) */}
+      {/* Resolution — image-input KIE providers only (per-provider option set) */}
       {imageInputKie && (
         <MappableField field="resolution" label="Resolution" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-          <Select value={data.resolution || "720p"} onValueChange={(v) => onUpdate({ resolution: v as LipSyncData["resolution"] })}>
+          <Select value={data.resolution || resOpts.def} onValueChange={(v) => onUpdate({ resolution: v as LipSyncData["resolution"] })}>
             <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="480p">480p</SelectItem>
-              <SelectItem value="720p">720p (default)</SelectItem>
-              {supports1080p && <SelectItem value="1080p">1080p</SelectItem>}
+              {resOpts.values.map((r) => (
+                <SelectItem key={r} value={r}>{r === resOpts.def ? `${r} (default)` : r}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </MappableField>
@@ -1405,6 +1415,30 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
         label="Injected references"
       />
       <SeedanceReferenceTip provider={provider} />
+
+      {/* OmniHuman 1.5 — fast mode + seed (prompt + resolution are above) */}
+      {provider === "omnihuman-1-5" && (
+        <>
+          <div className="flex items-center justify-between">
+            <Label>Fast Mode</Label>
+            <Switch checked={data.fastMode ?? false} onCheckedChange={(v) => onUpdate({ fastMode: v })} />
+          </div>
+          <p className="text-xs text-muted-foreground -mt-1">Trade some quality for faster generation</p>
+          <div>
+            <Label>Seed</Label>
+            <Input
+              type="number"
+              value={data.seed ?? -1}
+              onChange={(e) => {
+                const n = parseInt(e.target.value, 10)
+                onUpdate({ seed: Number.isNaN(n) ? -1 : n })
+              }}
+              placeholder="-1 = random"
+            />
+            <p className="text-xs text-muted-foreground mt-1">Same seed + inputs → near-identical result. -1 = random.</p>
+          </div>
+        </>
+      )}
 
       {/* LatentSync params */}
       {provider === "latentsync" && (

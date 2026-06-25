@@ -13,6 +13,7 @@ import type {
   MotionTransferProvider,
   VideoUpscaleProvider,
   LipSyncProvider,
+  LipSyncOptions,
   VideoLipSyncOptions,
   ProviderResult,
   ProviderOptions,
@@ -39,6 +40,7 @@ import {
   KIE_LIP_SYNC_MODELS,
   KIE_SPEECH_TO_VIDEO_MODELS,
   KIE_CREDIT_USD,
+  type KieModelConfig,
 } from "./models.js"
 import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
 import { downloadFile, runFfmpeg, getVideoDuration, createWorkDir, cleanupWorkDir } from "../video/ffmpeg-utils.js"
@@ -108,6 +110,53 @@ export function applySeedance2Params(
 const LIP_SYNC_AUDIO_SAFETY_MARGIN_SEC = 0.5
 function lipSyncAudioCapFor(provider: string): number {
   return getLipSyncMaxAudioSeconds(provider) - LIP_SYNC_AUDIO_SAFETY_MARGIN_SEC
+}
+
+/**
+ * Build the KIE `input` object for a lip-sync request from the model config.
+ * Pure + exported for unit testing. Most avatars send `prompt` + a verbatim
+ * `resolution`; per-model configs can remap the resolution param/value
+ * (OmniHuman → `output_resolution` "720"|"1080") and opt into pe_fast_mode/seed.
+ */
+export function buildLipSyncInput(
+  modelConfig: KieModelConfig,
+  args: {
+    imageUrl: string
+    audioUrl: string
+    prompt?: string
+    resolution?: string
+    options?: LipSyncOptions
+  },
+): Record<string, unknown> {
+  const input: Record<string, unknown> = {
+    ...(modelConfig.extraParams ?? {}),
+    image_url: args.imageUrl,
+    audio_url: args.audioUrl,
+  }
+
+  // KIE requires a prompt for all lip-sync models — default if none provided.
+  input.prompt = args.prompt || "A person speaking naturally"
+
+  // Resolution: per-model param name + value mapping (OmniHuman uses
+  // output_resolution "720"|"1080"; others send `resolution` verbatim).
+  if (modelConfig.resolutionParam) {
+    const mapped = args.resolution
+      ? (modelConfig.resolutionMap?.[args.resolution] ?? modelConfig.defaultResolution)
+      : modelConfig.defaultResolution
+    if (mapped) input[modelConfig.resolutionParam] = mapped
+  } else if (args.resolution) {
+    input.resolution = args.resolution
+  }
+
+  // Optional per-model levers.
+  if (modelConfig.supportsFastMode && args.options?.fastMode !== undefined) {
+    input.pe_fast_mode = args.options.fastMode
+  }
+  if (modelConfig.supportsSeed && args.options?.seed !== undefined && args.options.seed >= 0) {
+    input.seed = args.options.seed
+  }
+
+  return input
 }
 
 /**
@@ -1611,6 +1660,7 @@ export class KieVideoProvider
     resolution?: string,
     audioDurationSec?: number,
     reconcileOpts?: ReconcileOpts,
+    options?: LipSyncOptions,
   ): Promise<ProviderResult> {
     const provider = model ?? "kling-avatar"
     const modelConfig = KIE_LIP_SYNC_MODELS[provider]
@@ -1633,20 +1683,13 @@ export class KieVideoProvider
     const audioCapSec = lipSyncAudioCapFor(provider)
     const effectiveAudioUrl = await ensureAudioDuration(audioUrl, audioCapSec)
 
-    // Start with extra params from config
-    const input: Record<string, unknown> = {
-      ...(modelConfig.extraParams ?? {}),
-      image_url: imageUrl,
-      audio_url: effectiveAudioUrl,
-    }
-
-    // KIE API requires prompt for all lip-sync models — use a default if none provided
-    input.prompt = prompt || "A person speaking naturally"
-
-    // Override resolution if provided (for infinitalk: 480p or 720p)
-    if (resolution) {
-      input.resolution = resolution
-    }
+    const input = buildLipSyncInput(modelConfig, {
+      imageUrl,
+      audioUrl: effectiveAudioUrl,
+      prompt,
+      resolution,
+      options,
+    })
 
     // Long-audio kling-avatar runs can take "tens of minutes" per KIE's
     // 2026-05-11 upgrade notes — extend the poll budget for those providers.

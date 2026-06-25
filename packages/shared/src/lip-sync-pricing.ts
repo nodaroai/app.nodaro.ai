@@ -30,6 +30,8 @@ export const LIP_SYNC_MAX_AUDIO_SECONDS: Record<string, number> = {
   "kling-avatar": 300,
   "kling-avatar-pro": 300,
   "infinitalk": 15,
+  // OmniHuman 1.5 — KIE hard limit is < 60s; audio is auto-trimmed to this cap.
+  "omnihuman-1-5": 60,
   // HeyGen Lipsync Precision + Sync Lipsync 2 Pro — billed per output second.
   // 5-min ceiling for credit bucketing (mirrors kling-avatar). MUST be set:
   // the default fallback below is 15s, which would clamp every request to the
@@ -50,6 +52,8 @@ export function getLipSyncMaxAudioSeconds(provider: string): number {
 const PER_SECOND_LIP_SYNC_PROVIDERS = new Set([
   "kling-avatar",
   "kling-avatar-pro",
+  ***REDACTED-OSS-SCRUB***
+  "omnihuman-1-5",
   "heygen-lipsync-precision",
   "lipsync-2-pro",
   ***REDACTED-OSS-SCRUB***

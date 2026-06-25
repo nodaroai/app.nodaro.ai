@@ -30,6 +30,12 @@ export interface KieModelConfig {
   allowedDurations?: number[]  // Video models: allowed duration values in seconds
   supportsEndFrame?: boolean   // Video models: supports start + end frame (2 images -> video)
   endFrameParam?: string       // Parameter name for end frame (e.g., "tail_image_url", "end_image_url")
+  // Lip-sync param mapping (per-model overrides for the generic lipSync dispatch):
+  resolutionParam?: string                 // KIE input key for resolution (default "resolution")
+  resolutionMap?: Record<string, string>   // our enum (480p/720p/1080p) → KIE value
+  defaultResolution?: string               // KIE resolution value when none supplied
+  supportsFastMode?: boolean               // emit pe_fast_mode from options
+  supportsSeed?: boolean                   // emit seed from options
 }
 
 // =============================================================================
@@ -1118,6 +1124,23 @@ export const KIE_LIP_SYNC_MODELS: Record<string, KieModelConfig> = {
     ***REDACTED-OSS-SCRUB***
     imageParam: "image_url",
     extraParams: { resolution: "720p" },
+  },
+
+  // OmniHuman 1.5 (ByteDance) — image+audio → prompt-directed avatar.
+  ***REDACTED-OSS-SCRUB***
+  // Distinct param names vs other avatars: output_resolution ("720"|"1080"),
+  // pe_fast_mode, seed — mapped by the generic lipSync() dispatch.
+  "omnihuman-1-5": {
+    model: "omnihuman-1-5",
+    credits: 405,            // 15s display anchor (27 cr/sec × 15s); real charge is per-second bucket
+    cost: 2.025,             // USD display anchor
+    imageParam: "image_url",
+    resolutionParam: "output_resolution",
+    resolutionMap: { "480p": "720", "720p": "720", "1080p": "1080" },
+    defaultResolution: "1080",
+    supportsFastMode: true,
+    supportsSeed: true,
+    extraParams: {},
   },
 
   // Volcengine video-to-video lip sync (AI dubbing). VIDEO input (video_url +

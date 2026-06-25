@@ -27,6 +27,7 @@ import type {
   MotionTransferProvider,
   VideoUpscaleProvider,
   LipSyncProvider,
+  LipSyncOptions,
   VideoLipSyncOptions,
   MusicGenerationProvider,
   TextToSpeechProvider,
@@ -284,6 +285,7 @@ export async function lipSync(
   resolution?: string,
   audioDurationSec?: number,
   reconcileOpts?: ReconcileOpts,
+  options?: LipSyncOptions,
 ): Promise<RouteResult> {
   return routeAndExecute(
     "lip-sync",
@@ -291,7 +293,7 @@ export async function lipSync(
     "lipSync",
     async (instance) => {
       const p = resolveModule<LipSyncProvider>(instance, "video")
-      return p.lipSync(imageUrl, audioUrl, prompt, model, resolution, audioDurationSec, reconcileOpts)
+      return p.lipSync(imageUrl, audioUrl, prompt, model, resolution, audioDurationSec, reconcileOpts, options)
     }
   )
 }
