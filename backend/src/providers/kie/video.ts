@@ -459,6 +459,47 @@ function snapToAllowedDuration(requested: number, allowed: number[]): number {
   )
 }
 
+// Longest-side cap for Seedance 2 reference images — the same 2048px ceiling the
+// i2v start/end frames use (no Seedance 2 input needs a larger image).
+const SEEDANCE_2_REF_MAX_DIMENSION = 2048
+
+/**
+ * Normalize a Seedance 2 run's user `referenceImageUrls` through the SAME
+ * `ensureImageForProvider` pipeline the i2v start/end frames go through (2048px
+ * longest-side cap + JPEG re-encode for the Hailuo/MiniMax family) BEFORE handing
+ * them to `applySeedance2Params`.
+ *
+ * Seedance 2 builds `reference_image_urls` via the shared resolver inside the
+ * (synchronous) `applySeedance2Params`, so the async size-normalization can't
+ * live there — it must run at the i2v/t2v call site and feed the processed URLs
+ * in. The start/end frames the resolver later MOVES into the reference pool are
+ * ALREADY processed (they arrive as `effectiveImageUrl`/`effectiveEndFrameUrl`),
+ * so this only touches the raw user references — no double-processing.
+ *
+ * Returns the original `options` unchanged when there are no references to
+ * process, so the common no-reference path stays allocation-free.
+ */
+async function normalizeSeedance2ReferenceImages(
+  provider: string,
+  options: ProviderOptions | undefined,
+): Promise<ProviderOptions | undefined> {
+  const refs = options?.referenceImageUrls
+  if (!refs || refs.length === 0) return options
+  const constraints: ImageConstraints = {
+    context: "Video generation",
+    maxDimension: SEEDANCE_2_REF_MAX_DIMENSION,
+  }
+  // Seedance 2's models are `bytedance/*`, so forceJpeg is never set here today;
+  // mirror the i2v frame rule anyway so a future Hailuo-backed Seedance variant
+  // stays correct without a separate edit.
+  const modelConfig = KIE_VIDEO_MODELS[provider] ?? KIE_TEXT_TO_VIDEO_MODELS[provider]
+  if (modelConfig?.model.startsWith("hailuo/")) constraints.forceJpeg = true
+  const processed = await Promise.all(
+    refs.map((u) => ensureImageForProvider(u, provider, constraints)),
+  )
+  return { ...options, referenceImageUrls: processed }
+}
+
 /** Shared helper for Kling 3.0 calls from both imageToVideo and textToVideo. */
 async function runKling3(
   modelConfig: { allowedDurations?: number[]; cost: number },
@@ -919,7 +960,14 @@ export class KieVideoProvider
     }
 
     if (isSeedance2Provider(provider)) {
-      applySeedance2Params(input, options)
+      // Size-normalize the user's reference images (2048px cap + Hailuo JPEG
+      // re-encode) BEFORE the resolver assembles reference_image_urls — the
+      // resolver/applySeedance2Params is synchronous, so this async step runs
+      // here. The frame URLs the resolver moves into the pool are already
+      // processed (effectiveImageUrl/effectiveEndFrameUrl), so they're not
+      // touched again.
+      const seedance2Options = await normalizeSeedance2ReferenceImages(provider, options)
+      applySeedance2Params(input, seedance2Options)
     }
 
     // Wan Turbo specific params
@@ -1147,7 +1195,10 @@ export class KieVideoProvider
     }
 
     if (isSeedance2Provider(provider)) {
-      applySeedance2Params(input, options)
+      // Size-normalize the user's reference images before the resolver runs —
+      // same rationale as the i2v path (applySeedance2Params is synchronous).
+      const seedance2Options = await normalizeSeedance2ReferenceImages(provider, options)
+      applySeedance2Params(input, seedance2Options)
     }
 
     console.log(

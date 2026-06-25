@@ -1283,14 +1283,16 @@ export function TranscribeConfig({ data, onUpdate, sources, fieldMappings, onMap
 }
 
 // Per-provider resolution option set for the Lip Sync node. OmniHuman 1.5 is
-// 720/1080 only (no 480p), default 1080; Seedance 2 (-fast) adds 1080 to
-// 480/720; other KIE avatars are 480/720. Drives both the dropdown and the
-// fail-safe useEffect so a stale value snaps to a valid one on provider switch.
+// 720/1080 only (no 480p), default 1080; the full Seedance 2 adds 1080 to
+// 480/720; seedance-2-fast / -mini and other KIE avatars are 480/720 only
+// (fast has NO 1080p SKU — KIE pricing page verified 2026-06-25). Drives both
+// the dropdown and the fail-safe useEffect so a stale value snaps to a valid
+// one on provider switch.
 function lipSyncResolutionOptions(
   provider: string,
 ): { values: Array<"480p" | "720p" | "1080p">; def: "480p" | "720p" | "1080p" } {
   if (provider === "omnihuman-1-5") return { values: ["720p", "1080p"], def: "1080p" }
-  if (provider === "seedance-2" || provider === "seedance-2-fast")
+  if (provider === "seedance-2")
     return { values: ["480p", "720p", "1080p"], def: "720p" }
   return { values: ["480p", "720p"], def: "720p" }
 }

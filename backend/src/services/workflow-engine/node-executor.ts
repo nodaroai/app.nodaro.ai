@@ -22,7 +22,8 @@ import { resolveFieldMappings, NODE_MAPPABLE_FIELDS } from "./resolve-field-mapp
 
 import { executeCombineText, executeSplitText, executeComposite, executeWebhookOutput, executePreview, executeTeleporterPassthrough, executeRouter, executeExtractField, executeJsonProcess, executeFilterList, executeDeduplicateList, executeMergeLists, executeSortList, executeSelector } from "./inline-executor.js"
 import { executeSubWorkflow } from "./sub-workflow-handler.js"
-import { mergeExposedSettings, applyHandleInputOverride, isHandleInputWired, computeLlmChatFields, computeNodePrompt, resolveNodeRefs, SOCIAL_POST_NODE_TYPES, pickerFanoutTargets } from "@nodaro/shared"
+import { mergeExposedSettings, applyHandleInputOverride, isHandleInputWired, computeLlmChatFields, computeNodePrompt, resolveNodeRefs, SOCIAL_POST_NODE_TYPES, pickerFanoutTargets, isSeedance2Provider } from "@nodaro/shared"
+import { getAppSettings } from "../../lib/app-settings.js"
 import type { ComponentMetadata } from "@nodaro/shared"
 import type {
   SimpleNode,
@@ -897,6 +898,52 @@ export function buildSyncHttpBody(
 // Worker-queued execution
 // ---------------------------------------------------------------------------
 
+/**
+ * Compute the BASE-then-markup credit override for a Seedance 2 reference-video
+ * run, or `undefined` when the override doesn't apply (non-seedance-2 provider,
+ * or no reference videos wired).
+ *
+ * The orchestrator reserves credits by `modelIdentifier` alone, and the seeded
+ * `-ref` composite only encodes the per-8s OUTPUT rate. KIE actually bills
+ * `unit × (input_video_duration + output_duration)` for these runs, and
+ * `commit_credits` can only refund — never up-charge — so we must reserve the
+ * FULL scaled amount up front. This mirrors the route's `computeCredits` hook
+ * (A2): the SAME shared helper ffprobes the reference videos and returns BASE
+ * (0%-markup) credits, then we apply `cost_markup_percent` ONCE here exactly
+ * the way `credit-guard-impl.ts` does for the route — `reserveCredits` uses an
+ * explicit `creditOverride` verbatim (no further markup), whereas its DB-lookup
+ * path returns an already-marked-up cost. Applying markup here keeps the
+ * orchestrated reservation numerically identical to the single-node route path
+ * (no double-markup, no metered recompute).
+ *
+ * The ee billing helper is loaded via DYNAMIC `import()` so this CORE engine
+ * file never statically depends on `ee/` for it — `tools/check-ee-imports.mjs`
+ * stays clean (the same escape hatch the credit-guard shim uses).
+ */
+async function computeSeedance2RefVideoCreditOverride(
+  payload: Record<string, unknown>,
+): Promise<number | undefined> {
+  const provider = payload.provider as string | undefined
+  const referenceVideoUrls = payload.referenceVideoUrls
+  if (!isSeedance2Provider(provider) || !Array.isArray(referenceVideoUrls) || referenceVideoUrls.length === 0) {
+    return undefined
+  }
+
+  const { seedance2RefVideoBaseCreditsFromUrls } = await import("../../ee/billing/seedance2-ref-video-credits.js")
+  const baseCredits = await seedance2RefVideoBaseCreditsFromUrls({
+    provider: provider as string,
+    resolution: (payload.resolution as string | undefined) ?? "720p",
+    outputDurationSec: Number(payload.duration ?? 5),
+    referenceVideoUrls: referenceVideoUrls as unknown[],
+  })
+
+  // Apply the admin markup ONCE — identical formula + guard to credit-guard-impl.ts.
+  const settings = await getAppSettings()
+  return settings.cost_markup_percent > 0 && baseCredits > 0
+    ? Math.ceil(baseCredits * (1 + settings.cost_markup_percent / 100))
+    : baseCredits
+}
+
 async function executeWorkerNode(
   node: SimpleNode,
   resolvedInputs: ResolvedInputs,
@@ -1022,12 +1069,20 @@ async function executeWorkerNode(
 
   if (hasCredits() && modelIdentifier !== "ffmpeg") {
     try {
+      // Seedance 2 reference-video runs are billed unit×(input+output). The
+      // seeded `-ref` composite (used as `modelIdentifier`) only encodes the
+      // per-8s OUTPUT rate, so we ffprobe the connected reference videos and
+      // reserve the FULL scaled BASE up front via an explicit creditOverride
+      // (commit_credits only refunds — never up-charges). Undefined for every
+      // other provider / no-ref run → unchanged DB-priced reservation.
+      const creditOverride = await computeSeedance2RefVideoCreditOverride(payload)
+
       // Free-tier / blocked-models gate. reserveCredits does NOT check
       // blockedModels, so without this a free-tier workflow/app run could
       // generate a blocked model (e.g. 4K gemini-omni-video). checkCredits
       // self-fetches the profile and reports blocked/over-limit; the
       // surrounding catch deletes the orphaned pending jobs row on throw.
-      const preflight = await CreditsService.checkCredits(ctx.userId, modelIdentifier, ctx.isAppRun)
+      const preflight = await CreditsService.checkCredits(ctx.userId, modelIdentifier, ctx.isAppRun, creditOverride)
       if (!preflight.allowed) {
         throw new Error(preflight.error ?? "Model not available on your plan or insufficient credits")
       }
@@ -1038,7 +1093,7 @@ async function executeWorkerNode(
         modelIdentifier,
         0, // provider cost calculated in worker
         0, // display cost calculated in worker
-        { isAppRun: ctx.isAppRun },
+        { isAppRun: ctx.isAppRun, creditOverride },
       )
       usageLogId = reservation.usageLogId
       creditsUsed = reservation.creditsReserved

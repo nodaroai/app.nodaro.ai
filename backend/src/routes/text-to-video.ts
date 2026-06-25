@@ -9,7 +9,7 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
-import { TEXT_TO_VIDEO_PROVIDERS, SEEDANCE_2_REF_LIMITS, PROMPT_HARD_CEILING, videoProviderRequiresImage } from "@nodaro/shared"
+import { TEXT_TO_VIDEO_PROVIDERS, SEEDANCE_2_REF_LIMITS, PROMPT_HARD_CEILING, videoProviderRequiresImage, isSeedance2Provider } from "@nodaro/shared"
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 
@@ -42,19 +42,55 @@ export const textToVideoBody = z.object({
 
 export async function textToVideoRoutes(app: FastifyInstance) {
   app.post("/v1/text-to-video", {
-    preHandler: creditGuard((req) => {
-      const body = req.body as Record<string, unknown>
-      const hasVideoRef = Array.isArray(body?.referenceVideoUrls) && (body.referenceVideoUrls as unknown[]).length > 0
-      return buildVideoCreditModelIdentifier(
-        (body?.provider as string) ?? "minimax",
-        body?.duration as number | string | undefined,
-        body?.sound as boolean | undefined,
-        "text-to-video",
-        body?.mode as string | undefined,
-        body?.resolution as string | undefined,
-        hasVideoRef,
-      )
-    }),
+    preHandler: creditGuard(
+      (req) => {
+        const body = req.body as Record<string, unknown>
+        const hasVideoRef = Array.isArray(body?.referenceVideoUrls) && (body.referenceVideoUrls as unknown[]).length > 0
+        return buildVideoCreditModelIdentifier(
+          (body?.provider as string) ?? "minimax",
+          body?.duration as number | string | undefined,
+          body?.sound as boolean | undefined,
+          "text-to-video",
+          body?.mode as string | undefined,
+          body?.resolution as string | undefined,
+          hasVideoRef,
+        )
+      },
+      {
+        computeCredits: async (body) => {
+          const b = body as Record<string, unknown>
+          const hasVideoRef = Array.isArray(b?.referenceVideoUrls) && (b.referenceVideoUrls as unknown[]).length > 0
+          // Seedance 2 reference-video runs bill unit×(input+output): ffprobe the
+          // connected reference videos and reserve the FULL scaled base up front
+          // (commit_credits only refunds — never up-charges). Core may not
+          // statically import ee/, so the helpers are loaded dynamically (the
+          // allowed escape hatch — same pattern the credit-guard shim uses).
+          if (isSeedance2Provider(b?.provider as string | undefined) && hasVideoRef) {
+            const { seedance2RefVideoBaseCreditsFromUrls } = await import("../ee/billing/seedance2-ref-video-credits.js")
+            return seedance2RefVideoBaseCreditsFromUrls({
+              provider: b.provider as string,
+              resolution: (b.resolution as string | undefined) ?? "720p",
+              outputDurationSec: Number(b.duration ?? 5),
+              referenceVideoUrls: b.referenceVideoUrls as unknown[],
+            })
+          }
+          // Non-ref / other providers: the normal base for the resolved identifier
+          // (matches how generate-video computes its non-addon base).
+          const modelId = buildVideoCreditModelIdentifier(
+            (b?.provider as string) ?? "minimax",
+            b?.duration as number | string | undefined,
+            b?.sound as boolean | undefined,
+            "text-to-video",
+            b?.mode as string | undefined,
+            b?.resolution as string | undefined,
+            hasVideoRef,
+          )
+          const { getModelCreditBaseCost } = await import("../ee/billing/credits.js")
+          const { creditCost } = await getModelCreditBaseCost(modelId)
+          return creditCost
+        },
+      },
+    ),
   }, async (req, reply) => {
     const parsed = textToVideoBody.safeParse(req.body)
     if (!parsed.success) {

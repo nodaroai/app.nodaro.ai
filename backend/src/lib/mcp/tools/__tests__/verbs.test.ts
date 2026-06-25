@@ -184,6 +184,30 @@ describe("generate_video verb", () => {
     expect(received.body?.provider).toBe("veo3.1")
   })
 
+  // Surface guard (C1): Seedance 2's full tier supports `resolution: "4k"` and
+  // `aspect_ratio: "adaptive"`. The tool's `resolution`/`aspect_ratio` are
+  // permissive `z.string()` and `normalizeVideoInput` passes valid values
+  // through untouched, so both must reach the /v1/text-to-video body verbatim.
+  // Pins this so a future enum-tightening on the MCP layer can't silently drop
+  // 4k / adaptive before they reach the route.
+  it("forwards resolution=4k + aspect_ratio=adaptive unaltered for seedance-2", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/text-to-video", { jobId: "j-sd2-4k" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const result = await callTool(server, "generate_video", {
+      prompt: "a city skyline at dusk",
+      model: "seedance-2",
+      resolution: "4k",
+      aspect_ratio: "adaptive",
+    })
+
+    expect(result.isError).toBeUndefined()
+    expect(received.body?.provider).toBe("seedance-2")
+    expect(received.body?.resolution).toBe("4k")
+    expect(received.body?.aspectRatio).toBe("adaptive")
+  })
+
   it("does NOT register without workflows:execute scope", async () => {
     const fastify = Fastify()
     const server = buildServer()
@@ -241,19 +265,6 @@ describe("animate_image verb", () => {
       reference_audio_urls: ["https://cdn/x.mp3"],
     })
     expect(received.body?.referenceAudioUrls).toBeUndefined()
-  })
-
-  it("forwards seedance2_input_mode to payload", async () => {
-    const { fastify, received } = stubRoute("POST", "/v1/generate-video", { jobId: "j-sd2-mode" })
-    const server = buildServer()
-    registerVerbs({ server, session: executeSession(), fastify })
-    await callTool(server, "animate_image", {
-      image_url: "https://x/y.png",
-      model: "seedance-2",
-      seedance2_input_mode: "references",
-      reference_image_urls: ["https://cdn/ref.jpg"],
-    })
-    expect(received.body?.seedance2InputMode).toBe("references")
   })
 
   it("rejects reference_video_urls + end_frame_url combination with isError", async () => {

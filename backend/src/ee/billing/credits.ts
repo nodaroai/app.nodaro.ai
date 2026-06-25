@@ -379,11 +379,6 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
-  // 480p with video ref (8 KIE cr/s)
-  "seedance-2-fast:4s:480p-ref": 8,    // 32 KIE cr, $0.16
-  "seedance-2-fast:8s:480p-ref": 16,   // 64 KIE cr, $0.32
-  "seedance-2-fast:12s:480p-ref": 24,  // 96 KIE cr, $0.48
-  "seedance-2-fast:15s:480p-ref": 30,  // 120 KIE cr, $0.60
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
@@ -394,16 +389,13 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
-  // 1080p no video ref (49.5 KIE cr/s — 1.5× of 720p rate)
-  "seedance-2-fast:4s:1080p": 50,      // 198 KIE cr, $0.99
-  "seedance-2-fast:8s:1080p": 99,      // 396 KIE cr, $1.98
-  "seedance-2-fast:12s:1080p": 149,    // 594 KIE cr, $2.97
-  "seedance-2-fast:15s:1080p": 186,    // 742.5 KIE cr, $3.7125
-  // 1080p with video ref (30 KIE cr/s — 1.5× of 720p ref rate)
-  "seedance-2-fast:4s:1080p-ref": 30,  // 120 KIE cr, $0.60
-  "seedance-2-fast:8s:1080p-ref": 60,  // 240 KIE cr, $1.20
-  "seedance-2-fast:12s:1080p-ref": 90, // 360 KIE cr, $1.80
-  "seedance-2-fast:15s:1080p-ref": 113, // 450 KIE cr, $2.25
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  // NOTE: seedance-2-fast has NO 1080p tier — KIE sells it at 480p/720p only
+  // (verified KIE pricing page 2026-06-25, 4 SKUs). The full seedance-2 has 1080p/4K.
   // ── Seedance 2.0 Mini — budget tier, 480p/720p only, per-second × video-ref ──
   // Base fallback (8s/480p/no-ref)
   "seedance-2-mini": 19,
@@ -1314,6 +1306,7 @@ export class CreditsService {
     userId: string,
     modelIdentifier: string,
     isAppRun?: boolean,
+    creditOverride?: number,
   ): Promise<CreditCheckResult> {
     // Self-hosted: always allow
     if (creditsDisabled()) {
@@ -1334,7 +1327,11 @@ export class CreditsService {
       }
     }
 
-    return CreditsService.checkCreditsWithProfile(userId, profile as CreditProfile, modelIdentifier, isAppRun)
+    // `creditOverride` lets a caller (e.g. the orchestrator's Seedance 2
+    // ref-video reservation) preflight the EXACT amount it will reserve, not the
+    // base DB cost — so a balance between base and scaled never passes preflight
+    // then fails at reserve.
+    return CreditsService.checkCreditsWithProfile(userId, profile as CreditProfile, modelIdentifier, isAppRun, creditOverride)
   }
 
   /**

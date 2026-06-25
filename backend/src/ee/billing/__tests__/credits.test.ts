@@ -947,14 +947,9 @@ describe("CreditsService", () => {
       ["seedance-2:8s:1080p-ref", 124],
       ["seedance-2:12s:1080p-ref", 186],
       ["seedance-2:15s:1080p-ref", 233],
-      ["seedance-2-fast:4s:1080p", 50],
-      ["seedance-2-fast:8s:1080p", 99],
-      ["seedance-2-fast:12s:1080p", 149],
-      ["seedance-2-fast:15s:1080p", 186],
-      ["seedance-2-fast:4s:1080p-ref", 30],
-      ["seedance-2-fast:8s:1080p-ref", 60],
-      ["seedance-2-fast:12s:1080p-ref", 90],
-      ["seedance-2-fast:15s:1080p-ref", 113],
+      // NOTE: seedance-2-fast has NO 1080p tier (KIE sells it at 480p/720p only,
+      // verified 2026-06-25). The previously-seeded fast 1080p composites were
+      // guessed (1.5×-of-720p) and were removed in migration 239.
     ])('STATIC_CREDIT_COSTS["%s"] is %i', (identifier, credits) => {
       expect(STATIC_CREDIT_COSTS[identifier]).toBe(credits)
     })
@@ -962,15 +957,14 @@ describe("CreditsService", () => {
     // Sanity — 1080p must always be more expensive than 720p at the same
     // duration / ref state. If a future re-price inverts this it almost
     // certainly indicates a typo.
+    // seedance-2-fast is intentionally absent: it has NO 1080p tier (480p/720p
+    // only). Only the full seedance-2 spans 480p→720p→1080p.
     it.each([
       ["seedance-2", "4s", false],
       ["seedance-2", "8s", false],
       ["seedance-2", "12s", false],
       ["seedance-2", "15s", false],
       ["seedance-2", "8s", true],
-      ["seedance-2-fast", "4s", false],
-      ["seedance-2-fast", "8s", false],
-      ["seedance-2-fast", "8s", true],
     ])("%s:%s%s — 1080p > 720p > 480p", (provider, duration, withRef) => {
       const suffix = withRef ? "-ref" : ""
       const k480 = STATIC_CREDIT_COSTS[`${provider}:${duration}:480p${suffix}`]
