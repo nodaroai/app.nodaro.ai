@@ -184,7 +184,7 @@ const VIDEO_RATIOS_HVS345 = ["16:9", "9:16", "1:1", "4:3", "3:4"] as const
 // Seedance 2.x only — KIE accepts the full fixed-ratio set incl. 21:9
 // (docs.kie.ai/market/bytedance/seedance-2). Kept separate from HVS so the
 // wider set can't leak to models that don't support it.
-const VIDEO_RATIOS_SEEDANCE_2 = ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"] as const
+const VIDEO_RATIOS_SEEDANCE_2 = ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "adaptive"] as const
 
 // =============================================================================
 // IMAGE MODELS
@@ -1168,15 +1168,17 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     features: ["end-frame", "audio", "reference-image"],
     aspectRatios: VIDEO_RATIOS_SEEDANCE_2,
     durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
-    resolutions: ["480p", "720p", "1080p"],
+    resolutions: ["480p", "720p", "1080p", "4k"],
     pricing: [
       { identifier: "seedance-2", credits: 38, note: "default — see :NsR variants for exact" },
       { identifier: "seedance-2:8s:480p", credits: 38, note: "8s 480p" },
       { identifier: "seedance-2:8s:720p", credits: 82, note: "8s 720p" },
-      { identifier: "seedance-2:8s:1080p", credits: 123, note: "8s 1080p" },
+      { identifier: "seedance-2:8s:1080p", credits: 204, note: "8s 1080p" },
       { identifier: "seedance-2:8s:480p-ref", credits: 23, note: "8s 480p with reference" },
       { identifier: "seedance-2:8s:720p-ref", credits: 50, note: "8s 720p with reference" },
-      { identifier: "seedance-2:8s:1080p-ref", credits: 75, note: "8s 1080p with reference" },
+      { identifier: "seedance-2:8s:1080p-ref", credits: 124, note: "8s 1080p with reference" },
+      { identifier: "seedance-2:8s:4k", credits: 416, note: "8s 4k" },
+      { identifier: "seedance-2:8s:4k-ref", credits: 256, note: "8s 4k with reference" },
     ],
   },
   "seedance-2-fast": {

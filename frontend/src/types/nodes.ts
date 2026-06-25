@@ -1743,7 +1743,8 @@ export type ImageToVideoData = {
   /** See GenerateImageData.suppressedCanonicalCharacterIds — location equivalent. */
   suppressedCanonicalLocationIds?: readonly string[]
   veoMode?: "frame-to-frame" | "reference"  // VEO 3/3.1: toggle between start+end frame and reference mode
-  seedance2InputMode?: "frames" | "references"  // Seedance 2: toggle between start/end frames and reference media
+  /** @deprecated Seedance 2 inputs are auto-detected; no longer written by the UI. */
+  seedance2InputMode?: "frames" | "references"
   /** Extra reference images with per-ref descriptions. See `ExtraRef`. */
   extraRefs?: readonly ExtraRef[]
   videoPlayState?: "loop" | "paused" | "stopped"
@@ -5820,7 +5821,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     // drift test in enumerate-connection-options.test.ts.
     inputs: ["prompt", "negative", "startFrame", "endFrame", "imageReferences", "videoReferences", "audio", "audioReferences", "assets", "elements", "look"],
     outputs: ["video"],
-    defaultData: { label: "Generate Video", provider: "seedance-2-fast", seedance2InputMode: "references", duration: 5, prompt: "", negativePrompt: "", fieldMappings: {} },
+    defaultData: { label: "Generate Video", provider: "seedance-2-fast", duration: 5, prompt: "", negativePrompt: "", fieldMappings: {} },
     exposableOutputs: [{ key: "result", label: "Result", outputType: "video" as const }],
     exposableFields: [
       {

@@ -26,7 +26,7 @@ import { getNodeThumbnailUrl, getNodeVideoUrl, getNodePickerVisual, getNodeConfi
 import { focusNodeInViewport } from "@/lib/focus-node-in-viewport"
 import { collectTargetCandidates, isValidWorkflowConnection, resolveEffectiveSourceType } from "@/lib/connection-validation"
 import { optimizedImageUrl } from "@/lib/image"
-import { getHandleConnectionLimit } from "@/lib/handle-limits"
+import { getHandleConnectionLimit, seedance2ImagePoolSlotsConsumed } from "@/lib/handle-limits"
 import { TARGET_HANDLE_ACCEPTS, getTargetHandlesAccepting } from "@/lib/target-handle-registry"
 import { isTileGridPickerType } from "@/lib/picker-handles"
 import { Workflow } from "lucide-react"
@@ -466,8 +466,19 @@ export function HandlePopover({
   // surface that in the count label and gray out overflow rows so the
   // user can see (and reorder) which refs will actually be used.
   const consumerNode = getNode(nodeId)
+  // Seedance 2's `imageReferences` cap is a SHARED budget: the start/end frame
+  // and wired identity assets consume slots in the same `reference_image_urls`
+  // pool, so subtract those from the user-ref cap. The count is derived from
+  // the live edge list here (the cap fn stays pure / graph-unaware). No-op for
+  // every other handle/provider — `seedance2ImagePoolSlotsConsumed` only sums
+  // the frame + asset handles, and the cap fn only applies it for S2.
   const handleLimit = direction === "target"
-    ? getHandleConnectionLimit(consumerNode as WorkflowNode | undefined, handleId)
+    ? getHandleConnectionLimit(consumerNode as WorkflowNode | undefined, handleId, {
+        seedance2ImagePoolConsumed:
+          handleId === "imageReferences"
+            ? seedance2ImagePoolSlotsConsumed(edges, nodeId)
+            : 0,
+      })
     : null
   const overflowFrom = handleLimit && enriched.length > handleLimit.limit ? handleLimit.limit : null
   const countLabel = enriched.length === 0

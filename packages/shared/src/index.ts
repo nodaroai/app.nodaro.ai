@@ -168,6 +168,13 @@ export type {
   VideoAudioCapability,
 } from "./model-constants.js"
 
+export {
+  resolveSeedance2Inputs,
+  type Seedance2Mode,
+  type Seedance2InputsArgs,
+  type Seedance2InputsResult,
+} from "./seedance-2-inputs.js"
+
 export { describeMaskRegion } from "./inpaint-region.js"
 export type { MaskRegionDescriptor, PixelBox } from "./inpaint-region.js"
 

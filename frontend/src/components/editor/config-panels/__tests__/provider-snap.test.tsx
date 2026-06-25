@@ -614,37 +614,90 @@ describe("ImageToVideoConfig — provider-snap useEffect", () => {
   })
 })
 
-describe("ImageToVideoConfig — Seedance 2 input mode toggle", () => {
-  it("renders the Input Mode segmented control for seedance-2-fast", () => {
+describe("ImageToVideoConfig — Seedance 2 resolved-mode indicator", () => {
+  // The frames-vs-references TOGGLE was removed: there is no longer a user
+  // lever. The backend resolver (resolveSeedance2Inputs) decides the mode at
+  // run time from the connected inputs; the panel only DISPLAYS the resolved
+  // mode. These tests pin the new read-only indicator and guard against any
+  // regression that re-introduces a chooser or a seedance2InputMode write.
+
+  it("shows a read-only resolved-mode indicator for seedance-2-fast (no toggle, no write)", () => {
     const onUpdate = vi.fn()
     const data = baseImageToVideoData({ provider: "seedance-2-fast" })
-    const { getByText } = render(<ImageToVideoConfig {...commonProps(onUpdate, data)} />)
-    expect(getByText("Frames")).toBeTruthy()
-    expect(getByText("References")).toBeTruthy()
+    // No connections → strict First Frame mode.
+    const { getByText, queryByRole } = render(<ImageToVideoConfig {...commonProps(onUpdate, data)} />)
+    expect(getByText(/^Mode:/)).toBeTruthy()
+    expect(getByText(/^Mode: First Frame/)).toBeTruthy()
+    // No segmented chooser buttons.
+    expect(queryByRole("button", { name: "Frames" })).toBeNull()
+    expect(queryByRole("button", { name: "References" })).toBeNull()
+    // Never writes the removed lever.
+    expect(onUpdate).not.toHaveBeenCalledWith(
+      expect.objectContaining({ seedance2InputMode: expect.anything() }),
+    )
   })
 
-  it("does not render the Input Mode toggle for non-Seedance-2 providers", () => {
+  it("resolves to Reference mode when a reference image is connected", () => {
+    const onUpdate = vi.fn()
+    const data = baseImageToVideoData({ provider: "seedance-2-fast" })
+    const sources = [
+      { id: "img1", type: "upload-image", label: "Ref", targetHandle: "references" },
+    ]
+    const { getByText } = render(
+      <ImageToVideoConfig {...commonProps(onUpdate, data)} sources={sources} />,
+    )
+    expect(getByText(/^Mode: Reference/)).toBeTruthy()
+    expect(onUpdate).not.toHaveBeenCalledWith(
+      expect.objectContaining({ seedance2InputMode: expect.anything() }),
+    )
+  })
+
+  it("does not render the indicator for non-Seedance-2 providers", () => {
     const onUpdate = vi.fn()
     const data = baseImageToVideoData({ provider: "minimax" })
     const { queryByText } = render(<ImageToVideoConfig {...commonProps(onUpdate, data)} />)
-    expect(queryByText("Frames")).toBeNull()
-    expect(queryByText("References")).toBeNull()
+    expect(queryByText(/^Mode:/)).toBeNull()
+  })
+})
+
+describe("GenerateVideoConfig — Seedance 2 resolved-mode indicator", () => {
+  // The unified generate-video node exposes the SAME read-only indicator (no
+  // mode chooser, no seedance2InputMode write) — its connection signals come
+  // from per-handle sources.
+
+  it("shows a read-only resolved-mode indicator for seedance-2-fast (no toggle, no write)", () => {
+    const onUpdate = vi.fn()
+    const data = baseGenerateVideoData({ provider: "seedance-2-fast" })
+    const { getByText, queryByRole } = render(<GenerateVideoConfig {...commonProps(onUpdate, data)} />)
+    expect(getByText(/^Mode:/)).toBeTruthy()
+    expect(getByText(/^Mode: First Frame/)).toBeTruthy()
+    expect(queryByRole("button", { name: "Frames" })).toBeNull()
+    expect(queryByRole("button", { name: "References" })).toBeNull()
+    expect(onUpdate).not.toHaveBeenCalledWith(
+      expect.objectContaining({ seedance2InputMode: expect.anything() }),
+    )
   })
 
-  it("calls onUpdate with seedance2InputMode: 'references' when References button clicked", async () => {
+  it("resolves to Reference mode when a reference image is connected to imageReferences", () => {
     const onUpdate = vi.fn()
-    const data = baseImageToVideoData({ provider: "seedance-2-fast", seedance2InputMode: "frames" })
-    const { getByText } = render(<ImageToVideoConfig {...commonProps(onUpdate, data)} />)
-    getByText("References").click()
-    expect(onUpdate).toHaveBeenCalledWith({ seedance2InputMode: "references" })
+    const data = baseGenerateVideoData({ provider: "seedance-2-fast" })
+    const sources = [
+      { id: "img1", type: "upload-image", label: "Ref", targetHandle: "imageReferences" },
+    ]
+    const { getByText } = render(
+      <GenerateVideoConfig {...commonProps(onUpdate, data)} sources={sources} />,
+    )
+    expect(getByText(/^Mode: Reference/)).toBeTruthy()
+    expect(onUpdate).not.toHaveBeenCalledWith(
+      expect.objectContaining({ seedance2InputMode: expect.anything() }),
+    )
   })
 
-  it("calls onUpdate with seedance2InputMode: 'frames' when Frames button clicked while in references mode", async () => {
+  it("does not render the indicator for non-Seedance-2 providers", () => {
     const onUpdate = vi.fn()
-    const data = baseImageToVideoData({ provider: "seedance-2-fast", seedance2InputMode: "references" })
-    const { getByText } = render(<ImageToVideoConfig {...commonProps(onUpdate, data)} />)
-    getByText("Frames").click()
-    expect(onUpdate).toHaveBeenCalledWith({ seedance2InputMode: "frames" })
+    const data = baseGenerateVideoData({ provider: "minimax" })
+    const { queryByText } = render(<GenerateVideoConfig {...commonProps(onUpdate, data)} />)
+    expect(queryByText(/^Mode:/)).toBeNull()
   })
 })
 

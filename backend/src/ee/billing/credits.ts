@@ -351,19 +351,27 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
-  // 1080p no video ref (61.5 KIE cr/s — extrapolated 1.5× of 720p rate;
-  // KIE pricing page isn't fetchable from the dev env, and the 1.5×
-  // 720p→1080p factor matches the established convention used by
-  // Kling 2.6 (6→9 cr/s) and Kling 3.0 (12→20 cr/s) families.)
-  "seedance-2:4s:1080p": 62,     // 246 KIE cr, $1.23
-  "seedance-2:8s:1080p": 123,    // 492 KIE cr, $2.46
-  "seedance-2:12s:1080p": 185,   // 738 KIE cr, $3.69
-  "seedance-2:15s:1080p": 231,   // 922.5 KIE cr, $4.6125
-  // 1080p with video ref (37.5 KIE cr/s — 1.5× of 720p ref rate)
-  "seedance-2:4s:1080p-ref": 38, // 150 KIE cr, $0.75
-  "seedance-2:8s:1080p-ref": 75, // 300 KIE cr, $1.50
-  "seedance-2:12s:1080p-ref": 113, // 450 KIE cr, $2.25
-  "seedance-2:15s:1080p-ref": 141, // 562.5 KIE cr, $2.8125
+  ***REDACTED-OSS-SCRUB***
+  // ~2.49× the 720p rate (the original 1.5× estimate under-billed ~40%; KIE pricing
+  // page verified 2026-06-25).
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
   // ── Seedance 2.0 Fast — same matrix, lower rates ──
   "seedance-2-fast": 31,
   ***REDACTED-OSS-SCRUB***

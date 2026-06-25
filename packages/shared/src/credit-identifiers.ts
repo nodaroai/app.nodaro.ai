@@ -247,7 +247,7 @@ export function buildVideoCreditModelIdentifier(
     // maps to its top priced tier instead of emitting an unpriced composite
     // (which the hard-fail credit guard would 503 on at runtime).
     const supported = MODEL_CATALOG[effectiveProvider]?.resolutions ?? ["480p", "720p", "1080p"]
-    const want = resolution === "1080p" ? "1080p" : resolution === "720p" ? "720p" : "480p"
+    const want = resolution === "4k" ? "4k" : resolution === "1080p" ? "1080p" : resolution === "720p" ? "720p" : "480p"
     // Unsupported (e.g. a stale 1080p on seedance-2-mini) clamps to the model's
     // top priced tier so the emitted composite is always seeded.
     const res = supported.includes(want) ? want : (supported[supported.length - 1] ?? "480p")

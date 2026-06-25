@@ -3,7 +3,7 @@
 import { useCallback, useContext, useEffect, useRef, useState } from "react"
 import { InlineGluedStripContext } from "./inline-glued-strip-context"
 import { useStore } from "@xyflow/react"
-import { Sparkles, Ratio, Maximize2, Clock, Settings2, Copy, Layers } from "lucide-react"
+import { Sparkles, Ratio, Maximize2, Clock, Settings2, Copy } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import {
@@ -139,15 +139,11 @@ export function GenerateVideoQuickToolbar({
     currentResolution,
     resolutionShort,
     repeatCount,
-    isSeedance2,
-    currentSeedance2Mode,
-    seedance2ModeLabel,
     onModelChange: handleModelChange,
     onAspectChange: handleAspectChange,
     onDurationChange: handleDurationChange,
     onResolutionChange: handleResolutionChange,
     onRepeatChange: handleRepeatChange,
-    onSeedance2ModeChange: handleSeedance2ModeChange,
     runSingleNode,
   } = useGenerateVideoStripModel(nodeId, data)
 
@@ -183,7 +179,6 @@ export function GenerateVideoQuickToolbar({
   if (isCompact) {
     const summary = [
       modelShort,
-      isSeedance2 ? seedance2ModeLabel : null,
       aspectShort || currentAspect,
       durationShort,
       resolutionShort,
@@ -228,19 +223,6 @@ export function GenerateVideoQuickToolbar({
                 ariaLabel="Model"
               />
             </ToolbarSetting>
-            {isSeedance2 && (
-              <ToolbarSetting label="Mode" icon={<Layers className="w-3 h-3" />}>
-                <Select disabled={isRunning} value={currentSeedance2Mode} onValueChange={handleSeedance2ModeChange} onOpenChange={handleOpenChange}>
-                  <SelectTrigger className={ghostPopoverTriggerClass}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="node-menu-surface">
-                    <SelectItem value="frames" className="text-xs">Frames (start/end images)</SelectItem>
-                    <SelectItem value="references" className="text-xs">References (image refs)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </ToolbarSetting>
-            )}
             {aspectOptions.length > 0 && (
               <ToolbarSetting label="Aspect" icon={<Ratio className="w-3 h-3" />}>
                 <Select disabled={isRunning} value={currentAspect} onValueChange={handleAspectChange} onOpenChange={handleOpenChange}>
@@ -320,10 +302,10 @@ export function GenerateVideoQuickToolbar({
   // ── Default mode: ghost selects with icon prefixes ─────────────────────
   // The PILL presentation (container/zoom transform/click isolation/open
   // tracking) stays here; the inner control row is the shared
-  // <NodeRunStripControls>. Video's two provider-specific levers — the
-  // Seedance-2 input-mode select and the Duration select — are threaded as
-  // `extraControls` (rendered between resolution and versions in the shared
-  // row). The model-row capability tooltip is threaded via `modelGetTooltip`.
+  // <NodeRunStripControls>. Video's provider-specific Duration select is
+  // threaded as `afterAspect` (rendered between aspect and resolution in the
+  // shared row). The model-row capability tooltip is threaded via
+  // `modelGetTooltip`.
   return (
     <div
       className={`${containerClass} gap-0.5`}
@@ -353,23 +335,6 @@ export function GenerateVideoQuickToolbar({
         repeatCount={repeatCount}
         onRepeatChange={handleRepeatChange}
         ghostTriggerClass={ghostTriggerClass}
-        afterModel={
-          /* Seedance 2 input mode (Frames vs References) — only when relevant.
-             Placed right after the model select to match the original pill order
-             (model → mode → aspect → duration → resolution → versions). */
-          isSeedance2 ? (
-            <Select disabled={isRunning} value={currentSeedance2Mode} onValueChange={handleSeedance2ModeChange} onOpenChange={handleOpenChange}>
-              <SelectTrigger className={ghostTriggerClass} title="Input mode (Seedance 2)">
-                <Layers className="opacity-70" />
-                <SelectValue>{seedance2ModeLabel}</SelectValue>
-              </SelectTrigger>
-              <SelectContent className="node-menu-surface">
-                <SelectItem value="frames" className="text-xs">Frames (start/end images)</SelectItem>
-                <SelectItem value="references" className="text-xs">References (image refs)</SelectItem>
-              </SelectContent>
-            </Select>
-          ) : null
-        }
         afterAspect={
           /* Duration selector (only when the provider exposes one) — right after
              aspect, matching the original order. */

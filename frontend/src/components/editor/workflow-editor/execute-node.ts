@@ -1984,7 +1984,10 @@ export function executeNode(
     // wired Character but no `startFrameUrl` source must let the resolved mention URL
     // fill the slot (matches backend's i2v handling in payload-builder.ts).
     const isVeoRefMode = (nodeProvider === "veo3" || nodeProvider === "veo3.1" || nodeProvider === "veo3_lite") && i2vData.veoMode === "reference"
-    const isSeedance2RefOnly = isSeedance2Provider(nodeProvider ?? "") && (i2vData.seedance2InputMode ?? "frames") === "references"
+    // Seedance 2 (unified inputs): the backend resolver picks the mode from
+    // whatever is connected; a prompt-only run is a valid t2v fallback, so never
+    // hard-fail on a missing start frame.
+    const isSeedance2RefOnly = isSeedance2Provider(nodeProvider ?? "")
     if (!startFrameUrl && !isVeoRefMode && !isSeedance2RefOnly) {
       const debugSources = edges.filter((e) => e.target === node.id).map((e) => `${e.sourceHandle ?? "?"}→${e.targetHandle ?? "?"}`).join(", ")
       toast.error(`Node "${i2vData.label}": no start frame image found (inputs: startFrame=${inputs.startFrameUrl ?? "none"}, imageUrl=${inputs.imageUrl ?? "none"}, edges: ${debugSources || "none"})`);
@@ -2022,18 +2025,14 @@ export function executeNode(
     // both fields silently. Send explicit defaults so the value the user
     // SEES in the picker always matches what KIE receives.
     const isSeedance2I2V = isSeedance2Provider(nodeProvider ?? "")
-    const s2InputMode = isSeedance2I2V ? (i2vData.seedance2InputMode ?? "frames") : "frames"
     const effectiveAspectRatio = i2vData.aspectRatio ?? (isSeedance2I2V ? "16:9" : undefined)
     const effectiveResolution = i2vData.resolution ?? (isSeedance2I2V ? MODEL_CATALOG[nodeProvider ?? ""]?.resolutions?.[0] : undefined)
-    // Gate conflicting inputs by Seedance 2 mode — edges to hidden handles persist across mode switches
-    const s2RefMode = isSeedance2I2V && s2InputMode === "references"
-    const s2FrameMode = isSeedance2I2V && s2InputMode === "frames"
     setUserPromptTemplate(i2vData.prompt?.trim() || undefined);
     return runVideoGeneration(
       node.id,
-      s2RefMode ? "" : (startFrameUrl ?? ""),
+      startFrameUrl ?? "",
       ctx,
-      s2RefMode ? undefined : endFrameUrl,
+      endFrameUrl,
       audioUrl,
       nodeProvider || undefined,
       i2vData.generateAudio,
@@ -2052,14 +2051,13 @@ export function executeNode(
       i2vData.videoSize,
       i2vData.seed,
       i2vData.cameraFixed,
-      s2FrameMode ? undefined : (i2vMergedRefs?.length ? i2vMergedRefs : undefined),
+      i2vMergedRefs?.length ? i2vMergedRefs : undefined,
       i2vData.veoMode === "reference" ? "REFERENCE_2_VIDEO" : undefined,
       {
-        referenceVideoUrls: s2FrameMode ? undefined : (referenceVideoUrls?.length ? referenceVideoUrls : undefined),
-        referenceAudioUrls: s2FrameMode ? undefined : (referenceAudioUrls?.length ? referenceAudioUrls : undefined),
+        referenceVideoUrls: referenceVideoUrls?.length ? referenceVideoUrls : undefined,
+        referenceAudioUrls: referenceAudioUrls?.length ? referenceAudioUrls : undefined,
         webSearch: i2vData.webSearch,
         nsfwChecker: i2vData.nsfwChecker,
-        seedance2InputMode: i2vData.seedance2InputMode,
         enableTranslation: i2vData.enableTranslation,
         loopTrim: i2vData.loopTrim,
         videoTrimStart: i2vData.videoTrimStart,

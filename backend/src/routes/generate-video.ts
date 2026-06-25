@@ -159,9 +159,10 @@ async function voicedAudioAddonCredits(b: Record<string, unknown>): Promise<numb
  * after the job is created (and, pre-fix, the reconcile cron sat on it ~90 min).
  * Best-effort on the probe: a probe failure does NOT block the request (it
  * proceeds; a genuinely-too-long clip is then caught by KIE and fails fast via
- * the reconcile upstream-failure path). Skips frames-mode (audio is dropped
- * there) and any provider without an enforced cap. Runs BEFORE creditGuard so
- * we never reserve credits for a request we're about to reject.
+ * the reconcile upstream-failure path). Skips any provider without an enforced
+ * cap. Runs BEFORE creditGuard so we never reserve credits for a request we're
+ * about to reject. (Input mode is auto-detected downstream by
+ * resolveSeedance2Inputs; reference audio is always validated when present.)
  */
 export async function validateSeedance2AudioPreHandler(
   req: FastifyRequest,
@@ -171,7 +172,6 @@ export async function validateSeedance2AudioPreHandler(
   const provider = body.provider as string | undefined
   const limit = seedance2AudioLimitSec(provider)
   if (limit === null) return
-  if (body.seedance2InputMode === "frames") return // frames mode ignores audio
   const urls = body.referenceAudioUrls
   if (!Array.isArray(urls) || urls.length === 0) return
 
@@ -254,17 +254,21 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const { audioUrl, prompt: rawPrompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, webSearch, nsfwChecker, generationType, autoLoopTrim, loopTrim: rawLoopTrim, enableTranslation, seedance2InputMode, videoTrimStart, videoTrimEnd, characterVoices, dialogue } = parsed.data
+    const { audioUrl, prompt: rawPrompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, webSearch, nsfwChecker, generationType, autoLoopTrim, loopTrim: rawLoopTrim, enableTranslation, videoTrimStart, videoTrimEnd, characterVoices, dialogue } = parsed.data
     let prompt = rawPrompt
 
-    // Seedance 2: strip inputs that belong to the inactive mode — hidden handles leave
-    // stale edges that still resolve and would otherwise send conflicting params to KIE
+    // Seedance 2 accepts unified inputs: pass every wired input (first/last frame,
+    // reference image/video/audio) through unconditionally. The shared
+    // resolveSeedance2Inputs (kie/video.ts::applySeedance2Params) is the single
+    // decision point that derives the mode from whatever inputs arrive — there is
+    // no mutual-exclusivity to enforce here. (The deprecated seedance2InputMode
+    // body field is accepted-but-ignored for back-compat.)
     const isS2 = isSeedance2Provider(provider)
-    const imageUrl = (isS2 && seedance2InputMode === "references") ? undefined : parsed.data.imageUrl
-    const endFrameUrl = (isS2 && seedance2InputMode === "references") ? undefined : parsed.data.endFrameUrl
-    const referenceImageUrls = (isS2 && seedance2InputMode === "frames") ? undefined : parsed.data.referenceImageUrls
-    const referenceVideoUrls = (isS2 && seedance2InputMode === "frames") ? undefined : parsed.data.referenceVideoUrls
-    const referenceAudioUrls = (isS2 && seedance2InputMode === "frames") ? undefined : parsed.data.referenceAudioUrls
+    const imageUrl = parsed.data.imageUrl
+    const endFrameUrl = parsed.data.endFrameUrl
+    const referenceImageUrls = parsed.data.referenceImageUrls
+    const referenceVideoUrls = parsed.data.referenceVideoUrls
+    const referenceAudioUrls = parsed.data.referenceAudioUrls
 
     // Legacy autoLoopTrim → loopTrim normalization. Drop in a future release.
     const loopTrim = rawLoopTrim ?? (autoLoopTrim !== undefined

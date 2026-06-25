@@ -936,14 +936,17 @@ describe("CreditsService", () => {
   // `getModelCreditBaseCost` — fail CI.
   describe("STATIC_CREDIT_COSTS — seedance-2 family 1080p tier", () => {
     it.each([
-      ["seedance-2:4s:1080p", 62],
-      ["seedance-2:8s:1080p", 123],
-      ["seedance-2:12s:1080p", 185],
-      ["seedance-2:15s:1080p", 231],
-      ["seedance-2:4s:1080p-ref", 38],
-      ["seedance-2:8s:1080p-ref", 75],
-      ["seedance-2:12s:1080p-ref", 113],
-      ["seedance-2:15s:1080p-ref", 141],
+      // Authoritative KIE rates: 1080p = 102 KIE cr/s (no video) / 62 (with video).
+      // (Corrected from the original 1.5×-of-720p estimate, which under-billed ~40%.)
+      // 4K coverage lives in the dedicated seedance-2-pricing.test.ts.
+      ["seedance-2:4s:1080p", 102],
+      ["seedance-2:8s:1080p", 204],
+      ["seedance-2:12s:1080p", 306],
+      ["seedance-2:15s:1080p", 383],
+      ["seedance-2:4s:1080p-ref", 62],
+      ["seedance-2:8s:1080p-ref", 124],
+      ["seedance-2:12s:1080p-ref", 186],
+      ["seedance-2:15s:1080p-ref", 233],
       ["seedance-2-fast:4s:1080p", 50],
       ["seedance-2-fast:8s:1080p", 99],
       ["seedance-2-fast:12s:1080p", 149],

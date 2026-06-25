@@ -7,16 +7,14 @@ import {
   getVideoModelCapabilitiesTooltip,
 } from "@/components/editor/config-panels/model-options"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { isSeedance2Provider } from "@nodaro/shared"
 import { shortenLabel } from "./strip-label"
 import type { GenerateVideoNodeData } from "@/types/nodes"
 
 /**
  * Single source for the generate-video run-strip derivation: model / aspect /
- * duration / resolution / versions + the Seedance-2 input-mode lever, plus all
- * change handlers and the run action. Consumed by BOTH the hover quick-toolbar
- * and the inline in-body run strip so they can never disagree (provider-enum
- * -sync hazard).
+ * duration / resolution / versions, plus all change handlers and the run
+ * action. Consumed by BOTH the hover quick-toolbar and the inline in-body run
+ * strip so they can never disagree (provider-enum-sync hazard).
  *
  * Body lifted verbatim from generate-video-quick-toolbar.tsx (the original
  * lines 124-198 derivation). Also re-exports `getVideoModelCapabilitiesTooltip`
@@ -85,20 +83,6 @@ export function useGenerateVideoStripModel(nodeId: string, data: GenerateVideoNo
     updateNodeData(nodeId, { resolution: value })
   }
 
-  // Seedance 2 input mode — mutually exclusive between Frames (start/end
-  // images) and References (image references). Visible only when the chosen
-  // provider is in the Seedance 2 family; drives the disabled-handle styling
-  // via `getHandleConnectionLimit`.
-  const isSeedance2 = isSeedance2Provider(currentProvider)
-  const currentSeedance2Mode: "frames" | "references" =
-    (data.seedance2InputMode as "frames" | "references" | undefined) ?? "frames"
-  const handleSeedance2ModeChange = (value: string) => {
-    if (value === "frames" || value === "references") {
-      updateNodeData(nodeId, { seedance2InputMode: value })
-    }
-  }
-  const seedance2ModeLabel = currentSeedance2Mode === "frames" ? "Frames" : "Refs"
-
   return {
     modelLabel,
     modelShort,
@@ -115,15 +99,11 @@ export function useGenerateVideoStripModel(nodeId: string, data: GenerateVideoNo
     currentResolution,
     resolutionShort,
     repeatCount,
-    isSeedance2,
-    currentSeedance2Mode,
-    seedance2ModeLabel,
     onModelChange: handleModelChange,
     onAspectChange: handleAspectChange,
     onDurationChange: handleDurationChange,
     onResolutionChange: handleResolutionChange,
     onRepeatChange: handleRepeatChange,
-    onSeedance2ModeChange: handleSeedance2ModeChange,
     runSingleNode,
   }
 }

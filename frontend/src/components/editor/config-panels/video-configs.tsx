@@ -35,7 +35,7 @@ import type {
   CharacterNodeData,
 } from "@/types/nodes"
 import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, VIDEO_GEN_MODELS, MOTION_TRANSFER_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, VIDEO_DURATION_OPTIONS, VIDEO_FPS_OPTIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, EXTEND_VIDEO_MODELS, getVideoResolutionOptions, getAspectRatiosForVideoModel, getVideoModelCapabilitiesTooltip } from "./model-options"
-import { isSeedance2Provider, MODEL_CATALOG, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, buildVideoCreditModelIdentifier, characterMentionSlug, characterMentionableAssetArrays, DEFAULT_LABEL_BY_SOURCE, locationMentionSlug } from "@nodaro/shared"
+import { isSeedance2Provider, resolveSeedance2Inputs, MODEL_CATALOG, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, buildVideoCreditModelIdentifier, characterMentionSlug, characterMentionableAssetArrays, DEFAULT_LABEL_BY_SOURCE, locationMentionSlug } from "@nodaro/shared"
 import { PromptLengthCounter } from "./prompt-length-counter"
 import type { ReferenceSource } from "@nodaro/shared"
 import { ModelSearchSelect } from "./model-search-select"
@@ -414,7 +414,6 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
   const maxRefImages = data.provider === "grok-i2v" ? 6 : data.provider === "kling-3-omni" ? 7 : 3
 
   const hasEndFrame = connectedImages.some((img) => img.targetHandle === "endFrame")
-  const seedance2Conflict = isSeedance2Provider(data.provider || "seedance-2-fast") && hasEndFrame && connectedRefImages.length > 0
 
   if (data.provider === "kling-3.0") {
     return <Suspense fallback={null}><Kling3StudioConfig data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} nodes={nodes} edges={edges} onUpdateNode={onUpdateNode} nodeId={nodeId} /></Suspense>
@@ -444,26 +443,33 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
       </MappableField>
       <ModelDescriptionHint modelId={data.provider} />
 
-      {isSeedance2Provider(currentI2VProvider) && (
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Input Mode</Label>
-          <div className="flex rounded-md border border-border overflow-hidden">
-            {(["frames", "references"] as const).map((mode) => {
-              const active = (data.seedance2InputMode ?? "frames") === mode
-              return (
-                <button
-                  key={mode}
-                  type="button"
-                  className={`flex-1 py-1 text-xs font-medium transition-colors ${active ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:text-foreground"}`}
-                  onClick={() => { if (!active) onUpdate({ seedance2InputMode: mode }) }}
-                >
-                  {mode === "frames" ? "Frames" : "References"}
-                </button>
-              )
-            })}
+      {isSeedance2Provider(currentI2VProvider) && (() => {
+        const s2 = resolveSeedance2Inputs({
+          firstFrameUrl: connectedImages.some((img) => img.targetHandle !== "endFrame") ? "first" : undefined,
+          lastFrameUrl: hasEndFrame ? "last" : undefined,
+          refImageUrls: Array.from({ length: connectedRefImages.length }, (_, i) => `r${i}`),
+          refVideoUrls: Array.from({ length: ((data.referenceVideoUrls as readonly unknown[] | undefined) ?? []).length }, (_, i) => `v${i}`),
+          refAudioUrls: Array.from({ length: ((data.referenceAudioUrls as readonly unknown[] | undefined) ?? []).length }, (_, i) => `a${i}`),
+        })
+        const label = s2.mode === "reference"
+          ? "Reference — frames used as prompt-directed references"
+          : s2.mode === "first-last-frame" ? "First + Last Frame (exact)" : "First Frame (exact)"
+        return (
+          <div className="flex flex-col gap-1 rounded-md border border-border bg-muted/30 p-2">
+            <span className="text-[11px] font-medium text-foreground">Mode: {label}</span>
+            {s2.promptSuffix && (
+              <span className="text-[10px] leading-snug text-muted-foreground">
+                Appended to prompt: “{s2.promptSuffix}”
+              </span>
+            )}
+            {s2.droppedRefImages > 0 && (
+              <span className="text-[10px] leading-snug text-amber-500">
+                {s2.droppedRefImages} reference image{s2.droppedRefImages > 1 ? "s" : ""} over the 9-image limit will be dropped (frames kept).
+              </span>
+            )}
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* VEO mode toggle */}
       {isVeo && (
@@ -491,11 +497,6 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
       {supportsReferences && (!isVeo || isVeoRefMode) && connectedRefImages.length > 0 && (
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Reference Images ({connectedRefImages.length}/{maxRefImages})</Label>
-          {seedance2Conflict && (
-            <div className="rounded border border-red-500/40 bg-red-500/10 p-2 text-[11px] leading-snug text-red-300">
-              Reference images and end frame are mutually exclusive on Seedance 2. Disconnect the end frame <em>or</em> reference images before generating.
-            </div>
-          )}
           <ConnectedMediaList
             sources={refSources}
             mediaOrder={data.connectedRefImageOrder ?? []}
@@ -2345,7 +2346,6 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
   const maxRefImages = currentProvider === "grok-i2v" ? 6 : currentProvider === "kling-3-omni" ? 7 : currentProvider === "gemini-omni-video" ? Math.max(0, 7 - geminiVideoCount * 2 - (geminiHasStartFrame ? 1 : 0)) : 3
 
   const hasEndFrame = connectedImages.some((img) => img.targetHandle === "endFrame")
-  const seedance2Conflict = isSeedance2 && hasEndFrame && connectedRefImages.length > 0
 
   if (currentProvider === "kling-3.0") {
     return <Suspense fallback={null}><Kling3StudioConfig data={data as unknown as ImageToVideoData} onUpdate={onUpdate as (u: Partial<ImageToVideoData>) => void} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} nodes={nodes} edges={edges} onUpdateNode={onUpdateNode} nodeId={nodeId} /></Suspense>
@@ -2375,35 +2375,38 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
       </MappableField>
       <ModelDescriptionHint modelId={currentProvider} />
 
-      {/* Seedance 2 input mode toggle — Frames (start/end images) and References
-          (image references) are mutually exclusive on the Seedance 2 family.
-          Mirror of the legacy ImageToVideoConfig toggle so the new generate-video
-          node exposes the same lever. */}
-      {isSeedance2 && (
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Input Mode</Label>
-          <div className="flex rounded-md border border-border overflow-hidden">
-            {(["frames", "references"] as const).map((mode) => {
-              const active = (data.seedance2InputMode ?? "frames") === mode
-              return (
-                <button
-                  key={mode}
-                  type="button"
-                  className={`flex-1 py-1 text-xs font-medium transition-colors ${active ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:text-foreground"}`}
-                  onClick={() => { if (!active) onUpdate({ seedance2InputMode: mode }) }}
-                >
-                  {mode === "frames" ? "Frames" : "References"}
-                </button>
-              )
-            })}
+      {/* Seedance 2 resolved-mode indicator — the backend resolver
+          (resolveSeedance2Inputs) decides frames-vs-references from the
+          connected inputs at run time, so the panel only DISPLAYS the
+          resolved mode + the prompt directive it appends. Mirror of the
+          indicator in ImageToVideoConfigImpl. */}
+      {isSeedance2 && (() => {
+        const s2 = resolveSeedance2Inputs({
+          firstFrameUrl: connectedImages.some((img) => img.targetHandle !== "endFrame") ? "first" : undefined,
+          lastFrameUrl: hasEndFrame ? "last" : undefined,
+          refImageUrls: Array.from({ length: connectedRefImages.length }, (_, i) => `r${i}`),
+          refVideoUrls: Array.from({ length: connectedRefVideos.length }, (_, i) => `v${i}`),
+          refAudioUrls: Array.from({ length: connectedRefAudio.length }, (_, i) => `a${i}`),
+        })
+        const label = s2.mode === "reference"
+          ? "Reference — frames used as prompt-directed references"
+          : s2.mode === "first-last-frame" ? "First + Last Frame (exact)" : "First Frame (exact)"
+        return (
+          <div className="flex flex-col gap-1 rounded-md border border-border bg-muted/30 p-2">
+            <span className="text-[11px] font-medium text-foreground">Mode: {label}</span>
+            {s2.promptSuffix && (
+              <span className="text-[10px] leading-snug text-muted-foreground">
+                Appended to prompt: “{s2.promptSuffix}”
+              </span>
+            )}
+            {s2.droppedRefImages > 0 && (
+              <span className="text-[10px] leading-snug text-amber-500">
+                {s2.droppedRefImages} reference image{s2.droppedRefImages > 1 ? "s" : ""} over the 9-image limit will be dropped (frames kept).
+              </span>
+            )}
           </div>
-          <p className="text-[10px] text-muted-foreground px-1">
-            {(data.seedance2InputMode ?? "frames") === "references"
-              ? "References mode uses image references to guide generation (not as start/end frames)."
-              : "Frames mode uses start and optional end frame images."}
-          </p>
-        </div>
-      )}
+        )
+      })()}
 
       {/* VEO mode toggle */}
       {isVeo && (
@@ -2428,11 +2431,6 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
       {(supportsReferences && (!isVeo || isVeoRefMode)) && connectedRefImages.length > 0 && (
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Reference Images ({connectedRefImages.length}/{isSeedance2 ? SEEDANCE_2_REF_LIMITS.images : maxRefImages})</Label>
-          {seedance2Conflict && (
-            <div className="rounded border border-red-500/40 bg-red-500/10 p-2 text-[11px] leading-snug text-red-300">
-              Reference images and end frame are mutually exclusive on Seedance 2. Disconnect the end frame <em>or</em> reference images before generating.
-            </div>
-          )}
           <ConnectedMediaList
             sources={refSources}
             mediaOrder={data.referenceImageOrder ?? []}

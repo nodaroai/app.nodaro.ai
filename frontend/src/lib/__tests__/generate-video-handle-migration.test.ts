@@ -86,6 +86,18 @@ describe("migrateGenerateVideoNodes", () => {
     expect((result.nodes[0].data as Record<string, unknown>).seedance2InputMode).toBeUndefined()
   })
 
+  it("strips the deprecated seedance2InputMode field on a PRE-EXISTING generate-video node too", () => {
+    // The converting-only guard used to skip pre-existing generate-video nodes,
+    // leaving the inert field behind. The strip now runs for both cases.
+    const result = migrateGenerateVideoNodes(
+      [mkNode("gv", "generate-video", { provider: "veo3", seedance2InputMode: "references" })],
+      [],
+    )
+    const data = result.nodes[0].data as Record<string, unknown>
+    expect(data.seedance2InputMode).toBeUndefined()
+    expect(data.provider).toBe("veo3") // unrelated fields untouched
+  })
+
   it("normalizes kling3Mode → mode and kling3Sound → sound", () => {
     const result = migrateGenerateVideoNodes(
       [mkNode("i2v", "image-to-video", { kling3Mode: "pro", kling3Sound: true })],
