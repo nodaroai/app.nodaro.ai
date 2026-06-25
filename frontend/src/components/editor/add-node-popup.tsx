@@ -723,6 +723,14 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     group: "Video",
   },
   {
+    type: "switchx",
+    label: "Relight & Switch",
+    icon: <Wand2 className="h-4 w-4" />,
+    category: "AI",
+    group: "Video",
+    keywords: ["relight", "relighting", "relit", "lighting", "switch", "swap background", "replace background", "change background", "scene swap", "restyle", "recolor", "composite", "compositing", "green screen", "chroma key", "rotoscope", "matte", "alpha", "color match", "harmonize", "vfx", "video to video", "beeble"],
+  },
+  {
     type: "generative-pipeline",
     label: "Story → Video",
     icon: <Film className="h-4 w-4" />,

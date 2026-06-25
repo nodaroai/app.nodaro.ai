@@ -1,6 +1,6 @@
 # MCP Tool Reference
 
-Complete reference for the 131 tools exposed by the Nodaro MCP server.
+Complete reference for the 132 tools exposed by the Nodaro MCP server.
 
 ## Scopes
 
@@ -418,6 +418,7 @@ prompt with no questions round-trip.
 | `extend_video` | Extend an existing video clip forward in time. Accepts `video_url`, `prompt`, `model`, `duration`. |
 | `loop_video` | Create a seamless looping clip from a short video segment. Accepts `video_url` and optional loop-trim parameters. |
 | `modify_video` | Video-to-video transformation — apply a style or prompt transformation to an existing clip. |
+| `relight_video` | Relight & switch/composite a clip from its own pixels (Beeble SwitchX). Accepts `video_url`/`video_asset_id` + `prompt` and/or `reference_image_url`, `alpha_mode` (auto/fill/select/custom), `mask_url`, `alpha_keyframe_index`, `max_resolution` (720/1080), `seed`. |
 | `trim_video` | Trim a video to a start/end timestamp. Accepts `video_url`, `start`, `end`. |
 | `combine_videos` | Concatenate multiple video clips with optional transitions. Accepts `video_urls[]`, `transition`, `transition_duration`. |
 | `merge_video_audio` | Merge a video track and an audio track into a single output file. |

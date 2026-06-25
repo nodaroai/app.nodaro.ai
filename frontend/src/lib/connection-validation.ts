@@ -66,6 +66,7 @@ import {
   isValidMotionTransferConnection,
   isValidAiAvatarConnection,
   isValidCinematicAvatarConnection,
+  isValidSwitchXConnection,
 } from "./video-producer-handles"
 import {
   isValidCharacterConnection,
@@ -559,6 +560,7 @@ const VIDEO_PRODUCER_VALIDATORS: Record<string, AudioTextValidator> = {
   "motion-transfer":  (h, s) => isValidMotionTransferConnection(h, s),
   "ai-avatar":        isValidAiAvatarConnection,
   "cinematic-avatar": isValidCinematicAvatarConnection,
+  "switchx":          isValidSwitchXConnection,
 }
 
 const IDENTITY_VALIDATORS: Record<string, AudioTextValidator> = {

@@ -184,7 +184,7 @@ export async function getVideoDuration(filePath: string): Promise<number> {
  * references file://). Residual: a DNS-rebind between this resolve and
  * ffprobe's own resolve — narrow, and the probe is a blind duration oracle.
  */
-async function assertSafeProbeSource(src: string): Promise<void> {
+export async function assertSafeProbeSource(src: string): Promise<void> {
   if (!src.includes("://")) return // local filesystem path — no network I/O
   let parsed: URL
   try {

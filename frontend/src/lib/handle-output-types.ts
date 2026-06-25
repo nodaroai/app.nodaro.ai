@@ -128,6 +128,7 @@ export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleCo
   "video-retake": { video: "video" },
   "video-sfx": { video: "video" },
   "video-to-video": { video: "video" },
+  "switchx": { video: "video" },
   "video-upscale": { video: "video" },
   "voice-changer": { audio: "audio", video: "video" },
   "voice-design": { audio: "audio", voiceId: "identity" },

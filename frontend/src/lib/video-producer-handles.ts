@@ -235,6 +235,31 @@ export function isValidMotionTransferConnection(
   }
 }
 
+// ─── switchx (Relight & Switch) ────────────────────────────────────────
+// Inputs: video (source), image (reference look), mask (select-mode keyframe
+// image), mask-video (custom-mode matte video), prompt. The mask handles are
+// conditionally rendered by mode but the predicate accepts them unconditionally
+// (modify-image mask pattern — a saved edge survives a mode flip). Source: video.
+export function isValidSwitchXConnection(
+  targetHandleId: string,
+  sourceType: string,
+  isVisualPicker: (t: string) => boolean,
+): boolean {
+  switch (targetHandleId) {
+    case "video":
+      return ACCEPTS_VIDEO_OR_DYN(sourceType)
+    case "image":
+    case "mask":
+      return ACCEPTS_IMAGE_OR_DYN(sourceType)
+    case "mask-video":
+      return ACCEPTS_VIDEO_OR_DYN(sourceType)
+    case "prompt":
+      return ACCEPTS_PROMPT(sourceType, isVisualPicker)
+    default:
+      return false
+  }
+}
+
 // ─── Friendly labels for source-direction popover candidate rows ──────
 
 export const VIDEO_PRODUCER_HANDLE_LABELS: Record<string, Record<string, string>> = {
@@ -246,4 +271,5 @@ export const VIDEO_PRODUCER_HANDLE_LABELS: Record<string, Record<string, string>
   "motion-transfer":  { image: "Character", video: "Source video", prompt: "Prompt", negative: "Negative", assets: "Assets" },
   "ai-avatar":        { image: "Image", script: "Script", audio: "Audio", video: "Video" },
   "cinematic-avatar": { prompt: "Prompt", "ref-video": "Video ref", "ref-audio": "Audio ref", "ref-image": "Image ref", video: "Video" },
+  "switchx":          { video: "Source video", image: "Reference", mask: "Mask", "mask-video": "Mask video", prompt: "Prompt" },
 }

@@ -265,6 +265,13 @@ const ALLOWED_PATHS = [
   // cross-user reads or writes — all queries scope by req.userId at insert time.
   /^src\/routes\/ai-avatar\.ts$/,
 
+  // SwitchX (Beeble relight): creates a jobs row tagged with `user_id: req.userId`,
+  // then reserveCreditsForJob + the ffprobe preflight preHandler run under the
+  // service-role client; the BullMQ worker reads the job by job.id out-of-band.
+  // Mirrors ai-avatar / generate-video (baselined). No cross-user reads or writes —
+  // all queries scope by req.userId at insert time.
+  /^src\/routes\/switchx\.ts$/,
+
   // Cinematic Avatar (HeyGen): same shape as ai-avatar — a jobs row tagged with
   // `user_id: req.userId`, reserveCreditsForJob under the service-role client,
   // worker reads by job.id out-of-band. Mirrors generate-video / extend-video

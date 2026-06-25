@@ -463,6 +463,27 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
     },
   },
   {
+    type: "switchx",
+    label: "Relight & Switch",
+    category: "ai-video",
+    description:
+      "Relight a video and switch/composite elements, driven by the original pixels: source video + alpha mask (auto/fill/select/custom) + reference image and/or prompt. Powered by Beeble SwitchX.",
+    outputType: "video",
+    providers: ["beeble-switchx"],
+    inputSchema: {
+      fields: [
+        { key: "videoUrl", type: "video-url", required: true },
+        { key: "referenceImageUrl", type: "image-url" },
+        { key: "maskUrl", type: "image-url" },
+        { key: "prompt", type: "text" },
+        { key: "alphaMode", type: "select", options: ["auto", "fill", "select", "custom"] },
+        { key: "maxResolution", type: "select", options: ["720", "1080"] },
+        { key: "alphaKeyframeIndex", type: "number" },
+        { key: "seed", type: "number" },
+      ],
+    },
+  },
+  {
     type: "lip-sync",
     label: "Lip Sync",
     category: "ai-video",

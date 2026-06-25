@@ -746,7 +746,7 @@ const LLM_REF_IMAGE_NODE_TYPES = new Set<string>([
  *  VIDEO_OUTPUT_NODE_TYPES above, which is also used for kieTaskId routing —
  *  this set is purposefully scoped to llm-chat reference routing.) */
 const LLM_REF_VIDEO_NODE_TYPES = new Set<string>([
-  "image-to-video", "text-to-video", "video-to-video",
+  "image-to-video", "text-to-video", "video-to-video", "switchx",
   // Generate Video — unified video node (Task 6.1). Mirrors the i2v/t2v
   // entries so llm-chat reference routing treats its output as video.
   "generate-video",
@@ -1384,6 +1384,17 @@ export function resolveNodeInputs(
     }
     if (srcEdge.targetHandle === "mask") {
       inputs.maskUrl = output;
+      continue;
+    }
+    // SwitchX custom-mode alpha matte video → the single alpha_uri slot (maskUrl).
+    if (srcEdge.targetHandle === "mask-video") {
+      inputs.maskUrl = output;
+      continue;
+    }
+    // SwitchX reference image (the "new look") → referenceImageUrls (the execute
+    // block + backend resolver both read [0]).
+    if (srcEdge.targetHandle === "image" && node.type === "switchx") {
+      inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output];
       continue;
     }
     if (srcEdge.targetHandle === "image" && node.type === "image-critic") {

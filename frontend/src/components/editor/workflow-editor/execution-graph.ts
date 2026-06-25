@@ -330,6 +330,7 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
   if (
     type === "image-to-video" ||
     type === "video-to-video" ||
+    type === "switchx" ||
     type === "text-to-video" ||
     // Unified video node — dispatches to i2v/t2v worker handlers, which write
     // the same `generatedVideoUrl` / per-result `url` fields back onto node.data.
@@ -920,6 +921,7 @@ export const IMAGE_SOURCE_TYPES = new Set([
 export const VIDEO_SOURCE_TYPES_FOR_RENDER = new Set([
   "image-to-video",
   "video-to-video",
+  "switchx",
   "text-to-video",
   // Generate Video — unified video node (Task 6.1). Mirrors backend
   // execution-graph's VIDEO_SOURCE_TYPES so detectPreviewItemType /

@@ -17,6 +17,7 @@ import { appendMusicMeta } from "@nodaro/shared"
 import { resolveEntityImageCreditIdentifier } from "../../lib/entity-credit-identifier.js"
 import { buildLipSyncCreditId, isPerSecondLipSyncProvider } from "@nodaro/shared"
 import { resolveAiAvatarCreditId } from "@nodaro/shared"
+import { resolveSwitchXCreditId } from "@nodaro/shared"
 import { resolveCinematicCreditId } from "@nodaro/shared"
 import { referenceSheetCreditId } from "@nodaro/shared"
 import { extractReferencedLabels, combineSameLabelRefs, refHandleCategory, canonicalVarName } from "@nodaro/shared"
@@ -2955,6 +2956,44 @@ export function buildPayload(
           videoEditDuration: data.videoEditDuration as string | undefined,
           audioSetting: data.audioSetting as string | undefined,
           promptExtend: data.promptExtend as boolean | undefined,
+          usageLogId,
+        },
+      }
+    }
+
+    case "switchx": {
+      const sxPrompt = (() => {
+        let p: string | undefined = promptFor("switchx")
+        const identityClause = collectIdentityLockClause(node.id, buildCtx)
+        if (identityClause) p = p ? `${p} ${identityClause}` : identityClause
+        return p
+      })()
+      const sxMention = resolveVideoPromptMentions(sxPrompt, node.id, buildCtx, readExtraRefs(data), {
+        referenceOrder: readStringArray(data.referenceOrder),
+        suppressedCanonicalCharacterIds: readStringArray(data.suppressedCanonicalCharacterIds),
+      })
+      const sxUpstreamRef = (typeof resolvedInputs.referenceImageUrls === "string"
+        ? resolvedInputs.referenceImageUrls
+        : Array.isArray(resolvedInputs.referenceImageUrls)
+          ? resolvedInputs.referenceImageUrls[0]
+          : undefined) as string | undefined
+      const sxMaxRes = data.maxResolution === 720 ? 720 : 1080
+      return {
+        jobName: "switchx",
+        queueName: "video-generation",
+        // No ffprobe in the orchestrator path → reserve the worst-case frame tier
+        // for the resolution (resolveSwitchXCreditId defaults to 240f). Over-reserve is safe.
+        modelIdentifier: resolveSwitchXCreditId({ maxResolution: sxMaxRes }),
+        payload: {
+          jobId,
+          videoUrl: resolvedInputs.videoUrl || data.videoUrl,
+          referenceImageUrl: sxUpstreamRef ?? sxMention.additionalUrls[0],
+          prompt: sxMention.prompt,
+          alphaMode: (data.alphaMode as string) ?? "auto",
+          maskUrl: (resolvedInputs.maskUrl as string | undefined) ?? (data.maskUrl as string | undefined),
+          alphaKeyframeIndex: data.alphaKeyframeIndex as number | undefined,
+          maxResolution: sxMaxRes,
+          seed: data.seed as number | undefined,
           usageLogId,
         },
       }

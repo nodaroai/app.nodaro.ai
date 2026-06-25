@@ -8,6 +8,7 @@ import {
   removeBackground,
   generateVideo,
   videoToVideo,
+  switchXApi,
   textToVideo,
   textToSpeech,
   generateScriptApi,
@@ -378,6 +379,31 @@ export function runVideoToVideoGeneration(
     () => videoToVideo(sourceVideoUrl, prompt, provider, ctx.userId, options),
     "generatedVideoUrl",
     "Video-to-video generation",
+    ctx,
+  );
+}
+
+// --- SwitchX (Relight & Switch) ---
+
+export function runSwitchXGeneration(
+  nodeId: string,
+  sourceVideoUrl: string,
+  ctx: ExecutionContext,
+  options: {
+    alphaMode: "auto" | "fill" | "select" | "custom";
+    referenceImageUrl?: string;
+    prompt?: string;
+    maskUrl?: string;
+    alphaKeyframeIndex?: number;
+    maxResolution?: 720 | 1080;
+    seed?: number;
+  },
+): Promise<string> {
+  return pollJobWithNodeUpdate(
+    nodeId,
+    () => switchXApi(sourceVideoUrl, { ...options, userId: ctx.userId }),
+    "generatedVideoUrl",
+    "Relight & Switch generation",
     ctx,
   );
 }
