@@ -5,6 +5,7 @@ import {
   IMAGE_TO_VIDEO_PROVIDERS,
   TEXT_TO_VIDEO_PROVIDERS,
   VIDEO_GEN_PROVIDERS,
+  LIP_SYNC_PROVIDERS,
   VOICE_CHANGER_MODEL_IDS,
 } from "@nodaro/shared"
 
@@ -467,11 +468,13 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
     category: "ai-video",
     description: "Sync audio to a character's face to create a talking head video.",
     outputType: "video",
+    providers: [...LIP_SYNC_PROVIDERS],
     inputSchema: {
       fields: [
         { key: "imageUrl", type: "image-url" },
         { key: "videoUrl", type: "video-url" },
         { key: "audioUrl", type: "audio-url", required: true },
+        { key: "provider", type: "select", options: [...LIP_SYNC_PROVIDERS] },
       ],
     },
   },
