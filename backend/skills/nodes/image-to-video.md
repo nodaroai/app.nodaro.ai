@@ -1,7 +1,7 @@
 ---
 node_type: image-to-video
-generated_at: 2026-06-24T17:51:20.452Z
-generated_from: 056170208
+generated_at: 2026-06-25T20:54:04.449Z
+generated_from: c39f9799d
 ---
 
 # image-to-video
@@ -98,7 +98,6 @@ generated_from: 056170208
 - `reference_image_urls`
 - `reference_video_urls`
 - `reference_audio_urls`
-- `seedance2_input_mode`
 - `loop_trim`
 - `auto_loop_trim`
 <!-- AUTO-GEN:END mcp-call -->

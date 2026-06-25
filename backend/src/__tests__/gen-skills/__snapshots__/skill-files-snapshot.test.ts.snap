@@ -378,7 +378,6 @@ exports[`per-node skill file snapshots > image-to-video.md auto-gen blocks match
 - \`reference_image_urls\`
 - \`reference_video_urls\`
 - \`reference_audio_urls\`
-- \`seedance2_input_mode\`
 - \`loop_trim\`
 - \`auto_loop_trim\`",
   "node-data-shape": "**Type:** \`image-to-video\`

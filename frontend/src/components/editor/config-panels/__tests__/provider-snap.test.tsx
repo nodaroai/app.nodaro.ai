@@ -790,10 +790,19 @@ describe("LipSyncConfig — provider-snap useEffect", () => {
     )
   })
 
-  it("snaps 1080p to 720p for seedance-2-fast (also supports 1080p)", () => {
-    // seedance-2-fast supports 1080p; 1080p stays.
+  it("snaps stale 1080p to 720p for seedance-2-fast (no fast 1080p SKU)", () => {
+    // seedance-2-fast is 480p/720p only — a stale 1080p must snap to the default 720p.
     const onUpdate = vi.fn()
     const data = baseLipSyncData({ provider: "seedance-2-fast", resolution: "1080p" })
+    render(<LipSyncConfig {...commonProps(onUpdate, data)} />)
+    expect(onUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ resolution: "720p" }),
+    )
+  })
+
+  it("keeps 1080p for the full seedance-2 (real 1080p SKU)", () => {
+    const onUpdate = vi.fn()
+    const data = baseLipSyncData({ provider: "seedance-2", resolution: "1080p" })
     render(<LipSyncConfig {...commonProps(onUpdate, data)} />)
     expect(onUpdate).not.toHaveBeenCalledWith(
       expect.objectContaining({ resolution: expect.anything() }),

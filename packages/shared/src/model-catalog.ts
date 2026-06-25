@@ -1193,15 +1193,13 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     features: ["end-frame", "audio", "reference-image"],
     aspectRatios: VIDEO_RATIOS_SEEDANCE_2,
     durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
-    resolutions: ["480p", "720p", "1080p"],
+    resolutions: ["480p", "720p"],
     pricing: [
       { identifier: "seedance-2-fast", credits: 31, note: "default — see :NsR variants" },
       { identifier: "seedance-2-fast:8s:480p", credits: 31 },
       { identifier: "seedance-2-fast:8s:720p", credits: 66 },
-      { identifier: "seedance-2-fast:8s:1080p", credits: 99 },
-      { identifier: "seedance-2-fast:8s:480p-ref", credits: 16 },
+      { identifier: "seedance-2-fast:8s:480p-ref", credits: 18 },
       { identifier: "seedance-2-fast:8s:720p-ref", credits: 40 },
-      { identifier: "seedance-2-fast:8s:1080p-ref", credits: 60 },
     ],
   },
   "seedance-2-mini": {

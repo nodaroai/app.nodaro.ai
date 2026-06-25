@@ -516,6 +516,25 @@ exact shape grows over time — treat unknown fields as forward-compatible.
 Neither endpoint requires authentication; they expose only static
 registry metadata. No scopes required.
 
+### Seedance 2 video capabilities
+
+The video routes (`/v1/text-to-video`, `/v1/generate-video`) accept these on
+the Seedance 2 family — `resolution` / `aspectRatio` are pass-through strings,
+so a value the model doesn't support is ignored, never a 400:
+
+- **`seedance-2`** (full) supports `resolution: "4k"` and
+  `aspectRatio: "adaptive"` (plus `"21:9"`). `seedance-2-fast` and
+  `seedance-2-mini` are **480p / 720p only** (no 1080p, no 4K).
+- **Frames + references coexist.** When any reference (image / video / audio)
+  is wired alongside a start/end frame, the frames become prompt-directed
+  `Image N` references rather than pinned endpoints — the resolver decides the
+  mode, there is no toggle.
+- **Reference videos are billed `unit × (input + output)` duration.** The
+  runtime ffprobes each `referenceVideoUrls` clip and scales the per-second
+  `-ref` rate (see the [Generate Video node](nodes/ai-video/generate-video.md)
+  for the live per-resolution rates) by the input-video duration plus the
+  output duration, so longer source clips reserve proportionally more credits.
+
 ### Picker catalogs
 
 `GET /v1/picker-catalogs` and `GET /v1/picker-catalogs/:nodeType` expose the

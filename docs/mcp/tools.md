@@ -429,6 +429,8 @@ prompt with no questions round-trip.
 | `face_swap` | Swap a face in a source image/video with a reference face. |
 | `video_upscale` | AI upscale a video to a higher resolution (powered by Topaz via KIE). |
 
+**Seedance 2 (`model: "seedance-2"`)** accepts `resolution: "4k"` and `aspect_ratio: "adaptive"` (plus `"21:9"`) on `generate_video` / `animate_image` — both fields are free strings, forwarded to the route unaltered. The cheaper variants are resolution-capped: `seedance-2-fast` and `seedance-2-mini` are **480p / 720p only** (no 1080p, no 4K). Frame inputs and references coexist — when any reference (image / video / audio) is wired alongside `image_url` / `end_frame_url`, the frames become **prompt-directed `Image N` references** rather than pinned endpoints; the resolver decides the mode, so there is no toggle. Reference **videos** are billed `unit × (input + output)` duration — the per-second `-ref` rate (see the [Generate Video node pricing](../nodes/ai-video/generate-video.md)) is scaled by the probed input-video duration plus the output duration, so longer source clips reserve more.
+
 ---
 
 ## Audio generation tools

@@ -643,6 +643,17 @@ if ("jobId" in result) {
 }
 ```
 
+> **Seedance 2 video** (`run("text-to-video" | "generate-video", …)`):
+> `seedance-2` (full) accepts `resolution: "4k"` and `aspectRatio: "adaptive"`
+> (plus `"21:9"`); `seedance-2-fast` / `seedance-2-mini` are 480p / 720p only.
+> `resolution` / `aspectRatio` are pass-through strings — an unsupported value
+> is ignored, never a 400. Start/end frames and references can coexist (the
+> frames become prompt-directed `Image N` references; the resolver picks the
+> mode, no toggle). Reference videos are billed `unit × (input + output)`
+> duration — the runtime ffprobes each `referenceVideoUrls` clip and scales the
+> per-second `-ref` rate by the input-video plus output duration. Per-resolution
+> rates are in the [Generate Video node docs](nodes/ai-video/generate-video.md).
+
 #### `runAndWait(type, params?, opts?)`
 
 ```ts

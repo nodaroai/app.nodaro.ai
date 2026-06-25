@@ -58,7 +58,7 @@ Generate Video covers the union of the legacy image-to-video and text-to-video c
 | VEO 3.x | `veo3` (Quality), `veo3.1` (Fast), `veo3_lite` (Lite) | T2V, I2V, first+last, reference | 4 / 6 / 8s; 720p / 1080p; generate-audio default on; auto-translate |
 | Gemini Omni | `gemini-omni-video` | T2V, I2V, video-edit (V2V) | 4 / 6 / 8 / 10s; 720p / 1080p / 4K (4K not on free tier); no prompt-baked audio (external `audio_ids` only — see section); up to 7 reference images; V2V uses trim window ≤ 10 s |
 | Kling | `kling`, `kling-turbo`, `kling-3.0`, `kling-master` | T2V, I2V (`kling-master` is I2V-only) | 5 / 10s (Kling 3.0: continuous 3–15s) |
-| Seedance / Seedance 2 | `seedance`, `seedance-2`, `seedance-2-fast`, `seedance-2-mini` | T2V, I2V, reference (S2) | S2: 4–15s; aspect 16:9 / 9:16 / 1:1 / 4:3 / 3:4 / **21:9** / **adaptive** (match the wired input). Resolution by variant (separate KIE models): `seedance-2` (full) **480p / 720p / 1080p / 4K**; `seedance-2-fast` up to **1080p** (no 4K); `seedance-2-mini` **480p / 720p only**. Up to 9 image + 3 video + 3 audio refs |
+| Seedance / Seedance 2 | `seedance`, `seedance-2`, `seedance-2-fast`, `seedance-2-mini` | T2V, I2V, reference (S2) | S2: 4–15s; aspect 16:9 / 9:16 / 1:1 / 4:3 / 3:4 / **21:9** / **adaptive** (match the wired input). Resolution by variant (separate KIE models): `seedance-2` (full) **480p / 720p / 1080p / 4K**; `seedance-2-fast` **480p / 720p only** (no 1080p, no 4K); `seedance-2-mini` **480p / 720p only**. Up to 9 image + 3 video + 3 audio refs |
 | Hailuo | `hailuo-2.3-pro`, `hailuo-2.3`, `hailuo-standard` | T2V (`hailuo-standard`), I2V | 6 / 10s |
 | Bytedance | `bytedance-lite`, `bytedance-pro`, `bytedance-pro-fast` | T2V (lite, pro), I2V | 5 / 10s |
 | MiniMax | `minimax` | T2V, I2V | Fixed 5s, end-frame supported |
@@ -182,7 +182,9 @@ If neither has the identifier, the route returns HTTP 503 `price_not_configured`
 | 720p | 41 | 25 |
 | 480p | 19 | 11.5 |
 
-So at 8s: 1080p = `ceil(102×8/4)` = **204** no-ref / `ceil(62×8/4)` = **124** with-ref; 4K = `ceil(208×8/4)` = **416** no-ref / `ceil(128×8/4)` = **256** with-ref. Wiring any reference (image / video / audio) selects the cheaper `-ref` ladder. 4K is the full `seedance-2` only — `seedance-2-fast` (up to 1080p) and `seedance-2-mini` (480p / 720p) are separate, cheaper KIE models with their own ladders.
+So at 8s: 1080p = `ceil(102×8/4)` = **204** no-ref / `ceil(62×8/4)` = **124** with-ref; 4K = `ceil(208×8/4)` = **416** no-ref / `ceil(128×8/4)` = **256** with-ref. Wiring any reference (image / video / audio) selects the cheaper `-ref` ladder. 4K is the full `seedance-2` only — `seedance-2-fast` (480p / 720p) and `seedance-2-mini` (480p / 720p) are separate, cheaper KIE models with their own ladders (neither has a 1080p SKU).
+
+**Reference videos bill input + output duration.** KIE bills "with video input" runs as `per_sec × (input_video_duration + output_duration)`, not output alone. When one or more reference videos are wired, the runtime ffprobes their durations at reservation time and reserves `ceil(per_sec_with_ref × (Σ reference_video_seconds + output_seconds) / 4)` up front — credits can only be refunded (never up-charged) at commit, so the full duration is reserved. A probe failure assumes the 15s cap (KIE limits total reference video to ≤ 15s) so a blip never under-charges. Reference **images** and **audio** do not add input duration — only reference **videos** do.
 
 Cross-check the runtime table in `/admin/models` for the live numbers — the worked examples above match the `STATIC_CREDIT_COSTS` snapshot at the time of this writing.
 

@@ -12,4 +12,7 @@ describe("seedance-2 catalog", () => {
     expect(MODEL_CATALOG["seedance-2-fast"].resolutions).not.toContain("4k")
     expect(MODEL_CATALOG["seedance-2-mini"].resolutions).not.toContain("4k")
   })
+  it("fast is 480p/720p ONLY — no phantom 1080p (KIE has no SKU for it)", () => {
+    expect(MODEL_CATALOG["seedance-2-fast"].resolutions).toEqual(["480p", "720p"])
+  })
 })

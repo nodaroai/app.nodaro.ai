@@ -583,23 +583,29 @@ describe("buildVideoCreditModelIdentifier", () => {
       })
     })
 
-    describe("seedance-2-fast", () => {
-      it("1080p 8s no-ref -> :8s:1080p", () => {
+    describe("seedance-2-fast (no 1080p SKU — stale 1080p clamps to 720p)", () => {
+      it("1080p 8s no-ref clamps -> :8s:720p", () => {
         expect(
           buildVideoCreditModelIdentifier("seedance-2-fast", 8, false, undefined, undefined, "1080p", false),
-        ).toBe("seedance-2-fast:8s:1080p")
+        ).toBe("seedance-2-fast:8s:720p")
       })
 
-      it("1080p 8s with ref -> :8s:1080p-ref", () => {
+      it("1080p 8s with ref clamps -> :8s:720p-ref", () => {
         expect(
           buildVideoCreditModelIdentifier("seedance-2-fast", 8, false, undefined, undefined, "1080p", true),
-        ).toBe("seedance-2-fast:8s:1080p-ref")
+        ).toBe("seedance-2-fast:8s:720p-ref")
       })
 
-      it("1080p 12s no-ref -> :12s:1080p", () => {
+      it("1080p 12s no-ref clamps -> :12s:720p", () => {
         expect(
           buildVideoCreditModelIdentifier("seedance-2-fast", 12, false, undefined, undefined, "1080p", false),
-        ).toBe("seedance-2-fast:12s:1080p")
+        ).toBe("seedance-2-fast:12s:720p")
+      })
+
+      it("720p 8s no-ref -> :8s:720p (supported tier passes through)", () => {
+        expect(
+          buildVideoCreditModelIdentifier("seedance-2-fast", 8, false, undefined, undefined, "720p", false),
+        ).toBe("seedance-2-fast:8s:720p")
       })
     })
   })

@@ -222,6 +222,21 @@ export async function generateVideoRoutes(app: FastifyInstance) {
         computeCredits: async (body) => {
           const b = body as Record<string, unknown>
           const hasVideoRef = Array.isArray(b?.referenceVideoUrls) && (b.referenceVideoUrls as unknown[]).length > 0
+          // Seedance 2 reference-video runs are billed unit×(input+output). The
+          // seeded `-ref` composite only encodes the per-8s OUTPUT rate, so we
+          // ffprobe the connected reference videos and reserve the FULL scaled
+          // base UP FRONT (commit_credits only refunds — never up-charges). Core
+          // may not statically import ee/, so the helper is loaded dynamically
+          // (the allowed escape hatch — same pattern the credit-guard shim uses).
+          if (isSeedance2Provider(b?.provider as string | undefined) && hasVideoRef) {
+            const { seedance2RefVideoBaseCreditsFromUrls } = await import("../ee/billing/seedance2-ref-video-credits.js")
+            return seedance2RefVideoBaseCreditsFromUrls({
+              provider: b.provider as string,
+              resolution: (b.resolution as string | undefined) ?? "720p",
+              outputDurationSec: Number(b.duration ?? 5),
+              referenceVideoUrls: b.referenceVideoUrls as unknown[],
+            })
+          }
           const modelId = buildVideoCreditModelIdentifier(
             (b?.provider as string) ?? "minimax",
             b?.duration as number | string | undefined,

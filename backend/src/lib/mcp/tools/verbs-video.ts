@@ -275,7 +275,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         "AND end frame, pick a model whose `features` includes `end-frame` (VEO, " +
         "MiniMax, Hailuo Standard, Bytedance Lite, Kling Turbo, Seedance). " +
         "Default `veo3.1` is the best price/quality balance with native audio.\n\n" +
-        "**Seedance 2 modes** (use `seedance2_input_mode` to switch explicitly):\n" +
+        "**Seedance 2 modes** (auto-selected from the inputs you provide):\n" +
         "  • `'frames'` (default) — start/end-frame mode: provide `image_url` as " +
         "the first frame and optionally `end_frame_url` as the last frame.\n" +
         "  • `'references'` — reference-media mode: provide up to 9 reference images " +
@@ -378,14 +378,6 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
             "Seedance 2 only: reference audio for soundtrack-driven motion (URLs or " +
             "Nodaro asset IDs). Max 3. Used in 'references' mode; ignored in 'frames' mode. " +
             "Accepts an array; a lone URL or JSON-stringified array is coerced.",
-          ),
-        seedance2_input_mode: z
-          .enum(["frames", "references"])
-          .optional()
-          .describe(
-            "Seedance 2 only: 'frames' = start/end-frame mode (use image_url + end_frame_url); " +
-            "'references' = reference-media mode (use reference_image_urls / reference_video_urls / reference_audio_urls). " +
-            "Silently ignored on other providers.",
           ),
         loop_trim: z.object({
           enabled: z.boolean(),
@@ -510,7 +502,6 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         ...(refImageUrls.length ? { referenceImageUrls: refImageUrls } : {}),
         ...(refVideoUrls.length ? { referenceVideoUrls: refVideoUrls } : {}),
         ...(refAudioUrls.length ? { referenceAudioUrls: refAudioUrls } : {}),
-        ...(args.seedance2_input_mode !== undefined ? { seedance2InputMode: args.seedance2_input_mode } : {}),
         // Pass through only when explicitly set so the route's default (true)
         // applies when the caller doesn't specify. Worker still gates on
         // `provider === "veo3.1"` — non-veo3.1 jobs ignore this flag.
@@ -561,7 +552,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         veo_quality: z.enum(["fast", "quality"]).optional(),
         runway_resolution: z.enum(["720p", "1080p"]).optional(),
         duration: z.number().int().min(4).max(15).optional().describe("Seconds to add (seedance-2-extend, default 8)"),
-        resolution: z.enum(["480p", "720p", "1080p"]).optional().describe("Extension resolution (seedance-2-extend, default 720p — match the source for the cleanest seam)"),
+        resolution: z.enum(["480p", "720p", "1080p", "4k"]).optional().describe("Extension resolution (seedance-2-extend, default 720p — match the source for the cleanest seam)"),
         generate_audio: z.boolean().optional().describe("Continue the soundtrack into the extension (seedance-2-extend, default true)"),
         seed: z.number().int().min(10000).max(99999).optional(),
       },
@@ -943,7 +934,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         "heads), strong identity preservation, premium quality. Pick this " +
         "for hero scenes, multi-language dubs, or when the user wants the " +
         "absolute best quality.\n" +
-        "  • **`seedance-2-fast`** (~40 cr @ 720p / 60 cr @ 1080p, 8s w/audio ref) — same " +
+        "  • **`seedance-2-fast`** (~18 cr @ 480p / 40 cr @ 720p, 8s w/audio ref; 480p/720p only) — same " +
         "Seedance 2 phoneme lip sync, cheaper / faster tier. Pick when the " +
         "user wants Seedance quality on a budget.\n" +
         "  • **`kling-avatar`** (default, 28 cr) — KIE talking head, 720p, " +

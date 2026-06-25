@@ -171,6 +171,19 @@ const KNOWN_GHOST_IDENTIFIERS: ReadonlySet<string> = new Set([
   "flux-2-max:6ref",
   "flux-2-max:7ref",
   "flux-2-max:8ref",
+  // ── seedance-2-fast phantom 1080p (migration 133) — KIE has NO 1080p SKU for
+  //    the fast model (480p/720p only, verified KIE pricing page 2026-06-25).
+  //    Migration 133 seeded these guessed (1.5×-of-720p) rows; migration 239
+  //    DELETEs them. Removed from STATIC_CREDIT_COSTS — 133's literal INSERTs
+  //    stay on disk (append-only), so the scanner still sees them as ghosts. ──
+  "seedance-2-fast:4s:1080p",
+  "seedance-2-fast:8s:1080p",
+  "seedance-2-fast:12s:1080p",
+  "seedance-2-fast:15s:1080p",
+  "seedance-2-fast:4s:1080p-ref",
+  "seedance-2-fast:8s:1080p-ref",
+  "seedance-2-fast:12s:1080p-ref",
+  "seedance-2-fast:15s:1080p-ref",
 ])
 
 describe("model_pricing migrations have no undocumented ghosts", () => {

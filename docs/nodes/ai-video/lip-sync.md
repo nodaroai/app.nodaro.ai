@@ -13,7 +13,7 @@ It can also **dub an existing video**: HeyGen Lipsync Precision, Sync Lipsync 2 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | Provider | Select | kling-avatar | AI model for lip sync |
-| Resolution | Select | 720p | Output resolution: 480p/720p (most KIE providers); OmniHuman 1.5 is 720p/1080p (default 1080p); only the full `seedance-2` adds **4K** (`seedance-2-fast` up to 1080p, `seedance-2-mini` 480p/720p) |
+| Resolution | Select | 720p | Output resolution: 480p/720p (most KIE providers); OmniHuman 1.5 is 720p/1080p (default 1080p); only the full `seedance-2` adds **1080p / 4K** (`seedance-2-fast` and `seedance-2-mini` are 480p/720p only) |
 | Motion Prompt | Textarea | — | Optional: describe head/expression motions (KIE providers only) |
 
 ### OmniHuman 1.5 options
@@ -29,7 +29,7 @@ It can also **dub an existing video**: HeyGen Lipsync Precision, Sync Lipsync 2 
 
 ### Seedance 2 (image + audio avatar)
 
-`seedance-2`, `seedance-2-fast`, and `seedance-2-mini` are also offered on the lip-sync surface. They are ByteDance's multimodal video models, which do native phoneme-level lip sync in 8+ languages when fed an audio track alongside a portrait — routed through the image-to-video provider with the audio passed as `reference_audio_urls` (not the dedicated lip-sync flow). The full `seedance-2` accepts **1080p and 4K** output; `seedance-2-fast` goes up to 1080p and `seedance-2-mini` is 480p/720p. Full controls, durations, and per-second pricing live on the [Generate Video](./generate-video.md) page (e.g. 4K 8s = 416 cr, 1080p 8s = 204 cr). `seedance-2-fast` requires each reference audio clip to be ≤ 15.2 s.
+`seedance-2`, `seedance-2-fast`, and `seedance-2-mini` are also offered on the lip-sync surface. They are ByteDance's multimodal video models, which do native phoneme-level lip sync in 8+ languages when fed an audio track alongside a portrait — routed through the image-to-video provider with the audio passed as `reference_audio_urls` (not the dedicated lip-sync flow). The full `seedance-2` accepts **1080p and 4K** output; `seedance-2-fast` and `seedance-2-mini` are **480p/720p only** (no 1080p SKU). Full controls, durations, and per-second pricing live on the [Generate Video](./generate-video.md) page (e.g. 4K 8s = 416 cr, 1080p 8s = 204 cr). `seedance-2-fast` requires each reference audio clip to be ≤ 15.2 s.
 
 ### HeyGen Lipsync Precision options
 

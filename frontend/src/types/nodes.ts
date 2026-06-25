@@ -1974,7 +1974,7 @@ export type LipSyncData = {
   [key: string]: unknown
   label: string
   provider: LipSyncProvider
-  // 1080p only valid for seedance-2 / seedance-2-fast; other KIE providers cap at 720p.
+  // 1080p only valid for the full seedance-2; seedance-2-fast and other KIE providers cap at 720p.
   resolution: "480p" | "720p" | "1080p"
   prompt: string
   fieldMappings: FieldMappings
