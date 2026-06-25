@@ -22,6 +22,10 @@ export const PROVIDER_KIND_VALUES = [
   "elevenlabs-sync",
   "anthropic-sync",
   "heygen",
+  // Beeble SwitchX (direct vendor v2v): persists the Beeble job id via
+  // onTaskCreated; no recover handler (webhook deferred) → swept fail+refund
+  // like heygen. idempotency_key=jobId dedupes any BullMQ re-submit on Beeble.
+  "beeble",
   // fal.ai queue jobs (sync-lipsync-v3 etc.). The fal branch persists the
   // request_id via onTaskCreated; reconcileFalJob (Phase C) re-fetches the queue
   // result and finalizes (or exhausts→refund). Classified async — see
@@ -81,6 +85,9 @@ export const STALE_THRESHOLD_MS: Record<ProviderKind, number> = {
   // — HeyGen's own MAX_POLL_DURATION bounds a run well under 30 min, so this
   // never fails a still-rendering job (same effective threshold pre-task gave it).
   "heygen":                   30 * MIN,
+  // Beeble SwitchX: same posture as heygen (persisted id, no recover handler).
+  // 30 min comfortably exceeds a 240-frame relight render.
+  "beeble":                   30 * MIN,
   // fal.ai queue jobs (sync-lipsync-v3): per-second media jobs that can run
   // several minutes. 5-min threshold (= the existing global min) keeps
   // MIN_STALE_THRESHOLD_MS unchanged while giving a live worker headroom before
@@ -141,6 +148,8 @@ const SYNC_KINDS: ReadonlySet<ProviderKind> = new Set([
   // `heygen` persists a video_id (so stall-retry skips the re-call), but there's
   // no recover handler — treat a stalled HeyGen job like pre-task: fail + refund.
   "heygen",
+  // Beeble SwitchX: same — persisted job id, no recover handler → fail + refund.
+  "beeble",
 ])
 
 export function isSyncKind(kind: ProviderKind): boolean {

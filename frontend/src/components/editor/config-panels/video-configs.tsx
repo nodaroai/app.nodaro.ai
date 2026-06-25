@@ -33,6 +33,7 @@ import type {
   GeneratedScript,
   GeneratedScriptResult,
   CharacterNodeData,
+  SwitchXData,
 } from "@/types/nodes"
 import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, VIDEO_GEN_MODELS, MOTION_TRANSFER_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, VIDEO_DURATION_OPTIONS, VIDEO_FPS_OPTIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, EXTEND_VIDEO_MODELS, getVideoResolutionOptions, getAspectRatiosForVideoModel, getVideoModelCapabilitiesTooltip } from "./model-options"
 import { isSeedance2Provider, resolveSeedance2Inputs, MODEL_CATALOG, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, buildVideoCreditModelIdentifier, characterMentionSlug, characterMentionableAssetArrays, DEFAULT_LABEL_BY_SOURCE, locationMentionSlug } from "@nodaro/shared"
@@ -1453,6 +1454,95 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
 }
 
 export const VideoToVideoConfig = memo(VideoToVideoConfigImpl)
+
+const SWITCHX_MODE_HELP: Record<string, string> = {
+  auto: "AI masks the foreground subject — relight it, restyle/replace the background.",
+  fill: "Keep the whole scene — restyle the entire frame from your reference/prompt.",
+  select: "Provide one keyframe mask image; the AI propagates it across the video.",
+  custom: "Provide a full per-frame alpha matte video for frame-accurate control.",
+}
+
+function SwitchXConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<SwitchXData> & { nodeId?: string }) {
+  const mode = data.alphaMode ?? "auto"
+
+  // Fail-safe (Provider-Enum-Sync step 12b): snap stale values when the mode
+  // changes so the route's Zod never rejects — clear the mask when leaving the
+  // mask modes, clear the keyframe outside select, snap an out-of-range resolution.
+  useEffect(() => {
+    const updates: Partial<SwitchXData> = {}
+    if (mode !== "select" && mode !== "custom" && data.maskUrl) updates.maskUrl = undefined
+    if (mode !== "select" && data.alphaKeyframeIndex !== undefined) updates.alphaKeyframeIndex = undefined
+    if (data.maxResolution !== 720 && data.maxResolution !== 1080) updates.maxResolution = 1080
+    if (Object.keys(updates).length > 0) onUpdate(updates)
+  }, [mode]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="text-[11px] text-muted-foreground/70 -mb-1">Powered by SwitchX · Beeble</div>
+
+      <MappableField field="alphaMode" label="Mode" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Select value={mode} onValueChange={(v) => onUpdate({ alphaMode: v as SwitchXData["alphaMode"] })}>
+          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="auto">Auto — mask the subject</SelectItem>
+            <SelectItem value="fill">Fill — restyle whole frame</SelectItem>
+            <SelectItem value="select">Select — keyframe mask</SelectItem>
+            <SelectItem value="custom">Custom — matte video</SelectItem>
+          </SelectContent>
+        </Select>
+      </MappableField>
+      <p className="text-[11px] text-muted-foreground/70 -mt-1">{SWITCHX_MODE_HELP[mode]}</p>
+
+      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Textarea
+          rows={3}
+          className="text-xs"
+          value={data.prompt ?? ""}
+          onChange={(e) => onUpdate({ prompt: e.target.value })}
+          placeholder="Describe the desired look (a connected reference image is strongly recommended)…"
+        />
+      </MappableField>
+
+      {mode === "select" && (
+        <MappableField field="alphaKeyframeIndex" label="Keyframe index" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <Input
+            type="number"
+            min={0}
+            className="h-8 text-xs"
+            value={data.alphaKeyframeIndex ?? 0}
+            onChange={(e) => onUpdate({ alphaKeyframeIndex: Math.max(0, parseInt(e.target.value, 10) || 0) })}
+          />
+        </MappableField>
+      )}
+
+      <MappableField field="maxResolution" label="Resolution" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Select value={String(data.maxResolution ?? 1080)} onValueChange={(v) => onUpdate({ maxResolution: Number(v) as 720 | 1080 })}>
+          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="1080">1080p</SelectItem>
+            <SelectItem value="720">720p</SelectItem>
+          </SelectContent>
+        </Select>
+      </MappableField>
+
+      <MappableField field="seed" label="Seed (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Input
+          type="number"
+          min={0}
+          className="h-8 text-xs"
+          placeholder="Random"
+          value={data.seed ?? ""}
+          onChange={(e) => {
+            const v = e.target.value.trim()
+            onUpdate({ seed: v === "" ? undefined : Math.max(0, parseInt(v, 10) || 0) })
+          }}
+        />
+      </MappableField>
+    </div>
+  )
+}
+
+export const SwitchXConfig = memo(SwitchXConfigImpl)
 
 const MOTION_VIDEO_NODE_TYPES = new Set(["image-to-video", "text-to-video", "video-to-video", "upload-video", "motion-transfer", "extend-video", "speech-to-video"])
 

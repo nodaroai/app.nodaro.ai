@@ -1274,6 +1274,118 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
     },
   )
 
+  // ── relight_video (Beeble SwitchX — relight / switch / composite) ──
+  // Source-pixel-driven: keep the subject's motion, change the lighting /
+  // background / look via a reference image + alpha mask. Distinct from
+  // modify_video (generative restyle) — SwitchX relights the ORIGINAL pixels.
+  server.registerTool(
+    "relight_video",
+    {
+      title: "Relight & Switch Video",
+      description:
+        "Relight a video and switch/composite elements, driven by the SOURCE " +
+        "video's own pixels (Beeble SwitchX) — relight a subject, swap/restyle a " +
+        "background, or composite new elements. Use this directly for relight / " +
+        "background-swap / restyle-with-reference workflows.\n\n" +
+        "Provide ONE of:\n" +
+        "  (a) `video_url` — public HTTPS URL\n" +
+        "  (b) `video_asset_id` — a Nodaro job id whose output is a video\n\n" +
+        "Plus at least one of `prompt` or `reference_image_url` (a reference " +
+        "image is strongly recommended).\n\n" +
+        "`alpha_mode` controls masking:\n" +
+        "  • **auto** (default) — AI masks the foreground subject.\n" +
+        "  • **fill** — keep the whole scene; restyle the entire frame.\n" +
+        "  • **select** — `mask_url` is one keyframe mask image, propagated " +
+        "(`alpha_keyframe_index` picks the frame it describes).\n" +
+        "  • **custom** — `mask_url` is a full per-frame alpha matte video.\n\n" +
+        "Source must be ≤240 frames and ≤2,770,000 px. Output 720p or 1080p " +
+        "(default 1080p). Powered by SwitchX — attribution is shown on outputs.",
+      inputSchema: {
+        video_url: z.string().url().optional(),
+        video_asset_id: z.string().optional(),
+        prompt: z.string().max(2000).optional(),
+        reference_image_url: z.string().url().optional(),
+        alpha_mode: z.enum(["auto", "fill", "select", "custom"]).optional().describe("Default auto."),
+        mask_url: z.string().url().optional().describe("Required for select (keyframe image) / custom (matte video)."),
+        alpha_keyframe_index: z.number().int().min(0).optional().describe("select mode — 0-based reference frame."),
+        max_resolution: z.enum(["720", "1080"]).optional().describe("Default 1080."),
+        seed: z.number().int().min(0).max(4294967295).optional(),
+      },
+      outputSchema: {
+        jobId: z.string(),
+        prompt: z.string().optional(),
+        alphaMode: z.string().optional(),
+        resolution: z.string().optional(),
+        outputUrl: z.string().optional(),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: true,
+      },
+      _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/v4/job-video",
+        ui: {
+          resourceUri: "ui://nodaro/widget/v4/job-video",
+          visibility: ["model", "app"],
+        },
+      },
+    },
+    async (args) => {
+      const videoUrl =
+        args.video_url ??
+        (args.video_asset_id
+          ? await resolveAssetId({
+              assetId: args.video_asset_id,
+              userId: session.userId,
+              expectedKind: "video",
+            })
+          : null)
+      if (!videoUrl) {
+        return {
+          content: [{ type: "text", text: "Pass video_url or video_asset_id." }],
+          isError: true,
+        }
+      }
+      if (!args.prompt && !args.reference_image_url) {
+        return {
+          content: [{ type: "text", text: "Pass at least one of prompt or reference_image_url." }],
+          isError: true,
+        }
+      }
+      const alphaMode = args.alpha_mode ?? "auto"
+      if ((alphaMode === "select" || alphaMode === "custom") && !args.mask_url) {
+        return {
+          content: [{ type: "text", text: `alpha_mode "${alphaMode}" requires mask_url.` }],
+          isError: true,
+        }
+      }
+      const payload: Record<string, unknown> = {
+        videoUrl,
+        alphaMode,
+        maxResolution: Number(args.max_resolution ?? "1080"),
+        ...(args.prompt ? { prompt: args.prompt } : {}),
+        ...(args.reference_image_url ? { referenceImageUrl: args.reference_image_url } : {}),
+        ...(args.mask_url ? { maskUrl: args.mask_url } : {}),
+        ...(args.alpha_keyframe_index !== undefined ? { alphaKeyframeIndex: args.alpha_keyframe_index } : {}),
+        ...(args.seed !== undefined ? { seed: args.seed } : {}),
+        mcp_client: session.clientName,
+        userId: session.userId,
+      }
+      return dispatchJob(fastify, session, {
+        url: "/v1/switchx",
+        payload,
+        label: "relight-switch",
+        widgetKind: "video",
+        widgetData: {
+          prompt: args.prompt,
+          model: "beeble-switchx",
+          resolution: args.max_resolution,
+        },
+      })
+    },
+  )
+
   // ── trim_video ──
   // Three trim modes: by time (default — start_time/end_time seconds), by
   // frames (trim_start_frames/trim_end_frames; worker probes source fps),

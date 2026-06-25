@@ -13,7 +13,7 @@ import {
 } from "../types.js"
 
 describe("ProviderKind registry", () => {
-  it("exposes spec-listed kinds at runtime (14 base + 2 suno-voice in P5.2 + 3 reconcile blind-spot fixes + heygen stall-retry guard + fal-request)", () => {
+  it("exposes spec-listed kinds at runtime (14 base + 2 suno-voice in P5.2 + 3 reconcile blind-spot fixes + heygen stall-retry guard + fal-request + beeble switchx)", () => {
     expect(PROVIDER_KIND_VALUES).toEqual([
       "kie-standard", "kie-veo", "kie-veo-1080p", "kie-suno",
       "kie-suno-voice-create", "kie-suno-voice-validate",
@@ -22,6 +22,7 @@ describe("ProviderKind registry", () => {
       "replicate-prediction", "replicate-training",
       "elevenlabs-async", "elevenlabs-sync", "anthropic-sync",
       "heygen",
+      "beeble",
       "fal-request",
       "pre-task",
     ])
@@ -41,6 +42,7 @@ describe("ProviderKind registry", () => {
     expect(isSyncKind("kie-suno-voice-validate")).toBe(true)
     expect(isSyncKind("pre-task")).toBe(true)
     expect(isSyncKind("heygen")).toBe(true)
+    expect(isSyncKind("beeble")).toBe(true)
     // fal-request: Phase C reclassified it to async — reconcileFalJob recovers it
     // (or exhausts→refund), so it is NOT a sync-sweep kind.
     expect(isSyncKind("fal-request")).toBe(false)

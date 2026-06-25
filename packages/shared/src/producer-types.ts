@@ -22,6 +22,7 @@
 export const VIDEO_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   "image-to-video",
   "video-to-video",
+  "switchx", // Beeble SwitchX relight/composite
   "text-to-video",
   // Unified video node — emits videoUrl identically to i2v/t2v (its payload-builder
   // case dispatches dynamically to "image-to-video" or "text-to-video" jobName based

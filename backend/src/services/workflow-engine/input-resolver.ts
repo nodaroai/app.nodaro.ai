@@ -1147,7 +1147,8 @@ function routeOutput(
       targetType === "edit-image" ||
       targetType === "image-to-image" ||
       targetType === "modify-image" ||
-      targetType === "video-to-video"
+      targetType === "video-to-video" ||
+      targetType === "switchx"
     ) {
       inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
     } else {
@@ -1208,6 +1209,12 @@ function routeOutput(
     return
   }
   if (edge.targetHandle === "mask") {
+    inputs.maskUrl = output
+    return
+  }
+  // SwitchX custom-mode alpha matte VIDEO → the same alpha_uri slot as the
+  // select-mode mask image (Beeble has a single alpha input regardless of mode).
+  if (edge.targetHandle === "mask-video") {
     inputs.maskUrl = output
     return
   }
@@ -1471,7 +1478,7 @@ function routeOutput(
 
   // --- Upload image ---
   if (srcType === "upload-image") {
-    if (targetType === "generate-image" || targetType === "reference-board" || targetType === "video-to-video") {
+    if (targetType === "generate-image" || targetType === "reference-board" || targetType === "video-to-video" || targetType === "switchx") {
       inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
     } else {
       inputs.imageUrl = output
@@ -1502,7 +1509,7 @@ function routeOutput(
 
   // --- Generate image / Reference board → depends on target ---
   if (srcType === "generate-image" || srcType === "reference-board") {
-    if (targetType === "generate-image" || targetType === "reference-board" || targetType === "video-to-video") {
+    if (targetType === "generate-image" || targetType === "reference-board" || targetType === "video-to-video" || targetType === "switchx") {
       inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
     } else if (targetType === "text-to-audio") {
       inputs.prompt = (src.data.prompt as string) ?? ""
@@ -1520,7 +1527,8 @@ function routeOutput(
       targetType === "edit-image" ||
       targetType === "image-to-image" ||
       targetType === "modify-image" ||
-      targetType === "video-to-video"
+      targetType === "video-to-video" ||
+      targetType === "switchx"
     ) {
       inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
     } else {
@@ -1537,7 +1545,8 @@ function routeOutput(
       targetType === "edit-image" ||
       targetType === "image-to-image" ||
       targetType === "modify-image" ||
-      targetType === "video-to-video"
+      targetType === "video-to-video" ||
+      targetType === "switchx"
     ) {
       inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
     } else {
@@ -1666,7 +1675,7 @@ function routeOutput(
   if (srcType === "scene") {
     const state = nodeStates[src.id]
     if (state?.output?.imageUrl) {
-      if (targetType === "generate-image" || targetType === "reference-board" || targetType === "video-to-video") {
+      if (targetType === "generate-image" || targetType === "reference-board" || targetType === "video-to-video" || targetType === "switchx") {
         inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), state.output.imageUrl]
       } else {
         inputs.imageUrl = state.output.imageUrl

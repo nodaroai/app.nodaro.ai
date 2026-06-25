@@ -473,6 +473,8 @@ export {
 } from "./ai-avatar-pricing.js"
 export type { AiAvatarEngine, AiAvatarResolution, AiAvatarDurationBucket } from "./ai-avatar-pricing.js"
 
+export * from "./switchx-pricing.js"
+
 export {
   CINEMATIC_RATE_USD_PER_SEC,
   CINEMATIC_MIN_DURATION_SEC,

@@ -95,6 +95,7 @@ import {
   GenerateMaskConfig,
   ImageToVideoConfig,
   VideoToVideoConfig,
+  SwitchXConfig,
   MotionTransferConfig,
   VideoUpscaleConfig,
   ExtendVideoConfig,
@@ -214,7 +215,7 @@ import {
 import { TileCommitContext } from "./config-panels/dimension-tile-grid"
 import { createRovingTabIndexRef, handleConfigPanelNavKeyDown } from "./config-panels/config-keyboard-nav"
 
-const LIBRARY_VIDEO_TYPES = new Set(["image-to-video", "video-to-video", "text-to-video", "generate-video", "video-upscale", "extend-video", "motion-transfer", "lip-sync", "speech-to-video", "face-swap", "video-sfx", "ai-avatar", "cinematic-avatar"])
+const LIBRARY_VIDEO_TYPES = new Set(["image-to-video", "video-to-video", "switchx", "text-to-video", "generate-video", "video-upscale", "extend-video", "motion-transfer", "lip-sync", "speech-to-video", "face-swap", "video-sfx", "ai-avatar", "cinematic-avatar"])
 const LIBRARY_AUDIO_TYPES = new Set(["text-to-speech", "generate-music", "text-to-audio", "audio-isolation", "audio-separation", "text-to-dialogue", "voice-changer", "voice-changer-pro", "dubbing", "voice-remix", "voice-design", "suno-generate", "suno-cover", "suno-extend", "suno-separate", "suno-mashup", "suno-replace-section", "suno-add-instrumental", "suno-add-vocals", "suno-convert-wav", "suno-upload-extend"])
 
 const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
@@ -279,6 +280,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "generate-mask": "Generate Mask",
   "image-to-video": "Image to Video",
   "video-to-video": "Video to Video",
+  "switchx": "Relight & Switch",
   "text-to-video": "Text to Video",
   "generate-video": "Generate Video",
   "text-to-speech": "Text to Speech",
@@ -389,7 +391,7 @@ export function getNodeTypeDisplayName(type: string): string {
 
 export const GENERATE_BUTTON_TYPES = new Set([
   "generate-script", "generate-image", "modify-image", "upscale-image", "remove-background", "generate-mask", "reference-sheet", "reference-board",
-  "image-to-video", "video-to-video", "text-to-video", "generate-video", "text-to-speech",
+  "image-to-video", "video-to-video", "switchx", "text-to-video", "generate-video", "text-to-speech",
   "text-to-audio", "audio-isolation", "audio-separation", "text-to-dialogue", "voice-changer", "dubbing", "voice-remix", "voice-design", "forced-alignment", "generate-music", "motion-transfer", "lip-sync", "speech-to-video",
   "video-upscale", "extend-video", "video-retake", "face-swap", "video-sfx", "ai-avatar", "cinematic-avatar", "suno-generate", "suno-cover", "suno-extend",
   "suno-lyrics", "suno-separate", "suno-music-video",
@@ -526,6 +528,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     // here, which keeps the studio panel in a single on-demand chunk.
     case "image-to-video": return <ImageToVideoConfig {...configProps} onUpdateNode={updateNodeData} nodeId={selectedNodeId} />
     case "video-to-video": return <VideoToVideoConfig {...configProps} nodeId={selectedNodeId} />
+    case "switchx": return <SwitchXConfig {...configProps} nodeId={selectedNodeId} />
     case "text-to-video": return (
       <>
         <TextToVideoConfig {...configProps} nodeId={selectedNodeId} />

@@ -64,6 +64,7 @@ import { RemoveBackgroundNode } from "./remove-background-node";
 // (`image-to-video-node.tsx`, `text-to-video-node.tsx`) were deleted in
 // Task 13.2 after staging verified migration parity.
 import { VideoToVideoNode } from "./video-to-video-node";
+import { SwitchXNode } from "./switchx-node";
 import { GenerateVideoNode } from "./generate-video-node";
 import { VideoRetakeNode } from "./video-retake-node";
 import { VideoSfxNode } from "./video-sfx-node";
@@ -245,6 +246,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   // files once staging confirms parity.
   "image-to-video": GenerateVideoNode,
   "video-to-video": VideoToVideoNode,
+  "switchx": SwitchXNode,
   "text-to-video": GenerateVideoNode,
   "generate-video": GenerateVideoNode,
   "video-retake": VideoRetakeNode,

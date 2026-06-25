@@ -22,6 +22,7 @@ import {
   resolveCinematicCreditId,
   type CinematicResolution,
 } from "@nodaro/shared"
+import { resolveSwitchXCreditId } from "@nodaro/shared"
 
 // ── Flux 2 per-MP×ref static costs (generated from flux2BaseCredits formula) ──
 // Identifier format: `<model>:<mp>MP:<n>ref` (e.g. `flux-2-max:2MP:1ref`)
@@ -946,6 +947,25 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "pipeline-music-timeline": 4,
   "pipeline-final-merge": 3,
   "pipeline-freecut-export": 0,
+  // ── Beeble SwitchX relight — frame-tier × resolution reserve holds ──
+  // 11 ids: bare (= 240f/1080p worst-case) + 5 frame tiers (48/96/144/192/240,
+  // SWITCHX_FRAME_TIERS) × 2 resolutions (720/1080p). Metered per-step (no
+  // per-job meter), so the reserved tier bucket is committed verbatim. These are
+  // PROVISIONAL 0%-base values (global markup applies at reserve) deliberately
+  // set HIGH so any pre-anchor Cloud usage over-reserves and never under-bills —
+  // re-anchor before opening the gate (spec §9.2). Mirrors the migration 240
+  // rows exactly (credit-pricing-migration-sync test enforces both directions).
+  "beeble-switchx": 180,
+  "beeble-switchx:48f:1080p": 36,
+  "beeble-switchx:48f:720p": 22,
+  "beeble-switchx:96f:1080p": 72,
+  "beeble-switchx:96f:720p": 44,
+  "beeble-switchx:144f:1080p": 108,
+  "beeble-switchx:144f:720p": 65,
+  "beeble-switchx:192f:1080p": 144,
+  "beeble-switchx:192f:720p": 87,
+  "beeble-switchx:240f:1080p": 180,
+  "beeble-switchx:240f:720p": 108,
 }
 
 // ============================================================
@@ -979,6 +999,12 @@ export const CREDIT_COSTS: Record<string, (data: Record<string, unknown>) => str
   // Cinematic Avatar (HeyGen): delegates to resolveCinematicCreditId — exact
   // (resolution, duration) id, same logic the creditGuard preHandler uses.
   "cinematic-avatar": (data) => resolveCinematicCreditId(data),
+
+  // Beeble SwitchX relight: delegates to resolveSwitchXCreditId — builds the
+  // `beeble-switchx:<tier>f:<res>p` composite from the ffprobed frame count
+  // (__probedFrameCount) + maxResolution, same logic the creditGuard preHandler
+  // uses at request time.
+  "switchx": (data) => resolveSwitchXCreditId(data),
 }
 
 // Tier order for restriction checks

@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-06-22T12:36:44.414Z
-generated_from: 41c5c5bde
+generated_at: 2026-06-25T22:11:36.850Z
+generated_from: 9280bca55
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -198,6 +198,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `suno-style-boost` — Suno Style Boost
 - `suno-upload-extend` — Suno Upload Extend
 - `suno-voice` — Suno Voice
+- `switchx` — Relight & Switch
 - `telegram-post` — Telegram Post
 - `telegram-trigger` — Telegram Trigger
 - `teleport-receive` — Teleport Receive

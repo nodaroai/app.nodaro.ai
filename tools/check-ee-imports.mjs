@@ -212,6 +212,7 @@ const ALLOWLIST = new Set([
   "frontend/src/components/nodes/video-sfx-node.tsx",
   "frontend/src/components/nodes/video-sfx-quick-toolbar.tsx",
   "frontend/src/components/nodes/video-to-video-node.tsx",
+  "frontend/src/components/nodes/switchx-node.tsx",
   "frontend/src/components/nodes/video-upscale-node.tsx",
   "frontend/src/components/nodes/voice-changer-node.tsx",
   "frontend/src/components/nodes/voice-design-node.tsx",

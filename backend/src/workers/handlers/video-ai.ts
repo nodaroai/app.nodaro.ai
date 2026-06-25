@@ -89,6 +89,7 @@ import {
 import { finalizeJobWithMedia } from "../../lib/job-finalize.js"
 import { handleAiAvatar } from "./heygen-avatar.js"
 import { handleCinematicAvatar } from "./heygen-cinematic.js"
+import { handleBeebleSwitchX } from "./beeble-switchx.js"
 import { makeOnTaskCreated } from "../../lib/reconcile/persistence.js"
 import {
   providerKindForVideoModel,
@@ -1583,4 +1584,5 @@ export const videoAIHandlers: Record<string, HandlerFn> = {
   "generate-mask": handleGenerateMask,
   "ai-avatar": handleAiAvatar,
   "cinematic-avatar": handleCinematicAvatar,
+  "switchx": handleBeebleSwitchX,
 }

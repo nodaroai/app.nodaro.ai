@@ -98,6 +98,7 @@ import type {
   RemoveBackgroundData,
   ImageToVideoData,
   VideoToVideoData,
+  SwitchXData,
   TextToVideoData,
   TextToSpeechData,
   GenerateMusicData,
@@ -221,6 +222,7 @@ import {
   runRemoveBackground,
   runVideoGeneration,
   runVideoToVideoGeneration,
+  runSwitchXGeneration,
   runTextToVideoGeneration,
   runTextToSpeechGeneration,
   runScriptGeneration,
@@ -2151,6 +2153,31 @@ export function executeNode(
         promptExtend: v2vData.promptExtend,
       },
     );
+  }
+
+  if (node.type === "switchx") {
+    const sourceVideoUrl = overrideMediaUrl ?? inputs.videoUrl;
+    if (!sourceVideoUrl) {
+      toast.error(`Node "${(node.data as SwitchXData).label}": no source video found`);
+      return Promise.reject(new Error("No source video"));
+    }
+    const sxData = node.data as SwitchXData;
+    const prompt = stripVideoImageTokens(promptOf("switchx"));
+    const upstreamRef = typeof inputs.referenceImageUrls === "string"
+      ? inputs.referenceImageUrls
+      : Array.isArray(inputs.referenceImageUrls)
+        ? inputs.referenceImageUrls[0]
+        : undefined;
+    setUserPromptTemplate((typeof sxData.prompt === "string" ? sxData.prompt.trim() : "") || undefined);
+    return runSwitchXGeneration(node.id, sourceVideoUrl, ctx, {
+      alphaMode: sxData.alphaMode ?? "auto",
+      referenceImageUrl: upstreamRef ?? sxData.referenceImageUrl,
+      prompt: prompt || undefined,
+      maskUrl: inputs.maskUrl ?? sxData.maskUrl,
+      alphaKeyframeIndex: sxData.alphaKeyframeIndex,
+      maxResolution: sxData.maxResolution,
+      seed: sxData.seed,
+    });
   }
 
   if (node.type === "text-to-video") {

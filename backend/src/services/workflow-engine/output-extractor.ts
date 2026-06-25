@@ -832,6 +832,10 @@ export { extractVideoDurationFromNode } from "@nodaro/shared"
 const VIDEO_RESULT_TYPES = new Set([
   "image-to-video",
   "video-to-video",
+  // Beeble SwitchX relight/composite — writes generatedVideoUrl + per-result url
+  // like the other video producers, so DAG resume / "Run from here" hydrates a
+  // downstream consumer from a previously-executed switchx without re-running.
+  "switchx",
   "text-to-video",
   // Unified video node — its payload-builder case dispatches dynamically to the
   // i2v/t2v worker handlers, which write the same `generatedVideoUrl` / per-result

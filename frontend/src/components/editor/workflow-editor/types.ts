@@ -165,6 +165,7 @@ export const EXECUTABLE_TYPES = new Set([
   "remove-background",
   "image-to-video",
   "video-to-video",
+  "switchx",
   "text-to-video",
   // Unified video node — backend registers in NODE_REGISTRY + payload-builder
   // (Tasks 3.1/3.4). Listed here ahead of the dedicated frontend wire-up

@@ -2626,6 +2626,29 @@ export async function videoToVideo(videoUrl: string, prompt?: string, provider?:
   })
 }
 
+export async function switchXApi(
+  videoUrl: string,
+  options: {
+    alphaMode: "auto" | "fill" | "select" | "custom"
+    referenceImageUrl?: string
+    prompt?: string
+    maskUrl?: string
+    alphaKeyframeIndex?: number
+    maxResolution?: 720 | 1080
+    seed?: number
+    userId?: string
+  },
+): Promise<{ jobId: string }> {
+  const { userId, ...rest } = options
+  const body: Record<string, unknown> = { videoUrl, ...rest }
+  if (userId) body.userId = userId
+  return apiJson("/v1/switchx", {
+    body,
+    workflowId: true,
+    label: "Failed to start Relight & Switch generation",
+  })
+}
+
 export async function textToVideo(prompt: string, provider?: string, userId?: string, options?: {
   duration?: number
   mode?: string

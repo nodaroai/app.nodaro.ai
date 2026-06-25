@@ -1,5 +1,6 @@
 import { join } from "node:path"
 import { downloadFile, runFfmpeg, runFfprobe, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
+import { resolveFrameCount } from "../../lib/ffprobe-frames.js"
 
 interface ExtractFrameOptions {
   readonly videoUrl: string
@@ -45,8 +46,8 @@ async function probeFrameCount(filePath: string, fps: number): Promise<number> {
     "-of", "csv=p=0",
     filePath,
   ])
-  const n = parseInt(out.trim(), 10)
-  if (Number.isFinite(n) && n > 0) return n
+  const fromNb = resolveFrameCount(out.trim(), undefined, undefined)
+  if (fromNb !== undefined) return fromNb
   const sd = await runFfprobe([
     "-v", "error",
     "-select_streams", "v:0",
@@ -54,8 +55,8 @@ async function probeFrameCount(filePath: string, fps: number): Promise<number> {
     "-of", "csv=p=0",
     filePath,
   ])
-  const dur = parseFloat(sd.trim())
-  if (Number.isFinite(dur) && dur > 0) return Math.max(1, Math.round(dur * fps))
+  const fromDuration = resolveFrameCount(undefined, parseFloat(sd.trim()), fps)
+  if (fromDuration !== undefined) return fromDuration
   throw new Error(
     `extract-frame: could not determine frame count (nb_frames="${out.trim()}", stream duration="${sd.trim()}")`,
   )

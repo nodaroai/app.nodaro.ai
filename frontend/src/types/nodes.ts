@@ -1943,6 +1943,40 @@ export type VideoToVideoData = {
   pausedAtTime?: number
 }
 
+export type SwitchXData = {
+  [key: string]: unknown
+  label: string
+  prompt: string
+  provider: "beeble-switchx"
+  /** Beeble alpha mode: auto (AI masks subject) / fill (keep whole scene) /
+   *  select (one keyframe mask image, propagated) / custom (per-frame matte video). */
+  alphaMode: "auto" | "fill" | "select" | "custom"
+  /** The "new look" — strongly recommended (≥1 of prompt/referenceImageUrl required). */
+  referenceImageUrl?: string
+  /** Alpha mask: keyframe image (select) or matte video (custom). One slot. */
+  maskUrl?: string
+  /** select-on-video: 0-based reference frame the keyframe describes (default 0). */
+  alphaKeyframeIndex?: number
+  maxResolution: 720 | 1080
+  seed?: number
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedVideoUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
+  currentJobId?: string
+  currentJobProgress?: number
+  connectedImageOrder?: readonly string[]
+  /** See GenerateImageData.referenceOrder. */
+  referenceOrder?: readonly string[]
+  suppressedCanonicalCharacterIds?: readonly string[]
+  suppressedCanonicalLocationIds?: readonly string[]
+  extraRefs?: readonly ExtraRef[]
+  videoPlayState?: "loop" | "paused" | "stopped"
+  pausedAtTime?: number
+}
+
 export type VideoRetakeData = {
   [key: string]: unknown
   label: string
@@ -4808,6 +4842,7 @@ export type SceneNodeData =
   | RemoveBackgroundData
   | ImageToVideoData
   | VideoToVideoData
+  | SwitchXData
   | VideoRetakeData
   | TextToVideoData
   | GenerateVideoNodeData
@@ -4982,6 +5017,7 @@ export type SceneNodeType =
   | "remove-background"
   | "image-to-video"
   | "video-to-video"
+  | "switchx"
   | "video-retake"
   | "text-to-video"
   | "generate-video"
@@ -5884,6 +5920,37 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["video", "cinematography", "prompt", "negative"],
     outputs: ["video"],
     defaultData: { label: "Video to Video", prompt: "", duration: 5, negativePrompt: "", fieldMappings: {} },
+  },
+  {
+    type: "switchx",
+    label: "Relight & Switch",
+    category: "ai",
+    creditCost: 36, // provisional display (48f/1080p tier); real reserve is a frame-tier composite
+    inputs: ["video", "image", "mask", "mask-video", "prompt"],
+    outputs: ["video"],
+    defaultData: {
+      label: "Relight & Switch",
+      provider: "beeble-switchx",
+      alphaMode: "auto",
+      prompt: "",
+      maxResolution: 1080,
+      fieldMappings: {},
+    } as SwitchXData,
+    // Only string-clean fields are exposed as published-app inputs: ExposableField
+    // option values are strings, so numeric maxResolution/seed are kept editor-only
+    // (a "1080" string would fail the route's numeric Zod).
+    exposableFields: [
+      {
+        key: "alphaMode", label: "Mode", type: "select" as const,
+        options: [
+          { value: "auto", label: "Auto — mask the subject" },
+          { value: "fill", label: "Fill — restyle whole frame" },
+          { value: "select", label: "Select — keyframe mask" },
+          { value: "custom", label: "Custom — matte video" },
+        ],
+      },
+      { key: "prompt", label: "Prompt", type: "text" as const },
+    ],
   },
   {
     type: "video-retake",
