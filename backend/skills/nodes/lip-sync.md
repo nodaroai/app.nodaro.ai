@@ -1,7 +1,7 @@
 ---
 node_type: lip-sync
-generated_at: 2026-06-24T22:32:05.096Z
-generated_from: e08287907
+generated_at: 2026-06-25T00:05:53.117Z
+generated_from: a00d7d3bb
 ---
 
 # Lip Sync
@@ -94,6 +94,11 @@ generated_from: e08287907
 - `model`
 - `resolution`
 - `mode`
+- `separate_vocal`
+- `open_scenedet`
+- `align_audio`
+- `align_audio_reverse`
+- `templ_start_seconds`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## Common gotchas

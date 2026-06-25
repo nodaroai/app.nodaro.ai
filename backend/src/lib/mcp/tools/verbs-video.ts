@@ -965,8 +965,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         "for animating a portrait into a speaking head when no video exists.\n" +
         "  • **`volcengine-lipsync`** (2 cr/s — e.g. 30 cr/15s, 120 cr/60s) — KIE " +
         "**video-to-video AI dubbing**: re-syncs an existing clip's lips to a new " +
-        "vocal track. `mode: basic` adds multi-speaker scene detection + speaker " +
-        "ID. Cheapest modern dubbing option. Requires video input.\n\n" +
+        "vocal track. Set `mode: basic` + `open_scenedet: true` for multi-speaker " +
+        "(scene detection + speaker ID). Cheapest modern dubbing option. Requires video input.\n\n" +
         "**Input requirements by model**: seedance-2(-fast), kling-avatar(-pro), " +
         "infinitalk, sadtalker → image input only. latentsync, video-retalking, " +
         "volcengine-lipsync → video input only. wav2lip → image OR video.\n\n" +
@@ -1017,8 +1017,28 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe(
             "volcengine-lipsync only. 'lite' (default) = single-person frontal, faster. " +
-            "'basic' = multi-speaker (scene detection + speaker ID). Other models ignore this.",
+            "'basic' = complex scenes; pair with open_scenedet for multi-speaker. Other models ignore this.",
           ),
+        separate_vocal: z
+          .boolean()
+          .optional()
+          .describe("volcengine-lipsync only. Strip background noise from the driving audio."),
+        open_scenedet: z
+          .boolean()
+          .optional()
+          .describe("volcengine-lipsync 'basic' mode only. Scene detection + speaker ID — enables multi-speaker dubbing."),
+        align_audio: z
+          .boolean()
+          .optional()
+          .describe("volcengine-lipsync 'lite' mode only. Loop the source video when the audio is longer (default on)."),
+        align_audio_reverse: z
+          .boolean()
+          .optional()
+          .describe("volcengine-lipsync 'lite' mode only. Ping-pong the loop (requires align_audio on)."),
+        templ_start_seconds: z
+          .number()
+          .optional()
+          .describe("volcengine-lipsync only. Start time (seconds) in the source video to drive from (advanced)."),
       },
       outputSchema: {
         jobId: z.string(),
@@ -1109,6 +1129,12 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         ...(args.prompt ? { prompt: args.prompt } : {}),
         ...(args.resolution ? { resolution: args.resolution } : {}),
         ...(args.mode ? { mode: args.mode } : {}),
+        // Volcengine dubbing toggles — snake_case MCP inputs → camelCase route body.
+        ...(args.separate_vocal !== undefined ? { separateVocal: args.separate_vocal } : {}),
+        ...(args.open_scenedet !== undefined ? { openScenedet: args.open_scenedet } : {}),
+        ...(args.align_audio !== undefined ? { alignAudio: args.align_audio } : {}),
+        ...(args.align_audio_reverse !== undefined ? { alignAudioReverse: args.align_audio_reverse } : {}),
+        ...(args.templ_start_seconds !== undefined ? { templStartSeconds: args.templ_start_seconds } : {}),
         mcp_client: session.clientName,
         userId: session.userId,
       }

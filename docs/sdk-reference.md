@@ -1565,6 +1565,22 @@ const clip = await client.nodes.runAndWait("lip-sync", {
 })
 ```
 
+The same node also **dubs an existing video** — pass `videoUrl` + a video-input
+provider instead of an image. `volcengine-lipsync` is the cheapest dubbing option
+and the only one with multi-speaker support (extra fields pass straight through to
+the route; via the CLI use `--param videoUrl=… --param provider=volcengine-lipsync …`):
+
+```ts
+const dub = await client.nodes.runAndWait("lip-sync", {
+  videoUrl: "https://…/scene.mp4",
+  audioUrl: "https://…/new-vocal.mp3",
+  provider: "volcengine-lipsync",
+  mode: "basic",          // complex scenes
+  openScenedet: true,     // multi-speaker: scene detection + speaker ID (basic mode)
+  audioDurationSec: 42,   // buckets per-second pricing; absent → 5-min ceiling, no refund
+})
+```
+
 Binding a creature into a shot uses the shared reference contract:
 `toConnectedReference({ kind: "creature", id, name, url, description })`
 (from `@nodaro/shared`) emits a `wired-creature` reference — it auto-attaches
