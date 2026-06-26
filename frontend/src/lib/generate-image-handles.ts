@@ -116,6 +116,12 @@ export const IMAGE_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   // referenceImageUrls). Membership lets the canvas accept sheet/panels → any
   // image input; edge colors stay handle-correct via HANDLE_OUTPUT_TYPES.
   "reference-sheet",
+  // reference-board's `image` source pip emits a real generated board image
+  // (extractNodeOutput + backend IMAGE_RESULT_TYPES + frontend IMAGE_SOURCE_TYPES
+  // all route it). Without this entry the canvas validator rejected
+  // reference-board → every image consumer (the voice-changer-pro output-drift
+  // class). Guarded by connection-validation.test.ts.
+  "reference-board",
 ])
 
 /** Identity-locking source node types that feed Subjects. */

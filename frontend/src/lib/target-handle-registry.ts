@@ -1,5 +1,8 @@
 import { ANALYZABLE_PICKER_TYPES } from "@nodaro/shared"
 import { GENERATE_IMAGE_INPUT_HANDLES, IDENTITY_TYPES, isValidGenerateImageConnection } from "./generate-image-handles"
+import { GENERATE_VIDEO_INPUT_HANDLES, isValidGenerateVideoConnection } from "./generate-video-handles"
+import { VIDEO_RETAKE_HANDLE_IDS, isValidVideoRetakeConnection } from "./video-retake-handles"
+import { isValidVideoSfxConnection } from "./video-sfx-handles"
 import { ACCEPTS_VIDEO, ACCEPTS_AUDIO, ACCEPTS_MEDIA } from "./ffmpeg-handles"
 import {
   isValidListNodeConnection,
@@ -34,12 +37,14 @@ import {
   isValidMotionTransferConnection,
   isValidAiAvatarConnection,
   isValidCinematicAvatarConnection,
+  isValidSwitchXConnection,
 } from "./video-producer-handles"
 import {
   IDENTITY_HANDLE_LABELS,
   isValidCharacterConnection,
   isValidFaceConnection,
   isValidObjectConnection,
+  isValidCreatureConnection,
   isValidLocationConnection,
 } from "./identity-handles"
 import {
@@ -48,6 +53,7 @@ import {
   isValidTextToAudioConnection,
   isValidGenerateMusicConnection,
   isValidAudioIsolationConnection,
+  isValidAudioSeparationConnection,
   isValidTextToDialogueConnection,
   isValidVoiceChangerConnection,
   isValidDubbingConnection,
@@ -199,6 +205,31 @@ const GENERATE_IMAGE_HANDLE_LABELS: Record<string, string> = {
   look: "Look",
 }
 
+/** Friendly labels for Generate Video's eleven input handles (mirrors the
+ *  node component's HandleWithPopover `label` props). There is no exported
+ *  GENERATE_VIDEO_*_LABELS map — kept local like GENERATE_IMAGE_HANDLE_LABELS. */
+const GENERATE_VIDEO_HANDLE_LABELS: Record<string, string> = {
+  prompt: "Prompt",
+  negative: "Negative",
+  startFrame: "Start Frame",
+  endFrame: "End Frame",
+  imageReferences: "Image Refs",
+  videoReferences: "Video Refs",
+  audio: "Audio",
+  audioReferences: "Audio Refs",
+  assets: "Assets",
+  elements: "Elements",
+  look: "Look",
+}
+
+/** Friendly labels for Video Retake's three input handles (video-retake-handles.ts
+ *  exports only the IDs, no label map — mirror the node component's labels). */
+const VIDEO_RETAKE_HANDLE_LABELS: Record<string, string> = {
+  video: "Video",
+  prompt: "Prompt",
+  look: "Look",
+}
+
 /**
  * Hand-authored base of per-node-type target handles + accept predicates.
  * The exported `TARGET_HANDLE_ACCEPTS` (below) is this PLUS a generated
@@ -216,6 +247,16 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
     label: GENERATE_IMAGE_HANDLE_LABELS[handleId] ?? handleId,
     accepts: (sourceType: string) =>
       isValidGenerateImageConnection(handleId, sourceType, isVisualPickerType),
+  })),
+  // Generate Video mirrors Generate Image: eleven typed input handles built
+  // from GENERATE_VIDEO_INPUT_HANDLES so the popover candidate set can't drift
+  // from the rendered handle set. Uses isVisualPickerType to match the drop
+  // validator's dispatch in connection-validation.ts (line ~351).
+  "generate-video": GENERATE_VIDEO_INPUT_HANDLES.map((handleId) => ({
+    handleId,
+    label: GENERATE_VIDEO_HANDLE_LABELS[handleId] ?? handleId,
+    accepts: (sourceType: string) =>
+      isValidGenerateVideoConnection(handleId, sourceType, isVisualPickerType),
   })),
   "camera-motion": [
     { handleId: "startState", label: "Start state", accepts: ACCEPTS_PARAMETER_PICKER },
@@ -290,14 +331,26 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
   "audio-isolation": [
     { handleId: "audio", label: AUDIO_TEXT_HANDLE_LABELS["audio-isolation"].audio, accepts: (s) => isValidAudioIsolationConnection("audio", s) },
   ],
+  // audio-separation (Demucs) — single `audio` target; the 7 stem outputs are
+  // SOURCE handles. No AUDIO_TEXT_HANDLE_LABELS entry, so a literal label.
+  "audio-separation": [
+    { handleId: "audio", label: "Audio", accepts: (s) => isValidAudioSeparationConnection("audio", s) },
+  ],
   "text-to-dialogue": [
     { handleId: "prompt", label: AUDIO_TEXT_HANDLE_LABELS["text-to-dialogue"].prompt, accepts: (s) => isValidTextToDialogueConnection("prompt", s, isVisualPickerType) },
   ],
+  // voice-changer / voice-changer-pro are dual-mode: an `audio` input revoices
+  // audio→audio; a `video` input revoices the talking clip (backend demuxes,
+  // speech-to-speech, remuxes). Both pips are rendered. AUDIO_TEXT_HANDLE_LABELS
+  // has no `video` key for voice-changer (the label map predates the dual-mode
+  // video pip), so the video label is a literal matching the node component.
   "voice-changer": [
     { handleId: "audio", label: AUDIO_TEXT_HANDLE_LABELS["voice-changer"].audio, accepts: (s) => isValidVoiceChangerConnection("audio", s) },
+    { handleId: "video", label: "Video",                                         accepts: (s) => isValidVoiceChangerConnection("video", s) },
   ],
   "voice-changer-pro": [
     { handleId: "audio", label: AUDIO_TEXT_HANDLE_LABELS["voice-changer"].audio, accepts: (s) => isValidVoiceChangerConnection("audio", s) },
+    { handleId: "video", label: "Video",                                         accepts: (s) => isValidVoiceChangerConnection("video", s) },
   ],
   "dubbing": [
     { handleId: "audio", label: AUDIO_TEXT_HANDLE_LABELS["dubbing"].audio, accepts: (s) => isValidDubbingConnection("audio", s) },
@@ -471,11 +524,21 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
     { handleId: "video", label: IMAGE_PRODUCER_HANDLE_LABELS["image-to-text"].video, accepts: (s) => isValidImageToTextConnection("video", s) },
     { handleId: "text",  label: IMAGE_PRODUCER_HANDLE_LABELS["image-to-text"].text,  accepts: (s) => isValidImageToTextConnection("text",  s) },
   ],
+  // describe-to-picker renders a SINGLE `image` target (its `picker-json` is a
+  // SOURCE). connection-validation.ts dispatches it through
+  // isValidImageToTextConnection (image OR video accepted by the predicate), but
+  // the node only renders the `image` pip — so only `image` is registered here
+  // (registering video/text would surface phantom popover handles the node has none of).
+  "describe-to-picker": [
+    { handleId: "image", label: "Image", accepts: (s) => isValidImageToTextConnection("image", s) },
+  ],
 
   // ─── Video-producer nodes (Phase 21 of typed-handles migration) ──────
   "video-to-video": [
     { handleId: "video",          label: VIDEO_PRODUCER_HANDLE_LABELS["video-to-video"].video,          accepts: (s) => isValidVideoToVideoConnection("video",          s, isVisualPickerType) },
     { handleId: "cinematography", label: VIDEO_PRODUCER_HANDLE_LABELS["video-to-video"].cinematography, accepts: (s) => isValidVideoToVideoConnection("cinematography", s, isVisualPickerType) },
+    { handleId: "prompt",         label: VIDEO_PRODUCER_HANDLE_LABELS["video-to-video"].prompt,          accepts: (s) => isValidVideoToVideoConnection("prompt",         s, isVisualPickerType) },
+    { handleId: "negative",       label: VIDEO_PRODUCER_HANDLE_LABELS["video-to-video"].negative,        accepts: (s) => isValidVideoToVideoConnection("negative",       s, isVisualPickerType) },
   ],
   "video-upscale": [
     { handleId: "video", label: VIDEO_PRODUCER_HANDLE_LABELS["video-upscale"].video, accepts: (s) => isValidVideoUpscaleConnection("video", s) },
@@ -483,6 +546,7 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
   "extend-video": [
     { handleId: "video",          label: VIDEO_PRODUCER_HANDLE_LABELS["extend-video"].video,          accepts: (s) => isValidExtendVideoConnection("video",          s, isVisualPickerType) },
     { handleId: "cinematography", label: VIDEO_PRODUCER_HANDLE_LABELS["extend-video"].cinematography, accepts: (s) => isValidExtendVideoConnection("cinematography", s, isVisualPickerType) },
+    { handleId: "prompt",         label: VIDEO_PRODUCER_HANDLE_LABELS["extend-video"].prompt,          accepts: (s) => isValidExtendVideoConnection("prompt",         s, isVisualPickerType) },
   ],
   "lip-sync": [
     { handleId: "image", label: VIDEO_PRODUCER_HANDLE_LABELS["lip-sync"].image, accepts: (s) => isValidLipSyncConnection("image", s) },
@@ -495,8 +559,17 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
     { handleId: "prompt",         label: VIDEO_PRODUCER_HANDLE_LABELS["speech-to-video"].prompt,         accepts: (s) => isValidSpeechToVideoConnection("prompt",         s, isVisualPickerType) },
     { handleId: "cinematography", label: VIDEO_PRODUCER_HANDLE_LABELS["speech-to-video"].cinematography, accepts: (s) => isValidSpeechToVideoConnection("cinematography", s, isVisualPickerType) },
   ],
+  // motion-transfer renders five typed inputs (image, video, prompt, negative,
+  // assets). Its drop dispatch in connection-validation.ts calls the 2-arg form
+  // `isValidMotionTransferConnection(h, s)` (no picker predicate), so the popover
+  // candidates use the SAME 2-arg form — keeping discovery and drop in lockstep
+  // (a 3-arg call here would surface picker candidates the drop then rejects).
   "motion-transfer": [
-    { handleId: "video", label: VIDEO_PRODUCER_HANDLE_LABELS["motion-transfer"].video, accepts: (s) => isValidMotionTransferConnection("video", s) },
+    { handleId: "image",    label: VIDEO_PRODUCER_HANDLE_LABELS["motion-transfer"].image,    accepts: (s) => isValidMotionTransferConnection("image",    s) },
+    { handleId: "video",    label: VIDEO_PRODUCER_HANDLE_LABELS["motion-transfer"].video,    accepts: (s) => isValidMotionTransferConnection("video",    s) },
+    { handleId: "prompt",   label: VIDEO_PRODUCER_HANDLE_LABELS["motion-transfer"].prompt,   accepts: (s) => isValidMotionTransferConnection("prompt",   s) },
+    { handleId: "negative", label: VIDEO_PRODUCER_HANDLE_LABELS["motion-transfer"].negative, accepts: (s) => isValidMotionTransferConnection("negative", s) },
+    { handleId: "assets",   label: VIDEO_PRODUCER_HANDLE_LABELS["motion-transfer"].assets,   accepts: (s) => isValidMotionTransferConnection("assets",   s) },
   ],
   "ai-avatar": [
     { handleId: "image",  label: VIDEO_PRODUCER_HANDLE_LABELS["ai-avatar"].image,  accepts: (s) => isValidAiAvatarConnection("image",  s, isVisualPickerType) },
@@ -513,6 +586,33 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
     { handleId: "ref-audio", label: VIDEO_PRODUCER_HANDLE_LABELS["cinematic-avatar"]["ref-audio"], accepts: (s) => isValidCinematicAvatarConnection("ref-audio", s, isVisualPickerType) },
     { handleId: "ref-image", label: VIDEO_PRODUCER_HANDLE_LABELS["cinematic-avatar"]["ref-image"], accepts: (s) => isValidCinematicAvatarConnection("ref-image", s, isVisualPickerType) },
   ],
+  // SwitchX (Relight & Switch) — five typed inputs. mask / mask-video are
+  // mode-conditional pips but the predicate accepts them unconditionally (a
+  // saved edge survives a mode flip), so the popover lists them too.
+  "switchx": [
+    { handleId: "video",      label: VIDEO_PRODUCER_HANDLE_LABELS["switchx"].video,        accepts: (s) => isValidSwitchXConnection("video",      s, isVisualPickerType) },
+    { handleId: "image",      label: VIDEO_PRODUCER_HANDLE_LABELS["switchx"].image,        accepts: (s) => isValidSwitchXConnection("image",      s, isVisualPickerType) },
+    { handleId: "mask",       label: VIDEO_PRODUCER_HANDLE_LABELS["switchx"].mask,         accepts: (s) => isValidSwitchXConnection("mask",       s, isVisualPickerType) },
+    { handleId: "mask-video", label: VIDEO_PRODUCER_HANDLE_LABELS["switchx"]["mask-video"], accepts: (s) => isValidSwitchXConnection("mask-video", s, isVisualPickerType) },
+    { handleId: "prompt",     label: VIDEO_PRODUCER_HANDLE_LABELS["switchx"].prompt,       accepts: (s) => isValidSwitchXConnection("prompt",     s, isVisualPickerType) },
+  ],
+  // Video Retake — three typed inputs (video / prompt / look) built from
+  // VIDEO_RETAKE_HANDLE_IDS so the popover candidate set can't drift from the
+  // rendered set. Drop dispatch passes isVisualPickerType (connection-validation.ts).
+  "video-retake": VIDEO_RETAKE_HANDLE_IDS.map((handleId) => ({
+    handleId,
+    label: VIDEO_RETAKE_HANDLE_LABELS[handleId] ?? handleId,
+    accepts: (sourceType: string) =>
+      isValidVideoRetakeConnection(handleId, sourceType, isVisualPickerType),
+  })),
+  // Video SFX — three typed inputs (prompt / negative / video). Unlike Generate
+  // Video, prompt AND negative accept pickers (video-sfx-handles.ts). Literal
+  // labels: video-sfx has no *_HANDLE_LABELS map.
+  "video-sfx": [
+    { handleId: "prompt",   label: "Prompt",   accepts: (s) => isValidVideoSfxConnection("prompt",   s, isVisualPickerType) },
+    { handleId: "negative", label: "Negative", accepts: (s) => isValidVideoSfxConnection("negative", s, isVisualPickerType) },
+    { handleId: "video",    label: "Video",    accepts: (s) => isValidVideoSfxConnection("video",    s, isVisualPickerType) },
+  ],
 
   // ─── Identity nodes (Phase 23 of typed-handles migration) ────────────
   "character": [
@@ -525,6 +625,12 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
   "object": [
     { handleId: "in",   label: IDENTITY_HANDLE_LABELS["object"].in,   accepts: (s) => isValidObjectConnection("in",   s, isVisualPickerType) },
     { handleId: "type", label: IDENTITY_HANDLE_LABELS["object"].type, accepts: (s) => isValidObjectConnection("type", s, isVisualPickerType) },
+  ],
+  // creature (Animal/Creature entity) — faithful clone of object: `in` text-prompt
+  // + `type` identity-type picker. Source handles (creatureRef, image) are not targets.
+  "creature": [
+    { handleId: "in",   label: IDENTITY_HANDLE_LABELS["creature"].in,   accepts: (s) => isValidCreatureConnection("in",   s, isVisualPickerType) },
+    { handleId: "type", label: IDENTITY_HANDLE_LABELS["creature"].type, accepts: (s) => isValidCreatureConnection("type", s, isVisualPickerType) },
   ],
   "location": [
     { handleId: "in",             label: IDENTITY_HANDLE_LABELS["location"].in,             accepts: (s) => isValidLocationConnection("in",             s, isVisualPickerType) },

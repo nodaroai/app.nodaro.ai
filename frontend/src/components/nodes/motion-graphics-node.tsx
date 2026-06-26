@@ -1,5 +1,5 @@
-import { memo } from "react"
-import { Position, type NodeProps } from "@xyflow/react"
+import { memo, useEffect } from "react"
+import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { Shapes, Film, Layers, Loader2, AlertCircle } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { NodeQuickStrip } from "./node-quick-strip"
@@ -22,6 +22,13 @@ function MotionGraphicsNodeComponent({ id, data, selected }: NodeProps) {
   const motionPlan = nodeData.motionPlan as Record<string, unknown> | undefined
 
   const isLottieEngine = nodeData.engine === "lottie"
+  // The `lottie` source handle is added/removed when the engine toggles. React
+  // Flow caches handle bounds and won't re-measure on its own (BaseNode's height
+  // keyed remeasure doesn't fire here — the body already exceeds minHeight), so
+  // tell it to re-read getHandleBounds when the handle set changes, else an edge
+  // from `lottie` mis-anchors. Mirrors switchx-node / modify-image-node.
+  const updateNodeInternals = useUpdateNodeInternals()
+  useEffect(() => { updateNodeInternals(id) }, [id, isLottieEngine, updateNodeInternals])
   const isLottiePlan = motionPlan?.planType === "lottie-graphic"
   const elementCount = motionPlan
     ? ((motionPlan.elements as unknown[])?.length ?? 0)

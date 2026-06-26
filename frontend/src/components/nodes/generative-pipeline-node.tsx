@@ -4,7 +4,7 @@ import { memo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Film, Type } from "lucide-react"
 import { BaseNode } from "./base-node"
-import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
+import { HandleWithPopover, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { EditableNodeLabel } from "./editable-node-label"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { GenerativePipelineNodeData } from "@/types/nodes"
@@ -38,8 +38,11 @@ function GenerativePipelineNodeImpl({ id, data, selected }: NodeProps) {
         minHeight={120}
         hideHeader
         handles={[
+          // Input only — generative-pipeline is a TERMINAL node. Its work runs
+          // out-of-band (POST /v1/pipelines) and the DAG executes it as a no-op
+          // leaf, so its result can't be routed downstream server-side. No
+          // output handle (see generative-pipeline-node-def.test.ts).
           { id: "story_prompt", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
-          { id: "final_video",  type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
         ]}
       >
         <div className="flex h-full flex-col gap-2 p-3">
@@ -67,7 +70,6 @@ function GenerativePipelineNodeImpl({ id, data, selected }: NodeProps) {
         </div>
       </BaseNode>
       <HandleWithPopover nodeId={id} nodeType="generative-pipeline" handleId="story_prompt" type="target" position={Position.Left}  label="Prompt" color={TEXT_HANDLE_COLOR} icon={<Type />} side="left"  top="calc(100% - 24px)" />
-      <HandleWithPopover nodeId={id} nodeType="generative-pipeline" handleId="final_video"  type="source" position={Position.Right} label="Video"  color={HANDLE_COLORS.video} icon={<Film />} side="right" top="24px" />
     </div>
   )
 }

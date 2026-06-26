@@ -7743,7 +7743,10 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "scene",
     creditCost: 30,
     inputs: ["story_prompt"],
-    outputs: ["final_video"],
+    // Terminal node — no output handle. Runs out-of-band (POST /v1/pipelines);
+    // the DAG executes it as a no-op leaf so its result can't be routed
+    // downstream. Empty so node-compatibility never offers it as a source.
+    outputs: [],
     defaultData: {
       label: "Story → Video",
       target_duration_seconds: 35,

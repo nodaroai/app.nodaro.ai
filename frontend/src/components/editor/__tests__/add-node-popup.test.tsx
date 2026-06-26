@@ -360,6 +360,9 @@ describe("mediaTabNodeOptions", () => {
       "remove-background",
       "generate-mask",
       "reference-sheet",
+      // reference-board is an image producer (emits a composited board image),
+      // so it surfaces as an image-input candidate — see IMAGE_PRODUCER_TYPES.
+      "reference-board",
       "extract-frame",
     ])
   })
