@@ -156,11 +156,6 @@ export const router = createBrowserRouter([
     errorElement: <RouteErrorBoundary />,
   },
   {
-    path: "/pricing",
-    element: <SuspenseWrapper><PricingPage /></SuspenseWrapper>,
-    errorElement: <RouteErrorBoundary />,
-  },
-  {
     // Public, no-auth return page for embedded Stripe Checkout (new-tab flow).
     path: "/checkout-complete",
     element: <SuspenseWrapper><CheckoutCompletePage /></SuspenseWrapper>,
@@ -282,8 +277,18 @@ export const router = createBrowserRouter([
         element: <SuspenseWrapper><GalleryPage /></SuspenseWrapper>,
       },
       {
-        path: "/_pricing",
+        // In-app pricing. Lives inside DashboardLayout so it shows the sidebar
+        // when used in-app, and (via the iframe check in DashboardLayout) renders
+        // chromeless when studio.nodaro.ai embeds it. The session-handoff here
+        // lets the embedded iframe authenticate.
+        path: "/pricing",
         element: <SuspenseWrapper><PricingPage /></SuspenseWrapper>,
+      },
+      {
+        // Back-compat: /_pricing was the interim in-shell path. Redirect any old
+        // links/bookmarks to the clean /pricing.
+        path: "/_pricing",
+        element: <Navigate to="/pricing" replace />,
       },
     ],
   },
