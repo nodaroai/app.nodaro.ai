@@ -36,7 +36,7 @@ import type {
   SwitchXData,
 } from "@/types/nodes"
 import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, VIDEO_GEN_MODELS, MOTION_TRANSFER_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, VIDEO_DURATION_OPTIONS, VIDEO_FPS_OPTIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, EXTEND_VIDEO_MODELS, getVideoResolutionOptions, getAspectRatiosForVideoModel, getVideoModelCapabilitiesTooltip } from "./model-options"
-import { isSeedance2Provider, resolveSeedance2Inputs, MODEL_CATALOG, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, buildVideoCreditModelIdentifier, characterMentionSlug, characterMentionableAssetArrays, DEFAULT_LABEL_BY_SOURCE, locationMentionSlug } from "@nodaro/shared"
+import { isSeedance2Provider, defaultVideoAspectRatio, resolveSeedance2Inputs, MODEL_CATALOG, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, buildVideoCreditModelIdentifier, characterMentionSlug, characterMentionableAssetArrays, DEFAULT_LABEL_BY_SOURCE, locationMentionSlug } from "@nodaro/shared"
 import { PromptLengthCounter } from "./prompt-length-counter"
 import type { ReferenceSource } from "@nodaro/shared"
 import { ModelSearchSelect } from "./model-search-select"
@@ -354,6 +354,16 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
     const baseDurations = VIDEO_DURATION_OPTIONS[currentI2VProvider]?.map((o) => o.value) ?? null
     if (baseDurations && data.duration && !baseDurations.includes(data.duration)) {
       updates.duration = baseDurations[0]
+    }
+    // Aspect ratio — snap a stale EXPLICIT value (e.g. Seedance's "adaptive" /
+    // "21:9" / "4:3" / "3:4") to the new provider's first valid option when it
+    // isn't in that provider's set. Reads the same option source the dropdown
+    // renders, so it's data-driven (no hardcoded provider list) and prevents a
+    // backend Zod reject at generate-time. Left untouched when unset (undefined
+    // resolves to the provider's own run default).
+    const aspectOpts = getAspectRatiosForVideoModel(currentI2VProvider)
+    if (data.aspectRatio && !aspectOpts.some((o) => o.value === data.aspectRatio)) {
+      updates.aspectRatio = aspectOpts[0]?.value as ImageToVideoData["aspectRatio"]
     }
     if (Object.keys(updates).length > 0) {
       onUpdate(updates)
@@ -971,7 +981,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
           <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <AspectRatioSelector
               options={SEEDANCE_2_VIDEO_RATIOS}
-              value={data.aspectRatio || "16:9"}
+              value={data.aspectRatio || defaultVideoAspectRatio(currentI2VProvider)}
               onValueChange={(v) => onUpdate({ aspectRatio: v as ImageToVideoData["aspectRatio"] })}
             />
           </MappableField>
@@ -1869,6 +1879,13 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
     if (baseDurations && data.duration && !baseDurations.includes(data.duration)) {
       updates.duration = baseDurations[0]
     }
+    // Aspect ratio — snap a stale EXPLICIT value (Seedance "adaptive"/"21:9"/
+    // "4:3"/"3:4") to the new provider's first valid option. See ImageToVideo
+    // for the rationale; data-driven off the dropdown's own option source.
+    const aspectOpts = getAspectRatiosForVideoModel(currentProvider)
+    if (data.aspectRatio && !aspectOpts.some((o) => o.value === data.aspectRatio)) {
+      updates.aspectRatio = aspectOpts[0]?.value as TextToVideoData["aspectRatio"]
+    }
     if (Object.keys(updates).length > 0) {
       onUpdate(updates)
     }
@@ -2178,10 +2195,14 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
         </>
       )}
 
+      {/* Seedance defaults to adaptive (preview = run, matching execute-node's
+          effectiveT2vAspect); non-Seedance keeps no default → undefined, so the run
+          still sends undefined (provider's own default) rather than a 16:9 the run
+          wouldn't send. */}
       <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <AspectRatioSelector
           options={isSeedance2 ? SEEDANCE_2_VIDEO_RATIOS : VIDEO_RATIOS}
-          value={data.aspectRatio}
+          value={data.aspectRatio || (isSeedance2 ? defaultVideoAspectRatio(currentProvider) : undefined)}
           onValueChange={(v) => onUpdate({ aspectRatio: v as TextToVideoData["aspectRatio"] })}
         />
       </MappableField>
@@ -2324,15 +2345,18 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
     } else if (currentFps !== undefined) {
       updates.fps = undefined
     }
-    // Gemini Omni only supports 16:9 / 9:16 — snap a stale wide ratio (1:1, 21:9,
-    // 4:3, adaptive, Auto) carried over from another provider so the unsupported
-    // value isn't persisted and sent to KIE. Scoped to gemini to avoid disturbing
-    // providers whose valid aspect set differs (e.g. VEO's "Auto").
+    // Aspect ratio — snap a stale EXPLICIT value to the new provider's first
+    // valid option whenever it isn't in that provider's set. Data-driven off the
+    // dropdown's own option source (no hardcoded provider list), so it covers
+    // Gemini Omni's 16:9/9:16-only set AND Seedance's wider set ("adaptive",
+    // "21:9", "4:3", "3:4") leaking into a provider that lacks them — preventing
+    // a backend Zod reject at generate-time. Providers whose set includes the
+    // value (e.g. VEO's "Auto") are left untouched; an unset value stays unset.
+    const aspectOpts = getAspectRatiosForVideoModel(currentProvider)
+    if (data.aspectRatio && !aspectOpts.some((o) => o.value === data.aspectRatio)) {
+      updates.aspectRatio = aspectOpts[0]?.value as ImageToVideoData["aspectRatio"]
+    }
     if (currentProvider === "gemini-omni-video") {
-      const geminiRatios = getAspectRatiosForVideoModel("gemini-omni-video").map((o) => o.value)
-      if (data.aspectRatio && !geminiRatios.includes(data.aspectRatio as string)) {
-        updates.aspectRatio = geminiRatios[0] as ImageToVideoData["aspectRatio"]
-      }
       // Persist the 8s default when duration is unset so the dropdown, the credit
       // identifier, and the KIE payload all agree (the credit id + provider both
       // default to 8 when undefined, while the dropdown would otherwise show the
@@ -3019,7 +3043,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
           <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <AspectRatioSelector
               options={SEEDANCE_2_VIDEO_RATIOS}
-              value={data.aspectRatio || "16:9"}
+              value={data.aspectRatio || defaultVideoAspectRatio(currentProvider)}
               onValueChange={(v) => onUpdate({ aspectRatio: v as ImageToVideoData["aspectRatio"] })}
             />
           </MappableField>

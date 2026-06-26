@@ -2484,7 +2484,7 @@ export function buildPayload(
           // persisting them to data until the user explicitly picks, so
           // untouched nodes submitted aspectRatio / resolution undefined.
           // Fill the defaults here so the request matches the UI.
-          aspectRatio: (data.aspectRatio as string | undefined) ?? (isSeedance2Provider(provider) ? "16:9" : undefined),
+          aspectRatio: (data.aspectRatio as string | undefined) ?? (isSeedance2Provider(provider) ? "adaptive" : undefined),
           resolution: (data.resolution as string | undefined) ?? (isSeedance2Provider(provider) ? MODEL_CATALOG[provider]?.resolutions?.[0] : undefined),
           seed: data.seed,
           cameraFixed: data.cameraFixed,
@@ -2571,7 +2571,7 @@ export function buildPayload(
           mode: data.mode ?? data.kling3Mode,
           sound: data.sound ?? data.kling3Sound,
           // See i2v note above — Seedance 2 UI default fallbacks.
-          aspectRatio: (data.aspectRatio as string | undefined) ?? (isSeedance2Provider(provider) ? "16:9" : undefined),
+          aspectRatio: (data.aspectRatio as string | undefined) ?? (isSeedance2Provider(provider) ? "adaptive" : undefined),
           negativePrompt: data.negativePrompt,
           cfgScale: data.cfgScale,
           multiShot: data.multiShot,
@@ -2804,7 +2804,7 @@ export function buildPayload(
           // Seedance 2 config pickers render defaults in the UI without
           // persisting them to data until the user explicitly picks; fill
           // them in here so the worker request matches the visible UI state.
-          aspectRatio: (data.aspectRatio as string | undefined) ?? (isS2 ? "16:9" : undefined),
+          aspectRatio: (data.aspectRatio as string | undefined) ?? (isS2 ? "adaptive" : undefined),
           resolution: (data.resolution as string | undefined) ?? (isS2 ? MODEL_CATALOG[provider]?.resolutions?.[0] : undefined),
           seed: data.seed,
           cameraFixed: data.cameraFixed,

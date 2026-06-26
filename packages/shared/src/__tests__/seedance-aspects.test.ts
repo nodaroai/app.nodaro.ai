@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { MODEL_CATALOG, validateModelInput } from "../index.js"
+import { MODEL_CATALOG, validateModelInput, defaultVideoAspectRatio } from "../index.js"
 
 /**
  * Seedance 2.x exposes the full KIE-supported fixed-ratio set
@@ -24,5 +24,29 @@ describe("seedance-2 aspect ratios", () => {
       expect(validateModelInput("kling", { aspectRatio: ar })).not.toBeNull()
       expect(validateModelInput("wan-turbo", { aspectRatio: ar })).not.toBeNull()
     }
+  })
+})
+
+/**
+ * `defaultVideoAspectRatio` is the single source of truth for the no-explicit-
+ * aspectRatio run/display default. Seedance 2.x → "adaptive" (output matches
+ * the wired input); every other provider keeps the historical "16:9". Pinning
+ * this here keeps the run-defaults (execute-node, payload-builder) and the
+ * config-panel display fallbacks in lock-step (preview = run).
+ */
+describe("defaultVideoAspectRatio", () => {
+  it.each(["seedance-2", "seedance-2-fast", "seedance-2-mini"])(
+    "%s defaults to adaptive",
+    (id) => {
+      expect(defaultVideoAspectRatio(id)).toBe("adaptive")
+      // adaptive must be a value the model actually validates against.
+      expect(validateModelInput(id, { aspectRatio: "adaptive" })).toBeNull()
+    },
+  )
+
+  it("non-Seedance providers default to 16:9", () => {
+    expect(defaultVideoAspectRatio("minimax")).toBe("16:9")
+    expect(defaultVideoAspectRatio("kling")).toBe("16:9")
+    expect(defaultVideoAspectRatio(undefined)).toBe("16:9")
   })
 })

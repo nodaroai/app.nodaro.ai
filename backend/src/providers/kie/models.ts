@@ -522,7 +522,7 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     imageParam: "first_frame_url",
     extraParams: {
       resolution: "720p",
-      aspect_ratio: "16:9",
+      aspect_ratio: "adaptive",
       duration: 8,
       generate_audio: true,
       web_search: false,
@@ -542,7 +542,7 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     imageParam: "first_frame_url",
     extraParams: {
       resolution: "720p",
-      aspect_ratio: "16:9",
+      aspect_ratio: "adaptive",
       duration: 8,
       generate_audio: true,
       web_search: false,
@@ -563,7 +563,7 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     imageParam: "first_frame_url",
     extraParams: {
       resolution: "720p",
-      aspect_ratio: "16:9",
+      aspect_ratio: "adaptive",
       duration: 8,
       generate_audio: true,
       web_search: false,
@@ -828,7 +828,7 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     cost: 0.41,
     extraParams: {
       resolution: "720p",
-      aspect_ratio: "16:9",
+      aspect_ratio: "adaptive",
       duration: 8,
       generate_audio: true,
       web_search: false,
@@ -844,7 +844,7 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     cost: 0.33,
     extraParams: {
       resolution: "720p",
-      aspect_ratio: "16:9",
+      aspect_ratio: "adaptive",
       duration: 8,
       generate_audio: true,
       web_search: false,
@@ -860,7 +860,7 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     cost: 0.205,  // nominal 8s/720p/no-ref fallback; per-second composites authoritative
     extraParams: {
       resolution: "720p",
-      aspect_ratio: "16:9",
+      aspect_ratio: "adaptive",
       duration: 8,
       generate_audio: true,
       web_search: false,

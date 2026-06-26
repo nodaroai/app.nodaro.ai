@@ -5982,7 +5982,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 25,
     inputs: ["in"],
     outputs: ["video"],
-    defaultData: { label: "Text to Video", prompt: "", provider: "seedance-2-fast", duration: 5, aspectRatio: "16:9", negativePrompt: "", fieldMappings: {} },
+    defaultData: { label: "Text to Video", prompt: "", provider: "seedance-2-fast", duration: 5, negativePrompt: "", fieldMappings: {} },
     exposableOutputs: [{ key: "result", label: "Result", outputType: "video" as const }],
     exposableFields: [
       {
