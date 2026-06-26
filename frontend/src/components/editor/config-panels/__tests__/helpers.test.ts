@@ -278,6 +278,20 @@ describe("getModelIdentifier", () => {
     const node = makeNode({ type: "reference-sheet", data: { label: "Sheet", flavour: { outputFormat: "motion" } } as any })
     expect(getModelIdentifier(node)).toBe("reference-sheet:assembly-motion")
   })
+
+  // SwitchX: frame-tier × resolution priced, but the editor can't know the frame
+  // count pre-run, so getModelIdentifier returns the resolution-aware WORST-CASE
+  // (240-frame) tier — one consistent SAFE UPPER bound shared by the run-button
+  // pill, the run-confirm gate and the precheck. The bare `beeble-switchx` key is
+  // the resolution-BLIND 1080p worst-case and must NEVER be used for a 720p node
+  // (it caused a 120-warning vs 25-pill vs 40-actual price inconsistency).
+  it("switchx returns the resolution-aware 240-frame worst-case, not the bare key", () => {
+    const id720 = getModelIdentifier(makeNode({ type: "switchx", data: { label: "Relight", provider: "beeble-switchx", maxResolution: 720 } as any }))
+    const id1080 = getModelIdentifier(makeNode({ type: "switchx", data: { label: "Relight", provider: "beeble-switchx", maxResolution: 1080 } as any }))
+    expect(id720).toBe("beeble-switchx:240f:720p")
+    expect(id1080).toBe("beeble-switchx:240f:1080p")
+    expect(id720).not.toBe("beeble-switchx")
+  })
 })
 
 describe("buildCreditModelIdentifier", () => {
