@@ -46,7 +46,12 @@ function SwitchXNodeComponent({ id, data, selected }: NodeProps) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [showThumbnails, setShowThumbnails] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
-  const credits = useModelCredits("beeble-switchx", 36)
+  // Cost scales with the clip's frame count, which the editor can't know until
+  // the job runs (the server ffprobes and reserves the real tier). Show the
+  // TYPICAL mid tier (144 frames) at the chosen resolution as a "~" estimate
+  // rather than the 240-frame ceiling, so the editor figure ≈ the actual charge.
+  const estRes = nodeData.maxResolution === 720 ? 720 : 1080
+  const credits = useModelCredits(`beeble-switchx:150f:${estRes}p`, estRes === 720 ? 25 : 75)
   const { aspectRatio: mediaAspectRatio, onLoadDimensions: handleLoadDimensions } =
     useResultAspectRatio(id, results, activeIndex)
 
@@ -148,11 +153,13 @@ function SwitchXNodeComponent({ id, data, selected }: NodeProps) {
         <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />
       }
       handles={[
-        { id: "video", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
-        { id: "image", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 56px)', left: '-29px' }, external: true },
-        ...(mode === "select" ? [{ id: "mask", type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 88px)', left: '-29px' }, external: true }] : []),
-        ...(mode === "custom" ? [{ id: "mask-video", type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 88px)', left: '-29px' }, external: true }] : []),
-        { id: "prompt", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 120px)', left: '-29px' }, external: true },
+        // Inputs bottom-anchored. Prompt sits at the very bottom; the conditional
+        // mask handle is at the TOP so auto/fill mode leaves no mid-stack gap.
+        { id: "prompt", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+        { id: "video", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 56px)', left: '-29px' }, external: true },
+        { id: "image", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 88px)', left: '-29px' }, external: true },
+        ...(mode === "select" ? [{ id: "mask", type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 120px)', left: '-29px' }, external: true }] : []),
+        ...(mode === "custom" ? [{ id: "mask-video", type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 120px)', left: '-29px' }, external: true }] : []),
         { id: "video", type: "source", position: Position.Right, customStyle: { top: '24px', right: '-29px' }, external: true },
       ]}
     >
@@ -276,15 +283,15 @@ function SwitchXNodeComponent({ id, data, selected }: NodeProps) {
         )}
       </div>
     </BaseNode>
-    <HandleWithPopover nodeId={id} nodeType="switchx" handleId="video"  type="target" position={Position.Left}  label="Source video" color={HANDLE_COLORS.video} icon={<Film />}      side="left"  top="calc(100% - 24px)"  accepts={ACCEPTS_VIDEO} />
-    <HandleWithPopover nodeId={id} nodeType="switchx" handleId="image"  type="target" position={Position.Left}  label="Reference"    color={HANDLE_COLORS.image} icon={<ImageIcon />} side="left"  top="calc(100% - 56px)"  accepts={ACCEPTS_IMAGE} />
+    <HandleWithPopover nodeId={id} nodeType="switchx" handleId="prompt" type="target" position={Position.Left}  label="Prompt"       color={TEXT_HANDLE_COLOR}  icon={<Type />}     side="left"  top="calc(100% - 24px)"  accepts={ACCEPTS_PROMPT} />
+    <HandleWithPopover nodeId={id} nodeType="switchx" handleId="video"  type="target" position={Position.Left}  label="Source video" color={HANDLE_COLORS.video} icon={<Film />}      side="left"  top="calc(100% - 56px)"  accepts={ACCEPTS_VIDEO} />
+    <HandleWithPopover nodeId={id} nodeType="switchx" handleId="image"  type="target" position={Position.Left}  label="Reference"    color={HANDLE_COLORS.image} icon={<ImageIcon />} side="left"  top="calc(100% - 88px)"  accepts={ACCEPTS_IMAGE} />
     {mode === "select" && (
-      <HandleWithPopover nodeId={id} nodeType="switchx" handleId="mask"       type="target" position={Position.Left} label="Mask"       color={HANDLE_COLORS.mask}  icon={<Layers />}      side="left" top="calc(100% - 88px)" accepts={ACCEPTS_MASK} />
+      <HandleWithPopover nodeId={id} nodeType="switchx" handleId="mask"       type="target" position={Position.Left} label="Mask"       color={HANDLE_COLORS.mask}  icon={<Layers />}      side="left" top="calc(100% - 120px)" accepts={ACCEPTS_MASK} />
     )}
     {mode === "custom" && (
-      <HandleWithPopover nodeId={id} nodeType="switchx" handleId="mask-video" type="target" position={Position.Left} label="Mask video" color={HANDLE_COLORS.mask}  icon={<Clapperboard />} side="left" top="calc(100% - 88px)" accepts={ACCEPTS_MASK_VIDEO} />
+      <HandleWithPopover nodeId={id} nodeType="switchx" handleId="mask-video" type="target" position={Position.Left} label="Mask video" color={HANDLE_COLORS.mask}  icon={<Clapperboard />} side="left" top="calc(100% - 120px)" accepts={ACCEPTS_MASK_VIDEO} />
     )}
-    <HandleWithPopover nodeId={id} nodeType="switchx" handleId="prompt" type="target" position={Position.Left}  label="Prompt"       color={TEXT_HANDLE_COLOR}  icon={<Type />}     side="left"  top="calc(100% - 120px)" accepts={ACCEPTS_PROMPT} />
     <HandleWithPopover nodeId={id} nodeType="switchx" handleId="video"  type="source" position={Position.Right} label="Video"        color={HANDLE_COLORS.video} icon={<Film />}     side="right" top="24px" />
 
     <DeleteConfirmationDialog

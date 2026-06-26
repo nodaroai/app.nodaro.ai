@@ -73,6 +73,7 @@ const NODE_TO_STYLES: Record<string, readonly PromptStyle[]> = {
   "text-to-video": VIDEO_PROMPT_STYLES,
   "image-to-video": VIDEO_PROMPT_STYLES,
   "video-to-video": VIDEO_PROMPT_STYLES,
+  "switchx": VIDEO_PROMPT_STYLES,
   "speech-to-video": VIDEO_PROMPT_STYLES,
   "motion-transfer": VIDEO_PROMPT_STYLES,
   "extend-video": VIDEO_PROMPT_STYLES,

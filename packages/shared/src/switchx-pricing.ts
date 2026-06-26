@@ -1,9 +1,16 @@
-// Beeble SwitchX pricing. Metered per-step (no per-job meter returned), so we
-// reserve a frame-tier bucket and commit it verbatim. Values are 0%-base credits
-// (global markup applies at reserve). PROVISIONAL worst-case until anchored
-// (see plan final task / spec §9.2): deliberately HIGH so any pre-anchor Cloud
-// usage over-reserves and never under-bills. 1 credit = $0.02.
-export const SWITCHX_FRAME_TIERS = [48, 96, 144, 192, 240] as const
+// Beeble SwitchX pricing. Anchored to Beeble's published rate 2026-06-26
+***REDACTED-OSS-SCRUB***
+***REDACTED-OSS-SCRUB***
+// and commit it verbatim. Tiers ARE 30-frame multiples, so a clip snaps to the
+// exact number of blocks Beeble bills (ceil(frames/30)); there is no tier
+***REDACTED-OSS-SCRUB***
+//
+***REDACTED-OSS-SCRUB***
+// [comment removed]
+// cost_markup_percent (applied at reserve) rather than baking it in here.
+export const SWITCHX_FRAME_TIERS = [30, 60, 90, 120, 150, 180, 210, 240] as const
+
+const SWITCHX_BLOCK_FRAMES = 30
 
 export function pickSwitchXFrameTier(frames?: number): number {
   if (frames === undefined || !Number.isFinite(frames) || frames <= 0) return 240
@@ -11,13 +18,13 @@ export function pickSwitchXFrameTier(frames?: number): number {
   return 240
 }
 
-// PROVISIONAL $/frame ceilings (replace after anchoring). 1080p ≈ $0.015/frame,
-// 720p ≈ $0.009/frame. base credits = ceil(usd / 0.02).
-const SWITCHX_USD_PER_FRAME: Record<720 | 1080, number> = { 720: 0.009, 1080: 0.015 }
+***REDACTED-OSS-SCRUB***
+const SWITCHX_BLOCK_CREDITS: Record<720 | 1080, number> = { 720: 5, 1080: 15 }
 
 export function switchXHoldCredits(frames: number | undefined, res: 720 | 1080): number {
-  const tier = pickSwitchXFrameTier(frames)
-  return Math.ceil((SWITCHX_USD_PER_FRAME[res] * tier) / 0.02)
+  // tier is always a 30-frame multiple, so (tier / 30) is the integer block count.
+  const blocks = pickSwitchXFrameTier(frames) / SWITCHX_BLOCK_FRAMES
+  return blocks * SWITCHX_BLOCK_CREDITS[res]
 }
 
 function readMaxResolution(body: Record<string, unknown>): 720 | 1080 {

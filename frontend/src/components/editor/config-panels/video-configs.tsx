@@ -1472,8 +1472,24 @@ const SWITCHX_MODE_HELP: Record<string, string> = {
   custom: "Provide a full per-frame alpha matte video for frame-accurate control.",
 }
 
-function SwitchXConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<SwitchXData> & { nodeId?: string }) {
+function SwitchXConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, nodeId }: ConfigProps<SwitchXData> & { nodeId?: string }) {
   const mode = data.alphaMode ?? "auto"
+  // Rich prompt UX (matches Generate Video / Video-to-Video): snippets, edit/final
+  // toggle, @-reference autocomplete + variables, "generate with AI" helper.
+  const promptSnippets = useSnippetPool("video", "prompt")
+  const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
+  const finalPrompt = useFinalPromptSegments({
+    userPrompt: data.prompt,
+    consumerNodeId: nodeId,
+    nodes,
+    edges: edges ?? [],
+    snippets: promptSnippets,
+    videoProvider: "beeble",
+  })
+  const refImagesForAutocomplete = useMemo<RefImageItem[]>(
+    () => toRefImageItems(buildVideoRefAutocomplete(sources)),
+    [sources],
+  )
 
   // Fail-safe (Provider-Enum-Sync step 12b): snap stale values when the mode
   // changes so the route's Zod never rejects — clear the mask when leaving the
@@ -1503,14 +1519,33 @@ function SwitchXConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField 
       </MappableField>
       <p className="text-[11px] text-muted-foreground/70 -mt-1">{SWITCHX_MODE_HELP[mode]}</p>
 
-      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Textarea
-          rows={3}
-          className="text-xs"
-          value={data.prompt ?? ""}
-          onChange={(e) => onUpdate({ prompt: e.target.value })}
-          placeholder="Describe the desired look (a connected reference image is strongly recommended)…"
-        />
+      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+        <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
+        <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="video" />
+        <PromptHelperButton nodeType="switchx" currentPrompt={data.prompt || ""} onAccept={(prompt) => onUpdate({ prompt })} />
+      </span>}>
+        {promptFieldMode.mode === "final" ? (
+          <PromptFieldFinalView
+            segments={finalPrompt.promptSegments}
+            plainText={finalPrompt.promptText}
+            placeholder="Final prompt preview — node has no prompt yet"
+            minHeightRem={3 * 1.5}
+          />
+        ) : (
+          <>
+            <PromptEditor
+              rows={3}
+              value={data.prompt}
+              onChange={(v) => onUpdate({ prompt: v })}
+              placeholder="Describe the desired look (a connected reference image is strongly recommended)…"
+              referenceImages={refImagesForAutocomplete}
+              nodeRefs={nodeRefs}
+              refMap={refMap}
+              snippets={promptSnippets}
+            />
+            <PromptLengthCounter value={data.prompt} max={2000} modelLabel="SwitchX" />
+          </>
+        )}
       </MappableField>
 
       {mode === "select" && (

@@ -184,6 +184,18 @@ const KNOWN_GHOST_IDENTIFIERS: ReadonlySet<string> = new Set([
   "seedance-2-fast:8s:1080p-ref",
   "seedance-2-fast:12s:1080p-ref",
   "seedance-2-fast:15s:1080p-ref",
+  // ── Beeble SwitchX coarse provisional tiers (migration 240) — re-anchored to
+  //    30-frame block tiers (30..240) in migration 241, which DELETEs these rows
+  //    and removes them from STATIC_CREDIT_COSTS. 240's literal INSERTs stay on
+  //    disk (append-only), so the scanner still sees them as ghosts. ──
+  "beeble-switchx:48f:1080p",
+  "beeble-switchx:48f:720p",
+  "beeble-switchx:96f:1080p",
+  "beeble-switchx:96f:720p",
+  "beeble-switchx:144f:1080p",
+  "beeble-switchx:144f:720p",
+  "beeble-switchx:192f:1080p",
+  "beeble-switchx:192f:720p",
 ])
 
 describe("model_pricing migrations have no undocumented ghosts", () => {

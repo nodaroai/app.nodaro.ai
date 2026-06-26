@@ -2,7 +2,7 @@
 
 import { useEffect } from "react"
 import type { LucideIcon } from "lucide-react"
-import { Sparkles, Languages, Image as ImageIcon, LayoutGrid, Palette, Ratio, Maximize2, Clock } from "lucide-react"
+import { Sparkles, Languages, Image as ImageIcon, LayoutGrid, Palette, Ratio, Maximize2, Clock, Wand2, Hash } from "lucide-react"
 import {
   Select,
   SelectContent,
@@ -328,6 +328,54 @@ export const NODE_QUICK_CONFIGS: Readonly<Record<string, ReadonlyArray<QuickConf
   "modify-image": [providerControl(MODIFY_IMAGE_MODELS)],
   "upscale-image": [providerControl(UPSCALE_IMAGE_MODELS)],
   "video-to-video": [providerControl(VIDEO_V2V_MODELS), v2vResolutionControl],
+  // SwitchX (Beeble) — mirrors Generate Video's strip: mode · keyframe (select-only)
+  // · resolution · runs. The prompt button + Run come from NodeQuickStrip itself.
+  "switchx": [
+    {
+      field: "alphaMode",
+      ariaLabel: "Mode",
+      icon: Wand2,
+      options: [
+        { value: "auto", label: "Auto" },
+        { value: "fill", label: "Fill" },
+        { value: "select", label: "Select" },
+        { value: "custom", label: "Custom" },
+      ],
+    },
+    {
+      field: "alphaKeyframeIndex",
+      ariaLabel: "Keyframe",
+      icon: Hash,
+      numeric: true,
+      // Only meaningful in select mode → return [] otherwise so QuickConfigSelect
+      // hides the control AND clears the stale value (provider-sync trap fix).
+      options: (data) =>
+        data.alphaMode === "select"
+          ? Array.from({ length: 10 }, (_, i) => ({ value: String(i), label: `Frame ${i}` }))
+          : [],
+    },
+    {
+      field: "maxResolution",
+      ariaLabel: "Resolution",
+      icon: Maximize2,
+      numeric: true,
+      options: [
+        { value: "1080", label: "1080p" },
+        { value: "720", label: "720p" },
+      ],
+    },
+    {
+      field: "repeatCount",
+      ariaLabel: "Runs",
+      numeric: true,
+      options: [
+        { value: "1", label: "× 1" },
+        { value: "2", label: "× 2" },
+        { value: "3", label: "× 3" },
+        { value: "4", label: "× 4" },
+      ],
+    },
+  ],
   "extend-video": [providerControl(EXTEND_VIDEO_MODELS)],
   "lip-sync": [providerControl(LIP_SYNC_MODELS)],
   "text-to-speech": [providerControl(TTS_MODELS)],

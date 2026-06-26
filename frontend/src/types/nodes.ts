@@ -1959,6 +1959,8 @@ export type SwitchXData = {
   alphaKeyframeIndex?: number
   maxResolution: 720 | 1080
   seed?: number
+  /** Run the node N times on Run (×1–×4), like generate-video. */
+  repeatCount?: number
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
