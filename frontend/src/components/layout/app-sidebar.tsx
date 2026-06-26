@@ -77,7 +77,7 @@ const NAV_SECTIONS: readonly NavSection[] = [
     label: "ACCOUNT",
     items: [
       { href: "/integrations", label: "Integrations", icon: Plug },
-      { href: "/_pricing", label: "Pricing", icon: Sparkles, billingOnly: true },
+      { href: "/pricing", label: "Pricing", icon: Sparkles, billingOnly: true },
       { href: "/billing", label: "Billing", icon: CreditCard, billingOnly: true },
       { href: "/settings", label: "Settings", icon: Settings },
       { href: "/admin", label: "Admin", icon: Shield, adminOnly: true },
@@ -262,7 +262,7 @@ export function AppSidebar({
                 </span>
                 {(creditBalance.tier === "free" || creditBalance.total <= (PRICING_TIERS.find((t) => t.id === creditBalance.tier)?.credits ?? 150) * 0.1) && (
                   <Link
-                    to="/_pricing"
+                    to="/pricing"
                     onClick={(e) => e.stopPropagation()}
                     className="text-[10px] font-medium text-[#ff0073] hover:text-[#ff0073]/80 transition-colors"
                   >

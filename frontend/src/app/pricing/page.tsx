@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from "react"
-import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom"
-import { Check, ArrowLeft, Zap } from "lucide-react"
+import { Link, useNavigate, useSearchParams } from "react-router-dom"
+import { Check, Zap } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { NodaroLogo } from "@/components/nodaro-logo"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
 import {
@@ -13,14 +12,11 @@ import {
   type BillingCycle,
 } from "@/lib/pricing-data"
 import { startCheckout } from "@/lib/checkout"
-import { ThemeToggle } from "@/components/theme-toggle"
 import { toast } from "sonner"
 import { useSubscription, useChangePlanMutation } from "@/ee/hooks/queries/use-billing-queries"
 
 export default function PricingPage() {
   const { user, loading: authLoading } = useAuth()
-  const location = useLocation()
-  const isEmbedded = location.pathname.startsWith("/_")
   const navigate = useNavigate()
   const [loadingTier, setLoadingTier] = useState<string | null>(null)
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("annual")
@@ -99,32 +95,6 @@ export default function PricingPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header — hidden when rendered inside DashboardLayout (/_pricing) */}
-      {!isEmbedded && (
-        <header className="border-b border-zinc-200 dark:border-zinc-800">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
-            <Link
-              to="/projects"
-              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to app
-            </Link>
-            <Link to="/" className="flex items-center">
-              <NodaroLogo size="md" />
-            </Link>
-            <div className="flex items-center gap-3">
-              <ThemeToggle />
-              {!authLoading && !user && (
-                <Link to="/login">
-                  <Button variant="outline" size="sm">Sign in</Button>
-                </Link>
-              )}
-            </div>
-          </div>
-        </header>
-      )}
-
       {/* Hero */}
       <section className="py-16 text-center">
         <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
