@@ -1,7 +1,7 @@
 ---
 node_type: text-to-video
-generated_at: 2026-06-24T17:51:20.505Z
-generated_from: 056170208
+generated_at: 2026-06-26T06:23:48.084Z
+generated_from: 9b6213ba9
 ---
 
 # Text to Video
@@ -52,7 +52,6 @@ generated_from: 056170208
   "prompt": "",
   "provider": "seedance-2-fast",
   "duration": 5,
-  "aspectRatio": "16:9",
   "negativePrompt": "",
   "fieldMappings": {}
 }
@@ -99,7 +98,6 @@ generated_from: 056170208
     "prompt": "",
     "provider": "seedance-2-fast",
     "duration": 5,
-    "aspectRatio": "16:9",
     "negativePrompt": "",
     "fieldMappings": {}
   }

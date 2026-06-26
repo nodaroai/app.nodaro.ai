@@ -1086,6 +1086,18 @@ export function isSeedance2Provider(provider: string | undefined): boolean {
 }
 
 /**
+ * Default aspect ratio for a video provider when the node carries no explicit
+ * `aspectRatio`. Seedance 2.x defaults to `"adaptive"` (output matches the
+ * wired input — fits the unified-inputs model); every other provider keeps the
+ * historical `"16:9"`. Single source of truth so every run-default / display-
+ * fallback site stays in lock-step (preview = run). Applies to ALL Seedance
+ * modes incl. text-to-video — KIE accepts `adaptive` there too.
+ */
+export function defaultVideoAspectRatio(provider: string | undefined): string {
+  return isSeedance2Provider(provider) ? "adaptive" : "16:9"
+}
+
+/**
  * Google VEO family (Quality / Fast / Lite). VEO goes through its own KIE
  * endpoint and image-handling path, so callers branch on this in several places.
  */

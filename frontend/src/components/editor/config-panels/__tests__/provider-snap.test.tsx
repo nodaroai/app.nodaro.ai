@@ -21,6 +21,7 @@ import { render } from "@testing-library/react"
 import { GenerateImageConfig, ModifyImageConfig } from "../image-configs"
 import { ImageToVideoConfig, TextToVideoConfig, GenerateVideoConfig } from "../video-configs"
 import { LipSyncConfig } from "../audio-configs"
+import { getAspectRatiosForVideoModel } from "../model-options"
 
 // =============================================================================
 // Module-level mocks — keep these as thin as possible. We only care about the
@@ -860,4 +861,69 @@ describe("GenerateVideoConfig — provider-snap useEffect", () => {
     const data = baseGenerateVideoData({ provider: "kling-master", duration: 5 })
     expect(() => render(<GenerateVideoConfig {...commonProps(onUpdate, data)} />)).not.toThrow()
   })
+})
+
+// =============================================================================
+// Aspect-ratio snap on provider switch (adaptive-default safety net)
+// =============================================================================
+// Seedance 2 defaults aspectRatio to "adaptive" and also exposes the wider
+// fixed set (21:9 / 4:3 / 3:4). When a node carrying one of those values is
+// switched to a provider whose aspect set lacks it, the fail-safe useEffect
+// MUST snap it to that provider's first valid option — otherwise the backend
+// route's Zod aspect enum rejects the run at generate-time. The snap reads the
+// SAME option source the dropdown renders (getAspectRatiosForVideoModel), so we
+// assert against that rather than hardcoding the target ratio.
+describe("video configs — aspectRatio snap on provider switch", () => {
+  const MINIMAX_FIRST = getAspectRatiosForVideoModel("minimax")[0]!.value
+
+  const cases: Array<[string, (o: Partial<any>) => any, (props: any) => any]> = [
+    ["ImageToVideoConfig", baseImageToVideoData, ImageToVideoConfig],
+    ["TextToVideoConfig", baseTextToVideoData, TextToVideoConfig],
+    ["GenerateVideoConfig", baseGenerateVideoData, GenerateVideoConfig],
+  ]
+
+  for (const [name, baseData, Config] of cases) {
+    it(`${name}: snaps stale "adaptive" → first valid option when switching to a non-Seedance provider`, () => {
+      // minimax has no "adaptive" (only the generic VIDEO_RATIOS fallback /
+      // its own catalog set). A defaulted-adaptive Seedance node switched to
+      // minimax must snap so the t2v/i2v Zod enum accepts the value.
+      const onUpdate = vi.fn()
+      const data = baseData({ provider: "minimax", aspectRatio: "adaptive", duration: 5 })
+      render(<Config {...commonProps(onUpdate, data)} />)
+      const merged: Record<string, unknown> = onUpdate.mock.calls.reduce((acc: any, [u]: any) => ({ ...acc, ...u }), {})
+      expect(merged.aspectRatio).toBe(MINIMAX_FIRST)
+      // sanity: the snapped value is actually valid for minimax
+      expect(getAspectRatiosForVideoModel("minimax").some((o) => o.value === merged.aspectRatio)).toBe(true)
+    })
+
+    it(`${name}: snaps stale "21:9" → first valid option when switching to minimax`, () => {
+      const onUpdate = vi.fn()
+      const data = baseData({ provider: "minimax", aspectRatio: "21:9", duration: 5 })
+      render(<Config {...commonProps(onUpdate, data)} />)
+      const merged: Record<string, unknown> = onUpdate.mock.calls.reduce((acc: any, [u]: any) => ({ ...acc, ...u }), {})
+      expect(merged.aspectRatio).toBe(MINIMAX_FIRST)
+    })
+
+    it(`${name}: preserves a valid Seedance ratio ("21:9" on seedance-2-fast)`, () => {
+      // 21:9 IS valid for Seedance 2 — must not be snapped/cleared.
+      const onUpdate = vi.fn()
+      const data = baseData({ provider: "seedance-2-fast", aspectRatio: "21:9", duration: 5 })
+      render(<Config {...commonProps(onUpdate, data)} />)
+      for (const [u] of onUpdate.mock.calls) {
+        expect("aspectRatio" in u).toBe(false)
+      }
+    })
+
+    it(`${name}: leaves aspectRatio untouched when unset (undefined stays undefined)`, () => {
+      // An unset value must NOT be snapped — it resolves to the provider's own
+      // run default (adaptive for Seedance, undefined for others). Snapping it
+      // would persist a value the run-default logic deliberately leaves open.
+      const onUpdate = vi.fn()
+      const data = baseData({ provider: "minimax", duration: 5 })
+      render(<Config {...commonProps(onUpdate, data)} />)
+      for (const [u] of onUpdate.mock.calls) {
+        expect("aspectRatio" in u).toBe(false)
+      }
+    })
+  }
 })

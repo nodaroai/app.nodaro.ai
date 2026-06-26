@@ -101,6 +101,7 @@ export {
   VIDEO_GEN_COLLAPSED_T2V_IDS,
   resolveVideoProviderForMode,
   isSeedance2Provider,
+  defaultVideoAspectRatio,
   CHARACTER_MOTION_PROVIDERS,
   LOCATION_ATMOSPHERE_PROVIDERS,
   OBJECT_MOTION_PROVIDERS,

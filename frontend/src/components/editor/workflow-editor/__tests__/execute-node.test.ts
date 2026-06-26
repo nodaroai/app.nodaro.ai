@@ -1466,8 +1466,9 @@ describe("text-to-video", () => {
       "seedance-2-fast",
       expect.objectContaining({
         duration: undefined,
-        // Seedance 2 silently defaults to 16:9 when data.aspectRatio is unset
-        aspectRatio: "16:9",
+        // Seedance 2 defaults to "adaptive" when data.aspectRatio is unset
+        // (output matches the wired input) — was 16:9.
+        aspectRatio: "adaptive",
         // Default resolution = lowest available tier from MODEL_CATALOG
         // (per #2453). For seedance-2-fast that's "480p".
         resolution: "480p",

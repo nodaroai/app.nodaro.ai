@@ -2027,7 +2027,7 @@ export function executeNode(
     // both fields silently. Send explicit defaults so the value the user
     // SEES in the picker always matches what KIE receives.
     const isSeedance2I2V = isSeedance2Provider(nodeProvider ?? "")
-    const effectiveAspectRatio = i2vData.aspectRatio ?? (isSeedance2I2V ? "16:9" : undefined)
+    const effectiveAspectRatio = i2vData.aspectRatio ?? (isSeedance2I2V ? "adaptive" : undefined)
     const effectiveResolution = i2vData.resolution ?? (isSeedance2I2V ? MODEL_CATALOG[nodeProvider ?? ""]?.resolutions?.[0] : undefined)
     setUserPromptTemplate(i2vData.prompt?.trim() || undefined);
     return runVideoGeneration(
@@ -2287,7 +2287,7 @@ export function executeNode(
     // data until the user actively picks — so an untouched Seedance 2 node
     // silently submits without aspectRatio/resolution. Fill the defaults
     // explicitly so the request matches what the user sees.
-    const effectiveT2vAspect = (t2vData.aspectRatio as string | undefined) ?? (isSeedance2T2V ? "16:9" : undefined)
+    const effectiveT2vAspect = (t2vData.aspectRatio as string | undefined) ?? (isSeedance2T2V ? "adaptive" : undefined)
     // generate-video (re-typed, carries `__appendWired`): typed + wired negative
     // both emitted. Standalone text-to-video keeps legacy wired-wins.
     const t2vTypedNeg = (t2vData.negativePrompt as string | undefined) || undefined;
