@@ -415,6 +415,32 @@ export async function trimLastFrames(
 }
 
 /**
+ * Cap a video to its first `maxFrames` video frames (frame-accurate via
+ * `-frames:v` + re-encode, so the cut lands on the exact frame rather than the
+ * next keyframe). Audio is trimmed to match via `-shortest`. Used by the SwitchX
+ * worker to fit a source that's slightly over Beeble's 240-frame cap.
+ */
+export async function capVideoToFrames(
+  inputPath: string,
+  outputPath: string,
+  maxFrames: number,
+): Promise<string> {
+  await runFfmpeg([
+    "-y", "-i", inputPath,
+    "-frames:v", String(maxFrames),
+    "-c:v", "libx264",
+    "-pix_fmt", "yuv420p",
+    "-preset", "fast",
+    "-crf", "20",
+    "-c:a", "copy",
+    "-shortest",
+    "-movflags", "+faststart",
+    outputPath,
+  ])
+  return outputPath
+}
+
+/**
  * Strip the audio track from a video, leaving the video stream untouched.
  * Stream-copies the video (`-c:v copy -an`) so this is essentially free —
  * no re-encode. Used to honour `sound: false` for providers that don't
