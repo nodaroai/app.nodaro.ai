@@ -719,7 +719,7 @@ export function MobileAppShell({
       return (
         <OutputCard
           key={node.id}
-          nodeId={node.id}
+          nodeId={node.id} nodeType={node.type}
           label={getCardTitle(node)}
           outputType={outputType}
           status={status}
@@ -744,7 +744,7 @@ export function MobileAppShell({
           {listResults.filter(Boolean).map((resultUrl, i) => (
             <OutputCard
               key={`${node.id}-${i}`}
-              nodeId={node.id}
+              nodeId={node.id} nodeType={node.type}
               label={`${getCardTitle(node)} #${i + 1}`}
               outputType={outputType}
               status={status}
@@ -762,7 +762,7 @@ export function MobileAppShell({
     return (
       <OutputCard
         key={node.id}
-        nodeId={node.id}
+        nodeId={node.id} nodeType={node.type}
         label={getCardTitle(node)}
         outputType={outputType}
         status={status}

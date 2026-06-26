@@ -18,6 +18,8 @@ export interface FieldBadgeEntry {
 
 export interface OutputCardProps {
   nodeId: string
+  /** Producing node type — threaded to cards that need it (e.g. switchx brand attribution). */
+  nodeType?: string
   label: string
   outputType: string
   status: "idle" | "waiting" | "running" | "completed" | "failed"
@@ -47,6 +49,7 @@ export interface OutputCardProps {
 /** Renders the appropriate output card based on output type */
 function OutputCardImpl({
   nodeId,
+  nodeType,
   label,
   outputType,
   status,
@@ -115,7 +118,7 @@ function OutputCardImpl({
       case "image":
         return <ImageOutputCard label={label} status={status} url={url} nodeId={nodeId} onOpenMedia={onOpenMedia} elementSize={elementSize} actions={actions} />
       case "video":
-        return <VideoOutputCard label={label} status={status} url={url} nodeId={nodeId} onOpenMedia={onOpenMedia} elementSize={elementSize} actions={actions} />
+        return <VideoOutputCard label={label} status={status} url={url} nodeId={nodeId} nodeType={nodeType} onOpenMedia={onOpenMedia} elementSize={elementSize} actions={actions} />
       case "audio":
         return <AudioOutputCard label={label} status={status} url={url} elementSize={elementSize} nodeId={nodeId} actions={actions} />
       case "text":

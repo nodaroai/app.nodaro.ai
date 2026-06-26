@@ -1958,6 +1958,7 @@ export type SwitchXData = {
   /** select-on-video: 0-based reference frame the keyframe describes (default 0). */
   alphaKeyframeIndex?: number
   maxResolution: 720 | 1080
+  /** Beeble reproducibility seed (0–4,294,967,295). Omitted = random. */
   seed?: number
   /** Run the node N times on Run (×1–×4), like generate-video. */
   repeatCount?: number

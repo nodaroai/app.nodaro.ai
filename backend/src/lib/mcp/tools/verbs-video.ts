@@ -1309,7 +1309,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         mask_url: z.string().url().optional().describe("Required for select (keyframe image) / custom (matte video)."),
         alpha_keyframe_index: z.number().int().min(0).optional().describe("select mode — 0-based reference frame."),
         max_resolution: z.enum(["720", "1080"]).optional().describe("Default 1080."),
-        seed: z.number().int().min(0).max(4294967295).optional(),
+        seed: z.number().int().min(0).max(4294967295).optional().describe("Reproducibility seed (0–4294967295)."),
       },
       outputSchema: {
         jobId: z.string(),

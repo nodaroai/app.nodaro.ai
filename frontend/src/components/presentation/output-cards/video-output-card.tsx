@@ -5,6 +5,7 @@ import { ActionMenu } from "./action-menu"
 import { ActionBar } from "./action-bar"
 import { shareMedia } from "./share-utils"
 import { ELEMENT_SIZES } from "@/lib/presentation-display"
+import { SwitchXAttribution } from "@/components/switchx-attribution"
 
 interface VideoOutputCardProps {
   label: string
@@ -14,9 +15,11 @@ interface VideoOutputCardProps {
   onOpenMedia?: (nodeId: string) => void
   elementSize?: "sm" | "md" | "lg"
   actions?: OutputCardActions
+  /** Producing node type — drives required brand attribution (e.g. switchx). */
+  nodeType?: string
 }
 
-function VideoOutputCardImpl({ label, status, url, nodeId, onOpenMedia, elementSize, actions }: VideoOutputCardProps) {
+function VideoOutputCardImpl({ label, status, url, nodeId, onOpenMedia, elementSize, actions, nodeType }: VideoOutputCardProps) {
   const maxHClass = ELEMENT_SIZES.videoOutput[elementSize ?? "md"]
   const bound = resolveCardActions(actions, nodeId, "video", url)
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -65,6 +68,12 @@ function VideoOutputCardImpl({ label, status, url, nodeId, onOpenMedia, elementS
               loop
               playsInline
             />
+            {/* Required brand attribution for SwitchX outputs (always visible). */}
+            {nodeType === "switchx" && (
+              <div className="absolute bottom-2 left-1/2 z-10 -translate-x-1/2">
+                <SwitchXAttribution />
+              </div>
+            )}
             {/* Bottom-left: play/pause — visible on hover/touch */}
             {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events,jsx-a11y/no-static-element-interactions */}
             <div className="media-overlay-controls absolute bottom-2 left-2 hidden md:flex opacity-0 group-hover:opacity-100 transition-opacity duration-200" onClick={(e) => e.stopPropagation()}>

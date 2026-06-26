@@ -1147,14 +1147,14 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
       const visibleItems = previewItems.filter((item) => item.visible !== false)
       const status = getNodeStatus(node.id)
       if (visibleItems.length === 0) {
-        return <OutputCard nodeId={node.id} label={getCardTitle(node)} outputType="text" status={status} elementSize={elementSize} actions={nodeActions} />
+        return <OutputCard nodeId={node.id} nodeType={node.type} label={getCardTitle(node)} outputType="text" status={status} elementSize={elementSize} actions={nodeActions} />
       }
       return (
         <div className="flex flex-col gap-2">
           {visibleItems.map((item, i) => (
             <OutputCard
               key={`${node.id}-preview-${i}`}
-              nodeId={node.id}
+              nodeId={node.id} nodeType={node.type}
               label={item.sourceNodeLabel || getCardTitle(node)}
               outputType={item.type === "data" ? "text" : item.type}
               status={status}
@@ -1236,7 +1236,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     if (listResults && listResults.length > 1 && displayMode === "gallery") {
       return (
         <OutputCard
-          nodeId={node.id}
+          nodeId={node.id} nodeType={node.type}
           label={getCardTitle(node)}
           outputType={outputType}
           status={status}
@@ -1274,7 +1274,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
             return (
               <OutputCard
                 key={`${node.id}-${i}`}
-                nodeId={node.id}
+                nodeId={node.id} nodeType={node.type}
                 label={`${getCardTitle(node)} #${i + 1}`}
                 outputType={outputType}
                 status={status}
@@ -1294,7 +1294,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     // Single result (default)
     return (
       <OutputCard
-        nodeId={node.id}
+        nodeId={node.id} nodeType={node.type}
         label={getCardTitle(node)}
         outputType={outputType}
         status={status}
