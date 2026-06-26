@@ -47,6 +47,10 @@ import { ALL_LANGUAGES } from "@/lib/audio-tags"
 export interface QuickConfigOption {
   readonly value: string
   readonly label: string
+  /** Optional one-line explanation shown UNDER the label in the dropdown menu
+   *  (not in the compact trigger). Use when the labels alone are ambiguous —
+   *  e.g. SwitchX alpha modes (auto/fill/select/custom). */
+  readonly description?: string
 }
 
 export interface QuickConfigControl {
@@ -336,10 +340,10 @@ export const NODE_QUICK_CONFIGS: Readonly<Record<string, ReadonlyArray<QuickConf
       ariaLabel: "Mode",
       icon: Wand2,
       options: [
-        { value: "auto", label: "Auto" },
-        { value: "fill", label: "Fill" },
-        { value: "select", label: "Select" },
-        { value: "custom", label: "Custom" },
+        { value: "auto", label: "Auto", description: "AI masks the subject — relight it or swap the background. No mask needed." },
+        { value: "fill", label: "Fill", description: "No masking — restyle the entire frame. No mask needed." },
+        { value: "select", label: "Select", description: "You supply a mask for ONE frame; AI propagates it across the clip." },
+        { value: "custom", label: "Custom", description: "You supply a full per-frame matte video for exact control." },
       ],
     },
     {
@@ -571,7 +575,14 @@ export function QuickConfigSelect({
       <SelectContent className="node-menu-surface">
         {options.map((o) => (
           <SelectItem key={o.value} value={o.value} className="text-xs">
-            {o.label}
+            {o.description ? (
+              <span className="flex flex-col gap-0.5">
+                <span>{o.label}</span>
+                <span className="text-[10px] leading-tight text-muted-foreground/70">{o.description}</span>
+              </span>
+            ) : (
+              o.label
+            )}
           </SelectItem>
         ))}
       </SelectContent>

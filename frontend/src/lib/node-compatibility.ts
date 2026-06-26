@@ -181,6 +181,19 @@ export const TYPED_HANDLE_IDS: ReadonlySet<string> = new Set([
   // producer's catalog-valid picker JSON (image→picker analysis). Typed (not a
   // Parameter-category gate); set-driven via TARGET_HANDLE_ACCEPTS.
   "picker-json",
+  // Generate Video + video-producer/SFX typed inputs registered in
+  // TARGET_HANDLE_ACCEPTS (handle-registry completeness audit). This set is a
+  // pure drift mirror of the registry — pinned by node-compatibility-v2.test.ts
+  // — so every newly-registered typed handle must be listed here too.
+  //   - Generate Video media cluster + elements picker handle.
+  "startFrame", "endFrame", "imageReferences", "videoReferences", "audioReferences", "elements",
+  //   - look: Generate Video + Video Retake look-picker handle.
+  "look",
+  //   - negative: text-only negative-prompt handle on Generate Video /
+  //     Video-to-Video / Motion Transfer / Video SFX.
+  "negative",
+  //   - mask-video: SwitchX (Relight & Switch) custom-mode matte-video input.
+  "mask-video",
 ])
 /** Subset that requires consumer-type dispatch — the dev-time warning in
  *  getCompatibleNodes triggers when one of these is passed without a

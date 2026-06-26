@@ -5,8 +5,10 @@
  * user input; this file only describes what we send to / receive from Beeble.
  */
 
-/** Alpha (matte) handling mode for the SwitchX relight pipeline. */
-export type SwitchXAlphaMode = "auto" | "provided" | "none"
+/** Alpha (matte) handling mode for the SwitchX relight pipeline, per Beeble's
+ *  API: auto (AI masks the subject) / fill (keep whole scene) / select (one
+ *  keyframe mask image, AI-propagated) / custom (full per-frame matte video). */
+export type SwitchXAlphaMode = "auto" | "fill" | "select" | "custom"
 
 /** Body for `POST /v1/switchx/generations`. */
 export interface CreateSwitchXRequest {
@@ -17,6 +19,7 @@ export interface CreateSwitchXRequest {
   reference_image_uri?: string
   alpha_uri?: string
   alpha_keyframe_index?: number
+  /** Random seed for reproducibility (0–4,294,967,295). */
   seed?: number
   max_resolution?: number
   idempotency_key?: string

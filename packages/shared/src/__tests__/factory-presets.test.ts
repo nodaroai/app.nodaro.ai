@@ -1046,8 +1046,8 @@ describe("factory-presets split integrity", () => {
     "generate-image", "modify-image", "generate-video", "text-to-speech",
     "text-to-audio", "generate-music", "suno-generate", "llm-chat",
     "generate-script", "image-to-text", "voice-design", "video-to-video",
-    "voice-changer", "add-captions", "combine-videos", "motion-graphics",
-    "lottie-overlay",
+    "switchx", "voice-changer", "add-captions", "combine-videos",
+    "motion-graphics", "lottie-overlay",
   ]
 
   it("exposes exactly the expected node-type keys in order", () => {

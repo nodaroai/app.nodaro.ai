@@ -103,6 +103,11 @@ export const DYNAMIC_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   // Listed here so canvas validators accept its output on BOTH audio and video
   // input handles (it also stays in AUDIO_PRODUCER_TYPES as its default).
   "voice-changer",
+  // voice-changer-pro (renamed from voice-recast in #3581) is a behavioral
+  // twin of voice-changer — identical dual-mode output. Must mirror it in
+  // EVERY producer set or its outputs can't connect (was the "cannot connect
+  // the outputs of voice-changer-pro" bug). Guarded by producer-types.test.ts.
+  "voice-changer-pro",
   "reduce",
   // Dual-output time chunker (UI label "Split into Chunks"; type id stays
   // "split-media"): video in → video chunks, audio in → audio chunks — two
@@ -143,6 +148,9 @@ export const AUDIO_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   "audio-isolation",
   "text-to-dialogue",
   "voice-changer",
+  // Twin of voice-changer (see DYNAMIC_PRODUCER_TYPES note). Audio is its
+  // default output mode; video mode is handled via DYNAMIC membership.
+  "voice-changer-pro",
   "dubbing",
   "voice-remix",
   "voice-design",

@@ -1468,7 +1468,7 @@ export const VideoToVideoConfig = memo(VideoToVideoConfigImpl)
 const SWITCHX_MODE_HELP: Record<string, string> = {
   auto: "AI masks the foreground subject — relight it, restyle/replace the background.",
   fill: "Keep the whole scene — restyle the entire frame from your reference/prompt.",
-  select: "Provide one keyframe mask image; the AI propagates it across the video.",
+  select: "Provide one keyframe mask image (e.g. wire a Generate Mask node into the Mask input); the AI propagates it across the video.",
   custom: "Provide a full per-frame alpha matte video for frame-accurate control.",
 }
 
@@ -1574,6 +1574,7 @@ function SwitchXConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField,
         <Input
           type="number"
           min={0}
+          max={4294967295}
           className="h-8 text-xs"
           placeholder="Random"
           value={data.seed ?? ""}

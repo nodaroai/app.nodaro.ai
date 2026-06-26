@@ -14,7 +14,7 @@ Unlike a normal video generator, **Relight & Switch** is driven by your **source
 | Prompt | Textarea | — | Text description of the desired output (a connected reference image is strongly recommended) |
 | Keyframe index | Number | 0 | *Select mode only* — 0-based frame your mask describes; the AI propagates it across the clip |
 | Resolution | Select | 1080p | 720p or 1080p output |
-| Seed | Number | — | Seed for reproducible results (near-identical, not bit-exact) |
+| Seed | Number | — | Reproducibility seed (0–4,294,967,295); leave empty for random |
 
 ### Alpha modes
 
@@ -81,5 +81,7 @@ A clip is billed by the number of 30-frame blocks it spans — e.g. a 144-frame 
 ## Tips
 
 - **Auto** and **Fill** need no mask; **Select** needs a single keyframe mask image; **Custom** needs a full alpha matte video.
+- For **Select** mode, the easiest way to make the mask is the **Generate Mask** node ("mask the person") wired into the Mask input — SwitchX then propagates that one-frame mask across the whole clip. Beeble has no separate alpha-generation API; `Auto` does the masking for you, and `Select`/`Custom` take a mask you supply.
 - Output URLs are re-hosted to your library automatically — there's no 72-hour expiry to worry about.
-- Reuse the same **Seed** with identical inputs for consistent iterations.
+- Start from a **preset** (Relight Subject, Swap Background, Restyle Scene, …) for a tuned starting point, then adjust the prompt and reference.
+- Set a **Seed** to make a result repeatable across runs with the same inputs; leave it empty for a fresh variation each time.

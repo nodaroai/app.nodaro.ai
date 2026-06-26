@@ -631,3 +631,89 @@ describe("audio-fx source → audio inputs (regression)", () => {
     )).toBe(true)
   })
 })
+
+// ─── voice-changer-pro OUTPUT connectability ────────────────────────────
+// Regression: voice-changer-pro (renamed from voice-recast, #3581) shipped
+// with audio + video OUTPUT handles but was never added to the producer-type
+// sets, so every downstream node's accepts(sourceType) rejected it →
+// "cannot connect the outputs of voice-changer-pro". It is a dual-mode twin
+// of voice-changer, so both its outputs must connect wherever voice-changer's
+// do. Validator sees only the source NODE type (DYNAMIC escape hatch), so
+// both audio and video outputs route through the same membership check.
+describe("isValidWorkflowConnection (voice-changer-pro output)", () => {
+  const typeOf = (id: string) => id // node id === node type here
+
+  it("connects voice-changer-pro audio output into an audio consumer", () => {
+    expect(isValidWorkflowConnection(
+      { source: "voice-changer-pro", target: "dubbing", sourceHandle: "audio", targetHandle: "audio" },
+      typeOf,
+    )).toBe(true)
+  })
+
+  it("connects voice-changer-pro video output into a video consumer", () => {
+    expect(isValidWorkflowConnection(
+      { source: "voice-changer-pro", target: "voice-changer", sourceHandle: "video", targetHandle: "video" },
+      typeOf,
+    )).toBe(true)
+  })
+
+  it("connects exactly where its twin voice-changer connects (audio target parity)", () => {
+    const proOk = isValidWorkflowConnection(
+      { source: "voice-changer-pro", target: "transcribe", sourceHandle: "audio", targetHandle: "audio" },
+      typeOf,
+    )
+    const baseOk = isValidWorkflowConnection(
+      { source: "voice-changer", target: "transcribe", sourceHandle: "audio", targetHandle: "audio" },
+      typeOf,
+    )
+    expect(proOk).toBe(baseOk)
+    expect(proOk).toBe(true)
+  })
+})
+
+// ─── reference-board image OUTPUT connectability ────────────────────────
+// Regression (voice-changer-pro class): reference-board has a single `image`
+// source handle producing a real generated board image (extractNodeOutput +
+// backend IMAGE_RESULT_TYPES + frontend IMAGE_SOURCE_TYPES all route it), but
+// it was missing from IMAGE_PRODUCER_TYPES, so the canvas validator rejected
+// reference-board → every image consumer.
+describe("isValidWorkflowConnection (reference-board image output)", () => {
+  const typeOf = (id: string) => id
+
+  it("connects reference-board image output into a generate-image reference input", () => {
+    expect(isValidWorkflowConnection(
+      { source: "reference-board", target: "generate-image", sourceHandle: "image", targetHandle: "references" },
+      typeOf,
+    )).toBe(true)
+  })
+
+  it("connects wherever generate-image (a known image producer) connects (parity)", () => {
+    const boardOk = isValidWorkflowConnection(
+      { source: "reference-board", target: "image-to-image", sourceHandle: "image", targetHandle: "image" },
+      typeOf,
+    )
+    const giOk = isValidWorkflowConnection(
+      { source: "generate-image", target: "image-to-image", sourceHandle: "image", targetHandle: "image" },
+      typeOf,
+    )
+    expect(boardOk).toBe(giOk)
+    expect(boardOk).toBe(true)
+  })
+})
+
+// ─── llm-chat items OUTPUT connectability ───────────────────────────────
+// Regression: llm-chat (Generate Text) `items` handle emits a ===NEXT===-split
+// fan-out list (node-input-resolver + backend output-extractor route it), but
+// llm-chat was missing from LIST_PRODUCER_TYPES / JSON_PRODUCER_TYPES — only
+// its dead predecessor `ai-writer` was listed — so its items output couldn't
+// connect into any list-processing node.
+describe("isValidWorkflowConnection (llm-chat items output)", () => {
+  const typeOf = (id: string) => id
+
+  it("connects llm-chat items output into a list consumer (deduplicate)", () => {
+    expect(isValidWorkflowConnection(
+      { source: "llm-chat", target: "deduplicate", sourceHandle: "items", targetHandle: "in" },
+      typeOf,
+    )).toBe(true)
+  })
+})

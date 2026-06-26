@@ -32,6 +32,10 @@ import {
 import { finalizeJobWithMedia } from "../../lib/job-finalize.js"
 
 const POLL_INTERVAL_MS = 5000
+/** Max consecutive rate-limit 429s tolerated WHILE POLLING before giving up (the
+ *  `beeble` reconciler then sweeps the still-running job). At ~5s/poll this rides
+ *  out a multi-minute rate-limit window without failing a near-complete job. */
+const MAX_POLL_RATE_LIMIT_STRIKES = 20
 
 /** OUR shared Beeble account is out of funds / over its spending cap — every
  *  SwitchX job 402s until resolved. Surface loudly for the operator. */
@@ -125,6 +129,7 @@ export const handleBeebleSwitchX: HandlerFn = async function handleBeebleSwitchX
   // worker slot and skipping the wasted R2 re-host. The Beeble-side job keeps
   // running (no cancel endpoint); that cost falls on the shared account.
   let renderUrl: string
+  let rateLimitStrikes = 0
   for (;;) {
     await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS))
     await throwIfJobCancelled()
@@ -132,8 +137,15 @@ export const handleBeebleSwitchX: HandlerFn = async function handleBeebleSwitchX
     let status
     try {
       status = await getSwitchXStatus(beebleId)
+      rateLimitStrikes = 0
     } catch (err) {
+      // A transient rate/concurrency 429 while polling must NOT fail the job —
+      // the Beeble generation is still running. Back off (onBeebleProviderError
+      // jitters) and retry the poll IN PLACE; give up only after many strikes.
       await onBeebleProviderError(err)
+      if (err instanceof BeebleError && RATE_LIMIT_CODES.has(err.code) && ++rateLimitStrikes <= MAX_POLL_RATE_LIMIT_STRIKES) {
+        continue
+      }
       throw err
     }
 

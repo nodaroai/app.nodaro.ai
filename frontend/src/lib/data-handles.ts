@@ -35,7 +35,7 @@ export const LIST_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>([
   "web-scrape", "extract-field", "filter-list",
   "deduplicate", "merge-lists", "sort-list",
   "selector",
-  "ai-writer", "generate-script",
+  "ai-writer", "llm-chat", "generate-script",
 ])
 
 /** Producers of JSON/dict-shaped data — web-scrape returns json arrays,
@@ -45,7 +45,7 @@ export const JSON_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>([
   "list", "filter-list",
   "deduplicate", "merge-lists", "sort-list",
   "selector",
-  "ai-writer", "generate-script",
+  "ai-writer", "llm-chat", "generate-script",
 ])
 
 /** True when `sourceType` can flow into a generic data input (text, list,

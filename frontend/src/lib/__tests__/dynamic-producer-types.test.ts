@@ -31,6 +31,9 @@ describe("DYNAMIC_PRODUCER_TYPES — shared set contents", () => {
       "adjust-volume",
       // Dual-mode: audio in → audio out; video in → video out (+ revoiced audio).
       "voice-changer",
+      // voice-changer-pro: behavioral twin of voice-changer (identical dual-mode
+      // output). Added so its outputs connect on both audio and video handles.
+      "voice-changer-pro",
       "reduce",
       // Dual-output time chunker ("Split into Chunks"): video chunks + audio
       // chunks on two handles; routed by sourceHandle at execution time.

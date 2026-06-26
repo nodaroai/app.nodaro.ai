@@ -1,7 +1,7 @@
 ---
 node_type: generative-pipeline
-generated_at: 2026-06-04T12:41:29.378Z
-generated_from: 9bf1388db
+generated_at: 2026-06-26T10:54:21.244Z
+generated_from: b514860cd
 ---
 
 # Story → Video
@@ -11,7 +11,7 @@ generated_from: 9bf1388db
 **Category:** scene
 **Credit cost:** 30
 **Inputs (target handles):** `story_prompt`
-**Outputs (source handles):** `final_video`
+**Outputs (source handles):** (none)
 
 **Optional data fields:**
 - `label?: string`

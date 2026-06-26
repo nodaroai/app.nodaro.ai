@@ -18,6 +18,7 @@ import { videoNodeSizing } from "./video-node-defaults"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { EditableNodeLabel } from "./editable-node-label"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
+import { SwitchXAttribution } from "@/components/switchx-attribution"
 import type { SwitchXData } from "@/types/nodes"
 
 const isPickerType = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
@@ -182,6 +183,14 @@ function SwitchXNodeComponent({ id, data, selected }: NodeProps) {
             loop={shouldPlay}
             playsInline
           />
+        )}
+
+        {/* Required brand attribution (Beeble) — always visible on the result.
+            developer.beeble.ai/docs/brand-attribution. */}
+        {activeUrl && status !== "running" && (
+          <div className="absolute bottom-2 left-1/2 z-10 -translate-x-1/2">
+            <SwitchXAttribution />
+          </div>
         )}
 
         {!activeUrl && status !== "running" && status !== "failed" && (

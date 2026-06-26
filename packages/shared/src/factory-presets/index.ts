@@ -7,6 +7,7 @@ import { TEXT_TO_SPEECH_PRESETS, VOICE_DESIGN_PRESETS, VOICE_CHANGER_PRESETS } f
 import { TEXT_TO_AUDIO_PRESETS } from "./sfx.js"
 import { LLM_CHAT_PRESETS, GENERATE_SCRIPT_PRESETS, IMAGE_TO_TEXT_PRESETS } from "./text.js"
 import { VIDEO_TO_VIDEO_PRESETS, ADD_CAPTIONS_PRESETS, COMBINE_VIDEOS_PRESETS } from "./video-edit.js"
+import { SWITCHX_PRESETS } from "./switchx.js"
 import { MOTION_GRAPHICS_PRESETS } from "./motion-graphics.js"
 import { LOTTIE_OVERLAY_PRESETS } from "./lottie-overlay.js"
 
@@ -32,6 +33,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
   "image-to-text": IMAGE_TO_TEXT_PRESETS,
   "voice-design": VOICE_DESIGN_PRESETS,
   "video-to-video": VIDEO_TO_VIDEO_PRESETS,
+  "switchx": SWITCHX_PRESETS,
   "voice-changer": VOICE_CHANGER_PRESETS,
   "add-captions": ADD_CAPTIONS_PRESETS,
   "combine-videos": COMBINE_VIDEOS_PRESETS,
