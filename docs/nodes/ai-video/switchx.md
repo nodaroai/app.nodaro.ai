@@ -67,7 +67,7 @@ A clip is billed by the number of 30-frame blocks it spans — e.g. a 144-frame 
 ## Best Practices
 
 - **Always connect a reference image** when you can — it's the single biggest quality lever.
-- Keep the source short (~8s / ≤ 240 frames). A clip just over the cap (up to ~270 frames / ~1s) is **auto-trimmed** to fit and billed at the 240-frame tier; a clip well over is rejected — trim those yourself first to pick the segment you want.
+- Keep the source short (~8s / ≤ 240 frames). A clip just over the cap (up to ~270 frames / ~1s) is **auto-trimmed** to fit and billed at the 240-frame tier; a clip well over (or above ~2.77 Mpx) shows an **orange warning** to trim it / lower the resolution first — it's guidance, not a failed run.
 - Start with **Auto** mode (no mask needed) for relight / background-swap; reach for **Select**/**Custom** only when you need precise control over what's kept.
 - For **Select** mode, the easiest mask source is the **Generate Mask** node ("mask the person") wired into the Mask input.
 

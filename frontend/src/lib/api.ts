@@ -154,7 +154,9 @@ function throwApiError(errJson: Record<string, unknown> | null, fallback: string
       (errObj.retryAfterSeconds as number) ?? 2,
     )
   }
-  throw new Error((errObj?.message as string) ?? fallback)
+  // Generic error: attach the machine-readable `code` so callers can branch on
+  // it (e.g. classify input-fit codes as user-fixable warnings, not red errors).
+  throw Object.assign(new Error((errObj?.message as string) ?? fallback), errObj?.code ? { code: errObj.code } : {})
 }
 
 /**
