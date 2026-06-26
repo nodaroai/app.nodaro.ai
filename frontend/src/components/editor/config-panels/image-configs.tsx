@@ -7,7 +7,6 @@ import { X, FileText, Plus, UserPlus, Loader2, Upload, UserCircle, Package, MapP
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { TagTextarea } from "./tag-textarea"
 import {
   Select,
@@ -1846,7 +1845,7 @@ export function RemoveBackgroundConfig({ data }: ConfigProps<RemoveBackgroundDat
 }
 
 export function GenerateMaskConfig({ data, onUpdate, nodes, edges, nodeId }: ConfigProps<GenerateMaskData> & { nodeId?: string }) {
-  const promptSnippets = useSnippetPool("image", "prompt")
+  const { referenceImages, nodeRefs, refMap, promptSnippets } = usePromptEditorRefs(nodeId ?? "")
   // Edit⇄Final toggle for the mask prompt. Provider-less (Grounded SAM has no
   // buildImagePrompt assembly); persistence key = "prompt".
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
@@ -1879,11 +1878,15 @@ export function GenerateMaskConfig({ data, onUpdate, nodes, edges, nodeId }: Con
             minHeightRem={2 * 1.5}
           />
         ) : (
-          <Textarea
+          <PromptEditor
             rows={2}
-            placeholder={`e.g. "the blonde woman", "the red car", "the background"`}
             value={data.prompt ?? ""}
-            onChange={(e) => onUpdate({ prompt: e.target.value })}
+            onChange={(v) => onUpdate({ prompt: v })}
+            placeholder={`e.g. "the blonde woman", "the red car", "the background"`}
+            referenceImages={referenceImages}
+            nodeRefs={nodeRefs}
+            refMap={refMap}
+            snippets={promptSnippets}
           />
         )}
       </div>

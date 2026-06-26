@@ -3577,7 +3577,7 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
 }
 
 
-export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeId }: ConfigProps<SpeechToVideoData> & { nodeId?: string }) {
+export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, nodeId }: ConfigProps<SpeechToVideoData> & { nodeId?: string }) {
   const promptSnippets = useSnippetPool("video", "prompt")
   const negativeSnippets = useSnippetPool("video", "negative")
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
@@ -3597,6 +3597,12 @@ export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, on
   })
   useEffect(() => { prefetchModelCredits(["speech-to-video", "speech-to-video:580p", "speech-to-video:720p"]) }, [])
   const [showAdvanced, setShowAdvanced] = useState(false)
+  // Reference images for the PromptEditor `@`-autocomplete (wired character /
+  // image producers), matching the i2v / t2v sibling panels.
+  const refImagesForAutocomplete = useMemo<RefImageItem[]>(
+    () => toRefImageItems(buildVideoRefAutocomplete(sources)),
+    [sources],
+  )
 
   return (
     <div className="flex flex-col gap-3">
@@ -3639,11 +3645,15 @@ export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, on
           />
         ) : (
           <>
-            <Textarea
+            <PromptEditor
+              rows={3}
               value={data.prompt || ""}
-              onChange={(e) => onUpdate({ prompt: e.target.value })}
+              onChange={(v) => onUpdate({ prompt: v })}
               placeholder="Describe the speaking scene..."
-              className="min-h-[80px] text-sm"
+              referenceImages={refImagesForAutocomplete}
+              nodeRefs={nodeRefs}
+              refMap={refMap}
+              snippets={promptSnippets}
             />
             <PromptLengthCounter value={data.prompt || ""} max={getMaxVideoPromptChars(data.provider as string | undefined)} modelLabel={(data.provider as string | undefined) || "wan-s2v"} />
           </>

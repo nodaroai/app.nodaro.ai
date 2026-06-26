@@ -15,6 +15,7 @@ import {
 import type { LLMChatData } from "@/types/nodes"
 import { LlmModelSelect } from "./llm-model-select"
 import { MappableField } from "./mappable-field"
+import { TagTextarea } from "./tag-textarea"
 import { PromptHelperButton } from "./prompt-helper-button"
 import { SnippetMenuButton } from "./snippet-menu-button"
 import { useSnippetPool } from "@/hooks/queries/use-prompt-snippets-queries"
@@ -85,7 +86,7 @@ function MediaRefRow({
   )
 }
 
-export function LLMChatConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeId }: ConfigProps<LLMChatData> & { nodeId?: string }) {
+export function LLMChatConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<LLMChatData> & { nodeId?: string }) {
   const activeIdx = data.activeResultIndex ?? 0
   const results = data.generatedResults ?? []
   const promptSnippets = useSnippetPool("text", "prompt")
@@ -376,12 +377,17 @@ export function LLMChatConfig({ data, onUpdate, sources, fieldMappings, onMapFie
             minHeightRem={4 * 1.5}
           />
         ) : (
-          <Textarea
+          <TagTextarea
             rows={4}
             value={data.userInput}
-            onChange={(e) => onUpdate({ userInput: e.target.value })}
+            onChange={(v) => onUpdate({ userInput: v })}
             placeholder="Enter your prompt... (use {} to inject input)"
             className="bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D] text-sm resize-y"
+            tagMode="none"
+            nodeRefs={nodeRefs}
+            displayMode={variableDisplayMode}
+            refMap={refMap}
+            snippets={promptSnippets}
           />
         )}
       </MappableField>

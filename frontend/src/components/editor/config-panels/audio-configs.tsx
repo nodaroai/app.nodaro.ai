@@ -5,7 +5,6 @@ import { Plus, Trash2, Wand2 } from "lucide-react"
 import { toast } from "sonner"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { TagTextarea } from "./tag-textarea"
 import { getLanguagesForModel, ALL_LANGUAGES, isV3Model } from "@/lib/audio-tags"
 import { SUNO_SUGGESTION_ITEMS, SUNO_LYRICS_SUGGESTION_ITEMS, SUNO_STYLE_SUGGESTION_ITEMS } from "@/lib/suno-tags"
@@ -1058,7 +1057,7 @@ export function SunoReplaceSectionConfig({ data, onUpdate, sources, fieldMapping
   )
 }
 
-export function SunoStyleBoostConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeId }: ConfigProps<SunoStyleBoostData> & { nodeId?: string }) {
+export function SunoStyleBoostConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<SunoStyleBoostData> & { nodeId?: string }) {
   const styleBoostSnippets = useSnippetPool("audio", "prompt")
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "content")
   const finalPrompt = useFinalPromptSegments({
@@ -1084,7 +1083,19 @@ export function SunoStyleBoostConfig({ data, onUpdate, sources, fieldMappings, o
           />
         ) : (
           <>
-            <Textarea rows={4} value={data.content ?? ""} onChange={(e) => { if (e.target.value.length <= SUNO_TEXT_MAX) onUpdate({ content: e.target.value }) }} placeholder="Enter style text to enhance..." maxLength={SUNO_TEXT_MAX} />
+            <TagTextarea
+              rows={4}
+              value={data.content ?? ""}
+              onChange={(v) => { if (v.length <= SUNO_TEXT_MAX) onUpdate({ content: v }) }}
+              placeholder="Enter style text to enhance..."
+              maxLength={SUNO_TEXT_MAX}
+              tagMode="suno"
+              customTags={SUNO_STYLE_SUGGESTION_ITEMS}
+              nodeRefs={nodeRefs}
+              displayMode={variableDisplayMode}
+              refMap={refMap}
+              snippets={styleBoostSnippets}
+            />
             <p className="text-xs text-muted-foreground mt-1">{(data.content ?? "").length}/{SUNO_TEXT_MAX}</p>
           </>
         )}
@@ -1297,7 +1308,7 @@ function lipSyncResolutionOptions(
   return { values: ["480p", "720p"], def: "720p" }
 }
 
-export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, nodeId }: ConfigProps<LipSyncData> & { nodeId?: string }) {
+export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<LipSyncData> & { nodeId?: string }) {
   const promptSnippets = useSnippetPool("audio", "prompt")
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
   const finalPrompt = useFinalPromptSegments({
@@ -1386,7 +1397,17 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
               minHeightRem={2 * 1.5}
             />
           ) : (
-            <Textarea rows={2} value={data.prompt ?? ""} onChange={(e) => onUpdate({ prompt: e.target.value })} placeholder="Optional: describe head/expression motions..." />
+            <TagTextarea
+              rows={2}
+              value={data.prompt ?? ""}
+              onChange={(v) => onUpdate({ prompt: v })}
+              placeholder="Optional: describe head/expression motions..."
+              tagMode="none"
+              nodeRefs={nodeRefs}
+              displayMode={variableDisplayMode}
+              refMap={refMap}
+              snippets={promptSnippets}
+            />
           )}
         </MappableField>
       )}
@@ -2133,11 +2154,16 @@ export function VoiceDesignConfig({ data, onUpdate, sources, fieldMappings, onMa
             minHeightRem={3 * 1.5}
           />
         ) : (
-          <Textarea
+          <TagTextarea
             rows={3}
             value={data.voiceDescription || ""}
-            onChange={(e) => onUpdate({ voiceDescription: e.target.value })}
+            onChange={(v) => onUpdate({ voiceDescription: v })}
             placeholder="Describe the voice you want (e.g. 'A warm, deep male voice with a British accent')"
+            tagMode="none"
+            nodeRefs={nodeRefs}
+            displayMode={variableDisplayMode}
+            refMap={refMap}
+            snippets={promptSnippets}
           />
         )}
       </MappableField>
