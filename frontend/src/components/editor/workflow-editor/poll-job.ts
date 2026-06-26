@@ -5,6 +5,7 @@ import { calculateProgress } from "@nodaro/shared";
 import type { GeneratedResult } from "@/types/nodes";
 import { buildVariantResults } from "./variant-results";
 import { shouldAbandonNode } from "./abandon-guard";
+import { isInputWarningCode } from "@/lib/input-warning-codes";
 import {
   WorkflowStaleError,
   MAX_CONSECUTIVE_POLL_FAILURES,
@@ -25,6 +26,7 @@ export const guardedToast = {
   info: (...args: Parameters<typeof toast.info>) => { if (!_suppressToasts) toast.info(...args); },
   success: (...args: Parameters<typeof toast.success>) => { if (!_suppressToasts) toast.success(...args); },
   error: (...args: Parameters<typeof toast.error>) => { if (!_suppressToasts) toast.error(...args); },
+  warning: (...args: Parameters<typeof toast.warning>) => { if (!_suppressToasts) toast.warning(...args); },
 };
 
 export type OutputKey = "generatedVideoUrl" | "generatedAudioUrl" | "generatedImageUrl";
@@ -339,15 +341,24 @@ export function pollJobWithNodeUpdate(
         );
       })
       .catch((err) => {
+        // A user-fixable input problem (source too long / too large) is a WARNING,
+        // not a system error: surface it in orange + keep the message on the node,
+        // so "trim your clip and retry" reads as guidance rather than a crash.
+        const code = (err as { code?: unknown })?.code;
+        const isWarning = isInputWarningCode(code);
+        const msg = err instanceof Error ? err.message : "Unknown error";
         updateNodeData(nodeId, {
           executionStatus: "failed",
           currentJobId: undefined,
           currentJobProgress: undefined,
+          ...(isWarning ? { errorMessage: msg, errorCode: code } : {}),
         });
         if (!checkStorageError(err, ctx)) {
-          guardedToast.error(`Failed to start ${label}`, {
-            description: err instanceof Error ? err.message : "Unknown error",
-          });
+          if (isWarning) {
+            guardedToast.warning(msg);
+          } else {
+            guardedToast.error(`Failed to start ${label}`, { description: msg });
+          }
         }
         reject(err);
       });

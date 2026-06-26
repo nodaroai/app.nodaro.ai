@@ -19,6 +19,7 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 import { EditableNodeLabel } from "./editable-node-label"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import { SwitchXAttribution } from "@/components/switchx-attribution"
+import { isInputWarningCode } from "@/lib/input-warning-codes"
 import type { SwitchXData } from "@/types/nodes"
 
 const isPickerType = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
@@ -39,6 +40,9 @@ function SwitchXNodeComponent({ id, data, selected }: NodeProps) {
   const shouldPlay = videoAutoplay && playState === "loop"
   const openFreeCut = useWorkflowStore((s) => s.openFreeCut)
   const status = nodeData.executionStatus ?? "idle"
+  // A "too long / too large" failure is a user-fixable WARNING (orange), not a
+  // red system error — the run poller tags it via errorCode.
+  const isInputWarning = isInputWarningCode((nodeData as Record<string, unknown>).errorCode)
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
   const activeResult = results[activeIndex]
@@ -209,10 +213,10 @@ function SwitchXNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         {status === "failed" && !activeUrl && (
-          <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-red-500/5 text-red-500 h-[180px]">
+          <div className={`flex flex-col items-center justify-center gap-2 rounded-xl h-[180px] ${isInputWarning ? "bg-orange-500/5 text-orange-500" : "bg-red-500/5 text-red-500"}`}>
             <AlertCircle className="w-6 h-6" />
             {nodeData.errorMessage && (
-              <p className="text-[10px] text-center text-red-400 px-2 line-clamp-2">{nodeData.errorMessage}</p>
+              <p className={`text-[10px] text-center px-2 line-clamp-2 ${isInputWarning ? "text-orange-400" : "text-red-400"}`}>{nodeData.errorMessage}</p>
             )}
           </div>
         )}
