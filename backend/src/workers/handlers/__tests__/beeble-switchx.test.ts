@@ -31,6 +31,12 @@ const mocks = vi.hoisted(() => {
     setJobProgress: vi.fn(async () => {}),
     finalizeJobWithMedia: vi.fn(async () => ({ ok: true })),
     uploadToR2: vi.fn(async () => "https://r2/UNEXPECTED.mp4"),
+    // Source auto-trim flow (small frame overage → cap to 240 before Beeble).
+    downloadFile: vi.fn(async () => {}),
+    capVideoToFrames: vi.fn(async (_in: string, out: string) => out),
+    createWorkDir: vi.fn(async () => "/tmp/switchx-trim-test"),
+    cleanupWorkDir: vi.fn(async () => {}),
+    uploadFileWithKeyToR2: vi.fn(async () => "https://r2.nodaro.ai/videos/job1-switchx-src.mp4"),
   }
 })
 
@@ -46,7 +52,13 @@ vi.mock("@/lib/job-cancellation.js", () => ({ throwIfJobCancelled: mocks.throwIf
 vi.mock("@/lib/reconcile/persistence.js", () => ({ makeOnTaskCreated: mocks.makeOnTaskCreated }))
 vi.mock("@/lib/job-finalize.js", () => ({ finalizeJobWithMedia: mocks.finalizeJobWithMedia }))
 // Guard: the worker must NEVER use bare uploadToR2 (skips watermark + transcode).
-vi.mock("@/lib/storage.js", () => ({ uploadToR2: mocks.uploadToR2 }))
+vi.mock("@/lib/storage.js", () => ({ uploadToR2: mocks.uploadToR2, uploadFileWithKeyToR2: mocks.uploadFileWithKeyToR2 }))
+vi.mock("@/providers/video/ffmpeg-utils.js", () => ({
+  downloadFile: mocks.downloadFile,
+  capVideoToFrames: mocks.capVideoToFrames,
+  createWorkDir: mocks.createWorkDir,
+  cleanupWorkDir: mocks.cleanupWorkDir,
+}))
 vi.mock("@/workers/shared.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/workers/shared.js")>()
   return {
@@ -80,6 +92,9 @@ beforeEach(() => {
   mocks.uploadVideoMaybeWatermark.mockResolvedValue("https://r2.nodaro.ai/videos/job1.mp4")
   mocks.generateAndUploadThumbnail.mockResolvedValue("https://r2.nodaro.ai/thumb/job1.webp")
   mocks.finalizeJobWithMedia.mockResolvedValue({ ok: true })
+  mocks.capVideoToFrames.mockImplementation(async (_in: string, out: string) => out)
+  mocks.createWorkDir.mockResolvedValue("/tmp/switchx-trim-test")
+  mocks.uploadFileWithKeyToR2.mockResolvedValue("https://r2.nodaro.ai/videos/job1-switchx-src.mp4")
 })
 
 describe("handleBeebleSwitchX", () => {
@@ -136,6 +151,53 @@ describe("handleBeebleSwitchX", () => {
         }),
       }),
     )
+  })
+
+  it("trims an over-cap source and submits the TRIMMED clip as the Beeble source", async () => {
+    vi.useFakeTimers()
+    mocks.startSwitchXGeneration.mockResolvedValue({ id: "swx1" })
+    mocks.getSwitchXStatus.mockResolvedValueOnce({
+      id: "swx1", status: "completed", output: { render: "https://cdn.beeble/render.mp4" },
+    })
+
+    const p = handleBeebleSwitchX(makeJob({ ...validData, trimSourceToFrames: 240 }), ctx)
+    await vi.advanceTimersByTimeAsync(5000)
+    await p
+    vi.useRealTimers()
+
+    // Downloaded the source, capped to 240 frames, re-hosted under a DISTINCT key.
+    expect(mocks.downloadFile).toHaveBeenCalledWith("https://cdn.example/src.mp4", expect.any(String))
+    expect(mocks.capVideoToFrames).toHaveBeenCalledWith(expect.any(String), expect.any(String), 240)
+    expect(mocks.uploadFileWithKeyToR2).toHaveBeenCalledWith(
+      expect.any(String),
+      "videos/job1-switchx-src.mp4",
+      "video/mp4",
+      "user1",
+    )
+    // Beeble gets the TRIMMED url, never the original over-cap source.
+    expect(mocks.startSwitchXGeneration.mock.calls[0][0]).toMatchObject({
+      source_uri: "https://r2.nodaro.ai/videos/job1-switchx-src.mp4",
+    })
+    expect(mocks.cleanupWorkDir).toHaveBeenCalled()
+  })
+
+  it("does NOT trim when trimSourceToFrames is absent — source passes straight through", async () => {
+    vi.useFakeTimers()
+    mocks.startSwitchXGeneration.mockResolvedValue({ id: "swx1" })
+    mocks.getSwitchXStatus.mockResolvedValueOnce({
+      id: "swx1", status: "completed", output: { render: "https://cdn.beeble/render.mp4" },
+    })
+
+    const p = handleBeebleSwitchX(makeJob(validData), ctx)
+    await vi.advanceTimersByTimeAsync(5000)
+    await p
+    vi.useRealTimers()
+
+    expect(mocks.downloadFile).not.toHaveBeenCalled()
+    expect(mocks.capVideoToFrames).not.toHaveBeenCalled()
+    expect(mocks.startSwitchXGeneration.mock.calls[0][0]).toMatchObject({
+      source_uri: "https://cdn.example/src.mp4",
+    })
   })
 
   it("omits absent optional fields and only sends a mask for mask modes", async () => {

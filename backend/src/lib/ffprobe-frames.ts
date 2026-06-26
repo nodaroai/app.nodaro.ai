@@ -103,3 +103,26 @@ export async function probeVideoFrames(
 
   return { frames, width, height }
 }
+
+/**
+ * EXACT video frame count via ffprobe `-count_frames` (decodes the stream — far
+ * slower than {@link probeVideoFrames}'s nb_frames/duration×fps estimate, but
+ * precise). Used ONLY at the SwitchX 240-frame cap boundary: the cheap estimate
+ * can land on 241 for a clip that is really 240, so before rejecting/trimming we
+ * confirm the real count. Returns `undefined` when the count can't be read (the
+ * caller falls back to the estimate). SSRF-guarded like probeVideoFrames.
+ */
+export async function exactFrameCount(srcUrlOrPath: string): Promise<number | undefined> {
+  await assertSafeProbeSource(srcUrlOrPath)
+  const output = await runFfprobe([
+    "-v", "error",
+    "-protocol_whitelist", "file,http,https,tcp,tls",
+    "-select_streams", "v:0",
+    "-count_frames",
+    "-show_entries", "stream=nb_read_frames",
+    "-of", "default=noprint_wrappers=1:nokey=1",
+    srcUrlOrPath,
+  ])
+  const n = parseInt(output.trim(), 10)
+  return Number.isFinite(n) && n > 0 ? n : undefined
+}

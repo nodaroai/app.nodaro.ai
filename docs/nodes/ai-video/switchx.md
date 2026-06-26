@@ -41,7 +41,7 @@ Unlike a normal video generator, **Relight & Switch** is driven by your **source
 
 | Provider | Notes |
 |----------|-------|
-| **Beeble SwitchX** (`beeble-switchx`) | Source ≤ 240 frames and ≤ 2,770,000 px (≈1080p); MP4/MOV (H.264/HEVC). |
+| **Beeble SwitchX** (`beeble-switchx`) | Source ≤ 240 frames (~8s; a clip a little over is auto-trimmed — see Tips) and ≤ 2,770,000 px (≈1080p); MP4/MOV (H.264/HEVC). |
 
 A "Powered by SwitchX" attribution is shown alongside the output, per Beeble's brand requirements.
 
@@ -67,7 +67,7 @@ A clip is billed by the number of 30-frame blocks it spans — e.g. a 144-frame 
 ## Best Practices
 
 - **Always connect a reference image** when you can — it's the single biggest quality lever.
-- Keep the source short (≤ 240 frames; trim longer clips first — the node rejects oversize sources).
+- Keep the source short (~8s / ≤ 240 frames). A clip just over the cap (up to ~270 frames / ~1s) is **auto-trimmed** to fit and billed at the 240-frame tier; a clip well over is rejected — trim those yourself first to pick the segment you want.
 - Start with **Auto** mode (no mask needed) for relight / background-swap; reach for **Select**/**Custom** only when you need precise control over what's kept.
 - For **Select** mode, the easiest mask source is the **Generate Mask** node ("mask the person") wired into the Mask input.
 

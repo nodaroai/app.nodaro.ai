@@ -8,7 +8,7 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
-import { probeVideoFrames } from "../lib/ffprobe-frames.js"
+import { probeVideoFrames, exactFrameCount } from "../lib/ffprobe-frames.js"
 import { resolveSwitchXCreditId } from "@nodaro/shared"
 
 /**
@@ -18,6 +18,10 @@ import { resolveSwitchXCreditId } from "@nodaro/shared"
  * the credit-reserve tier (see resolveSwitchXCreditId).
  */
 const MAX_FRAMES = 240
+// Sources up to this many frames are auto-trimmed down to MAX_FRAMES (a ≤~1s
+// overage; 270 = 240 + 30). Beyond it we reject so a long clip isn't silently
+// butchered down to the first 8 seconds.
+const AUTO_TRIM_MAX = 270
 const MAX_PIXELS = 2_770_000
 
 const switchXBody = z
@@ -51,9 +55,11 @@ const REFINE_CODES = new Set(["MISSING_STYLE_INPUT", "MISSING_ALPHA"])
  * BEFORE the creditGuard preHandler so `resolveSwitchXCreditId` (which reads the
  * raw body) buckets the credit reserve by the ACTUAL frame count.
  *
- * On a SUCCESSFUL probe we enforce both hard limits — a clean probe that
- * reports >240 frames (or >2.77 Mpx) is rejected here, never allowed to slip
- * through to a doomed worker run.
+ * On a SUCCESSFUL probe we enforce both caps. A clip just over the frame cap
+ * (≤270 after an exact-count confirm) is flagged via `__trimSourceToFrames` for
+ * the worker to trim to 240; a larger frame count, or >2.77 Mpx, is rejected
+ * here. A cheap over-estimate that an exact decode shows is really ≤240 passes
+ * through untouched (no trim).
  *
  * On probe FAILURE we cannot reject (no data to reject on — Beeble will), so we
  * stash the worst-case `MAX_FRAMES` so the reserve holds the top tier rather
@@ -65,14 +71,8 @@ export async function switchXPreflight(req: FastifyRequest, reply: FastifyReply)
   if (typeof url !== "string" || url.length === 0) return // Zod will 400 on the missing/invalid url
   try {
     const { frames, width, height } = await probeVideoFrames(url)
-    if (frames > MAX_FRAMES) {
-      return void reply.status(400).send({
-        error: {
-          code: "VIDEO_TOO_MANY_FRAMES",
-          message: `Source has ${frames} frames (max ${MAX_FRAMES}). Trim it first.`,
-        },
-      })
-    }
+    // Pixel cap is a hard reject — frame-trimming can't shrink an oversize frame.
+    // Check it FIRST so a doomed clip never pays for the exact-frame decode below.
     if (width * height > MAX_PIXELS) {
       return void reply.status(400).send({
         error: {
@@ -81,7 +81,34 @@ export async function switchXPreflight(req: FastifyRequest, reply: FastifyReply)
         },
       })
     }
-    body.__probedFrameCount = frames
+    if (frames <= MAX_FRAMES) {
+      body.__probedFrameCount = frames
+      return
+    }
+    // Over the frame cap. The cheap nb_frames/duration×fps estimate can be ±1 at
+    // the boundary, so for a clip in (or just past) the auto-trim zone, confirm
+    // with an exact decode — avoids trimming a clip that's really ≤240 AND avoids
+    // falsely rejecting one. Skip the decode for clips far over (clearly long).
+    let real = frames
+    if (frames <= AUTO_TRIM_MAX + 30) {
+      const exact = await exactFrameCount(url).catch(() => undefined)
+      if (exact !== undefined) real = exact
+    }
+    if (real <= MAX_FRAMES) {
+      body.__probedFrameCount = real // estimate over-counted — proceed, no trim
+    } else if (real <= AUTO_TRIM_MAX) {
+      // Small overage: the worker trims the source to MAX_FRAMES before Beeble.
+      // Bill the 240-frame tier (what actually gets relit).
+      body.__trimSourceToFrames = MAX_FRAMES
+      body.__probedFrameCount = MAX_FRAMES
+    } else {
+      return void reply.status(400).send({
+        error: {
+          code: "VIDEO_TOO_MANY_FRAMES",
+          message: `Source has ${real} frames (max ${MAX_FRAMES}). Trim it first.`,
+        },
+      })
+    }
   } catch (err) {
     // Non-fatal: we can't reject without dimensions, so reserve the worst-case
     // top tier. Beeble enforces the real limit on its side.
@@ -175,6 +202,9 @@ export async function switchXRoutes(app: FastifyInstance): Promise<void> {
         alphaKeyframeIndex,
         maxResolution,
         seed,
+        // Set by the preflight when the source is a small overage of the frame
+        // cap — the worker trims it to this many frames before submitting.
+        trimSourceToFrames: (req.body as Record<string, unknown>).__trimSourceToFrames as number | undefined,
         usageLogId,
       })
 
