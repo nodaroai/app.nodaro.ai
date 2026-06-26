@@ -252,7 +252,7 @@ describe("POST /v1/switchx", () => {
   })
 
   it("reserves credits against the frame-tier composite resolved from the probed count", async () => {
-    // 90 frames → 96f tier; maxResolution 1080 (default) → beeble-switchx:96f:1080p
+    // 90 frames → 90f block tier; maxResolution 1080 (default) → beeble-switchx:90f:1080p
     mockProbeVideoFrames.mockResolvedValueOnce({ frames: 90, width: 1280, height: 720 })
     mockJobInsert({ data: { id: "job-res" }, error: null })
 
@@ -270,7 +270,7 @@ describe("POST /v1/switchx", () => {
     expect(res.statusCode).toBe(200)
     // reserveCreditsForJob(req, reply, jobId, modelId) — 4th arg is the credit id.
     const modelId = vi.mocked(reserveCreditsForJob).mock.calls[0]?.[3]
-    expect(modelId).toBe("beeble-switchx:96f:1080p")
+    expect(modelId).toBe("beeble-switchx:90f:1080p")
   })
 
   it("still reserves (worst-case 240f tier) and enqueues when the probe FAILS", async () => {

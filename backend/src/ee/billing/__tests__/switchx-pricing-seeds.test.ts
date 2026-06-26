@@ -5,7 +5,8 @@
  * (frame-tier × resolution). Unlike the standard provider+duration video ids,
  * NO walker test asserts these holds exist — so a missing seed would surface
  * only as a runtime PriceNotConfiguredError → HTTP 503 "price_not_configured"
- * for a legal creditGuard input. This test makes the 11-id seed CI-enforced:
+ * for a legal creditGuard input. This test makes the seed (8 block tiers × 2
+ * resolutions + the bare worst-case id) CI-enforced:
  *
  * - Every (tier ∈ SWITCHX_FRAME_TIERS) × (res ∈ {720,1080}) composite exists in
  *   STATIC_CREDIT_COSTS with a positive hold value (the 503 trap).
@@ -15,10 +16,10 @@
  * - CREDIT_COSTS["switchx"] is defined (node-type resolver for workflow
  *   credit estimation).
  *
- * Values are PROVISIONAL worst-case placeholders (re-anchored in a later task);
- * this guard intentionally checks presence/positivity + the bare↔240f/1080p
- * invariant, NOT the exact provisional numbers, so re-anchoring stays a 1-file
- * change without flipping this test red.
+ * Values are ANCHORED to Beeble's published per-30-frame-block rate (migration
+ * 241); this guard intentionally checks presence/positivity + the bare↔240f/1080p
+ * invariant, NOT the exact numbers, so a future re-price stays a 1-file change
+ * without flipping this test red.
  */
 
 import { describe, it, expect } from "vitest"

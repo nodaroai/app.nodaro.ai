@@ -947,25 +947,31 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "pipeline-music-timeline": 4,
   "pipeline-final-merge": 3,
   "pipeline-freecut-export": 0,
-  // ── Beeble SwitchX relight — frame-tier × resolution reserve holds ──
-  // 11 ids: bare (= 240f/1080p worst-case) + 5 frame tiers (48/96/144/192/240,
-  // SWITCHX_FRAME_TIERS) × 2 resolutions (720/1080p). Metered per-step (no
-  // per-job meter), so the reserved tier bucket is committed verbatim. These are
-  // PROVISIONAL 0%-base values (global markup applies at reserve) deliberately
-  // set HIGH so any pre-anchor Cloud usage over-reserves and never under-bills —
-  // re-anchor before opening the gate (spec §9.2). Mirrors the migration 240
-  // rows exactly (credit-pricing-migration-sync test enforces both directions).
-  "beeble-switchx": 180,
-  "beeble-switchx:48f:1080p": 36,
-  "beeble-switchx:48f:720p": 22,
-  "beeble-switchx:96f:1080p": 72,
-  "beeble-switchx:96f:720p": 44,
-  "beeble-switchx:144f:1080p": 108,
-  "beeble-switchx:144f:720p": 65,
-  "beeble-switchx:192f:1080p": 144,
-  "beeble-switchx:192f:720p": 87,
-  "beeble-switchx:240f:1080p": 180,
-  "beeble-switchx:240f:720p": 108,
+  // ── Beeble SwitchX relight — 30-frame-block × resolution reserve holds ──
+  // 17 ids: bare (= 240f/1080p worst-case) + 8 block tiers (30/60/90/120/150/
+  // 180/210/240, SWITCHX_FRAME_TIERS) × 2 resolutions (720/1080p). ANCHORED to
+  // Beeble's published rate 2026-06-26 (developer.beeble.ai/pricing): metered per
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  // Tiers are 30-frame multiples so each snaps to the exact block Beeble bills
+  // (ceil(frames/30)). Mirrors migration 241 rows (credit-pricing-migration-sync).
+  "beeble-switchx": 120,
+  "beeble-switchx:30f:1080p": 15,
+  "beeble-switchx:30f:720p": 5,
+  "beeble-switchx:60f:1080p": 30,
+  "beeble-switchx:60f:720p": 10,
+  "beeble-switchx:90f:1080p": 45,
+  "beeble-switchx:90f:720p": 15,
+  "beeble-switchx:120f:1080p": 60,
+  "beeble-switchx:120f:720p": 20,
+  "beeble-switchx:150f:1080p": 75,
+  "beeble-switchx:150f:720p": 25,
+  "beeble-switchx:180f:1080p": 90,
+  "beeble-switchx:180f:720p": 30,
+  "beeble-switchx:210f:1080p": 105,
+  "beeble-switchx:210f:720p": 35,
+  "beeble-switchx:240f:1080p": 120,
+  "beeble-switchx:240f:720p": 40,
 }
 
 // ============================================================

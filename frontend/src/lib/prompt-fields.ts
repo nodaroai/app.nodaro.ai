@@ -52,6 +52,7 @@ export const NODE_PROMPT_FIELDS: Readonly<Record<string, PromptFieldSpec>> = {
   "text-to-video": { prompt: "prompt", negative: "negativePrompt", media: "video" },
   "image-to-video": { prompt: "prompt", negative: "negativePrompt", promptLabel: "Motion prompt", media: "video" },
   "video-to-video": { prompt: "prompt", negative: "negativePrompt", media: "video" },
+  "switchx": { prompt: "prompt", promptLabel: "Look prompt", media: "video" },
   "extend-video": { prompt: "prompt", negative: "negativePrompt", media: "video" },
   "speech-to-video": { prompt: "prompt", negative: "negativePrompt", media: "video" },
   "motion-transfer": { prompt: "prompt", negative: "negativePrompt", media: "video" },
