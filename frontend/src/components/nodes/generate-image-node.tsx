@@ -1,8 +1,8 @@
 "use client"
 
-import { memo, useState, useRef, useEffect, useLayoutEffect, Suspense } from "react"
+import { memo, useState, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
-import { Position, useStore, type NodeProps } from "@xyflow/react"
+import { Position, type NodeProps } from "@xyflow/react"
 import { ImageIcon, Loader2, AlertCircle, ShieldAlert, X, Scissors, LayoutGrid, Expand, Download, Link, Type, Pencil, Aperture, Minus, Users, Sparkles, RotateCcw } from "lucide-react"
 import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { isValidGenerateImageConnection } from "@/lib/generate-image-handles"
@@ -32,7 +32,7 @@ import { CachedImage } from "@/components/ui/cached-image"
 import { ResultsThumbnailsPanel } from "./results-thumbnails-panel"
 import { GenerateImageQuickToolbar } from "./generate-image-quick-toolbar"
 import { GenerateImageResultInfo } from "./generate-image-result-info"
-import { InlineNodePrompt } from "./inline-node-prompt/inline-node-prompt"
+import { useInlinePromptActive } from "./inline-node-prompt/use-inline-prompt-active"
 import { useFullResolution } from "@/hooks/use-full-resolution"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { useUpstreamImageAspect } from "@/hooks/use-upstream-image-aspect"
@@ -50,50 +50,13 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   // toolbar visible so the cursor moving into the portaled menu doesn't
   // dismiss it via the node-hover timer.
   const [toolbarDropdownOpen, setToolbarDropdownOpen] = useState(false)
-  // Whether the inline prompt editor is focused — reveals the hover pill while
-  // editing (the run strip/controls are otherwise hover-only, as before).
-  const [promptFocused, setPromptFocused] = useState(false)
-
-  // Inline prompt mode: when the global toggle is ON and the canvas is
-  // interactive (NOT the read-only viewer / template-preview modal, which
-  // sets elementsSelectable=false), render the live prompt editor + in-body
-  // run strip inside the node. OFF (or non-interactive) → today's behavior
-  // byte-for-byte (media fills the body, hover pill toolbar).
-  const inlineEnabled = useWorkflowStore((s) => s.inlinePromptMode)
-  const interactive = useStore((s) => s.elementsSelectable)
-  const showInline = inlineEnabled && interactive
-  // Measured height of the in-body chrome ([InlineNodePrompt + run strip]) —
-  // BaseNode derives node height as `chromeHeight + preview(width/aspect)` and
-  // makes resize width-driven when this is set.
-  const chromeRef = useRef<HTMLDivElement>(null)
+  // Inline-mode state. The editor itself, its measurement, and the per-toggle
+  // height reset now live in BaseNode (centralized for every inline node). This
+  // node keeps `showInline` (pure, shared hook) for preview rounding, and a
+  // local `chromeHeight` fed by BaseNode via `onChromeHeightChange` so the
+  // bottom-anchored input pips can offset below the aspect-locked preview.
+  const showInline = useInlinePromptActive("generate-image")
   const [chromeHeight, setChromeHeight] = useState(0)
-  // useLayoutEffect (not useEffect): commit the measured chrome height BEFORE
-  // paint so BaseNode's derived node.height and React Flow's NodeToolbar (which
-  // positions the run pill off the MEASURED height) land in the same frame —
-  // otherwise the pill lags the node's bottom on resize (bug: pill too far/close).
-  useLayoutEffect(() => {
-    // Reset the editing-pin when inline turns off so the hover pill isn't left
-    // pinned visible (promptFocused can't get a blur if the editor unmounts).
-    if (!showInline || !chromeRef.current) { setChromeHeight(0); if (!showInline) setPromptFocused(false); return }
-    const el = chromeRef.current
-    const ro = new ResizeObserver(() => setChromeHeight(el.offsetHeight))
-    ro.observe(el)
-    setChromeHeight(el.offsetHeight)
-    return () => ro.disconnect()
-  }, [showInline])
-
-  // Clear the stored height on each inline-mode TRANSITION so BaseNode re-fits
-  // cleanly from WIDTH (first-fit, no area preservation). Without this the node
-  // grows a little every toggle: the OFF area-preservation reads the chrome-
-  // inflated height and inflates the width, compounding each cycle.
-  const prevShowInlineRef = useRef(showInline)
-  useLayoutEffect(() => {
-    if (prevShowInlineRef.current === showInline) return
-    prevShowInlineRef.current = showInline
-    useWorkflowStore.setState((st) => ({
-      nodes: st.nodes.map((n) => (n.id === id ? { ...n, height: undefined } : n)),
-    }))
-  }, [showInline, id])
 
   // When inline, the prompt "chrome" sits below the aspect-locked preview, so the
   // bottom-anchored input pips must offset by the chrome height to stay beside the
@@ -336,8 +299,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
       selected={selected}
       isRunning={status === "running"}
       {...imageNodeSizing(imgAspectRatio, upstreamImageAspect)}
-      chromeHeight={showInline ? chromeHeight : undefined}
-      inlineChromePending={showInline && chromeHeight === 0}
+      onChromeHeightChange={setChromeHeight}
       listCount={listTotal}
       listProgress={isNodeRunning && listTotal ? `${listCompleted ?? 0}/${listTotal}` : undefined}
       listProgressPercent={isNodeRunning ? listProgressPercent : undefined}
@@ -351,9 +313,9 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
           onAnyOpenChange={setToolbarDropdownOpen}
         />
       }
-      // The hover pill behaves exactly as before: visible on hover, and ALSO
-      // while the inline prompt is being edited (promptFocused).
-      keepTopToolbarVisible={toolbarDropdownOpen || promptFocused}
+      // The hover pill behaves exactly as before: visible on hover, and (via
+      // BaseNode's internal promptFocused) while the inline prompt is edited.
+      keepTopToolbarVisible={toolbarDropdownOpen}
       bottomToolbarContent={
         showThumbnails && results.length > 1 ? (
           <ResultsThumbnailsPanel
@@ -379,33 +341,12 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
         { id: "image",      type: "source", position: Position.Right, customStyle: { top: '24px',          right: '-29px' }, external: true },
       ]}
     >
-      {showInline ? (
-        // Inline mode: aspect-locked preview on top, the inline prompt editor as
-        // chrome below (measured via chromeRef → BaseNode chromeHeight). The run
-        // controls stay on the original hover pill (rawToolbarContent) — shown on
-        // hover or while editing — so the resting node stays clean (as before).
-        // The preview sub-region carries `group` so the result hover controls'
-        // `group-hover:opacity-100` still reveal on hover.
-        <div className="flex flex-col h-full">
-          <div className="relative flex-1 min-h-0 group">
-            {renderPreview()}
-          </div>
-          <div ref={chromeRef} className="shrink-0">
-            <InlineNodePrompt
-              nodeId={id}
-              nodeType="generate-image"
-              data={nodeData as never}
-              provider={nodeData.provider}
-              aspectRatio={nodeData.aspectRatio}
-              onFocusChange={setPromptFocused}
-            />
-          </div>
-        </div>
-      ) : (
-        <div className="relative w-full h-full group">
-          {renderPreview()}
-        </div>
-      )}
+      {/* Body is just the aspect-locked preview; when inline mode is on, BaseNode
+          appends the InlineNodePrompt editor below it as measured chrome. The
+          `group` scope stays tight to the preview so result-hover controls work. */}
+      <div className="relative w-full h-full group">
+        {renderPreview()}
+      </div>
     </BaseNode>
     {/* Generate Image v2.1 — typed handle pips stacked from bottom-up:
         Prompt → Negative → References → Assets → Elements → Look.

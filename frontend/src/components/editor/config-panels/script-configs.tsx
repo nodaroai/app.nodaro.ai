@@ -299,7 +299,7 @@ export function QACheckConfig({ data, onUpdate }: ConfigProps<QACheckData>) {
   )
 }
 
-export function ImageCriticConfig({ data, onUpdate, nodes, edges, nodeId }: ConfigProps<ImageCriticData> & { nodeId?: string }) {
+export function ImageCriticConfig({ data, onUpdate, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<ImageCriticData> & { nodeId?: string }) {
   const promptSnippets = useSnippetPool("image", "prompt")
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "prompt")
   const finalPrompt = useFinalPromptSegments({
@@ -362,7 +362,7 @@ export function ImageCriticConfig({ data, onUpdate, nodes, edges, nodeId }: Conf
       {usesPrompt && (
         <div>
           <div className="flex items-center justify-between gap-2">
-            <Label htmlFor="image-critic-prompt">Prompt (or wire via input edge)</Label>
+            <Label>Prompt (or wire via input edge)</Label>
             <span className="inline-flex items-center gap-0.5">
               <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
               <SnippetMenuButton pool={promptSnippets} value={data.prompt || ""} onInsert={(v) => onUpdate({ prompt: v })} target="prompt" media="image" />
@@ -376,13 +376,16 @@ export function ImageCriticConfig({ data, onUpdate, nodes, edges, nodeId }: Conf
               minHeightRem={3 * 1.5}
             />
           ) : (
-            <textarea
-              id="image-critic-prompt"
-              className="w-full rounded-md border bg-background p-2 text-sm"
+            <TagTextarea
               rows={3}
               value={data.prompt ?? ""}
-              onChange={(e) => onUpdate({ prompt: e.target.value })}
+              onChange={(v) => onUpdate({ prompt: v })}
               maxLength={8000}
+              tagMode="none"
+              nodeRefs={nodeRefs}
+              displayMode={variableDisplayMode}
+              refMap={refMap}
+              snippets={promptSnippets}
             />
           )}
         </div>

@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useState, useEffect, useRef, useCallback, type ReactNode, type MouseEvent, type PointerEvent as ReactPointerEvent } from "react"
+import { memo, useState, useEffect, useLayoutEffect, useRef, useCallback, type ReactNode, type MouseEvent, type PointerEvent as ReactPointerEvent } from "react"
 import { Handle, Position, NodeToolbar, useUpdateNodeInternals, NodeResizeControl } from "@xyflow/react"
 import { Settings } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -14,6 +14,8 @@ import { NodeRunStripShell } from "./node-run-strip-shell"
 import { InlineGluedStripContext } from "./inline-glued-strip-context"
 import { NodeTopToolbar } from "./node-top-toolbar"
 import { computeFittedNodeBox } from "./video-node-defaults"
+import { InlineNodePrompt } from "./inline-node-prompt/inline-node-prompt"
+import { useInlinePromptActive } from "./inline-node-prompt/use-inline-prompt-active"
 import { computeZoomFromDrag, computeVisualSize, applyMagnet } from "./zoom-math"
 import { useNodeInsertAnimation } from "@/components/editor/workflow-editor/use-node-insert-animation"
 
@@ -66,23 +68,12 @@ interface BaseNodeProps {
   readonly keepTopToolbarVisible?: boolean
   readonly className?: string
   readonly imageAspectRatio?: number
-  /**
-   * Fixed-ish height (px) of in-body chrome below the aspect-locked preview
-   * (inline prompt editor + run strip). When set, the node height is derived as
-   * `chromeHeight + preview(width/aspect)` and resize is width-driven (the two
-   * resize controls get resizeDirection="horizontal"). Default 0 = today.
-   */
-  readonly chromeHeight?: number
-  /**
-   * True during the post-(re)mount window where inline mode is ON but the
-   * chrome height hasn't been measured yet (`showInline && chromeHeight === 0`).
-   * The sizing effect SKIPS while true: otherwise it would run the area-
-   * preserving (chrome===0) branch against a chrome-INCLUSIVE stored height and
-   * permanently inflate the node's width — which compounds when
-   * `onlyRenderVisibleElements` remounts nodes during a zoom/pan. The chrome
-   * ResizeObserver fires next tick and the effect re-runs with the real chrome.
-   */
-  readonly inlineChromePending?: boolean
+  /** When BaseNode centrally renders the inline prompt editor (inline mode on +
+   *  a media-preview node), it measures the editor and reports its height here so
+   *  the node component can offset bottom-anchored handle pips — those render as
+   *  siblings of BaseNode, outside any context it could provide. Pass a stable
+   *  setter (e.g. a useState dispatch). */
+  readonly onChromeHeightChange?: (chromeHeight: number) => void
   /** Opt a non-`parameter` node into the bottom-left zoom magnifier
    *  (`CustomHandle`) instead of a second plain resize dot. Reuses
    *  BaseNode's existing 2× zoom-drag handlers. */
@@ -173,21 +164,13 @@ function BaseNodeComponent({
   keepTopToolbarVisible,
   className,
   imageAspectRatio,
-  chromeHeight = 0,
-  inlineChromePending = false,
+  onChromeHeightChange,
   enableZoomHandle,
 }: BaseNodeProps) {
   // Auto-compute minHeight from handle count: handles need 30px each + 20px padding
   const leftCount = handles.filter((h) => h.position === Position.Left).length
   const rightCount = handles.filter((h) => h.position === Position.Right).length
   const handleMinHeight = (leftCount + rightCount) * 30 + 20
-  // Node-level floor includes chrome; the helper is given the un-inflated
-  // PREVIEW floor (`minHeight`) so chrome is added exactly once (no double-count).
-  const effectiveMinHeight = Math.max(minHeight + chromeHeight, handleMinHeight)
-  // With in-body chrome, height is derived from width (see sizing effect), so
-  // the resize handles only drive width. Without chrome, keep today's
-  // aspect-locked 2-corner resize.
-  const resizeDirection = chromeHeight > 0 ? "horizontal" : undefined
 
   const [isHovered, setIsHovered] = useState(false)
   // Keep the hover toolbar visible while the preset dropdown's (portaled) menu is open, so it
@@ -247,12 +230,13 @@ function BaseNodeComponent({
   // applyNodeChanges / onNodesChange). Subscribing to it lets the floor-clamp
   // effect re-fire once RF completes the first measurement of a new node,
   // instead of prematurely pinning the node before measurement arrives.
-  const { zoom, visualW, visualH, measuredH, isSkipped, isPending, quickStripPinned, hasActivePreset } = useWorkflowStore(
+  const { zoom, visualW, visualH, measuredH, isSkipped, isPending, quickStripPinned, hasActivePreset, nodeType } = useWorkflowStore(
     useShallow((s) => {
       const node = s.nodes.find((n) => n.id === id)
       const data = node?.data as Record<string, unknown> | undefined
       const z = data?.zoom
       return {
+        nodeType: node?.type,
         zoom: typeof z === "number" ? z : 1.0,
         visualW: node?.width,
         visualH: node?.height,
@@ -267,6 +251,70 @@ function BaseNodeComponent({
       }
     }),
   )
+
+  // ── Inline prompt editor (centralized) ──────────────────────────────────
+  // When inline mode is on for this media-preview node type, BaseNode renders
+  // the InlineNodePrompt editor itself (as chrome below the body) and measures
+  // it — so every inline node grows correctly with NO per-node wiring.
+  // `showInline` is a pure derivation shared with the gold nodes (no drift).
+  const showInline = useInlinePromptActive(nodeType)
+  const chromeRef = useRef<HTMLDivElement>(null)
+  const [measuredChrome, setMeasuredChrome] = useState(0)
+  const [promptFocused, setPromptFocused] = useState(false)
+
+  // Measure the inline chrome. useLayoutEffect (pre-paint) so node.height and
+  // the glued run-strip update in the same frame — useEffect reintroduces the
+  // "run pill lags during resize" bug. Resets to 0 (and drops focus, since the
+  // editor unmounts without a blur) when inline turns off.
+  useLayoutEffect(() => {
+    if (!showInline || !chromeRef.current) {
+      setMeasuredChrome(0)
+      if (!showInline) setPromptFocused(false)
+      return
+    }
+    const el = chromeRef.current
+    const ro = new ResizeObserver(() => setMeasuredChrome(el.offsetHeight))
+    ro.observe(el)
+    setMeasuredChrome(el.offsetHeight)
+    return () => ro.disconnect()
+  }, [showInline])
+
+  // Chrome height: the measured inline-editor height when active, else 0. When
+  // > 0 the node height is width-derived (chrome + preview(width/aspect)) and
+  // resize is width-only; at 0 it's the legacy aspect-locked 2-corner box. The
+  // name feeds every downstream consumer (sizing effect, min-height, resize,
+  // aspect-lock, glued strip) unchanged.
+  const chromeHeight = showInline ? measuredChrome : 0
+  // True in the post-(re)mount window where inline is ON but the chrome height
+  // isn't measured yet. The sizing effect SKIPS while true: otherwise it runs
+  // the area-preserving (chrome===0) branch against a chrome-INCLUSIVE stored
+  // height and permanently inflates the node's width — which compounds when
+  // `onlyRenderVisibleElements` remounts nodes during a zoom/pan. The chrome
+  // ResizeObserver fires next tick and the effect re-runs with the real value.
+  const inlineChromePending = showInline && measuredChrome === 0
+  // Node-level floor includes chrome; the sizing helper gets the un-inflated
+  // PREVIEW floor (`minHeight`) so chrome is added exactly once.
+  const effectiveMinHeight = Math.max(minHeight + chromeHeight, handleMinHeight)
+  // With in-body chrome, height is width-derived (sizing effect) so resize is
+  // width-only; without chrome, keep the aspect-locked 2-corner resize.
+  const resizeDirection = chromeHeight > 0 ? "horizontal" : undefined
+
+  // Lift the measured chrome height to the node component — used for bottom-
+  // anchored handle pips, which render as BaseNode siblings (no context reach).
+  useEffect(() => {
+    onChromeHeightChange?.(chromeHeight)
+  }, [chromeHeight, onChromeHeightChange])
+
+  // On each inline toggle, clear this node's stored height so the sizing effect
+  // re-fits from width (prevents per-toggle growth compounding).
+  const prevShowInlineRef = useRef(showInline)
+  useLayoutEffect(() => {
+    if (prevShowInlineRef.current === showInline) return
+    prevShowInlineRef.current = showInline
+    useWorkflowStore.setState((s) => ({
+      nodes: s.nodes.map((n) => (n.id === id ? { ...n, height: undefined } : n)),
+    }))
+  }, [showInline, id])
 
   // The aspect ratio the node's box was last fitted to. Lets the sizing effect
   // distinguish a result-aspect ROTATION (preserve area) from a same-aspect
@@ -552,6 +600,15 @@ function BaseNodeComponent({
   // Idempotent — re-mounting an already-seen node is a no-op.
   const insertStyle = useNodeInsertAnimation(id)
 
+  // The card body, shared by both render paths (inline editor on or off) so the
+  // two branches can't drift in padding/colors. `hideHeader` nodes render flush;
+  // the rest get the standard inset + light/dark surface.
+  const childrenBody = children && (
+    hideHeader
+      ? <div className="text-xs overflow-hidden flex-1 min-h-0">{children}</div>
+      : <div className="px-3 py-2 text-xs overflow-hidden flex-1 min-h-0 bg-white dark:bg-transparent text-[#1E293B] dark:text-card-foreground">{children}</div>
+  )
+
   return (
     <>
     <div
@@ -721,10 +778,20 @@ function BaseNodeComponent({
         </div>
       )}
 
-      {children && (
-        hideHeader
-          ? <div className="text-xs overflow-hidden flex-1 min-h-0">{children}</div>
-          : <div className="px-3 py-2 text-xs overflow-hidden flex-1 min-h-0 bg-white dark:bg-transparent text-[#1E293B] dark:text-card-foreground">{children}</div>
+      {showInline ? (
+        // Inline mode: media body (aspect-locked) on top, the measured inline
+        // prompt editor as chrome below — both in the card's flex column so the
+        // node grows by exactly the editor's height and the preview stays
+        // aspect-locked. The node's own preview keeps its `group`/`group/video`
+        // hover scope (we never wrap it), so result-hover controls still work.
+        <div className="flex-1 min-h-0 flex flex-col">
+          {childrenBody}
+          <div ref={chromeRef} className="shrink-0">
+            <InlineNodePrompt nodeId={id} onFocusChange={setPromptFocused} />
+          </div>
+        </div>
+      ) : (
+        childrenBody
       )}
     </div>
       {/* Content below card (the run strip). `topToolbarContent` is framed in
@@ -738,7 +805,7 @@ function BaseNodeComponent({
           // and leaves the pill "too far / too close". `top-full` of the
           // h-full wrapper = the node's bottom edge; the strip is out-of-flow so
           // it never reserves layout space (stays hidden at rest).
-          (isHovered || !!keepTopToolbarVisible || isRunning || isPending || quickStripPinned) && (
+          (isHovered || (!!keepTopToolbarVisible || promptFocused) || isRunning || isPending || quickStripPinned) && (
             <div
               className="absolute left-1/2 -translate-x-1/2 top-full mt-1 z-50"
               onMouseEnter={() => {
@@ -757,7 +824,7 @@ function BaseNodeComponent({
             </div>
           )
         ) : (
-          <NodeToolbar align="center" isVisible={isHovered || !!keepTopToolbarVisible || isRunning || isPending || quickStripPinned} position={Position.Bottom} offset={4}>
+          <NodeToolbar align="center" isVisible={isHovered || (!!keepTopToolbarVisible || promptFocused) || isRunning || isPending || quickStripPinned} position={Position.Bottom} offset={4}>
             <div
               // The bottom toolbar renders in a portal outside the node's DOM
               // subtree, so hovering it doesn't trigger the node's

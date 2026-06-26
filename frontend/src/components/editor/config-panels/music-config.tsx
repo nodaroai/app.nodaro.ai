@@ -16,6 +16,7 @@ import { CachedImage } from "@/components/ui/cached-image"
 import { uploadAudio, downloadYouTubeAudio } from "@/lib/api"
 import type { GenerateMusicData, WorkflowEdge } from "@/types/nodes"
 import { MappableField } from "./mappable-field"
+import { TagTextarea } from "./tag-textarea"
 import { PromptHelperButton } from "./prompt-helper-button"
 import { SnippetMenuButton } from "./snippet-menu-button"
 import { useSnippetPool } from "@/hooks/queries/use-prompt-snippets-queries"
@@ -30,7 +31,7 @@ import type { ConfigProps } from "./types"
 // referential equality so memoised children don't re-run.
 const EMPTY_EDGES: ReadonlyArray<WorkflowEdge> = []
 
-export function GenerateMusicConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeId }: ConfigProps<GenerateMusicData> & { nodeId?: string }) {
+export function GenerateMusicConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<GenerateMusicData> & { nodeId?: string }) {
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "error">("idle")
   const promptSnippets = useSnippetPool("audio", "prompt")
   // Edit⇄Final toggle for the music prompt. Provider-less; key = "prompt".
@@ -116,12 +117,16 @@ export function GenerateMusicConfig({ data, onUpdate, sources, fieldMappings, on
             minHeightRem={3 * 1.5}
           />
         ) : (
-          <Textarea
-            id="music-prompt"
+          <TagTextarea
             value={data.prompt}
-            onChange={(e) => onUpdate({ prompt: e.target.value })}
+            onChange={(v) => onUpdate({ prompt: v })}
             placeholder="Describe the music you want... (use {} to inject input)"
             rows={3}
+            tagMode="none"
+            nodeRefs={nodeRefs}
+            displayMode={variableDisplayMode}
+            refMap={refMap}
+            snippets={promptSnippets}
           />
         )}
       </MappableField>

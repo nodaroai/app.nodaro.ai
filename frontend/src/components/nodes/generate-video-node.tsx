@@ -1,7 +1,7 @@
 "use client"
 
-import { memo, useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback } from "react"
-import { Position, useUpdateNodeInternals, useStore, type NodeProps } from "@xyflow/react"
+import { memo, useState, useMemo, useEffect, useRef, useCallback } from "react"
+import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import {
   Clapperboard,
   Loader2,
@@ -28,7 +28,7 @@ import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-wi
 import { EditableNodeLabel } from "./editable-node-label"
 import { GenerateVideoQuickToolbar } from "./generate-video-quick-toolbar"
 import { GenerateVideoResultInfo } from "./generate-video-result-info"
-import { InlineNodePrompt } from "./inline-node-prompt/inline-node-prompt"
+import { useInlinePromptActive } from "./inline-node-prompt/use-inline-prompt-active"
 import { NodeJobProgress } from "./node-job-progress"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -94,46 +94,16 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
   const openFreeCut = useWorkflowStore((s) => s.openFreeCut)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
 
-  // Inline prompt mode: render the live prompt editor + in-body run strip when
-  // the global toggle is ON and the canvas is interactive (NOT the read-only
-  // viewer / template-preview modal). OFF → today's behavior byte-for-byte.
-  const inlineEnabled = useWorkflowStore((s) => s.inlinePromptMode)
-  const interactive = useStore((s) => s.elementsSelectable)
-  const showInline = inlineEnabled && interactive
-  const chromeRef = useRef<HTMLDivElement>(null)
+  // Inline-mode state. The editor, its measurement, and the per-toggle height
+  // reset now live in BaseNode (centralized for every inline node). This node
+  // keeps `showInline` (pure, shared hook) for preview rounding + the result-
+  // fill card-chrome strip, and a local `chromeHeight` fed by BaseNode via
+  // `onChromeHeightChange` so the bottom-anchored input pips offset below the
+  // aspect-locked preview.
+  const showInline = useInlinePromptActive("generate-video")
   const [chromeHeight, setChromeHeight] = useState(0)
-  // useLayoutEffect (not useEffect): commit the measured chrome height BEFORE
-  // paint so BaseNode's derived node.height and React Flow's NodeToolbar (which
-  // positions the run pill off the MEASURED height) land in the same frame —
-  // otherwise the pill lags the node's bottom on resize (bug: pill too far/close).
-  useLayoutEffect(() => {
-    // Reset the editing-pin when inline turns off so the hover pill isn't left
-    // pinned visible (promptFocused can't get a blur if the editor unmounts).
-    if (!showInline || !chromeRef.current) { setChromeHeight(0); if (!showInline) setPromptFocused(false); return }
-    const el = chromeRef.current
-    const ro = new ResizeObserver(() => setChromeHeight(el.offsetHeight))
-    ro.observe(el)
-    setChromeHeight(el.offsetHeight)
-    return () => ro.disconnect()
-  }, [showInline])
-
-  // Clear the stored height on each inline-mode TRANSITION so BaseNode re-fits
-  // cleanly from WIDTH (first-fit, no area preservation). Without this the node
-  // grows a little every toggle: the OFF area-preservation reads the chrome-
-  // inflated height and inflates the width, compounding each cycle.
-  const prevShowInlineRef = useRef(showInline)
-  useLayoutEffect(() => {
-    if (prevShowInlineRef.current === showInline) return
-    prevShowInlineRef.current = showInline
-    useWorkflowStore.setState((st) => ({
-      nodes: st.nodes.map((n) => (n.id === id ? { ...n, height: undefined } : n)),
-    }))
-  }, [showInline, id])
 
   const [toolbarDropdownOpen, setToolbarDropdownOpen] = useState(false)
-  // Whether the inline prompt editor is focused — reveals the hover pill while
-  // editing (the run strip/controls are otherwise hover-only, as before).
-  const [promptFocused, setPromptFocused] = useState(false)
   const [showThumbnails, setShowThumbnails] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
@@ -439,8 +409,7 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
         // idle, snaps to the real result aspect once a result loads. (368 also
         // satisfies this node's 11-pip handle stack.)
         {...videoNodeSizing(mediaAspectRatio)}
-        chromeHeight={showInline ? chromeHeight : undefined}
-        inlineChromePending={showInline && chromeHeight === 0}
+        onChromeHeightChange={setChromeHeight}
         handles={handles}
         rawToolbarContent={
           <GenerateVideoQuickToolbar
@@ -451,9 +420,9 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
             onAnyOpenChange={setToolbarDropdownOpen}
           />
         }
-        // The hover pill behaves exactly as before: visible on hover, and ALSO
-        // while the inline prompt is being edited (promptFocused).
-        keepTopToolbarVisible={toolbarDropdownOpen || promptFocused}
+        // The hover pill behaves exactly as before: visible on hover, and (via
+        // BaseNode's internal promptFocused) while the inline prompt is edited.
+        keepTopToolbarVisible={toolbarDropdownOpen}
         bottomToolbarContent={
           showThumbnails && results.length > 1 ? (
             <div className="flex gap-2 px-2 py-1.5 bg-black/60 backdrop-blur-sm rounded-xl border border-white/10">
@@ -494,33 +463,13 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
           ) : undefined
         }
       >
-        {showInline ? (
-          // Inline mode: aspect-locked preview on top, the inline prompt editor as
-          // chrome below (measured via chromeRef → BaseNode chromeHeight). The run
-          // controls stay on the original hover pill (rawToolbarContent) — shown on
-          // hover or while editing — so the resting node stays clean (as before).
-          // The preview sub-region carries `group/video` so the result hover
-          // controls' `group-hover/video:opacity-100` still reveal on hover.
-          <div className="flex flex-col h-full">
-            <div className="relative flex-1 min-h-0 group/video">
-              {renderPreview()}
-            </div>
-            <div ref={chromeRef} className="shrink-0">
-              <InlineNodePrompt
-                nodeId={id}
-                nodeType="generate-video"
-                data={nodeData as never}
-                provider={provider}
-                aspectRatio={nodeData.aspectRatio}
-                onFocusChange={setPromptFocused}
-              />
-            </div>
-          </div>
-        ) : (
-          <div className="relative w-full h-full group/video">
-            {renderPreview()}
-          </div>
-        )}
+        {/* Body is just the aspect-locked preview; when inline mode is on,
+            BaseNode appends the InlineNodePrompt editor below it as measured
+            chrome. The `group/video` scope stays tight to the preview so the
+            result-hover controls still reveal. */}
+        <div className="relative w-full h-full group/video">
+          {renderPreview()}
+        </div>
       </BaseNode>
 
       {/* 11 typed input pips + 1 output pip — bottom-up clusters:

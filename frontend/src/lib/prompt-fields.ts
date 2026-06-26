@@ -37,6 +37,12 @@ export interface PromptFieldSpec {
    *  "/" menu and Snippets button show for this node's prompt fields. REQUIRED
    *  so a new node cannot forget to declare it (compile error). */
   readonly media: SnippetMedia
+  /** True when this node renders a media-result preview body and therefore
+   *  participates in inline-prompt mode (the `InlineNodePrompt` editor on the
+   *  node face, centralized in `BaseNode`). REQUIRED (like `media`) so a new
+   *  prompt node must consciously choose — compile error if omitted. The set of
+   *  `inline: true` types is guarded in `prompt-fields.test.ts`. */
+  readonly inline: boolean
 }
 
 export const NODE_PROMPT_FIELDS: Readonly<Record<string, PromptFieldSpec>> = {
@@ -44,56 +50,56 @@ export const NODE_PROMPT_FIELDS: Readonly<Record<string, PromptFieldSpec>> = {
   // (`edit-image` / `image-to-image` are legacy types consolidated into
   // `modify-image`; they're not in the creatable node set, so a node of that
   // type never mounts and needs no entry here. The guard test enforces that.)
-  "generate-image": { prompt: "prompt", negative: "negativePrompt", media: "image" },
-  "modify-image": { prompt: "prompt", negative: "negativePrompt", icon: "paintbrush", media: "image" },
-  "generate-mask": { prompt: "prompt", promptLabel: "What to mask", media: "image" },
+  "generate-image": { prompt: "prompt", negative: "negativePrompt", media: "image", inline: true },
+  "modify-image": { prompt: "prompt", negative: "negativePrompt", icon: "paintbrush", media: "image", inline: true },
+  "generate-mask": { prompt: "prompt", promptLabel: "What to mask", media: "image", inline: true },
   // ── Video ──
-  "generate-video": { prompt: "prompt", negative: "negativePrompt", media: "video" },
-  "text-to-video": { prompt: "prompt", negative: "negativePrompt", media: "video" },
-  "image-to-video": { prompt: "prompt", negative: "negativePrompt", promptLabel: "Motion prompt", media: "video" },
-  "video-to-video": { prompt: "prompt", negative: "negativePrompt", media: "video" },
-  "switchx": { prompt: "prompt", promptLabel: "Look prompt", media: "video" },
-  "extend-video": { prompt: "prompt", negative: "negativePrompt", media: "video" },
-  "speech-to-video": { prompt: "prompt", negative: "negativePrompt", media: "video" },
-  "motion-transfer": { prompt: "prompt", negative: "negativePrompt", media: "video" },
+  "generate-video": { prompt: "prompt", negative: "negativePrompt", media: "video", inline: true },
+  "text-to-video": { prompt: "prompt", negative: "negativePrompt", media: "video", inline: true },
+  "image-to-video": { prompt: "prompt", negative: "negativePrompt", promptLabel: "Motion prompt", media: "video", inline: true },
+  "video-to-video": { prompt: "prompt", negative: "negativePrompt", media: "video", inline: true },
+  "switchx": { prompt: "prompt", promptLabel: "Look prompt", media: "video", inline: true },
+  "extend-video": { prompt: "prompt", negative: "negativePrompt", media: "video", inline: true },
+  "speech-to-video": { prompt: "prompt", negative: "negativePrompt", media: "video", inline: true },
+  "motion-transfer": { prompt: "prompt", negative: "negativePrompt", media: "video", inline: true },
   // Cinematic Avatar (HeyGen) — generative prompt (NOT a verbatim script),
   // so it participates in the quick-edit Prompt modal like other AI video nodes.
-  "cinematic-avatar": { prompt: "prompt", media: "video" },
-  "video-sfx": { prompt: "prompt", negative: "negativePrompt", promptLabel: "Sound prompt", media: "audio" },
-  "video-retake": { prompt: "prompt", promptLabel: "Retake prompt", media: "video" },
+  "cinematic-avatar": { prompt: "prompt", media: "video", inline: true },
+  "video-sfx": { prompt: "prompt", negative: "negativePrompt", promptLabel: "Sound prompt", media: "audio", inline: true },
+  "video-retake": { prompt: "prompt", promptLabel: "Retake prompt", media: "video", inline: true },
   // ── Audio / music ──
-  "generate-music": { prompt: "prompt", media: "audio" },
-  "suno-generate": { prompt: "prompt", media: "audio" },
-  "text-to-audio": { prompt: "prompt", media: "audio" },
-  // ── Text / LLM ──
-  "text-prompt": { prompt: "text", promptLabel: "Text", media: "text" },
-  "image-to-text": { prompt: "customPrompt", promptLabel: "Question", media: "text" },
-  "llm-chat": { prompt: "userInput", promptLabel: "Prompt", media: "text" },
+  "generate-music": { prompt: "prompt", media: "audio", inline: true },
+  "suno-generate": { prompt: "prompt", media: "audio", inline: true },
+  "text-to-audio": { prompt: "prompt", media: "audio", inline: true },
+  // ── Text / LLM (no media-result preview body → no inline editor) ──
+  "text-prompt": { prompt: "text", promptLabel: "Text", media: "text", inline: false },
+  "image-to-text": { prompt: "customPrompt", promptLabel: "Question", media: "text", inline: false },
+  "llm-chat": { prompt: "userInput", promptLabel: "Prompt", media: "text", inline: false },
   // ── Speech / voice ──
-  "text-to-speech": { prompt: "directText", promptLabel: "Text", media: "audio" },
-  "voice-design": { prompt: "voiceDescription", promptLabel: "Voice description", media: "audio" },
-  "voice-remix": { prompt: "voiceDescription", promptLabel: "Voice description", media: "audio" },
-  "lip-sync": { prompt: "prompt", media: "audio" },
+  "text-to-speech": { prompt: "directText", promptLabel: "Text", media: "audio", inline: true },
+  "voice-design": { prompt: "voiceDescription", promptLabel: "Voice description", media: "audio", inline: true },
+  "voice-remix": { prompt: "voiceDescription", promptLabel: "Voice description", media: "audio", inline: true },
+  "lip-sync": { prompt: "prompt", media: "audio", inline: true },
   // ── Suno (music) ──
-  "suno-cover": { prompt: "prompt", media: "audio" },
-  "suno-extend": { prompt: "prompt", media: "audio" },
-  "suno-replace-section": { prompt: "prompt", media: "audio" },
-  "suno-upload-extend": { prompt: "prompt", media: "audio" },
+  "suno-cover": { prompt: "prompt", media: "audio", inline: true },
+  "suno-extend": { prompt: "prompt", media: "audio", inline: true },
+  "suno-replace-section": { prompt: "prompt", media: "audio", inline: true },
+  "suno-upload-extend": { prompt: "prompt", media: "audio", inline: true },
   // NOTE: `suno-add-vocals` is intentionally absent — its node has no
   // user-editable prompt (SunoAddVocalsData declares only `model`; the config
   // panel + backend route take taskId/audioId/model, never a prompt). A stale
   // entry here rendered a phantom Prompt editor in the quick-edit modal that
   // wrote to a `data.prompt` key nothing ever reads (the dead-field class the
   // guard test now catches via defaultData ownership).
-  "suno-lyrics": { prompt: "prompt", media: "audio" },
-  "suno-style-boost": { prompt: "content", promptLabel: "Style", media: "audio" },
-  // ── Composition / FX ──
-  "image-critic": { prompt: "prompt", promptLabel: "Criteria", media: "image" },
-  "motion-graphics": { prompt: "motionPrompt", promptLabel: "Motion prompt", media: "video" },
-  "3d-title": { prompt: "titlePrompt", promptLabel: "Title", media: "text" },
+  "suno-lyrics": { prompt: "prompt", media: "audio", inline: false },
+  "suno-style-boost": { prompt: "content", promptLabel: "Style", media: "audio", inline: false },
+  // ── Composition / FX (compact, no media-result preview → no inline editor) ──
+  "image-critic": { prompt: "prompt", promptLabel: "Criteria", media: "image", inline: false },
+  "motion-graphics": { prompt: "motionPrompt", promptLabel: "Motion prompt", media: "video", inline: false },
+  "3d-title": { prompt: "titlePrompt", promptLabel: "Title", media: "text", inline: false },
   // ── Script / alignment (their primary text field) ──
-  "generate-script": { prompt: "styleGuide", promptLabel: "Style guide", media: "text" },
-  "forced-alignment": { prompt: "transcript", promptLabel: "Transcript", media: "audio" },
+  "generate-script": { prompt: "styleGuide", promptLabel: "Style guide", media: "text", inline: false },
+  "forced-alignment": { prompt: "transcript", promptLabel: "Transcript", media: "audio", inline: false },
 }
 
 /** The prompt-field spec for a node type, or undefined if it has none. */
@@ -110,4 +116,12 @@ export function nodeHasPromptField(nodeType: string | undefined): boolean {
  *  when the node has no prompt field. */
 export function getSnippetMedia(nodeType: string | undefined): SnippetMedia | undefined {
   return getPromptFields(nodeType)?.media
+}
+
+/** True when this node type renders the inline on-node prompt editor — the
+ *  media-preview nodes (image/video/audio result body). Single source for
+ *  BaseNode's centralized `InlineNodePrompt` rendering and the gold nodes'
+ *  `showInline` derivation (`useInlinePromptActive`). */
+export function nodeHasInlinePrompt(nodeType: string | undefined): boolean {
+  return getPromptFields(nodeType)?.inline === true
 }

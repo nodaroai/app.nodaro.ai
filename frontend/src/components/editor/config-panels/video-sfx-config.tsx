@@ -4,7 +4,6 @@ import { useState } from "react"
 import { ChevronDown, ChevronRight } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { Slider } from "@/components/ui/slider"
 import {
   Select,
@@ -15,6 +14,7 @@ import {
 } from "@/components/ui/select"
 import { hasCredits } from "@/lib/edition"
 import { MappableField } from "./mappable-field"
+import { TagTextarea } from "./tag-textarea"
 import { PromptHelperButton } from "./prompt-helper-button"
 import { SnippetMenuButton } from "./snippet-menu-button"
 import { useSnippetPool } from "@/hooks/queries/use-prompt-snippets-queries"
@@ -63,6 +63,9 @@ export function VideoSfxConfig({
   onMapField,
   nodes,
   edges,
+  nodeRefs,
+  refMap,
+  variableDisplayMode,
   nodeId,
 }: ConfigProps<VideoSfxNodeData> & { nodeId?: string }) {
   const [showAdvanced, setShowAdvanced] = useState(false)
@@ -134,12 +137,17 @@ export function VideoSfxConfig({
           />
         ) : (
           <>
-            <Textarea
+            <TagTextarea
               rows={3}
               value={data.prompt ?? ""}
-              onChange={(e) => onUpdate({ prompt: e.target.value })}
+              onChange={(v) => onUpdate({ prompt: v })}
               placeholder='e.g. "footsteps on dry leaves", "rain on a metal roof", "engine revving"'
               maxLength={2000}
+              tagMode="none"
+              nodeRefs={nodeRefs}
+              displayMode={variableDisplayMode}
+              refMap={refMap}
+              snippets={promptSnippets}
             />
             <p className="text-xs text-muted-foreground mt-1">
               Leave blank for pure foley driven by the video alone.

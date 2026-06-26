@@ -12,11 +12,6 @@ import type { FieldMappings } from "@/types/nodes" // FieldMappings is exported 
 
 export interface InlineNodePromptProps {
   readonly nodeId: string
-  readonly nodeType: string
-  readonly data: Record<string, unknown>
-  readonly provider?: string
-  readonly aspectRatio?: string
-  readonly duration?: number
   /** Lifts the editor's focus state to the node so it can reveal the run pill
    *  while the prompt is being edited (the pill is otherwise hover-only). */
   readonly onFocusChange?: (focused: boolean) => void
@@ -24,9 +19,19 @@ export interface InlineNodePromptProps {
 
 const DRAG_THRESHOLD_PX = 2
 
-export function InlineNodePrompt({ nodeId, nodeType, data, provider, aspectRatio, duration, onFocusChange }: InlineNodePromptProps) {
+export function InlineNodePrompt({ nodeId, onFocusChange }: InlineNodePromptProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const openPromptEditor = useWorkflowStore((s) => s.openPromptEditor)
+  // Self-sufficient: derive type/data + the AI-helper context (provider,
+  // aspectRatio) from the store by nodeId, so BaseNode can render this centrally
+  // with only an id. Deriving nodeType from the real node also fixes the old
+  // hardcoded nodeType="generate-video" on text-to-video / image-to-video (the
+  // real type now drives the prompt label + snippet media).
+  const node = useWorkflowStore((s) => s.nodes.find((n) => n.id === nodeId))
+  const nodeType = node?.type ?? ""
+  const data = (node?.data ?? {}) as Record<string, unknown>
+  const provider = typeof data.provider === "string" ? data.provider : undefined
+  const aspectRatio = typeof data.aspectRatio === "string" ? data.aspectRatio : undefined
   const { referenceImages, nodeRefs, refMap, promptSnippets } = usePromptEditorRefs(nodeId)
   const fields = getPromptFields(nodeType)
   const promptField = fields?.prompt ?? "prompt"
@@ -170,7 +175,6 @@ export function InlineNodePrompt({ nodeId, nodeType, data, provider, aspectRatio
               currentPrompt={promptValue}
               provider={provider}
               aspectRatio={aspectRatio}
-              duration={duration}
               onAccept={(text, mc) => { writeField(text); if (mc) updateNodeData(nodeId, { [mc.field]: mc.value }) }}
             />
           </div>

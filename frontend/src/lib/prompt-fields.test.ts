@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { NODE_PROMPT_FIELDS, getPromptFields, nodeHasPromptField, getSnippetMedia } from "./prompt-fields"
+import { NODE_PROMPT_FIELDS, getPromptFields, nodeHasPromptField, getSnippetMedia, nodeHasInlinePrompt } from "./prompt-fields"
 import { NODE_QUICK_CONFIGS } from "@/components/nodes/node-quick-configs"
 import { NODE_DEF_MAP } from "@/types/nodes"
 
@@ -89,5 +89,50 @@ describe("snippet media declarations", () => {
     expect(getSnippetMedia("text-to-speech")).toBe("audio")
     expect(getSnippetMedia("llm-chat")).toBe("text")
     expect(getSnippetMedia("unknown-node")).toBeUndefined()
+  })
+})
+
+describe("inline-prompt capability (media-preview nodes)", () => {
+  // The EXACT set of node types that render the inline on-node prompt editor —
+  // the media-preview nodes (image/video/audio result body). BaseNode renders
+  // InlineNodePrompt centrally for these via `nodeHasInlinePrompt`. Listed
+  // explicitly so any change to which nodes get the inline editor is a conscious,
+  // reviewed edit — not silent drift. (Text/utility nodes keep the bottom-button
+  // + quick-edit modal only.)
+  const EXPECTED_INLINE = new Set([
+    // image
+    "generate-image", "modify-image", "generate-mask",
+    // video
+    "generate-video", "text-to-video", "image-to-video", "video-to-video",
+    "switchx", "extend-video", "speech-to-video", "motion-transfer",
+    "cinematic-avatar", "video-retake", "video-sfx",
+    // audio / music / speech / voice
+    "generate-music", "suno-generate", "suno-cover", "suno-extend",
+    "suno-replace-section", "suno-upload-extend", "text-to-audio",
+    "text-to-speech", "voice-design", "voice-remix", "lip-sync",
+  ])
+
+  it("every prompt-field entry declares inline as a boolean (required)", () => {
+    for (const [nodeType, spec] of Object.entries(NODE_PROMPT_FIELDS)) {
+      expect(typeof spec.inline, `inline for ${nodeType}`).toBe("boolean")
+    }
+  })
+
+  it("the inline:true set matches the documented media-preview node set", () => {
+    const actual = new Set(
+      Object.entries(NODE_PROMPT_FIELDS).filter(([, s]) => s.inline).map(([t]) => t),
+    )
+    const missing = [...EXPECTED_INLINE].filter((t) => !actual.has(t))
+    const extra = [...actual].filter((t) => !EXPECTED_INLINE.has(t))
+    expect(missing, `expected inline:true but isn't: ${missing.join(", ")}`).toEqual([])
+    expect(extra, `inline:true but not in the expected set: ${extra.join(", ")}`).toEqual([])
+  })
+
+  it("nodeHasInlinePrompt resolves per node type", () => {
+    expect(nodeHasInlinePrompt("generate-image")).toBe(true)
+    expect(nodeHasInlinePrompt("voice-design")).toBe(true)
+    expect(nodeHasInlinePrompt("llm-chat")).toBe(false)
+    expect(nodeHasInlinePrompt("image-critic")).toBe(false)
+    expect(nodeHasInlinePrompt("unknown-node")).toBe(false)
   })
 })
