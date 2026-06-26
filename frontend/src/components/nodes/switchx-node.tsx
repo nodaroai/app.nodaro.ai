@@ -47,12 +47,14 @@ function SwitchXNodeComponent({ id, data, selected }: NodeProps) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [showThumbnails, setShowThumbnails] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
-  // Cost scales with the clip's frame count, which the editor can't know until
-  // the job runs (the server ffprobes and reserves the real tier). Show the
-  // TYPICAL mid tier (144 frames) at the chosen resolution as a "~" estimate
-  // rather than the 240-frame ceiling, so the editor figure ≈ the actual charge.
+  // Cost = frame-block tier × resolution, but the editor can't know the source's
+  // frame count until the job runs (the server ffprobes + reserves the real,
+  // ≤240-frame tier). Show the WORST-CASE (240-frame) tier for the chosen
+  // resolution: a SAFE UPPER bound the charge can never exceed, exact for ~8s
+  // clips. MUST match getModelIdentifier("switchx") so the run-button pill, the
+  // run-confirm gate (>100cr) and the precheck all show ONE consistent number.
   const estRes = nodeData.maxResolution === 720 ? 720 : 1080
-  const credits = useModelCredits(`beeble-switchx:150f:${estRes}p`, estRes === 720 ? 25 : 75)
+  const credits = useModelCredits(`beeble-switchx:240f:${estRes}p`, estRes === 720 ? 40 : 120)
   const { aspectRatio: mediaAspectRatio, onLoadDimensions: handleLoadDimensions } =
     useResultAspectRatio(id, results, activeIndex)
 

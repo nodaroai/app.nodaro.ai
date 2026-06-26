@@ -345,6 +345,16 @@ export function getModelIdentifier(node: WorkflowNode): string {
   if (nodeType === "reference-sheet") {
     return referenceSheetCreditId(data.flavour as { outputFormat?: string } | undefined)
   }
+  // SwitchX (Beeble): cost = frame-block tier × resolution, but the editor can't
+  // know the source's frame count until the job runs. Show the WORST-CASE (240-
+  // frame) tier for the chosen resolution so every estimate (run-button pill,
+  // run-confirm gate, precheck) is one consistent SAFE UPPER bound — the real
+  // reserve is always ≤ this, and it matches exactly for ~8s clips. (Bare
+  // `beeble-switchx` is the resolution-blind 1080p worst-case — never use it for
+  // a 720p node.) Must match the id in switchx-node.tsx's run-button pill.
+  if (nodeType === "switchx") {
+    return `beeble-switchx:240f:${data.maxResolution === 720 ? 720 : 1080}p`
+  }
 
   const provider = data.provider as string | undefined
   if (!provider) return nodeType
