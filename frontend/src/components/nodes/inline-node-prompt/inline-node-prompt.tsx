@@ -32,6 +32,13 @@ export function InlineNodePrompt({ nodeId, onFocusChange }: InlineNodePromptProp
   const data = (node?.data ?? {}) as Record<string, unknown>
   const provider = typeof data.provider === "string" ? data.provider : undefined
   const aspectRatio = typeof data.aspectRatio === "string" ? data.aspectRatio : undefined
+  // Keep the edit affordances (snippets + AI) mounted whenever this node is the
+  // selected one — not only while the editor has DOM focus. Opening the snippet
+  // popover / AI dialog moves focus OUT of the editor (isFocused → false); gated
+  // on focus alone the buttons unmounted mid-click, so the popover never opened
+  // ("clicking just hides them"). The node stays selected across that focus
+  // move, so this gate keeps them alive through the whole interaction.
+  const isSelected = useWorkflowStore((s) => s.selectedNodeId === nodeId)
   const { referenceImages, nodeRefs, refMap, promptSnippets } = usePromptEditorRefs(nodeId)
   const fields = getPromptFields(nodeType)
   const promptField = fields?.prompt ?? "prompt"
@@ -139,9 +146,13 @@ export function InlineNodePrompt({ nodeId, onFocusChange }: InlineNodePromptProp
     >
       {/* Header row: the Edit/Final/Both view toggle (ALWAYS visible, `nodrag`
           so a click doesn't start a node drag) on the left; the edit affordances
-          (snippets + Generate-with-AI) on the right, ONLY while editing — in a
-          row ABOVE the text so they never overlap it. */}
-      <div className="nodrag flex items-center justify-between gap-1 mb-1 px-0.5">
+          (snippets + Generate-with-AI) on the right, shown while editing OR while
+          the node is selected — in a row ABOVE the text so they never overlap it.
+          `min-h` reserves the row at its tallest (affordances) height so toggling
+          them in/out NEVER changes the measured chrome height (which would
+          resize the whole node); the affordance buttons are height-pinned to fit
+          that reserved row. */}
+      <div className="nodrag flex items-center justify-between gap-1 mb-1 px-0.5 min-h-[1.5rem]">
         <div className="inline-flex items-center overflow-hidden rounded-md border border-border/60 text-[10px] leading-none">
           {(["edit", "final", "both"] as const).map((m) => (
             <button
@@ -160,8 +171,8 @@ export function InlineNodePrompt({ nodeId, onFocusChange }: InlineNodePromptProp
             </button>
           ))}
         </div>
-        {showEditor && isFocused && (
-          <div className="flex items-center gap-0.5">
+        {showEditor && (isFocused || isSelected) && (
+          <div className="flex items-center gap-0.5 [&_button]:!h-6 [&_button]:!min-h-0 [&_button]:!leading-none">
             <SnippetMenuButton
               pool={promptSnippets}
               value={promptValue}

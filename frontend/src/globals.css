@@ -1230,6 +1230,33 @@ html, body {
 .text-prompt-card [data-orientation="horizontal"] > *:hover {
   background-color: color-mix(in srgb, var(--foreground) 60%, transparent) !important;
 }
+
+/* Inline node prompt editor scrollbar — match the text-prompt node's feel:
+   hidden at rest, revealed (wider) when the editor is hovered, brighter while
+   the thumb is hovered/dragged. The inline editor scrolls on `.prompt-editor`
+   (overflowY:auto from maxRows); `scrollbar-gutter: stable` reserves the lane so
+   the prompt text doesn't jump sideways the instant it starts to overflow.
+   color-mix tracks --foreground so it reads right in both themes. */
+.inline-node-prompt .prompt-editor {
+  scrollbar-gutter: stable;
+}
+.inline-node-prompt .prompt-editor::-webkit-scrollbar {
+  width: 10px;
+}
+.inline-node-prompt .prompt-editor::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 9999px;
+}
+.inline-node-prompt .prompt-editor:hover::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--foreground) 30%, transparent);
+}
+.inline-node-prompt .prompt-editor::-webkit-scrollbar-thumb:hover,
+.inline-node-prompt .prompt-editor::-webkit-scrollbar-thumb:active {
+  background-color: color-mix(in srgb, var(--foreground) 60%, transparent);
+}
+
 /* Node toolbar: 3-dots menu button turns branding pink on hover */
 .node-more-menu-btn:hover {
   color: #ff0073;

@@ -351,7 +351,13 @@ function BaseNodeComponent({
   // Either case triggers `useUpdateNodeInternals` (via the visualH
   // dep on the effect below) so React Flow re-measures handle bounds after
   // any size change.
-  useEffect(() => {
+  // useLayoutEffect (NOT useEffect): the node-height grow must land in the SAME
+  // paint as the chrome growth. With a post-paint useEffect, typing a line into
+  // the inline editor grew the chrome first (squeezing the flex-1 preview for
+  // one painted frame) and only THEN grew the node height back — the preview
+  // visibly flickered every keystroke. Running pre-paint makes the height catch
+  // up before the squeezed frame is ever shown.
+  useLayoutEffect(() => {
     if (!id) return
     // Skip while inline chrome is expected but not yet measured (post-remount
     // transient): re-fitting with chromeHeight===0 against a chrome-inclusive
