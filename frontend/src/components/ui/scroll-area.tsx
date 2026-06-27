@@ -15,12 +15,19 @@ import { cn } from "@/lib/utils"
 type ScrollAreaProps = React.ComponentPropsWithoutRef<typeof ScrollAreaPrimitive.Root> & {
   /** Class passed to the internal ScrollBar (e.g., extra padding for inset look). */
   scrollBarClassName?: string
+  /** Class passed to the internal Viewport (the actual scroller). */
+  viewportClassName?: string
+  /** Style passed to the internal Viewport. Use `maxHeight` for an auto-growing
+   *  container that scrolls only once content exceeds the cap (the inline canvas
+   *  prompt editor): the Root/Viewport size to content up to this height, then
+   *  the viewport scrolls. */
+  viewportStyle?: React.CSSProperties
 }
 
 const ScrollArea = React.forwardRef<
   React.ElementRef<typeof ScrollAreaPrimitive.Root>,
   ScrollAreaProps
->(({ className, children, type = "hover", scrollHideDelay = 0, scrollBarClassName, ...props }, ref) => (
+>(({ className, children, type = "hover", scrollHideDelay = 0, scrollBarClassName, viewportClassName, viewportStyle, ...props }, ref) => (
   <ScrollAreaPrimitive.Root
     ref={ref}
     type={type}
@@ -28,7 +35,7 @@ const ScrollArea = React.forwardRef<
     className={cn("relative overflow-hidden", className)}
     {...props}
   >
-    <ScrollAreaPrimitive.Viewport className="h-full w-full rounded-[inherit]">
+    <ScrollAreaPrimitive.Viewport className={cn("h-full w-full rounded-[inherit]", viewportClassName)} style={viewportStyle}>
       {children}
     </ScrollAreaPrimitive.Viewport>
     <ScrollBar className={scrollBarClassName} />

@@ -1054,10 +1054,9 @@ html, body {
 .prompt-editor--bare .prompt-editor__content .ProseMirror p {
   line-height: 2rem;
 }
-/* Inline editor scrollbar styling lives in ONE place — the
-   `.inline-node-prompt .prompt-editor` block further down (next to the
-   text-prompt reference rules). A duplicate `.prompt-editor--bare` set used to
-   live here and fought it on specificity; consolidated to avoid drift. */
+/* The inline (bare) editor's scrollbar is the shared Radix ScrollArea (see
+   prompt-editor/index.tsx) — same component as the text-prompt node, so no
+   per-element native-scrollbar CSS lives here. */
 .prompt-editor__content .ProseMirror {
   outline: none;
   min-height: inherit;
@@ -1217,37 +1216,13 @@ html, body {
   background-color: color-mix(in srgb, var(--foreground) 60%, transparent) !important;
 }
 
-/* Inline node prompt editor scrollbar — match the text-prompt node's feel
-   EXACTLY: hidden at rest, revealed on hover as a wider (~8px) rounded thumb,
-   brighter while the thumb is hovered/dragged. The inline editor scrolls
-   natively on `.prompt-editor` (overflow-y:auto from maxRows). Like the text
-   node's overlay scrollbar there is NO `scrollbar-gutter` — the lane only shows
-   once the prompt actually overflows, so short prompts keep full width (no
-   permanent text inset). The 1px transparent border + content-box clip leaves an
-   ~8px thumb in the 10px lane (the old 3px border made it look thin — the
-   "make it wider" complaint). Rest-hover uses --border to match the text node's
-   idle thumb; grab/drag bumps to --foreground/60 like the loop/list node. */
-.inline-node-prompt .prompt-editor { scrollbar-width: none; }
-.inline-node-prompt .prompt-editor:hover { scrollbar-width: thin; }
-.inline-node-prompt .prompt-editor::-webkit-scrollbar {
-  width: 10px;
-}
-.inline-node-prompt .prompt-editor::-webkit-scrollbar-track {
-  background: transparent;
-}
-.inline-node-prompt .prompt-editor::-webkit-scrollbar-thumb {
-  background-color: transparent;
-  border: 1px solid transparent;
-  background-clip: content-box;
-  border-radius: 9999px;
-}
-.inline-node-prompt .prompt-editor:hover::-webkit-scrollbar-thumb {
-  background-color: var(--border);
-}
-.inline-node-prompt .prompt-editor::-webkit-scrollbar-thumb:hover,
-.inline-node-prompt .prompt-editor::-webkit-scrollbar-thumb:active {
-  background-color: color-mix(in srgb, var(--foreground) 60%, transparent);
-}
+/* Inline node prompt editor scroll: the inline (bare) editor now scrolls through
+   the SAME Radix ScrollArea component as the text-prompt node (see
+   prompt-editor/index.tsx), so its scrollbar is identical in look AND behavior —
+   hover-revealed, ~8px rounded thumb (foreground/30 → foreground/60 on drag),
+   no permanent inset — across every OS scroll-bar setting (a native scrollbar
+   couldn't match it on macOS overlay mode). No per-element scrollbar CSS is
+   needed here; the shared ScrollBar component carries the styling. */
 
 /* Node toolbar: 3-dots menu button turns branding pink on hover */
 .node-more-menu-btn:hover {

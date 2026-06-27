@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useMemo } from "react"
 import { useEditor, EditorContent } from "@tiptap/react"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { Document } from "@tiptap/extension-document"
 import { Paragraph } from "@tiptap/extension-paragraph"
 import { Text } from "@tiptap/extension-text"
@@ -849,24 +850,45 @@ export function PromptEditor({
       ? { maxHeight: `calc(${minHeight} + 1.125rem)`, overflowY: "auto" as const }
       : undefined
 
+  const editorContent = (
+    <EditorContent
+      editor={editor}
+      className="prompt-editor__content"
+      style={{ minHeight }}
+    />
+  )
+
+  // Inline canvas editor (bare + auto-grow): route scrolling through the SAME
+  // Radix ScrollArea the text-prompt node uses, so the on-canvas prompt
+  // scrollbar matches it EXACTLY in look AND behavior (hover-reveal, ~8px
+  // rounded thumb, brighten on drag) regardless of the OS "show scroll bars"
+  // setting. A native scrollbar can't match a DOM one — on macOS overlay mode
+  // it's drawn by the OS and ignores most of our styling. The maxHeight goes on
+  // the ScrollArea VIEWPORT (the scroller): the editor grows to it, then the
+  // viewport scrolls. Boxed (config-panel/modal) usages keep the native overflow.
+  const useScrollArea = bare && !!maxHeight
+
   return (
     <div
       className={`prompt-editor ${bare ? "prompt-editor--bare" : ""} bg-transparent text-sm transition-colors ${bare ? "" : "rounded-md border border-input shadow-xs"} ${className ?? ""}`}
       onClick={() => editor?.chain().focus().run()}
-      // Scrollable: cap the outer wrapper (border included). The inner
+      // Scrollable (native path): cap the outer wrapper (border included). The inner
       // .prompt-editor__content has 1rem vertical padding; .ProseMirror
       // inherits `min-height` from its parent so it is always exactly
       // `rows*1.5rem` tall. Setting maxHeight here (border-box, no padding on
       // this element) to rows*1.5 + 1.125rem gives a content area of
       // rows*1.5 + 1rem — exactly ProseMirror's min-height + the 1rem padding,
-      // leaving zero overflow and zero spurious scrollbar.
-      style={wrapperStyle}
+      // leaving zero overflow and zero spurious scrollbar. The ScrollArea path
+      // (inline) caps the viewport instead, so the wrapper stays unconstrained.
+      style={useScrollArea ? undefined : wrapperStyle}
     >
-      <EditorContent
-        editor={editor}
-        className="prompt-editor__content"
-        style={{ minHeight }}
-      />
+      {useScrollArea ? (
+        <ScrollArea className="w-full" viewportStyle={{ maxHeight }}>
+          {editorContent}
+        </ScrollArea>
+      ) : (
+        editorContent
+      )}
     </div>
   )
 }
