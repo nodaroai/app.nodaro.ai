@@ -792,8 +792,24 @@ function BaseNodeComponent({
         // hover scope (we never wrap it), so result-hover controls still work.
         <div className="flex-1 min-h-0 flex flex-col">
           {childrenBody}
-          <div ref={chromeRef} className="shrink-0">
-            <InlineNodePrompt nodeId={id} onFocusChange={setPromptFocused} />
+          {/* Chrome height-clamp: pin this wrapper to the LAST MEASURED chrome
+              height (state) with overflow hidden. When the editor's DOM grows on
+              a keystroke, the extra height is clipped here for one frame instead
+              of squeezing the flex-1 preview above — that transient squeeze was
+              the preview "flicker" on every new line. The ResizeObserver on the
+              inner ref reports the true content height next tick; measuredChrome
+              and node.height then grow together in one pre-paint commit (the
+              sizing useLayoutEffect), so the new line and the taller node land in
+              the same frame. The inner ref (auto height) is what's measured;
+              the absolute affordances inside it stay out of that measurement. */}
+          <div className="shrink-0 overflow-hidden" style={{ height: measuredChrome || undefined }}>
+            <div ref={chromeRef}>
+              <InlineNodePrompt
+                nodeId={id}
+                onFocusChange={setPromptFocused}
+                affordancesVisible={!!selected || isHovered}
+              />
+            </div>
           </div>
         </div>
       ) : (
