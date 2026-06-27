@@ -1054,24 +1054,9 @@ html, body {
 .prompt-editor--bare .prompt-editor__content .ProseMirror p {
   line-height: 2rem;
 }
-/* Scrollbar: hidden at rest, revealed a little wider on hover of the editor
-   (mirrors the text node's hover-visible scrollbar). The root .prompt-editor is
-   the scroll container (overflow-y is set on it when maxRows is given). */
-.prompt-editor--bare { scrollbar-width: none; }
-.prompt-editor--bare:hover { scrollbar-width: thin; }
-.prompt-editor--bare::-webkit-scrollbar { width: 0; }
-.prompt-editor--bare:hover::-webkit-scrollbar { width: 10px; }
-.prompt-editor--bare::-webkit-scrollbar-track { background: transparent; }
-.prompt-editor--bare::-webkit-scrollbar-thumb {
-  background: rgba(128, 128, 128, 0.45);
-  border-radius: 9999px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
-}
-.prompt-editor--bare::-webkit-scrollbar-thumb:hover {
-  background: rgba(128, 128, 128, 0.7);
-  background-clip: padding-box;
-}
+/* The inline (bare) editor's scrollbar is the shared Radix ScrollArea (see
+   prompt-editor/index.tsx) — same component as the text-prompt node, so no
+   per-element native-scrollbar CSS lives here. */
 .prompt-editor__content .ProseMirror {
   outline: none;
   min-height: inherit;
@@ -1230,6 +1215,15 @@ html, body {
 .text-prompt-card [data-orientation="horizontal"] > *:hover {
   background-color: color-mix(in srgb, var(--foreground) 60%, transparent) !important;
 }
+
+/* Inline node prompt editor scroll: the inline (bare) editor now scrolls through
+   the SAME Radix ScrollArea component as the text-prompt node (see
+   prompt-editor/index.tsx), so its scrollbar is identical in look AND behavior —
+   hover-revealed, ~8px rounded thumb (foreground/30 → foreground/60 on drag),
+   no permanent inset — across every OS scroll-bar setting (a native scrollbar
+   couldn't match it on macOS overlay mode). No per-element scrollbar CSS is
+   needed here; the shared ScrollBar component carries the styling. */
+
 /* Node toolbar: 3-dots menu button turns branding pink on hover */
 .node-more-menu-btn:hover {
   color: #ff0073;

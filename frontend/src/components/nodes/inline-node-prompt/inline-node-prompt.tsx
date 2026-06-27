@@ -15,11 +15,19 @@ export interface InlineNodePromptProps {
   /** Lifts the editor's focus state to the node so it can reveal the run pill
    *  while the prompt is being edited (the pill is otherwise hover-only). */
   readonly onFocusChange?: (focused: boolean) => void
+  /** Whether the node is selected (React Flow) or hovered. Keeps the snippet +
+   *  AI affordances mounted across the focus loss that opening their
+   *  popover/dialog causes — gated on focus alone they unmounted mid-click and
+   *  the popover never opened ("clicking just hides them"). Driven by BaseNode
+   *  from React Flow's `selected` prop + its own hover state — NOT the store's
+   *  `selectedNodeId`, which only tracks the open config panel (false on a plain
+   *  canvas selection, which is why the first fix didn't work). */
+  readonly affordancesVisible?: boolean
 }
 
 const DRAG_THRESHOLD_PX = 2
 
-export function InlineNodePrompt({ nodeId, onFocusChange }: InlineNodePromptProps) {
+export function InlineNodePrompt({ nodeId, onFocusChange, affordancesVisible = false }: InlineNodePromptProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const openPromptEditor = useWorkflowStore((s) => s.openPromptEditor)
   // Self-sufficient: derive type/data + the AI-helper context (provider,
@@ -137,11 +145,16 @@ export function InlineNodePrompt({ nodeId, onFocusChange }: InlineNodePromptProp
         e.currentTarget.querySelector<HTMLElement>(".ProseMirror")?.focus()
       }}
     >
-      {/* Header row: the Edit/Final/Both view toggle (ALWAYS visible, `nodrag`
-          so a click doesn't start a node drag) on the left; the edit affordances
-          (snippets + Generate-with-AI) on the right, ONLY while editing — in a
-          row ABOVE the text so they never overlap it. */}
-      <div className="nodrag flex items-center justify-between gap-1 mb-1 px-0.5">
+      {/* Header row: the Edit/Final/Both toggle (ALWAYS visible, `nodrag` so a
+          click doesn't start a node drag) on the left. The edit affordances
+          (snippets + Generate-with-AI) float ABSOLUTELY on the right — out of
+          flow, so showing/hiding them never changes the measured chrome height
+          (which would resize the whole node mid-interaction). They appear while
+          editing OR while the node is selected/hovered, so opening the snippet
+          popover / AI dialog — which blurs the editor — doesn't unmount them
+          mid-click. `min-h` reserves the row at the affordances' height so the
+          floating buttons sit clear of the prompt text below. */}
+      <div className="nodrag relative flex items-center mb-1 px-0.5 min-h-[1.5rem]">
         <div className="inline-flex items-center overflow-hidden rounded-md border border-border/60 text-[10px] leading-none">
           {(["edit", "final", "both"] as const).map((m) => (
             <button
@@ -160,8 +173,8 @@ export function InlineNodePrompt({ nodeId, onFocusChange }: InlineNodePromptProp
             </button>
           ))}
         </div>
-        {showEditor && isFocused && (
-          <div className="flex items-center gap-0.5">
+        {showEditor && (isFocused || affordancesVisible) && (
+          <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-0.5 [&_button]:!h-6 [&_button]:!min-h-0 [&_button]:!leading-none">
             <SnippetMenuButton
               pool={promptSnippets}
               value={promptValue}

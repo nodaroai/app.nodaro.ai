@@ -944,10 +944,21 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     // Tell the auto-pan hook the user just initiated a pan/zoom — it
     // will suppress its next auto-pan for ~2s.
     cameraAutoPan.onMove()
-    // User-initiated pan/zoom exits focus mode (ignore our own animation)
-    if (isMobile && focusMode && !focusAnimatingRef.current) {
-      setFocusMode(false)
+    // Ignore OUR OWN focus camera animation. Every zoom-in / zoom-out / re-zoom
+    // routes through beginFocusAnimation, which holds focusAnimatingRef for
+    // ~350ms, so the programmatic setCenter/setViewport never self-cancels.
+    if (focusAnimatingRef.current) return
+    // A user-initiated pan or zoom CANCELS zoom-focus mode (Mode 2 → Mode 1):
+    // drop the zoomed-node refs so the next Enter / double-click re-zooms from
+    // scratch instead of toggling back to the saved overview.
+    if (zoomedNodeIdRef.current) {
+      zoomedNodeIdRef.current = null
+      preZoomViewportRef.current = null
+      preZoomNodeIdRef.current = null
     }
+    // Mobile focus mode can also be entered via the selectedNodeId effect (which
+    // doesn't set zoomedNodeIdRef), so clear it independently.
+    if (isMobile && focusMode) setFocusMode(false)
   }, [cameraAutoPan, isMobile, focusMode])
 
   const handleMoveEnd = useCallback(() => {
