@@ -452,6 +452,25 @@ describe("extractSavedNodeOutput", () => {
     expect(extractSavedNodeOutput(n)?.imageUrl).toBe("fallback.png")
   })
 
+  it("entity imageUrl prefers the selected default asset (starred preview) over active + source", () => {
+    const n = node("1", "character", {
+      defaultAssetUrl: "https://r2/starred.png",
+      generatedResults: [{ url: "https://r2/active.png" }],
+      activeResultIndex: 0,
+      sourceImageUrl: "https://r2/source.png",
+    })
+    expect(extractSavedNodeOutput(n)?.imageUrl).toBe("https://r2/starred.png")
+  })
+
+  it("entity imageUrl falls through to the active result when defaultAssetUrl is empty", () => {
+    const n = node("1", "object", {
+      defaultAssetUrl: "",
+      generatedResults: [{ url: "https://r2/active.png" }],
+      sourceImageUrl: "https://r2/source.png",
+    })
+    expect(extractSavedNodeOutput(n)?.imageUrl).toBe("https://r2/active.png")
+  })
+
   it("extracts videoUrl from image-to-video", () => {
     const n = node("1", "image-to-video", { generatedVideoUrl: "vid.mp4" })
     expect(extractSavedNodeOutput(n)?.videoUrl).toBe("vid.mp4")

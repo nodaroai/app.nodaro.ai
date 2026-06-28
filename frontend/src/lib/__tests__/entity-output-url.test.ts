@@ -17,4 +17,19 @@ describe("entityActiveImageUrl", () => {
   it("returns undefined when nothing is present", () => {
     expect(entityActiveImageUrl({})).toBeUndefined()
   })
+  it("prefers the selected default asset (defaultAssetUrl) over active result + source", () => {
+    expect(entityActiveImageUrl({
+      defaultAssetUrl: "starred",
+      generatedResults: [{ url: "active" }],
+      activeResultIndex: 0,
+      sourceImageUrl: "src",
+    })).toBe("starred")
+  })
+  it("treats an empty defaultAssetUrl as absent (falls through to the active result)", () => {
+    expect(entityActiveImageUrl({
+      defaultAssetUrl: "",
+      generatedResults: [{ url: "active" }],
+      sourceImageUrl: "src",
+    })).toBe("active")
+  })
 })
