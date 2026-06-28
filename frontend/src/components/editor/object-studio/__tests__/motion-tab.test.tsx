@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event"
 
 vi.mock("@/lib/api", () => ({
   generateObjectMotion: vi.fn(),
+  removeObjectAsset: vi.fn().mockResolvedValue(undefined),
   getJobStatusBatch: vi.fn().mockResolvedValue({ jobs: [] }),
 }))
 

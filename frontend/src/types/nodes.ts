@@ -3863,6 +3863,9 @@ export type ObjectNodeData = {
   // Sheet planner reuses them instead of regenerating. Objects have no
   // `outfitVariations` (character-only dimension).
   readonly detailCloseups?: ObjectAssetItem[]
+  // Named composite reference boards (the `boards` JSONB column, migration 212) —
+  // distinct from `sheets`. Hydrated from the GET route; rendered in the Board tab.
+  readonly boards?: ReadonlyArray<{ readonly name: string; readonly url: string }>
   // Per-CANVAS-NODE thumbnail override (frontend-only; mirrors
   // CharacterNodeData.defaultAssetUrl). When set — e.g. a generated reference
   // sheet or a Studio-selected variant — it drives the canvas thumbnail,
@@ -3957,6 +3960,9 @@ export type CreatureNodeData = {
   // GET route shape; the Sheet tab is DEFERRED this phase.
   sheets?: ReferenceSheet[]
   readonly detailCloseups?: ObjectAssetItem[]
+  // Named composite reference boards (the `boards` JSONB column, migration 212) —
+  // distinct from `sheets`. Hydrated from the GET route; rendered in the Board tab.
+  readonly boards?: ReadonlyArray<{ readonly name: string; readonly url: string }>
   // Per-CANVAS-NODE thumbnail override (frontend-only; mirrors
   // ObjectNodeData.defaultAssetUrl). Drives the canvas thumbnail, falling back
   // to the active result then `sourceImageUrl`. Never sent to saveCreature.
@@ -4078,6 +4084,9 @@ export type LocationNodeData = {
   // Sheet planner reuses them instead of regenerating. Locations have no
   // `outfitVariations` (character-only dimension).
   readonly detailCloseups?: LocationAssetItem[]
+  // Named composite reference boards (the `boards` JSONB column, migration 212) —
+  // distinct from `sheets`. Hydrated from the GET route; rendered in the Board tab.
+  readonly boards?: ReadonlyArray<{ readonly name: string; readonly url: string }>
   // Per-CANVAS-NODE thumbnail override (frontend-only; mirrors
   // CharacterNodeData.defaultAssetUrl). When set — e.g. a generated reference
   // sheet or a Studio-selected variant — it drives the canvas thumbnail,

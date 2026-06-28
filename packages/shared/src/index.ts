@@ -1281,6 +1281,15 @@ export type {
   ResolveCharacterAspectOptions,
 } from "./character-aspect-defaults.js"
 
+export {
+  ENTITY_ASPECT_DEFAULTS,
+  resolveEntityAspect,
+  aspectRatioToNumber,
+} from "./entity-aspect-defaults.js"
+export type { EntityStudioKind } from "./entity-aspect-defaults.js"
+
+export * from "./object-asset-presets.js"
+
 export * from "./pipeline-chat.js"
 export * from "./pipeline-defaults.js"
 export * from "./pipeline-events.js"

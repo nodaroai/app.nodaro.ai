@@ -1,30 +1,12 @@
+import { OBJECT_VARIATION_PRESETS } from "@nodaro/shared"
 import { ObjectAssetTab } from "./object-asset-tab"
 import type { ObjectStudioState } from "./use-object-studio"
 
 /**
- * Variations tab — thin wrapper over `ObjectAssetTab` passing the
- * `variations` bucket + the 11 preset strings.
- *
- * Preset list extends the current `VARIANTS.variations` in
- * `backend/src/routes/generate-object-asset.ts` (5 entries) with 6 more
- * (broken/antique/futuristic/holographic/dirty/polished). New presets fall
- * through the route's "custom" path until the VARIANTS map is extended in
- * a follow-up.
+ * Variations tab — thin wrapper over `ObjectAssetTab` passing the `variations`
+ * bucket + the variation preset chips (shared single source of truth
+ * `@nodaro/shared` → `OBJECT_VARIATION_PRESETS`, validated by the backend route).
  */
-const VARIATIONS_PRESETS = [
-  "clean",
-  "weathered",
-  "damaged",
-  "ornate",
-  "minimal",
-  "broken",
-  "antique",
-  "futuristic",
-  "holographic",
-  "dirty",
-  "polished",
-] as const
-
 interface VariationsTabProps {
   readonly studio: ObjectStudioState
 }
@@ -34,7 +16,7 @@ export function VariationsTab({ studio }: VariationsTabProps) {
     <ObjectAssetTab
       studio={studio}
       tabKind="variations"
-      presets={VARIATIONS_PRESETS}
+      presets={OBJECT_VARIATION_PRESETS}
       iconLabel="✨ Variations"
     />
   )

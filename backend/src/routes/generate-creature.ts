@@ -7,7 +7,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractForcePrivate, extractProvider } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { buildCreaturePrompt } from "@nodaro/shared"
+import { buildCreaturePrompt, resolveEntityAspect } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 import { hasCredits } from "../lib/config.js"
 
@@ -48,6 +48,10 @@ const generateCreatureBody = z.object({
   // Optimistic-concurrency guard for the single-candidate auto-attach path:
   // if set, worker bails on attach when `creatures.updated_at` has drifted.
   expectedUpdatedAt: z.string().datetime().optional(),
+  // Optional explicit aspect override ("W:H") for the main creature image.
+  // Permissive — `resolveEntityAspect` validates the format and falls through
+  // to the default when absent/malformed. Explicit wins over the default.
+  aspectRatio: z.string().max(16).optional(),
 })
 
 /**
@@ -138,6 +142,16 @@ export async function generateCreatureRoutes(app: FastifyInstance) {
       const modelIdentifier = parsed.data.provider
 
       const prompt = buildCreaturePrompt({ name, description, species, category, style })
+
+      // Main creature image: full-body portrait framing (3:4) so the hero shot
+      // isn't generated square and cropped. Mirrors generate-character.ts (which
+      // uses the portrait default); the worker forwards this as the provider
+      // `aspect_ratio` (clamped to the model). Explicit caller value wins.
+      const aspectRatio = resolveEntityAspect({
+        entity: "creature",
+        assetType: "poses",
+        explicit: parsed.data.aspectRatio,
+      })
 
       const mcpClient = extractMcpClient(req.body)
       const workflowId = extractWorkflowId(req.body)
@@ -317,6 +331,7 @@ export async function generateCreatureRoutes(app: FastifyInstance) {
           prompt,
           sourceImageUrl,
           provider: parsed.data.provider,
+          aspectRatio,
           usageLogId: r.usageLogId,
           seedPromptHint: parsed.data.seedPromptHint,
           ...(includeAttach

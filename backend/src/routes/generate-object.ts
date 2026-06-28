@@ -7,7 +7,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractForcePrivate, extractProvider } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { buildObjectPrompt } from "@nodaro/shared"
+import { buildObjectPrompt, resolveEntityAspect } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 import { hasCredits } from "../lib/config.js"
 
@@ -45,6 +45,10 @@ const generateObjectBody = z.object({
   // Optimistic-concurrency guard for the single-candidate auto-attach path:
   // if set, worker bails on attach when `objects.updated_at` has drifted.
   expectedUpdatedAt: z.string().datetime().optional(),
+  // Optional explicit aspect override ("W:H") for the main object image.
+  // Permissive — `resolveEntityAspect` validates the format and falls through
+  // to the default when absent/malformed. Explicit wins over the default.
+  aspectRatio: z.string().max(16).optional(),
 })
 
 /**
@@ -132,6 +136,16 @@ export async function generateObjectRoutes(app: FastifyInstance) {
       const modelIdentifier = parsed.data.provider
 
       const prompt = buildObjectPrompt({ name, description, category, style })
+
+      // Main object image: square product-shot framing (1:1) — the canonical
+      // turnaround reference. Mirrors generate-character.ts's main-image aspect
+      // resolution; the worker forwards this as the provider `aspect_ratio`
+      // (clamped to the model). Explicit caller value wins over the default.
+      const aspectRatio = resolveEntityAspect({
+        entity: "object",
+        assetType: "angles",
+        explicit: parsed.data.aspectRatio,
+      })
 
       const mcpClient = extractMcpClient(req.body)
       const workflowId = extractWorkflowId(req.body)
@@ -310,6 +324,7 @@ export async function generateObjectRoutes(app: FastifyInstance) {
           prompt,
           sourceImageUrl,
           provider: parsed.data.provider,
+          aspectRatio,
           usageLogId: r.usageLogId,
           seedPromptHint: parsed.data.seedPromptHint,
           ...(includeAttach

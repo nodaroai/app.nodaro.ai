@@ -181,6 +181,66 @@ describe("useCharacterStudioJobs.trackAndWait", () => {
   })
 })
 
+describe("useCharacterStudioJobs failed surfacing (failed/dismissFailed)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it("surfaces a failed job in `failed` (name + assetType) and removes the spinner", async () => {
+    const { result } = renderHook(() => useCharacterStudioJobs(vi.fn(), vi.fn()))
+    act(() => {
+      result.current.track("job-f", "expressions", "smile")
+    })
+    vi.mocked(getJobStatusLean).mockResolvedValueOnce({
+      id: "job-f",
+      status: "failed",
+      error_message: "boom",
+      input_data: {},
+      created_at: new Date().toISOString(),
+    } as never)
+
+    await act(async () => {
+      vi.advanceTimersByTime(2000)
+      await Promise.resolve(); await Promise.resolve(); await Promise.resolve()
+    })
+
+    // Spinner gone, but a dismissible failed entry remains for the tab to render.
+    expect(result.current.pending.has("job-f")).toBe(false)
+    expect(result.current.failed.get("job-f")).toEqual({ assetType: "expressions", name: "smile" })
+
+    // dismissFailed (Retry or ✕) clears it.
+    act(() => {
+      result.current.dismissFailed("job-f")
+    })
+    expect(result.current.failed.has("job-f")).toBe(false)
+  })
+
+  it("does NOT add a `failed` entry for a cancelled job (cancellations stay silent)", async () => {
+    const { result } = renderHook(() => useCharacterStudioJobs(vi.fn(), vi.fn()))
+    act(() => {
+      result.current.track("job-c", "poses", "standing")
+    })
+    vi.mocked(getJobStatusLean).mockResolvedValueOnce({
+      id: "job-c",
+      status: "cancelled",
+      input_data: {},
+      created_at: new Date().toISOString(),
+    } as never)
+
+    await act(async () => {
+      vi.advanceTimersByTime(2000)
+      await Promise.resolve(); await Promise.resolve(); await Promise.resolve()
+    })
+
+    expect(result.current.pending.has("job-c")).toBe(false)
+    expect(result.current.failed.size).toBe(0)
+  })
+})
+
 describe("useCharacterStudioJobs optimistic lifecycle (begin/settle/abort)", () => {
   beforeEach(() => {
     vi.clearAllMocks()

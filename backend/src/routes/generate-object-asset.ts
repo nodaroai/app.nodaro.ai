@@ -8,7 +8,7 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate, extractProvider 
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
-import { OBJECT_ATTACH_COLUMNS } from "@nodaro/shared"
+import { OBJECT_ATTACH_COLUMNS, resolveEntityAspect, OBJECT_ASSET_PRESETS, OBJECT_ASSET_PROMPTS } from "@nodaro/shared"
 import { llmComplete } from "../lib/llm-client.js"
 import {
   OBJECT_ASSET_DESCRIPTION_SYSTEM_PROMPT,
@@ -18,11 +18,11 @@ import {
 
 const assetTypeEnum = z.enum(["angles", "materials", "variations", "custom"])
 
-const VARIANTS: Record<string, readonly string[]> = {
-  angles: ["front", "side", "top", "back", "three-quarter"],
-  materials: ["wood", "metal", "glass", "plastic", "fabric", "stone"],
-  variations: ["clean", "weathered", "damaged", "ornate", "minimal"],
-}
+// Valid preset variants per asset type — derived from the shared single source
+// of truth (`@nodaro/shared` object-asset-presets) so the frontend preset chips
+// and THIS validation can never drift. Previously these were hand-maintained
+// here at 5/6/5 while the UI shipped 9/13/11, so ~17 chips 400'd silently.
+const VARIANTS: Record<string, readonly string[]> = OBJECT_ASSET_PRESETS
 
 const generateObjectAssetBody = z.object({
   assetType: assetTypeEnum,
@@ -52,6 +52,11 @@ const generateObjectAssetBody = z.object({
   attachName: z.string().min(1).max(200).optional(),
   // Phase E picker-hint pass-through: prompt-fragment for the worker.
   seedPromptHint: z.string().max(2000).optional(),
+  // Optional explicit aspect override ("W:H"). Permissive on purpose — the
+  // shared `resolveEntityAspect` validates the format (RATIO_RE) and falls
+  // through to the per-asset-type default when absent/malformed, so a stale
+  // value never poisons the request. Explicit wins over the default.
+  aspectRatio: z.string().max(16).optional(),
 })
 
 function buildVariantPrompt(
@@ -72,41 +77,19 @@ function buildVariantPrompt(
     return `${variant}. ${base}`
   }
 
+  // Prompt fragment per preset, from the shared single source of truth
+  // (object-asset-presets). Unknown variants fall back to a sensible per-type
+  // phrasing so a freshly-added preset never yields a broken prompt.
+  const fragment = OBJECT_ASSET_PROMPTS[assetType as keyof typeof OBJECT_ASSET_PROMPTS]?.[variant]
+
   if (assetType === "angles") {
-    const angleMap: Record<string, string> = {
-      front: "front view, facing camera directly",
-      side: "side profile view",
-      top: "top-down view, bird's eye perspective",
-      back: "back view, rear perspective",
-      "three-quarter": "three-quarter angle view, dynamic perspective",
-    }
-    const angle = angleMap[variant] ?? `${variant} view`
-    return `${name}, ${angle}. ${base}`
+    return `${name}, ${fragment ?? `${variant} view`}. ${base}`
   }
-
   if (assetType === "materials") {
-    const materialMap: Record<string, string> = {
-      wood: "made of polished wood, wood grain texture visible",
-      metal: "made of brushed metal, metallic surface with subtle reflections",
-      glass: "made of transparent glass, see-through with subtle reflections",
-      plastic: "made of smooth plastic, matte finish",
-      fabric: "covered in soft fabric texture, textile material",
-      stone: "carved from stone, rough granite or marble texture",
-    }
-    const material = materialMap[variant] ?? `made of ${variant}`
-    return `${name}, ${material}. ${base}`
+    return `${name}, ${fragment ?? `made of ${variant}`}. ${base}`
   }
-
   // variations
-  const variationMap: Record<string, string> = {
-    clean: "brand new pristine condition, perfect and clean",
-    weathered: "slightly weathered and aged, with wear marks",
-    damaged: "battle-damaged with scratches and dents",
-    ornate: "ornately decorated with intricate details and patterns",
-    minimal: "minimalist design, clean simple lines",
-  }
-  const variation = variationMap[variant] ?? `${variant} style`
-  return `${name}, ${variation}. ${base}`
+  return `${name}, ${fragment ?? `${variant} style`}. ${base}`
 }
 
 export async function generateObjectAssetRoutes(app: FastifyInstance) {
@@ -257,6 +240,17 @@ export async function generateObjectAssetRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
+    // Per-asset-type aspect ratio so full-body / non-square assets aren't
+    // generated square and cropped. Mirrors generate-character-asset.ts — the
+    // worker forwards this as the provider `aspect_ratio` (clamped to model).
+    // Defaults: object angles/materials/variations 1:1; custom → 1:1.
+    // Explicit caller value wins over the default.
+    const aspectRatio = resolveEntityAspect({
+      entity: "object",
+      assetType,
+      explicit: parsed.data.aspectRatio,
+    })
+
     await videoQueue.add("generate-object-asset", {
       jobId: job.id,
       prompt,
@@ -264,6 +258,7 @@ export async function generateObjectAssetRoutes(app: FastifyInstance) {
       assetType,
       variant,
       provider: parsed.data.provider,
+      aspectRatio,
       usageLogId,
       attachToObjectId: parsed.data.attachToObjectId,
       attachToColumn: parsed.data.attachToColumn,

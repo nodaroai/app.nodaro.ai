@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event"
 // Hoisted API + sonner mocks.
 vi.mock("@/lib/api", () => ({
   generateLocationAsset: vi.fn(),
+  removeLocationAsset: vi.fn().mockResolvedValue(undefined),
   getJobStatusBatch: vi.fn().mockResolvedValue({ jobs: [] }),
 }))
 

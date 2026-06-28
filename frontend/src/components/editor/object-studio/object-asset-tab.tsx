@@ -7,12 +7,16 @@ import {
   MATERIAL_CATEGORY_ORDER,
   getMaterialLabel,
   getMaterialPromptHint,
+  resolveEntityAspect,
+  aspectRatioToNumber,
   type MaterialCategory,
 } from "@nodaro/shared"
-import { generateObjectAsset } from "@/lib/api"
+import { generateObjectAsset, removeObjectAsset } from "@/lib/api"
+import { MultiImageLightbox } from "@/components/ui/multi-image-lightbox"
 import { useObjectStudioJobs } from "./use-object-studio-jobs"
 import { PresetChips } from "../studio-shell/preset-chips"
 import { lowerNameSet } from "../studio-shell/preset-state"
+import { StudioAssetMedia } from "../studio-shell/studio-asset-media"
 import type { ObjectStudioState } from "./use-object-studio"
 import type { ObjectAssetItem, ObjectNodeData } from "@/types/nodes"
 
@@ -69,6 +73,8 @@ export function ObjectAssetTab({
 }: ObjectAssetTabProps) {
   const data = studio.stagedData
   const [customPrompt, setCustomPrompt] = useState("")
+  // Fullscreen viewer: click an asset to open; ←/→ navigate, Esc closes.
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const jobs = useObjectStudioJobs([])
 
   useEffect(() => {
@@ -85,6 +91,14 @@ export function ObjectAssetTab({
     ] ?? []) as ReadonlyArray<ObjectAssetItem>
 
   const disabled = studio.isApprovingMainImage
+
+  // Card fallback container ratio (until the real media aspect is probed).
+  // Drawn from the single entity-aspect table so the placeholder framing
+  // matches what's requested at generation time (angles/materials/variations
+  // are 1:1).
+  const fallbackAspect = aspectRatioToNumber(
+    resolveEntityAspect({ entity: "object", assetType: tabKind }),
+  )
 
   async function fireGen(variant: string, isCustom: boolean, seedPromptHint?: string): Promise<void> {
     if (!data) return
@@ -105,17 +119,24 @@ export function ObjectAssetTab({
         style: data.style,
         // Per the location precedent: pass main image as source only when
         // style-lock is on (worker uses it to anchor variants to approved
-        // look). When style-lock is off, fallback to text-only generation.
-        sourceImageUrl: data.styleLock && data.sourceImageUrl ? data.sourceImageUrl : "",
+        // look). When style-lock is off, fall back to text-only generation —
+        // send `undefined`, NOT "" (the backend `safeUrlSchema.optional()`
+        // rejects an empty string with a 400 before the handler's fallback runs;
+        // location + creature already pass undefined).
+        sourceImageUrl: data.styleLock && data.sourceImageUrl ? data.sourceImageUrl : undefined,
         attachToObjectId: objectDbId,
         attachToColumn: BUCKET_TO_COLUMN[tabKind],
         attachName: trimmedVariant,
         ...(seedPromptHint ? { seedPromptHint } : {}),
       })
       jobs.settleJob(tempId, result.jobId)
-    } catch {
+    } catch (e) {
       jobs.abortJob(tempId)
-      // ensureSavedBeforeGen / generateObjectAsset already toast on failure.
+      // Surface the failure. `generateObjectAsset` / `ensureSavedBeforeGen`
+      // throw but do NOT toast (apiJson only throws), so without this the
+      // "Generating…" card just vanished with no explanation — e.g. out of
+      // credits, or a rejected variant. Mirrors the location precedent.
+      toast.error(e instanceof Error ? e.message : "Generation failed — try again.")
     }
   }
 
@@ -153,9 +174,21 @@ export function ObjectAssetTab({
     setCustomPrompt("")
   }
 
-  function handleRemove(idx: number): void {
+  async function handleRemove(idx: number): Promise<void> {
+    const target = items[idx]
     const next = items.filter((_, i) => i !== idx)
+    // Optimistic local patch (snappy UX), then persist via the remove-asset
+    // route — the studio's UPDATE excludes worker-owned bucket columns, so a
+    // local-only delete reappears on reopen.
     studio.patch({ [tabKind]: next } as Partial<ObjectNodeData>)
+    const id = studio.stagedData?.objectDbId
+    if (id && target) {
+      try {
+        await removeObjectAsset(id, { column: BUCKET_TO_COLUMN[tabKind], url: target.url })
+      } catch {
+        toast.error("Failed to delete asset — refresh to restore")
+      }
+    }
   }
 
   // Material-catalog browser pick handler. Only used when tabKind === "materials".
@@ -192,20 +225,24 @@ export function ObjectAssetTab({
         {items.map((item, idx) => (
           <div
             key={`${item.url}-${idx}`}
-            className="relative group aspect-square border border-[#1e293b] rounded overflow-hidden bg-[#0e1117]"
+            onClick={() => setLightboxIndex(idx)}
+            className="relative group border border-[#1e293b] rounded overflow-hidden bg-[#0e1117] cursor-zoom-in"
           >
-            <img
-              src={item.url}
+            <StudioAssetMedia
+              url={item.url}
               alt={item.name}
-              loading="lazy"
-              className="w-full h-full object-cover"
+              fallbackAspect={fallbackAspect}
+              className="w-full rounded"
             />
             <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[10px] px-1.5 py-0.5">
               {item.name}
             </div>
             <button
               type="button"
-              onClick={() => handleRemove(idx)}
+              onClick={(e) => {
+                e.stopPropagation()
+                void handleRemove(idx)
+              }}
               aria-label={`Remove ${item.name}`}
               className="absolute top-1 right-1 px-1.5 py-0.5 text-[10px] rounded bg-black/60 text-white opacity-0 group-hover:opacity-100 hover:bg-black/80"
             >
@@ -273,6 +310,12 @@ export function ObjectAssetTab({
       {tabKind === "materials" && (
         <MaterialCatalogBrowser disabled={disabled} onPick={handleMaterialPick} />
       )}
+
+      <MultiImageLightbox
+        items={items.map((i) => ({ url: i.url, alt: i.name }))}
+        startIndex={lightboxIndex}
+        onClose={() => setLightboxIndex(null)}
+      />
     </div>
   )
 }

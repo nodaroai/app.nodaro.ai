@@ -35,9 +35,11 @@ describe("ReferencePhotosSection", () => {
     render(<ReferencePhotosSection photos={photos} onChange={() => {}} />)
     expect(screen.getByAltText("wide")).toBeInTheDocument()
     expect(screen.getByAltText("interior")).toBeInTheDocument()
-    // Kind label is rendered as overlay text; getAllByText since "wide" also
-    // appears as a <option> in the kind selector.
-    expect(screen.getAllByText("wide").length).toBeGreaterThanOrEqual(2)
+    // The thumbnail overlay shows the raw kind; the kind <select> now shows the
+    // friendly label (LOCATION_REFERENCE_PHOTO_KIND_LABELS), so the raw "wide"
+    // appears once (overlay) and its friendly label once (the dropdown option).
+    expect(screen.getByText("wide")).toBeInTheDocument()
+    expect(screen.getByText("wide-angle reference")).toBeInTheDocument()
   })
 
   // Phase 2 #7: pass a `piiConsentAt` so the consent gate is dismissed for

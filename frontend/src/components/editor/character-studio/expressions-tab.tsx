@@ -6,10 +6,11 @@ import type { CharacterStudioJobs, StudioAssetType } from "./use-character-studi
 import { AssetCard } from "./asset-card"
 import { AssetGenPanel, type AssetGenSubmission } from "./asset-gen-panel"
 import { GenerationBar } from "./generation-bar"
-import { PendingCard } from "./pending-card"
+import { FailedCard, PendingCard } from "./pending-card"
 import { PerVariantRealLifeRefsDrawer } from "./per-variant-refs-drawer"
 import { MultiImageLightbox } from "@/components/ui/multi-image-lightbox"
 import { injectAssetAsCanvasNode, setCharacterNodeDefaultAsset } from "./inject-helpers"
+import { resolveCharacterAspectRatio, aspectRatioToNumber } from "@nodaro/shared"
 import { lowerNameSet } from "../studio-shell/preset-state"
 
 // Curated top-tier image models for character work. Drop budget/older options — the studio is
@@ -104,9 +105,15 @@ export function ImageAssetTab({
   const items = (state.staged[arrayField] as { name: string; url: string }[]) ?? []
   const trackingAssetType = ARRAY_FIELD_TO_TRACKING_TYPE[arrayField]
   const pendingForType = Array.from(jobs.pending.entries()).filter(([, m]) => m.assetType === trackingAssetType)
+  const failedForType = Array.from(jobs.failed.entries()).filter(([, m]) => m.assetType === trackingAssetType)
   // Track the currently-selected model so AssetCards and regen handlers use the same cost basis
   // as whatever the user picked in the GenerationBar.
   const [currentModel, setCurrentModel] = useState<string>(DEFAULT_IMAGE_MODEL)
+  // Card/spinner fallback ratio = this asset type's generated aspect (override-aware),
+  // so full-body poses (9:16) aren't cropped before the real media aspect probes in.
+  const fallbackAspect = aspectRatioToNumber(
+    resolveCharacterAspectRatio({ nodeOverride: state.staged.defaultAssetAspectRatio, assetType }),
+  )
   // Fullscreen-lightbox index. Null = closed. The arrows on the lightbox cycle
   // through THIS tab's items, so each tab opens an isolated viewer (you don't
   // accidentally arrow from an expression into a pose).
@@ -189,9 +196,19 @@ export function ImageAssetTab({
       }
       const trackName = mode === "replace" ? asset.name : `${asset.name} (v)`
       if (mode === "replace") {
-        // Remove the old card immediately; the worker auto-attach will land
-        // the new image as a fresh entry on the row.
-        state.patch({ [arrayField]: items.filter((_, i) => i !== idx) } as never)
+        // Remove the old card immediately; the worker auto-attach lands the new
+        // image as a fresh entry on the row. Compute from the FRESHEST staged
+        // array and match by URL (not the captured render index) so a poll
+        // completion that appended a DIFFERENT asset during ensureSaved's await
+        // isn't clobbered by writing back a stale snapshot.
+        state.patchWith(
+          (prev) =>
+            ({
+              [arrayField]: ((prev[arrayField] as { url: string }[] | undefined) ?? []).filter(
+                (it) => it.url !== asset.url,
+              ),
+            }) as never,
+        )
       }
       const { jobId } = await modifyImage(
         asset.url,
@@ -224,7 +241,17 @@ export function ImageAssetTab({
       // "replace" deletes the old card immediately; the new generation lands as a fresh card on
       // completion. "add" leaves the old one in place and appends with a "(v)" suffix.
       if (mode === "replace") {
-        state.patch({ [arrayField]: items.filter((_, i) => i !== idx) } as never)
+        // Match by URL on the FRESHEST staged array (not the captured render
+        // index) so a poll completion that appended during ensureSaved's await
+        // isn't clobbered. See patchWith in use-character-studio.ts.
+        state.patchWith(
+          (prev) =>
+            ({
+              [arrayField]: ((prev[arrayField] as { url: string }[] | undefined) ?? []).filter(
+                (it) => it.url !== asset.url,
+              ),
+            }) as never,
+        )
       }
       const trackName = mode === "replace" ? asset.name : `${asset.name} (v)`
       const { jobId } = await generateCharacterAsset({
@@ -355,6 +382,7 @@ export function ImageAssetTab({
             <AssetCard
               key={`${item.url}-${idx}`}
               item={item}
+              fallbackAspect={fallbackAspect}
               costModel={currentModel}
               onDelete={() => state.patch({ [arrayField]: items.filter((_, i) => i !== idx) } as never)}
               onRefine={(p, mode) => handleRefine(idx, p, mode)}
@@ -377,11 +405,25 @@ export function ImageAssetTab({
               name={m.name}
               progress={m.progress}
               theme="image"
+              aspect={fallbackAspect}
               onCancel={jobs.cancel}
             />
           ))}
+          {failedForType.map(([jobId, m]) => (
+            <FailedCard
+              key={jobId}
+              name={m.name}
+              aspect={fallbackAspect}
+              onRetry={() => {
+                jobs.dismissFailed(jobId)
+                void handleGenerate(m.name, presetSet.has(m.name.toLowerCase()), currentModel)
+              }}
+              onDismiss={() => jobs.dismissFailed(jobId)}
+            />
+          ))}
           <button
-            className="rounded-md border border-dashed border-[#334155] aspect-[3/4] flex items-center justify-center text-slate-500 text-xl"
+            className="rounded-md border border-dashed border-[#334155] flex items-center justify-center text-slate-500 text-xl"
+            style={{ aspectRatio: fallbackAspect }}
             onClick={() => {
               const p = window.prompt(`New ${title.toLowerCase()} prompt:`)
               if (p) handleGenerate(p, false, currentModel)

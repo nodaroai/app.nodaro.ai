@@ -30,10 +30,24 @@ interface ResolvedAsset {
   url: string
 }
 
+interface FailedJob {
+  assetType: StudioAssetType
+  name: string
+}
+
 export interface CharacterStudioJobs {
   /** jobId (or optimistic temp id) -> pending metadata; consumers render a
    *  spinner card for each */
   pending: Map<string, PendingJob>
+  /** jobId -> failed metadata for generations that errored. Unlike `pending`,
+   *  entries are NOT auto-removed — the tab renders a persistent, dismissible
+   *  failed tile (with Retry) so the failure doesn't vanish silently when the
+   *  spinner is removed. Independent of the modal's header "N failed" counter
+   *  (which is cumulative for the session); dismissing a tile doesn't touch it. */
+  failed: Map<string, FailedJob>
+  /** Drop a failed entry — called on Retry (after re-firing the generation) and
+   *  when the user clicks ✕ on the failed tile. */
+  dismissFailed: (jobId: string) => void
   /** Optimistically add a placeholder spinner card and return its temp id —
    *  call this synchronously on click, BEFORE awaiting ensureSaved/generate,
    *  so the UI reacts instantly. Follow with `settle(tempId, realJobId)` once
@@ -72,6 +86,9 @@ export function useCharacterStudioJobs(
   onFailed: (jobId: string, assetType: StudioAssetType) => void,
 ): CharacterStudioJobs {
   const [pending, setPending] = useState<Map<string, PendingJob>>(new Map())
+  // Failed generations the user hasn't dismissed/retried yet. Mirrors `pending`
+  // but persists across poll cycles so the failure stays visible in the grid.
+  const [failed, setFailed] = useState<Map<string, FailedJob>>(new Map())
   const timer = useRef<ReturnType<typeof setInterval> | null>(null)
   // keep callbacks + latest pending in refs so the polling effect depends only on whether
   // there's anything to poll — avoids recreating the interval on every staged-state change
@@ -210,8 +227,16 @@ export function useCharacterStudioJobs(
             setPending((prev) => { const n = new Map(prev); n.delete(jobId); return n })
           } else if (job.status === "failed" || job.status === "cancelled") {
             // Cancelled jobs disappear silently (no error card). Failed ones
-            // get the red "failed" overlay via onFailed.
-            if (job.status === "failed") onFailedRef.current(jobId, meta.assetType)
+            // bump the header counter (onFailed) AND surface a persistent,
+            // dismissible failed tile in the grid via the `failed` map.
+            if (job.status === "failed") {
+              onFailedRef.current(jobId, meta.assetType)
+              setFailed((prev) => {
+                const n = new Map(prev)
+                n.set(jobId, { assetType: meta.assetType, name: meta.name })
+                return n
+              })
+            }
             const waiter = waitersRef.current.get(jobId)
             if (waiter) {
               waitersRef.current.delete(jobId)
@@ -247,6 +272,15 @@ export function useCharacterStudioJobs(
     return s
   }, [pending])
 
+  const dismissFailed = useCallback((jobId: string) => {
+    setFailed((prev) => {
+      if (!prev.has(jobId)) return prev
+      const next = new Map(prev)
+      next.delete(jobId)
+      return next
+    })
+  }, [])
+
   // Settle any outstanding waiters on unmount so the orchestration callers
   // don't end up with hung Promises if the user closes the studio mid-chain.
   useEffect(() => {
@@ -257,5 +291,5 @@ export function useCharacterStudioJobs(
     }
   }, [])
 
-  return { pending, begin, settle, abort, track, trackAndWait, cancel, runningTypes }
+  return { pending, failed, dismissFailed, begin, settle, abort, track, trackAndWait, cancel, runningTypes }
 }

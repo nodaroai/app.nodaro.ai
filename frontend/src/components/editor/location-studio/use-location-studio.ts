@@ -144,6 +144,9 @@ export function useLocationStudio(nodeId: string): LocationStudioState {
         sheets: fresh.sheets ?? current.sheets ?? [],
         detailCloseups:
           (fresh.detailCloseups as LocationNodeData["detailCloseups"]) ?? current.detailCloseups,
+        // Named composite reference boards (the `boards` column) — hydrate so
+        // the Board page surfaces boards generated in studio.nodaro.ai.
+        boards: fresh.boards ?? [],
         canonicalDescription: fresh.canonicalDescription ?? "",
         styleLock: fresh.styleLock ?? current.styleLock,
         piiConsentAt: fresh.piiConsentAt ?? current.piiConsentAt,
@@ -283,6 +286,15 @@ export function useLocationStudio(nodeId: string): LocationStudioState {
               } as LocationNodeData)
             : prev,
         )
+        // Mirror the approved image to the canvas node immediately. The approve
+        // already persisted server-side, so these fields are NOT unsaved — but
+        // without this mirror staged diverges from the canvas node, flipping
+        // isDirty true (spurious "discard unsaved changes" prompt + lit Save
+        // button) and leaving the canvas thumbnail stale until the next Save.
+        updateNodeData(nodeId, {
+          sourceImageUrl: result.sourceImageUrl,
+          canonicalDescription: result.canonicalDescription,
+        })
         return result
       } catch (e) {
         if (e instanceof ConcurrentModificationError) {
@@ -292,7 +304,7 @@ export function useLocationStudio(nodeId: string): LocationStudioState {
         throw e
       }
     },
-    [refetchAndRestage],
+    [nodeId, refetchAndRestage, updateNodeData],
   )
 
   const ensureSavedBeforeGen = useCallback(async (): Promise<string> => {

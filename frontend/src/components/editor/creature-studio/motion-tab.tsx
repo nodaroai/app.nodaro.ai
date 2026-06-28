@@ -1,14 +1,18 @@
 import { useEffect, useState } from "react"
-import { Loader2 } from "lucide-react"
+import { Loader2, Maximize2 } from "lucide-react"
 import { toast } from "sonner"
 import {
   OBJECT_MOTION_PROVIDERS,
+  resolveEntityAspect,
+  aspectRatioToNumber,
   type ObjectMotionProvider,
 } from "@nodaro/shared"
-import { generateCreatureMotion } from "@/lib/api"
+import { generateCreatureMotion, removeCreatureAsset } from "@/lib/api"
+import { MultiImageLightbox } from "@/components/ui/multi-image-lightbox"
 import { useCreatureStudioJobs } from "./use-creature-studio-jobs"
 import { PresetChips } from "../studio-shell/preset-chips"
 import { lowerNameSet } from "../studio-shell/preset-state"
+import { StudioAssetMedia } from "../studio-shell/studio-asset-media"
 import type { CreatureStudioState } from "./use-creature-studio"
 import type { ObjectAssetItem, CreatureNodeData } from "@/types/nodes"
 
@@ -63,6 +67,8 @@ export function MotionTab({ studio }: MotionTabProps) {
   const [customPrompt, setCustomPrompt] = useState("")
   const [provider, setProvider] = useState<ObjectMotionProvider>("kling-turbo")
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>("1:1")
+  // Fullscreen viewer (videos): Enlarge to open; ←/→ navigate, Esc closes.
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const jobs = useCreatureStudioJobs([])
 
   useEffect(() => {
@@ -142,9 +148,21 @@ export function MotionTab({ studio }: MotionTabProps) {
     setCustomPrompt("")
   }
 
-  function handleRemove(idx: number): void {
+  async function handleRemove(idx: number): Promise<void> {
+    const target = items[idx]
     const next = items.filter((_, i) => i !== idx)
+    // Optimistic local patch (snappy UX), then persist via the remove-asset
+    // route — the studio's UPDATE excludes the worker-owned motion_clips
+    // column, so a local-only delete reappears on reopen.
     studio.patch({ motionClips: next } as Partial<CreatureNodeData>)
+    const id = studio.stagedData?.creatureDbId
+    if (id && target) {
+      try {
+        await removeCreatureAsset(id, { column: "motion_clips", url: target.url })
+      } catch {
+        toast.error("Failed to delete asset — refresh to restore")
+      }
+    }
   }
 
   const trackedMotions = jobs.tracked.filter((j) => j.assetType === "motion_clips")
@@ -183,25 +201,44 @@ export function MotionTab({ studio }: MotionTabProps) {
           <div
             key={`${item.url}-${idx}`}
             data-testid={`creature-motion-card-${idx}`}
-            className="relative group aspect-square border border-[#1e293b] rounded overflow-hidden bg-[#0e1117]"
+            className="relative group border border-[#1e293b] rounded overflow-hidden bg-[#0e1117]"
           >
-            <video
-              src={item.url}
-              preload="metadata"
-              controls
-              className="w-full h-full object-cover"
+            <StudioAssetMedia
+              url={item.url}
+              kind="video"
+              fallbackAspect={aspectRatioToNumber(
+                resolveEntityAspect({ entity: "creature", assetType: "motion" }),
+              )}
+              className="w-full rounded"
             />
             <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[10px] px-1.5 py-0.5 pointer-events-none">
               {item.name}
             </div>
-            <button
-              type="button"
-              onClick={() => handleRemove(idx)}
-              aria-label={`Remove ${item.name}`}
-              className="absolute top-1 right-1 px-1.5 py-0.5 text-[10px] rounded bg-black/60 text-white opacity-0 group-hover:opacity-100 hover:bg-black/80"
-            >
-              Remove
-            </button>
+            <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 z-10">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setLightboxIndex(idx)
+                }}
+                aria-label={`Enlarge ${item.name}`}
+                title="Enlarge"
+                className="w-6 h-6 flex items-center justify-center rounded bg-black/60 text-white hover:bg-black/80"
+              >
+                <Maximize2 className="w-3 h-3" />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  void handleRemove(idx)
+                }}
+                aria-label={`Remove ${item.name}`}
+                className="px-1.5 py-0.5 text-[10px] rounded bg-black/60 text-white hover:bg-black/80"
+              >
+                Remove
+              </button>
+            </div>
           </div>
         ))}
         {trackedMotions.map((j) => (
@@ -299,6 +336,12 @@ export function MotionTab({ studio }: MotionTabProps) {
           Generate
         </button>
       </div>
+
+      <MultiImageLightbox
+        items={items.map((i) => ({ url: i.url, alt: i.name, kind: "video" as const }))}
+        startIndex={lightboxIndex}
+        onClose={() => setLightboxIndex(null)}
+      />
     </div>
   )
 }

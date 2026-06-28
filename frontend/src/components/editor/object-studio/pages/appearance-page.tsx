@@ -1,12 +1,10 @@
-import { useEffect, useState } from "react"
-import { toast } from "sonner"
-import { ConcurrentModificationError, generateObject } from "@/lib/api"
+import { useContext, useState } from "react"
 import { optimizedImageUrl } from "@/lib/image"
 import type { StudioPageProps } from "../../studio-shell/types"
 import { UpstreamPickerBanner } from "../upstream-picker-banner"
-import { useObjectStudioJobs } from "../use-object-studio-jobs"
 import type { ObjectStudioJobs } from "../use-object-studio-jobs"
 import type { ObjectStudioState } from "../use-object-studio"
+import { ObjectCandidatesContext } from "../object-candidates-context"
 
 /**
  * Appearance page — main image preview, identity form (name + description),
@@ -23,109 +21,43 @@ import type { ObjectStudioState } from "../use-object-studio"
  * Approval flow:
  *  1. User clicks Generate → ensureSavedBeforeGen() creates the row if needed.
  *  2. POST /v1/generate-object with `count` and (count===1) attachToObjectId.
- *  3. useObjectStudioJobs polls; on completion pushes to local candidates.
+ *  3. useObjectStudioJobs (modal-scoped, in useObjectCandidates) polls; on
+ *     completion pushes into the candidate grid.
  *  4. User clicks Approve → POST /v1/objects/:id/approve-main-image with the
  *     candidateJobId. The route persists source_image_url + canonical_description.
  *  5. setIsApprovingMainImage(true) during the in-flight call so Generate is
  *     locked out — prevents an "approve then immediately re-generate" race.
  *
- * This page owns its OWN jobs hook (the candidate-generation tracker) exactly
- * as `appearance-tab.tsx` did — it does NOT consume the shell-supplied `jobs`
- * (that one is the Sheet page's Stage-A tracker).
+ * The main-image candidate state + its candidate-generation jobs tracker now
+ * live at MODAL scope (`useObjectCandidates`, provided via
+ * `ObjectCandidatesContext`) so in-flight candidates + the completed-candidate
+ * grid survive Appearance↔other-tab navigation (StudioShell unmounts this page
+ * on every switch). This page is a pure consumer of that API — it does NOT own
+ * the candidates array or the jobs hook, and does NOT consume the shell-supplied
+ * `jobs` (that one is the Sheet page's Stage-A tracker). Mirrors character's
+ * Profile page reading `PortraitCandidatesContext`.
  */
-type Candidate = { readonly jobId: string; readonly url: string }
 
 export function AppearancePage({ state }: StudioPageProps<ObjectStudioState, ObjectStudioJobs>) {
   const studio = state
   const data = studio.stagedData
   const [count, setCount] = useState<1 | 2 | 4>(1)
-  const [candidates, setCandidates] = useState<Candidate[]>([])
-  const jobs = useObjectStudioJobs([])
-
-  // Wire onResolved once — push completed candidates into the grid. The hook
-  // keeps the callback in a ref so the polling effect doesn't restart on
-  // re-renders.
-  useEffect(() => {
-    jobs.onResolved((j) => {
-      if (j.assetType !== "main") return
-      setCandidates((prev) =>
-        prev.some((c) => c.jobId === j.jobId) ? prev : [...prev, { jobId: j.jobId, url: j.url }],
-      )
-    })
-    jobs.onFailed((jobId) => {
-      toast.error(`Candidate ${jobId.slice(0, 8)}… failed`)
-    })
-  }, [jobs.onResolved, jobs.onFailed])
+  // Candidate state + jobs tracker live at MODAL scope; this page only consumes
+  // the API (see ObjectCandidatesContext). The null-guard throw matches
+  // character's ProfilePage — AppearancePage always renders inside the provider.
+  const cands = useContext(ObjectCandidatesContext)
+  if (!cands) {
+    throw new Error("AppearancePage must render within an ObjectCandidatesContext provider")
+  }
 
   // Guard against the cold-load case — the modal already short-circuits to
   // a placeholder, so by the time AppearancePage mounts `data` is non-null.
   if (!data) return null
 
-  async function handleGenerate() {
-    if (!data) return
-    if (studio.isApprovingMainImage) return
-    if (!data.objectName.trim()) {
-      toast.error("Add an object name first")
-      return
-    }
-    try {
-      const objectDbId = await studio.ensureSavedBeforeGen()
-      const result = await generateObject({
-        name: data.objectName,
-        description: data.description || undefined,
-        category: data.category,
-        style: data.style,
-        provider: data.provider,
-        count,
-        attachToObjectId: count === 1 ? objectDbId : undefined,
-      })
-      // E1 finding: generateObject returns { jobId } | { jobIds: string[] }
-      // depending on count. Type-guard branch covers both shapes.
-      const jobIds: ReadonlyArray<string> =
-        "jobIds" in result ? result.jobIds : "jobId" in result ? [result.jobId] : []
-      if (jobIds.length === 0) {
-        toast.error("Backend returned no job ids")
-        return
-      }
-      for (const id of jobIds) {
-        jobs.trackJob({ jobId: id, assetType: "main", name: data.objectName })
-      }
-    } catch {
-      // saveStaged + generateObject already toast on failure.
-    }
-  }
-
-  async function handleApprove(candidateJobId: string) {
-    if (!data?.objectDbId) {
-      toast.error("Save the object first")
-      return
-    }
-    studio.setIsApprovingMainImage(true)
-    try {
-      await studio.approveMainImage(candidateJobId)
-      toast.success("Main image approved")
-      setCandidates([])
-    } catch (e) {
-      if (e instanceof ConcurrentModificationError) {
-        // Hook toasted + re-staged; just clear the candidates grid because
-        // the canonical state may already have a different main image.
-        setCandidates([])
-      } else {
-        toast.error("Approval failed")
-      }
-    } finally {
-      studio.setIsApprovingMainImage(false)
-    }
-  }
-
-  function handleDiscard(candidateJobId: string) {
-    setCandidates((prev) => prev.filter((c) => c.jobId !== candidateJobId))
-  }
-
   // Lock approval flow whenever a main-image generation job is in flight.
   // Prevents the "approve candidate A while candidate B is still generating"
   // race even within a single tab. Discard is gated by the same condition.
-  const mainImageGenPending = jobs.tracked.some((j) => j.assetType === "main")
+  const mainImageGenPending = cands.tracked.some((j) => j.assetType === "main")
   const approveDiscardDisabled = studio.isApprovingMainImage || mainImageGenPending
 
   const generateDisabled =
@@ -154,7 +86,7 @@ export function AppearancePage({ state }: StudioPageProps<ObjectStudioState, Obj
               src={optimizedImageUrl(data.sourceImageUrl, { width: 800 })}
               alt={data.objectName || "Object"}
               loading="lazy"
-              className="w-full max-h-[400px] object-cover rounded border border-[#1e293b]"
+              className="w-full max-h-[400px] object-contain rounded border border-[#1e293b]"
             />
           ) : (
             <div className="aspect-video bg-[#1a1d27] rounded border border-[#1e293b] flex items-center justify-center text-[11px] text-slate-500">
@@ -211,26 +143,26 @@ export function AppearancePage({ state }: StudioPageProps<ObjectStudioState, Obj
             </div>
             <button
               type="button"
-              onClick={handleGenerate}
+              onClick={() => void cands.generate(count)}
               disabled={generateDisabled}
               className="ml-auto px-4 py-1.5 text-[12px] rounded bg-[#ff0073] hover:bg-[#ff0073]/90 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium"
             >
               Generate
             </button>
           </div>
-          {jobs.tracked.length > 0 && (
+          {cands.tracked.length > 0 && (
             <div className="mt-2 text-[10px] text-slate-500">
-              Generating {jobs.tracked.length} candidate{jobs.tracked.length === 1 ? "" : "s"}…
+              Generating {cands.tracked.length} candidate{cands.tracked.length === 1 ? "" : "s"}…
             </div>
           )}
         </section>
 
         {/* Candidates grid */}
-        {candidates.length > 0 && (
+        {cands.candidates.length > 0 && (
           <section>
             <h2 className="text-[12px] font-medium text-slate-300 mb-2">Candidates</h2>
             <div className="grid grid-cols-2 gap-3">
-              {candidates.map((c) => (
+              {cands.candidates.map((c) => (
                 <div key={c.jobId} className="border border-[#1e293b] rounded p-2 bg-[#0e1117]">
                   <img
                     src={optimizedImageUrl(c.url, { width: 512 })}
@@ -241,7 +173,7 @@ export function AppearancePage({ state }: StudioPageProps<ObjectStudioState, Obj
                   <div className="flex gap-2 mt-2">
                     <button
                       type="button"
-                      onClick={() => handleApprove(c.jobId)}
+                      onClick={() => void cands.approve(c.jobId)}
                       disabled={approveDiscardDisabled}
                       title={
                         mainImageGenPending
@@ -254,7 +186,7 @@ export function AppearancePage({ state }: StudioPageProps<ObjectStudioState, Obj
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleDiscard(c.jobId)}
+                      onClick={() => cands.discard(c.jobId)}
                       disabled={approveDiscardDisabled}
                       title={
                         mainImageGenPending

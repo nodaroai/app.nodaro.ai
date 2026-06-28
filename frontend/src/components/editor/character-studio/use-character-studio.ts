@@ -100,6 +100,13 @@ export interface CharacterStudioState {
   initialPreviousCandidates: ReadonlyArray<{ jobId: string; url: string; createdAt: string }>
   /** Shallow merge into staged, mirror to canvas, and schedule a debounced PATCH. */
   patch: (p: Partial<CharacterNodeData>) => void
+  /** Functional variant of `patch` — the updater receives the FRESHEST staged
+   *  state and returns the partial to merge. Use this when the new value is
+   *  DERIVED from the current array (e.g. removing one item by URL): the
+   *  object-form `patch` captures a render-time snapshot, so a concurrent
+   *  poll-driven append that lands during an `await` gets clobbered when the
+   *  snapshot is written back. patchWith computes from `prev`, so it survives. */
+  patchWith: (updater: (prev: CharacterNodeData) => Partial<CharacterNodeData>) => void
   /** Returns the persisted character DB id, creating the row first if needed.
    *  If the user hasn't typed a name yet, auto-assigns PLACEHOLDER_CHARACTER_NAME
    *  (prompt builders strip it; the Appearance tab shows a rename cue). */
@@ -290,7 +297,11 @@ export function useCharacterStudio(nodeId: string): CharacterStudioState | null 
           // can edit. Don't re-add `characterName` to dirty — let the next
           // character-name patch trigger a save attempt instead of looping.
           toast.error(e.message)
-          dirtySnapshot.delete("sourceImageUrl" as never)
+          // Drop only the FAILED field (the name that collided) from the retry
+          // set so we don't loop on it — the next character-name edit re-flags
+          // it. Previously this deleted "sourceImageUrl" (a copy-paste slip),
+          // silently dropping an unrelated unsaved portrait-image edit.
+          dirtySnapshot.delete("characterName" as never)
           // The fields that DIDN'T fail are still unsaved; flag them as dirty
           // so the next debounce flushes them on subsequent edits.
           for (const f of dirtySnapshot) dirtyRef.current.add(f)
@@ -315,16 +326,12 @@ export function useCharacterStudio(nodeId: string): CharacterStudioState | null 
     }, AUTOSAVE_DEBOUNCE_MS)
   }, [flushSave])
 
-  const patch = useCallback(
+  // Dirty-field tracking + debounced-save scheduling, shared by `patch` (object
+  // form) and `patchWith` (functional form). Idempotent (Set add + timer reset)
+  // so it's safe to call inside a setStaged updater, which React may
+  // double-invoke under StrictMode.
+  const trackPatch = useCallback(
     (p: Partial<CharacterNodeData>) => {
-      setStaged((prev) => {
-        if (!prev) return prev
-        const next = { ...prev, ...p }
-        // Mirror to the workflow store so the canvas summary updates live
-        // (counts, name, portrait thumbnail).
-        updateNodeData(nodeId, p)
-        return next
-      })
       for (const key of Object.keys(p)) {
         if (DIRTY_TRACKED_FIELDS.has(key as DirtyTrackedField)) {
           dirtyRef.current.add(key as DirtyTrackedField)
@@ -337,7 +344,41 @@ export function useCharacterStudio(nodeId: string): CharacterStudioState | null 
         scheduleSave()
       }
     },
-    [nodeId, updateNodeData, scheduleSave],
+    [scheduleSave],
+  )
+
+  const patch = useCallback(
+    (p: Partial<CharacterNodeData>) => {
+      setStaged((prev) => {
+        if (!prev) return prev
+        const next = { ...prev, ...p }
+        // Mirror to the workflow store so the canvas summary updates live
+        // (counts, name, portrait thumbnail).
+        updateNodeData(nodeId, p)
+        return next
+      })
+      trackPatch(p)
+    },
+    [nodeId, updateNodeData, trackPatch],
+  )
+
+  // Functional patch: computes the partial from the FRESHEST staged state via
+  // the setStaged reducer (NOT a render snapshot), so a removal-by-URL can't
+  // clobber an append that a 2s job poll committed during an `await` gap.
+  const patchWith = useCallback(
+    (updater: (prev: CharacterNodeData) => Partial<CharacterNodeData>) => {
+      setStaged((prev) => {
+        if (!prev) return prev
+        const p = updater(prev)
+        // Mirror to canvas + track dirty fields from the freshly-computed
+        // partial. Both side effects are idempotent under StrictMode's
+        // double-invoke (same as `patch`'s updateNodeData call above).
+        updateNodeData(nodeId, p)
+        trackPatch(p)
+        return { ...prev, ...p }
+      })
+    },
+    [nodeId, updateNodeData, trackPatch],
   )
 
   /** Link this (unlinked) node to an EXISTING character row and load its assets.
@@ -438,6 +479,7 @@ export function useCharacterStudio(nodeId: string): CharacterStudioState | null 
     initialPortraitCandidates,
     initialPreviousCandidates,
     patch,
+    patchWith,
     ensureSaved,
   }
 }

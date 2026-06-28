@@ -42,6 +42,8 @@ vi.mock("@/hooks/use-auth", () => ({
 }))
 
 import { AppearancePage } from "../appearance-page"
+import { ObjectCandidatesContext } from "../../object-candidates-context"
+import { useObjectCandidates } from "../../use-object-candidates"
 import { generateObject, approveObjectMainImage } from "@/lib/api"
 import type { ObjectStudioState } from "../../use-object-studio"
 import type { ObjectStudioJobs } from "../../use-object-studio-jobs"
@@ -108,8 +110,21 @@ function makeStudio(overrides: Partial<ObjectStudioState> = {}): ObjectStudioSta
   }
 }
 
-const renderPage = (studio: ObjectStudioState) =>
-  render(<AppearancePage state={studio} jobs={stubJobs} />)
+// The candidate state + jobs tracker now live at MODAL scope and reach the page
+// via ObjectCandidatesContext. Mount the REAL useObjectCandidates hook in a thin
+// harness so the page's Generate/candidate behavior is exercised end-to-end
+// (the hook owns the generateObject call + jobs tracking). The supabase +
+// getJobStatusBatch mocks above keep the underlying jobs hook inert.
+function Harness({ studio }: { studio: ObjectStudioState }) {
+  const cands = useObjectCandidates(studio)
+  return (
+    <ObjectCandidatesContext.Provider value={cands}>
+      <AppearancePage state={studio} jobs={stubJobs} />
+    </ObjectCandidatesContext.Provider>
+  )
+}
+
+const renderPage = (studio: ObjectStudioState) => render(<Harness studio={studio} />)
 
 describe("Object AppearancePage", () => {
   beforeEach(() => {

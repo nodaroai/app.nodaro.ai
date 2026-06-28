@@ -1,27 +1,16 @@
+import { OBJECT_ANGLE_PRESETS } from "@nodaro/shared"
 import { ObjectAssetTab } from "./object-asset-tab"
 import type { ObjectStudioState } from "./use-object-studio"
 
 /**
- * Angles tab — thin wrapper over `ObjectAssetTab` passing the `angles`
- * bucket + the 9 preset strings.
+ * Angles tab — thin wrapper over `ObjectAssetTab` passing the `angles` bucket
+ * + the angle preset chips.
  *
- * Preset list extends the current `VARIANTS.angles` in
- * `backend/src/routes/generate-object-asset.ts` (5 entries) with 4 more
- * (detail/in-context/exploded/perspective). New presets fall through the
- * route's "custom" path until the VARIANTS map is extended in a follow-up.
+ * The preset list is the shared single source of truth
+ * (`@nodaro/shared` → `OBJECT_ANGLE_PRESETS`) — the SAME constant the backend
+ * route (`generate-object-asset.ts` VARIANTS) validates against, so the chips
+ * and the route can never drift (the drift that 400'd the extra presets).
  */
-const ANGLES_PRESETS = [
-  "front",
-  "side",
-  "top",
-  "back",
-  "three-quarter",
-  "detail",
-  "in-context",
-  "exploded",
-  "perspective",
-] as const
-
 interface AnglesTabProps {
   readonly studio: ObjectStudioState
 }
@@ -31,7 +20,7 @@ export function AnglesTab({ studio }: AnglesTabProps) {
     <ObjectAssetTab
       studio={studio}
       tabKind="angles"
-      presets={ANGLES_PRESETS}
+      presets={OBJECT_ANGLE_PRESETS}
       iconLabel="📐 Angles"
     />
   )

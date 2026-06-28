@@ -166,6 +166,9 @@ export function useCreatureStudio(nodeId: string): CreatureStudioState {
         sheets: fresh.sheets ?? current.sheets ?? [],
         detailCloseups:
           (fresh.detailCloseups as CreatureNodeData["detailCloseups"]) ?? current.detailCloseups,
+        // Named composite reference boards (the `boards` column) — hydrate so
+        // the Board page surfaces boards generated in studio.nodaro.ai.
+        boards: fresh.boards ?? [],
         canonicalDescription: fresh.canonicalDescription ?? "",
         styleLock: fresh.styleLock ?? current.styleLock,
       }

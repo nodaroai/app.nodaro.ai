@@ -188,7 +188,7 @@ export function ReferencePhotosSection({ photos, onChange, piiConsentAt, onConse
           className="text-[11px] bg-[#1a1d27] border border-[#1e293b] rounded px-2 py-1.5 text-slate-300"
         >
           {KINDS.map((k) => (
-            <option key={k} value={k}>{k}</option>
+            <option key={k} value={k}>{LOCATION_REFERENCE_PHOTO_KIND_LABELS[k] ?? k}</option>
           ))}
         </select>
         <input

@@ -51,6 +51,20 @@ vi.mock("../use-creature-studio", () => ({
   useCreatureStudio: () => mockStudioState,
 }))
 
+// The Appearance page's main-image candidate jobs hook now mounts at MODAL
+// scope (via useCreatureCandidates). Stub it inert so the realtime subscription
+// effect never opens a Supabase channel in this modal-shell test — the
+// AppearancePage body is mocked to a marker below, so the candidate UI itself
+// isn't exercised here.
+vi.mock("../use-creature-studio-jobs", () => ({
+  useCreatureStudioJobs: () => ({
+    tracked: [],
+    trackJob: vi.fn(),
+    onResolved: vi.fn(),
+    onFailed: vi.fn(),
+  }),
+}))
+
 // Stub the page modules so the test doesn't depend on their internals. Each
 // renders a uniquely-id'd marker we can assert on to confirm body switching
 // through the shared StudioShell.

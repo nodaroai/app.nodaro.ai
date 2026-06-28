@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event"
 
 vi.mock("@/lib/api", () => ({
   generateObjectAsset: vi.fn(),
+  removeObjectAsset: vi.fn().mockResolvedValue(undefined),
   getJobStatusBatch: vi.fn().mockResolvedValue({ jobs: [] }),
   ConcurrentModificationError: class ConcurrentModificationError extends Error {},
 }))
@@ -124,8 +125,9 @@ describe("ObjectAssetTab", () => {
         name: "Vintage Lamp",
         category: "other",
         style: "realistic",
-        // styleLock: false (default) → sourceImageUrl is "" (object-specific)
-        sourceImageUrl: "",
+        // styleLock: false (default) → sourceImageUrl is undefined (NOT "",
+        // which the backend safeUrlSchema would 400 on) — text-only generation
+        sourceImageUrl: undefined,
         attachToObjectId: "obj-uuid-1",
         attachToColumn: "angles",
         attachName: "front",

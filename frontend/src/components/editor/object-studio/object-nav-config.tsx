@@ -8,6 +8,7 @@ import { MaterialsPage } from "./pages/materials-page"
 import { VariationsPage } from "./pages/variations-page"
 import { MotionPage } from "./pages/motion-page"
 import { SheetPage } from "./pages/sheet-page"
+import { BoardPage } from "./pages/board-page"
 
 type S = ObjectStudioState
 type J = ObjectStudioJobs
@@ -48,6 +49,7 @@ export const OBJECT_STUDIO_NAV: StudioNavConfig<S, J> = {
     ] },
     { label: "Sheet", pages: [
       { key: "sheet", label: "Sheet", icon: "📋", Component: SheetPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.sheets) }) },
+      { key: "board", label: "Board", icon: "🖼", Component: BoardPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.boards) }) },
     ] },
   ],
 }

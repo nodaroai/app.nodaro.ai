@@ -2,6 +2,8 @@ import { Suspense, lazy, useEffect, useState } from "react"
 import { Upload } from "lucide-react"
 import { useObjectStudio } from "./use-object-studio"
 import { useObjectStudioJobs } from "./use-object-studio-jobs"
+import { useObjectCandidates } from "./use-object-candidates"
+import { ObjectCandidatesContext } from "./object-candidates-context"
 import { StudioShell } from "../studio-shell/studio-shell"
 import { OBJECT_STUDIO_NAV } from "./object-nav-config"
 import { Button } from "@/components/ui/button"
@@ -13,6 +15,7 @@ import {
 } from "@/components/ui/tooltip"
 import { useAuth } from "@/hooks/use-auth"
 import { hasCredits, isMultiUser } from "@/lib/edition"
+import { STUDIO_MODAL_Z } from "../studio-shell/studio-modal-z"
 
 // Lazy dynamic import keeps this core file off the ee/ static-import graph
 // (check-ee-imports.mjs only flags top-level `import ... from "@/ee/..."`,
@@ -47,6 +50,12 @@ export function ObjectStudioModal({ nodeId, onClose }: ObjectStudioModalProps) {
   // image-asset pages each create their own; the sheet page consumes this one
   // (passed through StudioShell as `jobs`).
   const sheetJobs = useObjectStudioJobs([])
+  // Main-image candidate state + jobs tracker, owned at MODAL scope so in-flight
+  // candidates + the completed-candidate grid survive Appearance↔other-tab
+  // navigation (StudioShell unmounts the page on every switch). Distinct from
+  // `sheetJobs` above; its generate/approve handlers guard internally on
+  // `studio.stagedData`, so mounting before the cold-load early return is safe.
+  const candidates = useObjectCandidates(studio)
   const { isAdmin } = useAuth()
   const [showPublish, setShowPublish] = useState(false)
 
@@ -73,7 +82,7 @@ export function ObjectStudioModal({ nodeId, onClose }: ObjectStudioModalProps) {
         role="dialog"
         aria-modal="true"
         aria-label="Object/Props Studio"
-        className="fixed inset-0 z-[1000] bg-[#0d1017] flex items-center justify-center"
+        className={`fixed inset-0 ${STUDIO_MODAL_Z} bg-[#0d1017] flex items-center justify-center`}
       >
         <div className="text-sm text-slate-400">Loading object…</div>
       </div>
@@ -88,7 +97,7 @@ export function ObjectStudioModal({ nodeId, onClose }: ObjectStudioModalProps) {
       role="dialog"
       aria-modal="true"
       aria-labelledby="object-studio-title"
-      className="fixed inset-0 z-[1000] bg-[#0d1017] flex flex-col"
+      className={`fixed inset-0 ${STUDIO_MODAL_Z} bg-[#0d1017] flex flex-col`}
     >
       {/* header */}
       <div className="flex items-center justify-between px-4.5 py-2.5 border-b border-[#1e293b] bg-[#090c12] shrink-0">
@@ -189,13 +198,15 @@ export function ObjectStudioModal({ nodeId, onClose }: ObjectStudioModalProps) {
         </Suspense>
       )}
 
-      <StudioShell
-        config={OBJECT_STUDIO_NAV}
-        state={studio}
-        jobs={sheetJobs}
-        hasCredits={hasCredits()}
-        defaultActiveKey="appearance"
-      />
+      <ObjectCandidatesContext.Provider value={candidates}>
+        <StudioShell
+          config={OBJECT_STUDIO_NAV}
+          state={studio}
+          jobs={sheetJobs}
+          hasCredits={hasCredits()}
+          defaultActiveKey="appearance"
+        />
+      </ObjectCandidatesContext.Provider>
     </div>
   )
 }

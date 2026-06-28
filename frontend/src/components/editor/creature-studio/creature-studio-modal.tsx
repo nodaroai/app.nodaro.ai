@@ -2,6 +2,8 @@ import { Suspense, lazy, useEffect, useState } from "react"
 import { Upload } from "lucide-react"
 import { useCreatureStudio } from "./use-creature-studio"
 import type { CreatureStudioJobs } from "./use-creature-studio-jobs"
+import { useCreatureCandidates } from "./use-creature-candidates"
+import { CreatureCandidatesContext } from "./creature-candidates-context"
 import { StudioShell } from "../studio-shell/studio-shell"
 import { CREATURE_STUDIO_NAV } from "./creature-nav-config"
 import { Button } from "@/components/ui/button"
@@ -13,6 +15,7 @@ import {
 } from "@/components/ui/tooltip"
 import { useAuth } from "@/hooks/use-auth"
 import { hasCredits, isMultiUser } from "@/lib/edition"
+import { STUDIO_MODAL_Z } from "../studio-shell/studio-modal-z"
 
 // Lazy dynamic import keeps this core file off the ee/ static-import graph
 // (check-ee-imports.mjs only flags top-level `import ... from "@/ee/..."`,
@@ -32,8 +35,11 @@ const PublishDialog = lazy(() => import("@/ee/components/community/publish-dialo
  *
  * Creature has NO Sheet (matching today — the reference-sheet tab was never
  * added to the creature studio), so no page consumes the shell-supplied `jobs`;
- * we pass an inert stub. The Appearance + Voice pages each own their own jobs
- * hook internally. Accent is purple (#A78BFA), vs object/location's cyan.
+ * we pass an inert stub. The Appearance page's main-image candidate state +
+ * jobs tracker live at MODAL scope (`useCreatureCandidates`, provided via
+ * `CreatureCandidatesContext`) so in-flight candidates survive tab navigation;
+ * the Voice page still owns its own jobs hook internally. Accent is purple
+ * (#A78BFA), vs object/location's cyan.
  *
  * Dirty-state guard: Escape and Close both prompt via window.confirm when
  * isDirty. In-flight saves / approvals block close entirely.
@@ -62,6 +68,12 @@ const INERT_JOBS: CreatureStudioJobs = {
 
 export function CreatureStudioModal({ nodeId, onClose }: CreatureStudioModalProps) {
   const studio = useCreatureStudio(nodeId)
+  // Main-image candidate state + jobs tracker, owned at MODAL scope so in-flight
+  // candidates + the completed-candidate grid survive Appearance↔other-tab
+  // navigation (StudioShell unmounts the page on every switch). Mounted
+  // unconditionally before the cold-load early return; its generate/approve
+  // handlers guard internally on `studio.stagedData`.
+  const candidates = useCreatureCandidates(studio)
   const { isAdmin } = useAuth()
   const [showPublish, setShowPublish] = useState(false)
   const jobs = INERT_JOBS
@@ -89,7 +101,7 @@ export function CreatureStudioModal({ nodeId, onClose }: CreatureStudioModalProp
         role="dialog"
         aria-modal="true"
         aria-label="Creature Studio"
-        className="fixed inset-0 z-[1000] bg-[#0d1017] flex items-center justify-center"
+        className={`fixed inset-0 ${STUDIO_MODAL_Z} bg-[#0d1017] flex items-center justify-center`}
       >
         <div className="text-sm text-slate-400">Loading creature…</div>
       </div>
@@ -104,7 +116,7 @@ export function CreatureStudioModal({ nodeId, onClose }: CreatureStudioModalProp
       role="dialog"
       aria-modal="true"
       aria-labelledby="creature-studio-title"
-      className="fixed inset-0 z-[1000] bg-[#0d1017] flex flex-col"
+      className={`fixed inset-0 ${STUDIO_MODAL_Z} bg-[#0d1017] flex flex-col`}
     >
       {/* header */}
       <div className="flex items-center justify-between px-4.5 py-2.5 border-b border-[#1e293b] bg-[#090c12] shrink-0">
@@ -205,13 +217,15 @@ export function CreatureStudioModal({ nodeId, onClose }: CreatureStudioModalProp
         </Suspense>
       )}
 
-      <StudioShell
-        config={CREATURE_STUDIO_NAV}
-        state={studio}
-        jobs={jobs}
-        hasCredits={hasCredits()}
-        defaultActiveKey="appearance"
-      />
+      <CreatureCandidatesContext.Provider value={candidates}>
+        <StudioShell
+          config={CREATURE_STUDIO_NAV}
+          state={studio}
+          jobs={jobs}
+          hasCredits={hasCredits()}
+          defaultActiveKey="appearance"
+        />
+      </CreatureCandidatesContext.Provider>
     </div>
   )
 }

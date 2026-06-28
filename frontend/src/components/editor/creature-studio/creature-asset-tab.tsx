@@ -7,12 +7,16 @@ import {
   POSE_CATEGORY_ORDER,
   getPoseLabel,
   getPosePromptHint,
+  resolveEntityAspect,
+  aspectRatioToNumber,
   type PoseCategory,
 } from "@nodaro/shared"
-import { generateCreatureAsset } from "@/lib/api"
+import { generateCreatureAsset, removeCreatureAsset } from "@/lib/api"
+import { MultiImageLightbox } from "@/components/ui/multi-image-lightbox"
 import { useCreatureStudioJobs } from "./use-creature-studio-jobs"
 import { PresetChips } from "../studio-shell/preset-chips"
 import { lowerNameSet } from "../studio-shell/preset-state"
+import { StudioAssetMedia } from "../studio-shell/studio-asset-media"
 import type { CreatureStudioState } from "./use-creature-studio"
 import type { ObjectAssetItem, CreatureNodeData } from "@/types/nodes"
 
@@ -72,6 +76,8 @@ export function CreatureAssetTab({
 }: CreatureAssetTabProps) {
   const data = studio.stagedData
   const [customPrompt, setCustomPrompt] = useState("")
+  // Fullscreen viewer: click an asset to open; ←/→ navigate, Esc closes.
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const jobs = useCreatureStudioJobs([])
 
   useEffect(() => {
@@ -88,6 +94,14 @@ export function CreatureAssetTab({
     ] ?? []) as ReadonlyArray<ObjectAssetItem>
 
   const disabled = studio.isApprovingMainImage
+
+  // Card fallback container ratio (until the real media aspect is probed).
+  // Drawn from the single entity-aspect table so the placeholder framing
+  // matches what's requested at generation time (angles/variations 1:1,
+  // full-body poses 3:4).
+  const fallbackAspect = aspectRatioToNumber(
+    resolveEntityAspect({ entity: "creature", assetType: tabKind }),
+  )
 
   async function fireGen(variant: string, isCustom: boolean, seedPromptHint?: string): Promise<void> {
     if (!data) return
@@ -159,9 +173,21 @@ export function CreatureAssetTab({
     setCustomPrompt("")
   }
 
-  function handleRemove(idx: number): void {
+  async function handleRemove(idx: number): Promise<void> {
+    const target = items[idx]
     const next = items.filter((_, i) => i !== idx)
+    // Optimistic local patch (snappy UX), then persist via the remove-asset
+    // route — the studio's UPDATE excludes worker-owned bucket columns, so a
+    // local-only delete reappears on reopen.
     studio.patch({ [tabKind]: next } as Partial<CreatureNodeData>)
+    const id = studio.stagedData?.creatureDbId
+    if (id && target) {
+      try {
+        await removeCreatureAsset(id, { column: BUCKET_TO_COLUMN[tabKind], url: target.url })
+      } catch {
+        toast.error("Failed to delete asset — refresh to restore")
+      }
+    }
   }
 
   // Pose-catalog browser pick handler. Only used when tabKind === "poses".
@@ -198,20 +224,24 @@ export function CreatureAssetTab({
         {items.map((item, idx) => (
           <div
             key={`${item.url}-${idx}`}
-            className="relative group aspect-square border border-[#1e293b] rounded overflow-hidden bg-[#0e1117]"
+            onClick={() => setLightboxIndex(idx)}
+            className="relative group border border-[#1e293b] rounded overflow-hidden bg-[#0e1117] cursor-zoom-in"
           >
-            <img
-              src={item.url}
+            <StudioAssetMedia
+              url={item.url}
               alt={item.name}
-              loading="lazy"
-              className="w-full h-full object-cover"
+              fallbackAspect={fallbackAspect}
+              className="w-full rounded"
             />
             <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[10px] px-1.5 py-0.5">
               {item.name}
             </div>
             <button
               type="button"
-              onClick={() => handleRemove(idx)}
+              onClick={(e) => {
+                e.stopPropagation()
+                void handleRemove(idx)
+              }}
               aria-label={`Remove ${item.name}`}
               className="absolute top-1 right-1 px-1.5 py-0.5 text-[10px] rounded bg-black/60 text-white opacity-0 group-hover:opacity-100 hover:bg-black/80"
             >
@@ -279,6 +309,12 @@ export function CreatureAssetTab({
       {tabKind === "poses" && (
         <PoseCatalogBrowser disabled={disabled} onPick={handlePosePick} />
       )}
+
+      <MultiImageLightbox
+        items={items.map((i) => ({ url: i.url, alt: i.name }))}
+        startIndex={lightboxIndex}
+        onClose={() => setLightboxIndex(null)}
+      />
     </div>
   )
 }

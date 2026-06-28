@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react"
-import { Check, Loader2 } from "lucide-react"
+import { Check, Loader2, Maximize2 } from "lucide-react"
 import { toast } from "sonner"
 import {
   LOCATION_ATMOSPHERE_PROVIDERS,
   LOCATION_PRESET_TO_CATALOG,
   type LocationAtmosphereProvider,
 } from "@nodaro/shared"
-import { generateLocationMotion } from "@/lib/api"
+import { generateLocationMotion, removeLocationAsset } from "@/lib/api"
+import { MultiImageLightbox } from "@/components/ui/multi-image-lightbox"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 import { useLocationStudioJobs } from "./use-location-studio-jobs"
 import { presetState, lowerNameSet } from "../studio-shell/preset-state"
@@ -140,9 +141,21 @@ export function MotionTab({ studio }: MotionTabProps) {
     setCustomPrompt("")
   }
 
-  function handleRemove(idx: number): void {
+  async function handleRemove(idx: number): Promise<void> {
+    const target = items[idx]
     const next = items.filter((_, i) => i !== idx)
+    // Optimistic local patch (snappy UX), then persist via the remove-asset
+    // route — the studio's UPDATE excludes the worker-owned atmosphere_motions
+    // column, so a local-only delete reappears on reopen.
     studio.patch({ atmosphereMotions: next } as Partial<LocationNodeData>)
+    const id = studio.stagedData?.locationDbId
+    if (id && target) {
+      try {
+        await removeLocationAsset(id, { column: "atmosphere_motions", url: target.url })
+      } catch {
+        toast.error("Failed to delete asset — refresh to restore")
+      }
+    }
   }
 
   // Phase 2 #10 — Bulk select + delete. Same shape as
@@ -166,11 +179,24 @@ export function MotionTab({ studio }: MotionTabProps) {
     setSelectedIdx(new Set())
   }
 
-  function handleBulkDelete() {
+  async function handleBulkDelete(): Promise<void> {
     if (selectedIdx.size === 0) return
+    // Capture the URLs to remove BEFORE clearing the selection / filtering.
+    const targets = items.filter((_, i) => selectedIdx.has(i))
     const remaining = items.filter((_, i) => !selectedIdx.has(i))
     studio.patch({ atmosphereMotions: remaining } as Partial<LocationNodeData>)
     clearSelection()
+    const id = studio.stagedData?.locationDbId
+    if (id && targets.length > 0) {
+      const results = await Promise.allSettled(
+        targets.map((t) =>
+          removeLocationAsset(id, { column: "atmosphere_motions", url: t.url }),
+        ),
+      )
+      if (results.some((r) => r.status === "rejected")) {
+        toast.error("Failed to delete some assets — refresh to restore")
+      }
+    }
   }
 
   const trackedMotions = jobs.tracked.filter(
@@ -187,6 +213,8 @@ export function MotionTab({ studio }: MotionTabProps) {
   // input until the grid is large enough to need it. Filter items by name,
   // tracked placeholders by name, presets by both raw + localized label.
   const [searchQuery, setSearchQuery] = useState("")
+  // Fullscreen viewer (videos): Enlarge to open; ←/→ navigate, Esc closes.
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const q = searchQuery.trim().toLowerCase()
   const visibleItems = q
     ? items.filter((i) => i.name.toLowerCase().includes(q))
@@ -263,7 +291,7 @@ export function MotionTab({ studio }: MotionTabProps) {
             </button>
             <button
               type="button"
-              onClick={handleBulkDelete}
+              onClick={() => void handleBulkDelete()}
               className="px-3 py-1 rounded bg-rose-600 hover:bg-rose-500 text-white font-medium"
             >
               Delete {selectedIdx.size}
@@ -319,14 +347,31 @@ export function MotionTab({ studio }: MotionTabProps) {
                 }
               />
               {!isSelectionMode && (
-                <button
-                  type="button"
-                  onClick={() => handleRemove(originalIdx)}
-                  aria-label={`Remove ${item.name}`}
-                  className="absolute top-1 right-1 px-1.5 py-0.5 text-[10px] rounded bg-black/60 text-white opacity-0 group-hover:opacity-100 hover:bg-black/80"
-                >
-                  Remove
-                </button>
+                <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 z-10">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setLightboxIndex(visibleItems.indexOf(item))
+                    }}
+                    aria-label={`Enlarge ${item.name}`}
+                    title="Enlarge"
+                    className="w-6 h-6 flex items-center justify-center rounded bg-black/60 text-white hover:bg-black/80"
+                  >
+                    <Maximize2 className="w-3 h-3" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      void handleRemove(originalIdx)
+                    }}
+                    aria-label={`Remove ${item.name}`}
+                    className="px-1.5 py-0.5 text-[10px] rounded bg-black/60 text-white hover:bg-black/80"
+                  >
+                    Remove
+                  </button>
+                </div>
               )}
             </div>
           )
@@ -448,6 +493,12 @@ export function MotionTab({ studio }: MotionTabProps) {
           Generate
         </button>
       </div>
+
+      <MultiImageLightbox
+        items={visibleItems.map((i) => ({ url: i.url, alt: i.name, kind: "video" as const }))}
+        startIndex={lightboxIndex}
+        onClose={() => setLightboxIndex(null)}
+      />
     </div>
   )
 }

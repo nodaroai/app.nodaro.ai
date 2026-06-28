@@ -147,7 +147,7 @@ export function AppearancePage({ state }: StudioPageProps<LocationStudioState, L
               src={optimizedImageUrl(data.sourceImageUrl, { width: 800 })}
               alt={data.locationName || "Location"}
               loading="lazy"
-              className="w-full max-h-[400px] object-cover rounded border border-[#1e293b]"
+              className="w-full max-h-[400px] object-contain rounded border border-[#1e293b]"
             />
           ) : (
             <div className="aspect-video bg-[#1a1d27] rounded border border-[#1e293b] flex items-center justify-center text-[11px] text-slate-500">

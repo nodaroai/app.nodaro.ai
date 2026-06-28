@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { optimizedImageUrl } from "@/lib/image"
 import { X } from "lucide-react"
+import { useMediaAspectRatio } from "../studio-shell/use-media-aspect"
 
 export type CandidateCount = 1 | 2 | 4
 
@@ -91,8 +92,11 @@ function CandidateCard({
   onCancel: () => void
 }) {
   const done = candidate.status === "completed" && candidate.url
+  // Size to the candidate's real aspect (portraits default 3:4 but the node's
+  // aspect override may make them 9:16/16:9) so they aren't cropped.
+  const { ratio } = useMediaAspectRatio(done && candidate.url ? candidate.url : "", "image", 0.75)
   return (
-    <div className="relative rounded-md overflow-hidden bg-[#13161f] border border-[#334155] aspect-[3/4]">
+    <div className="relative rounded-md overflow-hidden bg-[#13161f] border border-[#334155]" style={{ aspectRatio: ratio }}>
       {done ? (
         <button
           type="button"
@@ -100,7 +104,7 @@ function CandidateCard({
           onClick={onApprove}
           className="block w-full h-full"
         >
-          <img src={optimizedImageUrl(candidate.url)} alt={`candidate ${candidate.jobId}`} className="w-full h-full object-cover" />
+          <img src={optimizedImageUrl(candidate.url)} alt={`candidate ${candidate.jobId}`} className="w-full h-full object-cover object-top" />
           <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[10px] py-1 text-center">
             Click to approve
           </div>
