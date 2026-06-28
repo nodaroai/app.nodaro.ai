@@ -14,4 +14,12 @@ describe("referenceSheetBody", () => {
     const { entityKind, entityDbId, ...rest } = base
     expect(referenceSheetBody.safeParse(rest).success).toBe(false)
   })
+  it("accepts and preserves flavour.presetId", () => {
+    const r = referenceSheetBody.safeParse({ ...base, flavour: { ...base.flavour, presetId: "studio-main" } })
+    expect(r.success).toBe(true)
+    if (r.success) expect(r.data.flavour.presetId).toBe("studio-main")
+  })
+  it("rejects an unknown presetId", () => {
+    expect(referenceSheetBody.safeParse({ ...base, flavour: { ...base.flavour, presetId: "bogus" } }).success).toBe(false)
+  })
 })

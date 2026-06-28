@@ -9,6 +9,10 @@ export type SheetSkin = (typeof SHEET_SKINS)[number]
 export const SHEET_ASPECTS = ["landscape", "square", "story"] as const
 export type SheetAspect = (typeof SHEET_ASPECTS)[number]
 
+/** Studio sheet presets (character only). Declared here so SheetFlavour can carry
+ *  it without a cycle (`presets.ts` re-exports it alongside the registry). */
+export type SheetPresetId = "studio-main" | "studio-extended"
+
 export const OUTPUT_FORMATS = ["still", "motion"] as const
 export type OutputFormat = (typeof OUTPUT_FORMATS)[number]
 
@@ -45,6 +49,7 @@ export interface SheetFlavour {
   aspect: SheetAspect
   background: SheetBackground
   sections?: SheetSection[]   // explicit stack for `full-reference`; other types derive defaults
+  presetId?: SheetPresetId    // labels studio preset sheets; inert to pricing/composition
 }
 
 /** A single panel the planner says must exist (reused or generated). */

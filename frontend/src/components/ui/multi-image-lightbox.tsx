@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useState, type ReactNode } from "react"
 import { createPortal } from "react-dom"
 import { ChevronLeft, ChevronRight, X } from "lucide-react"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -20,6 +20,10 @@ interface MultiImageLightboxProps {
   /** Which item to open at. Pass null to close. */
   readonly startIndex: number | null
   readonly onClose: () => void
+  /** Optional toolbar rendered (top-left) for the current item, e.g. a Copy-URL
+   *  button. Buttons MUST call e.stopPropagation() or a click also closes the
+   *  lightbox (the backdrop's onClick). */
+  readonly actions?: (item: LightboxItem) => ReactNode
 }
 
 /**
@@ -35,7 +39,7 @@ interface MultiImageLightboxProps {
  * full set. The "x of N" footer and looping (wrap-around) come for free.
  * Single-item sets get no navigation chrome, just the close + footer.
  */
-export function MultiImageLightbox({ items, startIndex, onClose }: MultiImageLightboxProps) {
+export function MultiImageLightbox({ items, startIndex, onClose, actions }: MultiImageLightboxProps) {
   const [index, setIndex] = useState<number>(startIndex ?? 0)
 
   // Sync local index when the caller pops the lightbox open at a new position.
@@ -95,6 +99,13 @@ export function MultiImageLightbox({ items, startIndex, onClose }: MultiImageLig
       >
         <X className="w-6 h-6" />
       </button>
+
+      {/* Optional per-item actions (top-left). Buttons stopPropagation themselves. */}
+      {actions && (
+        <div className="absolute top-4 left-4 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+          {actions(current)}
+        </div>
+      )}
 
       {/* Previous (left edge) */}
       {total > 1 && (
