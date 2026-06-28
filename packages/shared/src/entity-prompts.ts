@@ -98,7 +98,7 @@ export const CHARACTER_ASSET_VARIANTS = {
   ],
   lighting: ["daylight", "night", "dramatic"],
   angles: ["front", "3/4 left", "left profile", "right profile", "3/4 right", "back", "above", "below"],
-  headAngles: ["front", "3/4 left", "left profile", "right profile", "3/4 right", "above", "below"],
+  headAngles: ["front", "3/4 left", "left profile", "right profile", "3/4 right", "above", "below", "back"],
   bodyAngles: ["front", "3/4 left", "left profile", "right profile", "3/4 right", "back", "above", "below"],
 } as const satisfies Partial<Record<CharacterAssetType, readonly string[]>>
 

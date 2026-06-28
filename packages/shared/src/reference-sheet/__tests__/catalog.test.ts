@@ -23,6 +23,12 @@ describe("catalog invariants", () => {
     expect(BOARD_VARIANTS.location.timeOfDay).toEqual(LOCATION_ASSET_VARIANTS.timeOfDay)
     expect(BOARD_VARIANTS.location.angles).toEqual(LOCATION_ASSET_VARIANTS.angles)
   })
+  it("headAngles includes back-of-head, appended after the default-4 slice", () => {
+    const head = CHARACTER_ASSET_VARIANTS.headAngles
+    expect(head).toContain("back")
+    expect(head.indexOf("back")).toBeGreaterThanOrEqual(4) // keeps slice(0,4) stable
+    expect(head.slice(0, 4)).toEqual(["front", "3/4 left", "left profile", "right profile"])
+  })
   it("new buckets (detail/wardrobe) have starter presets", () => {
     expect(DETAIL_VARIANTS.character.length).toBeGreaterThan(0)
     expect(WARDROBE_VARIANTS.length).toBeGreaterThan(0)

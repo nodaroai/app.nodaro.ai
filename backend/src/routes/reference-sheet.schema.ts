@@ -20,6 +20,10 @@ const flavour = z.object({
   aspect: z.enum(SHEET_ASPECTS),
   background: z.enum(SHEET_BACKGROUNDS),
   sections: z.array(section).max(16).optional(),
+  // Studio preset id (character only) — labels the persisted sheet. A plain
+  // z.object strips unknown keys, so this MUST be declared or it never reaches
+  // the worker's verbatim-flavour snapshot. Inert to pricing/composition.
+  presetId: z.enum(["studio-main", "studio-extended"]).optional(),
 })
 export const referenceSheetBody = z.object({
   type: z.enum(SHEET_TYPES),

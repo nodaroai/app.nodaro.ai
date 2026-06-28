@@ -51,11 +51,17 @@ export interface SheetTabAdapter {
   awaitJob: (jobs: any, jobId: string, assetType: string, name: string) => Promise<string> // eslint-disable-line @typescript-eslint/no-explicit-any
   /** Set a sheet url as the node thumbnail (per-canvas-node defaultAssetUrl). */
   setThumbnail: (studio: any, url: string, name: string) => void // eslint-disable-line @typescript-eslint/no-explicit-any
+  /** Credits per generated panel (nano-banana default) — for the hasCredits()-gated cost readout. */
+  perPanelCost: number
+  /** Flat credits to compose a still sheet (reference-sheet:assembly). */
+  assemblyCost: number
 }
 
 export const SHEET_TAB_ADAPTERS: Record<EntityKind, SheetTabAdapter> = {
   character: {
     entityKind: "character",
+    perPanelCost: 1,
+    assemblyCost: 4,
     getStaged: (s) => s.staged,
     ensureSaved: (s) => s.ensureSaved(),
     bucketsByColumn: (st) => ({
@@ -81,6 +87,8 @@ export const SHEET_TAB_ADAPTERS: Record<EntityKind, SheetTabAdapter> = {
   },
   object: {
     entityKind: "object",
+    perPanelCost: 1,
+    assemblyCost: 4,
     getStaged: (s) => s.stagedData,
     ensureSaved: (s) => s.ensureSavedBeforeGen(),
     bucketsByColumn: (st) => ({ angles: st.angles, materials: st.materials, variations: st.variations, detail_closeups: st.detailCloseups }),
@@ -94,6 +102,8 @@ export const SHEET_TAB_ADAPTERS: Record<EntityKind, SheetTabAdapter> = {
   },
   location: {
     entityKind: "location",
+    perPanelCost: 1,
+    assemblyCost: 4,
     getStaged: (s) => s.stagedData,
     ensureSaved: (s) => s.ensureSavedBeforeGen(),
     bucketsByColumn: (st) => ({ angles: st.angles, time_of_day: st.timeOfDay, weather: st.weather, seasons: st.seasons, lighting: st.lighting, detail_closeups: st.detailCloseups }),
