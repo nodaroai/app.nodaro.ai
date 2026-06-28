@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/tooltip"
 import { useAuth } from "@/hooks/use-auth"
 import { hasCredits, isMultiUser } from "@/lib/edition"
+import { STUDIO_MODAL_Z } from "../studio-shell/studio-modal-z"
 import type { CharacterNodeData } from "@/types/nodes"
 
 // Lazy dynamic import keeps this core file off the ee/ static-import graph
@@ -105,7 +106,7 @@ function StudioModalBody({
   }
 
   return (
-    <div className="fixed inset-0 z-[100] bg-[#0d1017] flex flex-col">
+    <div className={`fixed inset-0 ${STUDIO_MODAL_Z} bg-[#0d1017] flex flex-col`}>
       {/* header */}
       <div className="flex items-center justify-between px-4.5 py-2.5 border-b border-[#1e293b] bg-[#090c12] shrink-0">
         <div className="flex items-center gap-3">

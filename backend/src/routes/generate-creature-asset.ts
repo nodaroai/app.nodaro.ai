@@ -8,7 +8,7 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate, extractProvider 
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
-import { CREATURE_ATTACH_COLUMNS } from "@nodaro/shared"
+import { CREATURE_ATTACH_COLUMNS, resolveEntityAspect } from "@nodaro/shared"
 import { llmComplete } from "../lib/llm-client.js"
 import {
   CREATURE_ASSET_DESCRIPTION_SYSTEM_PROMPT,
@@ -56,6 +56,11 @@ const generateCreatureAssetBody = z.object({
   attachName: z.string().min(1).max(200).optional(),
   // Phase E picker-hint pass-through: prompt-fragment for the worker.
   seedPromptHint: z.string().max(2000).optional(),
+  // Optional explicit aspect override ("W:H"). Permissive on purpose — the
+  // shared `resolveEntityAspect` validates the format (RATIO_RE) and falls
+  // through to the per-asset-type default when absent/malformed, so a stale
+  // value never poisons the request. Explicit wins over the default.
+  aspectRatio: z.string().max(16).optional(),
 })
 
 function buildVariantPrompt(
@@ -260,6 +265,17 @@ export async function generateCreatureAssetRoutes(app: FastifyInstance) {
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
+    // Per-asset-type aspect ratio so full-body poses aren't generated square
+    // and cropped. Mirrors generate-character-asset.ts — the worker forwards
+    // this as the provider `aspect_ratio` (clamped to the model's catalog).
+    // Defaults: creature angles 1:1, poses 3:4, variations 1:1; custom → 1:1.
+    // Explicit caller value wins over the default.
+    const aspectRatio = resolveEntityAspect({
+      entity: "creature",
+      assetType,
+      explicit: parsed.data.aspectRatio,
+    })
+
     await videoQueue.add("generate-creature-asset", {
       jobId: job.id,
       prompt,
@@ -267,6 +283,7 @@ export async function generateCreatureAssetRoutes(app: FastifyInstance) {
       assetType,
       variant,
       provider: parsed.data.provider,
+      aspectRatio,
       usageLogId,
       attachToCreatureId: parsed.data.attachToCreatureId,
       attachToColumn: parsed.data.attachToColumn,

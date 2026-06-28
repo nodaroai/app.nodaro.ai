@@ -48,7 +48,7 @@ In two more cases the picker helps you avoid clutter:
 
 **Outputs:**
 - `objectRef` -- Object reference (identity) for use in scenes and compositions.
-- `image` -- The object's image as a **plain image**. Connect this anywhere a Generate Image output can go (image References, Image-to-Image, Generate Video image input, etc.). Unlike `objectRef`, it carries no identity injection — it is just the picture.
+- `image` -- The object's image as a **plain image**. Connect this anywhere a Generate Image output can go (image References, Image-to-Image, Generate Video image input, List columns, etc.). Unlike `objectRef`, it carries no identity injection — it is just the picture.
 ## Best Practices
 - Include specific material and texture descriptions (e.g., "brushed stainless steel coffee mug with a matte black handle").
 - Choose the appropriate category to help the AI understand the object's context and typical usage.

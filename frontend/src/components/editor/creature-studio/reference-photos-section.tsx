@@ -172,7 +172,7 @@ export function ReferencePhotosSection({ photos, onChange }: ReferencePhotosSect
           type="button"
           onClick={add}
           disabled={!pendingUrl.trim() || photos.length >= MAX_PHOTOS}
-          className="text-[11px] px-3 py-1.5 rounded bg-[#22d3ee] hover:bg-[#22d3ee]/90 disabled:opacity-40 disabled:cursor-not-allowed text-slate-900 font-medium"
+          className="text-[11px] px-3 py-1.5 rounded bg-[#A78BFA] hover:bg-[#A78BFA]/90 disabled:opacity-40 disabled:cursor-not-allowed text-slate-900 font-medium"
         >
           Add
         </button>

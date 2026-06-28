@@ -36,7 +36,8 @@ import type {
   SwitchXData,
 } from "@/types/nodes"
 import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, VIDEO_GEN_MODELS, MOTION_TRANSFER_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, VIDEO_DURATION_OPTIONS, VIDEO_FPS_OPTIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, EXTEND_VIDEO_MODELS, getVideoResolutionOptions, getAspectRatiosForVideoModel, getVideoModelCapabilitiesTooltip } from "./model-options"
-import { isSeedance2Provider, defaultVideoAspectRatio, resolveSeedance2Inputs, MODEL_CATALOG, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, buildVideoCreditModelIdentifier, characterMentionSlug, characterMentionableAssetArrays, DEFAULT_LABEL_BY_SOURCE, locationMentionSlug } from "@nodaro/shared"
+import { isSeedance2Provider, defaultVideoAspectRatio, resolveSeedance2Inputs, MODEL_CATALOG, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, buildVideoCreditModelIdentifier, characterMentionSlug, characterMentionableAssetArrays, DEFAULT_LABEL_BY_SOURCE, locationMentionSlug, resolveEffectiveSourceType } from "@nodaro/shared"
+import { entityActiveImageUrl } from "@/lib/entity-output-url"
 import { PromptLengthCounter } from "./prompt-length-counter"
 import type { ReferenceSource } from "@nodaro/shared"
 import { ModelSearchSelect } from "./model-search-select"
@@ -141,13 +142,14 @@ function buildVideoRefAutocomplete(
 ): VideoRefAutocompleteEntry[] {
   const out: VideoRefAutocompleteEntry[] = []
   for (const s of sources) {
-    const refSource = VIDEO_REF_SOURCE_BY_TYPE[s.type]
+    const effectiveType = resolveEffectiveSourceType(s.type, s.sourceHandle)
+    const refSource = VIDEO_REF_SOURCE_BY_TYPE[effectiveType]
     if (!refSource) continue
     const nd = s.nodeData ?? {}
 
     // Character upstream: expand into canonical + one entry per asset variant
     // so the `@kira` / `@kira-smile` typeahead in the prompt editor sees them.
-    if (s.type === "character") {
+    if (effectiveType === "character") {
       const charData = nd as unknown as CharacterNodeData
       const charName = charData.characterName || s.label || "Character"
       const slug = characterMentionSlug(charName)
@@ -203,7 +205,7 @@ function buildVideoRefAutocomplete(
     // so `@oldlibrary:1` and `@oldlibrary:1:weather/rain` both surface in
     // the autocomplete. Mirrors `expandLocationNodeIntoRefs` in
     // execute-node.ts (runtime path) for slice 3 of Location Studio Phase 2 #2.
-    if (s.type === "location") {
+    if (effectiveType === "location") {
       const locName = (nd.locationName as string) || s.label || "Location"
       const locSlug = locationMentionSlug(locName) || undefined
       const sourceUrl = nd.sourceImageUrl as string | undefined
@@ -244,6 +246,7 @@ function buildVideoRefAutocomplete(
     }
 
     const url =
+      entityActiveImageUrl(nd) ||
       (nd.generatedImageUrl as string) ||
       (nd.url as string) ||
       (nd.sourceImageUrl as string) ||

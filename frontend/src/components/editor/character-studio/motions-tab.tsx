@@ -9,7 +9,8 @@ import type { CharacterStudioJobs } from "./use-character-studio-jobs"
 import { AssetCard } from "./asset-card"
 import { AssetGenPanel, type AssetGenSubmission } from "./asset-gen-panel"
 import { GenerationBar } from "./generation-bar"
-import { PendingCard } from "./pending-card"
+import { FailedCard, PendingCard } from "./pending-card"
+import { resolveCharacterAspectRatio, aspectRatioToNumber } from "@nodaro/shared"
 import { PerVariantRealLifeRefsDrawer } from "./per-variant-refs-drawer"
 import { MultiImageLightbox } from "@/components/ui/multi-image-lightbox"
 import { injectAssetAsCanvasNode, setCharacterNodeDefaultAsset } from "./inject-helpers"
@@ -55,6 +56,12 @@ export function MotionsTab({
   const hasPortrait = Boolean(state.staged.sourceImageUrl)
   const items = state.staged.motions
   const pendingForType = Array.from(jobs.pending.entries()).filter(([, m]) => m.assetType === "motions")
+  const failedForType = Array.from(jobs.failed.entries()).filter(([, m]) => m.assetType === "motions")
+  // Motion clips are vertical (9:16, override-aware) — fallback ratio until each
+  // video reports its real dimensions, so the old aspect-[3/4] no longer crops them.
+  const fallbackAspect = aspectRatioToNumber(
+    resolveCharacterAspectRatio({ nodeOverride: state.staged.defaultAssetAspectRatio, assetType: "motions" }),
+  )
   // GenerationBar chip states: "created" once a motion of that name exists,
   // "creating" while a job (real or optimistic) is in flight.
   const createdNames = lowerNameSet(items)
@@ -145,7 +152,10 @@ export function MotionsTab({
         return
       }
       if (mode === "replace") {
-        state.patch({ motions: items.filter((_, i) => i !== idx) })
+        // Match by URL on the FRESHEST staged motions array (not the captured
+        // render index) so a poll completion that appended during ensureSaved's
+        // await isn't clobbered. See patchWith in use-character-studio.ts.
+        state.patchWith((prev) => ({ motions: prev.motions.filter((it) => it.url !== asset.url) }))
       }
       const trackName = mode === "replace" ? asset.name : `${asset.name} (v)`
       // Auto-chain: see handleGenerate for the rationale.
@@ -308,6 +318,7 @@ export function MotionsTab({
               key={`${item.url}-${idx}`}
               item={item}
               isVideo
+              fallbackAspect={fallbackAspect}
               costModel={currentModel}
               onDelete={() => state.patch({ motions: items.filter((_, i) => i !== idx) })}
               onRegenerate={hasPortrait ? (mode) => handleRegenerate(idx, mode) : undefined}
@@ -329,7 +340,20 @@ export function MotionsTab({
               name={m.name}
               progress={m.progress}
               theme="motion"
+              aspect={fallbackAspect}
               onCancel={jobs.cancel}
+            />
+          ))}
+          {failedForType.map(([jobId, m]) => (
+            <FailedCard
+              key={jobId}
+              name={m.name}
+              aspect={fallbackAspect}
+              onRetry={() => {
+                jobs.dismissFailed(jobId)
+                void handleGenerate(m.name, false, currentModel)
+              }}
+              onDismiss={() => jobs.dismissFailed(jobId)}
             />
           ))}
         </div>

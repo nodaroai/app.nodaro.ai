@@ -1538,7 +1538,10 @@ export async function generateObjectAsset(data: {
   userPrompt?: string
   category?: string
   style?: string
-  sourceImageUrl: string
+  // Optional: only sent when style-lock is on. Backend `safeUrlSchema.optional()`
+  // rejects "", so the studio passes `undefined` for text-only generation
+  // (matches generateLocationAsset / generateCreatureAsset).
+  sourceImageUrl?: string
   provider?: string
   userId?: string
   // Phase A (Object Studio) — studio auto-attach + seed-prompt context.
@@ -1681,6 +1684,23 @@ export async function recaptionObject(
 }
 
 /**
+ * Atomically removes a single worker-owned asset (by `url`) from one of the
+ * object's JSONB bucket columns. The studio tabs deliberately exclude these
+ * worker-owned columns from their UPDATE, so a local-only delete never
+ * persisted — this route (backed by an RPC) is the authoritative removal.
+ * Returns 404 when nothing matched (wrong owner / url absent).
+ */
+export async function removeObjectAsset(
+  objectId: string,
+  body: { column: string; url: string },
+): Promise<void> {
+  await apiJson(
+    `/v1/objects/${encodeURIComponent(objectId)}/remove-asset`,
+    { body, label: "Failed to remove object asset" },
+  )
+}
+
+/**
  * Archives the object (soft delete). The row stays in the DB and any canvas
  * node pointing at it keeps loading; the library list hides it. Restore via
  * `restoreObject(id)`.
@@ -1768,6 +1788,8 @@ export interface DbObject {
   // `outfitVariations` (character-only dimension).
   sheets?: ReferenceSheet[]
   detailCloseups?: unknown[]
+  // Named composite reference boards (the `boards` JSONB column, migration 212).
+  boards?: { name: string; url: string }[]
   deletedAt?: string | null
   createdAt: string
   updatedAt: string
@@ -2018,6 +2040,22 @@ export async function recaptionCreature(
 }
 
 /**
+ * Atomically removes a single worker-owned asset (by `url`) from one of the
+ * creature's JSONB bucket columns. Mirrors `removeObjectAsset` — the studio
+ * tabs exclude these columns from their UPDATE, so this RPC-backed route is
+ * the authoritative removal. Returns 404 when nothing matched.
+ */
+export async function removeCreatureAsset(
+  creatureId: string,
+  body: { column: string; url: string },
+): Promise<void> {
+  await apiJson(
+    `/v1/creatures/${encodeURIComponent(creatureId)}/remove-asset`,
+    { body, label: "Failed to remove creature asset" },
+  )
+}
+
+/**
  * Archives the creature (soft delete). `opts.permanent === true` flips the
  * route into hard-delete mode (the row MUST already be archived). Mirrors
  * `deleteObject`.
@@ -2088,6 +2126,8 @@ export interface DbCreature {
   // shape (Sheet tab DEFERRED this phase). Mirrors DbObject.
   sheets?: ReferenceSheet[]
   detailCloseups?: unknown[]
+  // Named composite reference boards (the `boards` JSONB column, migration 212).
+  boards?: { name: string; url: string }[]
   deletedAt?: string | null
   createdAt: string
   updatedAt: string
@@ -2309,6 +2349,22 @@ export async function recaptionLocation(
 }
 
 /**
+ * Atomically removes a single worker-owned asset (by `url`) from one of the
+ * location's JSONB bucket columns. Mirrors `removeObjectAsset` — the studio
+ * tabs exclude these columns from their UPDATE, so this RPC-backed route is
+ * the authoritative removal. Returns 404 when nothing matched.
+ */
+export async function removeLocationAsset(
+  locationId: string,
+  body: { column: string; url: string },
+): Promise<void> {
+  await apiJson(
+    `/v1/locations/${encodeURIComponent(locationId)}/remove-asset`,
+    { body, label: "Failed to remove location asset" },
+  )
+}
+
+/**
  * Un-archive a soft-deleted location (mirror of restoreCharacter). On name
  * collision with an active row, the backend auto-suffixes "(restored)" so
  * the returned name may differ from the original.
@@ -2411,6 +2467,8 @@ export interface DbLocation {
   // `outfitVariations` (character-only dimension).
   sheets?: ReferenceSheet[]
   detailCloseups?: unknown[]
+  // Named composite reference boards (the `boards` JSONB column, migration 212).
+  boards?: { name: string; url: string }[]
   /** Phase 2 #7 — timestamp the user consented that reference photos don't
    *  include PII without rights. NULL = no consent recorded yet (UI shows
    *  the consent checkbox); non-NULL = consent given (UI hides checkbox). */

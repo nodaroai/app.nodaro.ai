@@ -1,7 +1,7 @@
 ---
 node_type: location
-generated_at: 2026-06-23T20:10:00.161Z
-generated_from: 527130f41
+generated_at: 2026-06-27T20:11:22.283Z
+generated_from: f80b06e52
 ---
 
 # Location
@@ -52,6 +52,7 @@ generated_from: 527130f41
 - `scriptLocationIndex?: number`
 - `sheets?: ReferenceSheet[]`
 - `detailCloseups?: LocationAssetItem[]`
+- `boards?: ReadonlyArray<{ readonly name: string; readonly url: string }>`
 - `defaultAssetUrl?: string`
 - `defaultAssetName?: string`
 - `piiConsentAt?: string`

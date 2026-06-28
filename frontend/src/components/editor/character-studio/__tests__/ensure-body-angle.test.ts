@@ -67,6 +67,7 @@ function makeState(stagedOverrides: Partial<CharacterNodeData> = {}): CharacterS
     initialPortraitCandidates: [],
     initialPreviousCandidates: [],
     patch: vi.fn(),
+    patchWith: vi.fn(),
     ensureSaved: vi.fn().mockResolvedValue("char-uuid"),
   }
 }
@@ -74,6 +75,8 @@ function makeState(stagedOverrides: Partial<CharacterNodeData> = {}): CharacterS
 function makeJobs(overrides: Partial<CharacterStudioJobs> = {}): CharacterStudioJobs {
   return {
     pending: new Map(),
+    failed: new Map(),
+    dismissFailed: vi.fn(),
     begin: vi.fn(() => "optimistic:test"),
     settle: vi.fn(),
     abort: vi.fn(),

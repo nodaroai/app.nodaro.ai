@@ -5,7 +5,8 @@ import {
   LOCATION_BUCKET_TO_CATALOG_ID,
   LOCATION_PRESET_TO_CATALOG,
 } from "@nodaro/shared"
-import { generateLocationAsset } from "@/lib/api"
+import { generateLocationAsset, removeLocationAsset } from "@/lib/api"
+import { MultiImageLightbox } from "@/components/ui/multi-image-lightbox"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 import { useLocationStudioJobs } from "./use-location-studio-jobs"
 import { presetState, lowerNameSet } from "../studio-shell/preset-state"
@@ -198,12 +199,27 @@ export function EnvironmentalAssetTab({
     setCustomPrompt("")
   }
 
-  function handleRemove(idx: number): void {
+  async function handleRemove(idx: number): Promise<void> {
+    const target = items[idx]
     const next = items.filter((_, i) => i !== idx)
-    // Mutate just this bucket on the staged data. Cast through Partial so
-    // TypeScript accepts the dynamic key — every bucket name in the registry
-    // maps to a LocationAssetItem[] on LocationNodeData.
+    // Optimistically mutate just this bucket on the staged data so the UX
+    // stays snappy. Cast through Partial so TypeScript accepts the dynamic key
+    // — every bucket name in the registry maps to a LocationAssetItem[] on
+    // LocationNodeData.
     studio.patch({ [bucketName]: next } as Partial<LocationNodeData>)
+    // Persist the removal. The studio's UPDATE deliberately excludes these
+    // worker-owned bucket columns, so a local-only patch never reaches the DB
+    // and the asset reappears on reopen. The remove-asset route is the
+    // authoritative atomic removal. On failure, surface a toast (do NOT
+    // silently swallow) so the user knows the row is out of sync.
+    const id = studio.stagedData?.locationDbId
+    if (id && target) {
+      try {
+        await removeLocationAsset(id, { column: BUCKET_TO_COLUMN[bucketName], url: target.url })
+      } catch {
+        toast.error("Failed to delete asset — refresh to restore")
+      }
+    }
   }
 
   // Phase 2 #10 — Bulk asset operations. The Set tracks selected items by
@@ -232,11 +248,26 @@ export function EnvironmentalAssetTab({
     setSelectedIdx(new Set())
   }
 
-  function handleBulkDelete() {
+  async function handleBulkDelete(): Promise<void> {
     if (selectedIdx.size === 0) return
+    // Capture the URLs to remove BEFORE clearing the selection / filtering.
+    const targets = items.filter((_, i) => selectedIdx.has(i))
     const remaining = items.filter((_, i) => !selectedIdx.has(i))
     studio.patch({ [bucketName]: remaining } as Partial<LocationNodeData>)
     clearSelection()
+    // Persist each removal (see handleRemove for why a local patch isn't
+    // enough). Fire them in parallel; toast once if any failed.
+    const id = studio.stagedData?.locationDbId
+    if (id && targets.length > 0) {
+      const results = await Promise.allSettled(
+        targets.map((t) =>
+          removeLocationAsset(id, { column: BUCKET_TO_COLUMN[bucketName], url: t.url }),
+        ),
+      )
+      if (results.some((r) => r.status === "rejected")) {
+        toast.error("Failed to delete some assets — refresh to restore")
+      }
+    }
   }
 
   const trackedForBucket = jobs.tracked.filter((j) => j.assetType === bucketName)
@@ -254,6 +285,8 @@ export function EnvironmentalAssetTab({
   // literal AND the resolved localized label (so a French user typing
   // "néon" still finds the canonical "neon" preset chip).
   const [searchQuery, setSearchQuery] = useState("")
+  // Fullscreen viewer: click an asset to open; ←/→ navigate, Esc closes.
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const q = searchQuery.trim().toLowerCase()
   const visibleItems = q
     ? items.filter((i) => i.name.toLowerCase().includes(q))
@@ -333,7 +366,7 @@ export function EnvironmentalAssetTab({
             </button>
             <button
               type="button"
-              onClick={handleBulkDelete}
+              onClick={() => void handleBulkDelete()}
               className="px-3 py-1 rounded bg-rose-600 hover:bg-rose-500 text-white font-medium"
             >
               Delete {selectedIdx.size}
@@ -354,19 +387,20 @@ export function EnvironmentalAssetTab({
               key={`${item.url}-${originalIdx}`}
               onClick={(e) => {
                 // In selection mode, clicking anywhere on the card toggles
-                // selection. Outside selection mode the card is purely a
-                // viewer; we don't want a single click to start selection
-                // (use the checkbox in the corner for that).
+                // selection. Outside selection mode a click opens the asset in
+                // the fullscreen lightbox (←/→ to navigate, Esc to close).
                 if (isSelectionMode) {
                   e.preventDefault()
                   toggleSelected(originalIdx)
+                } else {
+                  setLightboxIndex(visibleItems.indexOf(item))
                 }
               }}
               className={
                 "relative group aspect-video border rounded overflow-hidden bg-[#0e1117] "
                 + (isSelected
                   ? "border-[#22d3ee] ring-2 ring-[#22d3ee] cursor-pointer"
-                  : "border-[#1e293b] " + (isSelectionMode ? "cursor-pointer" : ""))
+                  : "border-[#1e293b] " + (isSelectionMode ? "cursor-pointer" : "cursor-zoom-in"))
               }
             >
               <img
@@ -399,7 +433,10 @@ export function EnvironmentalAssetTab({
               {!isSelectionMode && (
                 <button
                   type="button"
-                  onClick={() => handleRemove(originalIdx)}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    void handleRemove(originalIdx)
+                  }}
                   aria-label={`Remove ${item.name}`}
                   className="absolute top-1 right-1 px-1.5 py-0.5 text-[10px] rounded bg-black/60 text-white opacity-0 group-hover:opacity-100 hover:bg-black/80"
                 >
@@ -501,6 +538,12 @@ export function EnvironmentalAssetTab({
           Generate
         </button>
       </div>
+
+      <MultiImageLightbox
+        items={visibleItems.map((i) => ({ url: i.url, alt: i.name }))}
+        startIndex={lightboxIndex}
+        onClose={() => setLightboxIndex(null)}
+      />
     </div>
   )
 }

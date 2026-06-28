@@ -1281,6 +1281,15 @@ export type {
   ResolveCharacterAspectOptions,
 } from "./character-aspect-defaults.js"
 
+export {
+  ENTITY_ASPECT_DEFAULTS,
+  resolveEntityAspect,
+  aspectRatioToNumber,
+} from "./entity-aspect-defaults.js"
+export type { EntityStudioKind } from "./entity-aspect-defaults.js"
+
+export * from "./object-asset-presets.js"
+
 export * from "./pipeline-chat.js"
 export * from "./pipeline-defaults.js"
 export * from "./pipeline-events.js"
@@ -1369,3 +1378,6 @@ export * from "./model-tree.js"
 
 // --- Audio FX node preset ids (single source of truth for route/UI/data type) ---
 export * from "./audio-fx-presets.js"
+
+// --- Entity image-handle parity (entity `image` source handle → plain image) ---
+export * from "./entity-image-handle.js"

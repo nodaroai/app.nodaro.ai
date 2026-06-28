@@ -91,6 +91,12 @@ export function LoraPage({ state }: StudioPageProps<CharacterStudioState, Charac
   const [training, setTraining] = useState<TrainingStatus | null>(null)
   const [busy, setBusy] = useState(false)
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Bumped by handleStart/Re-train to RE-ARM the poll effect. Without this the
+  // poll only self-perpetuates while the *fetched* status is queued/training;
+  // on mount with an untrained character tick() fetches "untrained" and
+  // schedules nothing, so a freshly-started training stayed on "Training…"
+  // until the page was reopened.
+  const [pollNonce, setPollNonce] = useState(0)
 
   // Candidate images (the 7 buckets, de-duped). Recomputed when staged changes.
   const candidates = useMemo(() => deriveCandidates(data), [data])
@@ -172,7 +178,7 @@ export function LoraPage({ state }: StudioPageProps<CharacterStudioState, Charac
       cancelled = true
       if (pollTimerRef.current) clearTimeout(pollTimerRef.current)
     }
-  }, [trainingEnabled, data?.characterDbId, characterNodeId, updateNodeData])
+  }, [trainingEnabled, data?.characterDbId, characterNodeId, updateNodeData, pollNonce])
 
   const handleStart = useCallback(async () => {
     if (!data?.characterDbId || busy) return
@@ -191,6 +197,9 @@ export function LoraPage({ state }: StudioPageProps<CharacterStudioState, Charac
         triggerWord: null,
         imageCount: selectedCount,
       })
+      // Re-arm the status poll — the effect's other deps are stable, so without
+      // this nothing would poll the just-queued training to completion.
+      setPollNonce((n) => n + 1)
     } catch (err) {
       toast.error((err as Error).message)
     } finally {

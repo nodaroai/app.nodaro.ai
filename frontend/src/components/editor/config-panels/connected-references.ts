@@ -8,7 +8,9 @@ import {
   locationMentionSlug,
   expandExtraRefsToConnectedReferences,
   characterMentionableAssetArrays,
+  resolveEffectiveSourceType,
 } from "@nodaro/shared"
+import { entityActiveImageUrl } from "@/lib/entity-output-url"
 import type {
   CharacterNodeData,
   CharacterDefinition,
@@ -152,9 +154,10 @@ export function buildImageConnectedReferences(params: {
 
   // Wired upstream nodes (sources from @xyflow incoming edges).
   for (const s of sources) {
-    if (!(s.type in wiredSourceTypeMap)) continue
+    const effectiveType = resolveEffectiveSourceType(s.type, s.sourceHandle)
+    if (!(effectiveType in wiredSourceTypeMap)) continue
     const nd = s.nodeData ?? {}
-    if (s.type === "character") {
+    if (effectiveType === "character") {
       const charData = nd as unknown as CharacterNodeData
       const charName = charData.characterName || s.label || "Character"
       const slug = characterMentionSlug(charName)
@@ -210,7 +213,7 @@ export function buildImageConnectedReferences(params: {
       }
       // Unnamed character — fall through to generic upstream handling.
     }
-    if (s.type === "location") {
+    if (effectiveType === "location") {
       const expanded = expandLocationSourceForAutocomplete(s.id, nd as Record<string, unknown>, s.label)
       if (expanded) {
         for (const e of expanded) map.set(e.id, e)
@@ -218,14 +221,15 @@ export function buildImageConnectedReferences(params: {
       }
       // No source image yet — fall through to generic handling.
     }
-    // `sourceImageUrl` covers entity nodes (object / creature / face) whose
+    // `entityActiveImageUrl` covers entity nodes wired via their `image` handle
+    // (active result URL). `sourceImageUrl` covers object / creature / face whose
     // approved main image lives in that field rather than generatedImageUrl.
-    const url = (nd.generatedImageUrl as string) || (nd.url as string) || (nd.referenceImageUrl as string) || (nd.sourceImageUrl as string) || ""
+    const url = entityActiveImageUrl(nd) || (nd.generatedImageUrl as string) || (nd.url as string) || (nd.referenceImageUrl as string) || (nd.sourceImageUrl as string) || ""
     if (!url) continue
     map.set(s.id, {
       id: s.id,
       defaultName: s.label || s.type,
-      source: wiredSourceTypeMap[s.type],
+      source: wiredSourceTypeMap[effectiveType],
       description: nd.description as string | undefined,
       url,
     })

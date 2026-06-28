@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { optimizedImageUrl } from "@/lib/image"
+import { useMediaAspectRatio } from "../studio-shell/use-media-aspect"
 import { Link as LinkIcon, Maximize2, Plus, Star } from "lucide-react"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { copyToClipboard } from "@/lib/utils"
@@ -52,9 +53,13 @@ interface AssetCardProps {
   /** When true, the ★ button renders highlighted (yellow) to indicate this
    *  card is the active default for the character node. */
   readonly isDefault?: boolean
+  /** Fallback container ratio (width/height) shown until the real media aspect
+   *  is probed — pass the asset-type default (e.g. 0.5625 for 9:16 full-body
+   *  poses/motions) so the card doesn't crop the asset. Defaults to 3:4. */
+  readonly fallbackAspect?: number
 }
 
-export function AssetCard({ item, isVideo, onDelete, onRefine, onRegenerate, onRename, errored, costModel, onEnlarge, onDescriptionChange, onMotionDescriptionChange, onSuggestDescription, onInjectToCanvas, onSetAsDefault, isDefault }: AssetCardProps) {
+export function AssetCard({ item, isVideo, onDelete, onRefine, onRegenerate, onRename, errored, costModel, onEnlarge, onDescriptionChange, onMotionDescriptionChange, onSuggestDescription, onInjectToCanvas, onSetAsDefault, isDefault, fallbackAspect }: AssetCardProps) {
   const [refining, setRefining] = useState(false)
   const [prompt, setPrompt] = useState("")
   const cost = useModelCredits(costModel, 0)
@@ -77,25 +82,35 @@ export function AssetCard({ item, isVideo, onDelete, onRefine, onRegenerate, onR
     videoRef.current.currentTime = 0
   }
 
+  // Size the card to the asset's REAL aspect (9:16 full-body poses/motions were
+  // cropped by the old hardcoded aspect-[3/4] container). `object-top` keeps any
+  // residual crop off the head.
+  const { ratio, onVideoLoadedMetadata } = useMediaAspectRatio(
+    item.url,
+    isVideo ? "video" : "image",
+    fallbackAspect ?? 0.75,
+  )
+
   return (
     <div
       className="relative rounded-md overflow-hidden bg-[#1a1d27] group"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      <div className="aspect-[3/4] bg-gradient-to-br from-[#1e2535] to-[#252836] flex items-center justify-center">
+      <div className="bg-gradient-to-br from-[#1e2535] to-[#252836] flex items-center justify-center" style={{ aspectRatio: ratio }}>
         {isVideo ? (
           <video
             ref={videoRef}
             src={item.url}
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover object-top"
             muted
             playsInline
             loop
             preload="metadata"
+            onLoadedMetadata={onVideoLoadedMetadata}
           />
         ) : (
-          <img src={optimizedImageUrl(item.url)} alt={item.name} className="w-full h-full object-cover" />
+          <img src={optimizedImageUrl(item.url)} alt={item.name} className="w-full h-full object-cover object-top" />
         )}
         {errored && (
           <span className="absolute inset-0 flex items-center justify-center text-red-400 text-xs bg-black/50">failed</span>

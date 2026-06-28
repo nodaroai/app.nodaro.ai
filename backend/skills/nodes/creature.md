@@ -1,7 +1,7 @@
 ---
 node_type: creature
-generated_at: 2026-06-23T20:10:00.147Z
-generated_from: 527130f41
+generated_at: 2026-06-27T20:11:22.269Z
+generated_from: f80b06e52
 ---
 
 # Animal/Creature
@@ -48,6 +48,7 @@ generated_from: 527130f41
 - `errorMessage?: string`
 - `sheets?: ReferenceSheet[]`
 - `detailCloseups?: ObjectAssetItem[]`
+- `boards?: ReadonlyArray<{ readonly name: string; readonly url: string }>`
 - `defaultAssetUrl?: string`
 - `defaultAssetName?: string`
 - `updatedAt?: string`

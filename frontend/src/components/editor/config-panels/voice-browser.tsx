@@ -41,12 +41,15 @@ interface VoiceBrowserProps {
 }
 
 // ── Stacking order for the Browse Voices dialog and its filter dropdowns ──
-// The dialog content + overlay are lifted above the Character Studio modal
-// (z-[100], see #3378). The filter Selects portal their menus to <body>, so
-// they must sit ABOVE the dialog or they open behind it and can't be clicked.
-// One place for both values; the ordering invariant is guarded by
+// The dialog content + overlay sit ABOVE the studio modal tier — all four entity
+// studios render their opaque full-screen modal at STUDIO_MODAL_Z (z-[100], see
+// studio-shell/studio-modal-z.ts), so without this the portaled dialog opens
+// BEHIND the studio and looks like nothing happens. The filter Selects portal
+// their menus to <body>, so they must sit ABOVE the dialog or they open behind it
+// and can't be clicked. One place for both values; the ordering invariant
+// (dialog > STUDIO_MODAL_Z_VALUE, filter > dialog) is guarded by
 // `__tests__/voice-browser-zindex.test.ts`. Tailwind JIT picks up the literal
-// `z-[NNN]` strings here. Keep both below the toast/critical tier (z-[1000]+).
+// `z-[NNN]` strings here. Both stay below the toast / fullscreen tier.
 export const BROWSE_DIALOG_Z = "z-[110]"
 export const FILTER_SELECT_Z = "z-[120]"
 

@@ -10,6 +10,7 @@ import { AnglesPage } from "./pages/angles-page"
 import { LightingPage } from "./pages/lighting-page"
 import { MotionPage } from "./pages/motion-page"
 import { SheetPage } from "./pages/sheet-page"
+import { BoardPage } from "./pages/board-page"
 
 type S = LocationStudioState
 type J = LocationStudioJobs
@@ -47,6 +48,7 @@ export const LOCATION_STUDIO_NAV: StudioNavConfig<S, J> = {
     ] },
     { label: "Sheet", pages: [
       { key: "sheet", label: "Sheet", icon: "📋", Component: SheetPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.sheets) }) },
+      { key: "board", label: "Board", icon: "🖼", Component: BoardPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.boards) }) },
     ] },
   ],
 }

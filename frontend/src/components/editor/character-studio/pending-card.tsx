@@ -5,7 +5,7 @@
  * `POST /v1/jobs/:id/cancel` via the jobs hook. Color theme passed in so
  * image-asset tabs use blue (#3b82f6) and motion tabs keep their amber tint.
  */
-import { X } from "lucide-react"
+import { AlertTriangle, RotateCw, X } from "lucide-react"
 
 export type PendingCardTheme = "image" | "motion"
 
@@ -33,14 +33,17 @@ interface PendingCardProps {
   readonly progress: number
   readonly theme?: PendingCardTheme
   readonly onCancel: (jobId: string) => void
+  /** Container ratio (width/height) so the spinner matches the eventual asset
+   *  card shape (e.g. 0.5625 for 9:16 poses/motions). Defaults to 3:4. */
+  readonly aspect?: number
 }
 
-export function PendingCard({ jobId, name, progress, theme = "image", onCancel }: PendingCardProps) {
+export function PendingCard({ jobId, name, progress, theme = "image", onCancel, aspect }: PendingCardProps) {
   const t = THEME[theme]
   const pct = Math.max(0, Math.min(100, progress))
   return (
     <div className={`relative rounded-md overflow-hidden bg-[#1a1d27] border ${t.border} group`}>
-      <div className={`aspect-[3/4] flex flex-col items-center justify-center bg-gradient-to-br ${t.bg}`}>
+      <div className={`flex flex-col items-center justify-center bg-gradient-to-br ${t.bg}`} style={{ aspectRatio: aspect ?? 0.75 }}>
         <div className={`w-5 h-5 border-2 ${t.spinner} border-t-transparent rounded-full animate-spin`} />
         {pct > 0 && (
           <div className={`mt-2 text-[10px] ${t.text} opacity-70 tabular-nums`}>{Math.round(pct)}%</div>
@@ -63,6 +66,60 @@ export function PendingCard({ jobId, name, progress, theme = "image", onCancel }
         <X className="w-3 h-3" />
       </button>
       <div className={`px-2 py-1.5 text-[10px] ${t.text} truncate`}>{name}…</div>
+    </div>
+  )
+}
+
+interface FailedCardProps {
+  readonly name: string
+  /** Container ratio (width/height) so the tile matches the grid's asset cards. */
+  readonly aspect?: number
+  /** Re-run this generation. The caller dismisses the tile before re-firing. */
+  readonly onRetry: () => void
+  /** Drop the tile without retrying (the ✕). */
+  readonly onDismiss: () => void
+}
+
+/**
+ * Persistent, dismissible tile rendered in place of a failed generation's
+ * spinner. Without it, a failed job's `PendingCard` is removed by the poll loop
+ * and the failure vanishes silently (the only trace being the header's "N
+ * failed" counter). Mirrors `PendingCard`'s shape (same rounded tile + aspect)
+ * with a red error treatment, a Retry button, and a ✕ dismiss.
+ */
+export function FailedCard({ name, aspect, onRetry, onDismiss }: FailedCardProps) {
+  return (
+    <div className="relative rounded-md overflow-hidden bg-[#1a1d27] border border-[#ef444433] group">
+      <div
+        className="flex flex-col items-center justify-center gap-1.5 bg-gradient-to-br from-[#241215] to-[#1f1012] px-2 text-center"
+        style={{ aspectRatio: aspect ?? 0.75 }}
+      >
+        <AlertTriangle className="w-5 h-5 text-[#ef4444]" />
+        <div className="text-[10px] text-[#ef4444]">Generation failed</div>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onRetry()
+          }}
+          className="mt-0.5 flex items-center gap-1 text-[10px] bg-[#1e293b] hover:bg-[#27364a] text-slate-200 rounded px-2 py-1"
+        >
+          <RotateCw className="w-3 h-3" /> Retry
+        </button>
+      </div>
+      {/* Dismiss — top-right, mirrors PendingCard's cancel affordance. */}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          onDismiss()
+        }}
+        title="Dismiss"
+        className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center bg-black/40 hover:bg-red-500/70 rounded text-white opacity-0 group-hover:opacity-100 transition"
+      >
+        <X className="w-3 h-3" />
+      </button>
+      <div className="px-2 py-1.5 text-[10px] text-slate-400 truncate">{name}</div>
     </div>
   )
 }

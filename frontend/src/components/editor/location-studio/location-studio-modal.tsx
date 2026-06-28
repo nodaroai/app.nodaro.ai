@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/tooltip"
 import { useAuth } from "@/hooks/use-auth"
 import { hasCredits, isMultiUser } from "@/lib/edition"
+import { STUDIO_MODAL_Z } from "../studio-shell/studio-modal-z"
 
 // Lazy dynamic import keeps this core file off the ee/ static-import graph
 // (check-ee-imports.mjs only flags top-level `import ... from "@/ee/..."`,
@@ -72,7 +73,7 @@ export function LocationStudioModal({ nodeId, onClose }: LocationStudioModalProp
         role="dialog"
         aria-modal="true"
         aria-label="Location Studio"
-        className="fixed inset-0 z-[1000] bg-[#0d1017] flex items-center justify-center"
+        className={`fixed inset-0 ${STUDIO_MODAL_Z} bg-[#0d1017] flex items-center justify-center`}
       >
         <div className="text-sm text-slate-400">Loading location…</div>
       </div>
@@ -87,7 +88,7 @@ export function LocationStudioModal({ nodeId, onClose }: LocationStudioModalProp
       role="dialog"
       aria-modal="true"
       aria-labelledby="location-studio-title"
-      className="fixed inset-0 z-[1000] bg-[#0d1017] flex flex-col"
+      className={`fixed inset-0 ${STUDIO_MODAL_Z} bg-[#0d1017] flex flex-col`}
     >
       {/* header */}
       <div className="flex items-center justify-between px-4.5 py-2.5 border-b border-[#1e293b] bg-[#090c12] shrink-0">

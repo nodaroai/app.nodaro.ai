@@ -17,10 +17,12 @@
 import {
   characterMentionSlug,
   characterMentionableAssetArrays,
+  resolveEffectiveSourceType,
   type ConnectedReference,
   type ReferenceSource,
 } from "@nodaro/shared"
 import type { CharacterNodeData } from "@/types/nodes"
+import { entityActiveImageUrl } from "@/lib/entity-output-url"
 import type { SourceNodeInfo } from "./types"
 
 /** Same mapping as `buildVideoRefAutocomplete` — accept image-y upstreams. */
@@ -56,11 +58,12 @@ export function buildConnectedRefsFromSources(
 ): ConnectedReference[] {
   const out: ConnectedReference[] = []
   for (const s of sources) {
-    const refSource = SOURCE_TYPE_MAP[s.type]
+    const effectiveType = resolveEffectiveSourceType(s.type, s.sourceHandle)
+    const refSource = SOURCE_TYPE_MAP[effectiveType]
     if (!refSource) continue
     const nd = s.nodeData ?? {}
 
-    if (s.type === "character") {
+    if (effectiveType === "character") {
       const charData = nd as unknown as CharacterNodeData
       const charName = charData.characterName || s.label || "Character"
       const slug = characterMentionSlug(charName)
@@ -115,6 +118,7 @@ export function buildConnectedRefsFromSources(
     }
 
     const url =
+      entityActiveImageUrl(nd) ||
       (nd.generatedImageUrl as string) ||
       (nd.url as string) ||
       (nd.sourceImageUrl as string) ||

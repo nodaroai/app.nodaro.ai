@@ -38,6 +38,7 @@ function makeState(overrides: Partial<{ expressions: { name: string; url: string
     },
     ensureSaved: vi.fn(async () => "char-1"),
     patch: vi.fn(),
+    patchWith: vi.fn(),
   } as unknown as CharacterStudioState
 }
 

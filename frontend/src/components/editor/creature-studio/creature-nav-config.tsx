@@ -8,6 +8,7 @@ import { PosesPage } from "./pages/poses-page"
 import { VariationsPage } from "./pages/variations-page"
 import { MotionPage } from "./pages/motion-page"
 import { VoicePage } from "./pages/voice-page"
+import { BoardPage } from "./pages/board-page"
 
 type S = CreatureStudioState
 type J = CreatureStudioJobs
@@ -24,8 +25,9 @@ type J = CreatureStudioJobs
  * Composition[angles, poses] · Variants[variations] · Motion[motion] — plus the
  * new Resources[references] group at the top AND the new Character[**Voice**]
  * group (the "talking creature" stack, migration 220). Creature has NO Sheet
- * (matching today — the reference-sheet tab was never added to the creature
- * studio).
+ * *planner* tab (the reference-sheet generator was never added to the creature
+ * studio), but DOES surface a read-only **Board** page (Sheet group) that
+ * displays named reference boards authored in studio.nodaro.ai.
  *
  * Badge parity: Appearance + References show no count; every list-bucket
  * content page shows its asset-array `.length`; Voice shows a ✓ check once a
@@ -52,6 +54,9 @@ export const CREATURE_STUDIO_NAV: StudioNavConfig<S, J> = {
     ] },
     { label: "Character", pages: [
       { key: "voice", label: "Voice", icon: "🎤", Component: VoicePage, badge: (s) => (s.stagedData?.voice ? { kind: "check" } : null) },
+    ] },
+    { label: "Sheet", pages: [
+      { key: "board", label: "Board", icon: "🖼", Component: BoardPage, badge: (s) => ({ kind: "count", value: stagedLen(s, (d) => d.boards) }) },
     ] },
   ],
 }

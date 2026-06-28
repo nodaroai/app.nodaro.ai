@@ -75,7 +75,7 @@ import {
   isValidCreatureConnection,
   isValidLocationConnection,
 } from "./identity-handles"
-import { isAnalyzablePicker } from "@nodaro/shared"
+import { isAnalyzablePicker, resolveEffectiveSourceType, ENTITY_IMAGE_HANDLE_TYPES } from "@nodaro/shared"
 import { isVisualPickerType } from "./parameter-picker-types"
 import { ACCEPTS_CHARACTER_REF, ACCEPTS_ENTITY_REF, ACCEPTS_LOTTIE_ASSET, ACCEPTS_PARAMETER_PICKER, ACCEPTS_PICKER_JSON } from "./target-handle-registry"
 
@@ -97,52 +97,11 @@ const MEDIA_ONLY_HANDLES: ReadonlySet<string> = new Set([
   "ref-audio",
 ])
 
-/**
- * Entity node types that expose a plain `image` source handle (emitting the
- * portrait URL) in addition to their identity `*Ref` handle. When the drag
- * leaves the `image` handle, the entity is treated as a plain image PRODUCER
- * (substituted to "upload-image" below) so it reaches image inputs while the
- * `*Ref` handle stays identity. PR #3369 (character) generalized to all four
- * in Phase 1 (entity-studios-parity §3).
- */
-const ENTITY_IMAGE_HANDLE_TYPES: ReadonlySet<string> = new Set([
-  "character",
-  "location",
-  "object",
-  "creature",
-])
-
-/**
- * The effective output TYPE that a given source handle emits. This is the
- * SINGLE SOURCE OF TRUTH consulted by all three connection surfaces:
- *   1. the drop validator (`isValidWorkflowConnection`, below),
- *   2. the drag-glow candidate check (`isValidCandidate` in
- *      `handle-with-popover.tsx`), and
- *   3. the source-direction popover candidate enumeration
- *      (`handle-popover.tsx`).
- * Routing every surface through one function is what keeps the visual
- * "possible connections" (glow + popover) in agreement with what the drop
- * actually allows — discovery can't drift from the validator.
- *
- * Today the only remap is the entity `image` handle (see
- * `ENTITY_IMAGE_HANDLE_TYPES`): character / location / object / creature emit
- * their portrait URL on that handle, behaving as a plain image PRODUCER
- * (`"upload-image"`) — valid into image inputs (generate-image `references`,
- * image-to-image, lip-sync image, …) and NOT as an identity ref. Their
- * `*Ref` handle (and the bare/legacy no-handle case) stays identity. For every
- * other (type, handle) pair this returns the raw node type unchanged, so
- * existing wiring is unaffected. Add future per-handle output-type remaps HERE
- * so all surfaces inherit them.
- */
-export function resolveEffectiveSourceType(
-  rawSourceType: string | undefined | null,
-  sourceHandleId: string | undefined | null,
-): string {
-  if (sourceHandleId === "image" && ENTITY_IMAGE_HANDLE_TYPES.has(rawSourceType ?? "")) {
-    return "upload-image"
-  }
-  return rawSourceType ?? ""
-}
+// Re-exported from @nodaro/shared so the connection surfaces, run assemblers,
+// preview builders, and backend all consult ONE definition. Existing importers
+// of `@/lib/connection-validation` (handle-popover, handle-with-popover, tests)
+// are unaffected.
+export { resolveEffectiveSourceType, ENTITY_IMAGE_HANDLE_TYPES }
 
 /**
  * The SOURCE handle ids a node can be wired FROM, for reverse (target-
@@ -450,11 +409,11 @@ export function isValidWorkflowConnection(
     if (connection.targetHandle === "in") {
       return isValidListNodeConnection(
         connection.targetHandle,
-        typeOf(connection.source) ?? "",
+        imageSourceType,
         isVisualPickerType,
       )
     }
-    return isValidLoopCoarse(typeOf(connection.source) ?? "", isVisualPickerType)
+    return isValidLoopCoarse(imageSourceType, isVisualPickerType)
   }
   if (targetType === "web-scrape" && connection.targetHandle) {
     return isValidWebScrapeConnection(

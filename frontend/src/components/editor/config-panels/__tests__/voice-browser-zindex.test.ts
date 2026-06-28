@@ -1,13 +1,19 @@
 import { describe, expect, it } from "vitest"
 import { BROWSE_DIALOG_Z, FILTER_SELECT_Z } from "../voice-browser"
+import { STUDIO_MODAL_Z_VALUE } from "../../studio-shell/studio-modal-z"
 
-// Bug (#bugs session): the ElevenLabs filter dropdowns (gender/accent/age/
-// language/use-case/tone) inside the "Browse Voices" dialog opened BEHIND it
-// and couldn't be clicked. The filter Selects portal their content to <body>
-// at shadcn's default z-50, while the host dialog was lifted to z-[110] (to
-// clear the Character Studio modal at z-[100], see #3378). z-50 < z-[110] →
-// the menu rendered under its own host. These constants pin the ordering so a
-// future z-index bump on the dialog can't silently re-bury the menus.
+// Bug (#3389-era): the "Browse Voices" dialog opened from a studio Voice page
+// rendered BEHIND the studio modal and looked like nothing happened. The dialog
+// + its filter Selects portal to <body>; the four entity studios render their
+// opaque full-screen modal at STUDIO_MODAL_Z_VALUE. Creature/location/object
+// shipped at z-[1000] while the dialog was only z-[110] — burying it (the
+// original "voice dropdown does nothing" report). Now every studio shares
+// STUDIO_MODAL_Z, so the real invariants are: the dialog clears the studio tier,
+// and the filter menus clear the dialog.
+//
+// NOTE: the previous "FILTER_SELECT_Z < 1000" assertion was FALSE SAFETY — it
+// could never have caught the z-[1000] studio modals it was supposed to protect
+// against. It is intentionally replaced by the studio-tier assertion below.
 
 const parseZ = (cls: string): number => {
   const m = cls.match(/z-\[(\d+)\]/)
@@ -16,15 +22,11 @@ const parseZ = (cls: string): number => {
 }
 
 describe("voice-browser z-index ordering", () => {
+  it("the Browse Voices dialog clears every studio modal (STUDIO_MODAL_Z)", () => {
+    expect(parseZ(BROWSE_DIALOG_Z)).toBeGreaterThan(STUDIO_MODAL_Z_VALUE)
+  })
+
   it("filter dropdowns render ABOVE the Browse Voices dialog host", () => {
     expect(parseZ(FILTER_SELECT_Z)).toBeGreaterThan(parseZ(BROWSE_DIALOG_Z))
-  })
-
-  it("the Browse Voices dialog still clears the Character Studio modal (z-[100])", () => {
-    expect(parseZ(BROWSE_DIALOG_Z)).toBeGreaterThan(100)
-  })
-
-  it("filter dropdowns stay below the toast / critical-overlay tier (z-[1000]+)", () => {
-    expect(parseZ(FILTER_SELECT_Z)).toBeLessThan(1000)
   })
 })
