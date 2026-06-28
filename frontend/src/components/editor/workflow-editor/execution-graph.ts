@@ -24,6 +24,7 @@ import type {
   WebScrapeNodeData,
   DescribeToPickerData,
 } from "@/types/nodes";
+import { entityActiveImageUrl } from "@/lib/entity-output-url";
 
 export function buildExecutionLevels(
   nodes: WorkflowNode[],
@@ -568,48 +569,11 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
   if (type === "reference-audio") {
     return (data.extractedAudioUrl as string | undefined)?.trim();
   }
-  if (type === "character") {
-    const results =
-      (data.generatedResults as GeneratedResult[] | undefined) ?? [];
-    const activeIndex = (data.activeResultIndex as number | undefined) ?? 0;
-    return (
-      results[activeIndex]?.url ?? (data.sourceImageUrl as string | undefined)
-    );
-  }
-  if (type === "face") {
-    const results =
-      (data.generatedResults as GeneratedResult[] | undefined) ?? [];
-    const activeIndex = (data.activeResultIndex as number | undefined) ?? 0;
-    return (
-      results[activeIndex]?.url ?? (data.sourceImageUrl as string | undefined)
-    );
-  }
-  if (type === "object") {
-    const results =
-      (data.generatedResults as GeneratedResult[] | undefined) ?? [];
-    const activeIndex = (data.activeResultIndex as number | undefined) ?? 0;
-    return (
-      results[activeIndex]?.url ?? (data.sourceImageUrl as string | undefined)
-    );
-  }
-  if (type === "creature") {
-    // Mirrors object — emits the active result image, falling back to the
-    // persisted source image. creatureRef → imageRef downstream.
-    const results =
-      (data.generatedResults as GeneratedResult[] | undefined) ?? [];
-    const activeIndex = (data.activeResultIndex as number | undefined) ?? 0;
-    return (
-      results[activeIndex]?.url ?? (data.sourceImageUrl as string | undefined)
-    );
-  }
-  if (type === "location") {
-    const results =
-      (data.generatedResults as GeneratedResult[] | undefined) ?? [];
-    const activeIndex = (data.activeResultIndex as number | undefined) ?? 0;
-    return (
-      results[activeIndex]?.url ?? (data.sourceImageUrl as string | undefined)
-    );
-  }
+  if (type === "character") return entityActiveImageUrl(data);
+  if (type === "face") return entityActiveImageUrl(data);
+  if (type === "object") return entityActiveImageUrl(data);
+  if (type === "creature") return entityActiveImageUrl(data);
+  if (type === "location") return entityActiveImageUrl(data);
   if (type === "scene") {
     // Phase 1B.2 pipeline-managed SceneNode — outputs are populated by the
     // pipeline orchestrator in Phase 1C, not the workflow worker. Source

@@ -153,7 +153,7 @@ Angle and lighting variations of the approved portrait, in three sub-sections, e
 
 **Outputs:**
 - `characterRef` -- Character reference (identity) that can be connected to scene nodes, image generation, and other nodes that accept character references. Unchanged by the studio.
-- `image` -- The character's portrait as a **plain image**. Connect this anywhere a Generate Image output can go (image References, Image-to-Image, Generate Video image input, etc.). Unlike `characterRef`, it carries no identity / canonical-description injection — it is just the picture.
+- `image` -- The character's portrait as a **plain image**. Connect this anywhere a Generate Image output can go (image References, Image-to-Image, Generate Video image input, List columns, etc.). Unlike `characterRef`, it carries no identity / canonical-description injection — it is just the picture.
 
 ## Best Practices
 - **Set Pickers and reference photos before generating the portrait.** Person + Wardrobe selections are injected into the portrait and asset prompts server-side, and reference photos give the providers extra conditioning — getting them in first makes the first portrait far more on-target.

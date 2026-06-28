@@ -350,7 +350,7 @@ Pass `--json` to any command for machine-readable output and `--watch` to comman
 
 **Outputs:**
 - `locationRef` — Location reference (identity) that can be connected to scene nodes, image generation, image-to-video, and any other node that accepts location references. Carries the canonical description, main image URL, and active style-lock state.
-- `image` — The location's establishing shot as a **plain image**. Connect this anywhere a Generate Image output can go (image References, Image-to-Image, Generate Video image input, etc.). Unlike `locationRef`, it carries no canonical-description / variant injection — it is just the picture.
+- `image` — The location's establishing shot as a **plain image**. Connect this anywhere a Generate Image output can go (image References, Image-to-Image, Generate Video image input, List columns, etc.). Unlike `locationRef`, it carries no canonical-description / variant injection — it is just the picture.
 
 ## Best Practices
 

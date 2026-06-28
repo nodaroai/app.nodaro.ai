@@ -23,6 +23,7 @@ import { referenceSheetCreditId } from "@nodaro/shared"
 import { extractReferencedLabels, combineSameLabelRefs, refHandleCategory, canonicalVarName } from "@nodaro/shared"
 import { validateAiAvatarPayload, validateCinematicAvatarPayload } from "@nodaro/shared"
 import { resolveNodeRefs } from "@nodaro/shared"
+import { resolveEffectiveSourceType } from "@nodaro/shared"
 import {
   composeSoundHintFromConnections,
   truncateForField,
@@ -283,14 +284,17 @@ export function resolveSheetEntity(
   for (const e of incoming) {
     const up = nodeById.get(e.source)
     if (!up) continue
-    // The character node's "image" handle is a PLAIN image, not an entity ref —
-    // never treat it as the sheet's entity source.
-    if (e.sourceHandle !== "image" && (up.type === "character" || up.type === "object" || up.type === "location")) {
+    // The entity node's "image" handle is a PLAIN image, not an identity ref —
+    // resolveEffectiveSourceType maps it to "upload-image" so the condition below
+    // is false for the image handle and true for *Ref handles (single source of truth
+    // shared with the frontend canvas).
+    const eff = resolveEffectiveSourceType(up.type, e.sourceHandle)
+    if (eff === "character" || eff === "object" || eff === "location") {
       const d = up.data as Record<string, unknown>
       const idField =
-        up.type === "character" ? "characterDbId" : up.type === "object" ? "objectDbId" : "locationDbId"
+        eff === "character" ? "characterDbId" : eff === "object" ? "objectDbId" : "locationDbId"
       const entityDbId = d[idField] as string | undefined
-      return { entityKind: up.type, entityDbId: typeof entityDbId === "string" && entityDbId.length > 0 ? entityDbId : undefined }
+      return { entityKind: eff, entityDbId: typeof entityDbId === "string" && entityDbId.length > 0 ? entityDbId : undefined }
     }
   }
   return {}
@@ -306,11 +310,11 @@ function expandWiredCharacterRefs(
   const nodeById = new Map(buildCtx.nodes.map((n) => [n.id, n] as const))
   const incoming = buildCtx.edges.filter((e) => e.target === consumerNodeId)
   for (const e of incoming) {
-    // The character node's "image" handle is a PLAIN image (PR #3369), not an
-    // identity ref — never treat it as a wired character (mirrors resolveSheetEntity).
-    if (e.sourceHandle === "image") continue
     const upstream = nodeById.get(e.source)
-    if (!upstream || upstream.type !== "character") continue
+    // The entity `image` handle is a PLAIN image, not an identity ref
+    // (resolveEffectiveSourceType maps it to "upload-image"). The portrait still
+    // routes as a plain reference via resolvedInputs.referenceImageUrls.
+    if (!upstream || resolveEffectiveSourceType(upstream.type, e.sourceHandle) !== "character") continue
     const charData = upstream.data
     const charName =
       (charData.characterName as string | undefined) ??
@@ -586,13 +590,8 @@ export function expandWiredLocationRefs(
     (consumer?.data?.motionPrompt as string | undefined) ??
     undefined
   for (const e of incoming) {
-    // The location node's "image" handle is a PLAIN image (Phase 1, mirroring
-    // PR #3369), not an identity ref — never treat it as a wired location
-    // (mirrors resolveSheetEntity + expandWiredCharacterRefs). The portrait
-    // routes as a plain reference via resolvedInputs.referenceImageUrls instead.
-    if (e.sourceHandle === "image") continue
     const upstream = nodeById.get(e.source)
-    if (!upstream || upstream.type !== "location") continue
+    if (!upstream || resolveEffectiveSourceType(upstream.type, e.sourceHandle) !== "location") continue
     const locData = upstream.data
     let sourceUrl = locData.sourceImageUrl as string | undefined
     if (!sourceUrl) continue
@@ -693,11 +692,8 @@ function buildExtraRefCharacterContextLookup(
   const nodeById = new Map(buildCtx.nodes.map((n) => [n.id, n] as const))
   const incoming = buildCtx.edges.filter((e) => e.target === consumerNodeId)
   for (const e of incoming) {
-    // The character node's "image" handle is a PLAIN image (PR #3369), not an
-    // identity ref — never treat it as a wired character (mirrors resolveSheetEntity).
-    if (e.sourceHandle === "image") continue
     const upstream = nodeById.get(e.source)
-    if (!upstream || upstream.type !== "character") continue
+    if (!upstream || resolveEffectiveSourceType(upstream.type, e.sourceHandle) !== "character") continue
     const charData = upstream.data
     const charName =
       (charData.characterName as string | undefined) ??

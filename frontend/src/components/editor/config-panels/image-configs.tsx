@@ -51,7 +51,8 @@ import { PromptEditor } from "./prompt-editor"
 import { usePromptEditorRefs } from "@/components/nodes/inline-node-prompt/use-prompt-editor-refs"
 import { ReferenceSupportWarning } from "./reference-support-warning"
 import type { ConnectedReference, ReferenceSource } from "@nodaro/shared"
-import { DEFAULT_LABEL_BY_SOURCE, characterMentionSlug, locationMentionSlug, expandExtraRefsToConnectedReferences, getMaxImagePromptChars, getMaxNegativePromptChars } from "@nodaro/shared"
+import { DEFAULT_LABEL_BY_SOURCE, characterMentionSlug, locationMentionSlug, expandExtraRefsToConnectedReferences, getMaxImagePromptChars, getMaxNegativePromptChars, resolveEffectiveSourceType } from "@nodaro/shared"
+import { entityActiveImageUrl } from "@/lib/entity-output-url"
 import { PromptLengthCounter } from "./prompt-length-counter"
 import { buildImageConnectedReferences } from "./connected-references"
 import { ConnectedMediaList } from "./connected-media-list"
@@ -1029,9 +1030,10 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
     // `@kira` / `@kira-smile` typeahead in the prompt editor sees them. Mirrors
     // `execute-node.ts` (runtime path).
     for (const s of sources) {
-      if (!(s.type in wiredSourceTypeMap)) continue
+      const effectiveType = resolveEffectiveSourceType(s.type, s.sourceHandle)
+      if (!(effectiveType in wiredSourceTypeMap)) continue
       const nd = s.nodeData ?? {}
-      if (s.type === "character") {
+      if (effectiveType === "character") {
         const charData = nd as unknown as CharacterNodeData
         const charName = charData.characterName || s.label || "Character"
         const slug = characterMentionSlug(charName)
@@ -1095,19 +1097,19 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
         // Unnamed character — fall through to generic upstream handling.
       }
       // Location upstream — same expansion as in GenerateImageConfig.
-      if (s.type === "location") {
+      if (effectiveType === "location") {
         const expanded = expandLocationSourceForAutocomplete(s.id, nd as Record<string, unknown>, s.label)
         if (expanded) {
           for (const e of expanded) map.set(e.id, e)
           continue
         }
       }
-      const url = (nd.generatedImageUrl as string) || (nd.url as string) || (nd.referenceImageUrl as string) || ""
+      const url = entityActiveImageUrl(nd) || (nd.generatedImageUrl as string) || (nd.url as string) || (nd.referenceImageUrl as string) || ""
       if (!url) continue
       map.set(s.id, {
         id: s.id,
         defaultName: s.label || s.type,
-        source: wiredSourceTypeMap[s.type],
+        source: wiredSourceTypeMap[effectiveType],
         description: nd.description as string | undefined,
         url,
       })

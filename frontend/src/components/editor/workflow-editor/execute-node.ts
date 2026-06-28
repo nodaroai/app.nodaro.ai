@@ -82,6 +82,7 @@ import {
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
 import { ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, MODEL_CATALOG, splitGeneratedItems, LLM_FEATURE_DEFAULTS, resolveVideoProviderForMode } from "@nodaro/shared";
 import { pickerFanoutTargets } from "@nodaro/shared";
+import { resolveEffectiveSourceType } from "@nodaro/shared";
 import { ANALYZABLE_PICKER_HINT } from "@/lib/picker-labels";
 import { getGenerateTextTemplate } from "@/lib/generate-text-templates";
 import { buildScenePrompt } from "@/lib/prompt-builder";
@@ -664,7 +665,7 @@ const WIRED_SOURCE_TYPE_MAP: Record<string, ReferenceSource> = {
  * `@kira:1:smile` tokens stayed literal in the prompt and only the canonical
  * character URL attached (as the main imageUrl).
  */
-function buildConnectedRefsForI2I(
+export function buildConnectedRefsForI2I(
   consumerNodeId: string,
   chainRefs: readonly string[],
   characterDefinitionIds: readonly string[] | undefined,
@@ -687,10 +688,16 @@ function buildConnectedRefsForI2I(
   // by-chainRefs-index). This ensures the character variants get added even
   // when the character's canonical URL is consumed as the main `imageUrl`.
   const incomingEdges = edges.filter((e) => e.target === consumerNodeId);
-  const wiredSourceNodes = incomingEdges
-    .map((e) => nodes.find((n) => n.id === e.source))
-    .filter((n): n is WorkflowNode => Boolean(n && n.type && n.type in WIRED_SOURCE_TYPE_MAP));
-  const characterUpstreams = wiredSourceNodes.filter((n) => n.type === "character");
+  // Pair each wired upstream with its edge's sourceHandle so the entity `image`
+  // handle (resolveEffectiveSourceType → "upload-image") drops out of identity
+  // expansion and is surfaced as a plain wired-image via chainRefs (Step 2).
+  const wiredEdgeNodes = incomingEdges
+    .map((e) => ({ node: nodes.find((n) => n.id === e.source), sourceHandle: e.sourceHandle }))
+    .filter((x): x is { node: WorkflowNode; sourceHandle: string | null | undefined } =>
+      Boolean(x.node && x.node.type && x.node.type in WIRED_SOURCE_TYPE_MAP));
+  const characterUpstreams = wiredEdgeNodes
+    .filter((x) => resolveEffectiveSourceType(x.node.type, x.sourceHandle) === "character")
+    .map((x) => x.node);
   const characterUrlsCovered = new Set<string>();
   for (const upstream of characterUpstreams) {
     const expansion = expandCharacterNodeIntoRefs(upstream);
@@ -705,7 +712,9 @@ function buildConnectedRefsForI2I(
   // canonical-description so the directive bullet says
   // "Image N (location — <canonical desc>)" without the user having to type
   // it. Phase 2 #1 of the Location Studio design.
-  const locationUpstreams = wiredSourceNodes.filter((n) => n.type === "location");
+  const locationUpstreams = wiredEdgeNodes
+    .filter((x) => resolveEffectiveSourceType(x.node.type, x.sourceHandle) === "location")
+    .map((x) => x.node);
   for (const upstream of locationUpstreams) {
     // Phase 2 #2 (slice 2a): expand into canonical + per-variant entries so
     // `resolveLocationMentions` (lands in slice 2b) can match
@@ -962,19 +971,24 @@ export function executeNode(
         "creature": "wired-creature",
         "location": "wired-location",
       };
-      const wiredSourceNodes = incomingEdges
-        .map((e) => nodes.find((n) => n.id === e.source))
-        .filter((n): n is WorkflowNode => Boolean(n && n.type && n.type in wiredSourceTypeMap));
+      const wiredSources = incomingEdges
+        .map((e) => ({ node: nodes.find((n) => n.id === e.source), sourceHandle: e.sourceHandle }))
+        .filter((x): x is { node: WorkflowNode; sourceHandle: string | null | undefined } =>
+          Boolean(x.node && x.node.type && x.node.type in wiredSourceTypeMap));
       for (let i = 0; i < chainRefs.length; i++) {
-        const upstream = wiredSourceNodes[i];
-        if (upstream) {
+        const entry = wiredSources[i];
+        if (entry) {
+          const upstream = entry.node;
           const upstreamData = upstream.data as Record<string, unknown>;
+          // Entity `image` handle → "upload-image": skip identity expansion and
+          // emit a plain wired-image (the portrait still arrives as chainRefs[i]).
+          const effectiveType = resolveEffectiveSourceType(upstream.type, entry.sourceHandle);
           // For wired character upstream nodes we have the full CharacterNodeData
           // — expand into a canonical entry plus one entry per asset variant
           // (expressions / poses / motions / angles / bodyAngles / lighting).
           // This is what powers `@kira` / `@kira-smile` autocomplete + buildImagePrompt
           // mention resolution.
-          if (upstream.type === "character") {
+          if (effectiveType === "character") {
             const charData = upstream.data as CharacterNodeData;
             const charName = charData.characterName || (upstreamData.label as string) || "Character";
             const characterSlug = characterMentionSlug(charName);
@@ -1024,7 +1038,7 @@ export function executeNode(
           }
           // Location upstream — enrich with canonical-description so the
           // directive bullet picks it up via the prompt-builder (Phase 2 #1).
-          if (upstream.type === "location") {
+          if (effectiveType === "location") {
             const locData = upstream.data as LocationNodeData;
             const locName = locData.locationName || (upstreamData.label as string) || "Location";
             const locationSlug = characterMentionSlug(locName); // reused slugify
@@ -1040,7 +1054,7 @@ export function executeNode(
           }
           refMetaMap.set(upstream.id, {
             defaultName: (upstreamData.label as string) || (upstreamData.name as string) || upstream.type!,
-            source: wiredSourceTypeMap[upstream.type!],
+            source: wiredSourceTypeMap[effectiveType] ?? "wired-image",
             description: upstreamData.description as string | undefined,
             url: chainRefs[i],
           });

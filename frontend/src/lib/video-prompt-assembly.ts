@@ -28,6 +28,7 @@ import {
   characterMentionableAssetArrays,
   computeNodePrompt,
   collectIdentityLockClause,
+  resolveEffectiveSourceType,
 } from "@nodaro/shared"
 import { collectCinematographyHints } from "@/lib/cinematography-hints"
 import { stampElementInjections } from "@/components/editor/workflow-editor/node-input-resolver"
@@ -158,7 +159,10 @@ export function expandWiredCharacterRefsForVideo(
   const incomingEdges = edges.filter((e) => e.target === consumerNodeId)
   for (const e of incomingEdges) {
     const upstream = nodes.find((n) => n.id === e.source)
-    if (!upstream || upstream.type !== "character") continue
+    // The entity `image` handle is a PLAIN image, not an identity ref — skip it
+    // (resolveEffectiveSourceType maps `image` → "upload-image"). The portrait
+    // still rides along as a plain reference via the resolved image inputs.
+    if (!upstream || resolveEffectiveSourceType(upstream.type, e.sourceHandle) !== "character") continue
     const expansion = expandCharacterNodeIntoRefs(upstream)
     for (const [id, meta] of expansion) {
       out.push({ id, ...meta })

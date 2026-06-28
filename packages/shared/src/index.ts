@@ -1378,3 +1378,6 @@ export * from "./model-tree.js"
 
 // --- Audio FX node preset ids (single source of truth for route/UI/data type) ---
 export * from "./audio-fx-presets.js"
+
+// --- Entity image-handle parity (entity `image` source handle → plain image) ---
+export * from "./entity-image-handle.js"

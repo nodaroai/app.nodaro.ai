@@ -57,7 +57,7 @@ In two more cases the picker helps you avoid clutter:
 
 **Outputs:**
 - `creatureRef` — Creature reference (identity) for use in scenes and compositions.
-- `image` — The creature's image as a **plain image**. Connect this anywhere a Generate Image output can go (image References, Image-to-Image, Generate Video image input, etc.). Unlike `creatureRef`, it carries no identity injection — it is just the picture.
+- `image` — The creature's image as a **plain image**. Connect this anywhere a Generate Image output can go (image References, Image-to-Image, Generate Video image input, List columns, etc.). Unlike `creatureRef`, it carries no identity injection — it is just the picture.
 
 ## Credits
 

@@ -717,3 +717,27 @@ describe("isValidWorkflowConnection (llm-chat items output)", () => {
     )).toBe(true)
   })
 })
+
+describe("entity image handle → list column (Gap A)", () => {
+  const getType = (id: string): string | undefined =>
+    ({ char1: "character", obj1: "object", loc1: "location", crea1: "creature", list1: "list" }[id])
+
+  it.each(["char1", "obj1", "loc1", "crea1"])(
+    "accepts %s.image → a list image-url column at drop",
+    (sourceId) => {
+      const ok = isValidWorkflowConnection(
+        { source: sourceId, target: "list1", sourceHandle: "image", targetHandle: "col_abc_in" },
+        getType,
+      )
+      expect(ok).toBe(true)
+    },
+  )
+
+  it("still rejects character identity (characterRef) → a list column", () => {
+    const ok = isValidWorkflowConnection(
+      { source: "char1", target: "list1", sourceHandle: "characterRef", targetHandle: "col_abc_in" },
+      getType,
+    )
+    expect(ok).toBe(false)
+  })
+})
