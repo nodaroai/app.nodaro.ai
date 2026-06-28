@@ -10,6 +10,7 @@ import { HardBreak } from "@tiptap/extension-hard-break"
 import { Placeholder, UndoRedo } from "@tiptap/extensions"
 import { createFloatingSuggestionRenderer } from "./floating-suggestion-renderer"
 import { ImageRefExtension } from "./image-ref-extension"
+import { VideoRefExtension, AudioRefExtension } from "./video-audio-ref-extension"
 import { CharacterRefExtension, parseCharacterRefMatch } from "./character-ref-extension"
 import { LocationRefExtension, parseLocationRefMatch } from "./location-ref-extension"
 import { SuggestionList, type SuggestionCommandPayload } from "./suggestion-list"
@@ -26,6 +27,16 @@ import type { RefImageItem } from "../tag-textarea"
 import type { NodeRefItem } from "@/lib/node-refs"
 
 const IMAGE_TOKEN_RE = /\{image:(\d+)(?::([a-zA-Z0-9_-]+))?\}/gi
+
+/**
+ * `{video:N(:label)?}` / `{audio:N(:label)?}` scanners — byte-parallel to
+ * `IMAGE_TOKEN_RE` (digit index + optional `[a-zA-Z0-9_-]` label, case-insensitive)
+ * so the literal grammar matches the Task 5.1 `videoRef` / `audioRef` extension's
+ * input/paste rules + `parseRefToken`. Used by `collectTokens` to promote
+ * stored/typed tokens into pills on the `valueToDoc → setContent` path.
+ */
+const VIDEO_TOKEN_RE = /\{video:(\d+)(?::([a-zA-Z0-9_-]+))?\}/gi
+const AUDIO_TOKEN_RE = /\{audio:(\d+)(?::([a-zA-Z0-9_-]+))?\}/gi
 
 /**
  * Slug shape — must mirror the input/paste-rule regex in
@@ -153,6 +164,35 @@ export function collectTokens(line: string, known: KnownSlugSets): TokenMatch[] 
           imageIndex: parseInt(match[1], 10),
           label: match[2] ?? "",
         },
+      },
+    })
+  }
+
+  // `{video:N(:label)?}` / `{audio:N(:label)?}` → atomic videoRef / audioRef
+  // nodes. Byte-parallel to the imageRef block above; the attrs use the SAME
+  // names the Task 5.1 extension declares (`refIndex` + `label`), so the
+  // pill ↔ raw-text round trip stays lossless. These literal shapes can't
+  // overlap an `{image:N}` or `@<slug>:N` span, so they never collide in the
+  // dedup-by-offset pass below.
+  for (const match of line.matchAll(VIDEO_TOKEN_RE)) {
+    const start = match.index ?? 0
+    tokens.push({
+      start,
+      end: start + match[0].length,
+      node: {
+        type: "videoRef",
+        attrs: { refIndex: parseInt(match[1], 10), label: match[2] ?? "" },
+      },
+    })
+  }
+  for (const match of line.matchAll(AUDIO_TOKEN_RE)) {
+    const start = match.index ?? 0
+    tokens.push({
+      start,
+      end: start + match[0].length,
+      node: {
+        type: "audioRef",
+        attrs: { refIndex: parseInt(match[1], 10), label: match[2] ?? "" },
       },
     })
   }
@@ -453,6 +493,13 @@ export function PromptEditor({
       CharacterRefExtension,
       LocationRefExtension,
       SnippetPillExtension,
+      // Atomic `{video:N:label}` / `{audio:N:label}` pills (Task 5.1). Render +
+      // round-trip only — their inherited Mention `@` suggestion plugin is
+      // suppressed (addProseMirrorPlugins → []) so the single `@` typeahead
+      // stays on ImageRefExtension below, which inserts these via its command
+      // branches.
+      VideoRefExtension,
+      AudioRefExtension,
       ImageRefExtension.configure({
         suggestion: {
           char: "@",
@@ -596,6 +643,27 @@ export function PromptEditor({
                   },
                   // Trailing space — matches the legacy plain-text insertion
                   // so the cursor lands ready for the user to keep typing.
+                  { type: "text", text: " " },
+                ])
+                .run()
+              return
+            }
+            // Reference-VIDEO / reference-AUDIO refs: insert the atomic
+            // `videoRef` / `audioRef` pill (Task 5.1). Mirrors the imageRef
+            // insertion exactly — uses the builder's positional `item.index`
+            // (NOT computeNextMentionIndex; that counter is for `@<slug>:N`
+            // character/location mentions), and the SAME attr names the 5.1
+            // extension declares (`refIndex` + `label`). `defaultLabel` is ""
+            // so the pill lands as a clean `{video:N}` / `{audio:N}`.
+            if (item.source === "video" || item.source === "audio") {
+              ed
+                .chain()
+                .focus()
+                .insertContentAt(range, [
+                  {
+                    type: item.source === "video" ? "videoRef" : "audioRef",
+                    attrs: { refIndex: item.index, label: item.defaultLabel },
+                  },
                   { type: "text", text: " " },
                 ])
                 .run()

@@ -753,6 +753,102 @@ html, body {
   opacity: 1;
 }
 
+/* {video:N:label} / {audio:N:label} pills — modality-typed reference slots.
+   Mirror the {image:N} pill STRUCTURALLY (icon + monospace label + reveal-on-
+   hover remove) with a distinct accent per modality so users can scan at a
+   glance which slot a token binds to: indigo for video, emerald for audio
+   (vs. pink image, violet character, cyan location). */
+.video-ref-pill,
+.audio-ref-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 4px;
+  margin: 0 -2px;
+  border-radius: 4px;
+  vertical-align: middle;
+  line-height: 1;
+}
+.video-ref-pill {
+  background: color-mix(in srgb, #6366f1 12%, transparent);
+  color: #4f46e5;
+}
+.audio-ref-pill {
+  background: color-mix(in srgb, #10b981 12%, transparent);
+  color: #059669;
+}
+.dark .video-ref-pill {
+  background: color-mix(in srgb, #6366f1 24%, transparent);
+  color: #a5b4fc;
+}
+.dark .audio-ref-pill {
+  background: color-mix(in srgb, #10b981 24%, transparent);
+  color: #6ee7b7;
+}
+.video-ref-pill--selected,
+.audio-ref-pill--selected {
+  outline: 2px solid currentColor;
+  outline-offset: 1px;
+}
+.video-ref-pill__icon,
+.audio-ref-pill__icon {
+  width: 0.95em;
+  height: 0.95em;
+  flex-shrink: 0;
+}
+.video-ref-pill__label,
+.audio-ref-pill__label {
+  font-size: 0.85em;
+  font-weight: 500;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  letter-spacing: -0.02em;
+  background: transparent;
+  border: none;
+  color: inherit;
+  padding: 0;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.video-ref-pill__label:hover,
+.audio-ref-pill__label:hover {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+.video-ref-pill__remove,
+.audio-ref-pill__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1em;
+  height: 1.1em;
+  margin-left: 1px;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font-size: 0.95em;
+  line-height: 1;
+  pointer-events: auto;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.1s ease, background-color 0.1s ease;
+  border: none;
+  padding: 0;
+  flex-shrink: 0;
+}
+.video-ref-pill:hover .video-ref-pill__remove,
+.audio-ref-pill:hover .audio-ref-pill__remove {
+  opacity: 0.85;
+}
+.video-ref-pill__remove:hover {
+  background: color-mix(in srgb, #6366f1 30%, transparent);
+  opacity: 1;
+}
+.audio-ref-pill__remove:hover {
+  background: color-mix(in srgb, #10b981 30%, transparent);
+  opacity: 1;
+}
+
 /* @character:N(:variant)(:mode) pill — small thumbnail + character name +
    optional variant + optional mode badge. Violet accent to distinguish from
    the pink {image:N} pill so users can scan at a glance which mentions are

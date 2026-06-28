@@ -119,6 +119,35 @@ describe("collectTokens", () => {
     expect(out[0].node.attrs).toEqual({ imageIndex: 2, label: "dragon" })
   })
 
+  it("converts {video:N:label} and {audio:N} tokens into videoRef / audioRef nodes (5.1 attr names)", () => {
+    // The 5.1 atomic nodes use `refIndex` + `label` attrs (see
+    // video-audio-ref-extension.ts addAttributes). collectTokens must emit the
+    // same shape so valueToDoc → setContent re-promotes stored/typed tokens to
+    // pills, exactly like the imageRef block does.
+    const out = collectTokens("a {video:1:clip} b {audio:2}", known())
+    expect(out).toHaveLength(2)
+    // Document order preserved (video first, audio second).
+    expect(out.map((t) => t.node.type)).toEqual(["videoRef", "audioRef"])
+    const video = out.find((t) => t.node.type === "videoRef")
+    const audio = out.find((t) => t.node.type === "audioRef")
+    expect(video?.node.attrs).toEqual({ refIndex: 1, label: "clip" })
+    expect(audio?.node.attrs).toEqual({ refIndex: 2, label: "" })
+  })
+
+  it("interleaves a {video:N} token with image/character/location tokens by order", () => {
+    const out = collectTokens(
+      "@kira:1 {video:1:clip} {image:2:relic} @oldlibrary:1 {audio:3}",
+      known({ chars: ["kira"], locs: ["oldlibrary"] }),
+    )
+    expect(out.map((t) => t.node.type)).toEqual([
+      "characterRef",
+      "videoRef",
+      "imageRef",
+      "locationRef",
+      "audioRef",
+    ])
+  })
+
   it("leaves a typed @<slug>:N alone when the slug is in neither known set", () => {
     // No `kira` in characters and no `kira` in locations — the @-mention
     // should NOT auto-promote. This is the conflict-avoidance gate.

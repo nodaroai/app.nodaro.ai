@@ -811,8 +811,8 @@ export type {
 
 export { resolveFieldMappings, resolveLocationFields } from "./resolve-field-mappings.js"
 
-export { resolveNodeRefs, parseNodeRef, canonicalVarName, NODE_REF_PATTERN, RESERVED_TEMPLATE_VARS, extractReferencedLabels, combineSameLabelRefs, refHandleCategory, REF_HANDLE_CATEGORY } from "./node-refs.js"
-export type { RefCandidate } from "./node-refs.js"
+export { resolveNodeRefs, parseNodeRef, canonicalVarName, NODE_REF_PATTERN, RESERVED_TEMPLATE_VARS, extractReferencedLabels, combineSameLabelRefs, refHandleCategory, REF_HANDLE_CATEGORY, REFERENCE_HANDLE_MAP, referenceModalityForHandle, FRAME_TARGET_HANDLES, countRefModalityEdges } from "./node-refs.js"
+export type { RefCandidate, ReferenceModality, RefModalityEdge } from "./node-refs.js"
 
 export { resolvePrompt, composeNegative, NODE_PROMPT_CANDIDATE_FIELDS, computeNodePrompt, computeLlmChatFields } from "./resolve-prompt.js"
 
@@ -1383,3 +1383,14 @@ export * from "./audio-fx-presets.js"
 export * from "./supported-fonts.js"
 // --- Entity image-handle parity (entity `image` source handle → plain image) ---
 export * from "./entity-image-handle.js"
+
+// --- Shared video-reference resolver core (FE + BE delegate to this) ---
+export {
+  resolveVideoReferenceCore,
+  REF_BINDING,
+  resolveReferenceTokens,
+  type ReferenceCounts,
+  type VideoExtraRef,
+  type CharacterMeta,
+  type ResolveVideoReferenceCoreArgs,
+} from "./video-reference-resolver.js"
