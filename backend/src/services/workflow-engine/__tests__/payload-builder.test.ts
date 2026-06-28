@@ -177,6 +177,55 @@ describe("buildPayload", () => {
       expect(refs[0]).toBe("https://a.png")
       expect(refs[1]).toBe("https://b.png")
     })
+
+    // VEO routes references through its REFERENCE_2_VIDEO endpoint. Attaching
+    // reference images must select that endpoint even when the user never
+    // flipped `veoMode` to "reference" — without the refs-present arm the refs
+    // were silently dropped (the provider used only the start frame). Mirrors
+    // the canvas-run path in execute-node.ts (isVeoRefMode).
+    it("veo i2v with wired references → REFERENCE_2_VIDEO even without veoMode", () => {
+      const n = node("n1", "image-to-video", { provider: "veo3" })
+      const inputs: ResolvedInputs = {
+        startFrameUrl: "https://start.png",
+        referenceImageUrls: ["https://ref.png"],
+      }
+      const result = buildPayload(n, jobId, inputs)
+      expect(result.payload.generationType).toBe("REFERENCE_2_VIDEO")
+      expect(result.payload.referenceImageUrls).toEqual(["https://ref.png"])
+    })
+
+    // Regression guard: the explicit veoMode="reference" path must keep
+    // emitting the hint even with no wired refs (the original behavior).
+    it("veo i2v with veoMode=reference (no wired refs) → REFERENCE_2_VIDEO preserved", () => {
+      const n = node("n1", "image-to-video", { provider: "veo3", veoMode: "reference" })
+      const inputs: ResolvedInputs = { startFrameUrl: "https://start.png" }
+      const result = buildPayload(n, jobId, inputs)
+      expect(result.payload.generationType).toBe("REFERENCE_2_VIDEO")
+    })
+
+    // No-regression: a plain VEO i2v (start frame only, no refs, no veoMode)
+    // must NOT acquire the REFERENCE_2_VIDEO hint — it stays first-frame i2v.
+    it("veo i2v with no references and no veoMode → generationType undefined", () => {
+      const n = node("n1", "image-to-video", { provider: "veo3" })
+      const inputs: ResolvedInputs = { startFrameUrl: "https://start.png" }
+      const result = buildPayload(n, jobId, inputs)
+      expect(result.payload.generationType).toBeUndefined()
+    })
+
+    // Non-VEO i2v providers carry refs through their OWN provider path
+    // (maxRefImages / seedance reference_image_urls), NOT the VEO-only
+    // generationType hint — so the hint must stay undefined for them even when
+    // refs are wired (gating on isVeoProvider, not on refs alone).
+    it("non-veo i2v with references → generationType stays undefined", () => {
+      const n = node("n1", "image-to-video", { provider: "grok-i2v", duration: 5 })
+      const inputs: ResolvedInputs = {
+        startFrameUrl: "https://start.png",
+        referenceImageUrls: ["https://ref.png"],
+      }
+      const result = buildPayload(n, jobId, inputs)
+      expect(result.payload.generationType).toBeUndefined()
+      expect(result.payload.referenceImageUrls).toEqual(["https://ref.png"])
+    })
   })
 
   describe("text-to-video", () => {

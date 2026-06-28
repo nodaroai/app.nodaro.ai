@@ -12,7 +12,7 @@ import { composeNegative } from "@nodaro/shared"
 import { collectIdentityLockClause as sharedCollectIdentityLockClause } from "@nodaro/shared"
 import { characterMentionableAssetArrays } from "@nodaro/shared"
 import { resolveTemplate, applyTemplate } from "@nodaro/shared"
-import { buildCreditModelIdentifier, resolveImageGenCreditIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt, resolveVideoProviderForMode, videoProviderRequiresImage } from "@nodaro/shared"
+import { buildCreditModelIdentifier, resolveImageGenCreditIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt, resolveVideoProviderForMode, videoProviderRequiresImage, isVeoProvider } from "@nodaro/shared"
 import { appendMusicMeta } from "@nodaro/shared"
 import { resolveEntityImageCreditIdentifier } from "../../lib/entity-credit-identifier.js"
 import { buildLipSyncCreditId, isPerSecondLipSyncProvider } from "@nodaro/shared"
@@ -2500,7 +2500,15 @@ export function buildPayload(
           referenceAudioUrls: resolvedInputs.referenceAudioUrls,
           webSearch: data.webSearch,
           nsfwChecker: data.nsfwChecker,
-          generationType: data.veoMode === "reference" ? "REFERENCE_2_VIDEO" : undefined,
+          // VEO uses its REFERENCE_2_VIDEO endpoint when the user picked
+          // reference mode OR when reference images are wired (without this
+          // refs-present arm, refs attached to a VEO i2v node were silently
+          // dropped). Non-VEO providers ignore generationType. Mirrors the
+          // canvas-run path in execute-node.ts.
+          generationType:
+            isVeoProvider(provider) && (data.veoMode === "reference" || (i2vReferenceImageUrls?.length ?? 0) > 0)
+              ? "REFERENCE_2_VIDEO"
+              : undefined,
           // Generic smart-loop-cut post-process. Worker reads loopTrim.enabled.
           // Legacy autoLoopTrim is normalized at the route level; orchestrator
           // path sees it migrated by the frontend already (use-workflow-store).
