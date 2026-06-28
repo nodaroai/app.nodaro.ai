@@ -1044,10 +1044,14 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
     return url ? { audioUrl: url, _lastInputType: "audio" } : undefined
   }
 
-  // Entity nodes → imageUrl from generatedResults or sourceImageUrl
+  // Entity nodes → imageUrl mirrors the node's displayed thumbnail: the
+  // user-selected default asset (starred in the Studio) wins, else the active
+  // generated result, else the persisted source image. Matches the frontend
+  // `entityActiveImageUrl` helper. `||` so an empty defaultAssetUrl falls through.
   if (ENTITY_RESULT_TYPES.has(type)) {
     const url =
-      getActiveResultUrl(data) ??
+      (data.defaultAssetUrl as string | undefined) ||
+      getActiveResultUrl(data) ||
       (data.sourceImageUrl as string | undefined)
     return url ? { imageUrl: url } : undefined
   }

@@ -1379,5 +1379,7 @@ export * from "./model-tree.js"
 // --- Audio FX node preset ids (single source of truth for route/UI/data type) ---
 export * from "./audio-fx-presets.js"
 
+// --- Remotion renderer: supported font names (shared with backend Zod validation) ---
+export * from "./supported-fonts.js"
 // --- Entity image-handle parity (entity `image` source handle → plain image) ---
 export * from "./entity-image-handle.js"

@@ -1,6 +1,6 @@
 # MCP Tool Reference
 
-Complete reference for the 132 tools exposed by the Nodaro MCP server.
+Complete reference for the 135 tools exposed by the Nodaro MCP server.
 
 ## Scopes
 
@@ -12,7 +12,7 @@ authorizing the connector; missing scopes cause tools to be omitted entirely
 |-------|----------|
 | `workflows:read` | `list_projects`, `get_project`, `list_workflows`, `get_workflow`, `get_workflow_json`, `export_workflow`, `list_components`, `get_component_inputs` |
 | `workflows:write` | `create_workflow`, `delete_workflow`, `update_workflow_json`, `import_workflow` |
-| `workflows:execute` | `run_workflow`, all generation verbs (image/video/audio/Suno/character/location/object), `run_component`, `run_app`, `delete_app_run`, `analyze_prompt`, `generate_prompt`, `enhance_prompt`, `reduce` |
+| `workflows:execute` | `run_workflow`, all generation verbs (image/video/audio/Suno/character/location/object), `run_component`, `run_app`, `delete_app_run`, `analyze_prompt`, `generate_prompt`, `enhance_prompt`, `reduce`, `forced_alignment`, `resolve_shot_sequence`, `render_shot_sequence` |
 | `jobs:read` | `list_jobs`, `get_job`, `diagnose_run` |
 | `assets:read` | `browse_gallery`, `browse_uploads`, `list_favorites`, `get_asset`, `display_asset`, `get_app_run`, `list_characters`, `get_character`, `list_locations`, `get_location` |
 | `assets:write` | `favorite_asset`, `create_character`, `update_character`, `approve_portrait`, `recaption_character`, `create_location`, `update_location`, `approve_main_image`, `recaption_location`, `approve_object_main_image`, `recaption_object`, `upload_image_widget`, `upload_audio_widget`, `upload_video_widget`, `request_image_upload`, `request_audio_upload`, `request_video_upload`, `prepare_image_upload`, `prepare_audio_upload`, `prepare_video_upload` |
@@ -1092,6 +1092,48 @@ enterprise Story-to-Video pipeline engine; Cloud/Business).
 | `get_pipeline_stage_chat` | `pipelines:read` | List all chat turns for a pipeline stage ordered by turn number. |
 | `get_pipeline_status` | `pipelines:read` | Get current pipeline state: status, current_stage, credit counters, mode, failure_reason. Poll after `start_pipeline` to track an Auto run. |
 | `pipeline_pending_approvals` | `pipelines:read` | List stages currently awaiting approval with their output snapshots. |
+
+---
+
+## Shot-sequence tools
+
+Tools for authoring narrated, time-coded motion-graphics videos (HyperFrames
+methodology on the Remotion engine). All three require `workflows:execute`.
+
+### `forced_alignment`
+
+**Scope:** `workflows:execute`
+
+Align a known transcript to an audio clip (ElevenLabs forced alignment),
+returning per-word start/end timings. Returns a `job_id`; the alignment array
+is in `output_data.alignment`. Use the result to drive element reveals in
+`resolve_shot_sequence`.
+
+**Input:** `audio_url` or `audio_asset_id`, `transcript`
+
+---
+
+### `resolve_shot_sequence`
+
+**Scope:** `workflows:execute`
+
+Bake an authored shot-sequence brief together with `forced_alignment` word
+timings into a render-ready plan. Pure and synchronous — returns the plan
+inline (no job). Feed the plan directly to `render_shot_sequence`.
+
+**Input:** `brief` (a `ShotSequenceBrief`), `audio_url`, `alignment` (from `forced_alignment`)
+
+---
+
+### `render_shot_sequence`
+
+**Scope:** `workflows:execute`
+
+Render a resolved shot-sequence plan to an MP4 on Nodaro's Remotion engine.
+Returns a `job_id`; the finished video appears in your library when the render
+is complete.
+
+**Input:** `plan` (a resolved `ShotSequencePlan` from `resolve_shot_sequence`)
 
 ---
 

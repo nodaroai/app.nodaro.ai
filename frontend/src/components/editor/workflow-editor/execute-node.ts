@@ -80,7 +80,7 @@ import {
   executeReduce,
 } from "@/lib/api";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
-import { ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, MODEL_CATALOG, splitGeneratedItems, LLM_FEATURE_DEFAULTS, resolveVideoProviderForMode } from "@nodaro/shared";
+import { ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, isVeoProvider, MODEL_CATALOG, splitGeneratedItems, LLM_FEATURE_DEFAULTS, resolveVideoProviderForMode } from "@nodaro/shared";
 import { pickerFanoutTargets } from "@nodaro/shared";
 import { resolveEffectiveSourceType } from "@nodaro/shared";
 import { ANALYZABLE_PICKER_HINT } from "@/lib/picker-labels";
@@ -1999,7 +1999,12 @@ export function executeNode(
     // Run this check AFTER mention resolution — a `@kira:1:smile dancing` prompt with a
     // wired Character but no `startFrameUrl` source must let the resolved mention URL
     // fill the slot (matches backend's i2v handling in payload-builder.ts).
-    const isVeoRefMode = (nodeProvider === "veo3" || nodeProvider === "veo3.1" || nodeProvider === "veo3_lite") && i2vData.veoMode === "reference"
+    // A VEO run uses its REFERENCE_2_VIDEO endpoint when the user explicitly
+    // picked reference mode OR when reference images are wired — either way VEO
+    // takes refs (and no start frame). Without the refs-present arm, attaching
+    // references to a VEO i2v node without flipping veoMode silently dropped
+    // them. Mirrored on the orchestrator path in payload-builder.ts.
+    const isVeoRefMode = isVeoProvider(nodeProvider ?? "") && (i2vData.veoMode === "reference" || (i2vMergedRefs?.length ?? 0) > 0)
     // Seedance 2 (unified inputs): the backend resolver picks the mode from
     // whatever is connected; a prompt-only run is a valid t2v fallback, so never
     // hard-fail on a missing start frame.
@@ -2068,7 +2073,7 @@ export function executeNode(
       i2vData.seed,
       i2vData.cameraFixed,
       i2vMergedRefs?.length ? i2vMergedRefs : undefined,
-      i2vData.veoMode === "reference" ? "REFERENCE_2_VIDEO" : undefined,
+      isVeoRefMode ? "REFERENCE_2_VIDEO" : undefined,
       {
         referenceVideoUrls: referenceVideoUrls?.length ? referenceVideoUrls : undefined,
         referenceAudioUrls: referenceAudioUrls?.length ? referenceAudioUrls : undefined,

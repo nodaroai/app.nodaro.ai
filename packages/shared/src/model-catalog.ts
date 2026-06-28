@@ -1117,7 +1117,10 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     id: "grok-imagine-video-1.5",
     kind: "video",
     modes: ["i2v"] as const,
-    features: ["reference-image"],
+    // No `reference-image`: KIE's grok-imagine endpoint accepts a single
+    // image_url (the i2v start frame) only — there is no reference path, so
+    // advertising the feature let the editor attach refs that were silently
+    // dropped at the provider. See backend models.ts (no `maxRefImages`).
     family: "xAI",
     label: "Grok Imagine Video 1.5",
     series: "Grok",
