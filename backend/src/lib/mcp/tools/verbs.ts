@@ -2,6 +2,7 @@ import { registerImageVerbs, type RegisterOpts } from "./verbs-image.js"
 import { registerVideoVerbs } from "./verbs-video.js"
 import { registerAudioVerbs } from "./verbs-audio.js"
 import { registerCloVerbs } from "./verbs-clo.js"
+import { registerShotSequenceVerbs } from "./verbs-shot-sequence.js"
 
 export type RegisterVerbsOpts = RegisterOpts
 
@@ -31,4 +32,5 @@ export function registerVerbs(opts: RegisterVerbsOpts): void {
   registerVideoVerbs(opts)
   registerAudioVerbs(opts)
   registerCloVerbs(opts)
+  registerShotSequenceVerbs(opts)
 }

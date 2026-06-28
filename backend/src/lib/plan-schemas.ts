@@ -1,6 +1,6 @@
 import { z } from "zod"
 import { safeUrlSchema } from "./url-validator.js"
-import { KINETIC_CAPTION_STYLES } from "@nodaro/shared"
+import { KINETIC_CAPTION_STYLES, SUPPORTED_FONT_NAMES } from "@nodaro/shared"
 
 // ── Plan Types ──────────────────────────────────────────────────────────
 
@@ -13,6 +13,7 @@ export const PLAN_TYPES = [
   "composite",
   "burn-captions",
   "lottie-graphic",
+  "shot-sequence",
 ] as const
 
 export type PlanType = (typeof PLAN_TYPES)[number]
@@ -494,6 +495,149 @@ export const sceneGraphPlanSchema = z
   })
   .passthrough()
 
+// ── Shot Sequence Plan (VO-cued reveals) ────────────────────────────────
+
+const MAX_FRAMES = 54000
+
+/** Entrance motion for a reveal (resolved + brief share this). */
+export const enterMotionSchema = z.object({
+  motion: z.enum([
+    "fade",
+    "scale-up",
+    "wipe-in",
+    "slide-up",
+    "slide-down",
+    "slide-left",
+    "slide-right",
+    "none",
+  ]),
+  durationFrames: z.number().min(0).max(MAX_FRAMES),
+  easing: z.enum(["linear", "easeIn", "easeOut", "easeInOut", "spring"]).optional(),
+  direction: z.enum(["left", "right", "up", "down"]).optional(),
+})
+
+/** Exit motion — constrained to what getExitStyle actually implements. */
+export const exitMotionSchema = z.object({
+  motion: z.enum(["fade", "slide-up", "slide-down", "slide-left", "slide-right", "none"]),
+  durationFrames: z.number().min(0).max(MAX_FRAMES),
+  easing: z.enum(["linear", "easeIn", "easeOut", "easeInOut", "spring"]).optional(),
+  direction: z.enum(["left", "right", "up", "down"]).optional(),
+})
+
+const shotTextElementSchema = z.object({
+  id: z.string(),
+  type: z.literal("text"),
+  text: z.string(),
+  fontFamily: z.enum(SUPPORTED_FONT_NAMES),
+  fontSize: z.number(),
+  fontWeight: z.union([z.literal(300), z.literal(400), z.literal(700), z.literal(900)]).optional(),
+  color: z.string(),
+  x: z.number(),
+  y: z.number(),
+  letterSpacing: z.number().optional(),
+  opacity: z.number().min(0).max(1).optional(),
+})
+
+const shotShapeElementSchema = z.object({
+  id: z.string(),
+  type: z.literal("shape"),
+  shape: z.enum(["rectangle", "circle", "line"]),
+  fill: z.string().optional(),
+  stroke: z.string().optional(),
+  strokeWidth: z.number().optional(),
+  x: z.number(),
+  y: z.number(),
+  width: z.number(),
+  height: z.number(),
+  cornerRadius: z.number().optional(),
+  opacity: z.number().min(0).max(1).optional(),
+})
+
+/** Visual element (text or shape). svg-path is deferred (Phase 0 boundary). */
+export const shotElementSchema = z.discriminatedUnion("type", [
+  shotTextElementSchema,
+  shotShapeElementSchema,
+])
+
+const resolvedRevealSchema = z.object({
+  id: z.string(),
+  element: shotElementSchema,
+  frame: z.number().min(0).max(MAX_FRAMES), // SCENE-RELATIVE baked entrance frame
+  enter: enterMotionSchema,
+  hold: z.number().min(0).optional(),
+  exit: exitMotionSchema.optional(),
+})
+
+const resolvedShotSchema = z.object({
+  id: z.string(),
+  reveals: z.array(resolvedRevealSchema).min(1),
+})
+
+const resolvedSceneSchema = z.object({
+  id: z.string(),
+  startFrame: z.number().min(0), // ABSOLUTE composition frame the scene <Sequence> mounts at
+  durationInFrames: z.number().min(1).max(MAX_FRAMES),
+  background: z.object({ color: z.string().optional() }).optional(),
+  shots: z.array(resolvedShotSchema).min(1),
+})
+
+/** Base object — this is what the discriminated union references. */
+export const shotSequencePlanBaseSchema = z
+  .object({
+    planType: z.literal("shot-sequence"),
+    fps: z.number().min(15).max(60),
+    width: z.number().min(100).max(3840),
+    height: z.number().min(100).max(3840),
+    durationInFrames: z.number().min(1).max(MAX_FRAMES),
+    backgroundColor: z.string(),
+    audio: z.object({ src: safeUrlSchema, volume: z.number().min(0).max(1).optional() }),
+    scenes: z.array(resolvedSceneSchema).min(1),
+  })
+  .passthrough()
+
+/**
+ * Validated schema (used by planSchemaMap + validatePlanByType): adds the
+ * cross-field invariants. MUST stay a ZodEffects here and out of the
+ * discriminated union (unions require plain ZodObjects). render_shot_sequence
+ * accepts pre-baked plans, so these checks cannot live only in the baker.
+ */
+export const shotSequencePlanSchema = shotSequencePlanBaseSchema.superRefine((plan, ctx) => {
+  const sceneIds = new Set<string>()
+  const revealIds = new Set<string>()
+  let prevEnd = -1
+  plan.scenes.forEach((scene, i) => {
+    if (sceneIds.has(scene.id)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Duplicate scene id "${scene.id}"`, path: ["scenes", i, "id"] })
+    }
+    sceneIds.add(scene.id)
+    if (scene.startFrame < prevEnd) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Scene "${scene.id}" window starts at ${scene.startFrame} but the previous scene ends at ${prevEnd}; scenes must be ascending and non-overlapping`,
+        path: ["scenes", i, "startFrame"],
+      })
+    }
+    prevEnd = scene.startFrame + scene.durationInFrames
+    scene.shots.forEach((shot, j) =>
+      shot.reveals.forEach((r, k) => {
+        if (revealIds.has(r.id)) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Duplicate reveal id "${r.id}"`, path: ["scenes", i, "shots", j, "reveals", k, "id"] })
+        }
+        revealIds.add(r.id)
+      }),
+    )
+  })
+})
+
+export type ShotSequencePlan = z.infer<typeof shotSequencePlanSchema>
+
+/** Single ElevenLabs forced-alignment word (SECONDS). Reused by the resolver. */
+export const alignmentWordSchema = z.object({
+  word: z.string(),
+  start: z.number().finite().min(0),
+  end: z.number().finite().min(0),
+})
+
 // ── Render Plan Envelope (discriminated union) ──────────────────────────
 
 export const renderPlanSchema = z.discriminatedUnion("planType", [
@@ -505,11 +649,12 @@ export const renderPlanSchema = z.discriminatedUnion("planType", [
   compositePlanSchema,
   burnCaptionsPlanSchema,
   lottieGraphicPlanSchema,
+  shotSequencePlanBaseSchema,
 ])
 
 // ── Plan type → schema lookup ───────────────────────────────────────────
 
-const planSchemaMap: Record<string, z.ZodType> = {
+export const planSchemaMap: Record<string, z.ZodType> = {
   "scene-graph": sceneGraphPlanSchema,
   "after-effects": afterEffectsPlanSchema,
   "lottie-overlay": lottieOverlayPlanSchema,
@@ -518,6 +663,7 @@ const planSchemaMap: Record<string, z.ZodType> = {
   "composite": compositePlanSchema,
   "burn-captions": burnCaptionsPlanSchema,
   "lottie-graphic": lottieGraphicPlanSchema,
+  "shot-sequence": shotSequencePlanSchema,
 }
 
 /**

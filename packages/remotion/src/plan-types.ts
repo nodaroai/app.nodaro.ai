@@ -280,6 +280,85 @@ export interface MotionGraphicsPlan {
   readonly exitAnimation?: MGExitAnimation
 }
 
+// ── Shot Sequence Plan (VO-cued reveals) ─────────────────────────────────
+
+export type ShotEnterMotionType =
+  | "fade" | "scale-up" | "wipe-in" | "slide-up" | "slide-down" | "slide-left" | "slide-right" | "none"
+export type ShotExitMotionType = "fade" | "slide-up" | "slide-down" | "slide-left" | "slide-right" | "none"
+export type ShotEasing = "linear" | "easeIn" | "easeOut" | "easeInOut" | "spring"
+
+export interface ShotEnterMotion {
+  readonly motion: ShotEnterMotionType
+  readonly durationFrames: number
+  readonly easing?: ShotEasing
+  readonly direction?: "left" | "right" | "up" | "down"
+}
+export interface ShotExitMotion {
+  readonly motion: ShotExitMotionType
+  readonly durationFrames: number
+  readonly easing?: ShotEasing
+  readonly direction?: "left" | "right" | "up" | "down"
+}
+
+export interface ShotTextElement {
+  readonly id: string
+  readonly type: "text"
+  readonly text: string
+  readonly fontFamily: string
+  readonly fontSize: number
+  readonly fontWeight?: 300 | 400 | 700 | 900
+  readonly color: string
+  readonly x: number
+  readonly y: number
+  readonly letterSpacing?: number
+  readonly opacity?: number
+}
+export interface ShotShapeElement {
+  readonly id: string
+  readonly type: "shape"
+  readonly shape: "rectangle" | "circle" | "line"
+  readonly fill?: string
+  readonly stroke?: string
+  readonly strokeWidth?: number
+  readonly x: number
+  readonly y: number
+  readonly width: number
+  readonly height: number
+  readonly cornerRadius?: number
+  readonly opacity?: number
+}
+export type ShotElement = ShotTextElement | ShotShapeElement
+
+export interface ResolvedReveal {
+  readonly id: string
+  readonly element: ShotElement
+  readonly frame: number // scene-relative entrance frame
+  readonly enter: ShotEnterMotion
+  readonly hold?: number
+  readonly exit?: ShotExitMotion
+}
+export interface ResolvedShot {
+  readonly id: string
+  readonly reveals: ResolvedReveal[]
+}
+export interface ResolvedScene {
+  readonly id: string
+  readonly startFrame: number
+  readonly durationInFrames: number
+  readonly background?: { readonly color?: string }
+  readonly shots: ResolvedShot[]
+}
+export interface ShotSequencePlan {
+  readonly planType: "shot-sequence"
+  readonly fps: number
+  readonly width: number
+  readonly height: number
+  readonly durationInFrames: number
+  readonly backgroundColor: string
+  readonly audio: { readonly src: string; readonly volume?: number }
+  readonly scenes: ResolvedScene[]
+}
+
 // ── Composite Plan Types ─────────────────────────────────────────────
 
 export interface CompositeLayer {
@@ -325,4 +404,4 @@ export interface LottieGraphicPlan {
 }
 
 // Union type for all composer plans (extend as more composers are added)
-export type ComposerPlanType = "scene-graph" | "after-effects" | "lottie-overlay" | "3d-title" | "motion-graphics" | "composite" | "lottie-graphic"
+export type ComposerPlanType = "scene-graph" | "after-effects" | "lottie-overlay" | "3d-title" | "motion-graphics" | "composite" | "lottie-graphic" | "shot-sequence"

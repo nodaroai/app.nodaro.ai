@@ -156,11 +156,12 @@ describe("buildMcpServer full catalog (v1.1)", () => {
     expect(names.has("upload_video")).toBe(false)
 
     // Sanity: ping + verbs + jobs + workflows + projects + gallery + 9 upload
-    // tools + app tools (list_apps, get_app_inputs, run_app, delete_app_run).
+    // tools + app tools (list_apps, get_app_inputs, run_app, delete_app_run) +
+    // shot-sequence tools (forced_alignment, resolve_shot_sequence, render_shot_sequence).
     // Upper bound has headroom for future tool additions; bump when adding
     // a new tool family rather than tracking every single tool.
     expect(tools.length).toBeGreaterThanOrEqual(28)
-    expect(tools.length).toBeLessThanOrEqual(125)
+    expect(tools.length).toBeLessThanOrEqual(130)
   })
 
   it("with only jobs:read, registers ping + jobs tools and nothing else", async () => {

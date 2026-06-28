@@ -1,5 +1,5 @@
 import React from "react"
-import { AbsoluteFill, useCurrentFrame, interpolate, Easing } from "remotion"
+import { AbsoluteFill, useCurrentFrame, interpolate } from "remotion"
 import type {
   MotionGraphicsPlan,
   MGElement,
@@ -10,22 +10,10 @@ import type {
   MGSvgPathElement,
 } from "../plan-types"
 import { FONT_MAP } from "../lib/font-registry"
+import { getEasing, getEntranceStyle, getExitStyle } from "../lib/mg-motion"
 
 interface MotionGraphicsRendererProps {
   readonly plan: MotionGraphicsPlan
-}
-
-const EASING_MAP: Record<string, (t: number) => number> = {
-  linear: Easing.linear,
-  easeIn: Easing.ease,
-  easeOut: Easing.out(Easing.ease),
-  easeInOut: Easing.inOut(Easing.ease),
-  spring: Easing.bezier(0.175, 0.885, 0.32, 1.275),
-}
-
-function getEasing(name?: string): ((t: number) => number) | undefined {
-  if (!name) return undefined
-  return EASING_MAP[name]
 }
 
 function computeEntranceProgress(frame: number, anim: MGElementAnimation): number {
@@ -48,61 +36,6 @@ function computeExitProgress(frame: number, exit: MGExitAnimation | undefined): 
     [1, 0],
     { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
   )
-}
-
-function getEntranceStyle(progress: number, anim: MGElementAnimation): React.CSSProperties {
-  switch (anim.type) {
-    case "fade":
-      return { opacity: progress }
-    case "scale-up":
-      return { transform: `scale(${progress})`, opacity: progress }
-    case "slide-up":
-      return { transform: `translateY(${(1 - progress) * 40}px)`, opacity: progress }
-    case "slide-down":
-      return { transform: `translateY(${-(1 - progress) * 40}px)`, opacity: progress }
-    case "slide-left":
-      return { transform: `translateX(${(1 - progress) * 60}px)`, opacity: progress }
-    case "slide-right":
-      return { transform: `translateX(${-(1 - progress) * 60}px)`, opacity: progress }
-    case "wipe-in":
-      return { clipPath: getWipeClipPath(progress, anim.direction) }
-    case "draw-path":
-    case "none":
-      return {}
-    default:
-      return {}
-  }
-}
-
-function getWipeClipPath(progress: number, direction?: string): string {
-  switch (direction) {
-    case "right":
-      return `inset(0 ${(1 - progress) * 100}% 0 0)`
-    case "up":
-      return `inset(${(1 - progress) * 100}% 0 0 0)`
-    case "down":
-      return `inset(0 0 ${(1 - progress) * 100}% 0)`
-    case "left":
-    default:
-      return `inset(0 0 0 ${(1 - progress) * 100}%)`
-  }
-}
-
-function getExitStyle(progress: number, exit: MGExitAnimation): React.CSSProperties {
-  switch (exit.type) {
-    case "fade":
-      return { opacity: progress }
-    case "slide-down":
-      return { transform: `translateY(${(1 - progress) * 40}px)`, opacity: progress }
-    case "slide-up":
-      return { transform: `translateY(${-(1 - progress) * 40}px)`, opacity: progress }
-    case "slide-left":
-      return { transform: `translateX(${-(1 - progress) * 60}px)`, opacity: progress }
-    case "slide-right":
-      return { transform: `translateX(${(1 - progress) * 60}px)`, opacity: progress }
-    default:
-      return {}
-  }
 }
 
 // ── Shape Element ─────────────────────────────────────────────────────

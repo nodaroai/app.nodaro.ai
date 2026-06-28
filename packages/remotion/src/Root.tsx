@@ -10,10 +10,11 @@ import { SceneGraphRenderer } from "./compositions/scene-graph-renderer"
 import { AfterEffectsRenderer } from "./compositions/after-effects-renderer"
 import { LottieOverlayRenderer } from "./compositions/lottie-overlay-renderer"
 import { MotionGraphicsRenderer } from "./compositions/motion-graphics-renderer"
+import { ShotSequenceRenderer } from "./compositions/shot-sequence-renderer"
 import { CompositeRenderer } from "./compositions/composite-renderer"
 import { LottieGraphicRenderer } from "./compositions/lottie-graphic-renderer"
 import { BurnCaptions } from "./compositions/burn-captions"
-import type { AfterEffectsPlan, LottieOverlayPlan, MotionGraphicsPlan, CompositePlan, LottieGraphicPlan } from "./plan-types"
+import type { AfterEffectsPlan, LottieOverlayPlan, MotionGraphicsPlan, CompositePlan, LottieGraphicPlan, ShotSequencePlan } from "./plan-types"
 
 /**
  * Bridge specific component prop types with Remotion's
@@ -111,6 +112,21 @@ const MOTION_GRAPHICS_DEFAULT_PROPS: { plan: MotionGraphicsPlan } = {
   },
 }
 
+const SHOT_SEQUENCE_DEFAULT_PROPS: { plan: ShotSequencePlan } = {
+  plan: {
+    planType: "shot-sequence",
+    fps: 30,
+    width: 1920,
+    height: 1080,
+    durationInFrames: 150,
+    backgroundColor: "#000000",
+    audio: { src: "" },
+    scenes: [
+      { id: "s1", startFrame: 0, durationInFrames: 150, shots: [{ id: "sh1", reveals: [] }] },
+    ],
+  },
+}
+
 const COMPOSITE_DEFAULT_PROPS: { plan: CompositePlan } = {
   plan: {
     planType: "composite",
@@ -199,6 +215,15 @@ function RemotionRoot() {
         width={1920}
         height={1080}
         defaultProps={MOTION_GRAPHICS_DEFAULT_PROPS}
+      />
+      <Composition
+        id="shot-sequence"
+        component={asRemotionComponent(ShotSequenceRenderer)}
+        durationInFrames={150}
+        fps={30}
+        width={1920}
+        height={1080}
+        defaultProps={SHOT_SEQUENCE_DEFAULT_PROPS}
       />
       <Composition
         id="lottie-graphic"

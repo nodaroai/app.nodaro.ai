@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest"
 import {
   PLAN_TYPES,
+  planSchemaMap,
   validatePlanByType,
   afterEffectsPlanSchema,
   lottieOverlayPlanSchema,
@@ -9,6 +10,7 @@ import {
   compositePlanSchema,
   sceneGraphPlanSchema,
   renderPlanSchema,
+  shotSequencePlanSchema,
 } from "../plan-schemas.js"
 
 // ── Helpers ──────────────────────────────────────────────────────────────
@@ -167,7 +169,7 @@ function makeSceneGraphPlan(overrides: Record<string, unknown> = {}) {
 
 describe("PLAN_TYPES", () => {
   it("has exactly 8 entries", () => {
-    expect(PLAN_TYPES).toHaveLength(8)
+    expect(PLAN_TYPES).toHaveLength(9)
   })
 
   it("contains all expected types", () => {
@@ -364,5 +366,108 @@ describe("cross-cutting validation", () => {
     const plan = makeMotionGraphicsPlan({ notes: "test" })
     const result = validatePlanByType("motion-graphics", plan)
     expect((result as Record<string, unknown>).notes).toBe("test")
+  })
+})
+
+// ── shot-sequence ──────────────────────────────────────────────────────────
+function makeShotSequencePlan(overrides: Record<string, unknown> = {}) {
+  return {
+    planType: "shot-sequence",
+    fps: 30,
+    width: 1920,
+    height: 1080,
+    durationInFrames: 300,
+    backgroundColor: "#000000",
+    audio: { src: "https://example.com/vo.mp3" },
+    scenes: [
+      {
+        id: "s1",
+        startFrame: 0,
+        durationInFrames: 150,
+        shots: [
+          {
+            id: "sh1",
+            reveals: [
+              {
+                id: "r1",
+                element: { id: "t1", type: "text", text: "Hello", fontFamily: "Inter", fontSize: 80, color: "#fff", x: 100, y: 100 },
+                frame: 30,
+                enter: { motion: "fade", durationFrames: 12 },
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: "s2",
+        startFrame: 150,
+        durationInFrames: 150,
+        shots: [
+          {
+            id: "sh2",
+            reveals: [
+              {
+                id: "r2",
+                element: { id: "rect1", type: "shape", shape: "rectangle", x: 0, y: 0, width: 200, height: 200, fill: "#f00" },
+                frame: 10,
+                enter: { motion: "wipe-in", durationFrames: 10, direction: "left" },
+              },
+            ],
+          },
+        ],
+      },
+    ],
+    ...overrides,
+  }
+}
+
+describe("shotSequencePlanSchema", () => {
+  it("registers shot-sequence in PLAN_TYPES", () => {
+    expect(PLAN_TYPES).toContain("shot-sequence")
+  })
+
+  it("parses a valid two-scene plan", () => {
+    expect(shotSequencePlanSchema.safeParse(makeShotSequencePlan()).success).toBe(true)
+  })
+
+  it("validatePlanByType resolves shot-sequence", () => {
+    expect(() => validatePlanByType("shot-sequence", makeShotSequencePlan())).not.toThrow()
+  })
+
+  it("rejects an unsupported font", () => {
+    const plan = makeShotSequencePlan()
+    ;(plan.scenes[0].shots[0].reveals[0].element as Record<string, unknown>).fontFamily = "Comic Sans"
+    expect(shotSequencePlanSchema.safeParse(plan).success).toBe(false)
+  })
+
+  it("rejects a bare (non-URL) audio src", () => {
+    expect(shotSequencePlanSchema.safeParse(makeShotSequencePlan({ audio: { src: "not-a-url" } })).success).toBe(false)
+  })
+
+  it("rejects overlapping scene windows", () => {
+    // s2 starts at 100 but s1 runs [0,150) → overlap
+    const plan = makeShotSequencePlan()
+    plan.scenes[1].startFrame = 100
+    expect(shotSequencePlanSchema.safeParse(plan).success).toBe(false)
+  })
+
+  it("rejects duplicate scene ids", () => {
+    const plan = makeShotSequencePlan()
+    plan.scenes[1].id = "s1"
+    expect(shotSequencePlanSchema.safeParse(plan).success).toBe(false)
+  })
+
+  it("rejects duplicate reveal ids", () => {
+    const plan = makeShotSequencePlan()
+    plan.scenes[1].shots[0].reveals[0].id = "r1"
+    expect(shotSequencePlanSchema.safeParse(plan).success).toBe(false)
+  })
+})
+
+// ── Drift guard ──────────────────────────────────────────────────────────────
+
+describe("planSchemaMap ↔ PLAN_TYPES drift guard", () => {
+  it("planSchemaMap keys and PLAN_TYPES values are identical sets (no unregistered type, no orphaned schema)", () => {
+    expect(Object.keys(planSchemaMap).sort()).toEqual([...PLAN_TYPES].sort())
   })
 })

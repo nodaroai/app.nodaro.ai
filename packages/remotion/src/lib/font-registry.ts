@@ -1,3 +1,4 @@
+import { SUPPORTED_FONT_NAMES, type SupportedFontName } from "@nodaro/shared"
 import { loadFont as loadInter } from "@remotion/google-fonts/Inter"
 import { loadFont as loadRoboto } from "@remotion/google-fonts/Roboto"
 import { loadFont as loadOpenSans } from "@remotion/google-fonts/OpenSans"
@@ -43,12 +44,12 @@ const fonts = {
   "Caveat": loadCaveat("normal", { weights: ["400", "700"], subsets: ["latin"] }),
   "Roboto Mono": loadRobotoMono("normal", { weights: ["300", "400", "700"], subsets: ["latin"] }),
   "Fira Code": loadFiraCode("normal", { weights: ["300", "400", "700"], subsets: ["latin"] }),
-} as const
+} satisfies Record<SupportedFontName, { readonly fontFamily: string }>
 
 /** Maps display name → CSS font-family value */
 export const FONT_MAP: Record<string, string> = Object.fromEntries(
   Object.entries(fonts).map(([name, result]) => [name, result.fontFamily]),
 )
 
-/** List of all supported font display names (for AI prompt) */
-export const SUPPORTED_FONTS: string[] = Object.keys(FONT_MAP)
+/** Display names supported by the renderer (single source of truth in @nodaro/shared). */
+export const SUPPORTED_FONTS: readonly string[] = SUPPORTED_FONT_NAMES

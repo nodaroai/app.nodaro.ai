@@ -1,0 +1,5 @@
+export { shotSequenceBriefSchema, MAX_ALIGNMENT_WORDS } from "./brief-schema.js"
+export type { ShotSequenceBrief, AlignmentWordInput } from "./brief-schema.js"
+export { alignCues } from "./aligner.js"
+export { bakeShotSequence, EmptyAlignmentError, SceneOverlapError } from "./baker.js"
+export type { BakeOptions } from "./baker.js"

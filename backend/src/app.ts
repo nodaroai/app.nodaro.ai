@@ -138,6 +138,7 @@ import { dubbingRoutes } from "./routes/dubbing.js"
 import { voiceRemixRoutes } from "./routes/voice-remix.js"
 import { voiceDesignRoutes } from "./routes/voice-design.js"
 import { forcedAlignmentRoutes } from "./routes/forced-alignment.js"
+import { shotSequenceRoutes } from "./routes/shot-sequence.js"
 import { subWorkflowRoutes } from "./routes/sub-workflows.js"
 import { workflowExecutionRoutes } from "./routes/workflow-execution.js"
 import { webhookTriggerRoutes } from "./routes/webhook-triggers.js"
@@ -425,6 +426,7 @@ export async function buildApp() {
   await app.register(voiceRemixRoutes)
   await app.register(voiceDesignRoutes)
   await app.register(forcedAlignmentRoutes)
+  await app.register(shotSequenceRoutes)
   await app.register(subWorkflowRoutes)
   await app.register(workflowExecutionRoutes)
   await app.register(webhookTriggerRoutes)
