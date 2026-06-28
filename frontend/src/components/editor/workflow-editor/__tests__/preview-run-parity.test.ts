@@ -397,6 +397,92 @@ describe("preview↔run parity — video", () => {
     expect(runPrompt).toContain("The subject must remain exactly the same person")
     expect(previewPrompt).toBe(runPrompt)
   })
+
+  // ── Task 3.3: the RUN path resolves {image:N} → @image_N for ref-capable
+  // providers, exactly as the PREVIEW (assembleVideoPrompt) does (Task 3.2). ──
+  /** A plain upstream image source wired to the consumer's `references` handle. */
+  function refImageNode() {
+    return {
+      id: "ref-img",
+      type: "upload-image",
+      position: { x: 0, y: 0 },
+      data: { label: "Upload" },
+    }
+  }
+
+  it("(e) image-to-video ref-capable: run resolves {image:1} into an @image_1 binding (parity)", async () => {
+    // seedance-2 declares the `reference-image` capability → the {image:N} token
+    // is KEPT and resolved (not stripped). The run must produce the same text the
+    // preview does. Start frame supplied so the dispatch fires regardless of the
+    // provider's ref-only handling.
+    const i2vNode = makeNode("image-to-video", {
+      prompt: "circle {image:1:object}",
+      provider: "seedance-2",
+    })
+    mockNodes = [refImageNode(), i2vNode]
+    // ONE `references`-handle edge → imageRefCount = 1 → {image:1} binds @image_1.
+    mockEdges = [
+      { id: "e1", source: "ref-img", target: "n1", targetHandle: "references" },
+    ]
+    mockResolveNodeInputs.mockReturnValue({ imageUrl: "http://frame.png" })
+    mockRunVideoGeneration.mockResolvedValue(undefined)
+
+    await executeNode(i2vNode as any, makeCtx())
+
+    expect(mockRunVideoGeneration).toHaveBeenCalledTimes(1)
+    const runPrompt = mockRunVideoGeneration.mock.calls[0][8] as string
+    const previewPrompt = assembleVideoPrompt("image-to-video", assemblerArgs(i2vNode))
+
+    // Token RESOLVED (not stripped to the bare label): the @image_1 binding lands.
+    expect(runPrompt).toContain("circle the object from @image_1")
+    expect(previewPrompt).toBe(runPrompt)
+  })
+
+  it("(f) image-to-video NON-ref provider: run strips {image:1} to the bare label (regression guard + parity)", async () => {
+    // minimax has no `reference-image` capability → legacy strip path. Run +
+    // preview both emit the bare label, no @image_N binding.
+    const i2vNode = makeNode("image-to-video", {
+      prompt: "circle {image:1:object}",
+      provider: "minimax",
+    })
+    mockNodes = [refImageNode(), i2vNode]
+    mockEdges = [
+      { id: "e1", source: "ref-img", target: "n1", targetHandle: "references" },
+    ]
+    mockResolveNodeInputs.mockReturnValue({ imageUrl: "http://frame.png" })
+    mockRunVideoGeneration.mockResolvedValue(undefined)
+
+    await executeNode(i2vNode as any, makeCtx())
+
+    const runPrompt = mockRunVideoGeneration.mock.calls[0][8] as string
+    const previewPrompt = assembleVideoPrompt("image-to-video", assemblerArgs(i2vNode))
+
+    expect(runPrompt).toBe("circle object")
+    expect(previewPrompt).toBe(runPrompt)
+  })
+
+  it("(g) text-to-video ref-capable: run resolves {image:1} into an @image_1 binding (second path, parity)", async () => {
+    // Same gate on the t2v run path. seedance-2 keeps + resolves the token.
+    const t2vNode = makeNode("text-to-video", {
+      prompt: "circle {image:1:object}",
+      provider: "seedance-2",
+    })
+    mockNodes = [refImageNode(), t2vNode]
+    mockEdges = [
+      { id: "e1", source: "ref-img", target: "n1", targetHandle: "references" },
+    ]
+    mockResolveNodeInputs.mockReturnValue({})
+    mockRunTextToVideoGeneration.mockResolvedValue(undefined)
+
+    await executeNode(t2vNode as any, makeCtx())
+
+    expect(mockRunTextToVideoGeneration).toHaveBeenCalledTimes(1)
+    const runPrompt = mockRunTextToVideoGeneration.mock.calls[0][1] as string
+    const previewPrompt = assembleVideoPrompt("text-to-video", assemblerArgs(t2vNode))
+
+    expect(runPrompt).toContain("circle the object from @image_1")
+    expect(previewPrompt).toBe(runPrompt)
+  })
 })
 
 // ===========================================================================

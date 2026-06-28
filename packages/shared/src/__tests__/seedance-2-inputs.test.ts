@@ -33,7 +33,7 @@ describe("resolveSeedance2Inputs", () => {
     expect(r.firstFrameUrl).toBeUndefined()
     expect(r.lastFrameUrl).toBeUndefined()
     expect(r.referenceImageUrls).toEqual(["https://a/ref.png", "https://a/first.png"])
-    expect(r.promptSuffix).toBe("Use Image 2 as the opening (first) frame of the video.")
+    expect(r.promptSuffix).toBe("Use @image_2 as the opening (first) frame of the video.")
   })
 
   it("first + last frame + two reference images → reference, frames at 3 and 4", () => {
@@ -42,7 +42,7 @@ describe("resolveSeedance2Inputs", () => {
       refImageUrls: ["https://a/r1.png", "https://a/r2.png"],
     })
     expect(r.referenceImageUrls).toEqual(["https://a/r1.png", "https://a/r2.png", "https://a/f.png", "https://a/l.png"])
-    expect(r.promptSuffix).toBe("Use Image 3 as the opening (first) frame and Image 4 as the closing (last) frame of the video.")
+    expect(r.promptSuffix).toBe("Use @image_3 as the opening (first) frame and @image_4 as the closing (last) frame of the video.")
   })
 
   it("reference audio + first frame (no images/videos) → reference mode, frame as Image 1, audio passed through", () => {
@@ -50,14 +50,14 @@ describe("resolveSeedance2Inputs", () => {
     expect(r.mode).toBe("reference")
     expect(r.referenceImageUrls).toEqual(["https://a/f.png"])
     expect(r.referenceAudioUrls).toEqual(["https://a/voice.mp3"])
-    expect(r.promptSuffix).toBe("Use Image 1 as the opening (first) frame of the video.")
+    expect(r.promptSuffix).toBe("Use @image_1 as the opening (first) frame of the video.")
   })
 
   it("last frame only, no first frame, no references → reference, closing-frame hint", () => {
     const r = resolveSeedance2Inputs({ lastFrameUrl: "https://a/l.png" })
     expect(r.mode).toBe("reference")
     expect(r.referenceImageUrls).toEqual(["https://a/l.png"])
-    expect(r.promptSuffix).toBe("Use Image 1 as the closing (last) frame of the video.")
+    expect(r.promptSuffix).toBe("Use @image_1 as the closing (last) frame of the video.")
   })
 
   it("9 user images + first + last → frames kept, 2 user images dropped, ordinals 8 and 9", () => {
@@ -67,7 +67,7 @@ describe("resolveSeedance2Inputs", () => {
     expect(r.referenceImageUrls[7]).toBe("https://a/f.png")
     expect(r.referenceImageUrls[8]).toBe("https://a/l.png")
     expect(r.droppedRefImages).toBe(2)
-    expect(r.promptSuffix).toBe("Use Image 8 as the opening (first) frame and Image 9 as the closing (last) frame of the video.")
+    expect(r.promptSuffix).toBe("Use @image_8 as the opening (first) frame and @image_9 as the closing (last) frame of the video.")
   })
 
   it("blank/whitespace urls are ignored", () => {
@@ -89,7 +89,7 @@ describe("resolveSeedance2Inputs", () => {
   // ---------------------------------------------------------------------------
   // Frame-ordinal ↔ array-position INVARIANT (drift guard).
   //
-  // The frame `Image N` numbers the resolver writes into `promptSuffix` must be
+  // The frame `@image_N` numbers the resolver writes into `promptSuffix` must be
   // the literal 1-based positions of `firstFrameUrl` / `lastFrameUrl` in the
   // returned `referenceImageUrls`, AND must be strictly greater than the count
   // of user reference images (frames always come AFTER user refs, never in a
@@ -103,9 +103,11 @@ describe("resolveSeedance2Inputs", () => {
   // see backend `seedance2-multimodal.test.ts` "combined case" tests.
   // ---------------------------------------------------------------------------
   describe("frame-ordinal ↔ array-position invariant", () => {
-    // Parse every `Image N` ordinal out of the suffix in document order.
+    // Parse every `@image_N` ordinal out of the suffix in document order. The
+    // regex tolerates both the `@image_N` form (current) and a legacy `Image N`
+    // form so the invariant holds across the REF_BINDING swap-point flip.
     const ordinalsIn = (suffix: string): number[] =>
-      Array.from(suffix.matchAll(/Image (\d+)/g)).map((m) => parseInt(m[1], 10))
+      Array.from(suffix.matchAll(/@?image[_ ](\d+)/gi)).map((m) => parseInt(m[1], 10))
 
     const refShapes: Array<{ name: string; refs: string[] }> = [
       { name: "0 user refs", refs: [] },
@@ -154,7 +156,7 @@ describe("resolveSeedance2Inputs", () => {
           if (firstPos) expect(firstPos).toBeGreaterThan(userRefCount)
           if (lastPos) expect(lastPos).toBeGreaterThan(userRefCount)
 
-          // The suffix's `Image N` ordinals are EXACTLY the array positions, in
+          // The suffix's `@image_N` ordinals are EXACTLY the array positions, in
           // the order the suffix names them (first frame before last frame).
           const expectedOrdinals: number[] = []
           if (firstPos) expectedOrdinals.push(firstPos)

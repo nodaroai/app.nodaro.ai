@@ -781,14 +781,17 @@ function applyReferenceOrder(
   for (let newPos = 0; newPos < newOrderIndices.length; newPos++) {
     remap.set(newOrderIndices[newPos] + 1, newPos + 1)
   }
-  // Replace every `Image N` (1-2 digit, word-boundary) substring. Negative
-  // lookahead on digits guards against `Image 12` → `Image 32` when remapping
-  // 1 → 3. Same lookbehind on `Image` prevents catching `XImage 1`.
-  const renumbered = prompt.replace(/(?<![A-Za-z])Image (\d{1,3})(?!\d)/g, (whole, n) => {
+  // Replace every positional ordinal (1-3 digit, word-boundary) substring,
+  // preserving its prefix: image prompts use `Image N`, video prompts use the
+  // `@image_N` binding form (REF_BINDING.ordinal). The alternation is
+  // case-exact (no `i` flag) so each form re-emits with the SAME prefix.
+  // Negative lookahead on digits guards against `Image 12` → `Image 32` when
+  // remapping 1 → 3. The lookbehind prevents catching `XImage 1` / `foo@image_1`.
+  const renumbered = prompt.replace(/(?<![A-Za-z])(@image_|Image )(\d{1,3})(?!\d)/g, (whole, prefix, n) => {
     const orig = parseInt(n, 10)
     const next = remap.get(orig)
     if (next === undefined || next === orig) return whole
-    return `Image ${next}`
+    return `${prefix}${next}`
   })
   return { urls: newUrls, prompt: renumbered }
 }

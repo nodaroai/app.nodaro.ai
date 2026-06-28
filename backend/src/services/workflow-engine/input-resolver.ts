@@ -23,6 +23,7 @@ import { SOCIAL_POST_NODE_TYPES } from "@nodaro/shared"
 import { PARAMETER_NODE_TYPES } from "@nodaro/shared"
 import { FAN_OUT_EACH_TYPES, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES } from "@nodaro/shared"
 import { extractReferencedLabels, canonicalVarName } from "@nodaro/shared"
+import { REFERENCE_HANDLE_MAP } from "@nodaro/shared"
 
 /**
  * Resolve a node's primary output from execution state or source node data.
@@ -989,17 +990,12 @@ const ARRAY_ACCUMULATING_TYPES = new Set(["combine-videos", "mix-audio", "combin
  *  per-item routing entirely — the strategy folds the list into one value. */
 const FAN_IN_NODE_TYPES = new Set(["reduce"])
 
-const REFERENCE_HANDLE_MAP: Record<string, "referenceImageUrls" | "referenceVideoUrls" | "referenceAudioUrls"> = {
-  // Legacy / i2v single-name handle ids (kept for un-migrated workflows)
-  "references": "referenceImageUrls",
-  "reference-videos": "referenceVideoUrls",
-  "reference-audio": "referenceAudioUrls",
-  // New canonical typed-handle ids (Generate Video) — share the resolved-input
-  // keys with the legacy ids so payload-builder code doesn't fork.
-  "imageReferences": "referenceImageUrls",
-  "videoReferences": "referenceVideoUrls",
-  "audioReferences": "referenceAudioUrls",
-}
+// REFERENCE_HANDLE_MAP now lives in `@nodaro/shared` (single source of truth):
+// the same 6 legacy + canonical handle aliases drive BOTH this resolver's
+// reference-URL routing (`inputs[refHandleKey]` below) AND the positional
+// `{image:N}` token COUNTS in the FE preview / FE run / BE payload-builder. The
+// object indexes identically, so `REFERENCE_HANDLE_MAP[edge.targetHandle ?? ""]`
+// behavior is unchanged.
 
 const ENTITY_NODE_TYPES = new Set(["character", "face", "object", "creature", "location"])
 

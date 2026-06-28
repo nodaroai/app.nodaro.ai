@@ -7,7 +7,7 @@ import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeExecutionState } from 
 
 // Shared logic from packages/shared — single source of truth
 import { collectAncestorRefs as sharedCollectAncestorRefs } from "@nodaro/shared"
-import { buildImagePrompt, assembleImageInput, buildScenePrompt, applyReferenceOrderToVideo } from "@nodaro/shared"
+import { buildImagePrompt, assembleImageInput, buildScenePrompt } from "@nodaro/shared"
 import { composeNegative } from "@nodaro/shared"
 import { collectIdentityLockClause as sharedCollectIdentityLockClause } from "@nodaro/shared"
 import { characterMentionableAssetArrays } from "@nodaro/shared"
@@ -35,11 +35,13 @@ import {
 import { getParameterPromptHint } from "@nodaro/shared"
 import { PARAMETER_NODE_TYPES } from "@nodaro/shared"
 import { computeNodePrompt } from "@nodaro/shared"
-import type { CharacterDef, ConnectedReference, SceneData, ExtraRefInput, ExtraRefCharacterContext } from "@nodaro/shared"
-import { characterMentionSlug, findCharacterMentionTokens, resolveCharacterMentions, usageModeDirective, DEFAULT_USAGE_MODE } from "@nodaro/shared"
+import type { CharacterDef, ConnectedReference, SceneData, ExtraRefInput, ExtraRefCharacterContext, CharacterMeta } from "@nodaro/shared"
+import { characterMentionSlug } from "@nodaro/shared"
+import { resolveVideoReferenceCore } from "@nodaro/shared"
 import { expandExtraRefsToConnectedReferences } from "@nodaro/shared"
 import { PLATFORM_SPECS } from "@nodaro/shared"
-import { isSeedance2Provider, MODEL_CATALOG } from "@nodaro/shared"
+import { isSeedance2Provider, MODEL_CATALOG, hasFeature } from "@nodaro/shared"
+import { referenceModalityForHandle, countRefModalityEdges as countRefModalityEdgesCore, type ReferenceModality } from "@nodaro/shared"
 import { COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS } from "@nodaro/shared"
 import { buildLlmCreditIdentifier, motionGraphicsFeature } from "@nodaro/shared"
 import {
@@ -321,7 +323,7 @@ function expandWiredCharacterRefs(
       (charData.label as string | undefined) ??
       ""
     const characterSlug = characterMentionSlug(charName)
-    if (!characterSlug) continue // unnamed character — skip from autocomplete
+    if (!characterSlug) continue // unnamed character — no slug to @-mention or canonical-fold in the core
 
     const description = charData.description as string | undefined
     const canonicalDescription =
@@ -773,222 +775,88 @@ function resolveVideoPromptMentions(
     referenceOrder?: readonly string[]
     /** Character slugs whose canonical-fallback the user has hidden. */
     suppressedCanonicalCharacterIds?: readonly string[]
+    /**
+     * Positional reference-handle counts the core numbers `{image:N}` /
+     * `{video:N}` / `{audio:N}` body tokens against (worker-payload order). Pure
+     * pass-through to the shared core — supplied by the video call sites gated on
+     * provider ref-capability (Task 4.1) so the orchestrator resolves in-range
+     * tokens to `@image_N` and drops out-of-range/non-ref ones to the bare label.
+     * When omitted the core falls back (image → its own merged-URL count,
+     * video/audio → 0).
+     */
+    imageRefCount?: number
+    videoRefCount?: number
+    audioRefCount?: number
   },
 ): { prompt: string | undefined; additionalUrls: string[] } {
-  let wiredCharRefs = expandWiredCharacterRefs(consumerNodeId, buildCtx)
-  const suppressedSlugs = new Set(opts?.suppressedCanonicalCharacterIds ?? [])
-  if (suppressedSlugs.size > 0) {
-    // Drop ONLY the canonical entry — `@-mentioned` variants stay.
-    wiredCharRefs = wiredCharRefs.filter((r) => {
-      if (r.source !== "wired-character") return true
-      if (!r.characterSlug) return true
-      if (r.variantSlug) return true
-      return !suppressedSlugs.has(r.characterSlug)
-    })
-  }
-  const hasExtras = (extraRefs?.length ?? 0) > 0
-  if (wiredCharRefs.length === 0 && !hasExtras) {
-    return { prompt, additionalUrls: [] }
-  }
-  const knownCharSlugs = Array.from(
-    new Set(
-      wiredCharRefs
-        .map((r) => r.characterSlug)
-        .filter((s): s is string => typeof s === "string" && s.length > 0),
-    ),
-  )
-  // Empty user prompt is allowed — canonical fallback / mention resolution
-  // can fill the prompt entirely. Treat undefined/empty as `""` so the
-  // resolver flows through to mention + canonical-fallback assembly below.
-  const promptForResolution = prompt ?? ""
-  const mentionTokens = knownCharSlugs.length > 0
-    ? findCharacterMentionTokens(promptForResolution, knownCharSlugs)
-    : []
-  // Resolve any mentions (may be empty); always check fallback after.
-  const resolved = mentionTokens.length > 0
-    ? resolveCharacterMentions(promptForResolution, mentionTokens, wiredCharRefs)
-    : { prompt: promptForResolution, additionalUrls: [] as string[], mentionedCharacterSlugs: new Set<string>() }
-
-  // Track position of the first emitted URL per characterSlug — used by
-  // extras to pair back via "Image B is the same subject as Image A".
-  const positionsByChar = new Map<string, number>()
-  let position = 0
-  for (let i = 0; i < resolved.additionalUrls.length; i++) {
-    position += 1
-    const ref = wiredCharRefs.find((r) => r.url === resolved.additionalUrls[i])
-    const slug = ref?.characterSlug
-    if (slug && !positionsByChar.has(slug)) positionsByChar.set(slug, position)
-  }
-
-  // Canonical fallback for any wired character NOT @-mentioned. Single
-  // canonical URL + strong directive per unmentioned character — mirrors
-  // `buildCanonicalFallback` from the shared prompt-builder.
-  const fallbackUrls: string[] = []
-  const fallbackDirectiveLines: string[] = []
-  const seenSlugs = new Set<string>()
-  for (const r of wiredCharRefs) {
-    if (r.source !== "wired-character") continue
-    if (!r.characterSlug) continue
-    if (resolved.mentionedCharacterSlugs.has(r.characterSlug)) continue
-    if (seenSlugs.has(r.characterSlug)) continue
-    if (r.variantSlug) continue
-    if (!r.url) continue
-    seenSlugs.add(r.characterSlug)
-    fallbackUrls.push(r.url)
-    position += 1
-    if (!positionsByChar.has(r.characterSlug)) positionsByChar.set(r.characterSlug, position)
-    const displayName = r.defaultName || r.characterSlug
-    // Mode-aware directive: character node's `defaultUsageMode` → global
-    // `DEFAULT_USAGE_MODE`. Keeps backend video runs in lock-step with the
-    // frontend `resolveVideoPromptMentions` and the shared image builder.
-    const effectiveMode = r.defaultUsageMode ?? DEFAULT_USAGE_MODE
-    // Minimal-intervention modes:
-    //   - "none": URL is attached but NO bullet is emitted (no textual bias).
-    //   - "name": one bullet with the name, no trailing directive.
-    if (effectiveMode === "none") {
-      continue
-    }
-    if (effectiveMode === "name") {
-      fallbackDirectiveLines.push(`- Image ${position} (${displayName})`)
-      continue
-    }
-    const directive = usageModeDirective(effectiveMode)
-    const includeCanonicalDesc = effectiveMode === "identical" || effectiveMode === "face-pose"
-    // Wired elements ride the bullet alongside the (mode-gated) canonical desc —
-    // mirrors the shared image-side `composeIdentityDescPart` and the FE video path.
-    const descBodyParts: string[] = []
-    if (includeCanonicalDesc && r.characterCanonicalDescription?.trim()) {
-      descBodyParts.push(r.characterCanonicalDescription.trim())
-    }
-    if (r.elementInjection?.trim()) descBodyParts.push(r.elementInjection.trim())
-    const descPart = descBodyParts.length > 0
-      ? `${displayName} — ${descBodyParts.join(". ")}`
-      : displayName
-    fallbackDirectiveLines.push(`- ${descPart}.${directive ? ` ${directive}` : ""}`)
-  }
-
-  // Extras: emit one directive per row. Numbering continues from `position`
-  // so the worker's `referenceImageUrls` order lines up with "Image N" in
-  // the assembled prompt. Mirrors the frontend `resolveVideoPromptMentions`.
-  const extraUrls: string[] = []
-  const extraDirectiveLines: string[] = []
-  if (hasExtras) {
-    const ctxLookup = buildExtraRefCharacterContextLookup(consumerNodeId, buildCtx)
-    for (const ex of extraRefs!) {
-      if (!ex.url) continue
-      position += 1
-      const desc = (ex.description ?? "").trim()
-      if (ex.characterSlug) {
-        const ctx = ctxLookup(ex.characterSlug)
-        const effectiveMode = ex.usageMode ?? ctx?.defaultUsageMode ?? DEFAULT_USAGE_MODE
-        const earlierPos = positionsByChar.get(ex.characterSlug)
-        if (earlierPos !== undefined) {
-          // Pair-back. Suppressed for "none" so the extras-side respects the
-          // same minimal-intervention contract as primary mentions.
-          if (effectiveMode !== "none") {
-            const tail = desc ? `, ${desc}` : ""
-            extraDirectiveLines.push(
-              `- Image ${position} is the same subject as Image ${earlierPos}${tail}.`,
-            )
-          }
-        } else if (effectiveMode === "none") {
-          // URL attached, no bullet. Record the slot for any later same-
-          // character extras that pair-back via "same subject as Image N".
-          positionsByChar.set(ex.characterSlug, position)
-        } else if (effectiveMode === "name") {
-          // Labeled subject + per-ref description, no trailing directive.
-          const displayName = ctx?.displayName || ex.characterSlug
-          const subject = `Image ${position} (${displayName})`
-          const descPart = desc ? `${subject} — ${desc}` : subject
-          extraDirectiveLines.push(`- ${descPart}.`)
-          positionsByChar.set(ex.characterSlug, position)
-        } else {
-          const directive = usageModeDirective(effectiveMode)
-          const displayName = ctx?.displayName || ex.characterSlug
-          const subject = `Image ${position} (${displayName})`
-          const includeCanonicalDesc = effectiveMode === "identical" || effectiveMode === "face-pose"
-          const canonicalDesc = ctx?.canonicalDescription
-          let descPart = subject
-          if (desc) descPart = `${subject} — ${desc}`
-          else if (includeCanonicalDesc && canonicalDesc?.trim()) descPart = `${subject} — ${canonicalDesc.trim()}`
-          extraDirectiveLines.push(`- ${descPart}.${directive ? ` ${directive}` : ""}`)
-          positionsByChar.set(ex.characterSlug, position)
-        }
-      } else {
-        if (desc) {
-          extraDirectiveLines.push(`- Image ${position} (reference): ${desc}.`)
-        } else {
-          extraDirectiveLines.push(`- Image ${position} (reference).`)
-        }
-      }
-      extraUrls.push(ex.url)
+  // ── BE-only expansion: wire upstream Character nodes → ConnectedReference[].
+  // Canonical-suppression filtering lives in the shared core (single source of
+  // truth) — pass the raw expansion + the suppressed set straight through. ──
+  const wiredCharRefs = expandWiredCharacterRefs(consumerNodeId, buildCtx)
+  // BE-only lookup for an extra-ref's character metadata: the build-context edge
+  // walk (`buildExtraRefCharacterContextLookup`) maps a character slug to its
+  // `{ displayName, defaultUsageMode, canonicalDescription }`; adapt that to the
+  // core's `CharacterMeta` shape (the FE supplies the same shape from
+  // `nodes.find(...)`).
+  const ctxLookup = buildExtraRefCharacterContextLookup(consumerNodeId, buildCtx)
+  const lookupCharacterBySlug = (slug: string): CharacterMeta | undefined => {
+    const ctx = ctxLookup(slug)
+    if (!ctx) return undefined
+    return {
+      characterName: ctx.displayName,
+      defaultUsageMode: ctx.defaultUsageMode,
+      canonicalDescription: ctx.canonicalDescription ?? undefined,
     }
   }
+  // All mention / numbering / canonical-fallback / extras assembly lives in the
+  // shared core — the single source of truth shared with the frontend resolver.
+  return resolveVideoReferenceCore({
+    prompt,
+    wiredCharRefs,
+    extraRefs: extraRefs?.map((ex) => ({
+      // BE `ExtraRefInput.url` is optional; the core skips falsy urls exactly as
+      // the old BE body's `if (!ex.url) continue` did, so `?? ""` is a
+      // behavior-preserving coercion into the core's required `url: string`.
+      url: ex.url ?? "",
+      description: ex.description,
+      characterSlug: ex.characterSlug,
+      variantSlug: ex.variantSlug,
+      usageMode: ex.usageMode,
+    })),
+    lookupCharacterBySlug,
+    referenceOrder: opts?.referenceOrder,
+    suppressedCanonicalCharacterIds: opts?.suppressedCanonicalCharacterIds,
+    imageRefCount: opts?.imageRefCount,
+    videoRefCount: opts?.videoRefCount,
+    audioRefCount: opts?.audioRefCount,
+  })
+}
 
-  let finalPrompt = resolved.prompt
-  const allFallbackLines = [...fallbackDirectiveLines, ...extraDirectiveLines]
-  if (allFallbackLines.length > 0) {
-    // Mirror shared `buildImagePrompt`'s consolidation: append fallback
-    // bullets into an existing "Use these characters:" block when present,
-    // otherwise create a new one.
-    if (finalPrompt && finalPrompt.startsWith("Use these characters:\n")) {
-      const splitIdx = finalPrompt.indexOf("\n\n")
-      if (splitIdx !== -1) {
-        const header = finalPrompt.slice(0, splitIdx)
-        const rest = finalPrompt.slice(splitIdx)
-        finalPrompt = `${header}\n${allFallbackLines.join("\n")}${rest}`
-      } else {
-        finalPrompt = `${finalPrompt}\n${allFallbackLines.join("\n")}`
-      }
-    } else {
-      const block = `Use these characters:\n${allFallbackLines.join("\n")}`
-      finalPrompt = finalPrompt ? `${block}\n\n${finalPrompt}` : block
-    }
-  }
-
-  // Dedup combined URLs while preserving order (mentions first, fallback,
-  // then extras). "Image N" labels in the prompt assume this exact order
-  // BEFORE any user-defined `referenceOrder` reorder below.
-  const merged: string[] = []
-  const seen = new Set<string>()
-  for (const u of resolved.additionalUrls) {
-    if (u && !seen.has(u)) { seen.add(u); merged.push(u) }
-  }
-  for (const u of fallbackUrls) {
-    if (u && !seen.has(u)) { seen.add(u); merged.push(u) }
-  }
-  for (const u of extraUrls) {
-    if (u && !seen.has(u)) { seen.add(u); merged.push(u) }
-  }
-
-  // Apply user-defined reorder + renumber `Image N` tokens. Skipped fast when
-  // `referenceOrder` is absent or there's <2 URLs (nothing to reorder).
-  const referenceOrder = opts?.referenceOrder
-  if (referenceOrder && referenceOrder.length > 0 && merged.length > 1) {
-    // Build a synthetic ConnectedReference list that combines wired chars +
-    // extras so `applyReferenceOrderToVideo` can identify each URL. Extras
-    // don't have a stable `id` field on the input shape, so we derive one
-    // from the URL — extras are tile-matched as `wired:<url>` in this path.
-    const refsForOrdering: ConnectedReference[] = [...wiredCharRefs]
-    if (hasExtras) {
-      for (const ex of extraRefs!) {
-        if (!ex.url) continue
-        refsForOrdering.push({
-          id: ex.url,
-          defaultName: ex.characterSlug || "Extra",
-          source: ex.characterSlug ? "wired-character" : "manual",
-          url: ex.url,
-          characterSlug: ex.characterSlug,
-          variantSlug: ex.variantSlug,
-          isExtraRef: true,
-        })
-      }
-    }
-    const reordered = applyReferenceOrderToVideo(merged, finalPrompt, refsForOrdering, referenceOrder)
-    return { prompt: reordered.prompt, additionalUrls: reordered.urls }
-  }
-
-  return { prompt: finalPrompt, additionalUrls: merged }
+/**
+ * Count the reference-handle edges of a given reference MODALITY wired into a
+ * node. Counts by modality (via the shared `referenceModalityForHandle`) rather
+ * than a single handle string, so BOTH the legacy single-name ids
+ * (`references` / `reference-videos` / `reference-audio`) AND the canonical
+ * Generate Video ids (`imageReferences` / `videoReferences` / `audioReferences`)
+ * are counted — the latter is what real generate-video nodes wire, and counting
+ * only `references` left `{image:N}` tokens silently uncounted on every
+ * generate-video node (the bug this closes).
+ *
+ * This is the EDGE count (mirrors the FE preview + run `countRefModality`), NOT
+ * the resolved/list-expanded URL count — the FE can only edge-count (its preview
+ * has no URL-resolution layer), so matching it keeps the two paths identical.
+ * The edge-vs-resolved divergence for a reference edge that fans out to >1 URL
+ * (a List producer) is a shared, documented v1 limitation.
+ */
+function countRefModalityEdges(
+  consumerNodeId: string,
+  modality: ReferenceModality,
+  buildCtx: PayloadBuildContext | undefined,
+): number {
+  // Thin buildCtx adapter over the shared `countRefModalityEdges` (the ONE
+  // modality-edge counter shared with the FE preview + run) so the orchestrator
+  // and editor never drift on `{image:N}`/`{video:N}`/`{audio:N}` numbering.
+  return countRefModalityEdgesCore(buildCtx?.edges ?? [], consumerNodeId, modality)
 }
 
 // ---------------------------------------------------------------------------
@@ -2394,9 +2262,19 @@ export function buildPayload(
         buildCtx,
         motionHint: data.motionEnabled && data.motion ? `${data.motion} motion` : undefined,
       })
+      // Resolve `{image:N}` body tokens for ref-capable providers (FE↔BE parity
+      // with execute-node.ts / video-prompt-assembly.ts). Pass the per-handle
+      // EDGE count so in-range tokens bind to `@image_N`; non-ref → 0 so the core
+      // bare-labels (the parity-equivalent of the FE's `stripVideoImageTokens`,
+      // without a BE strip). 0 (not undefined) also forces bare-label when a
+      // character is wired, matching the FE strip.
+      const i2vSupportsRefs = !!provider && hasFeature(provider, "reference-image")
       const i2vMention = resolveVideoPromptMentions(i2vPrompt, node.id, buildCtx, readExtraRefs(data), {
         referenceOrder: readStringArray(data.referenceOrder),
         suppressedCanonicalCharacterIds: readStringArray(data.suppressedCanonicalCharacterIds),
+        imageRefCount: i2vSupportsRefs ? countRefModalityEdges(node.id, "image", buildCtx) : 0,
+        videoRefCount: i2vSupportsRefs ? countRefModalityEdges(node.id, "video", buildCtx) : 0,
+        audioRefCount: i2vSupportsRefs ? countRefModalityEdges(node.id, "audio", buildCtx) : 0,
       })
       i2vPrompt = i2vMention.prompt
       // Splice mention-resolved URLs into the i2v payload. i2v has two slots:
@@ -2409,13 +2287,17 @@ export function buildPayload(
       const i2vBaseImage = resolvedInputs.startFrameUrl || resolvedInputs.imageUrl || data.imageUrl as string | undefined
       // Apply user-defined reorder before mention-merge so the positional
       // Image-N letters assigned by `resolveVideoPromptMentions` match the
-      // order shown in the config panel's drag-list. Walks the `references`
-      // handle edges so end-frame / start-frame connections aren't touched.
+      // order shown in the config panel's drag-list. Walks the image-reference
+      // edges via the shared `referenceModalityForHandle` SoT — honoring BOTH
+      // the legacy `references` handle AND the canonical `imageReferences` one a
+      // generate-video re-typed to i2v wires (the generate-video case below
+      // already accepts both) — so frame (start/end) connections, whose modality
+      // is null, are never touched.
       const i2vOrderedRefs = applyOrderToReferenceUrls(
         node.id,
         data.connectedRefImageOrder as string[] | undefined,
         buildCtx,
-        (e) => e.targetHandle === "references",
+        (e) => referenceModalityForHandle(e.targetHandle) === "image",
       )
       const i2vBaseRefs = i2vOrderedRefs ?? resolvedInputs.referenceImageUrls
       let i2vImageUrl = i2vBaseImage
@@ -2527,9 +2409,14 @@ export function buildPayload(
       // `referenceImageUrls`, merged with whatever upstream already provided.
       const t2vRawPrompt = promptFor("text-to-video")
       let t2vPrompt = composeVideoPrompt({ rawPrompt: t2vRawPrompt, nodeId: node.id, buildCtx })
+      // `{image:N}` token resolution — see i2v note. Same gate + edge counts.
+      const t2vSupportsRefs = !!provider && hasFeature(provider, "reference-image")
       const t2vMention = resolveVideoPromptMentions(t2vPrompt, node.id, buildCtx, readExtraRefs(data), {
         referenceOrder: readStringArray(data.referenceOrder),
         suppressedCanonicalCharacterIds: readStringArray(data.suppressedCanonicalCharacterIds),
+        imageRefCount: t2vSupportsRefs ? countRefModalityEdges(node.id, "image", buildCtx) : 0,
+        videoRefCount: t2vSupportsRefs ? countRefModalityEdges(node.id, "video", buildCtx) : 0,
+        audioRefCount: t2vSupportsRefs ? countRefModalityEdges(node.id, "audio", buildCtx) : 0,
       })
       t2vPrompt = t2vMention.prompt
       // Apply user-defined reorder for t2v references — mirrors i2v. t2v has
@@ -2713,6 +2600,15 @@ export function buildPayload(
 
       // Mention resolution + ref-image merging (mirrors i2v case). Extras /
       // suppressed-canonicals stay opt-in via the same node-data fields.
+      // `{image:N}` token resolution — see i2v note. Gate on `resolvedProvider`
+      // (the mode-resolved id) to mirror the FE, which re-types generate-video to
+      // i2v/t2v and reads the re-typed `data.provider` (= resolvedProvider for
+      // split-id models). Counts are MODALITY-based (shared
+      // `referenceModalityForHandle`), so the `imageReferences` /
+      // `videoReferences` / `audioReferences` handles real generate-video nodes
+      // wire are counted alongside the legacy `references` ids — fixing the prior
+      // gap where `{image:N}` resolved only for the legacy handle.
+      const gvSupportsRefs = !!resolvedProvider && hasFeature(resolvedProvider, "reference-image")
       const mentionResult = resolveVideoPromptMentions(
         composedPrompt,
         node.id,
@@ -2721,6 +2617,9 @@ export function buildPayload(
         {
           referenceOrder: readStringArray(data.referenceImageOrder),
           suppressedCanonicalCharacterIds: readStringArray(data.suppressedCanonicalCharacterIds),
+          imageRefCount: gvSupportsRefs ? countRefModalityEdges(node.id, "image", buildCtx) : 0,
+          videoRefCount: gvSupportsRefs ? countRefModalityEdges(node.id, "video", buildCtx) : 0,
+          audioRefCount: gvSupportsRefs ? countRefModalityEdges(node.id, "audio", buildCtx) : 0,
         },
       )
       composedPrompt = mentionResult.prompt
@@ -2929,9 +2828,16 @@ export function buildPayload(
         if (identityClause) p = p ? `${p} ${identityClause}` : identityClause
         return p
       })()
+      // `{image:N}` token resolution — see i2v note. Mirrors the FE v2v run
+      // (execute-node.ts: `v2vProviderSupportsRefs` gate). Wan 2.6 et al. are
+      // non-ref → 0 → bare-label (the FE strips for the same case).
+      const v2vSupportsRefs = !!v2vProvider && hasFeature(v2vProvider, "reference-image")
       const v2vMention = resolveVideoPromptMentions(v2vPrompt, node.id, buildCtx, readExtraRefs(data), {
         referenceOrder: readStringArray(data.referenceOrder),
         suppressedCanonicalCharacterIds: readStringArray(data.suppressedCanonicalCharacterIds),
+        imageRefCount: v2vSupportsRefs ? countRefModalityEdges(node.id, "image", buildCtx) : 0,
+        videoRefCount: v2vSupportsRefs ? countRefModalityEdges(node.id, "video", buildCtx) : 0,
+        audioRefCount: v2vSupportsRefs ? countRefModalityEdges(node.id, "audio", buildCtx) : 0,
       })
       v2vPrompt = v2vMention.prompt
       const v2vUpstreamRef = (typeof resolvedInputs.referenceImageUrls === "string"
@@ -2972,9 +2878,15 @@ export function buildPayload(
         if (identityClause) p = p ? `${p} ${identityClause}` : identityClause
         return p
       })()
+      // SwitchX has no ref-capable token mode — the FE run ALWAYS strips
+      // `{image:N}` here (execute-node.ts: unconditional `stripVideoImageTokens`).
+      // Mirror that with a flat 0 (always bare-label), independent of provider.
       const sxMention = resolveVideoPromptMentions(sxPrompt, node.id, buildCtx, readExtraRefs(data), {
         referenceOrder: readStringArray(data.referenceOrder),
         suppressedCanonicalCharacterIds: readStringArray(data.suppressedCanonicalCharacterIds),
+        imageRefCount: 0,
+        videoRefCount: 0,
+        audioRefCount: 0,
       })
       const sxUpstreamRef = (typeof resolvedInputs.referenceImageUrls === "string"
         ? resolvedInputs.referenceImageUrls

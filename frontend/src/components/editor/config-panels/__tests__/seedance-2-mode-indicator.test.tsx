@@ -11,6 +11,6 @@ describe("seedance-2 mode indicator mapping", () => {
   it("frame + ref image → reference + directive shown to the user", () => {
     const r = resolveSeedance2Inputs({ firstFrameUrl: "f", refImageUrls: ["r"] })
     expect(r.mode).toBe("reference")
-    expect(r.promptSuffix).toContain("Use Image 2 as the opening")
+    expect(r.promptSuffix).toContain("Use @image_2 as the opening")
   })
 })

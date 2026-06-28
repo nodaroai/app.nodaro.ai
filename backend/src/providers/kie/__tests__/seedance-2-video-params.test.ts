@@ -15,7 +15,7 @@ describe("applySeedance2Params", () => {
     applySeedance2Params(input, { referenceImageUrls: ["https://a/r.png"] } as any)
     expect(input.first_frame_url).toBeUndefined()
     expect(input.reference_image_urls).toEqual(["https://a/r.png", "https://a/f.png"])
-    expect(input.prompt).toBe("a cat\n\nUse Image 2 as the opening (first) frame of the video.")
+    expect(input.prompt).toBe("a cat\n\nUse @image_2 as the opening (first) frame of the video.")
   })
 
   it("reference video present → no throw, first/last frame moved into references", () => {

@@ -79,6 +79,18 @@ describe("stripVideoImageTokens", () => {
     expect(stripVideoImageTokens(undefined)).toBeUndefined()
     expect(stripVideoImageTokens("{image:1}")).toBeUndefined()
   })
+
+  // I2 parity: the FE switchx run-path strips-only (no core pass), so it must
+  // collapse {video:N}/{audio:N} to bare label exactly as the BE switchx case
+  // (count 0) does — otherwise a hand-typed {video:1:clip} ships raw to the
+  // provider (FE-run vs BE-orchestrator divergence).
+  it("strips {video:N}/{audio:N} tokens too (keeps the label, drops curly syntax)", () => {
+    expect(stripVideoImageTokens("a {video:1:clip} b {audio:2}")).toBe("a clip b")
+  })
+
+  it("keeps a multi-word {audio:N:label} label (space allowed, matching the core charset)", () => {
+    expect(stripVideoImageTokens("play {audio:2:my song} now")).toBe("play my song now")
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -236,6 +248,64 @@ describe("assembleVideoPrompt", () => {
       refMap: EMPTY_REFMAP,
     })
     expect(out).toBe("raise the sword")
+  })
+
+  // ── Task 3.2: ref-capable providers RESOLVE {image:N} to @image_N bindings ──
+  /** A plain upstream image source wired to the consumer's `references` handle. */
+  function refImageSource(id: string): WorkflowNode {
+    return { id, type: "upload-image", position: { x: 0, y: 0 }, data: {} } as unknown as WorkflowNode
+  }
+  /** ONE `references`-handle edge from `src` → the consumer node v1. */
+  function refEdge(src: string): WorkflowEdge {
+    return { id: `re_${src}`, source: src, target: "v1", targetHandle: "references" } as WorkflowEdge
+  }
+
+  it("(c'') i2v with a ref-capable provider RESOLVES {image:1} into an @image_1 binding (NOT stripped)", () => {
+    // seedance-2 declares features:["...","reference-image"] → token is bound, not stripped.
+    const node = videoNode("image-to-video", { prompt: "circle {image:1:object}", provider: "seedance-2" })
+    const nodes = [refImageSource("img1"), node]
+    const out = assembleVideoPrompt("image-to-video", { node, nodes, edges: [refEdge("img1")], refMap: EMPTY_REFMAP })
+    expect(out).toContain("circle the object from @image_1")
+  })
+
+  it("(c''') i2v with a NON-ref-capable provider still STRIPS {image:1} to the bare label", () => {
+    // minimax has no `reference-image` feature → legacy strip path (regression guard).
+    const node = videoNode("image-to-video", { prompt: "circle {image:1:object}", provider: "minimax" })
+    const nodes = [refImageSource("img1"), node]
+    const out = assembleVideoPrompt("image-to-video", { node, nodes, edges: [refEdge("img1")], refMap: EMPTY_REFMAP })
+    expect(out).toBe("circle object")
+  })
+
+  it("(c'''') i2v ref-capable: an OUT-OF-RANGE {image:5} drops to its bare label (only 1 ref wired)", () => {
+    const node = videoNode("image-to-video", { prompt: "{image:5:ghost}", provider: "seedance-2" })
+    const nodes = [refImageSource("img1"), node]
+    const out = assembleVideoPrompt("image-to-video", { node, nodes, edges: [refEdge("img1")], refMap: EMPTY_REFMAP })
+    expect(out).toBe("ghost")
+  })
+
+  // ── Task 4.2 headline regression: the COUNT must follow MODALITY, not a single
+  // handle string. Real generate-video nodes wire image refs on the canonical
+  // `imageReferences` handle (generate-video-node.tsx:178) — the preview re-types
+  // generate-video to i2v/t2v before dispatching here, so an i2v node fed by an
+  // `imageReferences` edge IS the generate-video preview path. Before the fix the
+  // count looked only at `references`, so `{image:1}` saw 0 in-range refs and
+  // dropped to the bare label even though a ref was wired (RED). The shared
+  // modality count now covers the alias (GREEN). ──
+  /** ONE edge on the canonical `imageReferences` handle (generate-video wiring). */
+  function imageReferencesEdge(src: string): WorkflowEdge {
+    return { id: `ire_${src}`, source: src, target: "v1", targetHandle: "imageReferences" } as WorkflowEdge
+  }
+
+  it("(c''''') i2v ref-capable: RESOLVES {image:1} when the ref edge is on the canonical `imageReferences` handle (generate-video parity)", () => {
+    const node = videoNode("image-to-video", { prompt: "circle {image:1:object}", provider: "seedance-2" })
+    const nodes = [refImageSource("img1"), node]
+    const out = assembleVideoPrompt("image-to-video", {
+      node,
+      nodes,
+      edges: [imageReferencesEdge("img1")],
+      refMap: EMPTY_REFMAP,
+    })
+    expect(out).toContain("circle the object from @image_1")
   })
 
   it("(d) motion-transfer returns the bare resolved prompt (NO folding)", () => {

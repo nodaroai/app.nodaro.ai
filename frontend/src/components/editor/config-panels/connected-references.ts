@@ -9,6 +9,7 @@ import {
   expandExtraRefsToConnectedReferences,
   characterMentionableAssetArrays,
   resolveEffectiveSourceType,
+  FRAME_TARGET_HANDLES,
 } from "@nodaro/shared"
 import { entityActiveImageUrl } from "@/lib/entity-output-url"
 import type {
@@ -154,6 +155,14 @@ export function buildImageConnectedReferences(params: {
 
   // Wired upstream nodes (sources from @xyflow incoming edges).
   for (const s of sources) {
+    // Start/end KEYFRAMES are NOT `{image:N}` references — the backend appends
+    // them at the TAIL of reference_image_urls (resolveSeedance2Inputs), never
+    // numbered. Skip them so the inline/modal `{image:N}` numbering matches the
+    // config-panel builder (`toRefImageItems`, which excludes the same handles)
+    // AND the backend count (`countRefModalityEdges`). Shared SoT set so the two
+    // editor surfaces can't drift (the C1 bug). No-op for image nodes — they have
+    // no frame handles.
+    if (FRAME_TARGET_HANDLES.has(s.targetHandle ?? "")) continue
     const effectiveType = resolveEffectiveSourceType(s.type, s.sourceHandle)
     if (!(effectiveType in wiredSourceTypeMap)) continue
     const nd = s.nodeData ?? {}

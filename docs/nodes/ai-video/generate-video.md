@@ -85,11 +85,41 @@ Seedance 2 (`seedance-2` / `seedance-2-fast` / `seedance-2-mini`) accepts up to 
 **Seedance 2 unified inputs (frames + references together).** Seedance 2 no longer has a Frames-vs-References toggle (`data.seedance2InputMode` was removed) — first/last frames and references can all be connected at once, and the dispatch mode is derived from the wiring:
 
 - **With no references connected** (`startFrame` and/or `endFrame` only), the frames are used in exact **first/last-frame** mode (`first_frame_url` / `last_frame_url`).
-- **With any reference connected** (image / video / audio), the frames are passed as **prompt-directed reference images** — they join the reference set and are named `Image N` in the prompt so the model can refer to them, rather than being pinned as exact endpoints.
+- **With any reference connected** (image / video / audio), the frames are passed as **prompt-directed reference images** — they join the reference set and are bound in the prompt as `@image_N` (e.g. `Use @image_3 as the opening (first) frame of the video.`) so the model can refer to them, rather than being pinned as exact endpoints.
 
 The node shows an indicator of the active mode, and warns when a wired input would be dropped. Note `audio` (a post-merge soundtrack) is distinct from `audioReferences` (generation-conditioning audio): `audio` always applies as the final soundtrack, while `audioReferences` conditions generation (and triggers audio-driven lip-sync on Seedance 2).
 
 Reference arrays are forwarded to the backend for **every** provider in both dispatch modes; models that don't support them ignore them. (Earlier editor builds dropped reference images on the text-to-video path for all providers except Kling and Seedance 2.)
+
+#### Referencing wired assets in the prompt (`{image:N}` / `{video:N}` / `{audio:N}` tokens)
+
+On reference-capable providers (Seedance 2 etc.), you can point a phrase in the prompt at a specific wired reference so it actually drives the output, instead of being a loose description. Type a token where you want the binding — the editor offers them via the `@` autocomplete, or you can type them directly:
+
+| Token | Resolves to | Use |
+|---|---|---|
+| `{image:1:person}` | `the person from @image_1` | Bind a subject to reference image 1 |
+| `{image:2:jacket}` | `the jacket from @image_2` | Bind an attribute to reference image 2 |
+| `{image:1}` (no label) | `the subject in @image_1` | Bind without a noun |
+| `{video:1:clip}` | `the clip from @video_1` | Bind to reference **video** 1 |
+| `{audio:1:voice}` | `the voice from @audio_1` | Bind to reference **audio** 1 |
+
+**Worked example** — two reference images wired to `imageReferences`, prompt:
+
+```
+circle {image:1:person} wearing {image:2:jacket} for a 360 spin
+```
+
+resolves in the final prompt to:
+
+```
+circle the person from @image_1 wearing the jacket from @image_2 for a 360 spin
+```
+
+**Numbering rules:**
+- **Reference-only.** `{image:N}` numbers the assets on the **image-reference** handle only (`imageReferences`), in attachment order. `{video:N}` and `{audio:N}` number their own handles independently (a node can have `{image:1}`, `{video:1}`, and `{audio:1}` at once).
+- **Start/end frames are NOT user-numbered.** They are auto-bound at the **tail** of the image set. With two reference images wired, a start frame becomes `@image_3` and the model is told `Use @image_3 as the opening (first) frame of the video.` — you never write a `{image:3}` token for a frame.
+- **Out-of-range tokens fall back to the bare label.** `{image:5:ghost}` on a node with only two references resolves to `ghost` (no dangling binding).
+- **Providers without reference support** ignore the tokens — they are stripped to their bare labels, so the prompt still reads naturally.
 
 ### LTX 2.3 — auto-dispatch by wired inputs
 

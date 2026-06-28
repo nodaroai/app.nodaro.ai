@@ -1,4 +1,5 @@
 import { SEEDANCE_2_REF_LIMITS } from "./model-constants.js"
+import { REF_BINDING } from "./video-reference-resolver.js"
 
 export type Seedance2Mode = "first-frame" | "first-last-frame" | "reference"
 
@@ -76,11 +77,14 @@ export function resolveSeedance2Inputs(args: Seedance2InputsArgs): Seedance2Inpu
 
   let promptSuffix = ""
   if (firstOrdinal > 0 && lastOrdinal > 0) {
-    promptSuffix = `Use Image ${firstOrdinal} as the opening (first) frame and Image ${lastOrdinal} as the closing (last) frame of the video.`
+    // Combined sentence — REF_BINDING.frame() emits a single-frame sentence, so use
+    // REF_BINDING.ordinal() for each ordinal inline to keep the combined wording AND
+    // route both ordinals through the single swap-point.
+    promptSuffix = `Use ${REF_BINDING.ordinal(firstOrdinal)} as the opening (first) frame and ${REF_BINDING.ordinal(lastOrdinal)} as the closing (last) frame of the video.`
   } else if (firstOrdinal > 0) {
-    promptSuffix = `Use Image ${firstOrdinal} as the opening (first) frame of the video.`
+    promptSuffix = REF_BINDING.frame(firstOrdinal, "opening")
   } else if (lastOrdinal > 0) {
-    promptSuffix = `Use Image ${lastOrdinal} as the closing (last) frame of the video.`
+    promptSuffix = REF_BINDING.frame(lastOrdinal, "closing")
   }
 
   return {

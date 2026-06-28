@@ -1,4 +1,10 @@
-import { NODE_REF_PATTERN, resolveNodeRefs, parseNodeRef } from "../node-refs.js"
+import {
+  NODE_REF_PATTERN,
+  resolveNodeRefs,
+  parseNodeRef,
+  REFERENCE_HANDLE_MAP,
+  referenceModalityForHandle,
+} from "../node-refs.js"
 
 // ---------------------------------------------------------------------------
 // NODE_REF_PATTERN
@@ -131,5 +137,51 @@ describe("resolveNodeRefs with fallback", () => {
   })
   it("leaves a reserved var with a fallback untouched", () => {
     expect(resolveNodeRefs("{name || x}", new Map())).toBe("{name || x}")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// REFERENCE_HANDLE_MAP / referenceModalityForHandle
+//
+// SINGLE SOURCE OF TRUTH for reference-handle aliases. Both the legacy single-
+// name ids and the canonical Generate Video ids must resolve to the same
+// modality so positional `{image:N}` / `{video:N}` / `{audio:N}` token counts
+// cover every handle the editor can produce.
+// ---------------------------------------------------------------------------
+describe("REFERENCE_HANDLE_MAP", () => {
+  it("maps both legacy and canonical handle families to the same resolved-input keys", () => {
+    expect(REFERENCE_HANDLE_MAP).toEqual({
+      references: "referenceImageUrls",
+      "reference-videos": "referenceVideoUrls",
+      "reference-audio": "referenceAudioUrls",
+      imageReferences: "referenceImageUrls",
+      videoReferences: "referenceVideoUrls",
+      audioReferences: "referenceAudioUrls",
+    })
+  })
+})
+
+describe("referenceModalityForHandle", () => {
+  it("resolves all 6 reference handles to their modality (legacy + canonical aliases)", () => {
+    // Legacy / i2v single-name ids
+    expect(referenceModalityForHandle("references")).toBe("image")
+    expect(referenceModalityForHandle("reference-videos")).toBe("video")
+    expect(referenceModalityForHandle("reference-audio")).toBe("audio")
+    // Canonical Generate Video ids — the alias that was silently uncounted
+    expect(referenceModalityForHandle("imageReferences")).toBe("image")
+    expect(referenceModalityForHandle("videoReferences")).toBe("video")
+    expect(referenceModalityForHandle("audioReferences")).toBe("audio")
+  })
+
+  it("returns null for a non-reference handle", () => {
+    expect(referenceModalityForHandle("prompt")).toBeNull()
+    expect(referenceModalityForHandle("startFrame")).toBeNull()
+    expect(referenceModalityForHandle("audio")).toBeNull() // single-image-frame audio handle, NOT a ref array
+    expect(referenceModalityForHandle("")).toBeNull()
+  })
+
+  it("returns null for null / undefined", () => {
+    expect(referenceModalityForHandle(null)).toBeNull()
+    expect(referenceModalityForHandle(undefined)).toBeNull()
   })
 })

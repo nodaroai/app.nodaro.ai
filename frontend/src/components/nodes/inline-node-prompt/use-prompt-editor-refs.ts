@@ -8,6 +8,10 @@ import {
   type ConnectedRefsData,
 } from "@/components/editor/config-panels/connected-references"
 import { getConnectedSources } from "@/components/editor/config-panels/helpers"
+import {
+  buildVideoRefVideoAutocomplete,
+  buildVideoRefAudioAutocomplete,
+} from "@/components/editor/config-panels/video-audio-ref-items"
 import { getSnippetMedia } from "@/lib/prompt-fields"
 import { useSnippetPool } from "@/hooks/queries/use-prompt-snippets-queries"
 import type { RefImageItem } from "@/components/editor/config-panels/tag-textarea"
@@ -94,7 +98,16 @@ export function usePromptEditorRefs(nodeId: string): PromptEditorRefs {
       nodes: state.nodes,
       attachedChars,
     })
-    const referenceImages = connectedReferencesToRefImages(connected)
+    // Image refs first, then the independently-numbered reference-VIDEO and
+    // reference-AUDIO items. Self-gating: the builders key off
+    // `referenceModalityForHandle(targetHandle)`, so they yield [] for every
+    // node that has no video/audio reference handle wired (i.e. everything but
+    // a Generate Video node fed those edges) — appending them is a no-op there.
+    const referenceImages = [
+      ...connectedReferencesToRefImages(connected),
+      ...buildVideoRefVideoAutocomplete(sources),
+      ...buildVideoRefAudioAutocomplete(sources),
+    ]
     const nodeRefs = getUpstreamNodes(nodeId, state.nodes, state.edges)
     const refMap = buildNodeRefMap(nodeId, state.nodes, state.edges)
     return { referenceImages, nodeRefs, refMap, promptSnippets }

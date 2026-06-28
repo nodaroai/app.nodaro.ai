@@ -36,7 +36,7 @@ import type {
   SwitchXData,
 } from "@/types/nodes"
 import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, VIDEO_GEN_MODELS, MOTION_TRANSFER_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, VIDEO_DURATION_OPTIONS, VIDEO_FPS_OPTIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, EXTEND_VIDEO_MODELS, getVideoResolutionOptions, getAspectRatiosForVideoModel, getVideoModelCapabilitiesTooltip } from "./model-options"
-import { isSeedance2Provider, defaultVideoAspectRatio, resolveSeedance2Inputs, MODEL_CATALOG, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, buildVideoCreditModelIdentifier, characterMentionSlug, characterMentionableAssetArrays, DEFAULT_LABEL_BY_SOURCE, locationMentionSlug, resolveEffectiveSourceType } from "@nodaro/shared"
+import { isSeedance2Provider, defaultVideoAspectRatio, resolveSeedance2Inputs, MODEL_CATALOG, SEEDANCE_2_REF_LIMITS, VIDEO_PROMPT_MAX, getMaxVideoPromptChars, getMaxNegativePromptChars, buildVideoCreditModelIdentifier, characterMentionSlug, characterMentionableAssetArrays, DEFAULT_LABEL_BY_SOURCE, locationMentionSlug, resolveEffectiveSourceType, FRAME_TARGET_HANDLES } from "@nodaro/shared"
 import { entityActiveImageUrl } from "@/lib/entity-output-url"
 import { PromptLengthCounter } from "./prompt-length-counter"
 import type { ReferenceSource } from "@nodaro/shared"
@@ -45,6 +45,14 @@ import { ModelDescriptionHint } from "./model-description-hint"
 import { MappableField } from "./mappable-field"
 import { TagTextarea } from "./tag-textarea"
 import type { RefImageItem } from "./tag-textarea"
+// `{video:N}` / `{audio:N}` autocomplete builders live in a neutral module to
+// avoid a circular import (this file imports `usePromptEditorRefs`, which in
+// turn consumes these builders). Imported here so the config-panel
+// `referenceImages` can append them (full image+video+audio parity with the
+// inline/modal surface), and re-exported so callers + the Task 3.1 test keep
+// importing them from `../video-configs`.
+import { buildVideoRefVideoAutocomplete, buildVideoRefAudioAutocomplete } from "./video-audio-ref-items"
+export { buildVideoRefVideoAutocomplete, buildVideoRefAudioAutocomplete }
 import { PromptEditor } from "./prompt-editor"
 import { usePromptEditorRefs } from "@/components/nodes/inline-node-prompt/use-prompt-editor-refs"
 // Lazy-loaded so the heavy Kling3 studio panel ships in its OWN chunk instead
@@ -58,6 +66,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { ConnectedMediaList, getSourceThumbnail } from "./connected-media-list"
 import { InjectedReferenceList } from "./injected-reference-list"
 import { SeedanceReferenceTip } from "./seedance-reference-tip"
+import { FramesAndReferencesTip } from "./frames-references-tip"
 import { removeMentionToken, makeRemoveWiredSource, appendSuppressedSlug } from "./injected-reference-helpers"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { PromptFieldFinalView, PromptFieldModeToggle } from "./prompt-field-final-view"
@@ -118,6 +127,17 @@ interface VideoRefAutocompleteEntry {
   readonly url: string
   readonly defaultName: string
   readonly source: ReferenceSource
+  /**
+   * The CONSUMER node's target handle this upstream is wired into
+   * (`"references"` / `"imageReferences"` for image refs, `"startFrame"` /
+   * `"endFrame"` for frames). Carried so the `{image:N}` token numbering in
+   * `toRefImageItems` can exclude frames — editor token N must equal backend
+   * `reference_image_urls` slot N (frames are appended at the tail by
+   * `resolveSeedance2Inputs`, never numbered). The connected-references DISPLAY
+   * path (`toConnectedReferences`) ignores this field, so its output is
+   * unchanged.
+   */
+  readonly targetHandle?: string
   readonly characterSlug?: string
   readonly variantSlug?: string
   readonly variantDisplayName?: string
@@ -137,7 +157,7 @@ interface VideoRefAutocompleteEntry {
   readonly loraTrainingStatus?: string | null
 }
 
-function buildVideoRefAutocomplete(
+export function buildVideoRefAutocomplete(
   sources: ReadonlyArray<SourceNodeInfo>,
 ): VideoRefAutocompleteEntry[] {
   const out: VideoRefAutocompleteEntry[] = []
@@ -168,6 +188,7 @@ function buildVideoRefAutocomplete(
             url: canonicalUrl,
             defaultName: charName,
             source: "wired-character",
+            targetHandle: s.targetHandle,
             characterSlug: slug,
             variantSlug: undefined,
             variantDisplayName: "canonical",
@@ -188,6 +209,7 @@ function buildVideoRefAutocomplete(
               url: item.url,
               defaultName: `${charName} / ${item.name}`,
               source: "wired-character",
+              targetHandle: s.targetHandle,
               characterSlug: slug,
               variantSlug,
               variantDisplayName: item.name,
@@ -215,6 +237,7 @@ function buildVideoRefAutocomplete(
           url: sourceUrl,
           defaultName: locName,
           source: "wired-location",
+          targetHandle: s.targetHandle,
           locationSlug: locSlug,
           locationVariantDisplayName: "canonical",
         })
@@ -232,6 +255,7 @@ function buildVideoRefAutocomplete(
               url: variantUrl,
               defaultName: `${locName} / ${variantName}`,
               source: "wired-location",
+              targetHandle: s.targetHandle,
               locationSlug: locSlug,
               locationVariantBucket: bucket,
               locationVariantSlug: variantSlug,
@@ -258,6 +282,7 @@ function buildVideoRefAutocomplete(
       url,
       defaultName: s.label || s.type,
       source: refSource,
+      targetHandle: s.targetHandle,
     })
   }
   return out
@@ -285,8 +310,15 @@ function toConnectedReferences(entries: ReadonlyArray<VideoRefAutocompleteEntry>
   }))
 }
 
-function toRefImageItems(entries: ReadonlyArray<VideoRefAutocompleteEntry>): RefImageItem[] {
-  return entries.map((ref, i) => ({
+// Frame target handles (start/end keyframes) are excluded from `{image:N}`
+// numbering — see the shared `FRAME_TARGET_HANDLES` (single source of truth,
+// also consumed by the inline/modal builder in `connected-references.ts` so the
+// two surfaces can't drift). A wired start frame must NOT steal slot 1; the
+// backend appends frames at the TAIL of `reference_image_urls`.
+export function toRefImageItems(entries: ReadonlyArray<VideoRefAutocompleteEntry>): RefImageItem[] {
+  return entries
+    .filter((ref) => !FRAME_TARGET_HANDLES.has(ref.targetHandle ?? ""))
+    .map((ref, i) => ({
     url: ref.url,
     label: ref.defaultName,
     // Map `wired-location` → "location" so the autocomplete renders cyan
@@ -420,7 +452,16 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
   // Character @-mention autocomplete: wired-character upstreams expand into
   // canonical + per-variant entries (mirrors image-configs.tsx Task 6 + 8b3b3c13).
   const refImagesForAutocomplete = useMemo<RefImageItem[]>(
-    () => toRefImageItems(buildVideoRefAutocomplete(sources)),
+    () => [
+      // Image refs (frame-excluded) first, then the independently-numbered
+      // reference-VIDEO + reference-AUDIO items — full {image:N}/{video:N}/
+      // {audio:N} parity with the inline/modal surface (usePromptEditorRefs).
+      // The video/audio builders self-gate on referenceModalityForHandle, so
+      // they yield [] for panels with no such handle wired (no-op there).
+      ...toRefImageItems(buildVideoRefAutocomplete(sources)),
+      ...buildVideoRefVideoAutocomplete(sources),
+      ...buildVideoRefAudioAutocomplete(sources),
+    ],
     [sources],
   )
 
@@ -606,6 +647,10 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
         label="Injected references"
       />
       <SeedanceReferenceTip provider={data.provider} />
+      <FramesAndReferencesTip
+        hasFrame={connectedImages.some((img) => img.targetHandle === "startFrame" || img.targetHandle === "endFrame")}
+        hasReference={connectedRefImages.length > 0}
+      />
 
       <ExtraRefsSection
         extraRefs={data.extraRefs}
@@ -1200,7 +1245,16 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
   // Character @-mention autocomplete: wired-character upstreams expand into
   // canonical + per-variant entries (mirrors image-configs.tsx Task 6 + 8b3b3c13).
   const refImagesForAutocomplete = useMemo<RefImageItem[]>(
-    () => toRefImageItems(buildVideoRefAutocomplete(sources)),
+    () => [
+      // Image refs (frame-excluded) first, then the independently-numbered
+      // reference-VIDEO + reference-AUDIO items — full {image:N}/{video:N}/
+      // {audio:N} parity with the inline/modal surface (usePromptEditorRefs).
+      // The video/audio builders self-gate on referenceModalityForHandle, so
+      // they yield [] for panels with no such handle wired (no-op there).
+      ...toRefImageItems(buildVideoRefAutocomplete(sources)),
+      ...buildVideoRefVideoAutocomplete(sources),
+      ...buildVideoRefAudioAutocomplete(sources),
+    ],
     [sources],
   )
 
@@ -1490,7 +1544,16 @@ function SwitchXConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField,
     videoProvider: "beeble",
   })
   const refImagesForAutocomplete = useMemo<RefImageItem[]>(
-    () => toRefImageItems(buildVideoRefAutocomplete(sources)),
+    () => [
+      // Image refs (frame-excluded) first, then the independently-numbered
+      // reference-VIDEO + reference-AUDIO items — full {image:N}/{video:N}/
+      // {audio:N} parity with the inline/modal surface (usePromptEditorRefs).
+      // The video/audio builders self-gate on referenceModalityForHandle, so
+      // they yield [] for panels with no such handle wired (no-op there).
+      ...toRefImageItems(buildVideoRefAutocomplete(sources)),
+      ...buildVideoRefVideoAutocomplete(sources),
+      ...buildVideoRefAudioAutocomplete(sources),
+    ],
     [sources],
   )
 
@@ -1959,7 +2022,16 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
   // Character @-mention autocomplete: wired-character upstreams expand into
   // canonical + per-variant entries (mirrors image-configs.tsx Task 6 + 8b3b3c13).
   const refImagesForAutocomplete = useMemo<RefImageItem[]>(
-    () => toRefImageItems(buildVideoRefAutocomplete(sources)),
+    () => [
+      // Image refs (frame-excluded) first, then the independently-numbered
+      // reference-VIDEO + reference-AUDIO items — full {image:N}/{video:N}/
+      // {audio:N} parity with the inline/modal surface (usePromptEditorRefs).
+      // The video/audio builders self-gate on referenceModalityForHandle, so
+      // they yield [] for panels with no such handle wired (no-op there).
+      ...toRefImageItems(buildVideoRefAutocomplete(sources)),
+      ...buildVideoRefVideoAutocomplete(sources),
+      ...buildVideoRefAudioAutocomplete(sources),
+    ],
     [sources],
   )
 
@@ -2704,6 +2776,10 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
         label="Injected references"
       />
       <SeedanceReferenceTip provider={data.provider} />
+      <FramesAndReferencesTip
+        hasFrame={connectedImages.some((img) => img.targetHandle === "startFrame" || img.targetHandle === "endFrame")}
+        hasReference={connectedRefImages.length > 0}
+      />
 
       <ExtraRefsSection
         extraRefs={data.extraRefs}
@@ -3603,7 +3679,16 @@ export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, on
   // Reference images for the PromptEditor `@`-autocomplete (wired character /
   // image producers), matching the i2v / t2v sibling panels.
   const refImagesForAutocomplete = useMemo<RefImageItem[]>(
-    () => toRefImageItems(buildVideoRefAutocomplete(sources)),
+    () => [
+      // Image refs (frame-excluded) first, then the independently-numbered
+      // reference-VIDEO + reference-AUDIO items — full {image:N}/{video:N}/
+      // {audio:N} parity with the inline/modal surface (usePromptEditorRefs).
+      // The video/audio builders self-gate on referenceModalityForHandle, so
+      // they yield [] for panels with no such handle wired (no-op there).
+      ...toRefImageItems(buildVideoRefAutocomplete(sources)),
+      ...buildVideoRefVideoAutocomplete(sources),
+      ...buildVideoRefAudioAutocomplete(sources),
+    ],
     [sources],
   )
 

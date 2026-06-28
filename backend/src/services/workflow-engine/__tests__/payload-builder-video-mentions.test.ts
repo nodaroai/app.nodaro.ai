@@ -534,7 +534,7 @@ describe("payload-builder video paths: @-mention resolution", () => {
 describe("payload-builder video paths: extra reference images", () => {
   const jobId = "job-extras"
 
-  it("appends manual extra refs to referenceImageUrls AND emits 'Image N (reference): …' directive (image-to-video)", () => {
+  it("appends manual extra refs to referenceImageUrls AND emits '@image_N (reference): …' directive (image-to-video)", () => {
     const i2v = node("i2v-1", "image-to-video", {
       prompt: "a moody portrait, slow tilt up",
       provider: "kling",
@@ -556,7 +556,7 @@ describe("payload-builder video paths: extra reference images", () => {
     expect(refs).toContain("https://r2/look-ref.png")
     // Prompt has the dedicated extra-ref bullet.
     const prompt = result.payload.prompt as string
-    expect(prompt).toContain("Image 1 (reference): warm cinematic color palette.")
+    expect(prompt).toContain("@image_1 (reference): warm cinematic color palette.")
   })
 
   it("pairs character-sourced extras back to canonically-attached character (same subject as Image A)", () => {
@@ -589,7 +589,7 @@ describe("payload-builder video paths: extra reference images", () => {
     // Pair-back directive.
     const prompt = result.payload.prompt as string
     expect(prompt).toContain(
-      "Image 2 is the same subject as Image 1, full body, standing, facing right.",
+      "@image_2 is the same subject as @image_1, full body, standing, facing right.",
     )
   })
 
@@ -617,7 +617,7 @@ describe("payload-builder video paths: extra reference images", () => {
     expect(refs).toContain("https://r2/danny.png")
     const prompt = result.payload.prompt as string
     // First sight emits a canonical-style bullet with the description.
-    expect(prompt).toContain("Image 1 (danny) — hands in pockets, looking right")
+    expect(prompt).toContain("@image_1 (danny) — hands in pockets, looking right")
   })
 
   it("propagates extra refs to text-to-video referenceImageUrls", () => {
@@ -642,6 +642,146 @@ describe("payload-builder video paths: extra reference images", () => {
     const prompt = result.payload.prompt as string
     // Numeric ordering: mention takes position 1; extra takes position 2.
     expect(prompt).toContain("Image 1 (Kira)")
-    expect(prompt).toContain("Image 2 (reference): 1970s film look.")
+    expect(prompt).toContain("@image_2 (reference): 1970s film look.")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Video payload-builder: {image:N} reference-token resolution (Task 4.1).
+//
+// FE↔BE parity contract (mirrors execute-node.ts run + video-prompt-assembly.ts
+// preview): the editor numbers `{image:N}` body tokens against the COUNT of
+// reference-handle edges wired into the node (`targetHandle === "references"`,
+// edge-count NOT resolved-URL count). For a ref-capable provider (its model
+// declares the `reference-image` feature) an IN-RANGE token resolves to
+// `the {label} from @image_N`; a non-ref provider OR an out-of-range index
+// drops to the bare label. The orchestrator must NEVER ship the raw
+// `{image:N}` token to the provider — that was the "orchestrator ships raw
+// tokens" bug this task closes. Both layers delegate to the SAME shared
+// `resolveVideoReferenceCore`, gated by the SAME `hasFeature(provider,
+// "reference-image")`, so parity is structural (no cross-layer snapshot).
+// ---------------------------------------------------------------------------
+
+describe("payload-builder video paths: {image:N} reference tokens (Task 4.1)", () => {
+  const jobId = "job-imgtok"
+
+  // A plain image producer wired into the consumer's `references` handle. Only
+  // the edge's targetHandle drives the token COUNT — the source needn't resolve
+  // to a URL (edge-count parity with the FE preview, which has no URL layer).
+  function refImage(id: string): SimpleNode {
+    return node(id, "generate-image", { generatedImageUrl: "https://r2/ref.png" })
+  }
+
+  it("image-to-video: ref-capable provider resolves {image:1:object} → 'the object from @image_1'", () => {
+    const i2v = node("i2v-1", "image-to-video", {
+      prompt: "circle {image:1:object}",
+      provider: "seedance-2", // declares `reference-image` in MODEL_CATALOG
+    })
+    const nodes = [refImage("img-1"), i2v]
+    const edges = [edge("img-1", "i2v-1", "image", "references")]
+    const inputs: ResolvedInputs = {}
+
+    const result = buildPayload(i2v, jobId, inputs, undefined, { nodes, edges, nodeStates: {} })
+
+    const prompt = result.payload.prompt as string
+    expect(prompt).toContain("circle the object from @image_1")
+    // Never ship the raw token.
+    expect(prompt).not.toContain("{image:1")
+  })
+
+  it("image-to-video: non-ref provider drops {image:1:object} to the bare label (no @image_1, no raw token)", () => {
+    const i2v = node("i2v-1", "image-to-video", {
+      prompt: "circle {image:1:object}",
+      provider: "kling", // no `reference-image` feature → tokens bare-label
+    })
+    const nodes = [refImage("img-1"), i2v]
+    const edges = [edge("img-1", "i2v-1", "image", "references")]
+    const inputs: ResolvedInputs = {}
+
+    const result = buildPayload(i2v, jobId, inputs, undefined, { nodes, edges, nodeStates: {} })
+
+    const prompt = result.payload.prompt as string
+    expect(prompt).toContain("circle object")
+    expect(prompt).not.toContain("@image_1")
+    expect(prompt).not.toContain("{image:1")
+  })
+
+  it("image-to-video: out-of-range index on a ref-capable provider drops to the bare label", () => {
+    const i2v = node("i2v-1", "image-to-video", {
+      // Only ONE references edge wired → index 2 is out of range.
+      prompt: "circle {image:2:object}",
+      provider: "seedance-2",
+    })
+    const nodes = [refImage("img-1"), i2v]
+    const edges = [edge("img-1", "i2v-1", "image", "references")]
+    const inputs: ResolvedInputs = {}
+
+    const result = buildPayload(i2v, jobId, inputs, undefined, { nodes, edges, nodeStates: {} })
+
+    const prompt = result.payload.prompt as string
+    expect(prompt).toContain("circle object")
+    expect(prompt).not.toContain("@image_2")
+    expect(prompt).not.toContain("{image:2")
+  })
+
+  it("text-to-video: ref-capable provider resolves {image:1:object} → '@image_1'", () => {
+    const t2v = node("t2v-1", "text-to-video", {
+      prompt: "circle {image:1:object}",
+      provider: "seedance-2",
+    })
+    const nodes = [refImage("img-1"), t2v]
+    const edges = [edge("img-1", "t2v-1", "image", "references")]
+    const inputs: ResolvedInputs = {}
+
+    const result = buildPayload(t2v, jobId, inputs, undefined, { nodes, edges, nodeStates: {} })
+
+    const prompt = result.payload.prompt as string
+    expect(prompt).toContain("the object from @image_1")
+    expect(prompt).not.toContain("{image:1")
+  })
+
+  it("generate-video: ref-capable provider threads the LEGACY references-handle count into {image:N} resolution", () => {
+    // Legacy-alias regression guard: the modality count (countRefModalityEdges →
+    // shared referenceModalityForHandle) covers the legacy `references` id too, so
+    // un-migrated workflows wiring image refs on `references` keep resolving.
+    // (no start frame → dispatches text-to-video).
+    const gv = node("gv-1", "generate-video", {
+      prompt: "circle {image:1:object}",
+      provider: "seedance-2",
+    })
+    const nodes = [refImage("img-1"), gv]
+    const edges = [edge("img-1", "gv-1", "image", "references")]
+    const inputs: ResolvedInputs = {}
+
+    const result = buildPayload(gv, jobId, inputs, undefined, { nodes, edges, nodeStates: {} })
+
+    expect(result.jobName).toBe("text-to-video")
+    const prompt = result.payload.prompt as string
+    expect(prompt).toContain("the object from @image_1")
+    expect(prompt).not.toContain("{image:1")
+  })
+
+  it("generate-video: resolves {image:1:object} when the ref edge is on the CANONICAL `imageReferences` handle (Task 4.2 headline)", () => {
+    // Real generate-video nodes wire image refs on `imageReferences`
+    // (generate-video-node.tsx:178), NOT the legacy `references` handle. Before
+    // the fix the COUNT looked only at `references`, so {image:N} saw 0 in-range
+    // refs and dropped to the bare label on EVERY real generate-video node — the
+    // feature was inert. The shared modality count now treats `imageReferences`
+    // as an image ref, so {image:1} binds to @image_1 (no start frame →
+    // text-to-video dispatch).
+    const gv = node("gv-1", "generate-video", {
+      prompt: "circle {image:1:object}",
+      provider: "seedance-2",
+    })
+    const nodes = [refImage("img-1"), gv]
+    const edges = [edge("img-1", "gv-1", "image", "imageReferences")]
+    const inputs: ResolvedInputs = {}
+
+    const result = buildPayload(gv, jobId, inputs, undefined, { nodes, edges, nodeStates: {} })
+
+    expect(result.jobName).toBe("text-to-video")
+    const prompt = result.payload.prompt as string
+    expect(prompt).toContain("the object from @image_1")
+    expect(prompt).not.toContain("{image:1")
   })
 })

@@ -114,8 +114,11 @@ export interface RefImageItem {
    *   - "uploaded" / "wired": legacy `{image:N:label}` ref (TipTap `imageRef` node)
    *   - "character": violet `@<charSlug>:N(:variant)(:mode)` pill (TipTap `characterRef` node)
    *   - "location":  cyan   `@<locSlug>:N(:bucket/variant)(:mode)`  pill (TipTap `locationRef` node)
+   *   - "video" / "audio": `{video:N:label}` / `{audio:N:label}` ref (TipTap
+   *     `videoRef` / `audioRef` atomic node) — the reference-video / reference-audio
+   *     siblings of the image ref, numbered independently per modality.
    */
-  readonly source: "uploaded" | "wired" | "character" | "location"
+  readonly source: "uploaded" | "wired" | "character" | "location" | "video" | "audio"
   /** 1-based position matching {image:N} in the prompt. */
   readonly index: number
   /** Default role label inserted by the "@" trigger (e.g. "object", "person"). */
@@ -186,6 +189,35 @@ const REF_IMAGE_SOURCE_LABEL: Record<RefImageItem["source"], string> = {
   wired: "Wired",
   character: "Character",
   location: "Location",
+  video: "Video",
+  audio: "Audio",
+}
+
+/**
+ * Insertion token for a non-character/-location ref autocomplete row — the
+ * literal text the `@` typeahead drops into the textarea. One grammar shared by
+ * all three modalities, byte-parallel to the atomic pills the TipTap
+ * PromptEditor inserts and to the round-trip single source of truth
+ * (`serializeRefToken` in `prompt-editor/video-audio-ref-extension.ts` /
+ * `image-ref-extension.ts`'s `renderText`): labelled → `{kind:N:label}`,
+ * label-less → `{kind:N}`.
+ *
+ *  - image refs (uploaded / wired — and any location ref that falls through
+ *    here) always carry a role label (`DEFAULT_LABEL_BY_SOURCE`:
+ *    "object"/"person"/…), so they keep the legacy `{image:N:label}` form —
+ *    output is byte-identical to the previous inline template for every real
+ *    image ref.
+ *  - video / audio refs are label-less by default (`video-audio-ref-items.ts`),
+ *    so they land as a clean `{video:N}` / `{audio:N}` — the ONLY form the Task
+ *    5.1 `{(video|audio):N(:label)?}` round-trip scanners accept (a
+ *    trailing-colon empty label `{video:N:}` is NOT matched, so it must never be
+ *    emitted).
+ */
+function refInsertTag(r: RefImageItem): string {
+  const kind = r.source === "video" ? "video" : r.source === "audio" ? "audio" : "image"
+  return r.defaultLabel
+    ? `{${kind}:${r.index}:${r.defaultLabel}}`
+    : `{${kind}:${r.index}}`
 }
 
 function getAllSuggestions(): SuggestionItem[] {
@@ -404,7 +436,7 @@ export function TagTextarea(props: TagTextareaProps) {
         ) {
           nonCharMatches.push({
             kind: "leaf",
-            tag: `{image:${r.index}:${r.defaultLabel}}`,
+            tag: refInsertTag(r),
             label: `#${r.index} ${r.label}`,
             category: REF_IMAGE_SOURCE_LABEL[r.source],
             thumbnailUrl: r.url,
@@ -463,7 +495,7 @@ export function TagTextarea(props: TagTextareaProps) {
     }
     const nonCharacterLeaves: SuggestionItem[] = nonCharacterItems.map((r) => ({
       kind: "leaf",
-      tag: `{image:${r.index}:${r.defaultLabel}}`,
+      tag: refInsertTag(r),
       label: `#${r.index} ${r.label}`,
       category: REF_IMAGE_SOURCE_LABEL[r.source],
       thumbnailUrl: r.url,

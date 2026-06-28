@@ -25,7 +25,7 @@ describe("applySeedance2Params — Seedance 2 multimodal input routing", () => {
     // …the audio is still forwarded to KIE…
     expect(input.reference_audio_urls).toEqual(["https://cdn.example/voice.mp3"])
     // …and the frame is named in the prompt suffix.
-    expect(input.prompt).toBe("talk\n\nUse Image 1 as the opening (first) frame of the video.")
+    expect(input.prompt).toBe("talk\n\nUse @image_1 as the opening (first) frame of the video.")
   })
 
   it("reference VIDEO + frames → reference mode: frames moved into reference_image_urls, video forwarded (no throw)", () => {
@@ -150,14 +150,14 @@ describe("Seedance 2 combined case — frame-as-mention numbering stays consiste
     frameUrl: string | undefined,
   ) {
     // Every ordinal must be a valid 1-based index into the images the model sees.
-    const allOrdinals = Array.from(finalPrompt.matchAll(/Image (\d+)/g)).map((m) => parseInt(m[1], 10))
+    const allOrdinals = Array.from(finalPrompt.matchAll(/@?image[_ ](\d+)/gi)).map((m) => parseInt(m[1], 10))
     for (const n of allOrdinals) {
       expect(n).toBeGreaterThanOrEqual(1)
       expect(n).toBeLessThanOrEqual(modelImages.length)
     }
     // If a frame suffix is present, its ordinal must address the slot holding
     // the frame URL (not a different reference image).
-    const frameMatch = finalPrompt.match(/Use Image (\d+) as the (opening|closing)/)
+    const frameMatch = finalPrompt.match(/Use @?image[_ ](\d+) as the (opening|closing)/i)
     if (frameMatch) {
       expect(frameUrl).toBeDefined()
       const ordinal = parseInt(frameMatch[1], 10)
@@ -179,10 +179,10 @@ describe("Seedance 2 combined case — frame-as-mention numbering stays consiste
     expect(finalRefs).toEqual(["https://r2/kira-smile.png", "https://r2/sep-ref.png"])
     // Identity bullets line up with their array positions…
     expect(finalPrompt).toContain("Image 1 (Kira)")
-    expect(finalPrompt).toContain("Image 2 (reference): a backdrop")
+    expect(finalPrompt).toContain("@image_2 (reference): a backdrop")
     // …and because there is no actual frame, NO frame suffix is emitted (so no
     // `Image 2` double-claim that the pre-fix path produced).
-    expect(finalPrompt).not.toMatch(/Use Image \d+ as the (opening|closing)/)
+    expect(finalPrompt).not.toMatch(/Use @?image[_ ]\d+ as the (opening|closing)/i)
     assertConsistent(finalPrompt, modelImages, undefined)
   })
 
@@ -208,8 +208,8 @@ describe("Seedance 2 combined case — frame-as-mention numbering stays consiste
     // …mention bullets at 1 & 2, frame suffix at 3 — every ordinal points at the
     // correct slot, nothing double-numbered.
     expect(finalPrompt).toContain("Image 1 (Kira)")
-    expect(finalPrompt).toContain("Image 2 (reference): a backdrop")
-    expect(finalPrompt).toContain("Use Image 3 as the opening (first) frame")
+    expect(finalPrompt).toContain("@image_2 (reference): a backdrop")
+    expect(finalPrompt).toContain("Use @image_3 as the opening (first) frame")
     assertConsistent(finalPrompt, modelImages, "https://r2/user-start.png")
   })
 
@@ -225,7 +225,7 @@ describe("Seedance 2 combined case — frame-as-mention numbering stays consiste
     expect(firstFrameUrl).toBe("https://r2/kira-smile.png")
     expect(finalRefs).toEqual([])
     expect(finalPrompt).toContain("Image 1 (Kira)")
-    expect(finalPrompt).not.toMatch(/Use Image \d+ as the (opening|closing)/)
+    expect(finalPrompt).not.toMatch(/Use @?image[_ ]\d+ as the (opening|closing)/i)
     assertConsistent(finalPrompt, modelImages, undefined)
   })
 })
@@ -289,12 +289,12 @@ describe("Seedance 2 combined case (generate-video) — frame-as-mention numberi
   // suffix's ordinal points at the slot truly holding the frame. (Copy of the
   // assertion used by the image-to-video combined case so the contract matches.)
   function assertConsistent(finalPrompt: string, modelImages: string[], frameUrl: string | undefined) {
-    const allOrdinals = Array.from(finalPrompt.matchAll(/Image (\d+)/g)).map((m) => parseInt(m[1], 10))
+    const allOrdinals = Array.from(finalPrompt.matchAll(/@?image[_ ](\d+)/gi)).map((m) => parseInt(m[1], 10))
     for (const n of allOrdinals) {
       expect(n).toBeGreaterThanOrEqual(1)
       expect(n).toBeLessThanOrEqual(modelImages.length)
     }
-    const frameMatch = finalPrompt.match(/Use Image (\d+) as the (opening|closing)/)
+    const frameMatch = finalPrompt.match(/Use @?image[_ ](\d+) as the (opening|closing)/i)
     if (frameMatch) {
       expect(frameUrl).toBeDefined()
       const ordinal = parseInt(frameMatch[1], 10)
@@ -315,9 +315,9 @@ describe("Seedance 2 combined case (generate-video) — frame-as-mention numberi
     expect(firstFrameUrl).toBeUndefined()
     expect(finalRefs).toEqual(["https://r2/kira-smile.png", "https://r2/sep-ref.png"])
     expect(finalPrompt).toContain("Image 1 (Kira)")
-    expect(finalPrompt).toContain("Image 2 (reference): a backdrop")
+    expect(finalPrompt).toContain("@image_2 (reference): a backdrop")
     // No actual frame → NO frame suffix (the pre-fix path double-claimed Image 2).
-    expect(finalPrompt).not.toMatch(/Use Image \d+ as the (opening|closing)/)
+    expect(finalPrompt).not.toMatch(/Use @?image[_ ]\d+ as the (opening|closing)/i)
     assertConsistent(finalPrompt, modelImages, undefined)
   })
 
@@ -331,7 +331,7 @@ describe("Seedance 2 combined case (generate-video) — frame-as-mention numberi
     expect(firstFrameUrl).toBe("https://r2/kira-smile.png")
     expect(finalRefs).toEqual([])
     expect(finalPrompt).toContain("Image 1 (Kira)")
-    expect(finalPrompt).not.toMatch(/Use Image \d+ as the (opening|closing)/)
+    expect(finalPrompt).not.toMatch(/Use @?image[_ ]\d+ as the (opening|closing)/i)
     assertConsistent(finalPrompt, modelImages, undefined)
   })
 })
@@ -396,8 +396,8 @@ describe("Seedance 2 #6 — reference reorder then frame appends after the reord
     // Reference mode: refs stay in the reordered order, frame appended LAST.
     expect(input.reference_image_urls).toEqual(["https://r2/b.png", "https://r2/a.png", "https://r2/start.png"])
     expect(input.first_frame_url).toBeUndefined()
-    // The frame suffix's `Image N` points at the frame's true tail slot (3), so
+    // The frame suffix's `@image_N` points at the frame's true tail slot (3), so
     // the reorder renumbered the refs (b=1, a=2) and the frame follows at 3.
-    expect(input.prompt).toContain("Use Image 3 as the opening (first) frame")
+    expect(input.prompt).toContain("Use @image_3 as the opening (first) frame")
   })
 })

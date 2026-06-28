@@ -83,6 +83,8 @@ import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
 import { ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, isVeoProvider, MODEL_CATALOG, splitGeneratedItems, LLM_FEATURE_DEFAULTS, resolveVideoProviderForMode } from "@nodaro/shared";
 import { pickerFanoutTargets } from "@nodaro/shared";
 import { resolveEffectiveSourceType } from "@nodaro/shared";
+import { hasFeature } from "@nodaro/shared";
+import { countRefModalityEdges, type ReferenceModality } from "@nodaro/shared";
 import { ANALYZABLE_PICKER_HINT } from "@/lib/picker-labels";
 import { getGenerateTextTemplate } from "@/lib/generate-text-templates";
 import { buildScenePrompt } from "@/lib/prompt-builder";
@@ -1946,7 +1948,13 @@ export function executeNode(
     // the main prompt in data.motionPrompt (not data.prompt), AND a
     // generate-video node re-typed to image-to-video (same field list).
     let prompt: string | undefined = promptOf("image-to-video", (node.data as Record<string, unknown>).__appendWired === true);
-    prompt = stripVideoImageTokens(prompt)
+    // {image:N} reference tokens — DATA-DRIVEN off the catalog (mirror of the
+    // PREVIEW path in video-prompt-assembly.ts:assembleVideoPrompt). A provider
+    // whose model declares the `reference-image` capability RESOLVES the tokens
+    // into `@image_N` bindings via resolveVideoPromptMentions below, so leave
+    // them in; a provider with no reference support keeps the legacy strip.
+    const i2vProviderSupportsRefs = !!nodeProvider && hasFeature(nodeProvider, "reference-image");
+    if (!i2vProviderSupportsRefs) prompt = stripVideoImageTokens(prompt)
     // Inject motion + cinematography hints into prompt
     const motionHints: string[] = [];
     if (i2vData.motionEnabled && i2vData.motion) motionHints.push(`${i2vData.motion} motion`);
@@ -1969,9 +1977,23 @@ export function executeNode(
     // overwrite. When no `startFrameUrl` is wired yet, the first resolved
     // mention URL fills that slot so a pure "@kira:1:smile dancing" prompt
     // gets the smile image as input rather than failing with no image.
+    // Positional reference counts the core resolves `{image:N}` / `{video:N}` /
+    // `{audio:N}` body tokens against (worker-payload order). Count by reference
+    // MODALITY via the shared `referenceModalityForHandle` (single source of
+    // truth) so the canonical `imageReferences`/`videoReferences`/`audioReferences`
+    // handles real generate-video nodes wire count alongside the legacy
+    // `references` ids — matching the backend (payload-builder.ts
+    // `countRefModalityEdges`) and the preview so the run's numbering matches.
+    // Only meaningful for ref-capable providers — else the tokens were already
+    // stripped, so pass `undefined` (core falls back to its own count).
+    const countRefModality = (modality: ReferenceModality): number =>
+      countRefModalityEdges(edges, node.id, modality);
     const i2vMention = resolveVideoPromptMentions(prompt, node.id, nodes, edges, i2vData.extraRefs, {
       referenceOrder: i2vData.referenceOrder,
       suppressedCanonicalCharacterIds: i2vData.suppressedCanonicalCharacterIds,
+      imageRefCount: i2vProviderSupportsRefs ? countRefModality("image") : undefined,
+      videoRefCount: i2vProviderSupportsRefs ? countRefModality("video") : undefined,
+      audioRefCount: i2vProviderSupportsRefs ? countRefModality("audio") : undefined,
     });
     prompt = i2vMention.prompt;
     let i2vMergedRefs: string[] | undefined = referenceImageUrls?.length ? [...referenceImageUrls] : undefined;
@@ -2112,8 +2134,15 @@ export function executeNode(
       return Promise.reject(new Error("No source video"));
     }
     const v2vData = node.data as VideoToVideoData;
-    // Manual wins — see gen-image note above.
-    let prompt = stripVideoImageTokens(promptOf("video-to-video"))
+    // Manual wins — see gen-image note above. `provider` hoisted from below so
+    // the {image:N} strip can gate on its `reference-image` capability (mirror of
+    // assembleVideoPrompt / the i2v branch): ref-capable providers keep the
+    // tokens for @image_N binding below; the rest strip to the bare label.
+    const provider =
+      typeof v2vData.provider === "string" ? v2vData.provider : undefined;
+    const v2vProviderSupportsRefs = !!provider && hasFeature(provider, "reference-image");
+    let prompt: string | undefined = promptOf("video-to-video")
+    if (!v2vProviderSupportsRefs) prompt = stripVideoImageTokens(prompt)
     {
       // Bullet consumer (stamps character elements onto the video ref) → exclude here.
       const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeCharacterElements: true });
@@ -2134,9 +2163,14 @@ export function executeNode(
     // accept exactly one reference image and silently ignore the rest, so
     // there's no payload key to plumb them into. Prompt token replacement
     // still happens so the LLM sees the character names regardless.
+    const countRefModality = (modality: ReferenceModality): number =>
+      countRefModalityEdges(edges, node.id, modality);
     const v2vMention = resolveVideoPromptMentions(prompt, node.id, nodes, edges, v2vData.extraRefs, {
       referenceOrder: v2vData.referenceOrder,
       suppressedCanonicalCharacterIds: v2vData.suppressedCanonicalCharacterIds,
+      imageRefCount: v2vProviderSupportsRefs ? countRefModality("image") : undefined,
+      videoRefCount: v2vProviderSupportsRefs ? countRefModality("video") : undefined,
+      audioRefCount: v2vProviderSupportsRefs ? countRefModality("audio") : undefined,
     });
     prompt = v2vMention.prompt;
     const v2vUpstreamRef = typeof inputs.referenceImageUrls === "string"
@@ -2145,8 +2179,6 @@ export function executeNode(
         ? inputs.referenceImageUrls[0]
         : undefined;
     const v2vReferenceImageUrl = v2vUpstreamRef ?? v2vMention.additionalUrls[0];
-    const provider =
-      typeof v2vData.provider === "string" ? v2vData.provider : undefined;
     const v2vManualPrompt = typeof v2vData.prompt === "string" ? v2vData.prompt.trim() : undefined;
     setUserPromptTemplate(v2vManualPrompt || undefined);
     return runVideoToVideoGeneration(
@@ -2208,7 +2240,15 @@ export function executeNode(
     // t2v's candidate-field list includes `motionPrompt`
     // (NODE_PROMPT_CANDIDATE_FIELDS), so a generate-video node re-typed to
     // text-to-video keeps a prompt stored in data.motionPrompt.
-    let prompt = stripVideoImageTokens(promptOf("text-to-video", (node.data as Record<string, unknown>).__appendWired === true));
+    // {image:N} reference tokens — gate the strip on the provider's
+    // `reference-image` capability (mirror of assembleVideoPrompt / the i2v
+    // branch). Read `t2vData.provider` RAW — matching the preview's `data.provider`
+    // — so the run's prompt is byte-identical to the preview. The seedance-default
+    // `t2vProvider` below is only for endpoint/param routing, not the strip gate.
+    const t2vProviderForRefs = t2vData.provider;
+    const t2vProviderSupportsRefs = !!t2vProviderForRefs && hasFeature(t2vProviderForRefs, "reference-image");
+    let prompt: string | undefined = promptOf("text-to-video", (node.data as Record<string, unknown>).__appendWired === true);
+    if (!t2vProviderSupportsRefs) prompt = stripVideoImageTokens(prompt);
     {
       // Bullet consumer (stamps character elements onto the video ref) → exclude here.
       const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeCharacterElements: true });
@@ -2225,9 +2265,14 @@ export function executeNode(
     // `resolveVideoPromptMentions` in `payload-builder.ts`. t2v has no
     // `imageUrl` slot — all resolved URLs become entries in
     // `referenceImageUrls`, merged with whatever upstream already provided.
+    const countRefModality = (modality: ReferenceModality): number =>
+      countRefModalityEdges(edges, node.id, modality);
     const t2vMention = resolveVideoPromptMentions(prompt, node.id, nodes, edges, t2vData.extraRefs, {
       referenceOrder: t2vData.referenceOrder,
       suppressedCanonicalCharacterIds: t2vData.suppressedCanonicalCharacterIds,
+      imageRefCount: t2vProviderSupportsRefs ? countRefModality("image") : undefined,
+      videoRefCount: t2vProviderSupportsRefs ? countRefModality("video") : undefined,
+      audioRefCount: t2vProviderSupportsRefs ? countRefModality("audio") : undefined,
     });
     prompt = t2vMention.prompt ?? prompt;
     // Post-assembly empty-prompt check: only reject when the FINAL prompt
