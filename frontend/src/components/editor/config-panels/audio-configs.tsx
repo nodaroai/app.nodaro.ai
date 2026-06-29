@@ -72,6 +72,7 @@ import { FinalAudioPromptPreview } from "./final-audio-prompt-preview"
 import { LIP_SYNC_MODELS, TTS_MODELS, SUNO_MODELS } from "./model-options"
 import { REPLICATE_LIP_SYNC_PROVIDERS, FAL_LIP_SYNC_PROVIDERS, VIDEO_INPUT_LIP_SYNC_PROVIDERS, isPerSecondLipSyncProvider, getEffectiveSunoCustomMode, SUNO_ADD_TRACK_MODELS, SUNO_TEXT_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars, getMaxTtsChars } from "@nodaro/shared"
 import { PromptLengthCounter } from "./prompt-length-counter"
+import { SUNO_FIELD_EDIT_META, SunoFieldEditor } from "./suno-field-editor"
 import { InjectedReferenceList } from "./injected-reference-list"
 import { SeedanceReferenceTip } from "./seedance-reference-tip"
 import { WaveformAudioPlayer } from "@/components/audio-player"
@@ -455,57 +456,14 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
         </Select>
       </MappableField>
       <ModelDescriptionHint modelId={data.model} />
-      <MappableField field="title" label="Title (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Input value={data.title ?? ""} maxLength={200} onChange={(e) => onUpdate({ title: e.target.value })} placeholder="Song title" />
-      </MappableField>
-      <MappableField field="lyrics" label="Lyrics (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <>
-          <TagTextarea
-            rows={4}
-            value={data.lyrics ?? ""}
-            onChange={(v) => { if (v.length <= SUNO_TEXT_MAX) onUpdate({ lyrics: v }) }}
-            placeholder="Write custom lyrics... (type [ or / for metatags)"
-            maxLength={SUNO_TEXT_MAX}
-            tagMode="suno"
-            customTags={SUNO_LYRICS_SUGGESTION_ITEMS}
-            nodeRefs={nodeRefs}
-            displayMode={variableDisplayMode}
-            refMap={refMap}
-          />
-          <PromptLengthCounter value={data.lyrics ?? ""} max={getMaxSunoPromptChars(data.model, getEffectiveSunoCustomMode(data))} modelLabel={data.model ?? "V5_5"} noun="lyrics" />
-        </>
-      </MappableField>
-      <MappableField field="style" label="Style (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <>
-          <TagTextarea
-            rows={2}
-            value={data.style ?? ""}
-            onChange={(v) => { if (v.length <= 1000) onUpdate({ style: v }) }}
-            placeholder="e.g. pop, rock, jazz, lo-fi... (type [ or / for suggestions)"
-            maxLength={1000}
-            tagMode="suno"
-            customTags={SUNO_STYLE_SUGGESTION_ITEMS}
-            nodeRefs={nodeRefs}
-            displayMode={variableDisplayMode}
-            refMap={refMap}
-          />
-          <PromptLengthCounter value={data.style ?? ""} max={getMaxSunoStyleChars(data.model)} modelLabel={data.model ?? "V5_5"} noun="style" />
-        </>
-      </MappableField>
-      <MappableField field="negativeStyle" label="Negative Style (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <TagTextarea
-          rows={2}
-          value={data.negativeStyle ?? ""}
-          onChange={(v) => { if (v.length <= 500) onUpdate({ negativeStyle: v }) }}
-          placeholder="Styles to avoid... (type [ or / for suggestions)"
-          maxLength={500}
-          tagMode="suno"
-          customTags={SUNO_STYLE_SUGGESTION_ITEMS}
-          nodeRefs={nodeRefs}
-          displayMode={variableDisplayMode}
-          refMap={refMap}
-        />
-      </MappableField>
+      {(["title", "lyrics", "style", "negativeStyle"] as const).map((f) => {
+        const meta = SUNO_FIELD_EDIT_META[f]
+        return (
+          <MappableField key={f} field={meta.field} label={meta.label} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <SunoFieldEditor meta={meta} data={data} onUpdate={onUpdate} nodeRefs={nodeRefs} refMap={refMap} variableDisplayMode={variableDisplayMode} />
+          </MappableField>
+        )
+      })}
       <MappableField field="vocalGender" label="Vocal Gender (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select value={data.vocalGender ?? "auto"} onValueChange={(v) => onUpdate({ vocalGender: v === "auto" ? undefined : v })}>
           <SelectTrigger aria-label="Vocal Gender (optional)"><SelectValue placeholder="Auto" /></SelectTrigger>

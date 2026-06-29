@@ -121,6 +121,10 @@ export const generateImageBody = z.object({
   // `assembleImageInput`. When ALL are absent, the route behaves
   // byte-identically to before (the pre-assembled flat-prompt path).
   connectedReferences: z.array(connectedReferenceSchema).max(14).optional(),
+  // User-defined reorder of the assembled reference list (stable tile ids),
+  // honored by `assembleImageInput`'s reference-order pass — parity with
+  // generate-video. No-op without `connectedReferences` (nothing to reorder).
+  referenceOrder: z.array(z.string()).max(14).optional(),
   direction: directionSchema.optional(),
   structured: structuredPromptFieldsSchema.optional(),
   characterDescriptions: z.array(z.string().max(500)).max(10).optional(),
@@ -229,6 +233,7 @@ function buildAssembleInput(
     prompt?: string
     provider?: string
     connectedReferences?: AssembleImageInput["connectedReferences"]
+    referenceOrder?: AssembleImageInput["referenceOrder"]
     direction?: AssembleImageInput["direction"]
     structured?: AssembleImageInput["structured"]
     referenceImageUrls?: string[]
@@ -252,6 +257,7 @@ function buildAssembleInput(
         ? { referenceFormat: "hybrid" as const }
         : {}),
     ...(body.connectedReferences !== undefined ? { connectedReferences: body.connectedReferences } : {}),
+    ...(body.referenceOrder !== undefined ? { referenceOrder: body.referenceOrder } : {}),
     ...(body.direction !== undefined ? { direction: body.direction } : {}),
     ...(body.structured !== undefined ? { structured: body.structured } : {}),
     // The flat `referenceImageUrls` doubles as `extraReferenceImageUrls` so it

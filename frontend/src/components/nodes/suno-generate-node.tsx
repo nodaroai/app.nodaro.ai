@@ -18,6 +18,9 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { AudioResultOverlay } from "./audio-result-overlay"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { SunoFieldEditModal } from "./suno-field-edit-modal"
+import { SUNO_FIELD_EDIT_META, type SunoEditField } from "@/components/editor/config-panels/suno-field-editor"
 import type { SunoGenerateData } from "@/types/nodes"
 
 const isVisualPicker = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
@@ -50,10 +53,29 @@ function SunoGenerateNodeComponent({ id, data, selected }: NodeProps) {
   )
   const advancedOpen = nodeData.advancedOpen ?? (anySecondaryContent || anySecondaryWired)
 
+  // Per-field "is this exact handle wired?" check. A wired field-* pip stays
+  // visible even when Advanced is collapsed (so a live connection is never
+  // hidden/orphaned). Used as `advancedOpen || isFieldWired(h.id)` in LOCKSTEP
+  // by both the BaseNode `handles` array (sizing) and the HandleWithPopover JSX
+  // (the visible pip) so the node is sized for exactly the pips it draws.
+  const isFieldWired = (handleId: string) =>
+    edges.some((e) => e.target === id && e.targetHandle === handleId)
+
+  // Stable signature of which field-* pips are wired. The rendered handle set
+  // depends on this (a wired pip stays shown even when collapsed), so the
+  // re-measure effect below must re-run when it changes — e.g. a field-* edge
+  // added/removed while Advanced is collapsed (undo/redo/paste), where
+  // `advancedOpen` alone wouldn't tick.
+  const wiredFieldSig = edges
+    .filter((e) => e.target === id && typeof e.targetHandle === "string" && e.targetHandle.startsWith("field-"))
+    .map((e) => e.targetHandle)
+    .sort()
+    .join(",")
+
   // React Flow v12 doesn't auto-detect added/removed handles — re-measure on
   // toggle so the new pips render measured + connectable (same gotcha as the
   // loop node's dynamic columns).
-  useEffect(() => { updateNodeInternals(id) }, [advancedOpen, id, updateNodeInternals])
+  useEffect(() => { updateNodeInternals(id) }, [advancedOpen, wiredFieldSig, id, updateNodeInternals])
 
   const fieldHandleDefs = useMemo(
     () => [
@@ -73,6 +95,7 @@ function SunoGenerateNodeComponent({ id, data, selected }: NodeProps) {
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [showThumbnails, setShowThumbnails] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [editField, setEditField] = useState<SunoEditField | null>(null)
   const creditModel = nodeData.model === "V5" ? "suno-v5" : "suno-generate"
   const credits = useModelCredits(creditModel, nodeData.model === "V5" ? 13 : 7)
 
@@ -131,12 +154,15 @@ function SunoGenerateNodeComponent({ id, data, selected }: NodeProps) {
         { id: "audio-style", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 56px)', left: '-29px' }, external: true },
         { id: "voice",       type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 88px)', left: '-29px' }, external: true },
         // Secondary field pips — continue the 32px pitch above `voice` (88px).
-        ...(advancedOpen ? [
-          { id: "field-style",         type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 120px)', left: '-29px' }, external: true },
-          { id: "field-lyrics",        type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 152px)', left: '-29px' }, external: true },
-          { id: "field-title",         type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 184px)', left: '-29px' }, external: true },
-          { id: "field-negativeStyle", type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 216px)', left: '-29px' }, external: true },
-        ] : []),
+        // Each renders when Advanced is open OR that exact field is wired, so a
+        // live connection survives collapse. Per-handle (not one block) so the
+        // condition matches the HandleWithPopover JSX below handle-for-handle —
+        // this array drives BaseNode's handle-count sizing, the JSX draws the
+        // pip, so they must stay in lockstep (guarded by suno-handle-array-parity).
+        ...(advancedOpen || isFieldWired("field-style")         ? [{ id: "field-style",         type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 120px)', left: '-29px' }, external: true }] : []),
+        ...(advancedOpen || isFieldWired("field-lyrics")        ? [{ id: "field-lyrics",        type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 152px)', left: '-29px' }, external: true }] : []),
+        ...(advancedOpen || isFieldWired("field-title")         ? [{ id: "field-title",         type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 184px)', left: '-29px' }, external: true }] : []),
+        ...(advancedOpen || isFieldWired("field-negativeStyle") ? [{ id: "field-negativeStyle", type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 216px)', left: '-29px' }, external: true }] : []),
         { id: "audio",       type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
       ]}
     >
@@ -197,21 +223,47 @@ function SunoGenerateNodeComponent({ id, data, selected }: NodeProps) {
           {nodeData.title && <span className="text-xs truncate max-w-[120px]">{nodeData.title}</span>}
         </div>
 
-        <button type="button"
-          className="self-start text-[11px] text-muted-foreground hover:text-foreground"
-          onClick={(e) => { e.stopPropagation(); updateNodeData(id, { advancedOpen: !advancedOpen }) }}>
-          {advancedOpen ? "Advanced ▴" : "Advanced ▾"}
-        </button>
+        <div className="flex items-center gap-3 self-start">
+          <button type="button"
+            className="text-[11px] text-muted-foreground hover:text-foreground"
+            onClick={(e) => { e.stopPropagation(); updateNodeData(id, { advancedOpen: !advancedOpen }) }}>
+            {advancedOpen ? "Advanced ▴" : "Advanced ▾"}
+          </button>
+          {/* Edit menu — opens the focused field-edit modal for a chosen
+              secondary field. Shown only with Advanced open (the fields it edits
+              are the ones revealed there). stopPropagation on trigger + content
+              keeps the canvas from selecting/deselecting the node on click. */}
+          {advancedOpen && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button type="button" className="text-[11px] text-muted-foreground hover:text-foreground" onClick={(e) => e.stopPropagation()}>Edit ▾</button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="node-menu-surface" onClick={(e) => e.stopPropagation()}>
+                {(["title", "lyrics", "style", "negativeStyle"] as const).map((f) => (
+                  <DropdownMenuItem key={f} onSelect={() => setEditField(f)}>{SUNO_FIELD_EDIT_META[f].label.replace(" (optional)", "")}</DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
       </div>
     </BaseNode>
     <HandleWithPopover nodeId={id} nodeType="suno-generate" handleId="prompt"      type="target" position={Position.Left}  label="Prompt"      color={TEXT_HANDLE_COLOR} icon={<Type />}     side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_PROMPT} />
     <HandleWithPopover nodeId={id} nodeType="suno-generate" handleId="audio-style" type="target" position={Position.Left}  label="Audio style" color={HANDLE_COLORS.audio} icon={<Sparkles />} side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_AUDIO_STYLE} />
     <HandleWithPopover nodeId={id} nodeType="suno-generate" handleId="voice"       type="target" position={Position.Left}  label="Voice"       color={HANDLE_COLORS.audio} icon={<Mic />}      side="left"  top="calc(100% - 88px)" accepts={ACCEPTS_VOICE} />
-    {advancedOpen && fieldHandleDefs.map((h, i) => (
-      <HandleWithPopover key={h.id} nodeId={id} nodeType="suno-generate" handleId={h.id} type="target" position={Position.Left}
-        label={h.label} color={h.id === "field-negativeStyle" ? HANDLE_COLORS.negative : TEXT_HANDLE_COLOR}
-        icon={<Type />} side="left" top={`calc(100% - ${120 + i * 32}px)`} accepts={h.accept} />
-    ))}
+    {fieldHandleDefs
+      .filter((h) => advancedOpen || isFieldWired(h.id))
+      .map((h) => {
+        // Offset from the FIXED slot index (indexOf), not the filtered
+        // position — a lone wired pip (e.g. field-title at slot 2) keeps its
+        // own 184px anchor and lines up with its handles-array entry above.
+        const i = fieldHandleDefs.indexOf(h)
+        return (
+          <HandleWithPopover key={h.id} nodeId={id} nodeType="suno-generate" handleId={h.id} type="target" position={Position.Left}
+            label={h.label} color={h.id === "field-negativeStyle" ? HANDLE_COLORS.negative : TEXT_HANDLE_COLOR}
+            icon={<Type />} side="left" top={`calc(100% - ${120 + i * 32}px)`} accepts={h.accept} />
+        )
+      })}
     <HandleWithPopover nodeId={id} nodeType="suno-generate" handleId="audio"       type="source" position={Position.Right} label="Audio"       color={HANDLE_COLORS.audio} icon={<Music />}    side="right" top="24px" />
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}
@@ -229,6 +281,13 @@ function SunoGenerateNodeComponent({ id, data, selected }: NodeProps) {
         results={results}
         initialIndex={activeIndex}
       />
+    )}
+    {/* Mount the field-edit modal ONLY while a field is being edited.
+        SunoFieldEditModal calls usePromptEditorRefs unconditionally (an active
+        snippet subscription), so an always-mounted modal would put that
+        subscription on every Suno node — gate it on editField (C3 review). */}
+    {editField && (
+      <SunoFieldEditModal nodeId={id} field={editField} onClose={() => setEditField(null)} />
     )}
     </div>
   )

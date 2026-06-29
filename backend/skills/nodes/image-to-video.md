@@ -1,7 +1,7 @@
 ---
 node_type: image-to-video
-generated_at: 2026-06-28T21:28:37.082Z
-generated_from: e83ff8544
+generated_at: 2026-06-29T17:01:42.002Z
+generated_from: ef9c0616e
 ---
 
 # image-to-video
@@ -100,6 +100,8 @@ generated_from: e83ff8544
 - `reference_audio_urls`
 - `loop_trim`
 - `auto_loop_trim`
+- `connected_references`
+- `reference_order`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## When to use

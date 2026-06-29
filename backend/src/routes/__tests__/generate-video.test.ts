@@ -757,6 +757,67 @@ describe("assembleVideoConnectedReferences (server-side video reference assembly
     expect(out.referenceImageUrls).toHaveLength(9)
   })
 
+  it("never emits an @image_N directive past the cap (veo3 = 3)", () => {
+    // VEO carries up to 3 reference images (REFERENCE_2_VIDEO). Four wired refs
+    // must assemble to THREE URLs AND three directives — never a dangling
+    // @image_4 pointing at the dropped slot. (Regression: the core numbered every
+    // ref, then the route sliced URLs to the cap AFTER assembly, leaving @image_N+
+    // binding nothing.)
+    const out = assembleVideoConnectedReferences({
+      prompt: "a chase scene",
+      provider: "veo3",
+      connectedReferences: [
+        cref({ source: "wired-image", url: "https://r2/a.png", description: "a red car" }),
+        cref({ source: "wired-image", url: "https://r2/b.png", description: "a brown dog" }),
+        cref({ source: "wired-image", url: "https://r2/c.png", description: "a blue bike" }),
+        cref({ source: "wired-image", url: "https://r2/d.png", description: "a green truck" }),
+      ],
+      referenceVideoCount: 0,
+      referenceAudioCount: 0,
+    })
+    expect(out.referenceImageUrls).toEqual(["https://r2/a.png", "https://r2/b.png", "https://r2/c.png"])
+    expect(out.prompt).toContain("@image_3")
+    expect(out.prompt).not.toContain("@image_4")
+  })
+
+  it("never numbers @image_N past the cap when more refs than the limit are supplied (seedance-2 = 9)", () => {
+    const refs = Array.from({ length: 11 }, (_, i) =>
+      cref({ source: "wired-image", url: `https://r2/img${i}.png`, description: `img ${i}` }),
+    )
+    const out = assembleVideoConnectedReferences({
+      prompt: "scene",
+      provider: "seedance-2",
+      connectedReferences: refs,
+      referenceVideoCount: 0,
+      referenceAudioCount: 0,
+    })
+    expect(out.referenceImageUrls).toHaveLength(9)
+    expect(out.prompt).toContain("@image_9")
+    expect(out.prompt).not.toContain("@image_10")
+    expect(out.prompt).not.toContain("@image_11")
+  })
+
+  it("resolves a {image:N} body token only within the cap; out-of-range drops to its bare label (veo3 = 3)", () => {
+    // {image:4:truck} exceeds the 3-image cap → must NOT bind to a dropped slot;
+    // it falls back to the bare label "truck" (the resolveReferenceTokens contract).
+    const out = assembleVideoConnectedReferences({
+      prompt: "drive {image:1:car} past the {image:4:truck}",
+      provider: "veo3",
+      connectedReferences: [
+        cref({ source: "wired-image", url: "https://r2/a.png", description: "a red car" }),
+        cref({ source: "wired-image", url: "https://r2/b.png", description: "a brown dog" }),
+        cref({ source: "wired-image", url: "https://r2/c.png", description: "a blue bike" }),
+        cref({ source: "wired-image", url: "https://r2/d.png", description: "a green truck" }),
+      ],
+      referenceVideoCount: 0,
+      referenceAudioCount: 0,
+    })
+    expect(out.referenceImageUrls).toEqual(["https://r2/a.png", "https://r2/b.png", "https://r2/c.png"])
+    expect(out.prompt).toContain("the car from @image_1")
+    expect(out.prompt).not.toContain("@image_4")
+    expect(out.prompt).toContain("past the truck")
+  })
+
   it("leads with connectedReferences URLs, then appends caller-sent flat refs (deduped)", () => {
     const out = assembleVideoConnectedReferences({
       prompt: "scene",

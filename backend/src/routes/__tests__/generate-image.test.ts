@@ -127,8 +127,9 @@ describe("generateImageBody prompt length cap", () => {
 // (missing field OR extra field). `readonly` modifiers differ between the two
 // (the shared type marks most fields `readonly`, Zod's inference does not), so
 // we compare KEY SETS rather than full structural types — that's the part the
-// hand-mirror can actually get wrong. See the TODO(nodaro) on the schema:
-// WI-7 replaces this mirror with a shared Zod schema and retires this guard.
+// hand-mirror can actually get wrong. See the field-set note in
+// `lib/connected-reference-schema.ts` (the canonical mirror, now shared with
+// generate-video — the hand-mirror was extracted there in #3673).
 // ---------------------------------------------------------------------------
 describe("connectedReferenceSchema mirrors ConnectedReference (key-set drift guard)", () => {
   type SchemaKeys = keyof z.infer<typeof connectedReferenceSchema>
@@ -795,6 +796,45 @@ describe("POST /v1/generate-image", () => {
       expect(queued.referenceImageUrls).toEqual(expected.referenceImageUrls)
       // The direction hints must have actually changed the prompt vs. the raw input.
       expect(queued.prompt).not.toBe("a hero shot")
+    })
+
+    it("honors `referenceOrder` — reorders the assembled referenceImageUrls (parity with generate-video)", async () => {
+      setupSupabaseMock({})
+      const connectedReferences = mkManualRefs(3)
+      // Reverse the three manual refs by their stable tile ids (`wired:<id>`).
+      const referenceOrder = ["wired:m2", "wired:m1", "wired:m0"]
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: {
+          prompt: "a hero shot",
+          userId: VALID_UUID,
+          provider: "nano-banana",
+          connectedReferences,
+          referenceOrder,
+        },
+      })
+      expect(res.statusCode).toBe(200)
+
+      const withOrder = assembleImageInput({
+        userPrompt: "a hero shot",
+        provider: "nano-banana",
+        connectedReferences,
+        referenceOrder,
+        throwOnEmpty: true,
+      })
+      const withoutOrder = assembleImageInput({
+        userPrompt: "a hero shot",
+        provider: "nano-banana",
+        connectedReferences,
+        throwOnEmpty: true,
+      })
+      // Non-vacuous: the reorder actually changes the assembled URL order.
+      expect(withOrder.referenceImageUrls).not.toEqual(withoutOrder.referenceImageUrls)
+      // The route must honor referenceOrder → queued matches the WITH-order assembly.
+      const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as Record<string, unknown>
+      expect(queued.referenceImageUrls).toEqual(withOrder.referenceImageUrls)
     })
 
     it("routes the non-native negative prompt into the assembled prompt (native rides its own channel)", async () => {

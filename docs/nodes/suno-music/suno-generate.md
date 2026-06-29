@@ -56,6 +56,10 @@ The node's bottom strip exposes the most-used non-text controls without opening 
 
 The same sliders (with these descriptions) are in the config panel.
 
+## Editing fields from the node
+
+Expand **Advanced ▾** and use **Edit ▾** to edit a secondary field — **Style**, **Lyrics**, **Title**, or **Negative style** — in a focused modal (the same editors as the config panel, including Suno tag suggestions). A field that's **wired** from another node shows read-only in the modal (the upstream value wins); unwire it to edit by hand. A wired field's input pip stays visible even when Advanced is collapsed, so you never lose track of a live connection.
+
 ## Best Practices
 
 - Use Suno metatags in lyrics (`[Verse]`, `[Chorus]`, `[Bridge]`, `[Outro]`) to structure the song.

@@ -198,11 +198,24 @@ export function assembleVideoConnectedReferences(args: {
     }
   }
 
+  // Cap the URL-producing refs to the provider's image limit BEFORE assembly.
+  // The shared core numbers an `@image_N` directive (and resolves `{image:N}`
+  // tokens) for EVERY ref it is given; if it numbered all of them and we only
+  // sliced the URL list to the cap afterward, the prompt would carry directives
+  // binding `@image_(cap+1)…` to images that never reach the worker. Bounding the
+  // input here mirrors the canvas, where the `imageReferences` handle is hard-
+  // limited to the same cap (`handle-limits.ts`), so the core never sees more
+  // refs than the cap. `referenceOrder` still reorders within the surviving set;
+  // `lookupCharacterBySlug` below still reads the FULL list (metadata only — no
+  // URL/directive impact). The post-assembly `merged.slice(0, imageCap)` remains
+  // a defensive net for the rare mention-variant-multiply case.
+  const cappedReferences = connectedReferences.slice(0, imageCap)
+
   // Split incoming refs: canonical wired characters (mention + canonical-fallback
   // + identity directives) vs. everything else (extras → auto-attach + bullet).
   const wiredCharRefs: ConnectedReference[] = []
   const extraRefs: VideoExtraRef[] = []
-  for (const r of connectedReferences) {
+  for (const r of cappedReferences) {
     if (r.source === "wired-character" && !r.isExtraRef) {
       wiredCharRefs.push(r)
     } else {

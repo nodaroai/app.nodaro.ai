@@ -654,6 +654,14 @@ if ("jobId" in result) {
 > per-second `-ref` rate by the input-video plus output duration. Per-resolution
 > rates are in the [Generate Video node docs](nodes/ai-video/generate-video.md).
 
+> **Typed structured references.** `run("generate-image" | "generate-video", …)`
+> have typed overloads — `GenerateImageParams` / `GenerateVideoParams` (both extend
+> `StructuredReferenceParams`). Pass `connectedReferences: ConnectedReference[]` (the
+> editor's wired-reference shape, re-exported from the SDK) + `referenceOrder` for
+> labeled, ordered references the route assembles into `@image_N` directives —
+> instead of hand-building a prose "Image N is …" guide. Other node types keep the
+> generic `Record<string, unknown>` body.
+
 #### `runAndWait(type, params?, opts?)`
 
 ```ts
