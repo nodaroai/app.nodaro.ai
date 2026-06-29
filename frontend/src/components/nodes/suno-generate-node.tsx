@@ -7,6 +7,7 @@ import { SUNO_FIELD_HANDLE_FIELDS } from "@nodaro/shared"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { NodeQuickStrip } from "./node-quick-strip"
+import { SunoMixPopover } from "./suno-mix-popover"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { isValidSunoGenerateConnection } from "@/lib/audio-text-handles"
@@ -97,7 +98,9 @@ function SunoGenerateNodeComponent({ id, data, selected }: NodeProps) {
       minHeight={advancedOpen ? 248 : 140}
       hideHeader
       topToolbarContent={
-        <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />
+        <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"}>
+          <SunoMixPopover nodeId={id} />
+        </NodeQuickStrip>
       }
       bottomToolbarContent={
         showThumbnails && results.length > 1 ? (

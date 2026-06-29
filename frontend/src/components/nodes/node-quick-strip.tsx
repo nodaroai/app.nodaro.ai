@@ -1,11 +1,22 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
+import { createContext, useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { RunNodeButton } from "./run-node-button"
 import { PromptEditButton } from "./prompt-edit-button"
 import { QuickConfigSelect, getQuickConfigs } from "./node-quick-configs"
 import { nodeHasPromptField } from "@/lib/prompt-fields"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+
+/**
+ * Supplies the strip's `handleOpenChange` to inline `children` (e.g. the Suno
+ * Mix popover). A child that consumes this composes its open-state into the
+ * SAME `openCount` the registry configs use — so `openCount` stays the single
+ * writer of `setQuickStripPinned`. This removes the last-writer-wins race a
+ * second strip child would otherwise create by writing the pin directly.
+ * `null` (no provider) means "rendered standalone" — the child should fall back
+ * to writing the pin itself.
+ */
+export const QuickStripOpenChangeContext = createContext<((open: boolean) => void) | null>(null)
 
 interface NodeQuickStripProps {
   readonly nodeId: string
@@ -79,7 +90,7 @@ export function NodeQuickStrip({ nodeId, credits, isRunning, children }: NodeQui
           onOpenChange={handleOpenChange}
         />
       ))}
-      {children}
+      <QuickStripOpenChangeContext.Provider value={handleOpenChange}>{children}</QuickStripOpenChangeContext.Provider>
       <RunNodeButton
         nodeId={nodeId}
         credits={credits}

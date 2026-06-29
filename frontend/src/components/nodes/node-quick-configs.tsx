@@ -2,7 +2,7 @@
 
 import { useEffect } from "react"
 import type { LucideIcon } from "lucide-react"
-import { Sparkles, Languages, Image as ImageIcon, LayoutGrid, Palette, Ratio, Maximize2, Clock, Wand2, Hash } from "lucide-react"
+import { Sparkles, Languages, Image as ImageIcon, LayoutGrid, Palette, Ratio, Maximize2, Clock, Wand2, Hash, Music2, Mic } from "lucide-react"
 import {
   Select,
   SelectContent,
@@ -83,6 +83,15 @@ export interface QuickConfigControl {
    *  field on hide — the provider-sync trap fix for enum fields like
    *  v2v-resolution. */
   readonly preserveOnHide?: boolean
+  /** Write the chosen value as a boolean (`"true"`/`"false"` option values). For
+   *  boolean node-data fields surfaced as a 2-option dropdown (suno `instrumental`).
+   *  Mutually exclusive with `numeric`. */
+  readonly boolean?: boolean
+  /** When the chosen option value equals this string, write `undefined` instead —
+   *  the sentinel "no value" choice (suno Vocal "auto" → undefined, since the API
+   *  only accepts male/female). Make the sentinel the FIRST option so an unset
+   *  field falls back to its label. */
+  readonly sentinelUndefined?: string
 }
 
 /** Resolve a control's options against the node's current data. */
@@ -91,6 +100,16 @@ function resolveOptions(
   data: Record<string, unknown>,
 ): ReadonlyArray<QuickConfigOption> {
   return typeof control.options === "function" ? control.options(data) : control.options
+}
+
+/** Coerce a dropdown's chosen string value to the node-data value, honoring the
+ *  control's `sentinelUndefined` / `boolean` / `numeric` flags. Single source for
+ *  BOTH the change-write and the fail-safe snap so they can't diverge. */
+export function coerceQuickConfigValue(control: QuickConfigControl, v: string): unknown {
+  if (control.sentinelUndefined !== undefined && v === control.sentinelUndefined) return undefined
+  if (control.boolean) return v === "true"
+  if (control.numeric) return Number(v)
+  return v
 }
 
 const toOptions = (
@@ -114,6 +133,38 @@ const sunoModelControl: QuickConfigControl = {
   ariaLabel: "Model",
   icon: Sparkles,
   options: toOptions(SUNO_MODELS),
+}
+
+/** Suno Instrumental toggle as a 2-option dropdown (writes boolean `data.instrumental`).
+ *  Undefined reads as "With vocals" — executor treats `instrumental ?? false`. */
+const sunoInstrumentalControl: QuickConfigControl = {
+  field: "instrumental",
+  ariaLabel: "Instrumental",
+  icon: Music2,
+  boolean: true,
+  options: [
+    { value: "false", label: "With vocals" },
+    { value: "true", label: "Instrumental — no vocals" },
+  ],
+}
+
+/** Suno Vocal gender (writes `data.vocalGender`); "Auto" → undefined (API accepts
+ *  only male/female). Hidden when instrumental is on (no vocals to gender),
+ *  preserving the stored value. Auto first so an unset field shows "Auto". */
+const sunoVocalControl: QuickConfigControl = {
+  field: "vocalGender",
+  ariaLabel: "Vocal",
+  icon: Mic,
+  sentinelUndefined: "auto",
+  preserveOnHide: true,
+  options: (data) =>
+    data.instrumental
+      ? []
+      : [
+          { value: "auto", label: "Auto" },
+          { value: "male", label: "Male" },
+          { value: "female", label: "Female" },
+        ],
 }
 
 /** LLM model dropdown (writes `data.llmModel`), shared by the LLM-backed nodes.
@@ -385,7 +436,7 @@ export const NODE_QUICK_CONFIGS: Readonly<Record<string, ReadonlyArray<QuickConf
   "text-to-speech": [providerControl(TTS_MODELS)],
   "motion-transfer": [providerControl(MOTION_TRANSFER_MODELS)],
   // ── Suno (model: SunoModel) ──
-  "suno-generate": [sunoModelControl],
+  "suno-generate": [sunoModelControl, sunoInstrumentalControl, sunoVocalControl],
   "suno-cover": [sunoModelControl],
   "suno-extend": [sunoModelControl],
   "suno-music-video": [sunoModelControl],
@@ -544,7 +595,7 @@ export function QuickConfigSelect({
       }
     } else if (!options.some((o) => o.value === value)) {
       const next = options[0].value
-      updateNodeData(nodeId, { [control.field]: control.numeric ? Number(next) : next })
+      updateNodeData(nodeId, { [control.field]: coerceQuickConfigValue(control, next) })
     }
   }, [value, options, nodeId, control, updateNodeData])
 
@@ -557,7 +608,7 @@ export function QuickConfigSelect({
     <Select
       value={value || undefined}
       onValueChange={(v) => {
-        const patch: Record<string, unknown> = { [control.field]: control.numeric ? Number(v) : v }
+        const patch: Record<string, unknown> = { [control.field]: coerceQuickConfigValue(control, v) }
         if (control.additionalClear) {
           for (const f of control.additionalClear) patch[f] = undefined
         }

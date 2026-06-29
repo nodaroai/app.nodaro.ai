@@ -123,7 +123,14 @@ export function bakeShotSequence(
   // 5. Build the resolved scenes (scene-relative reveal frames, revealAt stripped).
   const scenes = sceneWindows.map((win, idx) => {
     const isLast = idx === sceneWindows.length - 1
-    const sceneEnd = isLast ? durationInFrames : win.endAbs
+    // Non-last scenes extend to ABUT the next scene's start, not stop at their own
+    // last reveal's end (win.endAbs). A scene renders as a Remotion <Sequence> that
+    // unmounts at startFrame + durationInFrames; ending at endAbs unmounts a still-held
+    // reveal the moment its hold finishes, leaving frames up to the next scene's
+    // startAbs blank (the inter-scene gap). Windows are sorted + non-overlapping (step 3),
+    // so the next startAbs is always ≥ this scene's endAbs — this never shrinks a scene.
+    // The last scene fills to the composition end (narration tail + held read).
+    const sceneEnd = isLast ? durationInFrames : sceneWindows[idx + 1].startAbs
     return {
       id: win.scene.id,
       startFrame: win.startAbs,

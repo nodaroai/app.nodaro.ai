@@ -244,3 +244,54 @@ describe("QuickConfigSelect provider-aware fail-safe", () => {
     expect(updateNodeData).not.toHaveBeenCalled()
   })
 })
+
+// ===========================================================================
+// coerceQuickConfigValue — single-sourced boolean + sentinel-undefined coercion
+// (QuickConfigControl is already imported at the top of this file.)
+// ===========================================================================
+import { coerceQuickConfigValue } from "../node-quick-configs"
+
+const base = { field: "x", ariaLabel: "X", options: [] as const } satisfies Partial<QuickConfigControl>
+describe("coerceQuickConfigValue", () => {
+  it("sentinelUndefined match → undefined", () => {
+    expect(coerceQuickConfigValue({ ...base, sentinelUndefined: "auto" } as QuickConfigControl, "auto")).toBeUndefined()
+  })
+  it("sentinel non-match passes through", () => {
+    expect(coerceQuickConfigValue({ ...base, sentinelUndefined: "auto" } as QuickConfigControl, "male")).toBe("male")
+  })
+  it("boolean coercion", () => {
+    expect(coerceQuickConfigValue({ ...base, boolean: true } as QuickConfigControl, "true")).toBe(true)
+    expect(coerceQuickConfigValue({ ...base, boolean: true } as QuickConfigControl, "false")).toBe(false)
+  })
+  it("numeric coercion", () => {
+    expect(coerceQuickConfigValue({ ...base, numeric: true } as QuickConfigControl, "5")).toBe(5)
+  })
+  it("plain passthrough", () => {
+    expect(coerceQuickConfigValue(base as QuickConfigControl, "V5")).toBe("V5")
+  })
+})
+
+import { NODE_QUICK_CONFIGS } from "../node-quick-configs"
+
+describe("suno-generate quick configs", () => {
+  const controls = NODE_QUICK_CONFIGS["suno-generate"]
+  it("is Model, Instrumental, Vocal", () => {
+    expect(controls.map((c) => c.field)).toEqual(["model", "instrumental", "vocalGender"])
+  })
+  it("Instrumental is a boolean 2-option dropdown", () => {
+    const instr = controls.find((c) => c.field === "instrumental")!
+    expect(instr.boolean).toBe(true)
+    expect((instr.options as unknown as { value: string }[]).map((o) => o.value)).toEqual(["false", "true"])
+  })
+  it("Vocal: sentinel auto, preserveOnHide, hidden when instrumental, Auto-first", () => {
+    const vocal = controls.find((c) => c.field === "vocalGender")!
+    expect(vocal.sentinelUndefined).toBe("auto")
+    expect(vocal.preserveOnHide).toBe(true)
+    const optsFn = vocal.options as unknown as (d: Record<string, unknown>) => { value: string }[]
+    expect(optsFn({ instrumental: true })).toEqual([])
+    expect(optsFn({ instrumental: false }).map((o) => o.value)).toEqual(["auto", "male", "female"])
+  })
+  it("other suno-* nodes keep just the model control", () => {
+    expect(NODE_QUICK_CONFIGS["suno-cover"].map((c) => c.field)).toEqual(["model"])
+  })
+})
