@@ -278,6 +278,15 @@ const ALLOWED_PATHS = [
   // (baselined). No cross-user reads or writes.
   /^src\/routes\/cinematic-avatar\.ts$/,
 
+  // Video Director (HyperFrames Phase 1): the create_explainer / create_launch_video
+  // MCP tools dispatch here with the internal-orchestrator secret (userId resolved
+  // from the request body). The route creates a jobs row tagged with that user's
+  // `user_id`, reserveCreditsForJob runs under the service-role client, and the
+  // BullMQ video-director worker reads + commits/refunds the job by job.id
+  // out-of-band. Mirrors ai-avatar / forced-alignment (baselined). No cross-user
+  // reads or writes — the job is scoped to the dispatching user's id at insert time.
+  /^src\/routes\/video-director\.ts$/,
+
   // Video SFX (Replicate mmaudio): creates a jobs row tagged with
   // `user_id: req.userId` (line 196). Service-role required for the same
   // reasons as video-retake — reserveCreditsForJob runs under the same

@@ -1,6 +1,6 @@
 # MCP Tool Reference
 
-Complete reference for the 135 tools exposed by the Nodaro MCP server.
+Complete reference for the 138 tools exposed by the Nodaro MCP server.
 
 ## Scopes
 
@@ -12,7 +12,7 @@ authorizing the connector; missing scopes cause tools to be omitted entirely
 |-------|----------|
 | `workflows:read` | `list_projects`, `get_project`, `list_workflows`, `get_workflow`, `get_workflow_json`, `export_workflow`, `list_components`, `get_component_inputs` |
 | `workflows:write` | `create_workflow`, `delete_workflow`, `update_workflow_json`, `import_workflow` |
-| `workflows:execute` | `run_workflow`, all generation verbs (image/video/audio/Suno/character/location/object), `run_component`, `run_app`, `delete_app_run`, `analyze_prompt`, `generate_prompt`, `enhance_prompt`, `reduce`, `forced_alignment`, `resolve_shot_sequence`, `render_shot_sequence` |
+| `workflows:execute` | `run_workflow`, all generation verbs (image/video/audio/Suno/character/location/object), `run_component`, `run_app`, `delete_app_run`, `analyze_prompt`, `generate_prompt`, `enhance_prompt`, `reduce`, `forced_alignment`, `resolve_shot_sequence`, `render_shot_sequence`, `create_explainer`, `create_launch_video` |
 | `jobs:read` | `list_jobs`, `get_job`, `diagnose_run` |
 | `assets:read` | `browse_gallery`, `browse_uploads`, `list_favorites`, `get_asset`, `display_asset`, `get_app_run`, `list_characters`, `get_character`, `list_locations`, `get_location` |
 | `assets:write` | `favorite_asset`, `create_character`, `update_character`, `approve_portrait`, `recaption_character`, `create_location`, `update_location`, `approve_main_image`, `recaption_location`, `approve_object_main_image`, `recaption_object`, `upload_image_widget`, `upload_audio_widget`, `upload_video_widget`, `request_image_upload`, `request_audio_upload`, `request_video_upload`, `prepare_image_upload`, `prepare_audio_upload`, `prepare_video_upload` |
@@ -23,7 +23,7 @@ authorizing the connector; missing scopes cause tools to be omitted entirely
 | `pipelines:approve` | `chat_pipeline_stage`, `apply_chat_proposal` |
 | `presets:read` | `list_node_presets`, `get_node_preset` |
 
-**Ungated (always visible):** `ping`, `list_models`, `start_film_director`, `start_workflow_editor`, `get_node_skill`, `get_picker_catalog`
+**Ungated (always visible):** `ping`, `list_models`, `start_film_director`, `start_video_director`, `start_workflow_editor`, `get_node_skill`, `get_picker_catalog`
 
 ---
 
@@ -1134,6 +1134,49 @@ Returns a `job_id`; the finished video appears in your library when the render
 is complete.
 
 **Input:** `plan` (a resolved `ShotSequencePlan` from `resolve_shot_sequence`)
+
+---
+
+## Video Director tools
+
+One-shot tools that author + render a narrated motion-graphics video in a single
+call (author → speech → alignment → resolve → render). The director writes the
+VO script and shot-sequence brief for you. See [Video Director](./video-director.md)
+for credit costs, honest Phase-1 limits, and the full brief format.
+
+### `start_video_director`
+
+**Scope:** none — always visible (all editions, free).
+
+Returns the motion-director doctrine: pick a genre and arc, draft the VO as cue
+phrases, build a `ShotSequenceBrief`, then drive the Phase-0 pipeline yourself.
+Idempotent, non-destructive, zero credits.
+
+**Input:** none
+
+---
+
+### `create_explainer`
+
+**Scope:** `workflows:execute` (Cloud only)
+
+Author and render a narrated, time-coded concept-led explainer video in one
+call. Costs **20 credits** (9 authoring + 3 speech + 3 alignment + 0 resolve +
+5 render). Returns a `job_id`.
+
+**Input:** `topic` (string, 1–8000 chars) — what the explainer should cover.
+
+---
+
+### `create_launch_video`
+
+**Scope:** `workflows:execute` (Cloud only)
+
+Author and render a narrated product-launch video. Pass `brief` describing the
+product. Passing `url` without `brief` returns a deferred-capability message
+(real-UI capture is not yet supported). Costs **20 credits**. Returns a `job_id`.
+
+**Input:** `brief` (string, 1–8000 chars), `url` (string, optional — not yet supported)
 
 ---
 

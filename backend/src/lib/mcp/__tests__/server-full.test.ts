@@ -110,6 +110,15 @@ describe("buildMcpServer full catalog (v1.1)", () => {
     expect(names.has("check_balance")).toBe(true)
     expect(names.has("credit_transactions")).toBe(true)
 
+    // Video Director tools:
+    //   start_video_director — always-on (pure content delivery, no scope gate)
+    //   create_explainer / create_launch_video — hasCredits() + workflows:execute
+    //   Test env is EDITION=cloud so hasCredits()=true; all scopes granted so
+    //   workflows:execute passes.
+    expect(names.has("start_video_director")).toBe(true)
+    expect(names.has("create_explainer")).toBe(true)
+    expect(names.has("create_launch_video")).toBe(true)
+
     // 4 gallery tools
     expect(names.has("browse_gallery")).toBe(true)
     expect(names.has("list_favorites")).toBe(true)
@@ -157,11 +166,12 @@ describe("buildMcpServer full catalog (v1.1)", () => {
 
     // Sanity: ping + verbs + jobs + workflows + projects + gallery + 9 upload
     // tools + app tools (list_apps, get_app_inputs, run_app, delete_app_run) +
-    // shot-sequence tools (forced_alignment, resolve_shot_sequence, render_shot_sequence).
+    // shot-sequence tools (forced_alignment, resolve_shot_sequence, render_shot_sequence) +
+    // video-director tools (start_video_director, create_explainer, create_launch_video).
     // Upper bound has headroom for future tool additions; bump when adding
     // a new tool family rather than tracking every single tool.
     expect(tools.length).toBeGreaterThanOrEqual(28)
-    expect(tools.length).toBeLessThanOrEqual(130)
+    expect(tools.length).toBeLessThanOrEqual(135)
   })
 
   it("with only jobs:read, registers ping + jobs tools and nothing else", async () => {
@@ -180,12 +190,17 @@ describe("buildMcpServer full catalog (v1.1)", () => {
     expect(names).toContain("get_job")
     // list_models is always-on (no gate)
     expect(names).toContain("list_models")
+    // start_video_director is always-on (pure content delivery, no scope gate)
+    expect(names).toContain("start_video_director")
 
     // Must NOT include any execute-gated tool
     expect(names).not.toContain("generate_image")
     expect(names).not.toContain("run_workflow")
     expect(names).not.toContain("run_component")
     expect(names).not.toContain("run_app")
+    // create_explainer / create_launch_video require workflows:execute
+    expect(names).not.toContain("create_explainer")
+    expect(names).not.toContain("create_launch_video")
     // Must NOT include workflows:read tools
     expect(names).not.toContain("list_workflows")
     expect(names).not.toContain("list_components")
@@ -201,7 +216,7 @@ describe("buildMcpServer full catalog (v1.1)", () => {
     expect(names).not.toContain("list_apps")
   })
 
-  it("with no scopes, registers only the unscoped tools (ping, list_models, start_film_director, start_workflow_editor, get_node_skill, get_picker_catalog)", async () => {
+  it("with no scopes, registers only the unscoped tools (ping, list_models, start_film_director, start_workflow_editor, get_node_skill, get_picker_catalog, start_video_director)", async () => {
     const fastify = Fastify()
     const server = await buildMcpServer({
       userId: "u1",
@@ -225,10 +240,16 @@ describe("buildMcpServer full catalog (v1.1)", () => {
     // get_picker_catalog is also ungated content delivery (returns parameter-
     // picker value catalogs) — same posture as get_node_skill.
     expect(names).toContain("get_picker_catalog")
+    // start_video_director is unconditionally registered on all editions —
+    // pure content delivery, no scope gate, same posture as start_film_director.
+    expect(names).toContain("start_video_director")
     expect(names).not.toContain("list_jobs")
     expect(names).not.toContain("generate_image")
     expect(names).not.toContain("check_balance")
-    expect(tools).toHaveLength(6)
+    // create_explainer / create_launch_video require workflows:execute
+    expect(names).not.toContain("create_explainer")
+    expect(names).not.toContain("create_launch_video")
+    expect(tools).toHaveLength(7)
   })
 
   it("v3.0: dynamic per-user tools dropped — list_apps + get_app_inputs + run_app cover the same surface", async () => {

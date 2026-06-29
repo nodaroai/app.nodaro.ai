@@ -126,6 +126,10 @@ const TOOLS_WITHOUT_INPUTS: ReadonlySet<string> = new Set<string>([
   // (get_node_skill takes a `node_type` arg, so it has a schema and is NOT
   // in this allowlist.)
   "start_workflow_editor",
+  // Pure content-delivery tool — returns the Video Director motion-doctrine
+  // (HEADER + doctrine.md + explainer.md + product-launch.md). No inputs,
+  // no side effects. Same posture as start_film_director. See video-director.ts.
+  "start_video_director",
 ])
 
 // ---------------------------------------------------------------------------
