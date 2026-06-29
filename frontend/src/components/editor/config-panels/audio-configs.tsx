@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { TagTextarea } from "./tag-textarea"
 import { getLanguagesForModel, ALL_LANGUAGES, isV3Model } from "@/lib/audio-tags"
 import { SUNO_SUGGESTION_ITEMS, SUNO_LYRICS_SUGGESTION_ITEMS, SUNO_STYLE_SUGGESTION_ITEMS } from "@/lib/suno-tags"
+import { SUNO_SLIDER_META } from "@/lib/suno-sliders"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Slider } from "@/components/ui/slider"
@@ -515,18 +516,21 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
           </SelectContent>
         </Select>
       </MappableField>
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-center justify-between"><label className="text-xs font-medium text-muted-foreground">Style Weight</label><span className="text-xs text-muted-foreground">{data.styleWeight ?? 0.5}</span></div>
-        <input type="range" min={0} max={1} step={0.01} value={data.styleWeight ?? 0.5} onChange={(e) => onUpdate({ styleWeight: parseFloat(e.target.value) })} className="w-full accent-[#ff0073]" />
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-center justify-between"><label className="text-xs font-medium text-muted-foreground">Weirdness</label><span className="text-xs text-muted-foreground">{data.weirdnessConstraint ?? 0}</span></div>
-        <input type="range" min={0} max={1} step={0.01} value={data.weirdnessConstraint ?? 0} onChange={(e) => onUpdate({ weirdnessConstraint: parseFloat(e.target.value) })} className="w-full accent-[#ff0073]" />
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-center justify-between"><label className="text-xs font-medium text-muted-foreground">Audio Weight</label><span className="text-xs text-muted-foreground">{data.audioWeight ?? 0.5}</span></div>
-        <input type="range" min={0} max={1} step={0.01} value={data.audioWeight ?? 0.5} onChange={(e) => onUpdate({ audioWeight: parseFloat(e.target.value) })} className="w-full accent-[#ff0073]" />
-      </div>
+      {SUNO_SLIDER_META.map((s) => (
+        <div key={s.key} className="flex flex-col gap-1">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-medium text-muted-foreground">{s.label}</label>
+            <span className="text-xs text-muted-foreground">{(data[s.key] as number | undefined) ?? s.default}</span>
+          </div>
+          <input
+            type="range" min={s.min} max={s.max} step={s.step}
+            value={(data[s.key] as number | undefined) ?? s.default}
+            onChange={(e) => onUpdate({ [s.key]: parseFloat(e.target.value) } as Partial<SunoGenerateData>)}
+            className="w-full accent-[#ff0073]"
+          />
+          <p className="text-[10px] leading-tight text-muted-foreground/70">{s.description}</p>
+        </div>
+      ))}
       <div className="flex items-center gap-2">
         <input type="checkbox" id="suno-instrumental" checked={data.instrumental ?? false} onChange={(e) => onUpdate({ instrumental: e.target.checked })} className="accent-[#ff0073]" />
         <label htmlFor="suno-instrumental" className="text-xs font-medium text-muted-foreground">Instrumental (no vocals)</label>

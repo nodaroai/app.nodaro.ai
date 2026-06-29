@@ -42,6 +42,20 @@ The four **Advanced** handles appear when you expand **Advanced ▾** on the nod
 
 - `audio` — generated audio URL
 
+## Bottom-strip controls
+
+The node's bottom strip exposes the most-used non-text controls without opening the config panel:
+
+- **Model** — Suno model version.
+- **Instrumental** — `With vocals` / `Instrumental — no vocals`.
+- **Vocal** — `Auto` / `Male` / `Female` (hidden when Instrumental is on).
+- **Mix ▾** — three advanced sliders (0.00–1.00):
+  - **Style Weight** — how literally Suno follows your Style tags.
+  - **Weirdness** — how far Suno strays from genre norms.
+  - **Audio Weight** — how strongly a wired voice-persona / reference steers the song.
+
+The same sliders (with these descriptions) are in the config panel.
+
 ## Best Practices
 
 - Use Suno metatags in lyrics (`[Verse]`, `[Chorus]`, `[Bridge]`, `[Outro]`) to structure the song.
