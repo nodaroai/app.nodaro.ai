@@ -4,6 +4,7 @@ import { useMemo, useCallback } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MappableField } from "@/components/editor/config-panels/mappable-field"
+import { SunoStyleAiButton } from "./suno-style-ai-button"
 import { getConnectedSources } from "@/components/editor/config-panels/helpers"
 import { isPromptEditorPortalInteraction } from "@/components/editor/config-panels/prompt-editor/prompt-editor-portal"
 import { usePromptEditorRefs } from "./inline-node-prompt/use-prompt-editor-refs"
@@ -83,6 +84,7 @@ export function SunoFieldEditModal({
               sources={sources}
               fieldMappings={fieldMappings}
               onMapField={onMapField}
+              labelAction={meta.field === "style" ? <SunoStyleAiButton nodeId={nodeId} /> : undefined}
             >
               <SunoFieldEditor
                 meta={meta}

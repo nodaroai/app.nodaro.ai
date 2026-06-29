@@ -20,6 +20,10 @@ vi.mock("@/lib/supabase", () => ({
   }),
 }))
 
+// The Style AI button (PromptHelperButton) self-gates on hasCredits(); force it
+// true so the button renders in tests (mirrors suno-style-ai-button.test.tsx).
+vi.mock("@/lib/edition", async (orig) => ({ ...(await orig()), hasCredits: () => true }))
+
 import { SunoFieldEditModal } from "../suno-field-edit-modal"
 import type { SunoEditField } from "@/components/editor/config-panels/suno-field-editor"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -79,5 +83,21 @@ describe("SunoFieldEditModal", () => {
     expect(await screen.findByText("Wired title")).toBeInTheDocument()
     // ...and the editable <Input> is NOT mounted.
     expect(screen.queryByPlaceholderText("Song title")).toBeNull()
+  })
+
+  // Phase D: the Style field's MappableField gets the ✨ Style AI button via the
+  // `labelAction` slot. The modal renders only the ACTIVE field, so it shows for
+  // field=style and is absent for any other field.
+  it("shows the Style AI button in the modal for the style field", async () => {
+    renderModal("style")
+    expect(await screen.findByRole("button", { name: /ai/i })).toBeInTheDocument()
+  })
+
+  it("renders no Style AI button for the title field", async () => {
+    renderModal("title")
+    // Await the title editor so the modal has fully mounted before asserting the
+    // button's ABSENCE (otherwise queryByRole could be vacuously null).
+    expect(await screen.findByPlaceholderText("Song title")).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /ai/i })).toBeNull()
   })
 })

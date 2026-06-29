@@ -49,6 +49,9 @@ const NODE_CATEGORY_MAP: Record<string, string> = {
   "speech-to-video": "video",
   "generate-music": "music",
   "suno-generate": "music",
+  // Composite wizard target — reuses the music persona; only the OUTPUT rule in
+  // buildWizardGenerateSystem differs (style tags vs prose).
+  "suno-generate:style": "music",
   "text-to-audio": "audio",
   "text-prompt": "text",
 }
@@ -200,10 +203,28 @@ export function buildWizardGenerateSystem(ctx: WizardGenerateContext): string {
   const providerBlock = buildProviderBlock(ctx.nodeType, ctx.provider)
   const contextBlock = buildContextBlock(ctx)
 
+  // Composite `suno-generate:style` target: emit Suno *style tags* (comma-
+  // separated genres/moods/instruments/production descriptors) instead of a
+  // natural-language prose prompt. The `:style` branch rewrites the Task line,
+  // the output rule (#1), AND the "do not keyword-stuff" rule (#3) so the WHOLE
+  // prompt agrees — a tag list would otherwise contradict the base prose Task
+  // line and violate Rule #3. Every other nodeType keeps byte-identical prose
+  // instructions (each `else` literal is the verbatim original string).
+  const isSunoStyle = ctx.nodeType.endsWith(":style")
+  const taskLine = isSunoStyle
+    ? `Generate Suno **style tags** from the user's selections — genres, moods, instruments, and production descriptors.`
+    : `Build a natural-language ${contentCategory} generation prompt from the user's selections.`
+  const outputRule = isSunoStyle
+    ? `Output ONLY a comma-separated list of concise Suno style tags (genres, moods, instruments, production descriptors) — e.g. "lo-fi hip hop, mellow, jazzy, vinyl crackle". No sentences, no preamble, no quotes.`
+    : `Weave all selections into one concise, natural-language prompt — under 500 characters.`
+  const keywordRule = isSunoStyle
+    ? `Use concise tags or short phrases — a comma-separated list IS expected here (this field is style tags, not prose).`
+    : `Weave style, mood, lighting naturally — do not keyword-stuff.`
+
   return `${persona}
 
 ## Task
-Build a natural-language ${contentCategory} generation prompt from the user's selections.
+${taskLine}
 
 ## User's Selections
 ${selectionsBlock}
@@ -211,9 +232,9 @@ ${ctx.originalPrompt ? `\n## Original Prompt\n${ctx.originalPrompt}` : ""}
 ## Node Context${contextBlock}
 ${providerBlock}
 ${ctx.userPreference ? `## User Preference\nThe user has set a general preference. Follow it:\n"${ctx.userPreference}"\n` : ""}## Rules
-1. Weave all selections into one concise, natural-language prompt — under 500 characters.
+1. ${outputRule}
 2. Preserve the user's original intent and details. If the original text is not in English, TRANSLATE it into English — the final prompt MUST be entirely in English (generation models perform best in English).
-3. Weave style, mood, lighting naturally — do not keyword-stuff.
+3. ${keywordRule}
 4. For reference-role selections, include explicit per-image role instructions bound by ordinal (e.g., "Image 1 defines the character — preserve identity exactly. Image 2 defines the mood and lighting.").
 5. If "what-to-avoid" selections are present, append them as a negative instruction at the end of the prompt (e.g., "Avoid: CGI look, plastic skin, oversaturated colors").
 6. Output ONLY valid JSON — no markdown, no wrapping:
