@@ -30,6 +30,9 @@ export type {
   WorkflowExportCharacter,
   WorkflowExportObject,
   WorkflowExportLocation,
+  // The editor's structured-reference shape, used by GenerateImageParams /
+  // GenerateVideoParams below so callers can build `connectedReferences`.
+  ConnectedReference,
 } from "@nodaro/shared"
 
 // --- Resource classes (re-exported so consumers can typecheck `client.workflows`, etc.) ---
@@ -131,6 +134,9 @@ export type {
   NodeJobOutput,
   RunAndWaitOptions,
   RunManyResult,
+  StructuredReferenceParams,
+  GenerateImageParams,
+  GenerateVideoParams,
 } from "./resources/nodes.js"
 
 export type {

@@ -209,6 +209,37 @@ describe("POST /v1/text-to-video", () => {
     )
   })
 
+  it("assembles connectedReferences server-side into the queued prompt + referenceImageUrls", async () => {
+    mockJobInsert({ data: { id: "job-cr" }, error: null })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/text-to-video",
+      payload: {
+        prompt: "a chase scene",
+        userId: "00000000-0000-4000-8000-000000000001",
+        provider: "seedance-2",
+        connectedReferences: [
+          {
+            id: "r1",
+            defaultName: "Car",
+            source: "wired-image",
+            url: "https://cdn.nodaro.ai/uploads/car.png",
+            description: "a red car",
+          },
+        ],
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)?.[1] as Record<string, unknown>
+    // The unmentioned wired-image ref auto-attaches its URL + emits an @image_N directive.
+    expect(queued.referenceImageUrls).toEqual(["https://cdn.nodaro.ai/uploads/car.png"])
+    expect(queued.prompt).toContain("@image_1")
+    expect(queued.prompt).toContain("a red car")
+    expect(queued.prompt).toContain("a chase scene")
+  })
+
   it("returns 500 when job insert fails", async () => {
     mockJobInsert({
       data: null,

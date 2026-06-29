@@ -4,6 +4,7 @@ import { buildCompositePrompt } from "../prompt-builder-bridge.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { config } from "../../config.js"
 import type { RegisterOpts } from "./verbs-image.js"
+import { connectedReferenceSchema } from "../../connected-reference-schema.js"
 import {
   parseJobId,
   errorResult,
@@ -114,6 +115,15 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         negative_prompt: z.string().max(8000).optional(),
         seed: z.number().int().min(0).max(2147483647).optional(),
         structured: StructuredFields.optional(),
+        connected_references: z.array(connectedReferenceSchema).max(14).optional()
+          .describe(
+            "Advanced structured references — the editor's wired-reference shape (each needs at least " +
+            "{id, defaultName, source, url}, url a public https URL). Assembled server-side into per-ref " +
+            "@image_N directives + {image:N} token resolution (labeled/ordered refs, unlike flat " +
+            "reference_image_urls). Only models with image-reference support attach them.",
+          ),
+        reference_order: z.array(z.string()).max(14).optional()
+          .describe("Advanced: reorder connected_references by their stable ids; renumbers the @image_N bindings."),
       },
               outputSchema: {
           jobId: z.string(),
@@ -242,6 +252,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         generateAudio: effective.sound as boolean | undefined,
         negativePrompt: effective.negative_prompt as string | undefined,
         seed: effective.seed as number | undefined,
+        ...(args.connected_references ? { connectedReferences: args.connected_references } : {}),
+        ...(args.reference_order ? { referenceOrder: args.reference_order } : {}),
         mcp_client: session.clientName,
         userId: session.userId,
       }
@@ -388,6 +400,15 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         // Legacy alias — accepted for one release, normalized internally.
         auto_loop_trim: z.boolean().optional()
           .describe("DEPRECATED: use loop_trim instead. Maps to loop_trim={enabled,frames_to_test:8,quality:'precise'}."),
+        connected_references: z.array(connectedReferenceSchema).max(14).optional()
+          .describe(
+            "Advanced structured references — the editor's wired-reference shape (each needs at least " +
+            "{id, defaultName, source, url}, url a public https URL). Assembled server-side into per-ref " +
+            "@image_N directives + {image:N} token resolution (labeled/ordered refs, unlike flat " +
+            "reference_image_urls). Only models with image-reference support attach them.",
+          ),
+        reference_order: z.array(z.string()).max(14).optional()
+          .describe("Advanced: reorder connected_references by their stable ids; renumbers the @image_N bindings."),
       },
               outputSchema: {
           jobId: z.string(),
@@ -502,6 +523,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         ...(refImageUrls.length ? { referenceImageUrls: refImageUrls } : {}),
         ...(refVideoUrls.length ? { referenceVideoUrls: refVideoUrls } : {}),
         ...(refAudioUrls.length ? { referenceAudioUrls: refAudioUrls } : {}),
+        ...(args.connected_references ? { connectedReferences: args.connected_references } : {}),
+        ...(args.reference_order ? { referenceOrder: args.reference_order } : {}),
         // Pass through only when explicitly set so the route's default (true)
         // applies when the caller doesn't specify. Worker still gates on
         // `provider === "veo3.1"` — non-veo3.1 jobs ignore this flag.

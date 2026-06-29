@@ -39,7 +39,9 @@ exports[`per-node skill file snapshots > generate-image.md auto-gen blocks match
 - \`mask_url\`
 - \`strength\`
 - \`guidance_scale\`
-- \`structured\`",
+- \`structured\`
+- \`connected_references\`
+- \`reference_order\`",
   "node-data-shape": "**Type:** \`generate-image\`
 **Category:** ai
 **Credit cost:** 5
@@ -225,7 +227,9 @@ exports[`per-node skill file snapshots > generate-video.md auto-gen blocks match
 - \`sound\`
 - \`negative_prompt\`
 - \`seed\`
-- \`structured\`",
+- \`structured\`
+- \`connected_references\`
+- \`reference_order\`",
   "node-data-shape": "**Type:** \`generate-video\`
 **Category:** ai
 **Credit cost:** 20
@@ -379,7 +383,9 @@ exports[`per-node skill file snapshots > image-to-video.md auto-gen blocks match
 - \`reference_video_urls\`
 - \`reference_audio_urls\`
 - \`loop_trim\`
-- \`auto_loop_trim\`",
+- \`auto_loop_trim\`
+- \`connected_references\`
+- \`reference_order\`",
   "node-data-shape": "**Type:** \`image-to-video\`
 **Category:** ai
 **Credit cost:** 20

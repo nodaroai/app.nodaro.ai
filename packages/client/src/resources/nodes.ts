@@ -1,6 +1,7 @@
 import type { NodaroClient } from "../client.js"
 import type { JobStatusResult } from "./jobs.js"
 import { JobAbortedError, JobFailedError, JobTimeoutError } from "../errors.js"
+import type { ConnectedReference } from "@nodaro/shared"
 
 export type NodeCategory =
   | "input"
@@ -67,6 +68,50 @@ export interface NodeDescriptor {
 export type RunNodeResult =
   | { jobId: string; usageLogId?: string; [k: string]: unknown }
   | Record<string, unknown>
+
+/**
+ * Structured references — the editor's wired-reference shape — shared by
+ * `generate-image` and `generate-video`. The route assembles them server-side
+ * into per-ref `@image_N` directives and resolves `{image:N}` prompt tokens, so
+ * a direct SDK run binds inline references exactly like the canvas. Pass the
+ * same `ConnectedReference[]` the editor builds; the route dedupes + caps them
+ * to the provider's image-reference limit.
+ */
+export interface StructuredReferenceParams {
+  /** Wired references assembled server-side (deduped + capped per provider). */
+  connectedReferences?: ConnectedReference[]
+  /** Reorder the assembled reference list by stable ref ids; renumbers `@image_N`. */
+  referenceOrder?: string[]
+}
+
+/**
+ * Typed request body for `nodes.run("generate-image", …)` / `runAndWait`.
+ * Common fields are typed; any other route field passes through via the index
+ * signature (the route Zod-validates the full body).
+ */
+export interface GenerateImageParams extends StructuredReferenceParams {
+  prompt?: string
+  provider?: string
+  /** Flat reference image URLs — appended after `connectedReferences`. */
+  referenceImageUrls?: string[]
+  negativePrompt?: string
+  [k: string]: unknown
+}
+
+/**
+ * Typed request body for `nodes.run("generate-video", …)` / `runAndWait`.
+ * Common fields are typed; any other route field passes through.
+ */
+export interface GenerateVideoParams extends StructuredReferenceParams {
+  prompt?: string
+  provider?: string
+  /** Start-frame image (image-to-video). */
+  imageUrl?: string
+  referenceImageUrls?: string[]
+  referenceVideoUrls?: string[]
+  referenceAudioUrls?: string[]
+  [k: string]: unknown
+}
 
 /**
  * The `output_data` shape a finalized generation job writes. Every async
@@ -187,6 +232,9 @@ export class NodesResource {
    * @param params  Request body. Field names must match the node's
    *                `inputSchema` (see `get(type).inputSchema`).
    */
+  run(type: "generate-image", params?: GenerateImageParams): Promise<RunNodeResult>
+  run(type: "generate-video", params?: GenerateVideoParams): Promise<RunNodeResult>
+  run(type: string, params?: Record<string, unknown>): Promise<RunNodeResult>
   run(type: string, params: Record<string, unknown> = {}): Promise<RunNodeResult> {
     return this.client.request("POST", `/v1/${encodeURIComponent(type)}`, { body: params })
   }
@@ -213,6 +261,9 @@ export class NodesResource {
    * @param params  Request body — field names match the node's `inputSchema`.
    * @param opts    `signal` / `onProgress` / `pollMs` / `maxMs`.
    */
+  runAndWait(type: "generate-image", params?: GenerateImageParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
+  runAndWait(type: "generate-video", params?: GenerateVideoParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
+  runAndWait(type: string, params?: Record<string, unknown>, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
   async runAndWait(
     type: string,
     params: Record<string, unknown> = {},

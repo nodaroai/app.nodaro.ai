@@ -1,7 +1,7 @@
 ---
 node_type: text-to-video
-generated_at: 2026-06-28T21:28:37.144Z
-generated_from: e83ff8544
+generated_at: 2026-06-29T17:01:42.070Z
+generated_from: ef9c0616e
 ---
 
 # Text to Video
@@ -76,6 +76,8 @@ generated_from: e83ff8544
 - `negative_prompt`
 - `seed`
 - `structured`
+- `connected_references`
+- `reference_order`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## Common gotchas

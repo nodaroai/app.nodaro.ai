@@ -1,7 +1,7 @@
 ---
 node_type: generate-image
-generated_at: 2026-06-23T20:58:11.865Z
-generated_from: c4e4998f5
+generated_at: 2026-06-29T17:01:41.973Z
+generated_from: ef9c0616e
 ---
 
 # generate-image
@@ -84,6 +84,8 @@ generated_from: c4e4998f5
 - `strength`
 - `guidance_scale`
 - `structured`
+- `connected_references`
+- `reference_order`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## When to use

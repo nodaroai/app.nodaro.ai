@@ -9,6 +9,7 @@ import {
   JobAbortedError,
 } from "../../index.js"
 import type { JobStatus, JobStatusResult } from "../jobs.js"
+import type { GenerateVideoParams, GenerateImageParams } from "../../index.js"
 
 function mockOk<T>(body: T) {
   return Promise.resolve({ ok: true, status: 200, json: async () => body } as unknown as Response)
@@ -33,7 +34,7 @@ function runThenStatuses(
   statuses: Partial<JobStatusResult>[],
 ): FetchMock {
   let statusIdx = 0
-  return vi.fn((url: string, init: { method: string }) => {
+  return vi.fn((_url: string, init: { method: string }) => {
     if (init.method === "POST") return mockOk(runBody)
     // GET status — return the next status, repeating the last one if exhausted.
     const s = statuses[Math.min(statusIdx, statuses.length - 1)]
@@ -300,5 +301,50 @@ describe("nodes.runMany", () => {
       c.nodes.runMany("generate-image", [{}, {}], { signal: ac.signal }),
     ).rejects.toBeInstanceOf(JobAbortedError)
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
+describe("nodes structured references (typed params)", () => {
+  it("run('generate-video', GenerateVideoParams) forwards connectedReferences + referenceOrder", async () => {
+    let body: Record<string, unknown> | undefined
+    const fetchMock = makeFetch((_url, init) => {
+      body = init.body ? (JSON.parse(init.body) as Record<string, unknown>) : undefined
+      return mockOk({ jobId: "job-1" })
+    })
+    const c = client(fetchMock)
+    // Typed at compile time: this only compiles with the GenerateVideoParams +
+    // ConnectedReference types exported from the SDK.
+    const params: GenerateVideoParams = {
+      prompt: "a chase scene",
+      provider: "seedance-2",
+      connectedReferences: [
+        { id: "r1", defaultName: "Car", source: "wired-image", url: "https://cdn.nodaro.ai/uploads/car.png" },
+      ],
+      referenceOrder: ["r1"],
+    }
+    await c.nodes.run("generate-video", params)
+    expect(body).toMatchObject({
+      connectedReferences: [{ id: "r1", url: "https://cdn.nodaro.ai/uploads/car.png" }],
+      referenceOrder: ["r1"],
+    })
+  })
+
+  it("run('generate-image', GenerateImageParams) forwards connectedReferences", async () => {
+    let body: Record<string, unknown> | undefined
+    const fetchMock = makeFetch((_url, init) => {
+      body = init.body ? (JSON.parse(init.body) as Record<string, unknown>) : undefined
+      return mockOk({ jobId: "job-2" })
+    })
+    const c = client(fetchMock)
+    const params: GenerateImageParams = {
+      prompt: "a hero shot",
+      connectedReferences: [
+        { id: "r1", defaultName: "Hero", source: "wired-character", url: "https://cdn.nodaro.ai/uploads/hero.png", characterSlug: "hero" },
+      ],
+    }
+    await c.nodes.run("generate-image", params)
+    expect(body).toMatchObject({
+      connectedReferences: [{ id: "r1", characterSlug: "hero" }],
+    })
   })
 })

@@ -5,7 +5,7 @@
  */
 
 import { resolveTemplate, applyTemplate } from "./prompt-templates.js"
-import { NATIVE_NEGATIVE_PROMPT_MODELS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, getMaxImagePromptChars, getMaxNegativePromptChars } from "./model-constants.js"
+import { NATIVE_NEGATIVE_PROMPT_MODELS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, imageReferenceLimit, getMaxImagePromptChars, getMaxNegativePromptChars } from "./model-constants.js"
 import { getStylePromptHint } from "./style.js"
 import { findCharacterMentionTokens, type CharacterMentionTokenInfo } from "./character-mention-slug.js"
 import { usageModeDirective, DEFAULT_USAGE_MODE, type UsageMode } from "./character-usage-mode.js"
@@ -1061,6 +1061,23 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
       if (r.isExtraRef) return true
       return !suppressedCanonicalCharacterIds.has(r.characterSlug)
     })
+  }
+
+  // Cap structured references to the provider's image-reference limit — the SAME
+  // cap the canvas enforces via handle-limits. Applied UP FRONT (like the
+  // suppression filter above) so the direct API / MCP / SDK path can't send more
+  // references than the provider accepts and leave an `Image N` directive
+  // pointing at a slot the provider silently drops. Flat `referenceImageUrls` are
+  // numbered first, so they consume the budget. Only ref-capable providers
+  // (refCap > 0) cap here; non-ref providers drop all URLs via `supportsRefs`.
+  if (connectedReferences && connectedReferences.length > 0) {
+    const refCap = imageReferenceLimit(provider)
+    if (refCap > 0) {
+      const structuredBudget = Math.max(0, refCap - referenceImageUrls.length)
+      if (connectedReferences.length > structuredBudget) {
+        connectedReferences = connectedReferences.slice(0, structuredBudget)
+      }
+    }
   }
 
   // -------------------------------------------------------------------------

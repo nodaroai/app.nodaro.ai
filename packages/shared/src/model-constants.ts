@@ -1176,28 +1176,41 @@ export function findSeedance2AudioOverLimit(
 }
 
 /**
- * Per-provider connection caps for the typed reference handles on Generate Video.
- * - Seedance 2 providers: full multimodal caps from SEEDANCE_2_REF_LIMITS.
- * - Other providers in PROVIDERS_WITH_REFERENCES: typically 1 image, no video/audio.
- * - Providers absent from the map = 0 caps (popover dims the handle with
- *   "Not supported by [Model]").
+ * Per-provider connection caps for the typed reference handles on Generate Video
+ * AND the cap for the server-side `connectedReferences` assembly (`imageCap`).
  *
- * Seeded conservatively. Add entries as new providers gain ref support.
+ * The KEY SET is bound 1:1 to MODEL_CATALOG (kind:"video" + features:
+ * ["reference-image"]) by the drift guard in `__tests__/video-ref-limits.test.ts`:
+ * adding a ref-capable video model to the catalog without a cap here — or a cap
+ * here without the catalog flag — fails CI. So the CATALOG is the single source
+ * for "is this model ref-capable", and this map is the single source for the
+ * NUMERIC caps (sourced from the provider configs, see per-line notes).
+ * Providers absent from the map = 0 caps (the popover dims the handle with
+ * "Not supported by [Model]"; the API assembly strips `{image:N}` tokens).
  */
 export const VIDEO_REF_LIMITS_BY_PROVIDER: Record<
   string,
   { images?: number; videos?: number; audio?: number } | undefined
 > = {
+  // Seedance 2 — full multimodal caps.
   "seedance-2": { ...SEEDANCE_2_REF_LIMITS },
   "seedance-2-fast": { ...SEEDANCE_2_REF_LIMITS },
   "seedance-2-mini": { ...SEEDANCE_2_REF_LIMITS },
-  "wan-i2v": { images: 1 },
-  "hailuo-2.3-pro": { images: 1 },
-  "hailuo-2.3": { images: 1 },
-  "bytedance-pro": { images: 1 },
-  "bytedance-pro-fast": { images: 1 },
+  // Multi-image reference providers.
   "gemini-omni-video": { images: 7, videos: 1 },
-  "grok-imagine-video-1.5": { images: 1 },
+  "kling-3-omni": { images: 7 },     // catalog/docs: "end frame + up to 7 reference images"
+  "grok-i2v": { images: 7 },         // backend kie/models.ts maxRefImages: 7
+  "happyhorse-ref2v": { images: 9 }, // backend kie/models.ts maxRefImages: 9
+  // VEO 3.x — REFERENCE_2_VIDEO path caps refs at 3 (kie/video.ts slice(0, 3)).
+  "veo3": { images: 3 },
+  "veo3.1": { images: 3 },
+  "veo3_lite": { images: 3 },
+  // NOTE: wan-i2v / hailuo-2.3[-pro] / bytedance-pro[-fast] / grok-imagine-video-1.5
+  // are deliberately ABSENT. The 2026-06-28 audit (video-reference-features.test.ts)
+  // verified backend reference-forwarding paths and these i2v models have none —
+  // a single image_url start frame only. Advertising a ref cap would silently drop
+  // the user's references (the grok-imagine-video-1.5 bug). Add only with a
+  // verified provider path + the catalog `reference-image` feature.
 }
 
 /**

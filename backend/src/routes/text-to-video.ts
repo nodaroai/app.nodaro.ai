@@ -1,7 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
-import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { shotsSchema, elementsSchema } from "../lib/video-schemas.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
@@ -11,6 +10,8 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
 import { TEXT_TO_VIDEO_PROVIDERS, SEEDANCE_2_REF_LIMITS, PROMPT_HARD_CEILING, videoProviderRequiresImage, isSeedance2Provider } from "@nodaro/shared"
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared"
+import { connectedReferenceSchema } from "../lib/connected-reference-schema.js"
+import { assembleVideoConnectedReferences } from "./generate-video.js"
 import { formatZodError } from "../lib/zod-error.js"
 
 export const textToVideoBody = z.object({
@@ -32,6 +33,12 @@ export const textToVideoBody = z.object({
   referenceImageUrls: z.array(safeUrlSchema).max(SEEDANCE_2_REF_LIMITS.images).optional(),
   referenceVideoUrls: z.array(safeUrlSchema).max(SEEDANCE_2_REF_LIMITS.videos).optional(),
   referenceAudioUrls: z.array(safeUrlSchema).max(SEEDANCE_2_REF_LIMITS.audio).optional(),
+  // Structured references (parity with generate-video). When present, the route
+  // assembles them server-side via the shared video resolver — auto-attaching
+  // unmentioned wired refs to referenceImageUrls, emitting per-ref directives, and
+  // expanding {image:N} tokens. Absent → byte-identical to the flat path.
+  connectedReferences: z.array(connectedReferenceSchema).max(14).optional(),
+  referenceOrder: z.array(z.string()).max(14).optional(),
   webSearch: z.boolean().optional(),
   nsfwChecker: z.boolean().optional(),
   // VEO 3.x: opt out of KIE's auto-translate-to-English (default true
@@ -99,7 +106,11 @@ export async function textToVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, seed, resolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, enableTranslation } = parsed.data
+    const { provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, seed, resolution, generateAudio, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, enableTranslation } = parsed.data
+    // `prompt` + `referenceImageUrls` are reassigned by the connectedReferences
+    // assembly below (when present), so they're `let`, not part of the const destructure.
+    let prompt = parsed.data.prompt
+    let referenceImageUrls = parsed.data.referenceImageUrls
     const userId = req.userId
 
     if (!userId) {
@@ -120,6 +131,27 @@ export async function textToVideoRoutes(app: FastifyInstance) {
           message: `${provider} requires an input image — connect an image to the node's image input (reference images alone are not enough).`,
         },
       })
+    }
+
+    // Structured references (parity with generate-video / generate-image): assemble
+    // connectedReferences server-side via the SAME shared resolver the canvas +
+    // orchestrator use, so an MCP/SDK t2v run binds inline {image:N} references
+    // identically. Absent → flat path untouched. Provider-gated by the cap map.
+    if (parsed.data.connectedReferences && parsed.data.connectedReferences.length > 0) {
+      const assembled = assembleVideoConnectedReferences({
+        prompt,
+        provider,
+        connectedReferences: parsed.data.connectedReferences,
+        baseReferenceImageUrls: referenceImageUrls,
+        referenceOrder: parsed.data.referenceOrder,
+        referenceVideoCount: referenceVideoUrls?.length ?? 0,
+        referenceAudioCount: referenceAudioUrls?.length ?? 0,
+      })
+      prompt = assembled.prompt ?? prompt
+      referenceImageUrls = assembled.referenceImageUrls
+      // Mirror into parsed.data so buildJobInputData records what the worker gets.
+      parsed.data.prompt = prompt
+      parsed.data.referenceImageUrls = referenceImageUrls
     }
 
     // Determine model identifier for credit check (supports variable pricing by duration/audio/resolution/video-ref)
