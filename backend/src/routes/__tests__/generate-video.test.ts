@@ -84,7 +84,8 @@ vi.mock("@/lib/video-schemas.js", async () => {
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
-import { generateVideoRoutes } from "../generate-video.js"
+import { generateVideoRoutes, assembleVideoConnectedReferences } from "../generate-video.js"
+import type { ConnectedReference } from "@nodaro/shared"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 import { probeMediaDuration } from "../../providers/video/ffmpeg-utils.js"
@@ -661,5 +662,223 @@ describe("POST /v1/generate-video — character voice (voiced-video)", () => {
     expect(res.json().warnings).toBeUndefined()
     const [jobName] = vi.mocked(videoQueue.add).mock.calls.at(-1)!
     expect(jobName).toBe("image-to-video")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// connectedReferences — server-side reference assembly (parity with
+// generate-image). Pure-helper unit tests exercise the assembly semantics
+// directly; the route-integration tests below confirm the assembled prompt +
+// referenceImageUrls reach the worker payload + job record.
+// ---------------------------------------------------------------------------
+
+/** Minimal ConnectedReference factory for the helper unit tests. */
+function cref(
+  over: Partial<ConnectedReference> & { source: ConnectedReference["source"]; url: string },
+): ConnectedReference {
+  return {
+    id: over.id ?? over.url,
+    defaultName: over.defaultName ?? "object",
+    ...over,
+  } as ConnectedReference
+}
+
+describe("assembleVideoConnectedReferences (server-side video reference assembly)", () => {
+  it("auto-attaches an unmentioned wired-image ref + emits an @image_N (reference) directive", () => {
+    const out = assembleVideoConnectedReferences({
+      prompt: "a person dancing",
+      provider: "seedance-2",
+      connectedReferences: [cref({ source: "wired-image", url: "https://r2/car.png", description: "a red car" })],
+      referenceVideoCount: 0,
+      referenceAudioCount: 0,
+    })
+    expect(out.referenceImageUrls).toEqual(["https://r2/car.png"])
+    expect(out.prompt).toContain("@image_1")
+    expect(out.prompt).toContain("a red car")
+    expect(out.prompt).toContain("a person dancing")
+  })
+
+  it("expands {image:N:label} tokens to @image_N subject bindings", () => {
+    const out = assembleVideoConnectedReferences({
+      prompt: "drive {image:1:car} fast",
+      provider: "seedance-2",
+      connectedReferences: [cref({ source: "wired-image", url: "https://r2/car.png", description: "a red car" })],
+      referenceVideoCount: 0,
+      referenceAudioCount: 0,
+    })
+    expect(out.prompt).toContain("the car from @image_1")
+    expect(out.referenceImageUrls).toEqual(["https://r2/car.png"])
+  })
+
+  it("emits a canonical-fallback identity directive for an unmentioned wired character", () => {
+    const out = assembleVideoConnectedReferences({
+      prompt: "she walks",
+      provider: "seedance-2",
+      connectedReferences: [
+        cref({
+          source: "wired-character",
+          url: "https://r2/kira.png",
+          defaultName: "Kira",
+          characterSlug: "kira",
+          characterCanonicalDescription: "auburn hair, hazel eyes",
+        }),
+      ],
+      referenceVideoCount: 0,
+      referenceAudioCount: 0,
+    })
+    expect(out.referenceImageUrls).toEqual(["https://r2/kira.png"])
+    expect(out.prompt).toContain("Use these characters:")
+    expect(out.prompt).toContain("Kira")
+  })
+
+  it("strips {image:N} to bare labels + attaches nothing for a provider without image-ref support", () => {
+    const out = assembleVideoConnectedReferences({
+      prompt: "drive {image:1:car} fast",
+      provider: "kling", // not in VIDEO_REF_LIMITS_BY_PROVIDER → image cap 0
+      connectedReferences: [cref({ source: "wired-image", url: "https://r2/car.png", description: "car" })],
+      referenceVideoCount: 0,
+      referenceAudioCount: 0,
+    })
+    expect(out.prompt).toBe("drive car fast")
+    expect(out.referenceImageUrls).toBeUndefined()
+  })
+
+  it("dedups + caps the merged reference list at the provider's image limit (seedance-2 = 9)", () => {
+    const refs = Array.from({ length: 11 }, (_, i) =>
+      cref({ source: "wired-image", url: `https://r2/img${i}.png`, description: `img ${i}` }),
+    )
+    const out = assembleVideoConnectedReferences({
+      prompt: "scene",
+      provider: "seedance-2",
+      connectedReferences: refs,
+      referenceVideoCount: 0,
+      referenceAudioCount: 0,
+    })
+    expect(out.referenceImageUrls).toHaveLength(9)
+  })
+
+  it("leads with connectedReferences URLs, then appends caller-sent flat refs (deduped)", () => {
+    const out = assembleVideoConnectedReferences({
+      prompt: "scene",
+      provider: "seedance-2",
+      connectedReferences: [cref({ source: "wired-image", url: "https://r2/a.png", description: "a" })],
+      baseReferenceImageUrls: ["https://r2/b.png", "https://r2/a.png"], // a.png is a dup
+      referenceVideoCount: 0,
+      referenceAudioCount: 0,
+    })
+    expect(out.referenceImageUrls).toEqual(["https://r2/a.png", "https://r2/b.png"])
+  })
+
+  it("honors referenceOrder (reverses two extra refs by their wired:<url> tile id)", () => {
+    const out = assembleVideoConnectedReferences({
+      prompt: "scene",
+      provider: "seedance-2",
+      connectedReferences: [
+        cref({ id: "r1", source: "wired-image", url: "https://r2/a.png", description: "car" }),
+        cref({ id: "r2", source: "wired-image", url: "https://r2/b.png", description: "dog" }),
+      ],
+      referenceOrder: ["wired:https://r2/b.png", "wired:https://r2/a.png"],
+      referenceVideoCount: 0,
+      referenceAudioCount: 0,
+    })
+    expect(out.referenceImageUrls).toEqual(["https://r2/b.png", "https://r2/a.png"])
+  })
+})
+
+describe("POST /v1/generate-video — connectedReferences integration", () => {
+  const USER = "00000000-0000-4000-8000-000000000001"
+
+  it("assembles connectedReferences server-side: assembled prompt + merged refs reach the queue", async () => {
+    mockJobInsert({ data: { id: "job-cr" }, error: null })
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-video",
+      payload: {
+        prompt: "drive {image:1:car} fast",
+        userId: USER,
+        provider: "seedance-2",
+        connectedReferences: [
+          { id: "r1", defaultName: "object", source: "wired-image", url: "https://cdn.example/car.png", description: "a red car" },
+        ],
+      },
+    })
+    expect(res.statusCode).toBe(200)
+    const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)![1] as Record<string, unknown>
+    expect(queued.prompt).toContain("the car from @image_1")
+    expect(queued.referenceImageUrls).toEqual(["https://cdn.example/car.png"])
+  })
+
+  it("records the assembled referenceImageUrls in job input_data", async () => {
+    const { mockInsert } = mockJobInsert({ data: { id: "job-cr2" }, error: null })
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-video",
+      payload: {
+        prompt: "a person",
+        userId: USER,
+        provider: "seedance-2",
+        connectedReferences: [
+          { id: "r1", defaultName: "object", source: "wired-image", url: "https://cdn.example/x.png", description: "thing" },
+        ],
+      },
+    })
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input_data: expect.objectContaining({
+          referenceImageUrls: ["https://cdn.example/x.png"],
+        }),
+      }),
+    )
+  })
+
+  it("is backward-compatible: no connectedReferences → prompt + flat refs pass through unchanged", async () => {
+    mockJobInsert({ data: { id: "job-flat" }, error: null })
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-video",
+      payload: {
+        prompt: "plain prompt",
+        userId: USER,
+        provider: "seedance-2",
+        referenceImageUrls: ["https://cdn.example/flat.png"],
+      },
+    })
+    const queued = vi.mocked(videoQueue.add).mock.calls.at(-1)![1] as Record<string, unknown>
+    expect(queued.prompt).toBe("plain prompt")
+    expect(queued.referenceImageUrls).toEqual(["https://cdn.example/flat.png"])
+  })
+
+  it("rejects a connectedReference with an invalid url (SSRF/Zod gate parity with flat refs)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-video",
+      payload: {
+        prompt: "x",
+        userId: USER,
+        provider: "seedance-2",
+        connectedReferences: [
+          { id: "r1", defaultName: "object", source: "wired-image", url: "not-a-url", description: "bad" },
+        ],
+      },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+  })
+
+  it("allows a connectedReferences-only request (no imageUrl) for a ref-capable provider", async () => {
+    mockJobInsert({ data: { id: "job-noimg" }, error: null })
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-video",
+      payload: {
+        prompt: "scene",
+        userId: USER,
+        provider: "seedance-2",
+        connectedReferences: [
+          { id: "r1", defaultName: "object", source: "wired-image", url: "https://cdn.example/x.png", description: "thing" },
+        ],
+      },
+    })
+    expect(res.statusCode).toBe(200)
   })
 })

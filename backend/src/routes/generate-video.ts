@@ -13,6 +13,15 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
 import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, PROMPT_HARD_CEILING, isSeedance2Provider, estimateLoopTrimAddonCredits, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS } from "@nodaro/shared"
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared"
+import {
+  VIDEO_REF_LIMITS_BY_PROVIDER,
+  resolveVideoReferenceCore,
+  resolveReferenceTokens,
+  type ConnectedReference,
+  type VideoExtraRef,
+  type CharacterMeta,
+} from "@nodaro/shared"
+import { connectedReferenceSchema } from "../lib/connected-reference-schema.js"
 import { formatZodError } from "../lib/zod-error.js"
 
 // Character-voice orchestration (voiced-video). All optional + additive: absent
@@ -59,6 +68,16 @@ export const generateVideoBody = z.object({
   referenceImageUrls: z.array(safeUrlSchema).max(SEEDANCE_2_REF_LIMITS.images).optional(),
   referenceVideoUrls: z.array(safeUrlSchema).max(SEEDANCE_2_REF_LIMITS.videos).optional(),
   referenceAudioUrls: z.array(safeUrlSchema).max(SEEDANCE_2_REF_LIMITS.audio).optional(),
+  // Structured references (parity with generate-image). When present, the route
+  // assembles them server-side via the shared video resolver — auto-attaching
+  // unmentioned wired-ref URLs to `referenceImageUrls`, emitting per-ref
+  // directives, and expanding `{image:N:label}` tokens. Absent → byte-identical
+  // to the pre-assembly flat path. The `url` of each rides `safeUrlSchema` (same
+  // SSRF gate as the flat `referenceImageUrls`).
+  connectedReferences: z.array(connectedReferenceSchema).max(14).optional(),
+  // User-defined reorder of the injected reference list (stable tile ids),
+  // honored by `resolveVideoReferenceCore`'s `applyReferenceOrderToVideo` pass.
+  referenceOrder: z.array(z.string()).max(14).optional(),
   webSearch: z.boolean().optional(),
   nsfwChecker: z.boolean().optional(),
   generationType: z.enum(["TEXT_2_VIDEO", "FIRST_AND_LAST_FRAMES_2_VIDEO", "REFERENCE_2_VIDEO"]).optional(),
@@ -118,6 +137,131 @@ export const generateVideoBody = z.object({
 
 const IDENTITY_PRESERVE_SUFFIX =
   "The subject must remain exactly the same person — preserve facial identity, eye color, hair color, skin tone, and unique features."
+
+/**
+ * Server-side `connectedReferences` assembly for the single-node generate-video
+ * route — the video analog of generate-image's `assembleImageInput` path. Wired
+ * characters drive mention resolution + canonical fallback + identity
+ * directives; every OTHER source (`wired-image` / `wired-object` /
+ * `wired-location` / `manual`) rides the extras path so an UNMENTIONED wired ref
+ * auto-attaches its URL and emits an `@image_N (reference)` directive.
+ * `{image:N:label}` tokens expand and `referenceOrder` is honored — all via
+ * `resolveVideoReferenceCore`, the SAME shared core the canvas
+ * (`assembleVideoPrompt`) and orchestrator (`payload-builder`) delegate to, so a
+ * direct API/SDK run binds inline references identically to a canvas run.
+ *
+ * Engine note: this deliberately does NOT use `assembleImageInput` —
+ * `buildImagePrompt` drops every reference URL when the provider isn't a known
+ * IMAGE model (`MODELS_WITH_REFERENCE_IMAGE_SUPPORT`), which no video provider
+ * is. `resolveVideoReferenceCore` is provider-agnostic and is the correct video
+ * equivalent.
+ *
+ * Provider-gated by the catalog: when the video provider has no image-reference
+ * support (`VIDEO_REF_LIMITS_BY_PROVIDER[provider].images` falsy) the refs can't
+ * be sent, so we only strip the editor's `{image:N}` tokens to bare labels
+ * (parity with the canvas `stripVideoImageTokens`) and attach nothing.
+ *
+ * Pure: no I/O, no mutation of inputs. Exported for unit tests.
+ */
+export function assembleVideoConnectedReferences(args: {
+  prompt: string | undefined
+  provider: string | undefined
+  connectedReferences: ConnectedReference[]
+  baseReferenceImageUrls?: string[]
+  referenceOrder?: string[]
+  referenceVideoCount: number
+  referenceAudioCount: number
+}): { prompt: string | undefined; referenceImageUrls: string[] | undefined } {
+  const {
+    prompt,
+    provider,
+    connectedReferences,
+    baseReferenceImageUrls,
+    referenceOrder,
+    referenceVideoCount,
+    referenceAudioCount,
+  } = args
+  const imageCap = provider ? (VIDEO_REF_LIMITS_BY_PROVIDER[provider]?.images ?? 0) : 0
+
+  // Provider can't carry image references → nothing to attach. Strip the
+  // editor's `{image:N}` tokens to bare labels so they never ship raw to the
+  // model; `{video:N}` / `{audio:N}` still resolve against the flat ref counts.
+  if (imageCap <= 0) {
+    return {
+      prompt:
+        resolveReferenceTokens(prompt, {
+          image: 0,
+          video: referenceVideoCount,
+          audio: referenceAudioCount,
+        }) ?? prompt,
+      referenceImageUrls: baseReferenceImageUrls,
+    }
+  }
+
+  // Split incoming refs: canonical wired characters (mention + canonical-fallback
+  // + identity directives) vs. everything else (extras → auto-attach + bullet).
+  const wiredCharRefs: ConnectedReference[] = []
+  const extraRefs: VideoExtraRef[] = []
+  for (const r of connectedReferences) {
+    if (r.source === "wired-character" && !r.isExtraRef) {
+      wiredCharRefs.push(r)
+    } else {
+      extraRefs.push({
+        url: r.url,
+        // Best available label for the "(reference): <…>" bullet.
+        description: (r.description ?? "").trim() || r.defaultName,
+        characterSlug: r.characterSlug,
+        variantSlug: r.variantSlug,
+        usageMode: r.defaultUsageMode,
+      })
+    }
+  }
+
+  // The core looks up an extra character-variant ref's metadata by slug. On the
+  // route there is no graph — read it straight off the wired-character ref that
+  // carries the same slug (self-contained; mirrors the FE/BE lookups).
+  const lookupCharacterBySlug = (slug: string): CharacterMeta | undefined => {
+    const m = connectedReferences.find(
+      (r) => r.source === "wired-character" && r.characterSlug === slug,
+    )
+    if (!m) return undefined
+    return {
+      characterName: m.defaultName,
+      defaultUsageMode: m.defaultUsageMode,
+      canonicalDescription: m.characterCanonicalDescription ?? undefined,
+    }
+  }
+
+  const core = resolveVideoReferenceCore({
+    prompt,
+    wiredCharRefs,
+    extraRefs,
+    lookupCharacterBySlug,
+    referenceOrder,
+    // `{image:N}` falls back to the core's own additionalUrls count (its URLs
+    // lead the merged list below, so front-of-list numbering aligns); video /
+    // audio tokens resolve against the flat ref counts.
+    videoRefCount: referenceVideoCount,
+    audioRefCount: referenceAudioCount,
+  })
+
+  // Merge: core-derived URLs LEAD so `@image_N` (numbered from the front) lines
+  // up with the worker payload; any flat refs the caller also sent follow.
+  // Dedup, then cap at the provider's image-ref limit.
+  const merged: string[] = []
+  const seen = new Set<string>()
+  for (const u of [...core.additionalUrls, ...(baseReferenceImageUrls ?? [])]) {
+    if (u && !seen.has(u)) {
+      seen.add(u)
+      merged.push(u)
+    }
+  }
+  const capped = merged.slice(0, imageCap)
+  return {
+    prompt: core.prompt,
+    referenceImageUrls: capped.length > 0 ? capped : baseReferenceImageUrls,
+  }
+}
 
 /** True when the request carries a character-voice spec (voices and/or dialogue). */
 function voiceSpecPresent(b: { characterVoices?: unknown; dialogue?: unknown }): boolean {
@@ -281,7 +425,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     const isS2 = isSeedance2Provider(provider)
     const imageUrl = parsed.data.imageUrl
     const endFrameUrl = parsed.data.endFrameUrl
-    const referenceImageUrls = parsed.data.referenceImageUrls
+    let referenceImageUrls = parsed.data.referenceImageUrls
     const referenceVideoUrls = parsed.data.referenceVideoUrls
     const referenceAudioUrls = parsed.data.referenceAudioUrls
 
@@ -297,6 +441,31 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
       })
+    }
+
+    // Structured references (parity with generate-image). When present, assemble
+    // them server-side via the shared video resolver — the SAME core the canvas
+    // + orchestrator use — so a direct API/SDK run binds inline `{image:N}`
+    // references to the right attached image. Absent → flat path untouched
+    // (byte-identical to before). Runs BEFORE identity injection so that, when
+    // both are set, the canonical-description suffix layers on top of the
+    // assembled prompt (mirrors generate-image's ordering).
+    if (parsed.data.connectedReferences && parsed.data.connectedReferences.length > 0) {
+      const assembled = assembleVideoConnectedReferences({
+        prompt,
+        provider,
+        connectedReferences: parsed.data.connectedReferences,
+        baseReferenceImageUrls: referenceImageUrls,
+        referenceOrder: parsed.data.referenceOrder,
+        referenceVideoCount: referenceVideoUrls?.length ?? 0,
+        referenceAudioCount: referenceAudioUrls?.length ?? 0,
+      })
+      prompt = assembled.prompt
+      referenceImageUrls = assembled.referenceImageUrls
+      // Mirror the assembled values into parsed.data so buildJobInputData records
+      // exactly what the worker receives.
+      parsed.data.prompt = prompt
+      parsed.data.referenceImageUrls = referenceImageUrls
     }
 
     // Identity injection — when enabled + a character is referenced, append

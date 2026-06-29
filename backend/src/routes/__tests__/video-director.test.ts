@@ -10,6 +10,10 @@ const hoisted = vi.hoisted(() => ({
   creditGuardIds: [] as string[],
   reserveMock: vi.fn(),
   queueAddMock: vi.fn(),
+  // Captures the exact payload passed to jobs.insert() so we can assert it
+  // contains only real `jobs` columns — regression: a bogus top-level
+  // `model_identifier` column errored the real insert → 500 on prod.
+  jobsInsertArg: undefined as Record<string, unknown> | undefined,
 }))
 
 vi.mock("@/lib/supabase.js", () => {
@@ -60,9 +64,12 @@ function mockDb(jobId: string, tier = "pro") {
     }
     // jobs
     return {
-      insert: () => ({
-        select: () => ({ single: vi.fn().mockResolvedValue({ data: { id: jobId }, error: null }) }),
-      }),
+      insert: (payload: Record<string, unknown>) => {
+        hoisted.jobsInsertArg = payload
+        return {
+          select: () => ({ single: vi.fn().mockResolvedValue({ data: { id: jobId }, error: null }) }),
+        }
+      },
     } as never
   })
 }
@@ -145,6 +152,15 @@ describe("POST /v1/video-director/run", () => {
 
     // jobs insert happened
     expect(vi.mocked(supabase.from)).toHaveBeenCalledWith("jobs")
+
+    // REGRESSION (prod 500): the insert payload must contain only real `jobs`
+    // columns. `jobs` has NO `model_identifier` column — inserting one errors
+    // the insert and returns 500. The model id lives in input_data + is passed
+    // to reserveCreditsForJob; it must NOT be a top-level insert field.
+    expect(hoisted.jobsInsertArg).toBeDefined()
+    expect(hoisted.jobsInsertArg).not.toHaveProperty("model_identifier")
+    expect(hoisted.jobsInsertArg).toMatchObject({ user_id: TEST_USER_ID, status: "pending" })
+    expect(hoisted.jobsInsertArg?.input_data).toBeDefined()
 
     // reserved against the "video-director" identifier (what the worker later
     // commits/refunds against by jobId)

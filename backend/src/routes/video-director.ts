@@ -75,7 +75,10 @@ export async function videoDirectorRoutes(app: FastifyInstance) {
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
         status: "pending",
-        model_identifier: VIDEO_DIRECTOR_MODEL_ID,
+        // NOTE: `jobs` has NO `model_identifier` column — the model id lives in
+        // input_data (via buildJobInputData) + is passed to reserveCreditsForJob.
+        // Inserting a top-level model_identifier here errors the insert → 500
+        // (mirrors forced-alignment.ts, which does not insert it).
         ...(mcpClient ? { mcp_client: mcpClient } : {}),
         input_data: buildJobInputData(parsed.data, VIDEO_DIRECTOR_MODEL_ID),
       })
