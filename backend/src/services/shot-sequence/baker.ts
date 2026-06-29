@@ -120,9 +120,19 @@ export function bakeShotSequence(
     Math.min(MAX_FRAMES, Math.max(Math.round((narrationDurationMs / 1000) * fps) + TAIL_FRAMES, maxSceneEnd)),
   )
 
+  // Scene cross-dissolve windows — the combine-videos "Seamless Join" recipe
+  // (~4 frames out / 3 in @ 30fps), video half only; the VO track is continuous
+  // and untouched. Render-only overlap: a non-first scene fades IN so the held
+  // outgoing scene shows through at the boundary (no blank handoff, even with
+  // opaque scene backgrounds); a non-last scene fades OUT across a tail the
+  // renderer adds PAST the window. The stored windows stay non-overlapping.
+  const CROSSFADE_OUT_FRAMES = Math.max(1, Math.round((fps / 30) * 4))
+  const CROSSFADE_IN_FRAMES = Math.max(1, Math.round((fps / 30) * 3))
+
   // 5. Build the resolved scenes (scene-relative reveal frames, revealAt stripped).
   const scenes = sceneWindows.map((win, idx) => {
     const isLast = idx === sceneWindows.length - 1
+    const isFirst = idx === 0
     // Non-last scenes extend to ABUT the next scene's start, not stop at their own
     // last reveal's end (win.endAbs). A scene renders as a Remotion <Sequence> that
     // unmounts at startFrame + durationInFrames; ending at endAbs unmounts a still-held
@@ -135,6 +145,8 @@ export function bakeShotSequence(
       id: win.scene.id,
       startFrame: win.startAbs,
       durationInFrames: Math.max(1, sceneEnd - win.startAbs),
+      ...(isFirst ? {} : { transitionInFrames: CROSSFADE_IN_FRAMES }),
+      ...(isLast ? {} : { transitionOutFrames: CROSSFADE_OUT_FRAMES }),
       ...(win.scene.background ? { background: win.scene.background } : {}),
       shots: win.scene.shots.map((shot) => ({
         id: shot.id,
