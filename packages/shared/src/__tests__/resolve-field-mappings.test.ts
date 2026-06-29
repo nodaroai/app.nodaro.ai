@@ -8,6 +8,7 @@
 
 import { describe, it, expect } from "vitest"
 import { resolveLocationFields } from "../resolve-field-mappings.js"
+import { resolveFieldMappings, fieldKeyFromHandle } from "../index.js"
 
 describe("resolveLocationFields", () => {
   it("returns just the main image entry when no buckets are set", () => {
@@ -75,4 +76,35 @@ describe("resolveLocationFields", () => {
   it("returns an empty array when the location has no fields at all", () => {
     expect(resolveLocationFields({})).toEqual([])
   })
+})
+
+describe("resolveFieldMappings — edgeSourceForField precedence", () => {
+  it("prefers an edge source over data.fieldMappings and over the typed value", () => {
+    const data = { style: "typed-style", fieldMappings: { style: { sourceNodeId: "mapped" } } }
+    const out = resolveFieldMappings(
+      data,
+      undefined,
+      ["style"],
+      (id) => (id === "edge" ? "EDGE TEXT" : id === "mapped" ? "MAPPED TEXT" : undefined),
+      (field) => (field === "style" ? "edge" : undefined),
+    )
+    expect(out.style).toBe("EDGE TEXT")
+  })
+
+  it("falls back to data.fieldMappings when no edge source", () => {
+    const data = { style: "x", fieldMappings: { style: { sourceNodeId: "mapped" } } }
+    const out = resolveFieldMappings(data, undefined, ["style"], () => "MAPPED TEXT", () => undefined)
+    expect(out.style).toBe("MAPPED TEXT")
+  })
+
+  it("leaves the field untouched when neither edge nor mapping resolves", () => {
+    const data = { style: "keep" }
+    const out = resolveFieldMappings(data, undefined, ["style"], () => undefined, () => undefined)
+    expect(out.style).toBe("keep")
+  })
+})
+
+describe("fieldKeyFromHandle", () => {
+  it("strips the field- prefix", () => { expect(fieldKeyFromHandle("field-style")).toBe("style") })
+  it("returns null for non-field handles", () => { expect(fieldKeyFromHandle("prompt")).toBeNull() })
 })

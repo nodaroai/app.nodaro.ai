@@ -17,6 +17,10 @@ function audioStyleEdge(sourceId: string): HintEdgeLike {
   return { source: sourceId, target: "consumer", sourceHandle: "out", targetHandle: "audio-style" }
 }
 
+function voiceEdge(sourceId: string): HintEdgeLike {
+  return { source: sourceId, target: "consumer", sourceHandle: "out", targetHandle: "voice" }
+}
+
 describe("composeSoundHintFromConnections — empty cases", () => {
   it("returns empty composition with no edges", () => {
     const out = composeSoundHintFromConnections(sunoConsumer(), "suno-generate", ctx([], []))
@@ -122,6 +126,57 @@ describe("composeSoundHintFromConnections — Suno Generate", () => {
     )
     expect(out.text).toMatch(/rock|raspy/)
     expect(out.fields.vocalGender).toBe("male")
+    expect(out.warnings).toEqual([])
+  })
+})
+
+// Regression: the typed-handle split gave suno-generate three pips
+// (prompt / audio-style / voice). A descriptive voice-character picker dropped
+// onto the "Voice" pip must STILL fold into the output — before, suno had one
+// picker handle and "any picker, any pip" worked. The voice pip's persona
+// producers (suno-voice / voice-design) carry no prompt hint, so they're
+// skipped here and still route to personaId via the input-resolver.
+describe("composeSoundHintFromConnections — Suno Generate, voice pip", () => {
+  it("folds a voice-character picker wired to the VOICE handle (not just audio-style)", () => {
+    const out = composeSoundHintFromConnections(
+      sunoConsumer({ customMode: false }),
+      "suno-generate",
+      ctx(
+        [{ id: "v", type: "voice-character", data: { timbre: "warm", gender: "female", accent: "british-rp" } }],
+        [voiceEdge("v")],
+      ),
+    )
+    expect(out.text).toContain("warm")
+    expect(out.fields.vocalGender).toBe("female")
+  })
+
+  it("collects pickers from audio-style AND voice pips together", () => {
+    const out = composeSoundHintFromConnections(
+      sunoConsumer({ customMode: false }),
+      "suno-generate",
+      ctx(
+        [
+          { id: "g", type: "music-genre", data: { genre: "electronic", subgenre: "synthwave" } },
+          { id: "v", type: "voice-character", data: { timbre: "raspy", gender: "male" } },
+        ],
+        [audioStyleEdge("g"), voiceEdge("v")],
+      ),
+    )
+    expect(out.text).toContain("synthwave")
+    expect(out.text).toContain("raspy")
+    expect(out.fields.vocalGender).toBe("male")
+  })
+
+  it("ignores a suno-voice persona on the voice pip (no hint, no crash)", () => {
+    const out = composeSoundHintFromConnections(
+      sunoConsumer({ customMode: false }),
+      "suno-generate",
+      ctx(
+        [{ id: "p", type: "suno-voice", data: { voiceId: "abc", personaModel: "voice_persona" } }],
+        [voiceEdge("p")],
+      ),
+    )
+    expect(out.text).toBe("")
     expect(out.warnings).toEqual([])
   })
 })

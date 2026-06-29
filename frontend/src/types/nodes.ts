@@ -2464,6 +2464,7 @@ export type SunoGenerateData = {
   weirdnessConstraint?: number
   audioWeight?: number
   customMode?: boolean
+  advancedOpen?: boolean
   instrumental?: boolean
   personaId?: string
   personaModel?: SunoPersonaModel
@@ -6123,7 +6124,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Suno Generate",
     category: "ai",
     creditCost: 3,
-    inputs: ["prompt", "audio-style", "voice"],
+    inputs: ["prompt", "audio-style", "voice", "field-style", "field-lyrics", "field-title", "field-negativeStyle"],
     outputs: ["audio"],
     defaultData: { label: "Suno Generate", prompt: "", model: "V5_5", lyrics: "", style: "", title: "", negativeStyle: "", fieldMappings: {} } as SunoGenerateData,
   },

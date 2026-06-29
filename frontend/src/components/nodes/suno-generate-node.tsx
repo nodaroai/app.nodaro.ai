@@ -1,8 +1,9 @@
 "use client"
 
-import { memo, useState } from "react"
-import { Position, type NodeProps } from "@xyflow/react"
+import { memo, useState, useEffect, useMemo } from "react"
+import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { Music, Loader2, AlertCircle, Volume2, Type, LayoutGrid, Sparkles, Mic } from "lucide-react"
+import { SUNO_FIELD_HANDLE_FIELDS } from "@nodaro/shared"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { NodeQuickStrip } from "./node-quick-strip"
@@ -22,11 +23,47 @@ const isVisualPicker = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
 const ACCEPTS_PROMPT      = (t: string) => isValidSunoGenerateConnection("prompt",      t, isVisualPicker)
 const ACCEPTS_AUDIO_STYLE = (t: string) => isValidSunoGenerateConnection("audio-style", t, isVisualPicker)
 const ACCEPTS_VOICE       = (t: string) => isValidSunoGenerateConnection("voice",       t, isVisualPicker)
+// All four field-* pips are text-only, so they share one predicate.
+const ACCEPTS_FIELD       = (t: string) => isValidSunoGenerateConnection("field-style", t, isVisualPicker)
 
 function SunoGenerateNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as SunoGenerateData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
+  const edges = useWorkflowStore((s) => s.edges)
+  const updateNodeInternals = useUpdateNodeInternals()
+
+  // The 4 secondary field pips (style/lyrics/title/negativeStyle) stay hidden
+  // behind the `Advanced ▾` toggle so the default node is prompt-only. We
+  // auto-reveal them when there's already a reason to: a secondary field has
+  // content, OR a field-* pip is wired. `data.advancedOpen` is the explicit
+  // user toggle and WINS over the auto-derivation (nullish-coalescing, not OR)
+  // — so a user can collapse the section even with content present. This is
+  // render-derived (no load effect writing data.advancedOpen, which would
+  // dirty the workflow and trigger spurious saves).
+  const anySecondaryContent = SUNO_FIELD_HANDLE_FIELDS.some(
+    (f) => typeof nodeData[f] === "string" && (nodeData[f] as string).trim().length > 0,
+  )
+  const anySecondaryWired = edges.some(
+    (e) => e.target === id && typeof e.targetHandle === "string" && e.targetHandle.startsWith("field-"),
+  )
+  const advancedOpen = nodeData.advancedOpen ?? (anySecondaryContent || anySecondaryWired)
+
+  // React Flow v12 doesn't auto-detect added/removed handles — re-measure on
+  // toggle so the new pips render measured + connectable (same gotcha as the
+  // loop node's dynamic columns).
+  useEffect(() => { updateNodeInternals(id) }, [advancedOpen, id, updateNodeInternals])
+
+  const fieldHandleDefs = useMemo(
+    () => [
+      { id: "field-style",         label: "Style",    accept: ACCEPTS_FIELD },
+      { id: "field-lyrics",        label: "Lyrics",   accept: ACCEPTS_FIELD },
+      { id: "field-title",         label: "Title",    accept: ACCEPTS_FIELD },
+      { id: "field-negativeStyle", label: "Negative style", accept: ACCEPTS_FIELD },
+    ],
+    [],
+  )
+
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
@@ -57,7 +94,7 @@ function SunoGenerateNodeComponent({ id, data, selected }: NodeProps) {
       credits={credits}
       selected={selected}
       isRunning={status === "running"}
-      minHeight={140}
+      minHeight={advancedOpen ? 248 : 140}
       hideHeader
       topToolbarContent={
         <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />
@@ -90,10 +127,17 @@ function SunoGenerateNodeComponent({ id, data, selected }: NodeProps) {
         { id: "prompt",      type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
         { id: "audio-style", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 56px)', left: '-29px' }, external: true },
         { id: "voice",       type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 88px)', left: '-29px' }, external: true },
+        // Secondary field pips — continue the 32px pitch above `voice` (88px).
+        ...(advancedOpen ? [
+          { id: "field-style",         type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 120px)', left: '-29px' }, external: true },
+          { id: "field-lyrics",        type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 152px)', left: '-29px' }, external: true },
+          { id: "field-title",         type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 184px)', left: '-29px' }, external: true },
+          { id: "field-negativeStyle", type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 216px)', left: '-29px' }, external: true },
+        ] : []),
         { id: "audio",       type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
       ]}
     >
-      <div className="flex flex-col gap-2 p-3" style={{ minHeight: 140 }}>
+      <div className="flex flex-col gap-2 p-3" style={{ minHeight: advancedOpen ? 248 : 140 }}>
         {status === "running" && !activeUrl && (
           <div className="flex-1 flex flex-col items-center justify-center gap-2 min-h-[96px] rounded-md bg-muted/30">
             <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
@@ -149,11 +193,22 @@ function SunoGenerateNodeComponent({ id, data, selected }: NodeProps) {
           <span className="text-xs">Suno {nodeData.model ?? "V5"}</span>
           {nodeData.title && <span className="text-xs truncate max-w-[120px]">{nodeData.title}</span>}
         </div>
+
+        <button type="button"
+          className="self-start text-[11px] text-muted-foreground hover:text-foreground"
+          onClick={(e) => { e.stopPropagation(); updateNodeData(id, { advancedOpen: !advancedOpen }) }}>
+          {advancedOpen ? "Advanced ▴" : "Advanced ▾"}
+        </button>
       </div>
     </BaseNode>
     <HandleWithPopover nodeId={id} nodeType="suno-generate" handleId="prompt"      type="target" position={Position.Left}  label="Prompt"      color={TEXT_HANDLE_COLOR} icon={<Type />}     side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_PROMPT} />
     <HandleWithPopover nodeId={id} nodeType="suno-generate" handleId="audio-style" type="target" position={Position.Left}  label="Audio style" color={HANDLE_COLORS.audio} icon={<Sparkles />} side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_AUDIO_STYLE} />
     <HandleWithPopover nodeId={id} nodeType="suno-generate" handleId="voice"       type="target" position={Position.Left}  label="Voice"       color={HANDLE_COLORS.audio} icon={<Mic />}      side="left"  top="calc(100% - 88px)" accepts={ACCEPTS_VOICE} />
+    {advancedOpen && fieldHandleDefs.map((h, i) => (
+      <HandleWithPopover key={h.id} nodeId={id} nodeType="suno-generate" handleId={h.id} type="target" position={Position.Left}
+        label={h.label} color={h.id === "field-negativeStyle" ? HANDLE_COLORS.negative : TEXT_HANDLE_COLOR}
+        icon={<Type />} side="left" top={`calc(100% - ${120 + i * 32}px)`} accepts={h.accept} />
+    ))}
     <HandleWithPopover nodeId={id} nodeType="suno-generate" handleId="audio"       type="source" position={Position.Right} label="Audio"       color={HANDLE_COLORS.audio} icon={<Music />}    side="right" top="24px" />
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}

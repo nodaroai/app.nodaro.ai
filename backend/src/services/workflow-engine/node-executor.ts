@@ -327,6 +327,8 @@ export async function executeNode(
       allNodes,
       resolvedInputs.prompt,
       mappableFields,
+      node.id,
+      edges,
     )
     node = { ...node, data: resolvedData }
   }

@@ -279,6 +279,11 @@ export function isValidSunoGenerateConnection(
       return AUDIO_PICKER_TYPES.has(sourceType)
     case "voice":
       return VOICE_PERSONA_TYPES.has(sourceType)
+    case "field-style":
+    case "field-lyrics":
+    case "field-title":
+    case "field-negativeStyle":
+      return ACCEPTS_TEXT_OR_DYN(sourceType)
     default:
       return false
   }
@@ -629,7 +634,7 @@ export const AUDIO_TEXT_HANDLE_LABELS: Record<string, Record<string, string>> = 
   "voice-design":       { prompt: "Prompt", "audio-style": "Audio style" },
   "forced-alignment":   { audio: "Audio", transcript: "Transcript" },
   // Batch 2: Suno Music
-  "suno-generate":          { prompt: "Prompt", "audio-style": "Audio style", voice: "Voice" },
+  "suno-generate":          { prompt: "Prompt", "audio-style": "Audio style", voice: "Voice", "field-style": "Style", "field-lyrics": "Lyrics", "field-title": "Title", "field-negativeStyle": "Negative style" },
   "suno-cover":             { audio: "Audio", prompt: "Prompt", voice: "Voice" },
   "suno-extend":            { audio: "Audio", prompt: "Prompt", voice: "Voice" },
   "suno-lyrics":            { prompt: "Prompt" },

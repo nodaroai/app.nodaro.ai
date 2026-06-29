@@ -194,6 +194,8 @@ export const TYPED_HANDLE_IDS: ReadonlySet<string> = new Set([
   "negative",
   //   - mask-video: SwitchX (Relight & Switch) custom-mode matte-video input.
   "mask-video",
+  // suno-generate secondary text fields (field-<key> mappable handles).
+  "field-style", "field-lyrics", "field-title", "field-negativeStyle",
 ])
 /** Subset that requires consumer-type dispatch — the dev-time warning in
  *  getCompatibleNodes triggers when one of these is passed without a
@@ -401,6 +403,26 @@ export function getCompatibleNodes(
   // Generate Image v2: Negative accepts text producers only (pickers as
   // variable sources work via workflow-wide {Label}, no wire needed).
   if (handleId === "negative" && direction === "target") {
+    const TEXT_TYPES: ReadonlySet<string> = new Set([
+      "text-prompt", "ai-writer", "llm-chat", "generate-script",
+      "combine-text", "image-to-text", "split-text",
+    ])
+    const direct: NodeOption[] = []
+    const directTypes = new Set<SceneNodeType>()
+    for (const option of nodeOptions) {
+      if (!TEXT_TYPES.has(option.type)) continue
+      direct.push(option)
+      directTypes.add(option.type)
+    }
+    return { direct, compatible: [], directTypes }
+  }
+
+  // suno-generate field-<key> text inputs: text producers only (the audio
+  // pickers stay on audio-style/voice). Mirrors the `negative` branch.
+  // Placed after the `cinematography`/`style` branch so a `field-`-prefixed
+  // id never reaches that picker branch — and `field-style` neither equals
+  // `style` nor starts with `cinematography`, so it's safe regardless.
+  if (handleId.startsWith("field-") && direction === "target") {
     const TEXT_TYPES: ReadonlySet<string> = new Set([
       "text-prompt", "ai-writer", "llm-chat", "generate-script",
       "combine-text", "image-to-text", "split-text",

@@ -739,7 +739,7 @@ export {
   type SemanticAspectRatio,
 } from "./node-default-mappings.js"
 
-export { NODE_MAPPABLE_FIELDS } from "./node-mappable-fields.js"
+export { NODE_MAPPABLE_FIELDS, SUNO_FIELD_HANDLE_FIELDS, fieldKeyFromHandle } from "./node-mappable-fields.js"
 
 export {
   PROVIDER_CAPABILITIES,

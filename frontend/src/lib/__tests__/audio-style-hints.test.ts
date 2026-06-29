@@ -20,4 +20,17 @@ describe("collectAudioStyleHints", () => {
     const out = collectAudioStyleHints(cons, "suno-generate", [cons, src], [edge])
     expect(out.text).toContain("electronic")
   })
+
+  // Regression: a voice-character picker dropped onto suno-generate's "Voice"
+  // pip must fold in too — the short-circuit used to gate on `audio-style` alone
+  // and returned empty before the aggregator ran, so the picker silently
+  // vanished from BOTH the run and the Final preview.
+  it("walks voice-pip edges too (voice-character on the Voice handle)", () => {
+    const cons = consumer({ customMode: false })
+    const src = { id: "vc", type: "voice-character", position: { x: 0, y: 0 }, data: { label: "V", timbre: "warm", gender: "female" } } as unknown as WorkflowNode
+    const edge = { id: "e", source: "vc", target: "consumer", sourceHandle: "out", targetHandle: "voice" } as unknown as WorkflowEdge
+    const out = collectAudioStyleHints(cons, "suno-generate", [cons, src], [edge])
+    expect(out.text).toContain("warm")
+    expect(out.fields.vocalGender).toBe("female")
+  })
 })
