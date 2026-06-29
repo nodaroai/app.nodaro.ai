@@ -19,8 +19,11 @@ export async function forcedAlignment(
 
   const formData = new FormData()
   const blob = new Blob([audioBuffer as BlobPart], { type: "audio/mpeg" })
-  formData.append("audio", blob, "audio.mp3")
-  formData.append("transcript", transcript)
+  // ElevenLabs forced-alignment expects multipart fields named `file` + `text`
+  // (https://elevenlabs.io/docs/api-reference/forced-alignment/create). Sending
+  // `audio`/`transcript` makes the API 422 with both fields "missing".
+  formData.append("file", blob, "audio.mp3")
+  formData.append("text", transcript)
 
   const response = await fetch(`${ELEVENLABS_BASE_URL}/v1/forced-alignment`, {
     method: "POST",
@@ -33,43 +36,54 @@ export async function forcedAlignment(
     throw new Error(`ElevenLabs Forced Alignment failed (${response.status}): ${errorText}`)
   }
 
+  // ElevenLabs returns top-level `characters` + `words` arrays, each item shaped
+  // { text, start, end }. We tolerate the legacy `word`/`char` keys and a nested
+  // `alignment.characters` so a future API tweak can't silently zero timings.
   const result = (await response.json()) as {
-    alignment?: { characters?: Array<{ char: string; start: number; end: number }> }
-    words?: AlignmentWord[]
+    characters?: Array<{ text?: string; char?: string; start: number; end: number }>
+    words?: Array<{ text?: string; word?: string; start: number; end: number }>
+    alignment?: { characters?: Array<{ text?: string; char?: string; start: number; end: number }> }
   }
 
-  // The API may return character-level or word-level alignment.
-  // Normalize to word-level.
-  if (result.words) {
-    return { alignment: result.words }
+  // Word-level alignment (preferred).
+  if (result.words && result.words.length > 0) {
+    return {
+      alignment: result.words.map((w) => ({
+        word: w.text ?? w.word ?? "",
+        start: w.start,
+        end: w.end,
+      })),
+    }
   }
 
-  if (result.alignment?.characters) {
-    // Group characters into words
+  // Character-level fallback: group characters into words on whitespace.
+  const characters = result.characters ?? result.alignment?.characters
+  if (characters && characters.length > 0) {
     const words: AlignmentWord[] = []
     let currentWord = ""
     let wordStart = -1
 
-    for (const char of result.alignment.characters) {
-      if (char.char === " " || char.char === "\n") {
+    for (const ch of characters) {
+      const c = ch.text ?? ch.char ?? ""
+      if (c === " " || c === "\n") {
         if (currentWord.length > 0) {
-          words.push({ word: currentWord, start: wordStart, end: char.start })
+          words.push({ word: currentWord, start: wordStart, end: ch.start })
           currentWord = ""
           wordStart = -1
         }
       } else {
-        if (wordStart === -1) wordStart = char.start
-        currentWord += char.char
+        if (wordStart === -1) wordStart = ch.start
+        currentWord += c
       }
     }
     if (currentWord.length > 0) {
-      const lastChar = result.alignment.characters[result.alignment.characters.length - 1]
+      const lastChar = characters[characters.length - 1]
       words.push({ word: currentWord, start: wordStart, end: lastChar?.end ?? wordStart })
     }
 
     return { alignment: words }
   }
 
-  // Fallback: return the raw response as alignment
+  // No usable alignment in the response.
   return { alignment: [] }
 }

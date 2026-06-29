@@ -544,7 +544,7 @@ describe("forced-alignment — forcedAlignment", () => {
     fetchMock
       .mockResolvedValueOnce(audioResponse(Buffer.from("audio")))
       .mockResolvedValueOnce(jsonResponse({
-        words: [{ word: "hello", start: 0, end: 0.5 }],
+        words: [{ text: "hello", start: 0, end: 0.5 }],
       }))
 
     await forcedAlignment("https://src.mp3", "hello")
@@ -556,7 +556,7 @@ describe("forced-alignment — forcedAlignment", () => {
     )
   })
 
-  it("attaches transcript + audio in multipart form", async () => {
+  it("attaches the audio as `file` and transcript as `text` (ElevenLabs field names)", async () => {
     fetchMock
       .mockResolvedValueOnce(audioResponse(Buffer.from("audio")))
       .mockResolvedValueOnce(jsonResponse({ words: [] }))
@@ -564,37 +564,43 @@ describe("forced-alignment — forcedAlignment", () => {
     await forcedAlignment("https://src.mp3", "hello world")
 
     const init = fetchMock.mock.calls[1][1] as { body: FormData }
-    expect(init.body.get("transcript")).toBe("hello world")
-    expect(init.body.get("audio")).toBeTruthy()
+    // Contract: ElevenLabs requires `file` + `text`. The legacy `audio`/`transcript`
+    // names 422'd ("field required") on every real call — guard the regression.
+    expect(init.body.get("text")).toBe("hello world")
+    expect(init.body.get("file")).toBeTruthy()
+    expect(init.body.get("transcript")).toBeNull()
+    expect(init.body.get("audio")).toBeNull()
   })
 
-  it("returns word-level alignment when API returns words", async () => {
-    const expected = [
-      { word: "hello", start: 0, end: 0.5 },
-      { word: "world", start: 0.6, end: 1.0 },
-    ]
-    fetchMock
-      .mockResolvedValueOnce(audioResponse(Buffer.from("audio")))
-      .mockResolvedValueOnce(jsonResponse({ words: expected }))
-
-    const result = await forcedAlignment("u", "hello world")
-
-    expect(result.alignment).toEqual(expected)
-  })
-
-  it("groups characters into words on space boundary when API returns characters", async () => {
+  it("maps ElevenLabs word objects ({ text, start, end }) to { word, start, end }", async () => {
     fetchMock
       .mockResolvedValueOnce(audioResponse(Buffer.from("audio")))
       .mockResolvedValueOnce(jsonResponse({
-        alignment: {
-          characters: [
-            { char: "h", start: 0.0, end: 0.1 },
-            { char: "i", start: 0.1, end: 0.2 },
-            { char: " ", start: 0.2, end: 0.25 },
-            { char: "y", start: 0.3, end: 0.4 },
-            { char: "o", start: 0.4, end: 0.5 },
-          ],
-        },
+        words: [
+          { text: "hello", start: 0, end: 0.5, loss: 0.1 },
+          { text: "world", start: 0.6, end: 1.0, loss: 0.2 },
+        ],
+      }))
+
+    const result = await forcedAlignment("u", "hello world")
+
+    expect(result.alignment).toEqual([
+      { word: "hello", start: 0, end: 0.5 },
+      { word: "world", start: 0.6, end: 1.0 },
+    ])
+  })
+
+  it("falls back to top-level `characters` ({ text, start, end }) grouped on spaces", async () => {
+    fetchMock
+      .mockResolvedValueOnce(audioResponse(Buffer.from("audio")))
+      .mockResolvedValueOnce(jsonResponse({
+        characters: [
+          { text: "h", start: 0.0, end: 0.1 },
+          { text: "i", start: 0.1, end: 0.2 },
+          { text: " ", start: 0.2, end: 0.25 },
+          { text: "y", start: 0.3, end: 0.4 },
+          { text: "o", start: 0.4, end: 0.5 },
+        ],
       }))
 
     const result = await forcedAlignment("u", "hi yo")
@@ -604,7 +610,7 @@ describe("forced-alignment — forcedAlignment", () => {
     expect(result.alignment[1]).toMatchObject({ word: "yo", start: 0.3 })
   })
 
-  it("groups characters into words on newline boundary too", async () => {
+  it("still supports the legacy nested `alignment.characters` shape (back-compat), splitting on newlines", async () => {
     fetchMock
       .mockResolvedValueOnce(audioResponse(Buffer.from("audio")))
       .mockResolvedValueOnce(jsonResponse({
