@@ -535,6 +535,37 @@ so a value the model doesn't support is ignored, never a 400:
   for the live per-resolution rates) by the input-video duration plus the
   output duration, so longer source clips reserve proportionally more credits.
 
+### Structured references (`connectedReferences`) on video
+
+`POST /v1/generate-video` accepts an optional `connectedReferences` array — the
+SAME structured-reference shape `/v1/generate-image` takes — so a direct API/SDK
+caller gets the identical reference assembly the editor performs client-side,
+instead of hand-building a prose "Image N is …" guide. When present, the route
+assembles them server-side (via the shared video resolver the canvas and
+orchestrator already use):
+
+- **Unmentioned wired references auto-attach.** Each ref's `url` is appended to
+  the worker's `referenceImageUrls` (deduped, capped at the provider's image-ref
+  limit) and gets a per-ref directive — `@image_N (reference): <label>` for
+  images/objects/locations, a "Use these characters:" identity bullet for
+  `wired-character` refs.
+- **`{image:N:label}` tokens in `prompt` expand** to `the <label> from @image_N`,
+  numbered against the attached references (front-of-list order).
+- **`referenceOrder`** (an optional string array of stable ref ids) reorders the
+  reference list and renumbers the `@image_N` bindings to match.
+- **Provider-gated.** Only models with image-reference support (the Seedance 2
+  family, Gemini Omni, VEO 3.1, …) attach references; on a provider without it
+  the tokens are stripped to their bare labels and nothing is attached.
+- **Backward compatible.** Omit `connectedReferences` and the route behaves
+  exactly as before — a pre-assembled `prompt` + flat `referenceImageUrls` pass
+  through unchanged. `connectedReferences` feeds the **image** channel only;
+  `referenceVideoUrls` / `referenceAudioUrls` stay as explicit flat inputs.
+
+Each ref's `url` rides the same SSRF gate as the flat `referenceImageUrls`, so a
+ref pointing at a private address / non-http(s) scheme is rejected at the route
+boundary. See the [Generate Video node](nodes/ai-video/generate-video.md#referencing-wired-assets-in-the-prompt-imagen--videon--audion-tokens)
+page for the token syntax and worked examples.
+
 ### Picker catalogs
 
 `GET /v1/picker-catalogs` and `GET /v1/picker-catalogs/:nodeType` expose the
