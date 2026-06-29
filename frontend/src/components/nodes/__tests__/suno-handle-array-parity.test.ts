@@ -26,3 +26,22 @@ describe("suno-generate handle declarations stay in sync", () => {
     })
   }
 })
+
+// Collapse-while-wired refinement: a field-* pip renders when Advanced is open
+// OR that exact field is wired. The BaseNode `handles` array (drives the
+// handle-count sizing) and the HandleWithPopover JSX (draws the visible pip)
+// MUST gate each pip on the SAME condition, or the node is sized for a
+// different set than it shows (pips overflow the card / float past its top).
+// Literal-count parity above proves both sites DECLARE each id; this proves
+// both sites gate it on the wired condition — guarding the lockstep itself,
+// not just presence.
+describe("suno-generate collapse-while-wired gate is in lockstep", () => {
+  for (const id of ["field-style", "field-lyrics", "field-title", "field-negativeStyle"]) {
+    it(`${id} handles-array entry is gated on advancedOpen || isFieldWired`, () => {
+      expect(src).toContain(`advancedOpen || isFieldWired("${id}")`)
+    })
+  }
+  it("the HandleWithPopover JSX shares the same advancedOpen || isFieldWired gate", () => {
+    expect(src).toContain("advancedOpen || isFieldWired(h.id)")
+  })
+})

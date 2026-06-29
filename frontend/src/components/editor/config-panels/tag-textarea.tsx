@@ -7,6 +7,7 @@ import type { VariableDisplayMode } from "./types"
 import { renderNodeRefs } from "@/lib/render-node-refs"
 import { optimizedImageUrl } from "@/lib/image"
 import { computeFlipPosition } from "./prompt-editor/flip-position"
+import { PROMPT_EDITOR_PORTAL_PROPS } from "./prompt-editor/prompt-editor-portal"
 import { filterSnippets, computeSnippetInsertPrefix, type SnippetPoolItem } from "@/lib/snippet-pool"
 import { USAGE_MODES, DEFAULT_USAGE_MODE, usageModeLabel, type UsageMode } from "@nodaro/shared"
 
@@ -1109,6 +1110,7 @@ export function TagTextarea(props: TagTextareaProps) {
   const dropdown = showDropdown && filtered.length > 0 && dropdownPos && createPortal(
     <div
       ref={dropdownRef}
+      {...PROMPT_EDITOR_PORTAL_PROPS}
       style={{
         position: "fixed",
         top: dropdownPos.top,
@@ -1360,6 +1362,7 @@ export function TagTextarea(props: TagTextareaProps) {
           })
           return (
             <div
+              {...PROMPT_EDITOR_PORTAL_PROPS}
               style={{ position: "fixed", top, left }}
               className="z-[10000] pointer-events-none rounded-md shadow-xl bg-popover border border-border p-1"
               aria-hidden
