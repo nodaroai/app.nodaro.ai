@@ -798,6 +798,10 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "generate-script": 2,
   "generate-script:economy": 1,
   "generate-script:premium": 3,
+  // ── Video Director (HyperFrames Phase 1) — fixed model: claude-sonnet-4.6 (standard) ──
+  // No :economy/:premium composites — the authoring model is not user-selectable.
+  ***REDACTED-OSS-SCRUB***
+  "video-director": 9,
   "generate-image": 2,
   "edit-image": 2,
   "image-to-image": 2,

@@ -13,6 +13,7 @@ import {
   stopPipelinesReconcileCron,
 } from "./ee/pipelines/reconcile-cron.js"
 import { createOrchestratorWorker } from "./workers/orchestrator-worker.js"
+import { createVideoDirectorWorker } from "./workers/video-director-worker.js"
 import { initTelegramRoutingTable } from "./lib/telegram-router.js"
 import { pipelineEvents } from "./ee/pipelines/events.js"
 
@@ -83,6 +84,18 @@ async function main() {
   const orchestratorWorker = createOrchestratorWorker()
   console.log("[orchestrator] Worker started in-process")
 
+  // Start the video-director worker in-process (Cloud edition only).
+  // The director chain (author → speech → alignment → bake → render) is
+  // an EE feature gated on credits; running it in Community/Business editions
+  // would fail at the first createSpeechJob call (no credit guard wired).
+  // Mirrors the pipeline-worker in-process startup block below.
+  let videoDirectorWorker: { close: () => Promise<unknown> } | null = null
+  if (hasCredits()) {
+    videoDirectorWorker = createVideoDirectorWorker(app)
+    console.log("[video-director] Worker started in-process")
+    // The standalone workers/video-director.ts entrypoint is not wired into any deploy; even if both somehow ran, BullMQ's per-job Redis lock + idempotent CAS-on-reserved commit/refund prevent double-processing or double-charge.
+  }
+
   // Start the Story→Video pipeline worker in-process too — opt-in via
   // PIPELINE_WORKER_INPROCESS=true. The workflow orchestrator above already
   // runs in-process; enabling this lets `npm run dev` alone drive the pipeline
@@ -124,6 +137,7 @@ async function main() {
     stopWorkflowExecutionsReconcileCron()
     stopPipelinesReconcileCron()
     await orchestratorWorker.close()
+    if (videoDirectorWorker) await videoDirectorWorker.close()
     if (pipelineWorker) await pipelineWorker.close()
     await app.close()
     process.exit(0)

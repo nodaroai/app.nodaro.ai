@@ -219,7 +219,7 @@ export async function reconcileInflightJobs(): Promise<ReconcileResult> {
 
   await sweepNeverStartedJobs(result)
   await sweepStuckComponentWrappers(result)
-  await sweepStuckRenderJobs(result)
+  await sweepStuckOrchestratorJobs(result)
 
   return result
 }
@@ -273,36 +273,40 @@ async function sweepNeverStartedJobs(result: ReconcileResult): Promise<void> {
   }
 }
 
-/** Render jobs (the "video-render" BullMQ queue) set status='processing' +
- *  started_at at pickup but NO provider_kind / provider_call_started_at — so they
- *  are invisible to the main scan (requires provider_call_started_at NOT NULL),
- *  to sweepNeverStartedJobs (status='pending'), and to the component sweep
- *  (provider='component'). If a render stalls past BullMQ's maxStalledCount
- *  (default 1) — e.g. the container OOM-kills mid-render while holding the lock —
- *  BullMQ abandons the job WITHOUT running the handler's catch, so the row stays
- *  'processing' forever and its reserved credits (render-video = 15cr) never
- *  refund. Mark each one failed + refund via the shared sync-sweep path.
+/** Render jobs (the "video-render" BullMQ queue) and video-director orchestrator
+ *  jobs (the "video-director" queue) both set status='processing' + started_at at
+ *  pickup but NO provider_kind / provider_call_started_at — so they are invisible
+ *  to the main scan (requires provider_call_started_at NOT NULL), to
+ *  sweepNeverStartedJobs (status='pending'), and to the component sweep
+ *  (provider='component').
  *
- *  The threshold is well past the longest legitimate render AND the orchestrator's
- *  30-min node timeout (which already cancels+refunds workflow-embedded renders),
- *  so a still-running render is never failed. Render jobs are identified by
- *  input_data.type (set by buildJobInputData) since the jobs row carries no
- *  job_type/provider for renders. */
+ *  Render stalls: BullMQ's maxStalledCount OOM-kill scenario — handler catch never
+ *  runs, row stays 'processing', reserved credits (render-video = 5cr) never refund.
+ *
+ *  Director stalls: video-director never sets provider_call_started_at (it calls no
+ *  provider directly; sub-jobs do). A Railway deploy / OOM / SIGKILL mid-chain means
+ *  the handler catch never runs, so the reserved "video-director" authoring credit
+ *  is neither committed nor refunded without this sweep.
+ *
+ *  The threshold is well past the longest legitimate run (render ≈ 5 min, director
+ *  chain ≈ 3 min) AND the orchestrator's 30-min node timeout, so a still-running job
+ *  is never failed. Jobs are identified by input_data.type (set by buildJobInputData /
+ *  the director route) since the jobs rows carry no job_type/provider for these queues. */
 const RENDER_STALE_MS = 90 * 60 * 1000
 
-async function sweepStuckRenderJobs(result: ReconcileResult): Promise<void> {
+async function sweepStuckOrchestratorJobs(result: ReconcileResult): Promise<void> {
   const cutoff = new Date(Date.now() - RENDER_STALE_MS).toISOString()
   const { data, error } = await supabase
     .from("jobs")
     .select("id, provider_kind, reconcile_attempts")
     .eq("status", "processing")
     .is("provider_call_started_at", null)
-    .filter("input_data->>type", "eq", "render-video")
+    .in("input_data->>type", ["render-video", "video-director"])
     .lt("started_at", cutoff)
     .limit(BATCH_LIMIT)
 
   if (error) {
-    console.error(`[reconcile/cron] stuck-render query failed:`, error.message)
+    console.error(`[reconcile/cron] stuck-orchestrator query failed:`, error.message)
     result.errors++
     return
   }
@@ -318,7 +322,7 @@ async function sweepStuckRenderJobs(result: ReconcileResult): Promise<void> {
       result.swept++
     } catch (err) {
       console.error(
-        `[reconcile/cron] stuck-render sweep failed for job ${row.id}:`,
+        `[reconcile/cron] stuck-orchestrator sweep failed for job ${row.id}:`,
         err,
       )
       result.errors++

@@ -30,7 +30,10 @@ vi.mock("../../supabase.js", () => ({
       let isRender = false
       const chain: any = {
         select: vi.fn(() => chain),
-        in: vi.fn(() => chain),
+        in: vi.fn((col?: string) => {
+          if (col === "input_data->>type") isRender = true
+          return chain
+        }),
         not: vi.fn(() => chain),
         eq: vi.fn((col?: string, val?: unknown) => {
           if (col === "provider" && val === "component") isComponentWrapper = true
@@ -40,10 +43,7 @@ vi.mock("../../supabase.js", () => ({
           isNeverStarted = true
           return chain
         }),
-        filter: vi.fn((col?: string) => {
-          if (col === "input_data->>type") isRender = true
-          return chain
-        }),
+        filter: vi.fn(() => chain),
         lt: vi.fn(() => chain),
         maybeSingle: vi.fn(() => Promise.resolve({ data: null, error: null })),
         limit: vi.fn(() =>
@@ -407,6 +407,22 @@ describe("reconcileInflightJobs", () => {
     const result = await reconcileInflightJobs()
     expect(sweepStaleSyncJob).toHaveBeenCalledWith(expect.objectContaining({ id: "j-render-1" }))
     expect(sweepStaleSyncJob).toHaveBeenCalledWith(expect.objectContaining({ id: "j-render-2" }))
+    expect(result.swept).toBe(2)
+  })
+
+  it("sweeps stranded video-director jobs (processing, no provider_call_started_at) — credit-leak backstop", async () => {
+    // video-director never sets provider_call_started_at (the director calls no
+    // provider directly; sub-jobs do). If the worker process dies mid-chain
+    // (Railway deploy / OOM / SIGKILL) the catch never runs, leaving the reserved
+    // "video-director" authoring credit stranded. The orchestrator sweep covers
+    // input_data.type IN ('render-video','video-director') so both shapes are caught.
+    mocks.renderRows.push(
+      { id: "j-director-1", provider_kind: null, reconcile_attempts: 0 },
+      { id: "j-director-2", provider_kind: null, reconcile_attempts: 1 },
+    )
+    const result = await reconcileInflightJobs()
+    expect(sweepStaleSyncJob).toHaveBeenCalledWith(expect.objectContaining({ id: "j-director-1" }))
+    expect(sweepStaleSyncJob).toHaveBeenCalledWith(expect.objectContaining({ id: "j-director-2" }))
     expect(result.swept).toBe(2)
   })
 })
