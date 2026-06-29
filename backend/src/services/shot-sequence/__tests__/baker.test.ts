@@ -155,6 +155,31 @@ describe("bakeShotSequence", () => {
     expect(plan.scenes[1].startFrame + plan.scenes[1].shots[0].reveals[0].frame).toBe(180)
   })
 
+  it("extends a non-last scene to abut the next scene's start (no inter-scene blank gap)", () => {
+    const b = brief()
+    // Frame-anchored reveals (empty alignment is fine): scene A's content ends at
+    // frame 16 (enter 6 + hold 10), but scene B doesn't start until frame 100. The
+    // baker must keep scene A mounted until B mounts so held content fills the gap,
+    // instead of unmounting at 16 and leaving frames [16,100) blank.
+    b.narration = { script: "ship today", cues: [{ id: "c1", text: "ship" }] }
+    b.scenes = [
+      { id: "sceneA", shots: [{ id: "shA", reveals: [
+        { id: "rA", element: { id: "ta", type: "text", text: "A", fontFamily: "Inter", fontSize: 40, color: "#fff", x: 0, y: 0 }, revealAt: { kind: "frame", frame: 0 }, enter: { motion: "fade", durationFrames: 6 }, hold: 10 },
+      ] }] },
+      { id: "sceneB", shots: [{ id: "shB", reveals: [
+        { id: "rB", element: { id: "tb", type: "text", text: "B", fontFamily: "Inter", fontSize: 40, color: "#fff", x: 0, y: 0 }, revealAt: { kind: "frame", frame: 100 }, enter: { motion: "fade", durationFrames: 6 } },
+      ] }] },
+    ]
+    const { plan } = bakeShotSequence(b, [], "https://r2/vo.mp3")
+    expect(plan.scenes.map((s) => s.id)).toEqual(["sceneA", "sceneB"])
+    expect(plan.scenes[0].startFrame).toBe(0)
+    expect(plan.scenes[1].startFrame).toBe(100)
+    // Scene A abuts Scene B exactly: end of A === start of B (was 16 before the fix).
+    expect(plan.scenes[0].startFrame + plan.scenes[0].durationInFrames).toBe(plan.scenes[1].startFrame)
+    // Last scene still extends to fill the composition (unchanged).
+    expect(plan.scenes[1].startFrame + plan.scenes[1].durationInFrames).toBe(plan.durationInFrames)
+  })
+
   it("mixes cue + frame anchors in one scene (lowest anchor wins the window)", () => {
     const b = brief()
     // r1 frame-anchored at 20; r2 stays cue c2 start (2s → frame 60).
