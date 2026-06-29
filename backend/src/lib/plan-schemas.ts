@@ -579,6 +579,10 @@ const resolvedSceneSchema = z.object({
   durationInFrames: z.number().min(1).max(MAX_FRAMES),
   background: z.object({ color: z.string().optional() }).optional(),
   shots: z.array(resolvedShotSchema).min(1),
+  // Scene cross-dissolve (render-only; durationInFrames stays the non-overlapping
+  // window — the renderer adds transitionOutFrames PAST it for the overlap).
+  transitionInFrames: z.number().min(0).max(MAX_FRAMES).optional(),
+  transitionOutFrames: z.number().min(0).max(MAX_FRAMES).optional(),
 })
 
 /** Base object — this is what the discriminated union references. */

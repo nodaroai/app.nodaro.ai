@@ -347,6 +347,13 @@ export interface ResolvedScene {
   readonly durationInFrames: number
   readonly background?: { readonly color?: string }
   readonly shots: ResolvedShot[]
+  /** Scene cross-dissolve (render-only; windows stay non-overlapping). Non-first
+   *  scenes fade IN over this many frames so the held outgoing scene shows through
+   *  at the boundary (no blank handoff). */
+  readonly transitionInFrames?: number
+  /** Non-last scenes render this many frames PAST their window and fade OUT across
+   *  that tail, overlapping the next scene for the cross-dissolve. */
+  readonly transitionOutFrames?: number
 }
 export interface ShotSequencePlan {
   readonly planType: "shot-sequence"

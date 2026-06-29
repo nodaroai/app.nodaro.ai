@@ -1,12 +1,38 @@
 import React from "react"
 import { AbsoluteFill, Audio, Sequence, useCurrentFrame, interpolate } from "remotion"
-import type { ResolvedReveal, ShotElement, ShotSequencePlan } from "../plan-types"
+import type { ResolvedReveal, ResolvedScene, ShotElement, ShotSequencePlan } from "../plan-types"
 import { getEasing, getEntranceStyle, getExitStyle } from "../lib/mg-motion"
 import { FONT_MAP } from "../lib/font-registry"
 
 /** Final opacity = base × entrance × exit (multiplied, not overwritten). */
 export function computeRevealOpacity(base: number | undefined, enterOpacity: number, exitOpacity: number): number {
   return (base ?? 1) * enterOpacity * exitOpacity
+}
+
+/**
+ * Scene cross-dissolve opacity — the "Seamless Join" recipe ported to the
+ * single-composition renderer (video half only; the VO track is continuous and
+ * untouched). A non-first scene fades IN 0→1 over its first `transitionInFrames`
+ * so it is transparent at the boundary and the still-held outgoing scene shows
+ * through (kills the blank handoff frame even when scenes have opaque
+ * backgrounds). A non-last scene's <Sequence> renders `transitionOutFrames`
+ * frames PAST its window and fades OUT 1→0 across that tail, overlapping the next
+ * scene. `frame` is scene-relative.
+ */
+export function sceneCrossfadeOpacity(
+  frame: number,
+  durationInFrames: number,
+  transitionInFrames?: number,
+  transitionOutFrames?: number,
+): number {
+  let opacity = 1
+  if (transitionInFrames && transitionInFrames > 0 && frame < transitionInFrames) {
+    opacity *= Math.max(0, Math.min(1, frame / transitionInFrames))
+  }
+  if (transitionOutFrames && transitionOutFrames > 0 && frame >= durationInFrames) {
+    opacity *= Math.max(0, Math.min(1, 1 - (frame - durationInFrames) / transitionOutFrames))
+  }
+  return opacity
 }
 
 function ElementBox({ element, style }: { element: ShotElement; style: React.CSSProperties }) {
@@ -120,15 +146,31 @@ function RevealView({ reveal }: { reveal: ResolvedReveal }) {
   )
 }
 
+/** One scene's layer. Reads the scene-relative frame to apply the cross-dissolve
+ *  opacity envelope (in at the open, out across the overlap tail). */
+function SceneView({ scene }: { scene: ResolvedScene }) {
+  const frame = useCurrentFrame()
+  const opacity = sceneCrossfadeOpacity(frame, scene.durationInFrames, scene.transitionInFrames, scene.transitionOutFrames)
+  return (
+    <AbsoluteFill style={{ backgroundColor: scene.background?.color, opacity }}>
+      {scene.shots.flatMap((shot) => shot.reveals.map((r) => <RevealView key={r.id} reveal={r} />))}
+    </AbsoluteFill>
+  )
+}
+
 export function ShotSequenceRenderer({ plan }: { plan: ShotSequencePlan }) {
   return (
     <AbsoluteFill style={{ backgroundColor: plan.backgroundColor }}>
       <Audio src={plan.audio.src} volume={plan.audio.volume ?? 1} />
       {plan.scenes.map((scene) => (
-        <Sequence key={scene.id} from={scene.startFrame} durationInFrames={scene.durationInFrames}>
-          <AbsoluteFill style={{ backgroundColor: scene.background?.color }}>
-            {scene.shots.flatMap((shot) => shot.reveals.map((r) => <RevealView key={r.id} reveal={r} />))}
-          </AbsoluteFill>
+        <Sequence
+          key={scene.id}
+          from={scene.startFrame}
+          // Render past the window by transitionOutFrames so the out-fade overlaps
+          // the next scene for the cross-dissolve (window stays non-overlapping).
+          durationInFrames={scene.durationInFrames + (scene.transitionOutFrames ?? 0)}
+        >
+          <SceneView scene={scene} />
         </Sequence>
       ))}
     </AbsoluteFill>

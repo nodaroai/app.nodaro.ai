@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { bakeShotSequence, EmptyAlignmentError, SceneOverlapError } from "../baker.js"
 import type { AlignmentWord } from "../../../providers/elevenlabs/forced-alignment.js"
-import type { ShotSequenceBrief } from "../brief-schema.js"
+import type { ShotSequenceBrief, BriefReveal } from "../brief-schema.js"
 
 const ALIGN: AlignmentWord[] = [
   { word: "ship", start: 0, end: 1 },
@@ -178,6 +178,32 @@ describe("bakeShotSequence", () => {
     expect(plan.scenes[0].startFrame + plan.scenes[0].durationInFrames).toBe(plan.scenes[1].startFrame)
     // Last scene still extends to fill the composition (unchanged).
     expect(plan.scenes[1].startFrame + plan.scenes[1].durationInFrames).toBe(plan.durationInFrames)
+  })
+
+  it("emits scene cross-dissolve frames (in on non-first, out on non-last) without overlapping windows", () => {
+    const b = brief()
+    b.narration = { script: "a b c", cues: [{ id: "c1", text: "a" }] }
+    const mk = (id: string, tid: string, text: string, frame: number): BriefReveal => ({
+      id, element: { id: tid, type: "text", text, fontFamily: "Inter", fontSize: 40, color: "#fff", x: 0, y: 0 },
+      revealAt: { kind: "frame", frame }, enter: { motion: "fade", durationFrames: 6 },
+    })
+    b.scenes = [
+      { id: "A", shots: [{ id: "shA", reveals: [mk("rA", "ta", "A", 0)] }] },
+      { id: "B", shots: [{ id: "shB", reveals: [mk("rB", "tb", "B", 100)] }] },
+      { id: "C", shots: [{ id: "shC", reveals: [mk("rC", "tc", "C", 200)] }] },
+    ]
+    const { plan } = bakeShotSequence(b, [], "https://r2/vo.mp3")
+    const [A, B, C] = plan.scenes
+    // fps 30 → out 4 / in 3 (the Seamless-Join recipe, video half).
+    expect(A.transitionInFrames).toBeUndefined() // first scene opens normally
+    expect(A.transitionOutFrames).toBe(4)
+    expect(B.transitionInFrames).toBe(3) // middle scene cross-dissolves both ways
+    expect(B.transitionOutFrames).toBe(4)
+    expect(C.transitionInFrames).toBe(3)
+    expect(C.transitionOutFrames).toBeUndefined() // last scene holds to the end
+    // Stored windows stay non-overlapping/abutting (durationInFrames excludes the overlap):
+    expect(A.startFrame + A.durationInFrames).toBe(B.startFrame)
+    expect(B.startFrame + B.durationInFrames).toBe(C.startFrame)
   })
 
   it("mixes cue + frame anchors in one scene (lowest anchor wins the window)", () => {
