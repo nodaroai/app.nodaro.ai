@@ -167,6 +167,14 @@ The unit is a **time-coded sequence of cue-anchored reveals**, not a slide. Each
 - **Caption-band keep-out:** keep important content in the **top ~83%** of the canvas (leave the bottom ~17% clear) so a caption pill never collides with a reveal.
 - **Scenes vs shots:** Phase 1 is usually ONE scene with ONE shot holding all reveals (like the keystone). Add a second scene only for a deliberate background-color change; scene ids and reveal ids are **globally unique** across the whole brief.
 
+**Vertical layout budget — no overflow, no collision:**
+- The canvas is \`height\` px tall (e.g. 1080). Reserve ~80 px at the top (poster row) and ~80 px at the bottom (above the caption keep-out). **Usable vertical space** ≈ \`height − 160\` px (~920 px on 1080).
+- Each \`text\` reveal occupies a vertical band of ≈ **\`1.3 × fontSize\`** px. The **sum of the bands of all reveals visible at the same time MUST fit the usable height**. If it does not fit, use a second column or fewer reveals — never overflow.
+- **No y-collision.** Any two reveals visible simultaneously MUST occupy **non-overlapping y-ranges**. Assign each accumulating reveal a distinct \`y\`, top→bottom, leaving a gap of ≥ ~24 px between bands. A display title with \`fontSize ≥ 100\` consumes ≥ ~130 px — budget for it; never place another reveal inside its band.
+- **Two columns for density** (proven pattern): when content exceeds one column's budget, place the second group at \`x ≈ width × 0.5\` (e.g. \`x: 980\` on a 1920-wide canvas), with its own top→bottom y-bands stacked independently.
+- **Cap the accumulating reveal count.** Typically ≤ ~6 single-column text reveals on a 1080-tall canvas (more with two columns). Stop before the budget fills.
+- **(Advanced) Multiple scenes** clear the canvas between beats: the renderer windows and unmounts each scene. Use ONLY for long narratives that need distinct full-canvas moments. Hard constraint: scenes are **strictly non-overlapping** in time — each scene's reveals (including holds) must finish before the next scene's first cue, or the resolver returns an overlap error. Prefer one accumulating scene unless the content truly requires it.
+
 ---
 
 ## Motion doctrine
@@ -323,6 +331,29 @@ Problem → product → features → CTA (a PAS / Feature-Benefit spine):
 - \`product_intro\` is where the brand name lands — a good candidate for the single **frame-0 poster** (a small wordmark held from t=0) or a mid-video name reveal.
 - Each \`feature_showcase\` is one capability translated into viewer value, revealed on its own cue — not a stacked feature list dumped at once.
 - Land the \`cta\` near the end so it holds into the resolver's tail (the held read). 5–8 cues for a 20–60s launch.
+
+## Vertical layout for product launch
+
+A full PAS/Feature-Benefit arc (hook + 2–3 pain lines + product name + 2–3 features + CTA) has 8–10 co-visible reveals by the end. **One column of a 1080-tall canvas cannot hold more than ~6 average-sized text reveals without colliding** — plan your y-stack before picking values.
+
+**Worked single-column layout (≤ 6 reveals, 1920 × 1080, left margin x: 140):**
+
+| Beat | y | fontSize | Band (≈ 1.3×) | Ends at |
+|------|---|----------|--------------|---------|
+| poster wordmark | 110 | 44 | ~57 px | ~167 |
+| hook line | 240 | 100 | ~130 px | ~370 |
+| pain beat 1 | 410 | 56 | ~73 px | ~483 |
+| pain beat 2 | 520 | 56 | ~73 px | ~593 |
+| product name | 640 | 80 | ~104 px | ~744 |
+| CTA | 790 | 52 | ~68 px | ~858 |
+
+All six fit with ≥ 24 px gaps; the last element ends well below the caption keep-out boundary (~896 px = 83% of 1080). A large display title (\`fontSize: 100+\`) consuming ~130 px+ needs its own gap — budget accordingly.
+
+**When you have more than ~6 beats** (common for product launches), split into two columns:
+- **Left column** (\`x: 140\`): hook → pain beats → product name
+- **Right column** (\`x: 980\`): feature showcases → benefit → CTA — each with its own y-stack starting from ~y: 160
+
+Never cram more reveals into one column than the vertical budget allows.
 
 ## Reveal palette
 

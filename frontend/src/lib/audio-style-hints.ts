@@ -22,13 +22,17 @@ export function collectAudioStyleHints(
   nodes: ReadonlyArray<WorkflowNode>,
   edges: ReadonlyArray<WorkflowEdge>,
 ): SoundComposition {
-  // Short-circuit: if no audio-style edges target this consumer, skip the
+  // Short-circuit: if no picker-bearing edge targets this consumer, skip the
   // O(N) graph projection entirely. Preview/runtime call this on every
   // render of every audio config panel, so the empty-graph case is hot.
-  const hasAudioStyleEdge = edges.some(
-    (e) => e.target === consumer.id && e.targetHandle === "audio-style",
+  // Must mirror `collectAudioStyleSources` (shared): a descriptive picker can
+  // ride the `voice` pip too (suno-generate), not only `audio-style` — gating on
+  // `audio-style` alone made a voice-only picker connection short-circuit to
+  // empty before the aggregator ever ran.
+  const hasPickerEdge = edges.some(
+    (e) => e.target === consumer.id && (e.targetHandle === "audio-style" || e.targetHandle === "voice"),
   )
-  if (!hasAudioStyleEdge) {
+  if (!hasPickerEdge) {
     return { text: "", fields: {}, warnings: [] }
   }
 

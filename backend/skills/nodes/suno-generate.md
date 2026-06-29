@@ -1,7 +1,7 @@
 ---
 node_type: suno-generate
-generated_at: 2026-06-16T08:22:28.285Z
-generated_from: 877dfa01a
+generated_at: 2026-06-29T12:56:27.078Z
+generated_from: 14d5f54b3
 ---
 
 # Suno Generate
@@ -10,7 +10,7 @@ generated_from: 877dfa01a
 **Type:** `suno-generate`
 **Category:** ai
 **Credit cost:** 3
-**Inputs (target handles):** `prompt`, `audio-style`, `voice`
+**Inputs (target handles):** `prompt`, `audio-style`, `voice`, `field-style`, `field-lyrics`, `field-title`, `field-negativeStyle`
 **Outputs (source handles):** `audio`
 
 **Required data fields:**
@@ -30,6 +30,7 @@ generated_from: 877dfa01a
 - `weirdnessConstraint?: number`
 - `audioWeight?: number`
 - `customMode?: boolean`
+- `advancedOpen?: boolean`
 - `instrumental?: boolean`
 - `personaId?: string`
 - `personaModel?: SunoPersonaModel`

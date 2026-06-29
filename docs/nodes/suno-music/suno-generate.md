@@ -24,8 +24,24 @@ Suno Generate creates complete songs from text prompts. It supports multiple Sun
 
 ## Inputs & Outputs
 
-- **Inputs:** `in` -- optional upstream connection (text prompt, etc.)
-- **Outputs:** `audio` -- generated audio URL
+**Inputs**
+
+| Handle | Accepts | Routes to |
+|--------|---------|-----------|
+| Prompt | text producers + audio/visual pickers | `prompt` |
+| Audio style | audio pickers (genre/mood/instrumentation), voice describers | folded into `style`/`prompt` |
+| Voice | voice persona (suno-voice / voice-design / voice-character) | `personaId` |
+| Style *(Advanced)* | text producers | `style` |
+| Lyrics *(Advanced)* | text producers | `lyrics` |
+| Title *(Advanced)* | text producers | `title` |
+| Negative style *(Advanced)* | text producers | `negativeStyle` |
+
+The four **Advanced** handles appear when you expand **Advanced ▾** on the node (or when the field already has content/a wire). Wiring any of Style / Lyrics / Title puts Suno into **custom mode** automatically.
+
+**Outputs**
+
+- `audio` — generated audio URL
+
 ## Best Practices
 
 - Use Suno metatags in lyrics (`[Verse]`, `[Chorus]`, `[Bridge]`, `[Outro]`) to structure the song.

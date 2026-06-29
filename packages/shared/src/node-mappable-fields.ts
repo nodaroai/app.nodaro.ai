@@ -60,3 +60,10 @@ export const NODE_MAPPABLE_FIELDS: Readonly<Record<string, readonly string[]>> =
   "location":            ["locationName", "description"],
   "web-scrape":          ["query", "url", "target"],
 }
+
+/** suno-generate secondary text fields exposed as `field-<key>` canvas handles. */
+export const SUNO_FIELD_HANDLE_FIELDS = ["style", "lyrics", "title", "negativeStyle"] as const
+/** Map a `field-<key>` handle id to its data key, or null if not a field handle. */
+export function fieldKeyFromHandle(handleId: string): string | null {
+  return handleId.startsWith("field-") ? handleId.slice("field-".length) : null
+}

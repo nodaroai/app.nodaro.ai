@@ -373,6 +373,10 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
     { handleId: "prompt",       label: AUDIO_TEXT_HANDLE_LABELS["suno-generate"].prompt,         accepts: (s) => isValidSunoGenerateConnection("prompt",       s, isVisualPickerType) },
     { handleId: "audio-style",  label: AUDIO_TEXT_HANDLE_LABELS["suno-generate"]["audio-style"], accepts: (s) => isValidSunoGenerateConnection("audio-style",  s, isVisualPickerType) },
     { handleId: "voice",        label: AUDIO_TEXT_HANDLE_LABELS["suno-generate"].voice,          accepts: (s) => isValidSunoGenerateConnection("voice",        s, isVisualPickerType) },
+    { handleId: "field-style",         label: AUDIO_TEXT_HANDLE_LABELS["suno-generate"]["field-style"],         accepts: (s) => isValidSunoGenerateConnection("field-style",         s, isVisualPickerType) },
+    { handleId: "field-lyrics",        label: AUDIO_TEXT_HANDLE_LABELS["suno-generate"]["field-lyrics"],        accepts: (s) => isValidSunoGenerateConnection("field-lyrics",        s, isVisualPickerType) },
+    { handleId: "field-title",         label: AUDIO_TEXT_HANDLE_LABELS["suno-generate"]["field-title"],         accepts: (s) => isValidSunoGenerateConnection("field-title",         s, isVisualPickerType) },
+    { handleId: "field-negativeStyle", label: AUDIO_TEXT_HANDLE_LABELS["suno-generate"]["field-negativeStyle"], accepts: (s) => isValidSunoGenerateConnection("field-negativeStyle", s, isVisualPickerType) },
   ],
   "suno-cover": [
     { handleId: "audio",  label: AUDIO_TEXT_HANDLE_LABELS["suno-cover"].audio,  accepts: (s) => isValidSunoCoverConnection("audio",  s, isVisualPickerType) },

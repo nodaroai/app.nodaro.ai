@@ -483,6 +483,73 @@ describe("preview↔run parity — video", () => {
     expect(runPrompt).toContain("circle the object from @image_1")
     expect(previewPrompt).toBe(runPrompt)
   })
+
+  // ── Unified `generate-video` node: the RUN re-types it to i2v/t2v before
+  // composing (execute-node.ts ~1814); the PREVIEW must resolve the SAME effective
+  // mode (resolveGenerateVideoMode) or its {image:N} tokens ride through raw. These
+  // two cases pin both modes — the gap that shipped {image:2:object} unresolved in
+  // the final-prompt preview while the run sent `@image_2`. ──
+
+  it("(h) generate-video, no frame → t2v: run resolves {image:1} → @image_1, preview matches (parity)", async () => {
+    // The user's bug scenario: reference image wired (no start frame), seedance-2.
+    // hasImage=false → run picks text-to-video → {image:1:object} → @image_1.
+    const genVidNode = makeNode("generate-video", {
+      prompt: "circle {image:1:object}",
+      provider: "seedance-2",
+    })
+    mockNodes = [refImageNode(), genVidNode]
+    // Reference image on the canonical generate-video handle → imageRefCount=1.
+    mockEdges = [
+      { id: "e1", source: "ref-img", target: "n1", targetHandle: "imageReferences" },
+    ]
+    // No start/end frame resolved → hasImage=false → run dispatches to text-to-video.
+    mockResolveNodeInputs.mockReturnValue({})
+    mockRunTextToVideoGeneration.mockResolvedValue(undefined)
+
+    await executeNode(genVidNode as any, makeCtx())
+
+    expect(mockRunTextToVideoGeneration).toHaveBeenCalledTimes(1)
+    const runPrompt = mockRunTextToVideoGeneration.mock.calls[0][1] as string
+    // Preview is called with the REAL node type "generate-video" (as the hook does).
+    const previewPrompt = assembleVideoPrompt("generate-video", assemblerArgs(genVidNode))
+
+    // Token RESOLVED, not stripped or left raw — the @image_1 binding lands.
+    expect(runPrompt).toContain("circle the object from @image_1")
+    expect(runPrompt).not.toMatch(/\{image:1/)
+    expect(previewPrompt).toBe(runPrompt)
+  })
+
+  it("(i) generate-video, start frame → i2v: run folds motion + resolves {image:1}, preview matches (parity)", async () => {
+    // A wired START frame flips the unified node to image-to-video — the i2v branch
+    // folds the motion hint (t2v does NOT), so this case guards the mode detection,
+    // not just token resolution.
+    const frameNode = { id: "frame-img", type: "upload-image", position: { x: 0, y: 0 }, data: { label: "Frame" } }
+    const genVidNode = makeNode("generate-video", {
+      prompt: "circle {image:1:object}",
+      provider: "seedance-2",
+      motion: "slow zoom",
+      motionEnabled: true,
+    })
+    mockNodes = [refImageNode(), frameNode, genVidNode]
+    mockEdges = [
+      { id: "e1", source: "ref-img", target: "n1", targetHandle: "imageReferences" },
+      { id: "e2", source: "frame-img", target: "n1", targetHandle: "startFrame" },
+    ]
+    // Start frame resolved → hasImage=true → run dispatches to image-to-video.
+    mockResolveNodeInputs.mockReturnValue({ startFrameUrl: "http://frame.png" })
+    mockRunVideoGeneration.mockResolvedValue(undefined)
+
+    await executeNode(genVidNode as any, makeCtx())
+
+    expect(mockRunVideoGeneration).toHaveBeenCalledTimes(1)
+    const runPrompt = mockRunVideoGeneration.mock.calls[0][8] as string
+    const previewPrompt = assembleVideoPrompt("generate-video", assemblerArgs(genVidNode))
+
+    // i2v mode: motion folded AND the reference token resolved.
+    expect(runPrompt).toContain("circle the object from @image_1")
+    expect(runPrompt).toContain("slow zoom motion")
+    expect(previewPrompt).toBe(runPrompt)
+  })
 })
 
 // ===========================================================================

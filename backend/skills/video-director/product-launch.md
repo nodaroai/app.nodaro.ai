@@ -17,6 +17,29 @@ Problem → product → features → CTA (a PAS / Feature-Benefit spine):
 - Each `feature_showcase` is one capability translated into viewer value, revealed on its own cue — not a stacked feature list dumped at once.
 - Land the `cta` near the end so it holds into the resolver's tail (the held read). 5–8 cues for a 20–60s launch.
 
+## Vertical layout for product launch
+
+A full PAS/Feature-Benefit arc (hook + 2–3 pain lines + product name + 2–3 features + CTA) has 8–10 co-visible reveals by the end. **One column of a 1080-tall canvas cannot hold more than ~6 average-sized text reveals without colliding** — plan your y-stack before picking values.
+
+**Worked single-column layout (≤ 6 reveals, 1920 × 1080, left margin x: 140):**
+
+| Beat | y | fontSize | Band (≈ 1.3×) | Ends at |
+|------|---|----------|--------------|---------|
+| poster wordmark | 110 | 44 | ~57 px | ~167 |
+| hook line | 240 | 100 | ~130 px | ~370 |
+| pain beat 1 | 410 | 56 | ~73 px | ~483 |
+| pain beat 2 | 520 | 56 | ~73 px | ~593 |
+| product name | 640 | 80 | ~104 px | ~744 |
+| CTA | 790 | 52 | ~68 px | ~858 |
+
+All six fit with ≥ 24 px gaps; the last element ends well below the caption keep-out boundary (~896 px = 83% of 1080). A large display title (`fontSize: 100+`) consuming ~130 px+ needs its own gap — budget accordingly.
+
+**When you have more than ~6 beats** (common for product launches), split into two columns:
+- **Left column** (`x: 140`): hook → pain beats → product name
+- **Right column** (`x: 980`): feature showcases → benefit → CTA — each with its own y-stack starting from ~y: 160
+
+Never cram more reveals into one column than the vertical budget allows.
+
 ## Reveal palette
 
 Per beat, the element + motion (all `easeOut`, 8–16 frame entrances — see doctrine motion enum):

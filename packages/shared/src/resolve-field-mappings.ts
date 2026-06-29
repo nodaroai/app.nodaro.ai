@@ -3,9 +3,13 @@ import { injectUpstream } from "./inject-upstream.js"
 /**
  * Resolve fieldMappings + {} injection for all text fields on a node.
  *
- * Two resolution mechanisms:
- *   1. fieldMappings: field mapped to source node → use that node's output
- *   2. {} injection: manual field contains {} → replace with upstreamText
+ * Three resolution mechanisms, in precedence order per field:
+ *   1. edge source: a live edge into the field's handle → use that node's
+ *      output. Prefix-agnostic — the caller decides which edges map to which
+ *      field (e.g. FE/BE wrappers match `field-<key>` handles). Wins over both
+ *      fieldMappings and {} injection.
+ *   2. fieldMappings: field mapped to source node → use that node's output
+ *   3. {} injection: manual field contains {} → replace with upstreamText
  *
  * Does NOT inject upstream into empty unmapped fields — that stays in
  * per-node execution code (e.g., d.prompt || inputs.prompt).
@@ -13,21 +17,25 @@ import { injectUpstream } from "./inject-upstream.js"
  * The `getSourceOutput` callback abstracts how source node output is
  * extracted — frontend reads from live React Flow state, backend reads
  * from NodeExecutionState.output. Same pattern as ancestor-refs.ts.
+ *
+ * `edgeSourceForField` is optional: when omitted, behaviour is identical to
+ * the prior fieldMappings-only resolver (existing callers stay valid).
  */
 export function resolveFieldMappings(
   data: Record<string, unknown>,
   upstreamText: string | undefined,
   mappableFieldNames: ReadonlyArray<string>,
   getSourceOutput: (sourceNodeId: string) => string | undefined,
+  edgeSourceForField?: (field: string) => string | undefined,
 ): Record<string, unknown> {
   const fm = data.fieldMappings as Record<string, { sourceNodeId: string }> | undefined
   const resolved = { ...data }
 
   for (const field of mappableFieldNames) {
-    const mapping = fm?.[field]
+    const sourceNodeId = edgeSourceForField?.(field) ?? fm?.[field]?.sourceNodeId
 
-    if (mapping?.sourceNodeId) {
-      const output = getSourceOutput(mapping.sourceNodeId)
+    if (sourceNodeId) {
+      const output = getSourceOutput(sourceNodeId)
       if (output != null) resolved[field] = output
     } else {
       const current = resolved[field]

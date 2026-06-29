@@ -49,6 +49,20 @@ const VOICE_TYPES = new Set(["voice-character", "voice-delivery"])
 function isMusic(t: string | undefined) { return !!t && MUSIC_TYPES.has(t) }
 function isVoice(t: string | undefined) { return !!t && VOICE_TYPES.has(t) }
 
+/**
+ * Target handles whose wired pickers contribute an audio-style hint. Before the
+ * typed-handle split, suno-generate had ONE picker handle; the split into
+ * prompt / audio-style / voice fragmented collection, so a descriptive
+ * voice-character picker dropped onto the "Voice" pip silently vanished from the
+ * output. The voice pip's other accepted sources (suno-voice / voice-design) are
+ * persona producers — `getParameterPromptHint` returns "" for them, so they're
+ * skipped here and still route to `personaId` via the input-resolver. Only
+ * suno-generate exposes a `voice` handle among the fold consumers, so adding it
+ * here is naturally scoped to suno without affecting generate-music / voice-* /
+ * text-to-audio (they have no voice edges to collect).
+ */
+const AUDIO_STYLE_SOURCE_HANDLES: ReadonlySet<string> = new Set(["audio-style", "voice"])
+
 function collectAudioStyleSources(
   consumer: HintNodeLike,
   ctx: HintGraphContext,
@@ -56,7 +70,7 @@ function collectAudioStyleSources(
   const sources: HintNodeLike[] = []
   for (const edge of ctx.edges) {
     if (edge.target !== consumer.id) continue
-    if (edge.targetHandle !== "audio-style") continue
+    if (edge.targetHandle == null || !AUDIO_STYLE_SOURCE_HANDLES.has(edge.targetHandle)) continue
     const source = ctx.nodes.find((n) => n.id === edge.source)
     if (source) sources.push(source)
   }

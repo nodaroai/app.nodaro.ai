@@ -173,6 +173,34 @@ describe("getCompatibleNodes / resolveTargetHandle — video-source edge-drop re
   })
 })
 
+// suno-generate's mappable secondary text fields (field-style / field-lyrics /
+// field-title / field-negativeStyle) are TEXT inputs: dragging FROM one of their
+// input pips must offer text producers (ai-writer, text-prompt, …) — NOT the audio
+// pickers (music-genre, …), which stay on the audio-style / voice handles. Mirrors
+// the `negative` branch. The pool mixes a text producer and an audio picker so the
+// branch's filter is exercised in both directions.
+describe("field-* handles surface text producers, not pickers", () => {
+  const pool = [
+    opt("text-prompt"),
+    opt("ai-writer"),
+    opt("llm-chat"),
+    opt("music-genre"),
+    opt("upload-image"),
+  ]
+  for (const id of ["field-style", "field-lyrics", "field-title", "field-negativeStyle"]) {
+    it(`${id} target → text producers direct, no music-genre`, () => {
+      const res = getCompatibleNodes(id, "target", pool, "suno-generate")
+      // `ai-writer` is a real runtime node type but intentionally outside the
+      // SceneNodeType union (the codebase casts it everywhere), so assert it via
+      // the loosely-typed `direct` array — the same convention as the Negative
+      // handle test above. `music-genre` IS a union member, so the picker-
+      // exclusion check uses the strict `directTypes` set verbatim per the brief.
+      expect(res.direct.map((o) => o.type)).toContain("ai-writer")
+      expect(res.directTypes.has("music-genre")).toBe(false)
+    })
+  }
+})
+
 describe("TYPED_HANDLE_IDS contract", () => {
   it("matches every typed-pool-gating handle in TARGET_HANDLE_ACCEPTS", () => {
     // Node types whose registry entries describe DATA-producer inputs (not

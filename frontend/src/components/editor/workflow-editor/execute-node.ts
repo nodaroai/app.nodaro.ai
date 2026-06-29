@@ -897,6 +897,8 @@ export function executeNode(
       nodes,
       upstreamText,
       mappableFields,
+      node.id,
+      edges,
     )
     node = { ...node, data: resolvedData } as WorkflowNode
   }

@@ -49,3 +49,27 @@ describe("useNodeFinalPrompt — generate-image", () => {
     expect(result.current.promptText.toLowerCase()).not.toContain("smartphone")
   })
 })
+
+// Audio nodes must route through the AUDIO assembly path (provider-less) so the
+// canvas "Final" view folds in the connected audio-style pickers (genre / mood /
+// instrumentation / voice) EXACTLY as the run does — not the image path (which
+// drops them). Regression guard for the inline-prompt rollout (#3646), where
+// every audio media node gained an inline Final view but useNodeFinalPrompt
+// still forced a fake image `provider`.
+describe("useNodeFinalPrompt — suno-generate (audio)", () => {
+  it("folds a connected music-genre picker into the Final prompt", () => {
+    useWorkflowStore.setState({
+      nodes: [
+        { id: "g", type: "music-genre", position: { x: 0, y: 0 }, data: { type: "music-genre", label: "G", genre: "electronic" } },
+        { id: "s1", type: "suno-generate", position: { x: 300, y: 0 }, data: { type: "suno-generate", label: "Suno", prompt: "a dreamy song", model: "V5_5" } },
+      ] as never,
+      // Non-custom mode (no style/title/lyrics) → hints fold into the PROMPT field.
+      edges: [{ id: "e1", source: "g", target: "s1", sourceHandle: "out", targetHandle: "audio-style" } as never],
+      characterDefinitions: [] as never,
+    })
+    const { result } = renderHook(() => useNodeFinalPrompt("s1"), { wrapper })
+    expect(result.current.promptText).toContain("a dreamy song")
+    // The connected music-genre picker must appear in the assembled Final prompt.
+    expect(result.current.promptText.toLowerCase()).toContain("electronic")
+  })
+})

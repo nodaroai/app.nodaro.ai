@@ -25,6 +25,7 @@ import {
   collectIdentityLockClause,
   resolveEffectiveSourceType,
   resolveVideoReferenceCore,
+  resolveVideoProviderForMode,
   hasFeature,
   countRefModalityEdges,
   type CharacterMeta,
@@ -282,10 +283,46 @@ export interface AssembleVideoPromptArgs {
 }
 
 /**
+ * Resolve the unified `generate-video` node to the concrete i2v/t2v mode the RUN
+ * dispatches it as (execute-node.ts ~1814), using the editor graph instead of
+ * resolved run inputs: a wired START or END frame image → image-to-video, else
+ * text-to-video. Reference-handle images (`imageReferences` / `videoReferences` /
+ * `audioReferences`) are NOT frames — they feed the `{image:N}` body tokens — so
+ * they never flip the mode, matching the run where they resolve to
+ * `referenceImageUrls`/etc., not `startFrameUrl`. `gemini-omni-video`'s V2V mode
+ * is the one provider-scoped exception that routes a wired reference VIDEO to i2v,
+ * mirroring the run's gemini-scoped override.
+ *
+ * `generate-video`'s only image-input handles are `startFrame`/`endFrame` (the
+ * node defines no generic image target — references live on their own handles),
+ * so an edge to either handle is the faithful editor-side equivalent of the run's
+ * `inputs.startFrameUrl || inputs.endFrameUrl || inputs.imageUrl`. The
+ * preview↔run parity test pins this against the real `executeNode` dispatch.
+ */
+function resolveGenerateVideoMode(
+  node: WorkflowNode,
+  edges: ReadonlyArray<WorkflowEdge>,
+): "image-to-video" | "text-to-video" {
+  const incoming = edges.filter((e) => e.target === node.id)
+  const hasFrame = incoming.some(
+    (e) => e.targetHandle === "startFrame" || e.targetHandle === "endFrame",
+  )
+  const provider = (node.data as { provider?: string }).provider
+  const hasGeminiVideoRef =
+    provider === "gemini-omni-video" &&
+    incoming.some((e) => e.targetHandle === "videoReferences")
+  return hasFrame || hasGeminiVideoRef ? "image-to-video" : "text-to-video"
+}
+
+/**
  * Reproduce the RUN's video-prompt TEXT composition EXACTLY for a single video
  * node, so the final-prompt PREVIEW matches what the run sends. Dispatches per
- * `nodeType`. Returns ONLY the composed prompt string (negative-prompt routing
- * is layered on top by the caller via `applyVideoNegativePrompt`).
+ * the node's EFFECTIVE type — the unified `generate-video` is resolved to its
+ * concrete i2v/t2v mode first (see {@link resolveGenerateVideoMode}), exactly as
+ * the run re-types it before dispatch; without this its `{image:N}` tokens would
+ * ride through raw in the preview while the run shows the `@image_N` binding.
+ * Returns ONLY the composed prompt string (negative-prompt routing is layered on
+ * top by the caller via `applyVideoNegativePrompt`).
  *
  * Mirrors `execute-node.ts`'s per-type handlers (line ranges current as of this
  * commit — kept here for drift auditability):
@@ -316,17 +353,30 @@ export function assembleVideoPrompt(nodeType: string, args: AssembleVideoPromptA
   const id = node.id
   const data = node.data as Record<string, unknown>
 
+  // ── Effective dispatch type ──
+  // The unified `generate-video` node has no handlers of its own here — the RUN
+  // re-types it to image-to-video / text-to-video before composing (execute-node.ts
+  // ~1814). Resolve the same effective mode so every per-mode branch below (token
+  // strip/resolve, motion-vs-cinematography hint fold, @-mention) fires identically.
+  // Every other type passes through unchanged. `node.type` (the REAL type) still
+  // drives `appendWired` — generate-video appends its wired prompt-handle.
+  const effectiveType =
+    nodeType === "generate-video" ? resolveGenerateVideoMode(node, edges) : nodeType
+
   // ── Base prompt: typed candidate fields resolved via refMap. generate-video
   // APPENDS the wired prompt-handle contribution (parity with execute-node's
-  // appendWired); standalone t2v/i2v keep wired as a fallback (no append). ──
+  // appendWired); standalone t2v/i2v keep wired as a fallback (no append). The
+  // candidate-field lists for generate-video and i2v/t2v are identical
+  // (["prompt","motionPrompt"]), so computing on `effectiveType` reads the same
+  // typed text the run does. ──
   const appendWired = node.type === "generate-video"
   const wired = appendWired
     ? collectWiredPromptContribution(node.id, nodes, edges, "prompt") || undefined
     : undefined
-  let prompt: string | undefined = computeNodePrompt(nodeType, data, { refMap, wired, appendWired })
+  let prompt: string | undefined = computeNodePrompt(effectiveType, data, { refMap, wired, appendWired })
 
   // ── motion-transfer / video-sfx: NO folding — bare resolved prompt ──
-  if (nodeType === "motion-transfer" || nodeType === "video-sfx") {
+  if (effectiveType === "motion-transfer" || effectiveType === "video-sfx") {
     return prompt ?? ""
   }
 
@@ -337,18 +387,27 @@ export function assembleVideoPrompt(nodeType: string, args: AssembleVideoPromptA
   // resolveReferenceTokens), so leave them in the prompt. A provider with no
   // reference support keeps the legacy strip-to-bare-label (plain text to the
   // video API).
-  const provider = data.provider as string | undefined
+  // generate-video stores the unified picker's BASE model id; the RUN remaps it to
+  // the chosen mode's concrete id (resolveVideoProviderForMode) before the i2v/t2v
+  // handler's reference-image feature check, so split-id models (Grok/Wan) gate
+  // refs by the right id. Mirror that remap here. Standalone i2v/t2v already store
+  // a mode-specific id, so they pass through untouched (no behaviour change).
+  const rawProvider = data.provider as string | undefined
+  const provider =
+    nodeType === "generate-video" && rawProvider
+      ? resolveVideoProviderForMode(rawProvider, effectiveType as "image-to-video" | "text-to-video")
+      : rawProvider
   const providerSupportsRefs = !!provider && hasFeature(provider, "reference-image")
   if (
-    nodeType === "image-to-video" ||
-    nodeType === "text-to-video" ||
-    nodeType === "video-to-video"
+    effectiveType === "image-to-video" ||
+    effectiveType === "text-to-video" ||
+    effectiveType === "video-to-video"
   ) {
     if (!providerSupportsRefs) prompt = stripVideoImageTokens(prompt)
   }
 
   // ── Hint folding ──
-  if (nodeType === "image-to-video") {
+  if (effectiveType === "image-to-video") {
     // i2v ONLY: motion hint + cinematography hints merged into ONE list, then
     // joined to the body with ". " (execute-node.ts:2290-2295).
     const motionHints: string[] = []
@@ -374,9 +433,9 @@ export function assembleVideoPrompt(nodeType: string, args: AssembleVideoPromptA
 
   // ── @-mention resolution (i2v / t2v / v2v ONLY) ──
   if (
-    nodeType === "image-to-video" ||
-    nodeType === "text-to-video" ||
-    nodeType === "video-to-video"
+    effectiveType === "image-to-video" ||
+    effectiveType === "text-to-video" ||
+    effectiveType === "video-to-video"
   ) {
     // Positional reference counts the core resolves `{image:N}` / `{video:N}` /
     // `{audio:N}` body tokens against. Count by reference MODALITY via the shared
