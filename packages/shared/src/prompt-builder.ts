@@ -377,6 +377,35 @@ function locationModeDirective(mode: LocationUsageMode): string | null {
 }
 
 /**
+ * Map a location usage-mode to its HYBRID reference role — the vocabulary
+ * `roleToPhrase` renders into "the {role} from reference image {LETTER}". The
+ * location analog of the character mention's role segment, for the 4-mode
+ * location enum:
+ *   - identical → "background"  (lock the scene to this image)
+ *   - style     → "style"       (borrow look / mood / palette)
+ *   - layout    → "layout"      (borrow compositional framing)
+ *   - none / undefined / anything else → the source default (`"background"`).
+ *
+ * Accepts a loose `string` so a `ConnectedReference.defaultUsageMode` (typed as
+ * the CHARACTER `UsageMode`, which can't express `"layout"`) flows in without a
+ * cast — unknown / non-location modes fall through to the safe source default
+ * instead of throwing. The three real roles are members of
+ * `REFERENCE_ROLE_PRESETS["wired-location"]`, so the phrasing stays curated.
+ */
+function locationModeToRole(mode: string | null | undefined): string {
+  switch (mode) {
+    case "identical":
+      return "background"
+    case "style":
+      return "style"
+    case "layout":
+      return "layout"
+    default:
+      return defaultRoleForSource("wired-location")
+  }
+}
+
+/**
  * Resolve `@oldlibrary:1:weather/rain` mentions in the prompt against the
  * pre-expanded `wired-location` ConnectedReferences (from
  * `expandWiredLocationRefs` / `expandLocationNodeIntoRefs`). Mirrors
@@ -498,6 +527,124 @@ export function resolveLocationMentions(
   }
 
   return { prompt: resolvedPrompt, additionalUrls, mentionedLocationSlugs }
+}
+
+interface ResolveLocationMentionsHybridResult {
+  /** Body with each `@location` mention replaced INLINE by its role phrase
+   *  ("the {role} from reference image {LETTER}"). No directive block. */
+  prompt: string
+  /** Matched location URLs in mention order (deduped by the caller). */
+  additionalUrls: string[]
+  /** Slugs that had at least one resolved mention. */
+  mentionedLocationSlugs: Set<string>
+  /** Per-reference opt-in identity-lock lines (deduped per URL). Locks are OFF
+   *  for locations by default — `buildIdentityLockLine` returns null unless the
+   *  ref sets `identityLock.enabled === true` with custom text (there is no
+   *  built-in wired-location lock wording). Caller prepends them as ONE block. */
+  lockLines: string[]
+  /** Non-empty `elementInjection` fragments (deduped per URL). Caller appends
+   *  them as trailing scene directives. */
+  elementDirectives: string[]
+}
+
+/**
+ * HYBRID-mode location mention convergence (Unified Reference Roles, Phase C).
+ *
+ * The location analog of `resolveCharacterMentionsHybrid`. Where the LEGACY
+ * `resolveLocationMentions` (above) prepends a `"Use these locations:"` bullet
+ * block + replaces `@location` tokens with display names, this renders each
+ * mention as the inline role phrase `"the {role} from reference image {LETTER}"`
+ * and surfaces the optional opt-in identity-lock + wired `elementInjection`
+ * SEPARATELY (caller prepends one lock block, appends element directives). No
+ * directive block is produced.
+ *
+ * MATCHING is byte-identical to the legacy resolver (variant-first, NO canonical
+ * fallback on a variant miss) so the set of attached URLs / matched tokens never
+ * diverges between formats — only the rendered phrasing differs.
+ *
+ * ROLE is `locationModeToRole(mode)` with `mode = perMentionOverride ?? the
+ * location node's defaultUsageMode ?? DEFAULT_LOCATION_USAGE_MODE` — so a node
+ * whose default is "style" renders "the style from …" for a bare `@old-library:1`.
+ *
+ * SLOT/LETTER: a URL's 1-based position in `dedup([...existingUrls,
+ * ...mentionUrls])`. The caller passes `existingUrls = [base refs, resolved
+ * character mentions]` (location mentions are merged AFTER character mentions and
+ * BEFORE the character canonical/extra URLs), so these letters are a prefix of —
+ * and byte-identical to — the caller's final `finalIndexByUrl` for every location
+ * URL.
+ */
+function resolveLocationMentionsHybrid(
+  prompt: string,
+  tokens: readonly LocationMentionTokenInfo[],
+  refs: readonly ConnectedReference[],
+  existingUrls: readonly string[],
+): ResolveLocationMentionsHybridResult {
+  const bySlug = new Map<string, ConnectedReference>()
+  const byVariant = new Map<string, ConnectedReference>()
+  for (const r of refs) {
+    if (!r.locationSlug) continue
+    if (!r.locationVariantBucket || !r.locationVariantSlug) {
+      bySlug.set(r.locationSlug, r)
+    } else {
+      byVariant.set(`${r.locationSlug}:${r.locationVariantBucket}/${r.locationVariantSlug}`, r)
+    }
+  }
+
+  const additionalUrls: string[] = []
+  const mentionedLocationSlugs = new Set<string>()
+  const refByUrl = new Map<string, ConnectedReference>()
+  const matched: Array<{ token: string; offset: number; url: string; role: string }> = []
+
+  for (const t of tokens) {
+    // Variant-first, canonical-fallback-FREE — identical to the legacy resolver
+    // so the matched URL set never diverges between formats.
+    const match = t.bucket && t.variant
+      ? byVariant.get(`${t.locationSlug}:${t.bucket}/${t.variant}`)
+      : bySlug.get(t.locationSlug)
+    if (!match || !match.url) continue
+    additionalUrls.push(match.url)
+    mentionedLocationSlugs.add(t.locationSlug)
+    refByUrl.set(match.url, match)
+    const mode = t.usageMode ?? match.defaultUsageMode ?? DEFAULT_LOCATION_USAGE_MODE
+    matched.push({ token: t.token, offset: t.offset, url: match.url, role: locationModeToRole(mode) })
+  }
+
+  // Slot letters from the deduped [existing, mention] URL list — the prefix of
+  // the caller's `finalIndexByUrl`, so the letters agree.
+  const slotByUrl = new Map<string, number>()
+  for (const u of [...existingUrls, ...additionalUrls]) {
+    if (!slotByUrl.has(u)) slotByUrl.set(u, slotByUrl.size + 1)
+  }
+  const bindingFor = (url: string): string => {
+    const slot = slotByUrl.get(url)
+    return slot ? `reference image ${slotToLetter(slot)}` : "the reference image"
+  }
+
+  // Replace mention tokens right-to-left so earlier offsets stay valid.
+  let resolvedPrompt = prompt
+  for (const m of [...matched].sort((a, b) => b.offset - a.offset)) {
+    const phrase = roleToPhrase(m.role, bindingFor(m.url))
+    resolvedPrompt =
+      resolvedPrompt.slice(0, m.offset) + phrase + resolvedPrompt.slice(m.offset + m.token.length)
+  }
+
+  // One opt-in lock + one element directive per UNIQUE attached URL.
+  const lockLines: string[] = []
+  const elementDirectives: string[] = []
+  const seenUrls = new Set<string>()
+  for (const m of matched) {
+    if (seenUrls.has(m.url)) continue
+    seenUrls.add(m.url)
+    const ref = refByUrl.get(m.url)
+    if (!ref) continue
+    const binding = bindingFor(m.url)
+    const lock = buildIdentityLockLine(ref, binding)
+    if (lock) lockLines.push(lock)
+    const inject = ref.elementInjection?.trim()
+    if (inject) elementDirectives.push(inject)
+  }
+
+  return { prompt: resolvedPrompt, additionalUrls, mentionedLocationSlugs, lockLines, elementDirectives }
 }
 
 /**
@@ -835,6 +982,97 @@ function renderExtraRefsHybrid(
     }
   }
   return { bodyLines, lockLines, elementDirectives }
+}
+
+/**
+ * Render the hybrid canonical convergence for UNMENTIONED wired locations (the
+ * location analog of `renderCanonicalFallbackHybrid`). Each unmentioned
+ * `wired-location` ref → the inline role phrase
+ * `roleToPhrase(locationModeToRole(defaultUsageMode), binding)` (the caller
+ * appends these as trailing scene directives) + its opt-in identity-lock line
+ * (null unless the ref enables one — locations have no built-in lock wording) +
+ * its wired `elementInjection` as a trailing directive.
+ *
+ * Unlike characters — whose canonical URLs are merged in Phase 0 — unmentioned
+ * locations flow through the New path's `nonCharacterRefs` / `finalIndexByUrl`,
+ * so the slot letter is read straight from `finalIndexByUrl` (the single source
+ * of truth for the assembled URL order). MENTIONED locations were already
+ * converged inline in Phase 0 and filtered out of `nonCharacterRefs`, so they
+ * never reach here. Deduped per URL to mirror `buildNonCharacterDirectives`'s
+ * per-URL `coveredUrls` guard (a location wired twice → one phrase).
+ *
+ * `coveredUrls` is the set of URLs ALREADY expanded inline by an `{image:N}`
+ * token in this hybrid scene (derived exactly as the legacy builder does — see
+ * the call site). A location that is BOTH unmentioned AND `{image:N}`-token-
+ * referenced is rendered ONCE (inline, via the scene); we `continue` here so it
+ * is not ALSO emitted as a trailing canonical phrase (the C1 review Minor).
+ */
+function renderLocationCanonicalHybrid(
+  nonCharacterRefs: readonly ConnectedReference[],
+  finalIndexByUrl: ReadonlyMap<string, number>,
+  coveredUrls: ReadonlySet<string>,
+): { phrases: string[]; lockLines: string[]; elementDirectives: string[] } {
+  const phrases: string[] = []
+  const lockLines: string[] = []
+  const elementDirectives: string[] = []
+  const seenUrls = new Set<string>()
+  for (const r of nonCharacterRefs) {
+    if (r.source !== "wired-location") continue
+    if (!r.url || seenUrls.has(r.url) || coveredUrls.has(r.url)) continue
+    const slot = finalIndexByUrl.get(r.url)
+    if (!slot) continue
+    seenUrls.add(r.url)
+    const binding = `reference image ${slotToLetter(slot)}`
+    phrases.push(roleToPhrase(locationModeToRole(r.defaultUsageMode), binding))
+    const lock = buildIdentityLockLine(r, binding)
+    if (lock) lockLines.push(lock)
+    const inject = r.elementInjection?.trim()
+    if (inject) elementDirectives.push(inject)
+  }
+  return { phrases, lockLines, elementDirectives }
+}
+
+/**
+ * Render the hybrid canonical convergence for UNMENTIONED wired objects /
+ * creatures (the object/creature analog of `renderLocationCanonicalHybrid`).
+ * Each unmentioned `wired-object` ref → "the object from reference image
+ * {LETTER}"; each `wired-creature` → "the creature from reference image
+ * {LETTER}" — via `roleToPhrase(defaultRoleForSource(source), binding)` (the
+ * source-default role, mirroring `renderCanonicalFallbackHybrid` for characters,
+ * not the location's mode-aware role) + its opt-in identity-lock line (null by
+ * default — `wired-object` has no built-in lock wording at all; `wired-creature`
+ * has wording but it is OFF unless `identityLock.enabled === true`, per Plan A's
+ * default-off flip) + its wired `elementInjection` as a trailing directive.
+ *
+ * Objects/creatures have NO `@-mention` path, so the ONLY way one renders inline
+ * is an `{image:N}` token. `coveredUrls` (the URLs already expanded by such a
+ * token in this scene) is threaded in so a wired object/creature that is BOTH
+ * unmentioned AND `{image:N}`-referenced renders ONCE (inline), never also as a
+ * trailing canonical phrase. Deduped per URL (an object wired twice → one phrase).
+ */
+function renderObjectCreatureCanonicalHybrid(
+  nonCharacterRefs: readonly ConnectedReference[],
+  finalIndexByUrl: ReadonlyMap<string, number>,
+  coveredUrls: ReadonlySet<string>,
+): { phrases: string[]; lockLines: string[]; elementDirectives: string[] } {
+  const phrases: string[] = []
+  const lockLines: string[] = []
+  const elementDirectives: string[] = []
+  const seenUrls = new Set<string>()
+  for (const r of nonCharacterRefs) {
+    if (r.source !== "wired-object" && r.source !== "wired-creature") continue
+    if (!r.url || seenUrls.has(r.url) || coveredUrls.has(r.url)) continue
+    const slot = finalIndexByUrl.get(r.url)
+    if (!slot) continue
+    seenUrls.add(r.url)
+    const binding = `reference image ${slotToLetter(slot)}`
+    phrases.push(roleToPhrase(defaultRoleForSource(r.source), binding))
+    const lock = buildIdentityLockLine(r, binding)
+    if (lock) lockLines.push(lock)
+    const inject = r.elementInjection?.trim()
+    if (inject) elementDirectives.push(inject)
+  }
+  return { phrases, lockLines, elementDirectives }
 }
 
 /**
@@ -1296,11 +1534,12 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
   // reassignment, so computing this once up front is stable. Gates the hybrid
   // character convergence (Phase 0) and the non-capitalizing scene render below.
   const isHybrid = config.referenceFormat === "hybrid"
-  // Set when Phase 0 converged character @-mentions into hybrid role phrases
-  // (+ identity-lock + element directives). Tells the hybrid scene render to
-  // expand non-character {image:N} tokens WITHOUT capitalizing line-initials
-  // (which would corrupt "the face from reference image A" → "The face …").
-  let hybridCharactersConverged = false
+  // Set when Phase 0 converged character OR location @-mentions into inline
+  // hybrid role phrases (+ identity-lock + element directives). Tells the hybrid
+  // scene render to expand any remaining {image:N} tokens WITHOUT capitalizing
+  // line-initials (which would corrupt "the face from reference image A" → "The
+  // face …" / "the style from reference image A" → "The style …").
+  let hybridBodyConverged = false
 
   // Character LoRA inference path: trigger word + LoRA model carry identity,
   // so we strip raw `@slug[:V[:variant]]` tokens from the prompt AND drop the
@@ -1421,7 +1660,7 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
         }
         hybridLockLines = h.lockLines
         hybridElementDirectives = h.elementDirectives
-        hybridCharactersConverged = true
+        hybridBodyConverged = true
       } else {
         resolved = mentionTokens.length > 0
           ? resolveCharacterMentions(config.prompt, mentionTokens, connectedReferences)
@@ -1435,9 +1674,39 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
       const locationTokens = knownLocationSlugs.length > 0
         ? findLocationMentionTokens(resolved.prompt, knownLocationSlugs)
         : []
-      const locationResolved = locationTokens.length > 0
-        ? resolveLocationMentions(resolved.prompt, locationTokens, connectedReferences)
-        : { prompt: resolved.prompt, additionalUrls: [] as string[], mentionedLocationSlugs: new Set<string>() }
+      // Location mention convergence. HYBRID (Unified Reference Roles, Phase C):
+      // each `@location` mention becomes the inline role phrase "the {role} from
+      // reference image {LETTER}" (role from the location node's usage mode) with
+      // the opt-in lock + wired elementInjection surfaced SEPARATELY, and NO "Use
+      // these locations:" block. LEGACY keeps the bullet block. `existingUrls` =
+      // [base refs, resolved CHARACTER mentions] so location slot letters are a
+      // prefix of the final `finalIndexByUrl` (location URLs merge after character
+      // mentions, before the character canonical/extra URLs).
+      let hybridLocationLockLines: string[] = []
+      let hybridLocationElementDirectives: string[] = []
+      let locationResolved: ResolveLocationMentionsResult
+      if (isHybrid && locationTokens.length > 0) {
+        const hl = resolveLocationMentionsHybrid(
+          resolved.prompt,
+          locationTokens,
+          connectedReferences,
+          [...(referenceImageUrls || []), ...resolved.additionalUrls],
+        )
+        locationResolved = {
+          prompt: hl.prompt,
+          additionalUrls: hl.additionalUrls,
+          mentionedLocationSlugs: hl.mentionedLocationSlugs,
+        }
+        hybridLocationLockLines = hl.lockLines
+        hybridLocationElementDirectives = hl.elementDirectives
+        // Inline role phrases now live in the body → skip line-initial
+        // capitalization. Only when a mention actually matched + was replaced.
+        if (hl.additionalUrls.length > 0) hybridBodyConverged = true
+      } else {
+        locationResolved = locationTokens.length > 0
+          ? resolveLocationMentions(resolved.prompt, locationTokens, connectedReferences)
+          : { prompt: resolved.prompt, additionalUrls: [] as string[], mentionedLocationSlugs: new Set<string>() }
+      }
       // Merge location's resolved prompt + URLs back into `resolved` so the
       // rest of the pipeline (fallback, extras, urlsByOrder) doesn't need
       // separate plumbing.
@@ -1578,16 +1847,23 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
         // image A"); flag the converged state so the scene render below skips
         // line-initial capitalization (which would corrupt them).
         if (canonical.phrases.length > 0 || extrasRendered.bodyLines.length > 0) {
-          hybridCharactersConverged = true
+          hybridBodyConverged = true
         }
 
+        // Location MENTION locks/elements (the role phrases themselves are
+        // already inline in `promptForNext`). Mentioned-location URLs sit
+        // between the character mentions and the character canonical/extras in
+        // `finalMergedUrls`, so their letters were computed against the matching
+        // prefix in `resolveLocationMentionsHybrid` and need no re-derivation here.
         const allLockLines = [
           ...hybridLockLines,
+          ...hybridLocationLockLines,
           ...canonical.lockLines,
           ...extrasRendered.lockLines,
         ]
         const trailingLines = [
           ...hybridElementDirectives,
+          ...hybridLocationElementDirectives,
           ...canonical.phrases,
           ...canonical.elementDirectives,
           ...extrasRendered.bodyLines,
@@ -1684,23 +1960,55 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
       // untouched. A caller MAY still opt to prepend one via
       // `config.referenceLockSnippet`, but nothing is added by default.
       // Replaces the legacy "Use these references:/Compose:" wrap + numeric
-      // token expansion. Objects/locations stay legacy; CHARACTERS were already
-      // converged in Phase 0 (role phrases + identity-lock + element directives).
+      // token expansion. Objects stay legacy; CHARACTERS were already converged
+      // in Phase 0 (role phrases + identity-lock + element directives), and
+      // LOCATIONS converge here too — mentioned ones inline in Phase 0, the
+      // unmentioned canonical ones as the trailing role phrases appended below.
       //
-      // When Phase 0 converged characters, the body is final and intentionally
-      // lowercase ("the face from reference image A") — expand any remaining
-      // non-character {image:N} tokens but DON'T capitalize line-initials (which
-      // would corrupt those phrases). Without characters, render the user scene
-      // as before (capitalized line-initials).
-      const scene = hybridCharactersConverged
+      // When Phase 0 converged a character OR location mention, the body is final
+      // and intentionally lowercase ("the face from reference image A") — expand
+      // any remaining {image:N} tokens but DON'T capitalize line-initials (which
+      // would corrupt those phrases). Otherwise render the user scene as before
+      // (capitalized line-initials); appended canonical phrases stay lowercase
+      // because they're added AFTER this capitalizing pass.
+      const scene = hybridBodyConverged
         ? prompt
             .split("\n")
             .map((line) => expandImageRefTokensHybrid(line, nonCharacterRefs, finalIndexByUrl))
             .join("\n")
         : buildHybridScene(prompt, nonCharacterRefs, finalIndexByUrl)
+      // URLs already expanded inline by an `{image:N}` token in this scene.
+      // Derived EXACTLY as the legacy `buildNonCharacterDirectives` derives its
+      // `coveredUrls` — via `collectIdentities` (labeled `{image:N:label}`
+      // tokens present in the prompt, indexing `nonCharacterRefs[N-1]`) — so the
+      // hybrid and legacy notions of "token-covered" share one source of truth
+      // and never drift. Threaded into both canonical renders so an unmentioned
+      // wired object / creature / location that is ALSO `{image:N}`-referenced
+      // renders ONCE (inline), never also as a trailing canonical phrase.
+      const tokenCoveredUrls = new Set<string>()
+      for (const id of collectIdentities(prompt, nonCharacterRefs, identityMeta)) {
+        const coveredUrl = nonCharacterRefs[id.imageIndex - 1]?.url
+        if (coveredUrl) tokenCoveredUrls.add(coveredUrl)
+      }
+      // Unmentioned wired-location / -object / -creature canonical convergence
+      // (Phase C): each → the trailing role phrase "the {role} from reference
+      // image {LETTER}" + opt-in lock + wired elementInjection, numbered against
+      // `finalIndexByUrl`. Mentioned locations were converged inline in Phase 0
+      // and filtered out of `nonCharacterRefs`; objects/creatures have no mention
+      // path, so their only inline route is an `{image:N}` token (guarded above).
+      const locCanon = renderLocationCanonicalHybrid(nonCharacterRefs, finalIndexByUrl, tokenCoveredUrls)
+      const objCanon = renderObjectCreatureCanonicalHybrid(nonCharacterRefs, finalIndexByUrl, tokenCoveredUrls)
+      const canonLockLines = [...locCanon.lockLines, ...objCanon.lockLines]
+      const canonLockBlock = canonLockLines.length > 0 ? `${canonLockLines.join("\n")}\n\n` : ""
+      const canonTrailingLines = [
+        ...locCanon.phrases, ...objCanon.phrases,
+        ...locCanon.elementDirectives, ...objCanon.elementDirectives,
+      ]
+      const canonTrailingBlock = canonTrailingLines.length > 0 ? `\n${canonTrailingLines.join("\n")}` : ""
+      const composedScene = `${canonLockBlock}${scene}${canonTrailingBlock}`
       prompt = config.referenceLockSnippet
-        ? `${config.referenceLockSnippet}\n${scene}`
-        : scene
+        ? `${config.referenceLockSnippet}\n${composedScene}`
+        : composedScene
       // The hybrid token rewrite can't be modeled by the segment marks → the
       // join-mismatch fallback in buildImagePromptSegments collapses to a single
       // segment (documented degradation, same as the Phase-0 splice branch).
