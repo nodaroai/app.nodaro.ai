@@ -191,6 +191,9 @@ function buildConnectedRefsForGenerate(
    *  directive builder can attach the location's canonical description to
    *  its bullet. URL-deduped against the wired-character refs and refUrlMap. */
   wiredLocRefs: readonly ConnectedReference[] = [],
+  /** Wired Object / Creature (animal) upstream refs (unified-asset-references
+   *  Phase 2) — auto-attach `Image N (reference)` entities, deduped by URL. */
+  wiredObjCreatureRefs: readonly ConnectedReference[] = [],
 ): ConnectedReference[] {
   const out: ConnectedReference[] = []
   const seenUrls = new Set<string>()
@@ -200,6 +203,11 @@ function buildConnectedRefsForGenerate(
     out.push(r)
   }
   for (const r of wiredCharRefs) {
+    if (!r.url || seenUrls.has(r.url)) continue
+    seenUrls.add(r.url)
+    out.push(r)
+  }
+  for (const r of wiredObjCreatureRefs) {
     if (!r.url || seenUrls.has(r.url)) continue
     seenUrls.add(r.url)
     out.push(r)
@@ -238,6 +246,8 @@ function buildConnectedRefsFromUrls(
   /** Wired Location upstream refs (Phase 2 #1). Same dedup contract as
    *  `buildConnectedRefsForGenerate`. */
   wiredLocRefs: readonly ConnectedReference[] = [],
+  /** Wired Object / Creature (animal) upstream refs (unified-asset-references). */
+  wiredObjCreatureRefs: readonly ConnectedReference[] = [],
 ): ConnectedReference[] {
   const out: ConnectedReference[] = []
   const seenUrls = new Set<string>()
@@ -247,6 +257,11 @@ function buildConnectedRefsFromUrls(
     out.push(r)
   }
   for (const r of wiredCharRefs) {
+    if (!r.url || seenUrls.has(r.url)) continue
+    seenUrls.add(r.url)
+    out.push(r)
+  }
+  for (const r of wiredObjCreatureRefs) {
     if (!r.url || seenUrls.has(r.url)) continue
     seenUrls.add(r.url)
     out.push(r)
@@ -719,6 +734,52 @@ export function expandWiredEntityExtraRefs(
       (d.label as string | undefined) ||
       (t === "location" ? "Location" : t === "creature" ? "Creature" : "Object")
     out.push({ url, description: (d.description as string | undefined)?.trim() || name })
+  }
+  return out
+}
+
+/**
+ * Expand wired Object / Creature (animal) upstreams into `ConnectedReference[]`
+ * for the IMAGE path (generate-image / image-to-image / modify-image). Returns
+ * the richer ConnectedReference shape (source `wired-object`/`wired-creature`)
+ * so `buildImagePrompt` auto-attaches each with its `Image N (reference): …`
+ * bullet + numbers it. Characters/locations have their own expanders
+ * (`expandWiredCharacterRefs` / `expandWiredLocationRefs`); this closes the
+ * object/animal gap so an entity wired to a generate-image node is referenceable
+ * via `{image:N}` exactly like a character/location (Phase 2 — unified-asset-references).
+ */
+export function expandWiredObjectCreatureRefs(
+  consumerNodeId: string,
+  buildCtx: PayloadBuildContext | undefined,
+): ConnectedReference[] {
+  if (!buildCtx?.nodes || !buildCtx.edges) return []
+  const out: ConnectedReference[] = []
+  const nodeById = new Map(buildCtx.nodes.map((n) => [n.id, n] as const))
+  for (const e of buildCtx.edges.filter((ed) => ed.target === consumerNodeId)) {
+    const upstream = nodeById.get(e.source)
+    if (!upstream) continue
+    const t = resolveEffectiveSourceType(upstream.type, e.sourceHandle)
+    if (t !== "object" && t !== "creature") continue
+    const d = upstream.data as Record<string, unknown>
+    const url =
+      (d.sourceImageUrl as string | undefined) ||
+      (d.generatedImageUrl as string | undefined) ||
+      (d.url as string | undefined) ||
+      (d.referenceImageUrl as string | undefined) ||
+      ""
+    if (!url) continue
+    const name =
+      (d.objectName as string | undefined) ||
+      (d.creatureName as string | undefined) ||
+      (d.label as string | undefined) ||
+      (t === "creature" ? "Creature" : "Object")
+    out.push({
+      id: upstream.id,
+      defaultName: name,
+      source: t === "creature" ? "wired-creature" : "wired-object",
+      description: d.description as string | undefined,
+      url,
+    })
   }
   return out
 }
@@ -1688,6 +1749,7 @@ export function buildPayload(
       // keeps a Location's main image URL from appearing twice if it also
       // arrived via the chainRefs path.
       const wiredLocRefs = expandWiredLocationRefs(node.id, buildCtx)
+      const wiredObjCreatureRefs = expandWiredObjectCreatureRefs(node.id, buildCtx)
       const extraRefEntries = expandExtraRefsToConnectedReferences(
         readExtraRefs(data),
         buildExtraRefCharacterContextLookup(node.id, buildCtx),
@@ -1741,6 +1803,7 @@ export function buildPayload(
                 refUrlMap,
                 orderIds,
                 wiredLocRefs,
+                wiredObjCreatureRefs,
               ),
               ...extraRefEntries,
             ],
@@ -2002,6 +2065,7 @@ export function buildPayload(
       // unmentioned characters and frontend/backend parity is preserved.
       const i2iWiredCharRefs = expandWiredCharacterRefs(node.id, buildCtx)
       const i2iWiredLocRefs = expandWiredLocationRefs(node.id, buildCtx)  // Phase 2 #1
+      const i2iWiredObjCreatureRefs = expandWiredObjectCreatureRefs(node.id, buildCtx)
       const i2iExtraRefEntries = expandExtraRefsToConnectedReferences(
         readExtraRefs(data),
         buildExtraRefCharacterContextLookup(node.id, buildCtx),
@@ -2024,7 +2088,7 @@ export function buildPayload(
             userTemplates: settings?.userPromptTemplates,
             flowTemplates: settings?.flowPromptTemplates,
             connectedReferences: [
-              ...buildConnectedRefsFromUrls(i2iWiredCharRefs, directRefs, i2iWiredLocRefs),
+              ...buildConnectedRefsFromUrls(i2iWiredCharRefs, directRefs, i2iWiredLocRefs, i2iWiredObjCreatureRefs),
               ...i2iExtraRefEntries,
             ],
             ancestorRefs: [],
@@ -2219,6 +2283,7 @@ export function buildPayload(
         // only / unmentioned → canonical fallback) applies in both paths.
         const modWiredCharRefs = expandWiredCharacterRefs(node.id, buildCtx)
         const modWiredLocRefs = expandWiredLocationRefs(node.id, buildCtx)  // Phase 2 #1
+        const modWiredObjCreatureRefs = expandWiredObjectCreatureRefs(node.id, buildCtx)
         const modExtraRefEntries = expandExtraRefsToConnectedReferences(
           readExtraRefs(data),
           buildExtraRefCharacterContextLookup(node.id, buildCtx),
@@ -2240,7 +2305,7 @@ export function buildPayload(
               userTemplates: settings?.userPromptTemplates,
               flowTemplates: settings?.flowPromptTemplates,
               connectedReferences: [
-                ...buildConnectedRefsFromUrls(modWiredCharRefs, directRefs, modWiredLocRefs),
+                ...buildConnectedRefsFromUrls(modWiredCharRefs, directRefs, modWiredLocRefs, modWiredObjCreatureRefs),
                 ...modExtraRefEntries,
               ],
               ancestorRefs: [],
