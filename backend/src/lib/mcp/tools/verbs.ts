@@ -3,6 +3,7 @@ import { registerVideoVerbs } from "./verbs-video.js"
 import { registerAudioVerbs } from "./verbs-audio.js"
 import { registerCloVerbs } from "./verbs-clo.js"
 import { registerShotSequenceVerbs } from "./verbs-shot-sequence.js"
+import { registerShotShapeTools } from "./shot-shapes.js"
 import { registerVideoDirectorTool } from "./video-director.js"
 import { registerVideoDirectorTools } from "./video-director-tools.js"
 import { hasCredits } from "../../config.js"
@@ -36,6 +37,10 @@ export function registerVerbs(opts: RegisterVerbsOpts): void {
   registerAudioVerbs(opts)
   registerCloVerbs(opts)
   registerShotSequenceVerbs(opts)
+  // list_shot_shapes / get_shot_shape: pure catalog discovery — no scope gate,
+  // no side effects. Same posture as list_models / get_node_skill. Ungated so
+  // the blueprint catalog is discoverable regardless of session scopes.
+  registerShotShapeTools(opts.server, opts.session)
   // start_video_director: pure content delivery (motion-director doctrine),
   // no side effects — registered unconditionally on all editions so the
   // skill is universally discoverable. The actions it instructs the LLM to

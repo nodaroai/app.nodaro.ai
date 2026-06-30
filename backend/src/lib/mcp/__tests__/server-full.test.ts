@@ -167,10 +167,11 @@ describe("buildMcpServer full catalog (v1.1)", () => {
     // Sanity: ping + verbs + jobs + workflows + projects + gallery + 9 upload
     // tools + app tools (list_apps, get_app_inputs, run_app, delete_app_run) +
     // shot-sequence tools (forced_alignment, resolve_shot_sequence, render_shot_sequence) +
+    // shot-shape catalog tools (list_shot_shapes, get_shot_shape — ungated) +
     // video-director tools (start_video_director, create_explainer, create_launch_video).
     // Upper bound has headroom for future tool additions; bump when adding
     // a new tool family rather than tracking every single tool.
-    expect(tools.length).toBeGreaterThanOrEqual(28)
+    expect(tools.length).toBeGreaterThanOrEqual(30)
     expect(tools.length).toBeLessThanOrEqual(135)
   })
 
@@ -216,7 +217,7 @@ describe("buildMcpServer full catalog (v1.1)", () => {
     expect(names).not.toContain("list_apps")
   })
 
-  it("with no scopes, registers only the unscoped tools (ping, list_models, start_film_director, start_workflow_editor, get_node_skill, get_picker_catalog, start_video_director)", async () => {
+  it("with no scopes, registers only the unscoped tools (ping, list_models, start_film_director, start_workflow_editor, get_node_skill, get_picker_catalog, start_video_director, list_shot_shapes, get_shot_shape)", async () => {
     const fastify = Fastify()
     const server = await buildMcpServer({
       userId: "u1",
@@ -243,13 +244,17 @@ describe("buildMcpServer full catalog (v1.1)", () => {
     // start_video_director is unconditionally registered on all editions —
     // pure content delivery, no scope gate, same posture as start_film_director.
     expect(names).toContain("start_video_director")
+    // list_shot_shapes + get_shot_shape: ungated catalog discovery for the
+    // shot-sequence blueprint catalog — same posture as list_models / get_node_skill.
+    expect(names).toContain("list_shot_shapes")
+    expect(names).toContain("get_shot_shape")
     expect(names).not.toContain("list_jobs")
     expect(names).not.toContain("generate_image")
     expect(names).not.toContain("check_balance")
     // create_explainer / create_launch_video require workflows:execute
     expect(names).not.toContain("create_explainer")
     expect(names).not.toContain("create_launch_video")
-    expect(tools).toHaveLength(7)
+    expect(tools).toHaveLength(9)
   })
 
   it("v3.0: dynamic per-user tools dropped — list_apps + get_app_inputs + run_app cover the same surface", async () => {

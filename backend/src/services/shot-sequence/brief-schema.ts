@@ -5,6 +5,9 @@ import {
   exitMotionSchema,
   alignmentWordSchema,
 } from "../../lib/plan-schemas.js"
+import { validateBlueprintParams } from "./blueprint-params.js"
+
+const MAX_BRIEF_FRAMES = 54000
 
 /** A lexical phrase of the script anchored to narration timing. */
 const cueSchema = z.object({
@@ -25,14 +28,39 @@ const revealAnchorSchema = z.discriminatedUnion("kind", [
   }),
 ])
 
-const briefRevealSchema = z.object({
+const briefBlueprintSchema = z.object({
   id: z.string(),
-  element: shotElementSchema,
-  revealAt: revealAnchorSchema,
-  enter: enterMotionSchema,
-  hold: z.number().min(0).optional(),
-  exit: exitMotionSchema.optional(),
+  params: z.record(z.unknown()),
 })
+
+export const briefRevealSchema = z
+  .object({
+    id: z.string(),
+    revealAt: revealAnchorSchema,
+    // element-reveal fields (optional now; required when no blueprint)
+    element: shotElementSchema.optional(),
+    enter: enterMotionSchema.optional(),
+    hold: z.number().min(0).optional(),
+    exit: exitMotionSchema.optional(),
+    // blueprint-reveal fields
+    blueprint: briefBlueprintSchema.optional(),
+    durationFrames: z.number().min(1).max(MAX_BRIEF_FRAMES).optional(),
+  })
+  .superRefine((r, ctx) => {
+    const hasEl = r.element !== undefined
+    const hasBp = r.blueprint !== undefined
+    if (hasEl === hasBp) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "a reveal must have exactly one of `element` or `blueprint`" })
+      return
+    }
+    if (hasEl && r.enter === undefined) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "an element reveal requires `enter`", path: ["enter"] })
+    }
+    if (hasBp) {
+      const v = validateBlueprintParams(r.blueprint!.id, r.blueprint!.params)
+      if (!v.ok) ctx.addIssue({ code: z.ZodIssueCode.custom, message: v.message, path: ["blueprint", "params"] })
+    }
+  })
 
 const briefShotSchema = z.object({
   id: z.string(),

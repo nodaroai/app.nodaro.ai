@@ -464,6 +464,59 @@ describe("shotSequencePlanSchema", () => {
   })
 })
 
+// ── shot-sequence — blueprint reveals ────────────────────────────────────────
+
+describe("shotSequencePlanSchema — blueprint reveals", () => {
+  function makeBlueprintRevealPlan(revealOverrides: Record<string, unknown> = {}) {
+    return makeShotSequencePlan({
+      scenes: [
+        {
+          id: "s1",
+          startFrame: 0,
+          durationInFrames: 300,
+          shots: [
+            {
+              id: "sh1",
+              reveals: [
+                {
+                  id: "r1",
+                  blueprint: { id: "titlecard-reveal", params: { title: "Hello" } },
+                  frame: 0,
+                  durationFrames: 120,
+                  ...revealOverrides,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    })
+  }
+
+  it("accepts a blueprint reveal with valid params", () => {
+    const plan = makeBlueprintRevealPlan()
+    expect(() => validatePlanByType("shot-sequence", plan)).not.toThrow()
+  })
+
+  it("rejects a blueprint reveal with bad params (missing required title)", () => {
+    const plan = makeBlueprintRevealPlan({ blueprint: { id: "titlecard-reveal", params: { subtitle: "no title" } } })
+    expect(shotSequencePlanSchema.safeParse(plan).success).toBe(false)
+  })
+
+  it("rejects a reveal with BOTH element and blueprint", () => {
+    const plan = makeBlueprintRevealPlan({
+      element: { id: "t1", type: "text", text: "x", fontFamily: "Inter", fontSize: 40, color: "#fff", x: 0, y: 0 },
+      enter: { motion: "fade", durationFrames: 6 },
+    })
+    expect(shotSequencePlanSchema.safeParse(plan).success).toBe(false)
+  })
+
+  it("rejects a blueprint reveal without durationFrames", () => {
+    const plan = makeBlueprintRevealPlan({ durationFrames: undefined })
+    expect(shotSequencePlanSchema.safeParse(plan).success).toBe(false)
+  })
+})
+
 // ── Drift guard ──────────────────────────────────────────────────────────────
 
 describe("planSchemaMap ↔ PLAN_TYPES drift guard", () => {

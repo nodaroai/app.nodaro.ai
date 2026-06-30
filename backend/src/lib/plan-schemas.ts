@@ -1,6 +1,7 @@
 import { z } from "zod"
 import { safeUrlSchema } from "./url-validator.js"
 import { KINETIC_CAPTION_STYLES, SUPPORTED_FONT_NAMES } from "@nodaro/shared"
+import { validateBlueprintParams } from "../services/shot-sequence/blueprint-params.js"
 
 // ── Plan Types ──────────────────────────────────────────────────────────
 
@@ -559,14 +560,42 @@ export const shotElementSchema = z.discriminatedUnion("type", [
   shotShapeElementSchema,
 ])
 
-const resolvedRevealSchema = z.object({
+const resolvedBlueprintSchema = z.object({
   id: z.string(),
-  element: shotElementSchema,
-  frame: z.number().min(0).max(MAX_FRAMES), // SCENE-RELATIVE baked entrance frame
-  enter: enterMotionSchema,
-  hold: z.number().min(0).optional(),
-  exit: exitMotionSchema.optional(),
+  params: z.record(z.unknown()),
 })
+
+const resolvedRevealSchema = z
+  .object({
+    id: z.string(),
+    frame: z.number().min(0).max(MAX_FRAMES), // SCENE-RELATIVE baked entrance frame
+    // element-reveal fields (optional; required when no blueprint)
+    element: shotElementSchema.optional(),
+    enter: enterMotionSchema.optional(),
+    hold: z.number().min(0).optional(),
+    exit: exitMotionSchema.optional(),
+    // blueprint-reveal fields
+    blueprint: resolvedBlueprintSchema.optional(),
+    durationFrames: z.number().min(1).max(MAX_FRAMES).optional(),
+  })
+  .superRefine((r, ctx) => {
+    const hasEl = r.element !== undefined
+    const hasBp = r.blueprint !== undefined
+    if (hasEl === hasBp) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "a reveal must have exactly one of `element` or `blueprint`" })
+      return
+    }
+    if (hasEl && r.enter === undefined) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "an element reveal requires `enter`", path: ["enter"] })
+    }
+    if (hasBp) {
+      if (r.durationFrames === undefined) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "a blueprint reveal requires `durationFrames`", path: ["durationFrames"] })
+      }
+      const v = validateBlueprintParams(r.blueprint!.id, r.blueprint!.params)
+      if (!v.ok) ctx.addIssue({ code: z.ZodIssueCode.custom, message: v.message, path: ["blueprint", "params"] })
+    }
+  })
 
 const resolvedShotSchema = z.object({
   id: z.string(),

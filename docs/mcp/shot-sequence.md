@@ -64,6 +64,67 @@ An element unmounts at its scene's content end — if you want it to persist vis
 - **Entrance motions:** `fade`, `scale-up`, `wipe-in`, `slide-up`, `slide-down`, `slide-left`, `slide-right`, `none`.
 - **Exit motions:** `fade`, `slide-up`, `slide-down`, `slide-left`, `slide-right`, `none`.
 
+## Blueprint catalog
+
+Six parameterised shot-shapes ("blueprints") cover the most common beat roles.
+Use `list_shot_shapes` to browse the catalog and `get_shot_shape` to inspect a
+blueprint's exact param contract before writing a `blueprint` reveal in a brief.
+
+Blueprints are **text/shape only** — they carry no pricing or credit information.
+The standard render-video credit (5 credits) applies to the overall
+`render_shot_sequence` call, not to individual blueprints.
+
+| Id | Roles | Default duration (frames) | What it does |
+|----|-------|--------------------------|--------------|
+| `kinetic-type-beats` | hook | 150 | 1–4 statement lines swap in by hard-cut/scale-pop; final line spring-pops on an accent. |
+| `dataviz-countup` | pain_point | 240 | A big number counts up to a value with a label; numbers are the hero. |
+| `grid-card-assemble` | feature_showcase, benefit_highlight | 180 | N text cards cascade-assemble into a grid with a staggered entrance. |
+| `titlecard-reveal` | benefit_highlight | 120 | One clean title (+ optional subtitle) revealed with one restrained move, then held. |
+| `logo-assemble-lockup` | product_intro, branding | 180 | Brand word's letters cascade/assemble into a centered lockup (+ optional tagline). |
+| `cta-morph-press` | cta | 150 | A CTA button appears centered; a cursor decelerates in and presses it. |
+
+### `list_shot_shapes()`
+
+Returns the full blueprint catalog as a JSON array. Each entry:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Blueprint identifier (kebab-case) |
+| `roles` | string[] | Beat roles this blueprint suits (from the doctrine vocabulary) |
+| `description` | string | One-line description |
+| `defaultDurationFrames` | number | Default scene duration at 30 fps |
+
+No inputs, no scope gate, no credits.
+
+---
+
+### `get_shot_shape(id)`
+
+Returns detailed information for one blueprint.
+
+**Inputs:**
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `id` | string | Blueprint id, e.g. `"titlecard-reveal"`. Call `list_shot_shapes` to browse all ids. |
+
+**Returns** (JSON):
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Blueprint id |
+| `roles` | string[] | Beat roles |
+| `description` | string | Description |
+| `defaultDurationFrames` | number | Default duration |
+| `paramSchema` | object | JSON Schema (OpenAPI 3) for the blueprint's `params` object |
+| `example` | object | Filled worked-params example ready to paste into a `blueprint` reveal |
+
+Unknown id → error result (`isError: true`) with the list of known ids.
+
+No scope gate, no credits.
+
+---
+
 ## Tool reference
 
 ### `forced_alignment(audio_url?, audio_asset_id?, transcript)`

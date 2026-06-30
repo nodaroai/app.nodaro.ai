@@ -233,6 +233,69 @@ describe("bakeShotSequence", () => {
     expect(plan.scenes[0].durationInFrames).toBe(36) // 136 - 100 = enter + hold + exit
   })
 
+  // ── Blueprint reveals ──────────────────────────────────────────────────
+
+  it("bakes a blueprint reveal using defaultDurationFrames when durationFrames is absent", () => {
+    // titlecard-reveal defaultDurationFrames = 120
+    const b = brief()
+    b.scenes[0].shots[0].reveals = [
+      {
+        id: "bp1",
+        blueprint: { id: "titlecard-reveal", params: { title: "X" } },
+        revealAt: { kind: "frame", frame: 100 },
+      } as never,
+    ]
+    b.narration.cues = [{ id: "c1", text: "ship" }] // unused by reveals
+    const { plan } = bakeShotSequence(b, [], "https://r2/vo.mp3")
+    const rev = plan.scenes[0].shots[0].reveals[0] as Record<string, unknown>
+    expect((rev.blueprint as Record<string, unknown>).id).toBe("titlecard-reveal")
+    expect(rev.frame).toBe(0) // rebased: 100 - 100 = 0
+    expect(rev.durationFrames).toBe(120) // default
+    expect(rev.revealAt).toBeUndefined() // stripped
+    expect(rev.element).toBeUndefined() // no element on a blueprint reveal
+    // composition: endAbs = 100 + 120 = 220; tail = fps(30) = 30 → max(220, 0+30) = 220
+    expect(plan.durationInFrames).toBe(220)
+  })
+
+  it("honors an explicit durationFrames on a blueprint reveal", () => {
+    const b = brief()
+    b.scenes[0].shots[0].reveals = [
+      {
+        id: "bp2",
+        blueprint: { id: "titlecard-reveal", params: { title: "X" } },
+        revealAt: { kind: "frame", frame: 0 },
+        durationFrames: 90,
+      } as never,
+    ]
+    b.narration.cues = [{ id: "c1", text: "ship" }]
+    const { plan } = bakeShotSequence(b, [], "https://r2/vo.mp3")
+    const rev = plan.scenes[0].shots[0].reveals[0] as Record<string, unknown>
+    expect(rev.durationFrames).toBe(90)
+    // With no narration: durationInFrames = max(tail=30, endAbs=90) = 90
+    // (the tail only applies to the narration-based estimate, not on top of maxSceneEnd)
+    expect(plan.durationInFrames).toBe(90)
+  })
+
+  it("bakes both element and blueprint reveals in one scene without conflict", () => {
+    const b = brief()
+    b.scenes[0].shots[0].reveals = [
+      { id: "el1", element: { id: "t1", type: "text", text: "Hi", fontFamily: "Inter", fontSize: 40, color: "#fff", x: 0, y: 0 }, revealAt: { kind: "frame", frame: 0 }, enter: { motion: "fade", durationFrames: 6 } },
+      { id: "bp3", blueprint: { id: "titlecard-reveal", params: { title: "Y" } }, revealAt: { kind: "frame", frame: 50 } } as never,
+    ]
+    b.narration.cues = [{ id: "c1", text: "ship" }]
+    const { plan } = bakeShotSequence(b, [], "https://r2/vo.mp3")
+    const reveals = plan.scenes[0].shots[0].reveals as Record<string, unknown>[]
+    expect(reveals).toHaveLength(2)
+    const elRev = reveals.find((r) => r.id === "el1")!
+    const bpRev = reveals.find((r) => r.id === "bp3")!
+    expect(elRev.element).toBeDefined()
+    expect(elRev.enter).toBeDefined()
+    expect(bpRev.blueprint).toBeDefined()
+    expect(bpRev.durationFrames).toBe(120) // default
+    expect(elRev.revealAt).toBeUndefined()
+    expect(bpRev.revealAt).toBeUndefined()
+  })
+
   it("shifts a cue reveal forward by a positive offsetMs", () => {
     const b = brief()
     // c1 start 0s + 500ms @ fps 30 → +15 frames (vs un-offset frame 0).

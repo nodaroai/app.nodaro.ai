@@ -130,6 +130,10 @@ const TOOLS_WITHOUT_INPUTS: ReadonlySet<string> = new Set<string>([
   // (HEADER + doctrine.md + explainer.md + product-launch.md). No inputs,
   // no side effects. Same posture as start_film_director. See video-director.ts.
   "start_video_director",
+  // Blueprint catalog listing — returns all 6 shot-sequence blueprints. No
+  // filter params (only 6 blueprints; a filter would add complexity without
+  // value). Use get_shot_shape for per-blueprint detail. See shot-shapes.ts.
+  "list_shot_shapes",
 ])
 
 // ---------------------------------------------------------------------------
