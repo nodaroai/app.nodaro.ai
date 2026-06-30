@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { getEntranceStyle, getExitStyle, getWipeClipPath } from "../mg-motion.js"
+import { getEntranceStyle, getExitStyle, getWipeClipPath, EASING_MAP } from "../mg-motion.js"
 
 describe("mg-motion helpers", () => {
   it("fade entrance sets opacity to progress", () => {
@@ -23,5 +23,13 @@ describe("mg-motion helpers", () => {
 
   it("exit fade sets opacity to progress; unimplemented types no-op", () => {
     expect(getExitStyle(0.25, { type: "fade" })).toEqual({ opacity: 0.25 })
+  })
+
+  it("spring easing does not overshoot (bouncy demoted)", () => {
+    for (let i = 0; i <= 20; i++) {
+      const t = i / 20
+      expect(EASING_MAP.spring(t)).toBeLessThanOrEqual(1.02)
+    }
+    expect(EASING_MAP.spring(1)).toBeCloseTo(1, 2)
   })
 })

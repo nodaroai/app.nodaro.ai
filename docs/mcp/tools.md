@@ -23,7 +23,7 @@ authorizing the connector; missing scopes cause tools to be omitted entirely
 | `pipelines:approve` | `chat_pipeline_stage`, `apply_chat_proposal` |
 | `presets:read` | `list_node_presets`, `get_node_preset` |
 
-**Ungated (always visible):** `ping`, `list_models`, `start_film_director`, `start_video_director`, `start_workflow_editor`, `get_node_skill`, `get_picker_catalog`
+**Ungated (always visible):** `ping`, `list_models`, `start_film_director`, `start_video_director`, `start_workflow_editor`, `get_node_skill`, `get_picker_catalog`, `list_shot_shapes`, `get_shot_shape`
 
 ---
 
@@ -1098,7 +1098,36 @@ enterprise Story-to-Video pipeline engine; Cloud/Business).
 ## Shot-sequence tools
 
 Tools for authoring narrated, time-coded motion-graphics videos (HyperFrames
-methodology on the Remotion engine). All three require `workflows:execute`.
+methodology on the Remotion engine). The execution tools (`forced_alignment`,
+`resolve_shot_sequence`, `render_shot_sequence`) require `workflows:execute`.
+The catalog discovery tools (`list_shot_shapes`, `get_shot_shape`) are ungated.
+
+### `list_shot_shapes`
+
+**Scope:** none — always visible (all editions, free).
+
+Return the catalog of all 6 shot-sequence blueprints (id, roles, description,
+defaultDurationFrames). Blueprints are text/shape only and carry no pricing or
+credit information. Use before authoring a `ShotSequenceBrief` to pick the
+right blueprint for each beat role. Zero credits.
+
+**Input:** none
+
+---
+
+### `get_shot_shape`
+
+**Scope:** none — always visible (all editions, free).
+
+Return detailed information for one blueprint: its metadata (roles, description,
+defaultDurationFrames), a JSON-schema descriptor of the params it accepts, and a
+filled worked example. Unknown id returns an error with the list of known ids.
+Zero credits.
+
+**Input:** `id` (string) — blueprint id, e.g. `"titlecard-reveal"`. Call
+`list_shot_shapes` to browse all ids.
+
+---
 
 ### `forced_alignment`
 

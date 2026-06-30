@@ -12,6 +12,23 @@ describe("video-director doctrine", () => {
     expect(d.toLowerCase()).toContain("avoid")
     expect(d).toMatch(/easeOut|easeInOut/)
   })
+  it("doctrine.md has a Blueprint picker section with all 6 blueprint ids", () => {
+    const d = read("doctrine.md")
+    expect(d).toContain("## Blueprint picker")
+    for (const id of [
+      "kinetic-type-beats",
+      "dataviz-countup",
+      "grid-card-assemble",
+      "titlecard-reveal",
+      "logo-assemble-lockup",
+      "cta-morph-press",
+    ]) {
+      expect(d).toContain(id)
+    }
+    // Must include the blueprint reveal JSON shape and the escape hatch
+    expect(d).toContain('"blueprint"')
+    expect(d).toContain("raw")
+  })
   it("genre addenda exist with arc + reveal palette", () => {
     for (const f of ["explainer.md","product-launch.md"]) {
       const g = read(f); expect(g).toContain("## Arc"); expect(g).toContain("## Reveal palette")

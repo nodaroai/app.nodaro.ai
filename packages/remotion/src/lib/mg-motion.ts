@@ -7,7 +7,7 @@ export const EASING_MAP: Record<string, (t: number) => number> = {
   easeIn: Easing.ease,
   easeOut: Easing.out(Easing.ease),
   easeInOut: Easing.inOut(Easing.ease),
-  spring: Easing.bezier(0.175, 0.885, 0.32, 1.275),
+  spring: Easing.bezier(0.22, 1, 0.36, 1),
 }
 
 export function getEasing(name?: string): ((t: number) => number) | undefined {

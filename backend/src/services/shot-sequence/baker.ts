@@ -2,6 +2,7 @@ import type { AlignmentWord } from "../../providers/elevenlabs/forced-alignment.
 import { validatePlanByType, type ShotSequencePlan } from "../../lib/plan-schemas.js"
 import { alignCues, type CueSpan } from "./aligner.js"
 import type { ShotSequenceBrief, BriefReveal } from "./brief-schema.js"
+import { BLUEPRINT_META, type BlueprintId } from "./blueprint-params.js"
 
 const MAX_FRAMES = 54000
 
@@ -30,6 +31,8 @@ interface BakedReveal {
   reveal: BriefReveal
   frameAbs: number
   endAbs: number
+  /** Resolved duration for blueprint reveals (avoids recomputing in step 5). */
+  dur?: number
 }
 
 function clampFrame(frame: number): number {
@@ -80,8 +83,17 @@ export function bakeShotSequence(
           // writes a (fallback) span for every cue, so ms is non-null here.
           frameAbs = clampFrame(((ms ?? 0) / 1000) * fps)
         }
-        const endAbs = clampFrame(frameAbs + reveal.enter.durationFrames + (reveal.hold ?? 0) + (reveal.exit?.durationFrames ?? 0))
-        const entry: BakedReveal = { reveal, frameAbs, endAbs }
+        let endAbs: number
+        let bpDur: number | undefined
+        if (reveal.blueprint) {
+          const id = reveal.blueprint.id as BlueprintId
+          const resolved = reveal.durationFrames ?? BLUEPRINT_META[id].defaultDurationFrames
+          bpDur = resolved
+          endAbs = clampFrame(frameAbs + resolved)
+        } else {
+          endAbs = clampFrame(frameAbs + reveal.enter!.durationFrames + (reveal.hold ?? 0) + (reveal.exit?.durationFrames ?? 0))
+        }
+        const entry: BakedReveal = { reveal, frameAbs, endAbs, ...(bpDur !== undefined ? { dur: bpDur } : {}) }
         baked.push(entry)
         bakedByReveal.set(reveal, entry)
       }
@@ -152,10 +164,19 @@ export function bakeShotSequence(
         id: shot.id,
         reveals: shot.reveals.map((reveal) => {
           const bakedReveal = win.bakedByReveal.get(reveal)!
+          const frameRelative = bakedReveal.frameAbs - win.startAbs // rebase scene-relative
+          if (reveal.blueprint) {
+            return {
+              id: reveal.id,
+              blueprint: reveal.blueprint,
+              frame: frameRelative,
+              durationFrames: bakedReveal.dur!,
+            }
+          }
           return {
             id: reveal.id,
             element: reveal.element,
-            frame: bakedReveal.frameAbs - win.startAbs, // rebase scene-relative
+            frame: frameRelative,
             enter: reveal.enter,
             ...(reveal.hold !== undefined ? { hold: reveal.hold } : {}),
             ...(reveal.exit ? { exit: reveal.exit } : {}),

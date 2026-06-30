@@ -329,7 +329,7 @@ export interface ShotShapeElement {
 }
 export type ShotElement = ShotTextElement | ShotShapeElement
 
-export interface ResolvedReveal {
+export interface ResolvedElementReveal {
   readonly id: string
   readonly element: ShotElement
   readonly frame: number // scene-relative entrance frame
@@ -337,6 +337,13 @@ export interface ResolvedReveal {
   readonly hold?: number
   readonly exit?: ShotExitMotion
 }
+export interface ResolvedBlueprintReveal {
+  readonly id: string
+  readonly blueprint: { readonly id: string; readonly params: Record<string, unknown> }
+  readonly frame: number
+  readonly durationFrames: number
+}
+export type ResolvedReveal = ResolvedElementReveal | ResolvedBlueprintReveal
 export interface ResolvedShot {
   readonly id: string
   readonly reveals: ResolvedReveal[]

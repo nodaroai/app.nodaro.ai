@@ -3,6 +3,7 @@ import { AbsoluteFill, Audio, Sequence, useCurrentFrame, interpolate } from "rem
 import type { ResolvedReveal, ResolvedScene, ShotElement, ShotSequencePlan } from "../plan-types"
 import { getEasing, getEntranceStyle, getExitStyle } from "../lib/mg-motion"
 import { FONT_MAP } from "../lib/font-registry"
+import { BLUEPRINT_REGISTRY } from "../blueprints/registry"
 
 /** Final opacity = base × entrance × exit (multiplied, not overwritten). */
 export function computeRevealOpacity(base: number | undefined, enterOpacity: number, exitOpacity: number): number {
@@ -92,8 +93,22 @@ function ElementBox({ element, style }: { element: ShotElement; style: React.CSS
   )
 }
 
-function RevealView({ reveal }: { reveal: ResolvedReveal }) {
+function RevealView({ reveal, backgroundColor }: { reveal: ResolvedReveal; backgroundColor: string }) {
   const frame = useCurrentFrame()
+
+  // Blueprint branch — narrows union to ResolvedBlueprintReveal.
+  // The wrapping <Sequence> makes useCurrentFrame() reveal-local inside Comp.
+  if ("blueprint" in reveal) {
+    const Comp = BLUEPRINT_REGISTRY[reveal.blueprint.id]
+    if (!Comp) throw new Error(`Unknown blueprint id: ${reveal.blueprint.id}`)
+    return (
+      <Sequence from={reveal.frame} durationInFrames={reveal.durationFrames} layout="none">
+        <Comp params={reveal.blueprint.params} durationInFrames={reveal.durationFrames} brand={{ backgroundColor }} />
+      </Sequence>
+    )
+  }
+
+  // Element reveal branch — TypeScript narrows to ResolvedElementReveal here.
   const { enter, exit } = reveal
 
   // Entrance progress 0→1 (guard a zero-length range — bare interpolate throws).
@@ -148,12 +163,14 @@ function RevealView({ reveal }: { reveal: ResolvedReveal }) {
 
 /** One scene's layer. Reads the scene-relative frame to apply the cross-dissolve
  *  opacity envelope (in at the open, out across the overlap tail). */
-function SceneView({ scene }: { scene: ResolvedScene }) {
+function SceneView({ scene, backgroundColor }: { scene: ResolvedScene; backgroundColor: string }) {
   const frame = useCurrentFrame()
   const opacity = sceneCrossfadeOpacity(frame, scene.durationInFrames, scene.transitionInFrames, scene.transitionOutFrames)
   return (
     <AbsoluteFill style={{ backgroundColor: scene.background?.color, opacity }}>
-      {scene.shots.flatMap((shot) => shot.reveals.map((r) => <RevealView key={r.id} reveal={r} />))}
+      {scene.shots.flatMap((shot) =>
+        shot.reveals.map((r) => <RevealView key={r.id} reveal={r} backgroundColor={backgroundColor} />),
+      )}
     </AbsoluteFill>
   )
 }
@@ -170,7 +187,7 @@ export function ShotSequenceRenderer({ plan }: { plan: ShotSequencePlan }) {
           // the next scene for the cross-dissolve (window stays non-overlapping).
           durationInFrames={scene.durationInFrames + (scene.transitionOutFrames ?? 0)}
         >
-          <SceneView scene={scene} />
+          <SceneView scene={scene} backgroundColor={plan.backgroundColor} />
         </Sequence>
       ))}
     </AbsoluteFill>
