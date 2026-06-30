@@ -718,6 +718,15 @@ export function applyReferenceOrderToVideo(
   refs: readonly ConnectedReference[],
   referenceOrder: readonly string[] | undefined,
   sourceNodeIdById?: ReadonlyMap<string, string>,
+  /**
+   * Number of LEADING reference images (e.g. plain image-refs that precede the
+   * asset URLs in the unified `@image_N` numbering — see
+   * `resolveVideoReferenceCore`'s `leadingRefUrls`). `urls` here are the ASSET
+   * URLs only; their prompt ordinals are `ordinalOffset + 1 …`, so the renumber
+   * remap is keyed by the offset ordinal and leading ordinals (`1 … offset`)
+   * pass through untouched. Defaults to 0 → behaviour unchanged.
+   */
+  ordinalOffset = 0,
 ): { urls: string[]; prompt: string | undefined } {
   if (!referenceOrder || !referenceOrder.length || urls.length < 2) {
     return { urls: [...urls], prompt }
@@ -728,6 +737,7 @@ export function applyReferenceOrderToVideo(
     refs,
     referenceOrder,
     sourceNodeIdById,
+    ordinalOffset,
   )
   return {
     urls: reordered.urls,
@@ -741,6 +751,7 @@ function applyReferenceOrder(
   refs: readonly ConnectedReference[],
   referenceOrder: readonly string[],
   sourceNodeIdById?: ReadonlyMap<string, string>,
+  ordinalOffset = 0,
 ): { urls: string[]; prompt: string } {
   if (!referenceOrder.length) return { urls: [...urls], prompt }
   const tileIds = buildTileIdForUrl(urls, refs, prompt, sourceNodeIdById)
@@ -776,10 +787,14 @@ function applyReferenceOrder(
   }
   if (isNoop) return { urls: [...urls], prompt }
   const newUrls = newOrderIndices.map((i) => urls[i])
-  // Build orig-1based-pos → new-1based-pos map for prompt renumbering.
+  // Build orig-1based-pos → new-1based-pos map for prompt renumbering. Offset by
+  // `ordinalOffset` so when `urls` are the ASSET tail of a unified list (leading
+  // image-refs occupy `1 … ordinalOffset`), the asset ordinals `ordinalOffset+1 …`
+  // remap among themselves and the leading ordinals are never matched (their keys
+  // aren't in `remap`, so the regex leaves them untouched).
   const remap = new Map<number, number>()
   for (let newPos = 0; newPos < newOrderIndices.length; newPos++) {
-    remap.set(newOrderIndices[newPos] + 1, newPos + 1)
+    remap.set(ordinalOffset + newOrderIndices[newPos] + 1, ordinalOffset + newPos + 1)
   }
   // Replace every positional ordinal (1-3 digit, word-boundary) substring,
   // preserving its prefix: image prompts use `Image N`, video prompts use the

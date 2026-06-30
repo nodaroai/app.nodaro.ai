@@ -166,6 +166,25 @@ export interface ResolveVideoReferenceCoreArgs {
   imageRefCount?: number
   videoRefCount?: number
   audioRefCount?: number
+  /**
+   * Plain image-reference URLs that LEAD the unified `@image_N` numbering
+   * (D5: image-refs-first). They occupy `@image_1 … @image_offset`; every
+   * character/asset directive this core emits is numbered AFTER them, and they
+   * are prepended to the returned `additionalUrls` so the worker payload order
+   * matches the ordinals. When provided, they OWN the image token count (so
+   * `imageRefCount` is ignored for the image modality); omitted → legacy
+   * behaviour (`imageRefCount ?? mergedLen`, asset URLs numbered from 1).
+   * Already deduped/reordered by the caller (e.g. `connectedRefImageOrder`).
+   */
+  leadingRefUrls?: readonly string[]
+  /**
+   * Number of leading image-refs the CALLER owns + merges itself (so the core
+   * offsets asset directive ordinals + the `{image:N}` count by this much WITHOUT
+   * prepending any URLs to `additionalUrls`). Used by i2v, whose frame-promotion
+   * consumes the asset URLs directly and can't have leading refs spliced in.
+   * Ignored when `leadingRefUrls` is set. D5 unified-asset-references.
+   */
+  ordinalOffset?: number
 }
 
 /**
@@ -191,8 +210,34 @@ export function resolveVideoReferenceCore(
   // against. `image` falls back to the core's own merged-URL count (passed by the
   // caller as `imageFallback`); `video`/`audio` to 0 since the core attaches only
   // image URLs. Applied at every return so token resolution is uniform.
-  const tokenCounts = (imageFallback: number): ReferenceCounts => ({
-    image: args.imageRefCount ?? imageFallback,
+  // Leading plain image-refs (D5 image-refs-first): they occupy `@image_1 …
+  // @image_offset`, lead the merged URL list, and OWN the image token count.
+  // Deduped + trimmed defensively (the caller already orders them).
+  const leadingRefUrls: string[] = []
+  {
+    const seenLead = new Set<string>()
+    for (const u of args.leadingRefUrls ?? []) {
+      const t = u?.trim()
+      if (t && !seenLead.has(t)) { seenLead.add(t); leadingRefUrls.push(t) }
+    }
+  }
+  const hasLeading = args.leadingRefUrls != null
+  // `offset` = how many image-refs precede the assets in the unified numbering.
+  // Two ways to specify it: `leadingRefUrls` (the core OWNS the URLs — prepends
+  // them to `merged`, offset = their count) OR `ordinalOffset` (the CALLER owns
+  // the leading URLs and merges them itself — e.g. i2v's frame-promotion path —
+  // so the core only offsets the numbering + count, no prepend). They're mutually
+  // exclusive; `leadingRefUrls` wins if both are (mistakenly) passed.
+  const offset = hasLeading ? leadingRefUrls.length : (args.ordinalOffset ?? 0)
+  const hasUnified = hasLeading || args.ordinalOffset != null
+  // image token count: the FULL unified count = offset (leading) + asset count,
+  // where asset count = mergedLen − the core-owned leading URLs. (leadingRefUrls
+  // mode: offset == leadingRefUrls.length → count == mergedLen; ordinalOffset
+  // mode: leadingRefUrls is empty → count == offset + mergedLen.) Without a
+  // unified offset, keep the legacy `imageRefCount ??` fallback. video/audio
+  // always from args (this core attaches only image URLs).
+  const tokenCounts = (mergedLen: number): ReferenceCounts => ({
+    image: hasUnified ? (offset + mergedLen - leadingRefUrls.length) : (args.imageRefCount ?? mergedLen),
     video: args.videoRefCount ?? 0,
     audio: args.audioRefCount ?? 0,
   })
@@ -213,9 +258,16 @@ export function resolveVideoReferenceCore(
   const hasExtras = (args.extraRefs?.length ?? 0) > 0
   if (wiredCharRefs.length === 0 && !hasExtras) {
     // No wired chars / extras, but the node can still carry plain base reference
-    // images, so `{image:N}` body tokens MUST still resolve. `merged` isn't built
-    // on this path → image fallback is 0 (resolve only against the caller count).
-    return { prompt: resolveReferenceTokens(args.prompt, tokenCounts(0)), additionalUrls: [] }
+    // images (leadingRefUrls), so `{image:N}` body tokens MUST still resolve. The
+    // count is the leading-ref count (or the legacy `imageRefCount` when no
+    // leading refs were passed); the leading URLs are returned for the payload.
+    return {
+      // tokenCounts(leadingRefUrls.length) → image count == offset (no assets here):
+      // leadingRefUrls mode counts the leading refs; ordinalOffset mode counts the
+      // caller-owned leading refs the offset stands in for.
+      prompt: resolveReferenceTokens(args.prompt, tokenCounts(leadingRefUrls.length)),
+      additionalUrls: [...leadingRefUrls],
+    }
   }
   const knownCharSlugs = Array.from(
     new Set(
@@ -250,10 +302,11 @@ export function resolveVideoReferenceCore(
   // "Image B is the same subject as Image A, …". Built from mention URLs +
   // canonical fallback URLs as they're emitted.
   const positionsByChar = new Map<string, number>()
-  // `position` walks the FINAL merged URL list (mention URLs first, then
-  // canonical fallback, then extras). Used so directive numbering aligns
-  // with the worker's `referenceImageUrls` order.
-  let position = 0
+  // `position` walks the FINAL merged URL list (leading plain refs first, then
+  // mention URLs, canonical fallback, then extras). Seeded past the leading refs
+  // (D5) so directive ordinals number AFTER them and align with the worker's
+  // `referenceImageUrls` order.
+  let position = offset
   for (let i = 0; i < resolved.additionalUrls.length; i++) {
     position += 1
     // Look up which ref this URL came from to learn its characterSlug.
@@ -386,11 +439,14 @@ export function resolveVideoReferenceCore(
     }
   }
 
-  // Dedup combined URLs while preserving order (mentions first, fallback,
-  // then extras). The "Image N" labels in the prompt assume this exact order
-  // BEFORE any user-defined `referenceOrder` reorder below.
+  // Dedup combined URLs while preserving order (LEADING plain refs first, then
+  // mentions, fallback, then extras — D5). The `@image_N` labels in the prompt
+  // assume this exact order BEFORE any user-defined `referenceOrder` reorder below.
   const merged: string[] = []
   const seen = new Set<string>()
+  for (const u of leadingRefUrls) {
+    if (u && !seen.has(u)) { seen.add(u); merged.push(u) }
+  }
   for (const u of resolved.additionalUrls) {
     if (u && !seen.has(u)) { seen.add(u); merged.push(u) }
   }
@@ -404,7 +460,12 @@ export function resolveVideoReferenceCore(
   // Apply user-defined reorder + renumber `Image N` tokens — parity with the
   // backend `resolveVideoPromptMentions` and the shared image builder.
   const referenceOrder = args.referenceOrder
-  if (referenceOrder && referenceOrder.length > 0 && merged.length > 1) {
+  // Reorder ONLY the asset tail (merged minus the core-owned leading plain refs).
+  // Leading refs are already in the caller's chosen order and stay fixed; the
+  // renumber offsets asset ordinals by `offset` (D5). Slice by the core-owned
+  // leading count (0 in ordinalOffset mode, where the caller owns the leading URLs).
+  const assetUrls = merged.slice(leadingRefUrls.length)
+  if (referenceOrder && referenceOrder.length > 0 && assetUrls.length > 1) {
     const refsForOrdering: ConnectedReference[] = [...wiredCharRefs]
     if (hasExtras) {
       for (const ex of args.extraRefs!) {
@@ -420,14 +481,14 @@ export function resolveVideoReferenceCore(
         })
       }
     }
-    const reordered = applyReferenceOrderToVideo(merged, finalPrompt, refsForOrdering, referenceOrder)
+    const reordered = applyReferenceOrderToVideo(assetUrls, finalPrompt, refsForOrdering, referenceOrder, undefined, offset)
     // Resolve body tokens LAST — AFTER the reorder's `@image_N` renumber pass, so
     // it can't miscorrect a freshly-resolved binding (the curly `{image:N}` tokens
     // are invisible to the reorder's `(@image_|Image )` regex, so they ride through
     // untouched and keep their author-typed N — documented v1 behavior).
     return {
       prompt: resolveReferenceTokens(reordered.prompt, tokenCounts(merged.length)),
-      additionalUrls: reordered.urls,
+      additionalUrls: [...leadingRefUrls, ...reordered.urls],
     }
   }
 

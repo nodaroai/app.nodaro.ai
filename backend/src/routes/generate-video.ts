@@ -209,7 +209,14 @@ export function assembleVideoConnectedReferences(args: {
   // `lookupCharacterBySlug` below still reads the FULL list (metadata only — no
   // URL/directive impact). The post-assembly `merged.slice(0, imageCap)` remains
   // a defensive net for the rare mention-variant-multiply case.
-  const cappedReferences = connectedReferences.slice(0, imageCap)
+  //
+  // D5 image-refs-first: the LEADING flat refs consume the cap budget first
+  // (mirrors the image side's `imageReferenceLimit` rule in prompt-builder.ts),
+  // and the structured refs get the remainder — so `@image_N` is identical to the
+  // canvas/orchestrator (flat refs are `@image_1 … @image_offset`, assets after).
+  const cappedLeading = (baseReferenceImageUrls ?? []).slice(0, imageCap)
+  const structuredBudget = Math.max(0, imageCap - cappedLeading.length)
+  const cappedReferences = connectedReferences.slice(0, structuredBudget)
 
   // Split incoming refs: canonical wired characters (mention + canonical-fallback
   // + identity directives) vs. everything else (extras → auto-attach + bullet).
@@ -251,19 +258,21 @@ export function assembleVideoConnectedReferences(args: {
     extraRefs,
     lookupCharacterBySlug,
     referenceOrder,
-    // `{image:N}` falls back to the core's own additionalUrls count (its URLs
-    // lead the merged list below, so front-of-list numbering aligns); video /
-    // audio tokens resolve against the flat ref counts.
+    // D5 image-refs-first: the flat refs LEAD the unified `@image_N` numbering;
+    // the core numbers assets after them and returns them prepended to
+    // additionalUrls. `{image:N}` counts the full merged list; video/audio tokens
+    // resolve against the flat ref counts.
+    leadingRefUrls: cappedLeading,
     videoRefCount: referenceVideoCount,
     audioRefCount: referenceAudioCount,
   })
 
-  // Merge: core-derived URLs LEAD so `@image_N` (numbered from the front) lines
-  // up with the worker payload; any flat refs the caller also sent follow.
-  // Dedup, then cap at the provider's image-ref limit.
+  // `core.additionalUrls` is already `[leading flat refs, …asset URLs]` (D5), so
+  // `@image_N` numbered from the front lines up with the worker payload. Dedup
+  // defensively, then cap at the provider's image-ref limit.
   const merged: string[] = []
   const seen = new Set<string>()
-  for (const u of [...core.additionalUrls, ...(baseReferenceImageUrls ?? [])]) {
+  for (const u of core.additionalUrls) {
     if (u && !seen.has(u)) {
       seen.add(u)
       merged.push(u)

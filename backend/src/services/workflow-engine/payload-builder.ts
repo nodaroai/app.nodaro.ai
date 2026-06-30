@@ -679,6 +679,51 @@ export function expandWiredLocationRefs(
 }
 
 /**
+ * Expand wired Assets-handle ENTITIES (location / object / creature-animal) into
+ * auto-attach canonical reference rows — the video parity of the image side. Each
+ * attaches a single canonical image (`sourceImageUrl`) + a generic reference
+ * bullet so the entity participates in the unified `{image:N}` numbering (D5 —
+ * unified-asset-references spec). Walks ALL incoming edges whose EFFECTIVE source
+ * type is location/object/creature (the Assets handle). Characters keep their own
+ * mention/canonical machinery (`expandWiredCharacterRefs`). Phase 1 deliberately
+ * uses the RAW canonical image (no location smart-variant pick) so the FE preview
+ * (`expandWiredEntityExtrasForVideo`) and the BE run produce byte-identical refs.
+ * Shape kept minimal (`{ url, description }`) — these are auto-attach extras, not
+ * mentionable refs.
+ */
+export function expandWiredEntityExtraRefs(
+  consumerNodeId: string,
+  buildCtx: PayloadBuildContext | undefined,
+): Array<{ url: string; description: string }> {
+  if (!buildCtx?.nodes || !buildCtx.edges) return []
+  const out: Array<{ url: string; description: string }> = []
+  const nodeById = new Map(buildCtx.nodes.map((n) => [n.id, n] as const))
+  const incoming = buildCtx.edges.filter((e) => e.target === consumerNodeId)
+  for (const e of incoming) {
+    const upstream = nodeById.get(e.source)
+    if (!upstream) continue
+    const t = resolveEffectiveSourceType(upstream.type, e.sourceHandle)
+    if (t !== "location" && t !== "object" && t !== "creature") continue
+    const d = upstream.data as Record<string, unknown>
+    const url =
+      (d.sourceImageUrl as string | undefined) ||
+      (d.generatedImageUrl as string | undefined) ||
+      (d.url as string | undefined) ||
+      (d.referenceImageUrl as string | undefined) ||
+      ""
+    if (!url) continue
+    const name =
+      (d.locationName as string | undefined) ||
+      (d.objectName as string | undefined) ||
+      (d.creatureName as string | undefined) ||
+      (d.label as string | undefined) ||
+      (t === "location" ? "Location" : t === "creature" ? "Creature" : "Object")
+    out.push({ url, description: (d.description as string | undefined)?.trim() || name })
+  }
+  return out
+}
+
+/**
  * Build a `slug → ExtraRefCharacterContext` lookup for character-sourced
  * extras. Mirrors the frontend `buildExtraRefCharacterContextLookup` in
  * `execute-node.ts`. Used by the extras directive emission below + by
@@ -787,12 +832,43 @@ function resolveVideoPromptMentions(
     imageRefCount?: number
     videoRefCount?: number
     audioRefCount?: number
+    /**
+     * Plain image-refs (Image-Refs handle) that LEAD the unified `@image_N`
+     * numbering (D5 image-refs-first). The core numbers assets after them and
+     * returns them prepended to `additionalUrls`; the caller uses that directly
+     * (no post-hoc merge). When supplied, the image token count is the full
+     * merged length (so `imageRefCount` is ignored for the image modality).
+     */
+    leadingRefUrls?: readonly string[]
+    /**
+     * Number of leading image-refs the caller owns + merges itself (EDGE count,
+     * for FE↔BE parity). The core offsets asset directive ordinals + the
+     * `{image:N}` count by this much WITHOUT prepending URLs (the orchestrator/
+     * canvas path; the route uses `leadingRefUrls` instead). Ignored when
+     * `leadingRefUrls` is set.
+     */
+    ordinalOffset?: number
+    /**
+     * Attach wired Assets-handle entities (location canonical + object/creature)
+     * as auto-attach extras in the unified numbering. Set by ref-capable video
+     * callers; non-ref providers leave it false (no entity refs, legacy behaviour).
+     */
+    includeWiredEntities?: boolean
   },
 ): { prompt: string | undefined; additionalUrls: string[] } {
   // ── BE-only expansion: wire upstream Character nodes → ConnectedReference[].
   // Canonical-suppression filtering lives in the shared core (single source of
   // truth) — pass the raw expansion + the suppressed set straight through. ──
   const wiredCharRefs = expandWiredCharacterRefs(consumerNodeId, buildCtx)
+  // Wired Assets-handle entities (location canonical + object/creature) join the
+  // unified {image:N} numbering as auto-attach extras (D5 — unified-asset-references).
+  // Characters keep their mention/canonical path above; locations attach only their
+  // CANONICAL image in Phase 1 (variants/refPhotos stay mention/image-side). Gated on
+  // `includeWiredEntities` so the caller only attaches them for ref-capable providers
+  // (non-ref providers keep their legacy no-entity behaviour).
+  const wiredEntityExtras = opts?.includeWiredEntities
+    ? expandWiredEntityExtraRefs(consumerNodeId, buildCtx)
+    : []
   // BE-only lookup for an extra-ref's character metadata: the build-context edge
   // walk (`buildExtraRefCharacterContextLookup`) maps a character slug to its
   // `{ displayName, defaultUsageMode, canonicalDescription }`; adapt that to the
@@ -813,19 +889,25 @@ function resolveVideoPromptMentions(
   return resolveVideoReferenceCore({
     prompt,
     wiredCharRefs,
-    extraRefs: extraRefs?.map((ex) => ({
-      // BE `ExtraRefInput.url` is optional; the core skips falsy urls exactly as
-      // the old BE body's `if (!ex.url) continue` did, so `?? ""` is a
-      // behavior-preserving coercion into the core's required `url: string`.
-      url: ex.url ?? "",
-      description: ex.description,
-      characterSlug: ex.characterSlug,
-      variantSlug: ex.variantSlug,
-      usageMode: ex.usageMode,
-    })),
+    extraRefs: [
+      ...(extraRefs?.map((ex) => ({
+        // BE `ExtraRefInput.url` is optional; the core skips falsy urls exactly as
+        // the old BE body's `if (!ex.url) continue` did, so `?? ""` is a
+        // behavior-preserving coercion into the core's required `url: string`.
+        url: ex.url ?? "",
+        description: ex.description,
+        characterSlug: ex.characterSlug,
+        variantSlug: ex.variantSlug,
+        usageMode: ex.usageMode,
+      })) ?? []),
+      // Wired Assets-handle entities auto-attach AFTER the caller's extras.
+      ...wiredEntityExtras,
+    ],
     lookupCharacterBySlug,
     referenceOrder: opts?.referenceOrder,
     suppressedCanonicalCharacterIds: opts?.suppressedCanonicalCharacterIds,
+    leadingRefUrls: opts?.leadingRefUrls,
+    ordinalOffset: opts?.ordinalOffset,
     imageRefCount: opts?.imageRefCount,
     videoRefCount: opts?.videoRefCount,
     audioRefCount: opts?.audioRefCount,
@@ -2269,30 +2351,20 @@ export function buildPayload(
       // without a BE strip). 0 (not undefined) also forces bare-label when a
       // character is wired, matching the FE strip.
       const i2vSupportsRefs = !!provider && hasFeature(provider, "reference-image")
-      const i2vMention = resolveVideoPromptMentions(i2vPrompt, node.id, buildCtx, readExtraRefs(data), {
-        referenceOrder: readStringArray(data.referenceOrder),
-        suppressedCanonicalCharacterIds: readStringArray(data.suppressedCanonicalCharacterIds),
-        imageRefCount: i2vSupportsRefs ? countRefModalityEdges(node.id, "image", buildCtx) : 0,
-        videoRefCount: i2vSupportsRefs ? countRefModalityEdges(node.id, "video", buildCtx) : 0,
-        audioRefCount: i2vSupportsRefs ? countRefModalityEdges(node.id, "audio", buildCtx) : 0,
-      })
-      i2vPrompt = i2vMention.prompt
-      // Splice mention-resolved URLs into the i2v payload. i2v has two slots:
-      // (1) `imageUrl` is the primary input frame, (2) `referenceImageUrls`
-      // is an additional pool that maxRefImages-aware providers will consume.
-      // Existing frames/refs from upstream wins — mentions augment, never
-      // overwrite. When no `imageUrl` is wired yet, the first resolved
-      // mention URL fills that slot so a pure "@kira-smile dancing" prompt
-      // gets the smile image as input rather than failing with no image.
+      // i2v has two slots: (1) `imageUrl` is the primary input frame, (2)
+      // `referenceImageUrls` is an additional pool that maxRefImages-aware
+      // providers consume. Existing frames/refs from upstream win — mentions
+      // augment, never overwrite. When no `imageUrl` is wired yet, the first
+      // resolved mention URL fills that slot. The base frame + leading plain refs
+      // are computed BEFORE the resolver so the asset directive ordinals can be
+      // offset past the leading refs (D5). i2v OWNS the URL merge (frame-promotion
+      // below), so the core only OFFSETS the numbering (`ordinalOffset`) — it does
+      // NOT prepend the leading refs. The reorder walks the image-reference edges
+      // via the shared `referenceModalityForHandle` SoT (honoring BOTH the legacy
+      // `references` handle AND the canonical `imageReferences` one a generate-video
+      // re-typed to i2v wires) — frame (start/end) connections (modality null) are
+      // never touched.
       const i2vBaseImage = resolvedInputs.startFrameUrl || resolvedInputs.imageUrl || data.imageUrl as string | undefined
-      // Apply user-defined reorder before mention-merge so the positional
-      // Image-N letters assigned by `resolveVideoPromptMentions` match the
-      // order shown in the config panel's drag-list. Walks the image-reference
-      // edges via the shared `referenceModalityForHandle` SoT — honoring BOTH
-      // the legacy `references` handle AND the canonical `imageReferences` one a
-      // generate-video re-typed to i2v wires (the generate-video case below
-      // already accepts both) — so frame (start/end) connections, whose modality
-      // is null, are never touched.
       const i2vOrderedRefs = applyOrderToReferenceUrls(
         node.id,
         data.connectedRefImageOrder as string[] | undefined,
@@ -2300,6 +2372,19 @@ export function buildPayload(
         (e) => referenceModalityForHandle(e.targetHandle) === "image",
       )
       const i2vBaseRefs = i2vOrderedRefs ?? resolvedInputs.referenceImageUrls
+      const i2vMention = resolveVideoPromptMentions(i2vPrompt, node.id, buildCtx, readExtraRefs(data), {
+        referenceOrder: readStringArray(data.referenceOrder),
+        suppressedCanonicalCharacterIds: readStringArray(data.suppressedCanonicalCharacterIds),
+        // Ref-capable: assets number AFTER the leading image-refs (ordinalOffset =
+        // EDGE count, for FE↔BE parity) + entities attach. Non-ref: legacy
+        // (imageRefCount 0 → tokens bare-label).
+        ...(i2vSupportsRefs
+          ? { ordinalOffset: countRefModalityEdges(node.id, "image", buildCtx), includeWiredEntities: true }
+          : { imageRefCount: 0 }),
+        videoRefCount: i2vSupportsRefs ? countRefModalityEdges(node.id, "video", buildCtx) : 0,
+        audioRefCount: i2vSupportsRefs ? countRefModalityEdges(node.id, "audio", buildCtx) : 0,
+      })
+      i2vPrompt = i2vMention.prompt
       let i2vImageUrl = i2vBaseImage
       let i2vReferenceImageUrls = i2vBaseRefs
       if (i2vMention.additionalUrls.length > 0) {
@@ -2411,33 +2496,37 @@ export function buildPayload(
       let t2vPrompt = composeVideoPrompt({ rawPrompt: t2vRawPrompt, nodeId: node.id, buildCtx })
       // `{image:N}` token resolution — see i2v note. Same gate + edge counts.
       const t2vSupportsRefs = !!provider && hasFeature(provider, "reference-image")
-      const t2vMention = resolveVideoPromptMentions(t2vPrompt, node.id, buildCtx, readExtraRefs(data), {
-        referenceOrder: readStringArray(data.referenceOrder),
-        suppressedCanonicalCharacterIds: readStringArray(data.suppressedCanonicalCharacterIds),
-        imageRefCount: t2vSupportsRefs ? countRefModalityEdges(node.id, "image", buildCtx) : 0,
-        videoRefCount: t2vSupportsRefs ? countRefModalityEdges(node.id, "video", buildCtx) : 0,
-        audioRefCount: t2vSupportsRefs ? countRefModalityEdges(node.id, "audio", buildCtx) : 0,
-      })
-      t2vPrompt = t2vMention.prompt
-      // Apply user-defined reorder for t2v references — mirrors i2v. t2v has
-      // no startFrame handle, so the filter accepts any wired image/character/
-      // entity upstream (matches the `connectedRefImages` filter in
-      // `video-configs.tsx` TextToVideoConfig).
+      // Plain image-refs LEAD the unified @image_N numbering (D5) — computed BEFORE
+      // the resolver so they can be passed in as `leadingRefUrls`. t2v has no
+      // startFrame handle, so the reorder filter accepts any wired image/character/
+      // entity upstream (matches the `connectedRefImages` filter in TextToVideoConfig).
       const t2vOrderedRefs = applyOrderToReferenceUrls(
         node.id,
         data.connectedRefImageOrder as string[] | undefined,
         buildCtx,
         (_e, src) => VIDEO_REF_IMAGE_SOURCE_TYPES.has(src.type),
       )
-      let t2vReferenceImageUrls = t2vOrderedRefs ?? resolvedInputs.referenceImageUrls
+      const t2vLeadingRefs = t2vOrderedRefs ?? resolvedInputs.referenceImageUrls
+      const t2vMention = resolveVideoPromptMentions(t2vPrompt, node.id, buildCtx, readExtraRefs(data), {
+        referenceOrder: readStringArray(data.referenceOrder),
+        suppressedCanonicalCharacterIds: readStringArray(data.suppressedCanonicalCharacterIds),
+        // Ref-capable: asset directives number AFTER the leading image-refs
+        // (ordinalOffset = the EDGE count, for FE↔BE parity — the FE preview has no
+        // URL layer) + entities attach (D5). The caller owns the URL merge below.
+        // Non-ref: legacy (imageRefCount 0 → tokens drop, no entities).
+        ...(t2vSupportsRefs
+          ? { ordinalOffset: countRefModalityEdges(node.id, "image", buildCtx), includeWiredEntities: true }
+          : { imageRefCount: 0 }),
+        videoRefCount: t2vSupportsRefs ? countRefModalityEdges(node.id, "video", buildCtx) : 0,
+        audioRefCount: t2vSupportsRefs ? countRefModalityEdges(node.id, "audio", buildCtx) : 0,
+      })
+      t2vPrompt = t2vMention.prompt
+      // image-refs-first (D5): leading plain refs, then the asset URLs (deduped).
+      let t2vReferenceImageUrls = t2vLeadingRefs
       if (t2vMention.additionalUrls.length > 0) {
-        const existing = t2vReferenceImageUrls ?? []
         const merged: string[] = []
         const seen = new Set<string>()
-        for (const u of existing) {
-          if (u && !seen.has(u)) { seen.add(u); merged.push(u) }
-        }
-        for (const u of t2vMention.additionalUrls) {
+        for (const u of [...(t2vLeadingRefs ?? []), ...t2vMention.additionalUrls]) {
           if (u && !seen.has(u)) { seen.add(u); merged.push(u) }
         }
         t2vReferenceImageUrls = merged
@@ -2609,25 +2698,12 @@ export function buildPayload(
       // wire are counted alongside the legacy `references` ids — fixing the prior
       // gap where `{image:N}` resolved only for the legacy handle.
       const gvSupportsRefs = !!resolvedProvider && hasFeature(resolvedProvider, "reference-image")
-      const mentionResult = resolveVideoPromptMentions(
-        composedPrompt,
-        node.id,
-        buildCtx,
-        readExtraRefs(data),
-        {
-          referenceOrder: readStringArray(data.referenceImageOrder),
-          suppressedCanonicalCharacterIds: readStringArray(data.suppressedCanonicalCharacterIds),
-          imageRefCount: gvSupportsRefs ? countRefModalityEdges(node.id, "image", buildCtx) : 0,
-          videoRefCount: gvSupportsRefs ? countRefModalityEdges(node.id, "video", buildCtx) : 0,
-          audioRefCount: gvSupportsRefs ? countRefModalityEdges(node.id, "audio", buildCtx) : 0,
-        },
-      )
-      composedPrompt = mentionResult.prompt
-
-      // Apply user-defined reorder (drag-to-reorder writes referenceImageOrder
-      // on the new node — the rename migration normalizes the legacy
-      // connectedRefImageOrder field). The handle filter accepts all three
-      // typed-handle ids the new node exposes for image inputs.
+      // Leading plain refs computed BEFORE the resolver so asset ordinals number
+      // AFTER them (D5). generate-video OWNS the URL merge (frame-promotion below),
+      // so the core only OFFSETS the numbering (`ordinalOffset`) — no URL prepend.
+      // Drag-to-reorder writes referenceImageOrder on the new node (the rename
+      // migration normalizes the legacy connectedRefImageOrder field). The handle
+      // filter accepts all three typed-handle ids the new node exposes for images.
       const orderedRefs = applyOrderToReferenceUrls(
         node.id,
         data.referenceImageOrder as string[] | undefined,
@@ -2636,6 +2712,25 @@ export function buildPayload(
       )
       let referenceImageUrls = orderedRefs ?? resolvedInputs.referenceImageUrls
       let imageUrl = startFrameUrl
+      const mentionResult = resolveVideoPromptMentions(
+        composedPrompt,
+        node.id,
+        buildCtx,
+        readExtraRefs(data),
+        {
+          referenceOrder: readStringArray(data.referenceImageOrder),
+          suppressedCanonicalCharacterIds: readStringArray(data.suppressedCanonicalCharacterIds),
+          // Ref-capable: assets number AFTER the leading image-refs (ordinalOffset =
+          // EDGE count, for FE↔BE parity) + entities attach. Non-ref: legacy
+          // (imageRefCount 0 → tokens bare-label).
+          ...(gvSupportsRefs
+            ? { ordinalOffset: countRefModalityEdges(node.id, "image", buildCtx), includeWiredEntities: true }
+            : { imageRefCount: 0 }),
+          videoRefCount: gvSupportsRefs ? countRefModalityEdges(node.id, "video", buildCtx) : 0,
+          audioRefCount: gvSupportsRefs ? countRefModalityEdges(node.id, "audio", buildCtx) : 0,
+        },
+      )
+      composedPrompt = mentionResult.prompt
       if (mentionResult.additionalUrls.length > 0) {
         let remaining = mentionResult.additionalUrls
         // Seedance 2 frame-numbering guard (shared helper — see

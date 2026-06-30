@@ -118,6 +118,15 @@ Examples:
   $ echo '{"prompt":"hi","provider":"flux"}' > body.json
   $ nodaro nodes run generate-image --params-file body.json --watch
 
+Structured references (the editor's wired-reference shape) — let a {image:N} prompt
+token bind a labeled reference, assembled server-side into @image_N (same as the
+canvas/API/MCP/SDK). Pass them via --params-file (arrays need the JSON file, not --param):
+  $ cat > body.json <<'JSON'
+  {"prompt":"the {image:1:hero} runs","provider":"seedance-2",
+   "connectedReferences":[{"id":"h1","defaultName":"hero","source":"manual","url":"https://cdn.example/hero.png"}]}
+  JSON
+  $ nodaro nodes run generate-video --params-file body.json --watch
+
 Tip: \`nodaro nodes get <type>\` shows the full input schema (required fields, providers, capabilities).`)
     .action(
       async (

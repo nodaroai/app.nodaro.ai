@@ -818,16 +818,37 @@ describe("assembleVideoConnectedReferences (server-side video reference assembly
     expect(out.prompt).toContain("past the truck")
   })
 
-  it("leads with connectedReferences URLs, then appends caller-sent flat refs (deduped)", () => {
+  it("leads with caller-sent flat refs (image-refs-first, D5), then assets; dedups across both", () => {
     const out = assembleVideoConnectedReferences({
       prompt: "scene",
       provider: "seedance-2",
-      connectedReferences: [cref({ source: "wired-image", url: "https://r2/a.png", description: "a" })],
-      baseReferenceImageUrls: ["https://r2/b.png", "https://r2/a.png"], // a.png is a dup
+      connectedReferences: [
+        cref({ source: "wired-image", url: "https://r2/asset.png", description: "asset" }),
+        cref({ source: "wired-image", url: "https://r2/a.png", description: "dup of a flat ref" }),
+      ],
+      baseReferenceImageUrls: ["https://r2/b.png", "https://r2/a.png"],
       referenceVideoCount: 0,
       referenceAudioCount: 0,
     })
-    expect(out.referenceImageUrls).toEqual(["https://r2/a.png", "https://r2/b.png"])
+    // D5: flat refs LEAD (@image_1=b, @image_2=a), then the unique asset (@image_3);
+    // the asset whose URL dups a flat ref drops.
+    expect(out.referenceImageUrls).toEqual(["https://r2/b.png", "https://r2/a.png", "https://r2/asset.png"])
+  })
+
+  it("D5 ordinal offset: a leading flat ref is @image_1, the asset token binds @image_2", () => {
+    const out = assembleVideoConnectedReferences({
+      prompt: "the {image:2:object} on a {image:1:table}",
+      provider: "seedance-2",
+      connectedReferences: [cref({ source: "wired-image", url: "https://r2/obj.png", description: "object" })],
+      baseReferenceImageUrls: ["https://r2/table.png"],
+      referenceVideoCount: 0,
+      referenceAudioCount: 0,
+    })
+    // payload order: flat ref first (@image_1), asset second (@image_2)
+    expect(out.referenceImageUrls).toEqual(["https://r2/table.png", "https://r2/obj.png"])
+    // body tokens resolve against the unified numbering
+    expect(out.prompt).toContain("the table from @image_1")
+    expect(out.prompt).toContain("the object from @image_2")
   })
 
   it("honors referenceOrder (reverses two extra refs by their wired:<url> tile id)", () => {

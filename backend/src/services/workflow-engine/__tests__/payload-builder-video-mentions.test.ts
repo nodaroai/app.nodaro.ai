@@ -784,4 +784,27 @@ describe("payload-builder video paths: {image:N} reference tokens (Task 4.1)", (
     expect(prompt).toContain("the object from @image_1")
     expect(prompt).not.toContain("{image:1")
   })
+
+  // ── D5 unified-asset-references: Assets-handle entities join the {image:N}
+  // numbering AFTER the leading plain image-refs. ──
+  it("text-to-video: an OBJECT wired via the Assets handle attaches as @image_2 after a leading ref (D5)", () => {
+    const t2v = node("t2v-ent", "text-to-video", {
+      prompt: "the {image:1:bg} with the {image:2:gadget}",
+      provider: "seedance-2",
+    })
+    const obj = node("obj-1", "object", { sourceImageUrl: "https://r2/obj.png", objectName: "Gadget" })
+    const nodes = [refImage("img-1"), obj, t2v]
+    const edges = [
+      edge("img-1", "t2v-ent", "image", "references"), // leading plain ref → @image_1
+      edge("obj-1", "t2v-ent", "objectRef", "assets"), // object asset → @image_2
+    ]
+    const inputs: ResolvedInputs = { referenceImageUrls: ["https://r2/bg.png"] }
+
+    const result = buildPayload(t2v, jobId, inputs, undefined, { nodes, edges, nodeStates: {} })
+    const prompt = result.payload.prompt as string
+    expect(prompt).toContain("the bg from @image_1") // leading plain ref
+    expect(prompt).toContain("the gadget from @image_2") // object asset, numbered AFTER
+    // the object's image lands in the worker payload at the @image_2 slot
+    expect(result.payload.referenceImageUrls).toEqual(["https://r2/bg.png", "https://r2/obj.png"])
+  })
 })
