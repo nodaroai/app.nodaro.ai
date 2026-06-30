@@ -109,6 +109,23 @@ export function bakeShotSequence(
   // 2. Sort scenes by start frame (array order == paint order == time order).
   sceneWindows.sort((a, b) => a.startAbs - b.startAbs)
 
+  // 2.5 Clamp a recoverable TAIL overflow. A reveal's tail (a blueprint's
+  //     durationFrames, a long hold) can run a scene's endAbs past the NEXT scene's
+  //     start. The abut/render logic (step 5) already renders each non-last scene only
+  //     until the next scene starts, so the overflow is harmless — the tail just trims
+  //     to fit. Clamp endAbs to the next scene's start so the overlap guard below does
+  //     not reject a perfectly renderable plan. Keep the hard error ONLY when a reveal
+  //     is ANCHORED at/after the next scene's start — that is genuine interleave (a
+  //     mis-ordered timeline), not a recoverable tail.
+  for (let i = 0; i < sceneWindows.length - 1; i++) {
+    const win = sceneWindows[i]
+    const nextStart = sceneWindows[i + 1].startAbs
+    if (win.endAbs > nextStart) {
+      const anchoredPastNext = [...win.bakedByReveal.values()].some((b) => b.frameAbs >= nextStart)
+      if (!anchoredPastNext) win.endAbs = Math.max(win.startAbs + 1, nextStart)
+    }
+  }
+
   // 3. Reject overlapping windows (the directly-supplied-plan guard lives in
   //    the schema superRefine; this gives a friendlier baker-side error).
   for (let i = 1; i < sceneWindows.length; i++) {
