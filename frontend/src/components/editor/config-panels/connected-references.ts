@@ -370,7 +370,24 @@ export function connectedReferencesToRefImages(
   const isPlainImage = (r: ConnectedReference): boolean =>
     r.source === "manual" || r.source === "wired-image"
   const ordered = [...refs.filter(isPlainImage), ...refs.filter((r) => !isPlainImage(r))]
-  return ordered.map((ref, i) => ({
+  // Count the `{image:N}` index over AUTO-ATTACHING refs only. A character /
+  // location VARIANT entry (variantSlug / locationVariant* set) appears in this
+  // list to power the `@`-mention drill, but at RUN time only the CANONICAL of an
+  // unmentioned entity attaches a reference image — the variants do NOT. So a
+  // variant must not advance the counter; otherwise an Object wired alongside a
+  // Character with K variants gets `{image:(K+…)}` instead of its true `@image_N`
+  // position (the mixed-case bug). Variant rows keep the current counter value for
+  // DISPLAY only — their `index` is never read for insertion (mentions derive
+  // their own N by scanning the prompt). Edge case still imperfect: when a SPECIFIC
+  // variant is `@`-mentioned the run attaches that variant instead of the canonical,
+  // which the editor can't know without parsing mentions — see the spec's As-built
+  // notes. This fixes the dominant no-mention case.
+  const isVariant = (r: ConnectedReference): boolean =>
+    !!r.variantSlug || !!r.locationVariantBucket || !!r.locationVariantSlug
+  let attach = 0
+  return ordered.map((ref) => {
+    if (!isVariant(ref)) attach += 1
+    return {
     url: ref.url,
     label: ref.defaultName,
     source:
@@ -378,7 +395,7 @@ export function connectedReferencesToRefImages(
       : ref.source === "wired-image" ? "wired"
       : ref.source === "wired-location" ? "location"
       : "character",
-    index: i + 1,
+    index: attach,
     defaultLabel: DEFAULT_LABEL_BY_SOURCE[ref.source],
     characterSlug: ref.characterSlug,
     variantSlug: ref.variantSlug,
@@ -389,5 +406,6 @@ export function connectedReferencesToRefImages(
     locationVariantDisplayName: ref.locationVariantDisplayName,
     defaultUsageMode: ref.defaultUsageMode,
     loraTrainingStatus: ref.loraTrainingStatus,
-  }))
+    }
+  })
 }
