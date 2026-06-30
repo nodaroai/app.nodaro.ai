@@ -68,3 +68,57 @@ describe("location reference converges onto the image hybrid form", () => {
     expect(out.prompt).not.toContain("the background from reference image A")
   })
 })
+
+/**
+ * Phase D restored-legacy guard (the review blocker). Pre-Phase-D the bare-slug
+ * ROLE tokens — `@old-library:1:background` / `:atmosphere` / `:as-is` /
+ * `:empty-background` / `:lighting` — did NOT parse, so they stayed literal text
+ * on the prod-default LEGACY path. The additive Phase-D parser now PARSES them
+ * (with `role` set), but `resolveLocationMentions` (legacy) must STILL leave them
+ * untouched so legacy stays byte-identical. The HYBRID resolver SHOULD resolve
+ * them to the inline role phrase — pinned here so the two paths can't silently
+ * converge again. (`layout`/`style` were already usage modes → unaffected.)
+ */
+describe("Phase D legacy guard: bare-slug ROLE location tokens", () => {
+  it("LEGACY: @old-library:1:background stays literal — no bullet, no inline swap, no hybrid phrase", () => {
+    const out = buildImagePrompt({
+      prompt: "@old-library:1:background a scene",
+      connectedReferences: [library],
+      provider: "nano-banana-pro",
+      // no referenceFormat → legacy (the prod default)
+    })
+    // The role token is left verbatim (literal text exactly as pre-Phase-D).
+    expect(out.prompt).toContain("@old-library:1:background")
+    // No legacy mention bullet claimed by the role token.
+    expect(out.prompt).not.toContain("Use these locations:")
+    // No hybrid role phrase leaking onto the legacy path.
+    expect(out.prompt).not.toContain("the background from reference image")
+  })
+
+  it("LEGACY: the other four role slugs (:atmosphere/:as-is/:empty-background/:lighting) also stay literal", () => {
+    for (const slug of ["atmosphere", "as-is", "empty-background", "lighting"]) {
+      const token = `@old-library:1:${slug}`
+      const out = buildImagePrompt({
+        prompt: `${token} a scene`,
+        connectedReferences: [library],
+        provider: "nano-banana-pro",
+      })
+      expect(out.prompt).toContain(token)
+      expect(out.prompt).not.toContain("Use these locations:")
+    }
+  })
+
+  it("HYBRID counterpart still resolves the role → 'the background from reference image A'", () => {
+    const out = buildImagePrompt({
+      prompt: "@old-library:1:background a scene",
+      connectedReferences: [library],
+      provider: "nano-banana-pro",
+      referenceFormat: "hybrid",
+    })
+    expect(out.prompt).toContain("the background from reference image A")
+    // Token consumed by the inline phrase, not left raw.
+    expect(out.prompt).not.toContain("@old-library:1:background")
+    expect(out.prompt).not.toContain("Use these locations:")
+    expect(out.referenceImageUrls).toContain("https://cdn/library.png")
+  })
+})

@@ -36,6 +36,7 @@ describe("parseLocationRefMatch", () => {
         bucket: null,
         variant: null,
         usageMode: null,
+        role: null,
       })
     })
 
@@ -47,6 +48,7 @@ describe("parseLocationRefMatch", () => {
         bucket: null,
         variant: null,
         usageMode: "layout",
+        role: null,
       })
     })
 
@@ -58,6 +60,7 @@ describe("parseLocationRefMatch", () => {
         bucket: "weather",
         variant: "rain",
         usageMode: null,
+        role: null,
       })
     })
 
@@ -69,6 +72,7 @@ describe("parseLocationRefMatch", () => {
         bucket: "weather",
         variant: "rain",
         usageMode: "style",
+        role: null,
       })
     })
   })

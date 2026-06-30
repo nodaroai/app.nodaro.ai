@@ -6,13 +6,20 @@ import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react"
 import {
   LOCATION_USAGE_MODES,
   locationUsageModeLabel,
+  normalizeRoleSlug,
   type LocationUsageMode,
 } from "@nodaro/shared"
 import { optimizedImageUrl } from "@/lib/image"
+import { IMAGE_REFERENCE_FORMAT } from "@/lib/image-reference-format"
 import { BODY_MENU_CLASS } from "./body-menu-class"
 import { useBodyMenuDismiss } from "./use-body-menu-dismiss"
 import { PROMPT_EDITOR_PORTAL_PROPS } from "./prompt-editor-portal"
 import { computeFlipPosition } from "./flip-position"
+import {
+  LOCATION_ROLE_PRESETS,
+  locationSwapMenuRoles,
+  roleToLocationRefSlots,
+} from "./location-ref-roles"
 import type { LocationRefAttrs } from "./location-ref-extension"
 
 /**
@@ -89,6 +96,28 @@ export function LocationRefView(props: NodeViewProps) {
   const [menuAnchor, setMenuAnchor] = useState<DOMRect | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
 
+  // Hybrid gate: in "hybrid" format the swap-menu offers curated ROLE presets
+  // (+ a Default row, NO Custom input — the location parser is preset-gated);
+  // in "legacy" it keeps the EXISTING usage-mode menu UNCHANGED.
+  // `roleMenuPresets` is null in legacy. A location role lives in EITHER `role`
+  // (genuine roles) OR `usageMode` (the two presets — layout/style — that are
+  // also LocationUsageModes, whose parser-stable slot is `usageMode`). The
+  // active role's PHRASE form (badge + menu highlight) maps from whichever slot
+  // is set via `normalizeRoleSlug`.
+  const roleMenuPresets = locationSwapMenuRoles(IMAGE_REFERENCE_FORMAT)
+  const isHybrid = roleMenuPresets !== null
+  const currentRolePhrase = useMemo<string | null>(() => {
+    if (!isHybrid) return null
+    if (attrs.role) return normalizeRoleSlug(attrs.role)
+    // A usageMode that is also a role preset (layout / style) surfaces as that
+    // role in hybrid — so a token round-tripped to `usageMode` still shows the
+    // picked role. The non-role modes (identical / none) map to no role badge.
+    if (attrs.usageMode && LOCATION_ROLE_PRESETS.includes(attrs.usageMode)) {
+      return attrs.usageMode
+    }
+    return null
+  }, [isHybrid, attrs.role, attrs.usageMode])
+
   // Clean up any stuck preview / menu on unmount (e.g. when the pill is deleted).
   useEffect(() => () => {
     setHoverAnchor(null)
@@ -115,6 +144,21 @@ export function LocationRefView(props: NodeViewProps) {
     setMenuAnchor(null)
   }, [props])
 
+  // Hybrid role pick: route the role into its single token slot (a
+  // LocationUsageMode → `usageMode`, else `role`) and CLEAR every sibling so
+  // the slots stay mutually exclusive (never an invalid multi-segment token).
+  const setRole = useCallback((rolePhrase: string) => {
+    props.updateAttributes(roleToLocationRefSlots(rolePhrase))
+    setMenuAnchor(null)
+  }, [props])
+
+  // Hybrid "Default" pick: clear ALL override slots so the pill falls back to
+  // the location's canonical reference (a clean @loc:1) at execution time.
+  const clearRole = useCallback(() => {
+    props.updateAttributes({ role: null, usageMode: null, bucket: null, variant: null })
+    setMenuAnchor(null)
+  }, [props])
+
   const locationDisplay = ref?.label ?? attrs.locationSlug
   const variantDisplay = attrs.bucket && attrs.variant
     ? (ref?.locationVariantDisplayName && ref.locationVariantDisplayName !== "canonical"
@@ -125,7 +169,10 @@ export function LocationRefView(props: NodeViewProps) {
   const tooltip = [
     `@${attrs.locationSlug}:${attrs.imageIndex}`,
     attrs.bucket && attrs.variant && `variant: ${attrs.bucket}/${attrs.variant}`,
-    attrs.usageMode && `mode: ${attrs.usageMode}`,
+    // Hybrid surfaces the role (phrase form); legacy keeps the raw mode line.
+    isHybrid
+      ? currentRolePhrase && `role: ${currentRolePhrase}`
+      : attrs.usageMode && `mode: ${attrs.usageMode}`,
     isBroken && "no matching location is wired to this node",
   ]
     .filter(Boolean)
@@ -174,9 +221,13 @@ export function LocationRefView(props: NodeViewProps) {
         {variantDisplay && (
           <span className="location-ref-pill__variant">/{variantDisplay}</span>
         )}
-        {attrs.usageMode && (
-          <span className="location-ref-pill__mode-badge">{locationUsageModeLabel(attrs.usageMode)}</span>
-        )}
+        {isHybrid
+          ? currentRolePhrase && (
+              <span className="location-ref-pill__mode-badge">{currentRolePhrase}</span>
+            )
+          : attrs.usageMode && (
+              <span className="location-ref-pill__mode-badge">{locationUsageModeLabel(attrs.usageMode)}</span>
+            )}
       </button>
       <button
         type="button"
@@ -222,7 +273,14 @@ export function LocationRefView(props: NodeViewProps) {
       {menuAnchor && createPortal(
         (() => {
           const MENU_W = 220
-          const MENU_H_ESTIMATE = (LOCATION_MODE_PRESETS_LIVE.length + 2) * 32 + 16
+          // Height estimate drives the flip-above-when-cramped math. In hybrid
+          // the vocabulary is the role presets (no Custom row for location); in
+          // legacy it's the usage-mode list — keeping the legacy estimate
+          // byte-identical to before.
+          const vocabCount = isHybrid
+            ? (roleMenuPresets as readonly string[]).length
+            : LOCATION_MODE_PRESETS_LIVE.length
+          const MENU_H_ESTIMATE = (vocabCount + 2) * 32 + 16
           const MARGIN = 4
           const vh = window.innerHeight
           const vw = window.innerWidth
@@ -241,54 +299,104 @@ export function LocationRefView(props: NodeViewProps) {
               style={{ position: "fixed", top, left, width: MENU_W, maxHeight, overflowY: "auto" }}
               className={BODY_MENU_CLASS}
               role="menu"
-              data-testid="location-ref-mode-menu"
+              // Hybrid role menu gets its own test hook; legacy keeps the
+              // original testid so the existing mode-menu test stays valid and
+              // the legacy DOM is byte-identical.
+              data-testid={isHybrid ? "location-ref-role-menu" : "location-ref-mode-menu"}
               // Stop the document-level outside-click listener from seeing
               // clicks inside the menu (containment-checks can race with
               // re-renders during state updates).
               onMouseDown={(e) => e.stopPropagation()}
               onClick={(e) => e.stopPropagation()}
             >
-              {/* "Default" row — clears the mode override so the pill falls
-                  back to the location node's defaultUsageMode at execution
-                  time. Mirrors the autocomplete's no-mode insertion path. */}
-              <button
-                key="__default__"
-                type="button"
-                role="menuitem"
-                className={`w-full text-left px-2.5 py-1.5 text-[11px] flex items-center justify-between transition-colors ${
-                  attrs.usageMode == null
-                    ? "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300"
-                    : "hover:bg-muted text-foreground"
-                }`}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setUsageMode(null)
-                }}
-              >
-                <span>Default (from location)</span>
-                {attrs.usageMode == null && <span aria-hidden>✓</span>}
-              </button>
-              <div className="my-1 border-t border-border/60" />
-              {LOCATION_MODE_PRESETS_LIVE.map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  role="menuitem"
-                  data-mode={m}
-                  className={`w-full text-left px-2.5 py-1.5 text-[11px] flex items-center justify-between transition-colors ${
-                    attrs.usageMode === m
-                      ? "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300"
-                      : "hover:bg-muted text-foreground"
-                  }`}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setUsageMode(m)
-                  }}
-                >
-                  <span>{locationUsageModeLabel(m)}</span>
-                  <span className="text-[10px] font-mono text-muted-foreground">:{m}</span>
-                </button>
-              ))}
+              {isHybrid ? (
+                <>
+                  {/* "Default" row — clears every override slot so the pill
+                      falls back to the location's canonical reference. */}
+                  <button
+                    key="__default__"
+                    type="button"
+                    role="menuitem"
+                    className={`w-full text-left px-2.5 py-1.5 text-[11px] flex items-center justify-between transition-colors ${
+                      currentRolePhrase == null
+                        ? "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300"
+                        : "hover:bg-muted text-foreground"
+                    }`}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      clearRole()
+                    }}
+                  >
+                    <span>Default (from location)</span>
+                    {currentRolePhrase == null && <span aria-hidden>✓</span>}
+                  </button>
+                  <div className="my-1 border-t border-border/60" />
+                  {(roleMenuPresets as readonly string[]).map((roleP) => (
+                    <button
+                      key={roleP}
+                      type="button"
+                      role="menuitem"
+                      data-role={roleP}
+                      className={`w-full text-left px-2.5 py-1.5 text-[11px] flex items-center justify-between transition-colors ${
+                        currentRolePhrase === roleP
+                          ? "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300"
+                          : "hover:bg-muted text-foreground"
+                      }`}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setRole(roleP)
+                      }}
+                    >
+                      <span>{roleP}</span>
+                      {currentRolePhrase === roleP && <span aria-hidden>✓</span>}
+                    </button>
+                  ))}
+                </>
+              ) : (
+                <>
+                  {/* "Default" row — clears the mode override so the pill falls
+                      back to the location node's defaultUsageMode at execution
+                      time. Mirrors the autocomplete's no-mode insertion path. */}
+                  <button
+                    key="__default__"
+                    type="button"
+                    role="menuitem"
+                    className={`w-full text-left px-2.5 py-1.5 text-[11px] flex items-center justify-between transition-colors ${
+                      attrs.usageMode == null
+                        ? "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300"
+                        : "hover:bg-muted text-foreground"
+                    }`}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setUsageMode(null)
+                    }}
+                  >
+                    <span>Default (from location)</span>
+                    {attrs.usageMode == null && <span aria-hidden>✓</span>}
+                  </button>
+                  <div className="my-1 border-t border-border/60" />
+                  {LOCATION_MODE_PRESETS_LIVE.map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      role="menuitem"
+                      data-mode={m}
+                      className={`w-full text-left px-2.5 py-1.5 text-[11px] flex items-center justify-between transition-colors ${
+                        attrs.usageMode === m
+                          ? "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300"
+                          : "hover:bg-muted text-foreground"
+                      }`}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setUsageMode(m)
+                      }}
+                    >
+                      <span>{locationUsageModeLabel(m)}</span>
+                      <span className="text-[10px] font-mono text-muted-foreground">:{m}</span>
+                    </button>
+                  ))}
+                </>
+              )}
             </div>
           )
         })(),

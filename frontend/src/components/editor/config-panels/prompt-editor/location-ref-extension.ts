@@ -7,6 +7,7 @@ import {
   parseLocationMentionToken,
   type LocationUsageMode,
 } from "@nodaro/shared"
+import { IMAGE_REFERENCE_FORMAT } from "@/lib/image-reference-format"
 import { LocationRefView } from "./location-ref-view"
 
 export interface LocationRefAttrs {
@@ -15,6 +16,12 @@ export interface LocationRefAttrs {
   bucket: string | null
   variant: string | null
   usageMode: LocationUsageMode | null
+  /** Bare-slug ROLE (Unified Reference Roles, Phase D) — a known location role
+   *  (`background`, `empty-background`, `as-is`, …) in slug form, mutually
+   *  exclusive with `bucket`/`variant`. null for canonical / bucket-variant /
+   *  mode pills. Round-trips through `renderText` as the 3rd segment so the
+   *  downstream shared parser sees the exact hand-typed token. */
+  role: string | null
 }
 
 /**
@@ -56,6 +63,7 @@ function parseMatchAttrs(token: string): LocationRefAttrs | null {
     bucket: parsed.bucket,
     variant: parsed.variant,
     usageMode: parsed.usageMode,
+    role: parsed.role ?? null,
   }
 }
 
@@ -77,6 +85,37 @@ function knownLocationSlugs(extension: { editor: unknown }): Set<string> {
     if (r.locationSlug) out.add(r.locationSlug)
   }
   return out
+}
+
+/**
+ * Resolve a TYPED / PASTED token into pill attrs, or `false` to leave it as
+ * literal text. Single source of truth for the input + paste rules so they
+ * never diverge. NOT used by `parseHTML` — existing saved pills always
+ * round-trip regardless of format (the gate below is for new text→pill
+ * promotion only).
+ *
+ * Gates:
+ *   1. Parse — non-matching shapes stay text (parser returns null).
+ *   2. Known-slug — only promote when `<slug>` is a location wired into the
+ *      consumer node, so the character extension's rule owns character slugs
+ *      and unknown slugs stay text.
+ *   3. Legacy role gate (Unified Reference Roles, Phase D) — a bare-slug ROLE
+ *      token (`@old-library:1:background`, `attrs.role` set) is a HYBRID-only
+ *      construct. In LEGACY it must stay literal text exactly as pre-Phase-D
+ *      (when the parser returned null for it), so we do NOT auto-promote it to
+ *      a pill. HYBRID keeps the promotion. `usageMode`-bearing tokens
+ *      (`:layout` / `:style`) carry no `role` → still promoted in both formats,
+ *      unchanged.
+ */
+export function resolvePromotableAttrs(
+  token: string,
+  extension: { editor: unknown },
+): LocationRefAttrs | false {
+  const attrs = parseMatchAttrs(token)
+  if (!attrs) return false
+  if (!knownLocationSlugs(extension).has(attrs.locationSlug)) return false
+  if (attrs.role && IMAGE_REFERENCE_FORMAT !== "hybrid") return false
+  return attrs
 }
 
 /**
@@ -135,6 +174,12 @@ export const LocationRefExtension = Node.create({
         renderHTML: (attrs) =>
           attrs.usageMode ? { "data-usage-mode": String(attrs.usageMode) } : {},
       },
+      role: {
+        default: null,
+        parseHTML: (el) => el.getAttribute("data-location-role") || null,
+        renderHTML: (attrs) =>
+          attrs.role ? { "data-location-role": String(attrs.role) } : {},
+      },
     }
   },
 
@@ -167,8 +212,13 @@ export const LocationRefExtension = Node.create({
   renderText({ node }) {
     const a = node.attrs as LocationRefAttrs
     const parts: string[] = [`@${a.locationSlug}:${a.imageIndex}`]
+    // 3rd segment is EITHER a `bucket/variant` pair OR a bare-slug role — they
+    // are mutually exclusive (the shared parser never sets both). `usageMode`,
+    // when present, trails as the next segment.
     if (a.bucket && a.variant) {
       parts.push(`${a.bucket}/${a.variant}`)
+    } else if (a.role) {
+      parts.push(a.role)
     }
     if (a.usageMode) {
       parts.push(a.usageMode)
@@ -200,18 +250,10 @@ export const LocationRefExtension = Node.create({
       nodeInputRule({
         find: new RegExp(`${LOCATION_REF_PATTERN_CORE}\\s$`),
         type: this.type,
-        getAttributes: (match) => {
-          const token = match[1]
-          const attrs = parseMatchAttrs(token)
-          if (!attrs) return false
-          // Only auto-promote to a location pill when the slug is known to
-          // the editor's location storage. Otherwise leave the text alone
-          // so the character extension (if applicable) or plain-text
-          // fallback handles it.
-          const known = knownLocationSlugs(self)
-          if (!known.has(attrs.locationSlug)) return false
-          return attrs
-        },
+        // Promotion is gated by `resolvePromotableAttrs`: known-slug only
+        // (so the character extension owns character slugs + unknown slugs
+        // stay text), and legacy role tokens stay literal (Phase D).
+        getAttributes: (match) => resolvePromotableAttrs(match[1], self),
       }),
     ]
   },
@@ -228,14 +270,9 @@ export const LocationRefExtension = Node.create({
       nodePasteRule({
         find: new RegExp(LOCATION_REF_PATTERN_CORE, "g"),
         type: this.type,
-        getAttributes: (match) => {
-          const token = match[1]
-          const attrs = parseMatchAttrs(token)
-          if (!attrs) return false
-          const known = knownLocationSlugs(self)
-          if (!known.has(attrs.locationSlug)) return false
-          return attrs
-        },
+        // Same gating as the input rule (known-slug + legacy role guard) via
+        // the shared `resolvePromotableAttrs` helper.
+        getAttributes: (match) => resolvePromotableAttrs(match[1], self),
       }),
     ]
   },

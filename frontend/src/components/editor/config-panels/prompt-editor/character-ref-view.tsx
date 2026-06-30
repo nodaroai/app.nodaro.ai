@@ -9,10 +9,17 @@ import {
   type UsageMode,
 } from "@nodaro/shared"
 import { optimizedImageUrl } from "@/lib/image"
+import { IMAGE_REFERENCE_FORMAT } from "@/lib/image-reference-format"
 import { BODY_MENU_CLASS } from "./body-menu-class"
 import { useBodyMenuDismiss } from "./use-body-menu-dismiss"
 import { PROMPT_EDITOR_PORTAL_PROPS } from "./prompt-editor-portal"
 import { computeFlipPosition } from "./flip-position"
+import {
+  CHARACTER_ROLE_PRESETS,
+  characterSwapMenuRoles,
+  roleToCharacterRefSlots,
+  sanitizeRole,
+} from "./character-ref-roles"
 import type { CharacterRefAttrs } from "./character-ref-extension"
 
 /** Subset of `RefImageItem` the pill needs to render. Loose shape because the
@@ -80,7 +87,20 @@ export function CharacterRefView(props: NodeViewProps) {
 
   const [hoverAnchor, setHoverAnchor] = useState<DOMRect | null>(null)
   const [menuAnchor, setMenuAnchor] = useState<DOMRect | null>(null)
+  const [customMode, setCustomMode] = useState(false)
+  const [customText, setCustomText] = useState("")
+  const customInputRef = useRef<HTMLInputElement | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
+
+  // Hybrid gate: in "hybrid" format the swap-menu offers curated ROLE presets
+  // (+ a Custom… input + Default); in "legacy" it keeps the EXISTING usage-mode
+  // menu unchanged. `roleMenuPresets` is null in legacy. The role lives in
+  // exactly one token slot — `usageMode` XOR `variantSlug` — so the active role
+  // is whichever slot is set (the D1 resolver reads `usageMode ?? variantSlug`).
+  const roleMenuPresets = characterSwapMenuRoles(IMAGE_REFERENCE_FORMAT)
+  const isHybrid = roleMenuPresets !== null
+  const currentRole = isHybrid ? (attrs.usageMode ?? attrs.variantSlug) : null
+  const isCustomRole = !!currentRole && !CHARACTER_ROLE_PRESETS.includes(currentRole)
 
   // Clean up any stuck preview / menu on unmount (e.g. when the pill is deleted).
   useEffect(() => () => {
@@ -88,9 +108,19 @@ export function CharacterRefView(props: NodeViewProps) {
     setMenuAnchor(null)
   }, [])
 
+  // Auto-focus the custom-role input when entering custom mode (hybrid only).
+  useEffect(() => {
+    if (customMode) customInputRef.current?.focus()
+  }, [customMode])
+
   // Dismiss on outside-click / Escape + escape the modal scroll-lock so the
-  // menu can scroll. Shared by all body-portaled pill views.
-  useBodyMenuDismiss(menuRef, menuAnchor, () => setMenuAnchor(null))
+  // menu can scroll. Shared by all body-portaled pill views. Also resets the
+  // hybrid custom-input state so it never reopens mid-typed.
+  useBodyMenuDismiss(menuRef, menuAnchor, () => {
+    setMenuAnchor(null)
+    setCustomMode(false)
+    setCustomText("")
+  })
 
   const handleRemove = useCallback(() => {
     if (typeof props.getPos !== "function") return
@@ -108,8 +138,31 @@ export function CharacterRefView(props: NodeViewProps) {
     setMenuAnchor(null)
   }, [props])
 
+  // Hybrid role pick: route the role into its single token slot (UsageMode →
+  // usageMode, else variantSlug) and CLEAR the sibling so the slots stay
+  // mutually exclusive (never an invalid 4-part token). Presets pass through
+  // sanitizeRole as a no-op; Custom values get grammar-conformed.
+  const setRole = useCallback((role: string) => {
+    props.updateAttributes(roleToCharacterRefSlots(role))
+    setMenuAnchor(null)
+    setCustomMode(false)
+    setCustomText("")
+  }, [props])
+
+  // Hybrid "Default" pick: clear BOTH slots so the token falls back to the
+  // source's default role at execution time (a clean @kira:1).
+  const clearRole = useCallback(() => {
+    props.updateAttributes({ usageMode: null, variantSlug: null })
+    setMenuAnchor(null)
+    setCustomMode(false)
+    setCustomText("")
+  }, [props])
+
   const characterDisplay = ref?.label ?? attrs.characterSlug
-  const variantDisplay = attrs.variantSlug
+  // Legacy: variantSlug is a real character variant → show the "/variant"
+  // segment. Hybrid: that slot holds a ROLE, surfaced via the badge below, so
+  // the segment is suppressed (no duplicate "/clothes" + "clothes" badge).
+  const variantDisplay = !isHybrid && attrs.variantSlug
     ? (ref?.variantDisplayName && ref.variantDisplayName !== "canonical"
         ? ref.variantDisplayName
         : attrs.variantSlug)
@@ -117,8 +170,10 @@ export function CharacterRefView(props: NodeViewProps) {
 
   const tooltip = [
     `@${attrs.characterSlug}:${attrs.imageIndex}`,
-    attrs.variantSlug && `variant: ${attrs.variantSlug}`,
-    attrs.usageMode && `mode: ${attrs.usageMode}`,
+    isHybrid
+      ? currentRole && `role: ${currentRole}`
+      : attrs.variantSlug && `variant: ${attrs.variantSlug}`,
+    !isHybrid && attrs.usageMode && `mode: ${attrs.usageMode}`,
     isBroken && "no matching character is wired to this node",
   ]
     .filter(Boolean)
@@ -166,9 +221,13 @@ export function CharacterRefView(props: NodeViewProps) {
         {variantDisplay && (
           <span className="character-ref-pill__variant">/{variantDisplay}</span>
         )}
-        {attrs.usageMode && (
-          <span className="character-ref-pill__mode-badge">{usageModeLabel(attrs.usageMode)}</span>
-        )}
+        {isHybrid
+          ? currentRole && (
+              <span className="character-ref-pill__mode-badge">{currentRole}</span>
+            )
+          : attrs.usageMode && (
+              <span className="character-ref-pill__mode-badge">{usageModeLabel(attrs.usageMode)}</span>
+            )}
       </button>
       <button
         type="button"
@@ -214,7 +273,14 @@ export function CharacterRefView(props: NodeViewProps) {
       {menuAnchor && createPortal(
         (() => {
           const MENU_W = 200
-          const MENU_H_ESTIMATE = (LABEL_PRESETS_LIVE.length + 2) * 32 + 16
+          // Height estimate drives the flip-above-when-cramped math. In hybrid
+          // the vocabulary is the role presets (+1 for the Custom… row); in
+          // legacy it's the usage-mode list — keeping the legacy estimate
+          // byte-identical to before.
+          const vocabCount = isHybrid
+            ? (roleMenuPresets as readonly string[]).length + 1
+            : LABEL_PRESETS_LIVE.length
+          const MENU_H_ESTIMATE = (vocabCount + 2) * 32 + 16
           const MARGIN = 4
           const vh = window.innerHeight
           const vw = window.innerWidth
@@ -233,52 +299,154 @@ export function CharacterRefView(props: NodeViewProps) {
               style={{ position: "fixed", top, left, width: MENU_W, maxHeight, overflowY: "auto" }}
               className={BODY_MENU_CLASS}
               role="menu"
+              // Test-only hook on the hybrid role menu; undefined in legacy so
+              // the legacy menu DOM stays byte-identical.
+              data-testid={isHybrid ? "character-ref-role-menu" : undefined}
               // Stop the document-level outside-click listener from seeing
               // clicks inside the menu (containment-checks can race with
               // re-renders during state updates).
               onMouseDown={(e) => e.stopPropagation()}
               onClick={(e) => e.stopPropagation()}
             >
-              {/* "Default" row — clears the mode override so the pill falls
-                  back to the character node's defaultUsageMode at execution
-                  time. Mirrors the autocomplete's no-mode insertion path. */}
-              <button
-                key="__default__"
-                type="button"
-                role="menuitem"
-                className={`w-full text-left px-2.5 py-1.5 text-[11px] flex items-center justify-between transition-colors ${
-                  attrs.usageMode == null
-                    ? "bg-violet-500/15 text-violet-700 dark:text-violet-300"
-                    : "hover:bg-muted text-foreground"
-                }`}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setUsageMode(null)
-                }}
-              >
-                <span>Default (from character)</span>
-                {attrs.usageMode == null && <span aria-hidden>✓</span>}
-              </button>
-              <div className="my-1 border-t border-border/60" />
-              {LABEL_PRESETS_LIVE.map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  role="menuitem"
-                  className={`w-full text-left px-2.5 py-1.5 text-[11px] flex items-center justify-between transition-colors ${
-                    attrs.usageMode === m
-                      ? "bg-violet-500/15 text-violet-700 dark:text-violet-300"
-                      : "hover:bg-muted text-foreground"
-                  }`}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setUsageMode(m)
-                  }}
-                >
-                  <span>{usageModeLabel(m)}</span>
-                  <span className="text-[10px] font-mono text-muted-foreground">:{m}</span>
-                </button>
-              ))}
+              {isHybrid ? (
+                <>
+                  {/* "Default" row — clears BOTH role slots so the token falls
+                      back to the source's default role at execution time. */}
+                  <button
+                    key="__default__"
+                    type="button"
+                    role="menuitem"
+                    className={`w-full text-left px-2.5 py-1.5 text-[11px] flex items-center justify-between transition-colors ${
+                      currentRole == null
+                        ? "bg-violet-500/15 text-violet-700 dark:text-violet-300"
+                        : "hover:bg-muted text-foreground"
+                    }`}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      clearRole()
+                    }}
+                  >
+                    <span>Default (from character)</span>
+                    {currentRole == null && <span aria-hidden>✓</span>}
+                  </button>
+                  <div className="my-1 border-t border-border/60" />
+                  {(roleMenuPresets as readonly string[]).map((role) => (
+                    <button
+                      key={role}
+                      type="button"
+                      role="menuitem"
+                      data-role={role}
+                      className={`w-full text-left px-2.5 py-1.5 text-[11px] flex items-center justify-between transition-colors ${
+                        currentRole === role
+                          ? "bg-violet-500/15 text-violet-700 dark:text-violet-300"
+                          : "hover:bg-muted text-foreground"
+                      }`}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setRole(role)
+                      }}
+                    >
+                      <span>{role}</span>
+                      {currentRole === role && <span aria-hidden>✓</span>}
+                    </button>
+                  ))}
+                  <div className="my-1 border-t border-border/60" />
+                  {customMode ? (
+                    <div className="px-2 py-1.5 flex items-center gap-1">
+                      <input
+                        ref={customInputRef}
+                        value={customText}
+                        onChange={(e) => setCustomText(e.target.value)}
+                        placeholder="earrings  or  freckles"
+                        data-testid="character-ref-role-custom-input"
+                        className="flex-1 min-w-0 text-[11px] px-2 py-1 rounded border border-border bg-background outline-none focus:ring-2 focus:ring-violet-400/50"
+                        onClick={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => {
+                          // Keep Enter/Escape out of the editor's keymap.
+                          e.stopPropagation()
+                          if (e.key === "Enter") {
+                            e.preventDefault()
+                            if (sanitizeRole(customText)) setRole(customText)
+                          } else if (e.key === "Escape") {
+                            e.preventDefault()
+                            setCustomMode(false)
+                            setCustomText("")
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        aria-label="Apply custom role"
+                        className="text-[11px] px-2 py-1 rounded bg-violet-500/15 text-violet-700 hover:bg-violet-500/25 dark:text-violet-300 disabled:opacity-40 disabled:cursor-not-allowed"
+                        disabled={sanitizeRole(customText).length === 0}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setRole(customText)
+                        }}
+                      >
+                        OK
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="w-full text-left px-2.5 py-1.5 text-[11px] hover:bg-muted text-foreground italic"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setCustomMode(true)
+                        setCustomText(isCustomRole ? (currentRole ?? "") : "")
+                      }}
+                    >
+                      Custom…
+                    </button>
+                  )}
+                </>
+              ) : (
+                <>
+                  {/* "Default" row — clears the mode override so the pill falls
+                      back to the character node's defaultUsageMode at execution
+                      time. Mirrors the autocomplete's no-mode insertion path. */}
+                  <button
+                    key="__default__"
+                    type="button"
+                    role="menuitem"
+                    className={`w-full text-left px-2.5 py-1.5 text-[11px] flex items-center justify-between transition-colors ${
+                      attrs.usageMode == null
+                        ? "bg-violet-500/15 text-violet-700 dark:text-violet-300"
+                        : "hover:bg-muted text-foreground"
+                    }`}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setUsageMode(null)
+                    }}
+                  >
+                    <span>Default (from character)</span>
+                    {attrs.usageMode == null && <span aria-hidden>✓</span>}
+                  </button>
+                  <div className="my-1 border-t border-border/60" />
+                  {LABEL_PRESETS_LIVE.map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      role="menuitem"
+                      className={`w-full text-left px-2.5 py-1.5 text-[11px] flex items-center justify-between transition-colors ${
+                        attrs.usageMode === m
+                          ? "bg-violet-500/15 text-violet-700 dark:text-violet-300"
+                          : "hover:bg-muted text-foreground"
+                      }`}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setUsageMode(m)
+                      }}
+                    >
+                      <span>{usageModeLabel(m)}</span>
+                      <span className="text-[10px] font-mono text-muted-foreground">:{m}</span>
+                    </button>
+                  ))}
+                </>
+              )}
             </div>
           )
         })(),

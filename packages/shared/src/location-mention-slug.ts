@@ -31,6 +31,8 @@
  *                                          location usage mode)
  */
 
+import { REFERENCE_ROLE_PRESETS, normalizeRoleSlug } from "./reference-roles.js"
+
 /** Modes that apply to scenes/locations. Subset of character `USAGE_MODES`. */
 export const LOCATION_USAGE_MODES = [
   "identical",
@@ -105,6 +107,13 @@ export interface LocationMentionTokenInfo {
   /** Per-mention mode override; null falls back to the location node's default
    *  (or the global "identical" default). */
   readonly usageMode: LocationUsageMode | null
+  /** Bare-slug ROLE (Unified Reference Roles, Phase D) — a slash-less, non-mode
+   *  3rd segment that is a KNOWN location role (`background`, `empty-background`,
+   *  `as-is`, …), stored verbatim in slug form. Absent (undefined) for canonical /
+   *  bucket-variant / mode tokens. The hybrid resolver + role pill map it back to
+   *  the phrase key via `normalizeRoleSlug`. Optional so canonical/variant/mode
+   *  tokens stay shape-identical to the pre-Phase-D parser output. */
+  readonly role?: string
   /** Byte offset into the source prompt — used to splice the token out at
    *  resolve time. */
   readonly offset: number
@@ -127,6 +136,10 @@ export function parseLocationMentionToken(
   bucket: string | null
   variant: string | null
   usageMode: LocationUsageMode | null
+  /** Bare-slug role (slug form). Present ONLY for a known-role 3rd segment;
+   *  OMITTED (undefined) for every other shape so canonical/variant/mode results
+   *  stay byte-identical to the pre-Phase-D parser. */
+  role?: string
 } | null {
   if (!text.startsWith("@")) return null
   const rest = text.slice(1)
@@ -172,8 +185,28 @@ export function parseLocationMentionToken(
         usageMode: third,
       }
     }
-    // Unknown 3rd segment — neither bucket/variant nor a known mode. Return
-    // null so the resolver falls through to literal text.
+    // Additive (Unified Reference Roles, Phase D): a bare 3rd segment that is a
+    // KNOWN location role (a `REFERENCE_ROLE_PRESETS["wired-location"]` entry, in
+    // slug form — `background`, `empty-background`, `as-is`, …) parses as a role.
+    // PRESET-GATED on purpose: an unknown slug (`foobar`) still returns null →
+    // literal text, so legacy parsing stays byte-identical for everything outside
+    // the curated vocabulary. The slug is stored verbatim (round-trips through the
+    // pill's `renderText`); the resolver/pill map it to the phrase key via
+    // `normalizeRoleSlug`. Driven by the preset registry so a new role needs no
+    // edit here. (`layout`/`style` never reach this branch — they're caught above
+    // as usage modes.)
+    if (REFERENCE_ROLE_PRESETS["wired-location"].includes(normalizeRoleSlug(third))) {
+      return {
+        locationSlug,
+        imageIndex,
+        bucket: null,
+        variant: null,
+        usageMode: null,
+        role: third,
+      }
+    }
+    // Unknown 3rd segment — neither bucket/variant, a known mode, nor a known
+    // role. Return null so the resolver falls through to literal text.
     return null
   }
 

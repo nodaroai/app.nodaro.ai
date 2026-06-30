@@ -273,14 +273,26 @@ function resolveVideoCharacterMentionsHybrid(
   const refByUrl = new Map<string, ConnectedReference>()
   const matched: Array<{ token: string; offset: number; url: string; role: string }> = []
   for (const t of tokens) {
-    const match =
-      (t.variantSlug ? byVariant.get(`${t.characterSlug}:${t.variantSlug}`) : undefined)
-      ?? bySlug.get(t.characterSlug)
+    // Variant-first, canonical-fallback. `variantMatch` (a REAL matched variant
+    // URL) doubles as the "this segment selected a variant, not a role" signal.
+    const variantMatch = t.variantSlug
+      ? byVariant.get(`${t.characterSlug}:${t.variantSlug}`)
+      : undefined
+    const match = variantMatch ?? bySlug.get(t.characterSlug)
     if (!match || !match.url) continue
     mentionedCharacterSlugs.add(t.characterSlug)
     refByUrl.set(match.url, match)
     const segment = (t.usageMode ?? t.variantSlug ?? "").trim()
-    const role = presets.includes(segment) ? segment : defaultRole
+    // Custom roles survive VERBATIM — the SAME relaxation as the image-side
+    // `resolveCharacterMentionsHybrid` (Unified Reference Roles, Phase D), kept
+    // in lock-step so FE single-node + orchestrator video runs never diverge. A
+    // preset OR a free-form value in the variant/role slot that didn't resolve to
+    // a real variant URL → role; a real variant slug or a directive-only usage
+    // mode → source default. Strict superset of the old preset-membership gate.
+    const role =
+      segment && (presets.includes(segment) || (t.usageMode == null && !variantMatch))
+        ? segment
+        : defaultRole
     matched.push({ token: t.token, offset: t.offset, url: match.url, role })
   }
 
