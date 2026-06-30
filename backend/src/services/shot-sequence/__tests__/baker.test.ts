@@ -116,6 +116,45 @@ describe("bakeShotSequence", () => {
     expect(() => bakeShotSequence(b, ALIGN, "https://r2/vo.mp3")).toThrow(SceneOverlapError)
   })
 
+  it("clamps a blueprint tail that overflows into the next scene instead of throwing (regression)", () => {
+    // A blueprint's durationFrames (here 120) can run a scene's tail past the next
+    // scene's start. Because the blueprint is ANCHORED before the next scene (frame 0
+    // < 100), this is a recoverable tail overflow, NOT interleave — the abut/render
+    // logic already trims the scene to the next scene's start, so the baker must NOT
+    // throw SceneOverlapError (this failed a real prod explainer render).
+    const b = brief()
+    b.narration = { script: "a b", cues: [{ id: "c1", text: "a" }] }
+    b.scenes = [
+      { id: "scene-a", shots: [{ id: "sha", reveals: [
+        { id: "ra", blueprint: { id: "dataviz-countup", params: { value: 8, label: "hrs wasted" } }, revealAt: { kind: "frame", frame: 0 }, durationFrames: 120 },
+      ] }] },
+      { id: "scene-b", shots: [{ id: "shb", reveals: [
+        { id: "rb", element: { id: "tb", type: "text", text: "B", fontFamily: "Inter", fontSize: 40, color: "#fff", x: 0, y: 0 }, revealAt: { kind: "frame", frame: 100 }, enter: { motion: "fade", durationFrames: 6 } },
+      ] }] },
+    ]
+    const { plan } = bakeShotSequence(b, [], "https://r2/vo.mp3")
+    expect(plan.scenes.map((s) => s.id)).toEqual(["scene-a", "scene-b"])
+    // scene-a abuts scene-b (its window clamps to scene-b's start); the blueprint trims to fit.
+    expect(plan.scenes[1].startFrame).toBe(100)
+    expect(plan.scenes[0].startFrame + plan.scenes[0].durationInFrames).toBe(plan.scenes[1].startFrame)
+  })
+
+  it("still throws SceneOverlapError when a reveal is ANCHORED past the next scene's start (genuine interleave)", () => {
+    const b = brief()
+    b.narration = { script: "a b", cues: [{ id: "c1", text: "a" }] }
+    b.scenes = [
+      { id: "scene-a", shots: [{ id: "sha", reveals: [
+        { id: "ra1", element: { id: "ta1", type: "text", text: "A1", fontFamily: "Inter", fontSize: 40, color: "#fff", x: 0, y: 0 }, revealAt: { kind: "frame", frame: 0 }, enter: { motion: "fade", durationFrames: 6 } },
+        // anchored at 200 — AFTER scene-b's start (100): genuinely interleaved, a real mis-order.
+        { id: "ra2", element: { id: "ta2", type: "text", text: "A2", fontFamily: "Inter", fontSize: 40, color: "#fff", x: 0, y: 0 }, revealAt: { kind: "frame", frame: 200 }, enter: { motion: "fade", durationFrames: 6 } },
+      ] }] },
+      { id: "scene-b", shots: [{ id: "shb", reveals: [
+        { id: "rb", element: { id: "tb", type: "text", text: "B", fontFamily: "Inter", fontSize: 40, color: "#fff", x: 0, y: 0 }, revealAt: { kind: "frame", frame: 100 }, enter: { motion: "fade", durationFrames: 6 } },
+      ] }] },
+    ]
+    expect(() => bakeShotSequence(b, [], "https://r2/vo.mp3")).toThrow(SceneOverlapError)
+  })
+
   it("throws EmptyAlignmentError when cue-anchored but no cue matched", () => {
     expect(() => bakeShotSequence(brief(), [], "https://r2/vo.mp3")).toThrow(EmptyAlignmentError)
   })
