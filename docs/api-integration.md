@@ -556,6 +556,18 @@ orchestrator already use):
   numbered against the attached references (front-of-list order).
 - **`referenceOrder`** (an optional string array of stable ref ids) reorders the
   reference list and renumbers the `@image_N` bindings to match.
+- **`identityLock` (per-reference, opt-in — default off).** Each
+  `connectedReferences[]` entry may carry
+  `identityLock?: { enabled: boolean; text?: string }`. With `enabled: true`, the
+  prompt builder prepends a short identity-lock fidelity line for that reference
+  (pinning its exact identity); `text` overrides the built-in per-source wording,
+  and `{ref}` in that text is the placeholder for the reference's binding
+  (`reference image A` on image, `@image_N` on video). Left off — the default —
+  nothing identity-locking is injected. Honored when the route assembles in the
+  hybrid reference format. CLI callers pass it inside the `connectedReferences`
+  JSON via `--params-file` (no dedicated flag). See the
+  [Reference Roles guide](./reference-roles-guide.md) for the role-label + lock
+  model.
 - **Provider-gated, per-provider caps.** Only models with verified image-reference
   support attach references; on any other model the `{image:N}` tokens are stripped
   to their bare labels and nothing is attached. Supported models and their

@@ -42,13 +42,24 @@
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import {
   computeNodePrompt,
-  getEffectiveSunoCustomMode,
   truncateForField,
   appendField,
   resolveNodeRefs,
+  assembleSunoInput,
+  type AssembleSunoResult,
   type SoundConsumerType,
 } from "@nodaro/shared"
 import { collectAudioStyleHints } from "@/lib/audio-style-hints"
+// The editor's field-mapping resolver — the SAME wrapper the RUN calls
+// (execute-node.ts ~892). Reused here so the Suno preview resolves `field-*`
+// canvas edges via the identical upstream-output source (extractNodeOutput /
+// getParameterValue), guaranteeing the wired field surfaces in the preview
+// exactly as it will at run. No import cycle: the wrapper → execution-graph
+// chain never imports back into this module.
+import {
+  resolveFieldMappings,
+  NODE_MAPPABLE_FIELDS,
+} from "@/components/editor/workflow-editor/resolve-field-mappings"
 
 /**
  * Resolve `{Node Label}` refs in a typed value, mirroring the frontend
@@ -143,6 +154,93 @@ function foldStyle(user: string, styleText: string, budget: number): string {
 }
 
 /**
+ * Build the PREVIEW's assembled Suno field set — a pass-through of the SHARED
+ * `assembleSunoInput` (the SAME fn the FE + BE run call), under the preview's
+ * input constraints: no wired/override prompt and no wired persona, `userPrompt`
+ * + `lyrics` resolved via the `{Label}` refMap ONLY, and `throwOnEmpty:false`.
+ *
+ * This is the SINGLE place the editor derives a suno-generate node's preview
+ * fields, so the two suno preview surfaces — the multi-field segment string
+ * ({@link assembleAudioPrompt}'s suno case) and the standalone
+ * `FinalAudioPromptPreview` blocks — stay in lockstep, AND the preview equals
+ * the run (modulo the persona/override the preview structurally lacks). The
+ * userPrompt/lyrics resolution mirrors `execute-node.ts`'s suno branch: the
+ * prompt is trimmed-then-resolved; lyrics is resolved WITHOUT trimming.
+ *
+ * FIELD-HANDLE RESOLUTION (preview==run): the run rebinds `node.data` via
+ * `resolveFieldMappings` BEFORE assembling, so a `field-style`/`field-lyrics`/…
+ * edge sets `data.<field> = <upstream output>`. The preview runs the IDENTICAL
+ * resolver first (same wrapper, same upstream-output reader) so a handle-wired
+ * field surfaces here exactly as it does at run. With no field edges (the typed-
+ * field / connected-picker case) the resolver copies `data` through untouched, so
+ * those existing previews are unchanged. The preview has no upstream prompt
+ * (`inputs.prompt`), so `{}` injection gets `undefined` — a no-op, matching a run
+ * with no wired prompt. customMode + userPrompt + lyrics are then read from the
+ * RESOLVED data, exactly as `execute-node.ts` reads them off the rebound node.
+ */
+export function assembleSunoPreview(args: AssembleAudioPromptArgs): AssembleSunoResult {
+  const { node, nodes, edges, refMap } = args
+  // Resolve `field-*` edges (+ legacy fieldMappings + {} injection) the same way
+  // the run does, then assemble off the RESOLVED data — never mutating the input.
+  const resolvedData = resolveFieldMappings(
+    node.data as Record<string, unknown>,
+    nodes,
+    undefined, // preview has no upstream prompt → {} injection is a no-op
+    NODE_MAPPABLE_FIELDS["suno-generate"] ?? [],
+    node.id,
+    edges,
+  )
+  const resolvedNode = { ...node, data: resolvedData } as WorkflowNode
+  const userPrompt = resolveRefs(((resolvedData.prompt as string | undefined) ?? "").trim(), refMap)
+  const lyrics = resolveRefs((resolvedData.lyrics as string | undefined) ?? "", refMap)
+  return assembleSunoInput({
+    node: resolvedNode,
+    graph: { nodes, edges },
+    userPrompt,
+    lyrics,
+    throwOnEmpty: false,
+  })
+}
+
+/** One labeled, non-empty field of an assembled Suno result. */
+export interface SunoPreviewField {
+  readonly key: "prompt" | "style" | "lyrics" | "title" | "negativeStyle"
+  readonly label: string
+  readonly text: string
+}
+
+/**
+ * The ordered, non-empty fields of an assembled Suno result, for the multi-field
+ * Final preview. SINGLE source of the preview's field vocabulary + order, shared
+ * by the segment-view string ({@link formatSunoPreviewText}) and the standalone
+ * `FinalAudioPromptPreview` blocks — so the two suno surfaces never drift. Empty
+ * fields are omitted, so the preview shows exactly the fields the run would send.
+ */
+export function sunoPreviewFields(result: AssembleSunoResult): SunoPreviewField[] {
+  const out: SunoPreviewField[] = []
+  if (result.prompt) out.push({ key: "prompt", label: "Prompt", text: result.prompt })
+  if (result.style) out.push({ key: "style", label: "Style", text: result.style })
+  if (result.lyrics) out.push({ key: "lyrics", label: "Lyrics", text: result.lyrics })
+  if (result.title) out.push({ key: "title", label: "Title", text: result.title })
+  if (result.negativeStyle) out.push({ key: "negativeStyle", label: "Negative style", text: result.negativeStyle })
+  return out
+}
+
+/**
+ * Format the assembled Suno result as the multi-field FINAL preview STRING the
+ * segment view renders: the prompt body first (unlabeled — it's the main text),
+ * then each secondary field as its own `Label: value` block, blank-line
+ * separated. Empty fields are omitted. The folded picker hint rides INSIDE
+ * `prompt` (non-custom) or `style` (custom) verbatim, so the caller's provenance
+ * tagger still colours it wherever it landed.
+ */
+export function formatSunoPreviewText(result: AssembleSunoResult): string {
+  return sunoPreviewFields(result)
+    .map((f) => (f.key === "prompt" ? f.text : `${f.label}: ${f.text}`))
+    .join("\n\n")
+}
+
+/**
  * Reproduce the RUN's audio-prompt PROMPT-FIELD composition EXACTLY for a single
  * audio node, so the final-prompt PREVIEW matches what the run sends to that
  * node's prompt-equivalent field (per `getPromptFields(nodeType)`). Dispatches
@@ -175,15 +273,15 @@ export function assembleAudioPrompt(nodeType: string, args: AssembleAudioPromptA
       return foldStyle(typed, style.text, TEXT_TO_AUDIO_BUDGET)
     }
     case "suno-generate": {
-      // typed prompt resolves the same way the run's preview path does
-      // (resolveTextRefs over data.prompt — no wired/override in a preview).
-      const typed = resolveRefs(((data.prompt as string | undefined) ?? "").trim(), refMap)
-      const custom = getEffectiveSunoCustomMode(data)
-      // In custom mode the style hints fold into the STYLE field, NOT the
-      // prompt — so the prompt field shown is just the bare typed prompt.
-      if (custom) return typed
-      const style = collectAudioStyleHints(node, "suno-generate", nodes, edges)
-      return foldStyle(typed, style.text, SUNO_PROMPT_BUDGET)
+      // Pass-through of the shared assembler — the suno preview shows the FULL
+      // field set (prompt + style + lyrics + title + negativeStyle), so typed-
+      // field edits AND connected pickers are visible (fixes the empty preview +
+      // invisible-edit complaints). Unlike the other audio types this returns a
+      // MULTI-FIELD labeled string (not just the prompt field); the folded picker
+      // hint rides inside prompt (non-custom) or style (custom), so the caller's
+      // provenance tagger still colours it. `assembleSunoPreview` resolves the
+      // user prompt + lyrics via refMap exactly as the run does.
+      return formatSunoPreviewText(assembleSunoPreview({ node, nodes, edges, refMap }))
     }
     case "voice-design":
     case "voice-remix": {

@@ -14,3 +14,18 @@ describe("suno-generate:style wizard target", () => {
     expect(isWizardSupported("suno-generate:style")).toBe(true)
   })
 })
+
+describe("suno-generate:negativeStyle + :lyrics wizard targets", () => {
+  // Task 5 extends the Phase-D composite-key pattern to two more Suno fields.
+  // BOTH reuse the SAME music wizard FORM as `:style`/`suno-generate`; only the
+  // backend OUTPUT framing differs (avoid-tags / sectioned lyrics).
+  it("negativeStyle reuses MUSIC categories and is supported", () => {
+    expect(getCategoriesForNodeType("suno-generate:negativeStyle")).toEqual(MUSIC_WIZARD_CATEGORIES)
+    expect(isWizardSupported("suno-generate:negativeStyle")).toBe(true)
+  })
+
+  it("lyrics reuses MUSIC categories and is supported", () => {
+    expect(getCategoriesForNodeType("suno-generate:lyrics")).toEqual(MUSIC_WIZARD_CATEGORIES)
+    expect(isWizardSupported("suno-generate:lyrics")).toBe(true)
+  })
+})

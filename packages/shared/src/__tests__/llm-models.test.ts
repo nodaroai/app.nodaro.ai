@@ -2,6 +2,7 @@ import {
   LLM_MODELS,
   LLM_MODEL_IDS,
   LLM_FEATURE_DEFAULTS,
+  STRUCTURED_VISION_MODELS,
   calculateLlmCost,
   getLlmModel,
   getLlmTier,
@@ -431,6 +432,13 @@ describe("LLM_FEATURE_DEFAULTS", () => {
     expect(getLlmTier(LLM_FEATURE_DEFAULTS["ai-writer"])).toBe("standard")
   })
 
+  it('"describe-to-picker" defaults to "claude-opus-4.7" (premium vision)', () => {
+    expect(LLM_FEATURE_DEFAULTS["describe-to-picker"]).toBe("claude-opus-4.7")
+    expect(getLlmTier(LLM_FEATURE_DEFAULTS["describe-to-picker"])).toBe("premium")
+    // The default MUST be an accepted analyzer model (vision + structured output).
+    expect(STRUCTURED_VISION_MODELS.map((m) => m.id)).toContain("claude-opus-4.7")
+  })
+
   it('"generate-script" defaults to "gemini-3-flash" (economy)', () => {
     expect(LLM_FEATURE_DEFAULTS["generate-script"]).toBe("gemini-3-flash")
   })
@@ -465,5 +473,43 @@ describe("motionGraphicsFeature", () => {
     ["junk", "motion-graphics"],
   ] as const)("%s -> %s", (engine, expected) => {
     expect(motionGraphicsFeature(engine)).toBe(expected)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// STRUCTURED_VISION_MODELS — describe-to-picker's single source of truth
+// (the model picker AND the backend route gate both derive from this list)
+// ---------------------------------------------------------------------------
+describe("STRUCTURED_VISION_MODELS", () => {
+  it("is exactly the vision models with a guaranteed structured-output mode", () => {
+    const ids = STRUCTURED_VISION_MODELS.map((m) => m.id).sort()
+    expect(ids).toEqual(
+      [
+        "claude-haiku-4.5",
+        "claude-opus-4.7",
+        "claude-sonnet-4.6",
+        "gemini-3-flash",
+        "gemini-3.1-pro",
+      ].sort(),
+    )
+  })
+
+  it("includes Anthropic (forced-tool) AND Gemini (response_format) vendors", () => {
+    const vendors = new Set(STRUCTURED_VISION_MODELS.map((m) => m.vendor))
+    expect(vendors).toContain("anthropic")
+    expect(vendors).toContain("google")
+  })
+
+  it("excludes GPT models — no native structured mode (parse+retry only)", () => {
+    const ids = STRUCTURED_VISION_MODELS.map((m) => m.id)
+    expect(ids).not.toContain("gpt-5.2")
+    expect(ids).not.toContain("gpt-5.4")
+  })
+
+  it("every member is vision-capable and has a structuredOutputMode", () => {
+    for (const m of STRUCTURED_VISION_MODELS) {
+      expect(m.supportsImages).toBe(true)
+      expect(m.structuredOutputMode).toBeDefined()
+    }
   })
 })

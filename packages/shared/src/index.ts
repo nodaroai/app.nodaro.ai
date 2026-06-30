@@ -205,6 +205,7 @@ export {
   toIdentityLockMode,
   collectIdentityLockClause,
   hasUpstreamCharacter,
+  buildIdentityLockLine,
   type IdentityLockMode,
 } from "./identity-lock.js"
 
@@ -252,6 +253,12 @@ export {
 } from "./assemble-image-input.js"
 
 export {
+  assembleSunoInput,
+  type AssembleSunoInput,
+  type AssembleSunoResult,
+} from "./assemble-suno-input.js"
+
+export {
   INPUT_NODE_TYPES,
   getInputNodes,
   getOutputNodes,
@@ -293,7 +300,7 @@ export {
 export {
   LLM_MODELS,
   LLM_MODEL_IDS,
-  ANTHROPIC_VISION_MODELS,
+  STRUCTURED_VISION_MODELS,
   LLM_FEATURE_DEFAULTS,
   LLM_MODALITY_CAPS,
   getLlmModel,
@@ -1394,3 +1401,6 @@ export {
   type CharacterMeta,
   type ResolveVideoReferenceCoreArgs,
 } from "./video-reference-resolver.js"
+
+// --- Type-aware reference-role registry (presets + default + phrase renderer) ---
+export * from "./reference-roles.js"

@@ -179,6 +179,7 @@ describe("connectedReferenceSchema mirrors ConnectedReference (key-set drift gua
       loraReplicateVersion: true,
       loraTriggerWord: true,
       loraTrainingStatus: true,
+      identityLock: true,
     }
     expect(Object.keys(connectedReferenceSchema.shape).sort()).toEqual(
       Object.keys(sample).sort(),

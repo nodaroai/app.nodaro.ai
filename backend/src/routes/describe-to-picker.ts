@@ -8,6 +8,7 @@ import {
   getLlmModel,
   LLM_FEATURE_DEFAULTS,
   LLM_MODEL_IDS,
+  STRUCTURED_VISION_MODELS,
   type PickerType,
   type PickerGaps,
 } from "@nodaro/shared"
@@ -16,13 +17,18 @@ import { config } from "../lib/config.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { prefetchAsBase64 } from "../lib/anthropic-image.js"
-import { callStructuredLlm } from "../lib/structured-llm.js"
-import type { LlmContentBlock } from "../lib/llm-client.js"
+import { llmCompleteStructured, type LlmContentBlock } from "../lib/llm-client.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { markProviderCallStart } from "../lib/reconcile/persistence.js"
 import { commitReservedCreditsForJob, refundReservedCreditsForJob } from "../lib/credits-job-lifecycle.js"
+
+/** Models the analyzer accepts: vision-capable AND able to return guaranteed
+ *  structured output (Anthropic forced-tool or Gemini `response_format`). Derived
+ *  from the SAME shared list the model picker offers, so the UI options and this
+ *  route gate can't drift. */
+const STRUCTURED_VISION_MODEL_IDS = new Set(STRUCTURED_VISION_MODELS.map((m) => m.id))
 
 const describeToPickerBody = z
   .object({
@@ -132,14 +138,19 @@ export async function describeToPickerRoutes(app: FastifyInstance) {
       if (!userId) {
         return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
       }
-      if (!config.ANTHROPIC_API_KEY) {
-        return reply.status(503).send({ error: { code: "provider_unavailable", message: "Anthropic API key required for structured picker analysis" } })
+      // Structured analysis routes through the unified LLM client — KIE for any
+      // vendor (Claude messages / Gemini response_format), with direct Anthropic
+      // as the Claude fallback. So it needs EITHER key, not Anthropic specifically
+      // (mirrors prompt-helper); requiring the Anthropic key would wrongly block
+      // Gemini models on a KIE-only deploy.
+      if (!config.KIE_API_KEY && !config.ANTHROPIC_API_KEY) {
+        return reply.status(503).send({ error: { code: "provider_unavailable", message: "LLM API key not configured" } })
       }
 
       const llmModelId = parsed.data.llmModel ?? LLM_FEATURE_DEFAULTS["describe-to-picker"]
       const model = getLlmModel(llmModelId)
-      if (!model || model.vendor !== "anthropic" || !model.directFallbackModel) {
-        return reply.status(400).send({ error: { code: "validation_error", message: "describe-to-picker requires an Anthropic vision model" } })
+      if (!model || !STRUCTURED_VISION_MODEL_IDS.has(model.id)) {
+        return reply.status(400).send({ error: { code: "validation_error", message: "describe-to-picker requires a vision-capable model with structured output (Anthropic or Gemini)" } })
       }
       const modelIdentifier = buildLlmCreditIdentifier("describe-to-picker", llmModelId)
 
@@ -170,13 +181,15 @@ export async function describeToPickerRoutes(app: FastifyInstance) {
         const imageBlock = await prefetchAsBase64(imageUrl)
         const content: LlmContentBlock[] = [imageBlock, { type: "text", text: "Analyze the subject and emit the picker JSON." }]
 
-        const { output, inputTokens, outputTokens } = await callStructuredLlm({
+        const { output, inputTokens, outputTokens } = await llmCompleteStructured(
+          {
+            modelId: model.id,
+            system: buildSystemPrompt(legend, instructions),
+            messages: [{ role: "user", content }],
+          },
           schema,
-          modelId: model.directFallbackModel,
-          toolName,
-          system: buildSystemPrompt(legend, instructions),
-          content,
-        })
+          { schemaName: toolName },
+        )
 
         const { gaps, ...pickerJson } = output as Record<string, unknown> & { gaps?: PickerGaps }
 

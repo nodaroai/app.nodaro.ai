@@ -1,11 +1,10 @@
 "use client"
 
-import { useMemo, useCallback } from "react"
+import { useCallback } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { MappableField } from "@/components/editor/config-panels/mappable-field"
-import { SunoStyleAiButton } from "./suno-style-ai-button"
-import { getConnectedSources } from "@/components/editor/config-panels/helpers"
+import { SunoField, isSunoFieldWired } from "@/components/editor/config-panels/suno-field"
+import { SunoFieldAiButton, isSunoAiField } from "./suno-field-ai-button"
 import { isPromptEditorPortalInteraction } from "@/components/editor/config-panels/prompt-editor/prompt-editor-portal"
 import { usePromptEditorRefs } from "./inline-node-prompt/use-prompt-editor-refs"
 import {
@@ -13,7 +12,7 @@ import {
   SunoFieldEditor,
   type SunoEditField,
 } from "@/components/editor/config-panels/suno-field-editor"
-import type { SunoGenerateData, FieldMappings } from "@/types/nodes"
+import type { SunoGenerateData } from "@/types/nodes"
 
 /**
  * Phase C keystone: edit one Suno "secondary" text field (title / lyrics /
@@ -22,9 +21,11 @@ import type { SunoGenerateData, FieldMappings } from "@/types/nodes"
  * can never drift between the two surfaces.
  *
  * Two load-bearing reuses:
- *  1. Wrapping the editor in `MappableField` (fed the REAL connected sources +
- *     fieldMappings) means a wired field is handled for free: MappableField
- *     swaps the editor for a read-only preview and never mounts it.
+ *  1. Wrapping the editor in `SunoField` means a wired field is handled for
+ *     free: when the field's `field-<field>` canvas handle is connected,
+ *     SunoField swaps the editor for a read-only preview and never mounts it.
+ *     `wired` is read from the EDGE (the resolver's top precedence), NOT a
+ *     manual fieldMappings entry — there is no per-field source dropdown.
  *  2. `onInteractOutside` ignores clicks inside a prompt-editor body portal (the
  *     TagTextarea `@`/`[`/`/` suggestion popups, marked in Task 2) so picking a
  *     suggestion doesn't dismiss the dialog.
@@ -45,27 +46,17 @@ export function SunoFieldEditModal({
   const { nodeRefs, refMap } = usePromptEditorRefs(nodeId)
 
   const data = (nodes.find((n) => n.id === nodeId)?.data ?? {}) as SunoGenerateData
-  const sources = useMemo(() => getConnectedSources(nodeId, edges, nodes), [nodeId, edges, nodes])
-  const fieldMappings = (data.fieldMappings as FieldMappings) ?? {}
 
   const onUpdate = useCallback(
     (patch: Partial<SunoGenerateData>) => updateNodeData(nodeId, patch),
     [nodeId, updateNodeData],
   )
-  const onMapField = useCallback(
-    (f: string, sourceNodeId: string | null) => {
-      const current = { ...((data.fieldMappings as FieldMappings) ?? {}) }
-      if (sourceNodeId === null) {
-        const { [f]: _drop, ...rest } = current
-        updateNodeData(nodeId, { fieldMappings: rest })
-      } else {
-        updateNodeData(nodeId, { fieldMappings: { ...current, [f]: { sourceNodeId } } })
-      }
-    },
-    [data.fieldMappings, nodeId, updateNodeData],
-  )
 
   const meta = field ? SUNO_FIELD_EDIT_META[field] : null
+  // Wired via the SHARED predicate (edge into the field's handle OR a legacy
+  // fieldMappings entry) — the SAME derivation the config panel + AI button use,
+  // so this modal's read-only state can never drift from them.
+  const wired = !!meta && isSunoFieldWired(meta.field, data, edges, nodeId)
 
   return (
     <Dialog open={!!field} onOpenChange={(o) => { if (!o) onClose() }}>
@@ -78,13 +69,11 @@ export function SunoFieldEditModal({
             <DialogHeader>
               <DialogTitle>{meta.label.replace(" (optional)", "")}</DialogTitle>
             </DialogHeader>
-            <MappableField
+            <SunoField
               field={meta.field}
               label={meta.label}
-              sources={sources}
-              fieldMappings={fieldMappings}
-              onMapField={onMapField}
-              labelAction={meta.field === "style" ? <SunoStyleAiButton nodeId={nodeId} /> : undefined}
+              wired={wired}
+              labelAction={isSunoAiField(meta.field) ? <SunoFieldAiButton nodeId={nodeId} field={meta.field} /> : undefined}
             >
               <SunoFieldEditor
                 meta={meta}
@@ -94,7 +83,7 @@ export function SunoFieldEditModal({
                 refMap={refMap}
                 variableDisplayMode={variableDisplayMode}
               />
-            </MappableField>
+            </SunoField>
           </>
         )}
       </DialogContent>

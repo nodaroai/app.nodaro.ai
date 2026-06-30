@@ -461,10 +461,12 @@ export function useFinalPromptSegments(args: UseFinalPromptSegmentsArgs): UseFin
       })
 
       // The folded audio-style hint text (only the 5 SoundConsumerType nodes
-      // fold; pass-through audio nodes have none). For suno-generate in custom
-      // mode the hints go to the STYLE field, so they won't appear in this
-      // prompt-field `promptText` — `tagPromptProvenance` simply leaves the
-      // (absent) fragment untagged, which is exactly right.
+      // fold; pass-through audio nodes have none). For suno-generate the
+      // assembler now returns the FULL multi-field preview string (prompt +
+      // style + lyrics + title + negativeStyle), so the hint appears wherever it
+      // folded — inside the prompt body (non-custom) OR the `Style:` block
+      // (custom). `tagPromptProvenance` locates it in the final string and tints
+      // it `picker` either way (and leaves it untagged if a budget clamp dropped it).
       const audioStyleText = AUDIO_STYLE_FOLD_TYPES.has(nodeType as SoundConsumerType)
         ? collectAudioStyleHints(audioConsumerNode, nodeType as SoundConsumerType, nodes, edges).text
         : ""

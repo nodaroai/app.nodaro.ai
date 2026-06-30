@@ -12,7 +12,7 @@
  *  - frontend DAG executor (`workflow-editor/execute-node.ts`)
  *  - backend orchestrator (`services/workflow-engine/payload-builder.ts`)
  */
-import type { GenericNode, GenericEdge } from "./types.js"
+import type { GenericNode, GenericEdge, ConnectedReference, ReferenceSource } from "./types.js"
 import { PASSTHROUGH_TYPES } from "./ancestor-refs.js"
 
 export type IdentityLockMode = "off" | "soft" | "strict"
@@ -118,4 +118,38 @@ export function hasUpstreamCharacter<N extends GenericNode, E extends GenericEdg
     }
   }
   return false
+}
+
+// ---------------------------------------------------------------------------
+// Per-reference, customizable identity-lock (Unified Reference Roles, Phase A).
+//
+// Distinct from the node-data `IdentityLockMode` ("off"/"soft"/"strict") above:
+// this is an OPTIONAL, opt-in lock line attached to a single resolved
+// `ConnectedReference`. OFF by default for EVERY source — a lock line is emitted
+// only when the ref explicitly sets `identityLock.enabled === true` (the ref may
+// supply custom `.text`; otherwise the source's built-in wording is used).
+// Consumed by the prompt builder to prepend a fidelity line per reference.
+// ---------------------------------------------------------------------------
+
+/** Built-in lock wording per source. `{ref}` is replaced with the binding. */
+const DEFAULT_LOCK_TEXT: Partial<Record<ReferenceSource, string>> = {
+  "wired-character": "Lock the exact identity of the person in {ref} — face, bone structure, skin tone, and all unique features.",
+  "wired-face": "Lock the exact facial identity in {ref} — bone structure, features, and skin texture.",
+  "wired-creature": "Lock the exact identity of the creature in {ref} — anatomy, markings, and all unique features.",
+}
+
+/**
+ * The identity-lock line for a reference, or `null` when the lock is off.
+ * Opt-in only: a line is returned ONLY when `identityLock.enabled === true`
+ * (absent or `enabled === false` → `null`). Custom `text` wins (with `{ref}` →
+ * binding); otherwise the source's built-in wording is used.
+ */
+export function buildIdentityLockLine(ref: ConnectedReference, binding: string): string | null {
+  const lock = ref.identityLock
+  if (!lock?.enabled) return null                       // default OFF + explicit-false OFF
+  const interpolate = (t: string) => t.replaceAll("{ref}", binding)
+  const custom = lock.text?.trim()
+  if (custom) return interpolate(custom)
+  const text = DEFAULT_LOCK_TEXT[ref.source]
+  return text ? interpolate(text) : null
 }

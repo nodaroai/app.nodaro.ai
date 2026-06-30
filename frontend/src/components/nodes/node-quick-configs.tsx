@@ -35,7 +35,7 @@ import {
   getDurationsForVideoModel,
   VIDEO_RESOLUTION_OPTIONS,
 } from "@/components/editor/config-panels/model-options"
-import { LLM_MODELS, ANTHROPIC_VISION_MODELS, SHEET_TYPES, SHEET_SKINS } from "@nodaro/shared"
+import { LLM_MODELS, STRUCTURED_VISION_MODELS, SHEET_TYPES, SHEET_SKINS } from "@nodaro/shared"
 import { ALL_LANGUAGES } from "@/lib/audio-tags"
 
 /**
@@ -176,14 +176,16 @@ const llmModelControl: QuickConfigControl = {
   options: LLM_MODELS.map((m) => ({ value: m.id, label: m.displayName })),
 }
 
-/** Anthropic-only LLM model dropdown (writes `data.llmModel`). The
- *  describe-to-picker route uses forced tool-use, which only Anthropic-direct
- *  supports, so the quick strip must offer Anthropic vision models exclusively. */
-const anthropicModelControl: QuickConfigControl = {
+/** Vision LLM model dropdown (writes `data.llmModel`). The describe-to-picker
+ *  analyzer forces a schema over an image, so the strip offers exactly the
+ *  vision models that can return guaranteed structured output (Anthropic +
+ *  Gemini) — the shared {@link STRUCTURED_VISION_MODELS} list the route gate
+ *  also enforces, so the picker and the gate can't drift. */
+const visionModelControl: QuickConfigControl = {
   field: "llmModel",
   ariaLabel: "Model",
   icon: Sparkles,
-  options: ANTHROPIC_VISION_MODELS.map((m) => ({ value: m.id, label: m.displayName })),
+  options: STRUCTURED_VISION_MODELS.map((m) => ({ value: m.id, label: m.displayName })),
 }
 
 // NOTE: the lists below mirror INLINE `<SelectItem>`s in the referenced config
@@ -453,7 +455,7 @@ export const NODE_QUICK_CONFIGS: Readonly<Record<string, ReadonlyArray<QuickConf
   "generate-script": [llmModelControl],
   "qa-check": [llmModelControl],
   "image-to-text": [llmModelControl],
-  "describe-to-picker": [anthropicModelControl],
+  "describe-to-picker": [visionModelControl],
   "image-critic": [llmModelControl],
   "forced-alignment": [llmModelControl],
   "motion-graphics": [llmModelControl],

@@ -129,9 +129,14 @@ const NODE_TYPE_TO_CATEGORIES: Record<string, readonly WizardCategory[]> = {
   "cinematic-avatar": VIDEO_WIZARD_CATEGORIES,
   "generate-music": MUSIC_WIZARD_CATEGORIES,
   "suno-generate": MUSIC_WIZARD_CATEGORIES,
-  // Composite wizard target: same music form as suno-generate, but the backend
-  // system-prompt builder emits comma-separated Suno *style tags* (not prose).
+  // Composite wizard targets: same music form as suno-generate, but the backend
+  // system-prompt builder reshapes the OUTPUT per field (not prose):
+  //   :style         → comma-separated Suno *style tags*
+  //   :negativeStyle → comma-separated tags of styles/sounds to AVOID
+  //   :lyrics        → full sectioned song LYRICS ([Verse]/[Chorus]/…)
   "suno-generate:style": MUSIC_WIZARD_CATEGORIES,
+  "suno-generate:negativeStyle": MUSIC_WIZARD_CATEGORIES,
+  "suno-generate:lyrics": MUSIC_WIZARD_CATEGORIES,
   "text-to-audio": AUDIO_WIZARD_CATEGORIES,
   "text-prompt": TEXT_WIZARD_CATEGORIES,
 }

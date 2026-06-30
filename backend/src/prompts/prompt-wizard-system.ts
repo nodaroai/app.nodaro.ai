@@ -49,9 +49,12 @@ const NODE_CATEGORY_MAP: Record<string, string> = {
   "speech-to-video": "video",
   "generate-music": "music",
   "suno-generate": "music",
-  // Composite wizard target — reuses the music persona; only the OUTPUT rule in
-  // buildWizardGenerateSystem differs (style tags vs prose).
+  // Composite wizard targets — all reuse the music persona; only the OUTPUT
+  // framing in buildWizardGenerateSystem differs per field (style tags /
+  // avoid-tags / sectioned lyrics vs prose).
   "suno-generate:style": "music",
+  "suno-generate:negativeStyle": "music",
+  "suno-generate:lyrics": "music",
   "text-to-audio": "audio",
   "text-prompt": "text",
 }
@@ -203,23 +206,52 @@ export function buildWizardGenerateSystem(ctx: WizardGenerateContext): string {
   const providerBlock = buildProviderBlock(ctx.nodeType, ctx.provider)
   const contextBlock = buildContextBlock(ctx)
 
-  // Composite `suno-generate:style` target: emit Suno *style tags* (comma-
-  // separated genres/moods/instruments/production descriptors) instead of a
-  // natural-language prose prompt. The `:style` branch rewrites the Task line,
-  // the output rule (#1), AND the "do not keyword-stuff" rule (#3) so the WHOLE
-  // prompt agrees — a tag list would otherwise contradict the base prose Task
-  // line and violate Rule #3. Every other nodeType keeps byte-identical prose
-  // instructions (each `else` literal is the verbatim original string).
-  const isSunoStyle = ctx.nodeType.endsWith(":style")
-  const taskLine = isSunoStyle
-    ? `Generate Suno **style tags** from the user's selections — genres, moods, instruments, and production descriptors.`
-    : `Build a natural-language ${contentCategory} generation prompt from the user's selections.`
-  const outputRule = isSunoStyle
-    ? `Output ONLY a comma-separated list of concise Suno style tags (genres, moods, instruments, production descriptors) — e.g. "lo-fi hip hop, mellow, jazzy, vinyl crackle". No sentences, no preamble, no quotes.`
-    : `Weave all selections into one concise, natural-language prompt — under 500 characters.`
-  const keywordRule = isSunoStyle
-    ? `Use concise tags or short phrases — a comma-separated list IS expected here (this field is style tags, not prose).`
-    : `Weave style, mood, lighting naturally — do not keyword-stuff.`
+  // Composite `suno-generate:<field>` targets reshape the OUTPUT (the music
+  // wizard FORM is unchanged). Each of the three Suno text fields needs its own
+  // framing:
+  //   :style         → comma-separated Suno *style tags*
+  //   :negativeStyle → comma-separated tags of styles/sounds to AVOID
+  //   :lyrics        → full sectioned song LYRICS ([Verse]/[Chorus]/…) — sung
+  //                    words, NOT a tag list and NOT a generation prompt
+  // The matching branch rewrites the Task line, the output rule (#1), AND the
+  // keyword rule (#3) together so the WHOLE prompt agrees — a tag/lyric output
+  // would otherwise contradict the base prose Task line and violate Rule #3.
+  // EVERY non-matching nodeType keeps byte-identical prose instructions: the
+  // `prose` defaults below are the verbatim original literals (em-dashes
+  // included), and any nodeType outside the `suno-generate:` namespace resolves
+  // to `prose` untouched — guarded by the normal-target byte-identity test.
+  const sunoField = ctx.nodeType.startsWith("suno-generate:")
+    ? ctx.nodeType.slice("suno-generate:".length)
+    : null
+  const prose = {
+    task: `Build a natural-language ${contentCategory} generation prompt from the user's selections.`,
+    output: `Weave all selections into one concise, natural-language prompt — under 500 characters.`,
+    keyword: `Weave style, mood, lighting naturally — do not keyword-stuff.`,
+  }
+  const sunoFraming: Record<string, { task: string; output: string; keyword: string }> = {
+    style: {
+      task: `Generate Suno **style tags** from the user's selections — genres, moods, instruments, and production descriptors.`,
+      output: `Output ONLY a comma-separated list of concise Suno style tags (genres, moods, instruments, production descriptors) — e.g. "lo-fi hip hop, mellow, jazzy, vinyl crackle". No sentences, no preamble, no quotes.`,
+      keyword: `Use concise tags or short phrases — a comma-separated list IS expected here (this field is style tags, not prose).`,
+    },
+    negativeStyle: {
+      task: `Generate Suno **style tags to AVOID** from the user's selections — genres, sounds, and production traits to EXCLUDE.`,
+      output: `Output ONLY a comma-separated list of styles/genres/sounds to EXCLUDE — e.g. "heavy metal, autotune, distortion". No sentences, no preamble, no quotes.`,
+      keyword: `Use concise tags or short phrases — a comma-separated list IS expected here (this field is styles to AVOID, not prose).`,
+    },
+    lyrics: {
+      // Lyrics are the actual sung words, NOT tags and NOT a prompt — and the
+      // wording deliberately avoids the substring "comma-separated" so the
+      // whole prompt reads as "write lyrics", never "list tags".
+      task: `Write complete song lyrics from the user's selections.`,
+      output: `Write full song LYRICS with section tags ([Verse], [Chorus], [Bridge], [Outro]) — actual sung words/lines, NOT a list of style tags and NOT a generation prompt.`,
+      keyword: `Write natural, singable lyric lines grouped under their section tags — this field is the actual song lyrics, not a tag list.`,
+    },
+  }
+  const framing = (sunoField && sunoFraming[sunoField]) || prose
+  const taskLine = framing.task
+  const outputRule = framing.output
+  const keywordRule = framing.keyword
 
   return `${persona}
 

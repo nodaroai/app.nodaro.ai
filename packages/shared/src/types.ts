@@ -183,6 +183,15 @@ export interface ConnectedReference {
   readonly loraReplicateVersion?: string | null
   readonly loraTriggerWord?: string | null
   readonly loraTrainingStatus?: string | null
+  /**
+   * Optional, opt-in identity-lock for this reference. When `enabled === true`,
+   * a short fidelity line is prepended so the model preserves the subject's
+   * exact identity. `text` overrides the built-in default (use `{ref}` as the
+   * placeholder for the reference's binding, e.g. "reference image A"). Default
+   * is OFF for EVERY source: absent or `enabled === false` emits no lock line.
+   * The single new structured-shape field for external (API/MCP/SDK) parity.
+   */
+  readonly identityLock?: { enabled: boolean; text?: string }
 }
 
 /** Default label per source — used by `@` autocomplete and inventory fallback. */

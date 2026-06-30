@@ -13,6 +13,7 @@ REST-first; the included visual editor is one of many possible clients.
 - **Build a custom frontend** → [SDK Quickstart](./sdk-quickstart.md) → [SDK Reference](./sdk-reference.md)
 - **Build Nodaro's parameter pickers in your own app** (Mood, Framing, Lens, Voice…) → [Picker Catalogs](./picker-catalogs.md)
 - **Keep characters/products consistent across generations** (boards, cast grids, model choice) → [Reference Boards Guide](./reference-boards-guide.md)
+- **Control what each wired reference contributes** (identity, outfit, background, style — role labels + identity-lock) → [Reference Roles Guide](./reference-roles-guide.md)
 - **Pick the right model for a task** (everyday vs premium tiers, use-case → model table) → [Choosing Models](./choosing-models.md)
 - **Enrich prompts with reusable fragments** (Identity Lock, Golden Hour, Slow Dolly-In — `/` slash menu) → [Prompt Snippets](./prompt-snippets.md)
 - **Run Nodaro from the terminal** → [CLI](./cli.md)

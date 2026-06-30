@@ -94,6 +94,10 @@ vi.mock("@/lib/api", () => ({
   generateImage: vi.fn(),
   getJobStatusLean: vi.fn(),
   generateMusicApi: vi.fn(() => Promise.resolve({ jobId: "music-job" })),
+  // BARE vi.fn() (like generateMusicApi) so the suno parity case can
+  // `import { sunoGenerateApi }` and assert on `.mock.calls[0][0]` — the
+  // assembled AssembleSunoResult object the run sends.
+  sunoGenerateApi: vi.fn(() => Promise.resolve({ jobId: "suno-job" })),
   voiceDesignApi: (...args: unknown[]) => mockVoiceDesignApi(...args),
   voiceRemixApi: (...args: unknown[]) => mockVoiceRemixApi(...args),
   setForcePrivate: vi.fn(),
@@ -185,9 +189,9 @@ vi.mock("../types", () => ({
 // ---------------------------------------------------------------------------
 
 import { executeNode } from "../execute-node"
-import { generateMusicApi } from "@/lib/api"
+import { generateMusicApi, sunoGenerateApi } from "@/lib/api"
 import { assembleVideoPrompt } from "@/lib/video-prompt-assembly"
-import { assembleAudioPrompt } from "@/lib/audio-prompt-assembly"
+import { assembleAudioPrompt, assembleSunoPreview } from "@/lib/audio-prompt-assembly"
 import { buildNodeRefMap } from "@/lib/node-refs"
 
 // ---------------------------------------------------------------------------
@@ -665,5 +669,112 @@ describe("preview↔run parity — audio", () => {
     expect(runVoiceDescription).toContain("warm and confident")
     expect(runVoiceDescription).toContain("a gravelly noir narrator")
     expect(previewVoiceDescription).toBe(runVoiceDescription)
+  })
+})
+
+// ===========================================================================
+// SUNO parity (OBJECT — the whole assembled field set, not just a prompt string)
+// ===========================================================================
+
+describe("preview↔run parity — suno", () => {
+  it("(suno) run sunoGenerateApi arg === assembleSunoPreview result — typed style/lyrics/title + connected picker (custom mode)", () => {
+    // The suno run sends an ASSEMBLED OBJECT (not a single prompt string), so the
+    // parity is field-for-field on the AssembleSunoResult. Both the run and the
+    // preview call the SAME shared `assembleSunoInput`; this guards that they feed
+    // it the same inputs (node + graph + refMap-resolved prompt/lyrics). Typed
+    // style/title/lyrics auto-engage custom mode → the picker hint folds into STYLE.
+    const genreNode = {
+      id: "genre-1",
+      type: "music-genre",
+      position: { x: 0, y: 0 },
+      data: { label: "Music Genre", preText: "driving synthwave" },
+    }
+    const sunoNode = makeNode("suno-generate", {
+      prompt: "an epic anthem",
+      style: "lo-fi",
+      lyrics: "[verse] hello",
+      title: "My Song",
+      negativeStyle: "screaming",
+      model: "V5",
+      vocalGender: "female",
+    })
+    mockNodes = [genreNode, sunoNode]
+    mockEdges = [
+      { id: "e1", source: "genre-1", target: "n1", targetHandle: "audio-style" },
+    ]
+    mockResolveNodeInputs.mockReturnValue({}) // no wired prompt / persona
+
+    return executeNode(sunoNode as any, makeCtx()).then(() => {
+      // sunoGenerateApi({ ...assembleSunoResult, userId }) — capture arg 0.
+      expect(sunoGenerateApi).toHaveBeenCalledTimes(1)
+      const runArg = (sunoGenerateApi as any).mock.calls[0][0] as Record<string, unknown>
+      // Strip the caller-only `userId` (the preview has no user context).
+      const { userId: _userId, ...runResult } = runArg
+
+      const previewResult = assembleSunoPreview({
+        node: sunoNode,
+        nodes: mockNodes as any,
+        edges: mockEdges as any,
+        refMap: buildNodeRefMap("n1", mockNodes as any, mockEdges as any),
+      })
+
+      // Sanity: custom mode engaged, the typed prompt is preserved, and the
+      // connected picker folded into the STYLE field (alongside the typed style).
+      expect(previewResult.customMode).toBe(true)
+      expect(previewResult.prompt).toBe("an epic anthem")
+      expect(previewResult.style).toContain("lo-fi")
+      expect(previewResult.style).toContain("driving synthwave")
+      expect(previewResult.lyrics).toBe("[verse] hello")
+      expect(previewResult.title).toBe("My Song")
+
+      // Field-for-field parity: the preview's assembled object equals what the run
+      // sends (modulo the caller-only userId stripped above).
+      expect(previewResult).toEqual(runResult)
+    })
+  })
+
+  it("(suno-field) a field-style edge from a text source surfaces in the preview === the run's style (parity)", () => {
+    // HEADLINE auto-inject scenario. At RUN, resolveFieldMappings (execute-node
+    // ~892) rebinds data.style = the wired source's output BEFORE assembleSunoInput.
+    // The PREVIEW must resolve the SAME `field-style` edge so the wired value
+    // surfaces in the Final preview (preview==run). Before the fix the preview read
+    // `data.style` RAW (empty) and showed NOTHING for the handle-wired field.
+    //
+    // Source = a `text-prompt` node, the task's named example. It is a parameter
+    // node type, so BOTH the run's and the preview's resolveFieldMappings source
+    // its value via the shared `getParameterValue` (reads `data.text`) — the exact
+    // same path, which is the whole point of reusing the run's FE wrapper.
+    const txtNode = {
+      id: "txt-1",
+      type: "text-prompt",
+      position: { x: 0, y: 0 },
+      data: { label: "Style Text", text: "neon synthwave, retro bass" },
+    }
+    // NO typed style — the ONLY way `style` is populated is via the field-style edge,
+    // so the preview MUST resolve the edge or it shows nothing (the bug).
+    const sunoNode = makeNode("suno-generate", { prompt: "an epic anthem" })
+    mockNodes = [txtNode, sunoNode]
+    mockEdges = [{ id: "e1", source: "txt-1", target: "n1", targetHandle: "field-style" }]
+    mockResolveNodeInputs.mockReturnValue({}) // no wired prompt / persona
+
+    return executeNode(sunoNode as any, makeCtx()).then(() => {
+      expect(sunoGenerateApi).toHaveBeenCalledTimes(1)
+      const runArg = (sunoGenerateApi as any).mock.calls[0][0] as Record<string, unknown>
+      const { userId: _userId, ...runResult } = runArg
+
+      const previewResult = assembleSunoPreview({
+        node: sunoNode as any,
+        nodes: mockNodes as any,
+        edges: mockEdges as any,
+        refMap: buildNodeRefMap("n1", mockNodes as any, mockEdges as any),
+      })
+
+      // The wired style surfaces in the preview (was undefined before the fix) …
+      expect(previewResult.style).toContain("neon synthwave, retro bass")
+      // … and the wired style auto-engages custom mode, exactly as the run does.
+      expect(previewResult.customMode).toBe(true)
+      // Field-for-field parity with the run.
+      expect(previewResult).toEqual(runResult)
+    })
   })
 })

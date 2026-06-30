@@ -587,7 +587,7 @@ describe("useFinalPromptSegments — Phase 4: audio preview fidelity + colour", 
     expect(pickerSeg?.text).toBe(result.current.promptText)
   })
 
-  it("(audio) suno-generate in custom mode does NOT fold the style into the prompt field", () => {
+  it("(audio) Task 3: suno-generate in custom mode now SHOWS the folded style + the prompt body", () => {
     const nodes = [
       { id: "n1", type: "suno-generate", position: { x: 0, y: 0 }, data: { prompt: "a ballad", customMode: true } },
       { id: "genre", type: "music-genre", position: { x: 0, y: 0 }, data: { label: "Genre", genre: "electronic" } },
@@ -596,10 +596,44 @@ describe("useFinalPromptSegments — Phase 4: audio preview fidelity + colour", 
     const { result } = renderHook(() =>
       useFinalPromptSegments({ userPrompt: "a ballad", consumerNodeId: "n1", nodes, edges }),
     )
-    // Custom mode → style folds into STYLE, so the prompt field is the bare prompt.
-    expect(result.current.promptText).toBe("a ballad")
-    expect(result.current.promptText).not.toContain("electronic")
-    expect(result.current.promptSegments.find((s) => s.origin === "picker")).toBeUndefined()
+    // Custom mode → style folds into the STYLE field, which the multi-field
+    // preview now renders (previously the prompt-field view dropped it entirely).
+    expect(result.current.promptText).toContain("a ballad")
+    expect(result.current.promptText).toContain("Style:")
+    expect(result.current.promptText).toContain("electronic")
+    // The folded picker hint is coloured as a `picker` span wherever it landed.
+    const pickerSeg = result.current.promptSegments.find((s) => s.origin === "picker")
+    expect(pickerSeg?.text).toContain("electronic")
+    // Absolute join invariant holds across the multi-field string.
+    expect(result.current.promptSegments.map((s) => s.text).join("")).toBe(result.current.promptText)
+  })
+
+  it("(audio) Task 3 complaint 1: typed style + lyrics + title with an EMPTY prompt are all shown", () => {
+    const nodes = [
+      { id: "n1", type: "suno-generate", position: { x: 0, y: 0 }, data: { prompt: "", style: "lo-fi", lyrics: "[verse] hi", title: "My Song" } },
+    ] as never[]
+    const { result } = renderHook(() =>
+      useFinalPromptSegments({ userPrompt: "", consumerNodeId: "n1", nodes, edges: [] as never[] }),
+    )
+    expect(result.current.promptText).toContain("lo-fi")
+    expect(result.current.promptText).toContain("[verse] hi")
+    expect(result.current.promptText).toContain("My Song")
+  })
+
+  it("(audio) Task 3 complaint 4: custom mode + EMPTY prompt + connected picker → preview is NON-empty", () => {
+    // The exact empty-preview bug: in custom mode the prompt field is empty and
+    // the picker hint went to STYLE, so the OLD prompt-field view rendered "".
+    const nodes = [
+      { id: "n1", type: "suno-generate", position: { x: 0, y: 0 }, data: { prompt: "", title: "Untitled" } },
+      { id: "genre", type: "music-genre", position: { x: 0, y: 0 }, data: { label: "Genre", genre: "electronic" } },
+    ] as never[]
+    const edges = [{ id: "eg", source: "genre", target: "n1", targetHandle: "audio-style" }] as never[]
+    const { result } = renderHook(() =>
+      useFinalPromptSegments({ userPrompt: "", consumerNodeId: "n1", nodes, edges }),
+    )
+    expect(result.current.promptText.length).toBeGreaterThan(0)
+    expect(result.current.promptText).toContain("electronic")
+    expect(result.current.promptText).toContain("Untitled")
   })
 
   it("(audio) a pass-through audio node (suno-cover) shows the bare resolved prompt, no fold", () => {
