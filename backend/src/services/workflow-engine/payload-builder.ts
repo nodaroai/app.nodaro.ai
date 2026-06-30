@@ -28,7 +28,7 @@ import {
   composeSoundHintFromConnections,
   truncateForField,
   appendField,
-  getEffectiveSunoCustomMode,
+  assembleSunoInput,
   type SoundConsumerType,
   type SoundComposition,
 } from "@nodaro/shared"
@@ -1145,10 +1145,11 @@ function simpleResult(
 function resolvePersona(
   resolvedInputs: { personaId?: string; personaModel?: string },
   data: Record<string, unknown>,
-): { personaId?: string; personaModel?: string } {
+): { personaId?: string; personaModel?: "voice_persona" | "style_persona" } {
   const personaId = resolvedInputs.personaId ?? (data.personaId as string | undefined)
   if (!personaId) return {}
-  const personaModel = resolvedInputs.personaModel ?? (data.personaModel as string | undefined)
+  const personaModel = (resolvedInputs.personaModel ?? (data.personaModel as string | undefined)) as
+    | "voice_persona" | "style_persona" | undefined
   return { personaId, personaModel: personaModel ?? "voice_persona" }
 }
 
@@ -3746,40 +3747,24 @@ export function buildPayload(
     // --- Suno ---
     case "suno-generate": {
       const sunoGenCreditId = (data.model as string) === "V5" ? "suno-v5" : "suno-generate"
-      const audioStyle = collectAudioStyleHints(node, "suno-generate", buildCtx)
-      const effectiveCustomMode = getEffectiveSunoCustomMode(data)
-      const userStyle = (data.style as string | undefined) ?? ""
-      const userPromptForSuno = resolvedInputs.prompt
-        || resolveRefs(data.prompt as string | undefined, refMap)
-        || ""
-      let finalStyle = userStyle
-      let finalSunoPrompt = userPromptForSuno
-      if (effectiveCustomMode) {
-        const composed = truncateForField(audioStyle.text, userStyle, 500)
-        finalStyle = appendField(userStyle, composed)
-      } else {
-        const composed = truncateForField(audioStyle.text, userPromptForSuno, 3000)
-        finalSunoPrompt = appendField(userPromptForSuno, composed)
-      }
-      return simpleResult("suno-generate", sunoGenCreditId, {
-        jobId,
-        prompt: finalSunoPrompt,
-        model: data.model,
+      // Delegate the custom-mode / connected-picker fold to the shared
+      // assembler — the single source of truth shared with the FE run +
+      // editor preview. `throwOnEmpty: false`: the orchestrator never rejects
+      // an empty prompt here (an empty payload surfaces as a provider error
+      // downstream, as before). This reconciles the prior BE divergences
+      // toward the FE: skip truncation when the user field is empty (B),
+      // `||`-precedence vocalGender (D), and `|| undefined` normalization of
+      // model/style/title/negativeStyle/lyrics (E).
+      const result = assembleSunoInput({
+        node,
+        graph: { nodes: buildCtx?.nodes ?? [], edges: buildCtx?.edges ?? [] },
+        userPrompt:
+          resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap) || "",
         lyrics: resolveRefs(data.lyrics as string | undefined, refMap),
-        style: finalStyle,
-        title: data.title,
-        negativeStyle: data.negativeStyle,
-        // Manual vocalGender wins; otherwise derive from a connected
-        // voice-character node (audioStyle.fields.vocalGender).
-        vocalGender: data.vocalGender ?? audioStyle.fields.vocalGender,
-        styleWeight: data.styleWeight,
-        weirdnessConstraint: data.weirdnessConstraint,
-        audioWeight: data.audioWeight,
-        customMode: effectiveCustomMode,
-        instrumental: data.instrumental ?? false,
-        ...resolvePersona(resolvedInputs, data),
-        usageLogId,
+        persona: resolvePersona(resolvedInputs, data),
+        throwOnEmpty: false,
       })
+      return simpleResult("suno-generate", sunoGenCreditId, { jobId, ...result, usageLogId })
     }
 
     case "suno-cover": {

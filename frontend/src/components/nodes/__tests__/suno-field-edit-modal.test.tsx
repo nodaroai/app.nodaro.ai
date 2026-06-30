@@ -20,8 +20,8 @@ vi.mock("@/lib/supabase", () => ({
   }),
 }))
 
-// The Style AI button (PromptHelperButton) self-gates on hasCredits(); force it
-// true so the button renders in tests (mirrors suno-style-ai-button.test.tsx).
+// The field AI button (PromptHelperButton) self-gates on hasCredits(); force it
+// true so the button renders in tests (mirrors suno-field-ai-button.test.tsx).
 vi.mock("@/lib/edition", async (orig) => ({ ...(await orig()), hasCredits: () => true }))
 
 import { SunoFieldEditModal } from "../suno-field-edit-modal"
@@ -66,23 +66,42 @@ describe("SunoFieldEditModal", () => {
     expect(await screen.findByPlaceholderText("Song title")).toBeInTheDocument()
   })
 
-  // Bonus: when the field is wired (a fieldMappings entry + a matching upstream
-  // source), MappableField renders a read-only preview of the source value and
-  // does NOT mount the editor. The modal gets this for free by feeding the REAL
-  // sources/fieldMappings into MappableField.
-  it("renders the wired source read-only (no editor) when the field is mapped", async () => {
+  // When the field's CANVAS HANDLE is wired (a `field-<field>` edge into the
+  // node — the resolver's top precedence), the value is auto-injected from the
+  // connection, so SunoField renders a read-only preview and does NOT mount the
+  // editor. Keys off the EDGE, NOT a manual fieldMappings entry (that UI is gone).
+  it("renders read-only (no editor) when the field's handle is wired by an edge", async () => {
     useWorkflowStore.setState({
       nodes: [
-        { id: "n1", type: "suno-generate", position: { x: 0, y: 0 }, data: { label: "S", model: "V5", fieldMappings: { title: { sourceNodeId: "t1" } } } },
-        { id: "t1", type: "text-prompt", position: { x: 0, y: 0 }, data: { label: "Title source", text: "Wired title" } },
+        { id: "n1", type: "suno-generate", position: { x: 0, y: 0 }, data: { label: "S", model: "V5" } },
       ] as any,
-      edges: [{ id: "e1", source: "t1", target: "n1" }] as any,
+      edges: [{ id: "e1", source: "t1", target: "n1", targetHandle: "field-title" }] as any,
     } as any)
     renderModal("title")
-    // Read-only preview shows the source's extracted value...
-    expect(await screen.findByText("Wired title")).toBeInTheDocument()
-    // ...and the editable <Input> is NOT mounted.
+    // The editable <Input> is NOT mounted...
     expect(screen.queryByPlaceholderText("Song title")).toBeNull()
+    // ...a read-only preview is shown instead.
+    expect(await screen.findByText(/connected handle/i)).toBeInTheDocument()
+  })
+
+  // No manual "Manual / source" dropdown — even when a TYPE-COMPATIBLE upstream
+  // source is connected (exactly when the OLD MappableField rendered the picker).
+  // A Suno field is bound only by its handle or a {variable}, never a per-field
+  // source select.
+  it("renders no manual source dropdown even with a compatible upstream source", async () => {
+    useWorkflowStore.setState({
+      nodes: [
+        { id: "n1", type: "suno-generate", position: { x: 0, y: 0 }, data: { label: "S", model: "V5" } },
+        { id: "sg", type: "style-guide", position: { x: 0, y: 0 }, data: { label: "Style guide", text: "noir" } },
+      ] as any,
+      // Connected, but NOT to the field-style handle → the field stays editable.
+      edges: [{ id: "e1", source: "sg", target: "n1", targetHandle: "audio-style" }] as any,
+    } as any)
+    renderModal("style")
+    // The editor is mounted (unwired)...
+    expect(await screen.findByPlaceholderText(/pop, rock, jazz/i)).toBeInTheDocument()
+    // ...and there is NO source-picker combobox.
+    expect(screen.queryByRole("combobox", { name: /source/i })).toBeNull()
   })
 
   // Phase D: the Style field's MappableField gets the ✨ Style AI button via the

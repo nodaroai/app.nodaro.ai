@@ -34,6 +34,7 @@ function SunoGenerateNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as SunoGenerateData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
+  const openPromptEditor = useWorkflowStore((s) => s.openPromptEditor)
   const edges = useWorkflowStore((s) => s.edges)
   const updateNodeInternals = useUpdateNodeInternals()
 
@@ -239,6 +240,10 @@ function SunoGenerateNodeComponent({ id, data, selected }: NodeProps) {
                 <button type="button" className="text-[11px] text-muted-foreground hover:text-foreground" onClick={(e) => e.stopPropagation()}>Edit ▾</button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="node-menu-surface" onClick={(e) => e.stopPropagation()}>
+                {/* Prompt is the primary field — it opens the node's prompt-edit
+                    surface (openPromptEditor), NOT the secondary field-edit modal.
+                    Prepended so it's the first item; the 4 secondary items stay. */}
+                <DropdownMenuItem onSelect={() => openPromptEditor(id)}>Prompt</DropdownMenuItem>
                 {(["title", "lyrics", "style", "negativeStyle"] as const).map((f) => (
                   <DropdownMenuItem key={f} onSelect={() => setEditField(f)}>{SUNO_FIELD_EDIT_META[f].label.replace(" (optional)", "")}</DropdownMenuItem>
                 ))}

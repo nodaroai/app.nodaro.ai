@@ -274,7 +274,7 @@ import {
 } from "@/lib/video-prompt-assembly";
 import { collectAudioStyleHints, truncateForField, appendField } from "@/lib/audio-style-hints";
 import { probeAudioDuration } from "@/lib/audio-duration";
-import { getEffectiveSunoCustomMode } from "@nodaro/shared";
+import { assembleSunoInput, type AssembleSunoResult } from "@nodaro/shared";
 import { computeNodePrompt, computeLlmChatFields } from "@nodaro/shared";
 import { applyMediaOrder } from "../config-panels/connected-media-list";
 import {
@@ -3015,59 +3015,32 @@ export function executeNode(
 
   if (node.type === "suno-generate") {
     const d = node.data as SunoGenerateData;
-    const typedPrompt = overridePrompt ?? inputs.prompt ?? resolveTextRefs(d.prompt?.trim(), refMap);
-    const effectiveCustomMode = getEffectiveSunoCustomMode(d);
-    // Fold connected Sound nodes (music-genre / music-mood / instrumentation
-    // / voice-character / voice-delivery) into either `style` (customMode
-    // true, 500-char budget) or `prompt` (customMode false, 3000-char
-    // budget). Collected BEFORE the prompt-required check so upstream
-    // parameter pickers can supply the prompt entirely. Suno enforces
-    // these caps server-side.
-    const audioStyle = collectAudioStyleHints(node, "suno-generate", nodes, edges);
-    if (!typedPrompt && !audioStyle.text) {
+    // Resolve the user prompt + lyrics up front (lyrics is NOW ref-resolved,
+    // matching the BE — the FE previously sent `data.lyrics` raw), then hand
+    // the custom-mode / connected-picker fold to the shared assembler so the
+    // FE run, BE run, and editor preview all emit ONE identical payload.
+    // `assembleSunoInput` throws on an empty prompt+hint (throwOnEmpty) —
+    // caught below to preserve the existing toast + rejection.
+    const userPrompt = overridePrompt ?? inputs.prompt ?? resolveTextRefs(d.prompt?.trim(), refMap);
+    const lyrics = resolveTextRefs(d.lyrics, refMap);
+    let result: AssembleSunoResult;
+    try {
+      result = assembleSunoInput({
+        node,
+        graph: { nodes, edges },
+        userPrompt: userPrompt ?? "",
+        lyrics,
+        persona: resolvePersona(inputs, d),
+        throwOnEmpty: true,
+      });
+    } catch {
       toast.error(`Node "${d.label}": no prompt found`);
       return Promise.reject(new Error("No prompt"));
-    }
-    const userStyle = d.style ?? "";
-    let finalStyle = userStyle;
-    let finalPrompt = typedPrompt ?? "";
-    if (effectiveCustomMode) {
-      const composedStyle = userStyle
-        ? truncateForField(audioStyle.text, userStyle, 500)
-        : audioStyle.text;
-      finalStyle = userStyle
-        ? appendField(userStyle, composedStyle)
-        : composedStyle;
-    } else {
-      const composedPrompt = typedPrompt
-        ? truncateForField(audioStyle.text, typedPrompt, 3000)
-        : audioStyle.text;
-      finalPrompt = typedPrompt
-        ? appendField(typedPrompt, composedPrompt)
-        : composedPrompt;
     }
     setUserPromptTemplate(d.prompt?.trim() || undefined);
     return runProcessingNode(
       node.id,
-      () =>
-        sunoGenerateApi({
-          prompt: finalPrompt,
-          model: d.model || undefined,
-          lyrics: d.lyrics || undefined,
-          style: finalStyle || undefined,
-          title: d.title || undefined,
-          negativeStyle: d.negativeStyle || undefined,
-          // Manual vocalGender wins; otherwise extract from a connected
-          // voice-character node ("male"/"female" only).
-          vocalGender: d.vocalGender || audioStyle.fields.vocalGender || undefined,
-          styleWeight: d.styleWeight,
-          weirdnessConstraint: d.weirdnessConstraint,
-          audioWeight: d.audioWeight,
-          customMode: effectiveCustomMode,
-          instrumental: d.instrumental ?? false,
-          ...resolvePersona(inputs, d),
-          userId: ctx.userId,
-        }),
+      () => sunoGenerateApi({ ...result, userId: ctx.userId }),
       "generatedAudioUrl",
       "Suno Generate",
       ctx,

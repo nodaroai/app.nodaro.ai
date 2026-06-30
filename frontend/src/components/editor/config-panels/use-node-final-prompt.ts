@@ -78,8 +78,13 @@ export function useNodeFinalPrompt(nodeId: string): UseFinalPromptSegmentsResult
 
   return useFinalPromptSegments({
     userPrompt: data[promptField] as string | undefined,
-    // `style` + `identityMeta` are image-only levers; audio's style field is
-    // handled inside the audio assembler, not passed here.
+    // `style` + `identityMeta` are image-only levers. For audio (suno-generate)
+    // the assembler reads EVERY field — style, lyrics, title, negativeStyle, and
+    // the folded pickers — straight from `node.data` (the shared
+    // `assembleSunoInput`, single source), so the Final view now shows them ALL.
+    // They are deliberately NOT re-passed as args here (the assembler is the one
+    // source of truth — re-passing would risk drift), hence `style` stays
+    // image-only / withheld for audio.
     style: isImage ? (data.style as string | undefined) : undefined,
     negativePrompt: data.negativePrompt as string | undefined,
     consumerNodeId: nodeId,

@@ -58,6 +58,7 @@ import { VOICE_CHANGER_MODELS } from "@nodaro/shared"
 import { AUDIO_FX_PRESETS, AUDIO_FX_PRESET_LABELS, AUDIO_FX_REVERB_PRESETS } from "@nodaro/shared"
 import type { AudioFxPreset } from "@nodaro/shared"
 import { MappableField } from "./mappable-field"
+import { SunoField, isSunoFieldWired } from "./suno-field"
 import { PromptHelperButton } from "./prompt-helper-button"
 import { SnippetMenuButton } from "./snippet-menu-button"
 import { useSnippetPool } from "@/hooks/queries/use-prompt-snippets-queries"
@@ -73,7 +74,7 @@ import { LIP_SYNC_MODELS, TTS_MODELS, SUNO_MODELS } from "./model-options"
 import { REPLICATE_LIP_SYNC_PROVIDERS, FAL_LIP_SYNC_PROVIDERS, VIDEO_INPUT_LIP_SYNC_PROVIDERS, isPerSecondLipSyncProvider, getEffectiveSunoCustomMode, SUNO_ADD_TRACK_MODELS, SUNO_TEXT_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars, getMaxTtsChars } from "@nodaro/shared"
 import { PromptLengthCounter } from "./prompt-length-counter"
 import { SUNO_FIELD_EDIT_META, SunoFieldEditor } from "./suno-field-editor"
-import { SunoStyleAiButton } from "@/components/nodes/suno-style-ai-button"
+import { SunoFieldAiButton, isSunoAiField } from "@/components/nodes/suno-field-ai-button"
 import { InjectedReferenceList } from "./injected-reference-list"
 import { SeedanceReferenceTip } from "./seedance-reference-tip"
 import { WaveformAudioPlayer } from "@/components/audio-player"
@@ -404,6 +405,11 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
     edges: edges ?? EMPTY_EDGES,
     snippets: promptSnippets,
   })
+  // A Suno field is "wired" (read-only) per the SINGLE shared predicate: a live
+  // edge into its handle (bare `prompt` for the prompt field, `field-<key>` for
+  // the secondary fields) OR a legacy `fieldMappings[field]` entry. Using the same
+  // `isSunoFieldWired` the AI button uses keeps read-only ⇔ button-hidden in lockstep.
+  const sunoEdges = edges ?? EMPTY_EDGES
   return (
     <div className="flex flex-col gap-3">
       <ConnectedAudioSources consumerNodeId={nodeId} nodes={nodes} edges={edges ?? EMPTY_EDGES} />
@@ -416,7 +422,7 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
         nodes={nodes}
         edges={edges ?? EMPTY_EDGES}
       />
-      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
+      <SunoField field="prompt" label="Prompt" wired={isSunoFieldWired("prompt", data, sunoEdges, nodeId)} labelAction={<span className="inline-flex items-center gap-0.5">
         <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
         <PromptHelperButton nodeType="suno-generate" currentPrompt={data.prompt || ""} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />
       </span>}>
@@ -445,7 +451,7 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
             <PromptLengthCounter value={data.prompt} max={getMaxSunoPromptChars(data.model, getEffectiveSunoCustomMode(data))} modelLabel={data.model ?? "V5_5"} noun="prompt / lyrics" />
           </>
         )}
-      </MappableField>
+      </SunoField>
       <MappableField field="model" label="Model" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select value={data.model || "V5_5"} onValueChange={(v) => onUpdate({ model: v as SunoGenerateData["model"] })}>
           <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
@@ -460,9 +466,9 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
       {(["title", "lyrics", "style", "negativeStyle"] as const).map((f) => {
         const meta = SUNO_FIELD_EDIT_META[f]
         return (
-          <MappableField key={f} field={meta.field} label={meta.label} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={meta.field === "style" && nodeId ? <SunoStyleAiButton nodeId={nodeId} /> : undefined}>
+          <SunoField key={f} field={meta.field} label={meta.label} wired={isSunoFieldWired(meta.field, data, sunoEdges, nodeId)} labelAction={isSunoAiField(meta.field) && nodeId ? <SunoFieldAiButton nodeId={nodeId} field={meta.field} /> : undefined}>
             <SunoFieldEditor meta={meta} data={data} onUpdate={onUpdate} nodeRefs={nodeRefs} refMap={refMap} variableDisplayMode={variableDisplayMode} />
-          </MappableField>
+          </SunoField>
         )
       })}
       <MappableField field="vocalGender" label="Vocal Gender (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>

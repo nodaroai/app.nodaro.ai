@@ -253,6 +253,12 @@ export {
 } from "./assemble-image-input.js"
 
 export {
+  assembleSunoInput,
+  type AssembleSunoInput,
+  type AssembleSunoResult,
+} from "./assemble-suno-input.js"
+
+export {
   INPUT_NODE_TYPES,
   getInputNodes,
   getOutputNodes,

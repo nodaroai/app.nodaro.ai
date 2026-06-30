@@ -142,4 +142,30 @@ describe("suno-generate on-node Edit menu", () => {
       await screen.findByPlaceholderText(SUNO_FIELD_EDIT_META.lyrics.placeholder),
     ).toBeInTheDocument()
   })
+
+  it("lists Prompt as the FIRST Edit item and opens the prompt editor (not the field modal)", async () => {
+    // Spy the store's prompt-editor action; restore it after so the override
+    // doesn't leak to sibling tests.
+    const orig = useWorkflowStore.getState().openPromptEditor
+    const openPromptEditor = vi.fn()
+    useWorkflowStore.setState({ openPromptEditor: openPromptEditor as never })
+    try {
+      const user = userEvent.setup({ pointerEventsCheck: 0 })
+      renderNode({ advancedOpen: true })
+
+      await user.click(screen.getByRole("button", { name: /edit/i }))
+      const items = await screen.findAllByRole("menuitem")
+      // Prompt is prepended → it is the first item; the 4 secondary items stay.
+      expect(items[0]).toHaveTextContent("Prompt")
+      expect(items).toHaveLength(5)
+
+      await user.click(items[0])
+      // Selecting Prompt opens the prompt-edit surface for THIS node...
+      expect(openPromptEditor).toHaveBeenCalledWith("n1")
+      // ...and does NOT open the field-edit modal (no secondary-field editor mounts).
+      expect(screen.queryByPlaceholderText(SUNO_FIELD_EDIT_META.lyrics.placeholder)).toBeNull()
+    } finally {
+      useWorkflowStore.setState({ openPromptEditor: orig })
+    }
+  })
 })

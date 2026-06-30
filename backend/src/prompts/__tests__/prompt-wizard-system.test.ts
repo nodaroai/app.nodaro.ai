@@ -112,3 +112,43 @@ describe("buildWizardGenerateSystem — suno style target emits tags", () => {
     expect(sys).toMatch(/Build a natural-language image generation prompt/i)
   })
 })
+
+describe("buildWizardGenerateSystem — suno negativeStyle + lyrics targets (Task 5)", () => {
+  const genCtx = (nodeType: string) => ({ nodeType, selections: [] })
+
+  it("negativeStyle target asks for avoid/exclude tags (comma-separated), not 500-char prose", () => {
+    const sys = buildWizardGenerateSystem(genCtx("suno-generate:negativeStyle"))
+    // Avoid-tags framing: must instruct the model to EXCLUDE styles. Assert the
+    // uppercase "EXCLUDE" token, which appears ONLY in the negativeStyle framing —
+    // the shared template's static Rule #5 ("Avoid:") and the :style framing do
+    // not, so this genuinely discriminates negativeStyle from a :style regression.
+    expect(sys).toContain("EXCLUDE")
+    // …as a comma-separated tag list (same shape as :style)…
+    expect(sys.toLowerCase()).toContain("comma-separated")
+    // …and must NOT carry the prose 500-char rule or the keyword-stuff rule.
+    expect(sys).not.toMatch(/under 500 characters/i)
+    expect(sys).not.toMatch(/do not keyword-stuff/i)
+  })
+
+  it("lyrics target asks for sectioned LYRICS — not tags, not 500-char prose", () => {
+    const sys = buildWizardGenerateSystem(genCtx("suno-generate:lyrics"))
+    // Sectioned-lyrics framing: actual sung words with section tags.
+    expect(sys).toMatch(/verse|chorus|lyric/i)
+    // Lyrics are PROSE lines, NOT a comma-separated tag list…
+    expect(sys).not.toMatch(/comma-separated/i)
+    // …and NOT the natural-language 500-char prompt rule.
+    expect(sys).not.toMatch(/under 500 characters/i)
+  })
+
+  // BYTE-IDENTITY GUARD: the refactor only touches the Task line, output rule
+  // (#1), and keyword rule (#3). Asserting those three lines VERBATIM for a
+  // non-suno target proves the whole prompt is byte-identical to the original
+  // (every other line of the template is untouched). The em-dash chars below
+  // are copied from the source literals.
+  it("a normal target stays byte-identical (Task/output/keyword lines verbatim)", () => {
+    const sys = buildWizardGenerateSystem(genCtx("generate-image"))
+    expect(sys).toContain("Build a natural-language image generation prompt from the user's selections.")
+    expect(sys).toContain("Weave all selections into one concise, natural-language prompt — under 500 characters.")
+    expect(sys).toContain("Weave style, mood, lighting naturally — do not keyword-stuff.")
+  })
+})

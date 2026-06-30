@@ -58,9 +58,22 @@ The same sliders (with these descriptions) are in the config panel.
 
 ## Editing fields from the node
 
-Expand **Advanced ▾** and use **Edit ▾** to edit a secondary field — **Style**, **Lyrics**, **Title**, or **Negative style** — in a focused modal (the same editors as the config panel, including Suno tag suggestions). A field that's **wired** from another node shows read-only in the modal (the upstream value wins); unwire it to edit by hand. A wired field's input pip stays visible even when Advanced is collapsed, so you never lose track of a live connection.
+Each field — **Prompt**, **Style**, **Lyrics**, **Title**, **Negative style** — is filled one of three ways, with no manual source-picker:
 
-The **Style** field has a ✨ **AI** button (in the config panel and the field-edit modal): it runs the prompt wizard and writes back **comma-separated Suno style tags** (genres, moods, instruments, production descriptors) — not a prose prompt. The button is hidden when Style is wired from another node. (The **Prompt** field has its own AI button in the config panel.)
+- **Type** directly (with Suno tag suggestions), or
+- **Connect a node** to the field's input handle — its output is injected into that field automatically. A wired field shows read-only; unwire it to type by hand. (Wired input pips stay visible even when Advanced is collapsed, so you never lose track of a live connection.) Or
+- **Reference a `{variable}`** in the text — it resolves from the upstream node with that label at run time.
+
+Expand **Advanced ▾** and use **Edit ▾** to edit any field — including **Prompt** — in a focused modal (the same editors as the config panel). The node's **Final** view shows the fully-assembled result — prompt + style + lyrics + title + negative + any connected style pickers — so you always see exactly what will be sent.
+
+### Generate with AI
+
+The **Prompt**, **Style**, **Lyrics**, and **Negative style** fields each have a ✨ **AI** button (in the config panel and the field-edit modal) that runs the prompt wizard:
+
+- **Style** / **Negative style** → a comma-separated list of Suno style **tags** (genres, moods, instruments, production traits — for Negative style, traits to *exclude*).
+- **Lyrics** → complete song **lyrics** with `[Verse]`/`[Chorus]`/`[Bridge]` section tags — actual sung words, not tags or a prompt.
+
+Each button is hidden when its field is wired from another node. (Title has no AI button — it's a short label.)
 
 ## Best Practices
 

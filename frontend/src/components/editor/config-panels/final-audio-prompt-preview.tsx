@@ -7,7 +7,11 @@ import {
   TEXT_TO_AUDIO_BUDGET,
   VOICE_DESC_BUDGET,
   SUNO_PROMPT_BUDGET,
+  assembleSunoPreview,
+  sunoPreviewFields,
+  type SunoPreviewField,
 } from "@/lib/audio-prompt-assembly"
+import { buildNodeRefMap } from "@/lib/node-refs"
 import type { SoundConsumerType } from "@nodaro/shared"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { cn } from "@/lib/utils"
@@ -50,6 +54,13 @@ const FIELD_MAX = {
  * Soft warnings (Voice → Suno, Music → Voice Design, etc.) are surfaced
  * underneath in amber. Renders nothing when there's no audio-style
  * composition AND no warnings.
+ *
+ * SUNO is special: it is a pass-through of the shared `assembleSunoInput` (the
+ * SAME fn the run calls) and renders the FULL field set — prompt + style +
+ * lyrics + title + negativeStyle, each as a labeled block — so typed-field edits
+ * AND connected pickers are visible. It renders whenever the assembled result
+ * has ANY content (a typed field OR a folded picker), not only when a connected
+ * picker produced hint text — fixing the empty-preview + invisible-edit bugs.
  */
 export function FinalAudioPromptPreview({
   consumerNodeId,
@@ -62,21 +73,33 @@ export function FinalAudioPromptPreview({
   edges,
   className,
 }: Props): ReactNode {
-  const preview = useMemo(() => {
+  const preview = useMemo(():
+    | { kind: "suno"; fields: SunoPreviewField[] }
+    | { kind: "single"; label: string; final: string; warnings: ReadonlyArray<string> }
+    | null => {
     const consumer = consumerNodeId ? nodes.find((n) => n.id === consumerNodeId) : undefined
     if (!consumer) return null
+
+    // ── Suno: pass-through of the shared assembler → render EVERY field ──
+    if (consumerType === "suno-generate") {
+      const refMap = buildNodeRefMap(consumer.id, nodes, edges)
+      const result = assembleSunoPreview({ node: consumer, nodes, edges, refMap })
+      const fields = sunoPreviewFields(result)
+      // Render whenever the assembled result has ANY content — a connected picker
+      // OR any typed field. Only a truly-empty node (no typed field, no picker)
+      // shows nothing.
+      if (fields.length === 0) return null
+      return { kind: "suno", fields }
+    }
+
+    // ── Other audio types: single folded prompt/voice-description field ──
     const composition = collectAudioStyleHints(consumer, consumerType, nodes, edges)
     if (!composition.text && composition.warnings.length === 0) return null
 
     let label: string
     let userText: string
     let max: number
-    if (consumerType === "suno-generate") {
-      const isCustom = !!customMode
-      label = isCustom ? "Final style" : "Final prompt"
-      userText = isCustom ? (userStyle ?? "") : (userPrompt ?? "")
-      max = isCustom ? FIELD_MAX["suno-generate-style"] : FIELD_MAX["suno-generate-prompt"]
-    } else if (consumerType === "voice-design") {
+    if (consumerType === "voice-design") {
       label = "Final voice description"
       userText = userVoiceDescription ?? ""
       max = FIELD_MAX["voice-design"]
@@ -95,26 +118,41 @@ export function FinalAudioPromptPreview({
     }
     const composed = truncateForField(composition.text, userText, max)
     const final = appendField(userText, composed)
-    return { label, final, warnings: composition.warnings }
+    return { kind: "single", label, final, warnings: composition.warnings }
   }, [consumerNodeId, consumerType, userPrompt, userStyle, userVoiceDescription, customMode, nodes, edges])
 
   if (!preview) return null
   return (
-    <div className={cn("flex flex-col gap-1.5 p-2 border border-border rounded-md bg-muted/30", className)}>
-      <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">
-        {preview.label}
-      </div>
-      <pre className="whitespace-pre-wrap text-[11px] leading-snug font-mono text-foreground">
-        {preview.final}
-      </pre>
-      {preview.warnings.length > 0 && (
-        <div className="flex flex-col gap-0.5">
-          {preview.warnings.map((w, i) => (
-            <div key={i} className="text-[10px] text-amber-600 dark:text-amber-400">
-              ⚠ {w}
+    <div className={cn("flex flex-col gap-2 p-2 border border-border rounded-md bg-muted/30", className)}>
+      {preview.kind === "suno" ? (
+        preview.fields.map((f) => (
+          <div key={f.key} className="flex flex-col gap-1">
+            <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">
+              {f.label}
             </div>
-          ))}
-        </div>
+            <pre className="whitespace-pre-wrap text-[11px] leading-snug font-mono text-foreground">
+              {f.text}
+            </pre>
+          </div>
+        ))
+      ) : (
+        <>
+          <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">
+            {preview.label}
+          </div>
+          <pre className="whitespace-pre-wrap text-[11px] leading-snug font-mono text-foreground">
+            {preview.final}
+          </pre>
+          {preview.warnings.length > 0 && (
+            <div className="flex flex-col gap-0.5">
+              {preview.warnings.map((w, i) => (
+                <div key={i} className="text-[10px] text-amber-600 dark:text-amber-400">
+                  ⚠ {w}
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   )
