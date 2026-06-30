@@ -659,8 +659,15 @@ if ("jobId" in result) {
 > `StructuredReferenceParams`). Pass `connectedReferences: ConnectedReference[]` (the
 > editor's wired-reference shape, re-exported from the SDK) + `referenceOrder` for
 > labeled, ordered references the route assembles into `@image_N` directives —
-> instead of hand-building a prose "Image N is …" guide. Other node types keep the
-> generic `Record<string, unknown>` body.
+> instead of hand-building a prose "Image N is …" guide. Each `ConnectedReference`
+> may also carry an opt-in (default-off)
+> `identityLock?: { enabled: boolean; text?: string }`: with `enabled: true` the
+> route prepends a short identity-lock fidelity line for that reference (`text`
+> overrides the built-in per-source wording; `{ref}` is the placeholder for the
+> reference's binding — `reference image A` / `@image_N`), honored when the route
+> assembles in the hybrid reference format. See the
+> [Reference Roles guide](./reference-roles-guide.md) for the role-label + lock
+> model. Other node types keep the generic `Record<string, unknown>` body.
 
 #### `runAndWait(type, params?, opts?)`
 

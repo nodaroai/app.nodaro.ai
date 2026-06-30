@@ -1801,6 +1801,12 @@ export function buildPayload(
             characterDefs: charDefs as CharacterDef[],
             userTemplates: settings?.userPromptTemplates,
             flowTemplates: settings?.flowPromptTemplates,
+            // BE gate: workflow-run image assembly honors hybrid roles on the
+            // SAME env signal as the route (`generate-image.ts`) + video path
+            // (`backendHybridRoles()` in reference-format.ts). False under
+            // NODE_ENV=test/production → legacy block (dark in prod). Placed
+            // before any explicit `referenceFormat` so it never overrides one.
+            ...(backendHybridRoles() ? { referenceFormat: "hybrid" as const } : {}),
             connectedReferences: [
               ...buildConnectedRefsForGenerate(
                 wiredCharRefs,
@@ -1828,6 +1834,8 @@ export function buildPayload(
             characterDefs: charDefs as CharacterDef[],
             userTemplates: settings?.userPromptTemplates,
             flowTemplates: settings?.flowPromptTemplates,
+            // BE gate: same env signal as the connected-refs branch above.
+            ...(backendHybridRoles() ? { referenceFormat: "hybrid" as const } : {}),
             extraReferenceImageUrls: directRefs,
             ancestorRefs,
             referenceOrder: generateRefOrder,
