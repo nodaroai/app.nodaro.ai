@@ -34,6 +34,7 @@ import {
 import { collectCinematographyHints } from "@/lib/cinematography-hints"
 import { stampElementInjections } from "@/components/editor/workflow-editor/node-input-resolver"
 import { collectWiredPromptContribution } from "@/lib/node-refs"
+import { IMAGE_REFERENCE_FORMAT } from "@/lib/image-reference-format"
 
 /**
  * Strip the editor's reference tokens — `{image:N:label}` AND `{video:N:label}` /
@@ -331,6 +332,13 @@ export function resolveVideoPromptMentions(
     imageRefCount: opts?.imageRefCount,
     videoRefCount: opts?.videoRefCount,
     audioRefCount: opts?.audioRefCount,
+    // FE gate: same module-level `IMAGE_REFERENCE_FORMAT` constant the image side
+    // uses (test→legacy, dev→hybrid, prod→VITE_IMAGE_REFERENCE_FORMAT). This is
+    // the FE's single `resolveVideoReferenceCore` call site, so both the run
+    // (execute-node.ts → resolveVideoPromptMentions) and the preview
+    // (assembleVideoPrompt → resolveVideoPromptMentions) inherit it. Default
+    // false = legacy block (dark in prod); flips in lockstep with image.
+    hybridRoles: IMAGE_REFERENCE_FORMAT === "hybrid",
   })
 }
 

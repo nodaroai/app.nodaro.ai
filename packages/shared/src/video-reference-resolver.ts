@@ -28,8 +28,10 @@
  */
 
 import { DEFAULT_USAGE_MODE, usageModeDirective, type UsageMode } from "./character-usage-mode.js"
-import { findCharacterMentionTokens } from "./character-mention-slug.js"
+import { findCharacterMentionTokens, type CharacterMentionTokenInfo } from "./character-mention-slug.js"
 import { resolveCharacterMentions, applyReferenceOrderToVideo } from "./prompt-builder.js"
+import { roleToPhrase, defaultRoleForSource, REFERENCE_ROLE_PRESETS } from "./reference-roles.js"
+import { buildIdentityLockLine } from "./identity-lock.js"
 import type { ConnectedReference } from "./types.js"
 
 /**
@@ -131,6 +133,19 @@ export interface VideoExtraRef {
   characterSlug?: string
   variantSlug?: string
   usageMode?: UsageMode
+  /**
+   * Wired scene-composition fragment (held-prop / styling / text) for this
+   * extra — the `ConnectedReference.elementInjection` analogue. Surfaced ONLY
+   * in hybrid mode on a FIRST-SIGHT character extra, as its own trailing scene
+   * directive (mirrors the canonical/mention hybrid paths). Absent → unchanged.
+   */
+  elementInjection?: string | null
+  /**
+   * Optional, opt-in per-extra identity-lock (the `ConnectedReference.identityLock`
+   * analogue). Emitted ONLY in hybrid mode on a first-sight character extra, via
+   * `buildIdentityLockLine`. Default OFF (absent / `enabled === false`) → no lock.
+   */
+  identityLock?: { enabled: boolean; text?: string }
 }
 
 /**
@@ -185,6 +200,131 @@ export interface ResolveVideoReferenceCoreArgs {
    * Ignored when `leadingRefUrls` is set. D5 unified-asset-references.
    */
   ordinalOffset?: number
+  /**
+   * Render character / canonical-fallback / extra-ref directives in the hybrid
+   * role-phrase form (`the {role} from @image_N`) instead of the legacy
+   * `Use these characters:` block; default false = today's behavior, unchanged.
+   * Wired in Phase B Tasks 2-3.
+   */
+  hybridRoles?: boolean
+}
+
+/** Result of the HYBRID mention pass — inline role phrases + surfaced opt-in
+ *  locks + wired element injections (no "Use these characters:" block). */
+interface HybridMentionResult {
+  /** Body with each `@`-mention replaced INLINE by its role phrase
+   *  (e.g. "the face from @image_1"). */
+  prompt: string
+  /** Matched character URLs in mention order, DEDUPED. The deduped order +
+   *  `offset` define each URL's `@image_N` slot, so the per-mention binding and
+   *  the core's `position` walk agree with the final merged URL list. */
+  additionalUrls: string[]
+  /** Slugs that had at least one resolved mention. */
+  mentionedCharacterSlugs: Set<string>
+  /** Per-reference opt-in identity-lock lines (non-null, one per unique URL).
+   *  The caller prepends them as ONE block. Empty by default (opt-in). */
+  lockLines: string[]
+  /** Non-empty `elementInjection` fragments (one per unique URL). The caller
+   *  appends them as trailing scene directives. */
+  elementDirectives: string[]
+}
+
+/**
+ * HYBRID-mode character mention convergence for the VIDEO core (Unified
+ * Reference Roles, Phase B — Task 2). The video analogue of
+ * `resolveCharacterMentionsHybrid` in `prompt-builder.ts`: where the legacy
+ * `resolveCharacterMentions` prepends the `"Use these characters:"` bullet block
+ * and replaces tokens with bare display names, this renders each `@`-mention as
+ * the inline role phrase `roleToPhrase(role, REF_BINDING.ordinal(slot))`
+ * (e.g. "the face from @image_1") and surfaces the optional identity-lock + the
+ * wired `elementInjection` SEPARATELY for the caller to assemble. No block.
+ *
+ * Slot/binding: a character URL's 1-based position in the DEDUPED mention-URL
+ * list, OFFSET by `offset` (the count of leading plain image-refs that precede
+ * the assets in the unified `@image_N` numbering — D5). Deduping keeps the
+ * binding aligned with both the core's `position` walk and the final merged URL
+ * list (a character mentioned N times attaches ONE URL → ONE slot).
+ *
+ * Role: the mention's `usageMode` (3rd-segment) — or `variantSlug` when no mode
+ * parsed — is the role when it's a curated `REFERENCE_ROLE_PRESETS["wired-character"]`
+ * entry (`person`/`face`/`clothes`/`hair`/`pose`/`expression`/`style`); otherwise
+ * the source default (`"person"`). Matching is variant-first, canonical-fallback,
+ * so a role-word 3rd segment that parsed as a variant slug still attaches the
+ * canonical reference instead of being dropped.
+ */
+function resolveVideoCharacterMentionsHybrid(
+  prompt: string,
+  tokens: readonly CharacterMentionTokenInfo[],
+  refs: readonly ConnectedReference[],
+  offset: number,
+): HybridMentionResult {
+  const bySlug = new Map<string, ConnectedReference>()
+  const byVariant = new Map<string, ConnectedReference>()
+  for (const r of refs) {
+    if (!r.characterSlug) continue
+    if (!r.variantSlug) bySlug.set(r.characterSlug, r)
+    else byVariant.set(`${r.characterSlug}:${r.variantSlug}`, r)
+  }
+
+  const presets = REFERENCE_ROLE_PRESETS["wired-character"]
+  const defaultRole = defaultRoleForSource("wired-character")
+
+  const mentionedCharacterSlugs = new Set<string>()
+  const refByUrl = new Map<string, ConnectedReference>()
+  const matched: Array<{ token: string; offset: number; url: string; role: string }> = []
+  for (const t of tokens) {
+    const match =
+      (t.variantSlug ? byVariant.get(`${t.characterSlug}:${t.variantSlug}`) : undefined)
+      ?? bySlug.get(t.characterSlug)
+    if (!match || !match.url) continue
+    mentionedCharacterSlugs.add(t.characterSlug)
+    refByUrl.set(match.url, match)
+    const segment = (t.usageMode ?? t.variantSlug ?? "").trim()
+    const role = presets.includes(segment) ? segment : defaultRole
+    matched.push({ token: t.token, offset: t.offset, url: match.url, role })
+  }
+
+  // Deduped URL list + slot map together. Slot = offset + 1-based dedup index →
+  // `@image_N` (REF_BINDING.ordinal), so the binding lands AFTER the leading refs
+  // and aligns with the core's `position` walk over `additionalUrls`.
+  const additionalUrls: string[] = []
+  const slotByUrl = new Map<string, number>()
+  for (const m of matched) {
+    if (!slotByUrl.has(m.url)) {
+      slotByUrl.set(m.url, offset + slotByUrl.size + 1)
+      additionalUrls.push(m.url)
+    }
+  }
+  const bindingFor = (url: string): string => {
+    const slot = slotByUrl.get(url)
+    return slot !== undefined ? REF_BINDING.ordinal(slot) : REF_BINDING.ordinal(offset + 1)
+  }
+
+  // Replace mention tokens right-to-left so earlier offsets stay valid.
+  let resolvedPrompt = prompt
+  for (const m of [...matched].sort((a, b) => b.offset - a.offset)) {
+    const phrase = roleToPhrase(m.role, bindingFor(m.url))
+    resolvedPrompt =
+      resolvedPrompt.slice(0, m.offset) + phrase + resolvedPrompt.slice(m.offset + m.token.length)
+  }
+
+  // One opt-in lock + one element directive per UNIQUE attached URL.
+  const lockLines: string[] = []
+  const elementDirectives: string[] = []
+  const seenUrls = new Set<string>()
+  for (const m of matched) {
+    if (seenUrls.has(m.url)) continue
+    seenUrls.add(m.url)
+    const ref = refByUrl.get(m.url)
+    if (!ref) continue
+    const binding = bindingFor(m.url)
+    const lock = buildIdentityLockLine(ref, binding)
+    if (lock) lockLines.push(lock)
+    const inject = ref.elementInjection?.trim()
+    if (inject) elementDirectives.push(inject)
+  }
+
+  return { prompt: resolvedPrompt, additionalUrls, mentionedCharacterSlugs, lockLines, elementDirectives }
 }
 
 /**
@@ -283,10 +423,27 @@ export function resolveVideoReferenceCore(
   const mentionTokens = knownCharSlugs.length > 0
     ? findCharacterMentionTokens(promptForResolution, knownCharSlugs)
     : []
+  // Hybrid (Phase B) emits inline role phrases (`the {role} from @image_N`) +
+  // surfaced opt-in locks / element injections; legacy emits the shared "Use
+  // these characters:" block. Gated on `args.hybridRoles` (default false →
+  // byte-identical legacy output).
+  const hybrid = args.hybridRoles === true
   // Resolve any mentions (may be empty); always check fallback after.
-  const resolved = mentionTokens.length > 0
-    ? resolveCharacterMentions(promptForResolution, mentionTokens, wiredCharRefs)
-    : { prompt: promptForResolution, additionalUrls: [] as string[], mentionedCharacterSlugs: new Set<string>() }
+  let resolved: { prompt: string; additionalUrls: string[]; mentionedCharacterSlugs: Set<string> }
+  // Hybrid mention-pass byproducts (empty in legacy mode): the lock lines the
+  // caller prepends once + the element injections it appends as trailing lines.
+  let mentionLockLines: string[] = []
+  let mentionElementDirectives: string[] = []
+  if (hybrid) {
+    const h = resolveVideoCharacterMentionsHybrid(promptForResolution, mentionTokens, wiredCharRefs, offset)
+    resolved = { prompt: h.prompt, additionalUrls: h.additionalUrls, mentionedCharacterSlugs: h.mentionedCharacterSlugs }
+    mentionLockLines = h.lockLines
+    mentionElementDirectives = h.elementDirectives
+  } else {
+    resolved = mentionTokens.length > 0
+      ? resolveCharacterMentions(promptForResolution, mentionTokens, wiredCharRefs)
+      : { prompt: promptForResolution, additionalUrls: [] as string[], mentionedCharacterSlugs: new Set<string>() }
+  }
 
   // Canonical fallback for any wired character NOT @-mentioned. Single
   // canonical URL + strong directive per unmentioned character — mirrors
@@ -297,6 +454,12 @@ export function resolveVideoReferenceCore(
   // face-only directive instead of the identity-lock language.
   const fallbackUrls: string[] = []
   const fallbackDirectiveLines: string[] = []
+  // Hybrid canonical-fallback byproducts (empty in legacy mode): the role
+  // phrases appended to the body, the opt-in lock lines, and the wired element
+  // injections — mirrors `renderCanonicalFallbackHybrid` in prompt-builder.ts.
+  const canonicalPhrases: string[] = []
+  const canonicalLockLines: string[] = []
+  const canonicalElementDirectives: string[] = []
   const seenSlugs = new Set<string>()
   // Character-slug → first emitted position, used by extras to pair back via
   // "Image B is the same subject as Image A, …". Built from mention URLs +
@@ -325,6 +488,19 @@ export function resolveVideoReferenceCore(
     fallbackUrls.push(r.url)
     position += 1
     if (!positionsByChar.has(r.characterSlug)) positionsByChar.set(r.characterSlug, position)
+    // Hybrid: emit the inline role phrase (`the person from @image_N`) + opt-in
+    // lock + wired element injection instead of a "Use these characters:"
+    // bullet. The selection above (canonical entry only, deduped, skip mentioned)
+    // is shared with the legacy branch so both paths attach the SAME URLs.
+    if (hybrid) {
+      const binding = REF_BINDING.ordinal(position)
+      canonicalPhrases.push(roleToPhrase(defaultRoleForSource(r.source), binding))
+      const lock = buildIdentityLockLine(r, binding)
+      if (lock) canonicalLockLines.push(lock)
+      const inject = r.elementInjection?.trim()
+      if (inject) canonicalElementDirectives.push(inject)
+      continue
+    }
     const displayName = r.defaultName || r.characterSlug
     const effectiveMode = r.defaultUsageMode ?? DEFAULT_USAGE_MODE
     // Minimal-intervention modes:
@@ -354,12 +530,26 @@ export function resolveVideoReferenceCore(
   }
 
   // Extras: emit one directive per row. Numbering continues from `position`
-  // so the worker's `referenceImageUrls` order lines up with "Image N" in
-  // the assembled prompt. Pair-back ("same subject as Image M, …") fires
+  // so the worker's `referenceImageUrls` order lines up with `@image_N` in
+  // the assembled prompt. Pair-back ("same subject as @image_M, …") fires
   // when the same `characterSlug` was already attached as a mention or
   // canonical fallback.
+  //
+  // Two render shapes, gated on `hybrid`:
+  //   - legacy (`!hybrid`) → `- @image_N (reference): …` / `- @image_N is the
+  //     same subject as @image_M.` bullets in `extraDirectiveLines` (byte-
+  //     identical to today; consolidated into the "Use these characters:" block).
+  //   - hybrid → trailing role-phrase / pair-back / manual directives in
+  //     `extraHybridLines` (+ opt-in lock lines + first-sight element
+  //     injections), mirroring Task 2's canonical branch. NO block, no bullets.
   const extraUrls: string[] = []
   const extraDirectiveLines: string[] = []
+  // Hybrid extras byproducts (empty in legacy mode): trailing directives, the
+  // opt-in identity-lock lines (prepended once with the mention/canonical locks),
+  // and first-sight wired element injections (appended as trailing scene lines).
+  const extraHybridLines: string[] = []
+  const extraHybridLockLines: string[] = []
+  const extraHybridElementDirectives: string[] = []
   if (hasExtras) {
     for (const ex of args.extraRefs!) {
       if (!ex.url) continue
@@ -374,7 +564,48 @@ export function resolveVideoReferenceCore(
         const charDefaultMode = meta?.defaultUsageMode
         const effectiveMode = ex.usageMode ?? charDefaultMode ?? DEFAULT_USAGE_MODE
         const earlierPos = positionsByChar.get(ex.characterSlug)
-        if (earlierPos !== undefined) {
+        if (hybrid) {
+          // Hybrid character extra — mirrors Task 2's mention/canonical role
+          // shape. Mode-agnostic (the role comes from the usageMode/variant
+          // mapping, not from a none/name/else split): the hybrid path never
+          // emits a "Use these characters:" bullet, so the legacy minimal-
+          // intervention suppression doesn't apply.
+          const binding = REF_BINDING.ordinal(position)
+          if (earlierPos !== undefined) {
+            // Pair-back: `@image_N is the same subject as @image_M[, <desc>].`
+            const tail = desc ? `, ${desc}` : ""
+            extraHybridLines.push(
+              `${binding} is the same subject as ${REF_BINDING.ordinal(earlierPos)}${tail}.`,
+            )
+          } else {
+            // First-sight: mapped role phrase + opt-in identity-lock + wired
+            // element injection (the latter two surfaced as their own lines,
+            // mirroring `renderCanonicalFallbackHybrid` / the mention hybrid).
+            // Role = (usageMode ?? variantSlug) when a curated preset, else the
+            // wired-character default — consistent with `resolveVideoCharacterMentionsHybrid`.
+            const presets = REFERENCE_ROLE_PRESETS["wired-character"]
+            const segment = (ex.usageMode ?? ex.variantSlug ?? "").trim()
+            const role = presets.includes(segment) ? segment : defaultRoleForSource("wired-character")
+            const phrase = roleToPhrase(role, binding)
+            extraHybridLines.push(desc ? `${phrase}, ${desc}.` : `${phrase}.`)
+            const lock = buildIdentityLockLine(
+              {
+                id: ex.url,
+                defaultName: meta?.characterName || ex.characterSlug,
+                source: "wired-character",
+                url: ex.url,
+                characterSlug: ex.characterSlug,
+                variantSlug: ex.variantSlug,
+                identityLock: ex.identityLock,
+              },
+              binding,
+            )
+            if (lock) extraHybridLockLines.push(lock)
+            const inject = ex.elementInjection?.trim()
+            if (inject) extraHybridElementDirectives.push(inject)
+            positionsByChar.set(ex.characterSlug, position)
+          }
+        } else if (earlierPos !== undefined) {
           // Pair-back. Suppressed for "none" so the extras-side respects the
           // same minimal-intervention contract as primary mentions.
           if (effectiveMode !== "none") {
@@ -405,6 +636,13 @@ export function resolveVideoReferenceCore(
           extraDirectiveLines.push(`- ${descPart}.${directive ? ` ${directive}` : ""}`)
           positionsByChar.set(ex.characterSlug, position)
         }
+      } else if (hybrid) {
+        // Hybrid manual extra: surface the description tied to its `@image_N`
+        // ("<desc> (@image_N).") as a trailing directive; a description-less
+        // extra still emits a bare positional marker so the model knows what
+        // `@image_N` is. No bullet, no block.
+        const binding = REF_BINDING.ordinal(position)
+        extraHybridLines.push(desc ? `${desc} (${binding}).` : `${binding} (reference).`)
       } else {
         // Manual extra. Description goes in the bullet; absent description
         // still emits a positional marker so the model knows what Image N is.
@@ -419,23 +657,45 @@ export function resolveVideoReferenceCore(
   }
 
   let finalPrompt = resolved.prompt
-  const allFallbackLines = [...fallbackDirectiveLines, ...extraDirectiveLines]
-  if (allFallbackLines.length > 0) {
-    // Mirror shared `buildImagePrompt`'s consolidation: append fallback
-    // bullets into an existing "Use these characters:" block when present,
-    // otherwise create a new one.
-    if (finalPrompt && finalPrompt.startsWith("Use these characters:\n")) {
-      const splitIdx = finalPrompt.indexOf("\n\n")
-      if (splitIdx !== -1) {
-        const header = finalPrompt.slice(0, splitIdx)
-        const rest = finalPrompt.slice(splitIdx)
-        finalPrompt = `${header}\n${allFallbackLines.join("\n")}${rest}`
+  if (hybrid) {
+    // Hybrid assembly (mirrors `buildImagePrompt`'s hybrid branch): prepend ONE
+    // identity-lock block (mention + canonical + extra first-sight, opt-in →
+    // usually empty) and append the body's trailing scene directives (mention
+    // element injections, canonical role phrases, canonical element injections,
+    // then the extras' hybrid directives + their first-sight element
+    // injections). Every extra line carries an `@image_N` binding, so the
+    // numbering stays consistent with the core's `position` walk. The
+    // `"Use these characters:"` block is NEVER assembled here.
+    const lockLines = [...mentionLockLines, ...canonicalLockLines, ...extraHybridLockLines]
+    const trailingLines = [
+      ...mentionElementDirectives,
+      ...canonicalPhrases,
+      ...canonicalElementDirectives,
+      ...extraHybridLines,
+      ...extraHybridElementDirectives,
+    ]
+    const lockBlock = lockLines.length > 0 ? `${lockLines.join("\n")}\n\n` : ""
+    const trailingBlock = trailingLines.length > 0 ? `\n${trailingLines.join("\n")}` : ""
+    finalPrompt = `${lockBlock}${finalPrompt}${trailingBlock}`
+  } else {
+    const allFallbackLines = [...fallbackDirectiveLines, ...extraDirectiveLines]
+    if (allFallbackLines.length > 0) {
+      // Mirror shared `buildImagePrompt`'s consolidation: append fallback
+      // bullets into an existing "Use these characters:" block when present,
+      // otherwise create a new one.
+      if (finalPrompt && finalPrompt.startsWith("Use these characters:\n")) {
+        const splitIdx = finalPrompt.indexOf("\n\n")
+        if (splitIdx !== -1) {
+          const header = finalPrompt.slice(0, splitIdx)
+          const rest = finalPrompt.slice(splitIdx)
+          finalPrompt = `${header}\n${allFallbackLines.join("\n")}${rest}`
+        } else {
+          finalPrompt = `${finalPrompt}\n${allFallbackLines.join("\n")}`
+        }
       } else {
-        finalPrompt = `${finalPrompt}\n${allFallbackLines.join("\n")}`
+        const block = `Use these characters:\n${allFallbackLines.join("\n")}`
+        finalPrompt = finalPrompt ? `${block}\n\n${finalPrompt}` : block
       }
-    } else {
-      const block = `Use these characters:\n${allFallbackLines.join("\n")}`
-      finalPrompt = finalPrompt ? `${block}\n\n${finalPrompt}` : block
     }
   }
 

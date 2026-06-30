@@ -23,6 +23,7 @@ import {
 } from "@nodaro/shared"
 import { connectedReferenceSchema } from "../lib/connected-reference-schema.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { backendHybridRoles } from "../lib/reference-format.js"
 
 // Character-voice orchestration (voiced-video). All optional + additive: absent
 // => today's behaviour. A "voiced" request ALSO requires a dialogue-capable
@@ -265,6 +266,9 @@ export function assembleVideoConnectedReferences(args: {
     leadingRefUrls: cappedLeading,
     videoRefCount: referenceVideoCount,
     audioRefCount: referenceAudioCount,
+    // BE gate: same env determination as the image side (see reference-format.ts).
+    // default false = legacy block (dark in prod); flips in lockstep with image.
+    hybridRoles: backendHybridRoles(),
   })
 
   // `core.additionalUrls` is already `[leading flat refs, …asset URLs]` (D5), so

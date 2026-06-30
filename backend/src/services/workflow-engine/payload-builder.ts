@@ -38,6 +38,7 @@ import { computeNodePrompt } from "@nodaro/shared"
 import type { CharacterDef, ConnectedReference, SceneData, ExtraRefInput, ExtraRefCharacterContext, CharacterMeta } from "@nodaro/shared"
 import { characterMentionSlug } from "@nodaro/shared"
 import { resolveVideoReferenceCore } from "@nodaro/shared"
+import { backendHybridRoles } from "../../lib/reference-format.js"
 import { expandExtraRefsToConnectedReferences } from "@nodaro/shared"
 import { PLATFORM_SPECS } from "@nodaro/shared"
 import { isSeedance2Provider, MODEL_CATALOG, hasFeature } from "@nodaro/shared"
@@ -972,6 +973,9 @@ function resolveVideoPromptMentions(
     imageRefCount: opts?.imageRefCount,
     videoRefCount: opts?.videoRefCount,
     audioRefCount: opts?.audioRefCount,
+    // BE gate: same env determination as the image side (see reference-format.ts).
+    // default false = legacy block (dark in prod); flips in lockstep with image.
+    hybridRoles: backendHybridRoles(),
   })
 }
 
