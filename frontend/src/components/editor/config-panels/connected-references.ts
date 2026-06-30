@@ -360,7 +360,17 @@ export function buildImageConnectedReferences(params: {
 export function connectedReferencesToRefImages(
   refs: ReadonlyArray<ConnectedReference>,
 ): RefImageItem[] {
-  return refs.map((ref, i) => ({
+  // D5 image-refs-first (unified-asset-references): number plain image refs
+  // (manual uploads + wired-image) BEFORE entity assets (character / location /
+  // object / creature) so the `{image:N}` chip the editor inserts matches the
+  // run's unified `@image_N` numbering, which leads with the image-refs handle
+  // (ordinalOffset) and attaches assets after. Stable within each group (relative
+  // order preserved); `@mention` chips (character/location) use their own slug
+  // index, not this positional one, so moving them is display-only for them.
+  const isPlainImage = (r: ConnectedReference): boolean =>
+    r.source === "manual" || r.source === "wired-image"
+  const ordered = [...refs.filter(isPlainImage), ...refs.filter((r) => !isPlainImage(r))]
+  return ordered.map((ref, i) => ({
     url: ref.url,
     label: ref.defaultName,
     source:

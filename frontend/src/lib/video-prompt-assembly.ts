@@ -181,6 +181,48 @@ export function expandWiredCharacterRefsForVideo(
 }
 
 /**
+ * Expand wired Assets-handle ENTITIES (location/object/creature-animal) into
+ * auto-attach `{ url, description }` extras for the unified `{image:N}` numbering
+ * (D5 — unified-asset-references). FE mirror of the backend
+ * `expandWiredEntityExtraRefs` — RAW canonical image (`sourceImageUrl`), no
+ * smart-variant, so the preview ≡ the run. Characters keep their own mention path
+ * (`expandWiredCharacterRefsForVideo`). An entity wired via its plain `image`
+ * handle is `resolveEffectiveSourceType`-mapped to "upload-image" and so flows
+ * through the normal image-ref path instead (not here).
+ */
+function expandWiredEntityExtrasForVideo(
+  consumerNodeId: string,
+  nodes: readonly WorkflowNode[],
+  edges: readonly WorkflowEdge[],
+): Array<{ url: string; description: string }> {
+  const out: Array<{ url: string; description: string }> = []
+  const nodeById = new Map(nodes.map((n) => [n.id, n] as const))
+  for (const e of edges) {
+    if (e.target !== consumerNodeId) continue
+    const upstream = nodeById.get(e.source)
+    if (!upstream) continue
+    const t = resolveEffectiveSourceType(upstream.type, e.sourceHandle)
+    if (t !== "location" && t !== "object" && t !== "creature") continue
+    const d = upstream.data as Record<string, unknown>
+    const url =
+      (d.sourceImageUrl as string | undefined) ||
+      (d.generatedImageUrl as string | undefined) ||
+      (d.url as string | undefined) ||
+      (d.referenceImageUrl as string | undefined) ||
+      ""
+    if (!url) continue
+    const name =
+      (d.locationName as string | undefined) ||
+      (d.objectName as string | undefined) ||
+      (d.creatureName as string | undefined) ||
+      (d.label as string | undefined) ||
+      (t === "location" ? "Location" : t === "creature" ? "Creature" : "Object")
+    out.push({ url, description: (d.description as string | undefined)?.trim() || name })
+  }
+  return out
+}
+
+/**
  * Resolve `@kira:N` / `@kira:N:smile` mentions in a video-node prompt against
  * wired Character upstreams AND apply the per-character canonical fallback
  * for unmentioned wired characters.
@@ -225,12 +267,30 @@ export function resolveVideoPromptMentions(
     imageRefCount?: number
     videoRefCount?: number
     audioRefCount?: number
+    /**
+     * Number of leading image-refs the caller merges itself (EDGE count) — the
+     * core offsets asset ordinals + the `{image:N}` count by this much without
+     * prepending URLs (D5 image-refs-first). Mirrors the backend orchestrator.
+     */
+    ordinalOffset?: number
+    /**
+     * Attach wired Assets-handle entities (location/object/creature) as auto-attach
+     * extras in the unified numbering. Set by ref-capable video callers. Mirrors
+     * the backend `expandWiredEntityExtraRefs`.
+     */
+    includeWiredEntities?: boolean
   },
 ): { prompt: string | undefined; additionalUrls: string[] } {
   // ── FE-only expansion: wire upstream Character nodes → ConnectedReference[].
   // Canonical-suppression filtering lives in the shared core (single source of
   // truth) — pass the raw expansion + the suppressed set straight through. ──
   const wiredCharRefs = expandWiredCharacterRefsForVideo(consumerNodeId, nodes, edges)
+  // Wired Assets-handle entities (location/object/creature) → auto-attach extras
+  // (D5). FE mirror of the backend `expandWiredEntityExtraRefs` — RAW canonical
+  // image, no smart-variant, so preview ≡ run.
+  const wiredEntityExtras = opts?.includeWiredEntities
+    ? expandWiredEntityExtrasForVideo(consumerNodeId, nodes, edges)
+    : []
   // FE-only lookup for an extra-ref's character metadata: find the upstream
   // Character node whose name slugifies to `slug`, then read its usage-mode +
   // canonical description (the BE supplies the same shape from its build ctx).
@@ -253,16 +313,21 @@ export function resolveVideoPromptMentions(
   return resolveVideoReferenceCore({
     prompt,
     wiredCharRefs,
-    extraRefs: extraRefs?.map((ex) => ({
-      url: ex.url,
-      description: ex.description,
-      characterSlug: ex.characterSlug,
-      variantSlug: ex.variantSlug,
-      usageMode: ex.usageMode,
-    })),
+    extraRefs: [
+      ...(extraRefs?.map((ex) => ({
+        url: ex.url,
+        description: ex.description,
+        characterSlug: ex.characterSlug,
+        variantSlug: ex.variantSlug,
+        usageMode: ex.usageMode,
+      })) ?? []),
+      // Wired Assets-handle entities auto-attach AFTER the caller's extras.
+      ...wiredEntityExtras,
+    ],
     lookupCharacterBySlug,
     referenceOrder: opts?.referenceOrder,
     suppressedCanonicalCharacterIds: opts?.suppressedCanonicalCharacterIds,
+    ordinalOffset: opts?.ordinalOffset,
     imageRefCount: opts?.imageRefCount,
     videoRefCount: opts?.videoRefCount,
     audioRefCount: opts?.audioRefCount,
@@ -458,7 +523,13 @@ export function assembleVideoPrompt(nodeType: string, args: AssembleVideoPromptA
       {
         referenceOrder: data.referenceOrder as readonly string[] | undefined,
         suppressedCanonicalCharacterIds: data.suppressedCanonicalCharacterIds as readonly string[] | undefined,
-        imageRefCount: providerSupportsRefs ? countRefModality("image") : undefined,
+        // D5: assets number AFTER the leading image-refs (ordinalOffset = EDGE
+        // count, FE↔BE parity) + wired entities attach — mirrors the orchestrator
+        // (payload-builder.ts). Non-ref providers keep tokens stripped (handled
+        // above) and attach no entities.
+        ...(providerSupportsRefs
+          ? { ordinalOffset: countRefModality("image"), includeWiredEntities: true }
+          : {}),
         videoRefCount: providerSupportsRefs ? countRefModality("video") : undefined,
         audioRefCount: providerSupportsRefs ? countRefModality("audio") : undefined,
       },

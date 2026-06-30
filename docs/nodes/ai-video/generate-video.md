@@ -116,7 +116,8 @@ circle the person from @image_1 wearing the jacket from @image_2 for a 360 spin
 ```
 
 **Numbering rules:**
-- **Reference-only.** `{image:N}` numbers the assets on the **image-reference** handle only (`imageReferences`), in attachment order. `{video:N}` and `{audio:N}` number their own handles independently (a node can have `{image:1}`, `{video:1}`, and `{audio:1}` at once).
+- **Image-refs first, then Assets-handle entities.** `{image:N}` numbers the **image-reference** handle (`imageReferences`) first, in attachment order, then the entities wired to the **`assets`** handle — a Character / Location / Object / Animal connected there is itself an `@image_N` reference (its canonical image), numbered **after** the plain image refs. So with one image ref + a wired Object, the object is `{image:2}`. (Characters & Locations also keep their `@name` mentions; the positional `{image:N}` is an additional way to point at them.) `{video:N}` and `{audio:N}` number their own handles independently (a node can have `{image:1}`, `{video:1}`, and `{audio:1}` at once).
+- **Consistent everywhere.** The same `@image_N` numbering is produced on the canvas preview, a single-node Run, a full workflow run, and a direct API / MCP / SDK call (which pass the references as `connectedReferences`) — so a prompt behaves identically however it's executed.
 - **Start/end frames are NOT user-numbered.** They are auto-bound at the **tail** of the image set. With two reference images wired, a start frame becomes `@image_3` and the model is told `Use @image_3 as the opening (first) frame of the video.` — you never write a `{image:3}` token for a frame.
 - **Out-of-range tokens fall back to the bare label.** `{image:5:ghost}` on a node with only two references resolves to `ghost` (no dangling binding).
 - **Providers without reference support** ignore the tokens — they are stripped to their bare labels, so the prompt still reads naturally.

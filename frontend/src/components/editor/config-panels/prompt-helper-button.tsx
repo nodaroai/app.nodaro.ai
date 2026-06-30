@@ -9,6 +9,10 @@ import { buildPromptHelperNodeContext } from "@/lib/prompt-helper-context"
 import { PromptHelperDialog } from "./prompt-helper-dialog"
 
 interface PromptHelperButtonProps {
+  /** Explicit target node. Defaults to the store's active node
+   *  (`promptEditNodeId ?? selectedNodeId`). The field-edit modal passes its own
+   *  because its Edit trigger stopPropagation's, so the node may not be selected. */
+  readonly nodeId?: string
   readonly nodeType: string
   readonly currentPrompt: string
   readonly provider?: string
@@ -22,6 +26,7 @@ interface PromptHelperButtonProps {
 }
 
 export function PromptHelperButton({
+  nodeId,
   nodeType,
   currentPrompt,
   provider,
@@ -31,26 +36,30 @@ export function PromptHelperButton({
   size = "sm",
 }: PromptHelperButtonProps) {
   const [open, setOpen] = useState(false)
-  // Use whichever "active node" is set: sidebar context (selectedNodeId) or
-  // quick-edit modal context (promptEditNodeId). The modal opens openPromptEditor
-  // which only sets promptEditNodeId, so the fallback lets the AI wizard read
-  // the same connected-input context it would have if the sidebar were open.
-  const selectedNodeId = useWorkflowStore((s) => s.promptEditNodeId ?? s.selectedNodeId)
+  // Use whichever "active node" is set: an explicit `nodeId` prop wins (the
+  // field-edit modal passes its own because its Edit trigger stopPropagation's,
+  // so the target node may not be selectedNodeId); otherwise fall back to sidebar
+  // context (selectedNodeId) or quick-edit modal context (promptEditNodeId). The
+  // modal opens openPromptEditor which only sets promptEditNodeId, so the fallback
+  // lets the AI wizard read the same connected-input context it would have if the
+  // sidebar were open.
+  const activeNodeId = useWorkflowStore((s) => s.promptEditNodeId ?? s.selectedNodeId)
+  const targetNodeId = nodeId ?? activeNodeId
   const allEdges = useWorkflowStore((s) => s.edges)
   const allNodes = useWorkflowStore((s) => s.nodes)
 
   // Collect node context from connected edges + the node's own manual refs
   // (counting rules live in lib/prompt-helper-context.ts, unit-tested).
   const nodeContext = useMemo(
-    () => buildPromptHelperNodeContext(selectedNodeId, allNodes, allEdges, nodeType),
-    [selectedNodeId, allEdges, allNodes, nodeType],
+    () => buildPromptHelperNodeContext(targetNodeId, allNodes, allEdges, nodeType),
+    [targetNodeId, allEdges, allNodes, nodeType],
   )
 
   // For text-prompt nodes: detect downstream wizard-supported nodes
   const downstreamTargets = useMemo(() => {
-    if (nodeType !== "text-prompt" || !selectedNodeId) return undefined
+    if (nodeType !== "text-prompt" || !targetNodeId) return undefined
 
-    const outgoingEdges = allEdges.filter((e) => e.source === selectedNodeId)
+    const outgoingEdges = allEdges.filter((e) => e.source === targetNodeId)
     const targets: Array<{ id: string; type: string; label: string }> = []
     const seenTypes = new Set<string>()
 
@@ -69,13 +78,13 @@ export function PromptHelperButton({
     }
 
     return targets
-  }, [nodeType, selectedNodeId, allEdges, allNodes])
+  }, [nodeType, targetNodeId, allEdges, allNodes])
 
   if (!hasCredits()) return null
   if (!isWizardSupported(nodeType)) return null
 
   // Read style from current node data
-  const currentNode = allNodes.find((n) => n.id === selectedNodeId)
+  const currentNode = allNodes.find((n) => n.id === targetNodeId)
   const currentStyle = (currentNode?.data as Record<string, unknown>)?.style as string | undefined
 
   return (

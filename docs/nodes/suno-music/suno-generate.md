@@ -60,6 +60,8 @@ The same sliders (with these descriptions) are in the config panel.
 
 Expand **Advanced ▾** and use **Edit ▾** to edit a secondary field — **Style**, **Lyrics**, **Title**, or **Negative style** — in a focused modal (the same editors as the config panel, including Suno tag suggestions). A field that's **wired** from another node shows read-only in the modal (the upstream value wins); unwire it to edit by hand. A wired field's input pip stays visible even when Advanced is collapsed, so you never lose track of a live connection.
 
+The **Style** field has a ✨ **AI** button (in the config panel and the field-edit modal): it runs the prompt wizard and writes back **comma-separated Suno style tags** (genres, moods, instruments, production descriptors) — not a prose prompt. The button is hidden when Style is wired from another node. (The **Prompt** field has its own AI button in the config panel.)
+
 ## Best Practices
 
 - Use Suno metatags in lyrics (`[Verse]`, `[Chorus]`, `[Bridge]`, `[Outro]`) to structure the song.

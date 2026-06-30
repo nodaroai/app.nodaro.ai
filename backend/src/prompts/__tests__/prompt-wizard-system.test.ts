@@ -83,3 +83,32 @@ describe("buildWizardEnhanceSystem", () => {
     expect(enhance).toMatch(/MUST be entirely in English/i)
   })
 })
+
+describe("buildWizardGenerateSystem — suno style target emits tags", () => {
+  const genCtx = (nodeType: string) => ({ nodeType, selections: [] })
+
+  it("style target asks for comma-separated tags, not prose", () => {
+    const sys = buildWizardGenerateSystem(genCtx("suno-generate:style"))
+    expect(sys.toLowerCase()).toMatch(/comma-separated|style tags/)
+    expect(sys).not.toMatch(/under 500 characters/i)
+  })
+
+  it("a normal target keeps the prose rule (unchanged)", () => {
+    const sys = buildWizardGenerateSystem(genCtx("generate-image"))
+    expect(sys).toMatch(/under 500 characters/i)
+  })
+
+  it("style target drops the prose Task line + keyword-stuff rule (whole prompt agrees)", () => {
+    const sys = buildWizardGenerateSystem(genCtx("suno-generate:style"))
+    // A tag list violates the base "do not keyword-stuff" rule, and the prose
+    // Task line contradicts the tag-output rule — neither may survive for :style.
+    expect(sys).not.toMatch(/do not keyword-stuff/i)
+    expect(sys).not.toMatch(/Build a natural-language .* generation prompt/i)
+  })
+
+  it("a normal target keeps the prose Task line + keyword-stuff rule", () => {
+    const sys = buildWizardGenerateSystem(genCtx("generate-image"))
+    expect(sys).toMatch(/do not keyword-stuff/i)
+    expect(sys).toMatch(/Build a natural-language image generation prompt/i)
+  })
+})

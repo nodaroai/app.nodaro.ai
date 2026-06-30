@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { buildPayload, buildNodeRefMap, expandWiredLocationRefs } from "../payload-builder.js"
+import { buildPayload, buildNodeRefMap, expandWiredLocationRefs, expandWiredObjectCreatureRefs } from "../payload-builder.js"
 import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeExecutionState } from "../types.js"
 
 // ---------------------------------------------------------------------------
@@ -1203,6 +1203,51 @@ describe("expandWiredLocationRefs — reference photos (Phase 2 #3)", () => {
       // reference photos auto-attach — they're not gated by @-mention).
       expect(r.locationVariantBucket).toBeUndefined()
     }
+  })
+})
+
+// unified-asset-references Phase 2 — Object / Creature (animal) entities wired to
+// a generate-image / i2i / modify node become `{image:N}` references (the image
+// builder already auto-attaches wired-object/wired-creature; this expander is the
+// orchestrator side that was missing).
+describe("expandWiredObjectCreatureRefs — Assets-handle entities", () => {
+  it("expands a wired Object into a wired-object reference (canonical image)", () => {
+    const obj = node("obj-1", "object", {
+      objectName: "Gadget",
+      sourceImageUrl: "https://r2/gadget.png",
+      description: "a chrome gadget",
+    })
+    const consumer = node("gen-1", "generate-image")
+    const refs = expandWiredObjectCreatureRefs("gen-1", {
+      nodes: [obj, consumer],
+      edges: [edge("obj-1", "gen-1", "objectRef", "assets")],
+      nodeStates: {},
+    })
+    expect(refs).toHaveLength(1)
+    expect(refs[0]).toMatchObject({ source: "wired-object", url: "https://r2/gadget.png", defaultName: "Gadget" })
+  })
+
+  it("expands a wired Creature (animal) into a wired-creature reference", () => {
+    const creature = node("cr-1", "creature", { creatureName: "Rex", sourceImageUrl: "https://r2/rex.png" })
+    const consumer = node("gen-1", "generate-image")
+    const refs = expandWiredObjectCreatureRefs("gen-1", {
+      nodes: [creature, consumer],
+      edges: [edge("cr-1", "gen-1", "creatureRef", "assets")],
+      nodeStates: {},
+    })
+    expect(refs).toHaveLength(1)
+    expect(refs[0]).toMatchObject({ source: "wired-creature", url: "https://r2/rex.png", defaultName: "Rex" })
+  })
+
+  it("ignores an entity wired via its plain `image` handle (resolves to upload-image, not an entity ref)", () => {
+    const obj = node("obj-1", "object", { objectName: "Gadget", sourceImageUrl: "https://r2/gadget.png" })
+    const consumer = node("gen-1", "generate-image")
+    const refs = expandWiredObjectCreatureRefs("gen-1", {
+      nodes: [obj, consumer],
+      edges: [edge("obj-1", "gen-1", "image", "references")],
+      nodeStates: {},
+    })
+    expect(refs).toHaveLength(0)
   })
 })
 

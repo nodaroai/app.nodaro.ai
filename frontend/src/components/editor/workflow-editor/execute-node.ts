@@ -1993,7 +1993,9 @@ export function executeNode(
     const i2vMention = resolveVideoPromptMentions(prompt, node.id, nodes, edges, i2vData.extraRefs, {
       referenceOrder: i2vData.referenceOrder,
       suppressedCanonicalCharacterIds: i2vData.suppressedCanonicalCharacterIds,
-      imageRefCount: i2vProviderSupportsRefs ? countRefModality("image") : undefined,
+      // D5: assets number AFTER leading image-refs (ordinalOffset = EDGE count) +
+      // wired entities attach — mirrors the orchestrator (payload-builder.ts) + preview.
+      ...(i2vProviderSupportsRefs ? { ordinalOffset: countRefModality("image"), includeWiredEntities: true } : {}),
       videoRefCount: i2vProviderSupportsRefs ? countRefModality("video") : undefined,
       audioRefCount: i2vProviderSupportsRefs ? countRefModality("audio") : undefined,
     });
@@ -2170,7 +2172,9 @@ export function executeNode(
     const v2vMention = resolveVideoPromptMentions(prompt, node.id, nodes, edges, v2vData.extraRefs, {
       referenceOrder: v2vData.referenceOrder,
       suppressedCanonicalCharacterIds: v2vData.suppressedCanonicalCharacterIds,
-      imageRefCount: v2vProviderSupportsRefs ? countRefModality("image") : undefined,
+      // D5: assets number AFTER leading image-refs (ordinalOffset = EDGE count) +
+      // wired entities attach — mirrors the orchestrator (payload-builder.ts) + preview.
+      ...(v2vProviderSupportsRefs ? { ordinalOffset: countRefModality("image"), includeWiredEntities: true } : {}),
       videoRefCount: v2vProviderSupportsRefs ? countRefModality("video") : undefined,
       audioRefCount: v2vProviderSupportsRefs ? countRefModality("audio") : undefined,
     });
@@ -2272,7 +2276,9 @@ export function executeNode(
     const t2vMention = resolveVideoPromptMentions(prompt, node.id, nodes, edges, t2vData.extraRefs, {
       referenceOrder: t2vData.referenceOrder,
       suppressedCanonicalCharacterIds: t2vData.suppressedCanonicalCharacterIds,
-      imageRefCount: t2vProviderSupportsRefs ? countRefModality("image") : undefined,
+      // D5: assets number AFTER leading image-refs (ordinalOffset = EDGE count) +
+      // wired entities attach — mirrors the orchestrator (payload-builder.ts) + preview.
+      ...(t2vProviderSupportsRefs ? { ordinalOffset: countRefModality("image"), includeWiredEntities: true } : {}),
       videoRefCount: t2vProviderSupportsRefs ? countRefModality("video") : undefined,
       audioRefCount: t2vProviderSupportsRefs ? countRefModality("audio") : undefined,
     });

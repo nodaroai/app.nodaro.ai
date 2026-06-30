@@ -73,6 +73,7 @@ import { LIP_SYNC_MODELS, TTS_MODELS, SUNO_MODELS } from "./model-options"
 import { REPLICATE_LIP_SYNC_PROVIDERS, FAL_LIP_SYNC_PROVIDERS, VIDEO_INPUT_LIP_SYNC_PROVIDERS, isPerSecondLipSyncProvider, getEffectiveSunoCustomMode, SUNO_ADD_TRACK_MODELS, SUNO_TEXT_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars, getMaxTtsChars } from "@nodaro/shared"
 import { PromptLengthCounter } from "./prompt-length-counter"
 import { SUNO_FIELD_EDIT_META, SunoFieldEditor } from "./suno-field-editor"
+import { SunoStyleAiButton } from "@/components/nodes/suno-style-ai-button"
 import { InjectedReferenceList } from "./injected-reference-list"
 import { SeedanceReferenceTip } from "./seedance-reference-tip"
 import { WaveformAudioPlayer } from "@/components/audio-player"
@@ -459,7 +460,7 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
       {(["title", "lyrics", "style", "negativeStyle"] as const).map((f) => {
         const meta = SUNO_FIELD_EDIT_META[f]
         return (
-          <MappableField key={f} field={meta.field} label={meta.label} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <MappableField key={f} field={meta.field} label={meta.label} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={meta.field === "style" && nodeId ? <SunoStyleAiButton nodeId={nodeId} /> : undefined}>
             <SunoFieldEditor meta={meta} data={data} onUpdate={onUpdate} nodeRefs={nodeRefs} refMap={refMap} variableDisplayMode={variableDisplayMode} />
           </MappableField>
         )

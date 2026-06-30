@@ -550,6 +550,39 @@ describe("preview↔run parity — video", () => {
     expect(runPrompt).toContain("slow zoom motion")
     expect(previewPrompt).toBe(runPrompt)
   })
+
+  // ── D5 unified-asset-references: an Assets-handle ENTITY (object/animal/
+  // location) auto-attaches and is referenceable via {image:N}, identically in
+  // preview and run. ──
+  it("(j) text-to-video: an OBJECT on the Assets handle resolves to @image_1 in BOTH preview and run", async () => {
+    const objNode = {
+      id: "obj-1",
+      type: "object",
+      position: { x: 0, y: 0 },
+      data: { label: "Gadget", objectName: "Gadget", sourceImageUrl: "http://r2/gadget.png" },
+    }
+    const t2vNode = makeNode("text-to-video", {
+      prompt: "spinning {image:1:gadget}",
+      provider: "seedance-2", // ref-capable
+    })
+    mockNodes = [objNode, t2vNode]
+    // Wired via the Assets handle (NOT an image-ref handle) → not counted toward
+    // ordinalOffset, but attaches as an entity extra → @image_1.
+    mockEdges = [{ id: "e1", source: "obj-1", target: "n1", sourceHandle: "objectRef", targetHandle: "assets" }]
+    mockResolveNodeInputs.mockReturnValue({})
+    mockRunTextToVideoGeneration.mockResolvedValue(undefined)
+
+    await executeNode(t2vNode as any, makeCtx())
+
+    expect(mockRunTextToVideoGeneration).toHaveBeenCalledTimes(1)
+    const runPrompt = mockRunTextToVideoGeneration.mock.calls[0][1] as string
+    const previewPrompt = assembleVideoPrompt("text-to-video", assemblerArgs(t2vNode))
+
+    // The object asset resolved into the @image_1 binding (not stripped/raw).
+    expect(runPrompt).toContain("the gadget from @image_1")
+    expect(runPrompt).not.toMatch(/\{image:1/)
+    expect(previewPrompt).toBe(runPrompt)
+  })
 })
 
 // ===========================================================================
