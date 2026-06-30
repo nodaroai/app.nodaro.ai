@@ -13,6 +13,7 @@ import { ImageRefExtension } from "./image-ref-extension"
 import { VideoRefExtension, AudioRefExtension } from "./video-audio-ref-extension"
 import { CharacterRefExtension, parseCharacterRefMatch } from "./character-ref-extension"
 import { LocationRefExtension, parseLocationRefMatch } from "./location-ref-extension"
+import { IMAGE_REFERENCE_FORMAT } from "@/lib/image-reference-format"
 import { SuggestionList, type SuggestionCommandPayload } from "./suggestion-list"
 import { VariableSuggestionExtension } from "./variable-suggestion-extension"
 import { VariableSuggestionList } from "./variable-suggestion-list"
@@ -210,6 +211,15 @@ export function collectTokens(line: string, known: KnownSlugSets): TokenMatch[] 
     const attrs = parseLocationRefMatch(token)
     if (!attrs) continue
     if (!known.locations.has(attrs.locationSlug)) continue
+    // Phase D legacy gate (mirrors the extension's input/paste rule): a
+    // bare-slug ROLE token (`@old-library:1:background`, role set) is a
+    // HYBRID-only construct. In LEGACY it stayed literal text pre-Phase-D, so
+    // the valueToDoc scanner must NOT auto-promote it to a pill either —
+    // otherwise a saved legacy prompt would flip text→pill on reload (and, since
+    // the node below drops the role slug, silently rewrite the token on the next
+    // edit). HYBRID keeps promotion. NOT gated: `parseLocationRefMatch` itself
+    // (existing pills still parse) — only this promotion decision.
+    if (attrs.role && IMAGE_REFERENCE_FORMAT !== "hybrid") continue
     tokens.push({
       start: slugStart,
       end: slugEnd,

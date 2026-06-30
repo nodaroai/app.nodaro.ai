@@ -9,7 +9,7 @@ import { NATIVE_NEGATIVE_PROMPT_MODELS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, ima
 import { getStylePromptHint } from "./style.js"
 import { findCharacterMentionTokens, type CharacterMentionTokenInfo } from "./character-mention-slug.js"
 import { usageModeDirective, DEFAULT_USAGE_MODE, type UsageMode } from "./character-usage-mode.js"
-import { roleToPhrase, defaultRoleForSource, REFERENCE_ROLE_PRESETS } from "./reference-roles.js"
+import { roleToPhrase, defaultRoleForSource, REFERENCE_ROLE_PRESETS, normalizeRoleSlug } from "./reference-roles.js"
 import { buildIdentityLockLine } from "./identity-lock.js"
 import {
   findLocationMentionTokens,
@@ -286,15 +286,31 @@ function resolveCharacterMentionsHybrid(
   const matched: Array<{ token: string; offset: number; url: string; role: string }> = []
 
   for (const t of tokens) {
-    const match =
-      (t.variantSlug ? byVariant.get(`${t.characterSlug}:${t.variantSlug}`) : undefined)
-      ?? bySlug.get(t.characterSlug)
+    // Variant-first, canonical-fallback. `variantMatch` (a REAL matched variant
+    // URL) doubles as the signal that the 3rd segment SELECTED a variant rather
+    // than acting as a role — see the role derivation below.
+    const variantMatch = t.variantSlug
+      ? byVariant.get(`${t.characterSlug}:${t.variantSlug}`)
+      : undefined
+    const match = variantMatch ?? bySlug.get(t.characterSlug)
     if (!match || !match.url) continue
     additionalUrls.push(match.url)
     mentionedCharacterSlugs.add(t.characterSlug)
     refByUrl.set(match.url, match)
     const segment = (t.usageMode ?? t.variantSlug ?? "").trim()
-    const role = presets.includes(segment) ? segment : defaultRole
+    // Custom roles survive VERBATIM (Unified Reference Roles, Phase D). A
+    // non-empty segment is the role when it is a curated preset (face/pose/style
+    // modes, person/clothes/… role-slugs) OR a free-form value typed in the
+    // variant/role slot that did NOT resolve to a real matched variant URL (e.g.
+    // `earrings`) — i.e. it's acting as a role, not selecting a variant. A real
+    // variant slug (`smile`) and the directive-only usage modes (identical/
+    // face-pose/emotion/name/none) fall back to the source default. This is a
+    // strict superset of the old `presets.includes(segment)` gate: byte-identical
+    // for every case EXCEPT the new custom-role survival.
+    const role =
+      segment && (presets.includes(segment) || (t.usageMode == null && !variantMatch))
+        ? segment
+        : defaultRole
     matched.push({ token: t.token, offset: t.offset, url: match.url, role })
   }
 
@@ -454,6 +470,21 @@ export function resolveLocationMentions(
   const replacements: Array<{ token: string; offset: number; replacement: string }> = []
 
   for (const t of tokens) {
+    // Bare-slug ROLE tokens (Unified Reference Roles, Phase D — e.g.
+    // `@old-library:1:background` / `:atmosphere` / `:as-is` /
+    // `:empty-background` / `:lighting`) are a HYBRID-only construct. The
+    // additive parser now PARSES them (with `t.role` set, no bucket/variant),
+    // but in the LEGACY path they must stay literal text exactly as they did
+    // pre-Phase-D, when the parser returned null and the token fell through
+    // untouched. Skipping here guarantees byte-identical legacy output: NO
+    // inline replacement, NO bullet, NO attached URL, and crucially the slug is
+    // NOT added to `mentionedLocationSlugs` — so a wired location still
+    // auto-attaches via the unchanged non-character canonical path, just as
+    // before. Role resolution lives in `resolveLocationMentionsHybrid`, which is
+    // untouched. (`layout`/`style` set `usageMode`, not `role`, so they were
+    // always modes and are unaffected.)
+    if (t.role) continue
+
     const match = t.bucket && t.variant
       ? byVariant.get(`${t.locationSlug}:${t.bucket}/${t.variant}`)
       : bySlug.get(t.locationSlug)
@@ -596,8 +627,8 @@ function resolveLocationMentionsHybrid(
   const matched: Array<{ token: string; offset: number; url: string; role: string }> = []
 
   for (const t of tokens) {
-    // Variant-first, canonical-fallback-FREE — identical to the legacy resolver
-    // so the matched URL set never diverges between formats.
+    // Variant-first, canonical-fallback-FREE (ternary, NOT `??`) — identical to
+    // the legacy resolver so the matched URL set never diverges between formats.
     const match = t.bucket && t.variant
       ? byVariant.get(`${t.locationSlug}:${t.bucket}/${t.variant}`)
       : bySlug.get(t.locationSlug)
@@ -606,7 +637,15 @@ function resolveLocationMentionsHybrid(
     mentionedLocationSlugs.add(t.locationSlug)
     refByUrl.set(match.url, match)
     const mode = t.usageMode ?? match.defaultUsageMode ?? DEFAULT_LOCATION_USAGE_MODE
-    matched.push({ token: t.token, offset: t.offset, url: match.url, role: locationModeToRole(mode) })
+    // A bare-slug ROLE (Unified Reference Roles, Phase D — e.g. `background`,
+    // `empty-background`, `as-is`, or a curated custom role) is used VERBATIM:
+    // it's acting as a role, not selecting a bucket/variant. `t.role` is the
+    // token slug; map it back to the phrase key so `roleToPhrase` hits the
+    // non-noun specials (`empty-background` → `empty background`). With no role
+    // segment, derive the role from the usage mode (mode-aware default) —
+    // byte-identical to the prior behavior for every non-role mention.
+    const role = t.role ? normalizeRoleSlug(t.role) : locationModeToRole(mode)
+    matched.push({ token: t.token, offset: t.offset, url: match.url, role })
   }
 
   // Slot letters from the deduped [existing, mention] URL list — the prefix of

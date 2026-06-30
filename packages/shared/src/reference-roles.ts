@@ -43,3 +43,30 @@ export function roleToPhrase(role: string, binding: string): string {
       return `the ${r} from ${binding}`
   }
 }
+
+/**
+ * Map a location role SLUG — as it appears in a `@location:N:<slug>` mention
+ * token (lowercase, dash-joined, no spaces) — back to its canonical phrase key
+ * so `roleToPhrase` matches the non-noun specials. Only the multi-word
+ * `wired-location` presets need remapping (`empty-background` → `empty
+ * background`); single-token roles and `as-is` (whose phrase key keeps the
+ * hyphen) and free-form custom slugs pass through unchanged.
+ *
+ * Data-driven from `REFERENCE_ROLE_PRESETS["wired-location"]` (the single source
+ * of truth for the location vocabulary): a preset whose space→dash slug equals
+ * `slug` maps back to the preset's phrase form, so a future multi-word preset is
+ * handled with no extra wiring. Mention tokens are slug-form (the grammar
+ * segment is `[a-z][a-z0-9-]*`), so the role is stored verbatim on the token and
+ * normalized HERE at the consumption points — the location mention resolver
+ * (before `roleToPhrase`) and the location role pill (display label). The
+ * character side never needs this: character role slugs are single tokens that
+ * already equal their phrase key.
+ */
+export function normalizeRoleSlug(slug: string): string {
+  const s = slug.trim()
+  if (!s) return s
+  for (const preset of REFERENCE_ROLE_PRESETS["wired-location"]) {
+    if (preset.toLowerCase().replace(/\s+/g, "-") === s) return preset
+  }
+  return s
+}
