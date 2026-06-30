@@ -1,11 +1,11 @@
 # Describe to Picker
-> Analyze an image with an Anthropic vision model and emit catalog-valid picker JSON that auto-fills the picker nodes you wire to it.
+> Analyze an image with a vision model and emit catalog-valid picker JSON that auto-fills the picker nodes you wire to it.
 
 ## Overview
 
 Describe to Picker (`describe-to-picker`) looks at the primary subject and scene of an input image and produces a structured **picker JSON** object whose keys and values are guaranteed to be valid options from each parameter picker's catalog. It fills **every analyzable picker you connect to its output** in a single vision-LLM call — currently [**Person**](../parameters/person.md), **Styling**, **Framing**, **Lens**, and **Camera / Film Stock**. For each connected picker it detects the relevant traits (e.g. Person: type, age, ethnicity, build, hair, eyes, skin; Framing: shot size, angle, composition; Lens; Camera/film stock) and emits them as ids those nodes understand.
 
-Unlike [Describe Image](./image-to-text.md), which returns free-form prose, this node returns machine-structured data: each dimension is mapped to the closest allowed catalog id (or omitted when the trait is not visible/determinable). It is a sync HTTP node — it calls the Anthropic API directly via forced tool-use rather than queuing a BullMQ job — and its output is `data` (multi-section picker JSON), not text or an image.
+Unlike [Describe Image](./image-to-text.md), which returns free-form prose, this node returns machine-structured data: each dimension is mapped to the closest allowed catalog id (or omitted when the trait is not visible/determinable). It is a sync HTTP node — it calls the vision LLM synchronously with forced structured output rather than queuing a BullMQ job — and its output is `data` (multi-section picker JSON), not text or an image.
 
 The result is a multi-section object like `{ "person": {…}, "styling": {…} }` that **fans out**: each connected picker node reads its own section and applies it. See [Consumer flow](#consumer-flow).
 
@@ -18,7 +18,7 @@ There is **no "target picker" setting**. The node analyzes exactly the analyzabl
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | Analyzing (read-only) | derived | — | The picker nodes currently wired to this node's output — the set that will be analyzed. Not editable; change it by wiring/unwiring pickers. |
-| Model (Anthropic vision) | select | `claude-sonnet-4.6` | The vision model used for analysis. **Anthropic models only** (Claude Haiku 4.5 / Claude Sonnet 4.6 / Claude Opus 4.7). See [Why Anthropic-only](#why-anthropic-only). |
+| Model | select | `claude-opus-4.7` | The vision model used for analysis. **Vision models with guaranteed structured output**: Claude Haiku 4.5 / Claude Sonnet 4.6 / Claude Opus 4.7 and Gemini 3 Flash / Gemini 3.1 Pro. See [Why these models](#why-these-models). |
 | Extra guidance | text | `""` | Optional instructions appended to the analyzer's system prompt (e.g. "focus on the foreground subject"). Max 2000 characters. |
 
 ## Inputs & Outputs
@@ -29,15 +29,15 @@ There is **no "target picker" setting**. The node analyzes exactly the analyzabl
 **Outputs:**
 - `picker-json` — a multi-section, catalog-valid JSON object keyed by picker type. Wire it to one or more picker nodes' `picker-json` input handles; each consumes its own section. The same output can fan out to several pickers at once.
 
-## Why Anthropic-only
+## Why these models
 
-The node uses **forced tool-use** to guarantee a valid, parseable result: the model is required to call a single emit tool whose schema is composed from the connected pickers' catalogs (built from the same `PickerAnalyzerSpec` the pickers themselves use), so every emitted dimension is constrained to allowed ids and choice limits. This structured-output path runs through the direct Anthropic SDK (a model's `directFallbackModel`), which is why only Anthropic-vendor models are offered and why the route rejects any non-Anthropic model with a `validation_error`. The default is **Claude Sonnet 4.6** — a strong balance of vision quality and cost for trait extraction.
+The node guarantees a valid, parseable result via **forced structured output**: the emit schema is composed from the connected pickers' catalogs (the same `PickerAnalyzerSpec` the pickers themselves use), so every emitted dimension is constrained to allowed ids and choice limits. It routes through the unified LLM client, which enforces that schema natively per vendor — **Anthropic** via forced tool-use, **Gemini** via KIE `response_format` — so only **vision-capable models with a native structured-output mode** are offered. GPT models are excluded (no native structured mode via KIE → unreliable for a forced schema), and the route rejects any other model with a `validation_error`. The default is **Claude Opus 4.7** — the highest-quality vision model, chosen for accurate trait extraction (e.g. skin tone).
 
-If the Anthropic API key is not configured, the node returns `503 provider_unavailable`.
+If no LLM API key (KIE or Anthropic) is configured, the node returns `503 provider_unavailable`.
 
 ## Credit Cost
 
-**Flat 1 credit per run**, regardless of how many pickers you wire or which Anthropic model you pick — it is always one vision call. The tiered identifiers `describe-to-picker`, `describe-to-picker:economy`, and `describe-to-picker:premium` all resolve to 1 credit. Credits are reserved when the job starts, committed on success, and fully refunded if the analysis fails.
+**Flat 1 credit per run**, regardless of how many pickers you wire or which vision model you pick — it is always one vision call. The tiered identifiers `describe-to-picker`, `describe-to-picker:economy`, and `describe-to-picker:premium` all resolve to 1 credit. Credits are reserved when the job starts, committed on success, and fully refunded if the analysis fails.
 
 ## Consumer flow
 

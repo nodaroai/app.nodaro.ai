@@ -143,11 +143,15 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
 
 export const LLM_MODEL_IDS = LLM_MODELS.map((m) => m.id)
 
-/** Anthropic-vendor LLM models. The describe-to-picker analyzer uses forced
- *  tool-use, which only Anthropic-direct supports, so its model pickers must
- *  offer Anthropic vision models exclusively. Single-sourced here so the quick
- *  strip and the config panel can't drift. */
-export const ANTHROPIC_VISION_MODELS = LLM_MODELS.filter((m) => m.vendor === "anthropic")
+/** Vision models that can return GUARANTEED structured output — the
+ *  describe-to-picker analyzer forces a schema over an image, so its model
+ *  pickers AND the backend route gate offer exactly these: Anthropic (forced
+ *  tool) + Gemini (KIE `response_format`). GPT-via-KIE has no native structured
+ *  mode (parse+retry only), so it's excluded. Single source of truth so the
+ *  picker, the config panel, and the route gate can't drift. */
+export const STRUCTURED_VISION_MODELS = LLM_MODELS.filter(
+  (m) => m.supportsImages && m.structuredOutputMode != null,
+)
 
 /** Calculate provider cost in USD from token usage and model pricing. */
 export function calculateLlmCost(
@@ -193,7 +197,7 @@ export const LLM_FEATURE_DEFAULTS: Record<LlmFeature, string> = {
   "lottie-overlay": "claude-sonnet-4.6",
   "3d-title": "claude-sonnet-4.6",
   "image-to-text": "claude-sonnet-4.6",
-  "describe-to-picker": "claude-sonnet-4.6",
+  "describe-to-picker": "claude-opus-4.7",
   "qa-check": "claude-sonnet-4.6",
   "generate-script": "gemini-3-flash",
   "translate": "gemini-3-flash",

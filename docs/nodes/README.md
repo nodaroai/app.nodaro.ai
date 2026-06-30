@@ -181,7 +181,7 @@ Generate, edit, and transform images using 20+ AI providers.
 | [Generate Mask](./ai-image/generate-mask.md) | Text-prompted segmentation mask (Grounded SAM) | Create a mask for inpainting from a description; passes image through for chaining |
 | [Image Critic](./ai-image/image-critic.md) | Score an image on realism / character consistency / prompt adherence / anatomy / aesthetic / style-match via VLM | QC pipeline gates, automated regeneration loops with modify-image, batch quality scoring |
 | [Describe Image](./ai-image/image-to-text.md) | Extract text description from image | Auto-caption images, extract prompts from art, accessibility |
-| [Describe to Picker](./ai-image/describe-to-picker.md) | Analyze an image with an Anthropic vision model → catalog-valid picker JSON (Person) to auto-fill a parameter picker | Turn a reference photo into a Person casting brief; recurring-character setup |
+| [Describe to Picker](./ai-image/describe-to-picker.md) | Analyze an image with a vision model → catalog-valid picker JSON (Person) to auto-fill a parameter picker | Turn a reference photo into a Person casting brief; recurring-character setup |
 | [Reference Sheet](./ai-image/reference-sheet.md) | Composite a turnaround / expression / full reference sheet from a character, object, or location | Build a model sheet for consistency; export, or feed the clean panels into generators as a multi-image reference |
 | [Reference Board](./ai-image/reference-board.md) | Generate a dense reference board (hero + metadata + panels + palette) in one AI pass from reference image(s); refine globally, with a mask, or re-roll | Lock a subject's look in one premium artifact to feed downstream for consistency |
 
