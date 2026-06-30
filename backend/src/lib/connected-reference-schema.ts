@@ -62,4 +62,11 @@ export const connectedReferenceSchema = z.object({
   loraReplicateVersion: z.string().nullable().optional(),
   loraTriggerWord: z.string().nullable().optional(),
   loraTrainingStatus: z.string().nullable().optional(),
+  // Opt-in (default-off) per-reference identity-lock — Unified Reference Roles.
+  // When `enabled`, the prompt builder prepends a fidelity line for this ref
+  // (`text` overrides the built-in wording; `{ref}` is the reference's binding).
+  // The one new structured-shape field exposed to API/MCP/SDK callers.
+  identityLock: z
+    .object({ enabled: z.boolean(), text: z.string().optional() })
+    .optional(),
 })

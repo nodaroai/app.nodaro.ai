@@ -205,6 +205,7 @@ export {
   toIdentityLockMode,
   collectIdentityLockClause,
   hasUpstreamCharacter,
+  buildIdentityLockLine,
   type IdentityLockMode,
 } from "./identity-lock.js"
 
@@ -1394,3 +1395,6 @@ export {
   type CharacterMeta,
   type ResolveVideoReferenceCoreArgs,
 } from "./video-reference-resolver.js"
+
+// --- Type-aware reference-role registry (presets + default + phrase renderer) ---
+export * from "./reference-roles.js"
