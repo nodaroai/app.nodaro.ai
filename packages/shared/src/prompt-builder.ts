@@ -9,7 +9,7 @@ import { NATIVE_NEGATIVE_PROMPT_MODELS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, ima
 import { getStylePromptHint } from "./style.js"
 import { findCharacterMentionTokens, type CharacterMentionTokenInfo } from "./character-mention-slug.js"
 import { usageModeDirective, DEFAULT_USAGE_MODE, type UsageMode } from "./character-usage-mode.js"
-import { roleToPhrase, defaultRoleForSource, REFERENCE_ROLE_PRESETS, normalizeRoleSlug, firstSightExtraRole } from "./reference-roles.js"
+import { roleToPhrase, defaultRoleForSource, REFERENCE_ROLE_PRESETS, normalizeRoleSlug, resolveDefaultRole } from "./reference-roles.js"
 import { buildIdentityLockLine, withForcedIdentityLock } from "./identity-lock.js"
 import {
   findLocationMentionTokens,
@@ -278,7 +278,6 @@ function resolveCharacterMentionsHybrid(
   }
 
   const presets = REFERENCE_ROLE_PRESETS["wired-character"]
-  const defaultRole = defaultRoleForSource("wired-character")
 
   const additionalUrls: string[] = []
   const mentionedCharacterSlugs = new Set<string>()
@@ -312,13 +311,15 @@ function resolveCharacterMentionsHybrid(
     // variant/role slot that did NOT resolve to a real matched variant URL (e.g.
     // `earrings`) — i.e. it's acting as a role, not selecting a variant. A real
     // variant slug (`smile`) and the directive-only usage modes (identical/
-    // face-pose/emotion/name/none) fall back to the source default. This is a
-    // strict superset of the old `presets.includes(segment)` gate: byte-identical
-    // for every case EXCEPT the new custom-role survival.
+    // face-pose/emotion/name/none) fall back to the NODE default: the character
+    // node's `defaultRole` (hybrid dropdown pick, verbatim) → its
+    // `defaultUsageMode`-derived role → the source default ("person") — via
+    // `resolveDefaultRole` (Character Node Role+Lock). Precedence: per-mention
+    // token role → node defaultRole → defaultUsageMode-derived → source default.
     const role =
       segment && (presets.includes(segment) || (t.usageMode == null && !variantMatch))
         ? segment
-        : defaultRole
+        : resolveDefaultRole(match.defaultRole, match.defaultUsageMode, "wired-character")
     matched.push({ token: t.token, offset: t.offset, url: match.url, role })
   }
 
@@ -970,7 +971,12 @@ function renderCanonicalFallbackHybrid(
   const elementDirectives: string[] = []
   for (const r of refs) {
     const binding = `reference image ${letterForUrl(r.url)}`
-    phrases.push(roleToPhrase(defaultRoleForSource(r.source), binding))
+    // Node-default role chain (Character Node Role+Lock): the character node's
+    // `defaultRole` (hybrid dropdown pick, verbatim — Custom survives) → its
+    // `defaultUsageMode`-derived role → the source default ("person"). This is
+    // the MOST COMMON wiring (wired, not @-mentioned), which previously
+    // hardcoded the source default and ignored the node entirely.
+    phrases.push(roleToPhrase(resolveDefaultRole(r.defaultRole, r.defaultUsageMode, r.source), binding))
     const lock = buildIdentityLockLine(r, binding)
     if (lock) lockLines.push(lock)
     const inject = r.elementInjection?.trim()
@@ -1023,29 +1029,20 @@ function renderExtraRefsHybrid(
         const tail = description ? `, ${description}` : ""
         bodyLines.push(`${binding} is the same subject as reference image ${earlier}${tail}.`)
       } else {
-        // Role = `defaultUsageMode` when a curated preset, else the source
-        // default — via the shared `firstSightExtraRole` helper (Reference Roles
-        // follow-up F3). Previously always the source default, ignoring a
-        // role-carrying ref.
+        // Role chain (Character Node Role+Lock): the node's `defaultRole`
+        // (hybrid dropdown pick, VERBATIM — Custom survives; the expander only
+        // stamps it when the extra carries no per-ref usageMode override) → the
+        // COALESCED `defaultUsageMode`-derived role → the source default — via
+        // the shared `resolveDefaultRole` helper.
         //
-        // The image side reads the COALESCED `defaultUsageMode`
-        // (`expandExtraRefsToConnectedReferences` folds `usageMode` → char-node
-        // default → "identical" here), so a character extra ALWAYS carries a
-        // defined mode and honors the character node's default. That is why there
-        // is NO `?? r.variantSlug` fallback: for a character extra it could never
-        // fire (the field is coalesced), and a hand-built raw ref with an
-        // undefined mode correctly falls to the source default (pre-F3 behavior).
-        //
-        // The VIDEO extras path (`video-reference-resolver.ts`) shares this helper
-        // but feeds the RAW per-ref `ex.usageMode ?? ex.variantSlug` — usageMode
-        // there can be undefined, so it legitimately needs the variant fallback.
-        // Image + video thus share the helper but NOT its input: a character
-        // whose node default is Face/Pose/Style with an un-overridden extra
-        // resolves to the char default on the image side but to "person" on the
-        // video side. True convergence needs a data-model change (a raw per-ref
-        // usageMode on `ConnectedReference`, or coalescing on the video caller) —
-        // deferred; pinned by `character-convergence-image.test.ts`.
-        const role = firstSightExtraRole(r.defaultUsageMode, r.source)
+        // `defaultUsageMode` here is COALESCED (`expandExtraRefsToConnected-
+        // References` folds per-ref `usageMode` → char-node default →
+        // "identical"), so a character extra always carries a defined mode.
+        // The VIDEO extras path (`video-reference-resolver.ts`) feeds the same
+        // helper its own coalesced `effectiveMode` + `meta.defaultRole` — image
+        // and video are fully converged (same helper, same precedence); pinned
+        // by `character-convergence-image.test.ts`.
+        const role = resolveDefaultRole(r.defaultRole, r.defaultUsageMode, r.source)
         const phrase = roleToPhrase(role, binding)
         bodyLines.push(description ? `${phrase}, ${description}.` : `${phrase}.`)
         const lock = buildIdentityLockLine(r, binding)
@@ -1932,12 +1929,17 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
         // between the character mentions and the character canonical/extras in
         // `finalMergedUrls`, so their letters were computed against the matching
         // prefix in `resolveLocationMentionsHybrid` and need no re-derivation here.
-        const allLockLines = [
+        // Set-dedup: a reference can be locked via more than one path (e.g. an
+        // extra whose URL equals the wired canonical is routed to first-sight
+        // by the pair-back letter gate) — identical lock lines say nothing new
+        // to the model, so emit each exact line once. Line texts are
+        // {ref}-bound, so distinct references never collapse.
+        const allLockLines = [...new Set([
           ...hybridLockLines,
           ...hybridLocationLockLines,
           ...canonical.lockLines,
           ...extrasRendered.lockLines,
-        ]
+        ])]
         const trailingLines = [
           ...hybridElementDirectives,
           ...hybridLocationElementDirectives,

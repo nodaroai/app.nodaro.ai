@@ -58,6 +58,10 @@ export const connectedReferenceSchema = z.object({
   variantDescription: z.string().nullable().optional(),
   variantDisplayName: z.string().optional(),
   defaultUsageMode: z.enum(USAGE_MODES).optional(),
+  // Character node's HYBRID default role (Character Node Role+Lock) — a curated
+  // preset or sanitized Custom slug; free-string here (same trust class as
+  // `description`: prompt-affecting metadata from an authenticated caller).
+  defaultRole: z.string().optional(),
   isExtraRef: z.boolean().optional(),
   loraReplicateVersion: z.string().nullable().optional(),
   loraTriggerWord: z.string().nullable().optional(),

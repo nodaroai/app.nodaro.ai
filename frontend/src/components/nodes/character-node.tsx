@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useEffect, useMemo } from "react"
+import { memo, useEffect, useMemo, useRef, useState } from "react"
 import { useShallow } from "zustand/react/shallow"
 import { Position, type NodeProps } from "@xyflow/react"
 import { UserCircle, Loader2, Type, ImageIcon, Blend } from "lucide-react"
@@ -34,12 +34,23 @@ import {
   type UsageMode,
   CHARACTER_FACETS,
   DEFAULT_CHARACTER_FACET,
+  REFERENCE_ROLE_PRESETS,
+  resolveDefaultRole,
+  sanitizeRole,
 } from "@nodaro/shared"
+import { IMAGE_REFERENCE_FORMAT } from "@/lib/image-reference-format"
 import type { CharacterNodeData } from "@/types/nodes"
 
 const isPickerType = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
 const ACCEPTS_PROMPT = (t: string) => isValidCharacterConnection("in", t, isPickerType)
 const ACCEPTS_ASSETS = (t: string) => isValidCharacterConnection("assets", t, isPickerType)
+
+/** Curated hybrid role vocabulary for the node's default-role dropdown —
+ *  full parity with the mention pill's swap-menu (`character-ref-roles.ts`). */
+const CHARACTER_NODE_ROLES = REFERENCE_ROLE_PRESETS["wired-character"]
+/** Sentinel `Select` value that opens the free-form Custom role input instead
+ *  of committing a role (never stored on node data). */
+const CUSTOM_ROLE_SENTINEL = "__custom__"
 
 function CharacterNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as CharacterNodeData
@@ -49,6 +60,46 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
   const setCharacterStudioNodeId = useWorkflowStore((s) => s.setCharacterStudioNodeId)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
+
+  // ── Hybrid role dropdown + identity-lock (Character Node Role+Lock) ──────
+  // Gated on the reference format: hybrid shows the pill-parity ROLE menu
+  // (writes `defaultRole`) + an identity-lock sub-row (writes `identityLock`);
+  // legacy keeps the EXISTING usage-mode dropdown byte-identical (writes
+  // `defaultUsageMode`) and no lock row.
+  const hybridRoles = IMAGE_REFERENCE_FORMAT === "hybrid"
+  // Read-through display: an explicit `defaultRole` wins; a legacy node with
+  // only `defaultUsageMode` shows its derived role (face/pose/style, else
+  // "person") — exactly what the resolvers will emit for it.
+  const effectiveRole = resolveDefaultRole(
+    nodeData.defaultRole,
+    nodeData.defaultUsageMode,
+    "wired-character",
+  )
+  const isCustomRole = !(CHARACTER_NODE_ROLES as readonly string[]).includes(effectiveRole)
+  const [customRoleMode, setCustomRoleMode] = useState(false)
+  const [customRoleText, setCustomRoleText] = useState("")
+  const customRoleInputRef = useRef<HTMLInputElement | null>(null)
+  useEffect(() => {
+    if (customRoleMode) customRoleInputRef.current?.focus()
+  }, [customRoleMode])
+  const handleRolePick = (v: string) => {
+    if (v === CUSTOM_ROLE_SENTINEL) {
+      setCustomRoleText(isCustomRole ? effectiveRole : "")
+      setCustomRoleMode(true)
+      return
+    }
+    updateNodeData(id, { defaultRole: v })
+  }
+  const commitCustomRole = () => {
+    const slug = sanitizeRole(customRoleText)
+    if (slug) updateNodeData(id, { defaultRole: slug })
+    setCustomRoleMode(false)
+    setCustomRoleText("")
+  }
+  const cancelCustomRole = () => {
+    setCustomRoleMode(false)
+    setCustomRoleText("")
+  }
 
   // Element/asset injection (P2): identity/character sources wired to the
   // Assets handle each get a per-connection facet chip. We subscribe (shallow)
@@ -341,32 +392,130 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
             white menu. The `stopPropagation` on the trigger is critical:
             React Flow listens for pointer events on every node to start a
             drag, so without it opening the dropdown would also drag the node
-            (and on touch devices the dropdown wouldn't open at all). */}
-        <Select
-          value={nodeData.defaultUsageMode ?? DEFAULT_USAGE_MODE}
-          onValueChange={(v) =>
-            updateNodeData(id, { defaultUsageMode: v as UsageMode })
-          }
-        >
-          <SelectTrigger
-            aria-label="Default usage mode for character mentions"
-            title="How the AI consumes this character's image when @-mentioned"
-            className="shrink-0 h-6 w-[110px] text-[10px] bg-[#13161f] border-[#334155] text-slate-300 hover:border-[#475569] focus:border-[#ff0073] px-2 py-0"
-            onClick={(e) => e.stopPropagation()}
-            onPointerDown={(e) => e.stopPropagation()}
-            onMouseDown={(e) => e.stopPropagation()}
+            (and on touch devices the dropdown wouldn't open at all).
+
+            HYBRID (the prod default): pill-parity ROLE menu (person/face/
+            clothes/hair/pose/expression/style + Custom…) writing `defaultRole`.
+            LEGACY: the original usage-mode menu, byte-identical. */}
+        {hybridRoles ? (
+          customRoleMode ? (
+            <input
+              ref={customRoleInputRef}
+              value={customRoleText}
+              onChange={(e) => setCustomRoleText(e.target.value)}
+              placeholder="earrings  or  freckles"
+              aria-label="Custom default role"
+              className="shrink-0 h-6 w-[110px] text-[10px] px-2 rounded-md bg-[#13161f] border border-[#ff0073] text-slate-200 outline-none placeholder:text-slate-600"
+              onClick={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                // Keep Enter/Escape (and typing) out of React Flow's keymap.
+                e.stopPropagation()
+                if (e.key === "Enter") {
+                  e.preventDefault()
+                  commitCustomRole()
+                } else if (e.key === "Escape") {
+                  e.preventDefault()
+                  cancelCustomRole()
+                }
+              }}
+              // Commit on click-away (mirrors EditableNodeLabel): there is no
+              // OK button here, so a blur-cancel would silently discard typed
+              // text. commitCustomRole writes only when the sanitized slug is
+              // non-empty and always closes; Escape still cancels (it clears
+              // the text first, so the follow-up blur commits nothing).
+              onBlur={commitCustomRole}
+            />
+          ) : (
+            <Select value={effectiveRole} onValueChange={handleRolePick}>
+              <SelectTrigger
+                aria-label="Default role for character references"
+                title="Which part of this character's reference image downstream generators take by default — override per-mention on the @-pill"
+                className="shrink-0 h-6 w-[110px] text-[10px] bg-[#13161f] border-[#334155] text-slate-300 hover:border-[#475569] focus:border-[#ff0073] px-2 py-0"
+                onClick={(e) => e.stopPropagation()}
+                onPointerDown={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CHARACTER_NODE_ROLES.map((r) => (
+                  <SelectItem key={r} value={r} className="text-[11px]">
+                    {r}
+                  </SelectItem>
+                ))}
+                {/* A stored Custom role needs a matching item so Radix can
+                    render the current value (and re-picking it is a no-op). */}
+                {isCustomRole && (
+                  <SelectItem value={effectiveRole} className="text-[11px]">
+                    {effectiveRole}
+                  </SelectItem>
+                )}
+                <SelectItem value={CUSTOM_ROLE_SENTINEL} className="text-[11px] italic">
+                  Custom…
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          )
+        ) : (
+          <Select
+            value={nodeData.defaultUsageMode ?? DEFAULT_USAGE_MODE}
+            onValueChange={(v) =>
+              updateNodeData(id, { defaultUsageMode: v as UsageMode })
+            }
           >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {USAGE_MODES.map((m) => (
-              <SelectItem key={m} value={m} className="text-[11px]">
-                {usageModeLabel(m)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+            <SelectTrigger
+              aria-label="Default usage mode for character mentions"
+              title="How the AI consumes this character's image when @-mentioned"
+              className="shrink-0 h-6 w-[110px] text-[10px] bg-[#13161f] border-[#334155] text-slate-300 hover:border-[#475569] focus:border-[#ff0073] px-2 py-0"
+              onClick={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {USAGE_MODES.map((m) => (
+                <SelectItem key={m} value={m} className="text-[11px]">
+                  {usageModeLabel(m)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
+      {/* Identity-lock sub-row (hybrid only) — surfaces the SAME `identityLock`
+          field the config panel + Character Studio edit (off/soft/strict), now
+          wired to the live per-reference lock (`characterLockToRefLock`). Own
+          row so the truncating name row stays uncramped. */}
+      {hybridRoles && (
+        <div className="px-2.5 pt-1 flex items-center gap-1.5 min-w-0">
+          <span className="flex-1 min-w-0 text-[9px] text-slate-500 truncate">Identity lock</span>
+          <Select
+            value={nodeData.identityLock ?? "soft"}
+            onValueChange={(v) =>
+              updateNodeData(id, { identityLock: v as NonNullable<CharacterNodeData["identityLock"]> })
+            }
+          >
+            <SelectTrigger
+              aria-label="Identity lock strength"
+              title="How strongly downstream generators preserve this character's facial identity — Off (free reinterpretation) / Soft (preserve likeness) / Strict (match exactly)"
+              className="shrink-0 h-6 w-[110px] text-[10px] bg-[#13161f] border-[#334155] text-slate-300 hover:border-[#475569] focus:border-[#ff0073] px-2 py-0"
+              onClick={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="off" className="text-[11px]">Off</SelectItem>
+              <SelectItem value="soft" className="text-[11px]">Soft</SelectItem>
+              <SelectItem value="strict" className="text-[11px]">Strict</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      )}
       <div className="px-2.5 pb-2 text-[9px] text-slate-600">{`${nodeData.style} · ${nodeData.gender}`}</div>
 
       {/* Asset badge row */}

@@ -36,7 +36,7 @@ import { getParameterPromptHint } from "@nodaro/shared"
 import { PARAMETER_NODE_TYPES } from "@nodaro/shared"
 import { computeNodePrompt } from "@nodaro/shared"
 import type { CharacterDef, ConnectedReference, SceneData, ExtraRefInput, ExtraRefCharacterContext, CharacterMeta } from "@nodaro/shared"
-import { characterMentionSlug } from "@nodaro/shared"
+import { characterMentionSlug, characterLockToRefLock } from "@nodaro/shared"
 import { resolveVideoReferenceCore } from "@nodaro/shared"
 import { backendHybridRoles } from "../../lib/reference-format.js"
 import { expandExtraRefsToConnectedReferences } from "@nodaro/shared"
@@ -354,6 +354,13 @@ function expandWiredCharacterRefs(
     const defaultUsageMode = charData.defaultUsageMode as
       | ConnectedReference["defaultUsageMode"]
       | undefined
+    // Node-default role + mapped identity-lock (Character Node Role+Lock) —
+    // read by the hybrid resolvers; inert in legacy. Same boundary-narrowing
+    // rationale as `defaultUsageMode` above.
+    const defaultRole = charData.defaultRole as string | undefined
+    const identityLock = characterLockToRefLock(
+      charData.identityLock as "off" | "soft" | "strict" | undefined,
+    )
     // LoRA training fields — character-level (same across all variants).
     // Shared helper keeps backend + frontend `expand*Refs` in lockstep.
     const loraFields = extractCharacterLoraFields(
@@ -375,6 +382,8 @@ function expandWiredCharacterRefs(
         variantDescription: null,
         variantDisplayName: "canonical",
         defaultUsageMode,
+        defaultRole,
+        identityLock,
         ...loraFields,
       })
     }
@@ -399,6 +408,8 @@ function expandWiredCharacterRefs(
           variantDescription: null,
           variantDisplayName: item.name,
           defaultUsageMode,
+          defaultRole,
+          identityLock,
           ...loraFields,
         })
       }
@@ -815,6 +826,10 @@ function buildExtraRefCharacterContextLookup(
         defaultUsageMode: charData.defaultUsageMode as ExtraRefCharacterContext["defaultUsageMode"],
         canonicalDescription: (charData.canonicalDescription as string | null | undefined) ?? null,
         displayName: charName,
+        defaultRole: charData.defaultRole as string | undefined,
+        identityLock: characterLockToRefLock(
+          charData.identityLock as "off" | "soft" | "strict" | undefined,
+        ),
       })
     }
   }
@@ -944,6 +959,8 @@ function resolveVideoPromptMentions(
       characterName: ctx.displayName,
       defaultUsageMode: ctx.defaultUsageMode,
       canonicalDescription: ctx.canonicalDescription ?? undefined,
+      defaultRole: ctx.defaultRole,
+      identityLock: ctx.identityLock,
     }
   }
   // First-sight character extras: surface the wired character's scene-composition
@@ -951,9 +968,11 @@ function resolveVideoPromptMentions(
   // the mention/canonical paths derive `ConnectedReference.elementInjection` (via
   // `stampElementInjections`). Same map + "Inject Elements" off-switch as those
   // paths, so a first-sight extra whose slug has wired elements surfaces them in
-  // the video hybrid output instead of silently dropping. `identityLock` is
-  // intentionally NOT populated — `ExtraRefInput` carries no per-extra lock yet
-  // (the per-mention lock toggle is follow-up F4); no source → leave undefined.
+  // the video hybrid output instead of silently dropping. The per-EXTRA
+  // `identityLock` is still not populated (`ExtraRefInput` carries no lock
+  // field) — the NODE's mapped lock reaches the extras via the
+  // `lookupCharacterBySlug().identityLock` meta and the core's
+  // `ex.identityLock ?? meta.identityLock` fallback (Character Node Role+Lock).
   const extraConsumer = (buildCtx?.nodes ?? []).find((n) => n.id === consumerNodeId)
   const extraElementInjections =
     (extraConsumer?.data as { injectElements?: boolean } | undefined)?.injectElements === false

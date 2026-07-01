@@ -21,6 +21,7 @@ import {
   characterMentionSlug,
   extractCharacterLoraFields,
   characterMentionableAssetArrays,
+  characterLockToRefLock,
   computeNodePrompt,
   collectIdentityLockClause,
   resolveEffectiveSourceType,
@@ -95,6 +96,10 @@ export function expandCharacterNodeIntoRefs(
   // carry an explicit `:mode` override. `undefined` ↔ "identical" (the global
   // default) is handled by the resolver, not here, to keep the JSON small.
   const defaultUsageMode = charData.defaultUsageMode
+  // Node-default role + mapped identity-lock (Character Node Role+Lock) —
+  // read by the hybrid video resolvers (canonical/mention); inert in legacy.
+  const defaultRole = charData.defaultRole
+  const identityLock = characterLockToRefLock(charData.identityLock)
   // LoRA training fields — character-level (same across all variants). Shared
   // helper keeps this in lockstep with backend `expandWiredCharacterRefs`.
   const loraFields = extractCharacterLoraFields(charData)
@@ -113,6 +118,8 @@ export function expandCharacterNodeIntoRefs(
         variantDescription: null,
         variantDisplayName: "canonical",
         defaultUsageMode,
+        defaultRole,
+        identityLock,
         ...loraFields,
       },
     ])
@@ -136,6 +143,8 @@ export function expandCharacterNodeIntoRefs(
           variantDescription: null,
           variantDisplayName: item.name,
           defaultUsageMode,
+          defaultRole,
+          identityLock,
           ...loraFields,
         },
       ])
@@ -307,15 +316,19 @@ export function resolveVideoPromptMentions(
       characterName: cd.characterName as string | undefined,
       defaultUsageMode: cd.defaultUsageMode,
       canonicalDescription: cd.canonicalDescription as string | undefined,
+      defaultRole: cd.defaultRole,
+      identityLock: characterLockToRefLock(cd.identityLock),
     }
   }
   // First-sight character extras: surface the wired character's scene-composition
   // (held-prop / styling / text) as the extra's `elementInjection`, mirroring how
   // the mention/canonical paths derive `ConnectedReference.elementInjection` (via
   // `stampElementInjections`). Same map + "Inject Elements" off-switch as those
-  // paths (BE mirror in `payload-builder.ts`). `identityLock` is intentionally
-  // NOT populated — `ExtraRef` carries no per-extra lock yet (the per-mention
-  // lock toggle is follow-up F4); no source → leave undefined (don't fabricate).
+  // paths (BE mirror in `payload-builder.ts`). The per-EXTRA `identityLock` is
+  // still not populated (`ExtraRef` carries no lock field) — the NODE's mapped
+  // lock reaches the extras via `lookupCharacterBySlug().identityLock` and the
+  // core's `ex.identityLock ?? meta.identityLock` fallback (Character Node
+  // Role+Lock).
   const extraConsumer = nodes.find((n) => n.id === consumerNodeId)
   const extraElementInjections =
     (extraConsumer?.data as { injectElements?: boolean } | undefined)?.injectElements === false

@@ -45,6 +45,42 @@ export function toIdentityLockMode(value: unknown): IdentityLockMode {
 }
 
 /**
+ * Per-mode lock wording for the CHARACTER NODE's off/soft/strict control —
+ * `{ref}`-BOUND variants of the `getIdentityLockClause` ladder. The binding
+ * matters: these are emitted as PER-REFERENCE lines (one per attached URL), so
+ * a multi-character scene must attribute each line to its reference image —
+ * unbound clauses would repeat the same anonymous "the subject…" sentence with
+ * no way to tell which reference either line governs (caught by adversarial
+ * review of PR #3735). Same escalation semantics as the config panel's
+ * off/soft/strict; only the phrasing is reference-bound.
+ */
+const CHARACTER_NODE_LOCK_TEXT: Record<Exclude<IdentityLockMode, "off">, string> = {
+  soft: "Preserve the overall facial likeness of the subject in {ref}.",
+  strict:
+    "The facial identity of the subject in {ref} must match exactly — no creative reinterpretation; preserve facial structure, eye color, skin tone, and distinctive features precisely.",
+}
+
+/**
+ * Map a Character NODE's `identityLock` mode (off/soft/strict) → the per-reference
+ * lock shape (`{ enabled, text }`) stamped onto every `ConnectedReference` derived
+ * from that node. This is what makes the node's off/soft/strict control reach
+ * hybrid output via `buildIdentityLockLine` (below):
+ *   - off    → { enabled: false }                     (no lock line)
+ *   - soft   → { enabled: true, text: <soft clause> }  (mild "preserve likeness")
+ *   - strict → { enabled: true, text: <strict clause> }(strong "match exactly")
+ * `undefined` coerces to the runtime default (`"soft"`) via `toIdentityLockMode`,
+ * so existing nodes (which never set the field) emit the mild line in hybrid. The
+ * per-mention `~lock`/`~nolock` sentinel still overrides via `withForcedIdentityLock`.
+ */
+export function characterLockToRefLock(
+  mode: IdentityLockMode | undefined,
+): { enabled: boolean; text?: string } {
+  const m = toIdentityLockMode(mode)
+  if (m === "off") return { enabled: false }
+  return { enabled: true, text: CHARACTER_NODE_LOCK_TEXT[m] }
+}
+
+/**
  * @deprecated Since Fix 4 (character @-mentions revamp) the per-image
  * identity directive in `buildImagePrompt` — via
  * `resolveCharacterMentions` Phase 0 and the strengthened

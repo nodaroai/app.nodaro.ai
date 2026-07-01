@@ -203,6 +203,7 @@ export {
   DEFAULT_IDENTITY_LOCK,
   getIdentityLockClause,
   toIdentityLockMode,
+  characterLockToRefLock,
   collectIdentityLockClause,
   hasUpstreamCharacter,
   buildIdentityLockLine,
