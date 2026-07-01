@@ -9,8 +9,8 @@ import { NATIVE_NEGATIVE_PROMPT_MODELS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, ima
 import { getStylePromptHint } from "./style.js"
 import { findCharacterMentionTokens, type CharacterMentionTokenInfo } from "./character-mention-slug.js"
 import { usageModeDirective, DEFAULT_USAGE_MODE, type UsageMode } from "./character-usage-mode.js"
-import { roleToPhrase, defaultRoleForSource, REFERENCE_ROLE_PRESETS, normalizeRoleSlug } from "./reference-roles.js"
-import { buildIdentityLockLine } from "./identity-lock.js"
+import { roleToPhrase, defaultRoleForSource, REFERENCE_ROLE_PRESETS, normalizeRoleSlug, firstSightExtraRole } from "./reference-roles.js"
+import { buildIdentityLockLine, withForcedIdentityLock } from "./identity-lock.js"
 import {
   findLocationMentionTokens,
   DEFAULT_LOCATION_USAGE_MODE,
@@ -283,6 +283,10 @@ function resolveCharacterMentionsHybrid(
   const additionalUrls: string[] = []
   const mentionedCharacterSlugs = new Set<string>()
   const refByUrl = new Map<string, ConnectedReference>()
+  // Per-mention `~lock` (Task 4): URLs whose mention carried a trailing `~lock`.
+  // The lock loop below forces `identityLock.enabled` for these before
+  // `buildIdentityLockLine`, regardless of the ref's default (default-off).
+  const lockedUrls = new Set<string>()
   const matched: Array<{ token: string; offset: number; url: string; role: string }> = []
 
   for (const t of tokens) {
@@ -297,6 +301,7 @@ function resolveCharacterMentionsHybrid(
     additionalUrls.push(match.url)
     mentionedCharacterSlugs.add(t.characterSlug)
     refByUrl.set(match.url, match)
+    if (t.lock) lockedUrls.add(match.url)
     const segment = (t.usageMode ?? t.variantSlug ?? "").trim()
     // Custom roles survive VERBATIM (Unified Reference Roles, Phase D). A
     // non-empty segment is the role when it is a curated preset (face/pose/style
@@ -344,7 +349,7 @@ function resolveCharacterMentionsHybrid(
     const ref = refByUrl.get(m.url)
     if (!ref) continue
     const binding = bindingFor(m.url)
-    const lock = buildIdentityLockLine(ref, binding)
+    const lock = buildIdentityLockLine(withForcedIdentityLock(ref, lockedUrls.has(m.url)), binding)
     if (lock) lockLines.push(lock)
     const inject = ref.elementInjection?.trim()
     if (inject) elementDirectives.push(inject)
@@ -624,6 +629,10 @@ function resolveLocationMentionsHybrid(
   const additionalUrls: string[] = []
   const mentionedLocationSlugs = new Set<string>()
   const refByUrl = new Map<string, ConnectedReference>()
+  // Per-mention `~lock` (Task 4): URLs whose mention carried a trailing `~lock`.
+  // Forced ON before `buildIdentityLockLine` via `withForcedIdentityLock` below,
+  // so a location lock line appears even though location locks default OFF.
+  const lockedUrls = new Set<string>()
   const matched: Array<{ token: string; offset: number; url: string; role: string }> = []
 
   for (const t of tokens) {
@@ -636,6 +645,7 @@ function resolveLocationMentionsHybrid(
     additionalUrls.push(match.url)
     mentionedLocationSlugs.add(t.locationSlug)
     refByUrl.set(match.url, match)
+    if (t.lock) lockedUrls.add(match.url)
     const mode = t.usageMode ?? match.defaultUsageMode ?? DEFAULT_LOCATION_USAGE_MODE
     // A bare-slug ROLE (Unified Reference Roles, Phase D — e.g. `background`,
     // `empty-background`, `as-is`, or a curated custom role) is used VERBATIM:
@@ -677,7 +687,7 @@ function resolveLocationMentionsHybrid(
     const ref = refByUrl.get(m.url)
     if (!ref) continue
     const binding = bindingFor(m.url)
-    const lock = buildIdentityLockLine(ref, binding)
+    const lock = buildIdentityLockLine(withForcedIdentityLock(ref, lockedUrls.has(m.url)), binding)
     if (lock) lockLines.push(lock)
     const inject = ref.elementInjection?.trim()
     if (inject) elementDirectives.push(inject)
@@ -1008,7 +1018,30 @@ function renderExtraRefsHybrid(
         const tail = description ? `, ${description}` : ""
         bodyLines.push(`${binding} is the same subject as reference image ${earlier}${tail}.`)
       } else {
-        const phrase = roleToPhrase(defaultRoleForSource(r.source), binding)
+        // Role = `defaultUsageMode` when a curated preset, else the source
+        // default — via the shared `firstSightExtraRole` helper (Reference Roles
+        // follow-up F3). Previously always the source default, ignoring a
+        // role-carrying ref.
+        //
+        // The image side reads the COALESCED `defaultUsageMode`
+        // (`expandExtraRefsToConnectedReferences` folds `usageMode` → char-node
+        // default → "identical" here), so a character extra ALWAYS carries a
+        // defined mode and honors the character node's default. That is why there
+        // is NO `?? r.variantSlug` fallback: for a character extra it could never
+        // fire (the field is coalesced), and a hand-built raw ref with an
+        // undefined mode correctly falls to the source default (pre-F3 behavior).
+        //
+        // The VIDEO extras path (`video-reference-resolver.ts`) shares this helper
+        // but feeds the RAW per-ref `ex.usageMode ?? ex.variantSlug` — usageMode
+        // there can be undefined, so it legitimately needs the variant fallback.
+        // Image + video thus share the helper but NOT its input: a character
+        // whose node default is Face/Pose/Style with an un-overridden extra
+        // resolves to the char default on the image side but to "person" on the
+        // video side. True convergence needs a data-model change (a raw per-ref
+        // usageMode on `ConnectedReference`, or coalescing on the video caller) —
+        // deferred; pinned by `character-convergence-image.test.ts`.
+        const role = firstSightExtraRole(r.defaultUsageMode, r.source)
+        const phrase = roleToPhrase(role, binding)
         bodyLines.push(description ? `${phrase}, ${description}.` : `${phrase}.`)
         const lock = buildIdentityLockLine(r, binding)
         if (lock) lockLines.push(lock)

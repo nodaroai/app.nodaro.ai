@@ -32,7 +32,7 @@ import {
   type ReferenceModality,
 } from "@nodaro/shared"
 import { collectCinematographyHints } from "@/lib/cinematography-hints"
-import { stampElementInjections } from "@/components/editor/workflow-editor/node-input-resolver"
+import { stampElementInjections, collectCharacterElementInjections } from "@/components/editor/workflow-editor/node-input-resolver"
 import { collectWiredPromptContribution } from "@/lib/node-refs"
 import { IMAGE_REFERENCE_FORMAT } from "@/lib/image-reference-format"
 
@@ -309,6 +309,18 @@ export function resolveVideoPromptMentions(
       canonicalDescription: cd.canonicalDescription as string | undefined,
     }
   }
+  // First-sight character extras: surface the wired character's scene-composition
+  // (held-prop / styling / text) as the extra's `elementInjection`, mirroring how
+  // the mention/canonical paths derive `ConnectedReference.elementInjection` (via
+  // `stampElementInjections`). Same map + "Inject Elements" off-switch as those
+  // paths (BE mirror in `payload-builder.ts`). `identityLock` is intentionally
+  // NOT populated — `ExtraRef` carries no per-extra lock yet (the per-mention
+  // lock toggle is follow-up F4); no source → leave undefined (don't fabricate).
+  const extraConsumer = nodes.find((n) => n.id === consumerNodeId)
+  const extraElementInjections =
+    (extraConsumer?.data as { injectElements?: boolean } | undefined)?.injectElements === false
+      ? new Map<string, string>()
+      : collectCharacterElementInjections(consumerNodeId, nodes, edges)
   // All mention / numbering / canonical-fallback / extras assembly lives in the
   // shared core — the single source of truth shared with the backend resolver.
   return resolveVideoReferenceCore({
@@ -321,6 +333,7 @@ export function resolveVideoPromptMentions(
         characterSlug: ex.characterSlug,
         variantSlug: ex.variantSlug,
         usageMode: ex.usageMode,
+        elementInjection: ex.characterSlug ? extraElementInjections.get(ex.characterSlug) : undefined,
       })) ?? []),
       // Wired Assets-handle entities auto-attach AFTER the caller's extras.
       ...wiredEntityExtras,

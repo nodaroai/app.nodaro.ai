@@ -2,6 +2,7 @@ import { Node, mergeAttributes } from "@tiptap/core"
 import { nodeInputRule, nodePasteRule } from "@tiptap/core"
 import { ReactNodeViewRenderer } from "@tiptap/react"
 import { DEFAULT_USAGE_MODE, isUsageMode, type UsageMode } from "@nodaro/shared"
+import { IMAGE_REFERENCE_FORMAT } from "@/lib/image-reference-format"
 import { CharacterRefView } from "./character-ref-view"
 
 export interface CharacterRefAttrs {
@@ -9,6 +10,12 @@ export interface CharacterRefAttrs {
   imageIndex: number
   variantSlug: string | null
   usageMode: UsageMode | null
+  /** Per-mention identity-lock (Unified Reference Roles, Task 4). When true the
+   *  pill serializes a trailing `~lock` sentinel (`@kira:1:face~lock`) that the
+   *  HYBRID resolvers turn into a per-reference lock line. HYBRID-only: legacy
+   *  never sets it (the toggle is hidden and promotion strips it). Optional so a
+   *  lock-less parse stays byte-identical to the pre-Task-4 attr shape. */
+  lock?: boolean
 }
 
 /**
@@ -23,7 +30,22 @@ export interface CharacterRefAttrs {
  * `foo@bar` are not promoted to pills. The capturing group still starts at
  * the `@`.
  */
-const CHAR_REF_PATTERN_CORE = "(@[a-z][a-z0-9-]*):(\\d+)(?::([a-z][a-z0-9-]*))?(?::([a-z][a-z0-9-]*))?"
+// The optional trailing `(?:~lock)?` absorbs the additive Task-4 identity-lock
+// sentinel; it is non-capturing (segment capture groups 1–4 are unchanged) and
+// optional, so a lock-less token matches byte-identically. Lock presence is
+// detected from the full matched string via `matchHasLock`.
+const CHAR_REF_PATTERN_CORE = "(@[a-z][a-z0-9-]*):(\\d+)(?::([a-z][a-z0-9-]*))?(?::([a-z][a-z0-9-]*))?(?:~lock(?![a-z0-9-]))?"
+
+/** True when a matched mention string ends with the `~lock` sentinel. */
+function matchHasLock(full: string): boolean {
+  return /~lock$/.test(full)
+}
+
+/** HYBRID is the only format that honors `~lock` on promotion — legacy strips
+ *  it so a stray sentinel never flips a legacy pill's (hidden) lock on. */
+function lockHonored(): boolean {
+  return IMAGE_REFERENCE_FORMAT === "hybrid"
+}
 
 /**
  * Read the live character slug set from editor storage. Used by the
@@ -66,28 +88,33 @@ function parseMatchAttrs(
   indexStr: string,
   third: string | undefined,
   fourth: string | undefined,
+  lock = false,
 ): CharacterRefAttrs | null {
   const characterSlug = characterWithAt.slice(1) // drop leading "@"
   const imageIndex = parseInt(indexStr, 10)
   if (!Number.isInteger(imageIndex) || imageIndex < 1) return null
 
+  // Spread into each return so a lock-less parse gains NO `lock` key (byte-
+  // identical to the pre-Task-4 attr shape).
+  const lockField = lock ? { lock: true } : {}
+
   // 2-part: @kira:1
   if (third === undefined && fourth === undefined) {
-    return { characterSlug, imageIndex, variantSlug: null, usageMode: null }
+    return { characterSlug, imageIndex, variantSlug: null, usageMode: null, ...lockField }
   }
   // 3-part: @kira:1:X — X is mode OR variant.
   if (fourth === undefined && third !== undefined) {
     if (isUsageMode(third)) {
-      return { characterSlug, imageIndex, variantSlug: null, usageMode: third }
+      return { characterSlug, imageIndex, variantSlug: null, usageMode: third, ...lockField }
     }
     // Plain variant slug (alpha-prefix already enforced by the regex).
-    return { characterSlug, imageIndex, variantSlug: third, usageMode: null }
+    return { characterSlug, imageIndex, variantSlug: third, usageMode: null, ...lockField }
   }
   // 4-part: @kira:1:smile:mode — both must be set; final segment must be a
   // valid usage mode (matching parseCharacterMentionToken behavior).
   if (third !== undefined && fourth !== undefined) {
     if (!isUsageMode(fourth)) return null
-    return { characterSlug, imageIndex, variantSlug: third, usageMode: fourth }
+    return { characterSlug, imageIndex, variantSlug: third, usageMode: fourth, ...lockField }
   }
   return null
 }
@@ -142,6 +169,13 @@ export const CharacterRefExtension = Node.create({
             ? { "data-usage-mode": String(attrs.usageMode) }
             : {},
       },
+      // Per-mention identity-lock (Task 4). Boolean; renders `data-lock` only
+      // when on so lock-off pill HTML stays byte-identical.
+      lock: {
+        default: false,
+        parseHTML: (el) => el.getAttribute("data-lock") === "true",
+        renderHTML: (attrs) => (attrs.lock ? { "data-lock": "true" } : {}),
+      },
     }
   },
 
@@ -178,7 +212,9 @@ export const CharacterRefExtension = Node.create({
     const parts: string[] = [`@${a.characterSlug}:${a.imageIndex}`]
     if (a.variantSlug) parts.push(a.variantSlug)
     if (a.usageMode) parts.push(a.usageMode)
-    return parts.join(":")
+    // Additive `~lock` sentinel LAST (after all colon segments) so the shared
+    // parser reads it as the trailing per-mention lock flag.
+    return parts.join(":") + (a.lock ? "~lock" : "")
   },
 
   addNodeView() {
@@ -217,12 +253,14 @@ export const CharacterRefExtension = Node.create({
         type: this.type,
         getAttributes: (match) => {
           // Capture indices: 0 full, 1 the slug (no trailing space),
-          // 2 character w/ @, 3 indexStr, 4 third, 5 fourth.
+          // 2 character w/ @, 3 indexStr, 4 third, 5 fourth. Lock is read from
+          // the slug string (match[1]) and gated on HYBRID.
           const characterWithAt = match[2]
           const indexStr = match[3]
           const third = match[4]
           const fourth = match[5]
-          const attrs = parseMatchAttrs(characterWithAt, indexStr, third, fourth)
+          const lock = lockHonored() && matchHasLock(match[1])
+          const attrs = parseMatchAttrs(characterWithAt, indexStr, third, fourth, lock)
           // Returning false tells `nodeInputRule` to skip the rule — leaves
           // the typed text alone (e.g. a 3-part token whose 3rd segment is
           // neither a known usage mode nor a valid variant slug shape).
@@ -257,7 +295,8 @@ export const CharacterRefExtension = Node.create({
           const indexStr = match[2]
           const third = match[3]
           const fourth = match[4]
-          const attrs = parseMatchAttrs(characterWithAt, indexStr, third, fourth)
+          const lock = lockHonored() && matchHasLock(match[0])
+          const attrs = parseMatchAttrs(characterWithAt, indexStr, third, fourth, lock)
           if (!attrs) return false
           const known = knownCharacterSlugs(self)
           if (!known.has(attrs.characterSlug)) return false
@@ -302,8 +341,9 @@ export function parseCharacterRefMatch(
   indexStr: string,
   third: string | undefined,
   fourth: string | undefined,
+  lock = false,
 ): CharacterRefAttrs | null {
-  return parseMatchAttrs(characterWithAt, indexStr, third, fourth)
+  return parseMatchAttrs(characterWithAt, indexStr, third, fourth, lock)
 }
 
 // Re-export DEFAULT_USAGE_MODE / UsageMode so consumers don't need to dual-import.

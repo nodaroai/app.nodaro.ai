@@ -9,13 +9,16 @@
  *      ("the earrings from …") instead of collapsing to the source default
  *      ("the person from …"). Applies to character (image + video) and location.
  *
- *  (B) Location bare-slug ROLE parsing — a slash-less, non-mode 3rd segment that
- *      is a KNOWN location role (`@old-library:1:background`,
- *      `@old-library:1:empty-background`) now parses as a role (previously null →
- *      literal text). Preset-gated: an unknown slug (`foobar`) still returns null
- *      (legacy byte-identical). `normalizeRoleSlug` maps the slug back to the
- *      phrase key so the non-noun specials (`empty-background` → `empty
- *      background`) key `roleToPhrase` correctly.
+ *  (B) Location bare-slug ROLE parsing — a slash-less, non-mode 3rd segment now
+ *      parses as a role (previously null → literal text). The F2 follow-up
+ *      REMOVED the preset gate, so a CUSTOM slug (`@old-library:1:foobar`) parses
+ *      as `role: "foobar"` too, mirroring the character parser. Legacy stays
+ *      byte-identical NOT via the parser but via the resolver's `if (t.role)
+ *      continue` guard — a role token (preset OR custom) is skipped in the legacy
+ *      path, so it stays literal text with no bullet / phrase promotion.
+ *      `normalizeRoleSlug` maps the slug back to the phrase key so the non-noun
+ *      specials (`empty-background` → `empty background`) key `roleToPhrase`
+ *      correctly; a custom slug passes through verbatim.
  *
  * Existing `@-mention` / variant / mode parsing + the legacy resolvers stay
  * byte-identical — those suites are the guard.
@@ -106,6 +109,19 @@ describe("(B) location bare-slug role parsing — image hybrid", () => {
     )
     expect(out.prompt).not.toContain("@old-library:1:empty-background")
   })
+
+  it("CUSTOM role @old-library:1:foobar → 'the foobar from reference image A' (verbatim, F2)", () => {
+    const out = buildImagePrompt({
+      provider: "nano-banana-pro",
+      prompt: "@old-library:1:foobar a chase scene",
+      connectedReferences: [library],
+      referenceFormat: "hybrid",
+    })
+    expect(out.prompt).toContain("the foobar from reference image A")
+    expect(out.prompt).not.toContain("@old-library:1:foobar")
+    expect(out.prompt).not.toContain("Use these locations:")
+    expect(out.referenceImageUrls).toContain("https://cdn/library.png")
+  })
 })
 
 describe("(B) location parser additive change — direct", () => {
@@ -130,8 +146,11 @@ describe("(B) location parser additive change — direct", () => {
     })
   })
 
-  it("unknown bare slug @old-library:1:foobar still returns null (preset-gated, legacy byte-identical)", () => {
-    expect(parseLocationMentionToken("@old-library:1:foobar")).toBeNull()
+  it("CUSTOM bare slug @old-library:1:foobar now parses as a role (parser gate removed, F2)", () => {
+    expect(parseLocationMentionToken("@old-library:1:foobar")).toEqual({
+      locationSlug: "old-library", imageIndex: 1,
+      bucket: null, variant: null, usageMode: null, role: "foobar",
+    })
   })
 
   it("known mode @old-library:1:layout still parses as a usage mode (unchanged)", () => {
@@ -170,5 +189,20 @@ describe("legacy (no referenceFormat) is NOT affected by the relaxation", () => 
       connectedReferences: [library],
     })
     expect(locOut.prompt).not.toContain("the background from reference image")
+  })
+
+  it("CUSTOM location role @old-library:1:foobar stays LITERAL in legacy (byte-identical, F2)", () => {
+    // The parser now accepts `foobar` as a role, but the legacy resolver's
+    // `if (t.role) continue` guard skips ANY role token (preset or custom): no
+    // inline replacement, no bullet, no `Use these locations:` block — the raw
+    // token survives verbatim exactly as it did pre-Phase-D (parser → null).
+    const out = buildImagePrompt({
+      provider: "nano-banana-pro",
+      prompt: "@old-library:1:foobar a chase scene",
+      connectedReferences: [library],
+    })
+    expect(out.prompt).toContain("@old-library:1:foobar")
+    expect(out.prompt).not.toContain("Use these locations:")
+    expect(out.prompt).not.toContain("the foobar from reference image")
   })
 })

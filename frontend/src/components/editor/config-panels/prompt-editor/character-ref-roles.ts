@@ -34,10 +34,12 @@ export function characterSwapMenuRoles(
  * rides the `variantSlug` token slot, whose grammar is `[a-z][a-z0-9-]*` (see
  * `CHAR_REF_PATTERN_CORE` / the shared `parseCharacterMentionToken`). We must
  * NOT change that grammar (Phase D guardrail), so we conform to it here —
- * lower-case, dash-join whitespace, drop out-of-grammar characters, and force a
- * leading letter — keeping the emitted `@kira:1:<role>` token re-parseable on
- * reload. (image-ref's label can preserve case/underscores because the
- * `{image:N:label}` grammar is looser.)
+ * lower-case, dash-join whitespace, drop out-of-grammar characters, force a
+ * leading letter, then collapse dash runs and drop a trailing dash — keeping
+ * the emitted `@kira:1:<role>` token re-parseable on reload and matching
+ * `characterMentionSlug`'s slugification (so `"gold - ring"` → `"gold-ring"`
+ * and `"ring-"` → `"ring"`). (image-ref's label can preserve case/underscores
+ * because the `{image:N:label}` grammar is looser.)
  */
 export function sanitizeRole(raw: string): string {
   return raw
@@ -47,6 +49,8 @@ export function sanitizeRole(raw: string): string {
     .replace(/[^a-z0-9-]/g, "")
     .replace(/^[^a-z]+/, "") // grammar requires a leading [a-z]
     .slice(0, 32)
+    .replace(/-+/g, "-") // collapse dash runs (matches characterMentionSlug)
+    .replace(/-$/, "") // drop a trailing dash (incl. one left by the 32-cap)
 }
 
 /**

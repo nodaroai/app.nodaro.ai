@@ -99,6 +99,9 @@ export function CharacterRefView(props: NodeViewProps) {
   // is whichever slot is set (the D1 resolver reads `usageMode ?? variantSlug`).
   const roleMenuPresets = characterSwapMenuRoles(IMAGE_REFERENCE_FORMAT)
   const isHybrid = roleMenuPresets !== null
+  // Non-null in hybrid (the gate returned presets); `[]` in legacy — a single
+  // local so the `readonly string[]` cast isn't repeated at each use site.
+  const rolePresets: readonly string[] = roleMenuPresets ?? []
   const currentRole = isHybrid ? (attrs.usageMode ?? attrs.variantSlug) : null
   const isCustomRole = !!currentRole && !CHARACTER_ROLE_PRESETS.includes(currentRole)
 
@@ -158,6 +161,13 @@ export function CharacterRefView(props: NodeViewProps) {
     setCustomText("")
   }, [props])
 
+  // Hybrid identity-lock toggle (Task 4): flip the per-mention `~lock` sentinel
+  // for THIS pill. Kept open so the user sees the state change; the resolver
+  // forces `identityLock.enabled` on for this reference when set.
+  const toggleLock = useCallback(() => {
+    props.updateAttributes({ lock: !attrs.lock })
+  }, [props, attrs.lock])
+
   const characterDisplay = ref?.label ?? attrs.characterSlug
   // Legacy: variantSlug is a real character variant → show the "/variant"
   // segment. Hybrid: that slot holds a ROLE, surfaced via the badge below, so
@@ -174,6 +184,7 @@ export function CharacterRefView(props: NodeViewProps) {
       ? currentRole && `role: ${currentRole}`
       : attrs.variantSlug && `variant: ${attrs.variantSlug}`,
     !isHybrid && attrs.usageMode && `mode: ${attrs.usageMode}`,
+    isHybrid && attrs.lock && "identity lock: on",
     isBroken && "no matching character is wired to this node",
   ]
     .filter(Boolean)
@@ -228,6 +239,9 @@ export function CharacterRefView(props: NodeViewProps) {
           : attrs.usageMode && (
               <span className="character-ref-pill__mode-badge">{usageModeLabel(attrs.usageMode)}</span>
             )}
+        {isHybrid && attrs.lock && (
+          <span className="character-ref-pill__mode-badge" title="identity lock on">lock</span>
+        )}
       </button>
       <button
         type="button"
@@ -278,7 +292,7 @@ export function CharacterRefView(props: NodeViewProps) {
           // legacy it's the usage-mode list — keeping the legacy estimate
           // byte-identical to before.
           const vocabCount = isHybrid
-            ? (roleMenuPresets as readonly string[]).length + 1
+            ? rolePresets.length + 1
             : LABEL_PRESETS_LIVE.length
           const MENU_H_ESTIMATE = (vocabCount + 2) * 32 + 16
           const MARGIN = 4
@@ -330,7 +344,7 @@ export function CharacterRefView(props: NodeViewProps) {
                     {currentRole == null && <span aria-hidden>✓</span>}
                   </button>
                   <div className="my-1 border-t border-border/60" />
-                  {(roleMenuPresets as readonly string[]).map((role) => (
+                  {rolePresets.map((role) => (
                     <button
                       key={role}
                       type="button"
@@ -402,6 +416,27 @@ export function CharacterRefView(props: NodeViewProps) {
                       Custom…
                     </button>
                   )}
+                  {/* Identity-lock toggle (Task 4) — per-mention `~lock`. Kept
+                      open on click so the state change is visible. */}
+                  <div className="my-1 border-t border-border/60" />
+                  <button
+                    type="button"
+                    role="menuitemcheckbox"
+                    aria-checked={!!attrs.lock}
+                    data-testid="character-ref-lock-toggle"
+                    className={`w-full text-left px-2.5 py-1.5 text-[11px] flex items-center justify-between transition-colors ${
+                      attrs.lock
+                        ? "bg-violet-500/15 text-violet-700 dark:text-violet-300"
+                        : "hover:bg-muted text-foreground"
+                    }`}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      toggleLock()
+                    }}
+                  >
+                    <span>Identity lock</span>
+                    {attrs.lock && <span aria-hidden>✓</span>}
+                  </button>
                 </>
               ) : (
                 <>

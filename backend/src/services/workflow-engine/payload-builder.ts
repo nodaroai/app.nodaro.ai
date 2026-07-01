@@ -946,6 +946,19 @@ function resolveVideoPromptMentions(
       canonicalDescription: ctx.canonicalDescription ?? undefined,
     }
   }
+  // First-sight character extras: surface the wired character's scene-composition
+  // (held-prop / styling / text) as the extra's `elementInjection`, mirroring how
+  // the mention/canonical paths derive `ConnectedReference.elementInjection` (via
+  // `stampElementInjections`). Same map + "Inject Elements" off-switch as those
+  // paths, so a first-sight extra whose slug has wired elements surfaces them in
+  // the video hybrid output instead of silently dropping. `identityLock` is
+  // intentionally NOT populated — `ExtraRefInput` carries no per-extra lock yet
+  // (the per-mention lock toggle is follow-up F4); no source → leave undefined.
+  const extraConsumer = (buildCtx?.nodes ?? []).find((n) => n.id === consumerNodeId)
+  const extraElementInjections =
+    (extraConsumer?.data as { injectElements?: boolean } | undefined)?.injectElements === false
+      ? new Map<string, string>()
+      : collectCharacterElementInjections(consumerNodeId, buildCtx)
   // All mention / numbering / canonical-fallback / extras assembly lives in the
   // shared core — the single source of truth shared with the frontend resolver.
   return resolveVideoReferenceCore({
@@ -961,6 +974,7 @@ function resolveVideoPromptMentions(
         characterSlug: ex.characterSlug,
         variantSlug: ex.variantSlug,
         usageMode: ex.usageMode,
+        elementInjection: ex.characterSlug ? extraElementInjections.get(ex.characterSlug) : undefined,
       })) ?? []),
       // Wired Assets-handle entities auto-attach AFTER the caller's extras.
       ...wiredEntityExtras,

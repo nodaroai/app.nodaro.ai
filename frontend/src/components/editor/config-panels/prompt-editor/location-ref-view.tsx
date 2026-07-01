@@ -19,6 +19,7 @@ import {
   LOCATION_ROLE_PRESETS,
   locationSwapMenuRoles,
   roleToLocationRefSlots,
+  sanitizeLocationRole,
 } from "./location-ref-roles"
 import type { LocationRefAttrs } from "./location-ref-extension"
 
@@ -94,16 +95,19 @@ export function LocationRefView(props: NodeViewProps) {
 
   const [hoverAnchor, setHoverAnchor] = useState<DOMRect | null>(null)
   const [menuAnchor, setMenuAnchor] = useState<DOMRect | null>(null)
+  const [customMode, setCustomMode] = useState(false)
+  const [customText, setCustomText] = useState("")
+  const customInputRef = useRef<HTMLInputElement | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
 
   // Hybrid gate: in "hybrid" format the swap-menu offers curated ROLE presets
-  // (+ a Default row, NO Custom input — the location parser is preset-gated);
-  // in "legacy" it keeps the EXISTING usage-mode menu UNCHANGED.
-  // `roleMenuPresets` is null in legacy. A location role lives in EITHER `role`
-  // (genuine roles) OR `usageMode` (the two presets — layout/style — that are
-  // also LocationUsageModes, whose parser-stable slot is `usageMode`). The
-  // active role's PHRASE form (badge + menu highlight) maps from whichever slot
-  // is set via `normalizeRoleSlug`.
+  // (+ a Custom… input + a Default row); in "legacy" it keeps the EXISTING
+  // usage-mode menu UNCHANGED. `roleMenuPresets` is null in legacy. A location
+  // role lives in EITHER `role` (genuine + custom roles) OR `usageMode` (the two
+  // presets — layout/style — that are also LocationUsageModes, whose parser-
+  // stable slot is `usageMode`). The active role's PHRASE form (badge + menu
+  // highlight) maps from whichever slot is set via `normalizeRoleSlug` (custom
+  // slugs pass through unchanged).
   const roleMenuPresets = locationSwapMenuRoles(IMAGE_REFERENCE_FORMAT)
   const isHybrid = roleMenuPresets !== null
   const currentRolePhrase = useMemo<string | null>(() => {
@@ -117,6 +121,9 @@ export function LocationRefView(props: NodeViewProps) {
     }
     return null
   }, [isHybrid, attrs.role, attrs.usageMode])
+  // A role that isn't one of the curated presets (its phrase form isn't in the
+  // list) is a CUSTOM role — prefills the Custom… input when reopened.
+  const isCustomRole = !!currentRolePhrase && !LOCATION_ROLE_PRESETS.includes(currentRolePhrase)
 
   // Clean up any stuck preview / menu on unmount (e.g. when the pill is deleted).
   useEffect(() => () => {
@@ -124,9 +131,19 @@ export function LocationRefView(props: NodeViewProps) {
     setMenuAnchor(null)
   }, [])
 
+  // Auto-focus the custom-role input when entering custom mode (hybrid only).
+  useEffect(() => {
+    if (customMode) customInputRef.current?.focus()
+  }, [customMode])
+
   // Dismiss on outside-click / Escape + escape the modal scroll-lock so the
-  // menu can scroll. Shared by all body-portaled pill views.
-  useBodyMenuDismiss(menuRef, menuAnchor, () => setMenuAnchor(null))
+  // menu can scroll. Shared by all body-portaled pill views. Also resets the
+  // hybrid custom-input state so it never reopens mid-typed.
+  useBodyMenuDismiss(menuRef, menuAnchor, () => {
+    setMenuAnchor(null)
+    setCustomMode(false)
+    setCustomText("")
+  })
 
   const handleRemove = useCallback(() => {
     if (typeof props.getPos !== "function") return
@@ -147,9 +164,13 @@ export function LocationRefView(props: NodeViewProps) {
   // Hybrid role pick: route the role into its single token slot (a
   // LocationUsageMode → `usageMode`, else `role`) and CLEAR every sibling so
   // the slots stay mutually exclusive (never an invalid multi-segment token).
+  // Presets pass through sanitizeLocationRole as a no-op; Custom values get
+  // grammar-conformed to the bare-slug segment.
   const setRole = useCallback((rolePhrase: string) => {
     props.updateAttributes(roleToLocationRefSlots(rolePhrase))
     setMenuAnchor(null)
+    setCustomMode(false)
+    setCustomText("")
   }, [props])
 
   // Hybrid "Default" pick: clear ALL override slots so the pill falls back to
@@ -157,7 +178,16 @@ export function LocationRefView(props: NodeViewProps) {
   const clearRole = useCallback(() => {
     props.updateAttributes({ role: null, usageMode: null, bucket: null, variant: null })
     setMenuAnchor(null)
+    setCustomMode(false)
+    setCustomText("")
   }, [props])
+
+  // Hybrid identity-lock toggle (Task 4): flip the per-mention `~lock` sentinel
+  // for THIS pill; the hybrid location resolver forces `identityLock.enabled` on
+  // for this reference when set. Kept open so the state change is visible.
+  const toggleLock = useCallback(() => {
+    props.updateAttributes({ lock: !attrs.lock })
+  }, [props, attrs.lock])
 
   const locationDisplay = ref?.label ?? attrs.locationSlug
   const variantDisplay = attrs.bucket && attrs.variant
@@ -173,6 +203,7 @@ export function LocationRefView(props: NodeViewProps) {
     isHybrid
       ? currentRolePhrase && `role: ${currentRolePhrase}`
       : attrs.usageMode && `mode: ${attrs.usageMode}`,
+    isHybrid && attrs.lock && "identity lock: on",
     isBroken && "no matching location is wired to this node",
   ]
     .filter(Boolean)
@@ -228,6 +259,9 @@ export function LocationRefView(props: NodeViewProps) {
           : attrs.usageMode && (
               <span className="location-ref-pill__mode-badge">{locationUsageModeLabel(attrs.usageMode)}</span>
             )}
+        {isHybrid && attrs.lock && (
+          <span className="location-ref-pill__mode-badge" title="identity lock on">lock</span>
+        )}
       </button>
       <button
         type="button"
@@ -274,11 +308,11 @@ export function LocationRefView(props: NodeViewProps) {
         (() => {
           const MENU_W = 220
           // Height estimate drives the flip-above-when-cramped math. In hybrid
-          // the vocabulary is the role presets (no Custom row for location); in
+          // the vocabulary is the role presets (+1 for the Custom… row); in
           // legacy it's the usage-mode list — keeping the legacy estimate
           // byte-identical to before.
           const vocabCount = isHybrid
-            ? (roleMenuPresets as readonly string[]).length
+            ? (roleMenuPresets as readonly string[]).length + 1
             : LOCATION_MODE_PRESETS_LIVE.length
           const MENU_H_ESTIMATE = (vocabCount + 2) * 32 + 16
           const MARGIN = 4
@@ -351,6 +385,79 @@ export function LocationRefView(props: NodeViewProps) {
                       {currentRolePhrase === roleP && <span aria-hidden>✓</span>}
                     </button>
                   ))}
+                  <div className="my-1 border-t border-border/60" />
+                  {customMode ? (
+                    <div className="px-2 py-1.5 flex items-center gap-1">
+                      <input
+                        ref={customInputRef}
+                        value={customText}
+                        onChange={(e) => setCustomText(e.target.value)}
+                        placeholder="rooftop  or  courtyard"
+                        data-testid="location-ref-role-custom-input"
+                        className="flex-1 min-w-0 text-[11px] px-2 py-1 rounded border border-border bg-background outline-none focus:ring-2 focus:ring-cyan-400/50"
+                        onClick={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => {
+                          // Keep Enter/Escape out of the editor's keymap.
+                          e.stopPropagation()
+                          if (e.key === "Enter") {
+                            e.preventDefault()
+                            if (sanitizeLocationRole(customText)) setRole(customText)
+                          } else if (e.key === "Escape") {
+                            e.preventDefault()
+                            setCustomMode(false)
+                            setCustomText("")
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        aria-label="Apply custom role"
+                        className="text-[11px] px-2 py-1 rounded bg-cyan-500/15 text-cyan-700 hover:bg-cyan-500/25 dark:text-cyan-300 disabled:opacity-40 disabled:cursor-not-allowed"
+                        disabled={sanitizeLocationRole(customText).length === 0}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setRole(customText)
+                        }}
+                      >
+                        OK
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="w-full text-left px-2.5 py-1.5 text-[11px] hover:bg-muted text-foreground italic"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setCustomMode(true)
+                        setCustomText(isCustomRole ? (currentRolePhrase ?? "") : "")
+                      }}
+                    >
+                      Custom…
+                    </button>
+                  )}
+                  {/* Identity-lock toggle (Task 4) — per-mention `~lock`. Kept
+                      open on click so the state change is visible. */}
+                  <div className="my-1 border-t border-border/60" />
+                  <button
+                    type="button"
+                    role="menuitemcheckbox"
+                    aria-checked={!!attrs.lock}
+                    data-testid="location-ref-lock-toggle"
+                    className={`w-full text-left px-2.5 py-1.5 text-[11px] flex items-center justify-between transition-colors ${
+                      attrs.lock
+                        ? "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300"
+                        : "hover:bg-muted text-foreground"
+                    }`}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      toggleLock()
+                    }}
+                  >
+                    <span>Identity lock</span>
+                    {attrs.lock && <span aria-hidden>✓</span>}
+                  </button>
                 </>
               ) : (
                 <>

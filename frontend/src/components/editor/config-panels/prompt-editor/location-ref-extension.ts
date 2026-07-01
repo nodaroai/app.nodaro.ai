@@ -22,6 +22,11 @@ export interface LocationRefAttrs {
    *  mode pills. Round-trips through `renderText` as the 3rd segment so the
    *  downstream shared parser sees the exact hand-typed token. */
   role: string | null
+  /** Per-mention identity-lock (Unified Reference Roles, Task 4). When true the
+   *  pill serializes a trailing `~lock` sentinel that the HYBRID location
+   *  resolver turns into a per-reference lock line. HYBRID-only (legacy strips
+   *  it on promotion). Optional so a lock-less parse stays byte-identical. */
+  lock?: boolean
 }
 
 /**
@@ -44,8 +49,12 @@ export interface LocationRefAttrs {
  * have seen for a hand-typed slug.
  */
 const LOCATION_REF_SEGMENT = "(?:[a-z][a-z0-9-]*\\/[a-z][a-z0-9-]*|[a-z][a-z0-9-]*)"
+// The optional trailing `(?:~lock)?` absorbs the additive Task-4 identity-lock
+// sentinel INTO the single captured token (passed whole to
+// `parseLocationMentionToken`, which strips it); optional, so a lock-less token
+// matches byte-identically.
 const LOCATION_REF_PATTERN_CORE =
-  `(@[a-z][a-z0-9-]*:\\d+(?::${LOCATION_REF_SEGMENT})?(?::${LOCATION_REF_SEGMENT})?)`
+  `(@[a-z][a-z0-9-]*:\\d+(?::${LOCATION_REF_SEGMENT})?(?::${LOCATION_REF_SEGMENT})?(?:~lock(?![a-z0-9-]))?)`
 
 /**
  * Parse the captured token into a complete attribute set. Delegates to the
@@ -64,6 +73,9 @@ function parseMatchAttrs(token: string): LocationRefAttrs | null {
     variant: parsed.variant,
     usageMode: parsed.usageMode,
     role: parsed.role ?? null,
+    // Additive `~lock` (Task 4): only present when true so a lock-less parse
+    // stays byte-identical to the pre-Task-4 attr shape.
+    ...(parsed.lock ? { lock: true } : {}),
   }
 }
 
@@ -115,6 +127,10 @@ export function resolvePromotableAttrs(
   if (!attrs) return false
   if (!knownLocationSlugs(extension).has(attrs.locationSlug)) return false
   if (attrs.role && IMAGE_REFERENCE_FORMAT !== "hybrid") return false
+  // `~lock` is a HYBRID-only construct (Task 4): in LEGACY strip it on promotion
+  // so a stray sentinel from a prior hybrid session never sets a legacy pill's
+  // (hidden, toggle-less) lock. HYBRID keeps it.
+  if (attrs.lock && IMAGE_REFERENCE_FORMAT !== "hybrid") return { ...attrs, lock: false }
   return attrs
 }
 
@@ -180,6 +196,13 @@ export const LocationRefExtension = Node.create({
         renderHTML: (attrs) =>
           attrs.role ? { "data-location-role": String(attrs.role) } : {},
       },
+      // Per-mention identity-lock (Task 4). Boolean; renders `data-lock` only
+      // when on so lock-off pill HTML stays byte-identical.
+      lock: {
+        default: false,
+        parseHTML: (el) => el.getAttribute("data-lock") === "true",
+        renderHTML: (attrs) => (attrs.lock ? { "data-lock": "true" } : {}),
+      },
     }
   },
 
@@ -223,7 +246,9 @@ export const LocationRefExtension = Node.create({
     if (a.usageMode) {
       parts.push(a.usageMode)
     }
-    return parts.join(":")
+    // Additive `~lock` sentinel LAST so the shared parser reads it as the
+    // trailing per-mention lock flag.
+    return parts.join(":") + (a.lock ? "~lock" : "")
   },
 
   addNodeView() {

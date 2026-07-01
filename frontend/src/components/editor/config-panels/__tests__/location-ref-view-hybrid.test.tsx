@@ -6,8 +6,9 @@ import { createElement } from "react"
  * Wiring tests for the Phase D Task 3 HYBRID role menu on the cyan location
  * pill. The menu's visual rendering is a human staging check; this file pins
  * the load-bearing wiring — the role click → `roleToLocationRefSlots` →
- * `updateAttributes` path, the presets-only menu (NO Custom), and the
- * slug→phrase badge.
+ * `updateAttributes` path, the presets + Custom… input (F2 follow-up removed
+ * the parser preset gate, so custom location roles now round-trip like character
+ * roles), and the slug→phrase badge.
  *
  * Two narrow mocks:
  *   - `@tiptap/react` `NodeViewWrapper` → a plain span (same as the legacy
@@ -96,11 +97,27 @@ describe("LocationRefView — hybrid role menu", () => {
     expect(screen.getByText("empty background")).toBeInTheDocument()
   })
 
-  it("has NO Custom input (location parser is preset-gated)", () => {
+  it("HAS a Custom… input (F2 — the location parser now accepts custom roles)", () => {
     render(<LocationRefView {...mockProps()} />)
     openMenu()
-    expect(screen.queryByText("Custom…")).toBeNull()
-    expect(screen.queryByTestId("location-ref-role-custom-input")).toBeNull()
+    expect(screen.getByText("Custom…")).toBeInTheDocument()
+  })
+
+  it("a Custom role is sanitized into the role slot, clearing the rest (Enter)", () => {
+    const props = mockProps()
+    render(<LocationRefView {...props} />)
+    openMenu()
+    fireEvent.click(screen.getByText("Custom…"))
+    const input = screen.getByTestId("location-ref-role-custom-input") as HTMLInputElement
+    fireEvent.change(input, { target: { value: "Rooftop View" } })
+    fireEvent.keyDown(input, { key: "Enter" })
+    // "Rooftop View" → sanitizeLocationRole → "rooftop-view" in the role slot.
+    expect(props.updateAttributes).toHaveBeenCalledWith({
+      role: "rooftop-view",
+      usageMode: null,
+      bucket: null,
+      variant: null,
+    })
   })
 
   it("clicking a genuine role (background) sets role slot, clears the rest", () => {
