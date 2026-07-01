@@ -10,33 +10,23 @@
  ***REDACTED-OSS-SCRUB***
  */
 
-/**
- * Reference-photo kinds captured in the Character Studio identity foundation.
- * Mirrors the Zod enum in `routes/generate-character.ts` and the frontend copy
- * in `frontend/src/lib/reference-photo-routing.ts`; the DB stores them on
- * `reference_photos[].kind`. Defined locally (not imported from `@nodaro/shared`)
- * so this backend-only helper needs no shared-package rebuild.
- *
- * TODO(reference-roles): promote these 7 kinds — and the asset→kind routing in
- * `preferredKind` below — into `@nodaro/shared` (next to
- * `LOCATION_REFERENCE_PHOTO_KINDS`) so backend ranking and the frontend's
- * `routePhotosForAsset` filtering share one table. They currently diverge
- * (frontend routes `lighting` → all photos; here it → `frontBody`, matching the
- * full-body render). Deferred: out of this change's scope.
- */
-export type ReferencePhotoKind =
-  | "frontFace"
-  | "sideLeft"
-  | "sideRight"
-  | "threeQuarterLeft"
-  | "threeQuarterRight"
-  | "frontBody"
-  | "other"
+import type { CharacterReferencePhotoKind, CharacterReferencePhoto } from "@nodaro/shared"
 
-export interface ReferencePhoto {
-  url: string
-  kind: ReferencePhotoKind
-}
+/**
+ * The Character Studio identity-foundation reference-photo kinds. The canonical
+ * 7-kind enum + `CharacterReferencePhoto` shape live in `@nodaro/shared`
+ * (`CHARACTER_REFERENCE_PHOTO_KINDS`) — shared with the `generate-character` /
+ * `characters` route Zod enums and the frontend's `reference-photo-routing.ts`.
+ * Re-exported here under the local names this module's consumers already use.
+ *
+ * `preferredKind` below stays backend-only by design: it's identity RANKING
+ * (which kind to prioritize for multi-image conditioning), distinct from the
+ * frontend's `routePhotosForAsset` UI FILTERING (which intentionally routes
+ * `lighting` → all photos where this routes it → `frontBody`). The catalog drift
+ * guard in the test keeps its variant strings in sync with CHARACTER_ASSET_VARIANTS.
+ */
+export type ReferencePhotoKind = CharacterReferencePhotoKind
+export type ReferencePhoto = CharacterReferencePhoto
 
 export interface PriorAssetColumn {
   /** DB column name, e.g. `"expressions"`, `"body_angles"`. */

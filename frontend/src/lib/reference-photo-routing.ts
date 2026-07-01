@@ -1,16 +1,10 @@
-export type ReferencePhotoKind =
-  | "frontFace"          // RENAMED from "front" — explicit face-level shot
-  | "sideLeft"
-  | "sideRight"
-  | "threeQuarterLeft"
-  | "threeQuarterRight"
-  | "frontBody"          // RENAMED from "fullBody" — explicit full-body natural standing shot
-  | "other"
+import type { CharacterReferencePhotoKind, CharacterReferencePhoto } from "@nodaro/shared"
 
-export interface ReferencePhoto {
-  readonly url: string
-  readonly kind: ReferencePhotoKind
-}
+// The 7 identity-foundation kinds now live in `@nodaro/shared`
+// (`CHARACTER_REFERENCE_PHOTO_KINDS`). Aliased here (kept `readonly`) for the
+// existing frontend consumers — nodes.ts, api.ts, reference-photos-block.
+export type ReferencePhotoKind = CharacterReferencePhotoKind
+export type ReferencePhoto = Readonly<CharacterReferencePhoto>
 
 /**
  * Asset surfaces a Character Studio generation can target. The split between
