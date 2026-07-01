@@ -161,11 +161,14 @@ export function CharacterRefView(props: NodeViewProps) {
     setCustomText("")
   }, [props])
 
-  // Hybrid identity-lock toggle (Task 4): flip the per-mention `~lock` sentinel
-  // for THIS pill. Kept open so the user sees the state change; the resolver
-  // forces `identityLock.enabled` on for this reference when set.
+  // Hybrid identity-lock toggle (Task 4 + F4). Deliberately simple on/inherit:
+  // ON sets `lock:true` (`~lock`), OFF clears to `undefined` (inherit — since
+  // the editor source defaults lock off, inherit == off). The menu NEVER sets
+  // `false` (that would pollute every off token with `~nolock`); the force-off
+  // `~nolock` state (lock:false) is reachable only via a hand-typed/API token,
+  // which still round-trips through parse → attr → renderText.
   const toggleLock = useCallback(() => {
-    props.updateAttributes({ lock: !attrs.lock })
+    props.updateAttributes({ lock: attrs.lock === true ? undefined : true })
   }, [props, attrs.lock])
 
   const characterDisplay = ref?.label ?? attrs.characterSlug

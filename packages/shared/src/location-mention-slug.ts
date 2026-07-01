@@ -115,11 +115,11 @@ export interface LocationMentionTokenInfo {
   readonly role?: string
   /**
    * Additive per-mention identity-lock sentinel (Unified Reference Roles,
-   * Task 4). `true` when the token carried a trailing `~lock`
-   * (`@old-library:1:background~lock`); ABSENT (undefined) otherwise so a
-   * lock-less token stays byte-identical to the pre-Task-4 shape. Only ACTED
-   * UPON by the HYBRID resolver (force `identityLock.enabled = true`); the
-   * LEGACY resolver ignores it, so `~lock` is inert on the legacy path.
+   * Task 4 + F4). Tri-state: `true` (`~lock`, force ON) | `false` (`~nolock`,
+   * force OFF — suppresses a ref-level `identityLock.enabled = true`) |
+   * ABSENT/undefined (neither — inherit the ref default; byte-identical to the
+   * pre-Task-4 shape). Only ACTED UPON by the HYBRID resolver; the LEGACY
+   * resolver ignores it, so both sentinels are inert on the legacy path.
    */
   readonly lock?: boolean
   /** Byte offset into the source prompt — used to splice the token out at
@@ -148,20 +148,27 @@ export function parseLocationMentionToken(
    *  (preset OR custom, F2); OMITTED (undefined) for every other shape so
    *  canonical/variant/mode results stay byte-identical to the pre-Phase-D parser. */
   role?: string
-  /** Additive per-mention identity-lock sentinel (Task 4). `true` when the token
-   *  carried a trailing `~lock`; OMITTED otherwise (byte-identical). */
+  /** Additive per-mention identity-lock sentinel (Task 4 + F4). Tri-state:
+   *  `true` (`~lock`) | `false` (`~nolock`) | OMITTED (neither — byte-identical). */
   lock?: boolean
 } | null {
   if (!text.startsWith("@")) return null
   let rest = text.slice(1)
   if (rest.length === 0 || !/^[a-z]/.test(rest)) return null
 
-  // Additive `~lock` sentinel (Task 4). Strip a trailing `~lock` BEFORE
-  // splitting so the segment grammar stays byte-identical (a `~` never appears
-  // inside a bucket/variant/mode/role segment). A lock-less token is untouched.
-  const lock = rest.endsWith("~lock") || undefined
-  if (lock) rest = rest.slice(0, -"~lock".length)
-  const lockField = lock ? { lock: true } : {}
+  // Additive `~lock` / `~nolock` sentinels (Task 4 + F4). Strip a trailing
+  // `~nolock` (force lock OFF) or `~lock` (force lock ON) BEFORE splitting so
+  // the segment grammar stays byte-identical (a `~` never appears inside a
+  // bucket/variant/mode/role segment). Check `~nolock` FIRST. A token with
+  // NEITHER sentinel is untouched and gains NO `lock` key (byte-identical).
+  let lockField: { lock?: boolean } = {}
+  if (rest.endsWith("~nolock")) {
+    rest = rest.slice(0, -"~nolock".length)
+    lockField = { lock: false }
+  } else if (rest.endsWith("~lock")) {
+    rest = rest.slice(0, -"~lock".length)
+    lockField = { lock: true }
+  }
 
   const parts = rest.split(":")
   if (parts.length < 2 || parts.length > 4) return null
@@ -262,11 +269,13 @@ export function findLocationMentionTokens(
   // bucket/variant pair (`[a-z][a-z0-9-]*\/[a-z][a-z0-9-]*`). The two are
   // disjoint at the regex level — bucket/variant requires the literal `/`.
   const segment = "(?:[a-z][a-z0-9-]*\\/[a-z][a-z0-9-]*|[a-z][a-z0-9-]*)"
-  // The optional trailing `(?:~lock)?` absorbs the additive Task-4 identity-lock
-  // sentinel INTO the captured token (spliced out at resolve time); optional, so
-  // a lock-less token matches byte-identically to before.
+  // The optional trailing `(?:~(?:no)?lock)?` absorbs the additive Task-4/F4
+  // identity-lock sentinel (`~lock` force-on OR `~nolock` force-off) INTO the
+  // captured token (spliced out at resolve time); optional, so a lock-less token
+  // matches byte-identically to before. `(?![a-z0-9-])` keeps `~locked` /
+  // `~nolockx` literal.
   const regex = new RegExp(
-    `(?:^|[^a-zA-Z0-9])(@[a-z][a-z0-9-]*:\\d+(?::${segment})?(?::${segment})?(?:~lock(?![a-z0-9-]))?)`,
+    `(?:^|[^a-zA-Z0-9])(@[a-z][a-z0-9-]*:\\d+(?::${segment})?(?::${segment})?(?:~(?:no)?lock(?![a-z0-9-]))?)`,
     "g",
   )
   const knownSet = new Set(knownLocationSlugs)

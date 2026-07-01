@@ -51,11 +51,13 @@ const AUDIO_TOKEN_RE = /\{audio:(\d+)(?::([a-zA-Z0-9_-]+))?\}/gi
  *   4=third (variant OR mode)
  *   5=fourth (mode)
  *
- * The optional trailing `(?:~lock)?` absorbs the additive Task-4 identity-lock
- * sentinel into the match (detected via `/~lock$/` on match[0]); optional +
- * non-capturing, so groups 1–5 and a lock-less token stay byte-identical.
+ * The optional trailing `(?:~(?:no)?lock)?` absorbs the additive Task-4/F4
+ * identity-lock sentinel (`~lock` force-on OR `~nolock` force-off) into the
+ * match (the tri-state is read via `/~nolock$/` then `/~lock$/` on match[0]);
+ * optional + non-capturing, so groups 1–5 and a lock-less token stay
+ * byte-identical.
  */
-const CHARACTER_TOKEN_RE_GLOBAL = /(^|[^a-zA-Z0-9])(@[a-z][a-z0-9-]*):(\d+)(?::([a-z][a-z0-9-]*))?(?::([a-z][a-z0-9-]*))?(?:~lock(?![a-z0-9-]))?/g
+const CHARACTER_TOKEN_RE_GLOBAL = /(^|[^a-zA-Z0-9])(@[a-z][a-z0-9-]*):(\d+)(?::([a-z][a-z0-9-]*))?(?::([a-z][a-z0-9-]*))?(?:~(?:no)?lock(?![a-z0-9-]))?/g
 
 /**
  * Location token shape — wider than character because the 3rd/4th segment
@@ -73,11 +75,11 @@ const CHARACTER_TOKEN_RE_GLOBAL = /(^|[^a-zA-Z0-9])(@[a-z][a-z0-9-]*):(\d+)(?::(
  * would have seen for a hand-typed slug.
  */
 const LOCATION_TOKEN_SEGMENT = "(?:[a-z][a-z0-9-]*\\/[a-z][a-z0-9-]*|[a-z][a-z0-9-]*)"
-// The optional trailing `(?:~lock)?` is captured INSIDE group 2 (the token
-// passed to `parseLocationRefMatch`, which strips it); optional, so a lock-less
-// token stays byte-identical.
+// The optional trailing `(?:~(?:no)?lock)?` is captured INSIDE group 2 (the
+// token passed to `parseLocationRefMatch`, which strips it and surfaces the
+// tri-state `lock`); optional, so a lock-less token stays byte-identical.
 const LOCATION_TOKEN_RE_GLOBAL = new RegExp(
-  `(^|[^a-zA-Z0-9])(@[a-z][a-z0-9-]*:\\d+(?::${LOCATION_TOKEN_SEGMENT})?(?::${LOCATION_TOKEN_SEGMENT})?(?:~lock(?![a-z0-9-]))?)`,
+  `(^|[^a-zA-Z0-9])(@[a-z][a-z0-9-]*:\\d+(?::${LOCATION_TOKEN_SEGMENT})?(?::${LOCATION_TOKEN_SEGMENT})?(?:~(?:no)?lock(?![a-z0-9-]))?)`,
   "g",
 )
 
@@ -245,9 +247,12 @@ export function collectTokens(line: string, known: KnownSlugSets): TokenMatch[] 
           // → `@old-library:1` on the next edit. Matches the extension's
           // `parseMatchAttrs` / input-rule shape.
           role: attrs.role,
-          // Per-mention `~lock` (Task 4): HYBRID-only so a reloaded legacy
-          // prompt never flips a pill's lock on. Mirrors `resolvePromotableAttrs`.
-          lock: IMAGE_REFERENCE_FORMAT === "hybrid" ? (attrs.lock ?? false) : false,
+          // Per-mention tri-state lock (Task 4 + F4): HYBRID-only so a reloaded
+          // legacy prompt never flips a pill's lock on/off. In legacy force
+          // `undefined` (inert); in hybrid carry the parsed tri-state through
+          // verbatim (undefined stays undefined — NOT coerced to false, which
+          // would emit a spurious `~nolock`). Mirrors `resolvePromotableAttrs`.
+          lock: IMAGE_REFERENCE_FORMAT === "hybrid" ? attrs.lock : undefined,
         },
       },
     })
@@ -264,10 +269,13 @@ export function collectTokens(line: string, known: KnownSlugSets): TokenMatch[] 
     const indexStr = match[3]
     const third = match[4]
     const fourth = match[5]
-    // Per-mention `~lock` (Task 4): read from the full match (which now includes
-    // the sentinel) and HYBRID-gated so a reloaded legacy prompt never flips a
-    // pill's lock on. Mirrors the extension's input/paste `getAttributes`.
-    const lock = IMAGE_REFERENCE_FORMAT === "hybrid" && /~lock$/.test(match[0])
+    // Per-mention tri-state lock (Task 4 + F4): read from the full match (which
+    // now includes the sentinel) — `~nolock` → false, `~lock` → true, neither →
+    // undefined. HYBRID-gated so a reloaded legacy prompt never flips a pill's
+    // lock on/off. Mirrors the extension's input/paste `getAttributes`.
+    const lock = IMAGE_REFERENCE_FORMAT === "hybrid"
+      ? (/~nolock$/.test(match[0]) ? false : /~lock$/.test(match[0]) ? true : undefined)
+      : undefined
     const attrs = parseCharacterRefMatch(characterWithAt, indexStr, third, fourth, lock)
     if (!attrs) continue
     if (!known.characters.has(attrs.characterSlug)) continue
@@ -281,7 +289,9 @@ export function collectTokens(line: string, known: KnownSlugSets): TokenMatch[] 
           imageIndex: attrs.imageIndex,
           variantSlug: attrs.variantSlug,
           usageMode: attrs.usageMode,
-          lock: attrs.lock ?? false,
+          // Tri-state lock carried verbatim (undefined = inherit; NOT coerced to
+          // false, which would emit a spurious `~nolock` on re-serialize).
+          lock: attrs.lock,
         },
       },
     })

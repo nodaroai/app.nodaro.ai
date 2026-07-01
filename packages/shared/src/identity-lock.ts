@@ -146,16 +146,24 @@ const DEFAULT_LOCK_TEXT: Partial<Record<ReferenceSource, string>> = {
  * binding); otherwise the source's built-in wording is used.
  */
 /**
- * Return a copy of `ref` with `identityLock.enabled` forced ON when `forceLock`
- * is true — the per-mention `~lock` override (Unified Reference Roles, Task 4).
- * Any existing custom `text` is preserved. When `forceLock` is false the
- * ORIGINAL ref is returned UNCHANGED (never a copy), so a lock-less mention
- * resolves byte-identically to before. Called by the three HYBRID mention
- * resolvers right before `buildIdentityLockLine`. Never mutates `ref`.
+ * Apply a per-mention identity-lock OVERRIDE to `ref` — the tri-state
+ * `~lock` / `~nolock` sentinel (Unified Reference Roles, Task 4 + F4). The
+ * `lockOverride` argument is the token's parsed `lock`:
+ *   - `undefined` → INHERIT: the ORIGINAL ref is returned UNCHANGED (never a
+ *     copy), so a lock-less mention resolves byte-identically to before and the
+ *     ref/source default governs.
+ *   - `true` → FORCE ON: `identityLock.enabled = true` (any existing custom
+ *     `text` is preserved) — the `~lock` sentinel.
+ *   - `false` → FORCE OFF: `identityLock.enabled = false`, which
+ *     `buildIdentityLockLine` renders as `null`, SUPPRESSING even a ref-level
+ *     `identityLock.enabled = true` — the `~nolock` sentinel.
+ * Called by the three HYBRID mention resolvers right before
+ * `buildIdentityLockLine`. Never mutates `ref`.
  */
-export function withForcedIdentityLock(ref: ConnectedReference, forceLock: boolean): ConnectedReference {
-  if (!forceLock) return ref
-  return { ...ref, identityLock: { enabled: true, text: ref.identityLock?.text } }
+export function withForcedIdentityLock(ref: ConnectedReference, lockOverride?: boolean): ConnectedReference {
+  if (lockOverride === undefined) return ref
+  if (lockOverride) return { ...ref, identityLock: { enabled: true, text: ref.identityLock?.text } }
+  return { ...ref, identityLock: { enabled: false } }
 }
 
 export function buildIdentityLockLine(ref: ConnectedReference, binding: string): string | null {

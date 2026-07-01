@@ -283,10 +283,13 @@ function resolveCharacterMentionsHybrid(
   const additionalUrls: string[] = []
   const mentionedCharacterSlugs = new Set<string>()
   const refByUrl = new Map<string, ConnectedReference>()
-  // Per-mention `~lock` (Task 4): URLs whose mention carried a trailing `~lock`.
-  // The lock loop below forces `identityLock.enabled` for these before
-  // `buildIdentityLockLine`, regardless of the ref's default (default-off).
-  const lockedUrls = new Set<string>()
+  // Per-mention `~lock` / `~nolock` (Task 4 + F4): the tri-state lock OVERRIDE
+  // per attached URL — `true` (force on) / `false` (force off) / absent
+  // (inherit the ref default). The lock loop below feeds this to
+  // `withForcedIdentityLock` before `buildIdentityLockLine`. Only tokens that
+  // carried a sentinel write here (last sentinel wins); a sentinel-less mention
+  // never overwrites, so a `~lock` upstream survives a later plain mention.
+  const lockOverrideByUrl = new Map<string, boolean>()
   const matched: Array<{ token: string; offset: number; url: string; role: string }> = []
 
   for (const t of tokens) {
@@ -301,7 +304,7 @@ function resolveCharacterMentionsHybrid(
     additionalUrls.push(match.url)
     mentionedCharacterSlugs.add(t.characterSlug)
     refByUrl.set(match.url, match)
-    if (t.lock) lockedUrls.add(match.url)
+    if (t.lock !== undefined) lockOverrideByUrl.set(match.url, t.lock)
     const segment = (t.usageMode ?? t.variantSlug ?? "").trim()
     // Custom roles survive VERBATIM (Unified Reference Roles, Phase D). A
     // non-empty segment is the role when it is a curated preset (face/pose/style
@@ -349,7 +352,7 @@ function resolveCharacterMentionsHybrid(
     const ref = refByUrl.get(m.url)
     if (!ref) continue
     const binding = bindingFor(m.url)
-    const lock = buildIdentityLockLine(withForcedIdentityLock(ref, lockedUrls.has(m.url)), binding)
+    const lock = buildIdentityLockLine(withForcedIdentityLock(ref, lockOverrideByUrl.get(m.url)), binding)
     if (lock) lockLines.push(lock)
     const inject = ref.elementInjection?.trim()
     if (inject) elementDirectives.push(inject)
@@ -629,10 +632,12 @@ function resolveLocationMentionsHybrid(
   const additionalUrls: string[] = []
   const mentionedLocationSlugs = new Set<string>()
   const refByUrl = new Map<string, ConnectedReference>()
-  // Per-mention `~lock` (Task 4): URLs whose mention carried a trailing `~lock`.
-  // Forced ON before `buildIdentityLockLine` via `withForcedIdentityLock` below,
-  // so a location lock line appears even though location locks default OFF.
-  const lockedUrls = new Set<string>()
+  // Per-mention `~lock` / `~nolock` (Task 4 + F4): the tri-state lock OVERRIDE
+  // per attached URL — `true` (force on, so a location lock line appears even
+  // though location locks default OFF) / `false` (force off, suppressing a
+  // ref-level enabled lock) / absent (inherit). Fed to `withForcedIdentityLock`
+  // below. Only sentinel-bearing mentions write here (last sentinel wins).
+  const lockOverrideByUrl = new Map<string, boolean>()
   const matched: Array<{ token: string; offset: number; url: string; role: string }> = []
 
   for (const t of tokens) {
@@ -645,7 +650,7 @@ function resolveLocationMentionsHybrid(
     additionalUrls.push(match.url)
     mentionedLocationSlugs.add(t.locationSlug)
     refByUrl.set(match.url, match)
-    if (t.lock) lockedUrls.add(match.url)
+    if (t.lock !== undefined) lockOverrideByUrl.set(match.url, t.lock)
     const mode = t.usageMode ?? match.defaultUsageMode ?? DEFAULT_LOCATION_USAGE_MODE
     // A bare-slug ROLE (Unified Reference Roles, Phase D — e.g. `background`,
     // `empty-background`, `as-is`, or a curated custom role) is used VERBATIM:
@@ -687,7 +692,7 @@ function resolveLocationMentionsHybrid(
     const ref = refByUrl.get(m.url)
     if (!ref) continue
     const binding = bindingFor(m.url)
-    const lock = buildIdentityLockLine(withForcedIdentityLock(ref, lockedUrls.has(m.url)), binding)
+    const lock = buildIdentityLockLine(withForcedIdentityLock(ref, lockOverrideByUrl.get(m.url)), binding)
     if (lock) lockLines.push(lock)
     const inject = ref.elementInjection?.trim()
     if (inject) elementDirectives.push(inject)

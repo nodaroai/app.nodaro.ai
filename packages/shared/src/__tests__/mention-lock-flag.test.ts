@@ -326,3 +326,180 @@ describe("video hybrid — per-mention ~lock forces the lock line", () => {
     expect(out.prompt).not.toContain("Lock the exact identity")
   })
 })
+
+// ══════════════════════════════════════════════════════════════════════════
+// Task F4 — symmetric per-mention lock FORCE-OFF (`~nolock`) + tri-state
+// ══════════════════════════════════════════════════════════════════════════
+//
+// `~nolock` is the mirror of `~lock`: it FORCES the per-reference identity lock
+// OFF, suppressing a ref-level `identityLock.enabled = true`. Tri-state:
+//   `~lock`   → lock:true  (force ON)
+//   `~nolock` → lock:false (force OFF)
+//   neither   → lock ABSENT (undefined — inherit the ref/source default)
+// Additive + hybrid-gated; legacy byte-identical + inert.
+
+const victoriaLocked: ConnectedReference = { ...victoria, identityLock: { enabled: true } }
+const libraryLocked: ConnectedReference = { ...library, identityLock: { enabled: true } }
+
+describe("parseCharacterMentionToken — additive ~nolock (force off)", () => {
+  it("parses a trailing ~nolock on a mode token → lock:false", () => {
+    expect(parseCharacterMentionToken("@kira:1:face~nolock")).toEqual({
+      characterSlug: "kira",
+      imageIndex: 1,
+      variantSlug: null,
+      usageMode: "face",
+      lock: false,
+    })
+  })
+
+  it("parses ~nolock on a bare 2-part token → lock:false", () => {
+    expect(parseCharacterMentionToken("@kira:1~nolock")).toEqual({
+      characterSlug: "kira",
+      imageIndex: 1,
+      variantSlug: null,
+      usageMode: null,
+      lock: false,
+    })
+  })
+
+  it("~nolock is NOT mis-parsed as ~lock (endsWith('~lock') is false)", () => {
+    const parsed = parseCharacterMentionToken("@kira:1:face~nolock")
+    expect(parsed?.lock).toBe(false)
+    expect(parsed?.usageMode).toBe("face")
+  })
+})
+
+describe("findCharacterMentionTokens — additive ~nolock", () => {
+  it("captures the full ~nolock token + lock:false at the right offset", () => {
+    expect(findCharacterMentionTokens("Hi @kira:1:face~nolock waves", ["kira"])).toEqual([
+      {
+        token: "@kira:1:face~nolock",
+        characterSlug: "kira",
+        imageIndex: 1,
+        variantSlug: null,
+        usageMode: "face",
+        lock: false,
+        offset: 3,
+      },
+    ])
+  })
+
+  it("WORD-BOUNDARY: ~nolockx stays literal (token is @kira:1, no lock)", () => {
+    expect(findCharacterMentionTokens("@kira:1~nolockx in", ["kira"])).toEqual([
+      { token: "@kira:1", characterSlug: "kira", imageIndex: 1, variantSlug: null, usageMode: null, offset: 0 },
+    ])
+  })
+})
+
+describe("parseLocationMentionToken — additive ~nolock (force off)", () => {
+  it("parses ~nolock on a role token → role + lock:false", () => {
+    expect(parseLocationMentionToken("@old-library:1:background~nolock")).toEqual({
+      locationSlug: "old-library",
+      imageIndex: 1,
+      bucket: null,
+      variant: null,
+      usageMode: null,
+      role: "background",
+      lock: false,
+    })
+  })
+
+  it("parses ~nolock on a bucket/variant + mode token → lock:false", () => {
+    expect(parseLocationMentionToken("@old-library:1:weather/rain:style~nolock")).toEqual({
+      locationSlug: "old-library",
+      imageIndex: 1,
+      bucket: "weather",
+      variant: "rain",
+      usageMode: "style",
+      lock: false,
+    })
+  })
+})
+
+describe("hybrid image — per-mention ~nolock suppresses a ref-level enabled lock", () => {
+  it("@victoria-hayes:1:face~nolock (ref enabled:true) → phrase but NO lock line", () => {
+    const out = buildImagePrompt({
+      provider: "nano-banana-pro",
+      prompt: "@victoria-hayes:1:face~nolock on a rooftop",
+      connectedReferences: [victoriaLocked],
+      referenceFormat: "hybrid",
+    })
+    expect(out.prompt).toContain("the face from reference image A on a rooftop")
+    expect(out.prompt).not.toContain("Lock the exact identity")
+    expect(out.prompt).not.toContain("@victoria-hayes")
+  })
+
+  it("@victoria-hayes:1:face (inherit, ref enabled:true) → lock line PRESENT", () => {
+    const out = buildImagePrompt({
+      provider: "nano-banana-pro",
+      prompt: "@victoria-hayes:1:face on a rooftop",
+      connectedReferences: [victoriaLocked],
+      referenceFormat: "hybrid",
+    })
+    expect(out.prompt).toContain(CHAR_LOCK_LINE)
+  })
+
+  it("@victoria-hayes:1:face~lock (ref enabled:true) → lock line still PRESENT", () => {
+    const out = buildImagePrompt({
+      provider: "nano-banana-pro",
+      prompt: "@victoria-hayes:1:face~lock on a rooftop",
+      connectedReferences: [victoriaLocked],
+      referenceFormat: "hybrid",
+    })
+    expect(out.prompt).toContain(CHAR_LOCK_LINE)
+  })
+
+  it("location @old-library:1:background~nolock (ref enabled:true) → NO lock line", () => {
+    const out = buildImagePrompt({
+      provider: "nano-banana-pro",
+      prompt: "@old-library:1:background~nolock a scene",
+      connectedReferences: [libraryLocked],
+      referenceFormat: "hybrid",
+    })
+    expect(out.prompt).toContain("the background from reference image A")
+    expect(out.prompt).not.toContain("Lock the exact look")
+  })
+})
+
+describe("legacy — ~nolock is inert (like ~lock)", () => {
+  it("LEGACY character @…:face~nolock → no hybrid phrase, no lock line", () => {
+    const out = buildImagePrompt({
+      provider: "nano-banana-pro",
+      prompt: "@victoria-hayes:1:face~nolock on a rooftop",
+      connectedReferences: [victoria],
+    })
+    expect(out.prompt).not.toContain("Lock the exact identity")
+    expect(out.prompt).not.toContain("the face from reference image")
+  })
+
+  it("LEGACY location role @…:background~nolock stays literal", () => {
+    const out = buildImagePrompt({
+      provider: "nano-banana-pro",
+      prompt: "@old-library:1:background~nolock a scene",
+      connectedReferences: [library],
+    })
+    expect(out.prompt).toContain("@old-library:1:background~nolock")
+    expect(out.prompt).not.toContain("the background from reference image")
+  })
+})
+
+describe("video hybrid — per-mention ~nolock suppresses the lock line", () => {
+  it("@kira:1:face~nolock (ref enabled:true) → phrase but NO lock line", () => {
+    const out = resolveVideoReferenceCore({
+      prompt: "@kira:1:face~nolock runs",
+      wiredCharRefs: [kira({ identityLock: { enabled: true } })],
+      hybridRoles: true,
+    })
+    expect(out.prompt).toContain("the face from @image_1 runs")
+    expect(out.prompt).not.toContain("Lock the exact identity")
+  })
+
+  it("@kira:1:face (inherit, ref enabled:true) → lock line PRESENT", () => {
+    const out = resolveVideoReferenceCore({
+      prompt: "@kira:1:face runs",
+      wiredCharRefs: [kira({ identityLock: { enabled: true } })],
+      hybridRoles: true,
+    })
+    expect(out.prompt).toContain("Lock the exact identity of the person in @image_1")
+  })
+})
